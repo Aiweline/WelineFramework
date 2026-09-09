@@ -59,16 +59,16 @@ final class GuidanceWorkflowCatalog
     public static function sessionStartupNotices(): array
     {
         return [
-            '【引导·只指路】框架硬约束不在本列表展开。请立即阅读 prepare_project.agent_guidance.hard_constraints（hard-constraints.v1）；权威正文 app/code/Weline/Ai/doc/AI硬规则索引.md；任务细则由 resolve_task_context → workflow_contract.v1 surfaces 下发。',
-            '[Bootstrap · pointers only] Framework hard rules are not expanded here. Read agent_guidance.hard_constraints (hard-constraints.v1); authority app/code/Weline/Ai/doc/AI硬规则索引.md; task detail via resolve_task_context → workflow_contract.v1 surfaces.',
+            '【引导·只指路】框架硬约束不在本列表展开。请立即阅读 prepare_project.agent_guidance.hard_constraints（hard-constraints.v1）；权威正文 app/code/Weline/Ai/doc/AI硬规则索引.md；任务细则由 resolve_task_context → workflow_contract.v1 surfaces 下发；工程技能由 agent_guidance.mcp_skills + resolve_skill/get_skill 按需取。',
+            '[Bootstrap · pointers only] Framework hard rules are not expanded here. Read agent_guidance.hard_constraints (hard-constraints.v1); authority app/code/Weline/Ai/doc/AI硬规则索引.md; task detail via resolve_task_context → workflow_contract.v1 surfaces; engineering skills via agent_guidance.mcp_skills + resolve_skill/get_skill.',
             '交付地址机器契约见 agent_guidance.feature_delivery_urls 与 closeout_delivery_reminder；本机默认 Host 为 `{project_hash}.test.weline.com`，禁止主验收使用 `*.weline.test`。Browser 自测、每次打开禁用缓存、交付地址、汇报后关闭标签见 hard_constraints（browser_operator_self_test / browser_cache_disabled_on_open / feature_delivery_urls / browser_release_after_delivery）与 WebUI浏览器验收与交付地址门禁.md。',
             'Delivery URL machine contract: agent_guidance.feature_delivery_urls and closeout_delivery_reminder; default local Host is {project_hash}.test.weline.com (never primary *.weline.test). Browser self-test, cache-disabled-on-open, delivery URLs, and close-after-report live in hard_constraints (browser_operator_self_test / browser_cache_disabled_on_open / feature_delivery_urls / browser_release_after_delivery) and WebUI browser closeout gate doc.',
             '【宿主工具目录】密封编辑前确认本会话可见 submit_task_plan / get_task_plan。ensure 的 mcp_stdio 已含而本会话 GetDynamicTools 缺失时，记 HOST_MCP_SESSION_CATALOG_STALE 并新开 Agent 回合；禁止调用 mcp_auth。',
             '[Host tool catalog] Before sealed edits, confirm this chat exposes submit_task_plan / get_task_plan. If ensure mcp_stdio lists them but GetDynamicTools does not, record HOST_MCP_SESSION_CATALOG_STALE and start a new Agent turn; never call mcp_auth.',
-            '【调用范围】非编码（闲聊/概念问答）禁止 MCP；仅编码/工程走 ensure → prepare_project。细则见 hard_constraints.mcp_operational.mcp_call_scope。',
-            '[Call scope] Skip MCP for non-coding; coding/engineering only uses ensure → prepare_project. See hard_constraints.mcp_operational.mcp_call_scope.',
-            '【每条编码需求】可执行编码/工程需求提出后，立即理解并 submit_task_plan（需求分析→验收完整工作流）；不得等到写码前。非编码勿 submit_task_plan。',
-            '[Every coding requirement] After an executable coding/engineering ask, immediately understand it and submit_task_plan covering analysis→acceptance; do not wait until edit time. Non-coding must not submit_task_plan.',
+            '【调用范围】非编码（闲聊/概念问答）禁止 MCP；仅编码/工程走 ensure → prepare_project。例外：打招呼 hi/你好 或指令「提取技能」可 list MCP 技能+指令（禁止密封编辑）。细则见 hard_constraints.mcp_operational.mcp_call_scope / greeting_lists_mcp_skills_and_commands。',
+            '[Call scope] Skip MCP for non-coding; coding/engineering only uses ensure → prepare_project. Exception: greeting hi/你好 or command 提取技能 may list MCP skills+commands (no sealed edits). See mcp_call_scope / greeting_lists_mcp_skills_and_commands.',
+            '【每条编码需求】可执行编码/工程需求提出后，立即 submit_task_plan（强制规划，含 ≥1 unit）；再 TDD 红→绿并实际跑测；未跑通不得宣称完成（plan_then_tdd_required）。非编码勿 submit_task_plan。',
+            '[Every coding requirement] Immediately submit_task_plan (≥1 unit acceptance), then TDD red→green with real test runs; never claim done without PASS evidence (plan_then_tdd_required). Non-coding must not submit_task_plan.',
         ];
     }
 
@@ -93,9 +93,13 @@ final class GuidanceWorkflowCatalog
                 'Forcing 127.0.0.1 when *.test.weline.com Host exists',
                 'Leaving acceptance Browser tabs/webviews open after the Delivery URLs section (idle Glass/Simple Browser/ide-browser)',
             ],
-            'summary_zh' => '每次向用户汇报功能完成或阶段性交付时：① Web/UI 须已用当前宿主可用的真实 Browser 按用例自测，且每次打开/导航前禁用 HTTP 缓存（未测或宿主无 Browser 只能报验收未完成）；② 回复末尾必须包含「交付地址」小节，列出探活过的前台/后台/API 可点击 http(s) Markdown 链接；本机默认 Host 为 `{project_hash}.test.weline.com`（例 http://p05113ef3.test.weline.com:9555/...），禁止把 `*.weline.test` 当主验收 Host；纯逻辑无 UI 写 N/A。禁止省略该小节。③ 写完「交付地址」后立即关闭本回合打开的验收 Browser 标签/webview（Cursor：unlock 后 browser_tabs close；用户明确要求保留除外）。',
-            'summary_en' => 'On every feature completion or stage handoff: (1) for Web/UI, AI must have run a host-available real Browser on agreed use cases with HTTP cache disabled on every open/navigate—otherwise only report WebUI incomplete; (2) end with a Delivery URLs section of probe-verified clickable http(s) Markdown links using default local Host {project_hash}.test.weline.com (never primary *.weline.test), or N/A when no UI. Never omit this section. (3) Immediately after that section, close every acceptance Browser tab/webview opened this turn (Cursor: unlock then browser_tabs close), unless the user explicitly asks to keep them. Do not require a Cursor-only browser.',
+            'summary_zh' => '每次向用户汇报功能完成或阶段性交付时：① 须已自行按验收层级验证（agent_self_verify_before_done：UT/RT/WB）；Web/UI 须用当前宿主可用的真实 Browser 按用例自测，且每次打开/导航前禁用 HTTP 缓存（未测或宿主无 Browser 只能报验收未完成）；② 回复末尾必须包含「交付地址」小节，列出探活过的前台/后台/API 可点击 http(s) Markdown 链接；本机默认 Host 为 `{project_hash}.test.weline.com`（例 http://p05113ef3.test.weline.com:9555/...），禁止把 `*.weline.test` 当主验收 Host；纯逻辑无 UI 写 N/A。禁止省略该小节。③ 写完「交付地址」后立即关闭本回合打开的验收 Browser 标签/webview（Cursor：unlock 后 browser_tabs close；用户明确要求保留除外）。',
+            'summary_en' => 'On every feature completion or stage handoff: (1) Agent must have self-verified by acceptance tier (agent_self_verify_before_done: UT/RT/WB); for Web/UI, run a host-available real Browser on agreed use cases with HTTP cache disabled on every open/navigate—otherwise only report WebUI incomplete; (2) end with a Delivery URLs section of probe-verified clickable http(s) Markdown links using default local Host {project_hash}.test.weline.com (never primary *.weline.test), or N/A when no UI. Never omit this section. (3) Immediately after that section, close every acceptance Browser tab/webview opened this turn (Cursor: unlock then browser_tabs close), unless the user explicitly asks to keep them. Do not require a Cursor-only browser.',
             'browser_self_test_required_for_web' => true,
+            'agent_self_verify_required' => true,
+            'agent_self_verify_rule' => 'agent_self_verify_before_done',
+            'plan_then_tdd_required' => true,
+            'plan_then_tdd_rule' => 'plan_then_tdd_required',
             'browser_tooling' => 'host_available_real_browser',
             'browser_cache_disabled_on_open_required' => true,
             'browser_open_order' => [
@@ -249,10 +253,13 @@ final class GuidanceWorkflowCatalog
                 'extension_point_selected',
                 'task_contract_or_plan',
                 'submit_task_plan_accepted',
+                'tdd_unit_acceptance_planned',
                 'webui_acceptance_cases_agreed_for_web_surface',
                 'chapter_acceptance_defined_if_multi_chapter_plan',
             ],
             'mandatory_before_closeout' => [
+                'agent_self_verify_with_acceptance_evidence',
+                'tdd_unit_tests_executed_and_passed',
                 'module_docs_reconciled_with_behavior',
                 'responsive_breakpoints_considered_for_web_ui',
                 'webui_browser_operator_self_test_pass_or_na',
@@ -277,15 +284,16 @@ final class GuidanceWorkflowCatalog
                     'Call review_task_plan before closeout; closeout_allowed=true required to claim done.',
                     'Web/UI tasks must list tablet and PC responsive acceptance in the plan.',
                 ]],
-                ['id' => 'implement', 'label' => '实现', 'tools' => ['get_edit_bundle', 'apply_compact_edit', 'update_task_plan_progress']],
+                ['id' => 'implement', 'label' => '实现（TDD 绿）', 'tools' => ['get_edit_bundle', 'apply_compact_edit', 'update_task_plan_progress'], 'notes' => [
+                    'Only after accepted plan. TDD: failing test first (red), then minimal production change to green (plan_then_tdd_required). Do not claim done here.',
+                ]],
                 ['id' => 'review', 'label' => '架构/缺陷/安全复审', 'tools' => ['review_task_plan', 'update_task_plan_progress'], 'notes' => [
                     'Review plan omissions; append review_notes via update_task_plan_progress or review_task_plan.',
                 ]],
-                ['id' => 'verify', 'label' => '分层测试与 WebUI 验收', 'tools' => ['update_task_plan_progress', 'review_task_plan'], 'notes' => [
-                    'Page/UI: AI must run host-available real Browser operator use cases (WB-OP); curl/unit tests do not substitute; do not hard-code Cursor-only tooling.',
-                    'Page/UI surfaces: collect 375 / ≈768 / ≥1024 (and 1440 when relevant) evidence (WB-VIS).',
-                    'Multi-chapter Web: WB-OP operator path plus WB-VIS screenshots under module doc/evidence/.',
-                    'Unfinished Browser self-test → report only “代码已改，WebUI 验收未完成”; never claim done.',
+                ['id' => 'verify', 'label' => '实际跑测与分层验收', 'tools' => ['update_task_plan_progress', 'review_task_plan'], 'notes' => [
+                    'MANDATORY (plan_then_tdd_required + agent_self_verify_before_done): run the real test command; unit passed evidence must look like phpunit/PASS output.',
+                    'Pure logic → focused unit/contract tests actually PASS; command/API/runtime → real command/API result; page/UI → host-available real Browser WB-OP.',
+                    'Unfinished TDD/self-verify → report only “代码已改，TDD/测试未跑通”; never claim done.',
                 ]],
                 ['id' => 'closeout', 'label' => '文档对齐与开发日志收口', 'tools' => ['review_task_plan'], 'docs' => ['doc/README.md', 'doc/需求.md', 'doc/开发日志.md'], 'notes' => [
                     'review_task_plan.closeout_allowed must be true before claiming feature done.',
@@ -327,11 +335,32 @@ final class GuidanceWorkflowCatalog
     {
         $surfaces = [];
         foreach (self::resolveActiveSurfaces($task) as $surface) {
-            $surfaces[(string) $surface['id']] = [
+            $entry = [
                 'label' => $surface['label'],
                 'authoritative_doc' => $surface['authoritative_doc'],
                 'norms' => $surface['norms'] ?? [],
             ];
+            if (is_string($surface['authoritative_skill'] ?? null) && ($surface['authoritative_skill'] ?? '') !== '') {
+                $entry['authoritative_skill'] = $surface['authoritative_skill'];
+                $entry['mcp_skill_id'] = (string) $surface['id'];
+                $entry['mcp_skill_fetch'] = [
+                    'discover' => 'resolve_skill',
+                    'load' => 'get_skill',
+                    'skill_id' => (string) $surface['id'],
+                    'alias' => $surface['authoritative_skill'],
+                ];
+            } else {
+                $entry['mcp_skill_id'] = (string) $surface['id'];
+                $entry['mcp_skill_fetch'] = [
+                    'discover' => 'resolve_skill',
+                    'load' => 'get_skill',
+                    'skill_id' => (string) $surface['id'],
+                ];
+            }
+            if (is_array($surface['required_companion_skills'] ?? null) && $surface['required_companion_skills'] !== []) {
+                $entry['required_companion_skills'] = $surface['required_companion_skills'];
+            }
+            $surfaces[(string) $surface['id']] = $entry;
         }
         return [
             'schema_version' => self::SCHEMA,
@@ -355,15 +384,24 @@ final class GuidanceWorkflowCatalog
         return [
             'id' => self::SURFACE_FRONTEND_DEVELOPMENT,
             'label' => '前端开发规范',
-            'description' => 'Theme / 布局 / 部件 / partial / 前台模板开发的统一规范表面。【高压线】必须使用 Weline 自研主题 UI（Weline UI 2.0）与主题 CSS 变量 Token；禁止第三方 UI 与硬编码视觉字面量。section 身份属性（weline-code）只是其中一条硬约束，不是独立技能名。',
+            'description' => 'Theme / 布局 / 部件 / partial / 前台模板开发的统一规范表面。【高压线】必须使用 Weline 自研主题 UI（Weline UI 2.0）与主题 CSS 变量 Token；凡任务提到 CSS 或主题/theme，必须先加载 UI 技能 frontend-design、原型技能 prototype、主题技能 weline-theme-development（MCP get_skill），禁止自造色板与间距。禁止第三方 UI 与硬编码视觉字面量。section 身份属性（weline-code）只是其中一条硬约束，不是独立技能名。',
             'triggers' => [
                 '部件', 'widget', '主题', 'theme', '布局', 'layout', 'partial',
                 'phtml', '前端', 'frontend', '模板', 'section', 'slot',
+                'UI', 'ui', 'frontend-design', '样式', '颜色', '间距',
+                'css', 'CSS', 'stylesheet', 'prototype', '原型',
+            ],
+            'authoritative_skill' => 'weline-theme-development',
+            'required_companion_skills' => [
+                'frontend-design',
+                'prototype',
+                'weline-theme-development',
             ],
             'authoritative_doc' => 'app/code/Weline/Theme/doc/开发/Theme开发总指南.md',
             'authoritative_docs' => [
                 'app/code/Weline/Theme/doc/开发/Theme开发总指南.md',
                 'app/code/Weline/Theme/doc/部件开发指南.md',
+                'app/code/Weline/Theme/doc/前端JS模块加载规范.md',
                 'app/code/Weline/Theme/doc/frontend-section-weline-code.md',
                 'app/code/Weline/Theme/doc/theme-css-variables-only.md',
                 'app/code/Weline/Theme/doc/theme-layout-content-width.md',
@@ -373,6 +411,24 @@ final class GuidanceWorkflowCatalog
                     'id' => 'weline_ui_theme_first',
                     'summary' => '【高压线】前端必须使用 Weline 自研主题 UI（Weline UI 2.0）与主题 CSS 变量 Token（w-field/w-input/w-button… + --color-*/--weline-theme-*/spacing Token）；禁止 Bootstrap/Element/Ant 等第三方 UI、硬编码色值/间距，以及手写国家/省/市 input 替代 <w:theme:address>',
                     'detail_doc' => 'app/code/Weline/Theme/doc/theme-css-variables-only.md',
+                ],
+                [
+                    'id' => 'css_or_theme_requires_ui_prototype_theme_skills',
+                    'summary' => '【高压线】凡任务/需求提到 CSS 或主题/theme（含主题样式、Token、前台/后台视觉 CSS），写样式或改主题前必须先加载并服从三技能：（1）UI 技能 frontend-design；（2）原型技能 prototype；（3）主题技能 weline-theme-development（MCP get_skill / surface frontend_development）。主题 Token 与 Weline UI 2.0 仍优先；UI/原型不得自造色板或绕开 Theme。纯无视觉且无 CSS/主题意图可 N/A。避免主题开发跑偏',
+                    'detail_doc' => 'app/code/Weline/Theme/doc/开发/Theme开发总指南.md',
+                    'required_companion_skills' => [
+                        'frontend-design',
+                        'prototype',
+                        'weline-theme-development',
+                    ],
+                    'mcp_skill_id' => self::SURFACE_FRONTEND_DEVELOPMENT,
+                ],
+                [
+                    'id' => 'ui_skill_requires_theme_skill',
+                    'summary' => '【高压线】凡使用宿主 UI / frontend-design / 审美类技能写前台或后台界面，必须先用 MCP get_skill 加载 weline-theme-development（或 surface frontend_development）并服从 Theme开发总指南 / theme-css-variables-only；主题 Token 与 Weline UI 2.0 类名优先于通用 UI 技能的自造色板。禁止发明私有 #hex/rgb、px 间距阶梯、圆角阴影套件或平行 design token；UI 技能仅可指导构图/层次/文案，不得另造视觉字面量；宿主 SKILL.md 仅可选薄壳',
+                    'detail_doc' => 'app/code/Weline/Theme/doc/theme-css-variables-only.md',
+                    'authoritative_skill' => 'weline-theme-development',
+                    'mcp_skill_id' => self::SURFACE_FRONTEND_DEVELOPMENT,
                 ],
                 [
                     'id' => 'theme_address_for_region_pickers',
@@ -402,13 +458,25 @@ final class GuidanceWorkflowCatalog
                     'detail_doc' => 'app/code/Weline/Ai/doc/AI硬规则索引.md',
                 ],
                 [
+                    'id' => 'chinese_comments_friendly_style',
+                    'summary' => '新增/修改的说明性注释与 PHPDoc 摘要默认简体中文；代码风格友好清晰、贴合周围、避免过度巧妙；仍遵守 no_php_tags_in_comments',
+                    'detail_doc' => 'app/code/Weline/Framework/doc/3-开发/开发标准与验收.md',
+                ],
+                [
                     'id' => 'widget_external_js',
-                    'summary' => '部件禁止带 <?= 的内联 script；模块级 JS 须 weline.modules.js + data-weline-load/declare（禁止 @static/<js> 直引）',
+                    'summary' => '部件禁止带 <?= 的内联 script；模块级 JS 须 weline.modules.js + data-weline-load/declare（禁止 @static/<js> 直引）；改登记后必须 php bin/w resource:compile welineModules',
                     'detail_doc' => 'app/code/Weline/Theme/doc/前端JS模块加载规范.md',
+                    'verify' => 'php bin/w resource:compile welineModules',
                 ],
                 [
                     'id' => 'theme_js_module_declare_only',
-                    'summary' => '【高压线】前台主题/部件/布局 JS 只能 Weline.declare / data-weline-load / data-weline-declare；禁止 script src=@static 或裸 <js> 拉模块',
+                    'summary' => '【高压线】前台主题/部件/布局 JS 只能 Weline.declare / data-weline-load / data-weline-declare；禁止 script src=@static 或裸 <js> 拉模块；改 weline.modules.js 后必须 resource:compile welineModules 收集',
+                    'detail_doc' => 'app/code/Weline/Theme/doc/前端JS模块加载规范.md',
+                    'verify' => 'php bin/w resource:compile welineModules',
+                ],
+                [
+                    'id' => 'weline_js_loader_framework_only',
+                    'summary' => '【高压线】weline.js 只做 ModuleLoader + 维护时懒加载维护模块 JS；禁止 cart/account 等业务名与业务逻辑/内嵌维护 UI',
                     'detail_doc' => 'app/code/Weline/Theme/doc/前端JS模块加载规范.md',
                 ],
                 [
@@ -477,13 +545,15 @@ final class GuidanceWorkflowCatalog
                     'Naked country/province/city/district inputs when <w:theme:address> or official Theme/Taglib address controls exist',
                     'Hand-rolled country/region <select>, custom filter chip rows, or cascade inputs that replace <w:theme:address> in admin/storefront filters and forms',
                     'Hand-computed left/top, custom flip/boundary scripts, or private portal stacks for menus/popovers/tooltips/combobox/address multi dropdowns — use Weline.UI floating primitives instead',
+                    'Images without explicit HTML width+height (or aspect_ratio / layout dims) — CLS; do not rely on responsive CSS alone',
                 ],
                 'required' => [
                     'Use first-party Weline Theme / Weline UI 2.0 component classes and theme CSS variable tokens for all visual UI',
                     'Address and region cascade/filters via <w:theme:address> (single or multi, including official chips); never hand-roll region inputs or chip rows',
                     'Floating surfaces (menu/popover/tooltip/combobox/address multi) via menu/popover/tooltip/combobox/anchored-float or UI.floating.attach',
+                    'Images via <w:file:image> (or equivalent) with UI width+height or aspect_ratio, plus Theme CSS max-width:100%;height:auto / .w-file-image',
                     'Choose layout / partial / component / widget layer before editing',
-                    'Widget JS scoped by data-js-ns + data-uid; register in weline.modules.js and load via Weline.declare / data-weline-load / data-weline-declare',
+                    'Widget JS scoped by data-js-ns + data-uid; register in weline.modules.js and load via Weline.declare / data-weline-load / data-weline-declare; after any modules registry change run php bin/w resource:compile welineModules before closeout',
                     'Dynamic values in attributes: set on HTML elements in body, not on Taglib tag attributes',
                     'Widget root uses WidgetUiScope and a stable type-level section identity attribute',
                     'Layout/partial literal <section> and w:slot wrapper="section" carry stable semantic section identity; verify with php bin/w frontend:check-section-code before setup:upgrade',
@@ -497,6 +567,7 @@ final class GuidanceWorkflowCatalog
                 'authoritative_docs' => [
                     'app/code/Weline/Theme/doc/开发/Theme开发总指南.md',
                     'app/code/Weline/Theme/doc/部件开发指南.md',
+                    'app/code/Weline/Theme/doc/前端JS模块加载规范.md',
                     'app/code/Weline/Theme/doc/frontend-section-weline-code.md',
                     'app/code/Weline/Theme/doc/theme-css-variables-only.md',
                     'app/code/Weline/Theme/doc/theme-layout-content-width.md',
@@ -504,11 +575,13 @@ final class GuidanceWorkflowCatalog
                 'verification_commands' => [
                     'php bin/w frontend:check-section-code',
                     'php bin/w frontend:check-theme-layout-widgets',
+                    'php bin/w resource:compile welineModules',
                 ],
             ],
             'verification_commands' => [
                 'php bin/w frontend:check-section-code',
                 'php bin/w frontend:check-theme-layout-widgets',
+                'php bin/w resource:compile welineModules',
             ],
         ];
     }
@@ -579,6 +652,7 @@ final class GuidanceWorkflowCatalog
                 'taglib', 'w:', '<w:', 'select', 'switcher', 'picker', '手写', '原生',
                 'language:select', 'website:select', 'd-table', 'd-form',
             ],
+            'authoritative_skill' => 'weline-taglib-first',
             'authoritative_doc' => 'app/code/Weline/Taglib/doc/场景映射表.md',
             'authoritative_docs' => [
                 'app/code/Weline/Taglib/doc/场景映射表.md',
@@ -587,13 +661,18 @@ final class GuidanceWorkflowCatalog
                 'app/code/Weline/Framework/doc/4-内置标签/README.md',
             ],
             'norms' => [
-                ['id' => 'scenario_mapping_first', 'summary' => '写 HTML/控件前先读场景映射表'],
-                ['id' => 'no_hand_rolled_select', 'summary' => '禁止手写 language/website/currency/ACL 等 domain select'],
+                ['id' => 'scenario_mapping_first', 'summary' => '写 HTML/控件前先读场景映射表并选合适 Taglib（含地址/国家选择）'],
+                ['id' => 'no_hand_rolled_select', 'summary' => '禁止手写 language/website/currency/ACL 等 domain select；禁止手写 ISO 国家码 input 代替 theme:address'],
                 ['id' => 'taglib_attr_no_php', 'summary' => 'w:* 属性禁止 <?= / <?php'],
                 [
                     'id' => 'no_php_tags_in_comments',
                     'summary' => '注释内禁止 <?= / <?php 开标签（非禁止普通注释掉语句）',
                     'detail_doc' => 'app/code/Weline/Ai/doc/AI硬规则索引.md',
+                ],
+                [
+                    'id' => 'chinese_comments_friendly_style',
+                    'summary' => '新增/修改说明性注释与 PHPDoc 默认简体中文；风格友好可读、贴合周围代码',
+                    'detail_doc' => 'app/code/Weline/Framework/doc/3-开发/开发标准与验收.md',
                 ],
                 [
                     'id' => 'taglib_callback_static_url',
@@ -830,6 +909,7 @@ final class GuidanceWorkflowCatalog
                 '交付地址', '自测', '用例', '截图', 'wls', 'ui', 'test.weline.com', 'weline.test',
                 '关闭浏览器', 'close browser', 'webview', '缓存', 'cache', 'ignoreCache',
             ],
+            'authoritative_skill' => 'local-browser-urls',
             'authoritative_doc' => 'app/code/Weline/Framework/doc/3-开发/WebUI浏览器验收与交付地址门禁.md',
             'authoritative_docs' => [
                 'app/code/Weline/Framework/doc/3-开发/WebUI浏览器验收与交付地址门禁.md',

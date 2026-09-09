@@ -18,10 +18,9 @@ final class MaintenanceRecoveryAutoRefreshContractTest extends TestCase
         self::assertStringContainsString("redirect: 'manual'", $template);
         self::assertStringContainsString('scheduleHardReload()', $template);
         self::assertStringContainsString('hardReloadDelay = 30000', $template);
-        self::assertStringContainsString("if (/^\\/pub\\/errors\\/maintenance\\//.test(url.pathname))", $template);
-        self::assertStringContainsString("url.pathname = '/'", $template);
-        self::assertStringContainsString('social-login', $template);
-        self::assertStringContainsString('searchParams.delete', $template);
+        self::assertStringContainsString('/maintenance/frontend/recovery-check', $template);
+        self::assertStringContainsString('_maintenance_recovery_probe', $template);
+        self::assertStringContainsString('X-Maintenance-Recovery-Check', $template);
         self::assertStringNotContainsString('response.status === 200', $template);
         self::assertStringNotContainsString("redirect: 'follow'", $template);
     }
@@ -35,11 +34,10 @@ final class MaintenanceRecoveryAutoRefreshContractTest extends TestCase
         self::assertStringContainsString('function isRecovered(response)', $js);
         self::assertStringContainsString("redirect: 'manual'", $js);
         self::assertStringContainsString('scheduleHardReload()', $js);
-        self::assertStringContainsString("if (/^\\/pub\\/errors\\/maintenance\\//.test(url.pathname))", $js);
-        self::assertStringContainsString('social-login', $js);
-        self::assertStringContainsString("searchParams.delete(key)", $js);
-        self::assertStringContainsString("'code'", $js);
-        self::assertStringContainsString("'state'", $js);
+        self::assertStringContainsString('RECOVERY_CHECK_PATH', $js);
+        self::assertStringContainsString('/maintenance/frontend/recovery-check', $js);
+        self::assertStringContainsString('_maintenance_recovery_probe', $js);
+        self::assertStringContainsString('X-Maintenance-Recovery-Check', $js);
         self::assertStringNotContainsString('response.status === 200', $js);
     }
 
@@ -53,7 +51,7 @@ final class MaintenanceRecoveryAutoRefreshContractTest extends TestCase
         );
 
         $normalize = static function (string $source): string {
-            $source = \preg_replace('/^\\/\\*[\\s\\S]*?\\*\\/\\s*/', '', $source) ?? $source;
+            $source = \preg_replace('/^(?:\\/\\*[\\s\\S]*?\\*\\/\\s*)+/', '', $source) ?? $source;
 
             return \preg_replace('/\\s+/', ' ', \trim($source)) ?? $source;
         };

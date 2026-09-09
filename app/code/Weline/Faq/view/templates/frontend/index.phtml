@@ -1,0 +1,12 @@
+<?php
+/** Faq hub body slot content — layout shell remains Theme layouts/faq. */
+$topics = $this->getData('faq_topics') ?? [];
+$faqs = $this->getData('faq_faqs') ?? [];
+$quickLinks = $this->getData('faq_quick_links') ?? [];
+?>
+<div class="faq-module-hub" data-faq-hub="1" hidden>
+    <!-- Assigned into Theme faq layout via Template bag before layout materializes. -->
+</div>
+<?php
+// Hub uses Theme layoutType=faq; content arrays are consumed by the layout.
+echo '';

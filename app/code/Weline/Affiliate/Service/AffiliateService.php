@@ -1208,10 +1208,10 @@ class AffiliateService
     {
         $product = $this->loadShareableProduct($productId);
         if (!is_array($product)) {
-            throw new \InvalidArgumentException((string) \__('商品不存在或已下架，无法生成分销分享链接。'));
+            throw new \InvalidArgumentException((string) \__('暂时无法生成分销分享链接（商品分享目标不可用）。'));
         }
 
-        $handle = trim((string) ($product['handle'] ?? ''));
+        $handle = trim((string) ($product['handle'] ?? $product['slug'] ?? ''));
         if ($handle !== '') {
             return 'product/' . ltrim($handle, '/');
         }
@@ -1238,13 +1238,26 @@ class AffiliateService
             if (!is_array($product) || (int) ($product['product_id'] ?? 0) !== $productId) {
                 continue;
             }
-            $status = $product['status'] ?? 0;
-            if ($status === 1 || $status === '1' || $status === 'enabled') {
+            if ($this->isShareableProductStatus($product['status'] ?? null)) {
+                if (trim((string) ($product['handle'] ?? '')) === '' && trim((string) ($product['slug'] ?? '')) !== '') {
+                    $product['handle'] = trim((string) $product['slug']);
+                }
+
                 return $product;
             }
         }
 
         return null;
+    }
+
+    private function isShareableProductStatus(mixed $status): bool
+    {
+        if ($status === 1 || $status === '1' || $status === true) {
+            return true;
+        }
+        $normalized = strtolower(trim((string) $status));
+
+        return in_array($normalized, ['enabled', 'published', 'active', 'saleable', 'onsale'], true);
     }
 
     private function requireShareByCode(string $shareCode): AffiliateShare

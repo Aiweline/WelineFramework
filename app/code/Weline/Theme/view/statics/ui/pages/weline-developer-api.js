@@ -7,6 +7,7 @@ const detailRoot = document.querySelector('[data-api-detail]');
 const testRoot = document.querySelector('[data-api-test]');
 const workspace = document.querySelector('[data-api-workspace]');
 const searchInput = document.querySelector('[data-api-search]');
+const moduleFilterInput = document.querySelector('[data-api-module-filter]');
 const themeSelect = document.querySelector('[data-api-theme]');
 const productionSwitch = document.querySelector('[data-api-production]');
 const liveStatus = document.querySelector('[data-api-live-status]');
@@ -170,12 +171,15 @@ const state = {
     area: selectedFromConfig?.route?.is_backend ? 'backend' : readStore(storageKeys.area, 'frontend'),
     selectedId: String(config.selectedApiId || ''),
     query: '',
+    moduleFilter: '',
     locale: readStore(storageKeys.locale, String(config.currentLocale || 'zh_Hans_CN')),
     currency: readStore(storageKeys.currency, String(config.currentCurrency || 'CNY')),
     i18nMode: readStore(storageKeys.i18nMode, 'path'),
     production: readStore(storageKeys.production, 'false') === 'true',
     sandbox: readStore(storageKeys.sandbox, ''),
-    lastResponseText: ''
+    lastResponseText: '',
+    demoId: new URL(window.location.href).searchParams.get('demo') || '',
+    demoSessions: new Map()
 };
 
 function selectedApi() {
@@ -201,9 +205,22 @@ function apiSearchText(api) {
     ].filter(Boolean).join(' ').toLocaleLowerCase();
 }
 
+function matchesModule(api) {
+    const filter = String(state.moduleFilter || '').trim().toLocaleLowerCase();
+    if (!filter) return true;
+    const haystack = [
+        api.moduleName,
+        config.moduleDisplayNames?.[api.moduleName],
+        api.className,
+        String(api.className || '').split('\\').pop()
+    ].filter(Boolean).join(' ').toLocaleLowerCase();
+    return haystack.includes(filter);
+}
+
 function matches(api) {
     const backend = Boolean(api.route?.is_backend);
     if ((state.area === 'backend') !== backend) return false;
+    if (!matchesModule(api)) return false;
     const query = state.query.trim().toLocaleLowerCase();
     return !query || apiSearchText(api).includes(query);
 }
@@ -229,15 +246,20 @@ function renderList() {
     if (!listRoot) return;
     const filtered = apis.filter(matches);
     if (!filtered.length) {
-        listRoot.replaceChildren(emptyState(t('empty', '没有匹配的 API 接口'), 'search'));
+        const emptyKey = String(state.moduleFilter || '').trim() && !String(state.query || '').trim()
+            ? 'emptyModuleFilter'
+            : 'empty';
+        const emptyFallback = emptyKey === 'emptyModuleFilter' ? '没有匹配的模块' : '没有匹配的 API 接口';
+        listRoot.replaceChildren(emptyState(t(emptyKey, emptyFallback), 'search'));
         return;
     }
     const fragment = document.createDocumentFragment();
+    const hasFilter = Boolean(state.query.trim() || state.moduleFilter.trim());
     groupedApis(filtered).forEach((versions, moduleName) => {
         const moduleItems = [];
         versions.forEach((classes) => classes.forEach((items) => moduleItems.push(...items)));
         const moduleDetails = create('details', {className: 'w-api-tree__module'});
-        moduleDetails.open = Boolean(state.query) || containsSelected(moduleItems) || versions.size < 3;
+        moduleDetails.open = hasFilter || containsSelected(moduleItems) || versions.size < 3;
         const moduleSummary = create('summary', {}, [
             create('span', {text: String(config.moduleDisplayNames?.[moduleName] || moduleName)}),
             create('span', {className: 'w-badge', text: moduleItems.length, dataset: {tone: 'quiet'}})
@@ -247,11 +269,11 @@ function renderList() {
             const versionItems = [];
             classes.forEach((items) => versionItems.push(...items));
             const versionDetails = create('details', {className: 'w-api-tree__version'});
-            versionDetails.open = Boolean(state.query) || containsSelected(versionItems) || classes.size < 3;
+            versionDetails.open = hasFilter || containsSelected(versionItems) || classes.size < 3;
             versionDetails.append(create('summary', {text: version}));
             classes.forEach((items, className) => {
                 const classDetails = create('details', {className: 'w-api-tree__class'});
-                classDetails.open = Boolean(state.query) || containsSelected(items);
+                classDetails.open = hasFilter || containsSelected(items);
                 classDetails.append(create('summary', {text: String(className).split('\\').pop() || className}));
                 const list = create('ul', {className: 'w-api-tree__list'});
                 items.forEach((api) => {
@@ -484,13 +506,16 @@ function buildRestUrl(path, isBackend = false, settings = {}) {
     const adminArea = String(config.apiAdminArea || 'api_admin').replace(/^\/+|\/+$/g, '');
     const area = isBackend ? adminArea : apiArea;
     let segments = value.replace(/^\/+/, '').split('/').filter(Boolean);
-    if (segments[0] === area) {
+    const hasAreaPrefix = segments[0] === area;
+    if (hasAreaPrefix) {
         if (!isBackend && /^[A-Z]{3}$/.test(segments[1] || '') && isLocaleSegment(segments[2])) segments = segments.slice(3);
         else if (segments[1] !== 'rest') segments = segments.slice(1);
     } else if (!isBackend && /^[A-Z]{3}$/.test(segments[0] || '') && isLocaleSegment(segments[1])) {
         segments = segments.slice(2);
     }
-    const directRest = segments[0] === 'rest' || segments[1] === 'rest';
+    // 已含区域的 Auth 地址会保留两个模块段，仍应直接请求其 REST 路径。
+    const directRest = segments[0] === 'rest' || segments[1] === 'rest'
+        || (!isBackend && hasAreaPrefix && segments[2] === 'rest');
     let pathname;
     if (directRest) pathname = '/' + area + '/' + segments.join('/');
     else if (isBackend) pathname = '/' + area + '/' + segments.join('/');
@@ -755,6 +780,7 @@ function renderDetail(api) {
     [api.moduleName, api.version, api.className, api.method].filter(Boolean).forEach((value) => meta.append(metadataBadge(value)));
     if (api.document?.deprecated) meta.append(create('span', {className: 'w-badge', text: t('deprecated'), dataset: {tone: 'danger'}}));
     heading.append(meta);
+    if (demoDefinition(api)) heading.append(button(t('demoOpen', '打开示例'), 'open-demo', 'primary', 'play'));
     article.append(heading);
     if (state.production && !isWorker(api) && !isSdk(api)) {
         article.append(create('div', {className: 'w-alert', dataset: {tone: 'warning'}}, [
@@ -977,17 +1003,15 @@ function restAuth(api) {
 
 function renderRestTest(api) {
     const method = String(api.route?.method || api.example?.method || 'GET').toUpperCase();
-    const auth = restAuth(api);
-    const action = auth.required && !auth.token ? 'open-login' : 'run-rest';
     const article = create('div', {className: 'w-api-test w-stack'});
-    article.append(testHeader(api, action, auth.required && !auth.token ? t('loginToSend') : t('send')));
+    article.append(testHeader(api, 'run-rest', t('send')));
 
     const environment = create('details', {className: 'w-disclosure w-api-test__section'});
     environment.open = true;
     environment.append(create('summary', {text: t('i18nSettings')}));
     const controls = create('div', {className: 'w-api-settings-grid'});
     const mode = create('fieldset', {className: 'w-field w-api-mode'}, [
-        create('legend', {className: 'w-field__label', text: t('i18nSettings')})
+        create('legend', {className: 'w-field__label', text: t('i18nMode', '切换方式')})
     ]);
     [['path', t('pathMode')], ['param', t('paramMode')]].forEach(([value, label]) => {
         const input = create('input', {attrs: {type: 'radio', name: 'api-i18n-mode', value}, dataset: {apiI18nMode: ''}});
@@ -1051,21 +1075,281 @@ function selectField(label, values, selected, datasetKey) {
     (Array.isArray(values) ? values : []).forEach((item) => {
         const code = String(item?.code || item || '');
         if (!code) return;
-        const name = String(item?.name || '');
-        select.append(create('option', {text: name ? code + ' - ' + name : code, attrs: {value: code}}));
+        const display = String(item?.display_name || item?.name || '').trim();
+        const optionLabel = display || code;
+        const optionTitle = display && display !== code ? `${code} — ${display}` : code;
+        select.append(create('option', {
+            text: optionLabel,
+            attrs: {value: code, title: optionTitle}
+        }));
     });
     if (!select.options.length && selected) select.append(create('option', {text: selected, attrs: {value: selected}}));
     select.value = selected;
+    select.title = select.options[select.selectedIndex]?.title || select.value || '';
+    select.addEventListener('change', () => {
+        select.title = select.options[select.selectedIndex]?.title || select.value || '';
+    });
     return create('label', {className: 'w-field'}, [
         create('span', {className: 'w-field__label', text: label}),
         select
     ]);
 }
 
+// 示例只描述字段与已有接口的绑定，不执行模块传入的脚本。
+function demoValue(template, values) {
+    if (Array.isArray(template)) return template.map((value) => demoValue(value, values));
+    if (!template || typeof template !== 'object') return template;
+    if (Object.prototype.hasOwnProperty.call(template, '$field')) return values[template.$field];
+    if (Object.prototype.hasOwnProperty.call(template, '$unique')) return String(template.$unique) + crypto.randomUUID();
+    return Object.fromEntries(Object.entries(template).map(([key, value]) => [key, demoValue(value, values)]).filter(([, value]) => value !== undefined));
+}
+
+function demoCapture(bindings, body, values) {
+    Object.entries(bindings || {}).forEach(([name, path]) => {
+        if (['__proto__', 'prototype', 'constructor'].includes(name)) return;
+        const value = String(path).split('.').reduce((current, key) => current != null && Object.prototype.hasOwnProperty.call(current, key) ? current[key] : undefined, body);
+        if (value !== undefined) values[name] = value;
+    });
+}
+
+function demoFieldValue(field, raw) {
+    if (raw === '') return undefined;
+    if (['integer', 'number'].includes(field.type)) {
+        const value = Number(raw);
+        if (!Number.isFinite(value) || (field.type === 'integer' && !Number.isInteger(value))) throw new Error(t('demoInvalidValue', '字段格式不正确') + ': ' + field.label);
+        return value;
+    }
+    if (field.type === 'json') return JSON.parse(raw);
+    if (field.type === 'boolean') return raw === 'true';
+    return raw;
+}
+
+function demoDefinition(api) {
+    const demo = api?.demo;
+    return demo?.id && Array.isArray(demo.fields) && Array.isArray(demo.actions) ? demo : null;
+}
+
+function demoSession(demo) {
+    if (!state.demoSessions.has(demo.id)) {
+        const values = Object.create(null);
+        demo.fields.forEach((field) => {
+            if (field.generate === 'unique') values[field.name] = String(field.prefix || '') + crypto.randomUUID();
+            else if (field.default !== undefined) values[field.name] = JSON.parse(JSON.stringify(field.default));
+        });
+        state.demoSessions.set(demo.id, {values, drafts: Object.create(null), history: [], busy: false, error: ''});
+    }
+    return state.demoSessions.get(demo.id);
+}
+
+function demoApi(step) {
+    return apis.find((api) => (api.class === step.api?.class || api.className === step.api?.class) && api.method === step.api?.method);
+}
+
+function demoRequest(step, values) {
+    const api = demoApi(step);
+    if (!api) throw new Error(t('demoMissingApi', '示例依赖的接口不可用'));
+    const method = String(api.route?.method || 'GET').toUpperCase();
+    const url = new URL(buildRestUrl(api.route?.path, Boolean(api.route?.is_backend)), window.location.origin);
+    if (url.origin !== window.location.origin) throw new Error(t('demoMissingApi', '示例依赖的接口不可用'));
+    const data = demoValue(step.request || {}, values);
+    if (!state.production && state.sandbox) url.searchParams.set('sandbox', state.sandbox);
+    if (['GET', 'HEAD'].includes(method)) {
+        Object.entries(data).forEach(([key, value]) => {
+            if (value !== undefined && value !== null) url.searchParams.set(key, typeof value === 'object' ? JSON.stringify(value) : String(value));
+        });
+    }
+    return {api, method, url: url.href, data, body: ['GET', 'HEAD'].includes(method) ? undefined : JSON.stringify(data)};
+}
+
+function readDemoFields(demo) {
+    const session = demoSession(demo);
+    const form = testRoot.querySelector('[data-api-demo-form]');
+    if (!form) return session.values;
+    demo.fields.forEach((field) => {
+        const control = form.elements.namedItem('demo.' + field.name);
+        if (!control || field.readonly) return;
+        session.drafts[field.name] = control.value;
+        try {
+            const value = demoFieldValue(field, control.value.trim());
+            if (value === undefined) delete session.values[field.name];
+            else session.values[field.name] = value;
+            control.removeAttribute('aria-invalid');
+        } catch (error) {
+            control.setAttribute('aria-invalid', 'true');
+            throw new Error((field.label || field.name) + ': ' + (error.message || t('demoInvalidValue')));
+        }
+    });
+    return session.values;
+}
+
+function demoField(field, value) {
+    const attrs = {name: 'demo.' + field.name, readonly: Boolean(field.readonly)};
+    let control;
+    let suggestions;
+    if (field.type === 'locale' && !Array.isArray(field.options)) {
+        const listId = 'api-demo-locales-' + field.name;
+        control = create('input', {className: 'w-input', attrs: {...attrs, type: 'text', list: listId}});
+        suggestions = create('datalist', {attrs: {id: listId}});
+        (config.availableLocales || []).forEach((locale) => suggestions.append(create('option', {
+            attrs: {value: String(locale.code ?? locale.value ?? locale)},
+            text: String(locale.display_name ?? locale.name ?? locale.code ?? locale)
+        })));
+    } else if (field.type === 'json') {
+        control = create('textarea', {className: 'w-textarea', attrs: {...attrs, rows: 5}});
+    } else if (field.type === 'boolean' || Array.isArray(field.options)) {
+        const choices = field.options || [{value: 'true', label: 'true'}, {value: 'false', label: 'false'}];
+        control = create('select', {className: 'w-select', attrs});
+        control.append(create('option', {text: '—', attrs: {value: ''}}));
+        (choices || []).forEach((choice) => control.append(create('option', {
+            attrs: {value: String(choice.value ?? choice.code ?? choice.locale_code ?? choice)},
+            text: String(choice.label ?? choice.display_name ?? choice.name ?? choice.code ?? choice)
+        })));
+        if (field.readonly) control.disabled = true;
+    } else {
+        control = create('input', {className: 'w-input', attrs: {...attrs, type: ['integer', 'number'].includes(field.type) ? 'number' : 'text', step: field.type === 'integer' ? '1' : 'any'}});
+    }
+    control.value = value === undefined || value === null ? '' : (typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value));
+    const label = create('label', {className: 'w-field'}, [create('span', {className: 'w-field__label', text: field.label || field.name}), control]);
+    if (suggestions) label.append(suggestions);
+    if (field.description) label.append(create('span', {className: 'w-field__hint', text: field.description}));
+    return label;
+}
+
+function renderDemo(api) {
+    const demo = demoDefinition(api);
+    const session = demoSession(demo);
+    const article = create('div', {className: 'w-api-test w-stack', dataset: {apiDemo: demo.id}});
+    article.append(create('header', {className: 'w-stack'}, [
+        create('div', {className: 'w-cluster', attrs: {'data-justify': 'between'}}, [
+            create('h2', {text: demo.title || t('demoTitle', '示例应用')}),
+            button(t('demoClose', '返回单接口测试'), 'close-demo', 'quiet')
+        ]),
+        create('p', {text: demo.description || ''})
+    ]));
+    const identity = authUser(Boolean(api.route?.is_backend));
+    article.append(create('p', {text: t('demoCurrentIdentity', '当前登录身份') + ': ' + (identity.username || identity.name || t('demoUnauthenticated', '请先登录'))}));
+    const form = create('form', {className: 'w-stack', dataset: {apiDemoForm: ''}});
+    form.addEventListener('submit', (event) => event.preventDefault());
+    const inputs = create('div', {className: 'w-api-settings-grid'});
+    const results = create('details', {className: 'w-disclosure'});
+    results.append(create('summary', {text: t('demoState', '当前数据')}));
+    const resultFields = create('div', {className: 'w-stack'});
+    demo.fields.forEach((field) => {
+        const item = demoField(field, session.values[field.name]);
+        if (Object.prototype.hasOwnProperty.call(session.drafts, field.name)) item.querySelector('input,select,textarea').value = session.drafts[field.name];
+        if (field.readonly) resultFields.append(item);
+        else if (field.type === 'json') form.append(item);
+        else inputs.append(item);
+    });
+    form.prepend(inputs);
+    if (resultFields.childElementCount) {
+        results.append(resultFields);
+        form.append(results);
+    }
+    const controls = create('div', {className: 'w-cluster'});
+    demo.actions.forEach((action) => {
+        const control = button(action.label || action.id, 'run-demo', action.tone || 'neutral', 'play');
+        control.dataset.demoAction = action.id;
+        control.disabled = session.busy;
+        controls.append(control);
+    });
+    const reset = button(t('demoReset', '填入新示例'), 'reset-demo', 'quiet');
+    reset.disabled = session.busy;
+    controls.append(reset);
+    form.append(controls);
+    article.append(form);
+    const status = create('p', {className: 'w-alert', attrs: {role: 'status', hidden: !session.error && !session.busy}, dataset: {apiDemoStatus: '', tone: session.error ? 'danger' : 'info'}, text: session.error || t('demoWorking', '调用中')});
+    article.append(status);
+    (demo.links || []).forEach((link) => {
+        const value = session.values[link.field];
+        (Array.isArray(value) ? value : [value]).filter(Boolean).forEach((address) => {
+            try {
+                const url = new URL(typeof address === 'string' ? address : (address.loc || address.url), window.location.origin);
+                if (url.origin !== window.location.origin || !['http:', 'https:'].includes(url.protocol)) return;
+                article.append(create('a', {className: 'w-button', text: link.label || t('demoOpenProduct', '查看店面产品'), attrs: {href: url.href, target: '_blank', rel: 'noopener'}, dataset: {tone: 'primary', demoLink: link.field}}));
+            } catch (_error) {}
+        });
+    });
+    const history = create('div', {className: 'w-stack', dataset: {demoHistory: ''}});
+    history.append(create('h3', {text: t('demoHistory', '调用记录')}));
+    session.history.forEach((entry, index) => {
+        const details = create('details', {className: 'w-disclosure'});
+        details.open = index === session.history.length - 1;
+        details.append(create('summary', {text: [entry.label, entry.method, entry.status || t('demoWorking', '调用中')].join(' · ')}));
+        details.append(create('div', {className: 'w-stack'}, [
+            create('h4', {text: t('demoRequest', '请求预览')}), codeBlock({method: entry.method, url: entry.url, body: entry.request}),
+            create('h4', {text: t('demoResponse', '响应')}), codeBlock(entry.response ?? '')
+        ]));
+        history.append(details);
+    });
+    article.append(history);
+    return article;
+}
+
+async function runDemo(actionId) {
+    const api = selectedApi();
+    const demo = demoDefinition(api);
+    const action = demo?.actions.find((item) => item.id === actionId);
+    if (!action) return;
+    const session = demoSession(demo);
+    if (session.busy) return;
+    session.error = '';
+    const steps = action.steps || [action];
+    try {
+        readDemoFields(demo);
+        if (!testRoot.querySelector('[data-api-demo-form]').reportValidity()) return;
+        const missing = (action.required_fields || []).filter((name) => session.values[name] === undefined || session.values[name] === '');
+        if (missing.length) throw new Error(t('demoRequired', '请先填写必填项或完成前一步') + ': ' + missing.join(', '));
+        for (const step of steps) {
+            const targetApi = demoApi(step);
+            if (!targetApi) throw new Error(t('demoMissingApi', '示例依赖的接口不可用'));
+            const auth = restAuth(targetApi);
+            if (auth.required && !auth.token) {
+                openLogin();
+                return;
+            }
+        }
+        session.busy = true;
+        for (const step of steps) {
+            const request = demoRequest(step, session.values);
+            const auth = restAuth(request.api);
+            const headers = {'Accept': 'application/json'};
+            if (auth.token) headers.Authorization = 'Bearer ' + auth.token;
+            const entry = {label: step.label || action.label || action.id, method: request.method, url: request.url, request: request.data};
+            session.history.push(entry);
+            testRoot.replaceChildren(renderDemo(api));
+            const result = await sendHttp(request.url, {method: request.method, headers, body: request.body});
+            entry.status = result.status;
+            entry.response = result.body;
+            const business = result.body;
+            if (!result.ok || business?.success === false || Number(business?.code) >= 400) {
+                throw new Error(business?.message || business?.msg || t('demoFailed', '调用失败'));
+            }
+            demoCapture(step.capture, result.body, session.values);
+            Object.keys(step.capture || {}).forEach((name) => delete session.drafts[name]);
+        }
+        toast(t('demoCompleted', '已完成'), 'success');
+    } catch (error) {
+        session.error = error.message || String(error);
+        const last = session.history[session.history.length - 1];
+        if (last && !last.status) {
+            last.status = t('demoFailed', '调用失败');
+            last.response = session.error;
+        }
+    } finally {
+        session.busy = false;
+        if (state.demoId === demo.id) testRoot.replaceChildren(renderDemo(api));
+    }
+}
+
 function renderTest(api) {
     if (!testRoot) return;
     if (!api) {
         testRoot.replaceChildren(emptyState(t('chooseApi'), 'play'));
+        return;
+    }
+    if (demoDefinition(api)?.id === state.demoId) {
+        testRoot.replaceChildren(renderDemo(api));
         return;
     }
     if (isSdk(api) && !isWorker(api)) {
@@ -1192,6 +1476,47 @@ async function apiRuntime() {
         throw error;
     });
     return apiRuntimePromise;
+}
+
+/**
+ * REST 在线测试专用：Weline.Api.request(url) 已禁用，必须同域 fetch。
+ * 返回与 normalizeTransport 兼容的传输对象。
+ */
+async function sendHttp(url, options = {}) {
+    const method = String(options.method || 'GET').toUpperCase();
+    const headers = Object.assign({}, options.headers || {});
+    if (options.body != null && options.body !== ''
+        && !Object.keys(headers).some((key) => key.toLowerCase() === 'content-type')) {
+        headers['Content-Type'] = 'application/json';
+    }
+    const response = await fetch(url, {
+        method,
+        headers,
+        body: options.body,
+        credentials: 'same-origin',
+        cache: 'no-store'
+    });
+    const text = await response.text();
+    let body = text;
+    const contentType = String(response.headers.get('content-type') || '');
+    if (contentType.includes('json') || /^[\s]*[{[]/.test(text)) {
+        try {
+            body = text === '' ? null : JSON.parse(text);
+        } catch (_error) {
+            body = text;
+        }
+    }
+    const headerMap = {};
+    response.headers.forEach((value, key) => {
+        headerMap[key] = value;
+    });
+    return {
+        ok: response.ok,
+        status: response.status,
+        statusText: response.statusText || '',
+        headers: headerMap,
+        body
+    };
 }
 
 function setBusy(busy, label = '') {
@@ -1350,6 +1675,11 @@ async function runRest() {
         headers[pair.key] = pair.value;
     });
     const auth = restAuth(api);
+    const hasManualAuthorization = Object.entries(headers).some(([name, value]) => name.toLowerCase() === 'authorization' && String(value).trim() !== '');
+    if (auth.required && !auth.token && !hasManualAuthorization) {
+        openLogin();
+        return;
+    }
     if (auth.token && !Object.keys(headers).some((key) => key.toLowerCase() === 'authorization')) {
         headers.Authorization = 'Bearer ' + auth.token;
     }
@@ -1369,9 +1699,7 @@ async function runRest() {
     setBusy(true, t('requesting'));
     const started = performance.now();
     try {
-        const runtime = await apiRuntime();
-        if (typeof runtime.request !== 'function') throw new Error(t('runtimeUnavailable'));
-        const result = await runtime.request(url.href, {method, headers, body, silent: true});
+        const result = await sendHttp(url.href, {method, headers, body});
         renderResponse(normalizeTransport(result), Math.round(performance.now() - started));
     } catch (error) {
         renderResponse(normalizeTransport(null, error), Math.round(performance.now() - started));
@@ -1496,15 +1824,13 @@ async function login(event) {
     submit.disabled = true;
     const backend = selectedApi()?.route?.is_backend || state.area === 'backend';
     const payload = Object.fromEntries(new FormData(form).entries());
-    const path = backend ? 'api/rest/v1/backend/auth/login' : 'api/rest/v1/auth/login';
     try {
-        const runtime = await apiRuntime();
-        if (typeof runtime.request !== 'function') throw new Error(t('runtimeUnavailable'));
-        const result = await runtime.request(buildRestUrl(path, backend), {
+        const loginApi = backend ? null : apis.find((api) => api.class === 'Weline\\Api\\Api\\Rest\\V1\\Auth' && api.method === 'postLogin');
+        const path = backend ? 'api/rest/v1/backend/auth/login' : loginApi.route.path;
+        const result = await sendHttp(buildRestUrl(path, backend), {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(payload),
-            silent: true
+            body: JSON.stringify(payload)
         });
         const transport = normalizeTransport(result);
         const business = transport.body || {};
@@ -1642,6 +1968,23 @@ document.addEventListener('click', async (event) => {
     if (action === 'copy') await copyText(trigger.dataset.copyValue || '');
     else if (action === 'run-worker') await runWorker();
     else if (action === 'run-rest') await runRest();
+    else if (action === 'run-demo') await runDemo(trigger.dataset.demoAction);
+    else if (action === 'open-demo' || action === 'close-demo') {
+        const api = selectedApi();
+        state.demoId = action === 'open-demo' ? (demoDefinition(api)?.id || '') : '';
+        const url = new URL(window.location.href);
+        if (state.demoId) url.searchParams.set('demo', state.demoId);
+        else url.searchParams.delete('demo');
+        window.history.replaceState({apiId: state.selectedId}, '', url);
+        renderTest(api);
+    } else if (action === 'reset-demo') {
+        const api = selectedApi();
+        const demo = demoDefinition(api);
+        if (demo && !demoSession(demo).busy) {
+            state.demoSessions.delete(demo.id);
+            renderTest(api);
+        }
+    }
     else if (action === 'copy-response') await copyText(state.lastResponseText);
     else if (action === 'format-response') {
         const output = testRoot.querySelector('[data-api-response-body]');
@@ -1721,6 +2064,15 @@ searchInput?.addEventListener('input', () => {
     }, 180);
 });
 
+let moduleFilterTimer = 0;
+moduleFilterInput?.addEventListener('input', () => {
+    window.clearTimeout(moduleFilterTimer);
+    moduleFilterTimer = window.setTimeout(() => {
+        state.moduleFilter = moduleFilterInput.value;
+        renderList();
+    }, 160);
+});
+
 testRoot?.addEventListener('input', (event) => {
     const target = event.target;
     if (target.matches('[data-worker-param]')) syncWorkerPreview(target.dataset.paramName || '');
@@ -1747,6 +2099,7 @@ document.querySelectorAll('dialog[data-api-dialog]').forEach((dialog) => {
 });
 
 window.addEventListener('popstate', () => {
+    state.demoId = new URL(window.location.href).searchParams.get('demo') || '';
     const apiId = new URL(window.location.href).searchParams.get('api_id') || '';
     const api = apis.find((item) => String(item.id || '') === apiId);
     if (api) selectApi(api, {history: false});

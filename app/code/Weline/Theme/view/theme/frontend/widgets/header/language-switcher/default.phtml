@@ -27,6 +27,8 @@ $isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
 <section class="<?= $esc($scope->cssClass) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
          weline-code="<?= $esc($scope->code) ?>"
          data-uid="<?= $esc($scope->uid) ?>"
-         data-js-ns="<?= $esc($scope->jsNs) ?>">
+         data-js-ns="<?= $esc($scope->jsNs) ?>"
+         data-weline-load="i18n">
+    <?php // i18n：框架核心模组（Weline_Framework）；主题部件声明加载；Weline_I18n 仅增强 ?>
     <w:i18n:switcher navigation="path" />
 </section>

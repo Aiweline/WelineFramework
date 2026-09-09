@@ -1498,20 +1498,6 @@ class Dictionary extends BaseController
 
     private function clearRuntimeTranslationCaches(): void
     {
-        try {
-            w_cache('i18n')->clear();
-        } catch (\Throwable) {
-        }
-
-        try {
-            w_cache('phrase')->clear();
-        } catch (\Throwable) {
-        }
-
-        I18n::clearLocalWordsCache();
-        PhraseParser::clearWorkerCaches();
-        I18nParser::clearWorkerCaches();
-
         ObjectManager::getInstance(RuntimeCacheBroadcaster::class)->broadcast();
     }
 

@@ -10,6 +10,7 @@ use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
 use Weline\Framework\Database\Transaction\WriteIntentTransactionCoordinatorInterface;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Websites\Data\WebsiteData;
 use Weline\Websites\Service\WebsiteCacheInvalidationService;
 #[Table(comment: '网站表')]
 #[Index(name: 'uk_name', columns: ['name'], type: 'UNIQUE')]
@@ -267,6 +268,78 @@ class Website extends Model
     {
         $this->setData(self::schema_fields_ID, $websiteId);
         return $this;
+    }
+
+    /**
+     * Prefer the request WebsiteData snapshot, then the shared worker cache.
+     * Pass forceReload: true (or load($id, forceReload: true)) to hit the database.
+     */
+    public function load(int|string $field_or_pk_value, $value = null, bool $forceReload = false): AbstractModel
+    {
+        if (!$forceReload) {
+            $row = $this->resolveRowWithoutQuery($field_or_pk_value, $value);
+            if ($row !== null) {
+                $identityKey = static::class . '::' . (\is_null($value)
+                    ? (string)$field_or_pk_value
+                    : $field_or_pk_value . '::' . $value);
+                $this->hydrateFromLoadedRow($row, $identityKey);
+                return $this;
+            }
+        }
+
+        return parent::load($field_or_pk_value, $value, $forceReload);
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function resolveRowWithoutQuery(int|string $field_or_pk_value, mixed $value): ?array
+    {
+        if ($value === null) {
+            if (!\is_int($field_or_pk_value)
+                && !(\is_string($field_or_pk_value) && \preg_match('/^(?:0|[1-9][0-9]*)$/D', $field_or_pk_value) === 1)) {
+                return null;
+            }
+            $websiteId = (int)$field_or_pk_value;
+            if (WebsiteData::matchesWebsiteId($websiteId)) {
+                $row = WebsiteData::getRowSnapshot();
+                if (\is_array($row)) {
+                    return $row;
+                }
+            }
+            $shared = WebsiteData::readSharedSnapshotById($websiteId);
+            return $shared['website'] ?? null;
+        }
+
+        if ((string)$field_or_pk_value === self::schema_fields_CODE) {
+            $code = \trim((string)$value);
+            if (WebsiteData::matchesWebsiteCode($code)) {
+                $row = WebsiteData::getRowSnapshot();
+                if (\is_array($row)) {
+                    return $row;
+                }
+            }
+            $shared = WebsiteData::readSharedSnapshotByCode($code);
+            return $shared['website'] ?? null;
+        }
+
+        if ((string)$field_or_pk_value === self::schema_fields_ID) {
+            if (!\is_int($value)
+                && !(\is_string($value) && \preg_match('/^(?:0|[1-9][0-9]*)$/D', (string)$value) === 1)) {
+                return null;
+            }
+            $websiteId = (int)$value;
+            if (WebsiteData::matchesWebsiteId($websiteId)) {
+                $row = WebsiteData::getRowSnapshot();
+                if (\is_array($row)) {
+                    return $row;
+                }
+            }
+            $shared = WebsiteData::readSharedSnapshotById($websiteId);
+            return $shared['website'] ?? null;
+        }
+
+        return null;
     }
 
     public function getWebsiteId(): int

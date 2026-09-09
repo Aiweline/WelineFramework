@@ -233,7 +233,7 @@
                 if (!issued) {
                     throw new Error('guest_token_unavailable');
                 }
-                const expiresAt = Number((payload && payload.expires_at_ms) || (Date.now() + 7 * 24 * 3600 * 1000));
+                const expiresAt = Number((payload && payload.expires_at_ms) || (Date.now() + 15 * 24 * 3600 * 1000));
                 if (global.WelineCart && typeof global.WelineCart.rememberGuestSession === 'function') {
                     global.WelineCart.rememberGuestSession(issued, expiresAt);
                 } else {
@@ -266,6 +266,14 @@
                 selection[axisCode] = axisValue;
             }
         });
+        const themeId = String(
+            button.dataset.promotionThemeId
+            || (root && root.getAttribute('data-promotion-theme-id'))
+            || ''
+        ).trim();
+        if (themeId !== '' && themeId !== '0') {
+            selection.promotion_theme_id = themeId;
+        }
 
         return Object.keys(selection).sort().reduce(function (normalized, axisCode) {
             normalized[axisCode] = selection[axisCode];
@@ -283,13 +291,15 @@
                 : '')
             || 'toc'
         ).toLowerCase() === 'tob' ? 'tob' : 'toc';
+        const qtySelect = (detailRoot(button) || document).querySelector('[data-testid="product-qty"]');
+        const qtyFromSelect = qtySelect ? Math.max(1, Number(qtySelect.value || 1) || 1) : 0;
         const result = await (await waitForCartApi()).add({
             provider_code: button.dataset.providerCode || 'product',
             global_offer_uuid: button.dataset.globalOfferUuid || '',
             legacy_product_id: Number(button.dataset.productId || 0),
             selection: readEavSelection(button),
             guest_token: await ensureGuestToken(),
-            qty: Math.max(1, Number(button.dataset.qty || 1) || 1),
+            qty: qtyFromSelect > 0 ? qtyFromSelect : Math.max(1, Number(button.dataset.qty || 1) || 1),
             selling_mode: sellingMode,
             cart_type: sellingMode,
         }, { silent: true });
@@ -617,6 +627,165 @@
         return options;
     }
 
+    async function openPurchasePanel(button) {
+        const productId = Number(button.dataset.productId || 0);
+        if (productId <= 0) {
+            throw new Error('product_id_required');
+        }
+        let dialog = document.getElementById('weline-product-purchase-panel-dialog');
+        if (!dialog) {
+            dialog = document.createElement('dialog');
+            dialog.id = 'weline-product-purchase-panel-dialog';
+            dialog.className = 'w-dialog w-product-purchase-panel';
+            dialog.setAttribute('data-w-component', 'dialog');
+            dialog.setAttribute('data-state', 'closed');
+            dialog.setAttribute('data-size', 'lg');
+            dialog.setAttribute('data-w-closable', 'true');
+            dialog.setAttribute('data-w-backdrop', 'dismissible');
+            dialog.setAttribute('aria-labelledby', 'weline-product-purchase-panel-title');
+            dialog.innerHTML = ''
+                + '<header class="w-dialog__header">'
+                + '<h2 id="weline-product-purchase-panel-title" class="w-dialog__title"></h2>'
+                + '<button type="button" class="w-button" data-variant="ghost" data-size="sm" data-purchase-panel-close aria-label="×">×</button>'
+                + '</header>'
+                + '<div class="w-dialog__body w-product-purchase-panel__body" data-purchase-panel-body></div>';
+            document.body.appendChild(dialog);
+            dialog.querySelector('[data-purchase-panel-close]')?.addEventListener('click', function () {
+                if (typeof dialog.close === 'function') {
+                    dialog.close();
+                }
+                dialog.setAttribute('data-state', 'closed');
+            });
+            dialog.addEventListener('click', function (event) {
+                if (event.target === dialog) {
+                    if (typeof dialog.close === 'function') {
+                        dialog.close();
+                    }
+                    dialog.setAttribute('data-state', 'closed');
+                }
+            });
+        }
+        const title = dialog.querySelector('#weline-product-purchase-panel-title');
+        const body = dialog.querySelector('[data-purchase-panel-body]');
+        const isZh = String(document.documentElement.lang || '').toLowerCase().startsWith('zh');
+        if (title) {
+            title.textContent = isZh ? '选择规格并加购' : 'Choose options';
+        }
+        if (body) {
+            body.innerHTML = '<div class="w-product-purchase-panel__loading">'
+                + (isZh ? '加载中…' : 'Loading…')
+                + '</div>';
+        }
+        dialog.setAttribute('data-state', 'open');
+        if (typeof dialog.showModal === 'function') {
+            if (!dialog.open) {
+                dialog.showModal();
+            }
+        } else {
+            dialog.setAttribute('open', 'open');
+        }
+
+        const baseUrl = String(button.dataset.purchasePanelUrl || '').trim()
+            || '/weline_product/frontend/api/purchase-panel';
+        const url = new URL(baseUrl, global.location.origin);
+        url.searchParams.set('product_id', String(productId));
+        const offerUuid = String(button.dataset.globalOfferUuid || '').trim();
+        if (offerUuid) {
+            url.searchParams.set('offer', offerUuid);
+        }
+        const response = await fetch(url.toString(), {
+            credentials: 'same-origin',
+            headers: { Accept: 'application/json' },
+            cache: 'no-store',
+        });
+        const payload = await response.json().catch(function () { return null; });
+        if (!payload || payload.success === false || !payload.html) {
+            throw new Error((payload && payload.message) || (isZh ? '无法打开加购面板' : 'purchase_panel_failed'));
+        }
+        if (body) {
+            body.innerHTML = String(payload.html);
+            body.querySelectorAll('script').forEach(function (oldScript) {
+                const next = document.createElement('script');
+                // Preserve type/nonce so application/json catalogs stay inert.
+                Array.from(oldScript.attributes || []).forEach(function (attr) {
+                    if (!attr || !attr.name) {
+                        return;
+                    }
+                    try {
+                        next.setAttribute(attr.name, attr.value);
+                    } catch (e) {}
+                });
+                const scriptType = String(oldScript.getAttribute('type') || '').toLowerCase();
+                const isExecutable = scriptType === ''
+                    || scriptType === 'text/javascript'
+                    || scriptType === 'application/javascript'
+                    || scriptType === 'module';
+                if (oldScript.src) {
+                    next.src = oldScript.src;
+                } else {
+                    next.textContent = oldScript.textContent || '';
+                }
+                oldScript.parentNode.replaceChild(next, oldScript);
+                if (!isExecutable) {
+                    // Non-JS payloads (e.g. variant catalog JSON) must not run.
+                    return;
+                }
+            });
+            bindPurchaseButtons(body);
+            try {
+                if (global.WelineB2BSellingMode && typeof global.WelineB2BSellingMode.applyIdentity === 'function'
+                    && payload.identity && typeof payload.identity === 'object') {
+                    global.WelineB2BSellingMode.applyIdentity(payload.identity, body);
+                }
+            } catch (e) {}
+            try {
+                if (global.WelineB2BSellingMode && typeof global.WelineB2BSellingMode.bindAll === 'function') {
+                    global.WelineB2BSellingMode.bindAll();
+                }
+            } catch (e) {}
+            try {
+                if (global.WelineB2BSellingMode && typeof global.WelineB2BSellingMode.applyIdentity === 'function'
+                    && payload.identity && typeof payload.identity === 'object') {
+                    // Re-apply after bind so syncApplyPanels sees final attrs.
+                    global.WelineB2BSellingMode.applyIdentity(payload.identity, body);
+                }
+            } catch (e) {}
+            try {
+                global.dispatchEvent(new CustomEvent('weline:selling-mode-changed', {
+                    detail: {
+                        selling_mode: global.WelineB2BSellingMode && typeof global.WelineB2BSellingMode.preferredMode === 'function'
+                            ? global.WelineB2BSellingMode.preferredMode()
+                            : 'toc',
+                    },
+                }));
+            } catch (e) {}
+        }
+        return payload;
+    }
+
+    function shouldOpenPurchasePanel(button) {
+        if (!button) {
+            return false;
+        }
+        if (String(button.dataset.openPurchasePanel || '') === '1') {
+            return true;
+        }
+        if (String(button.dataset.needsSelection || '') === '1') {
+            return true;
+        }
+        const sellingMode = String(
+            button.dataset.sellingMode
+            || button.dataset.cartType
+            || (document.documentElement.getAttribute('data-selling-mode') || '')
+            || (global.WelineB2BSellingMode && typeof global.WelineB2BSellingMode.preferredMode === 'function'
+                ? global.WelineB2BSellingMode.preferredMode()
+                : '')
+            || 'toc',
+        ).toLowerCase();
+        // Listing card + wholesale: always open panel so MOQ / ladder prices are explicit.
+        return sellingMode === 'tob' && !!widgetRoot(button) && !detailRoot(button);
+    }
+
     function bindPurchaseButton(button, options) {
         if (!button || button.dataset.purchaseBound === '1') {
             return;
@@ -624,8 +793,45 @@
         button.dataset.purchaseBound = '1';
         const resolvedOptions = options || readOptions(button);
 
-        button.addEventListener('click', async function () {
+        button.addEventListener('click', async function (event) {
             if (button.disabled) {
+                return;
+            }
+
+            if (shouldOpenPurchasePanel(button) && !detailRoot(button)) {
+                if (event) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    if (typeof event.stopImmediatePropagation === 'function') {
+                        event.stopImmediatePropagation();
+                    }
+                }
+                const feedback = purchaseFeedback(button);
+                const message = feedback.message;
+                showPurchaseLoading(button, message, resolvedOptions.loadingText || '');
+                try {
+                    await openPurchasePanel(button);
+                    button.classList.remove('is-loading');
+                    button.disabled = false;
+                    if (message) {
+                        message.classList.remove('is-error', 'is-loading');
+                        message.textContent = '';
+                    }
+                } catch (error) {
+                    button.classList.remove('is-loading');
+                    button.disabled = false;
+                    const errorText = error && error.message
+                        ? error.message
+                        : (resolvedOptions.errorText || '');
+                    if (message) {
+                        message.classList.remove('is-success', 'is-loading');
+                        message.classList.add('is-error');
+                        message.textContent = errorText;
+                    }
+                    if (errorText) {
+                        showFloatingToast(errorText, 'error');
+                    }
+                }
                 return;
             }
 
@@ -660,6 +866,11 @@
                         cartSummary,
                         readCartLinkMeta(button),
                     );
+                    const panel = document.getElementById('weline-product-purchase-panel-dialog');
+                    if (panel && panel.open && typeof panel.close === 'function') {
+                        panel.close();
+                        panel.setAttribute('data-state', 'closed');
+                    }
                 } else if (message) {
                     message.classList.remove('is-error', 'is-loading');
                     message.textContent = resolvedOptions.successText || '';
@@ -682,7 +893,7 @@
                     showFloatingToast(errorText, 'error');
                 }
             }
-        });
+        }, true);
     }
 
     function bindPurchaseButtons(scope) {

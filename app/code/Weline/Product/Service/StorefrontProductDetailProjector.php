@@ -256,6 +256,7 @@ final class StorefrontProductDetailProjector
 
         $rowsByCode = [
             'name' => [],
+            'meta_name' => [],
             'slug' => [],
             'source_slug' => [],
         ];
@@ -278,6 +279,18 @@ final class StorefrontProductDetailProjector
         $displayName = $resolvedName->isExplicit()
             ? $this->normalizeResolvedValue($resolvedName->value)
             : trim((string)($offer['name'] ?? ''));
+        $resolvedMetaName = $this->resolvePresentableAttribute(
+            $rowsByCode['meta_name'],
+            $storeId,
+            $locale,
+            $localeFallbacks,
+        );
+        $metaName = $resolvedMetaName->isExplicit()
+            ? $this->normalizeResolvedValue($resolvedMetaName->value)
+            : trim((string)($offer['meta_name'] ?? ''));
+        if ($this->looksLikeFactorySkuName($displayName) && $metaName !== '') {
+            $displayName = $metaName;
+        }
         if (!$this->isHanTextLocale($locale)
             && ($displayName === '' || $this->containsUnsupportedHanText($displayName, $locale))
         ) {
@@ -310,7 +323,7 @@ final class StorefrontProductDetailProjector
             'name' => $displayName,
             'short_description' => (string)($offer['short_description'] ?? ''),
             'description' => (string)($offer['description'] ?? ''),
-            'meta_name' => (string)($offer['meta_name'] ?? ''),
+            'meta_name' => $metaName,
             'meta_description' => (string)($offer['meta_description'] ?? ''),
             'meta_keywords' => (string)($offer['meta_keywords'] ?? ''),
             'slug' => $slug,
@@ -1061,6 +1074,14 @@ final class StorefrontProductDetailProjector
         $productId = max(0, (int)($offer['product_id'] ?? 0));
 
         return $productId > 0 ? 'Product #' . $productId : 'Product';
+    }
+
+    private function looksLikeFactorySkuName(string $value): bool
+    {
+        $value = trim($value);
+
+        // e.g. YUEYANICHANG-4D375D6D-C7370-S7CA5
+        return $value !== '' && (bool)preg_match('/^[A-Z0-9]{3,}(?:-[A-Z0-9]{2,}){2,}$/', $value);
     }
 
     private function normalizeSlug(string $slug): string

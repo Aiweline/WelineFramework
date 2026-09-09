@@ -11,9 +11,11 @@ declare(strict_types=1);
 
 namespace Weline\CustomerService\Controller\Backend;
 
+use Weline\CustomerService\Model\AgentPhrase;
 use Weline\CustomerService\Model\ChatMessage;
 use Weline\CustomerService\Model\ChatSession;
 use Weline\CustomerService\Model\ServiceAgent;
+use Weline\CustomerService\Service\ChatAttachmentCodec;
 use Weline\CustomerService\Service\ChatService;
 use Weline\CustomerService\Service\StatisticsService;
 use Weline\Framework\App\Controller\BackendController;
@@ -50,7 +52,8 @@ class Console extends BackendController
             // 查找当前用户是否是客服
             /** @var ServiceAgent $agent */
             $agent = ObjectManager::getInstance(ServiceAgent::class);
-            $agent->where(ServiceAgent::schema_fields_USER_ID, $userId)
+            $agent->reset()
+                ->where(ServiceAgent::schema_fields_USER_ID, $userId)
                 ->where(ServiceAgent::schema_fields_IS_ACTIVE, 1)
                 ->find()
                 ->fetch();
@@ -79,52 +82,23 @@ class Console extends BackendController
                 ->select()
                 ->fetch()
                 ->getItems();
+            $waitingSessions = $this->chatService->normalizeSessionRows($waitingSessions);
+            $waitingSessions = $this->chatService->enrichConsoleSessionRows($waitingSessions);
 
-            // 获取每个会话的最后一条消息
-            foreach ($sessions as &$sessionData) {
-                /** @var ChatMessage $message */
-                $message = ObjectManager::getInstance(ChatMessage::class);
-                $lastMessage = $message->reset()
-                    ->where(ChatMessage::schema_fields_session_id, $sessionData['session_id'])
-                    ->order(ChatMessage::schema_fields_created_at, 'DESC')
-                    ->find()
-                    ->fetch();
-                
-                if ($lastMessage->getId()) {
-                    $sessionData['last_message'] = $lastMessage->getTranslatedContent() ?: $lastMessage->getContent();
-                    $sessionData['last_message_time'] = $this->chatService->formatClientDateTime((string)$lastMessage->getData('created_at'));
-                }
-
-                // 获取未读消息数
-                $unreadCount = $message->reset()
-                    ->where(ChatMessage::schema_fields_session_id, $sessionData['session_id'])
-                    ->where(ChatMessage::schema_fields_sender_type, ChatMessage::SENDER_TYPE_CUSTOMER)
-                    ->where(ChatMessage::schema_fields_created_at, $sessionData['last_read_time'] ?? '1970-01-01 00:00:00', '>')
-                    ->count();
-                $sessionData['unread_count'] = (int)$unreadCount;
-            }
-
-            foreach ($waitingSessions as &$waitingSession) {
-                /** @var ChatMessage $message */
-                $message = ObjectManager::getInstance(ChatMessage::class);
-                $lastMessage = $message->reset()
-                    ->where(ChatMessage::schema_fields_session_id, $waitingSession['session_id'])
-                    ->order(ChatMessage::schema_fields_created_at, 'DESC')
-                    ->find()
-                    ->fetch();
-                
-                if ($lastMessage->getId()) {
-                    $waitingSession['last_message'] = $lastMessage->getTranslatedContent() ?: $lastMessage->getContent();
-                    $waitingSession['last_message_time'] = $this->chatService->formatClientDateTime((string)$lastMessage->getData('created_at'));
-                }
-            }
+            $sessions = $this->chatService->enrichConsoleSessionRows($sessions);
+            $sessions = $this->chatService->withTransferBadges($sessions);
+            [$sessions, $transferredSessions] = $this->partitionAgentSessions($sessions);
+            $sessions = $this->chatService->sortConsoleSessionsByPriority($sessions);
+            $transferredSessions = $this->chatService->sortConsoleSessionsByPriority($transferredSessions);
 
             // 获取统计数据（默认今日）
             $statistics = $this->statisticsService->getAgentStatistics($agent->getId(), 'today');
 
             $this->assign('agent', $agent->getData());
             $this->assign('sessions', $sessions);
+            $this->assign('transferredSessions', $transferredSessions);
             $this->assign('waitingSessions', $waitingSessions);
+            $this->assign('defaultSessionId', (int)($sessions[0]['session_id'] ?? $sessions[0]['id'] ?? 0));
             $this->assign('statistics', $statistics);
             $this->assign('page_title', __('客服工作台'));
             
@@ -132,6 +106,7 @@ class Console extends BackendController
         } catch (\Exception $e) {
             $this->getMessageManager()->addError(__('加载工作台失败：%{1}', $e->getMessage()));
             $this->assign('sessions', []);
+            $this->assign('transferredSessions', []);
             $this->assign('waitingSessions', []);
             return $this->fetch();
         }
@@ -148,7 +123,8 @@ class Console extends BackendController
             
             /** @var ServiceAgent $agent */
             $agent = ObjectManager::getInstance(ServiceAgent::class);
-            $agent->where(ServiceAgent::schema_fields_USER_ID, $userId)
+            $agent->reset()
+                ->where(ServiceAgent::schema_fields_USER_ID, $userId)
                 ->where(ServiceAgent::schema_fields_IS_ACTIVE, 1)
                 ->find()
                 ->fetch();
@@ -174,33 +150,18 @@ class Console extends BackendController
                 ->select()
                 ->fetch()
                 ->getItems();
+            $waitingSessions = $this->chatService->normalizeSessionRows($waitingSessions);
+            $waitingSessions = $this->chatService->enrichConsoleSessionRows($waitingSessions);
 
-            // 获取每个会话的最后一条消息和未读数
-            foreach ($sessions as &$sessionData) {
-                /** @var ChatMessage $message */
-                $message = ObjectManager::getInstance(ChatMessage::class);
-                $lastMessage = $message->reset()
-                    ->where(ChatMessage::schema_fields_session_id, $sessionData['session_id'])
-                    ->order(ChatMessage::schema_fields_created_at, 'DESC')
-                    ->find()
-                    ->fetch();
-                
-                if ($lastMessage->getId()) {
-                    $sessionData['last_message'] = $lastMessage->getTranslatedContent() ?: $lastMessage->getContent();
-                    $sessionData['last_message_time'] = $this->chatService->formatClientDateTime((string)$lastMessage->getData('created_at'));
-                }
-
-                // 获取未读消息数
-                $unreadCount = $message->reset()
-                    ->where(ChatMessage::schema_fields_session_id, $sessionData['session_id'])
-                    ->where(ChatMessage::schema_fields_sender_type, ChatMessage::SENDER_TYPE_CUSTOMER)
-                    ->where(ChatMessage::schema_fields_created_at, $sessionData['last_read_time'] ?? '1970-01-01 00:00:00', '>')
-                    ->count();
-                $sessionData['unread_count'] = (int)$unreadCount;
-            }
+            $sessions = $this->chatService->enrichConsoleSessionRows($sessions);
+            $sessions = $this->chatService->withTransferBadges($sessions);
+            [$sessions, $transferredSessions] = $this->partitionAgentSessions($sessions);
+            $sessions = $this->chatService->sortConsoleSessionsByPriority($sessions);
+            $transferredSessions = $this->chatService->sortConsoleSessionsByPriority($transferredSessions);
 
             return $this->jsonResponse(true, __('获取成功'), [
                 'sessions' => $sessions,
+                'transferred_sessions' => $transferredSessions,
                 'waiting_sessions' => $waitingSessions
             ]);
         } catch (\Exception $e) {
@@ -218,6 +179,9 @@ class Console extends BackendController
             $sessionId = (int)$this->request->getParam('session_id', 0);
             $limit = (int)$this->request->getParam('limit', 50);
             $offset = (int)$this->request->getParam('offset', 0);
+            $sinceMessageId = (int)$this->request->getParam('since_id', 0);
+            $beforeMessageId = (int)$this->request->getParam('before_id', 0);
+            $markRead = (string)$this->request->getParam('mark_read', '1') !== '0';
 
             if ($sessionId <= 0) {
                 return $this->jsonResponse(false, __('无效的会话ID'));
@@ -227,7 +191,8 @@ class Console extends BackendController
             $userId = $this->session->getLoginUserID();
             /** @var ServiceAgent $agent */
             $agent = ObjectManager::getInstance(ServiceAgent::class);
-            $agent->where(ServiceAgent::schema_fields_USER_ID, $userId)
+            $agent->reset()
+                ->where(ServiceAgent::schema_fields_USER_ID, $userId)
                 ->where(ServiceAgent::schema_fields_IS_ACTIVE, 1)
                 ->find()
                 ->fetch();
@@ -249,12 +214,29 @@ class Console extends BackendController
                 return $this->jsonResponse(false, __('无权访问此会话'));
             }
 
+            $pageLimit = max(1, $limit);
+            if ($sinceMessageId > 0) {
+                $rawMessages = $this->chatService->getMessagesSince($sessionId, $sinceMessageId, $pageLimit);
+            } elseif ($beforeMessageId > 0) {
+                $rawMessages = $this->chatService->getMessagesBefore($sessionId, $beforeMessageId, $pageLimit);
+            } else {
+                $rawMessages = $this->chatService->getMessages($sessionId, $pageLimit, $offset);
+            }
+
             $messages = array_map(
-                fn(array $message): array => $this->chatService->formatMessageForAgentView($message),
-                $this->chatService->getMessages($sessionId, $limit, $offset)
+                fn(ChatMessage|array $message): array => $this->chatService->formatMessageForAgentView($message),
+                $rawMessages
             );
 
-            return $this->jsonResponse(true, __('获取成功'), $messages);
+            if ($markRead && $session->getAgentId() == $agent->getId() && $beforeMessageId <= 0) {
+                $this->chatService->markSessionReadByAgent($sessionId);
+            }
+
+            return $this->jsonResponse(true, __('获取成功'), $messages, [
+                'has_more' => $beforeMessageId > 0
+                    ? count($messages) >= $pageLimit
+                    : ($sinceMessageId > 0 ? false : count($messages) >= $pageLimit),
+            ]);
         } catch (\Exception $e) {
             return $this->jsonResponse(false, __('获取消息失败：%{1}', $e->getMessage()));
         }
@@ -268,9 +250,24 @@ class Console extends BackendController
     {
         try {
             $sessionId = (int)$this->request->getPost('session_id', 0);
-            $content = trim($this->request->getPost('content', ''));
+            $content = trim((string)$this->request->getPost('content', ''));
+            $attachmentType = trim((string)$this->request->getPost('attachment_type', ''));
+            $attachmentUrl = trim((string)$this->request->getPost('attachment_url', ''));
+            $attachmentName = trim((string)$this->request->getPost('attachment_name', ''));
+            $attachmentSize = (int)$this->request->getPost('attachment_size', 0);
+            $attachmentMime = trim((string)$this->request->getPost('attachment_mime', ''));
 
-            if (empty($content)) {
+            if ($attachmentType !== '' && $attachmentUrl !== '') {
+                $content = ChatAttachmentCodec::encode([
+                    'type' => $attachmentType,
+                    'url' => $attachmentUrl,
+                    'name' => $attachmentName,
+                    'size' => $attachmentSize,
+                    'mime' => $attachmentMime,
+                ]);
+            }
+
+            if ($content === '') {
                 return $this->jsonResponse(false, __('消息内容不能为空'));
             }
 
@@ -282,7 +279,8 @@ class Console extends BackendController
             $userId = $this->session->getLoginUserID();
             /** @var ServiceAgent $agent */
             $agent = ObjectManager::getInstance(ServiceAgent::class);
-            $agent->where(ServiceAgent::schema_fields_USER_ID, $userId)
+            $agent->reset()
+                ->where(ServiceAgent::schema_fields_USER_ID, $userId)
                 ->where(ServiceAgent::schema_fields_IS_ACTIVE, 1)
                 ->find()
                 ->fetch();
@@ -344,7 +342,8 @@ class Console extends BackendController
             $userId = $this->session->getLoginUserID();
             /** @var ServiceAgent $agent */
             $agent = ObjectManager::getInstance(ServiceAgent::class);
-            $agent->where(ServiceAgent::schema_fields_USER_ID, $userId)
+            $agent->reset()
+                ->where(ServiceAgent::schema_fields_USER_ID, $userId)
                 ->where(ServiceAgent::schema_fields_IS_ACTIVE, 1)
                 ->find()
                 ->fetch();
@@ -403,7 +402,8 @@ class Console extends BackendController
             $userId = $this->session->getLoginUserID();
             /** @var ServiceAgent $agent */
             $agent = ObjectManager::getInstance(ServiceAgent::class);
-            $agent->where(ServiceAgent::schema_fields_USER_ID, $userId)
+            $agent->reset()
+                ->where(ServiceAgent::schema_fields_USER_ID, $userId)
                 ->where(ServiceAgent::schema_fields_IS_ACTIVE, 1)
                 ->find()
                 ->fetch();
@@ -445,7 +445,8 @@ class Console extends BackendController
             
             /** @var ServiceAgent $agent */
             $agent = ObjectManager::getInstance(ServiceAgent::class);
-            $agent->where(ServiceAgent::schema_fields_USER_ID, $userId)
+            $agent->reset()
+                ->where(ServiceAgent::schema_fields_USER_ID, $userId)
                 ->where(ServiceAgent::schema_fields_IS_ACTIVE, 1)
                 ->find()
                 ->fetch();
@@ -474,7 +475,8 @@ class Console extends BackendController
 
             /** @var ServiceAgent $agent */
             $agent = ObjectManager::getInstance(ServiceAgent::class);
-            $agent->where(ServiceAgent::schema_fields_USER_ID, $userId)
+            $agent->reset()
+                ->where(ServiceAgent::schema_fields_USER_ID, $userId)
                 ->where(ServiceAgent::schema_fields_IS_ACTIVE, 1)
                 ->find()
                 ->fetch();
@@ -524,15 +526,243 @@ class Console extends BackendController
     }
 
     /**
+     * 上传聊天附件（base64，经 bin-query）
+     * POST /customerservice/backend/console/upload
+     */
+    public function postUpload(): string
+    {
+        try {
+            $agent = $this->requireCurrentAgent();
+            if ($agent instanceof string) {
+                return $agent;
+            }
+
+            $name = trim((string)$this->request->getPost('name', 'file'));
+            $mime = strtolower(trim((string)$this->request->getPost('mime', 'application/octet-stream')));
+            $base64 = (string)$this->request->getPost('data', '');
+            if (str_contains($base64, ',')) {
+                $base64 = substr($base64, (int)strpos($base64, ',') + 1);
+            }
+            $binary = base64_decode($base64, true);
+            if ($binary === false || $binary === '') {
+                return $this->jsonResponse(false, __('上传数据无效'));
+            }
+
+            $size = strlen($binary);
+            $isImage = str_starts_with($mime, 'image/');
+            $max = $isImage ? 5 * 1024 * 1024 : 10 * 1024 * 1024;
+            if ($size > $max) {
+                return $this->jsonResponse(false, __('文件过大'));
+            }
+
+            $allowedImage = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+            $allowedFile = [
+                'application/pdf',
+                'text/plain',
+                'application/zip',
+                'application/msword',
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                'application/vnd.ms-excel',
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            ];
+            if ($isImage && !in_array($mime, $allowedImage, true)) {
+                return $this->jsonResponse(false, __('不支持的图片类型'));
+            }
+            if (!$isImage && !in_array($mime, $allowedFile, true)) {
+                return $this->jsonResponse(false, __('不支持的文件类型'));
+            }
+
+            $safeName = preg_replace('/[^a-zA-Z0-9._\-一-龥]+/u', '_', $name) ?: 'file';
+            $ext = pathinfo($safeName, PATHINFO_EXTENSION);
+            if ($ext === '') {
+                $ext = $isImage ? 'png' : 'bin';
+                $safeName .= '.' . $ext;
+            }
+            $dirRel = 'customerservice/' . (int)$agent->getId() . '/' . date('Y/m/d');
+            $dirAbs = rtrim((string)BP, '/\\') . DIRECTORY_SEPARATOR . 'pub' . DIRECTORY_SEPARATOR . 'media' . DIRECTORY_SEPARATOR
+                . str_replace('/', DIRECTORY_SEPARATOR, $dirRel);
+            if (!is_dir($dirAbs) && !mkdir($dirAbs, 0775, true) && !is_dir($dirAbs)) {
+                return $this->jsonResponse(false, __('无法创建上传目录'));
+            }
+            $stored = bin2hex(random_bytes(8)) . '_' . $safeName;
+            $pathAbs = $dirAbs . DIRECTORY_SEPARATOR . $stored;
+            if (file_put_contents($pathAbs, $binary) === false) {
+                return $this->jsonResponse(false, __('保存文件失败'));
+            }
+
+            $url = '/media/' . $dirRel . '/' . rawurlencode($stored);
+            return $this->jsonResponse(true, __('上传成功'), [
+                'url' => $url,
+                'name' => $safeName,
+                'mime' => $mime,
+                'size' => $size,
+                'kind' => $isImage ? ChatAttachmentCodec::TYPE_IMAGE : ChatAttachmentCodec::TYPE_FILE,
+            ]);
+        } catch (\Exception $e) {
+            return $this->jsonResponse(false, __('上传失败：%{1}', $e->getMessage()));
+        }
+    }
+
+    /**
+     * 个人话术列表
+     * GET /customerservice/backend/console/phrases
+     */
+    public function getPhrases(): string
+    {
+        try {
+            $agent = $this->requireCurrentAgent();
+            if ($agent instanceof string) {
+                return $agent;
+            }
+            /** @var AgentPhrase $model */
+            $model = ObjectManager::getInstance(AgentPhrase::class);
+            $rows = $model->reset()
+                ->where(AgentPhrase::schema_fields_AGENT_ID, (int)$agent->getId())
+                ->order(AgentPhrase::schema_fields_SORT, 'ASC')
+                ->order(AgentPhrase::schema_fields_ID, 'DESC')
+                ->select()
+                ->fetch()
+                ->getItems();
+            $list = [];
+            foreach (is_array($rows) ? $rows : [] as $row) {
+                $data = is_array($row) ? $row : $row->getData();
+                $list[] = [
+                    'phrase_id' => (int)($data[AgentPhrase::schema_fields_ID] ?? 0),
+                    'title' => (string)($data[AgentPhrase::schema_fields_TITLE] ?? ''),
+                    'content' => (string)($data[AgentPhrase::schema_fields_CONTENT] ?? ''),
+                    'sort_order' => (int)($data[AgentPhrase::schema_fields_SORT] ?? 0),
+                ];
+            }
+            return $this->jsonResponse(true, __('获取成功'), $list);
+        } catch (\Exception $e) {
+            return $this->jsonResponse(false, __('获取话术失败：%{1}', $e->getMessage()));
+        }
+    }
+
+    /**
+     * 保存个人话术（新建/更新）
+     * POST /customerservice/backend/console/phrase-save
+     */
+    public function postPhraseSave(): string
+    {
+        try {
+            $agent = $this->requireCurrentAgent();
+            if ($agent instanceof string) {
+                return $agent;
+            }
+            $phraseId = (int)$this->request->getPost('phrase_id', 0);
+            $title = trim((string)$this->request->getPost('title', ''));
+            $content = trim((string)$this->request->getPost('content', ''));
+            if ($title === '' || $content === '') {
+                return $this->jsonResponse(false, __('标题和内容不能为空'));
+            }
+            /** @var AgentPhrase $model */
+            $model = ObjectManager::getInstance(AgentPhrase::class);
+            if ($phraseId > 0) {
+                $model->load($phraseId);
+                if (!$model->getId() || (int)$model->getAgentId() !== (int)$agent->getId()) {
+                    return $this->jsonResponse(false, __('话术不存在'));
+                }
+            } else {
+                $model->setAgentId((int)$agent->getId());
+            }
+            $model->setTitle(mb_substr($title, 0, 120))
+                ->setContent($content)
+                ->setData(AgentPhrase::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'))
+                ->save();
+
+            return $this->jsonResponse(true, __('保存成功'), [
+                'phrase_id' => (int)$model->getId(),
+                'title' => $model->getTitle(),
+                'content' => $model->getContent(),
+            ]);
+        } catch (\Exception $e) {
+            return $this->jsonResponse(false, __('保存话术失败：%{1}', $e->getMessage()));
+        }
+    }
+
+    /**
+     * 删除个人话术
+     * POST /customerservice/backend/console/phrase-delete
+     */
+    public function postPhraseDelete(): string
+    {
+        try {
+            $agent = $this->requireCurrentAgent();
+            if ($agent instanceof string) {
+                return $agent;
+            }
+            $phraseId = (int)$this->request->getPost('phrase_id', 0);
+            if ($phraseId <= 0) {
+                return $this->jsonResponse(false, __('无效的话术ID'));
+            }
+            /** @var AgentPhrase $model */
+            $model = ObjectManager::getInstance(AgentPhrase::class);
+            $model->load($phraseId);
+            if (!$model->getId() || (int)$model->getAgentId() !== (int)$agent->getId()) {
+                return $this->jsonResponse(false, __('话术不存在'));
+            }
+            $model->delete();
+            return $this->jsonResponse(true, __('删除成功'));
+        } catch (\Exception $e) {
+            return $this->jsonResponse(false, __('删除话术失败：%{1}', $e->getMessage()));
+        }
+    }
+
+    /**
+     * @return ServiceAgent|string JSON error response when agent missing
+     */
+    private function requireCurrentAgent(): ServiceAgent|string
+    {
+        $userId = $this->session->getLoginUserID();
+        /** @var ServiceAgent $agent */
+        $agent = ObjectManager::getInstance(ServiceAgent::class);
+        $agent->reset()
+            ->where(ServiceAgent::schema_fields_USER_ID, $userId)
+            ->where(ServiceAgent::schema_fields_IS_ACTIVE, 1)
+            ->find()
+            ->fetch();
+        if (!$agent->getId()) {
+            return $this->jsonResponse(false, __('您不是客服人员'));
+        }
+
+        return $agent;
+    }
+
+    /**
      * JSON响应
      */
-    private function jsonResponse(bool $success, string $message, array $data = []): string
+    private function jsonResponse(bool $success, string $message, array $data = [], array $extra = []): string
     {
         $this->request->getResponse()->setHeader('Content-Type', 'application/json');
-        return json_encode([
+        return json_encode(array_merge([
             'success' => $success,
             'message' => $message,
             'data' => $data,
-        ], JSON_UNESCAPED_UNICODE);
+        ], $extra), JSON_UNESCAPED_UNICODE);
+    }
+
+    /**
+     * 将客服名下活跃会话拆为「我的会话」与「转让分配」。
+     *
+     * @param list<array<string, mixed>> $sessions
+     * @return array{0: list<array<string, mixed>>, 1: list<array<string, mixed>>}
+     */
+    private function partitionAgentSessions(array $sessions): array
+    {
+        $mine = [];
+        $transferred = [];
+        foreach ($sessions as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            if (!empty($row['is_transferred'])) {
+                $transferred[] = $row;
+            } else {
+                $mine[] = $row;
+            }
+        }
+
+        return [$mine, $transferred];
     }
 }

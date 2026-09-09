@@ -87,24 +87,62 @@ final class WaitGiftTokenContractTest extends TestCase
         $js = (string)\file_get_contents($root . '/view/statics/js/maintenance.js');
         self::assertStringContainsString('weline_mw_wait_gift', $js);
         self::assertStringContainsString('/maintenance/frontend/wait-gift/redeem', $js);
+        self::assertStringContainsString('scrubWholesaleGiftCopy', $js);
+        self::assertStringContainsString('weline_selling_mode', $js);
         self::assertStringContainsString('window.location.reload()', $js);
         self::assertStringNotContainsString('scheduleHeartbeat', $js);
         self::assertStringNotContainsString('abandonWaitToken', $js);
         self::assertStringNotContainsString('redeemThenReload', $js);
 
         $frontendJs = (string)\file_get_contents(\dirname($root) . '/Frontend/view/statics/js/weline.js');
-        self::assertStringContainsString('weline-maintenance-wait-modal', $frontendJs);
-        self::assertStringContainsString('data-w-mw-gift', $frontendJs);
-        self::assertStringContainsString('维护补偿礼金', $frontendJs);
-        self::assertStringContainsString('/maintenance/frontend/wait-gift/wave', $frontendJs);
-        self::assertStringContainsString('#ffd814', $frontendJs);
-        self::assertStringContainsString('resolveMaintenanceMeta', $frontendJs);
+        self::assertStringContainsString('maintenanceAsyncWait', $frontendJs);
+        self::assertStringContainsString('installMaintenanceHandlerLazyBridge', $frontendJs);
+        self::assertStringNotContainsString('weline-maintenance-wait-modal', $frontendJs);
+        self::assertStringNotContainsString('resolveMaintenanceMeta', $frontendJs);
+
+        $asyncJs = (string)\file_get_contents($root . '/view/statics/js/maintenance-async-wait.js');
+        self::assertStringContainsString('weline-maintenance-wait-modal', $asyncJs);
+        self::assertStringContainsString('data-w-mw-gift', $asyncJs);
+        self::assertStringContainsString('维护补偿礼金', $asyncJs);
+        self::assertStringContainsString('/maintenance/frontend/wait-gift/wave', $asyncJs);
+        self::assertStringContainsString('#ffd814', $asyncJs);
+        self::assertStringContainsString('resolveMaintenanceMeta', $asyncJs);
+        self::assertStringContainsString('isTocAudience', $asyncJs);
+        self::assertStringContainsString('weline.cart.pending_coupon', $asyncJs);
+        self::assertStringContainsString('weline:cart:apply-coupon', $asyncJs);
+        self::assertStringContainsString('wait_gift_eligible', $asyncJs);
+        self::assertFileExists($root . '/view/statics/frontend/weline.modules.js');
+        $modules = (string)\file_get_contents($root . '/view/statics/frontend/weline.modules.js');
+        self::assertStringContainsString('maintenanceAsyncWait', $modules);
+        self::assertStringContainsString('WelineMaintenanceAsyncWait', $modules);
 
         $service = (string)\file_get_contents($root . '/Service/WaitGiftService.php');
         self::assertStringContainsString('function redeemHttpStatus', $service);
+        self::assertStringContainsString('function isTocAudience', $service);
+        self::assertStringContainsString('audience_tob', $service);
         self::assertSame(404, WaitGiftService::redeemHttpStatus(['success' => false, 'error' => 'token_not_found']));
         self::assertSame(503, WaitGiftService::redeemHttpStatus(['success' => false, 'error' => 'still_maintaining']));
         self::assertSame(200, WaitGiftService::redeemHttpStatus(['success' => true]));
+    }
+
+    public function testTocAudienceRejectsWholesaleCookie(): void
+    {
+        $service = new WaitGiftService(new UpgradeWaveService($this->tmpRoot), new WaitLedger($this->tmpRoot));
+        self::assertTrue($service->isTocAudience([]));
+        self::assertTrue($service->isTocAudience(['selling_mode' => 'toc']));
+        self::assertFalse($service->isTocAudience(['selling_mode' => 'tob']));
+        self::assertFalse($service->isTocAudience([
+            'cookies' => ['weline_selling_mode_w1' => 'tob'],
+        ]));
+        self::assertTrue($service->isTocAudience([
+            'cookies' => ['weline_selling_mode_w1' => 'toc'],
+        ]));
+        self::assertSame('tob', $service->resolveSellingMode([
+            'cookies' => [
+                'weline_selling_mode' => 'toc',
+                'weline_selling_mode_w1' => 'tob',
+            ],
+        ]));
     }
 
     private function removeTree(string $dir): void

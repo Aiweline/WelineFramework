@@ -299,6 +299,7 @@ class ShippingAddressService
             ShippingAddress::schema_fields_DISTRICT_CODE,
             ShippingAddress::schema_fields_DISTRICT_REGION_ID,
             ShippingAddress::schema_fields_STREET,
+            ShippingAddress::schema_fields_STREET_ID,
             ShippingAddress::schema_fields_POSTAL_CODE,
             ShippingAddress::schema_fields_IS_DEFAULT,
             ShippingAddress::schema_fields_IS_ENABLED,
@@ -352,6 +353,7 @@ class ShippingAddressService
             ShippingAddress::schema_fields_PROVINCE_REGION_ID => true,
             ShippingAddress::schema_fields_CITY_REGION_ID => true,
             ShippingAddress::schema_fields_DISTRICT_REGION_ID => true,
+            ShippingAddress::schema_fields_STREET_ID => true,
             ShippingAddress::schema_fields_IS_DEFAULT => true,
             ShippingAddress::schema_fields_IS_ENABLED => true,
         ];

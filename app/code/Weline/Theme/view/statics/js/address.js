@@ -597,12 +597,14 @@
             }
             return data.map(function (row) {
                 if (typeof row === 'string') {
-                    return {country_code: text(row).toUpperCase(), country_name: text(row).toUpperCase(), supported: true};
+                    return {country_code: text(row).toUpperCase(), country_name: text(row).toUpperCase(), supported: true, embargoed: false, place_name: ''};
                 }
                 return {
                     country_code: text(row.country_code || row.code || '').toUpperCase(),
                     country_name: text(row.country_name || row.name || row.country_code || row.code || ''),
-                    supported: row.supported === undefined ? true : !!row.supported
+                    place_name: text(row.place_name || ''),
+                    supported: row.supported === undefined ? true : !!row.supported,
+                    embargoed: !!row.embargoed
                 };
             }).filter(function (row) {
                 return row.country_code.length === 2;
@@ -637,7 +639,8 @@
         }).then(function (rows) {
             return embargoedCountryCodes().then(function (blocked) {
                 return (rows || []).map(function (row) {
-                    if (blocked[row.country_code]) {
+                    // API 可按邮编命中地点标省级/区级禁运；国家级名单再并入
+                    if (row.embargoed || blocked[row.country_code]) {
                         row.supported = false;
                         row.embargoed = true;
                     }
@@ -823,8 +826,12 @@
         list.forEach(function (row) {
             var code = text(typeof row === 'string' ? row : (row.country_code || row.code || '')).toUpperCase();
             var name = text(typeof row === 'string' ? row : (row.country_name || row.name || code));
+            var placeName = (typeof row === 'object' && row) ? text(row.place_name || '') : '';
             if (code.length !== 2) {
                 return;
+            }
+            if (placeName && name.indexOf(placeName) < 0) {
+                name = name + ' · ' + placeName;
             }
             var supported = true;
             if (typeof row === 'object' && row && row.supported !== undefined) {
@@ -838,6 +845,10 @@
                 });
             if (region) {
                 region.postal_unsupported = !supported;
+                if (typeof row === 'object' && row && row.embargoed) {
+                    region.embargoed = true;
+                    region.postal_unsupported = true;
+                }
                 if (name) {
                     region.region_name = name;
                 }
@@ -1046,6 +1057,144 @@
         });
     }
 
+    function embargoCoversControl(embargo, level) {
+        if (!embargo || !embargo.blocked) {
+            return false;
+        }
+        var order = ['country', 'province', 'city', 'district', 'street'];
+        var blockedLevel = text(embargo.level || 'country');
+        var bi = order.indexOf(blockedLevel);
+        var ci = order.indexOf(level);
+        if (bi < 0 || ci < 0) {
+            return blockedLevel === level;
+        }
+        return ci >= bi;
+    }
+
+    function markChildrenInheritedEmbargo(rows, countryCode, blockedMap) {
+        var cc = text(countryCode).toUpperCase();
+        if (!cc || !blockedMap || !blockedMap[cc]) {
+            return rows;
+        }
+        (Array.isArray(rows) ? rows : []).forEach(function (row) {
+            if (row && typeof row === 'object') {
+                row.embargoed = true;
+            }
+        });
+        return rows;
+    }
+
+    var subnationalEmbargoCache = {};
+
+    function embargoedSubnationalRules(countryCode) {
+        countryCode = text(countryCode).toUpperCase();
+        var cacheKey = countryCode || '*';
+        if (subnationalEmbargoCache[cacheKey]) {
+            return subnationalEmbargoCache[cacheKey];
+        }
+        var url = frontendRoute(defaultSourceUrl);
+        var sep = url.indexOf('?') >= 0 ? '&' : '?';
+        url += sep + 'mode=embargo_regions';
+        if (countryCode) {
+            url += '&country_code=' + encodeURIComponent(countryCode);
+        }
+        var req = fetch(url, {
+            credentials: 'same-origin',
+            headers: {Accept: 'application/json'}
+        }).then(function (response) {
+            if (!response.ok) {
+                throw new Error('embargo regions failed');
+            }
+            return response.json();
+        }).then(function (payload) {
+            if (payload && payload.success === false) {
+                throw new Error(text(payload.message || 'embargo regions failed'));
+            }
+            var data = payload && payload.data !== undefined ? payload.data : payload;
+            return Array.isArray(data) ? data : [];
+        }).catch(function () {
+            delete subnationalEmbargoCache[cacheKey];
+            if (!window.Weline || !window.Weline.Api) {
+                return [];
+            }
+            return getRegionApi().then(function (RegionApi) {
+                if (!RegionApi || typeof RegionApi.embargo_regions !== 'function') {
+                    return [];
+                }
+                var params = {};
+                if (countryCode) {
+                    params.country_code = countryCode;
+                }
+                return RegionApi.embargo_regions(params, {silent: true}).then(function (payload) {
+                    if (payload && payload.success === false) {
+                        return [];
+                    }
+                    var data = payload && payload.data !== undefined ? payload.data : payload;
+                    return Array.isArray(data) ? data : [];
+                });
+            }).catch(function () {
+                return [];
+            });
+        });
+        subnationalEmbargoCache[cacheKey] = req;
+        return req;
+    }
+
+    function ruleMatchesRegionRow(rule, row, level) {
+        if (!rule || !row) {
+            return false;
+        }
+        var ruleType = text(rule.region_type || rule.level || '');
+        var rowType = text(level || row.region_type || '');
+        if (ruleType && rowType && ruleType !== rowType) {
+            return false;
+        }
+        var ruleId = Number(rule.region_id || 0);
+        var rowId = Number(row.region_id || row.id || 0);
+        if (ruleId > 0 && rowId > 0 && ruleId === rowId) {
+            return true;
+        }
+        var ruleCode = text(rule.region_code || '').toUpperCase();
+        var rowCode = text(row.region_code || row.code || '').toUpperCase();
+        return !!(ruleCode && rowCode && ruleCode === rowCode);
+    }
+
+    function markChildrenSubnationalEmbargo(rows, countryCode, rules, parentRegion) {
+        rows = Array.isArray(rows) ? rows : [];
+        rules = Array.isArray(rules) ? rules : [];
+        var cc = text(countryCode).toUpperCase();
+        if (!cc || !rules.length) {
+            return rows;
+        }
+        var countryRules = rules.filter(function (rule) {
+            return text(rule.country_code).toUpperCase() === cc;
+        });
+        if (!countryRules.length) {
+            return rows;
+        }
+        var parentBlocked = false;
+        if (parentRegion) {
+            parentBlocked = countryRules.some(function (rule) {
+                return ruleMatchesRegionRow(rule, parentRegion, text(parentRegion.region_type || ''));
+            });
+        }
+        rows.forEach(function (row) {
+            if (!row || typeof row !== 'object') {
+                return;
+            }
+            if (parentBlocked) {
+                row.embargoed = true;
+                return;
+            }
+            if (countryRules.some(function (rule) {
+                return ruleMatchesRegionRow(rule, row, text(row.region_type || ''));
+            })) {
+                row.embargoed = true;
+            }
+        });
+        return rows;
+    }
+
     function loadChildren(parentRegionId, countryCode, limit) {
         parentRegionId = parentRegionId == null || parentRegionId === '' ? null : Number(parentRegionId);
         countryCode = text(countryCode).toUpperCase();
@@ -1092,6 +1241,29 @@
                 }).catch(function () {
                     return [];
                 });
+            }).then(function (rows) {
+                return Promise.all([
+                    embargoedCountryCodes().catch(function () { return {}; }),
+                    embargoedSubnationalRules(countryCode).catch(function () { return []; })
+                ]).then(function (parts) {
+                    var blockedMap = parts[0] || {};
+                    var rules = parts[1] || [];
+                    markChildrenInheritedEmbargo(rows, countryCode, blockedMap);
+                    var parentRegion = null;
+                    if (parentRegionId && parentRegionId > 0) {
+                        parentRegion = {region_id: parentRegionId, region_type: '', country_code: countryCode};
+                        // parent type unknown here; still match by id against any subnational rule
+                        rules.forEach(function (rule) {
+                            if (Number(rule.region_id || 0) === Number(parentRegionId)) {
+                                parentRegion.region_type = text(rule.region_type || '');
+                                parentRegion.region_code = text(rule.region_code || '');
+                            }
+                        });
+                    }
+                    return markChildrenSubnationalEmbargo(rows, countryCode, rules, parentRegion);
+                }).catch(function () {
+                    return rows;
+                });
             });
         }
         return regionSources[cacheKey];
@@ -1111,6 +1283,48 @@
             }
             index[key] = true;
             group.regions.push(region);
+        });
+    }
+
+    /**
+     * 有国家控件时禁止用「某国下级」整表覆盖 regions，否则禁运国等会从国家菜单消失。
+     * 无国家控件（宿主已锁国）仍可整表替换为该国省市区。
+     */
+    function adoptRegionRows(group, rows, options) {
+        options = options || {};
+        rows = Array.isArray(rows) ? rows : [];
+        if (group && group.controls && group.controls.country && !options.forceReplace) {
+            var hasCountries = (group.regions || []).some(function (region) {
+                return text(region.region_type) === 'country';
+            });
+            var nextHasCountries = rows.some(function (region) {
+                return text(region.region_type) === 'country';
+            });
+            if (!hasCountries && nextHasCountries) {
+                group.regions = rows.slice();
+                return;
+            }
+            mergeRegions(group, rows);
+            return;
+        }
+        group.regions = rows;
+    }
+
+    function ensureCountryCatalog(group) {
+        if (!group || !group.controls || !group.controls.country) {
+            return Promise.resolve(group);
+        }
+        var hasCountries = (group.regions || []).some(function (region) {
+            return text(region.region_type) === 'country';
+        });
+        if (hasCountries) {
+            return Promise.resolve(group);
+        }
+        return loadRegions(group.sourceUrl, '', group.catalog).then(function (all) {
+            if (Array.isArray(all) && all.length) {
+                group.regions = all;
+            }
+            return group;
         });
     }
 
@@ -1334,7 +1548,8 @@
             field.type = 'hidden';
         }
         var holder = field.closest && field.closest('.account-address-form__field');
-        if (holder) {
+        // Do not hide the account field that wraps postal/detail shell + cascade.
+        if (holder && !holder.querySelector('[data-w-address-shell], [data-w-address]')) {
             holder.hidden = true;
         }
         return field;
@@ -1897,13 +2112,32 @@
     }
 
     function applySearchHit(group, control, hit) {
+        if (hit && hit.region && hit.region.embargoed) {
+            return;
+        }
         if (hit && hit.formatted_address) {
-            applyFormattedAddress(group, hit.formatted_address);
-            closeMenus(group);
-            var emitControl = group.controls[hit.level] || control;
-            if (emitControl && emitControl.field) {
-                emitControl.field.dispatchEvent(new Event('change', {bubbles: true}));
-            }
+            var fa = hit.formatted_address || {};
+            evaluateEmbargo({
+                country_code: text(fa.country_code || ''),
+                province_code: text(fa.province_code || ''),
+                province_region_id: Number(fa.province_region_id || 0),
+                city_code: text(fa.city_code || ''),
+                city_region_id: Number(fa.city_region_id || 0),
+                district_code: text(fa.district_code || ''),
+                district_region_id: Number(fa.district_region_id || 0)
+            }).then(function (result) {
+                if (result && result.blocked) {
+                    group.embargo = result;
+                    updateGroup(group);
+                    return;
+                }
+                applyFormattedAddress(group, hit.formatted_address);
+                closeMenus(group);
+                var emitControl = group.controls[hit.level] || control;
+                if (emitControl && emitControl.field) {
+                    emitControl.field.dispatchEvent(new Event('change', {bubbles: true}));
+                }
+            });
             return;
         }
         var chain = [];
@@ -2159,12 +2393,19 @@
             });
         }
 
-        // 标记当前列表中的禁运项（国家级或当前级 region_id/code）
-        evaluateEmbargo(buildAddressPayloadFromGroup(group)).then(function (current) {
-            group.embargo = current || {blocked: false};
-        });
-        embargoedCountryCodes().then(function (blockedMap) {
-            localHits.forEach(function (hit) {
+        function markHitsForMenu(hits, blockedMap, rules) {
+            (hits || []).forEach(function (hit) {
+                if (!hit.region && hit.formatted_address) {
+                    var fa = hit.formatted_address || {};
+                    var lvl = text(hit.level || control.level || 'province');
+                    hit.region = {
+                        region_id: Number(fa[lvl + '_region_id'] || fa.province_region_id || fa.city_region_id || fa.district_region_id || 0),
+                        region_code: text(fa[lvl + '_code'] || fa.province_code || fa.city_code || fa.district_code || ''),
+                        region_name: text(fa[lvl] || fa.province || fa.city || fa.district || hit.label || ''),
+                        region_type: lvl,
+                        country_code: text(fa.country_code || selectedCountry).toUpperCase()
+                    };
+                }
                 if (!hit.region) {
                     return;
                 }
@@ -2173,12 +2414,143 @@
                     if (blockedMap[cc]) {
                         hit.region.embargoed = true;
                     }
+                    return;
+                }
+                var hitCc = text(hit.region.country_code || selectedCountry).toUpperCase();
+                if (hitCc && blockedMap[hitCc]) {
+                    hit.region.embargoed = true;
+                    return;
+                }
+                var ancestorBlocked = false;
+                ['country', 'province', 'city', 'district'].forEach(function (lvl) {
+                    var node = group.state[lvl];
+                    if (!node || ancestorBlocked) {
+                        return;
+                    }
+                    if (node.embargoed) {
+                        ancestorBlocked = true;
+                        return;
+                    }
+                    if (rules.some(function (rule) {
+                        return ruleMatchesRegionRow(rule, node, lvl);
+                    })) {
+                        ancestorBlocked = true;
+                    }
+                });
+                if (ancestorBlocked) {
+                    hit.region.embargoed = true;
+                    return;
+                }
+                if (rules.some(function (rule) {
+                    if (ruleMatchesRegionRow(rule, hit.region, control.level)
+                        || ruleMatchesRegionRow(rule, hit.region, text(hit.region.region_type || ''))) {
+                        return true;
+                    }
+                    // 同国同级：建议条目可能缺 id，用 code/名兜底
+                    if (text(rule.country_code).toUpperCase() !== hitCc) {
+                        return false;
+                    }
+                    if (text(rule.region_type) !== text(control.level) && text(rule.region_type) !== text(hit.region.region_type || '')) {
+                        return false;
+                    }
+                    var ruleCode = text(rule.region_code).toUpperCase();
+                    var rowCode = text(hit.region.region_code).toUpperCase();
+                    if (ruleCode && rowCode && ruleCode === rowCode) {
+                        return true;
+                    }
+                    var ruleId = Number(rule.region_id || 0);
+                    var rowId = Number(hit.region.region_id || 0);
+                    if (ruleId > 0 && rowId > 0 && ruleId === rowId) {
+                        return true;
+                    }
+                    var label = text(hit.label || hit.region.region_name || '');
+                    return !!(ruleId > 0 && label && group.regions && (group.regions || []).some(function (r) {
+                        return Number(r.region_id || 0) === ruleId && label.indexOf(text(r.region_name || '')) >= 0;
+                    }));
+                })) {
+                    hit.region.embargoed = true;
                 }
             });
-            paint(localHits);
-        });
+            // 同源重复项：任一禁运则同 id/同名一并禁用
+            var blockedIds = {};
+            var blockedNames = {};
+            (hits || []).forEach(function (hit) {
+                if (!(hit && hit.region && hit.region.embargoed)) {
+                    return;
+                }
+                var id = Number(hit.region.region_id || 0);
+                if (id > 0) {
+                    blockedIds[id] = true;
+                }
+                var nm = text(hit.region.region_name || hit.label || '');
+                if (nm) {
+                    blockedNames[nm] = true;
+                    blockedNames[nm.replace(/（.*?）/g, '')] = true;
+                }
+            });
+            (hits || []).forEach(function (hit) {
+                if (!(hit && hit.region) || hit.region.embargoed) {
+                    return;
+                }
+                var id = Number(hit.region.region_id || 0);
+                var nm = text(hit.region.region_name || hit.label || '').replace(/（.*?）/g, '');
+                if ((id > 0 && blockedIds[id]) || (nm && blockedNames[nm])) {
+                    hit.region.embargoed = true;
+                }
+            });
+            (hits || []).forEach(function (hit) {
+                if (!hit || hit.region) {
+                    return;
+                }
+                var label = text(hit.label || '').replace(/（.*?）/g, '').trim();
+                var blocked = !!(label && (blockedNames[label] || Object.keys(blockedNames).some(function (n) {
+                    return n && label.indexOf(n) >= 0;
+                })));
+                if (blocked) {
+                    hit.region = {
+                        region_id: 0,
+                        region_code: '',
+                        region_name: label,
+                        region_type: text(control.level || 'province'),
+                        country_code: selectedCountry,
+                        embargoed: true
+                    };
+                }
+            });
+            return hits;
+        }
 
-        paint(localHits);
+        function paintMarked(hits) {
+            return Promise.all([
+                embargoedCountryCodes().catch(function () { return {}; }),
+                control.level === 'country'
+                    ? Promise.resolve([])
+                    : embargoedSubnationalRules(selectedCountry).catch(function () { return []; })
+            ]).then(function (parts) {
+                markHitsForMenu(hits, parts[0] || {}, parts[1] || []);
+                paint(hits);
+                return hits;
+            }).catch(function () {
+                paint(hits);
+                return hits;
+            });
+        }
+
+        // 标记当前列表中的禁运项（国家级或省市区子级）后再渲染，避免首屏可点竞态
+        evaluateEmbargo(buildAddressPayloadFromGroup(group)).then(function (current) {
+            group.embargo = current || {blocked: false};
+        });
+        var selectedCountry = '';
+        if (group.state.country) {
+            selectedCountry = text(group.state.country.country_code || group.state.country.region_code).toUpperCase();
+        } else if (group.fixed && group.fixed.country) {
+            selectedCountry = text(group.fixed.country).toUpperCase();
+        }
+        if (!selectedCountry) {
+            var metaCc = group.root && group.root.querySelector('[name="country_code"], [data-address-meta="country_code"]');
+            selectedCountry = text(metaCc && metaCc.value).toUpperCase();
+        }
+        paintMarked(localHits);
 
         if (!needle || group.autocomplete === false || text(keyword).trim().length < 1) {
             return;
@@ -2186,10 +2558,10 @@
 
         var requestToken = String(Date.now()) + '-' + Math.random();
         control.suggestToken = requestToken;
-        var countryCode = '';
-        if (group.state.country) {
+        var countryCode = selectedCountry || '';
+        if (!countryCode && group.state.country) {
             countryCode = text(group.state.country.country_code || group.state.country.region_code);
-        } else if (group.fixed.country) {
+        } else if (!countryCode && group.fixed.country) {
             countryCode = text(group.fixed.country);
         }
         suggestRegions(keyword, countryCode, 8).then(function (rows) {
@@ -2216,7 +2588,8 @@
                 seen[key] = true;
                 merged.push(hit);
             });
-            paint(prioritizePostalCountryHits(group, control, merged).slice(0, 20));
+            // 远程建议可能带禁运省市区：合并后必须再打标再绘
+            paintMarked(prioritizePostalCountryHits(group, control, merged).slice(0, 20));
         });
     }
 
@@ -2262,7 +2635,7 @@
         var controlEl = control.item.querySelector('.w-address__control');
         controlEl.classList.toggle('is-disabled', disabled && !loading);
         controlEl.classList.toggle('is-loading', loading);
-        var embargoed = !!(group.embargo && group.embargo.blocked && group.embargo.level === control.level);
+        var embargoed = embargoCoversControl(group.embargo, control.level);
         controlEl.classList.toggle('is-embargoed', embargoed);
         if (embargoed) {
             control.input.setAttribute('aria-invalid', 'true');
@@ -3460,9 +3833,13 @@
             };
             bindControl(group, group.controls[level]);
         });
-        var anchor = firstField && firstField.closest && firstField.closest('.account-address-form__field');
-        if (anchor && anchor.parentNode) {
-            anchor.parentNode.insertBefore(root, anchor);
+        // Keep cascade inside postal/detail shell (postal → cascade → detail).
+        // Account form used to reparent into the 2-col grid; that tears the shell apart.
+        if (!root.closest('[data-w-address-shell]')) {
+            var anchor = firstField && firstField.closest && firstField.closest('.account-address-form__field');
+            if (anchor && anchor.parentNode) {
+                anchor.parentNode.insertBefore(root, anchor);
+            }
         }
         if (form && !form.dataset.wAddressRefreshBound) {
             form.dataset.wAddressRefreshBound = 'true';
@@ -3501,16 +3878,14 @@
                     applyCountryProfile(group, profile);
                     updateGroup(group);
                 });
-                return loadRegions(group.sourceUrl, lockedCountry, group.catalog).then(function (countryRegions) {
-                    if (Array.isArray(countryRegions) && countryRegions.length) {
-                        if (group.catalog === 'global' && group.controls.country) {
-                            mergeRegions(group, countryRegions);
-                        } else {
-                            group.regions = countryRegions;
+                return ensureCountryCatalog(group).then(function () {
+                    return loadRegions(group.sourceUrl, lockedCountry, group.catalog).then(function (countryRegions) {
+                        if (Array.isArray(countryRegions) && countryRegions.length) {
+                            adoptRegionRows(group, countryRegions);
+                            ensureCountryInRegions(group, lockedCountry, metadataValue(group, 'country'));
+                            updateGroup(group);
                         }
-                        ensureCountryInRegions(group, lockedCountry, metadataValue(group, 'country'));
-                        updateGroup(group);
-                    }
+                    });
                 });
             }
         });
@@ -3568,9 +3943,16 @@
             }
         } else if (countryCode && root) {
             findOrCreateField(root, form, 'country_code').value = countryCode;
-            // 无国家控件时（宿主顶部已选国家），锁定国家并写入隐藏字段供提交。
-            group.fixed.country = countryCode;
             findOrCreateField(root, form, 'country').value = countryName || countryCode;
+            // 无国家控件时（宿主顶部已选国家）才锁定；有国家控件时禁止 fixed 锁死，
+            // 否则国家菜单只剩当前国，系统禁运国无法再出现并标「不支持配送」。
+            if (!group.controls.country) {
+                group.fixed.country = countryCode;
+            } else if (text(group.fixed.country).toUpperCase() === countryCode) {
+                // 保持显式配置的 filters.country；不因 applyValues 额外加锁
+            } else {
+                group.fixed.country = '';
+            }
             // 地区库可能没有该国节点（如澳门/香港），预先放入合成国家，避免 refreshState 回落 CN。
             ensureCountryInRegions(group, countryCode, countryName || countryCode);
         }
@@ -3608,14 +3990,16 @@
             return true;
         }
 
-        // 切国家时带 country_code 重新拉国家+省；市/区由 children 懒加载。
+        // 切国家时带 country_code 重新拉该国下级；有国家控件时合并进现有国家列表（禁运国须保留可见）。
         if (countryCode) {
-            return loadRegions(group.sourceUrl, countryCode, group.catalog).then(function (regions) {
-                group.regions = regions || [];
-                ensureCountryInRegions(group, countryCode, countryName || countryCode);
-                return loadChildren(null, countryCode, 500).then(function (rows) {
-                    mergeRegions(group, rows);
-                    return finish();
+            return ensureCountryCatalog(group).then(function () {
+                return loadRegions(group.sourceUrl, countryCode, group.catalog).then(function (regions) {
+                    adoptRegionRows(group, regions || []);
+                    ensureCountryInRegions(group, countryCode, countryName || countryCode);
+                    return loadChildren(null, countryCode, 500).then(function (rows) {
+                        mergeRegions(group, rows);
+                        return finish();
+                    });
                 });
             });
         }
@@ -3635,6 +4019,7 @@
         if (!root) {
             return null;
         }
+        var selectors = '[data-w-address-postal], [data-postal-first], [data-shipping-field][name="postal_code"], [name="postal_code"]';
         var shell = root.closest('[data-w-address-shell]');
         if (shell) {
             var inShell = shell.querySelector('[data-w-address-postal], [data-postal-first]');
@@ -3642,16 +4027,33 @@
                 return inShell;
             }
         }
+        // Checkout / account: postal often sits outside shell (data-postal-first sibling).
+        var host = root.closest(
+            '[data-shipping-checkout-address], [data-shipping-section], [data-address-editor],'
+            + ' [data-shipping-address-cascade], .w-shipping-checkout-address, form'
+        );
+        if (host) {
+            var inHost = host.querySelector(selectors);
+            if (inHost) {
+                return inHost;
+            }
+        }
         var parent = root.parentElement;
         if (parent) {
-            var sibling = parent.querySelector('[data-w-address-postal], [data-postal-first], [data-shipping-field][name="postal_code"]');
+            var sibling = parent.querySelector(selectors);
             if (sibling) {
                 return sibling;
+            }
+            if (parent.parentElement) {
+                var uncle = parent.parentElement.querySelector(selectors);
+                if (uncle) {
+                    return uncle;
+                }
             }
         }
         var form = root.closest('form');
         if (form) {
-            return form.querySelector('[data-w-address-postal], [data-postal-first], [data-shipping-field][name="postal_code"], [name="postal_code"]');
+            return form.querySelector(selectors);
         }
         return null;
     }
@@ -3680,6 +4082,7 @@
         var postalJobSeq = 0;
         var postalJobQueue = Promise.resolve();
         var code = group.code;
+        var postalFieldSelector = '[data-w-address-postal], [data-postal-first], [data-shipping-field][name="postal_code"], [name="postal_code"]';
 
         function setLoading(busy) {
             setCascadeLoading(code, !!busy);
@@ -3765,7 +4168,38 @@
                         var onlyRow = countries[0] || {};
                         var only = text(onlyRow.country_code || onlyRow.code || '').toUpperCase() || countryCode;
                         setPostalCountryPin(code, countries, postal);
+                        if (onlyRow.embargoed || onlyRow.supported === false) {
+                            return clearCascade(countryCode, { keepCountry: false }).then(function () {
+                                preservePostal(postal);
+                                finishJob(jobId);
+                                return promptPostalCountries(code, countries, postal);
+                            });
+                        }
                         return applyHit(only, postal, jobId);
+                    }
+                    // 多国命中但当前国已在候选中：直接按当前国回填，禁止 clearCascade 清空市/区。
+                    // 否则输入 610500 时前缀 610/6100/61050 会反复清空，竞态下只剩省份。
+                    // 例外：当前国命中却禁运/不支持时，必须弹出「邮编匹配」，避免静默回填禁运地、也让浦东等仍显示「不支持」。
+                    var preferred = text(countryCode || '').toUpperCase();
+                    var preferredRow = null;
+                    var preferredHit = preferred && countries.some(function (row) {
+                        var cc = text((row && (row.country_code || row.code)) || '').toUpperCase();
+                        if (cc === preferred) {
+                            preferredRow = row;
+                            return true;
+                        }
+                        return false;
+                    });
+                    if (preferredHit) {
+                        setPostalCountryPin(code, countries, postal);
+                        if (preferredRow && (preferredRow.embargoed || preferredRow.supported === false)) {
+                            return clearCascade(countryCode, { keepCountry: false }).then(function () {
+                                preservePostal(postal);
+                                finishJob(jobId);
+                                return promptPostalCountries(code, countries, postal);
+                            });
+                        }
+                        return applyHit(preferred, postal, jobId);
                     }
                     return clearCascade(countryCode, { keepCountry: false }).then(function () {
                         preservePostal(postal);
@@ -3793,23 +4227,26 @@
             setLoading(true);
             postalLookupTimer = window.setTimeout(enqueue, POSTAL_LOOKUP_DEBOUNCE_MS);
         }
-        var scope = root.closest('[data-w-address-shell]') || root.parentElement || document;
-        scope.addEventListener('input', function (event) {
+        function onPostalEvent(event) {
             var t = event.target;
-            if (t && t.matches && t.matches('[data-w-address-postal], [data-postal-first], [data-shipping-field][name="postal_code"], [name="postal_code"]')) {
-                if (scope.contains(t)) {
-                    schedule();
-                }
+            if (!(t && t.matches && t.matches(postalFieldSelector))) {
+                return;
             }
-        });
-        scope.addEventListener('change', function (event) {
-            var t = event.target;
-            if (t && t.matches && t.matches('[data-w-address-postal], [data-postal-first], [data-shipping-field][name="postal_code"], [name="postal_code"]')) {
-                if (scope.contains(t)) {
-                    schedule();
-                }
-            }
-        });
+            schedule();
+        }
+        // Prefer form / checkout widget so shell-external data-postal-first receives input.
+        var scope = root.closest('form')
+            || root.closest('[data-shipping-checkout-address], .w-shipping-checkout-address, [data-address-editor]')
+            || root.closest('[data-w-address-shell]')
+            || root.parentElement
+            || document;
+        scope.addEventListener('input', onPostalEvent);
+        scope.addEventListener('change', onPostalEvent);
+        var postalField = findPostalFieldForRoot(root);
+        if (postalField && !scope.contains(postalField)) {
+            postalField.addEventListener('input', schedule);
+            postalField.addEventListener('change', schedule);
+        }
     }
 
     function boot() {
@@ -4000,18 +4437,34 @@
                         syncMetadata(group);
                         updateGroup(group);
                         syncLevelVisibility(group);
-                        // updateGroup/refreshState 后再次确保已回填的区县可见且值还在
-                        if (group.state.district && group.controls.district) {
-                            group.controls.district.item.hidden = false;
-                            group.controls.district.field.value = labelOf(group.state.district);
-                            group.controls.district.input.value = labelOf(group.state.district);
-                        }
-                        if (group.state.street && group.controls.street) {
-                            group.controls.street.item.hidden = false;
-                            group.controls.street.field.value = labelOf(group.state.street);
-                            group.controls.street.input.value = labelOf(group.state.street);
-                        }
-                        return ok;
+                        // updateGroup/refreshState 后强制回写已 paint 的省/市/区/街，防止仅省残留
+                        ['province', 'city', 'district', 'street'].forEach(function (level) {
+                            if (group.state[level] && group.controls[level]) {
+                                if (group.controls[level].item) {
+                                    group.controls[level].item.hidden = false;
+                                }
+                                group.controls[level].field.value = labelOf(group.state[level]);
+                                group.controls[level].input.value = labelOf(group.state[level]);
+                            }
+                        });
+                        // 禁运省市区不得留在已选状态：回填后评估，命中则清空下级并标红
+                        return refreshEmbargoState(group).then(function (embargo) {
+                            if (!(embargo && embargo.blocked)) {
+                                return ok;
+                            }
+                            ['province', 'city', 'district', 'street'].forEach(function (level) {
+                                group.state[level] = null;
+                                if (group.controls[level]) {
+                                    group.controls[level].field.value = '';
+                                    group.controls[level].input.value = '';
+                                }
+                            });
+                            syncMetadata(group);
+                            updateGroup(group);
+                            return false;
+                        }).catch(function () {
+                            return ok;
+                        });
                     });
                 });
             });

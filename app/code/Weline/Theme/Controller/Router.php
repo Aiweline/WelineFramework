@@ -49,8 +49,7 @@ class Router implements RouterInterface
             'register' => ['layout_type' => 'account_auth', 'layout_option' => 'default', 'title' => '注册'],
             'contact' => ['layout_type' => 'contact', 'layout_option' => 'default', 'title' => '联系我们'],
             'support' => ['layout_type' => 'contact', 'layout_option' => 'default', 'title' => '支持'],
-            'help' => ['layout_type' => 'help', 'layout_option' => 'default', 'title' => '帮助中心'],
-            'faq' => ['layout_type' => 'help', 'layout_option' => 'default', 'title' => '常见问题'],
+            'faq' => ['layout_type' => 'faq', 'layout_option' => 'default', 'title' => '常见问题'],
             'guide/payment' => ['layout_type' => 'payment_guide', 'layout_option' => 'default', 'title' => '支付指南'],
             'guide/shipping' => ['layout_type' => 'guide', 'layout_option' => 'default', 'title' => '配送指南'],
             'guide/returns' => ['layout_type' => 'guide', 'layout_option' => 'default', 'title' => '退换指南'],
@@ -231,6 +230,17 @@ class Router implements RouterInterface
             if ($normalizedPath === 'compare' && class_exists('Weline\\Compare\\Controller\\Router')) {
                 \Weline\Compare\Controller\Router::process($path, $rule);
             }
+            if (
+                (
+                    $normalizedPath === 'product'
+                    || str_starts_with($normalizedPath, 'product/')
+                    || in_array($normalizedPath, ['products', 'product-list', 'category', 'categories'], true)
+                    || str_starts_with($normalizedPath, 'category/')
+                )
+                && class_exists('Weline\\Product\\Controller\\Router')
+            ) {
+                \Weline\Product\Controller\Router::process($path, $rule);
+            }
             if (class_exists('Weline\\Blog\\Controller\\Router')) {
                 \Weline\Blog\Controller\Router::process($path, $rule);
             }
@@ -394,6 +404,10 @@ class Router implements RouterInterface
             if (preg_match('#^product/([a-z][a-z0-9]*(?:-[a-z0-9]+)*)$#D', $normalizedPath) === 1) {
                 return true;
             }
+            // /product?id=… or /product?slug=… belongs to Product Detail, not Theme shell.
+            if ($normalizedPath === 'product' && self::productQueryOwnsDetail()) {
+                return true;
+            }
         }
 
         if (class_exists('Weline\\Search\\Controller\\Router') && $normalizedPath === 'search') {
@@ -461,6 +475,43 @@ class Router implements RouterInterface
         return false;
     }
 
+    /**
+     * Bare /product with id or slug query is owned by Product Detail.
+     */
+    private static function productQueryOwnsDetail(): bool
+    {
+        try {
+            $ctx = \Weline\Framework\Context::current();
+            $productId = (int)($ctx->get('input.query.id') ?? 0);
+            $slug = strtolower(trim((string)($ctx->get('input.query.slug') ?? '')));
+            if ($productId > 0 || $slug !== '') {
+                return true;
+            }
+        } catch (\Throwable) {
+        }
+
+        if (isset($_GET['id']) && is_scalar($_GET['id']) && (int)$_GET['id'] > 0) {
+            return true;
+        }
+        if (isset($_GET['slug']) && is_scalar($_GET['slug']) && strtolower(trim((string)$_GET['slug'])) !== '') {
+            return true;
+        }
+
+        try {
+            /** @var Request $request */
+            $request = ObjectManager::getInstance(Request::class);
+            if ((int)$request->getParam('id', 0) > 0) {
+                return true;
+            }
+            if (strtolower(trim((string)$request->getParam('slug', ''))) !== '') {
+                return true;
+            }
+        } catch (\Throwable) {
+        }
+
+        return false;
+    }
+
 
     /**
      * @return array{layout_type: string, layout_option: string, title: string}|null
@@ -468,6 +519,10 @@ class Router implements RouterInterface
     private static function resolveDefaultPublicTarget(string $normalizedPath): ?array
     {
         $routes = self::defaultPublicRouteMap();
+        // Weline_Faq owns /faq when enabled.
+        if (self::isFaqModuleEnabled()) {
+            unset($routes['faq']);
+        }
         if (isset($routes[$normalizedPath])) {
             return $routes[$normalizedPath];
         }
@@ -483,6 +538,16 @@ class Router implements RouterInterface
         }
 
         return null;
+    }
+
+    private static function isFaqModuleEnabled(): bool
+    {
+        try {
+            return (bool)Env::getInstance()->getModuleStatus('Weline_Faq');
+        } catch (\Throwable) {
+            return class_exists(\Weline\Faq\Controller\Router::class, false)
+                || is_file(dirname(__DIR__, 2) . '/Faq/register.php');
+        }
     }
 
     private static function generatedFrontendRouteExists(string $normalizedPath, Request $request): bool

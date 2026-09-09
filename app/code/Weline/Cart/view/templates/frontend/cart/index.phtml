@@ -27,15 +27,17 @@ $copy = [
 ];
 ?>
 <link rel="stylesheet"
-      href="@static(Weline_Cart::css/cart-page-amazon.css)&v=20260907-price-header-layout3">
+      href="@static(Weline_Cart::css/cart-page-amazon.css)&v=20260909-tob-note-row1">
 
 <section class="weline-cart-shell weline-cart-shell--amazon"
          data-cart-content="1"
          data-weline-cart
+         data-cart-type="toc"
          aria-busy="true"
          weline-code="cart.cart.section_1">
     <header class="weline-cart-shell__header">
-        <h1><?= __('购物车') ?></h1>
+        <div class="weline-cart-shell__type-host" data-cart-page-type-host></div>
+        <h1><span data-cart-page-title><?= __('购物车') ?></span></h1>
         <p class="weline-cart-shell__subtitle" data-cart-subtitle hidden></p>
     </header>
 
@@ -71,22 +73,26 @@ $copy = [
                data-i18n-discount-automatic="<?= $escape(__('自动优惠')) ?>"
                data-i18n-discount-stack="<?= $escape(__('叠加优惠')) ?>">
             <h2><?= __('订单摘要') ?></h2>
-            <w:slot id="cart-summary-discount"
-                    name="<?= __('购物车优惠券') ?>"
-                    accept="cart-summary-discount,cart-coupon,checkout-coupon,marketing"
-                    multiple="false"
-                    position="content"
-                    class="weline-cart-shell__coupon-slot"
-                    weline-code="cart.cart.coupon_slot">
-            </w:slot>
-            <w:slot id="cart-summary-note"
-                    name="<?= __('购物车订单留言') ?>"
-                    accept="cart-summary-note,order-notice,order"
-                    multiple="false"
-                    position="content"
-                    class="weline-cart-shell__note-slot"
-                    weline-code="cart.cart.note_slot">
-            </w:slot>
+            <div class="weline-cart-shell__summary-extras mini-cart-drawer__extras"
+                 data-cart-summary-extras="1"
+                 data-wslot-name="<?= $escape(__('优惠券与订单留言')) ?>">
+                <w:slot id="cart-summary-discount"
+                        name="<?= __('购物车优惠券') ?>"
+                        accept="cart-summary-discount,cart-coupon,checkout-coupon,marketing"
+                        multiple="false"
+                        position="content"
+                        class="weline-cart-shell__coupon-slot"
+                        weline-code="cart.cart.coupon_slot">
+                </w:slot>
+                <w:slot id="cart-summary-note"
+                        name="<?= __('购物车订单留言') ?>"
+                        accept="cart-summary-note,order-notice,order"
+                        multiple="false"
+                        position="content"
+                        class="weline-cart-shell__note-slot"
+                        weline-code="cart.cart.note_slot">
+                </w:slot>
+            </div>
             <div class="weline-cart-shell__totals" data-cart-discount-breakdown hidden>
                 <div class="weline-cart-shell__summary-row weline-cart-shell__summary-row--goods">
                     <span><?= __('商品小计') ?></span>
@@ -101,7 +107,7 @@ $copy = [
                 </div>
             </div>
             <p class="weline-cart-shell__summary-note"><?= $escape($copy['shippingNote']) ?></p>
-            <a class="weline-cart-shell__checkout" href="@url{'checkout'}"><?= __('去结算') ?></a>
+            <a class="weline-cart-shell__checkout" data-cart-checkout href="@url{'checkout'}"><?= __('去结算') ?></a>
             <a class="weline-cart-shell__continue weline-cart-shell__summary-continue"
                href="@url{'products'}"><?= __('继续购物') ?></a>
         </aside>
@@ -129,10 +135,12 @@ $copy = [
     const errorNode = root.querySelector('[data-cart-error]');
     const messageNode = root.querySelector('[data-cart-message]');
     const retryButton = root.querySelector('[data-cart-retry]');
+    const checkoutNode = root.querySelector('[data-cart-checkout]');
     const summaryRoot = root.querySelector('.weline-cart-shell__summary');
     const guestTokenStorageKey = 'weline.cart.guest_token';
     let cartApi = null;
     let guestToken = '';
+    let cartLoadSeq = 0;
 
     function discountPreview(summary) {
         if (!summary || typeof summary !== 'object' || !summary.discount_preview) {
@@ -259,9 +267,167 @@ $copy = [
         return guestToken;
     }
 
-    async function cartIdentity() {
+    async function cartIdentity(forcedMode) {
         const token = await ensureGuestToken();
-        return { guest_token: token };
+        const mode = forcedMode === 'tob' || forcedMode === 'toc'
+            ? forcedMode
+            : preferredCartType();
+        return {
+            guest_token: token,
+            cart_type: mode,
+            selling_mode: mode,
+        };
+    }
+
+    function readSellingModeCookie() {
+        try {
+            const raw = String(document.cookie || '');
+            const names = [];
+            const site = window.site || {};
+            const websiteId = String(site.website_id || site.websiteId || '').trim();
+            if (websiteId !== '' && /^\d+$/.test(websiteId)) {
+                names.push('weline_selling_mode_w' + websiteId);
+            }
+            raw.split(';').forEach(function (part) {
+                const key = String(part.split('=')[0] || '').trim();
+                if (/^weline_selling_mode_w\d+$/.test(key) && names.indexOf(key) === -1) {
+                    names.push(key);
+                }
+            });
+            names.push('weline_selling_mode');
+            for (let i = 0; i < names.length; i += 1) {
+                const match = raw.match(new RegExp('(?:^|; )' + names[i].replace(/([.$?*|{}()[\]\\/+^])/g, '\\$1') + '=([^;]*)'));
+                const value = match ? decodeURIComponent(match[1]).toLowerCase() : '';
+                if (value === 'toc' || value === 'tob') {
+                    return value;
+                }
+            }
+            const fromSession = String(window.sessionStorage.getItem('weline_selling_mode') || '').toLowerCase();
+            if (fromSession === 'toc' || fromSession === 'tob') {
+                return fromSession;
+            }
+        } catch (error) {}
+        return '';
+    }
+
+    function preferredCartType() {
+        try {
+            if (window.WelineB2BSellingMode && typeof window.WelineB2BSellingMode.preferredMode === 'function') {
+                const fromB2b = String(window.WelineB2BSellingMode.preferredMode() || '').trim().toLowerCase();
+                if (fromB2b === 'tob' || fromB2b === 'toc') {
+                    return fromB2b;
+                }
+            }
+        } catch (error) {}
+        const fromCookie = readSellingModeCookie();
+        if (fromCookie === 'tob' || fromCookie === 'toc') {
+            return fromCookie;
+        }
+        const fromRoot = String(root.getAttribute('data-cart-type') || '').trim().toLowerCase();
+        return fromRoot === 'tob' ? 'tob' : 'toc';
+    }
+
+    function applyCartTypeChrome(mode) {
+        const next = mode === 'tob' ? 'tob' : 'toc';
+        root.setAttribute('data-cart-type', next);
+        root.classList.toggle('is-cart-type-tob', next === 'tob');
+    }
+
+    function isUsableLocalCartSummary(summary, mode) {
+        if (!summary || typeof summary !== 'object' || summary.success === false) {
+            return false;
+        }
+        if (summary.cart_count == null && !Array.isArray(summary.items)) {
+            return false;
+        }
+        const reported = String(summary.cart_type || summary.selling_mode || '').toLowerCase();
+        if (reported && reported !== mode) {
+            return false;
+        }
+        return true;
+    }
+
+    function rememberLocalCartSummary(summary) {
+        if (!summary || typeof summary !== 'object' || summary.success === false) {
+            return;
+        }
+        const mode = String(summary.cart_type || summary.selling_mode || preferredCartType()).toLowerCase() === 'tob'
+            ? 'tob'
+            : 'toc';
+        summary.cart_type = mode;
+        summary.selling_mode = mode;
+        let currency = String(summary.currency || '').trim().toUpperCase();
+        if (!/^[A-Z]{3}$/.test(currency) && window.WelineCart && typeof window.WelineCart.currentDisplayCurrency === 'function') {
+            currency = String(window.WelineCart.currentDisplayCurrency() || 'CNY').toUpperCase();
+        }
+        if (!/^[A-Z]{3}$/.test(currency)) {
+            currency = 'CNY';
+        }
+        summary.currency = currency;
+        const locale = window.WelineCart && typeof window.WelineCart.currentDisplayLocale === 'function'
+            ? String(window.WelineCart.currentDisplayLocale() || '')
+            : String(document.documentElement.getAttribute('lang') || '').replace(/-/g, '_');
+        if (window.WelineCart && typeof window.WelineCart.rememberSummary === 'function') {
+            try {
+                window.WelineCart.rememberSummary(summary, { cart_type: mode, currency: currency, locale: locale });
+            } catch (error) {}
+        }
+        try {
+            const guest = window.WelineCart && typeof window.WelineCart.getGuestSession === 'function'
+                ? window.WelineCart.getGuestSession()
+                : null;
+            window.localStorage.setItem('weline.cart.summary_cache.' + mode, JSON.stringify({
+                guest_token: guest && guest.token ? String(guest.token).trim() : '',
+                scope_key: String(summary.scope_key || ''),
+                cart_type: mode,
+                currency: currency,
+                locale: locale,
+                saved_at: Date.now(),
+                summary: summary,
+            }));
+        } catch (error) {}
+    }
+
+    function readLocalCartSummary(mode) {
+        const next = mode === 'tob' ? 'tob' : 'toc';
+        const wantCurrency = window.WelineCart && typeof window.WelineCart.currentDisplayCurrency === 'function'
+            ? String(window.WelineCart.currentDisplayCurrency() || 'CNY').toUpperCase()
+            : 'CNY';
+        const wantLocale = window.WelineCart && typeof window.WelineCart.currentDisplayLocale === 'function'
+            ? String(window.WelineCart.currentDisplayLocale() || '')
+            : String(document.documentElement.getAttribute('lang') || '').replace(/-/g, '_');
+        if (window.WelineCart && typeof window.WelineCart.getCachedSummary === 'function') {
+            try {
+                const shared = window.WelineCart.getCachedSummary({ cartType: next, currency: wantCurrency, locale: wantLocale });
+                if (isUsableLocalCartSummary(shared, next)) {
+                    const sharedCurrency = String(shared.currency || '').toUpperCase();
+                    if (!sharedCurrency || sharedCurrency === wantCurrency) {
+                        return Object.assign({}, shared, { cart_type: next, selling_mode: next });
+                    }
+                }
+            } catch (error) {}
+        }
+        try {
+            const raw = window.localStorage.getItem('weline.cart.summary_cache.' + next);
+            if (!raw) {
+                return null;
+            }
+            const data = JSON.parse(raw);
+            if (!data || !isUsableLocalCartSummary(data.summary, next)) {
+                return null;
+            }
+            const cachedCurrency = String(data.currency || (data.summary && data.summary.currency) || '').toUpperCase();
+            if (!cachedCurrency || cachedCurrency !== wantCurrency) {
+                return null;
+            }
+            const cachedLocale = String(data.locale || '').replace(/-/g, '_');
+            if (wantLocale && cachedLocale && wantLocale.toLowerCase() !== cachedLocale.toLowerCase()) {
+                return null;
+            }
+            return Object.assign({}, data.summary, { cart_type: next, selling_mode: next });
+        } catch (error) {
+            return null;
+        }
     }
 
     function text(value) {
@@ -414,6 +580,13 @@ $copy = [
         if (itemId) {
             row.dataset.itemId = itemId;
         }
+        const lineFound = !(item && Object.prototype.hasOwnProperty.call(item, 'found')) || Boolean(item.found);
+        const lineSellable = !(item && Object.prototype.hasOwnProperty.call(item, 'sellable')) || Boolean(item.sellable);
+        const lineBlocked = !lineFound || !lineSellable;
+        if (lineBlocked) {
+            row.classList.add('is-unavailable');
+            row.dataset.cartLineBlocked = '1';
+        }
 
         const quantity = Math.max(1, Number(item && (item.qty || item.quantity)) || 1);
         const maxQty = Math.max(1, Number(item && item.stock) || 999);
@@ -448,6 +621,14 @@ $copy = [
 
         appendLineOptions(details, item);
 
+        const issueText = text(item && item.message).trim();
+        if (lineBlocked && issueText) {
+            const issue = document.createElement('p');
+            issue.className = 'weline-cart-shell__line-issue';
+            issue.textContent = issueText;
+            details.appendChild(issue);
+        }
+
         const meta = document.createElement('div');
         meta.className = 'weline-cart-shell__line-meta';
 
@@ -460,7 +641,7 @@ $copy = [
         decrease.dataset.itemId = itemId;
         decrease.setAttribute('aria-label', copy.decreaseQty);
         decrease.textContent = '−';
-        if (quantity <= 1) {
+        if (quantity <= 1 || lineBlocked) {
             decrease.disabled = true;
         }
 
@@ -472,6 +653,9 @@ $copy = [
         input.value = String(quantity);
         input.dataset.cartQuantity = itemId;
         input.setAttribute('aria-label', copy.quantity + ' ' + text(item && item.name));
+        if (lineBlocked) {
+            input.disabled = true;
+        }
 
         const increase = document.createElement('button');
         increase.type = 'button';
@@ -479,7 +663,7 @@ $copy = [
         increase.dataset.itemId = itemId;
         increase.setAttribute('aria-label', copy.increaseQty);
         increase.textContent = '+';
-        if (quantity >= maxQty) {
+        if (quantity >= maxQty || lineBlocked) {
             increase.disabled = true;
         }
 
@@ -560,12 +744,40 @@ $copy = [
             if (subtitleNode) {
                 subtitleNode.hidden = true;
             }
+            if (checkoutNode) {
+                checkoutNode.removeAttribute('aria-disabled');
+                checkoutNode.classList.remove('is-disabled');
+                if (checkoutNode.dataset.href) {
+                    checkoutNode.setAttribute('href', checkoutNode.dataset.href);
+                }
+            }
+            rememberLocalCartSummary(Object.assign({
+                success: true,
+                is_empty: true,
+                items: [],
+                cart_count: 0,
+                cart_type: preferredCartType(),
+                selling_mode: preferredCartType(),
+            }, summary && typeof summary === 'object' ? summary : {}));
             showState('empty');
             return;
         }
 
         itemsNode.textContent = '';
-        const currency = text(summary && summary.currency || items[0] && items[0].currency || 'CNY');
+        let currency = text(summary && summary.currency || items[0] && items[0].currency || '').trim().toUpperCase();
+        const displayCurrency = window.WelineCart && typeof window.WelineCart.currentDisplayCurrency === 'function'
+            ? String(window.WelineCart.currentDisplayCurrency() || '').trim().toUpperCase()
+            : '';
+        // Prefer live storefront display currency so a stale API label cannot keep CNY
+        // after the shopper switched to USD/EUR in the header.
+        if (/^[A-Z]{3}$/.test(displayCurrency)) {
+            currency = displayCurrency;
+        } else if (!/^[A-Z]{3}$/.test(currency)) {
+            currency = 'CNY';
+        }
+        if (summary && typeof summary === 'object') {
+            summary.currency = currency;
+        }
         items.forEach(function (item) {
             itemsNode.appendChild(buildLine(item, currency));
         });
@@ -582,6 +794,35 @@ $copy = [
         setText(subtotalLabelNode, copy.subtotal);
         setText(grandTotalNode, money(payable, currency));
         renderDiscountBreakdown(summary, currency, goodsSubtotal || fallbackGrand);
+
+        const blocked = Boolean(summary && summary.checkout_blocked);
+        const blockingMessage = text(summary && (summary.blocking_message || summary.message)).trim();
+        if (checkoutNode) {
+            if (!checkoutNode.dataset.href) {
+                checkoutNode.dataset.href = checkoutNode.getAttribute('href') || '';
+            }
+            if (blocked) {
+                checkoutNode.setAttribute('aria-disabled', 'true');
+                checkoutNode.classList.add('is-disabled');
+                checkoutNode.removeAttribute('href');
+            } else {
+                checkoutNode.removeAttribute('aria-disabled');
+                checkoutNode.classList.remove('is-disabled');
+                if (checkoutNode.dataset.href) {
+                    checkoutNode.setAttribute('href', checkoutNode.dataset.href);
+                }
+            }
+        }
+        if (messageNode) {
+            if (blocked && blockingMessage) {
+                setText(messageNode, blockingMessage);
+                messageNode.classList.add('is-error');
+            } else if (!text(summary && summary.message)) {
+                setText(messageNode, '');
+                messageNode.classList.remove('is-error');
+            }
+        }
+        rememberLocalCartSummary(summary);
         showState('ready');
     }
 
@@ -599,18 +840,42 @@ $copy = [
 
     async function loadCart(options) {
         const soft = !!(options && options.soft);
+        const preferCache = !!(options && options.preferCache);
+        const requestedMode = options && (options.cartType === 'tob' || options.cartType === 'toc')
+            ? options.cartType
+            : preferredCartType();
+        const seq = ++cartLoadSeq;
+        if (preferCache && !options.forceNetwork) {
+            const cached = readLocalCartSummary(requestedMode);
+            if (cached) {
+                applyCartTypeChrome(requestedMode);
+                render(cached);
+                return;
+            }
+        }
         if (!soft) {
             showState('loading');
         }
         try {
+            applyCartTypeChrome(requestedMode);
             const cart = await getCartApi();
-            const result = await cart.getCart(await cartIdentity());
+            const result = await cart.getCart(await cartIdentity(requestedMode));
+            if (seq !== cartLoadSeq) {
+                return;
+            }
             const summary = result && result.data && typeof result.data === 'object' ? result.data : result;
             if (!summary || summary.success === false) {
                 throw new Error(text(summary && summary.message) || copy.loadFailed);
             }
+            const reported = String(summary.cart_type || summary.selling_mode || '').toLowerCase();
+            // Keep the requested type chrome when server omits cart_type; never let a late
+            // toc response paint over an already-selected wholesale tab.
+            applyCartTypeChrome(reported === 'tob' || reported === 'toc' ? reported : requestedMode);
             render(summary);
         } catch (error) {
+            if (seq !== cartLoadSeq) {
+                return;
+            }
             if (soft) {
                 return;
             }
@@ -623,9 +888,10 @@ $copy = [
         root.setAttribute('aria-busy', 'true');
         setText(messageNode, '');
         messageNode && messageNode.classList.remove('is-error');
+        const mode = preferredCartType();
         try {
             const cart = await getCartApi();
-            const params = Object.assign(await cartIdentity(), { item_id: itemId });
+            const params = Object.assign(await cartIdentity(mode), { item_id: itemId });
             const result = action === 'remove'
                 ? await cart.remove(params)
                 : await cart.update(Object.assign(params, { qty: Math.max(1, Number(qty) || 1) }));
@@ -634,6 +900,8 @@ $copy = [
                 throw new Error(text(summary && summary.message) || copy.mutationFailed);
             }
             setText(messageNode, text(summary.message));
+            const reported = String(summary.cart_type || summary.selling_mode || mode).toLowerCase();
+            applyCartTypeChrome(reported === 'tob' ? 'tob' : 'toc');
             render(summary);
         } catch (error) {
             setText(messageNode, error && error.message ? error.message : copy.mutationFailed);
@@ -649,7 +917,16 @@ $copy = [
     }
 
     window.addEventListener('weline:cart-updated', function () {
-        loadCart({ soft: true });
+        loadCart({ soft: true, cartType: preferredCartType() });
+    });
+
+    window.addEventListener('weline:selling-mode-changed', function (event) {
+        const detail = event && event.detail && typeof event.detail === 'object' ? event.detail : {};
+        const mode = String(detail.selling_mode || detail.cart_type || preferredCartType()).toLowerCase();
+        const next = mode === 'tob' ? 'tob' : 'toc';
+        applyCartTypeChrome(next);
+        // Prefer typed local summary; only hit getCart when that type has no usable cache.
+        loadCart({ soft: false, cartType: next, preferCache: true, forceNetwork: detail.forceNetwork === true });
     });
 
     root.addEventListener('click', async function (event) {
@@ -684,6 +961,7 @@ $copy = [
         }
     });
 
-    loadCart();
+    applyCartTypeChrome(preferredCartType());
+    loadCart({ cartType: preferredCartType() });
 })();
 </script>

@@ -54,7 +54,7 @@ moduleDescribe(test, MODULE, 'Weline_Cron 后台流程', () => {
         status.selectOption('pending'),
       ]);
       await waitForBackendShellReady(page);
-      await expect(page.locator('.weline-cron-table, table.table').first()).toBeVisible();
+      await expect(page.locator('.weline-cron-task-list, .w-disclosure.weline-cron-task').first()).toBeVisible();
       await expect(page.locator('body')).toContainText(/任务|共|条|模块/i);
     }
   );

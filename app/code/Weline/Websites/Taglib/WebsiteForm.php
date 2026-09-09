@@ -314,6 +314,7 @@ class WebsiteForm implements TaglibInterface
             $html[] = '      </div>';
             $html[] = '    </div>';
             $html[] = '  </div>';
+            $html[] = '  <?php echo $this->fetch("Weline_Websites::templates/Admin/Website/partials/crawler-policy.phtml", ["website" => $website, "id" => $Taglib__id]); ?>';
             $html[] = '  <?php $this->dispatchHook("Weline_Websites::backend::website::form::sections-after", ["id" => $Taglib__id, "website" => $website, "accordion_parent_id" => $Taglib__id . "_wrapper"]); ?>';
 
             // 操作按钮

@@ -66,7 +66,8 @@ class BackendPageController extends BackendController
         }
 
         $trimmed = \ltrim($content);
-        return !\str_starts_with($trimmed, '<!DOCTYPE html>')
+        // Case-insensitive: templates often emit `<!doctype html>` / `<HTML>`.
+        return !\str_starts_with(\strtolower($trimmed), '<!doctype html>')
             && \stripos($trimmed, '<html') === false;
     }
 

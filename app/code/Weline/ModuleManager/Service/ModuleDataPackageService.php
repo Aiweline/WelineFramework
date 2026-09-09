@@ -118,7 +118,7 @@ class ModuleDataPackageService
                     try {
                         $all = $connection->query(
                             "SELECT * FROM {$physical} LIMIT {$chunkSize} OFFSET {$offset}"
-                        )->fetchAll(\PDO::FETCH_ASSOC);
+                        )->fetchArray();
                         $batch = \is_array($all) ? $all : [];
                     } catch (\Throwable $e) {
                         return [
@@ -163,7 +163,7 @@ class ModuleDataPackageService
 
                 if ($cnt > 0) {
                     try {
-                        $all = $connection->query("SELECT * FROM {$physical}")->fetchAll(\PDO::FETCH_ASSOC);
+                        $all = $connection->query("SELECT * FROM {$physical}")->fetchArray();
                         $rows = \is_array($all) ? $all : [];
                     } catch (\Throwable $e) {
                         return [

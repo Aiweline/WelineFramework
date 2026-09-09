@@ -6,7 +6,7 @@ const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
 
-const sourcePath = path.resolve(__dirname, '../../../view/statics/js/i18n.js');
+const sourcePath = path.resolve(__dirname, '../../../../Framework/View/statics/js/i18n.js');
 const source = fs.readFileSync(sourcePath, 'utf8');
 
 function bootI18n({pathname, search = '', hash = '', cookie = '', documentLang = '', dataLang = ''}) {

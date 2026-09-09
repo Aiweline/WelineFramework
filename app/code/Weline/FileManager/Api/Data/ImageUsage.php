@@ -28,6 +28,10 @@ final readonly class ImageUsage
         public string $sizes = '100vw',
         public int $version = self::VERSION,
         public bool $complement = true,
+        /** UI 占位宽（HTML width，用于 CLS 宽高比；非强制显示像素） */
+        public ?int $layoutWidth = null,
+        /** UI 占位高（HTML height，配合 CSS height:auto 做响应式） */
+        public ?int $layoutHeight = null,
     ) {
         if (
             $version !== self::VERSION
@@ -62,6 +66,16 @@ final readonly class ImageUsage
         if ($decorative && trim($alt) !== '') {
             throw new \InvalidArgumentException((string)__('装饰图片的 alt 必须为空。'));
         }
+        if (($layoutWidth === null) !== ($layoutHeight === null)) {
+            throw new \InvalidArgumentException((string)__('图片 UI 宽高必须成对设置。'));
+        }
+        if (
+            $layoutWidth !== null
+            && $layoutHeight !== null
+            && ($layoutWidth < 1 || $layoutHeight < 1 || $layoutWidth > 10000 || $layoutHeight > 10000)
+        ) {
+            throw new \InvalidArgumentException((string)__('图片 UI 宽高无效。'));
+        }
     }
 
     /** @param array<string,mixed> $data */
@@ -78,6 +92,12 @@ final readonly class ImageUsage
             }
             $normalizedWidths[] = (int)$width;
         }
+        $layout = self::layoutPairFromMixed(
+            $data['layout_width'] ?? $data['width'] ?? null,
+            $data['layout_height'] ?? $data['height'] ?? null,
+            isset($data['aspect_ratio']) ? (string)$data['aspect_ratio'] : '',
+        );
+
         return new self(
             (string)($data['asset_id'] ?? ''),
             (string)($data['locale_code'] ?? ''),
@@ -91,13 +111,15 @@ final readonly class ImageUsage
             (string)($data['sizes'] ?? '100vw'),
             (int)($data['version'] ?? self::VERSION),
             self::boolean($data['complement'] ?? true, 'complement'),
+            $layout[0],
+            $layout[1],
         );
     }
 
     /** @return array<string,mixed> */
     public function toArray(): array
     {
-        return [
+        $data = [
             'version' => $this->version,
             'asset_id' => $this->assetId,
             'locale_code' => $this->localeCode,
@@ -111,6 +133,70 @@ final readonly class ImageUsage
             'sizes' => $this->sizes,
             'complement' => $this->complement,
         ];
+        if ($this->layoutWidth !== null && $this->layoutHeight !== null) {
+            $data['layout_width'] = $this->layoutWidth;
+            $data['layout_height'] = $this->layoutHeight;
+        }
+
+        return $data;
+    }
+
+    /**
+     * 解析 UI 宽高比（如 16/9、16:9），得到 HTML width/height 占位整数。
+     *
+     * @return array{0:?int,1:?int}
+     */
+    public static function parseAspectRatio(string $raw): array
+    {
+        $raw = trim($raw);
+        if ($raw === '') {
+            return [null, null];
+        }
+        if (preg_match('/^(\d{1,5})\s*[\/:xX]\s*(\d{1,5})$/', $raw, $matches) !== 1) {
+            throw new \InvalidArgumentException((string)__('图片宽高比格式无效，请使用如 16/9 或 16:9。'));
+        }
+        $width = (int)$matches[1];
+        $height = (int)$matches[2];
+        if ($width < 1 || $height < 1 || $width > 10000 || $height > 10000) {
+            throw new \InvalidArgumentException((string)__('图片宽高比数值无效。'));
+        }
+
+        return [$width, $height];
+    }
+
+    /**
+     * 合并显式宽高与宽高比；二者须成对出现。
+     *
+     * @return array{0:?int,1:?int}
+     */
+    public static function layoutPairFromMixed(mixed $width, mixed $height, string $aspectRatio = ''): array
+    {
+        $parsedWidth = self::optionalPositiveInt($width, 'layout_width');
+        $parsedHeight = self::optionalPositiveInt($height, 'layout_height');
+        if ($parsedWidth !== null && $parsedHeight !== null) {
+            return [$parsedWidth, $parsedHeight];
+        }
+        if ($parsedWidth !== null || $parsedHeight !== null) {
+            throw new \InvalidArgumentException((string)__('图片 UI 宽高必须成对设置。'));
+        }
+        return self::parseAspectRatio($aspectRatio);
+    }
+
+    private static function optionalPositiveInt(mixed $value, string $field): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+        if (is_int($value) && $value > 0 && $value <= 10000) {
+            return $value;
+        }
+        if (is_string($value) && ctype_digit($value)) {
+            $int = (int)$value;
+            if ($int > 0 && $int <= 10000) {
+                return $int;
+            }
+        }
+        throw new \InvalidArgumentException((string)__('图片 UI 尺寸字段无效：%{1}', [$field]));
     }
 
     public function assertPublishable(string $expectedLocale): void

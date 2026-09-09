@@ -43,6 +43,24 @@
     .w-docs-browser__sidebar,
     .w-docs-browser__content { min-block-size: 0; }
 
+    .w-docs-browser__content-bar {
+        gap: var(--weline-space-3);
+    }
+
+    .w-docs-browser__content-actions {
+        flex: 1 1 auto;
+        min-inline-size: 0;
+        flex-wrap: wrap;
+        gap: var(--weline-space-2);
+    }
+
+    .w-docs-browser__doc-search {
+        flex: 1 1 12rem;
+        min-inline-size: 10rem;
+        max-inline-size: 28rem;
+        margin: 0;
+    }
+
     .w-docs-browser__sidebar > .w-card__body,
     .w-docs-browser__body {
         overflow: auto;

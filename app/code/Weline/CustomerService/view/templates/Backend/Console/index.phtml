@@ -5,12 +5,22 @@
 $agent = $this->getData('agent') ?? [];
 $sessions = $this->getData('sessions') ?? [];
 $waitingSessions = $this->getData('waitingSessions') ?? [];
+$transferredSessions = $this->getData('transferredSessions') ?? [];
 $statistics = $this->getData('statistics') ?? [];
 $consolePath = 'customerservice/backend/console';
-$cssUrl = $this->getViewFileUrl('Weline_CustomerService::css/backend-console.css');
-$statisticsCssUrl = $this->getViewFileUrl('Weline_CustomerService::css/backend-statistics.css');
-$jsUrl = $this->getViewFileUrl('Weline_CustomerService::js/backend-console.js');
-$statisticsJsUrl = $this->getViewFileUrl('Weline_CustomerService::js/backend-statistics.js');
+$mySessionCount = is_array($sessions) ? count($sessions) : 0;
+$waitingSessionCount = is_array($waitingSessions) ? count($waitingSessions) : 0;
+$transferredSessionCount = is_array($transferredSessions) ? count($transferredSessions) : 0;
+// 互斥手风琴：首屏仅展开一组（优先我的 → 转让 → 等待）
+$openSessionGroup = 'mine';
+if ($mySessionCount <= 0 && $transferredSessionCount > 0) {
+    $openSessionGroup = 'transferred';
+} elseif ($mySessionCount <= 0 && $transferredSessionCount <= 0 && $waitingSessionCount > 0) {
+    $openSessionGroup = 'waiting';
+}
+$mineGroupOpen = $openSessionGroup === 'mine';
+$transferredGroupOpen = $openSessionGroup === 'transferred';
+$waitingGroupOpen = $openSessionGroup === 'waiting';
 $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
     | JSON_UNESCAPED_SLASHES
     | JSON_HEX_TAG
@@ -21,216 +31,336 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
 $jsonForHtmlAttr = static function ($value) use ($jsonForScriptFlags): string {
     return htmlspecialchars(json_encode($value, $jsonForScriptFlags), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 };
+$agentName = htmlspecialchars((string)($agent['name'] ?? __('客服')), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$agentLocale = htmlspecialchars((string)($agent['locale'] ?? 'zh_Hans_CN'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 ?>
-<link rel="stylesheet" href="<?= $cssUrl ?>">
-<link rel="stylesheet" href="<?= $statisticsCssUrl ?>">
-<div class="customer-service-console">
-    <div class="console-header">
-        <h1><?= __('客服工作台') ?></h1>
+<link rel="stylesheet" href="@static(Weline_CustomerService::css/backend-console.css)">
+<link rel="stylesheet" href="@static(Weline_CustomerService::css/backend-statistics.css)">
+<div class="cs-console customer-service-console" data-testid="customer-service-console">
+    <header class="cs-console__header console-header w-cluster" data-justify="between" data-align="center">
+        <div class="w-stack" style="--w-gap:var(--weline-space-1);">
+            <h1><?= __('客服工作台') ?></h1>
+            <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0;">
+                <?= __('接单等待中的会话，并在左侧聊天区回复客户。') ?>
+            </p>
+        </div>
         <div class="agent-info">
-            <span class="agent-name"><?= htmlspecialchars($agent['name'] ?? __('客服')) ?></span>
-            <span class="agent-locale"><?= htmlspecialchars($agent['locale'] ?? 'zh_Hans_CN') ?></span>
+            <span class="w-badge" data-tone="info"><?= $agentName ?></span>
+            <span class="w-text" data-tone="muted" data-size="sm"><?= __('界面语言') ?> · <?= $agentLocale ?></span>
         </div>
-    </div>
+    </header>
 
-    <!-- 统计卡片区域 -->
-    <div class="statistics-section">
-        <div class="statistics-header">
-            <h2><?= __('工作量统计') ?></h2>
-            <div class="period-selector">
-                <button class="period-btn active" data-period="today"><?= __('今日') ?></button>
-                <button class="period-btn" data-period="week"><?= __('本周') ?></button>
-                <button class="period-btn" data-period="month"><?= __('本月') ?></button>
-                <button class="period-btn" data-period="all"><?= __('全部') ?></button>
+    <section class="statistics-section w-card" aria-labelledby="cs-console-stats-heading">
+        <header class="statistics-header w-card__header">
+            <h2 class="w-card__title" id="cs-console-stats-heading"><?= __('工作量统计') ?></h2>
+            <div class="period-selector w-button-group" role="group" aria-label="<?= __('统计时间范围') ?>">
+                <button type="button" class="w-button period-btn active" data-period="today" data-tone="primary" data-size="sm" aria-pressed="true"><?= __('今日') ?></button>
+                <button type="button" class="w-button period-btn" data-period="week" data-tone="neutral" data-variant="outline" data-size="sm" aria-pressed="false"><?= __('本周') ?></button>
+                <button type="button" class="w-button period-btn" data-period="month" data-tone="neutral" data-variant="outline" data-size="sm" aria-pressed="false"><?= __('本月') ?></button>
+                <button type="button" class="w-button period-btn" data-period="all" data-tone="neutral" data-variant="outline" data-size="sm" aria-pressed="false"><?= __('全部') ?></button>
+            </div>
+        </header>
+        <div class="w-card__body" style="--w-p:0;">
+            <div class="statistics-cards" id="statistics-cards">
+                <div class="stat-card">
+                    <div class="stat-icon sessions" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                            <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
+                        </svg>
+                    </div>
+                    <div class="stat-content">
+                        <div class="stat-value" id="stat-sessions"><?= $statistics['sessions']['total'] ?? 0 ?></div>
+                        <div class="stat-label"><?= __('会话数') ?></div>
+                        <div class="stat-detail">
+                            <span><?= __('已关闭') ?>: <span id="stat-closed"><?= $statistics['sessions']['closed'] ?? 0 ?></span></span>
+                            <span><?= __('进行中') ?>: <span id="stat-active"><?= $statistics['sessions']['active'] ?? 0 ?></span></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon messages" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                            <path d="M10 9V5l-7 7 7 7v-4.1c5 0 8.5 1.6 11 5.1-1-5-4-10-11-11z"/>
+                        </svg>
+                    </div>
+                    <div class="stat-content">
+                        <div class="stat-value" id="stat-messages"><?= ($statistics['messages']['agent'] ?? 0) + ($statistics['messages']['customer'] ?? 0) ?></div>
+                        <div class="stat-label"><?= __('消息数') ?></div>
+                        <div class="stat-detail">
+                            <span><?= __('客服') ?>: <span id="stat-agent-messages"><?= $statistics['messages']['agent'] ?? 0 ?></span></span>
+                            <span><?= __('客户') ?>: <span id="stat-customer-messages"><?= $statistics['messages']['customer'] ?? 0 ?></span></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon response-rate" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                            <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                        </svg>
+                    </div>
+                    <div class="stat-content">
+                        <div class="stat-value" id="stat-response-rate"><?= $statistics['rates']['response_rate'] ?? 0 ?>%</div>
+                        <div class="stat-label"><?= __('响应率') ?></div>
+                        <div class="stat-detail">
+                            <span><?= __('已响应') ?>: <span id="stat-responded"><?= $statistics['sessions']['responded'] ?? 0 ?></span></span>
+                            <span><?= __('完结率') ?>: <span id="stat-close-rate"><?= $statistics['rates']['close_rate'] ?? 0 ?>%</span></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon response-time" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                            <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/>
+                        </svg>
+                    </div>
+                    <div class="stat-content">
+                        <div class="stat-value" id="stat-response-time"><?php 
+                            $avgTime = $statistics['response_time']['average'] ?? 0;
+                            echo $avgTime < 60 ? round($avgTime, 1) . __('秒') : round($avgTime / 60, 1) . __('分钟');
+                        ?></div>
+                        <div class="stat-label"><?= __('平均响应时间') ?></div>
+                        <div class="stat-detail">
+                            <span><?= __('最快') ?>: <?php 
+                                $minTime = $statistics['response_time']['min'] ?? 0;
+                                echo $minTime < 60 ? round($minTime, 1) . __('秒') : round($minTime / 60, 1) . __('分钟');
+                            ?></span>
+                            <span><?= __('最慢') ?>: <?php 
+                                $maxTime = $statistics['response_time']['max'] ?? 0;
+                                echo $maxTime < 60 ? round($maxTime, 1) . __('秒') : round($maxTime / 60, 1) . __('分钟');
+                            ?></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon duration" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                            <path d="M15 1H9v2h6V1zm-4 13h2V8h-2v6zm8.03-6.61l1.42-1.42c-.43-.51-.9-.99-1.41-1.41l-1.42 1.42C16.07 4.74 14.12 4 12 4c-4.97 0-9 4.03-9 9s4.02 9 9 9 9-4.03 9-9c0-2.12-.74-4.07-1.97-5.61zM12 20c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/>
+                        </svg>
+                    </div>
+                    <div class="stat-content">
+                        <div class="stat-value" id="stat-duration"><?= $statistics['session_duration']['average'] ?? 0 ?></div>
+                        <div class="stat-label"><?= __('平均会话时长（分钟）') ?></div>
+                        <div class="stat-detail">
+                            <span><?= __('平均消息') ?>: <span id="stat-msg-per-session"><?= $statistics['rates']['messages_per_session'] ?? 0 ?></span></span>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
-        <div class="statistics-cards" id="statistics-cards">
-            <div class="stat-card">
-                <div class="stat-icon sessions">
-                    <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
-                        <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
-                    </svg>
-                </div>
-                <div class="stat-content">
-                    <div class="stat-value" id="stat-sessions"><?= $statistics['sessions']['total'] ?? 0 ?></div>
-                    <div class="stat-label"><?= __('会话数') ?></div>
-                    <div class="stat-detail">
-                        <span><?= __('已关闭') ?>: <span id="stat-closed"><?= $statistics['sessions']['closed'] ?? 0 ?></span></span>
-                        <span><?= __('进行中') ?>: <span id="stat-active"><?= $statistics['sessions']['active'] ?? 0 ?></span></span>
-                    </div>
-                </div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon messages">
-                    <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
-                        <path d="M10 9V5l-7 7 7 7v-4.1c5 0 8.5 1.6 11 5.1-1-5-4-10-11-11z"/>
-                    </svg>
-                </div>
-                <div class="stat-content">
-                    <div class="stat-value" id="stat-messages"><?= ($statistics['messages']['agent'] ?? 0) + ($statistics['messages']['customer'] ?? 0) ?></div>
-                    <div class="stat-label"><?= __('消息数') ?></div>
-                    <div class="stat-detail">
-                        <span><?= __('客服') ?>: <span id="stat-agent-messages"><?= $statistics['messages']['agent'] ?? 0 ?></span></span>
-                        <span><?= __('客户') ?>: <span id="stat-customer-messages"><?= $statistics['messages']['customer'] ?? 0 ?></span></span>
-                    </div>
-                </div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon response-rate">
-                    <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
-                        <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
-                    </svg>
-                </div>
-                <div class="stat-content">
-                    <div class="stat-value" id="stat-response-rate"><?= $statistics['rates']['response_rate'] ?? 0 ?>%</div>
-                    <div class="stat-label"><?= __('响应率') ?></div>
-                    <div class="stat-detail">
-                        <span><?= __('已响应') ?>: <span id="stat-responded"><?= $statistics['sessions']['responded'] ?? 0 ?></span></span>
-                        <span><?= __('完结率') ?>: <span id="stat-close-rate"><?= $statistics['rates']['close_rate'] ?? 0 ?>%</span></span>
-                    </div>
-                </div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon response-time">
-                    <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
-                        <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/>
-                    </svg>
-                </div>
-                <div class="stat-content">
-                    <div class="stat-value" id="stat-response-time"><?php 
-                        $avgTime = $statistics['response_time']['average'] ?? 0;
-                        echo $avgTime < 60 ? round($avgTime, 1) . __('秒') : round($avgTime / 60, 1) . __('分钟');
-                    ?></div>
-                    <div class="stat-label"><?= __('平均响应时间') ?></div>
-                    <div class="stat-detail">
-                        <span><?= __('最快') ?>: <?php 
-                            $minTime = $statistics['response_time']['min'] ?? 0;
-                            echo $minTime < 60 ? round($minTime, 1) . __('秒') : round($minTime / 60, 1) . __('分钟');
-                        ?></span>
-                        <span><?= __('最慢') ?>: <?php 
-                            $maxTime = $statistics['response_time']['max'] ?? 0;
-                            echo $maxTime < 60 ? round($maxTime, 1) . __('秒') : round($maxTime / 60, 1) . __('分钟');
-                        ?></span>
-                    </div>
-                </div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon duration">
-                    <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
-                        <path d="M15 1H9v2h6V1zm-4 13h2V8h-2v6zm8.03-6.61l1.42-1.42c-.43-.51-.9-.99-1.41-1.41l-1.42 1.42C16.07 4.74 14.12 4 12 4c-4.97 0-9 4.03-9 9s4.02 9 9 9 9-4.03 9-9c0-2.12-.74-4.07-1.97-5.61zM12 20c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/>
-                    </svg>
-                </div>
-                <div class="stat-content">
-                    <div class="stat-value" id="stat-duration"><?= $statistics['session_duration']['average'] ?? 0 ?></div>
-                    <div class="stat-label"><?= __('平均会话时长（分钟）') ?></div>
-                    <div class="stat-detail">
-                        <span><?= __('平均消息') ?>: <span id="stat-msg-per-session"><?= $statistics['rates']['messages_per_session'] ?? 0 ?></span></span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
+    </section>
 
-    <div class="console-layout">
-        <!-- 左侧会话列表 -->
-        <div class="console-sidebar">
+    <div class="cs-console__layout console-layout">
+        <section class="cs-console__main console-main" aria-label="<?= __('聊天区域') ?>">
+            <div class="chat-container" id="chat-container">
+                <div class="chat-empty-state w-empty">
+                    <div class="empty-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor">
+                            <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
+                        </svg>
+                    </div>
+                    <p><?= __('请选择一个会话开始聊天') ?></p>
+                    <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0;">
+                        <?= __('从右侧「我的会话」点选，或先接单等待中的会话。') ?>
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <aside class="cs-console__sidebar console-sidebar" aria-label="<?= __('会话列表') ?>">
             <div class="sidebar-header">
                 <h2><?= __('会话列表') ?></h2>
-                <button class="weline-btn-refresh" id="refresh-sessions" title="<?= __('刷新') ?>">
-                    <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                <button type="button" class="w-button weline-btn-refresh" id="refresh-sessions" data-tone="quiet" data-icon-only="true" data-size="sm" title="<?= __('刷新') ?>" aria-label="<?= __('刷新会话列表') ?>">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
                         <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
                     </svg>
                 </button>
             </div>
 
-            <!-- 等待分配的会话 -->
-            <?php if (!empty($waitingSessions)): ?>
-            <div class="waiting-sessions">
-                <h3 class="section-title"><?= __('等待分配') ?></h3>
-                <div class="session-list" id="waiting-sessions-list">
-                    <?php foreach ($waitingSessions as $session): ?>
-                    <div class="session-item waiting" data-session-id="<?= $jsonForHtmlAttr((int)($session['session_id'] ?? 0)) ?>">
-                        <div class="session-header">
-                            <span class="session-id">#<?= (int)($session['session_id'] ?? 0) ?></span>
-                            <span class="session-status badge-waiting"><?= __('等待中') ?></span>
-                        </div>
-                        <div class="session-preview">
-                            <?php if (isset($session['last_message'])): ?>
-                                <p class="last-message"><?= htmlspecialchars(mb_substr($session['last_message'], 0, 50)) ?></p>
+            <div class="cs-console__session-groups w-stack" style="--w-gap:var(--weline-space-2);" data-cs-accordion="exclusive">
+                <div class="w-disclosure my-sessions cs-session-group" data-w-component="disclosure" data-session-group="mine" data-state="<?= $mineGroupOpen ? 'open' : 'closed' ?>">
+                    <h3 class="cs-session-group__heading" id="cs-my-sessions-heading">
+                        <button class="w-disclosure__trigger cs-session-group__trigger"
+                                type="button"
+                                aria-expanded="<?= $mineGroupOpen ? 'true' : 'false' ?>"
+                                aria-controls="cs-my-sessions-panel"
+                                data-w-disclosure-trigger>
+                            <span class="cs-session-group__label"><?= __('我的会话') ?></span>
+                            <span class="w-badge cs-session-group__count"
+                                  id="my-sessions-count"
+                                  data-tone="info"
+                                  data-size="sm"
+                                  <?= $mySessionCount > 0 ? '' : 'hidden' ?>><?= (int)$mySessionCount ?></span>
+                        </button>
+                    </h3>
+                    <div id="cs-my-sessions-panel"
+                         class="w-disclosure__panel cs-session-group__panel"
+                         aria-labelledby="cs-my-sessions-heading"
+                         data-w-disclosure-panel
+                         <?= $mineGroupOpen ? '' : 'hidden' ?>>
+                        <div class="session-list" id="my-sessions-list">
+                            <?php if (empty($sessions)): ?>
+                                <div class="empty-state w-empty">
+                                    <p><?= __('暂无进行中的会话') ?></p>
+                                    <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0;">
+                                        <?= __('有等待中的会话时，点击「接单」开始接待。') ?>
+                                    </p>
+                                </div>
                             <?php else: ?>
-                                <p class="last-message"><?= __('暂无消息') ?></p>
+                                <?php foreach ($sessions as $session): ?>
+                                <div class="session-item <?= !empty($session['unread_count']) ? 'unread' : '' ?>"
+                                     data-session-id="<?= $jsonForHtmlAttr((int)($session['session_id'] ?? 0)) ?>"
+                                     data-load-session-id="<?= $jsonForHtmlAttr((int)($session['session_id'] ?? 0)) ?>">
+                                    <div class="session-header">
+                                        <span class="session-id">#<?= (int)($session['session_id'] ?? 0) ?></span>
+                                        <span class="session-header-meta">
+                                            <?php if (!empty($session['unread_count'])): ?>
+                                                <span class="unread-badge"><?= (int)$session['unread_count'] ?></span>
+                                            <?php endif; ?>
+                                        </span>
+                                    </div>
+                                    <div class="session-preview">
+                                        <?php if (isset($session['last_message'])): ?>
+                                            <p class="last-message"><?= htmlspecialchars(mb_substr($session['last_message'], 0, 50)) ?></p>
+                                        <?php else: ?>
+                                            <p class="last-message"><?= __('暂无消息') ?></p>
+                                        <?php endif; ?>
+                                        <?php if (isset($session['last_message_time'])): ?>
+                                            <span class="last-time"><?= date('H:i', strtotime($session['last_message_time'])) ?></span>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                                <?php endforeach; ?>
                             <?php endif; ?>
                         </div>
-                        <div class="session-actions">
-                            <button class="weline-btn-assign" data-assign-session-id="<?= $jsonForHtmlAttr((int)($session['session_id'] ?? 0)) ?>">
-                                <?= __('接单') ?>
-                            </button>
+                    </div>
+                </div>
+
+                <div class="w-disclosure transferred-sessions cs-session-group" data-w-component="disclosure" data-session-group="transferred" data-state="<?= $transferredGroupOpen ? 'open' : 'closed' ?>">
+                    <h3 class="cs-session-group__heading" id="cs-transferred-sessions-heading">
+                        <button class="w-disclosure__trigger cs-session-group__trigger"
+                                type="button"
+                                aria-expanded="<?= $transferredGroupOpen ? 'true' : 'false' ?>"
+                                aria-controls="cs-transferred-sessions-panel"
+                                data-w-disclosure-trigger>
+                            <span class="cs-session-group__label"><?= __('转让分配') ?></span>
+                            <span class="w-badge cs-session-group__count"
+                                  id="transferred-sessions-count"
+                                  data-tone="info"
+                                  data-size="sm"
+                                  <?= $transferredSessionCount > 0 ? '' : 'hidden' ?>><?= (int)$transferredSessionCount ?></span>
+                        </button>
+                    </h3>
+                    <div id="cs-transferred-sessions-panel"
+                         class="w-disclosure__panel cs-session-group__panel"
+                         aria-labelledby="cs-transferred-sessions-heading"
+                         data-w-disclosure-panel
+                         <?= $transferredGroupOpen ? '' : 'hidden' ?>>
+                        <div class="session-list" id="transferred-sessions-list">
+                            <?php if (empty($transferredSessions)): ?>
+                                <div class="empty-state w-empty" style="--w-min-h:auto;padding:var(--weline-space-5);">
+                                    <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0;"><?= __('当前没有转让进来的会话') ?></p>
+                                    <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0;margin-top:var(--weline-space-2);"><?= __('你转出的会话只显示在接收方工作台的「转让分配」中。') ?></p>
+                                </div>
+                            <?php else: ?>
+                                <?php foreach ($transferredSessions as $session): ?>
+                                <div class="session-item transferred <?= !empty($session['unread_count']) ? 'unread' : '' ?>"
+                                     data-session-id="<?= $jsonForHtmlAttr((int)($session['session_id'] ?? 0)) ?>"
+                                     data-load-session-id="<?= $jsonForHtmlAttr((int)($session['session_id'] ?? 0)) ?>">
+                                    <div class="session-header">
+                                        <span class="session-id">#<?= (int)($session['session_id'] ?? 0) ?></span>
+                                        <span class="session-header-meta">
+                                            <span class="w-badge session-transfer-badge"
+                                                  data-tone="info"
+                                                  data-size="sm"
+                                                  title="<?= htmlspecialchars((string)($session['transfer_badge_title'] ?? __('转让会话')), ENT_QUOTES, 'UTF-8') ?>"><?= __('转让') ?></span>
+                                            <?php if (!empty($session['unread_count'])): ?>
+                                                <span class="unread-badge"><?= (int)$session['unread_count'] ?></span>
+                                            <?php endif; ?>
+                                        </span>
+                                    </div>
+                                    <?php if (!empty($session['transfer_from_label'])): ?>
+                                        <p class="session-transfer-from"><?= htmlspecialchars((string)$session['transfer_from_label'], ENT_QUOTES, 'UTF-8') ?></p>
+                                    <?php endif; ?>
+                                    <div class="session-preview">
+                                        <?php if (isset($session['last_message'])): ?>
+                                            <p class="last-message"><?= htmlspecialchars(mb_substr($session['last_message'], 0, 50)) ?></p>
+                                        <?php else: ?>
+                                            <p class="last-message"><?= __('暂无消息') ?></p>
+                                        <?php endif; ?>
+                                        <?php if (isset($session['last_message_time'])): ?>
+                                            <span class="last-time"><?= date('H:i', strtotime($session['last_message_time'])) ?></span>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
                         </div>
                     </div>
-                    <?php endforeach; ?>
                 </div>
-            </div>
-            <?php endif; ?>
 
-            <!-- 我的会话 -->
-            <div class="my-sessions">
-                <h3 class="section-title"><?= __('我的会话') ?></h3>
-                <div class="session-list" id="my-sessions-list">
-                    <?php if (empty($sessions)): ?>
-                        <div class="empty-state">
-                            <p><?= __('暂无会话') ?></p>
+                <div class="w-disclosure waiting-sessions cs-session-group" data-w-component="disclosure" data-session-group="waiting" data-state="<?= $waitingGroupOpen ? 'open' : 'closed' ?>">
+                    <h3 class="cs-session-group__heading" id="cs-waiting-sessions-heading">
+                        <button class="w-disclosure__trigger cs-session-group__trigger"
+                                type="button"
+                                aria-expanded="<?= $waitingGroupOpen ? 'true' : 'false' ?>"
+                                aria-controls="cs-waiting-sessions-panel"
+                                data-w-disclosure-trigger>
+                            <span class="cs-session-group__label"><?= __('等待分配') ?></span>
+                            <span class="w-badge cs-session-group__count"
+                                  id="waiting-sessions-count"
+                                  data-tone="warning"
+                                  data-size="sm"
+                                  <?= $waitingSessionCount > 0 ? '' : 'hidden' ?>><?= (int)$waitingSessionCount ?></span>
+                        </button>
+                    </h3>
+                    <div id="cs-waiting-sessions-panel"
+                         class="w-disclosure__panel cs-session-group__panel"
+                         aria-labelledby="cs-waiting-sessions-heading"
+                         data-w-disclosure-panel
+                         <?= $waitingGroupOpen ? '' : 'hidden' ?>>
+                        <div class="session-list" id="waiting-sessions-list">
+                            <?php if (empty($waitingSessions)): ?>
+                                <div class="empty-state w-empty" style="--w-min-h:auto;padding:var(--weline-space-5);">
+                                    <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0;"><?= __('当前没有等待中的会话') ?></p>
+                                </div>
+                            <?php else: ?>
+                                <?php foreach ($waitingSessions as $session): ?>
+                                <div class="session-item waiting" data-session-id="<?= $jsonForHtmlAttr((int)($session['session_id'] ?? 0)) ?>">
+                                    <div class="session-header">
+                                        <span class="session-id">#<?= (int)($session['session_id'] ?? 0) ?></span>
+                                        <span class="w-badge session-status badge-waiting" data-tone="warning" data-size="sm"><?= __('等待中') ?></span>
+                                    </div>
+                                    <div class="session-preview">
+                                        <?php if (isset($session['last_message'])): ?>
+                                            <p class="last-message"><?= htmlspecialchars(mb_substr($session['last_message'], 0, 50)) ?></p>
+                                        <?php else: ?>
+                                            <p class="last-message"><?= __('暂无消息') ?></p>
+                                        <?php endif; ?>
+                                    </div>
+                                    <div class="session-actions">
+                                        <button type="button" class="w-button weline-btn-assign btn-assign" data-assign-session-id="<?= $jsonForHtmlAttr((int)($session['session_id'] ?? 0)) ?>" data-tone="primary" data-size="sm">
+                                            <?= __('接单') ?>
+                                        </button>
+                                    </div>
+                                </div>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
                         </div>
-                    <?php else: ?>
-                        <?php foreach ($sessions as $session): ?>
-                        <div class="session-item <?= $session['unread_count'] > 0 ? 'unread' : '' ?>" 
-                             data-session-id="<?= $jsonForHtmlAttr((int)($session['session_id'] ?? 0)) ?>"
-                             data-load-session-id="<?= $jsonForHtmlAttr((int)($session['session_id'] ?? 0)) ?>">
-                            <div class="session-header">
-                                <span class="session-id">#<?= (int)($session['session_id'] ?? 0) ?></span>
-                                <?php if ($session['unread_count'] > 0): ?>
-                                    <span class="unread-badge"><?= $session['unread_count'] ?></span>
-                                <?php endif; ?>
-                            </div>
-                            <div class="session-preview">
-                                <?php if (isset($session['last_message'])): ?>
-                                    <p class="last-message"><?= htmlspecialchars(mb_substr($session['last_message'], 0, 50)) ?></p>
-                                <?php else: ?>
-                                    <p class="last-message"><?= __('暂无消息') ?></p>
-                                <?php endif; ?>
-                                <?php if (isset($session['last_message_time'])): ?>
-                                    <span class="last-time"><?= date('H:i', strtotime($session['last_message_time'])) ?></span>
-                                <?php endif; ?>
-                            </div>
-                        </div>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
-                </div>
-            </div>
-        </div>
-
-        <!-- 右侧聊天区域 -->
-        <div class="console-main">
-            <div class="chat-container" id="chat-container">
-                <div class="chat-empty-state">
-                    <div class="empty-icon">
-                        <svg viewBox="0 0 24 24" width="48" height="48" fill="currentColor">
-                            <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
-                        </svg>
                     </div>
-                    <p><?= __('请选择一个会话开始聊天') ?></p>
                 </div>
             </div>
-        </div>
+        </aside>
+
     </div>
 </div>
 
-<script src="<?= $jsUrl ?>"></script>
-<script src="<?= $statisticsJsUrl ?>"></script>
+<script src="@static(Weline_CustomerService::js/backend-console.js)"></script>
+<script src="@static(Weline_CustomerService::js/backend-statistics.js)"></script>
 <script>
-    // 初始化工作台
     const consoleConfig = {
         consoleUrl: "@backend-url{$consolePath}",
-        agentId: <?= json_encode((int)($agent['agent_id'] ?? 0), $jsonForScriptFlags) ?>
+        agentId: <?= json_encode((int)($agent['agent_id'] ?? 0), $jsonForScriptFlags) ?>,
+        defaultSessionId: <?= json_encode((int)($this->getData('defaultSessionId') ?? 0), $jsonForScriptFlags) ?>
     };
     
     CustomerServiceConsole.init(consoleConfig);
@@ -239,4 +369,3 @@ $jsonForHtmlAttr = static function ($value) use ($jsonForScriptFlags): string {
         currentPeriod: 'today'
     });
 </script>
-

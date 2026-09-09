@@ -3,10 +3,17 @@ const config = configElement ? JSON.parse(configElement.textContent || '{}') : {
 const treeRoot = document.querySelector('[data-docs-tree]');
 const contentRoot = document.querySelector('[data-docs-content]');
 const searchInput = document.querySelector('[data-docs-search]');
+const catalogFilterInput = document.querySelector('[data-docs-catalog-filter]');
 const backButton = document.querySelector('[data-docs-back]');
 const contextBadge = document.querySelector('[data-docs-context]');
 const text = config.text || {};
-const state = { catalogId: Number(config.catalogId || 0), documentId: Number(config.documentId || 0) };
+const state = {
+    catalogId: Number(config.catalogId || 0),
+    documentId: Number(config.documentId || 0),
+    searchKeyword: '',
+    catalogFilter: '',
+    treeNodes: [],
+};
 const markedEngine = window.marked || null;
 
 try { delete window.marked; } catch (_error) { window.marked = undefined; }
@@ -488,19 +495,49 @@ function treeList(nodes, level = 1) {
     return list;
 }
 
+function filterTreeNodes(nodes, keyword) {
+    const query = String(keyword || '').trim().toLowerCase();
+    const source = Array.isArray(nodes) ? nodes : [];
+    if (!query) return source;
+    const matches = [];
+    source.forEach((node) => {
+        const children = Array.isArray(node?.nodes) ? node.nodes : [];
+        const nameHit = String(node?.name || '').toLowerCase().includes(query)
+            || String(node?.description || '').toLowerCase().includes(query);
+        const filteredChildren = filterTreeNodes(children, keyword);
+        if (nameHit) {
+            matches.push({ ...node, nodes: children });
+        } else if (filteredChildren.length) {
+            matches.push({ ...node, nodes: filteredChildren });
+        }
+    });
+    return matches;
+}
+
+function renderCatalogTree() {
+    if (!treeRoot) return;
+    const nodes = filterTreeNodes(state.treeNodes, state.catalogFilter);
+    if (!nodes.length && String(state.catalogFilter || '').trim()) {
+        treeRoot.replaceChildren(empty(text.emptyCatalogFilter || '没有匹配的分类', 'search'));
+        return;
+    }
+    treeRoot.replaceChildren(treeList(nodes));
+    selectCatalogMarker();
+}
+
 async function loadTree() {
     setBusy(treeRoot);
     try {
         const nodes = await request('/docs/tree');
-        treeRoot.replaceChildren(treeList(nodes));
-        selectCatalogMarker();
+        state.treeNodes = Array.isArray(nodes) ? nodes : [];
+        renderCatalogTree();
     } catch (error) {
         treeRoot.replaceChildren(empty(error.message || text.requestFailed, 'warning'));
     }
 }
 
 function selectCatalogMarker() {
-    treeRoot.querySelectorAll('[data-catalog-id]').forEach((element) => {
+    treeRoot?.querySelectorAll('[data-catalog-id]').forEach((element) => {
         element.dataset.docsSelected = Number(element.dataset.catalogId) === state.catalogId ? 'true' : 'false';
     });
 }
@@ -913,6 +950,15 @@ let searchTimer = 0;
 searchInput?.addEventListener('input', () => {
     window.clearTimeout(searchTimer);
     searchTimer = window.setTimeout(() => search(searchInput.value), 220);
+});
+
+let catalogFilterTimer = 0;
+catalogFilterInput?.addEventListener('input', () => {
+    window.clearTimeout(catalogFilterTimer);
+    catalogFilterTimer = window.setTimeout(() => {
+        state.catalogFilter = String(catalogFilterInput.value || '');
+        renderCatalogTree();
+    }, 160);
 });
 
 treeRoot?.addEventListener('click', (event) => {

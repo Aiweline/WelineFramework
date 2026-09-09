@@ -11,17 +11,26 @@ use Weline\Framework\Runtime\FrontendWorkerBackendAttestationException;
 use Weline\Framework\Runtime\FrontendWorkerBackendAttestationProviderInterface;
 use Weline\Framework\Runtime\RequestAuthority;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\SchedulerSystem;
+use Weline\Framework\Service\Query\FrontendQueryException;
 use Weline\Framework\Service\Query\FrontendWorkerSessionService;
+use Weline\Framework\Service\Query\Value\FrontendWorkerBackendBinding;
 
 /**
  * Replaces one trusted backend-head slot with an opaque, one-time Worker
  * bootstrap ID. The proof remains exclusively in a host-only HttpOnly cookie.
+ *
+ * Missing inert slots (login shell / partial head) are healed by injecting the
+ * bootstrap meta before {@code </head>} instead of flashing slot_invalid.
  */
 final class BackendWorkerAttestationResponseService
 {
     private const REQUEST_STATE_KEY = 'backend.frontend_worker_attestation.v1';
-    private const SLOT = '<meta name="weline-worker-backend-bootstrap-slot" content="">';
-    private const META_NAME = 'weline-worker-backend-bootstrap';
+    public const SLOT = '<meta name="weline-worker-backend-bootstrap-slot" content="">';
+    public const META_NAME = 'weline-worker-backend-bootstrap';
+    private const SLOT_PATTERN = '/<meta\\b[^>]*\\bname=(["\\\'])'
+        . 'weline-worker-backend-bootstrap-slot'
+        . '\\1[^>]*>/i';
     private const OPAQUE_ID_PATTERN = '/^[A-Za-z0-9_-]{43}$/D';
     private const MAX_WIRE_BODY_BYTES = 8 * 1024 * 1024;
     private const MAX_HTML_BODY_BYTES = 16 * 1024 * 1024;
@@ -82,13 +91,49 @@ final class BackendWorkerAttestationResponseService
 
             $prepared = $this->prepareHtml($body, $response);
             $html = $prepared['html'];
+            $slotCount = $this->countInertSlots($html);
+            $hasBootstrapMeta = $this->htmlContainsBootstrapMeta($html);
 
-            if (\substr_count($html, self::SLOT) !== 1
-                || $this->htmlContainsBootstrapMeta($html)) {
+            // Cached / second-pass HTML that already carries the opaque meta
+            // must not flash slot_invalid or remint a second proof.
+            if ($hasBootstrapMeta && $slotCount === 0) {
+                RequestContext::set(self::REQUEST_STATE_KEY, ['status' => 'already_decorated']);
+                return $result;
+            }
+
+            if ($hasBootstrapMeta) {
+                \w_log_error(
+                    '[BackendWorkerAttestation] slot gate rejected: slot_count={slot_count} has_bootstrap_meta={has_meta} html_bytes={html_bytes}',
+                    [
+                        'slot_count' => $slotCount,
+                        'has_meta' => 1,
+                        'html_bytes' => \strlen($html),
+                    ],
+                    'worker_backend_attestation',
+                );
                 throw $this->failure('backend_attestation_response_slot_invalid', 503);
             }
 
-            $bootstrap = $this->workerSessionService->createBackendBootstrap($binding, $secure);
+            // slot_count>=2：布局壳 + 页面自带 head 双槽时，保留第一处替换并剥离多余 inert 槽。
+            if ($slotCount > 1) {
+                $html = $this->stripExtraInertSlots($html);
+                $slotCount = $this->countInertSlots($html);
+            }
+
+            if ($slotCount !== 0 && $slotCount !== 1) {
+                \w_log_error(
+                    '[BackendWorkerAttestation] slot gate rejected: slot_count={slot_count} has_bootstrap_meta={has_meta} html_bytes={html_bytes}',
+                    [
+                        'slot_count' => $slotCount,
+                        'has_meta' => 0,
+                        'html_bytes' => \strlen($html),
+                    ],
+                    'worker_backend_attestation',
+                );
+                throw $this->failure('backend_attestation_response_slot_invalid', 503);
+            }
+
+            $bootstrap = $this->createBackendBootstrapWithStoreRetry($binding, $secure);
             $bootstrapId = $bootstrap['bootstrap_id'] ?? null;
             $cookieName = $bootstrap['cookie_name'] ?? null;
             $cookieValue = $bootstrap['cookie_value'] ?? null;
@@ -109,10 +154,25 @@ final class BackendWorkerAttestationResponseService
             }
 
             $meta = '<meta name="' . self::META_NAME . '" content="' . $bootstrapId . '">';
-            $decoratedHtml = \str_replace(self::SLOT, $meta, $html, $replacements);
-            if ($replacements !== 1) {
+            if ($slotCount === 1) {
+                $decoratedHtml = $this->replaceInertSlot($html, $meta);
+            } else {
+                $decoratedHtml = $this->injectBootstrapMeta($html, $meta);
+            }
+            if ($decoratedHtml === null || $this->countInertSlots($decoratedHtml) !== 0
+                || !$this->htmlContainsBootstrapMeta($decoratedHtml)
+            ) {
+                \w_log_error(
+                    '[BackendWorkerAttestation] decorate apply failed: slot_count_before={slot_count} apply={apply}',
+                    [
+                        'slot_count' => $slotCount,
+                        'apply' => $slotCount === 1 ? 'replace' : 'inject',
+                    ],
+                    'worker_backend_attestation',
+                );
                 throw $this->failure('backend_attestation_response_slot_invalid', 503);
             }
+
             $decoratedBody = $decoratedHtml;
             if ($prepared['encoding'] === 'gzip') {
                 $encoded = \gzencode($decoratedHtml, 6);
@@ -138,7 +198,7 @@ final class BackendWorkerAttestationResponseService
             $this->applyNoStore($response);
             $response->setCookie($cookieName, $cookieValue, $expiresAt, '/', '', $secure, true, 'Strict');
             RequestContext::set(self::REQUEST_STATE_KEY, [
-                'status' => 'decorated',
+                'status' => $slotCount === 1 ? 'decorated' : 'decorated_injected',
                 'bootstrap_id' => $bootstrapId,
                 'cookie_name' => $cookieName,
             ]);
@@ -149,6 +209,68 @@ final class BackendWorkerAttestationResponseService
         } catch (\Throwable $exception) {
             throw $this->failure('backend_attestation_unavailable', 503, $exception);
         }
+    }
+
+    public function countInertSlots(string $html): int
+    {
+        return (int)\preg_match_all(self::SLOT_PATTERN, $html);
+    }
+
+    public function htmlContainsBootstrapMeta(string $html): bool
+    {
+        // Match a real <meta name="…"> only. Page JS may contain the same
+        // name string inside querySelector(...) without being a decorated slot.
+        return \preg_match(
+            '/<meta\\b[^>]*\\bname=(["\'])'
+            . \preg_quote(self::META_NAME, '/')
+            . '\\1[^>]*>/i',
+            $html,
+        ) === 1;
+    }
+
+    public function replaceInertSlot(string $html, string $meta): ?string
+    {
+        $decorated = \preg_replace(self::SLOT_PATTERN, $meta, $html, 1, $count);
+        if (!\is_string($decorated) || $count !== 1) {
+            return null;
+        }
+
+        return $decorated;
+    }
+
+    public function injectBootstrapMeta(string $html, string $meta): ?string
+    {
+        if (!\preg_match('/<\\/head\\s*>/i', $html, $match, \PREG_OFFSET_CAPTURE)) {
+            return null;
+        }
+        $offset = (int)$match[0][1];
+        $decorated = \substr_replace($html, $meta . "\n", $offset, 0);
+        if ($this->htmlContainsBootstrapMeta($decorated) !== true) {
+            return null;
+        }
+
+        return $decorated;
+    }
+
+    /**
+     * Keep the first inert slot; remove duplicates from layout+page double heads.
+     */
+    public function stripExtraInertSlots(string $html): string
+    {
+        $seen = false;
+        $out = \preg_replace_callback(
+            self::SLOT_PATTERN,
+            static function (array $match) use (&$seen): string {
+                if (!$seen) {
+                    $seen = true;
+                    return $match[0];
+                }
+                return '';
+            },
+            $html,
+        );
+
+        return \is_string($out) ? $out : $html;
     }
 
     private function alreadyProcessed(): bool
@@ -243,18 +365,6 @@ final class BackendWorkerAttestationResponseService
         $response->setHeader('Vary', $vary . ', Accept-Encoding');
     }
 
-    private function htmlContainsBootstrapMeta(string $html): bool
-    {
-        // Match a real <meta name="…"> only. Page JS may contain the same
-        // name string inside querySelector(...) without being a decorated slot.
-        return \preg_match(
-            '/<meta\\b[^>]*\\bname=(["\'])'
-            . \preg_quote(self::META_NAME, '/')
-            . '\\1[^>]*>/i',
-            $html,
-        ) === 1;
-    }
-
     private function headerValue(Response $response, string $name): string
     {
         $value = $response->getHeader($name);
@@ -265,6 +375,35 @@ final class BackendWorkerAttestationResponseService
             $value = $value[0] ?? '';
         }
         return \is_scalar($value) ? \trim((string)$value) : '';
+    }
+
+    /** @return array<string, mixed> */
+    private function createBackendBootstrapWithStoreRetry(
+        FrontendWorkerBackendBinding $binding,
+        bool $secure,
+    ): array {
+        // First backend document navigation often shares a Worker that already
+        // tripped the Memory circuit during HTML render. One 50ms retry still
+        // lost to cold reconnect; budget ~1s of exponential backoff in-request
+        // so users are not bounced through the attestation error + Refresh:1.
+        $attempts = 5;
+        $delayUs = 50_000;
+        $last = null;
+        for ($attempt = 1; $attempt <= $attempts; $attempt++) {
+            try {
+                return $this->workerSessionService->createBackendBootstrap($binding, $secure);
+            } catch (FrontendQueryException $exception) {
+                $last = $exception;
+                if ($exception->getErrorCode() !== 'worker_store_unavailable'
+                    || $attempt === $attempts) {
+                    throw $exception;
+                }
+                SchedulerSystem::usleep($delayUs);
+                $delayUs = \min(400_000, $delayUs * 2);
+            }
+        }
+
+        throw $last ?? $this->failure('backend_attestation_unavailable', 503);
     }
 
     private function failure(

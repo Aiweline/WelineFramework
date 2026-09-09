@@ -1,0 +1,44 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+$selectedScope = (string)($this->getData('selected_scope') ?? $this->getData('target_scope') ?? 'default.default.default');
+$scopeType = (string)($this->getData('work_scope_type') ?? 'website');
+$scopeId = (int)($this->getData('work_scope_id') ?? 0);
+$scopeKind = (string)($this->getData('scope_kind') ?? $scopeType);
+$globalAlert = (string)__('配送配置没有独立的 Global 层：已使用默认网站配置。请选择具体网站 / 店铺 / 渠道以切换。');
+?>
+<div class="w-grid" style="--w-mb:var(--weline-space-4);" data-testid="shipping-work-scope-toolbar">
+    <div style="--w-span:12;">
+        <div class="w-card">
+            <div class="w-card__body">
+                <div class="w-cluster" data-align="end" data-justify="between" style="--w-gap:var(--weline-space-4);">
+                    <div class="w-stack" style="--w-gap:var(--weline-space-1);--w-flex:1;">
+                        <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0;">
+                            <?= __('请选择具体网站 / 店铺 / 渠道。配送配置按范围隔离；Global 会落到默认网站（无独立 Global 配置层）。') ?>
+                        </p>
+                        <p class="w-text" data-tone="muted" data-size="xs" style="--w-m:0;" data-testid="shipping-work-scope-meta">
+                            <?= __('当前：%{1} · id=%{2}', [$scopeType, (string)$scopeId]) ?>
+                        </p>
+                    </div>
+                    <div class="w-field" style="--w-min-inline-size:18rem;--w-max-inline-size:26rem;">
+                        <label class="w-field__label" for="shipping-work-scope"><?= __('作用范围') ?></label>
+                        <div class="w-field__control">
+                            <w:scope
+                                id="shipping-work-scope"
+                                name="target_scope"
+                                value="selected_scope"
+                                placeholder="@lang(选择网站、店铺或渠道)"
+                                search-placeholder="@lang(搜索作用范围)"
+                                aria-label="@lang(选择作用范围)"
+                                searchable="true"
+                                default-expand-all="true"
+                                required="true"
+                            />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<script type="application/json" id="shipping-work-scope-i18n"><?= htmlspecialchars(json_encode(['globalAlert' => $globalAlert], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT), ENT_NOQUOTES, 'UTF-8') ?></script>
+<script src="/Weline/Shipping/view/statics/js/backend/shipping-work-scope.js?v=20260909-scope2" data-no-extract="true"></script>

@@ -77,7 +77,7 @@ $renderedTemplateContent = trim($rawContent) === '' && $contentTemplate !== ''
                                 <p><?= $escape(__('本次结算没有生成有效订单，也不会在此页面重复扣款。您可以返回购物车核对商品，或前往帮助中心排查支付与配送问题。')) ?></p>
                                 <div class="w-theme-checkout-failure-fallback__actions">
                                     <a class="w-theme-checkout-failure-fallback__link w-theme-checkout-failure-fallback__link--primary" href="@url{'cart'}"><?= $escape(__('返回购物车')) ?></a>
-                                    <a class="w-theme-checkout-failure-fallback__link" href="@url{'help'}"><?= $escape(__('查看帮助中心')) ?></a>
+                                    <a class="w-theme-checkout-failure-fallback__link" href="@url{'faq'}"><?= $escape(__('查看帮助中心')) ?></a>
                                 </div>
                             </section>
                         <?php endif; ?>

@@ -243,6 +243,7 @@ final class EavLocalTranslationService
                 $sourceLocale,
                 $localeCode,
                 $this->translationConfig->getStrategy($localeCode),
+                'eav',
             );
             if (!$result['success']) {
                 $errors = array_merge($errors, $result['errors']);
@@ -320,7 +321,12 @@ final class EavLocalTranslationService
     private function upsertLocalValue(array $descriptor, int $id, string $localeCode, string $value): void
     {
         $localeCode = trim($localeCode);
+        $value = trim($value);
         if ($localeCode === '' || $id <= 0) {
+            return;
+        }
+        // Never persist percent-encoded dumps as locale translations.
+        if ($value !== '' && preg_match('/%[0-9A-Fa-f]{2}/', $value) === 1) {
             return;
         }
 

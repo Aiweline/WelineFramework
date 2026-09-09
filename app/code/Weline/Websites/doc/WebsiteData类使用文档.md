@@ -412,7 +412,7 @@ if ($websiteId !== null) {
 
 ### 2. 数据缓存
 
-`WebsiteData` 类内部使用了静态变量缓存数据，在同一个请求中多次调用相同方法不会重复查询数据库，提高了性能。
+`WebsiteData` 类在 `setWebsite` 时一次粘贴站点与语/币快照进请求上下文，并写入共享缓存。同一个请求中多次调用相同方法不会重复查询数据库；其它 worker 可先命中共享快照。真要强制重载使用 `Website::load($id, forceReload: true)`。
 
 ### 3. 数据重置
 

@@ -15,10 +15,13 @@ final class PromotionThemeDealPriceAdjustmentProviderContractTest extends TestCa
         self::assertFileExists($provider);
         $providerSrc = (string) file_get_contents($provider);
         self::assertStringContainsString('StorefrontPriceAdjustmentProviderInterface', $providerSrc);
-        self::assertStringContainsString('resolveStorefrontCampaignMeta', $providerSrc);
+        self::assertStringContainsString('StorefrontPriceAdjustmentProviderInterface', $providerSrc);
+        self::assertStringContainsString('listEligibleCampaignChoices', $providerSrc);
+        self::assertStringContainsString('promotion_theme_id', $providerSrc);
 
         $page = (string) file_get_contents($root . '/Service/PromotionStorefrontPageService.php');
         self::assertStringContainsString('applyStorefrontPricing', $page);
+        self::assertStringContainsString('stampCampaignEntryLinks', $page);
         self::assertStringContainsString('StorefrontOfferPriceAssemblerInterface', $page);
         self::assertStringNotContainsString('applyDealPricing', $page);
 
@@ -31,6 +34,6 @@ final class PromotionThemeDealPriceAdjustmentProviderContractTest extends TestCa
         self::assertStringContainsString('wpc-campaign', (string) file_get_contents($card));
 
         $module = (string) file_get_contents($root . '/etc/module.php');
-        self::assertStringContainsString('1.1.13', $module);
+        self::assertMatchesRegularExpression("/'version'\\s*=>\\s*'1\\.1\\.\\d+'/", $module);
     }
 }

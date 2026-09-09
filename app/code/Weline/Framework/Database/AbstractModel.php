@@ -611,23 +611,22 @@ abstract class AbstractModel extends DataObject
      *
      * @param int|string $field_or_pk_value 字段或者主键的值
      * @param null $value 字段的值，只读取主键就不填
+     * @param bool $forceReload 为 true 时跳过请求内 identity map，强制重新查库
      *
      * @return mixed
      * @throws null
      */
-    public function load(int|string $field_or_pk_value, $value = null): AbstractModel
+    public function load(int|string $field_or_pk_value, $value = null, bool $forceReload = false): AbstractModel
     {
         $requestId = self::loadIdentityMapRequestId();
         if ($requestId !== null) {
             self::registerLoadIdentityMapCleanup($requestId);
         }
         $cacheKey = static::class . '::' . (is_null($value) ? (string) $field_or_pk_value : $field_or_pk_value . '::' . $value);
-        if ($requestId !== null && isset(self::$loadIdentityMap[$requestId][$cacheKey]) && is_array(self::$loadIdentityMap[$requestId][$cacheKey])) {
-            $this->clearDataObject();
-            $this->setObjectData(self::$loadIdentityMap[$requestId][$cacheKey]);
-            $this->_model_fields_data = self::$loadIdentityMap[$requestId][$cacheKey];
-            $this->fetch_after();
-            $this->clearQuery();
+        if ($forceReload) {
+            self::invalidateLoadIdentityMapEntry($cacheKey);
+        } elseif ($requestId !== null && isset(self::$loadIdentityMap[$requestId][$cacheKey]) && is_array(self::$loadIdentityMap[$requestId][$cacheKey])) {
+            $this->hydrateFromLoadedRow(self::$loadIdentityMap[$requestId][$cacheKey]);
             return $this;
         }
 
@@ -661,6 +660,29 @@ abstract class AbstractModel extends DataObject
         $this->fetch_after();
         $this->clearQuery();
         return $this;
+    }
+
+    /**
+     * Hydrate this model from an already-resolved row without querying.
+     * Used by request identity map and module-level context/shared-cache hits.
+     *
+     * @param array<string, mixed> $data
+     */
+    protected function hydrateFromLoadedRow(array $data, ?string $identityMapKey = null): void
+    {
+        $this->clearDataObject();
+        $this->setObjectData($data);
+        $this->_model_fields_data = $data;
+        $requestId = self::loadIdentityMapRequestId();
+        if ($requestId !== null) {
+            self::registerLoadIdentityMapCleanup($requestId);
+            if ($identityMapKey !== null && $identityMapKey !== '') {
+                self::$loadIdentityMap[$requestId][$identityMapKey] = $data;
+            }
+        }
+        $this->fetch_after();
+        // Avoid clearQuery() here: hydration must not open a DB connection just to
+        // discard a query builder. Callers that need a clean query call clearQuery().
     }
 
     private static function loadIdentityMapRequestId(): ?string

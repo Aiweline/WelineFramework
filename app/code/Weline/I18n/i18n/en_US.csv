@@ -36,6 +36,7 @@ AI翻译调用失败,AI翻译调用失败
 "I18n query provider","I18n query provider"
 "Provides locale and frontend translation operations.","Provides locale and frontend translation operations."
 "Get installed locales.","Get installed locales."
+"Batch country flag SVG payloads for storefront lazy load.","Batch country flag SVG payloads for storefront lazy load."
 "Get locale by code.","Get locale by code."
 "Get locale display name.","Get locale display name."
 "Get frontend translation dictionary.","Get frontend translation dictionary."
@@ -45,8 +46,6 @@ id属性不能为空,"The id attribute cannot be empty"
 点击选择语言（可多选）,"Click to select a language (multiple selection allowed)."
 点击选择语言,"Click to select a language."
 搜索国家、语言或代码...,"Search country, language, or code..."
-已支持,"Already supported"
-清空选择,"Clear selection"
 未分组国家,"Ungrouped countries"
 全球语言,"global language"
 "一键 AI 翻译","One-click AI Translation"
@@ -313,10 +312,12 @@ circle,circle
 "%{1} 个国家卸载失败","Uninstallation failed for %{1} countries"
 获取成功,"Successfully got"
 "语言包(%{1})：%{2} 已安装。","Language pack (%{1}): %{2} has been installed."
+词典写入与资源变更必须使用同一逻辑数据库连接,词典写入与资源变更必须使用同一逻辑数据库连接
 翻译词必须是字符串或整数,"The translation word must be a string or integer"
 翻译词不能为空,"The translation word cannot be empty"
 "翻译词必须是有效的 UTF-8 文本","The translation word must be valid UTF-8 text"
 "翻译词长度不能超过 %{1} 个 Unicode 字符","The translation word cannot exceed %{1} Unicode characters"
+语言目录写入与资源变更必须使用同一逻辑数据库连接,语言目录写入与资源变更必须使用同一逻辑数据库连接
 编辑,Edit
 "Weline.Api 不可用","Weline.Api is not available"
 保存失败,"Save failed"
@@ -344,6 +345,8 @@ circle,circle
 当前没有可加入的申请语言。,"There are currently no application languages ​​to add."
 正在加入站点语言…,"Adding site language..."
 站点语言已加入,"Site language has been added"
+已支持,"Already supported"
+清空选择,"Clear selection"
 请前往i18n模块收集词语后重试！或者开启实时收集词语功能！,"Please go to the i18n module to collect words and try again! Or enable real-time word collection feature!"
 填写正确！,"Filled correctly!"
 提交,Submit
@@ -447,6 +450,8 @@ i18n国际化,"i18n Internationalization"
 待补翻译,"Pending Backfill"
 最近队列,"Latest Queue"
 源语言跳过,"Source Language Skipped"
+网站语言并集，强制翻译,网站语言并集，强制翻译
+已不在网站并集，跳过翻译,已不在网站并集，跳过翻译
 查看队列结果,"View queue result"
 队列失败，但未返回详细错误信息。,"Queue failed, but no detailed error was returned."
 无,None
@@ -672,6 +677,9 @@ AI翻译繁忙，已结束本批；不立刻续队，等待下一轮定时任务
 不允许将语言申请直接变更为该状态,"It is not allowed to change the language application directly to this status"
 请选择要审核的语言申请,"Please select the language application to be reviewed"
 "网站 ID 无效","Invalid site ID"
+"网站语言 %{1} 自动安装失败，仍会尝试纳入 AI 翻译目标：%{2}","网站语言 %{1} 自动安装失败，仍会尝试纳入 AI 翻译目标：%{2}"
+"持久化 AI 翻译并集配置失败（运行时并集仍生效）：%{1}","持久化 AI 翻译并集配置失败（运行时并集仍生效）：%{1}"
+"网站语言变更后 AI 翻译入队失败：%{1}","网站语言变更后 AI 翻译入队失败：%{1}"
 当前站点未开放语言支持申请,"The current site does not open language support applications"
 请输入有效的邮箱地址,"Please enter a valid email address"
 请至少选择一种希望支持的语言,"Please select at least one language you wish to support"
@@ -760,6 +768,7 @@ CSV文件不存在：%{1},"CSV file does not exist: %{1}"
 "第 %{1} 行导入失败：%{2}","Import failed for row %{1}: %{2}"
 "成功导入 %{1} 条翻译。","Successfully imported %{1} translations."
 "处理 %{1} 个CSV文件，导入 %{2} 条翻译。","Processing %{1} CSV files, importing %{2} translations."
+词典翻译写入失败,词典翻译写入失败
 译文乱码，已跳过本条：%{1},译文乱码，已跳过本条：%{1}
 翻译为空，已跳过：%{1},"Translation is empty, skipped: %{1}"
 翻译结果与原文相同，已跳过：%{1},"Translation result is identical to the original, skipped: %{1}"
@@ -773,7 +782,7 @@ CSV文件不存在：%{1},"CSV file does not exist: %{1}"
 "提交 AI 翻译队列…","提交 AI 翻译队列…"
 开始收集词典,开始收集词典
 "I18n AI 自动翻译未启用，cron 已跳过","I18n AI 自动翻译未启用，cron 已跳过"
-"没有启用的 AI 翻译语言","没有启用的 AI 翻译语言"
+"没有启用的 AI 翻译语言（含多网站语言并集）","没有启用的 AI 翻译语言（含多网站语言并集）"
 "所有启用语言与 LocalModel 翻译队列均已有待运行/运行中任务，cron 未重复入队（耗时 %{1} 秒）","所有启用语言与 LocalModel 翻译队列均已有待运行/运行中任务，cron 未重复入队（耗时 %{1} 秒）"
 "词典 %{1}: 队列 #%{2}","词典 %{1}: 队列 #%{2}"
 "LocalModel: 队列 #%{1}","LocalModel: 队列 #%{1}"
@@ -843,6 +852,7 @@ CSV文件路径（导入单个文件时必填）,"CSV file path (required when i
 "4. 网络连接是否正常","4. Is the network connection normal?"
 无法创建文件：%{1},"Unable to create file: %{1}"
 查看本地语言码,"View local language code"
+"没有启用的 AI 翻译语言","没有启用的 AI 翻译语言"
 "AI翻译配置已保存，已入队 %{1} 个语言。","AI translation configuration saved. Queued %{1} language(s)."
 "已为 %{1} 个启用语言创建 AI 翻译队列。","Created AI translation queues for %{1} enabled language(s)."
 本批无进展，已安排重试（%{1}/%{2}）。,本批无进展，已安排重试（%{1}/%{2}）。

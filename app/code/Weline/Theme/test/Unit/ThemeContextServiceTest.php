@@ -85,7 +85,7 @@ class ThemeContextServiceTest extends TestCase
                 return $this;
             }
 
-            public function load(string|int $field_or_pk_value, $value = null): \Weline\Framework\Database\AbstractModel
+            public function load(string|int $field_or_pk_value, $value = null, bool $forceReload = false): \Weline\Framework\Database\AbstractModel
             {
                 if ($field_or_pk_value === 'is_active_backend') {
                     $this->setData('id', 0);

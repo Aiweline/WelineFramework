@@ -6,6 +6,7 @@ namespace Weline\SystemConfig\Service;
 
 use Weline\Framework\Cache\KeyBuilder;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\SystemConfig\Model\SystemConfig;
 
 /**
@@ -18,6 +19,7 @@ use Weline\SystemConfig\Model\SystemConfig;
 final class ScopeConfigCacheInvalidator
 {
     private const GEN_PREFIX = 'system_config_scope_gen:';
+    private const VECTOR_CONTEXT_PREFIX = 'system_config.version_vector.v1:';
 
     /**
      * @param list<string> $keys
@@ -131,6 +133,17 @@ final class ScopeConfigCacheInvalidator
         $current = (int)($cache->getCustom($cacheKey) ?: 0);
         $next = $current + 1;
         $cache->setCustom($cacheKey, $next, 86400 * 30);
+        // Readers already visited in this request may inherit the written scope.
+        // Drop their vector memo only; the new vector selects fresh row/map keys.
+        foreach (RequestContext::all() as $contextKey => $_) {
+            if (!\is_string($contextKey) || !\str_starts_with($contextKey, self::VECTOR_CONTEXT_PREFIX)) {
+                continue;
+            }
+            $readerScope = \substr($contextKey, \strlen(self::VECTOR_CONTEXT_PREFIX));
+            if (\in_array($scope, $this->ancestorScopesInclusive($readerScope), true)) {
+                RequestContext::remove($contextKey);
+            }
+        }
         return $next;
     }
 
@@ -147,12 +160,20 @@ final class ScopeConfigCacheInvalidator
     public function versionVectorFor(string $readerScope): string
     {
         $readerScope = $this->normalizeScopeFallback($readerScope);
+        $contextKey = self::VECTOR_CONTEXT_PREFIX . $readerScope;
+        if (RequestContext::has($contextKey)) {
+            return (string)RequestContext::get($contextKey);
+        }
+
         $parts = [];
         foreach ($this->ancestorScopesInclusive($readerScope) as $ancestor) {
             $parts[] = $ancestor . '=' . $this->readGeneration($ancestor);
         }
 
-        return KeyBuilder::systemConfigVersionVectorToken($parts);
+        $token = KeyBuilder::systemConfigVersionVectorToken($parts);
+        RequestContext::set($contextKey, $token);
+
+        return $token;
     }
 
     /**

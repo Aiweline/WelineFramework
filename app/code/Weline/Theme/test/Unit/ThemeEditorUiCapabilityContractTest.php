@@ -567,6 +567,11 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
         self::assertStringContainsString('editor.refreshPreview', $appearance);
         self::assertStringContainsString('appearanceTokenPrefix', $appearance);
         self::assertStringContainsString('APPEARANCE_TOKEN_LEAF', $appearance);
+        self::assertMatchesRegularExpression(
+            '/primary\\|accent\\|secondary\\|success\\|warning\\|danger\\|error\\|info\\|link\\|text\\|surface\\|border\\|canvas\\|overlay\\|on-\\|bg-/',
+            $appearance,
+            'Color panel inherit filter must expose neutral text/surface/border tokens for storefront follow-through.'
+        );
         self::assertStringContainsString('groupAppearanceTokenEntries', $appearance);
         self::assertStringContainsString('resolveAppearanceTokenGroup', $appearance);
         self::assertStringContainsString('tokenMeta', $appearance);

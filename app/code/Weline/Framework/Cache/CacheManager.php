@@ -100,6 +100,14 @@ class CacheManager implements CacheManagerInterface
         'single_flight' => ['ttl' => 30, 'tip' => '请求合并锁池', 'jitter' => 0.0],
         'hot_key_tracker' => ['ttl' => 60, 'tip' => '热点 Key 跟踪', 'jitter' => 0.0],
         'url_guard' => ['ttl' => 1800, 'tip' => 'URL 越界规则缓存'],
+        // Commerce carts must survive WLS file→wls_memory hijack; memory sidecar
+        // flaps otherwise look like "cart emptied in minutes".
+        'cart' => [
+            'ttl' => 1_296_000,
+            'hijack_exempt' => true,
+            'durable' => true,
+            'tip' => '购物车持久化（禁用 WLS file→wls_memory 劫持）',
+        ],
         'default' => ['ttl' => 1800, 'tip' => '默认缓存'],
     ];
 
@@ -271,8 +279,13 @@ class CacheManager implements CacheManagerInterface
                 $configuredDriver = 'file';
             }
 
-            // WLS 常驻模式下仅接管 file，其他驱动保持原样
+            // WLS 常驻模式下仅接管 file，其他驱动保持原样。
+            // 购物车等 durable 池可声明 hijack_exempt，避免写入易失 wls_memory。
             if ($configuredDriver === 'file' && $this->shouldHijackFileToWlsMemory()) {
+                if (!empty($poolConfig['hijack_exempt']) || !empty($poolConfig['durable'])) {
+                    return 'file';
+                }
+
                 return 'wls_memory';
             }
 

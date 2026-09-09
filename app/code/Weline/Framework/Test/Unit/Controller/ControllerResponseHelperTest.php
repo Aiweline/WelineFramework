@@ -8,11 +8,18 @@ use Weline\Framework\Controller\AbstractRestController;
 use Weline\Framework\Controller\Core;
 use Weline\Framework\Context;
 use Weline\Framework\Controller\PcController;
+use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Response;
 use Weline\Framework\Http\ResponseTerminateException;
+use Weline\Framework\Manager\ObjectManager;
 
 final class ControllerResponseHelperTest extends TestCase
 {
+    protected function tearDown(): void
+    {
+        ObjectManager::removeInstance(Request::class);
+    }
+
     public function testCoreHelpersKeepLegacyArrayPayloads(): void
     {
         $controller = new class extends Core {
@@ -42,6 +49,43 @@ final class ControllerResponseHelperTest extends TestCase
         $error = $controller->errorResponse();
         self::assertSame(422, $error['code'] ?? null);
         self::assertTrue((bool)($error['error'] ?? false));
+    }
+
+    public function testAbstractRestErrorSyncsHttpStatusOntoRequestResponse(): void
+    {
+        $scoped = new Response(true);
+        $request = new class ($scoped) extends Request {
+            public function __construct(private Response $scopedResponse)
+            {
+            }
+
+            public function getResponse(): Response
+            {
+                return $this->scopedResponse;
+            }
+        };
+        ObjectManager::setInstance(Request::class, $request);
+
+        $controller = new class extends AbstractRestController {
+            public function __construct()
+            {
+                $this->__init();
+            }
+
+            public function boom(): string
+            {
+                return $this->error('fail', '', 500);
+            }
+        };
+
+        $body = $controller->boom();
+        $decoded = \json_decode($body, true);
+
+        self::assertSame(500, $scoped->getStatusCode());
+        self::assertIsArray($decoded);
+        self::assertSame(500, $decoded['code'] ?? null);
+        self::assertFalse((bool)($decoded['success'] ?? true));
+        self::assertStringContainsString('application/json', (string)$scoped->getHeader('Content-Type'));
     }
 
     public function testAbstractRestFetchKeepsLegacyStringPayloads(): void

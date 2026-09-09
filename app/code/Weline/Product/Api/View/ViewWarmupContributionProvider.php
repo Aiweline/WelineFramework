@@ -16,8 +16,9 @@ final class ViewWarmupContributionProvider implements ViewWarmupContributionProv
     {
         return new ViewWarmupContribution(
             fpcPaths: [
+                // Default-locale catalog is unprefixed (…/zh_Hans_CN/products 301s).
+                '/products',
                 '/en_US/products',
-                '/zh_Hans_CN/products',
                 '/ar_SA/products',
             ],
         );

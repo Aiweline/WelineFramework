@@ -709,4 +709,11 @@ final class FixedSalesChannelCatalog implements SalesChannelCatalogInterface
             ? $this->channel
             : null;
     }
+
+    public function defaultChannelForStore(StoreSummary $store): ?SalesChannelSummary
+    {
+        return $store->id === $this->channel->storeId && $this->channel->isDefault
+            ? $this->channel
+            : null;
+    }
 }

@@ -107,7 +107,8 @@ $renderNodes = static function (
 <div class="amazon-blog-filter"
      data-testid="blog-category-filter"
      data-blog-category-filter>
-    <h2 class="amazon-blog-filter__title"><lang>博客分类</lang></h2>
+    <?php /* Non-heading label: must not precede page H1 in the SEO outline. */ ?>
+    <p class="amazon-blog-filter__title"><lang>博客分类</lang></p>
     <ul class="amazon-blog-filter__list" role="list">
         <li>
             <a class="amazon-blog-filter__option<?= $activeId <= 0 ? ' is-active' : '' ?>"

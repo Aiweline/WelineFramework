@@ -14,6 +14,9 @@ final class SlotBoundaryScanner
     private const MARKER_PATTERN = '/<!--@(\/?)weline-slot:([\w.-]+)-->/';
 
     /**
+     * @param array<string, true>|null $targetSlotIds Optional fill targets. All markers
+     * are still paired to preserve depth. Duplicate or malformed marker streams
+     * retain the complete legacy region set so batch ordering stays unchanged.
      * @return list<array{
      *     id: string,
      *     depth: int,
@@ -26,7 +29,7 @@ final class SlotBoundaryScanner
      *     wrapper_close_end: int
      * }>
      */
-    public function enumerateRegions(string $html, ?string $onlySlotId = null): array
+    public function enumerateRegions(string $html, ?string $onlySlotId = null, ?array $targetSlotIds = null): array
     {
         if ($html === '' || !SlotBoundaryMarkers::hasMarkers($html)) {
             return [];
@@ -76,10 +79,28 @@ final class SlotBoundaryScanner
             return $this->enumerateRegionsLegacy($html, $onlySlotId);
         }
 
+        if ($targetSlotIds !== null) {
+            $seen = [];
+            foreach ($paired as $pair) {
+                if (isset($seen[$pair['id']])) {
+                    // Duplicate IDs anywhere in the page historically disable
+                    // sibling batching, even if that ID has no layout widgets.
+                    // Hydrate all regions so the caller can validate duplicates.
+                    $targetSlotIds = null;
+                    break;
+                }
+                $seen[$pair['id']] = true;
+            }
+        }
+
         $regions = [];
         foreach ($paired as $pair) {
             $slotId = $pair['id'];
             if ($onlySlotId !== null && $slotId !== $onlySlotId) {
+                continue;
+            }
+
+            if ($targetSlotIds !== null && !isset($targetSlotIds[$slotId])) {
                 continue;
             }
 

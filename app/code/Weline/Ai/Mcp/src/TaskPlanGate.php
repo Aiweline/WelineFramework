@@ -133,6 +133,13 @@ final class TaskPlanGate
                 'status' => $status,
             ];
             $evidence = trim((string) ($item['evidence'] ?? ''));
+            if (in_array($status, ['passed', 'skipped', 'na'], true) && $evidence === '') {
+                throw new ToolException(
+                    self::ERROR_PLAN_INVALID,
+                    'acceptance ' . $id . ' status=' . $status
+                    . ' requires non-empty evidence (agent_self_verify_before_done).',
+                );
+            }
             if ($evidence !== '') {
                 if (mb_strlen($evidence, 'UTF-8') > 500) {
                     throw new ToolException(
@@ -143,6 +150,33 @@ final class TaskPlanGate
                 $row['evidence'] = $evidence;
             }
             $acceptance[] = $row;
+        }
+
+        $hasUnitAcceptance = false;
+        foreach ($acceptance as $row) {
+            if (($row['type'] ?? '') === 'unit') {
+                $hasUnitAcceptance = true;
+                break;
+            }
+        }
+        if (!$hasUnitAcceptance) {
+            throw new ToolException(
+                self::ERROR_PLAN_INVALID,
+                'acceptance must include ≥1 type=unit item (plan_then_tdd_required: TDD automated test).',
+            );
+        }
+        foreach ($acceptance as $row) {
+            if (($row['type'] ?? '') !== 'unit' || ($row['status'] ?? '') !== 'passed') {
+                continue;
+            }
+            $evidence = trim((string) ($row['evidence'] ?? ''));
+            if (!TaskPlanWorkflow::evidenceLooksLikeExecutedTest($evidence)) {
+                throw new ToolException(
+                    self::ERROR_PLAN_INVALID,
+                    'acceptance ' . ($row['id'] ?? '?')
+                    . ' type=unit status=passed requires evidence of a real test run (phpunit/PASS/OK).',
+                );
+            }
         }
 
         $devTasks = TaskPlanWorkflow::normalizeDevTasks($raw['dev_tasks'] ?? null);

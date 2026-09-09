@@ -109,6 +109,25 @@ class NamespaceScopedCachePool implements NamespaceScopedCachePoolInterface
         return $this->pool->getIdentity();
     }
 
+    /**
+     * Expose the concrete storage adapter when the inner pool is a CachePool.
+     * Worker Session default-cache assembly uses this for CAS / locked writes.
+     */
+    public function getAdapter(): mixed
+    {
+        if ($this->pool instanceof CachePool) {
+            return $this->pool->getAdapter();
+        }
+        if ($this->pool instanceof self) {
+            return $this->pool->getAdapter();
+        }
+        if (\method_exists($this->pool, 'getAdapter')) {
+            return $this->pool->getAdapter();
+        }
+
+        return null;
+    }
+
     public function getTip(): string
     {
         return $this->pool->getTip();
@@ -157,7 +176,7 @@ class NamespaceScopedCachePool implements NamespaceScopedCachePoolInterface
         $scopedByLogical = [];
         foreach ($keys as $key) {
             $key = self::assertLogicalKey($key);
-            $scopedByLogical[$key] = $this->decorator->decorate($key, $fingerprint);
+            $scopedByLogical[$key] = $this->decorateKeyWithFingerprint($key, $fingerprint);
         }
         $scopedValues = $this->pool->getMultiple(array_values($scopedByLogical));
         $values = [];
@@ -176,7 +195,7 @@ class NamespaceScopedCachePool implements NamespaceScopedCachePoolInterface
         $scoped = [];
         foreach ($values as $key => $value) {
             $key = self::assertLogicalKey($key);
-            $scoped[$this->decorator->decorate($key, $fingerprint)] = $value;
+            $scoped[$this->decorateKeyWithFingerprint($key, $fingerprint)] = $value;
         }
         return $this->pool->setMultiple($scoped, $ttl);
     }
@@ -189,7 +208,7 @@ class NamespaceScopedCachePool implements NamespaceScopedCachePoolInterface
         $fingerprint = $this->getNamespaceFingerprint();
         $scoped = [];
         foreach ($keys as $key) {
-            $scoped[] = $this->decorator->decorate(self::assertLogicalKey($key), $fingerprint);
+            $scoped[] = $this->decorateKeyWithFingerprint(self::assertLogicalKey($key), $fingerprint);
         }
         return $this->pool->deleteMultiple($scoped);
     }
@@ -275,11 +294,18 @@ class NamespaceScopedCachePool implements NamespaceScopedCachePoolInterface
 
     protected function decorateKey(string $key): string
     {
-        if ($this->namespaces === [] || $this->repository === null) {
-            return $key;
-        }
+        return $this->decorateKeyWithFingerprint($key, $this->getNamespaceFingerprint());
+    }
 
-        return $this->decorator->decorate($key, $this->getNamespaceFingerprint());
+    /** 空向量沿用全局池原键；批量操作复用本次已解析的同一个指纹。 */
+    protected function decorateKeyWithFingerprint(string $key, string $fingerprint): string
+    {
+        return $fingerprint === '' ? $key : $this->decorator->decorate($key, $fingerprint);
+    }
+
+    protected function decorateTagWithFingerprint(string $tag, string $fingerprint): string
+    {
+        return $fingerprint === '' ? $tag : $this->decorator->decorateTag($tag, $fingerprint);
     }
 
     protected function rememberer(): RemembererInterface
@@ -310,10 +336,10 @@ final class NamespaceScopedTaggableCachePool extends NamespaceScopedCachePool im
             if (!is_string($tag)) {
                 throw new \InvalidArgumentException(__('缓存标签必须是字符串'));
             }
-            $scopedTags[] = $this->decorator->decorateTag($tag, $fingerprint);
+            $scopedTags[] = $this->decorateTagWithFingerprint($tag, $fingerprint);
         }
         return $this->taggablePool()->setWithTags(
-            $this->decorator->decorate($key, $fingerprint),
+            $this->decorateKeyWithFingerprint($key, $fingerprint),
             $value,
             $scopedTags,
             $ttl
@@ -331,7 +357,7 @@ final class NamespaceScopedTaggableCachePool extends NamespaceScopedCachePool im
             if (!is_string($tag)) {
                 throw new \InvalidArgumentException(__('缓存标签必须是字符串'));
             }
-            $scopedTags[] = $this->decorator->decorateTag($tag, $fingerprint);
+            $scopedTags[] = $this->decorateTagWithFingerprint($tag, $fingerprint);
         }
         return $this->taggablePool()->invalidateTags($scopedTags);
     }
@@ -339,13 +365,13 @@ final class NamespaceScopedTaggableCachePool extends NamespaceScopedCachePool im
     public function getKeysByTag(string $tag): array
     {
         $fingerprint = $this->getNamespaceFingerprint();
-        $keys = $this->taggablePool()->getKeysByTag($this->decorator->decorateTag($tag, $fingerprint));
+        $keys = $this->taggablePool()->getKeysByTag($this->decorateTagWithFingerprint($tag, $fingerprint));
         $logical = [];
         foreach ($keys as $key) {
             if (!is_string($key)) {
                 continue;
             }
-            $unwrapped = $this->decorator->undecorate($key, $fingerprint);
+            $unwrapped = $fingerprint === '' ? $key : $this->decorator->undecorate($key, $fingerprint);
             if ($unwrapped !== null) {
                 $logical[] = $unwrapped;
             }
@@ -365,7 +391,7 @@ final class NamespaceScopedTaggableCachePool extends NamespaceScopedCachePool im
             if (!is_string($tag)) {
                 continue;
             }
-            $unwrapped = $this->decorator->undecorateTag($tag, $fingerprint);
+            $unwrapped = $fingerprint === '' ? $tag : $this->decorator->undecorateTag($tag, $fingerprint);
             if ($unwrapped !== null) {
                 $tags[] = $unwrapped;
             }
@@ -385,7 +411,7 @@ final class NamespaceScopedTaggableCachePool extends NamespaceScopedCachePool im
             if (!is_string($tag)) {
                 continue;
             }
-            $unwrapped = $this->decorator->undecorateTag($tag, $fingerprint);
+            $unwrapped = $fingerprint === '' ? $tag : $this->decorator->undecorateTag($tag, $fingerprint);
             if ($unwrapped !== null) {
                 $stats[$unwrapped] = (int)$count;
             }

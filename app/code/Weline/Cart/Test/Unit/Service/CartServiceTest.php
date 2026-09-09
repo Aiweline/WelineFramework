@@ -71,6 +71,35 @@ final class CartServiceTest extends TestCase
         self::assertSame(0, $svc->cartCountForScope($this->scopeA()));
         self::assertSame(1, $svc->cartCountForScope($this->scopeB()));
     }
+
+    public function testGetCartPresentationCurrencyFollowsRequestDisplayCurrency(): void
+    {
+        $offerUuid = '98989898-9898-4989-8989-989898989898';
+        $svc = $this->service([
+            $offerUuid => [
+                'name' => 'CNY Stored Offer',
+                'unit_price_minor' => 10800,
+                'currency' => 'CNY',
+                'stock' => 10,
+                'sellable' => true,
+            ],
+        ]);
+        $offer = new OfferIdentity('product', $offerUuid, legacyProductId: 98);
+        $guest = $svc->issueGuestToken();
+        $scope = $this->scopeA();
+        $svc->add($scope, $offer, [], 1, $guest);
+
+        $before = $svc->getCart($scope, $guest);
+        self::assertSame('CNY', $before['currency']);
+
+        \Weline\Framework\Runtime\RequestContext::setWelineUserCurrency('USD');
+        try {
+            $after = $svc->getCart($scope, $guest);
+            self::assertSame('USD', $after['currency']);
+        } finally {
+            \Weline\Framework\Runtime\RequestContext::setWelineUserCurrency('CNY');
+        }
+    }
     public function testGetCartStripsAssetProtocolImagesFromSummary(): void
     {
         $offerUuid = '22222222-2222-4222-8222-222222222222';
@@ -502,6 +531,86 @@ final class CartServiceTest extends TestCase
             self::fail('current unsellable provider fact must block checkout');
         } catch (CartConflictException $e) {
             self::assertSame(CheckoutCartSnapshotService::ERROR_SELLABILITY, $e->errorCode());
+        }
+    }
+
+    public function testGetCartAndUpdateSurfaceMissingOfferBeforeCheckoutSubmit(): void
+    {
+        $offerUuid = '88888888-8888-4888-8888-888888888888';
+        $current = [
+            'unit_price_minor' => 1990,
+            'stock' => 5,
+            'sellable' => true,
+            'found' => true,
+            'name' => 'Stale Offer',
+            'sku' => 'STALE-1',
+            'message' => '',
+        ];
+        $provider = new class($offerUuid, $current) implements CartItemSnapshotProviderInterface {
+            /** @var array<string, mixed> */
+            public array $current;
+
+            /** @param array<string, mixed> $current */
+            public function __construct(
+                private readonly string $offerUuid,
+                array $current,
+            ) {
+                $this->current = $current;
+            }
+
+            public function getProviderCode(): string
+            {
+                return 'product';
+            }
+
+            public function resolveCartItemSnapshot(
+                OfferIdentity $offer,
+                ScopeIdentity $scope,
+                array $selection = [],
+            ): ?CartItemSnapshot {
+                if ($offer->globalOfferUuid !== $this->offerUuid) {
+                    return null;
+                }
+
+                return new CartItemSnapshot(
+                    offer: $offer,
+                    name: (string)$this->current['name'],
+                    sku: (string)$this->current['sku'],
+                    currency: 'CNY',
+                    unitPriceMinor: (int)$this->current['unit_price_minor'],
+                    found: (bool)$this->current['found'],
+                    sellable: (bool)$this->current['sellable'],
+                    stock: (int)$this->current['stock'],
+                    message: (string)($this->current['message'] ?? ''),
+                    selection: $selection,
+                    offerId: 88,
+                    productId: 88,
+                );
+            }
+        };
+        $registry = CartItemSnapshotProviderRegistry::forTesting([$provider]);
+        $cart = CartService::forTesting($registry);
+        $scope = $this->scopeA();
+        $guest = $cart->issueGuestToken();
+        $cart->add($scope, new OfferIdentity('product', $offerUuid, legacyProductId: 88), [], 1, $guest);
+
+        $provider->current['found'] = false;
+        $provider->current['sellable'] = false;
+        $provider->current['message'] = 'Offer 不存在';
+
+        $presented = $cart->getCart($scope, $guest);
+        self::assertTrue($presented['checkout_blocked']);
+        self::assertFalse($presented['items'][0]['found']);
+        self::assertFalse($presented['items'][0]['sellable']);
+        self::assertNotSame('', (string)$presented['blocking_message']);
+        self::assertStringNotContainsStringIgnoringCase('offer', (string)$presented['items'][0]['message']);
+        self::assertNotEmpty($presented['line_issues']);
+
+        try {
+            $cart->updateItem($scope, (string)$presented['items'][0]['item_id'], 2, $guest);
+            self::fail('update must reject missing offer');
+        } catch (CartConflictException $e) {
+            self::assertSame(CartService::ERROR_NOT_FOUND, $e->errorCode());
         }
     }
 }

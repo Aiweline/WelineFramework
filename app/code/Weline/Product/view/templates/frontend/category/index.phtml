@@ -69,6 +69,8 @@ $to = $visibleCount > 0 ? min($page * $pageSize, $visibleCount) : 0;
         <div class="amz-plp__banner" data-testid="storefront-category-banner">
             <img src="<?= $escape($categoryBanner) ?>"
                  alt="<?= $escape($categoryName) ?>"
+                 width="1500"
+                 height="300"
                  loading="eager"
                  decoding="async">
         </div>
@@ -353,12 +355,12 @@ $to = $visibleCount > 0 ? min($page * $pageSize, $visibleCount) : 0;
     gap: 12px;
     align-items: stretch;
 }
-.amz-card:hover .product-actions,
+/* 购买操作：与卡片正文同一垂直节奏（禁止与分页器选择器串线） */
 .amz-plp .product-card-purchase-actions {
     display: grid;
-    gap: 6px;
+    gap: var(--weline-space-2, 0.5rem);
     width: 100%;
-    margin-top: 6px;
+    margin-top: 0;
 }
 .amz-plp .product-card-purchase-actions > .weline-cart-product-card-add-to-cart,
 .amz-plp .product-card-purchase-actions > .weline-checkout-product-card-buy-now {
@@ -368,12 +370,15 @@ $to = $visibleCount > 0 ? min($page * $pageSize, $visibleCount) : 0;
 .amz-plp .product-card-purchase-actions a.amz-card__add,
 .amz-plp .amz-card__add:disabled,
 .amz-plp .amz-card__add[aria-disabled="true"],
-.amz-plp .amz-card__buy-now:disabled,
+.amz-plp .amz-card__buy-now:disabled {
+    margin: 0;
+    width: 100%;
+}
 .amz-plp__pager {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
-    margin: 18px 0 0;
+    gap: var(--weline-space-2, 0.5rem);
+    margin: var(--weline-space-5, 1.125rem) 0 0;
     align-items: center;
     justify-content: center;
 }

@@ -98,6 +98,24 @@ final class CachePolicyTest extends TestCase
         self::assertArrayNotHasKey('website', KeyBuilder::policyDimensions($policy, $a));
     }
 
+    public function testScopedPresentationDependsOnTheCanonicalGlobalDictionaryVersion(): void
+    {
+        $context = $this->context('site_a', 'retail', 'web');
+        $policy = new CachePolicy('search.types', 'view', 'channel', ['lang'], ['catalog', 'global/i18n']);
+        $namespaces = $policy->namespacePaths($context->scopeIdentity);
+        self::assertContains('global/i18n', $namespaces);
+        self::assertNotContains('global/storefront/global/i18n', $namespaces);
+        self::assertNotContains('website/site_a/global/i18n/store/retail/normal/channel/web', $namespaces);
+        self::assertCount(3, $namespaces);
+
+        $generations = new PolicyGenerations();
+        $before = $generations->fingerprint($namespaces);
+        $generations->domainVersions['global/i18n'] = 2;
+        self::assertNotSame($before, $generations->fingerprint($namespaces));
+        $catalog = new CachePolicy('category.raw', 'product', 'website', [], ['catalog']);
+        self::assertSame($before, $generations->fingerprint($catalog->namespacePaths($context->scopeIdentity)));
+    }
+
     public function testStoreResourceSharesChannelsButKeepsModeAndParentIdentity(): void
     {
         $policy = new CachePolicy('store.menu', 'product', 'store', [], ['catalog'], 60, 300);
@@ -118,6 +136,36 @@ final class CachePolicyTest extends TestCase
         self::assertSame('request-fence', $dimensions['scope_state']);
         self::assertArrayNotHasKey('website', $dimensions);
         self::assertNotSame(KeyBuilder::policyKey($policy, 'root', '', $a), KeyBuilder::policyKey($policy, 'root', '', $b));
+    }
+
+    public function testWebsitePolicySharesAfterWebsiteResolutionBeforeChannelFreeze(): void
+    {
+        $policy = new CachePolicy('websites.store_catalog', 'website', 'website', [], ['catalog'], 60, 300);
+        $a = new StorefrontCacheKeyContext(
+            ScopeIdentity::website(7, 'site_a'),
+            'en_US',
+            'USD',
+            null,
+            str_repeat('a', 64),
+            false,
+        );
+        $b = new StorefrontCacheKeyContext(
+            ScopeIdentity::website(7, 'site_a'),
+            'en_US',
+            'USD',
+            null,
+            str_repeat('b', 64),
+            false,
+        );
+
+        $dimensions = KeyBuilder::policyDimensions($policy, $a);
+        self::assertSame('website', $dimensions['scope_state']);
+        self::assertSame('site_a', $dimensions['website']);
+        self::assertArrayNotHasKey('request_fence', $dimensions);
+        self::assertSame(
+            KeyBuilder::policyKey($policy, 'all', 'catalog-v1', $a),
+            KeyBuilder::policyKey($policy, 'all', 'catalog-v1', $b),
+        );
     }
 
     public function testPolicyTtlIsPartOfCacheIdentityAndRegistryIsInspectable(): void

@@ -104,6 +104,37 @@ final class WlsRuntimeStorefrontWarmupContractTest extends TestCase
         self::assertStringContainsString('logDeferredStorefrontWarmupStage', $source);
     }
 
+    public function testReadyGateBuildsABoundedAnonymousStorefrontFpcBeforePublicTraffic(): void
+    {
+        $runtimeSource = file_get_contents(self::RUNTIME);
+        $envSource = file_get_contents(self::ENV_SAMPLE);
+
+        self::assertIsString($runtimeSource);
+        self::assertIsString($envSource);
+        self::assertStringContainsString('runReadyGateStorefrontFpcWarmup', $runtimeSource);
+        self::assertStringContainsString(
+            "Env::get('wls.worker.storefront_ready_gate_enabled', '1')",
+            $runtimeSource,
+        );
+        self::assertStringContainsString(
+            "Env::get('wls.worker.storefront_ready_gate_max_paths', 4)",
+            $runtimeSource,
+        );
+        self::assertStringContainsString("'storefront_ready_gate_enabled' => true", $envSource);
+        self::assertStringContainsString("'storefront_ready_gate_max_paths' => 4", $envSource);
+    }
+
+    public function testReadyGateRuntimeTraceHonorsTheConfiguredWlsDebugFlag(): void
+    {
+        $runtimeSource = file_get_contents(self::RUNTIME);
+
+        self::assertIsString($runtimeSource);
+        self::assertStringContainsString(
+            "Env::get('wls.debug.worker_startup_trace', false)",
+            $runtimeSource,
+        );
+    }
+
     public function testStorefrontWarmupPrefersPublicHostForFpcIdentity(): void
     {
         $reflection = new \ReflectionClass(WlsRuntime::class);
@@ -131,6 +162,31 @@ final class WlsRuntimeStorefrontWarmupContractTest extends TestCase
         self::assertIsString($source);
         self::assertStringContainsString(
             'if (\count($paths) <= 1) {',
+            $source,
+        );
+        self::assertStringContainsString(
+            "storefront_deferred_warmup_max_paths', 6)",
+            $source,
+        );
+    }
+
+    public function testDeferredWarmupOwnsHomepageWhenReadyGateFailOpen(): void
+    {
+        $source = file_get_contents(self::RUNTIME);
+
+        self::assertIsString($source);
+        self::assertStringContainsString('isHomepageReadyGateFailOpen()', $source);
+        self::assertStringContainsString("\$paths['/'] = '/';", $source);
+        self::assertStringContainsString(
+            'left every Worker cold for the first anonymous homepage SSR',
+            $source,
+        );
+        self::assertStringContainsString(
+            'left catalog cold',
+            $source,
+        );
+        self::assertStringNotContainsString(
+            "if (\$path !== '/') {\n            \$paths[\$path] = \$path;\n        }",
             $source,
         );
     }

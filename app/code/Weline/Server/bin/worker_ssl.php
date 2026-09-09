@@ -4798,6 +4798,8 @@ $connectionSniHosts = [];
 $connectionPlaintextHosts = [];
 $http2ConnectionAdapters = [];
 $http2PendingRequests = [];
+/** @var array<int,bool> $http2HtmlNavigationSeen */
+$http2HtmlNavigationSeen = [];
 $http2ParsedAdmissionBudget = \max(16, \min(32, (int)(
     \Weline\Framework\App\Env::get('wls.http2.parsed_admission_budget', 32) ?: 32
 )));
@@ -5708,6 +5710,7 @@ while (true) {
                 $connectionPlaintextHosts = [];
                 $http2ConnectionAdapters = [];
                 $http2PendingRequests = [];
+                $http2HtmlNavigationSeen = [];
                 $longLivedConnections = [];
                 $activeFibers = [];
 
@@ -5812,6 +5815,7 @@ while (true) {
             $hasBufferedData = (isset($writeBuffers[$connId]) && $writeBuffers[$connId] !== '')
                 || $hasHttp2FlowControlledResponse;
             $hasActiveRequestWork = !empty($http2PendingRequests[$connId])
+                || ($isHttp2Connection && $http2TimeoutAdapter->hasActiveStreams())
                 || (!empty($requestBuffers[$connId]) && !$isHttp2Connection)
                 || isset($longLivedConnections[$connId]);
             if (!$hasActiveRequestWork) {
@@ -5885,6 +5889,7 @@ while (true) {
             unset($pendingClose[$connId]);
             unset($http2PendingRequests[$connId]);
             unset($http2ConnectionAdapters[$connId]);
+            unset($http2HtmlNavigationSeen[$connId]);
             unset($connectionProtocols[$connId]);
             if (isset($longLivedConnections[$connId])) {
                 unset($longLivedConnections[$connId]);
@@ -6068,6 +6073,17 @@ while (true) {
         }
     }
     
+    // H2 bodies larger than one drain quantum can sit in ConnectionAdapter while
+    // writeBuffers is empty. If we drop write interest, select only waits on read;
+    // a peer with spare flow-control window will not send WINDOW_UPDATE, and the
+    // connection deadlocks until keep-alive (~45s). Refill before arming writers.
+    wlsSslArmHttp2PendingResponseWrites(
+        $http2ConnectionAdapters,
+        $connections,
+        $writeBuffers,
+        $writableConnections,
+    );
+
     // 验证 $writableConnections 中的资源，并将零进展写入暂时移出 write interest。
     // 否则已断开的 TLS stream 可能一直被报告为可写，使 event loop 空转。
     foreach ($writeZeroProgress as $connId => $state) {
@@ -6130,9 +6146,15 @@ while (true) {
         $isDrainingHttp2ControlConnection = $ipcDraining
             && ($connectionProtocols[$connIdReadable] ?? '') === 'h2';
         $longLivedState = $longLivedConnections[$connIdReadable] ?? null;
-        if ((($applicationAdmissionOpen || $isDrainingHttp2ControlConnection)
-                && $longLivedState === null)
-            || wlsSslIsActiveWebSocketConnection($longLivedState)
+        $isHttp2Connection = ($connectionProtocols[$connIdReadable] ?? '') === 'h2';
+        // HTTP/2 must stay readable even when a false long-lived mark or a closed
+        // application gate would otherwise drop the socket from select. Otherwise
+        // Chrome keeps the conn in its pool, the next same-tab Document HEADERS
+        // are never fread, and Network shows the navigation pending forever.
+        if ($isHttp2Connection
+            || ((($applicationAdmissionOpen || $isDrainingHttp2ControlConnection)
+                    && $longLivedState === null)
+                || wlsSslIsActiveWebSocketConnection($longLivedState))
         ) {
             // GOAWAY already rejects new streams. The read side must remain live
             // for WINDOW_UPDATE/RST/PING so admitted streams can finish safely.
@@ -6142,23 +6164,21 @@ while (true) {
     $pendingHttp2ReadyConnections = [];
     foreach ($http2PendingRequests as $http2ReadyConnId => $queuedHttp2Requests) {
         $http2QueuedWriteBytes = \strlen((string)($writeBuffers[$http2ReadyConnId] ?? ''));
-        $http2ReadyAdapter = $http2ConnectionAdapters[$http2ReadyConnId] ?? null;
-        $http2QueuedResponseBytes = $http2QueuedWriteBytes
-            + ($http2ReadyAdapter instanceof \Weline\Server\Protocol\Http2\ConnectionAdapter
-                ? $http2ReadyAdapter->pendingResponseBytes()
-                : 0);
+        // Backpressure must use socket-facing writeBytes only. Counting full
+        // pendingResponseBodies (e.g. ~1MB homepage HTML) blocked every other
+        // multiplexed CSS/JS/image stream until the document nearly finished —
+        // Chrome painted then appeared frozen while assets stayed pending.
         if ($queuedHttp2Requests !== []
             && isset($validConnections[$http2ReadyConnId])
             && \is_resource($validConnections[$http2ReadyConnId])
             && $applicationAdmissionOpen
-            && $http2QueuedResponseBytes < $http2AdmissionWriteHighWatermark
+            && $http2QueuedWriteBytes < $http2AdmissionWriteHighWatermark
             && \Weline\Server\Protocol\Http2\MultiplexScheduler::activeStreamCount(
                 $activeFibers,
                 (int)$http2ReadyConnId
             ) < \Weline\Server\Protocol\Http2\ConnectionAdapter::MAX_CONCURRENT_STREAMS
             && !isset($pendingPeek[$http2ReadyConnId])
             && !isset($pendingHandshakes[$http2ReadyConnId])
-            && !isset($longLivedConnections[$http2ReadyConnId])
         ) {
             $pendingHttp2ReadyConnections[$http2ReadyConnId] = $validConnections[$http2ReadyConnId];
         }
@@ -7140,10 +7160,17 @@ while (true) {
         if (isset($pendingPeek[$connId])) {
             continue;
         }
-        if (!$applicationAdmissionOpen && isset($connections[$connId]) && !$activeWebSocket) {
+        $isHttp2Read = ($connectionProtocols[$connId] ?? 'http/1.1') === 'h2';
+        // Application gate may pause new Fiber admission, but HTTP/2 still needs
+        // fread for WINDOW_UPDATE/PING/HEADERS. Skipping here after putting the
+        // socket in the readable set leaves Chrome with HEADERS and no DATA.
+        if (!$applicationAdmissionOpen
+            && isset($connections[$connId])
+            && !$activeWebSocket
+            && !$isHttp2Read
+        ) {
             continue;
         }
-        $isHttp2Read = ($connectionProtocols[$connId] ?? 'http/1.1') === 'h2';
         if ((!$isHttp2Read && \Weline\Server\Service\ConnectionReadWriteGuard::shouldDeferRead(
             $writeBuffers,
             $pendingClose,
@@ -7238,13 +7265,14 @@ while (true) {
         }
 
         $data = '';
-        $hasPendingHttp2Request = $isHttp2Connection && !empty($http2PendingRequests[$connId]);
-        $http2ReadAdapter = $isHttp2Connection ? ($http2ConnectionAdapters[$connId] ?? null) : null;
-        $http2NeedsFlowControlRead = $http2ReadAdapter instanceof \Weline\Server\Protocol\Http2\ConnectionAdapter
-            && $http2ReadAdapter->hasPendingResponseData();
-        if ((!$hasPendingHttp2Request || $http2NeedsFlowControlRead)
-            && (!\is_array($bufferedFrame) || ($bufferedFrame['status'] ?? '') === 'incomplete')
-        ) {
+        // HTTP/2 must ALWAYS read the TLS socket while the connection is selected.
+        // Skipping fread just because http2PendingRequests is non-empty starves
+        // WINDOW_UPDATE/PING/additional HEADERS and deadlocks multiplexed assets
+        // until keep_alive (~45s) force-closes — Chrome then looks "frozen" after paint.
+        // Application backpressure stays in admission budget / write watermark below.
+        if ($isHttp2Connection) {
+            $data = @\fread($conn, 65535);
+        } elseif (!\is_array($bufferedFrame) || ($bufferedFrame['status'] ?? '') === 'incomplete') {
             $data = @\fread($conn, 65535);
         }
         
@@ -7336,12 +7364,17 @@ while (true) {
                     continue;
                 }
                 // Empty SSL read must NOT refresh keep-alive / stall clocks.
-                // Queued H2 streams are drained elsewhere; spinning here previously
-                // reset lastActivity and left Chrome documents pending forever.
-                continue;
+                // But already-parsed streams in http2PendingRequests still need
+                // admission: pendingHttp2ReadyConnections wakes this path with no
+                // kernel bytes. Continuing here previously starved every queued
+                // multiplexed asset until a later WINDOW_UPDATE/PING happened to
+                // arrive — and with a large window that event may never come.
+                if (empty($http2PendingRequests[$connId])) {
+                    continue;
+                }
+            } else {
+                $connectionLastActivity[$connId] = wlsWorkerMonotonicNow();
             }
-
-            $connectionLastActivity[$connId] = wlsWorkerMonotonicNow();
             // L4 slowloris accounting covers accept through the first complete H2
             // request. Subsequent DATA/WINDOW_UPDATE/PING frames are connection
             // control traffic, not new requests; per-stream framing limits belong
@@ -7411,6 +7444,20 @@ while (true) {
                             $http2PendingRequests[$connId],
                             static fn (array $pending): bool => (int)($pending['stream_id'] ?? 0) !== $resetStreamId
                         ));
+                    }
+                    if (isset($writeBuffers[$connId]) && $writeBuffers[$connId] !== '') {
+                        [$scrubbedHttp2Buffer, $removedHttp2DataBytes] =
+                            \Weline\Server\Protocol\Http2\FrameCodec::stripStreamFrames(
+                                (string)$writeBuffers[$connId],
+                                [$resetStreamId]
+                            );
+                        $writeBuffers[$connId] = $scrubbedHttp2Buffer;
+                        if ($removedHttp2DataBytes > 0) {
+                            $http2Adapter->creditConnectionSendWindow($removedHttp2DataBytes);
+                        }
+                        if ($writeBuffers[$connId] === '') {
+                            unset($writeBuffers[$connId], $writableConnections[$connId]);
+                        }
                     }
                     foreach (\Weline\Server\Protocol\Http2\MultiplexScheduler::keysForConnection(
                         $activeFibers,
@@ -7483,16 +7530,92 @@ while (true) {
                         // keep-alive PING clocks from the prior response cannot
                         // immediately stall-close this stream.
                         $connectionLastProgress[$connId] = wlsWorkerMonotonicNow();
+                        $http2RawRequest = (string)($http2Request['raw_request'] ?? '');
+                        $http2RawLower = \strtolower($http2RawRequest);
+                        $isHtmlDocumentNavigation = $http2RawRequest !== ''
+                            && (
+                                \str_contains($http2RawLower, "\naccept: text/html")
+                                || \str_contains($http2RawLower, "\nsec-fetch-dest: document")
+                                || \str_contains($http2RawLower, "\nsec-fetch-mode: navigate")
+                            );
+                        if ($isHtmlDocumentNavigation) {
+                            $http2HtmlNavigationSeen[$connId] = true;
+                            // Do NOT RST the second Document on a reused H2 conn.
+                            // REFUSED_STREAM/GOAWAY here left Chrome with a 200 +
+                            // Content-Length and zero DATA (Network pending forever).
+                            // Incomplete bodies stay in adapter pendingResponses and
+                            // are drained under exclusive-document scheduling instead.
+                        }
+                        // Same-tab Document navigations reuse the H2 connection while
+                        // cancelled asset streams may still own megabytes in writeBuffers.
+                        // Keep only frames for live fibers + queued requests so the new
+                        // Document body is not stuck behind dead DATA.
+                        if ($isHtmlDocumentNavigation
+                            && isset($writeBuffers[$connId])
+                            && \strlen((string)$writeBuffers[$connId]) > 65536
+                        ) {
+                            $keepHttp2Streams = [];
+                            foreach (($http2PendingRequests[$connId] ?? []) as $queuedHttp2Request) {
+                                $queuedStreamId = (int)($queuedHttp2Request['stream_id'] ?? 0);
+                                if ($queuedStreamId > 0) {
+                                    $keepHttp2Streams[$queuedStreamId] = true;
+                                }
+                            }
+                            foreach (\Weline\Server\Protocol\Http2\MultiplexScheduler::keysForConnection(
+                                $activeFibers,
+                                $connId
+                            ) as $liveFiberKey) {
+                                $liveStreamId = \Weline\Server\Protocol\Http2\MultiplexScheduler::streamId(
+                                    $liveFiberKey,
+                                    $activeFibers[$liveFiberKey] ?? []
+                                );
+                                if ($liveStreamId > 0) {
+                                    $keepHttp2Streams[$liveStreamId] = true;
+                                }
+                            }
+                            [$retainedHttp2Buffer, $removedHttp2DataBytes] =
+                                \Weline\Server\Protocol\Http2\FrameCodec::retainStreamFrames(
+                                    (string)$writeBuffers[$connId],
+                                    \array_keys($keepHttp2Streams)
+                                );
+                            $writeBuffers[$connId] = $retainedHttp2Buffer;
+                            if ($removedHttp2DataBytes > 0) {
+                                $http2Adapter->creditConnectionSendWindow($removedHttp2DataBytes);
+                            }
+                            if ($writeBuffers[$connId] === '') {
+                                unset($writeBuffers[$connId], $writableConnections[$connId]);
+                            }
+                        }
                     }
                 }
             }
             if (empty($http2PendingRequests[$connId])) {
                 continue;
             }
-            $http2QueuedResponseBytes = \strlen((string)($writeBuffers[$connId] ?? ''))
-                + $http2Adapter->pendingResponseBytes();
+            $http2QueuedWriteBytes = \strlen((string)($writeBuffers[$connId] ?? ''));
+            // Incomplete local bodies are connection response state: keep draining
+            // them before admitting another multiplexed request on the same conn.
+            // Otherwise the first DATA group is sent, later groups never rotate back,
+            // and Chrome sits on a half Content-Length forever.
+            $exclusiveDocumentStreamId = $http2Adapter->exclusiveDocumentStreamId();
+            if ($exclusiveDocumentStreamId !== null
+                || ($http2Adapter->hasPendingResponseData() && $http2QueuedWriteBytes === 0)
+            ) {
+                wlsSslArmHttp2PendingResponseWrites(
+                    [$connId => $http2Adapter],
+                    [$connId => $conn],
+                    $writeBuffers,
+                    $writableConnections,
+                );
+                if ($exclusiveDocumentStreamId !== null
+                    && $http2Adapter->pendingResponseBytes($exclusiveDocumentStreamId) > 0
+                ) {
+                    continue;
+                }
+            }
+            $http2QueuedWriteBytes = \strlen((string)($writeBuffers[$connId] ?? ''));
             if ($http2ParsedAdmissionsThisLoop >= $http2ParsedAdmissionBudget
-                || $http2QueuedResponseBytes >= $http2AdmissionWriteHighWatermark
+                || $http2QueuedWriteBytes >= $http2AdmissionWriteHighWatermark
             ) {
                 continue;
             }
@@ -8248,7 +8371,11 @@ while (true) {
         // H1 长连接以 TCP 连接为生命周期单位；H2 SSE 以 stream 为单位，
         // 不能写入 longLivedConnections，否则该 TLS 连接会停止读取
         // WINDOW_UPDATE/RST_STREAM，也会阻断同连接其它普通 H2 stream。
-        if ($isLongLived && $http2ResponseStreamId <= 0) {
+        // Also refuse any accidental long-lived mark when ALPN is already h2.
+        if ($isLongLived
+            && $http2ResponseStreamId <= 0
+            && ($connectionProtocols[$connId] ?? '') !== 'h2'
+        ) {
             $layer = (string) ($longLivedDetection['layer'] ?? 'unknown');
             $protocol = (string) ($longLivedDetection['protocol'] ?? 'long-lived');
             WlsLogger::info_("长链分层命中: layer={$layer}, protocol={$protocol}, connId={$connId}");
@@ -9609,6 +9736,65 @@ function wlsSslWebSocketReadStep(
 }
 
 /**
+ * Pull another bounded H2 DATA batch into writeBuffers and arm write interest.
+ *
+ * Large responses are generated in MAX_DRAIN_BYTES quanta. After the first quantum
+ * is written, writeBuffers may be empty while ConnectionAdapter still holds body
+ * bytes and the peer still has send-window credit. Without re-arming writers the
+ * event loop only waits for readable events; the peer will not send WINDOW_UPDATE,
+ * and multiplexed CSS/JS stay pending until keep-alive closes the connection.
+ *
+ * Refill whenever the socket-facing buffer is below the watermark — not only when
+ * it is completely empty. Otherwise a busy connection that keeps a few KB queued
+ * never pulls the next quantum for streams whose first encode already returned,
+ * and Chrome sees response headers with Content-Length but zero body bytes.
+ *
+ * @param array<int|string, \Weline\Server\Protocol\Http2\ConnectionAdapter|mixed> $http2ConnectionAdapters
+ * @param array<int|string, resource|mixed> $connections
+ * @param array<int|string, string> $writeBuffers
+ * @param array<int|string, resource|mixed> $writableConnections
+ */
+function wlsSslArmHttp2PendingResponseWrites(
+    array $http2ConnectionAdapters,
+    array $connections,
+    array &$writeBuffers,
+    array &$writableConnections,
+): void {
+    // Keep at most ~one drain quantum buffered ahead of the socket. Below this
+    // watermark, pull another adapter batch so in-flight HTML/CSS/JS bodies keep
+    // moving while other streams are still being admitted.
+    $http2WriteBufferRefillWatermark = 262144;
+    foreach ($http2ConnectionAdapters as $connId => $http2Adapter) {
+        if (!$http2Adapter instanceof \Weline\Server\Protocol\Http2\ConnectionAdapter) {
+            continue;
+        }
+        if (!$http2Adapter->hasPendingResponseData()) {
+            continue;
+        }
+        $conn = $connections[$connId] ?? null;
+        if (!\is_resource($conn) || !\in_array(\get_resource_type($conn), ['stream', 'Socket'], true)) {
+            continue;
+        }
+        $refillGuard = 0;
+        while ($refillGuard < 8 && $http2Adapter->hasPendingResponseData()) {
+            $bufferedBytes = \strlen((string)($writeBuffers[$connId] ?? ''));
+            if ($bufferedBytes >= $http2WriteBufferRefillWatermark) {
+                break;
+            }
+            $nextHttp2Batch = $http2Adapter->drainPendingResponseData();
+            if ($nextHttp2Batch === '') {
+                break;
+            }
+            $writeBuffers[$connId] = (string)($writeBuffers[$connId] ?? '') . $nextHttp2Batch;
+            $refillGuard++;
+        }
+        if (isset($writeBuffers[$connId]) && $writeBuffers[$connId] !== '') {
+            $writableConnections[$connId] = $conn;
+        }
+    }
+}
+
+/**
  * 将 writeBuffers 中的数据写入 SSL 流（非阻塞 fwrite，单连接每轮最多尝试若干次）。
  * 供事件循环在 Fiber tick 之后及早调用，减轻 SSE 与同 Worker 其它 HTTP 请求之间的写方向头阻塞。
  *
@@ -9630,6 +9816,13 @@ function wlsSslFlushQueuedWrites(
     array &$longLivedConnections,
     array &$http2ConnectionAdapters
 ): void {
+    wlsSslArmHttp2PendingResponseWrites(
+        $http2ConnectionAdapters,
+        $connections,
+        $writeBuffers,
+        $writableConnections,
+    );
+
     $maxBytesPerConnectionPerLoop = 131072; // 128KB，分片推进上限
     $zeroProgressTimeoutSeconds = 5.0;
     $maxZeroProgressBackoffUsec = 50_000;
@@ -9696,6 +9889,15 @@ function wlsSslFlushQueuedWrites(
             }
             $remainingBudget = $maxBytesPerConnectionPerLoop - $totalWrittenThisLoop;
             $writeLen = \min($bufferLen, $maxChunkPerWrite, $remainingBudget);
+            if ($http2Adapter instanceof \Weline\Server\Protocol\Http2\ConnectionAdapter) {
+                // Prefer complete HTTP/2 frames so RST scrubbing stays aligned.
+                // A single frame can still exceed the chunk budget; fall back to a
+                // partial write only when the first frame itself is larger.
+                $completePrefix = \Weline\Server\Protocol\Http2\FrameCodec::completeFramesPrefixLength($buffer);
+                if ($completePrefix > 0) {
+                    $writeLen = \min($writeLen, $completePrefix);
+                }
+            }
             if ($writeLen <= 0) {
                 break;
             }
@@ -9786,6 +9988,16 @@ function wlsSslFlushQueuedWrites(
             $connectionLastActivity[$connId] = wlsWorkerMonotonicNow();
             $totalWrittenThisLoop += $written;
             $writeBuffers[$connId] = \substr($buffer, $written);
+
+            if ($http2Adapter instanceof \Weline\Server\Protocol\Http2\ConnectionAdapter
+                && $http2Adapter->hasPendingResponseData()
+                && \strlen((string)($writeBuffers[$connId] ?? '')) < 262144
+            ) {
+                $nextHttp2Batch = $http2Adapter->drainPendingResponseData();
+                if ($nextHttp2Batch !== '') {
+                    $writeBuffers[$connId] = (string)($writeBuffers[$connId] ?? '') . $nextHttp2Batch;
+                }
+            }
 
             if ($writeBuffers[$connId] === '' || $writeBuffers[$connId] === false) {
                 $nextHttp2Batch = $http2Adapter instanceof \Weline\Server\Protocol\Http2\ConnectionAdapter
@@ -10398,6 +10610,22 @@ function sslFinalizeHttpResponseAfterHandle(
         $trustedCacheHit = true;
         $precomputedKeepAlive = true;
         $isHttp2Response = true;
+        if ($http2Adapter->hasPendingResponseData()) {
+            $http2Diag = $http2Adapter->diagnostics();
+            if ((int)($http2Diag['pending_response_bytes'] ?? 0) > 0
+                && (int)($http2Diag['connection_send_window'] ?? 0) <= 0
+            ) {
+                WlsLogger::warning_(
+                    'HTTP/2 encode queued body behind zero connection send window'
+                    . " (connId: {$connId}, streamId: {$http2StreamId}"
+                    . ', frames: ' . \strlen($response)
+                    . ', pending_bytes: ' . (int)$http2Diag['pending_response_bytes']
+                    . ', active_streams: ' . (int)($http2Diag['active_streams'] ?? 0)
+                    . ', pending_streams: ' . \json_encode($http2Diag['pending_response_streams'] ?? [])
+                    . ')'
+                );
+            }
+        }
     }
     $keepAlive = $isWebSocketMode ? true : ($precomputedKeepAlive ?? isKeepAlive($rawRequest));
     if ($drainRequestedBeforeResponse && !$isSseMode && !$isHttp2Response && !$isWebSocketMode) {
@@ -10430,6 +10658,18 @@ function sslFinalizeHttpResponseAfterHandle(
                 // HTTP/2 缓冲区内通常是连接级 SETTINGS/ACK，响应帧必须追加在其后。
                 $writeBuffers[$connId] .= $response;
                 $writableConnections[$connId] = $conn;
+                if ($http2Adapter instanceof \Weline\Server\Protocol\Http2\ConnectionAdapter
+                    && $http2Adapter->hasPendingResponseData()
+                ) {
+                    // First quantum may already be in `$response` while more body
+                    // remains flow-controlled / MAX_DRAIN-bounded in the adapter.
+                    wlsSslArmHttp2PendingResponseWrites(
+                        [$connId => $http2Adapter],
+                        [$connId => $conn],
+                        $writeBuffers,
+                        $writableConnections,
+                    );
+                }
                 if ($recordObservability) {
                     WlsLogger::debug_("Worker HTTP/2 响应追加到控制帧缓冲 connId={$connId} len={$responseLen}");
                 }
@@ -10454,7 +10694,10 @@ function sslFinalizeHttpResponseAfterHandle(
             return;
         }
 
-        $headerEnd = \strpos($response, "\r\n\r\n");
+        // HTTP/2 `$response` is binary frames — never use the HTTP/1.1
+        // `\r\n\r\n` heuristic (it can match inside DATA and shrink the first
+        // write to headers-only sized scraps).
+        $headerEnd = $isHttp2Response ? false : \strpos($response, "\r\n\r\n");
         $headerBytes = $headerEnd === false ? 0 : $headerEnd + 4;
         $configuredImmediateBytes = $recordObservability
             ? (int)(\Weline\Framework\App\Env::get('wls.ssl.immediate_response_write_bytes', 32768) ?: 32768)
@@ -10462,7 +10705,12 @@ function sslFinalizeHttpResponseAfterHandle(
             // 避免 64 KiB 边界把约 70 KiB 的首页人为拆到下一轮事件循环。
             : 131072;
         $immediateBudget = \max(8192, \min(131072, $configuredImmediateBytes));
-        if ($headerBytes > 0) {
+        if ($isHttp2Response) {
+            // Prefer writing the whole first encode batch (HEADERS + drained DATA)
+            // so a homepage-sized document is not artificially split at 128KiB in
+            // userland while more body already sits in `$response`.
+            $immediateBudget = \min($responseLen, 1048576);
+        } elseif ($headerBytes > 0) {
             $immediateBudget = \max($immediateBudget, \min($responseLen, $headerBytes + 8192));
         }
         $immediateBudget = \min($responseLen, $immediateBudget);
@@ -10500,6 +10748,23 @@ function sslFinalizeHttpResponseAfterHandle(
             }
             $responseBytes = $totalWritten;
             $responseFullyWritten = true;
+            // First H2 DATA quantum may be fully written while more body remains
+            // behind flow-control / MAX_DRAIN_BYTES inside the adapter. The
+            // connection stays in "responding" until pendingResponses is empty —
+            // never treat the first group as a completed response or the rest of
+            // the body is orphaned until (or unless) a later WINDOW_UPDATE arrives.
+            if ($isHttp2Response
+                && $http2Adapter instanceof \Weline\Server\Protocol\Http2\ConnectionAdapter
+                && $http2Adapter->hasPendingResponseData()
+            ) {
+                $responseFullyWritten = false;
+                wlsSslArmHttp2PendingResponseWrites(
+                    [$connId => $http2Adapter],
+                    [$connId => $conn],
+                    $writeBuffers,
+                    $writableConnections,
+                );
+            }
             goto ssl_finalize_skip_write;
         }
 
@@ -10799,7 +11064,8 @@ function handleRequest(
                 \is_array($cacheInfo) ? $cacheInfo : []
             );
         }
-        return $staticResponse;
+        // Static path returns before framework Response::compress(); gzip text/JS/CSS here.
+        return wlsMaybeCompressStaticHttpResponse($staticResponse, $rawRequest);
     }
     // ========== 静态文件处理结束 ==========
     

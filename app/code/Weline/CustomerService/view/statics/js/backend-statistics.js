@@ -2,10 +2,16 @@
 function csAdmin(url, options){
   options=options||{};
   var body=options.body;
+  var headers=Object.assign({}, options.headers||{});
   if(body && typeof FormData!=='undefined' && body instanceof FormData){
     var p=new URLSearchParams(); body.forEach(function(v,k){p.append(k,String(v));}); body=p.toString();
+  } else if(body && typeof URLSearchParams!=='undefined' && body instanceof URLSearchParams){
+    body=body.toString();
   } else if(body && typeof body!=='string'){ try{body=JSON.stringify(body);}catch(e){body='';} }
-  var run=function(api){ return api.resource('customerService').adminRequest({url:url, method:options.method||'GET', headers:options.headers||{}, body:body||''}); };
+  if(typeof body==='string' && body.indexOf('=')!==-1 && !headers['Content-Type'] && !headers['content-type']){
+    headers['Content-Type']='application/x-www-form-urlencoded;charset=UTF-8';
+  }
+  var run=function(api){ return api.resource('customerService').adminRequest({url:url, method:options.method||'GET', headers:headers, body:body||''}); };
   if(window.Weline&&window.Weline.load) return window.Weline.load('api').then(run);
   return Promise.resolve(run(window.Weline.Api));
 }
@@ -37,24 +43,27 @@ const CustomerServiceStatistics = (function() {
      */
     function bindPeriodSelector() {
         document.addEventListener('click', function(e) {
-            if (e.target.classList.contains('period-btn')) {
-                e.preventDefault();
-                
-                // 移除所有active类
-                document.querySelectorAll('.period-btn').forEach(btn => {
-                    btn.classList.remove('active');
-                });
-                
-                // 添加active类到当前按钮
-                e.target.classList.add('active');
-                
-                // 获取时间段
-                const period = e.target.dataset.period;
-                config.currentPeriod = period;
-                
-                // 加载统计数据
-                loadStatistics(period);
+            const btn = e.target.closest && e.target.closest('.period-btn');
+            if (!btn) {
+                return;
             }
+            e.preventDefault();
+
+            document.querySelectorAll('.period-btn').forEach(el => {
+                el.classList.remove('active');
+                el.setAttribute('aria-pressed', 'false');
+                el.setAttribute('data-tone', 'neutral');
+                el.setAttribute('data-variant', 'outline');
+            });
+
+            btn.classList.add('active');
+            btn.setAttribute('aria-pressed', 'true');
+            btn.setAttribute('data-tone', 'primary');
+            btn.removeAttribute('data-variant');
+
+            const period = btn.dataset.period;
+            config.currentPeriod = period;
+            loadStatistics(period);
         });
     }
     

@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Eav',
-    "version" => '1.1.15',
+    "version" => '1.2.5',
     "requires" => [
         'Weline_Backend' => '*',
         'Weline_Framework' => '*',

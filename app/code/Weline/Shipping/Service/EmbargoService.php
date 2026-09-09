@@ -9,7 +9,7 @@ use Weline\Framework\Runtime\RequestContext;
 use Weline\Shipping\Model\EmbargoRegion;
 
 /**
- * 运行时禁运评估：website ∪ store ∪ channel。
+ * 运行时禁运评估：active system ∪ website ∪ store ∪ channel（system 最高优先）。
  */
 final class EmbargoService
 {
@@ -158,6 +158,39 @@ final class EmbargoService
     }
 
     /**
+     * 活跃的省/市/区/街禁运规则（供地址选择器下级打标；不含国家级）。
+     *
+     * @param array{website_id?:int,store_id?:int,channel_id?:int}|null $context
+     * @return list<array{country_code:string,region_type:string,region_id:int,region_code:string,street_id:int,scope_type:string,reason_code:string}>
+     */
+    public function activeSubnationalRules(?array $context = null): array
+    {
+        $ctx = $this->resolveContext($context);
+        $out = [];
+        foreach ($this->loadActiveRules($ctx) as $rule) {
+            $type = (string)($rule['region_type'] ?? '');
+            if ($type === '' || $type === EmbargoRegion::TYPE_COUNTRY) {
+                continue;
+            }
+            $cc = strtoupper(trim((string)($rule['country_code'] ?? '')));
+            if ($cc === '' || !preg_match('/^[A-Z]{2}$/', $cc)) {
+                continue;
+            }
+            $out[] = [
+                'country_code' => $cc,
+                'region_type' => $type,
+                'region_id' => (int)($rule['region_id'] ?? 0),
+                'region_code' => (string)($rule['region_code'] ?? ''),
+                'street_id' => (int)($rule['street_id'] ?? 0),
+                'scope_type' => (string)($rule['scope_type'] ?? ''),
+                'reason_code' => (string)($rule['reason_code'] ?? ''),
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
      * @return array{blocked:bool,level:null,message:string,matched:null,scope_type:null}
      */
     private function ok(): array
@@ -184,6 +217,7 @@ final class EmbargoService
             return [];
         }
         $scopes = [
+            [EmbargoRegion::SCOPE_SYSTEM, 0],
             [EmbargoRegion::SCOPE_WEBSITE, $ctx['website_id']],
             [EmbargoRegion::SCOPE_STORE, $ctx['store_id']],
             [EmbargoRegion::SCOPE_CHANNEL, $ctx['channel_id']],
@@ -214,6 +248,7 @@ final class EmbargoService
                     'region_id' => (int)$item->getData(EmbargoRegion::schema_fields_REGION_ID),
                     'region_code' => (string)$item->getData(EmbargoRegion::schema_fields_REGION_CODE),
                     'street_id' => (int)$item->getData(EmbargoRegion::schema_fields_STREET_ID),
+                    'reason_code' => (string)$item->getData(EmbargoRegion::schema_fields_REASON_CODE),
                 ];
             }
         }
@@ -253,6 +288,7 @@ final class EmbargoService
     private function messageFor(string $level, string $scopeType): string
     {
         $scopeLabel = match ($scopeType) {
+            EmbargoRegion::SCOPE_SYSTEM => (string)__('系统'),
             EmbargoRegion::SCOPE_STORE => (string)__('店铺'),
             EmbargoRegion::SCOPE_CHANNEL => (string)__('渠道'),
             default => (string)__('网站'),

@@ -27,8 +27,10 @@ class SearchProviderRegistry
      */
     public function all(bool $forceReload = false, ?string $area = null): array
     {
-        if (!$forceReload && $this->providers !== null && $area === null) {
-            return $this->providers;
+        if (!$forceReload && $this->providers !== null) {
+            return $area === null
+                ? $this->providers
+                : $this->filterByArea($this->providers, $area);
         }
 
         $map = [];
@@ -61,13 +63,11 @@ class SearchProviderRegistry
             $map,
             static fn (SearchProviderInterface $a, SearchProviderInterface $b): int => $a->sortOrder() <=> $b->sortOrder()
         );
-        if ($area === null) {
-            $this->providers = $map;
+        // Cache the complete registry; area visibility is evaluated for each
+        // consumer so a frontend lookup cannot replace the backend map.
+        $this->providers = $map;
 
-            return $this->providers;
-        }
-
-        return $this->filterByArea($map, $area);
+        return $area === null ? $map : $this->filterByArea($map, $area);
     }
 
     public function get(string $code, ?string $area = null): ?SearchProviderInterface
@@ -121,7 +121,7 @@ class SearchProviderRegistry
             pool: 'view',
             scope: 'channel',
             vary: ['lang', 'area'],
-            dependencies: ['catalog', 'config'],
+            dependencies: ['catalog', 'config', 'global/i18n'],
             freshTtlSeconds: 300,
             staleTtlSeconds: 1800,
         );

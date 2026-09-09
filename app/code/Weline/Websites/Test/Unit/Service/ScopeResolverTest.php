@@ -392,4 +392,14 @@ final class ScopeResolverSalesChannelCatalogStub implements SalesChannelCatalogI
         }
         return null;
     }
+
+    public function defaultChannelForStore(StoreSummary $store): ?SalesChannelSummary
+    {
+        foreach ($this->channels as $channel) {
+            if ($channel->storeId === $store->id && $channel->isDefault) {
+                return $channel;
+            }
+        }
+        return null;
+    }
 }

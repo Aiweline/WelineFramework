@@ -26,6 +26,8 @@ Weline Acl (Access Control List) 是系统的权限控制模块，提供了基�
 - 动态菜单生成
 - 权限过滤
 
+公共菜单定义通过 `ResourceTreeService` 的请求快照、进程缓存和 `w_cache('acl')` 复用；角色树继续按 role×website 隔离。自 1.1.3 起，本地菜单失效、进程缓存重置及观察到共享 generation 变化，都会同步移除当前 `RequestContext` 的 `acl.enabled_menu_sources.v1`；快照同时携带来源 generation，另一 Fiber 推进代次后旧请求不能回填旧菜单定义。该快照不作为权限授予依据，既有角色过滤与接口鉴权不变。
+
 后台菜单和 Controller 使用统一 source 语法：
 
 `Vendor_Module::tag1:tag2:code`
@@ -308,20 +310,13 @@ class YourController extends AbstractController
 ```
 
 ### API 接口权限检查
-```php
-public function apiAction()
-{
-    $acl = new Acl();
-    $resource = $this->getRequest()->getParam('resource');
-    $action = $this->getRequest()->getParam('action');
 
-    if (!$acl->isAllowed($this->getUserId(), $resource, $action)) {
-        return $this->error('权限不足');
-    }
+前台 REST 的认证由 `Weline_Api` 完成，统一授权入口为 `Observer/RouteBefore::validateFrontendApiAccess()`。
 
-    // 执行API逻辑
-}
-```
+- 应用身份沿用安装 scope 的 `isRouteAllowedByEntries(..., true)`，同时限制 HTTP 方法和读写模式。
+- 已验证的 `Weline\Api\Api\AuthenticatedApiUser` 访问受保护路由时，复用 `AclService::isRouteAllowed(roleId, route, method)`；保留现有超管与授权包扩展规则，无角色或无授权返回 403。
+- 匿名仍返回 401；公开/guest 路由、其他前台 Session 和 WeShop Customer 的既有行为保持不变。
+- 业务控制器消费认证后的只读身份对象，不按请求参数 `user_id` 自行授予权限。用户角色应授权实际登记的 REST 路由和 HTTP 方法。
 
 ## 权限管理界面
 

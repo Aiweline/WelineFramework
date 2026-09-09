@@ -95,6 +95,24 @@ final readonly class StorefrontCacheKeyContext
         }
 
         $identity = RequestContext::scopeIdentity();
+        // Website detection runs before Store/Channel resolution. Preserve that
+        // authoritative website boundary so structural website resources (for
+        // example the Store catalog) can be shared across workers while the
+        // remaining navigation scope is still being resolved. Only accept the
+        // default website with id 0; a custom website must have a positive id.
+        if (!$identity instanceof ScopeIdentity) {
+            $websiteId = RequestContext::getWelineWebsiteId();
+            $websiteCode = trim(RequestContext::getWelineWebsiteCode());
+            if ($websiteCode !== ''
+                && ($websiteId > 0 || $websiteCode === 'default')
+            ) {
+                try {
+                    $identity = ScopeIdentity::website($websiteId, $websiteCode);
+                } catch (\Throwable) {
+                    $identity = null;
+                }
+            }
+        }
         $lang = trim(RequestContext::getWelineUserLang());
         $currency = trim(RequestContext::getWelineUserCurrency());
         try {
@@ -164,5 +182,20 @@ final readonly class StorefrontCacheKeyContext
             && $identity->storeCode !== null
             && $identity->channelCode !== null
             && $identity->storeMode !== null;
+    }
+
+    /**
+     * Website resolution is authoritative before Store/Channel resolution.
+     * This is deliberately weaker than a frozen storefront scope and is only
+     * suitable for policies whose declared scope is exactly Website.
+     */
+    public function hasWebsiteScope(): bool
+    {
+        $identity = $this->scopeIdentity;
+
+        return $identity instanceof ScopeIdentity
+            && $identity->scopeKind !== ScopeIdentity::KIND_GLOBAL
+            && $identity->websiteId !== null
+            && $identity->websiteCode !== null;
     }
 }

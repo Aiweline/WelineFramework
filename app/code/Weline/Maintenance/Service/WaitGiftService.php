@@ -40,6 +40,9 @@ final class WaitGiftService
         if (!(bool)($wave['wait_gift_enabled'] ?? false)) {
             return $this->fail('gift_disabled', '本轮未开启维护礼金');
         }
+        if (!$this->isTocAudience($context)) {
+            return $this->fail('audience_tob', '维护礼金仅面向零售客户');
+        }
         if (!$this->hasValidGate($context)) {
             return $this->fail('gate_required', '缺少维护门禁，无法签发');
         }
@@ -142,6 +145,9 @@ final class WaitGiftService
         }
         if (!(bool)($wave['wait_gift_enabled'] ?? false)) {
             return $this->fail('gift_disabled', '本轮未开启维护礼金');
+        }
+        if (!$this->isTocAudience($context)) {
+            return $this->fail('audience_tob', '维护礼金仅面向零售客户');
         }
         if (!$this->waves->isRedeemWindowOpen($wave)) {
             $hashEarly = $this->hashToken($opaque);
@@ -260,6 +266,58 @@ final class WaitGiftService
         }
 
         return 404;
+    }
+
+    /**
+     * Wait-gift is retail (ToC) only. Wholesale (tob) cookie / context is rejected.
+     * Soft cookie probe — no hard dependency on Weline_B2B.
+     *
+     * @param array<string, mixed> $context
+     */
+    public function isTocAudience(array $context = []): bool
+    {
+        return $this->resolveSellingMode($context) !== 'tob';
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     */
+    public function resolveSellingMode(array $context = []): string
+    {
+        $fromContext = \strtolower(\trim((string)($context['selling_mode'] ?? $context['cart_type'] ?? '')));
+        if ($fromContext === 'tob' || $fromContext === 'toc') {
+            return $fromContext;
+        }
+
+        $cookies = $context['cookies'] ?? null;
+        if (!\is_array($cookies)) {
+            $cookies = $_COOKIE ?? [];
+        }
+        if (!\is_array($cookies)) {
+            return 'toc';
+        }
+
+        $names = [];
+        foreach (\array_keys($cookies) as $name) {
+            $key = (string)$name;
+            if ($key === 'weline_selling_mode' || \preg_match('/^weline_selling_mode_w\d+$/', $key) === 1) {
+                $names[] = $key;
+            }
+        }
+        // Prefer site-scoped cookies before the legacy unscoped name.
+        \usort($names, static function (string $a, string $b): int {
+            $score = static fn(string $n): int => \str_starts_with($n, 'weline_selling_mode_w') ? 0 : 1;
+
+            return $score($a) <=> $score($b) ?: \strcmp($a, $b);
+        });
+        foreach ($names as $name) {
+            $value = \strtolower(\trim((string)($cookies[$name] ?? '')));
+            if ($value === 'tob' || $value === 'toc') {
+                return $value;
+            }
+        }
+
+        return 'toc';
     }
 
     /**

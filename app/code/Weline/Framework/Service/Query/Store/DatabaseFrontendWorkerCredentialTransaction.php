@@ -24,6 +24,7 @@ final class DatabaseFrontendWorkerCredentialTransaction implements FrontendWorke
         private readonly FrontendWorkerCredentialGuard $guardPrototype,
         private readonly FrontendWorkerCredentialCipher $cipher,
         private readonly string $databaseType,
+        private readonly ?FrontendWorkerSessionPayloadCache $sessionPayloadCache = null,
     ) {
     }
 
@@ -70,6 +71,15 @@ final class DatabaseFrontendWorkerCredentialTransaction implements FrontendWorke
         int $now,
     ): ?array {
         $identity = $this->identity($type, $credential, $scope);
+        $cacheKey = null;
+        if ($type === FrontendWorkerCredentialType::SESSION && $this->sessionPayloadCache !== null) {
+            $cacheKey = FrontendWorkerSessionPayloadCache::keyForIdentity($identity);
+            $cached = $this->sessionPayloadCache->get($cacheKey, $now);
+            if ($cached !== null) {
+                return $cached;
+            }
+        }
+
         $row = $this->credentialModel()
             ->where(FrontendWorkerCredential::schema_fields_TYPE, $identity['type'])
             ->where(FrontendWorkerCredential::schema_fields_SCOPE_HASH, $identity['scope_hash'])
@@ -91,11 +101,15 @@ final class DatabaseFrontendWorkerCredentialTransaction implements FrontendWorke
             'created_at' => $createdAt,
             'expires_at' => $expiresAt,
         ];
-        return $this->cipher->decrypt(
+        $payload = $this->cipher->decrypt(
             (string)$row->getData(FrontendWorkerCredential::schema_fields_KEY_ID),
             (string)$row->getData(FrontendWorkerCredential::schema_fields_CIPHERTEXT),
             $storedIdentity,
         );
+        if ($cacheKey !== null && $this->sessionPayloadCache !== null) {
+            $this->sessionPayloadCache->put($cacheKey, $payload, $expiresAt, $now);
+        }
+        return $payload;
     }
 
     public function insert(
@@ -141,6 +155,14 @@ final class DatabaseFrontendWorkerCredentialTransaction implements FrontendWorke
             FrontendWorkerCredential::schema_fields_CREATED_AT => $createdAt,
             FrontendWorkerCredential::schema_fields_EXPIRES_AT => $expiresAt,
         ])->save();
+        if ($type === FrontendWorkerCredentialType::SESSION && $this->sessionPayloadCache !== null) {
+            $this->sessionPayloadCache->put(
+                FrontendWorkerSessionPayloadCache::keyForIdentity($identity),
+                $payload,
+                $expiresAt,
+                $createdAt,
+            );
+        }
     }
 
     public function replaceActive(
@@ -199,6 +221,14 @@ final class DatabaseFrontendWorkerCredentialTransaction implements FrontendWorke
             ->setData(FrontendWorkerCredential::schema_fields_EXPIRES_AT, $expiresAt)
             ->setData(FrontendWorkerCredential::schema_fields_LOCK_VERSION, $lockVersion + 1)
             ->save();
+        if ($type === FrontendWorkerCredentialType::SESSION && $this->sessionPayloadCache !== null) {
+            $this->sessionPayloadCache->put(
+                FrontendWorkerSessionPayloadCache::keyForIdentity($identity),
+                $payload,
+                $expiresAt,
+                $this->now(),
+            );
+        }
     }
 
     public function consume(string $type, string $credential, ?string $scope): bool
@@ -223,6 +253,10 @@ final class DatabaseFrontendWorkerCredentialTransaction implements FrontendWorke
             ->setData(FrontendWorkerCredential::schema_fields_CONSUMED_AT, $consumedAt)
             ->setData(FrontendWorkerCredential::schema_fields_LOCK_VERSION, $lockVersion + 1)
             ->save();
+
+        if ($type === FrontendWorkerCredentialType::SESSION && $this->sessionPayloadCache !== null) {
+            $this->sessionPayloadCache->forget(FrontendWorkerSessionPayloadCache::keyForIdentity($identity));
+        }
 
         // Some adapters report a falsey UPDATE result even after a successful
         // write. The locked same-connection reread is the portable authority.

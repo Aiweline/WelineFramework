@@ -817,14 +817,8 @@ class Stop extends CommandAbstract
             return true;
         }
 
-        $pidIndex = Processer::readPidIndex();
-
-        if (isset($pidIndex[$masterPid])) {
-            return false;
-        }
-
-        // The index is only a discovery cache. Its disappearance does not prove
-        // that the operating-system process has exited.
+        // OS liveness first. Index flock can block the CLI wait loop forever
+        // if another process holds LOCK_EX on pid_index.json.
         return !$this->queryStopPidRunning($masterPid);
     }
 
@@ -2020,7 +2014,7 @@ class Stop extends CommandAbstract
         
         if ($written === false || $written === 0) {
             $this->ipcMsg("发送命令失败", 'error');
-            @\fclose($conn);
+            $this->closeStopIpcConnection($conn);
             return false;
         }
         
@@ -2052,7 +2046,7 @@ class Stop extends CommandAbstract
             if (!$stopAccepted && self::monotonicSeconds() >= $ackDeadline) {
                 $this->ipcMsg(__('STOP 命令在 ACK 超时内未得到确认（未见 Stopping），转为本地清理。'), 'error');
                 $this->ipcAppendStopTraceHint($instanceName);
-                @\fclose($conn);
+                $this->closeStopIpcConnection($conn);
                 return false;
             }
 
@@ -2062,14 +2056,13 @@ class Stop extends CommandAbstract
             // 把 Windows 上 server:stop 的主循环开销从 N×全表扫描降到 0。
             if ($masterPid > 0 && $this->isMasterPidMissingFromIndex($masterPid)) {
                 $this->ipcMsg("Master 进程已退出 ✓", 'success');
-                @\fclose($conn);
+                $this->closeStopIpcConnection($conn);
                 return true;
             }
 
             $read = [$conn];
             $write = $except = null;
-            // 缩短 select 超时到 0.5 秒，更快响应
-            $ready = @\stream_select($read, $write, $except, 0, 500000);
+            $ready = @\stream_select($read, $write, $except, 0, 0);
             
             if ($ready === false) {
                 // stream_select 错误，连接可能已断开
@@ -2093,17 +2086,17 @@ class Stop extends CommandAbstract
                         if ($rejection !== null) {
                             $this->ipcMsg($rejection, 'error');
                             $this->ipcAppendStopTraceHint($instanceName);
-                            @\fclose($conn);
+                            $this->closeStopIpcConnection($conn);
                             return false;
                         }
                     }
                     if (!$stopAccepted) {
                         $this->ipcMsg('STOP 控制连接在 Master 确认命令前关闭，转为本地清理。', 'error');
                         $this->ipcAppendStopTraceHint($instanceName);
-                        @\fclose($conn);
+                        $this->closeStopIpcConnection($conn);
                         return false;
                     }
-                    @\fclose($conn);
+                    $this->closeStopIpcConnection($conn);
 
                     $completed = $this->finishCompletedIpcStopAfterFinalProgress(
                         $masterPid,
@@ -2134,7 +2127,7 @@ class Stop extends CommandAbstract
                     if ($rejection !== null) {
                         $this->ipcMsg($rejection, 'error');
                         $this->ipcAppendStopTraceHint($instanceName);
-                        @\fclose($conn);
+                        $this->closeStopIpcConnection($conn);
                         return false;
                     }
                     if ($masterAboutToExit) {
@@ -2147,7 +2140,7 @@ class Stop extends CommandAbstract
             // 只在 Master 明确发送 "即将退出" 后才进入等待退出流程
             if ($masterAboutToExit) {
                 $this->ipcMsg("所有子进程已退出，等待 Master 清理...", 'success');
-                @\fclose($conn);
+                $this->closeStopIpcConnection($conn);
                 return $this->finishCompletedIpcStopAfterFinalProgress(
                     $masterPid,
                     $masterAboutToExit,
@@ -2160,12 +2153,12 @@ class Stop extends CommandAbstract
             if (($now - $lastActivityAt) >= $timeout) {
                 if ($masterPid <= 0 && $observedStopStage === 0 && !$childrenFullyExited && !$masterAboutToExit) {
                     $this->ipcMsg("No STOP progress from control port after {$timeout}s; switch to local cleanup.", 'error');
-                    @\fclose($conn);
+                    $this->closeStopIpcConnection($conn);
                     return false;
                 }
                 if ($masterPid > 0 && $this->isMasterPidMissingFromIndex($masterPid)) {
                     $this->ipcMsg("Master 进程已退出 ✓", 'success');
-                    @\fclose($conn);
+                    $this->closeStopIpcConnection($conn);
                     return true;
                 }
                 if ($this->shouldAbortToLocalCleanupAfterIdle(
@@ -2178,7 +2171,7 @@ class Stop extends CommandAbstract
                         "Stage 5 idle {$timeout}s (elapsed {$elapsed}s), switch to local cleanup.",
                         'error'
                     );
-                    @\fclose($conn);
+                    $this->closeStopIpcConnection($conn);
                     return false;
                 }
                 if (($now - $lastIdleNoticeAt) >= $timeout) {
@@ -2188,9 +2181,14 @@ class Stop extends CommandAbstract
                 }
                 $lastActivityAt = $now;
             }
+            $remainingUsec = (int)\max(
+                1,
+                (int)\floor(($hardDeadline - self::monotonicSeconds()) * 1_000_000)
+            );
+            SchedulerSystem::usleep(\min(50_000, $remainingUsec));
         }
 
-        @\fclose($conn);
+        $this->closeStopIpcConnection($conn);
         
         // 超时前最后一次检查 Master 状态
         if ($masterPid > 0 && $this->isMasterPidMissingFromIndex($masterPid)) {
@@ -2462,10 +2460,9 @@ class Stop extends CommandAbstract
         $confirmed = 0;
         
         while (self::monotonicSeconds() < $deadline) {
-            SchedulerSystem::usleep(200000); // 200ms
+            SchedulerSystem::usleep(50000);
             echo $this->printer->colorize('.', self::IPC_COLOR_INFO);
-            // 快速路径 + 真实进程校验双确认，避免“索引先删、进程未退”的假退出。
-            if ($this->isMasterPidMissingFromIndex($masterPid)) {
+            if (!$this->queryStopPidRunning($masterPid)) {
                 $confirmed++;
             } else {
                 $confirmed = 0;
@@ -2476,14 +2473,29 @@ class Stop extends CommandAbstract
             }
         }
         
-        // 最后一次检查
-        if ($this->isMasterPidMissingFromIndex($masterPid)) {
+        if (!$this->queryStopPidRunning($masterPid)) {
             echo $this->printer->colorize(' 完成 ✓', self::IPC_COLOR_SUCCESS) . "\n";
             return true;
         }
         
         echo $this->printer->colorize(' 超时', self::IPC_COLOR_ERROR) . "\n";
         return false;
+    }
+
+    /**
+     * Close the CLI control socket without waiting for a peer FIN.
+     *
+     * @param resource $conn
+     */
+    protected function closeStopIpcConnection(mixed $conn): void
+    {
+        if (!\is_resource($conn)) {
+            return;
+        }
+        if (\function_exists('stream_socket_shutdown')) {
+            @\stream_socket_shutdown($conn, \STREAM_SHUT_RDWR);
+        }
+        @\fclose($conn);
     }
     
     /**

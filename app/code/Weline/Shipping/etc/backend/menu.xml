@@ -27,6 +27,9 @@
     <menu source="Weline_Shipping::shipping_service" name="shipping_service" title="配送服务"
           action="shipping/backend/shippingservice/index" parent="Weline_Backend::shipping_group"
           icon="check" order="90"/>
+    <menu source="Weline_Shipping::system_embargo" name="shipping_system_embargo" title="系统禁运"
+          action="shipping/backend/systemembargo/index" parent="Weline_Backend::shipping_group"
+          icon="alert-triangle" order="95"/>
     <menu source="Weline_Shipping::tracking" name="shipping_tracking" title="物流跟踪"
           action="shipping/backend/tracking/index" parent="Weline_Backend::shipping_group"
           icon="search" order="100"/>

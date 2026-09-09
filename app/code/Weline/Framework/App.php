@@ -694,7 +694,13 @@ class App
             if (!$coordinator->canServeCachedResponse('GET')) {
                 return false;
             }
+            // Process L1 first, then shared. processOnly-only misses forced a full
+            // Router SSR even when shared FPC was warm (debug 70285b: process-miss
+            // + shared_hit/hydrate_ok for logged-in `/` and `/products`).
             $response = $coordinator->getCachedResponse('GET', true);
+            if (!$response instanceof Response) {
+                $response = $coordinator->getCachedResponse('GET', false);
+            }
             if (!$response instanceof Response) {
                 return false;
             }

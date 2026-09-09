@@ -1264,3 +1264,75 @@ if (!\is_string($wlsPanelRuntimeConfigJson)) {
     };
 })();
 </script>
+<script src="/Weline/Server/view/statics/wls-security-probes/panel.js?v=20260908-weline-panel-probes-7"></script>
+<script>
+(function() {
+    var TAB_ID = 'wls-probes';
+    var ENDPOINT = '/server/test/wls-security-probes';
+
+    function loadSecurityProbesContent() {
+        var content = document.getElementById('dev-tool-content');
+        if (!content) {
+            return;
+        }
+        if (window.WelineSecurityProbesPanel && typeof window.WelineSecurityProbesPanel.mount === 'function') {
+            return window.WelineSecurityProbesPanel.mount(content, { endpoint: ENDPOINT });
+        }
+        content.innerHTML = '<div class="dev-tool-loading"><div>加载安全探针脚本…</div></div>';
+        var tries = 0;
+        var timer = setInterval(function() {
+            tries += 1;
+            if (window.WelineSecurityProbesPanel && typeof window.WelineSecurityProbesPanel.mount === 'function') {
+                clearInterval(timer);
+                window.WelineSecurityProbesPanel.mount(content, { endpoint: ENDPOINT });
+                return;
+            }
+            if (tries >= 40) {
+                clearInterval(timer);
+                content.innerHTML = '<div class="dev-tool-empty">安全探针面板脚本未加载</div>';
+            }
+        }, 50);
+    }
+
+    function registerSecurityProbesTab() {
+        var manifest = {
+            id: TAB_ID,
+            title: '安全探针',
+            order: 45,
+            activate: loadSecurityProbesContent
+        };
+        window.__WELINE_PANEL_TABS__ = window.__WELINE_PANEL_TABS__ || {};
+        window.__WELINE_PANEL_TABS__[TAB_ID] = manifest;
+        window.__WELINE_PANEL_TAB_QUEUE__ = window.__WELINE_PANEL_TAB_QUEUE__ || [];
+        if (window.WelinePanel && typeof window.WelinePanel.registerTab === 'function') {
+            window.WelinePanel.registerTab(manifest);
+        } else {
+            var queued = false;
+            for (var i = 0; i < window.__WELINE_PANEL_TAB_QUEUE__.length; i++) {
+                if (window.__WELINE_PANEL_TAB_QUEUE__[i] && window.__WELINE_PANEL_TAB_QUEUE__[i].id === TAB_ID) {
+                    queued = true;
+                    break;
+                }
+            }
+            if (!queued) {
+                window.__WELINE_PANEL_TAB_QUEUE__.push(manifest);
+            }
+        }
+        if (typeof window.DevToolPanelRegisterExtensionTab === 'function') {
+            window.DevToolPanelRegisterExtensionTab(TAB_ID, loadSecurityProbesContent);
+            return;
+        }
+        if (window.DevToolPanel && typeof window.DevToolPanel.registerExtensionTab === 'function') {
+            window.DevToolPanel.registerExtensionTab(TAB_ID, loadSecurityProbesContent);
+            return;
+        }
+        setTimeout(registerSecurityProbesTab, 50);
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', registerSecurityProbesTab);
+    } else {
+        registerSecurityProbesTab();
+    }
+})();
+</script>

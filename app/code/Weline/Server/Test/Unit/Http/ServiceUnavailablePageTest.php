@@ -37,6 +37,7 @@ final class ServiceUnavailablePageTest extends TestCase
 
         self::assertStringContainsString('Content-Type: application/json; charset=utf-8', $response);
         self::assertStringContainsString('"code":"maintenance"', $response);
+        self::assertStringContainsString('X-Weline-Maintenance: 1', $response);
         self::assertStringContainsString('Set-Cookie: weline_mw_gate=', $response);
         self::assertStringNotContainsString('<html', $response);
     }
@@ -46,6 +47,7 @@ final class ServiceUnavailablePageTest extends TestCase
         $response = ServiceUnavailablePage::httpResponse(ServiceUnavailablePage::VARIANT_STARTUP);
 
         self::assertStringNotContainsString('weline_mw_gate=', $response);
+        self::assertStringNotContainsString('X-Weline-Maintenance: 1', $response);
     }
 
     public function testMaintenanceHtmlUsesPathLanguageStaticSnapshot(): void

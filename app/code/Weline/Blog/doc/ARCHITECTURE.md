@@ -62,3 +62,11 @@ sequenceDiagram
 内容写入只走 `BlogPostAdminService`，不直接拼接 SQL。每篇文章从主题 profile 重新构建，至少包含定义、识别依据、边界/风险、实践建议等 6 个章节；全局段落去重和旧填充词检查在写入前后各执行一次。正文不内嵌图片，封面使用 `blog/hanfu/r2/covers/**` 下的 160 个唯一主题资产；中英文同主题有意共享封面。
 
 图片存储边界由 `FileAssetLibraryInterface` 持有。每个封面先注册 FileAsset，再写入 `zh_Hans_CN` / `en_US` 的 reviewed/manual 名称、alt、description、caption，并保存 source、license、purpose、relations、review 元数据。旧资源只有在数据库、源码和 FileManager 引用守卫共同给出零引用证明后才可逐文件删除。完整规则见 `data/BLOG_IMAGE_NO_DUPLICATE.md`。
+
+## 7. 公共内容缓存与事实变更
+
+`BlogContentCache` 是 Blog 原生公共读取缓存 Owner，使用 Framework `StorefrontScopeHotCache::rememberPolicy`。策略使用显式查询网站 ID（包括 0）、locale、资源类型、分类/slug/数量等参数；不从当前前台请求推断后台、Sitemap 或 CLI 查询的网站。底层使用 global 存储策略，逻辑键保留业务网站范围；`global/storefront/blog/content/website/{id}` 是该网站原生事实的 generation 依赖。网站 N 的内容查询同时依赖 N 和全局 0，0 变更无需枚举消费者即可使回退结果失效。店铺/渠道当前不参与 Blog 原生查询，不添加无关维度。
+
+原始行和本地化关键词共享，最终 canonical URL、CSV fallback 名称留在请求内。分类 EAV 值继续由 EntityAttributeStore 管理其缓存与失效；Blog 只缓存原生分类行。CMS 页面继续通过官方 `w_query`，不复制其缓存层。请求 Context 保存已解析文章、实际查询 slug 别名、分类 meta 和关键词（包括 null）；控制器沿已查正文快照读取。
+
+所有原生模型 `save/delete` 经 `BlogContentMutation` 使用现有事务协调器及 `w_changed(ResourceChange)`，沿标准 critical CacheNamespaceObserver 更新 namespace authority。提交后通知 WLS Worker；回滚不发布版本。文章迁站同时推进原网站和新网站，关键词 LocalModel 根据父 Post 决定网站；不同 locale 的 composite identity 保留。活动事务不读写共享快照，避免传播未提交数据。直接 SQL 写入不属于模型生命周期，调用者仍须遵循框架 changed 写入规范。

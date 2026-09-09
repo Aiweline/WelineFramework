@@ -19,6 +19,7 @@ use Weline\Geo\Model\Platform as PlatformModel;
 use Weline\Geo\Model\PlatformAccount;
 use Weline\Geo\Service\SecretStoreService;
 use Weline\Geo\Service\PlatformAdapterService;
+use Weline\Geo\Service\PlatformAccountGuideService;
 
 /**
  * 平台管理控制器
@@ -75,13 +76,26 @@ class Platform extends BackendController
                 $platform = $platformModel;
             }
 
-            // 获取支持的平台代码
+            // 获取支持的平台代码（已配置项仍展示，保存走 upsert；模板标注「已配置」）
             /** @var PlatformAdapterService $adapterService */
             $adapterService = ObjectManager::getInstance(PlatformAdapterService::class);
-            $supportedPlatforms = $adapterService->getSupportedPlatforms();
-            
+            $platformCatalog = $adapterService->getPlatformCatalog();
+
+            /** @var PlatformModel $usedModel */
+            $usedModel = ObjectManager::getInstance(PlatformModel::class);
+            $usedRows = $usedModel->select()->fetchArray();
+            $usedCodes = [];
+            foreach ($usedRows as $row) {
+                $code = (string)($row[PlatformModel::schema_fields_PLATFORM_CODE] ?? '');
+                if ($code !== '') {
+                    $usedCodes[$code] = true;
+                }
+            }
+
             $this->assign('platform', $platform);
-            $this->assign('supported_platforms', $supportedPlatforms);
+            $this->assign('supported_platforms', array_keys($platformCatalog));
+            $this->assign('platform_catalog', $platformCatalog);
+            $this->assign('used_platform_codes', $usedCodes);
             return $this->fetch();
         } catch (\Exception $e) {
             Message::error(__('加载平台失败：%{1}', $e->getMessage()));
@@ -115,30 +129,58 @@ class Platform extends BackendController
                 return $this->jsonResponse(false, __('请填写平台代码和名称'));
             }
 
+            /** @var PlatformAdapterService $adapterService */
+            $adapterService = ObjectManager::getInstance(PlatformAdapterService::class);
+            if ($apiEndpoint === '') {
+                $apiEndpoint = $adapterService->resolveDefaultEndpoint($platformCode);
+            }
+            if ($feedFormat === '') {
+                $feedFormat = $adapterService->resolveDefaultFeedFormat($platformCode);
+            }
+
             /** @var Platform $platformModel */
             $platformModel = ObjectManager::getInstance(PlatformModel::class);
-            
+
             if ($id > 0) {
                 $platform = $platformModel->load($id);
                 if (!$platform->getId()) {
                     return $this->jsonResponse(false, __('平台不存在'));
                 }
             } else {
-                $platform = $platformModel;
+                /** @var PlatformModel $finder */
+                $finder = ObjectManager::getInstance(PlatformModel::class);
+                $existingRows = $finder
+                    ->where(PlatformModel::schema_fields_PLATFORM_CODE, $platformCode)
+                    ->select()
+                    ->fetchArray();
+                $existingId = (int)($existingRows[0][PlatformModel::schema_fields_ID] ?? 0);
+                if ($existingId > 0) {
+                    $platform = $finder->load($existingId);
+                } else {
+                    $platform = $platformModel;
+                }
             }
 
-            $platform->setData([
+            $now = \time();
+            $payload = [
                 PlatformModel::schema_fields_PLATFORM_CODE => $platformCode,
                 PlatformModel::schema_fields_PLATFORM_NAME => $platformName,
                 PlatformModel::schema_fields_API_ENDPOINT => $apiEndpoint,
                 PlatformModel::schema_fields_FEED_FORMAT => $feedFormat,
                 PlatformModel::schema_fields_IS_ENABLED => $isEnabled,
                 PlatformModel::schema_fields_CONFIG => $config,
-            ]);
+                PlatformModel::schema_fields_UPDATED_AT => $now,
+            ];
+            if (!(bool)$platform->getId()) {
+                $payload[PlatformModel::schema_fields_CREATED_AT] = $now;
+            }
+            $platform->setData($payload);
 
             $platform->save();
 
-            return $this->jsonResponse(true, __('保存成功'));
+            return $this->jsonResponse(true, __('Saved successfully'), [
+                'id' => (int)$platform->getId(),
+            ]);
         } catch (\Exception $e) {
             return $this->jsonResponse(false, __('保存失败：%{1}', $e->getMessage()));
         }
@@ -178,8 +220,15 @@ class Platform extends BackendController
                 ->select()
                 ->fetchArray();
 
+            /** @var PlatformAccountGuideService $guideService */
+            $guideService = ObjectManager::getInstance(PlatformAccountGuideService::class);
+            $accountGuide = $guideService->forPlatformCode(
+                (string)$platform->getData(PlatformModel::schema_fields_PLATFORM_CODE)
+            );
+
             $this->assign('platform', $platform);
             $this->assign('accounts', $accounts);
+            $this->assign('account_guide', $accountGuide);
             return $this->fetch();
         } catch (\Exception $e) {
             Message::error(__('加载账户列表失败：%{1}', $e->getMessage()));
@@ -254,7 +303,7 @@ class Platform extends BackendController
 
             $account->save();
 
-            return $this->jsonResponse(true, __('保存成功'));
+            return $this->jsonResponse(true, __('Saved successfully'));
         } catch (\Exception $e) {
             return $this->jsonResponse(false, __('保存失败：%{1}', $e->getMessage()));
         }
@@ -313,5 +362,19 @@ class Platform extends BackendController
         } catch (\Exception $e) {
             return $this->jsonResponse(false, __('测试失败：%{1}', $e->getMessage()));
         }
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    private function jsonResponse(bool $success, string $message, array $data = []): string
+    {
+        $this->request->getResponse()->setHeader('Content-Type', 'application/json');
+
+        return \json_encode([
+            'success' => $success,
+            'message' => $message,
+            'data' => $data,
+        ], JSON_UNESCAPED_UNICODE);
     }
 }

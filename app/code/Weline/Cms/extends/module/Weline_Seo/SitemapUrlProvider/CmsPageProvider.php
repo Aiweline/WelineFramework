@@ -69,7 +69,7 @@ class CmsPageProvider extends AbstractSitemapUrlProvider
             if ($pageId <= 0 || !$page->isPublished() || $page->isDeleted()) {
                 continue;
             }
-            if ($this->shouldSkipBlogPathGroup($page)) {
+            if ($this->shouldSkipOwnedPathGroup($page)) {
                 continue;
             }
 
@@ -101,21 +101,25 @@ class CmsPageProvider extends AbstractSitemapUrlProvider
         return __('CMS 已发布页面 sitemap URL 提供器');
     }
 
-    private function shouldSkipBlogPathGroup(Page $page): bool
+    private function shouldSkipOwnedPathGroup(Page $page): bool
     {
-        if (!$this->isBlogModuleEnabled()) {
-            return false;
+        $pathGroup = trim(strtolower($page->getPathGroup()));
+        if ($pathGroup === 'blog' && $this->isModuleEnabled('Weline_Blog')) {
+            return true;
+        }
+        if ($pathGroup === 'help' && $this->isModuleEnabled('Weline_Help')) {
+            return true;
         }
 
-        return trim(strtolower($page->getPathGroup())) === 'blog';
+        return false;
     }
 
-    private function isBlogModuleEnabled(): bool
+    private function isModuleEnabled(string $module): bool
     {
         try {
             $env = Env::getInstance();
 
-            return (bool)$env->getModuleStatus('Weline_Blog');
+            return (bool)$env->getModuleStatus($module);
         } catch (\Throwable) {
             return false;
         }

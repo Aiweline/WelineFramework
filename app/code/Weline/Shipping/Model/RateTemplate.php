@@ -16,17 +16,27 @@ use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
 #[Table(comment: '配送费用模板表')]
-#[Index(name: 'idx_template_code', columns: ['template_code'], type: 'UNIQUE')]
+#[Index(name: 'uk_template_scope_code', columns: ['scope_type', 'scope_id', 'template_code'], type: 'UNIQUE')]
+#[Index(name: 'idx_rate_template_scope', columns: ['scope_type', 'scope_id', 'is_active'])]
 #[Index(name: 'idx_calculation_type', columns: ['calculation_type'])]
 class RateTemplate extends AbstractModel
 {
     public const schema_table = 'w_shipping_rate_templates';
     public const schema_primary_key = 'template_id';
+
+    public const SCOPE_WEBSITE = 'website';
+    public const SCOPE_STORE = 'store';
+    public const SCOPE_CHANNEL = 'channel';
+
     #[Col('int', null, nullable: false, primaryKey: true, autoIncrement: true, comment: '模板ID')]
     public const schema_fields_ID = 'template_id';
+    #[Col('varchar', 16, nullable: false, default: 'website', comment: '作用范围类型 website|store|channel')]
+    public const schema_fields_SCOPE_TYPE = 'scope_type';
+    #[Col('int', null, nullable: false, default: 0, comment: '作用范围ID')]
+    public const schema_fields_SCOPE_ID = 'scope_id';
     #[Col('varchar', 255, nullable: false, comment: '模板名称')]
     public const schema_fields_TEMPLATE_NAME = 'template_name';
-    #[Col('varchar', 50, nullable: false, unique: true, comment: '模板代码')]
+    #[Col('varchar', 50, nullable: false, comment: '模板代码（同范围内唯一）')]
     public const schema_fields_TEMPLATE_CODE = 'template_code';
     #[Col('varchar', 20, nullable: false, comment: '计算类型')]
     public const schema_fields_CALCULATION_TYPE = 'calculation_type';
@@ -68,7 +78,7 @@ class RateTemplate extends AbstractModel
     /**
      * 索引排序键
      */
-    public array $_index_sort_keys = ['template_id', 'template_code'];
+    public array $_index_sort_keys = ['template_id', 'scope_type', 'scope_id', 'template_code'];
 
     /**
      * 初始化模型

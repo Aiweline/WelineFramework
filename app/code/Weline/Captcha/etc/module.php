@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Captcha',
-    "version" => '1.0.17',
+    "version" => '1.0.19',
     "requires" => [
         'Weline_Framework' => '*',
         'Weline_SystemConfig' => '*',

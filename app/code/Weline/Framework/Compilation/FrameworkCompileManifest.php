@@ -92,6 +92,20 @@ final class FrameworkCompileManifest
                 }
                 $path = $this->normalizePath($file->getPathname());
                 $relative = \ltrim(\substr($path, \strlen($canonicalRoot)), '/');
+                if ($file->isDir() && $this->isRuntimeTemplateParentPath($relative)) {
+                    // The parent `view` directory mtime changes whenever a
+                    // runtime-created view/tpl product is added or removed.
+                    // PHP files below view remain captured individually.
+                    continue;
+                }
+                // Theme runtime materialization writes compiled products below
+                // module-local view/tpl while Workers are serving requests.
+                // They are never compiler inputs and their directory mtimes
+                // must not make an otherwise stable PHP generation fail the
+                // before/after source-state proof.
+                if ($this->isRuntimeTemplateProductPath($relative)) {
+                    continue;
+                }
                 if ($file->isDir()) {
                     if (isset($directories[$relative])) {
                         throw new \RuntimeException(
@@ -186,6 +200,16 @@ final class FrameworkCompileManifest
             'sources' => $sources,
             'directories' => $directories,
         ];
+    }
+
+    private function isRuntimeTemplateProductPath(string $relative): bool
+    {
+        return \preg_match('~(?:^|/)view/tpl(?:/|$)~', $relative) === 1;
+    }
+
+    private function isRuntimeTemplateParentPath(string $relative): bool
+    {
+        return \preg_match('~(?:^|/)view$~', $relative) === 1;
     }
 
     /**

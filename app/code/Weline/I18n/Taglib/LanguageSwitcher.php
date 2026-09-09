@@ -5,6 +5,7 @@ namespace Weline\I18n\Taglib;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\App\State;
+use Weline\Framework\Phrase\DictionaryCacheNamespace;
 use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
@@ -298,10 +299,10 @@ class LanguageSwitcher implements TaglibInterface
                 . '|mount=' . $websiteMount
                 . '|inst=' . $switcherId;
             $now = \microtime(true);
-            if (isset(self::$htmlCache[$htmlCacheKey]) && self::$htmlCache[$htmlCacheKey]['expires'] >= $now) {
-                return self::$htmlCache[$htmlCacheKey]['html'];
+            if (isset(DictionaryCacheNamespace::localCache(self::$htmlCache, 512)[$htmlCacheKey]) && DictionaryCacheNamespace::localCache(self::$htmlCache, 512)[$htmlCacheKey]['expires'] >= $now) {
+                return DictionaryCacheNamespace::localCache(self::$htmlCache, 512)[$htmlCacheKey]['html'];
             }
-            unset(self::$htmlCache[$htmlCacheKey]);
+            unset(DictionaryCacheNamespace::localCache(self::$htmlCache, 512)[$htmlCacheKey]);
 
             $safeSwitcherId = htmlspecialchars($switcherId, ENT_QUOTES, 'UTF-8');
             $safeToggleId = htmlspecialchars($toggleId, ENT_QUOTES, 'UTF-8');
@@ -453,7 +454,7 @@ class LanguageSwitcher implements TaglibInterface
             }
             $html[] = '</div>';
             $output = \implode("\n", $html);
-            self::$htmlCache[$htmlCacheKey] = [
+            DictionaryCacheNamespace::localCache(self::$htmlCache, 512)[$htmlCacheKey] = [
                 'expires' => $now + self::SWITCHER_HTML_CACHE_TTL,
                 'html' => $output,
             ];
@@ -539,15 +540,15 @@ class LanguageSwitcher implements TaglibInterface
     private static function buildLanguagesFromScope(LocaleCatalogScope $scope, string $displayLocale): array
     {
         $displayLocale = \trim($displayLocale) !== '' ? $displayLocale : $scope->displayLocale;
-        $cacheKey = $scope->mode . ':' . $scope->websiteId . '|' . $displayLocale . '|' . \implode(',', $scope->codes);
+        $cacheKey = DictionaryCacheNamespace::cacheKey($scope->mode . ':' . $scope->websiteId . '|' . $displayLocale . '|' . \implode(',', $scope->codes));
         $now = \microtime(true);
-        if (isset(self::$languageCache[$cacheKey]) && self::$languageCache[$cacheKey]['expires'] >= $now) {
-            return self::$languageCache[$cacheKey]['languages'];
+        if (isset(DictionaryCacheNamespace::localCache(self::$languageCache, 512)[$cacheKey]) && DictionaryCacheNamespace::localCache(self::$languageCache, 512)[$cacheKey]['expires'] >= $now) {
+            return DictionaryCacheNamespace::localCache(self::$languageCache, 512)[$cacheKey]['languages'];
         }
-        unset(self::$languageCache[$cacheKey]);
+        unset(DictionaryCacheNamespace::localCache(self::$languageCache, 512)[$cacheKey]);
 
         $languages = self::buildLanguagesFromCodes($scope->codes, $displayLocale);
-        self::$languageCache[$cacheKey] = [
+        DictionaryCacheNamespace::localCache(self::$languageCache, 512)[$cacheKey] = [
             'expires' => $now + self::SWITCHER_LANGUAGE_CACHE_TTL,
             'languages' => $languages,
         ];
@@ -814,7 +815,7 @@ class LanguageSwitcher implements TaglibInterface
         $keys = \array_keys($normalized);
         \sort($keys);
 
-        return \sha1(\implode('|', $keys));
+        return \sha1(DictionaryCacheNamespace::cacheKey(\implode('|', $keys)));
     }
 
     /**
@@ -949,6 +950,7 @@ class LanguageSwitcher implements TaglibInterface
         array $languageCodes
     ): string {
         return \md5(\json_encode([
+            'dictionary_version' => DictionaryCacheNamespace::fingerprint(),
             'scope' => $isBackendArea ? 'backend' : 'frontend:' . $websiteId,
             'for' => $renderFor,
             'lang' => $currentCode,
@@ -994,18 +996,19 @@ class LanguageSwitcher implements TaglibInterface
      */
     private static function loadChromeDictionary(string $locale): array
     {
-        if (isset(self::$chromeDictionaryCache[$locale])) {
-            return self::$chromeDictionaryCache[$locale];
+        $cacheKey = DictionaryCacheNamespace::cacheKey($locale);
+        if (isset(DictionaryCacheNamespace::localCache(self::$chromeDictionaryCache, 256)[$cacheKey])) {
+            return DictionaryCacheNamespace::localCache(self::$chromeDictionaryCache, 256)[$cacheKey];
         }
 
         $path = \dirname(__DIR__) . '/i18n/' . $locale . '.csv';
         if (!\is_file($path)) {
-            return self::$chromeDictionaryCache[$locale] = [];
+            return DictionaryCacheNamespace::localCache(self::$chromeDictionaryCache, 256)[$cacheKey] = [];
         }
 
         $handle = @\fopen($path, 'rb');
         if ($handle === false) {
-            return self::$chromeDictionaryCache[$locale] = [];
+            return DictionaryCacheNamespace::localCache(self::$chromeDictionaryCache, 256)[$cacheKey] = [];
         }
 
         $words = [];
@@ -1025,7 +1028,7 @@ class LanguageSwitcher implements TaglibInterface
             \fclose($handle);
         }
 
-        return self::$chromeDictionaryCache[$locale] = $words;
+        return DictionaryCacheNamespace::localCache(self::$chromeDictionaryCache, 256)[$cacheKey] = $words;
     }
 
     /**

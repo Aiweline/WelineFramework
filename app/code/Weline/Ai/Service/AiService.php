@@ -436,6 +436,10 @@ class AiService
         $params['resolved_config'] = $resolvedConfig;
         $params['scenario_code'] = $scenarioCode;
         $params['locale'] = $locale;
+        // TranslationService and other callers pass timeout_seconds; providers read timeout.
+        if (isset($params['timeout_seconds']) && (int)$params['timeout_seconds'] > 0 && !\array_key_exists('timeout', $params)) {
+            $params['timeout'] = (int)$params['timeout_seconds'];
+        }
         $response = $this->callModelApi($model, $adaptedPrompt, $params);
 
         // 7. 场景适配器后处理

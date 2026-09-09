@@ -13,9 +13,9 @@ namespace Weline\CustomerService\Controller\Frontend;
 
 use Weline\CustomerService\Model\ChatMessage;
 use Weline\CustomerService\Model\ChatSession;
-use Weline\CustomerService\Model\CustomerServiceConfig;
 use Weline\CustomerService\Model\ServiceAgent;
 use Weline\CustomerService\Service\ChatService;
+use Weline\CustomerService\Service\CustomerServiceSettings;
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -50,7 +50,12 @@ class Chat extends FrontendController
         try {
             $customerId = $this->isLoggedIn() ? $this->getLoginUserId() : null;
             $sessionToken = $this->request->getParam('session_token');
-            $customerLocale = $this->request->getParam('locale', 'zh_Hans_CN');
+            /** @var CustomerServiceSettings $settings */
+            $settings = ObjectManager::getInstance(CustomerServiceSettings::class);
+            $customerLocale = trim((string)$this->request->getParam('locale', ''));
+            if ($customerLocale === '') {
+                $customerLocale = $settings->defaultCustomerLocale();
+            }
 
             $session = $this->chatService->getOrCreateSession(
                 $customerId,
@@ -104,6 +109,18 @@ class Chat extends FrontendController
             $customerId = $this->session->isLoggedIn() ? $this->session->getUserId() : 0;
             $senderId = $customerId ?: $sessionId; // 未登录用户使用会话ID作为发送者ID
 
+            try {
+                $this->chatService->assertCustomerMaySend($sessionId, (int)$customerId > 0);
+            } catch (\RuntimeException $e) {
+                $gate = $this->chatService->resolveGuestSendGate($sessionId, (int)$customerId > 0);
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => $e->getMessage(),
+                    'guest_send' => $gate,
+                    'guest_send_locked' => true,
+                ]);
+            }
+
             $message = $this->chatService->sendMessage(
                 $sessionId,
                 ChatMessage::SENDER_TYPE_CUSTOMER,
@@ -118,7 +135,8 @@ class Chat extends FrontendController
                     'content' => $message->getContent(),
                     'translated_content' => $message->getTranslatedContent(),
                     'created_at' => $message->getData('created_at')
-                ]
+                ],
+                'guest_send' => $this->chatService->resolveGuestSendGate($sessionId, (int)$customerId > 0),
             ]);
         } catch (\Exception $e) {
             return $this->fetchJson([
@@ -223,14 +241,14 @@ class Chat extends FrontendController
                 }
             }
 
-            // 检查 AI 是否配置
+            // 检查 AI 是否配置（统一配置 / 当前范围）
             $aiEnabled = false;
             try {
-                /** @var CustomerServiceConfig $config */
-                $config = ObjectManager::getInstance(CustomerServiceConfig::class);
-                $aiEnabled = $config->getConfigValue('ai_enabled', '0') === '1';
+                /** @var CustomerServiceSettings $settings */
+                $settings = ObjectManager::getInstance(CustomerServiceSettings::class);
+                $aiEnabled = $settings->isAiEnabled();
             } catch (\Exception $e) {
-                // 配置表可能不存在，忽略
+                // 配置不可用时忽略
             }
 
             if ($hasOnlineAgent) {

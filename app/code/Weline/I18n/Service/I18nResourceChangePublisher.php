@@ -6,9 +6,12 @@ namespace Weline\I18n\Service;
 
 use Weline\Framework\Cache\Namespace\NamespacePath;
 use Weline\Framework\Database\ConnectionFactory;
+use Weline\Framework\Database\Transaction\TransactionCoordinatorInterface;
 use Weline\Framework\Event\ResourceChange\ResourceChange;
 use Weline\Framework\Event\ResourceChange\ResourceChangeFactory;
 use Weline\Framework\Event\ResourceChange\ResourceRevisionService;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Phrase\DictionaryCacheNamespace;
 use Weline\I18n\Model\Locale\Dictionary as LocaleDictionary;
 
 final class I18nResourceChangePublisher
@@ -29,6 +32,52 @@ final class I18nResourceChangePublisher
     /** @param array<string,mixed> $payload */
     public function publishAction(string $action, array $payload): ResourceChange
     {
+        return ObjectManager::getInstance(TransactionCoordinatorInterface::class)->run(
+            $this->connection(),
+            fn(): ResourceChange => $this->publishInTransaction($action, $payload),
+        );
+    }
+
+    /**
+     * 同语言文件投影复用资源修订行锁。读取词典、替换文件、changed 必须在锁内完成。
+     *
+     * @param callable():array<string,mixed> $publishFile
+     * @param callable():void $restoreFile
+     */
+    public function publishLocaleFile(string $localeCode, callable $publishFile, callable $restoreFile): bool
+    {
+        $transactions = ObjectManager::getInstance(TransactionCoordinatorInterface::class);
+        $connection = $this->connection();
+        if ($transactions->isActive($connection)) {
+            throw new \LogicException('i18n_file_publication_requires_committed_dictionary');
+        }
+        return $transactions->run($connection, function () use ($localeCode, $publishFile, $restoreFile): bool {
+            // next 的锁定读取/CAS 写入持有到外层事务结束，后来的发布者不能先读取旧词典。
+            $revision = $this->revisions->next('i18n_pack', $localeCode);
+            try {
+                $payload = $publishFile();
+                $payload['locale_code'] = $localeCode;
+                $this->publishInTransaction('dictionary-file-publish', $payload, $revision);
+                return true;
+            } catch (\Throwable $failure) {
+                // 先恢复文件再让事务协调器回滚，避免释放行锁后覆盖后继发布者。
+                try {
+                    $restoreFile();
+                } catch (\Throwable $restoreFailure) {
+                    throw new \RuntimeException(
+                        'i18n_locale_file_restore_failed: ' . $restoreFailure->getMessage(),
+                        0,
+                        $failure,
+                    );
+                }
+                throw $failure;
+            }
+        });
+    }
+
+    /** @param array<string,mixed> $payload */
+    private function publishInTransaction(string $action, array $payload, ?int $revision = null): ResourceChange
+    {
         [$resourceType, $resourceId] = $this->identity($action, $payload);
         $locale = $this->locale($payload);
         $summary = [
@@ -40,7 +89,10 @@ final class I18nResourceChangePublisher
             'item_count' => $this->itemCount($payload),
             'payload_keys' => $this->safePayloadKeys($payload),
         ];
-        $revision = $this->revisions->next($resourceType, $resourceId);
+        if ($action === 'dictionary-file-publish') {
+            $summary['content_sha256'] = (string)($payload['content_sha256'] ?? '');
+        }
+        $revision ??= $this->revisions->next($resourceType, $resourceId);
         $change = $this->changes->create(
             resourceType: $resourceType,
             resourceId: $resourceId,
@@ -52,7 +104,7 @@ final class I18nResourceChangePublisher
             after: $summary,
             changedFields: $summary['payload_keys'],
             impact: [
-                'namespaces' => [$this->namespacePath->global('i18n', [$locale])],
+                'namespaces' => [DictionaryCacheNamespace::NAMESPACE, $this->namespacePath->global('i18n', [$locale])],
             ],
             origin: ['entry' => 'i18n.admin.' . $action],
         );
@@ -77,6 +129,7 @@ final class I18nResourceChangePublisher
             'dictionary-collect',
             'word-push',
             'ai-export-modules',
+            'dictionary-file-publish',
         ], true)) {
             return ['i18n_pack', $locale];
         }

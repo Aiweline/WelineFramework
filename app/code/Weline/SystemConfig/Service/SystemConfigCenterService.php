@@ -600,7 +600,46 @@ class SystemConfigCenterService
             : $default;
         $resolved = $this->systemConfig->resolveConfig($key, $module, $area, $scope, $locale, $resolvedDefault);
         $currentRow = $this->systemConfig->getScopedConfigRow($key, $module, $area, $scope, $locale);
+        $rowSuppressed = SystemConfigLockService::isRowSuppressed($currentRow);
+        $hasLiveOverride = $currentRow !== null
+            && !$rowSuppressed
+            && (
+                !\array_key_exists(SystemConfig::schema_fields_IS_ACTIVE, $currentRow)
+                || (int)$currentRow[SystemConfig::schema_fields_IS_ACTIVE] === 1
+            );
+        $value = $resolved['value'] ?? $resolvedDefault;
+        $valueFound = (bool)($resolved['found'] ?? false);
         $source = is_array($resolved['source'] ?? null) ? $resolved['source'] : null;
+        if ($hasLiveOverride) {
+            $valueType = (string)($currentRow[SystemConfig::schema_fields_VALUE_TYPE] ?? SystemConfig::VALUE_TYPE_STRING);
+            $raw = $currentRow[SystemConfig::schema_fields_VALUE] ?? null;
+            $value = match ($valueType) {
+                SystemConfig::VALUE_TYPE_NULL => null,
+                SystemConfig::VALUE_TYPE_BOOL => (string)$raw === '1' || $raw === true,
+                SystemConfig::VALUE_TYPE_INT => (int)$raw,
+                SystemConfig::VALUE_TYPE_FLOAT => (float)$raw,
+                SystemConfig::VALUE_TYPE_JSON => is_string($raw)
+                    ? (json_decode($raw, true) ?? $raw)
+                    : $raw,
+                default => $raw,
+            };
+            $valueFound = true;
+            $metadata = $currentRow[SystemConfig::schema_fields_METADATA] ?? null;
+            if (is_string($metadata)) {
+                $decoded = json_decode($metadata, true);
+                $metadata = is_array($decoded) ? $decoded : [];
+            } elseif (!is_array($metadata)) {
+                $metadata = [];
+            }
+            $source = [
+                'scope' => (string)($currentRow[SystemConfig::schema_fields_SCOPE] ?? $scope),
+                'locale' => (string)($currentRow[SystemConfig::schema_fields_LOCALE] ?? $locale),
+                'version' => (int)($currentRow[SystemConfig::schema_fields_VERSION] ?? 0),
+                'value_type' => $valueType,
+                'is_sensitive' => (int)($currentRow[SystemConfig::schema_fields_IS_SENSITIVE] ?? 0) === 1,
+                'metadata' => $metadata,
+            ];
+        }
         $isSensitive = ($fieldFound && $this->isSensitiveField($field))
             || (bool)($source['is_sensitive'] ?? false)
             || (int)($currentRow[SystemConfig::schema_fields_IS_SENSITIVE] ?? 0) === 1;
@@ -608,8 +647,8 @@ class SystemConfigCenterService
 
         return [
             'key' => $key,
-            'value' => $resolved['value'] ?? $resolvedDefault,
-            'display_value' => $isSensitive ? '***' : $this->stringifyValue($resolved['value'] ?? $resolvedDefault),
+            'value' => $value,
+            'display_value' => $isSensitive ? '***' : $this->stringifyValue($value),
             'label' => $fieldFound ? (string)__((string)($field['label'] ?? $key)) : '',
             'description' => $fieldFound ? (string)__((string)($field['description'] ?? '')) : '',
             'type' => $fieldFound ? (string)($field['type'] ?? 'text') : '',
@@ -620,8 +659,8 @@ class SystemConfigCenterService
             'options' => $options['options'],
             'options_source' => $options['options_source'],
             'field_found' => $fieldFound,
-            'value_found' => (bool)($resolved['found'] ?? false),
-            'has_override' => $currentRow !== null,
+            'value_found' => $valueFound,
+            'has_override' => $currentRow !== null && !$rowSuppressed,
             'base_version' => (int)($currentRow[SystemConfig::schema_fields_VERSION] ?? 0),
             'is_sensitive' => $isSensitive,
             'source' => $source,

@@ -304,6 +304,13 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             $startedAt
         );
 
+        // The first public request must not race the post-READY storefront
+        // FPC builder.  Build a bounded anonymous path set while this Worker
+        // is still outside the public READY pool; the shared FPC single-flight
+        // lock lets one Worker publish and the others hydrate from that entry.
+        // The flag is fail-open so a warmup defect cannot take WLS offline.
+        $this->runReadyGateStorefrontFpcWarmup($workerId, $startedAt);
+
         if (!$this->shouldRunReadyGateWorkerBootstrapWarmup()) {
             $this->logReadyGateWarmupStep('optional_bootstrap_skipped', $workerId, $startedAt);
             $this->logReadyGateWarmupStep('homepage_fpc_final_begin', $workerId, $startedAt);
@@ -427,10 +434,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
 
     public function assertFrontendWorkerCredentialStoreReady(): void
     {
-        $driver = \strtolower(\trim((string)Env::get(
-            'wls.frontend_worker_session_store_driver',
-            'local',
-        )));
+        $driver = FrontendWorkerSessionService::resolveConfiguredSessionStoreDriver();
         if ($driver === 'local') {
             return;
         }
@@ -677,6 +681,145 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         );
     }
 
+    private function shouldRunReadyGateStorefrontFpcWarmup(): bool
+    {
+        if (!$this->canRunDynamicFirstRenderWarmupForCurrentRole()) {
+            return false;
+        }
+
+        $rawFlag = \getenv('WLS_WORKER_STOREFRONT_READY_GATE_ENABLED');
+        if ($rawFlag === false || \trim((string)$rawFlag) === '') {
+            $rawFlag = Env::get('wls.worker.storefront_ready_gate_enabled', '1');
+        }
+
+        return \in_array(
+            \strtolower(\trim((string)$rawFlag)),
+            ['1', 'true', 'yes', 'on', 'sync', 'ready_gate'],
+            true,
+        );
+    }
+
+    private function shouldFailOpenReadyGateStorefrontFpcWarmup(): bool
+    {
+        $rawFlag = \getenv('WLS_WORKER_STOREFRONT_READY_GATE_FAIL_OPEN');
+        if ($rawFlag === false || \trim((string)$rawFlag) === '') {
+            $rawFlag = Env::get('wls.worker.storefront_ready_gate_fail_open', '1');
+        }
+
+        return \in_array(
+            \strtolower(\trim((string)$rawFlag)),
+            ['1', 'true', 'yes', 'on', 'fail_open'],
+            true,
+        );
+    }
+
+    private function readyGateStorefrontFpcWarmupMaxPaths(): int
+    {
+        $raw = \getenv('WLS_WORKER_STOREFRONT_READY_GATE_MAX_PATHS');
+        if ($raw === false || \trim((string)$raw) === '') {
+            $raw = Env::get('wls.worker.storefront_ready_gate_max_paths', 4);
+        }
+
+        return \max(1, \min(32, (int)$raw));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function resolveReadyGateStorefrontFpcWarmupPaths(): array
+    {
+        $configured = Env::get('wls.worker.storefront_ready_gate_paths', null);
+        if ($configured !== null) {
+            $normalizedConfigured = $this->normalizeDynamicWarmupPathList($configured);
+            if ($normalizedConfigured !== []) {
+                return \array_slice(
+                    $normalizedConfigured,
+                    0,
+                    $this->readyGateStorefrontFpcWarmupMaxPaths(),
+                );
+            }
+        }
+
+        $paths = [];
+        // Strict homepage mode already proved and hydrated `/`; fail-open mode
+        // must include it here so the homepage cannot be the first cold request.
+        if (!(bool)($this->readyGateHomepageFpcProof['hit'] ?? false)) {
+            $paths['/'] = '/';
+        }
+        foreach ($this->readyGateDynamicCriticalWarmupPaths() as $path) {
+            $normalized = $this->normalizeInternalWarmupPath((string)$path);
+            if ($normalized !== '') {
+                $paths[$normalized] = $normalized;
+            }
+        }
+
+        return \array_slice(
+            \array_values($paths),
+            0,
+            $this->readyGateStorefrontFpcWarmupMaxPaths(),
+        );
+    }
+
+    private function runReadyGateStorefrontFpcWarmup(int $workerId, float $startedAt): void
+    {
+        if (!$this->shouldRunReadyGateStorefrontFpcWarmup()) {
+            $this->logReadyGateWarmupStep('storefront_fpc_skipped', $workerId, $startedAt);
+            return;
+        }
+
+        $paths = $this->resolveReadyGateStorefrontFpcWarmupPaths();
+        $hosts = $this->resolveProcessLocalDynamicWarmupHosts();
+        if ($paths === [] || $hosts === []) {
+            $this->logReadyGateWarmupStep('storefront_fpc_skipped reason=no-path-or-host', $workerId, $startedAt);
+            return;
+        }
+
+        $this->logReadyGateWarmupStep(
+            'storefront_fpc_begin paths=' . \json_encode($paths, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE),
+            $workerId,
+            $startedAt,
+        );
+
+        try {
+            $result = $this->runStorefrontFpcWarmupInternal($paths, $hosts);
+        } catch (\Throwable $e) {
+            $result = [
+                'warmed' => 0,
+                'failed' => 1,
+                'errors' => [$e->getMessage()],
+                'samples' => [],
+                'elapsed_ms' => 0.0,
+            ];
+        }
+
+        $failed = (int)($result['failed'] ?? 0);
+        $this->logReadyGateWarmupStep(
+            'storefront_fpc_' . ($failed > 0 ? 'failed' : 'done')
+            . ' warmed=' . (int)($result['warmed'] ?? 0)
+            . ' failed=' . $failed
+            . ' elapsed_ms=' . (float)($result['elapsed_ms'] ?? 0.0),
+            $workerId,
+            $startedAt,
+        );
+
+        if ($failed <= 0) {
+            return;
+        }
+
+        $message = 'READY gate storefront FPC warmup failed worker=' . $workerId
+            . ' failed=' . $failed
+            . ' errors=' . \json_encode(
+                \array_slice(\is_array($result['errors'] ?? null) ? $result['errors'] : [], 0, 8),
+                \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE,
+            );
+        if (!$this->shouldFailOpenReadyGateStorefrontFpcWarmup()) {
+            throw new \RuntimeException($message);
+        }
+        if (\function_exists('w_log_warning')) {
+            \w_log_warning('[WlsRuntime] ' . $message);
+        }
+    }
+
     /**
      * Ordered hosts for the Worker homepage Process-FPC READY gate.
      *
@@ -805,9 +948,17 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
     private function logReadyGateWarmupStep(string $step, int $workerId, float $startedAt): void
     {
         $elapsedMs = \round((\microtime(true) - $startedAt) * 1000, 2);
-        // Always append a durable stage marker for cold-start diagnosis when
-        // workers die during READY gate (process logs may stay empty on SIGSEGV).
+        // Keep the runtime stage trace aligned with the Worker wrapper. The
+        // wrapper reads wls.debug.worker_startup_trace from env.php, while
+        // this class also accepts the one-shot environment override used by
+        // diagnostics. Without the config branch, the outer stages were
+        // recorded but the actual runtime/FPC stages silently disappeared.
+        $configuredTrace = Env::get('wls.debug.worker_startup_trace', false);
         $traceEnabled = \in_array(
+            \strtolower(\trim((string)$configuredTrace)),
+            ['1', 'true', 'yes', 'on'],
+            true,
+        ) || \in_array(
             \strtolower(\trim((string)(\getenv('WLS_WORKER_STARTUP_TRACE') ?: ''))),
             ['1', 'true', 'yes', 'on'],
             true
@@ -1139,13 +1290,25 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
     {
         $startedAt = \microtime(true);
         $paths = [];
+        // Homepage READY gate defaults to fail-open and skips in-process `/` prime.
+        // Deferred warmup used to exclude `/` under the assumption READY owned it,
+        // which left every Worker cold for the first anonymous homepage SSR.
+        $homepageProofHit = \is_array($this->readyGateHomepageFpcProof)
+            && (bool)($this->readyGateHomepageFpcProof['hit'] ?? false);
+        if ($this->isHomepageReadyGateFailOpen() || !$homepageProofHit) {
+            $paths['/'] = '/';
+        }
         foreach ($this->readyGateDynamicCriticalWarmupPaths() as $path) {
             $path = $this->normalizeInternalWarmupPath((string)$path);
-            if ($path !== '/') {
-                $paths[$path] = $path;
+            if ($path === '' || $path === '/') {
+                continue;
             }
+            $paths[$path] = $path;
         }
-        $maxPaths = (int)(Env::get('wls.worker.storefront_deferred_warmup_max_paths', 1) ?: 1);
+        // Keep `/` plus locale homes + catalog representatives. Default was 1,
+        // which let homepage fail-open steal the only slot and left catalog cold
+        // (debug 70285b: logged-in wait_miss on /products while `/` was warm).
+        $maxPaths = (int)(Env::get('wls.worker.storefront_deferred_warmup_max_paths', 6) ?: 6);
         $paths = \array_slice(\array_values($paths), 0, \max(1, \min(8, $maxPaths)));
         if ($paths === []) {
             $this->logDeferredStorefrontWarmupStage('skipped', [
@@ -3288,7 +3451,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
      */
     private function normalizeHomepageWarmupReceipt(mixed $receipt): array
     {
-        if (!\is_array($receipt) || (int)($receipt['version'] ?? 0) !== 1) {
+        if (!\is_array($receipt) || !in_array((int)($receipt['version'] ?? 0), [1, 2], true)) {
             return [];
         }
         $fullUri = $this->normalizeHomepageWarmupFullUri($receipt['full_uri'] ?? '');
@@ -3308,7 +3471,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         }
 
         $normalized = [
-            'version' => 1,
+            'version' => (int)$receipt['version'],
             'full_uri' => $fullUri,
             'method' => 'GET',
             'cookie_header' => $cookieHeader,
@@ -3316,6 +3479,18 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         ];
         if ($cacheKey !== '') {
             $normalized['cache_key'] = $cacheKey;
+        }
+        if ($normalized['version'] === 2) {
+            // v2 保留发布时冻结的范围及版本，命中前由 FPC 权威校验。
+            $scope = $receipt['scope_identity'] ?? null;
+            $fingerprint = $receipt['namespace_fingerprint'] ?? null;
+            if (!is_array($scope) || !is_string($fingerprint)
+                || preg_match('/^[a-f0-9]{64}$/D', $fingerprint) !== 1
+            ) {
+                return [];
+            }
+            $normalized['scope_identity'] = $scope;
+            $normalized['namespace_fingerprint'] = $fingerprint;
         }
         return $normalized;
     }

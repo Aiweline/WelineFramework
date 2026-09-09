@@ -244,6 +244,7 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
                 }
 
                 $localOffers = [];
+                $shippingProfileCode = $this->normalizeShippingProfileCode($payload);
                 foreach ($offerSpecs as $index => $spec) {
                     $offerIdentity = $offerIdentities[$index];
                     $offerData = [
@@ -255,6 +256,9 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
                         'is_default' => $index === 0 ? 1 : 0,
                         'requires_shipping' => $definition->requiresShipping ? 1 : 0,
                     ];
+                    if ($shippingProfileCode !== null) {
+                        $offerData[Offer::schema_fields_SHIPPING_PROFILE_CODE] = $shippingProfileCode;
+                    }
                     $configuration = is_array($spec['configuration'] ?? null)
                         ? $spec['configuration']
                         : [];
@@ -351,6 +355,9 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
                     $this->writeAttributes($command->websiteId, $productId, [
                         'attributes' => $payload['attributes'],
                     ]);
+                }
+                if (array_key_exists('translations', $payload)) {
+                    $this->writeTranslations($command->websiteId, $productId, $payload['translations']);
                 }
 
                 foreach ($selectedStoreIds as $storeId) {
@@ -501,6 +508,9 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
                     $inventory,
                 ): array {
                     $this->writeAttributes($command->websiteId, $productId, $payload);
+                    if (array_key_exists('translations', $payload)) {
+                        $this->writeTranslations($command->websiteId, $productId, $payload['translations']);
+                    }
                     if ($matrixPayload !== null) {
                         $this->writeProductAxisValues(
                             $command->websiteId,
@@ -526,6 +536,7 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
                             $payload,
                         );
                     $this->writePrices($command->websiteId, $productId, $payload);
+                    $this->writeOfferShippingProfiles($command->websiteId, $productId, $payload);
                     $this->writeTaxonomyAndMedia($command->websiteId, $productId, $payload);
                     if (array_key_exists('store_ids', $payload)) {
                         $selected = $this->selectedStoreIds($command->websiteId, $payload);
@@ -1415,6 +1426,71 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
     }
 
     /**
+     * Empty string = unbound (no restriction). Null = field absent (do not write).
+     *
+     * @param array<string, mixed> $payload
+     */
+    private function normalizeShippingProfileCode(array $payload): ?string
+    {
+        if (!array_key_exists('shipping_profile_code', $payload)) {
+            return null;
+        }
+        $code = trim((string)$payload['shipping_profile_code']);
+        if ($code === '') {
+            return '';
+        }
+        try {
+            /** @var \Weline\Product\Service\Storefront\StorefrontShippingProfileCatalogProviderRegistry $registry */
+            $registry = ObjectManager::getInstance(
+                \Weline\Product\Service\Storefront\StorefrontShippingProfileCatalogProviderRegistry::class,
+            );
+            $provider = $registry->primary();
+        } catch (Throwable) {
+            $provider = null;
+        }
+        if ($provider === null) {
+            return $code;
+        }
+        foreach ($provider->listActiveProfiles() as $profile) {
+            if (!is_array($profile)) {
+                continue;
+            }
+            if (trim((string)($profile['code'] ?? '')) === $code) {
+                return $code;
+            }
+        }
+        throw new \InvalidArgumentException('shipping_profile_code_invalid');
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function writeOfferShippingProfiles(int $websiteId, int $productId, array $payload): void
+    {
+        $code = $this->normalizeShippingProfileCode($payload);
+        if ($code === null) {
+            return;
+        }
+        $offers = $this->offers->listByProductIds($websiteId, [$productId]);
+        foreach ($offers as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $offerId = (int)($row['offer_id'] ?? $row['id'] ?? 0);
+            $version = (int)($row['publish_version'] ?? $row['offer_version'] ?? 0);
+            if ($offerId <= 0) {
+                continue;
+            }
+            $this->offers->updateVersioned(
+                $websiteId,
+                $offerId,
+                $version,
+                [Offer::schema_fields_SHIPPING_PROFILE_CODE => $code],
+            );
+        }
+    }
+
+    /**
      * @param array<string, mixed> $payload
      * @param list<array<string, mixed>> $offerIdentities
      * @param list<int> $selectedStoreIds
@@ -1840,7 +1916,12 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
         ];
     }
 
-    private function writeAttributes(int $websiteId, int $productId, array $payload): void
+    private function writeAttributes(
+        int $websiteId,
+        int $productId,
+        array $payload,
+        bool $mirrorDefault = true,
+    ): void
     {
         $locale = (string)($payload['locale'] ?? '');
         $storeId = (int)($payload['store_id'] ?? 0);
@@ -1859,7 +1940,7 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
                 $name,
                 true,
             );
-            if ($storeId === 0 && $locale !== '') {
+            if ($mirrorDefault && $storeId === 0 && $locale !== '') {
                 $this->attributes->writeTyped(
                     $websiteId,
                     0,
@@ -1872,14 +1953,23 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
                     true,
                 );
             }
-            $localFields['name'] = $name;
+            if ($mirrorDefault || $storeId === 0) {
+                $localFields['name'] = $name;
+            }
         }
 
-        foreach (['short_description', 'meta_name', 'meta_description', 'meta_keywords'] as $code) {
+        foreach (['short_description', 'description', 'meta_name', 'meta_description', 'meta_keywords'] as $code) {
             if (!array_key_exists($code, $payload)) {
                 continue;
             }
             $value = trim((string)$payload[$code]);
+            if ($code === 'description') {
+                $value = (new ProductAdminMediaPresenter($this->fileAssets))->persistDescriptionHtml($value);
+            }
+            $max = $code === 'description' ? 20000 : 2000;
+            if (strlen($value) > $max) {
+                throw new \InvalidArgumentException('product_' . $code . '_too_large');
+            }
             $this->attributes->writeTyped(
                 $websiteId,
                 $storeId,
@@ -1891,7 +1981,7 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
                 $value,
                 false,
             );
-            if ($storeId === 0 && $locale !== '') {
+            if ($mirrorDefault && $storeId === 0 && $locale !== '') {
                 $this->attributes->writeTyped(
                     $websiteId,
                     0,
@@ -1904,7 +1994,9 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
                     false,
                 );
             }
-            $localFields[$code] = $value;
+            if ($mirrorDefault || $storeId === 0) {
+                $localFields[$code] = $value;
+            }
         }
 
         $rows = $payload['attributes'] ?? [];
@@ -1966,7 +2058,7 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
                     && is_scalar($row['value'] ?? null)
                 ) {
                     $localFields[$code] = trim((string)$row['value']);
-                    if ($rowLocale !== '') {
+                    if ($mirrorDefault && $rowLocale !== '') {
                         $this->attributes->writeTyped(
                             $websiteId,
                             0,
@@ -1988,7 +2080,7 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
         if ($localFields !== [] && !\Weline\Product\Model\Product\LocalDescription::isSyncing()) {
             \Weline\Product\Model\Product\LocalDescription::upsertQuiet(
                 $productId,
-                $locale !== '' ? $locale : (string)($payload['local_code'] ?? ''),
+                !$mirrorDefault || $locale !== '' ? $locale : (string)($payload['local_code'] ?? ''),
                 $localFields,
             );
         }
@@ -2017,6 +2109,61 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
             );
         }
     }
+
+    /**
+     * 在当前创建或保存事务内按语言增量写入文案及 EAV 属性。
+     * 每组只修改对应语言，不回写默认语言；店铺覆盖不反写全局本地化表。
+     *
+     * @param array<string, array<string, mixed>> $translations
+     */
+    private function writeTranslations(int $websiteId, int $productId, mixed $translations): void
+    {
+        if (!is_array($translations) || ($translations !== [] && array_is_list($translations))) {
+            throw new \InvalidArgumentException('product_translations_invalid');
+        }
+        $localizedPayloads = [];
+        $allowedFields = array_fill_keys([
+            ...ProductRestTranslations::FIELDS,
+            'attributes',
+            'store_id',
+        ], true);
+        foreach ($translations as $localeKey => $translation) {
+            $locale = ProductRestTranslations::normalizeLocale($localeKey);
+            if (array_key_exists($locale, $localizedPayloads)) {
+                throw new \InvalidArgumentException('product_translation_locale_duplicate');
+            }
+            if (!is_array($translation) || ($translation !== [] && array_is_list($translation))) {
+                throw new \InvalidArgumentException('product_translation_invalid');
+            }
+            $localized = array_intersect_key($translation, $allowedFields);
+            $localized['locale'] = $locale;
+            if (array_key_exists('attributes', $localized)) {
+                if (!is_array($localized['attributes'])) {
+                    throw new \InvalidArgumentException('product_attributes_invalid');
+                }
+                foreach ($localized['attributes'] as $index => $row) {
+                    if (!is_array($row)) {
+                        throw new \InvalidArgumentException('product_attribute_invalid');
+                    }
+                    if (array_key_exists('locale', $row)
+                        && ProductRestTranslations::normalizeLocale($row['locale']) !== $locale
+                    ) {
+                        throw new \InvalidArgumentException('product_translation_attribute_locale_mismatch');
+                    }
+                    $row['locale'] = $locale;
+                    if (!array_key_exists('store_id', $row)) {
+                        $row['store_id'] = $localized['store_id'] ?? 0;
+                    }
+                    $localized['attributes'][$index] = $row;
+                }
+            }
+            $localizedPayloads[$locale] = $localized;
+        }
+        foreach ($localizedPayloads as $localized) {
+            $this->writeAttributes($websiteId, $productId, $localized, false);
+        }
+    }
+
 
     private function writePrices(int $websiteId, int $productId, array $payload): void
     {

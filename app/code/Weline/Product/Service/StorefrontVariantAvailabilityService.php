@@ -32,7 +32,7 @@ final class StorefrontVariantAvailabilityService
             return null;
         }
 
-        $offers = $this->catalog->livePublishedOffersForProduct($productId);
+        $offers = $this->catalog->liveVariantAvailabilityForProduct($productId);
         if ($offers === []) {
             return null;
         }

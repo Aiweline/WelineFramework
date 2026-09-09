@@ -16,80 +16,55 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Geo\Model\Feed;
 use Weline\Geo\Model\PushLog;
 use Weline\Geo\Service\FeedQueueService;
+use Weline\Geo\Service\GeoPushSettings;
 
 /**
- * 自动推送Feed的Cron任务
- * 
- * 定期推送所有启用了自动推送的Feed到所有启用的平台
- * 
+ * 定时推送 Feed 到 AI 搜索平台（每天一次；受统一配置开关控制）。
+ *
  * @package Weline_Geo
  */
 class AutoPushFeed implements CronTaskInterface
 {
-    /**
-     * 调度任务名
-     * 
-     * @return string
-     */
     public function name(): string
     {
         return 'Weline_Geo::auto_push_feed';
     }
 
-    /**
-     * 执行名
-     * 
-     * @return string
-     */
     public function execute_name(): string
     {
         return 'Weline\Geo\Cron\AutoPushFeed::execute';
     }
 
-    /**
-     * 任务描述
-     * 
-     * @return string
-     */
     public function tip(): string
     {
-        return '自动推送Feed到AI搜索引擎平台';
+        return '每天定时推送 GEO Feed 到 AI 搜索引擎平台（需开启统一配置「启用定时推送」）';
     }
 
     /**
-     * 调度时间频率
-     * 每小时执行一次
-     * 
-     * @return string
+     * 每天 02:00 执行一次。
      */
     public function cron_time(): string
     {
-        return '0 * * * *'; // 每小时执行一次
+        return '0 2 * * *';
     }
 
-    /**
-     * 超时解锁时间（分钟）
-     * 
-     * @param int $minute
-     * @return int
-     */
     public function unlock_timeout(int $minute = 30): int
     {
-        return 60; // 60分钟超时
+        return 120;
     }
 
-    /**
-     * 执行自动推送任务（入队方式）
-     * 
-     * @return string
-     */
     public function execute(): string
     {
         try {
+            /** @var GeoPushSettings $settings */
+            $settings = ObjectManager::getInstance(GeoPushSettings::class);
+            if (!$settings->isScheduledPushEnabled()) {
+                return '定时推送已关闭（统一配置 geo/push/scheduled_enabled）';
+            }
+
             /** @var Feed $feedModel */
             $feedModel = ObjectManager::getInstance(Feed::class);
-            
-            // 获取所有启用且启用了自动推送的Feed
+
             $feeds = $feedModel
                 ->where(Feed::schema_fields_IS_ENABLED, 1)
                 ->where(Feed::schema_fields_IS_AUTO_PUSH, 1)
@@ -97,7 +72,7 @@ class AutoPushFeed implements CronTaskInterface
                 ->fetchArray();
 
             if (empty($feeds)) {
-                return "没有需要自动推送的Feed";
+                return '没有需要自动推送的 Feed（需内容源启用且允许自动推送）';
             }
 
             /** @var FeedQueueService $queueService */
@@ -107,13 +82,11 @@ class AutoPushFeed implements CronTaskInterface
 
             foreach ($feeds as $feedData) {
                 $feed = $feedModel->load($feedData['id']);
-                
-                // 再次检查（防止数据变更）
+
                 if (!$feed->isEnabled() || !$feed->isAutoPush()) {
                     continue;
                 }
 
-                // 入队推送任务（空数组表示所有平台）
                 try {
                     $queueService->enqueueFeedPush($feed->getId(), [], PushLog::TYPE_SCHEDULED);
                     $totalEnqueued++;
@@ -122,18 +95,17 @@ class AutoPushFeed implements CronTaskInterface
                 }
             }
 
-            // 记录执行结果
             $message = "自动推送任务入队完成 - 已入队: {$totalEnqueued} 个Feed";
             if ($totalEnqueued > 0) {
                 w_log_info($message);
             }
-            
+
             return $message;
         } catch (\Exception $e) {
-            $errorMessage = "自动推送任务执行失败: " . $e->getMessage();
+            $errorMessage = '自动推送任务执行失败: ' . $e->getMessage();
             w_log_error($errorMessage);
+
             return $errorMessage;
         }
     }
 }
-

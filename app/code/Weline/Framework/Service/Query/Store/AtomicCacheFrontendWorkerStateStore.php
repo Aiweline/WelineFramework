@@ -20,7 +20,7 @@ use Weline\Framework\Service\Query\FrontendQueryException;
 final class AtomicCacheFrontendWorkerStateStore implements FrontendWorkerStateStoreInterface
 {
     private const STATE_KEY = 'worker_state.v1';
-    private const MAX_CAS_ATTEMPTS = 16;
+    private const MAX_CAS_ATTEMPTS = 24;
     private const MAX_STATE_BYTES = 8388608;
     private const DEFAULT_TTL_SECONDS = 86400;
 
@@ -37,14 +37,22 @@ final class AtomicCacheFrontendWorkerStateStore implements FrontendWorkerStateSt
 
     public function transaction(callable $callback): mixed
     {
+        $this->recoverRemoteIfPossible();
         for ($attempt = 1; $attempt <= self::MAX_CAS_ATTEMPTS; $attempt++) {
             $existing = $this->adapter->get(self::STATE_KEY);
-            if ($this->adapter instanceof CacheAdapterHealthInterface && !$this->adapter->isAvailable()) {
-                throw new FrontendQueryException(
-                    'worker_store_unavailable',
-                    'Shared worker session state is unavailable.',
-                    503,
-                );
+            if ($this->isAdapterUnavailable()) {
+                $this->recoverRemoteIfPossible();
+                if ($this->isAdapterUnavailable()) {
+                    throw new FrontendQueryException(
+                        'worker_store_unavailable',
+                        'Shared worker session state is unavailable.',
+                        503,
+                    );
+                }
+                // Cold Memory reconnect after same-request circuit trip needs
+                // more than a few hundred microseconds before the next CAS.
+                SchedulerSystem::usleep(\min(80_000, 2_000 * $attempt));
+                continue;
             }
             if ($existing !== null && !\is_array($existing)) {
                 throw new FrontendQueryException(
@@ -66,15 +74,20 @@ final class AtomicCacheFrontendWorkerStateStore implements FrontendWorkerStateSt
             )) {
                 return $result;
             }
-            if ($this->adapter instanceof CacheAdapterHealthInterface && !$this->adapter->isAvailable()) {
-                throw new FrontendQueryException(
-                    'worker_store_unavailable',
-                    'Shared worker session state is unavailable.',
-                    503,
-                );
+            if ($this->isAdapterUnavailable()) {
+                $this->recoverRemoteIfPossible();
+                if ($this->isAdapterUnavailable()) {
+                    throw new FrontendQueryException(
+                        'worker_store_unavailable',
+                        'Shared worker session state is unavailable.',
+                        503,
+                    );
+                }
+                SchedulerSystem::usleep(\min(80_000, 2_000 * $attempt));
+                continue;
             }
 
-            SchedulerSystem::usleep(\min(10000, 500 * $attempt));
+            SchedulerSystem::usleep(\min(25_000, 1_000 * $attempt));
         }
 
         throw new FrontendQueryException(
@@ -92,6 +105,18 @@ final class AtomicCacheFrontendWorkerStateStore implements FrontendWorkerStateSt
     public function isShared(): bool
     {
         return $this->sharedTopology;
+    }
+
+    private function recoverRemoteIfPossible(): void
+    {
+        if (\method_exists($this->adapter, 'recoverRemoteProbe')) {
+            $this->adapter->recoverRemoteProbe();
+        }
+    }
+
+    private function isAdapterUnavailable(): bool
+    {
+        return $this->adapter instanceof CacheAdapterHealthInterface && !$this->adapter->isAvailable();
     }
 
     /** @param array<string, mixed> $store */

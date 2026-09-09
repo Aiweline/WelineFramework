@@ -9,9 +9,10 @@ Object.assign(window.WelineModulesConfig.modules, {
     cart: {
         paths: [
             "Weline_Cart::js/cart.js",
-            "Weline_Cart::js/widgets/product-purchase-actions.js"
+            "Weline_Cart::js/widgets/product-purchase-actions.js?v=20260909-purchase-panel8"
         ],
         globalVar: "WelineCartPurchaseActions",
+        load: "defer",
         description: "万能购物车：优惠券事件 / 游客续期 / 加购交互"
     }
 });

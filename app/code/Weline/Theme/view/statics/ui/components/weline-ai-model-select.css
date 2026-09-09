@@ -1,0 +1,64 @@
+/* Weline UI source: css/ai-model-select.css */
+@layer components {
+    .w-ai-model-select {
+        position: relative;
+        display: grid;
+        min-inline-size: min(22rem, 100%);
+        gap: var(--weline-space-1);
+    }
+
+    .w-ai-model-select__trigger {
+        inline-size: 100%;
+        justify-content: space-between;
+        text-align: start;
+    }
+
+    .w-ai-model-select__panel {
+        display: grid;
+        inline-size: min(24rem, calc(100vw - 2rem));
+        gap: var(--weline-space-2);
+    }
+
+    .w-ai-model-select__panel[hidden] {
+        display: none;
+    }
+
+    .w-ai-model-select__list {
+        max-block-size: 18rem;
+        overflow: auto;
+        overscroll-behavior: contain;
+    }
+
+    .w-ai-model-select__status {
+        padding: var(--weline-space-4);
+        color: var(--weline-theme-text-muted);
+        text-align: center;
+    }
+
+    .w-ai-model-select__status[data-tone="danger"] {
+        color: var(--weline-theme-danger);
+    }
+
+    .w-ai-model-select__option {
+        justify-content: space-between;
+    }
+
+    .w-ai-model-select__option-copy {
+        display: grid;
+        min-inline-size: 0;
+        gap: var(--weline-space-1);
+    }
+
+    .w-ai-model-select__option-copy small {
+        overflow: hidden;
+        color: var(--weline-theme-text-muted);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    @media (max-width: 48rem) {
+        .w-ai-model-select {
+            min-inline-size: 14rem;
+        }
+    }
+}

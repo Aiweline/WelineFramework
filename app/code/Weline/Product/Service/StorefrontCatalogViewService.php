@@ -75,8 +75,8 @@ final class StorefrontCatalogViewService
     /**
      * Return a bounded channel/locale summary projection for card surfaces.
      *
-     * Summary rows intentionally cap the catalog build at the requested limit;
-     * callers that need filtering over the complete catalog should keep using
+     * Read candidates in bounded SQL pages and continue past unavailable rows
+     * until the requested result is filled; callers filtering the complete catalog should use
      * publishedOffers(), which owns the full listing projection cache.
      *
      * @return list<array<string, mixed>>
@@ -84,6 +84,12 @@ final class StorefrontCatalogViewService
     public function publishedOfferSummaries(int $limit = 48): array
     {
         $limit = max(1, min(self::MAX_CATALOG_PRODUCTS, $limit));
+        if (Context::hasCurrent() && RequestContext::has(self::REQUEST_FULL_ROWS_KEY)) {
+            $rows = RequestContext::get(self::REQUEST_FULL_ROWS_KEY);
+            if (is_array($rows)) {
+                return array_slice($rows, 0, $limit);
+            }
+        }
         $scope = $this->currentScope();
         $websiteId = max(0, (int)$scope->websiteId);
         $logicalKey = $this->catalogCache->catalogSummaryOffersLogicalKey($websiteId, $limit);
@@ -449,7 +455,174 @@ final class StorefrontCatalogViewService
     }
 
     /**
+     * Resolve only the live fields required by the CDN product shell.
+     *
+     * The variant availability endpoint is read after the PDP HTML has been
+     * delivered. It must reconcile stock and price, but does not need detail
+     * specifications, gallery assets, swatches, or Cart display options. Keep
+     * this request-local projection on the same durable snapshot resolver while
+     * explicitly skipping those presentation phases.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function liveVariantAvailabilityForProduct(int $productId): array
+    {
+        if ($productId <= 0) {
+            return [];
+        }
+
+        $scope = $this->currentScope();
+        $websiteId = max(0, (int)$scope->websiteId);
+        $storeId = max(0, RequestContext::getWelineStoreId());
+        $locale = trim((string)RequestContext::getWelineUserLang());
+        $currency = strtoupper(trim(RequestContext::getWelineUserCurrency()));
+        $requestKey = serialize([
+            $productId,
+            $scope->canonicalKey(),
+            $storeId,
+            $currency,
+            $locale,
+        ]);
+
+        /** @var list<array<string, mixed>> $rows */
+        $rows = RequestLifecycleTrace::measurePhase(
+            'product.catalog.live_availability',
+            fn(): array => $this->hotCache->rememberForRequest(
+                'product.live_variant_availability',
+                $requestKey,
+                function () use ($productId, $scope, $websiteId, $storeId, $locale): array {
+                    $products = RequestLifecycleTrace::measurePhase(
+                        'product.catalog.live_availability.products',
+                        fn(): array => $this->products->listByIds($websiteId, [$productId]),
+                        ['product_id' => $productId],
+                    );
+                    $product = $products[0] ?? null;
+                    if (!is_array($product)
+                        || strtolower(trim((string)($product[Product::schema_fields_STATUS] ?? '')))
+                            !== Product::STATUS_PUBLISHED
+                    ) {
+                        return [];
+                    }
+
+                    $offerRows = RequestLifecycleTrace::measurePhase(
+                        'product.catalog.live_availability.offers',
+                        fn(): array => array_values(array_filter(
+                            $this->offers->listPublishedByProductIds($websiteId, [$productId]),
+                            static fn(mixed $row): bool => is_array($row)
+                                && (int)($row[Offer::schema_fields_PRODUCT_ID] ?? 0) === $productId,
+                        )),
+                        ['product_id' => $productId],
+                    );
+                    if ($offerRows === []) {
+                        return [];
+                    }
+
+                    $storeIds = array_values(array_unique([0, $storeId]));
+                    $attributeRows = $this->requestAttributeRows(
+                        $websiteId,
+                        [$productId],
+                        $storeIds,
+                    );
+                    $snapshots = RequestLifecycleTrace::measurePhase(
+                        'product.catalog.live_availability.snapshot',
+                        fn(): array => $this->snapshots->resolveCatalogOffers(
+                            $offerRows,
+                            $scope,
+                            $products,
+                            $attributeRows,
+                            [],
+                            false,
+                            false,
+                        ),
+                        ['product_id' => $productId, 'offers' => count($offerRows)],
+                    );
+
+                    $attributeRowsByCode = [
+                        'quote_only' => [],
+                        'source_slug' => [],
+                        'slug' => [],
+                    ];
+                    foreach ($attributeRows as $attributeRow) {
+                        if (!is_array($attributeRow)
+                            || (int)($attributeRow[AttributeValue::schema_fields_ENTITY_ID] ?? 0) !== $productId
+                        ) {
+                            continue;
+                        }
+                        $code = strtolower(trim((string)($attributeRow[AttributeValue::schema_fields_ATTRIBUTE_CODE] ?? '')));
+                        if (isset($attributeRowsByCode[$code])) {
+                            $attributeRowsByCode[$code][] = $attributeRow;
+                        }
+                    }
+                    $overlay = new CatalogOverlayResolver();
+                    $localeFallbacks = $this->localeFallbacks($locale);
+                    $resolvedQuoteOnly = $overlay->resolveAttribute(
+                        $attributeRowsByCode['quote_only'],
+                        $storeId,
+                        $locale,
+                        $localeFallbacks,
+                    );
+                    $quoteOnly = false;
+                    if ($resolvedQuoteOnly->isExplicit()) {
+                        $rawQuoteOnly = $resolvedQuoteOnly->value;
+                        $quoteOnly = is_bool($rawQuoteOnly)
+                            ? $rawQuoteOnly
+                            : in_array(
+                                strtolower(trim((string)$rawQuoteOnly)),
+                                ['1', 'true', 'yes'],
+                                true,
+                            );
+                    }
+                    $slugRows = $attributeRowsByCode['source_slug'] !== []
+                        ? $attributeRowsByCode['source_slug']
+                        : $attributeRowsByCode['slug'];
+                    $resolvedSlug = $overlay->resolveAttribute(
+                        $slugRows,
+                        $storeId,
+                        $locale,
+                        $localeFallbacks,
+                    );
+                    $slug = $resolvedSlug->isExplicit()
+                        ? strtolower(trim((string)$resolvedSlug->value))
+                        : '';
+                    if (preg_match('#^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$#D', $slug) !== 1) {
+                        $slug = '';
+                    }
+
+                    $selection = new StorefrontVariantSelectionService();
+                    $availabilityRows = [];
+                    foreach ($offerRows as $index => $offerRow) {
+                        $snapshot = $snapshots[$index] ?? null;
+                        if ($snapshot === null || !$snapshot->found) {
+                            continue;
+                        }
+                        $combinationKey = trim((string)($offerRow[Offer::schema_fields_COMBINATION_KEY] ?? ''));
+                        $availabilityRows[] = [
+                            'product_id' => $snapshot->productId ?? $productId,
+                            'slug' => $slug,
+                            'global_offer_uuid' => $snapshot->offer->globalOfferUuid,
+                            'combination_key' => $combinationKey,
+                            'combination' => $selection->parseCombinationKey($combinationKey),
+                            'stock' => $snapshot->stock,
+                            'sellable' => $snapshot->sellable,
+                            'quote_only' => $quoteOnly,
+                            'unit_price_minor' => $snapshot->unitPriceMinor,
+                            'currency' => $snapshot->currency,
+                            'message' => $snapshot->message,
+                        ];
+                    }
+
+                    return $availabilityRows;
+                },
+            ),
+            ['product_id' => $productId],
+        );
+
+        return $rows;
+    }
+
+    /**
      * @param list<int> $productIdsFilter Empty list includes all published products.
+     * @param list<array<string, mixed>>|null $preparedOffers Rows already read by the candidate pager.
      * @return list<array<string, mixed>>
      */
     private function buildPublishedOffers(
@@ -459,6 +632,7 @@ final class StorefrontCatalogViewService
         bool $representativeOnly = false,
         bool $includeListingDetails = true,
         ?int $maxRows = null,
+        ?array $preparedOffers = null,
     ): array
     {
         $maxRows = $maxRows === null
@@ -469,6 +643,27 @@ final class StorefrontCatalogViewService
             static fn(int $id): bool => $id > 0,
         )));
         $allowedProductIds = $filterIds !== [] ? \array_fill_keys($filterIds, true) : [];
+
+        if ($maxRows !== null && $filterIds === []) {
+            $rows = [];
+            $afterOfferId = 0;
+            do {
+                $pageSize = max(24, min(128, $maxRows - count($rows)));
+                $page = $this->offers->listPublishedRepresentativePage($websiteId, $pageSize, $afterOfferId);
+                if ($page === []) {
+                    break;
+                }
+                $afterOfferId = (int)$page[array_key_last($page)][Offer::schema_fields_ID];
+                $ids = array_values(array_unique(array_map(
+                    static fn(array $row): int => (int)$row[Offer::schema_fields_PRODUCT_ID], $page,
+                )));
+                $rows = array_merge($rows, $this->buildPublishedOffers(
+                    $websiteId, $scope, $ids, true, $includeListingDetails, null, $page,
+                ));
+            } while (count($rows) < $maxRows && count($page) === $pageSize);
+
+            return array_slice($rows, 0, $maxRows);
+        }
 
         $phaseStartedAt = hrtime(true);
         $products = $filterIds === []
@@ -499,7 +694,7 @@ final class StorefrontCatalogViewService
         $candidateOffers = [];
         $representedProductIds = [];
         $phaseStartedAt = hrtime(true);
-        $loadedOffers = $representativeOnly
+        $loadedOffers = $preparedOffers ?? ($representativeOnly
             ? $this->offers->listPublishedRepresentativeByProductIds(
                 $websiteId,
                 \array_keys($publishedProductIds),
@@ -507,7 +702,7 @@ final class StorefrontCatalogViewService
             : $this->offers->listPublishedByProductIds(
                 $websiteId,
                 \array_keys($publishedProductIds),
-            );
+            ));
         foreach ($loadedOffers as $offer) {
             if ($maxRows !== null && count($candidateOffers) >= $maxRows) {
                 break;
@@ -517,7 +712,7 @@ final class StorefrontCatalogViewService
             }
             $offerUuid = \trim((string)($offer[Offer::schema_fields_GLOBAL_OFFER_UUID] ?? ''));
             $productId = (int)($offer[Offer::schema_fields_PRODUCT_ID] ?? 0);
-            if ($offerUuid === '' || $productId <= 0) {
+            if ($offerUuid === '' || $productId <= 0 || !isset($publishedProductIds[$productId])) {
                 continue;
             }
             if ($representativeOnly && isset($representedProductIds[$productId])) {
@@ -607,6 +802,7 @@ final class StorefrontCatalogViewService
                 'combination_key' => \trim((string)($offer[Offer::schema_fields_COMBINATION_KEY] ?? '')),
                 'is_default' => (bool)($offer[Offer::schema_fields_IS_DEFAULT] ?? false),
                 'requires_shipping' => (bool)($offer[Offer::schema_fields_REQUIRES_SHIPPING] ?? true),
+                'shipping_profile_code' => trim((string)($offer[Offer::schema_fields_SHIPPING_PROFILE_CODE] ?? '')),
                 'image' => $snapshot->image,
                 'currency' => $snapshot->currency,
                 'unit_price_minor' => $snapshot->unitPriceMinor,
@@ -742,6 +938,7 @@ final class StorefrontCatalogViewService
         $row['has_deal'] = false;
         $row['campaign_label'] = '';
         $row['campaign_url'] = '';
+        $row['eligible_campaigns'] = [];
         $row['deal_discount_type'] = '';
         $row['deal_discount_value'] = 0.0;
         if ($productId <= 0 || $catalogMinor <= 0) {
@@ -768,6 +965,7 @@ final class StorefrontCatalogViewService
             $row['has_deal'] = $view->hasDeal;
             $row['campaign_label'] = $view->campaignLabel();
             $row['campaign_url'] = $view->campaignUrl();
+            $row['eligible_campaigns'] = $view->eligibleCampaigns;
             $primary = $view->appliedAdjustments[0] ?? null;
             if ($primary instanceof StorefrontPriceAdjustment) {
                 $row['deal_discount_type'] = $primary->type;

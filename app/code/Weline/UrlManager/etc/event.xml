@@ -8,4 +8,7 @@
     <event name="Weline_Framework_Url::url_generate_rewrite">
         <observer name="Weline_UrlManager::url_generate_rewrite" instance="Weline\UrlManager\Observer\SeoUrlGenerateRewrite" disabled="false" shared="true" sort="0"/>
     </event>
+    <event name="Weline_Framework_Url::url_generate_rewrite_prefetch">
+        <observer name="Weline_UrlManager::url_generate_rewrite_prefetch" instance="Weline\UrlManager\Observer\SeoUrlGenerateRewriteBatch" disabled="false" shared="true" sort="0"/>
+    </event>
 </config>

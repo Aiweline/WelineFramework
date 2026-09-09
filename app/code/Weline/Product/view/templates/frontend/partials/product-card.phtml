@@ -7,6 +7,7 @@
 
 use Weline\Theme\Helper\ProductCardAddToCartParams;
 use Weline\Theme\Helper\ProductCardShopperActionParams;
+use Weline\Product\Service\ProductCardRenderer;
 
 $product = $this->getData('product');
 $product = is_array($product) ? $product : [];
@@ -51,6 +52,7 @@ $quoteOnly = !empty($product['quote_only']);
 $offerUuid = trim((string)($product['global_offer_uuid'] ?? ''));
 $campaignLabel = trim((string)($product['campaign_label'] ?? ''));
 $campaignUrl = trim((string)($product['campaign_url'] ?? ''));
+$imageLoading = ProductCardRenderer::imageLoadingAttributes($product);
 
 $classes = trim('weline-product-card product-card density-' . $density . ($extraClass !== '' ? ' ' . $extraClass : ''));
 $hrefAttr = $productUrl !== ''
@@ -66,7 +68,10 @@ $hrefAttr = $productUrl !== ''
             <img src="<?= $esc($productImage) ?>"
                  alt="<?= $esc($productName) ?>"
                  class="wpc-image"
-                 loading="lazy"
+                 width="800"
+                 height="800"
+                 loading="<?= $esc($imageLoading['loading']) ?>"<?php if (isset($imageLoading['fetchpriority'])): ?>
+                 fetchpriority="<?= $esc($imageLoading['fetchpriority']) ?>"<?php endif; ?>
                  decoding="async"
                  data-storefront-img
                  data-fallback="<?= $esc($imageFallback) ?>">

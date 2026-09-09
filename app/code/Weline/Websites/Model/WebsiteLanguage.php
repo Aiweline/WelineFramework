@@ -137,8 +137,24 @@ class WebsiteLanguage extends Model
         }
 
         $this->clearWebsiteLanguageCaches($websiteId);
+        $this->syncI18nTranslationTargets($languageCodes);
 
         return $this;
+    }
+
+    /**
+     * @param list<string>|array<int|string, mixed> $languageCodes
+     */
+    private function syncI18nTranslationTargets(array $languageCodes): void
+    {
+        if (!\class_exists(\Weline\I18n\Service\WebsiteLocaleTranslationSync::class)) {
+            return;
+        }
+        try {
+            ObjectManager::getInstance(\Weline\I18n\Service\WebsiteLocaleTranslationSync::class)
+                ->onWebsiteLocalesChanged($languageCodes, 'website_language_set');
+        } catch (\Throwable) {
+        }
     }
 
     /**

@@ -8,7 +8,9 @@ use Weline\Eav\Service\AttributeFilterService;
 use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Phrase\Parser;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\StorefrontPageContext;
 use Weline\Product\Repository\CategoryLinkRepository;
 use Weline\Product\Service\StorefrontCatalogViewService;
 use Weline\Product\Service\StorefrontCatalogCacheCoordinator;
@@ -48,6 +50,11 @@ final class StorefrontFilterPanelService
      */
     public function resolveListingOffers(string $requestPath): array
     {
+        $contextOffers = StorefrontPageContext::listingOffers();
+        if ($contextOffers !== null) {
+            return $contextOffers;
+        }
+
         $requestPath = strtolower(trim(str_replace('\\', '/', $requestPath), '/'));
         try {
             if (preg_match('#(?:^|/)category/(.+)$#', $requestPath, $matches) === 1) {
@@ -143,13 +150,7 @@ final class StorefrontFilterPanelService
         bool $rootCurrent = false,
     ): array {
         $query = $this->normalizePanelQuery($query);
-        $logicalKey = hash('sha256', serialize([
-            $offers,
-            $listingUrl,
-            $query,
-            max(0, $websiteId),
-            $rootCurrent,
-        ]));
+        $logicalKey = $this->buildPanelLogicalKey($offers, $listingUrl, $query, $websiteId, $rootCurrent);
 
         $panel = $this->hotCache->rememberPolicy(
             StorefrontCatalogCacheCoordinator::filterPanelPolicy(),
@@ -165,7 +166,26 @@ final class StorefrontFilterPanelService
             ),
         );
 
-        return is_array($panel) ? $panel : [];
+        if (!is_array($panel)) {
+            return [];
+        }
+
+        // A shared panel can be warm while this Worker's phrase cache is cold.
+        // Prefetch the final dynamic labels after either cache/build path; the
+        // template's __() calls still apply request/module/global precedence.
+        $words = [];
+        foreach ($panel['price'] ?? [] as $option) {
+            $words[] = (string)($option['label'] ?? '');
+        }
+        foreach ($panel['attributes'] ?? [] as $group) {
+            $words[] = (string)($group['name'] ?? '');
+            foreach ($group['options'] ?? [] as $option) {
+                $words[] = (string)($option['label'] ?? '');
+            }
+        }
+        Parser::prefetchWords($words);
+
+        return $panel;
     }
 
     /**
@@ -191,6 +211,81 @@ final class StorefrontFilterPanelService
                 continue;
             }
             $normalized[$key] = $value;
+        }
+        ksort($normalized);
+
+        return $normalized;
+    }
+
+    /**
+     * Keep the panel cache stable when card-only fields (media, URLs, labels)
+     * change. Facets depend on the product/variant identity and the effective
+     * price bucket; the cache policy's catalog/price generations handle their
+     * cross-request invalidation.
+     *
+     * @param list<array<string, mixed>> $offers
+     */
+    private function buildPanelLogicalKey(
+        array $offers,
+        string $listingUrl,
+        array $query,
+        int $websiteId,
+        bool $rootCurrent,
+    ): string {
+        $identities = [];
+        foreach ($offers as $offer) {
+            if (!is_array($offer)) {
+                continue;
+            }
+            $productId = (int)($offer['product_id'] ?? $offer['id'] ?? 0);
+            if ($productId <= 0) {
+                continue;
+            }
+            $combination = is_array($offer['combination'] ?? null) ? $offer['combination'] : [];
+            $combination = $this->normalizePanelCombination($combination);
+            $identities[] = [
+                $productId,
+                (int)($offer['unit_price_minor'] ?? 0),
+                !empty($offer['quote_only']),
+                $combination,
+            ];
+        }
+        usort($identities, static fn(array $left, array $right): int => strcmp(
+            serialize($left),
+            serialize($right),
+        ));
+
+        return hash('sha256', serialize([
+            $identities,
+            '/' . ltrim(trim($listingUrl), '/'),
+            $query,
+            max(0, $websiteId),
+            $rootCurrent,
+        ]));
+    }
+
+    /**
+     * @param array<string, mixed> $combination
+     * @return array<string, list<string>>
+     */
+    private function normalizePanelCombination(array $combination): array
+    {
+        $normalized = [];
+        foreach ($combination as $code => $value) {
+            $code = strtolower(trim((string)$code));
+            if ($code === '') {
+                continue;
+            }
+            $values = is_array($value) ? $value : [$value];
+            $values = array_values(array_filter(
+                array_map(static fn(mixed $item): string => trim((string)$item), $values),
+                static fn(string $item): bool => $item !== '',
+            ));
+            if ($values === []) {
+                continue;
+            }
+            sort($values, SORT_STRING);
+            $normalized[$code] = $values;
         }
         ksort($normalized);
 
@@ -305,45 +400,8 @@ final class StorefrontFilterPanelService
             array_replace($fallbackCodeNames, $codeNames),
         );
 
-        $facetData = [];
-        if ($productIds !== []) {
-            try {
-                $facetData = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase('storefront.filters.eav_counts',
-                    fn(): array => $this->attributes->getFilterableAttributes('product', $productIds, [], false),
-                );
-            } catch (\Throwable) {
-                $facetData = [];
-            }
-        }
-
         $countsByCode = [];
-        foreach ($facetData as $code => $row) {
-            if (!is_array($row)) {
-                continue;
-            }
-            $code = strtolower(trim((string)$code));
-            if (!isset($candidateCodeNames[$code])) {
-                continue;
-            }
-            $counts = is_array($row['counts'] ?? null) ? $row['counts'] : [];
-            $nonEmpty = [];
-            foreach ($counts as $value => $count) {
-                $count = (int)$count;
-                if ($count > 0 && trim((string)$value) !== '') {
-                    $nonEmpty[(string)$value] = $count;
-                }
-            }
-            if ($nonEmpty !== []) {
-                $countsByCode[$code] = $nonEmpty;
-                $attr = is_array($row['attribute'] ?? null) ? $row['attribute'] : [];
-                $name = trim((string)($attr['name'] ?? ($codeNames[$code] ?? $code)));
-                $candidateCodeNames[$code] = $name !== '' ? $name : $candidateCodeNames[$code];
-            }
-        }
-
         // Product attributes live on the Website shard. Prefer the catalog
-        // facet read model when it has values, while retaining the legacy EAV
-        // result as a compatibility fallback for older installations.
         if ($productIds !== []) {
             try {
                 $catalogCounts = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
@@ -375,7 +433,45 @@ final class StorefrontFilterPanelService
                     }
                 }
             } catch (\Throwable) {
-                // Keep legacy EAV/offer projection fallbacks below.
+                $countsByCode = [];
+            }
+        }
+
+        // The catalog read model is authoritative on current installations.
+        // Only hit the legacy EAV tables when it is unavailable/empty; doing
+        // both on every panel made a cold category request pay for the same
+        // attribute rows twice.
+        if ($countsByCode === [] && $productIds !== []) {
+            try {
+                $facetData = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
+                    'storefront.filters.eav_counts',
+                    fn(): array => $this->attributes->getFilterableAttributes('product', $productIds, [], false),
+                );
+                foreach ($facetData as $code => $row) {
+                    if (!is_array($row)) {
+                        continue;
+                    }
+                    $code = strtolower(trim((string)$code));
+                    if (!isset($candidateCodeNames[$code])) {
+                        continue;
+                    }
+                    $counts = is_array($row['counts'] ?? null) ? $row['counts'] : [];
+                    $nonEmpty = [];
+                    foreach ($counts as $value => $count) {
+                        $count = (int)$count;
+                        if ($count > 0 && trim((string)$value) !== '') {
+                            $nonEmpty[(string)$value] = $count;
+                        }
+                    }
+                    if ($nonEmpty !== []) {
+                        $countsByCode[$code] = $nonEmpty;
+                        $attr = is_array($row['attribute'] ?? null) ? $row['attribute'] : [];
+                        $name = trim((string)($attr['name'] ?? ($codeNames[$code] ?? $code)));
+                        $candidateCodeNames[$code] = $name !== '' ? $name : $candidateCodeNames[$code];
+                    }
+                }
+            } catch (\Throwable) {
+                // Keep offer projection fallback below.
             }
         }
 

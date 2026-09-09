@@ -57,10 +57,14 @@ class Statistics extends FrontendRestController
                 $websiteId = (int)(\Weline\Framework\Env\WelineEnv::getWebsiteId() ?? 0);
             }
             
-            // 获取时间范围参数（可选）
-            $startDate = $this->request->getParam('startDate') ?? $this->request->getGet('startDate');
-            $endDate = $this->request->getParam('endDate') ?? $this->request->getGet('endDate');
-            
+            // 获取时间范围参数（可选；API 文档空字段常传 ""，勿绑进 timestamp）
+            $startDate = $this->normalizeOptionalDateParam(
+                $this->request->getParam('startDate') ?? $this->request->getGet('startDate')
+            );
+            $endDate = $this->normalizeOptionalDateParam(
+                $this->request->getParam('endDate') ?? $this->request->getGet('endDate')
+            );
+
             // 如果提供了时间范围，使用时间范围统计
             if ($startDate !== null || $endDate !== null) {
                 $stats = Pixel::getWebsiteStatsByDateRange($websiteId, $startDate, $endDate);
@@ -674,5 +678,21 @@ class Statistics extends FrontendRestController
         } catch (\Exception $e) {
             return $this->error(__('获取实时统计失败：%{1}', [$e->getMessage()]), '', 500);
         }
+    }
+
+    /**
+     * API 文档 / 客户端常把未填日期传成 ""；空串对 PG timestamp 非法，按未传处理。
+     */
+    private function normalizeOptionalDateParam(mixed $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+        if (!\is_scalar($value)) {
+            return null;
+        }
+        $trimmed = \trim((string)$value);
+
+        return $trimmed === '' ? null : $trimmed;
     }
 }

@@ -36,6 +36,7 @@ final class FileAssetLocaleTranslationContractTest extends TestCase
         self::assertStringContainsString("ORIGIN_MACHINE", $service);
         self::assertStringContainsString("STATE_DRAFT", $service);
         self::assertStringContainsString("Weline_I18n::machine_translate", $service);
+        self::assertStringContainsString("'concurrency_lane' => 'file-asset'", $service);
         self::assertStringContainsString('localeHasContent', $service);
         self::assertStringContainsString('if (!$this->config->isEnabled())', $service);
 

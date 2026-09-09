@@ -79,4 +79,19 @@ final class ComparePageHydrateContractTest extends TestCase
         self::assertStringContainsString('ShopperNotice', $js);
         self::assertStringContainsString('data-i18n-compare-label', $hook);
     }
+
+    public function testUpdateWishlistCountOnlyTargetsBadgeNodes(): void
+    {
+        $js = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/view/statics/js/product-card-actions.js',
+        );
+
+        self::assertStringContainsString("querySelectorAll('.wishlist-count')", $js);
+        self::assertStringContainsString("querySelectorAll('[data-w-wishlist-icon]')", $js);
+        self::assertStringContainsString('data-wishlist-total', $js);
+        self::assertStringNotContainsString(
+            "querySelectorAll('.wishlist-count, [data-wishlist-count]')",
+            $js,
+        );
+    }
 }

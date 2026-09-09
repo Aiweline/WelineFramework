@@ -202,7 +202,7 @@ if (empty($displayText) || $displayText === __('Deliver to')) {
 
                     if (typeof WelineLocation === 'undefined') {
                         if (typeof Weline !== 'undefined' && Weline.load) {
-                            await Weline.load('geo');
+                            await Weline.load('location');
                         } else {
                             throw new Error(texts.geoUnavailable);
                         }

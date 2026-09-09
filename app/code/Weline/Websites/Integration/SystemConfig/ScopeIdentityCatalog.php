@@ -38,7 +38,13 @@ final class ScopeIdentityCatalog implements ScopeIdentityCatalogInterface
         }
 
         $website = $this->websiteByCode((string)$candidate->websiteCode);
-        if (!$website instanceof WebsiteSummary || $website->id !== $candidate->websiteId) {
+        if (!$website instanceof WebsiteSummary) {
+            throw new \InvalidArgumentException('system_config_website_scope_not_found');
+        }
+        // Storage scopes encode codes only; fromStorageScope therefore emits
+        // website_id=0 for every website code. Only code=default may actually
+        // own id 0 — treat 0 + non-default code as an unresolved claim to hydrate.
+        if (!$this->websiteIdClaimMatches($candidate->websiteId, $website)) {
             throw new \InvalidArgumentException('system_config_scope_claim_identity_mismatch');
         }
         if ($candidate->scopeKind === ScopeIdentity::KIND_WEBSITE) {
@@ -76,6 +82,16 @@ final class ScopeIdentityCatalog implements ScopeIdentityCatalogInterface
             $candidate->contextVersion,
         );
     }
+
+    private function websiteIdClaimMatches(?int $claimedId, WebsiteSummary $website): bool
+    {
+        if ($claimedId === $website->id) {
+            return true;
+        }
+
+        return $claimedId === 0 && \strtolower($website->code) !== 'default';
+    }
+
 
     public function options(): array
     {

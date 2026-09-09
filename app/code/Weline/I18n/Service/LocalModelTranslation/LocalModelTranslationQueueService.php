@@ -18,6 +18,7 @@ final class LocalModelTranslationQueueService
     public function __construct(
         private readonly AiTranslationConfig $translationConfig,
         private readonly IdempotentQueueAdmission $admission,
+        private readonly LocalModelTranslationService $localModelTranslationService,
     ) {
     }
 
@@ -31,6 +32,12 @@ final class LocalModelTranslationQueueService
         if (!$this->translationConfig->isEnabled()
             || $this->translationConfig->getEnabledLocaleCodes() === []
         ) {
+            return 0;
+        }
+
+        // Anti-starve: do not occupy a LocalModel queue/worker slot when nothing is pending.
+        // An empty runner must not burn the model channel while dictionary/Meta still have work.
+        if ($this->localModelTranslationService->collectWorkItems(0, 1) === []) {
             return 0;
         }
 

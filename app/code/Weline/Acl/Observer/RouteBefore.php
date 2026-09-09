@@ -674,6 +674,7 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
         }
 
         $isApiAppActor = $request->getData('api_app_actor') !== null;
+        $apiUser = $request->getData('api_authenticated_user');
         if ($isApiAppActor) {
             if (!$this->aclService->hasAnyAclEntries($access_sources)) {
                 $this->returnApiError(403, __('应用没有任何授权 scope'), $request);
@@ -685,11 +686,14 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                 $this->returnApiError(403, __('你无权进行该操作'), $request);
                 return;
             }
+        } elseif ($apiUser instanceof \Weline\Api\Api\AuthenticatedApiUser
+            && $this->aclService->isRouteProtected($uri)) {
+            // API 用户沿用角色授权及其扩展规则，其他前台身份保持原有行为。
+            if (!$this->aclService->isRouteAllowed($apiUser->getRoleId(), $uri, $request->getMethod())) {
+                $this->returnApiError(403, __('你无权进行该操作'), $request);
+                return;
+            }
         }
-        
-        // 前端API通常不需要Acl验证，只需要登录验证
-        // 如果需要Acl验证，可以在这里实现类似后台API的逻辑
-        // 目前前端API的Acl验证由ApiControllerInitBefore Observer处理
     }
 
     /**

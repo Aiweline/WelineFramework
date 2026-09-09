@@ -28,8 +28,21 @@ final class FullPageCacheCoordinatorTest extends TestCase
     private ?array $originalAllowedCurrencyCodeMap = null;
     private ?string $originalAllowedCurrencyCodeScope = null;
 
+    private array $originalIsolatedServices = [];
+
     protected function setUp(): void
     {
+        $isolatedServices = [
+            \Weline\Framework\Http\Security\SecurityHeaderPolicyOverrideProviderInterface::class
+                => $this->createStub(\Weline\Framework\Http\Security\SecurityHeaderPolicyOverrideProviderInterface::class),
+            \Weline\Framework\Event\EventsManager::class
+                => $this->createStub(\Weline\Framework\Event\EventsManager::class),
+        ];
+        foreach ($isolatedServices as $class => $service) {
+            $this->originalIsolatedServices[$class] = \Weline\Framework\Manager\ObjectManager::_getInstance($class);
+            \Weline\Framework\Manager\ObjectManager::setInstance($class, $service);
+        }
+
         $this->originalServer = $_SERVER;
         $_SERVER = [];
         if (Context::hasCurrent()) {
@@ -79,6 +92,15 @@ final class FullPageCacheCoordinatorTest extends TestCase
 
     protected function tearDown(): void
     {
+        \Weline\Framework\Http\CookieScope::setPolicyResolverOverride(null);
+        foreach ($this->originalIsolatedServices as $class => $service) {
+            if ($service !== null) {
+                \Weline\Framework\Manager\ObjectManager::setInstance($class, $service);
+            } else {
+                \Weline\Framework\Manager\ObjectManager::removeInstance($class);
+            }
+        }
+
         (new \ReflectionProperty(State::class, 'allowedCurrencyCodeMap'))
             ->setValue(null, $this->originalAllowedCurrencyCodeMap);
         (new \ReflectionProperty(State::class, 'allowedCurrencyCodeScope'))
@@ -96,7 +118,7 @@ final class FullPageCacheCoordinatorTest extends TestCase
     public function testGetCachedResponseRestoresLegacyHeadersAndStatus(): void
     {
         $pool = new InMemoryCachePool();
-        $coordinator = new FullPageCacheCoordinator(null, $pool);
+        $coordinator = $this->coordinator($pool);
         $pool->set(
             $this->buildCurrentUnifiedFpcCacheKey($coordinator, 'GET'),
             [
@@ -130,7 +152,7 @@ final class FullPageCacheCoordinatorTest extends TestCase
 
     public function testExternalizedLargePayloadRemainsEligibleForSharedStale(): void
     {
-        $coordinator = new FullPageCacheCoordinator(null, new InMemoryCachePool());
+        $coordinator = $this->coordinator(new InMemoryCachePool());
         $method = new \ReflectionMethod(FullPageCacheCoordinator::class, 'shouldPublishSharedStalePayload');
         $method->setAccessible(true);
 
@@ -197,7 +219,7 @@ final class FullPageCacheCoordinatorTest extends TestCase
         };
 
         $pool = new InMemoryCachePool($adapter);
-        $coordinator = new FullPageCacheCoordinator(null, $pool);
+        $coordinator = $this->coordinator($pool);
 
         $lockA = $coordinator->acquireBuildLock('GET');
         $lockB = $coordinator->acquireBuildLock('GET');
@@ -221,24 +243,28 @@ final class FullPageCacheCoordinatorTest extends TestCase
         $coordinator->releaseBuildLock($lockC);
     }
 
-    public function testPortQualifiedLoggedInSessionBypassesAllCurrentRequestFpcGates(): void
+    public function testPortQualifiedLoggedInSessionMayServePublicFpcButNeverBuild(): void
     {
+        \Weline\Framework\Http\CookieScope::setPolicyResolverOverride(static fn(): array => [
+            'active' => true, 'name_suffix' => '_w0', 'mount_path' => '/',
+        ]);
         $sid = str_repeat('a', 32);
         Context::current()->set('input.server.HTTP_HOST', '127.0.0.1:9502');
         Context::current()->set('input.server.SERVER_PORT', 9502);
         Context::current()->set('input.host', '127.0.0.1');
-        Context::current()->set('input.server.HTTP_COOKIE', 'WELINE_SESSID_9502=' . $sid);
-        WelineEnv::setServer('HTTP_COOKIE', 'WELINE_SESSID_9502=' . $sid, 'unit-test');
+        // CookieScope authority resolves to _{port}_w0; keep port-only alias in the jar too.
+        $cookieHeader = 'WELINE_SESSID_9502=' . $sid . '; WELINE_SESSID_9502_w0=' . $sid;
+        Context::current()->set('input.server.HTTP_COOKIE', $cookieHeader);
+        WelineEnv::setServer('HTTP_COOKIE', $cookieHeader, 'unit-test');
         $this->setKnownLoggedInSession($sid);
 
-        $coordinator = new FullPageCacheCoordinator(null, new InMemoryCachePool());
-        self::assertSame('WELINE_SESSID_9502', SessionCookieNameResolver::resolve());
-        self::assertSame(
-            'WELINE_SESSID_9502=' . $sid,
-            Context::current()->server('HTTP_COOKIE', ''),
-        );
+        $coordinator = $this->coordinator(new InMemoryCachePool());
+        self::assertSame('WELINE_SESSID_9502_w0', SessionCookieNameResolver::resolve());
+        self::assertSame($cookieHeader, Context::current()->server('HTTP_COOKIE', ''));
         self::assertTrue($coordinator->hasLoggedInFrontendSessionForCache());
-        self::assertFalse($coordinator->canServeCachedResponse('GET'));
+        // Signed-in may HIT public guest FPC; Customer soft-reconciles chrome.
+        // Build/publish stay blocked so personalized HTML never enters shared FPC.
+        self::assertTrue($coordinator->canServeCachedResponse('GET'));
         self::assertFalse($coordinator->canBuildCachedResponse('GET'));
         self::assertFalse($coordinator->canPublishResponse(
             Response::html('<html>private</html>')->setHeader('Cache-Control', 'public'),
@@ -246,9 +272,48 @@ final class FullPageCacheCoordinatorTest extends TestCase
         ));
     }
 
+    public function testBrowserReloadMaxAgeZeroDoesNotBypassSharedFpcServe(): void
+    {
+        $coordinator = $this->coordinator(new InMemoryCachePool());
+
+        // Chrome ordinary reload: Cache-Control: max-age=0 (+ legacy Pragma).
+        Context::current()->set('input.server.HTTP_CACHE_CONTROL', 'max-age=0');
+        Context::current()->set('input.server.HTTP_PRAGMA', 'no-cache');
+        WelineEnv::setServer('HTTP_CACHE_CONTROL', 'max-age=0', 'unit-test');
+        WelineEnv::setServer('HTTP_PRAGMA', 'no-cache', 'unit-test');
+        self::assertFalse($coordinator->shouldBypassCachedResponseForClientCacheControl());
+
+        // Chrome DevTools Disable cache sends Cache-Control: no-cache; that
+        // revalidates the browser disk cache, not shared origin FPC.
+        Context::current()->set('input.server.HTTP_CACHE_CONTROL', 'no-cache');
+        Context::current()->set('input.server.HTTP_PRAGMA', 'no-cache');
+        WelineEnv::setServer('HTTP_CACHE_CONTROL', 'no-cache', 'unit-test');
+        WelineEnv::setServer('HTTP_PRAGMA', 'no-cache', 'unit-test');
+        self::assertFalse(
+            $coordinator->shouldBypassCachedResponseForClientCacheControl(),
+            'Cache-Control: no-cache must still allow shared FPC HIT',
+        );
+
+        Context::current()->set('input.server.HTTP_CACHE_CONTROL', 'no-store');
+        Context::current()->set('input.server.HTTP_PRAGMA', '');
+        WelineEnv::setServer('HTTP_CACHE_CONTROL', 'no-store', 'unit-test');
+        WelineEnv::setServer('HTTP_PRAGMA', '', 'unit-test');
+        self::assertTrue(
+            $coordinator->shouldBypassCachedResponseForClientCacheControl(),
+            'Cache-Control: no-store must still bypass shared FPC',
+        );
+
+        // Legacy Pragma-only clients (no Cache-Control) still bypass.
+        Context::current()->set('input.server.HTTP_CACHE_CONTROL', '');
+        Context::current()->set('input.server.HTTP_PRAGMA', 'no-cache');
+        WelineEnv::setServer('HTTP_CACHE_CONTROL', '', 'unit-test');
+        WelineEnv::setServer('HTTP_PRAGMA', 'no-cache', 'unit-test');
+        self::assertTrue($coordinator->shouldBypassCachedResponseForClientCacheControl());
+    }
+
     public function testPreRouterSessionCheckUsesFullUriAuthorityAndFailsClosedForInvalidSid(): void
     {
-        $coordinator = new FullPageCacheCoordinator(null, new InMemoryCachePool());
+        $coordinator = $this->coordinator(new InMemoryCachePool());
         $method = new \ReflectionMethod($coordinator, 'cookieHeaderHasLoggedInFrontendSession');
         $method->setAccessible(true);
         $sid = str_repeat('c', 32);
@@ -274,7 +339,7 @@ final class FullPageCacheCoordinatorTest extends TestCase
 
     public function testScopedWebsiteSessionCookieAliasBypassesGuestFpc(): void
     {
-        $coordinator = new FullPageCacheCoordinator(null, new InMemoryCachePool());
+        $coordinator = $this->coordinator(new InMemoryCachePool());
         $method = new \ReflectionMethod($coordinator, 'cookieHeaderHasLoggedInFrontendSession');
         $method->setAccessible(true);
         $sid = str_repeat('d', 32);
@@ -301,7 +366,7 @@ final class FullPageCacheCoordinatorTest extends TestCase
 
     public function testCanPublishResponseRejectsCookiesPrivateDirectivesAndUnsafeVary(): void
     {
-        $coordinator = new FullPageCacheCoordinator(null, new InMemoryCachePool());
+        $coordinator = $this->coordinator(new InMemoryCachePool());
         $public = Response::html('<html>public</html>')->setHeader('Cache-Control', 'public, max-age=60');
         self::assertTrue($coordinator->canPublishResponse($public, 'GET'));
 
@@ -385,7 +450,7 @@ final class FullPageCacheCoordinatorTest extends TestCase
 
     public function testAllFpcKeySurfacesChangeTogetherAcrossFrozenScopes(): void
     {
-        $coordinator = new FullPageCacheCoordinator(null, new InMemoryCachePool());
+        $coordinator = $this->coordinator(new InMemoryCachePool());
         $scopeA = $this->fpcSurfaceIdentities($coordinator);
 
         $this->replaceFrozenScope(
@@ -401,7 +466,7 @@ final class FullPageCacheCoordinatorTest extends TestCase
 
     public function testLocalizedHomepageReceiptsPreserveEveryRouteFormAndUnifiedVariant(): void
     {
-        $coordinator = new FullPageCacheCoordinator(null, new InMemoryCachePool());
+        $coordinator = $this->coordinator(new InMemoryCachePool());
         // A path currency is a route identity, not a Website selector option.
         // Keep only CNY in the presentation allowlist and prove /USD/... still
         // receives its own USD variant through the central path parser.
@@ -505,7 +570,7 @@ final class FullPageCacheCoordinatorTest extends TestCase
 
     public function testLocalizedContextUpgradeRetiresFreshAndSchemaNeutralLegacyPayloads(): void
     {
-        $coordinator = new FullPageCacheCoordinator(null, new InMemoryCachePool());
+        $coordinator = $this->coordinator(new InMemoryCachePool());
         $fullUri = 'https://example.test/USD/en_US/';
         $this->setFrozenLocaleCurrency('en_US', 'USD');
         $this->setCurrentFpcUri($fullUri, '/USD/en_US/');
@@ -559,7 +624,7 @@ final class FullPageCacheCoordinatorTest extends TestCase
 
     public function testLocalizedHomepageReceiptRejectsAuthorityCookiesAndEvictedPayload(): void
     {
-        $coordinator = new FullPageCacheCoordinator(null, new InMemoryCachePool());
+        $coordinator = $this->coordinator(new InMemoryCachePool());
         $fullUri = 'https://example.test:8443/USD/en_US/';
         $this->setCurrentFpcUri($fullUri, '/USD/en_US/');
         $coordinator->publishResponse(
@@ -592,7 +657,7 @@ final class FullPageCacheCoordinatorTest extends TestCase
 
     public function testAnonymousRootHomepageNaturalHitRegistersExactProcessReceipt(): void
     {
-        $coordinator = new FullPageCacheCoordinator(null, new InMemoryCachePool());
+        $coordinator = $this->coordinator(new InMemoryCachePool());
         $fullUri = 'https://example.test/';
         $this->setCurrentFpcUri($fullUri, '/');
         $coordinator->publishResponse(
@@ -643,6 +708,19 @@ final class FullPageCacheCoordinatorTest extends TestCase
             'GET',
         );
         self::assertNull($coordinator->resolveRootHomepageProcessReceipt($queryFullUri));
+    }
+
+    private function coordinator(CachePoolInterface $pool): FullPageCacheCoordinator
+    {
+        $authority = new class implements NamespaceGenerationInterface {
+            public function fingerprint(array $namespaces): string { return str_repeat('b', 64); }
+            public function bump(string $namespace): array { return []; }
+            public function bumpMany(array $namespaces): array { return []; }
+        };
+        return new FullPageCacheCoordinator(
+            cachePool: $pool,
+            storefrontCacheKeyContextResolver: new StorefrontCacheKeyContextResolver($authority, new NamespacePath()),
+        );
     }
 
     private function buildCurrentUnifiedFpcCacheKey(FullPageCacheCoordinator $coordinator, string $method): string

@@ -211,6 +211,10 @@ switch,switch
 "Order asset snapshot 必填字段为空：%{1}","Order asset snapshot required fields are empty: %{1}"
 "Order asset snapshot 数值/hash 非法","Order asset snapshot value/hash is illegal"
 我的订单,"My Orders"
+退货,Return
+与我的订单,"And My Orders"
+订单留言,"Order note"
+如有特殊要求请留言,"Leave a message if you have special requirements"
 查看订单进度与支付状态,"View order progress and payment status"
 已关闭,Closed
 未知状态,"unknown status"
@@ -232,13 +236,9 @@ SKU,SKU
 暂无订单,"No orders yet"
 查看详情,"View Details"
 订单明细,"Order details"
-退货,Return
-与我的订单,"And My Orders"
 查询失败,"Query failed"
 物流单号,"Tracking Number"
 当前,Current
-订单留言,"Order note"
-如有特殊要求请留言,"Leave a message if you have special requirements"
 订单列表,"Order List"
 新建订单,"Create Order"
 搜索订单号、客户姓名、邮箱,"Search order number, customer name, email"

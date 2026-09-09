@@ -128,7 +128,7 @@ $renderAddressCard = function (array $address, string $contactLabel) use ($escap
     <?php
 };
 
-$renderAddressForm = function (string $idField, string $typeLabel, string $contactLabel): void {
+$renderAddressForm = function (string $idField, string $typeLabel, string $contactLabel, string $addressCode) use ($escape): void {
     ?>
     <div class="account-address-form-wrap" data-address-form-wrap hidden>
         <w:form class="account-address-form" data-address-form>
@@ -137,12 +137,11 @@ $renderAddressForm = function (string $idField, string $typeLabel, string $conta
             <header class="account-address-form__header">
                 <div>
                     <h3 class="account-address-form__title" data-address-form-title><lang>新增</lang><?= $typeLabel ?></h3>
-                    <p><lang>保存后当前页面会自动刷新地址卡片，不会跳转页面。</lang></p>
+                    <p><lang>可先填写邮编自动定位省市区；保存后当前页面会刷新地址卡片，不会跳转。</lang></p>
                 </div>
                 <button type="button" class="account-address-form__close" data-address-close aria-label="<?= __('关闭') ?>">&times;</button>
             </header>
             <div class="account-address-form__grid">
-                <w:theme:address for="country|province|city" district="true" searchable="true" />
                 <label class="account-address-form__field">
                     <span><lang>地址名称</lang></span>
                     <input name="name" type="text" required placeholder="<?= __('例如：华东仓 / 家') ?>">
@@ -151,18 +150,23 @@ $renderAddressForm = function (string $idField, string $typeLabel, string $conta
                     <span><?= $contactLabel ?></span>
                     <input name="contact_name" type="text" required placeholder="<?= __('请输入联系人') ?>">
                 </label>
-                <label class="account-address-form__field">
+                <label class="account-address-form__field account-address-form__field--wide">
                     <span><lang>联系电话</lang></span>
                     <input name="contact_phone" type="text" required placeholder="<?= __('请输入联系电话') ?>">
                 </label>
-                <label class="account-address-form__field">
-                    <span><lang>邮政编码</lang></span>
-                    <input name="postal_code" type="text" placeholder="<?= __('可选') ?>">
-                </label>
-                <label class="account-address-form__field account-address-form__field--wide">
-                    <span><lang>详细地址</lang></span>
-                    <textarea name="street" required placeholder="<?= __('街道、门牌号、仓库或收件说明') ?>"></textarea>
-                </label>
+                <div class="account-address-form__field account-address-form__field--wide" data-account-address-cascade>
+                    <w:theme:address
+                        levels="country,province,city"
+                        code="<?= $escape($addressCode) ?>"
+                        searchable="true"
+                        cascade="true"
+                        district="true"
+                        street="false"
+                        postal="true"
+                        postal-lookup="true"
+                        detail="true"
+                        detail-name="street" />
+                </div>
             </div>
             <label class="account-address-form__checkbox">
                 <input type="checkbox" name="is_default" value="1">
@@ -201,7 +205,7 @@ $renderAddressForm = function (string $idField, string $typeLabel, string $conta
                 <strong><lang>还没有收货地址</lang></strong>
                 <span><lang>点击“新增收货地址”，直接在当前页面维护。顶部「配送至」选择的地址也会出现在这里。</lang></span>
             </div>
-            <?php $renderAddressForm('delivery_address_id', (string)__('收货地址'), (string)__('收货人')); ?>
+            <?php $renderAddressForm('delivery_address_id', (string)__('收货地址'), (string)__('收货人'), 'account-delivery-address'); ?>
         </div>
     </div>
 </section>
@@ -231,7 +235,7 @@ $renderAddressForm = function (string $idField, string $typeLabel, string $conta
                 <span><lang>发货地址是店铺寄出地址，与顶部「配送至」不是同一套。</lang></span>
                 <a href="@url{'customer/account/index'}#delivery-address" data-section="delivery-address" data-account-nav-link="true"><lang>去收货地址查看顶部配送地址</lang></a>
             </div>
-            <?php $renderAddressForm('shipping_address_id', (string)__('发货地址'), (string)__('联系人')); ?>
+            <?php $renderAddressForm('shipping_address_id', (string)__('发货地址'), (string)__('联系人'), 'account-shipping-address'); ?>
         </div>
     </div>
 </section>

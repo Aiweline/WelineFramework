@@ -24,6 +24,7 @@ $embed = $this->getData('embed') ?? false;
                         </div>
                     </div>
                 </div>
+<?= $this->fetch('Weline_Shipping::templates/Backend/partials/manager-tabs.phtml', ['activeTab' => 'tracking']) ?>
 <?php endif; ?>
 
                 <div class="w-grid">

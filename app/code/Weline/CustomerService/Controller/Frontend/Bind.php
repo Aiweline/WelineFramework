@@ -14,6 +14,7 @@ namespace Weline\CustomerService\Controller\Frontend;
 use Weline\CustomerService\Service\BindCaptchaGuard;
 use Weline\CustomerService\Service\EmailBindingService;
 use Weline\Framework\App\Controller\FrontendController;
+use Weline\Framework\Cache\SharedResponseCachePolicy;
 
 /**
  * 邮件绑定控制器
@@ -32,6 +33,9 @@ class Bind extends FrontendController
      */
     public function getCaptchaChallenge(): string
     {
+        // One-shot challenge HTML must never enter shared/page fragment caches.
+        SharedResponseCachePolicy::forbid('customerservice_bind_captcha_challenge');
+
         if (!$this->bindCaptchaGuard->isEnabled()) {
             return $this->fetchJson([
                 'success' => true,
@@ -40,12 +44,20 @@ class Bind extends FrontendController
             ]);
         }
 
-        $html = $this->bindCaptchaGuard->renderChallenge();
+        $prefer = \strtolower(\trim((string)$this->request->getGet('prefer', '')));
+        if ($prefer !== 'local_image') {
+            $prefer = '';
+        }
+
+        $html = $this->bindCaptchaGuard->renderChallenge(
+            $prefer !== '' ? ['prefer' => $prefer] : []
+        );
 
         return $this->fetchJson([
             'success' => $html !== '',
             'enabled' => true,
             'html' => $html,
+            'prefer' => $prefer !== '' ? $prefer : null,
             'message' => $html === '' ? __('人机验证加载失败，请稍后重试') : '',
         ]);
     }
@@ -86,10 +98,17 @@ class Bind extends FrontendController
                 $submission = [];
             }
             if (!$this->bindCaptchaGuard->verify($submission, $this->request)) {
+                $degrade = $this->bindCaptchaGuard->allowsLocalDegrade() ? 'local_image' : '';
+                $provider = \strtolower(\trim((string)($submission['captcha_provider'] ?? '')));
+                $shouldDegrade = $degrade !== '' && $provider !== 'local_image';
+
                 return $this->fetchJson([
                     'success' => false,
-                    'message' => __('人机验证失败或已过期，请重试'),
+                    'message' => $shouldDegrade
+                        ? __('人机验证服务暂不可用，已切换为本地图码，请填写后重试')
+                        : __('人机验证失败或已过期，请重试'),
                     'captcha_error' => true,
+                    'captcha_degrade' => $shouldDegrade ? $degrade : null,
                 ]);
             }
 

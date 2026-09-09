@@ -96,6 +96,45 @@ final class ProductRepository extends AbstractWebsiteShardRepository
     }
 
     /**
+     * Bounded published product candidates ordered by created_at desc.
+     *
+     * @return array<int, string> product_id => created_at
+     */
+    public function listRecentPublishedCreatedAt(int $websiteId, string $cutoffDatetime, int $limit, int $offset = 0): array
+    {
+        $this->assertWebsite($websiteId);
+        $limit = max(1, min(500, $limit));
+        $cutoffDatetime = trim($cutoffDatetime);
+        $model = $this->newModel($websiteId)->clear()
+            ->fields([Product::schema_fields_ID, Product::schema_fields_CREATED_AT])
+            ->where(Product::schema_fields_STATUS, Product::STATUS_PUBLISHED);
+        if ($cutoffDatetime !== '') {
+            $model->where(Product::schema_fields_CREATED_AT, $cutoffDatetime, '>=');
+        }
+        $rows = $model
+            ->order(Product::schema_fields_CREATED_AT, 'DESC')
+            ->order(Product::schema_fields_ID, 'DESC')
+            ->limit($limit, max(0, $offset))
+            ->select()
+            ->fetchArray();
+
+        $out = [];
+        foreach (\is_array($rows) ? $rows : [] as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $productId = (int)($row[Product::schema_fields_ID] ?? 0);
+            $createdAt = \trim((string)($row[Product::schema_fields_CREATED_AT] ?? ''));
+            if ($productId <= 0 || $createdAt === '') {
+                continue;
+            }
+            $out[$productId] = $createdAt;
+        }
+
+        return $out;
+    }
+
+    /**
      * @param list<int> $productIds
      * @return list<array<string, mixed>>
      */

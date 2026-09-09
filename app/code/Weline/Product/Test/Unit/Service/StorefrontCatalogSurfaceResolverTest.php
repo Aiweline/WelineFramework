@@ -43,11 +43,33 @@ final class StorefrontCatalogSurfaceResolverTest extends TestCase
         self::assertSame('best_sellers', $surface['code']);
         self::assertSame('best-sellers', $surface['public_route']);
         self::assertSame('Most-Loved Hanfu', $surface['heading']);
-        self::assertSame('Best-Selling Hanfu | Most-Loved Styles', $surface['seo_title']);
+        self::assertSame('Best-Selling Hanfu', $surface['seo_title']);
+    }
+
+    public function testCurrencyAndLocalePrefixedProductsResolve(): void
+    {
+        $surface = $this->resolver->resolveSupported('/EUR/en_US/products');
+
+        self::assertNotNull($surface);
+        self::assertSame('products', $surface['code']);
+        self::assertSame('product_list', $surface['page_type']);
+        self::assertSame('en_US', $surface['locale']);
+        self::assertSame('Shop All Hanfu | Ming & Tang', $surface['seo_title']);
+        self::assertNotSame('', $surface['seo_keywords'] ?? '');
+        self::assertSame(StorefrontCatalogSurfaceResolver::SHARE_IMAGE, $surface['share_image'] ?? null);
     }
 
     public function testUnsupportedRoutesDoNotLeakCatalogSeo(): void
     {
         self::assertNull($this->resolver->resolveSupported('/en_US/product/hanfu-example'));
+        self::assertNull($this->resolver->resolveSupported('/EUR/en_US/product/hanfu-example'));
+    }
+
+    public function testLeafCategoryPathsAreNotIndexSurfaces(): void
+    {
+        self::assertNull($this->resolver->resolveSupported('/category/women/mamian'));
+        self::assertNull($this->resolver->resolveSupported('/en_US/category/women'));
+        self::assertSame('categories', $this->resolver->resolveSupported('/categories')['code'] ?? null);
+        self::assertSame('categories', $this->resolver->resolveSupported('/category')['code'] ?? null);
     }
 }

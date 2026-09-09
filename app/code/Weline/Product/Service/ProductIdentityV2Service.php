@@ -606,9 +606,11 @@ final class ProductIdentityV2Service implements ProductIdentityV2ResolverInterfa
      * @param list<string> $globalProductUuids
      * @return array<string, ProductIdentityV2>
      */
-    public function resolveProductsByUuids(array $globalProductUuids): array
+    public function resolveProductsByUuids(array $globalProductUuids, bool $strict = false): array
     {
-        $uuids = $this->normalizeUuidList($globalProductUuids);
+        $uuids = $this->normalizeUuidList($strict
+            ? array_map(fn(string $uuid): string => $this->normalizeUuid($uuid), $globalProductUuids)
+            : $globalProductUuids);
         if ($uuids === []) {
             return [];
         }

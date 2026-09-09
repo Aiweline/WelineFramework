@@ -1,0 +1,1786 @@
+{
+  "schema": "product-rest-multilingual-acceptance.v1",
+  "updated_at": "2026-09-08T09:46:56.387705+00:00",
+  "base_url": "https://p05113ef3.test.weline.com:9555",
+  "module_version": "1.0.184",
+  "feature_initial_version": "1.0.176",
+  "status": "manual_multilingual_http_verified_external_translation_and_browser_pending",
+  "acceptance_summary": "多语言创建、请求体 locale 与请求头语言编辑、一次保存多个语言、自定义属性语言、409/400 回滚，以及无渠道自动创建和编辑返回 502 且不写入，已通过真实 HTTP 验证。最终主阶段为 13 次请求、47/47 项断言；手工译文配合 translate_to 的优先覆盖补充为 4 次请求、15/15 项断言；请求头选择及查询参数优先的两个只读复验也通过。 官方路由升级完成后，语言选择、手工译文持久化及文档页共 4/4 项回读通过。",
+  "verified_workflows": [
+    "multilingual create",
+    "body.locale edit",
+    "Accept-Language edit",
+    "single-version multilingual batch save",
+    "localized custom attributes",
+    "409 stale-version rollback",
+    "400 invalid-locale atomicity",
+    "502 no-provider create/edit atomicity",
+    "request header locale readback",
+    "query locale precedence",
+    "manual translation priority with translate_to skips unavailable provider"
+  ],
+  "pending_workflows": [
+    "live translation provider success",
+    "browser online API calls"
+  ],
+  "products": {
+    "payload": {
+      "sku": "REST-ACCEPT-20260908-062138-3304A472-ML-PAYLOAD",
+      "product_id": 339,
+      "global_product_uuid": "b880a4fd-bf7b-54a6-9bef-a6518881ac3b"
+    },
+    "top": {
+      "sku": "REST-ACCEPT-20260908-062138-3304A472-ML-TOP",
+      "product_id": 340,
+      "global_product_uuid": "62621a5c-7aaa-5196-b584-da4a438d8838"
+    },
+    "auto_failure": {
+      "sku": "REST-ACCEPT-20260908-062138-3304A472-ML-AUTO"
+    }
+  },
+  "unit_tests": {
+    "product_rest_input": {
+      "tests": 6,
+      "assertions": 31,
+      "passed": true
+    },
+    "product_rest_translations": {
+      "tests": 5,
+      "assertions": 27,
+      "passed": true
+    },
+    "queue_control_targeted": {
+      "tests": 3,
+      "assertions": 89,
+      "passed": true
+    }
+  },
+  "runtime_phases": [
+    {
+      "artifact": "weline-product-rest-multilingual-acceptance.json",
+      "success": false,
+      "stopped_before_completion": true,
+      "passed_assertions": 39,
+      "total_assertions": 40,
+      "checks": [
+        {
+          "name": "payload: unique SKU absent before run",
+          "passed": true
+        },
+        {
+          "name": "top: unique SKU absent before run",
+          "passed": true
+        },
+        {
+          "name": "auto_failure: unique SKU absent before run",
+          "passed": true
+        },
+        {
+          "name": "unauthorized-create: HTTP status",
+          "passed": true
+        },
+        {
+          "name": "readonly-create: HTTP status",
+          "passed": true
+        },
+        {
+          "name": "create-payload: JSON Content-Type",
+          "passed": true
+        },
+        {
+          "name": "create-payload: HTTP status",
+          "passed": true
+        },
+        {
+          "name": "create-payload: success envelope",
+          "passed": true
+        },
+        {
+          "name": "created-payload-zh: JSON Content-Type",
+          "passed": true
+        },
+        {
+          "name": "created-payload-zh: HTTP status",
+          "passed": true
+        },
+        {
+          "name": "created-payload-zh: success envelope",
+          "passed": true
+        },
+        {
+          "name": "created-payload-en: JSON Content-Type",
+          "passed": true
+        },
+        {
+          "name": "created-payload-en: HTTP status",
+          "passed": true
+        },
+        {
+          "name": "created-payload-en: success envelope",
+          "passed": true
+        },
+        {
+          "name": "payload: requested locale returned",
+          "passed": true
+        },
+        {
+          "name": "payload: Chinese and English content hit",
+          "passed": true
+        },
+        {
+          "name": "payload: translations expose both languages",
+          "passed": true
+        },
+        {
+          "name": "payload: exact storage ownership and count",
+          "passed": true
+        },
+        {
+          "name": "create-top: JSON Content-Type",
+          "passed": true
+        },
+        {
+          "name": "create-top: HTTP status",
+          "passed": true
+        },
+        {
+          "name": "create-top: success envelope",
+          "passed": true
+        },
+        {
+          "name": "created-top-zh: JSON Content-Type",
+          "passed": true
+        },
+        {
+          "name": "created-top-zh: HTTP status",
+          "passed": true
+        },
+        {
+          "name": "created-top-zh: success envelope",
+          "passed": true
+        },
+        {
+          "name": "created-top-en: JSON Content-Type",
+          "passed": true
+        },
+        {
+          "name": "created-top-en: HTTP status",
+          "passed": true
+        },
+        {
+          "name": "created-top-en: success envelope",
+          "passed": true
+        },
+        {
+          "name": "top: requested locale returned",
+          "passed": true
+        },
+        {
+          "name": "top: Chinese and English content hit",
+          "passed": true
+        },
+        {
+          "name": "top: translations expose both languages",
+          "passed": true
+        },
+        {
+          "name": "top: exact storage ownership and count",
+          "passed": true
+        },
+        {
+          "name": "create-payload-replay: JSON Content-Type",
+          "passed": true
+        },
+        {
+          "name": "create-payload-replay: HTTP status",
+          "passed": true
+        },
+        {
+          "name": "create-payload-replay: success envelope",
+          "passed": true
+        },
+        {
+          "name": "create replay preserves identity and count",
+          "passed": true
+        },
+        {
+          "name": "baseline-version: JSON Content-Type",
+          "passed": true
+        },
+        {
+          "name": "baseline-version: HTTP status",
+          "passed": true
+        },
+        {
+          "name": "baseline-version: success envelope",
+          "passed": true
+        },
+        {
+          "name": "body-locale-precedence: JSON Content-Type",
+          "passed": true
+        },
+        {
+          "name": "body-locale-precedence: HTTP status",
+          "passed": false
+        }
+      ],
+      "requests": [
+        {
+          "label": "unauthorized-create",
+          "method": "POST",
+          "path": "/api/weline_product/rest/v1/products/create",
+          "accept_language": null,
+          "http_status": 401,
+          "content_type": "application/json; charset=utf-8",
+          "success": null,
+          "error_code": null,
+          "locale": null,
+          "content": null,
+          "translations": null,
+          "local_version": null
+        },
+        {
+          "label": "readonly-create",
+          "method": "POST",
+          "path": "/api/weline_product/rest/v1/products/create",
+          "accept_language": null,
+          "http_status": 403,
+          "content_type": "application/json; charset=utf-8",
+          "success": null,
+          "error_code": null,
+          "locale": null,
+          "content": null,
+          "translations": null,
+          "local_version": null
+        },
+        {
+          "label": "create-payload",
+          "method": "POST",
+          "path": "/api/weline_product/rest/v1/products/create",
+          "accept_language": null,
+          "http_status": 201,
+          "content_type": "application/json; charset=utf-8",
+          "success": true,
+          "error_code": null,
+          "locale": null,
+          "content": null,
+          "translations": null,
+          "local_version": null
+        },
+        {
+          "label": "created-payload-zh",
+          "method": "GET",
+          "path": "/api/weline_product/rest/v1/products/detail?website_id=0&global_product_uuid=b880a4fd-bf7b-54a6-9bef-a6518881ac3b&locale=zh_Hans_CN",
+          "accept_language": null,
+          "http_status": 200,
+          "content_type": "application/json; charset=utf-8",
+          "success": true,
+          "error_code": null,
+          "locale": "zh_Hans_CN",
+          "content": {
+            "name": "多语言验收棉衬衫",
+            "short_description": "中文短描述保持不变"
+          },
+          "translations": {
+            "en_US": {
+              "name": "Multilingual cotton shirt",
+              "short_description": "English short description stays"
+            },
+            "zh_Hans_CN": {
+              "name": "多语言验收棉衬衫",
+              "short_description": "中文短描述保持不变"
+            }
+          },
+          "local_version": 0
+        },
+        {
+          "label": "created-payload-en",
+          "method": "GET",
+          "path": "/api/weline_product/rest/v1/products/detail?website_id=0&global_product_uuid=b880a4fd-bf7b-54a6-9bef-a6518881ac3b&locale=en_US",
+          "accept_language": null,
+          "http_status": 200,
+          "content_type": "application/json; charset=utf-8",
+          "success": true,
+          "error_code": null,
+          "locale": "en_US",
+          "content": {
+            "name": "Multilingual cotton shirt",
+            "short_description": "English short description stays"
+          },
+          "translations": {
+            "en_US": {
+              "name": "Multilingual cotton shirt",
+              "short_description": "English short description stays"
+            },
+            "zh_Hans_CN": {
+              "name": "多语言验收棉衬衫",
+              "short_description": "中文短描述保持不变"
+            }
+          },
+          "local_version": 0
+        },
+        {
+          "label": "create-top",
+          "method": "POST",
+          "path": "/api/weline_product/rest/v1/products/create",
+          "accept_language": null,
+          "http_status": 201,
+          "content_type": "application/json; charset=utf-8",
+          "success": true,
+          "error_code": null,
+          "locale": null,
+          "content": null,
+          "translations": null,
+          "local_version": null
+        },
+        {
+          "label": "created-top-zh",
+          "method": "GET",
+          "path": "/api/weline_product/rest/v1/products/detail?website_id=0&global_product_uuid=62621a5c-7aaa-5196-b584-da4a438d8838&locale=zh_Hans_CN",
+          "accept_language": null,
+          "http_status": 200,
+          "content_type": "application/json; charset=utf-8",
+          "success": true,
+          "error_code": null,
+          "locale": "zh_Hans_CN",
+          "content": {
+            "name": "多语言验收棉衬衫",
+            "short_description": "中文短描述保持不变"
+          },
+          "translations": {
+            "en_US": {
+              "name": "Multilingual cotton shirt",
+              "short_description": "English short description stays"
+            },
+            "zh_Hans_CN": {
+              "name": "多语言验收棉衬衫",
+              "short_description": "中文短描述保持不变"
+            }
+          },
+          "local_version": 0
+        },
+        {
+          "label": "created-top-en",
+          "method": "GET",
+          "path": "/api/weline_product/rest/v1/products/detail?website_id=0&global_product_uuid=62621a5c-7aaa-5196-b584-da4a438d8838&locale=en_US",
+          "accept_language": null,
+          "http_status": 200,
+          "content_type": "application/json; charset=utf-8",
+          "success": true,
+          "error_code": null,
+          "locale": "en_US",
+          "content": {
+            "name": "Multilingual cotton shirt",
+            "short_description": "English short description stays"
+          },
+          "translations": {
+            "en_US": {
+              "name": "Multilingual cotton shirt",
+              "short_description": "English short description stays"
+            },
+            "zh_Hans_CN": {
+              "name": "多语言验收棉衬衫",
+              "short_description": "中文短描述保持不变"
+            }
+          },
+          "local_version": 0
+        },
+        {
+          "label": "create-payload-replay",
+          "method": "POST",
+          "path": "/api/weline_product/rest/v1/products/create",
+          "accept_language": null,
+          "http_status": 201,
+          "content_type": "application/json; charset=utf-8",
+          "success": true,
+          "error_code": null,
+          "locale": null,
+          "content": null,
+          "translations": null,
+          "local_version": null
+        },
+        {
+          "label": "baseline-version",
+          "method": "GET",
+          "path": "/api/weline_product/rest/v1/products/detail?website_id=0&global_product_uuid=b880a4fd-bf7b-54a6-9bef-a6518881ac3b&locale=en_US",
+          "accept_language": null,
+          "http_status": 200,
+          "content_type": "application/json; charset=utf-8",
+          "success": true,
+          "error_code": null,
+          "locale": "en_US",
+          "content": {
+            "name": "Multilingual cotton shirt",
+            "short_description": "English short description stays"
+          },
+          "translations": {
+            "en_US": {
+              "name": "Multilingual cotton shirt",
+              "short_description": "English short description stays"
+            },
+            "zh_Hans_CN": {
+              "name": "多语言验收棉衬衫",
+              "short_description": "中文短描述保持不变"
+            }
+          },
+          "local_version": 0
+        },
+        {
+          "label": "body-locale-precedence",
+          "method": "PUT",
+          "path": "/api/weline_product/rest/v1/products/edit",
+          "accept_language": "zh-Hans-CN",
+          "http_status": 500,
+          "content_type": "application/json; charset=utf-8",
+          "success": false,
+          "error_code": "product_admin_internal_error",
+          "locale": null,
+          "content": null,
+          "translations": null,
+          "local_version": null
+        }
+      ]
+    },
+    {
+      "artifact": "weline-product-rest-multilingual-resume.json",
+      "success": false,
+      "stopped_before_completion": true,
+      "passed_assertions": 25,
+      "total_assertions": 26,
+      "checks": [
+        {
+          "name": "resume preserves exact failed-run product and version",
+          "passed": true
+        },
+        {
+          "name": "baseline-version: JSON Content-Type",
+          "passed": true
+        },
+        {
+          "name": "baseline-version: HTTP status",
+          "passed": true
+        },
+        {
+          "name": "baseline-version: success envelope",
+          "passed": true
+        },
+        {
+          "name": "body-locale-precedence: JSON Content-Type",
+          "passed": true
+        },
+        {
+          "name": "body-locale-precedence: HTTP status",
+          "passed": true
+        },
+        {
+          "name": "body-locale-precedence: success envelope",
+          "passed": true
+        },
+        {
+          "name": "body-edit-en: JSON Content-Type",
+          "passed": true
+        },
+        {
+          "name": "body-edit-en: HTTP status",
+          "passed": true
+        },
+        {
+          "name": "body-edit-en: success envelope",
+          "passed": true
+        },
+        {
+          "name": "body-edit-zh: JSON Content-Type",
+          "passed": true
+        },
+        {
+          "name": "body-edit-zh: HTTP status",
+          "passed": true
+        },
+        {
+          "name": "body-edit-zh: success envelope",
+          "passed": true
+        },
+        {
+          "name": "body-edit-fallback: JSON Content-Type",
+          "passed": true
+        },
+        {
+          "name": "body-edit-fallback: HTTP status",
+          "passed": true
+        },
+        {
+          "name": "body-edit-fallback: success envelope",
+          "passed": true
+        },
+        {
+          "name": "body locale English edit preserves Chinese and short description",
+          "passed": true
+        },
+        {
+          "name": "unwritten French uses original global fallback",
+          "passed": true
+        },
+        {
+          "name": "single locale edit increments version once",
+          "passed": true
+        },
+        {
+          "name": "header-locale-quality: JSON Content-Type",
+          "passed": true
+        },
+        {
+          "name": "header-locale-quality: HTTP status",
+          "passed": true
+        },
+        {
+          "name": "header-locale-quality: success envelope",
+          "passed": true
+        },
+        {
+          "name": "header-edit-en: JSON Content-Type",
+          "passed": true
+        },
+        {
+          "name": "header-edit-en: HTTP status",
+          "passed": true
+        },
+        {
+          "name": "header-edit-en: success envelope",
+          "passed": true
+        },
+        {
+          "name": "Accept-Language picks highest supported locale",
+          "passed": false
+        }
+      ],
+      "requests": [
+        {
+          "label": "baseline-version",
+          "method": "GET",
+          "path": "/api/weline_product/rest/v1/products/detail?website_id=0&global_product_uuid=b880a4fd-bf7b-54a6-9bef-a6518881ac3b&locale=en_US",
+          "accept_language": null,
+          "http_status": 200,
+          "content_type": "application/json; charset=utf-8",
+          "success": true,
+          "error_code": null,
+          "locale": "en_US",
+          "content": {
+            "name": "Multilingual cotton shirt",
+            "short_description": "English short description stays"
+          },
+          "translations": {
+            "en_US": {
+              "name": "Multilingual cotton shirt",
+              "short_description": "English short description stays"
+            },
+            "zh_Hans_CN": {
+              "name": "多语言验收棉衬衫",
+              "short_description": "中文短描述保持不变"
+            }
+          },
+          "local_version": 0
+        },
+        {
+          "label": "body-locale-precedence",
+          "method": "PUT",
+          "path": "/api/weline_product/rest/v1/products/edit",
+          "accept_language": "zh-Hans-CN",
+          "http_status": 200,
+          "content_type": "application/json; charset=utf-8",
+          "success": true,
+          "error_code": null,
+          "locale": null,
+          "content": null,
+          "translations": null,
+          "local_version": 1
+        },
+        {
+          "label": "body-edit-en",
+          "method": "GET",
+          "path": "/api/weline_product/rest/v1/products/detail?website_id=0&global_product_uuid=b880a4fd-bf7b-54a6-9bef-a6518881ac3b&locale=en_US",
+          "accept_language": null,
+          "http_status": 200,
+          "content_type": "application/json; charset=utf-8",
+          "success": true,
+          "error_code": null,
+          "locale": "en_US",
+          "content": {
+            "name": "English name v2",
+            "short_description": "English short description stays"
+          },
+          "translations": {
+            "en_US": {
+              "name": "English name v2",
+              "short_description": "English short description stays"
+            },
+            "zh_Hans_CN": {
+              "name": "多语言验收棉衬衫",
+              "short_description": "中文短描述保持不变"
+            }
+          },
+          "local_version": 1
+        },
+        {
+          "label": "body-edit-zh",
+          "method": "GET",
+          "path": "/api/weline_product/rest/v1/products/detail?website_id=0&global_product_uuid=b880a4fd-bf7b-54a6-9bef-a6518881ac3b&locale=zh_Hans_CN",
+          "accept_language": null,
+          "http_status": 200,
+          "content_type": "application/json; charset=utf-8",
+          "success": true,
+          "error_code": null,
+          "locale": "zh_Hans_CN",
+          "content": {
+            "name": "多语言验收棉衬衫",
+            "short_description": "中文短描述保持不变"
+          },
+          "translations": {
+            "en_US": {
+              "name": "English name v2",
+              "short_description": "English short description stays"
+            },
+            "zh_Hans_CN": {
+              "name": "多语言验收棉衬衫",
+              "short_description": "中文短描述保持不变"
+            }
+          },
+          "local_version": 1
+        },
+        {
+          "label": "body-edit-fallback",
+          "method": "GET",
+          "path": "/api/weline_product/rest/v1/products/detail?website_id=0&global_product_uuid=b880a4fd-bf7b-54a6-9bef-a6518881ac3b&locale=fr_FR",
+          "accept_language": null,
+          "http_status": 200,
+          "content_type": "application/json; charset=utf-8",
+          "success": true,
+          "error_code": null,
+          "locale": "fr_FR",
+          "content": {
+            "name": "多语言验收棉衬衫",
+            "short_description": "中文短描述保持不变"
+          },
+          "translations": {
+            "en_US": {
+              "name": "English name v2",
+              "short_description": "English short description stays"
+            },
+            "zh_Hans_CN": {
+              "name": "多语言验收棉衬衫",
+              "short_description": "中文短描述保持不变"
+            }
+          },
+          "local_version": 1
+        },
+        {
+          "label": "header-locale-quality",
+          "method": "PUT",
+          "path": "/api/weline_product/rest/v1/products/edit",
+          "accept_language": "ja-JP;q=1,en-US;q=0.8,zh-Hans-CN;q=0.2",
+          "http_status": 200,
+          "content_type": "application/json; charset=utf-8",
+          "success": true,
+          "error_code": null,
+          "locale": null,
+          "content": null,
+          "translations": null,
+          "local_version": 2
+        },
+        {
+          "label": "header-edit-en",
+          "method": "GET",
+          "path": "/api/weline_product/rest/v1/products/detail?website_id=0&global_product_uuid=b880a4fd-bf7b-54a6-9bef-a6518881ac3b&locale=en_US",
+          "accept_language": null,
+          "http_status": 200,
+          "content_type": "application/json; charset=utf-8",
+          "success": true,
+          "error_code": null,
+          "locale": "en_US",
+          "content": {
+            "name": "English name v2",
+            "short_description": "English short description stays"
+          },
+          "translations": {
+            "en_US": {
+              "name": "English name v2",
+              "short_description": "English short description stays"
+            },
+            "zh_Hans_CN": {
+              "name": "English name v3",
+              "short_description": "中文短描述保持不变"
+            }
+          },
+          "local_version": 2
+        }
+      ]
+    },
+    {
+      "artifact": "weline-product-rest-multilingual-resume-header.json",
+      "success": false,
+      "stopped_before_completion": true,
+      "passed_assertions": 2,
+      "total_assertions": 3,
+      "checks": [
+        {
+          "name": "header resume owns unchanged version 2 fixture",
+          "passed": true
+        },
+        {
+          "name": "repair-header-fixture-chinese: JSON Content-Type",
+          "passed": true
+        },
+        {
+          "name": "repair-header-fixture-chinese: HTTP status",
+          "passed": false
+        }
+      ],
+      "requests": [
+        {
+          "label": "repair-header-fixture-chinese",
+          "method": "PUT",
+          "path": "/api/weline_product/rest/v1/products/edit",
+          "accept_language": null,
+          "http_status": 401,
+          "content_type": "application/json; charset=utf-8",
+          "success": null,
+          "error_code": null,
+          "locale": null,
+          "content": null,
+          "translations": null,
+          "local_version": null
+        }
+      ]
+    },
+    {
+      "artifact": "weline-product-rest-multilingual-resume-header-renewed.json",
+      "success": false,
+      "stopped_before_completion": true,
+      "passed_assertions": 2,
+      "total_assertions": 3,
+      "checks": [
+        {
+          "name": "header resume owns unchanged version 2 fixture",
+          "passed": true
+        },
+        {
+          "name": "repair-header-fixture-chinese: JSON Content-Type",
+          "passed": true
+        },
+        {
+          "name": "repair-header-fixture-chinese: HTTP status",
+          "passed": false
+        }
+      ],
+      "requests": [
+        {
+          "label": "repair-header-fixture-chinese",
+          "method": "PUT",
+          "path": "/api/weline_product/rest/v1/products/edit",
+          "accept_language": null,
+          "http_status": 503,
+          "content_type": "application/json; charset=utf-8",
+          "success": false,
+          "error_code": null,
+          "locale": null,
+          "content": null,
+          "translations": null,
+          "local_version": null
+        }
+      ]
+    },
+    {
+      "artifact": "weline-product-rest-multilingual-resume-header-recovered.json",
+      "success": false,
+      "stopped_before_completion": true,
+      "passed_assertions": 14,
+      "total_assertions": 15,
+      "checks": [
+        {
+          "name": "header resume owns unchanged version 2 fixture",
+          "passed": true
+        },
+        {
+          "name": "repair-header-fixture-chinese: JSON Content-Type",
+          "passed": true
+        },
+        {
+          "name": "repair-header-fixture-chinese: HTTP status",
+          "passed": true
+        },
+        {
+          "name": "repair-header-fixture-chinese: success envelope",
+          "passed": true
+        },
+        {
+          "name": "repaired-header-fixture: JSON Content-Type",
+          "passed": true
+        },
+        {
+          "name": "repaired-header-fixture: HTTP status",
+          "passed": true
+        },
+        {
+          "name": "repaired-header-fixture: success envelope",
+          "passed": true
+        },
+        {
+          "name": "explicit Chinese fixture repair preserves English and descriptions",
+          "passed": true
+        },
+        {
+          "name": "header-locale-quality: JSON Content-Type",
+          "passed": true
+        },
+        {
+          "name": "header-locale-quality: HTTP status",
+          "passed": true
+        },
+        {
+          "name": "header-locale-quality: success envelope",
+          "passed": true
+        },
+        {
+          "name": "header-edit-en: JSON Content-Type",
+          "passed": true
+        },
+        {
+          "name": "header-edit-en: HTTP status",
+          "passed": true
+        },
+        {
+          "name": "header-edit-en: success envelope",
+          "passed": true
+        },
+        {
+          "name": "Accept-Language picks highest supported locale",
+          "passed": false
+        }
+      ],
+      "requests": [
+        {
+          "label": "repair-header-fixture-chinese",
+          "method": "PUT",
+          "path": "/api/weline_product/rest/v1/products/edit",
+          "accept_language": null,
+          "http_status": 200,
+          "content_type": "application/json; charset=utf-8",
+          "success": true,
+          "error_code": null,
+          "locale": null,
+          "content": null,
+          "translations": null,
+          "local_version": 3
+        },
+        {
+          "label": "repaired-header-fixture",
+          "method": "GET",
+          "path": "/api/weline_product/rest/v1/products/detail?website_id=0&global_product_uuid=b880a4fd-bf7b-54a6-9bef-a6518881ac3b&locale=en_US",
+          "accept_language": null,
+          "http_status": 200,
+          "content_type": "application/json; charset=utf-8",
+          "success": true,
+          "error_code": null,
+          "locale": "en_US",
+          "content": {
+            "name": "English name v2",
+            "short_description": "English short description stays"
+          },
+          "translations": {
+            "en_US": {
+              "name": "English name v2",
+              "short_description": "English short description stays"
+            },
+            "zh_Hans_CN": {
+              "name": "多语言验收棉衬衫",
+              "short_description": "中文短描述保持不变"
+            }
+          },
+          "local_version": 3
+        },
+        {
+          "label": "header-locale-quality",
+          "method": "PUT",
+          "path": "/api/weline_product/rest/v1/products/edit",
+          "accept_language": "ja-JP;q=1,en-US;q=0.8,zh-Hans-CN;q=0.2",
+          "http_status": 200,
+          "content_type": "application/json; charset=utf-8",
+          "success": true,
+          "error_code": null,
+          "locale": null,
+          "content": null,
+          "translations": null,
+          "local_version": 4
+        },
+        {
+          "label": "header-edit-en",
+          "method": "GET",
+          "path": "/api/weline_product/rest/v1/products/detail?website_id=0&global_product_uuid=b880a4fd-bf7b-54a6-9bef-a6518881ac3b&locale=en_US",
+          "accept_language": null,
+          "http_status": 200,
+          "content_type": "application/json; charset=utf-8",
+          "success": true,
+          "error_code": null,
+          "locale": "en_US",
+          "content": {
+            "name": "English name v2",
+            "short_description": "English short description stays"
+          },
+          "translations": {
+            "en_US": {
+              "name": "English name v2",
+              "short_description": "English short description stays"
+            },
+            "zh_Hans_CN": {
+              "name": "English name v3",
+              "short_description": "中文短描述保持不变"
+            }
+          },
+          "local_version": 4
+        }
+      ]
+    },
+    {
+      "artifact": "weline-product-rest-multilingual-finalphase.json",
+      "success": true,
+      "stopped_before_completion": false,
+      "passed_assertions": 47,
+      "total_assertions": 47,
+      "checks": [
+        {
+          "name": "header resume owns exact recorded fixture version",
+          "passed": true
+        },
+        {
+          "name": "repair-header-fixture-chinese: JSON Content-Type",
+          "passed": true
+        },
+        {
+          "name": "repair-header-fixture-chinese: HTTP status",
+          "passed": true
+        },
+        {
+          "name": "repair-header-fixture-chinese: success envelope",
+          "passed": true
+        },
+        {
+          "name": "repaired-header-fixture: JSON Content-Type",
+          "passed": true
+        },
+        {
+          "name": "repaired-header-fixture: HTTP status",
+          "passed": true
+        },
+        {
+          "name": "repaired-header-fixture: success envelope",
+          "passed": true
+        },
+        {
+          "name": "explicit Chinese fixture repair preserves English and descriptions",
+          "passed": true
+        },
+        {
+          "name": "header-locale-quality: JSON Content-Type",
+          "passed": true
+        },
+        {
+          "name": "header-locale-quality: HTTP status",
+          "passed": true
+        },
+        {
+          "name": "header-locale-quality: success envelope",
+          "passed": true
+        },
+        {
+          "name": "header-edit-en: JSON Content-Type",
+          "passed": true
+        },
+        {
+          "name": "header-edit-en: HTTP status",
+          "passed": true
+        },
+        {
+          "name": "header-edit-en: success envelope",
+          "passed": true
+        },
+        {
+          "name": "Accept-Language picks highest supported locale",
+          "passed": true
+        },
+        {
+          "name": "header edit increments version once",
+          "passed": true
+        },
+        {
+          "name": "two-locale-edit: JSON Content-Type",
+          "passed": true
+        },
+        {
+          "name": "two-locale-edit: HTTP status",
+          "passed": true
+        },
+        {
+          "name": "two-locale-edit: success envelope",
+          "passed": true
+        },
+        {
+          "name": "two-locale-result: JSON Content-Type",
+          "passed": true
+        },
+        {
+          "name": "two-locale-result: HTTP status",
+          "passed": true
+        },
+        {
+          "name": "two-locale-result: success envelope",
+          "passed": true
+        },
+        {
+          "name": "both locales saved in one version",
+          "passed": true
+        },
+        {
+          "name": "multilocale edit preserves omitted descriptions",
+          "passed": true
+        },
+        {
+          "name": "attribute-locale-groups: JSON Content-Type",
+          "passed": true
+        },
+        {
+          "name": "attribute-locale-groups: HTTP status",
+          "passed": true
+        },
+        {
+          "name": "attribute-locale-groups: success envelope",
+          "passed": true
+        },
+        {
+          "name": "custom attribute request explicit and global locales",
+          "passed": true
+        },
+        {
+          "name": "attribute groups increment version once",
+          "passed": true
+        },
+        {
+          "name": "attribute-detail: JSON Content-Type",
+          "passed": true
+        },
+        {
+          "name": "attribute-detail: HTTP status",
+          "passed": true
+        },
+        {
+          "name": "attribute-detail: success envelope",
+          "passed": true
+        },
+        {
+          "name": "localized custom attribute detail",
+          "passed": true
+        },
+        {
+          "name": "stale-multilocale: JSON Content-Type",
+          "passed": true
+        },
+        {
+          "name": "stale-multilocale: HTTP status",
+          "passed": true
+        },
+        {
+          "name": "stale group rollback preserves version and all attributes",
+          "passed": true
+        },
+        {
+          "name": "unsupported-locale: JSON Content-Type",
+          "passed": true
+        },
+        {
+          "name": "unsupported-locale: HTTP status",
+          "passed": true
+        },
+        {
+          "name": "invalid-locale-detail: JSON Content-Type",
+          "passed": true
+        },
+        {
+          "name": "invalid-locale-detail: HTTP status",
+          "passed": true
+        },
+        {
+          "name": "invalid locale preserves exact storage",
+          "passed": true
+        },
+        {
+          "name": "auto-create-no-provider: JSON Content-Type",
+          "passed": true
+        },
+        {
+          "name": "auto-create-no-provider: HTTP status",
+          "passed": true
+        },
+        {
+          "name": "failed auto create leaves no product",
+          "passed": true
+        },
+        {
+          "name": "auto-edit-no-provider: JSON Content-Type",
+          "passed": true
+        },
+        {
+          "name": "auto-edit-no-provider: HTTP status",
+          "passed": true
+        },
+        {
+          "name": "failed auto edit preserves all locales and version",
+          "passed": true
+        }
+      ],
+      "requests": [
+        {
+          "label": "repair-header-fixture-chinese",
+          "method": "PUT",
+          "path": "/api/weline_product/rest/v1/products/edit",
+          "accept_language": null,
+          "http_status": 200,
+          "content_type": "application/json; charset=utf-8",
+          "success": true,
+          "error_code": null,
+          "locale": null,
+          "content": null,
+          "translations": null,
+          "local_version": 5
+        },
+        {
+          "label": "repaired-header-fixture",
+          "method": "GET",
+          "path": "/api/weline_product/rest/v1/products/detail?website_id=0&global_product_uuid=b880a4fd-bf7b-54a6-9bef-a6518881ac3b&locale=en_US",
+          "accept_language": null,
+          "http_status": 200,
+          "content_type": "application/json; charset=utf-8",
+          "success": true,
+          "error_code": null,
+          "locale": "en_US",
+          "content": {
+            "name": "English name v2",
+            "short_description": "English short description stays"
+          },
+          "translations": {
+            "en_US": {
+              "name": "English name v2",
+              "short_description": "English short description stays"
+            },
+            "zh_Hans_CN": {
+              "name": "多语言验收棉衬衫",
+              "short_description": "中文短描述保持不变"
+            }
+          },
+          "local_version": 5
+        },
+        {
+          "label": "header-locale-quality",
+          "method": "PUT",
+          "path": "/api/weline_product/rest/v1/products/edit",
+          "accept_language": "ja-JP;q=1,en-US;q=0.8,zh-Hans-CN;q=0.2",
+          "http_status": 200,
+          "content_type": "application/json; charset=utf-8",
+          "success": true,
+          "error_code": null,
+          "locale": null,
+          "content": null,
+          "translations": null,
+          "local_version": 6
+        },
+        {
+          "label": "header-edit-en",
+          "method": "GET",
+          "path": "/api/weline_product/rest/v1/products/detail?website_id=0&global_product_uuid=b880a4fd-bf7b-54a6-9bef-a6518881ac3b&locale=en_US",
+          "accept_language": null,
+          "http_status": 200,
+          "content_type": "application/json; charset=utf-8",
+          "success": true,
+          "error_code": null,
+          "locale": "en_US",
+          "content": {
+            "name": "English name v3",
+            "short_description": "English short description stays"
+          },
+          "translations": {
+            "en_US": {
+              "name": "English name v3",
+              "short_description": "English short description stays"
+            },
+            "zh_Hans_CN": {
+              "name": "多语言验收棉衬衫",
+              "short_description": "中文短描述保持不变"
+            }
+          },
+          "local_version": 6
+        },
+        {
+          "label": "two-locale-edit",
+          "method": "PUT",
+          "path": "/api/weline_product/rest/v1/products/edit",
+          "accept_language": null,
+          "http_status": 200,
+          "content_type": "application/json; charset=utf-8",
+          "success": true,
+          "error_code": null,
+          "locale": null,
+          "content": null,
+          "translations": null,
+          "local_version": 7
+        },
+        {
+          "label": "two-locale-result",
+          "method": "GET",
+          "path": "/api/weline_product/rest/v1/products/detail?website_id=0&global_product_uuid=b880a4fd-bf7b-54a6-9bef-a6518881ac3b&locale=en_US",
+          "accept_language": null,
+          "http_status": 200,
+          "content_type": "application/json; charset=utf-8",
+          "success": true,
+          "error_code": null,
+          "locale": "en_US",
+          "content": {
+            "name": "English name v4",
+            "short_description": "English short description stays"
+          },
+          "translations": {
+            "en_US": {
+              "name": "English name v4",
+              "short_description": "English short description stays"
+            },
+            "zh_Hans_CN": {
+              "name": "中文名称第二版",
+              "short_description": "中文短描述保持不变"
+            }
+          },
+          "local_version": 7
+        },
+        {
+          "label": "attribute-locale-groups",
+          "method": "PUT",
+          "path": "/api/weline_product/rest/v1/products/edit",
+          "accept_language": null,
+          "http_status": 200,
+          "content_type": "application/json; charset=utf-8",
+          "success": true,
+          "error_code": null,
+          "locale": null,
+          "content": null,
+          "translations": null,
+          "local_version": 8
+        },
+        {
+          "label": "attribute-detail",
+          "method": "GET",
+          "path": "/api/weline_product/rest/v1/products/detail?website_id=0&global_product_uuid=b880a4fd-bf7b-54a6-9bef-a6518881ac3b&locale=en_US",
+          "accept_language": null,
+          "http_status": 200,
+          "content_type": "application/json; charset=utf-8",
+          "success": true,
+          "error_code": null,
+          "locale": "en_US",
+          "content": {
+            "name": "English name v4",
+            "short_description": "English short description stays",
+            "source_public_specs": "Cotton 100 percent"
+          },
+          "translations": {
+            "en_US": {
+              "name": "English name v4",
+              "short_description": "English short description stays",
+              "source_public_specs": "Cotton 100 percent"
+            },
+            "zh_Hans_CN": {
+              "name": "中文名称第二版",
+              "short_description": "中文短描述保持不变"
+            },
+            "fr_FR": {
+              "source_public_specs": "Coton 100 pour cent"
+            }
+          },
+          "local_version": 8
+        },
+        {
+          "label": "stale-multilocale",
+          "method": "PUT",
+          "path": "/api/weline_product/rest/v1/products/edit",
+          "accept_language": null,
+          "http_status": 409,
+          "content_type": "application/json; charset=utf-8",
+          "success": false,
+          "error_code": "publish_version_conflict",
+          "locale": null,
+          "content": null,
+          "translations": null,
+          "local_version": null
+        },
+        {
+          "label": "unsupported-locale",
+          "method": "PUT",
+          "path": "/api/weline_product/rest/v1/products/edit",
+          "accept_language": null,
+          "http_status": 400,
+          "content_type": "application/json; charset=utf-8",
+          "success": false,
+          "error_code": "product_api_locale_unsupported",
+          "locale": null,
+          "content": null,
+          "translations": null,
+          "local_version": null
+        },
+        {
+          "label": "invalid-locale-detail",
+          "method": "GET",
+          "path": "/api/weline_product/rest/v1/products/detail?website_id=0&global_product_uuid=b880a4fd-bf7b-54a6-9bef-a6518881ac3b&locale=not_a_locale",
+          "accept_language": null,
+          "http_status": 400,
+          "content_type": "application/json; charset=utf-8",
+          "success": false,
+          "error_code": "product_api_locale_invalid",
+          "locale": null,
+          "content": null,
+          "translations": null,
+          "local_version": null
+        },
+        {
+          "label": "auto-create-no-provider",
+          "method": "POST",
+          "path": "/api/weline_product/rest/v1/products/create",
+          "accept_language": null,
+          "http_status": 502,
+          "content_type": "application/json; charset=utf-8",
+          "success": false,
+          "error_code": "product_api_translation_failed",
+          "locale": null,
+          "content": null,
+          "translations": null,
+          "local_version": null
+        },
+        {
+          "label": "auto-edit-no-provider",
+          "method": "PUT",
+          "path": "/api/weline_product/rest/v1/products/edit",
+          "accept_language": null,
+          "http_status": 502,
+          "content_type": "application/json; charset=utf-8",
+          "success": false,
+          "error_code": "product_api_translation_failed",
+          "locale": null,
+          "content": null,
+          "translations": null,
+          "local_version": null
+        }
+      ]
+    },
+    {
+      "artifact": "weline-product-rest-multilingual-manual-priority-live.json",
+      "success": true,
+      "stopped_before_completion": false,
+      "passed_assertions": 15,
+      "total_assertions": 15,
+      "checks": [
+        {
+          "name": "manual-priority-before: JSON Content-Type",
+          "passed": true
+        },
+        {
+          "name": "manual-priority-before: HTTP status",
+          "passed": true
+        },
+        {
+          "name": "manual-priority-before: success envelope",
+          "passed": true
+        },
+        {
+          "name": "exact 340 draft baseline version zero",
+          "passed": true
+        },
+        {
+          "name": "manual-priority-update: JSON Content-Type",
+          "passed": true
+        },
+        {
+          "name": "manual-priority-update: HTTP status",
+          "passed": true
+        },
+        {
+          "name": "manual-priority-update: success envelope",
+          "passed": true
+        },
+        {
+          "name": "manual-priority-en: JSON Content-Type",
+          "passed": true
+        },
+        {
+          "name": "manual-priority-en: HTTP status",
+          "passed": true
+        },
+        {
+          "name": "manual-priority-en: success envelope",
+          "passed": true
+        },
+        {
+          "name": "manual-priority-zh: JSON Content-Type",
+          "passed": true
+        },
+        {
+          "name": "manual-priority-zh: HTTP status",
+          "passed": true
+        },
+        {
+          "name": "manual-priority-zh: success envelope",
+          "passed": true
+        },
+        {
+          "name": "manual target skips unavailable provider and stores both names once",
+          "passed": true
+        },
+        {
+          "name": "manual priority preserves omitted descriptions",
+          "passed": true
+        }
+      ],
+      "requests": [
+        {
+          "label": "manual-priority-before",
+          "method": "GET",
+          "path": "/api/weline_product/rest/v1/products/detail?website_id=0&global_product_uuid=62621a5c-7aaa-5196-b584-da4a438d8838&locale=zh_Hans_CN",
+          "accept_language": null,
+          "http_status": 200,
+          "content_type": "application/json; charset=utf-8",
+          "success": true,
+          "error_code": null,
+          "locale": "zh_Hans_CN",
+          "content": {
+            "name": "多语言验收棉衬衫",
+            "short_description": "中文短描述保持不变"
+          },
+          "translations": {
+            "en_US": {
+              "name": "Multilingual cotton shirt",
+              "short_description": "English short description stays"
+            },
+            "zh_Hans_CN": {
+              "name": "多语言验收棉衬衫",
+              "short_description": "中文短描述保持不变"
+            }
+          },
+          "local_version": 0
+        },
+        {
+          "label": "manual-priority-update",
+          "method": "PUT",
+          "path": "/api/weline_product/rest/v1/products/edit",
+          "accept_language": null,
+          "http_status": 200,
+          "content_type": "application/json; charset=utf-8",
+          "success": true,
+          "error_code": null,
+          "locale": null,
+          "content": null,
+          "translations": null,
+          "local_version": 1
+        },
+        {
+          "label": "manual-priority-en",
+          "method": "GET",
+          "path": "/api/weline_product/rest/v1/products/detail?website_id=0&global_product_uuid=62621a5c-7aaa-5196-b584-da4a438d8838&locale=en_US",
+          "accept_language": null,
+          "http_status": 200,
+          "content_type": "application/json; charset=utf-8",
+          "success": true,
+          "error_code": null,
+          "locale": "en_US",
+          "content": {
+            "name": "Manual translation priority English name",
+            "short_description": "English short description stays"
+          },
+          "translations": {
+            "en_US": {
+              "name": "Manual translation priority English name",
+              "short_description": "English short description stays"
+            },
+            "zh_Hans_CN": {
+              "name": "手工优先验收中文名",
+              "short_description": "中文短描述保持不变"
+            }
+          },
+          "local_version": 1
+        },
+        {
+          "label": "manual-priority-zh",
+          "method": "GET",
+          "path": "/api/weline_product/rest/v1/products/detail?website_id=0&global_product_uuid=62621a5c-7aaa-5196-b584-da4a438d8838&locale=zh_Hans_CN",
+          "accept_language": null,
+          "http_status": 200,
+          "content_type": "application/json; charset=utf-8",
+          "success": true,
+          "error_code": null,
+          "locale": "zh_Hans_CN",
+          "content": {
+            "name": "手工优先验收中文名",
+            "short_description": "中文短描述保持不变"
+          },
+          "translations": {
+            "en_US": {
+              "name": "Manual translation priority English name",
+              "short_description": "English short description stays"
+            },
+            "zh_Hans_CN": {
+              "name": "手工优先验收中文名",
+              "short_description": "中文短描述保持不变"
+            }
+          },
+          "local_version": 1
+        }
+      ]
+    }
+  ],
+  "search_transaction_fix": {
+    "original_error": "search_incremental_queue_reopen_failed:queue_transaction_active",
+    "same_edit_after_fix_http": 200,
+    "version_change": [
+      0,
+      1
+    ],
+    "queue_id": 45990,
+    "queue_status": "done",
+    "queue_result": "search_incremental_applied"
+  },
+  "automatic_translation": {
+    "implementation": "translationService.batchTranslate before product mutation",
+    "provider_count": 0,
+    "live_success_verified": false,
+    "failure_atomicity_verified": true,
+    "pending": "Configure an enabled existing translation provider; no provider keys were read or stored in this report."
+  },
+  "api_docs": {
+    "url": "https://p05113ef3.test.weline.com:9555/dev/tool/docs/api",
+    "metadata": {
+      "product_apis": 3,
+      "language_parameters_and_examples": true
+    },
+    "original_http_status": 200,
+    "original_response_bytes": 0,
+    "fixed_http_status": 200,
+    "initial_fixed_response_bytes": 1165358,
+    "fixed_response_bytes": 1165919,
+    "fixed_content_type": "text/html",
+    "browser_online_calls_verified": false,
+    "browser_attempts": [
+      {
+        "browser": "Chrome",
+        "profile": "Weline",
+        "fresh_task_tab_attempts": 2,
+        "result": "goto timed out after 30 seconds / Debugger unattached",
+        "ui_requests_sent": false
+      },
+      {
+        "browser": "iab",
+        "result": "createBrowserTab immediately returned Browser is not available: iab",
+        "ui_requests_sent": false
+      }
+    ],
+    "cause": "Large API JSON script exceeded regex backtracking limit in Theme opaque-block parking; linear block extraction preserves original bytes."
+  },
+  "cleanup": {
+    "artifact": "weline-product-rest-final-cleanup.json",
+    "products": [
+      {
+        "website_id": 0,
+        "product_id": 324,
+        "global_product_uuid": "885e5a54-0657-5396-9ea1-cee70492917b",
+        "sku": "REST-ACCEPT-20260908-062138-3304A472",
+        "local_version": 1,
+        "product_status": "archived",
+        "identity_status": "archived"
+      },
+      {
+        "website_id": 0,
+        "product_id": 339,
+        "global_product_uuid": "b880a4fd-bf7b-54a6-9bef-a6518881ac3b",
+        "sku": "REST-ACCEPT-20260908-062138-3304A472-ML-PAYLOAD",
+        "local_version": 9,
+        "product_status": "archived",
+        "identity_status": "archived"
+      },
+      {
+        "website_id": 0,
+        "product_id": 340,
+        "global_product_uuid": "62621a5c-7aaa-5196-b584-da4a438d8838",
+        "sku": "REST-ACCEPT-20260908-062138-3304A472-ML-TOP",
+        "local_version": 2,
+        "product_status": "archived",
+        "identity_status": "archived"
+      }
+    ],
+    "test_apps": [
+      3,
+      4
+    ],
+    "applications_and_tokens_revoked": true,
+    "revoked_token_http_status": 401,
+    "private_fixture_file_removed": true
+  },
+  "notes": [
+    "Historical failure phases are preserved; assertion counts are per phase and are not a distinct-case total.",
+    "The former HTTP503 maintenance interruption is historical; it is not listed as a current blocker.",
+    "Basic REST 1.0.166 evidence remains unchanged in rest-api-acceptance.json.",
+    "No bearer tokens, authorization codes, client secrets, cookies or private credential paths are included."
+  ],
+  "request_locale_readback": {
+    "artifact": "weline-product-rest-locale-header-fix-readonly.json",
+    "cases": [
+      {
+        "label": "header",
+        "accept_language": "ja-JP;q=1,en-US;q=0.8,zh-Hans-CN;q=0.2",
+        "http": 200,
+        "locale": "en_US",
+        "expected": "en_US",
+        "passed": true
+      },
+      {
+        "label": "query-precedence",
+        "accept_language": "ja-JP;q=1,en-US;q=0.8,zh-Hans-CN;q=0.2",
+        "http": 200,
+        "locale": "zh_Hans_CN",
+        "expected": "zh_Hans_CN",
+        "passed": true
+      }
+    ]
+  },
+  "locale_header_fix": {
+    "root_cause": "Runtime WlsRequest getHeader compares original/case-insensitive header names; ACCEPT_LANGUAGE does not match Accept-Language.",
+    "fix": "Products requestLocale reads public ServerBag getHeader(Accept-Language); explicit body/payload/query precedence retained.",
+    "temporary_trace_removed": true
+  },
+  "post_upgrade_smoke": {
+    "artifact": "weline-product-rest-final-smoke.json",
+    "success": true,
+    "checks": [
+      {
+        "label": "weighted-header",
+        "http_status": 200,
+        "content_type": "application/json; charset=utf-8",
+        "locale": "en_US",
+        "content": {
+          "name": "English name v4",
+          "short_description": "English short description stays",
+          "source_public_specs": "Cotton 100 percent"
+        },
+        "translations": {
+          "en_US": {
+            "name": "English name v4",
+            "short_description": "English short description stays",
+            "source_public_specs": "Cotton 100 percent"
+          },
+          "zh_Hans_CN": {
+            "name": "中文名称第二版",
+            "short_description": "中文短描述保持不变"
+          },
+          "fr_FR": {
+            "source_public_specs": "Coton 100 pour cent"
+          }
+        },
+        "version": 8,
+        "passed": true
+      },
+      {
+        "label": "query-precedence",
+        "http_status": 200,
+        "content_type": "application/json; charset=utf-8",
+        "locale": "zh_Hans_CN",
+        "content": {
+          "name": "中文名称第二版",
+          "short_description": "中文短描述保持不变",
+          "source_public_specs": "棉 100 百分比"
+        },
+        "translations": {
+          "en_US": {
+            "name": "English name v4",
+            "short_description": "English short description stays",
+            "source_public_specs": "Cotton 100 percent"
+          },
+          "zh_Hans_CN": {
+            "name": "中文名称第二版",
+            "short_description": "中文短描述保持不变"
+          },
+          "fr_FR": {
+            "source_public_specs": "Coton 100 pour cent"
+          }
+        },
+        "version": 8,
+        "passed": true
+      },
+      {
+        "label": "manual-priority-persisted",
+        "http_status": 200,
+        "content_type": "application/json; charset=utf-8",
+        "locale": "en_US",
+        "content": {
+          "name": "Manual translation priority English name",
+          "short_description": "English short description stays"
+        },
+        "translations": {
+          "en_US": {
+            "name": "Manual translation priority English name",
+            "short_description": "English short description stays"
+          },
+          "zh_Hans_CN": {
+            "name": "手工优先验收中文名",
+            "short_description": "中文短描述保持不变"
+          }
+        },
+        "version": 1,
+        "passed": true
+      },
+      {
+        "label": "api-docs-rendering",
+        "http_status": 200,
+        "content_type": "text/html; charset=utf-8",
+        "body_bytes": 1165919,
+        "passed": true
+      }
+    ],
+    "browser_ui_verified": false
+  },
+  "operations": {
+    "artifact": "weline-product-rest-final-upgrade-evidence.json",
+    "command": "php bin/w setup:upgrade --route --module='Weline_Product Weline_DeveloperWorkspace'",
+    "exit_code": 0,
+    "product_version_transition": "1.0.181 -> 1.0.184",
+    "maintenance_closed": true,
+    "wls_reload_notified": true,
+    "developer_workspace_version_transition": "1.3.8 -> 1.3.10"
+  },
+  "final_product_state": [
+    {
+      "website_id": 0,
+      "product_id": 324,
+      "global_product_uuid": "885e5a54-0657-5396-9ea1-cee70492917b",
+      "sku": "REST-ACCEPT-20260908-062138-3304A472",
+      "local_version": 1,
+      "product_status": "archived",
+      "identity_status": "archived"
+    },
+    {
+      "website_id": 0,
+      "product_id": 339,
+      "global_product_uuid": "b880a4fd-bf7b-54a6-9bef-a6518881ac3b",
+      "sku": "REST-ACCEPT-20260908-062138-3304A472-ML-PAYLOAD",
+      "local_version": 9,
+      "product_status": "archived",
+      "identity_status": "archived"
+    },
+    {
+      "website_id": 0,
+      "product_id": 340,
+      "global_product_uuid": "62621a5c-7aaa-5196-b584-da4a438d8838",
+      "sku": "REST-ACCEPT-20260908-062138-3304A472-ML-TOP",
+      "local_version": 2,
+      "product_status": "archived",
+      "identity_status": "archived"
+    }
+  ]
+}

@@ -20,6 +20,6 @@ final class PromotionStorefrontPageServiceTitleContractTest extends TestCase
 
         self::assertStringContainsString("'page_title' => (string)\$copy['page_title']", $themeContent);
         self::assertStringContainsString("\$themePage['page_title'] ?? \$themePage['title']", $storefrontContent);
-        self::assertStringContainsString("'sale' => (string)__('季节主题陈列')", $storefrontContent);
+        self::assertStringContainsString("'sale' => (string)__('节令主题陈列')", $storefrontContent);
     }
 }

@@ -12,11 +12,14 @@ use Weline\Websites\Api\Catalog\Data\SalesChannelSummary;
 use Weline\Websites\Api\Catalog\Data\StoreSummary;
 use Weline\Websites\Api\Catalog\SalesChannelCatalogInterface;
 use Weline\Websites\Api\Catalog\StoreCatalogInterface;
+use Weline\Websites\Data\ScopeData;
 use Weline\Websites\Model\SalesChannel;
 use Weline\Websites\Model\Store;
 use Weline\Websites\Model\Website;
 use Weline\Websites\Service\Exception\ScopeResolutionException;
 use Weline\Websites\Service\Value\CanonicalStorefrontUrl;
+use Weline\Websites\Service\Value\ScopePathMatchHit;
+use Weline\Websites\Service\Value\ScopePathMatchKey;
 
 /**
  * 请求 Scope 解析器（P1a）。
@@ -28,6 +31,8 @@ use Weline\Websites\Service\Value\CanonicalStorefrontUrl;
  * 2. 站点 default Store 及其 default Channel；
  * 3. __store / __channel 仅作为一致性断言，不能改变可信解析结果。
  *
+ * L2 共享路径命中缓存可跳过最长扫描；L3 ScopeData 粘贴当前店/渠摘要。
+ *
  * 未知、停用、跨站或歧义断言必须 fail-closed；可信 URL 无店铺匹配时才使用默认。
  */
 class ScopeResolver
@@ -38,7 +43,13 @@ class ScopeResolver
     public function __construct(
         private readonly StoreCatalogInterface $storeCatalog,
         private readonly SalesChannelCatalogInterface $channelCatalog,
+        private ?ScopePathMatchCache $pathMatchCache = null,
     ) {
+    }
+
+    private function pathMatchCache(): ScopePathMatchCache
+    {
+        return $this->pathMatchCache ??= new ScopePathMatchCache();
     }
 
     /**
@@ -67,8 +78,43 @@ class ScopeResolver
             );
         }
 
-        [$store, $routePath] = $this->resolveStore($websiteId, $trustedRequestUrl, $defaultRoutePath);
-        $channel = $this->resolveChannel($websiteId, $store);
+        $matchKey = null;
+        try {
+            $matchKey = ScopePathMatchKey::fromTrustedUrl($trustedRequestUrl);
+        } catch (\InvalidArgumentException) {
+            $matchKey = null;
+        }
+
+        $store = null;
+        $channel = null;
+        $routePath = null;
+        $fromCache = false;
+
+        if ($matchKey instanceof ScopePathMatchKey) {
+            $hit = $this->pathMatchCache()->readMatch($matchKey);
+            if ($hit instanceof ScopePathMatchHit
+                && $hit->matchesWebsite($websiteId, $websiteCode)
+            ) {
+                $cachedStore = $hit->storeSummary();
+                $cachedChannel = $hit->channelSummary();
+                if ($cachedStore instanceof StoreSummary
+                    && $cachedChannel instanceof SalesChannelSummary
+                    && $this->isUsableCachedStore($websiteId, $cachedStore)
+                    && $this->isUsableCachedChannel($websiteId, $cachedStore, $cachedChannel)
+                ) {
+                    $store = $cachedStore;
+                    $channel = $cachedChannel;
+                    $routePath = $hit->routePath;
+                    $fromCache = true;
+                }
+            }
+        }
+
+        if (!$fromCache) {
+            [$store, $routePath] = $this->resolveStore($websiteId, $trustedRequestUrl, $defaultRoutePath);
+            $channel = $this->resolveChannel($websiteId, $store);
+        }
+
         $this->assertExplicitScope($store, $channel, $params);
 
         $storeCode = $store->code;
@@ -89,7 +135,40 @@ class ScopeResolver
         ScopeContext::setChannelCode($channelCode);
         RequestContext::setStorefrontRoutePath($routePath);
 
+        // L3: paste Store/Channel summaries into request context once.
+        ScopeData::install($store, $channel, $routePath);
+
+        // L2: publish path match + entity snapshots for other workers.
+        if (!$fromCache && $matchKey instanceof ScopePathMatchKey) {
+            $this->pathMatchCache()->writeMatch(
+                $matchKey,
+                ScopePathMatchHit::fromResolved($websiteId, $websiteCode, $store, $channel, $routePath),
+            );
+        }
+
         return new StorefrontNavigationScope($identity, $routePath);
+    }
+
+    private function isUsableCachedStore(int $websiteId, StoreSummary $store): bool
+    {
+        return $store->websiteId === $websiteId
+            && $store->enabled
+            && $store->lifecycleStatus === Store::LIFECYCLE_ACTIVE
+            && $store->tombstonedAt === null;
+    }
+
+    private function isUsableCachedChannel(
+        int $websiteId,
+        StoreSummary $store,
+        SalesChannelSummary $channel,
+    ): bool {
+        return $channel->websiteId === $websiteId
+            && $channel->storeId === $store->id
+            && $channel->enabled
+            && $channel->effectiveEnabled
+            && $channel->parentStoreLifecycleStatus === Store::LIFECYCLE_ACTIVE
+            && $channel->isDefault
+            && $channel->code === SalesChannel::CODE_DEFAULT;
     }
 
     /**
@@ -220,7 +299,7 @@ class ScopeResolver
      */
     private function resolveChannel(int $websiteId, StoreSummary $store): SalesChannelSummary
     {
-        $channel = $this->channelCatalog->defaultChannel($store->id);
+        $channel = $this->channelCatalog->defaultChannelForStore($store);
         if ($channel === null || !$channel->enabled || !$channel->effectiveEnabled
             || $channel->parentStoreLifecycleStatus !== Store::LIFECYCLE_ACTIVE
             || $channel->websiteId !== $websiteId

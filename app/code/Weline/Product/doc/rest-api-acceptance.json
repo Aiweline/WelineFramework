@@ -1,0 +1,291 @@
+{
+  "schema": "product-rest-acceptance.v1",
+  "verified_at": "2026-09-08",
+  "base_url": "https://p05113ef3.test.weline.com:9555",
+  "routes": {
+    "create": "POST /api/weline_product/rest/v1/products/create",
+    "edit": "PUT /api/weline_product/rest/v1/products/edit",
+    "detail": "GET /api/weline_product/rest/v1/products/detail",
+    "token": "POST /api/api/api/rest/v1/apps/token"
+  },
+  "unit": {
+    "command": "php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Api/ProductRestInputTest.php",
+    "tests": 6,
+    "assertions": 31,
+    "passed": true,
+    "red_before_implementation": true
+  },
+  "runtime": {
+    "http_cases": [
+      {
+        "case": "exchange_write",
+        "http_status": 200,
+        "seconds": 0.624,
+        "error_code": null,
+        "success": true
+      },
+      {
+        "case": "exchange_read",
+        "http_status": 200,
+        "seconds": 0.365,
+        "error_code": null,
+        "success": true
+      },
+      {
+        "case": "missing_token",
+        "http_status": 401,
+        "seconds": 0.063,
+        "error_code": null,
+        "success": null,
+        "message": "缺少身份验证令牌。"
+      },
+      {
+        "case": "invalid_token",
+        "http_status": 401,
+        "seconds": 0.126,
+        "error_code": null,
+        "success": null,
+        "message": "令牌无效或已过期。"
+      },
+      {
+        "case": "read_scope_cannot_create",
+        "http_status": 403,
+        "seconds": 0.266,
+        "error_code": null,
+        "success": null,
+        "message": "你无权进行该操作"
+      },
+      {
+        "case": "malformed_json",
+        "http_status": 400,
+        "seconds": 0.073,
+        "error_code": "product_api_json_object_required",
+        "success": false,
+        "message": "product_api_json_object_required"
+      },
+      {
+        "case": "non_json_content_type",
+        "http_status": 415,
+        "seconds": 0.084,
+        "error_code": "product_api_json_content_type_required",
+        "success": false,
+        "message": "product_api_json_content_type_required"
+      },
+      {
+        "case": "missing_product_name",
+        "http_status": 400,
+        "seconds": 0.29,
+        "error_code": "product_name_required",
+        "success": false,
+        "message": "product_name_required"
+      },
+      {
+        "case": "create_product",
+        "http_status": 201,
+        "seconds": 0.754,
+        "error_code": null,
+        "success": true
+      },
+      {
+        "case": "repeat_create_same_request",
+        "http_status": 201,
+        "seconds": 1.563,
+        "error_code": null,
+        "success": true
+      },
+      {
+        "case": "read_created_product",
+        "http_status": 200,
+        "seconds": 0.643,
+        "error_code": null,
+        "success": true
+      },
+      {
+        "case": "read_scope_cannot_edit",
+        "http_status": 403,
+        "seconds": 0.12,
+        "error_code": null,
+        "success": null,
+        "message": "你无权进行该操作"
+      },
+      {
+        "case": "edit_product_name",
+        "http_status": 200,
+        "seconds": 0.476,
+        "error_code": null,
+        "success": true
+      },
+      {
+        "case": "reject_stale_version",
+        "http_status": 409,
+        "seconds": 0.269,
+        "error_code": "publish_version_conflict",
+        "success": false,
+        "message": "Product 版本已变化，请刷新后重试"
+      },
+      {
+        "case": "read_edited_product",
+        "http_status": 200,
+        "seconds": 0.356,
+        "error_code": null,
+        "success": true
+      },
+      {
+        "case": "unknown_product",
+        "http_status": 404,
+        "seconds": 0.094,
+        "error_code": "product_v2_identity_not_found",
+        "success": false,
+        "message": "product_v2_identity_not_found"
+      }
+    ],
+    "storage": {
+      "found": true,
+      "website_id": 0,
+      "store_id": 0,
+      "product_id": 322,
+      "global_product_uuid": "728a1bbe-4b58-50dd-94a5-2a455a7710e3",
+      "sku": "REST-ACCEPT-20260908-034223-3F66055D",
+      "local_version": 1,
+      "name": {
+        "source": "explicit",
+        "value": "REST 验收商品（已编辑）",
+        "resolved_store_id": 0,
+        "resolved_locale": "",
+        "diagnostic": null
+      },
+      "explicit_attributes": [
+        {
+          "store_id": 0,
+          "entity_type": "product",
+          "entity_id": 322,
+          "attribute_code": "name",
+          "locale": "",
+          "value_type": "string",
+          "value": "REST 验收商品（已编辑）",
+          "scope_state": "explicit",
+          "cleared": false,
+          "is_required": true
+        },
+        {
+          "store_id": 0,
+          "entity_type": "product",
+          "entity_id": 322,
+          "attribute_code": "short_description",
+          "locale": "",
+          "value_type": "string",
+          "value": "编辑名称时应保留此描述",
+          "scope_state": "explicit",
+          "cleared": false,
+          "is_required": false
+        }
+      ],
+      "sku_counts": {
+        "REST-ACCEPT-20260908-034223-3F66055D": 1,
+        "REST-ACCEPT-20260908-034223-3F66055D-EDIT": 0
+      },
+      "uuid_count": 1
+    }
+  },
+  "cleanup": {
+    "product": {
+      "success": false,
+      "action": "archive",
+      "error_code": "product_admin_internal_error",
+      "message": "商品操作失败，请稍后重试",
+      "before": {
+        "website_id": 0,
+        "product_id": 322,
+        "global_product_uuid": "728a1bbe-4b58-50dd-94a5-2a455a7710e3",
+        "sku": "REST-ACCEPT-20260908-034223-3F66055D",
+        "local_version": 1,
+        "identity_version": 1,
+        "product_status": "draft",
+        "identity_status": "draft"
+      },
+      "after": {
+        "website_id": 0,
+        "product_id": 322,
+        "global_product_uuid": "728a1bbe-4b58-50dd-94a5-2a455a7710e3",
+        "sku": "REST-ACCEPT-20260908-034223-3F66055D",
+        "local_version": 1,
+        "identity_version": 1,
+        "product_status": "draft",
+        "identity_status": "draft"
+      }
+    },
+    "credentials": {
+      "state_path": "/tmp/weline-product-rest-acceptance-credentials.json",
+      "revoked": {
+        "write": {
+          "app_id": 1,
+          "token_ids": [
+            1,
+            2
+          ]
+        },
+        "read": {
+          "app_id": 2,
+          "token_ids": [
+            3,
+            4
+          ]
+        }
+      },
+      "products_unchanged": true,
+      "storage_readback": {
+        "write": {
+          "app_id": 1,
+          "app_status": "disabled",
+          "installation_id": 1,
+          "installation_status": "revoked",
+          "tokens": [
+            {
+              "token_id": 1,
+              "revoked_at": 1788839979
+            },
+            {
+              "token_id": 2,
+              "revoked_at": 1788839979
+            }
+          ]
+        },
+        "read": {
+          "app_id": 2,
+          "app_status": "disabled",
+          "installation_id": 2,
+          "installation_status": "revoked",
+          "tokens": [
+            {
+              "token_id": 3,
+              "revoked_at": 1788839979
+            },
+            {
+              "token_id": 4,
+              "revoked_at": 1788839979
+            }
+          ]
+        }
+      }
+    },
+    "revoked_token_http": [
+      {
+        "case": "revoked_application_token",
+        "http_status": 401,
+        "seconds": 0.274,
+        "error_code": null,
+        "success": null,
+        "message": "令牌无效或已过期。"
+      }
+    ]
+  },
+  "operations": {
+    "route_upgrade": "php bin/w setup:upgrade --route --module Weline_Product: exit 0",
+    "translation_collection": "php bin/w i18n:collect Weline_Product: exit 0, 翻译缓存清理成功"
+  },
+  "notes": [
+    "功能首版1.0.166；保留并行任务的后续模块版本与改动。",
+    "创建/编辑验收通过。验收产品归档使用现有公开命令返回product_admin_internal_error，回读仍draft，未发布、未删除。",
+    "无客户端密钥、授权码、access token 或 refresh token。"
+  ]
+}

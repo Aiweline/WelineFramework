@@ -547,6 +547,13 @@ $copy = [
         display: grid;
         gap: 10px;
         margin-top: 16px;
+        max-height: min(40vh, var(--weline-checkout-items-max-height, 22.5rem));
+        overflow-x: hidden;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        padding-inline-end: var(--weline-space-1, 0.25rem);
+        scrollbar-gutter: stable;
+        -webkit-overflow-scrolling: touch;
     }
     .weline-checkout__item {
         display: grid;
@@ -638,6 +645,17 @@ $copy = [
         overflow-wrap: anywhere;
         word-break: break-word;
         line-height: 1.35;
+    }
+    .weline-checkout__item.is-unavailable {
+        opacity: 0.92;
+    }
+    .weline-checkout__item-issue {
+        display: block;
+        clear: both;
+        margin: 6px 0 0;
+        color: var(--checkout-error-text, #b12704);
+        font-size: 13px;
+        line-height: 1.4;
     }
     .weline-checkout__item-options {
         clear: both;
@@ -1349,18 +1367,37 @@ $copy = [
             guest_allowed: true,
             requires_guest_email: true,
         };
+        const hangPurpose = (function () {
+            try {
+                const params = new URLSearchParams(window.location.search || '');
+                const purpose = String(params.get('purpose') || '').toLowerCase();
+                const orderUuid = String(params.get('order_uuid') || '').trim();
+                return (purpose === 'deposit' || purpose === 'balance') && orderUuid !== '';
+            } catch (error) {
+                return false;
+            }
+        })();
         const cartIsEmpty = Boolean(checkoutState.cart.is_empty);
+        const checkoutBlocked = Boolean(
+            (data && data.checkout_blocked)
+            || (checkoutState.cart && checkoutState.cart.checkout_blocked)
+        );
+        const blockingMessage = text(
+            (data && data.blocking_message)
+            || (checkoutState.cart && checkoutState.cart.blocking_message)
+            || ''
+        ).trim();
         if (form) {
-            form.hidden = cartIsEmpty;
+            form.hidden = cartIsEmpty || hangPurpose;
         }
         if (expressHost) {
-            expressHost.hidden = cartIsEmpty;
+            expressHost.hidden = cartIsEmpty || hangPurpose || checkoutBlocked;
         }
         if (emptyState) {
-            emptyState.hidden = !cartIsEmpty;
+            emptyState.hidden = hangPurpose ? true : !cartIsEmpty;
         }
         if (message) {
-            message.hidden = cartIsEmpty;
+            message.hidden = hangPurpose ? true : cartIsEmpty;
         }
         const emailInput = form ? form.querySelector('input[name="email"]') : null;
         if (emailInput) {
@@ -1371,10 +1408,18 @@ $copy = [
         applyServerHtml(paymentBox, data.payment_methods_html);
         renderTotals();
         if (submitButton) {
-            submitButton.disabled = cartIsEmpty || !checkoutState.shippingMethods.length || !checkoutState.paymentMethods.length;
+            submitButton.disabled = hangPurpose
+                || cartIsEmpty
+                || checkoutBlocked
+                || !checkoutState.shippingMethods.length
+                || !checkoutState.paymentMethods.length;
         }
-        if (cartIsEmpty) {
+        if (hangPurpose) {
+            setMessage('', 'success');
+        } else if (cartIsEmpty) {
             setMessage(copy.empty_cart, 'error');
+        } else if (checkoutBlocked) {
+            setMessage(blockingMessage || '<?= __('购物车中有不可结算的商品，请返回购物车移除后重试') ?>', 'error');
         } else {
             setMessage('<?= __('请确认收货信息、配送方式和支付方式。') ?>', 'success');
         }
@@ -1398,8 +1443,27 @@ $copy = [
             if (window.WelineB2BSellingMode && typeof window.WelineB2BSellingMode.preferredMode === 'function') {
                 sellingMode = window.WelineB2BSellingMode.preferredMode();
             } else {
-                const match = document.cookie.match(/(?:^|; )weline_selling_mode=([^;]*)/);
-                const value = match ? decodeURIComponent(match[1]).toLowerCase() : '';
+                const names = [];
+                const site = window.site || {};
+                const websiteId = String(site.website_id || site.websiteId || '').trim();
+                if (websiteId !== '' && /^\d+$/.test(websiteId)) {
+                    names.push('weline_selling_mode_w' + websiteId);
+                }
+                String(document.cookie || '').split(';').forEach((part) => {
+                    const key = String(part.split('=')[0] || '').trim();
+                    if (/^weline_selling_mode_w\d+$/.test(key) && !names.includes(key)) {
+                        names.push(key);
+                    }
+                });
+                names.push('weline_selling_mode');
+                let value = '';
+                for (const name of names) {
+                    const match = document.cookie.match(new RegExp('(?:^|; )' + name.replace(/([.$?*|{}()[\]\\/+^])/g, '\\$1') + '=([^;]*)'));
+                    value = match ? decodeURIComponent(match[1]).toLowerCase() : '';
+                    if (value === 'tob' || value === 'toc') {
+                        break;
+                    }
+                }
                 sellingMode = value === 'tob' ? 'tob' : 'toc';
             }
         } catch (error) {

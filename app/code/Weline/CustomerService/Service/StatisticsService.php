@@ -244,103 +244,180 @@ class StatisticsService
 
     /**
      * 计算平均响应时间（秒）
-     * 
-     * @param int $agentId 客服ID
-     * @param string $startDate 开始日期
-     * @param string $endDate 结束日期
-     * @return float
+     *
+     * 转让分账：
+     * - 转让方：累计到 transferred_at（含转让前未回复的等待）
+     * - 接收方：从 transferred_at 起算
      */
     public function getAverageResponseTime(int $agentId, string $startDate, string $endDate): float
     {
-        /** @var ChatSession $session */
-        $session = ObjectManager::getInstance(ChatSession::class);
-        
-        // 获取该客服的所有会话
-        $sessions = $session->reset()
+        $times = $this->collectResponseTimes($agentId, $startDate, $endDate);
+        if ($times === []) {
+            return 0.0;
+        }
+
+        return round(array_sum($times) / count($times), 2);
+    }
+
+    /**
+     * 获取最快响应时间（秒）
+     */
+    public function getMinResponseTime(int $agentId, string $startDate, string $endDate): float
+    {
+        $times = $this->collectResponseTimes($agentId, $startDate, $endDate);
+        return $times === [] ? 0.0 : round(min($times), 2);
+    }
+
+    /**
+     * 获取最慢响应时间（秒）
+     */
+    public function getMaxResponseTime(int $agentId, string $startDate, string $endDate): float
+    {
+        $times = $this->collectResponseTimes($agentId, $startDate, $endDate);
+        return $times === [] ? 0.0 : round(max($times), 2);
+    }
+
+    /**
+     * @return list<float>
+     */
+    private function collectResponseTimes(int $agentId, string $startDate, string $endDate): array
+    {
+        if ($agentId <= 0) {
+            return [];
+        }
+
+        /** @var ChatSession $sessionModel */
+        $sessionModel = ObjectManager::getInstance(ChatSession::class);
+        $owned = $sessionModel->reset()
             ->where(ChatSession::schema_fields_AGENT_ID, $agentId)
             ->where(ChatSession::schema_fields_CREATED_AT, $startDate, '>=')
             ->where(ChatSession::schema_fields_CREATED_AT, $endDate, '<=')
             ->select()
             ->fetch()
             ->getItems();
-        
-        if (empty($sessions)) {
-            return 0.0;
-        }
-        
-        $totalResponseTime = 0;
-        $responseCount = 0;
-        
-        foreach ($sessions as $sessionData) {
-            $sessionId = (int)$sessionData['session_id'];
-            
-            // 获取该会话的所有客户消息
-            /** @var ChatMessage $message */
-            $message = ObjectManager::getInstance(ChatMessage::class);
-            $customerMessages = $message->reset()
-                ->where(ChatMessage::schema_fields_session_id, $sessionId)
-                ->where(ChatMessage::schema_fields_sender_type, ChatMessage::SENDER_TYPE_CUSTOMER)
-                ->order(ChatMessage::schema_fields_created_at, 'ASC')
-                ->select()
-                ->fetch()
-                ->getItems();
-            
-            foreach ($customerMessages as $customerMsg) {
-                $customerMsgTime = strtotime($customerMsg['created_at']);
-                
-                // 查找该消息之后的第一条客服回复
-                $agentMessage = $message->reset()
-                    ->where(ChatMessage::schema_fields_session_id, $sessionId)
-                    ->where(ChatMessage::schema_fields_sender_type, ChatMessage::SENDER_TYPE_AGENT)
-                    ->where(ChatMessage::schema_fields_created_at, $customerMsg['created_at'], '>')
-                    ->order(ChatMessage::schema_fields_created_at, 'ASC')
-                    ->find()
-                    ->fetch();
-                
-                if ($agentMessage->getId()) {
-                    $agentMsgTime = strtotime($agentMessage->getData('created_at'));
-                    $responseTime = $agentMsgTime - $customerMsgTime;
-                    if ($responseTime > 0) {
-                        $totalResponseTime += $responseTime;
-                        $responseCount++;
-                    }
-                }
+        $transferredOut = $sessionModel->reset()
+            ->where(ChatSession::schema_fields_TRANSFERRED_FROM_AGENT_ID, $agentId)
+            ->where(ChatSession::schema_fields_TRANSFERRED_AT, $startDate, '>=')
+            ->where(ChatSession::schema_fields_TRANSFERRED_AT, $endDate, '<=')
+            ->select()
+            ->fetch()
+            ->getItems();
+
+        $byId = [];
+        foreach (array_merge(is_array($owned) ? $owned : [], is_array($transferredOut) ? $transferredOut : []) as $row) {
+            $data = $row instanceof ChatSession ? $row->getData() : (is_array($row) ? $row : []);
+            $sid = (int)($data[ChatSession::schema_fields_ID] ?? 0);
+            if ($sid > 0) {
+                $byId[$sid] = $data;
             }
         }
-        
-        return $responseCount > 0 ? round($totalResponseTime / $responseCount, 2) : 0.0;
+
+        $times = [];
+        foreach ($byId as $sessionId => $sessionData) {
+            $windows = $this->ownershipWindowsForAgent($agentId, $sessionData);
+            foreach ($windows as $window) {
+                $times = array_merge($times, $this->responseTimesInWindow($sessionId, $agentId, $window['start'], $window['end']));
+            }
+        }
+
+        return $times;
     }
 
     /**
-     * 获取最快响应时间（秒）
-     * 
-     * @param int $agentId 客服ID
-     * @param string $startDate 开始日期
-     * @param string $endDate 结束日期
-     * @return float
+     * @param array<string, mixed> $sessionData
+     * @return list<array{start:int,end:int|null}>
      */
-    public function getMinResponseTime(int $agentId, string $startDate, string $endDate): float
+    private function ownershipWindowsForAgent(int $agentId, array $sessionData): array
     {
-        // 简化实现：遍历所有响应时间找最小值
-        $avgTime = $this->getAverageResponseTime($agentId, $startDate, $endDate);
-        // 实际应该计算所有响应时间的最小值，这里简化处理
-        return $avgTime > 0 ? $avgTime * 0.5 : 0.0;
+        $created = strtotime((string)($sessionData[ChatSession::schema_fields_CREATED_AT] ?? '')) ?: 0;
+        $transferredAtRaw = trim((string)($sessionData[ChatSession::schema_fields_TRANSFERRED_AT] ?? ''));
+        $transferredAt = $transferredAtRaw !== '' ? (strtotime($transferredAtRaw) ?: 0) : 0;
+        $fromId = (int)($sessionData[ChatSession::schema_fields_TRANSFERRED_FROM_AGENT_ID] ?? 0);
+        $ownerId = (int)($sessionData[ChatSession::schema_fields_AGENT_ID] ?? 0);
+        $windows = [];
+
+        // 转让方：从创建到转让时刻
+        if ($fromId === $agentId && $transferredAt > 0) {
+            $windows[] = [
+                'start' => $created > 0 ? $created : $transferredAt,
+                'end' => $transferredAt,
+            ];
+        }
+
+        // 当前归属方
+        if ($ownerId === $agentId) {
+            $start = ($fromId > 0 && $transferredAt > 0) ? $transferredAt : ($created > 0 ? $created : time());
+            $windows[] = [
+                'start' => $start,
+                'end' => null,
+            ];
+        }
+
+        return $windows;
     }
 
     /**
-     * 获取最慢响应时间（秒）
-     * 
-     * @param int $agentId 客服ID
-     * @param string $startDate 开始日期
-     * @param string $endDate 结束日期
-     * @return float
+     * @return list<float>
      */
-    public function getMaxResponseTime(int $agentId, string $startDate, string $endDate): float
+    private function responseTimesInWindow(int $sessionId, int $agentId, int $windowStart, ?int $windowEnd): array
     {
-        // 简化实现：遍历所有响应时间找最大值
-        $avgTime = $this->getAverageResponseTime($agentId, $startDate, $endDate);
-        // 实际应该计算所有响应时间的最大值，这里简化处理
-        return $avgTime > 0 ? $avgTime * 2.0 : 0.0;
+        if ($sessionId <= 0 || $windowStart <= 0) {
+            return [];
+        }
+
+        /** @var ChatMessage $message */
+        $message = ObjectManager::getInstance(ChatMessage::class);
+        $customerMessages = $message->reset()
+            ->where(ChatMessage::schema_fields_session_id, $sessionId)
+            ->where(ChatMessage::schema_fields_sender_type, ChatMessage::SENDER_TYPE_CUSTOMER)
+            ->order(ChatMessage::schema_fields_created_at, 'ASC')
+            ->select()
+            ->fetch()
+            ->getItems();
+
+        $times = [];
+        foreach ($customerMessages as $customerMsg) {
+            $data = $customerMsg instanceof ChatMessage ? $customerMsg->getData() : (is_array($customerMsg) ? $customerMsg : []);
+            $customerAt = strtotime((string)($data[ChatMessage::schema_fields_created_at] ?? '')) ?: 0;
+            if ($customerAt <= 0) {
+                continue;
+            }
+            if ($customerAt < $windowStart) {
+                continue;
+            }
+            if ($windowEnd !== null && $customerAt > $windowEnd) {
+                continue;
+            }
+
+            $clockStart = max($customerAt, $windowStart);
+            $agentMessage = $message->reset()
+                ->where(ChatMessage::schema_fields_session_id, $sessionId)
+                ->where(ChatMessage::schema_fields_sender_type, ChatMessage::SENDER_TYPE_AGENT)
+                ->where(ChatMessage::schema_fields_sender_id, $agentId)
+                ->where(ChatMessage::schema_fields_created_at, date('Y-m-d H:i:s', $clockStart), '>=')
+                ->order(ChatMessage::schema_fields_created_at, 'ASC')
+                ->find()
+                ->fetch();
+
+            if ($agentMessage->getId()) {
+                $replyAt = strtotime((string)$agentMessage->getData(ChatMessage::schema_fields_created_at)) ?: 0;
+                if ($windowEnd !== null && $replyAt > $windowEnd) {
+                    // 回复发生在转让之后，不算转让方
+                    $times[] = (float)max(0, $windowEnd - $clockStart);
+                    continue;
+                }
+                if ($replyAt > $clockStart) {
+                    $times[] = (float)($replyAt - $clockStart);
+                }
+                continue;
+            }
+
+            if ($windowEnd !== null) {
+                $times[] = (float)max(0, $windowEnd - $clockStart);
+            }
+        }
+
+        return $times;
     }
 
     /**
@@ -357,6 +434,7 @@ class StatisticsService
         $session = ObjectManager::getInstance(ChatSession::class);
         
         // 只统计已关闭的会话
+        // NOTE: keep existing implementation below
         $sessions = $session->reset()
             ->where(ChatSession::schema_fields_AGENT_ID, $agentId)
             ->where(ChatSession::schema_fields_STATUS, ChatSession::STATUS_CLOSED)

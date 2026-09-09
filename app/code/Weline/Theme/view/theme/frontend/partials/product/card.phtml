@@ -61,7 +61,10 @@ $uniqueId = 'product-card-' . uniqid();
                     <img src="<?= $productImage ?>"
                          alt="<?= $productName ?>"
                          class="product-card-partial__image"
-                         loading="lazy">
+                         width="800"
+                         height="800"
+                         loading="lazy"
+                         decoding="async">
                 <?php else: ?>
                     <div class="product-card-partial__image-placeholder">
                         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">

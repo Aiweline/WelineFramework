@@ -6,11 +6,10 @@ namespace Weline\Geo\Cron;
 
 use Weline\Framework\Cron\CronTaskInterface;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Geo\Model\Feed;
-use Weline\Geo\Service\FeedQueueService;
+use Weline\Geo\Service\FeedScheduleService;
 
 /**
- * Periodically enqueues GEO feed generation for enabled feeds.
+ * Every 10 minutes: sync sources and generate GEO feeds only when content changed.
  */
 class AutoGenerateFeed implements CronTaskInterface
 {
@@ -26,12 +25,12 @@ class AutoGenerateFeed implements CronTaskInterface
 
     public function tip(): string
     {
-        return 'Automatically generate GEO feed files based on each feed update frequency';
+        return 'Every 10 minutes check GEO feed sources and generate only when content changed';
     }
 
     public function cron_time(): string
     {
-        return '*/15 * * * *';
+        return '*/10 * * * *';
     }
 
     public function unlock_timeout(int $minute = 30): int
@@ -42,81 +41,15 @@ class AutoGenerateFeed implements CronTaskInterface
     public function execute(): string
     {
         try {
-            /** @var Feed $feedModel */
-            $feedModel = ObjectManager::getInstance(Feed::class);
-            $feeds = $feedModel
-                ->where(Feed::schema_fields_IS_ENABLED, 1)
-                ->select()
-                ->fetchArray();
+            /** @var FeedScheduleService $schedule */
+            $schedule = ObjectManager::getInstance(FeedScheduleService::class);
+            $result = $schedule->tick(true, 5000);
 
-            if (empty($feeds)) {
-                return 'No enabled GEO feeds need generation';
-            }
-
-            /** @var FeedQueueService $queueService */
-            $queueService = ObjectManager::getInstance(FeedQueueService::class);
-            $now = time();
-            $checked = 0;
-            $enqueued = 0;
-            $skipped = 0;
-            $errors = 0;
-
-            foreach ($feeds as $feedData) {
-                $checked++;
-                $feedId = (int)($feedData[Feed::schema_fields_ID] ?? 0);
-                if ($feedId <= 0) {
-                    $skipped++;
-                    continue;
-                }
-
-                $frequency = (string)($feedData[Feed::schema_fields_UPDATE_FREQUENCY] ?? Feed::FREQUENCY_DAILY);
-                $lastGeneratedAt = (int)($feedData[Feed::schema_fields_LAST_GENERATED_AT] ?? 0);
-                if (!$this->shouldGenerate($frequency, $lastGeneratedAt, $now)) {
-                    $skipped++;
-                    continue;
-                }
-
-                try {
-                    $queueService->enqueueFeedGenerate($feedId, 'json_feed', true);
-                    $enqueued++;
-                } catch (\Throwable $e) {
-                    $errors++;
-                    w_log_error(sprintf(
-                        '[Weline_Geo] AutoGenerateFeed enqueue failed: feed_id=%d, error=%s',
-                        $feedId,
-                        $e->getMessage()
-                    ));
-                }
-            }
-
-            return sprintf(
-                'GEO feed auto generation checked=%d, enqueued=%d, skipped=%d, errors=%d',
-                $checked,
-                $enqueued,
-                $skipped,
-                $errors
-            );
+            return (string)($result['message'] ?? 'GEO feed schedule finished');
         } catch (\Throwable $e) {
             $message = '[Weline_Geo] AutoGenerateFeed failed: ' . $e->getMessage();
             w_log_error($message);
             return $message;
         }
-    }
-
-    private function shouldGenerate(string $frequency, int $lastGeneratedAt, int $now): bool
-    {
-        if ($lastGeneratedAt <= 0) {
-            return true;
-        }
-
-        $interval = match ($frequency) {
-            Feed::FREQUENCY_REALTIME => 300,
-            Feed::FREQUENCY_HOURLY => 3600,
-            Feed::FREQUENCY_WEEKLY => 604800,
-            Feed::FREQUENCY_DAILY => 86400,
-            default => 86400,
-        };
-
-        return ($now - $lastGeneratedAt) >= $interval;
     }
 }

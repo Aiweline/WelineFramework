@@ -49,7 +49,40 @@ final class WlsMemoryAdapterAtomicTest extends TestCase
         self::assertFalse($adapter->isAvailable());
     }
 
-    public function testSlowRemoteReadOpensShortGlobalCooldownForAllCachePools(): void
+    public function testRecoverRemoteProbeAllowsWorkerPoolAfterOtherPoolFailure(): void
+    {
+        WlsMemoryAdapter::clearAllMemory();
+        $shared = new SharedCacheStateDouble();
+        $shared->fail = true;
+        $theme = new WlsMemoryAdapter('theme_pool', [], $shared);
+        $worker = new WlsMemoryAdapter('frontend_worker_credential', [], $shared);
+
+        self::assertNull($theme->get('token'));
+        self::assertFalse($theme->isAvailable());
+        self::assertFalse($worker->isAvailable());
+
+        $shared->fail = false;
+        $worker->recoverRemoteProbe();
+
+        self::assertTrue($worker->isAvailable());
+        self::assertTrue($worker->set('worker_state.v1', ['ok' => 1]));
+        self::assertSame(['ok' => 1], $worker->get('worker_state.v1'));
+    }
+
+    public function testRecoverRemoteProbeDropsLiveFacadeSoNextOpReconnects(): void
+    {
+        WlsMemoryAdapter::clearAllMemory();
+        $shared = new SharedCacheStateDouble();
+        $adapter = new WlsMemoryAdapter('reconnect_pool', [], null);
+        $facade = new \ReflectionProperty(WlsMemoryAdapter::class, 'memoryFacade');
+        $facade->setAccessible(true);
+        $facade->setValue($adapter, $shared);
+
+        $adapter->recoverRemoteProbe();
+        self::assertNull($facade->getValue($adapter));
+    }
+
+    public function testSlowCacheMissKeepsTheRemoteAdapterAvailable(): void
     {
         WlsMemoryAdapter::clearAllMemory();
         $shared = new SlowSharedCacheStateDouble();
@@ -60,10 +93,67 @@ final class WlsMemoryAdapterAtomicTest extends TestCase
         self::assertNull($adapter->get('first'));
         self::assertSame(1, $shared->cacheReads);
 
-        // A different key must skip the remote service while the short
-        // process-wide cooldown is active, even when another pool asks next.
+        // 慢响应仍是合法 miss，后续读取必须继续访问共享缓存。
         self::assertNull($adapter->get('second'));
-        self::assertSame(1, $shared->cacheReads);
+        self::assertSame(2, $shared->cacheReads);
+        self::assertTrue($adapter->isAvailable());
+    }
+
+    public function testSlowSuccessfulReadPreservesPayloadAndOtherPools(): void
+    {
+        foreach ([null, false, ['present' => true]] as $payload) {
+            WlsMemoryAdapter::clearAllMemory();
+            $shared = $this->createMock(SharedCacheStateInterface::class);
+            $shared->expects(self::exactly(2))->method('getCache')->willReturnCallback(
+                static function (string $pool, string $key) use ($payload): mixed {
+                    if ($pool === 'slow_success') {
+                        usleep(35_000);
+                        return $payload;
+                    }
+                    return ['peer' => 'present'];
+                },
+            );
+            $shared->expects(self::once())->method('setCache')->with('slow_peer', 'false_value', false, 0)->willReturn(true);
+            $config = ['remote_slow_threshold_ms' => 25, 'local_cache_size' => 0];
+            $first = new WlsMemoryAdapter('slow_success', $config, $shared);
+            $peer = new WlsMemoryAdapter('slow_peer', $config, $shared);
+
+            self::assertSame($payload, $first->get('value'));
+            self::assertTrue($first->isAvailable());
+            self::assertSame(['peer' => 'present'], $peer->get('value'));
+            self::assertTrue($peer->set('false_value', false));
+        }
+    }
+
+    public function testSlowCasConflictDoesNotMarkOtherPoolsUnavailable(): void
+    {
+        $shared = $this->createMock(SharedCacheStateInterface::class);
+        $shared->expects(self::once())->method('compareAndSetCache')->willReturnCallback(static function (): bool {
+            usleep(35_000);
+            return false;
+        });
+        $shared->expects(self::once())->method('getCache')->willReturn('present');
+        $config = ['remote_slow_threshold_ms' => 25, 'local_cache_size' => 0];
+        $first = new WlsMemoryAdapter('slow_conflict', $config, $shared);
+        $peer = new WlsMemoryAdapter('conflict_peer', $config, $shared);
+
+        self::assertFalse($first->compareAndSet('quota', 1, 2));
+        self::assertTrue($first->isAvailable());
+        self::assertSame('present', $peer->get('value'));
+    }
+
+    public function testMaintenanceBulkClearCanRetryAfterSlowPoolClear(): void
+    {
+        WlsMemoryAdapter::clearAllMemory();
+        $shared = new SlowClearSharedCacheStateDouble();
+        $config = ['remote_slow_threshold_ms' => 25];
+        $firstPool = new WlsMemoryAdapter('bulk_clear_first', $config, $shared);
+        $secondPool = new WlsMemoryAdapter('bulk_clear_second', $config, $shared);
+
+        // 慢清理成功后，下一缓存池仍应正常执行维护清理。
+        self::assertTrue($firstPool->clear());
+        self::assertTrue($secondPool->clear());
+        self::assertSame(2, $shared->cacheClears);
     }
 
     public function testEmptyLocalCacheSkipsEpochProbeBeforeFirstRemoteRead(): void
@@ -257,6 +347,19 @@ final class SlowSharedCacheStateDouble extends SharedCacheStateDouble
         usleep(50_000);
 
         return null;
+    }
+}
+
+final class SlowClearSharedCacheStateDouble extends SharedCacheStateDouble
+{
+    public int $cacheClears = 0;
+
+    public function clearCache(string $poolIdentity): bool
+    {
+        ++$this->cacheClears;
+        usleep(50_000);
+
+        return parent::clearCache($poolIdentity);
     }
 }
 

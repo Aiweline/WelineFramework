@@ -70,5 +70,6 @@ class Install implements InstallInterface
         $modelSetup->putModel($websiteProtocolConfig);
         $websiteProtocolConfig->setup($modelSetup, $context);
 
+        ObjectManager::getInstance(\Weline\Geo\Service\EnsureDefaultFeedsService::class)->ensure();
     }
 }

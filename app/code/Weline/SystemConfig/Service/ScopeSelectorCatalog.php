@@ -62,20 +62,29 @@ final class ScopeSelectorCatalog implements ScopeSelectorCatalogInterface
             } catch (\Throwable) {
                 continue;
             }
-            $websiteName = \trim((string)($website['name'] ?? $websiteCode)) ?: $websiteCode;
+            $websiteNameRaw = \trim((string)($website['name'] ?? $websiteCode)) ?: $websiteCode;
+            $websiteName = $this->humanizeScopeName($websiteNameRaw, $websiteCode);
+            $websiteTrigger = $this->compactTriggerName($websiteName);
             $websiteScope = $this->scopes->toStorageScope($websiteIdentity);
             $websiteLabel = (string)__('网站：%{1}', [$websiteName]);
+            $websiteTitle = (string)__('网站：%{1}', [$websiteNameRaw]);
             $websiteOptions[] = [
                 'value' => $websiteCode,
                 'label' => $websiteName,
                 'meta' => $websiteCode,
                 'website_id' => $websiteId,
             ];
-            $flat[] = ['value' => $websiteScope, 'label' => $websiteLabel, 'kind' => ScopeIdentity::KIND_WEBSITE];
+            $flat[] = [
+                'value' => $websiteScope,
+                'label' => $websiteTrigger,
+                'title' => $websiteTitle,
+                'kind' => ScopeIdentity::KIND_WEBSITE,
+            ];
             $websiteNode = [
                 'value' => $websiteScope,
                 'label' => $websiteLabel,
-                'display_label' => $websiteLabel,
+                'display_label' => $websiteTrigger,
+                'title_label' => $websiteTitle,
                 'kind' => ScopeIdentity::KIND_WEBSITE,
                 'children' => [],
             ];
@@ -95,10 +104,13 @@ final class ScopeSelectorCatalog implements ScopeSelectorCatalogInterface
                 } catch (\Throwable) {
                     continue;
                 }
-                $storeName = \trim((string)($store['name'] ?? $storeCode)) ?: $storeCode;
+                $storeNameRaw = \trim((string)($store['name'] ?? $storeCode)) ?: $storeCode;
+                $storeName = $this->humanizeScopeName($storeNameRaw, $storeCode);
+                $storeTrigger = $this->compactTriggerName($storeName);
                 $storeScope = $this->scopes->toStorageScope($storeIdentity);
+                // 树节点保留「店铺：」；触发器只要短名（外侧已有「作用范围」标签）
                 $storeLabel = (string)__('店铺：%{1}', [$storeName]);
-                $storeDisplay = (string)__('店铺：%{1} / %{2}', [$websiteName, $storeName]);
+                $storeTitle = (string)__('店铺：%{1} / %{2}', [$websiteNameRaw, $storeNameRaw]);
                 if ($identity->websiteCode === $websiteCode) {
                     $storeOptions[] = [
                         'value' => $storeCode,
@@ -108,11 +120,17 @@ final class ScopeSelectorCatalog implements ScopeSelectorCatalogInterface
                         'store_mode' => $storeMode,
                     ];
                 }
-                $flat[] = ['value' => $storeScope, 'label' => $storeDisplay, 'kind' => ScopeIdentity::KIND_STORE];
+                $flat[] = [
+                    'value' => $storeScope,
+                    'label' => $storeTrigger,
+                    'title' => $storeTitle,
+                    'kind' => ScopeIdentity::KIND_STORE,
+                ];
                 $storeNode = [
                     'value' => $storeScope,
                     'label' => $storeLabel,
-                    'display_label' => $storeDisplay,
+                    'display_label' => $storeTrigger,
+                    'title_label' => $storeTitle,
                     'kind' => ScopeIdentity::KIND_STORE,
                     'children' => [],
                 ];
@@ -136,13 +154,15 @@ final class ScopeSelectorCatalog implements ScopeSelectorCatalogInterface
                     } catch (\Throwable) {
                         continue;
                     }
-                    $channelName = \trim((string)($channel['name'] ?? $channelCode)) ?: $channelCode;
+                    $channelNameRaw = \trim((string)($channel['name'] ?? $channelCode)) ?: $channelCode;
+                    $channelName = $this->humanizeScopeName($channelNameRaw, $channelCode);
+                    $channelTrigger = $this->compactTriggerName($channelName);
                     $channelScope = $this->scopes->toStorageScope($channelIdentity);
                     $channelLabel = (string)__('渠道：%{1}', [$channelName]);
-                    $channelDisplay = (string)__('渠道：%{1} / %{2} / %{3}', [
-                        $websiteName,
-                        $storeName,
-                        $channelName,
+                    $channelTitle = (string)__('渠道：%{1} / %{2} / %{3}', [
+                        $websiteNameRaw,
+                        $storeNameRaw,
+                        $channelNameRaw,
                     ]);
                     if ($identity->websiteCode === $websiteCode && $identity->storeCode === $storeCode) {
                         $channelOptions[] = [
@@ -152,11 +172,17 @@ final class ScopeSelectorCatalog implements ScopeSelectorCatalogInterface
                             'channel_id' => (int)($channel['id'] ?? 0),
                         ];
                     }
-                    $flat[] = ['value' => $channelScope, 'label' => $channelDisplay, 'kind' => ScopeIdentity::KIND_CHANNEL];
+                    $flat[] = [
+                        'value' => $channelScope,
+                        'label' => $channelTrigger,
+                        'title' => $channelTitle,
+                        'kind' => ScopeIdentity::KIND_CHANNEL,
+                    ];
                     $storeNode['children'][] = [
                         'value' => $channelScope,
                         'label' => $channelLabel,
-                        'display_label' => $channelDisplay,
+                        'display_label' => $channelTrigger,
+                        'title_label' => $channelTitle,
                         'kind' => ScopeIdentity::KIND_CHANNEL,
                         'children' => [],
                     ];
@@ -167,9 +193,11 @@ final class ScopeSelectorCatalog implements ScopeSelectorCatalogInterface
         }
 
         $selectedLabel = $context->storageScope;
+        $selectedTitle = $selectedLabel;
         foreach ($flat as $option) {
             if ((string)($option['value'] ?? '') === $context->storageScope) {
                 $selectedLabel = (string)($option['label'] ?? $selectedLabel);
+                $selectedTitle = (string)($option['title'] ?? $selectedLabel);
                 break;
             }
         }
@@ -177,6 +205,7 @@ final class ScopeSelectorCatalog implements ScopeSelectorCatalogInterface
         return [
             'selected_scope' => $context->storageScope,
             'selected_label' => $selectedLabel,
+            'selected_title' => $selectedTitle,
             'selected_identity' => $identity->toArray(),
             'selected_kind' => $identity->scopeKind,
             'selected_website_code' => (string)$identity->websiteCode,
@@ -192,6 +221,45 @@ final class ScopeSelectorCatalog implements ScopeSelectorCatalogInterface
             'legacy_readonly' => $legacyReadonly,
             'legacy_scope' => $legacyReadonly ? $selectedScope : null,
         ];
+    }
+
+    /**
+     * Compact toolbar trigger: drop redundant tails; CSS ellipsis handles overflow.
+     */
+    private function compactTriggerName(string $friendly): string
+    {
+        $friendly = \trim($friendly);
+        if ($friendly === '') {
+            return '';
+        }
+        if (\preg_match('/^(.+?)\s+(默认店铺|主店铺|默认店)$/u', $friendly, $m)) {
+            return \trim((string)$m[1]);
+        }
+
+        return $friendly;
+    }
+
+    /**
+     * Strip long technical codes from scope names for compact toolbar triggers.
+     * Full original names remain available via title_label.
+     */
+    private function humanizeScopeName(string $raw, string $code = ''): string
+    {
+        $raw = \trim($raw);
+        if ($raw === '') {
+            return $code !== '' ? $code : '';
+        }
+        if (\str_contains($raw, '/')) {
+            $raw = \trim(\explode('/', $raw, 2)[0]);
+        }
+        $friendly = \preg_replace('/\b[a-z][a-z0-9]*(?:[_-][a-z0-9]+){2,}\b/iu', '', $raw) ?? $raw;
+        $friendly = \preg_replace('/\s{2,}/u', ' ', \trim((string)$friendly)) ?? \trim((string)$friendly);
+        $friendly = \trim($friendly, " \t\n\r\0\x0B-_/|");
+        if ($friendly === '') {
+            return $code !== '' ? $code : $raw;
+        }
+
+        return $friendly;
     }
 
     private function identityFromClaims(array $claims): ScopeIdentity

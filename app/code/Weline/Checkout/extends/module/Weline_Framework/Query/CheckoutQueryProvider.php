@@ -198,17 +198,31 @@ class CheckoutQueryProvider implements QueryProviderInterface
             );
             $payment = $this->paymentRecoveryState->get($quoteToken, $idempotencyKey);
             if (!is_array($payment)) {
+                $payContext = [
+                    'country_code' => (string)($params['country_code'] ?? ''),
+                    'locale' => (string)($params['locale'] ?? ''),
+                    'environment' => (string)($params['environment'] ?? 'sandbox'),
+                    'quote_token' => $quoteToken,
+                    'checkout_token' => $quoteToken,
+                ];
+                $session = $this->checkoutGroupSubmitService->getSession($quoteToken);
+                $deposit = is_array($session['deposit'] ?? null) ? $session['deposit'] : [];
+                $cartType = strtolower(trim((string)($session['cart_type'] ?? '')));
+                if ($cartType === 'tob' || $deposit !== []) {
+                    $payContext['purpose'] = 'deposit';
+                    $payContext['hang_purpose'] = 'deposit';
+                    if ((int)($deposit['deposit_amount_minor'] ?? 0) > 0) {
+                        $payContext['deposit_amount_minor'] = (int)$deposit['deposit_amount_minor'];
+                    }
+                    if ((int)($deposit['balance_amount_minor'] ?? 0) > 0) {
+                        $payContext['balance_amount_minor'] = (int)$deposit['balance_amount_minor'];
+                    }
+                }
                 $payment = $this->payCreatedOrders(
                     $result->orderUuids,
                     (string)($params['payment_method'] ?? ''),
                     $idempotencyKey,
-                    [
-                        'country_code' => (string)($params['country_code'] ?? ''),
-                        'locale' => (string)($params['locale'] ?? ''),
-                        'environment' => (string)($params['environment'] ?? 'sandbox'),
-                        'quote_token' => $quoteToken,
-                        'checkout_token' => $quoteToken,
-                    ],
+                    $payContext,
                 );
                 $payment = $this->recordPaymentState($quoteToken, $idempotencyKey, $payment);
             }
@@ -456,13 +470,21 @@ class CheckoutQueryProvider implements QueryProviderInterface
      */
     private function resolveFreezeCouponCode(array $params): ?string
     {
-        $couponCode = strtoupper(trim((string)($params['coupon_code'] ?? '')));
-        if ($couponCode !== '') {
-            return $couponCode;
+        $cartType = strtolower(trim((string)($params['cart_type'] ?? $params['selling_mode'] ?? $params['sellingMode'] ?? 'toc')));
+        if ($cartType === '') {
+            $cartType = 'toc';
         }
 
         try {
-            $sessionCode = ObjectManager::getInstance(MarketingCheckoutCouponSession::class)->getCouponCode();
+            $session = ObjectManager::getInstance(MarketingCheckoutCouponSession::class);
+            if (!$session->couponsAllowedForCartType($cartType)) {
+                return null;
+            }
+            $couponCode = strtoupper(trim((string)($params['coupon_code'] ?? '')));
+            if ($couponCode !== '') {
+                return $couponCode;
+            }
+            $sessionCode = $session->getCouponCode($cartType);
         } catch (\Throwable) {
             return null;
         }
@@ -545,14 +567,23 @@ class CheckoutQueryProvider implements QueryProviderInterface
         $cart = $this->loadCartSummary($params);
         $items = \is_array($cart['items'] ?? null) ? $cart['items'] : [];
         $currency = (string)($cart['currency'] ?? 'CNY');
-        $shippingMethods = $this->loadShippingMethods($shippingAddress);
-        $paymentMethods = $this->loadPaymentMethods($params + [
+        $checkoutBlocked = !empty($cart['checkout_blocked']);
+        $blockingMessage = trim((string)($cart['blocking_message'] ?? ''));
+        if ($checkoutBlocked && $blockingMessage === '') {
+            $blockingMessage = (string)__('购物车中有不可结算的商品，请移除后重试');
+        }
+        $shippingMethods = $checkoutBlocked
+            ? []
+            : $this->loadShippingMethods($shippingAddress, $items, $currency);
+        $paymentMethods = $checkoutBlocked ? [] : $this->loadPaymentMethods($params + [
             'currency' => $currency,
             'amount' => (float)($cart['grand_total'] ?? $cart['subtotal'] ?? 0),
         ]);
         $html = $this->htmlRenderer();
 
-        return $this->ok((string)__('结账信息已加载'), [
+        return $this->ok(
+            $checkoutBlocked ? $blockingMessage : (string)__('结账信息已加载'),
+            [
             'currency' => $currency,
             'identity' => [
                 'checkout_mode' => (string)($identity['checkout_mode'] ?? 'guest'),
@@ -573,6 +604,9 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 'discount_preview' => \is_array($cart['discount_preview'] ?? null)
                     ? $cart['discount_preview']
                     : null,
+                'checkout_blocked' => $checkoutBlocked,
+                'line_issues' => \is_array($cart['line_issues'] ?? null) ? $cart['line_issues'] : [],
+                'blocking_message' => $blockingMessage,
             ],
             'items' => $items,
             'shipping_methods' => $shippingMethods,
@@ -583,14 +617,20 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 $shippingMethods,
                 'shipping_method',
                 $currency,
-                (string)__('暂无可用配送方式。'),
+                $checkoutBlocked
+                    ? $blockingMessage
+                    : (string)__('当前地址下所选配送方案不可用，请调整收货地址或商品后再试。'),
                 showPrice: true,
             ),
             'payment_methods_html' => $html->renderPaymentMethodOptions(
                 $paymentMethods,
                 'payment_method',
-                (string)__('暂无可用支付方式。'),
+                $checkoutBlocked
+                    ? $blockingMessage
+                    : (string)__('暂无可用支付方式。'),
             ),
+            'checkout_blocked' => $checkoutBlocked,
+            'blocking_message' => $blockingMessage,
         ]);
     }
 
@@ -833,7 +873,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
             ];
         }
 
-        $shippingAmount = $this->resolveShippingAmount($shippingMethod, $shippingAddress);
+        $shippingAmount = $this->resolveShippingAmount($shippingMethod, $shippingAddress, $items, $currency);
         $orderItems = [];
         foreach ($items as $item) {
             $qty = (float)($item['qty'] ?? $item['quantity'] ?? 1);
@@ -972,52 +1012,85 @@ class CheckoutQueryProvider implements QueryProviderInterface
 
     /**
      * @param array<string, mixed> $shippingAddress
+     * @param list<array<string, mixed>> $cartItems
      * @return list<array<string, mixed>>
      */
-    private function loadShippingMethods(array $shippingAddress): array
+    private function loadShippingMethods(array $shippingAddress, array $cartItems = [], string $currency = 'CNY'): array
     {
         $countryCode = strtoupper(trim((string)($shippingAddress['country_code'] ?? 'CN'))) ?: 'CN';
+        $lines = [];
+        foreach ($cartItems as $item) {
+            if (!\is_array($item)) {
+                continue;
+            }
+            $line = [
+                'requires_shipping' => (bool)($item['requires_shipping'] ?? true),
+                'qty_minor' => max(1, (int)($item['qty_minor'] ?? $item['qty'] ?? 1)),
+                'unit_price_minor' => (int)($item['unit_price_minor'] ?? 0),
+                'row_total_minor' => (int)($item['row_total_minor'] ?? 0),
+                'weight_minor' => (int)($item['weight_minor'] ?? 0),
+                'volume_minor' => (int)($item['volume_minor'] ?? 0),
+            ];
+            if (isset($item['fulfillment_metadata']) && \is_array($item['fulfillment_metadata'])) {
+                $line['fulfillment_metadata'] = $item['fulfillment_metadata'];
+            }
+            $profile = trim((string)($item['shipping_profile_code']
+                ?? ($item['fulfillment_metadata']['shipping_profile_code'] ?? '')));
+            if ($profile !== '') {
+                $line['shipping_profile_code'] = $profile;
+                $line['fulfillment_metadata'] = ($line['fulfillment_metadata'] ?? []) + [
+                    'shipping_profile_code' => $profile,
+                ];
+            }
+            $lines[] = $line;
+        }
+
         try {
-            $result = w_query('shippingInfo', 'getByLocation', [
-                'country_code' => $countryCode,
-                'province' => (string)($shippingAddress['province'] ?? ''),
-                'city' => (string)($shippingAddress['city'] ?? ''),
-                'district' => (string)($shippingAddress['district'] ?? ''),
+            $result = w_query('shippingInfo', 'listQuoteOptions', [
+                'address' => [
+                    'country_code' => $countryCode,
+                    'country' => $countryCode,
+                    'province' => (string)($shippingAddress['province'] ?? ''),
+                    'city' => (string)($shippingAddress['city'] ?? ''),
+                    'district' => (string)($shippingAddress['district'] ?? ''),
+                ],
+                'lines' => $lines,
+                'currency' => $currency !== '' ? $currency : 'CNY',
+                'currency_precision' => 2,
             ]);
         } catch (\Throwable) {
             return [];
         }
 
-        if (!\is_array($result)) {
+        if (!\is_array($result) || empty($result['success'])) {
             return [];
         }
 
-        $payload = \is_array($result['data'] ?? null) ? $result['data'] : $result;
-        $services = \is_array($payload['services'] ?? null) ? $payload['services'] : [];
+        $payload = \is_array($result['data'] ?? null) ? $result['data'] : [];
+        $options = \is_array($payload['options'] ?? null) ? $payload['options'] : [];
         $methods = [];
-        foreach ($services as $service) {
-            if (!\is_array($service)) {
+        foreach ($options as $option) {
+            if (!\is_array($option)) {
                 continue;
             }
-            $code = trim((string)($service['service_code'] ?? $service['service_id'] ?? ''));
+            $code = trim((string)($option['service_code'] ?? $option['code'] ?? ''));
             if ($code === '') {
                 continue;
             }
-            $amount = $this->firstPriceAmount(\is_array($service['price_rules'] ?? null) ? $service['price_rules'] : []);
-            $etaMin = $service['estimated_days_min'] ?? null;
-            $etaMax = $service['estimated_days_max'] ?? null;
-            $eta = '';
-            if ($etaMin !== null || $etaMax !== null) {
-                $eta = (string)__('预计 %{1}-%{2} 天', [(string)$etaMin, (string)$etaMax]);
-            }
+            $amountMinor = (int)($option['amount_minor'] ?? 0);
+            $amount = $amountMinor / 100;
+            $label = (string)($option['label'] ?? $option['service_name'] ?? $code);
             $methods[] = [
                 'code' => $code,
-                'label' => (string)($service['service_name'] ?? $code),
-                'title' => (string)($service['service_name'] ?? $code),
-                'description' => $eta,
-                'eta_label' => $eta,
+                'label' => $label,
+                'title' => $label,
+                'description' => !empty($option['is_free']) || !empty($option['free_reason'])
+                    ? (string)__('免邮')
+                    : '',
+                'eta_label' => '',
                 'amount' => $amount,
                 'fee' => $amount,
+                'amount_minor' => $amountMinor,
                 'source' => 'Weline_Shipping',
             ];
         }
@@ -1089,10 +1162,15 @@ class CheckoutQueryProvider implements QueryProviderInterface
 
     /**
      * @param array<string, mixed> $shippingAddress
+     * @param list<array<string, mixed>> $cartItems
      */
-    private function resolveShippingAmount(string $shippingMethod, array $shippingAddress): float
-    {
-        foreach ($this->loadShippingMethods($shippingAddress) as $method) {
+    private function resolveShippingAmount(
+        string $shippingMethod,
+        array $shippingAddress,
+        array $cartItems = [],
+        string $currency = 'CNY',
+    ): float {
+        foreach ($this->loadShippingMethods($shippingAddress, $cartItems, $currency) as $method) {
             if ((string)($method['code'] ?? '') === $shippingMethod) {
                 return (float)($method['amount'] ?? $method['fee'] ?? 0);
             }
@@ -1182,6 +1260,8 @@ class CheckoutQueryProvider implements QueryProviderInterface
                     'params' => [
                         'shipping_address' => ['type' => 'array', 'required' => false],
                         'guest_token' => ['type' => 'string', 'required' => false, 'max_length' => 64],
+                        'cart_type' => ['type' => 'string', 'required' => false, 'max_length' => 16],
+                        'selling_mode' => ['type' => 'string', 'required' => false, 'max_length' => 16],
                     ],
                     'returns' => ['type' => 'array'],
                     'summary' => 'Load checkout cart, shipping and payment options',

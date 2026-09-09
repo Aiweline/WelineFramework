@@ -27,6 +27,7 @@ final class CatalogSeoProfileProviderTest extends TestCase
 
         self::assertSame('汉服分类 | 按朝代、形制与场景选购', $profile['title']);
         self::assertStringContainsString('明制、宋制、唐制', $profile['description']);
+        self::assertSame('category', $profile['page_type']);
     }
 
     public function testArabicBestSellersUseReviewedEnglishSeoFallback(): void
@@ -38,8 +39,9 @@ final class CatalogSeoProfileProviderTest extends TestCase
             'description' => '热销榜 | 热销榜布局 - Weline Framework',
         ]);
 
-        self::assertSame('Best-Selling Hanfu | Most-Loved Styles', $profile['title']);
+        self::assertSame('Best-Selling Hanfu', $profile['title']);
         self::assertStringContainsString('best-selling Hanfu', $profile['description']);
+        self::assertSame('product_list', $profile['page_type']);
     }
 
     public function testLegacyCategoryPageLayoutDefaultsAreLocalized(): void
@@ -60,6 +62,7 @@ final class CatalogSeoProfileProviderTest extends TestCase
             'Explore Ming, Song, and Tang dynasty Hanfu, mamian skirts, and accessories by style and occasion.',
             $profile['description'],
         );
+        self::assertSame('category', $profile['page_type']);
     }
 
     public function testMerchantAuthoredMetadataIsPreserved(): void
@@ -71,7 +74,9 @@ final class CatalogSeoProfileProviderTest extends TestCase
             'description' => 'A hand-curated seasonal edit.',
         ]);
 
-        self::assertSame([], $profile);
+        self::assertSame('product_list', $profile['page_type']);
+        self::assertArrayNotHasKey('title', $profile);
+        self::assertArrayNotHasKey('description', $profile);
     }
 
     public function testProductDetailAndNonHeadSlotsAreIgnored(): void
@@ -84,5 +89,35 @@ final class CatalogSeoProfileProviderTest extends TestCase
             '_slot' => 'body',
             'canonical_url' => 'https://shop.example/en_US/products',
         ]));
+    }
+
+    public function testLeafCategoryBuildsItemListAndBreadcrumbsFromStorefrontFacts(): void
+    {
+        $profile = $this->provider->provideSeoProfile(null, [
+            '_slot' => 'head',
+            'page_type' => 'category',
+            'canonical_url' => 'https://shop.example/category/women/mamian',
+            'title' => '分类',
+            'description' => '分类 - Weline Framework',
+            'site_name' => 'Weline Framework',
+            'category' => [
+                'name' => '马面裙',
+                'meta_description' => '精选马面裙',
+            ],
+            'storefront_offers' => [
+                ['name' => '红马面', 'url' => '/product/100', 'image' => '/a.jpg'],
+            ],
+            'storefront_category_breadcrumbs' => [
+                ['label' => '女装', 'url' => '/category/women'],
+                ['label' => '马面裙', 'url' => '/category/women/mamian'],
+            ],
+        ]);
+
+        self::assertSame('category', $profile['page_type']);
+        self::assertSame('马面裙', $profile['title']);
+        self::assertSame('精选马面裙', $profile['description']);
+        self::assertSame('红马面', $profile['item_list'][0]['name']);
+        self::assertSame('/', $profile['breadcrumbs'][0]['url']);
+        self::assertSame('马面裙', $profile['breadcrumbs'][2]['name']);
     }
 }

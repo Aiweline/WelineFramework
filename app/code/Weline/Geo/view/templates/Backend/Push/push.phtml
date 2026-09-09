@@ -4,47 +4,61 @@
  * @var array $feeds
  * @var array $platforms
  */
+$escape = static fn(mixed $v): string => htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 ?>
-<div class="content-header">
-    <h1><?= __('一键推送') ?></h1>
-</div>
-
 <div class="content-body">
-    <w:form id="push-form" class="form-horizontal">
-        <div class="w-field">
-            <label class="control-label"><?= __('选择Feed') ?></label>
-            <select name="feed_id" class="w-input" required>
-                <option value=""><?= __('请选择Feed') ?></option>
-                <?php foreach ($feeds as $feed): ?>
-                    <option value="<?= $feed['id'] ?>"><?= htmlspecialchars($feed['feed_name']) ?></option>
-                <?php endforeach; ?>
-            </select>
-        </div>
+    <p class="w-text" data-tone="muted" style="margin-bottom: var(--weline-theme-space-4, 1rem);">
+        <?= __('此页仅人工立即推送。定时推送请回到「推送管理」用统一配置开关开启（每天一次）。') ?>
+    </p>
 
-        <div class="w-field">
-            <label class="control-label"><?= __('选择平台') ?></label>
-            <div class="checkbox-group">
-                <?php foreach ($platforms as $platform): ?>
-                    <label class="checkbox-inline">
-                        <input type="checkbox" name="platform_ids[]" value="<?= $platform['id'] ?>">
-                        <?= htmlspecialchars($platform['platform_name']) ?>
-                    </label>
-                <?php endforeach; ?>
+    <?php if (empty($feeds) || empty($platforms)): ?>
+        <div class="w-stack" data-gap="sm" style="padding: var(--weline-theme-space-4, 1rem) 0;">
+            <?php if (empty($feeds)): ?>
+                <div class="w-text"><?= __('没有已启用的内容源。请先到内容源管理开启。') ?></div>
+                <a href="@url{'geo/backend/feed'}" class="w-button" data-tone="primary" data-size="sm"><?= __('内容源管理') ?></a>
+            <?php endif; ?>
+            <?php if (empty($platforms)): ?>
+                <div class="w-text"><?= __('没有已启用的平台。请先添加平台并在「账户」中配置密钥。') ?></div>
+                <a href="@url{'geo/backend/platform'}" class="w-button" data-tone="primary" data-size="sm"><?= __('平台管理') ?></a>
+            <?php endif; ?>
+        </div>
+    <?php else: ?>
+        <w:form id="push-form" class="form-horizontal">
+            <div class="w-field">
+                <label class="control-label"><?= __('选择内容源') ?></label>
+                <select name="feed_id" class="w-input" required>
+                    <option value=""><?= __('请选择内容源') ?></option>
+                    <?php foreach ($feeds as $feed): ?>
+                        <option value="<?= (int)$feed['id'] ?>"><?= $escape($feed['feed_name'] ?? '') ?></option>
+                    <?php endforeach; ?>
+                </select>
             </div>
-        </div>
 
-        <div class="w-field">
-            <button type="submit" class="w-button" data-tone="primary">
-                <w:icon name="arrow-right" size="sm"></w:icon> <?= __('开始推送') ?>
-            </button>
-        </div>
-    </w:form>
+            <div class="w-field">
+                <label class="control-label"><?= __('选择平台') ?></label>
+                <div class="checkbox-group">
+                    <?php foreach ($platforms as $platform): ?>
+                        <label class="checkbox-inline">
+                            <input type="checkbox" name="platform_ids[]" value="<?= (int)$platform['id'] ?>">
+                            <?= $escape($platform['platform_name'] ?? '') ?>
+                        </label>
+                    <?php endforeach; ?>
+                </div>
+            </div>
 
-    <div id="push-result" style="display: none; margin-top: 20px;"></div>
+            <div class="w-field">
+                <button type="submit" class="w-button" data-tone="primary">
+                    <w:icon name="arrow-right" size="sm"></w:icon> <?= __('开始推送') ?>
+                </button>
+                <a href="@url{'geo/backend/push'}" class="w-button" data-tone="neutral"><?= __('返回历史') ?></a>
+            </div>
+        </w:form>
+
+        <div id="push-result" style="display: none; margin-top: var(--weline-theme-space-4, 1rem);"></div>
+    <?php endif; ?>
 </div>
 
-
-
+<?php if (!empty($feeds) && !empty($platforms)): ?>
 <script>
 function renderPushResult(resultDiv, type, message) {
     if (!resultDiv) {
@@ -55,51 +69,143 @@ function renderPushResult(resultDiv, type, message) {
     }
     var alert = document.createElement('div');
     alert.className = 'alert alert-' + type;
+    alert.style.whiteSpace = 'pre-wrap';
     alert.textContent = message == null ? '' : String(message);
     resultDiv.appendChild(alert);
 }
 
+function collectPushDetail(payload) {
+    if (!payload || typeof payload !== 'object') {
+        return '';
+    }
+    var parts = [];
+    if (payload.message) {
+        parts.push(String(payload.message));
+    }
+    var results = [];
+    if (payload.data && Array.isArray(payload.data.results)) {
+        results = payload.data.results;
+    } else if (Array.isArray(payload.results)) {
+        results = payload.results;
+    }
+    results.forEach(function(result) {
+        if (!result || result.success !== false) {
+            return;
+        }
+        var name = result.platform_name || (result.platform_id != null ? ('#' + result.platform_id) : '');
+        var reason = String(result.message || '').trim();
+        if (!reason) {
+            return;
+        }
+        var line = name ? (name + ': ' + reason) : reason;
+        var covered = parts.some(function(part) {
+            return part === line || part === reason || String(part).indexOf(line) !== -1;
+        });
+        if (!covered) {
+            parts.push(line);
+        }
+    });
+    return parts.join('\n');
+}
+
+function describePushFailure(error) {
+    var fallback = <?= json_encode((string)__('请重试。若持续失败，请检查平台账户密钥与推送地址。'), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+    var top = error && error.response ? error.response.data : null;
+    var fromTop = collectPushDetail(top);
+    if (fromTop) {
+        return fromTop;
+    }
+    if (window.Weline && Weline.ApiBusiness) {
+        if (typeof Weline.ApiBusiness.businessPayload === 'function') {
+            var business = Weline.ApiBusiness.businessPayload(error);
+            // businessPayload may return nested data{} without message; merge top message.
+            if (business && typeof business === 'object') {
+                var merged = Object.assign({}, business);
+                if (!merged.message && top && top.message) {
+                    merged.message = top.message;
+                }
+                if (!merged.results && top && top.data && Array.isArray(top.data.results)) {
+                    merged.results = top.data.results;
+                }
+                var fromBusiness = collectPushDetail(merged);
+                if (fromBusiness) {
+                    return fromBusiness;
+                }
+            }
+        }
+        if (typeof Weline.ApiBusiness.formatApiError === 'function') {
+            var formatted = String(Weline.ApiBusiness.formatApiError(error, '') || '').trim();
+            if (formatted && formatted !== 'Request failed.' && formatted !== 'Business error') {
+                return formatted;
+            }
+        }
+    }
+    if (error && error.message && !/^(Request failed\.?|Business error|Failed to fetch)$/i.test(String(error.message))) {
+        return String(error.message);
+    }
+    return fallback;
+}
+
+function showPushFailure(detail) {
+    Weline.UI.dialog.request({
+        tone: 'danger',
+        title: <?= json_encode((string)__('推送失败'), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>,
+        message: detail || <?= json_encode((string)__('请重试。若持续失败，请检查平台账户密钥与推送地址。'), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>,
+        confirmLabel: <?= json_encode((string)__('确定'), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>
+    });
+}
+
 document.getElementById('push-form').addEventListener('submit', function(e) {
     e.preventDefault();
-    
+
     const formData = new FormData(this);
     const platformIds = Array.from(document.querySelectorAll('input[name="platform_ids[]"]:checked'))
-        .map(input => input.value);
-    
+        .map(function(input) { return input.value; });
+
     if (!formData.get('feed_id') || platformIds.length === 0) {
         Weline.UI.dialog.request({
             tone: 'warning',
-            title: '<?= __('提示') ?>',
-            message: '<?= __('请选择Feed和至少一个平台') ?>',
-            confirmLabel: '<?= __('确定') ?>'
+            title: <?= json_encode((string)__('提示'), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>,
+            message: <?= json_encode((string)__('请选择内容源和至少一个平台'), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>,
+            confirmLabel: <?= json_encode((string)__('确定'), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>
         });
         return;
     }
-    
+
     formData.set('platform_ids', JSON.stringify(platformIds));
-    
+
     var geoPushUrl = '@url{'geo/backend/push/execute'}';
     var geoPushOpts = { method: 'POST', body: formData };
     Weline.adminRequest('geo', geoPushUrl, geoPushOpts)
     .then(function(res) {
-        var data = (res && res.data) !== undefined ? res.data : res;
+        var data = (window.Weline && Weline.ApiBusiness && typeof Weline.ApiBusiness.unwrapBusiness === 'function')
+            ? Weline.ApiBusiness.unwrapBusiness(res)
+            : res;
         var resultDiv = document.getElementById('push-result');
         resultDiv.style.display = 'block';
-        
-        if (data.success) {
-            renderPushResult(resultDiv, 'success', data.message);
-        } else {
-            renderPushResult(resultDiv, 'danger', data.message);
+        var detail = collectPushDetail(data) || String(data && data.message || '');
+
+        if (data && data.success) {
+            renderPushResult(resultDiv, 'success', detail || data.message);
+            setTimeout(function() {
+                window.location.href = '@url{'geo/backend/push'}';
+            }, 1200);
+            return;
         }
+
+        renderPushResult(resultDiv, 'danger', detail);
+        showPushFailure(detail);
     })
-    .catch(error => {
+    .catch(function(error) {
         console.error('Error:', error);
-        Weline.UI.dialog.request({
-            tone: 'danger',
-            title: '<?= __('推送失败') ?>',
-            message: '<?= __('请重试') ?>',
-            confirmLabel: '<?= __('确定') ?>'
-        });
+        var detail = describePushFailure(error);
+        var resultDiv = document.getElementById('push-result');
+        if (resultDiv) {
+            resultDiv.style.display = 'block';
+            renderPushResult(resultDiv, 'danger', detail);
+        }
+        showPushFailure(detail);
     });
 });
 </script>
+<?php endif; ?>

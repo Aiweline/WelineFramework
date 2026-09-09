@@ -185,4 +185,30 @@ final class SupplierApplicationContractTest extends TestCase
         self::assertStringContainsString('data-iq-translations', $src);
     }
 
+    public function testBackendEditorExposesBreadcrumbAndPagePadding(): void
+    {
+        $controller = dirname(__DIR__, 3) . '/Controller/Backend/Inquiry.php';
+        $controllerSrc = (string)file_get_contents($controller);
+        self::assertStringContainsString("assign('page_title'", $controllerSrc);
+
+        $menu = dirname(__DIR__, 3) . '/etc/backend/menu.xml';
+        $menuSrc = (string)file_get_contents($menu);
+        self::assertStringContainsString('action="inquiry/backend/inquiry"', $menuSrc);
+        self::assertStringNotContainsString('action="inquiry/backend/inquiry/index"', $menuSrc);
+
+        $css = dirname(__DIR__, 3) . '/view/statics/css/inquiry-editor.css';
+        $cssSrc = (string)file_get_contents($css);
+        self::assertStringNotContainsString('--iq-pad', $cssSrc);
+        self::assertStringNotContainsString('calc(100% + 2 * var(--iq-pad))', $cssSrc);
+
+        $path = dirname(__DIR__, 3) . '/view/templates/Backend/Inquiry/edit.phtml';
+        $src = (string)file_get_contents($path);
+        self::assertStringNotContainsString('--iq-pad', $src);
+        self::assertStringContainsString('w-inquiry-editor__chrome', $src);
+        self::assertStringContainsString('data-iq-lede', $src);
+        self::assertStringContainsString('data-iq-save', $src);
+        self::assertStringNotContainsString('w-backend-page__title', $src);
+        self::assertLessThanOrEqual(1, substr_count($src, '编辑询盘表单'));
+    }
+
 }

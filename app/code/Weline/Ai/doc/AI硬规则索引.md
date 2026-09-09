@@ -7,20 +7,44 @@
 | 类别 | 示例 | 是否调用 MCP |
 |------|------|--------------|
 | 非编码 | 闲聊、身份/概念问答、纯口头建议、与本仓改码无关 | **禁止**（含 ensure / `prepare_project` / `submit_task_plan`） |
+| 打招呼 `hi`/`你好`/`hello`（无编码任务）或指令「提取技能」 | 可 `prepare_project` / `resolve_skill(list_all)` **仅列** MCP 技能+指令；禁止密封编辑 / `submit_task_plan` |
 | 编码/工程 | 改代码或模块文档、诊断/评审、部署规划、项目知识检索、功能验收收口 | **必须** ensure → `prepare_project` → 既有工作流 |
 
 宿主 `AGENTS.md` 只作指针；细则以本表与 `HardConstraintsCatalog::mcpOperationalRules()` 为准。
+
+## 宿主编辑器规则（`host_editor_rules_mcp_generated_only`，强制）
+
+| 允许 | 禁止 |
+|------|------|
+| 规则权威维护在 MCP `hard-constraints.v1` 与 `Ai/Framework/模块 doc/` | Agent **手写/直接编辑** `.cursor/rules/*.mdc`、`.cursorrules`、`CLAUDE.md`、`.codex/*`、`.github/copilot-instructions.md` 等作为规则源 |
+| 由 **MCP**（ensure/install/guidance 生成器）在有专用生成路径时写出宿主编辑器规则产物 | 把编辑器私有规则文件当成高于 `prepare_project.hard_constraints` 的权威 |
+| `AGENTS.md` 仅作 MCP 接通指针 | 换项目后仍依赖本机/他仓残留的 Cursor/Codex 私有规则 |
+
+原因：换项目后编辑器私有规则会丢失或分叉；只有 MCP + 仓库文档可随项目带走。
+
+## MCP 技能（`mcp_skills_fetch_from_mcp`，强制）
+
+| 允许 | 禁止 |
+|------|------|
+| 工程/产品技能正文由 MCP `mcp-skills.v1` 提供：`prepare_project.agent_guidance.mcp_skills` → `resolve_skill` → `get_skill` | 把 Cursor/Codex 本地 `SKILL.md` 当作高于 MCP 的权威技能源 |
+| 宿主 Agent Skills 仅作**可选薄壳**（提醒去调 MCP） | 恢复 `knowledge.auto_generate_skills` / 仓库内 Skill 投影 |
+| 任务文档片段继续用 `resolve_task_context` | 用静态技能文件替代 workflow surfaces / 硬约束 |
+
+常用别名（`get_skill(skill_id=…)`）：`weline-theme-development`、`local-browser-urls`、`weline-taglib-first`（映射到对应 surface id）。
+
+模块 doc 技能：`doc/ai/INDEX.json` + `doc/ai/skills/*/SKILL.md` 只读提取进 MCP；无 file skill 时用 `doc-index:{module}`（来自 `AI-INDEX.md`）。全量列表：`resolve_skill(list_all=true)` 或指令「提取技能」。打招呼须列技能+指令（`greeting_lists_mcp_skills_and_commands`）。
 
 ## MCP 编译（权威落点）
 
 | 产物 | 位置 | 职责 |
 |------|------|------|
 | `hard-constraints.v1` | `prepare_project.agent_guidance.hard_constraints` + MCP `instructions` preamble | 全局硬约束（由本索引与交付流程编译） |
+| `mcp-skills.v1` | `agent_guidance.mcp_skills` + `resolve_skill` / `get_skill` | 按任务可拉取的工程技能正文 |
 | `session_startup_notices` | 同上 `agent_guidance` | **只指路**，不复制本表细则 |
 | `workflow_contract.v1` surfaces | `resolve_task_context` | 按任务下发 Taglib/Theme/Hook 等细则 |
 | 宿主 `AGENTS.md` / ensure | 仓库根 / 脚本 | 只负责接通 MCP，不写框架法 |
 
-实现类：`app/code/Weline/Ai/Mcp/src/HardConstraintsCatalog.php`。改本索引或硬约束摘要后，须跑 `php app/code/Weline/Ai/Mcp/tests/guidance-workflow-contract.php`。
+实现类：`app/code/Weline/Ai/Mcp/src/HardConstraintsCatalog.php`、`McpSkillCatalog.php`。改本索引或硬约束摘要后，须跑 `php app/code/Weline/Ai/Mcp/tests/guidance-workflow-contract.php` 与 `mcp-skills-catalog.php`。
 
 ## 使用方式
 
@@ -29,22 +53,31 @@
 3. 遵守**禁止**列；完成后跑**验证**命令（如有）。
 4. 写代码前完成 [扩展点选型](../Framework/doc/3-开发/扩展点选型.md)。
 
-## 工作区不可丢弃规则
+## 工作区不可丢弃规则（`preserve_dirty_workspace`，严重）
 
-MCP 的自愈、宿主重载、插件代次刷新、密封编辑、验证回滚和崩溃恢复必须保留任务开始前已经存在的 tracked、staged、untracked 与 ignored 脏改。MCP 子进程只允许只读 Git 检查，禁止 `git reset`、`git restore`、`git checkout`、`git switch`、`git clean`、`git stash` 等全部 Git 写操作，禁止 config/helper/pager 命令注入及 force/discard 变体。分支切换只能由工作区所有者显式执行。密封事务发现目标 Hash 漂移时必须保留现场并 fail-closed，不得拿 HEAD、索引或旧快照强盖当前文件。
+MCP 的自愈、宿主重载、插件代次刷新、密封编辑、验证回滚和崩溃恢复必须保留任务开始前已经存在的 tracked、staged、untracked 与 ignored 脏改。
+
+**宿主 Agent / Shell 同等禁止（硬）**：不得为「方便 MCP 密封 / get_edit_bundle 对齐 HEAD / 重做 apply」而对工作区执行 `git checkout -- <path>`、`git restore`、`git reset`、`git clean`、`git stash` 或任何等价擦脏。密封编辑必须**脏改加载**：以当前磁盘文件的精确哈希做 `expected_file_sha256`，在脏改上合并 apply；Hash 漂移只能 fail-closed 保留现场，禁止拿 HEAD、索引、旧 journal 快照或「先恢复再改」覆盖当前文件。丢代码风险优先于密封便利。
+
+MCP 子进程只允许只读 Git 检查，禁止上述全部 Git 写操作，禁止 config/helper/pager 命令注入及 force/discard 变体。分支切换只能由工作区所有者显式执行。
 
 ## 任务路由表
 
 | 任务关键词 | 必须先读 | 禁止 | 验证 |
 |-----------|---------|------|------|
+| 规格修复、技术细节补全、listing 规格缺失、PDP 只有尺码/类型 | [dev/ai-command/product/规格修复.md](../../../../../dev/ai-command/product/规格修复.md)；`Product/scripts/remediate-product-listing-spec-attrs.php` | 只口头解释不扫库；无快照伪造属性；改 combination_key/轴矩阵冒充补全；**修完不报明细、不给每品交付地址** | `php app/code/Weline/Product/scripts/remediate-product-listing-spec-attrs.php --scan --dry-run` → `--apply`；汇报含修复表 + 每品 Markdown URL；Browser PDP 技术细节 |
 | `.phtml`、模板、Taglib、`<w:` | [Taglib/doc/README.md](../Taglib/doc/README.md)、[场景映射表.md](../Taglib/doc/场景映射表.md)、[如何自定义Tag.md](../Taglib/doc/如何自定义Tag.md) | 手写领域 select/input；`w:*` 属性内 `<?=` / `<?php`；**Taglib callback 返回 HTML 里写裸 `@static(...)`** | — |
+| 图片、`<img>`、`file:image`、CLS、宽高比 | [file-image-cls-尺寸与响应式.md](../FileManager/doc/file-image-cls-尺寸与响应式.md)；MCP `image_explicit_width_height_css` | 只写响应式 CSS 不写 HTML width/height；裸 `<img src>` 替代 `<w:file:image>`（动态业务图） | 源码含 width/height 或 aspect_ratio；主题 `.w-file-image` / foundation `height:auto` |
 | 注释、文件头、`<?=` / `<?php` 开标签 | 本文；MCP `no_php_tags_in_comments`；[开发标准与验收.md](../Framework/doc/3-开发/开发标准与验收.md) | **注释**（`//` `#` `/* */` `/** */` `<!-- -->`）内出现 `<?=` / `<?php` / 短开标签；文件头残留生成器短回显；用 `<?php /* ?>…<?=…*/` 包死代码 | 检索注释内开标签；**非**禁止 `// $x = 1;` 这类普通注释掉语句 |
+| 注释语言、代码风格、可读性 | 本文；MCP `chinese_comments_friendly_style`；[开发标准与验收.md](../Framework/doc/3-开发/开发标准与验收.md) | 新增说明性注释/PHPDoc 却用英文堆砌；过度巧妙/过度抽象/工业式套话导致难读；无视周围既有风格 | Diff 抽查注释语言与命名/控制流可读性 |
 | `@static`、静态资源 404、`/@static(` | [Framework/doc/static-resource-versioning.md](../Framework/doc/static-resource-versioning.md)、[09-static标签](../Framework/doc/4-内置标签/09-static-template-js-css标签使用指南.md) | 在 Taglib callback 字符串里用 `@static`（不会二次编译） | 浏览器 Network 无 `.../@static(` 字面量 |
 | 写 HTML 标签、页面控件 | [标签全量索引.md](../Taglib/doc/标签全量索引.md)、[Framework/doc/4-内置标签/README.md](../Framework/doc/4-内置标签/README.md) | 能用 `<w:*>` / `<lang>` / `<w:hook>` 时用裸 HTML | — |
 | 主题、layout、widget、partial | [Theme/doc/AI-INDEX.md](../Theme/doc/AI-INDEX.md)、[Theme开发总指南.md](../Theme/doc/开发/Theme开发总指南.md) | 改 `generated/`、`view/tpl`；layout 内嵌非 `Weline_Theme` 部件 | `php bin/w frontend:check-theme-layout-widgets` |
-| 前台部件 JS、`Weline.declare`、`data-weline-load`、`weline.modules.js` | [前端JS模块加载规范.md](../Theme/doc/前端JS模块加载规范.md)、[Theme.js使用指南.md](../Theme/doc/Theme.js使用指南.md)、[Theme开发总指南.md §2.6](../Theme/doc/开发/Theme开发总指南.md) | 部件/布局 `<script src="@static(...js)">` / 裸 `<js>` 直拉模块；不注册 modules 就加载 | 属性可见 + Network 由加载器拉取；无双轨 script |
-| 前端 UI、Weline UI、CSS 变量、地址表单、结账样式 | [Theme开发总指南.md](../Theme/doc/开发/Theme开发总指南.md)、[theme-css-variables-only.md](../Theme/doc/theme-css-variables-only.md)、[场景映射表.md](../Taglib/doc/场景映射表.md) | 第三方 UI（Bootstrap/Element/Ant）；硬编码色值/间距；手写国家/省/市 input 替代 `<w:theme:address>` | 对照主题组件类名与 Token；Browser 多断点 |
-| 地区筛选、国家/省/市/区选择、地址多选 chips | [场景映射表.md](../Taglib/doc/场景映射表.md)；MCP `theme_address_for_region_pickers` | 手写国家/地区 `<select>`；自造筛选芯片行；绕开 `<w:theme:address>` 的级联 input | 列表/表单筛选用 `selection=single\|multi`；chips/菜单走标签与浮层内核 |
+| 前台部件 JS、`Weline.declare`、`data-weline-load`、`weline.modules.js` | [前端JS模块加载规范.md](../Theme/doc/前端JS模块加载规范.md)、[Theme.js使用指南.md](../Theme/doc/Theme.js使用指南.md)、[Theme开发总指南.md §2.6](../Theme/doc/开发/Theme开发总指南.md)；MCP `theme_js_module_declare_only` / `weline_js_loader_framework_only`（**强制**） | 部件/布局 `<script src="@static(...js)">` / 裸 `<js>` 直拉模块；不注册 modules 就加载；**改登记不 `resource:compile welineModules`**；**在 `weline.js` 写死业务名/业务逻辑或路径启发式预载**；把核心 i18n.js 放进外置 `Weline_I18n` | 仅 `declare` + `data-weline-load|declare`；改模块后 `php bin/w resource:compile welineModules`；`weline.js` 仅 ModuleLoader + 维护懒加载；核心 `i18n` 由 Framework 登记 |
+| 前端 UI、Weline UI、CSS 变量、地址表单、结账样式 | [Theme开发总指南.md](../Theme/doc/开发/Theme开发总指南.md)、[theme-css-variables-only.md](../Theme/doc/theme-css-variables-only.md)、[theme-semantic-color-matrix.md](../Theme/doc/theme-semantic-color-matrix.md)、[场景映射表.md](../Taglib/doc/场景映射表.md)；**MCP** `get_skill(weline-theme-development)`；MCP `weline_ui_theme_first` / `theme_base_components_token_only` / `ui_skill_requires_theme_skill` | 第三方 UI（Bootstrap/Element/Ant）；硬编码色值/间距；**基础组件（`w-button`/`w-input`/`w-alert` 等）私写 hex/rgb 或平行色变量**；手写国家/省/市 input 替代 `<w:theme:address>`；**只用 frontend-design/UI 技能却不从 MCP 取主题技能**；自造 hex/rgb 色板或 px 间距阶梯 | 对照主题组件类名与 Token；Browser 多断点 |
+| UI 技能、frontend-design、审美/配色、自造设计系统 | 同上；**必须先** `get_skill(weline-theme-development)` + Theme Token 文档 | 按通用 UI 技能发明私有 palette/spacing/radius/shadow；用 UI 技能覆盖主题 Token；给基础组件另写颜色；把宿主 `SKILL.md` 当权威 | 主题 Token 优先；UI 技能仅构图/层次/文案；基础组件只消费 `--weline-theme-*` / `--color-*` |
+| 审图、截图、发图审查、**用户附图/粘贴图**、**截图不说** | [dev/ai-command/theme/审图.md](../../../../../dev/ai-command/theme/审图.md)；**MCP** `user_image_attachment_triggers_shentu` / `image_attachment_shentu_bundle`；**任意附图即审**（含后台/CMS/错误页，不限店面零售/B2B；不必再说「审图」）；**仅附图/无文字默认按 UI+原型硬审附图表面，禁止当上一话题确认或闲聊插图**；Web UI 齐读主题/UI/原型技能；**缺 `frontend-design`/`prototype` 须对用户提示并自行装入 Agent Store**；**人性化 + 规范美观审美须用 frontend-design + prototype 判定，主题契合须用 weline-theme-development；fail 必须改到 pass** | 非本仓前端图仍套店面修复；只点评不改 Web UI fail 项（含审美/人性化 fail）；把产品 UI 截图当闲聊插图或「确认上下文」跳过 E/F；宿主 `weline-ui-shentu` 描述过窄（只店面）当借口；审美「主观」借口跳过 E/F/G；缺 UI/原型技能仍写 E/F pass 或只甩锅让用户去 Settings | 分流表 + 技能门禁 + 检查清单（含 E/F/G）；Web UI 修完 Browser 验收 |
+| 地区筛选、国家/省/市/区选择、地址多选 chips、系统禁运新增国家 | [场景映射表.md](../Taglib/doc/场景映射表.md)；MCP `theme_address_for_region_pickers` / `taglib_before_hand_rolled_controls` | 手写国家/地区 `<select>`；**手写 ISO 国家码 text input**；自造筛选芯片行；绕开 `<w:theme:address>` 的级联 input | 列表/表单筛选用 `selection=single\|multi`；仅选国可用 `levels=country`；chips/菜单走标签与浮层内核 |
 | 浮层、下拉、menu、popover、tooltip、combobox、anchored-float、边界翻转、portal | [Theme开发总指南.md §通用浮层](../Theme/doc/开发/Theme开发总指南.md)、[anchored-float.md](../Theme/doc/widgets/anchored-float.md)、MCP `weline_ui_floating_primitives` | **手写 `left/top`**；自研 flip/边界检测；私有 portal 栈；地址多选菜单绕开 `UI.floating.attach` | 对照 `data-w-component` / `UI.floating.attach`；Browser 底部展开上翻 |
 | 版心、内容区宽度、页面容器、`.w-container`、`max-width`、gutter | [theme-layout-content-width.md](../Theme/doc/theme-layout-content-width.md)；MCP `frontend_unified_content_container` | **自写一套页面容器**；`1440px`/`1200px`/`1180px`/`90rem` 私有壳；已在 `.w-container` 内再写 `max-width`+`padding-inline`（双重 gutter）；`var(--weline-layout-content-max-width, 1440px)` | ThemeFrontendLayoutsContentWidthContractTest / ThemeStorefrontModuleContentWidthContractTest；对照顶栏左右沿 |
 | section、`weline-code` | [frontend-section-weline-code.md](../Theme/doc/frontend-section-weline-code.md) | 缺/空 `weline-code`；无语义名如 `section1`；同文件重复 code | `php bin/w frontend:check-section-code` |
@@ -55,11 +88,12 @@ MCP 的自愈、宿主重载、插件代次刷新、密封编辑、验证回滚�
 | 跨模块读/写 | [扩展点选型.md](../Framework/doc/3-开发/扩展点选型.md) | 跨模块 `new` 对方 Service/Model | — |
 | 浏览器 AJAX、表单提交 | [Weline.Api使用指南.md](../Frontend/doc/Weline.Api使用指南.md) | raw `fetch` / `axios` / `$.ajax` | — |
 | 后台页面、Toast、Confirm | [开发标准与验收.md](../Framework/doc/3-开发/开发标准与验收.md) | JS `alert` / `confirm` / `prompt` | — |
+| 缓存、HotCache、WLS、CachePool、进程内 memo、清理不同步 | [统一缓存范围与性能优化.md](../Framework/doc/统一缓存范围与性能优化.md)、[开发标准与验收.md](../Framework/doc/3-开发/开发标准与验收.md) | **业务类再自做一层进程内缓存**（绕开 CachePool/Adapter）；读写/清理 **key 不一致**；清理只清驱动不清进程内（或反之）；可变 Model/个性化 HTML/草稿/未提交事务读进共享缓存 | 可缓存事实走 Framework **缓存类**：进程内存储 → 驱动存储；**同 key** 读写与清理同步；单次读命中进程内则不再打驱动。`cache_lookup_tier_process_shared_db` **已取消**（勿再当 MCP 硬规则要求业务类自做三层） |
 | ORM、Model、Schema | [模块版本与升级门禁.md](../Framework/doc/3-开发/模块版本与升级门禁.md)、[模块开发完整指南.md](../Framework/doc/3-开发/模块开发完整指南.md) | 改 Model/Controller 不 bump `etc/module.php` version；密封编辑缺 bump → `EDIT_MODULE_VERSION_REQUIRED` | `php bin/w setup:upgrade -m Weline_Module` |
 | 新建 Controller、路由、后台链接 | 同上 §控制器；**URL 动作为 `edit`/`add`/`save`，禁止写成 `getEdit`/`getAdd`/`postSave`** | 把 `get*`/`post*` 方法前缀拼进 URL | `php bin/w setup:upgrade --route`；对照 [03-自定义控制器.md §HTTP方法](../Framework/doc/2-快速开始/03-自定义控制器.md) |
-| 交付、验收 URL、Browser 自测 | [WebUI浏览器验收与交付地址门禁.md](../Framework/doc/3-开发/WebUI浏览器验收与交付地址门禁.md)、[AI工程交付流程.md](./AI工程交付流程.md) §6–§7；MCP `feature_delivery_urls` / `closeout_delivery_reminder` / `browser_cache_disabled_on_open` / `browser_release_after_delivery` | 单测/curl 冒充 UI 完成；省略「交付地址」；臆造路由；写死某一 IDE Browser；**主 Host 用 `*.weline.test` 或在有 `*.test.weline.com` 时强行 `127.0.0.1`**；**带着默认缓存验本回合静态资源**；**写完交付地址仍不关验收 Browser** | 宿主可用真实 Browser：**打开即禁用缓存**后跑用例 + curl 探活；本机主链默认 `{project_hash}.test.weline.com`；汇报「交付地址」后立即关闭本回合验收标签 |
+| 交付、验收 URL、Browser 自测、**自行验证** | [WebUI浏览器验收与交付地址门禁.md](../Framework/doc/3-开发/WebUI浏览器验收与交付地址门禁.md)、[开发标准与验收.md](../Framework/doc/3-开发/开发标准与验收.md)、[AI工程交付流程.md](./AI工程交付流程.md) §6–§7；MCP `agent_self_verify_before_done` / `feature_delivery_urls` / `closeout_delivery_reminder` / `browser_cache_disabled_on_open` / `browser_release_after_delivery` | **只改代码不跑 UT/RT/WB**；无 evidence 标 acceptance passed；单测/curl 冒充 UI 完成；省略「交付地址」；臆造路由；写死某一 IDE Browser；**主 Host 用 `*.weline.test` 或在有 `*.test.weline.com` 时强行 `127.0.0.1`**；**带着默认缓存验本回合静态资源**；**写完交付地址仍不关验收 Browser** | 实现后 Agent **亲自**按验收层级验证；`passed/skipped/na` 须带 evidence；宿主可用真实 Browser：**打开即禁用缓存**后跑用例 + curl 探活；本机主链默认 `{project_hash}.test.weline.com`；汇报「交付地址」后立即关闭本回合验收标签 |
 | 多 todo 计划收口、进度汇报 | [AI工程交付流程.md](./AI工程交付流程.md) §7；MCP `plan_todo_evidence_closeout` | 计划未逐项举证就宣称「已完成」；Cursor todo 无证据标 completed；隐瞒未清库/未删代码/未跑 Factory Reset | 对每个 todo 给出路径/DB/命令/Browser 证据；部分完成须列「未完成清单」并写入 `doc/开发日志.md` |
-| 密封编辑、写码前计划、`PLAN_REQUIRED`、每条编码需求完整工作流 | [AI工程交付流程.md](./AI工程交付流程.md) §1–§4；MCP `user_requirement_full_workflow` / `mcp_call_scope` | 编码需求提出后不立即 `submit_task_plan`；非编码却强调 MCP；缺 `requirements`/验收就写码；把 `PLAN_REQUIRED` 当完成 | `php app/code/Weline/Ai/Mcp/tests/task-plan-gate.php` |
+| 密封编辑、写码前计划、`PLAN_REQUIRED`、每条编码需求完整工作流、**TDD** | [AI工程交付流程.md](./AI工程交付流程.md) §1–§4；MCP `user_requirement_full_workflow` / `plan_then_tdd_required` / `mcp_call_scope` | 编码需求提出后不立即 `submit_task_plan`；计划无 `type=unit`；先堆业务代码后补测；**未实际跑测就宣称完成**；非编码却强调 MCP；缺 `requirements`/验收就写码；把 `PLAN_REQUIRED` 当完成 | `php app/code/Weline/Ai/Mcp/tests/task-plan-gate.php`；计划含 unit；红→绿→跑通并写 PASS evidence |
 
 ## 写 HTML / 模板前决策流（硬规则）
 
@@ -71,7 +105,8 @@ MCP 的自愈、宿主重载、插件代次刷新、密封编辑、验证回滚�
 4. 布局骨架？         → layout/partial/component/widget 分层，读 Theme 总指南
 5. 内容区宽度/容器？  → 先读 theme-layout-content-width.md：已在 .w-container 内用壳层 A（width:100% + padding-inline:0）；独立壳用壳层 B（--weline-layout-content-* / .w-theme-content-width）。禁止自写第三套容器或像素字面量版心
 6. 浮层/下拉/工具条？ → menu/popover/tooltip/combobox/anchored-float 或 UI.floating.attach；禁止手写 left/top 与自研边界翻转
-7. 以上都不满足？     → 才写原生 HTML，TaskContract 说明原因
+7. 图片？             → <w:file:image> 设 width+height 或 aspect_ratio（HTML 占位防 CLS）+ 主题 CSS max-width:100%;height:auto；禁止无尺寸裸 img
+8. 以上都不满足？     → 才写原生 HTML，TaskContract 说明原因
 ```
 
 ## 会话反复纠正清单
@@ -84,16 +119,24 @@ MCP 的自愈、宿主重载、插件代次刷新、密封编辑、验证回滚�
 | 缺 `weline-code` | [frontend-section-weline-code.md](../Theme/doc/frontend-section-weline-code.md) |
 | 手写 select 代替 Taglib | [场景映射表.md](../Taglib/doc/场景映射表.md) |
 | 前端不用自研主题 / 硬编码视觉 / 手写地址级联 | [Theme开发总指南.md](../Theme/doc/开发/Theme开发总指南.md)、[theme-css-variables-only.md](../Theme/doc/theme-css-variables-only.md) |
+| 用 UI/frontend-design 技能却自造色板间距、不从 MCP 取主题技能 | MCP `get_skill(weline-theme-development)`；`ui_skill_requires_theme_skill`；[theme-css-variables-only.md](../Theme/doc/theme-css-variables-only.md) |
+| 提到 CSS/主题却不读 UI+原型+主题三技能 | MCP `css_or_theme_requires_ui_prototype_theme_skills`；`frontend-design` + `prototype` + `get_skill(weline-theme-development)` |
+| 把宿主 SKILL.md 当工程技能权威 | 本文 `mcp_skills_fetch_from_mcp`；`resolve_skill` / `get_skill` |
+| 主题开发却给基础组件私写颜色 | MCP `theme_base_components_token_only`；[theme-semantic-color-matrix.md](../Theme/doc/theme-semantic-color-matrix.md) |
 | 地区筛选/国家省市区手写 select 或自造 chips | [场景映射表.md](../Taglib/doc/场景映射表.md)；MCP `theme_address_for_region_pickers` |
 | 浮层手写 left/top / 自研 flip / 绕开 Weline.UI | [anchored-float.md](../Theme/doc/widgets/anchored-float.md)；MCP `weline_ui_floating_primitives` |
 | 自写一套页面/模块版心容器 / 双重 gutter / `1440px` 私有壳 | [theme-layout-content-width.md](../Theme/doc/theme-layout-content-width.md)；MCP `frontend_unified_content_container` |
 | 写 HTML 不查 Taglib | 本文 + [标签全量索引.md](../Taglib/doc/标签全量索引.md) |
+| 业务类自做进程内缓存 / 清理与驱动 key 不一致 | [统一缓存范围与性能优化.md](../Framework/doc/统一缓存范围与性能优化.md)（缓存类进程内+驱动同 key）；勿再引用已取消的 `cache_lookup_tier_process_shared_db` |
+| 图片缺 HTML 宽高 / 只靠 CSS 声称响应式 | [file-image-cls-尺寸与响应式.md](../FileManager/doc/file-image-cls-尺寸与响应式.md)；MCP `image_explicit_width_height_css` |
 | 前台 phtml 用 `__()` | [Theme开发总指南.md §i18n](../Theme/doc/开发/Theme开发总指南.md) |
 | `@lang{含,逗号}` 编译 ParseError | [01-lang标签使用指南.md](../Framework/doc/4-内置标签/01-lang标签使用指南.md)：逗号为参数分隔；改 `<lang>` 或加引号 |
 | Theme layout 内嵌他模块 widget | [Theme开发总指南.md](../Theme/doc/开发/Theme开发总指南.md) |
 | 部件直接 `@static` / `<script src>` 拉 JS 模块 | [前端JS模块加载规范.md](../Theme/doc/前端JS模块加载规范.md)（`data-weline-load` / `Weline.declare`） |
+| 在 `weline.js` 写死 cart/account/compare 等业务名、业务代理或兑券/加购/维护 UI；把核心 i18n.js 放进外置 Weline_I18n | 同上；MCP `weline_js_loader_framework_only`（强制）；核心 i18n 归 `Weline_Framework::js/i18n.js`；Theme declare 加载；`Weline_I18n` 仅增强；勿把 Phrase 改名为 I18n（与小写 `i18n/` CSV 冲突） |
 | `w:*` 属性写 PHP | [Theme开发总指南.md](../Theme/doc/开发/Theme开发总指南.md) |
 | 注释内写 `<?=` / `<?php`（含文件头日期短回显） | 本文 `no_php_tags_in_comments`；[开发标准与验收.md](../Framework/doc/3-开发/开发标准与验收.md) |
+| 新增注释用英文堆砌 / 代码过度巧妙难读 | 本文 `chinese_comments_friendly_style`；[开发标准与验收.md](../Framework/doc/3-开发/开发标准与验收.md) |
 | raw fetch/ajax | [Weline.Api使用指南.md](../Frontend/doc/Weline.Api使用指南.md) |
 | alert/confirm | [开发标准与验收.md](../Framework/doc/3-开发/开发标准与验收.md) |
 | routes.xml / 改 generated | [AI-ENTRY.md](../../../AI-ENTRY.md) |
@@ -101,9 +144,12 @@ MCP 的自愈、宿主重载、插件代次刷新、密封编辑、验证回滚�
 | 验收 Browser 未禁用缓存就验本回合 UI | [WebUI浏览器验收与交付地址门禁.md](../Framework/doc/3-开发/WebUI浏览器验收与交付地址门禁.md) 门禁 A WB-CACHE；MCP `browser_cache_disabled_on_open` |
 | 写完交付地址仍不关验收 Browser | [WebUI浏览器验收与交付地址门禁.md](../Framework/doc/3-开发/WebUI浏览器验收与交付地址门禁.md) 门禁 D；MCP `browser_release_after_delivery` |
 | 主验收 Host 写成 `*.weline.test` 或强行 `127.0.0.1` | 同上「本机默认 Host」；默认 `{project_hash}.test.weline.com` |
+| 未自行验证就宣称完成 / acceptance 无 evidence | [开发标准与验收.md](../Framework/doc/3-开发/开发标准与验收.md)；MCP `agent_self_verify_before_done`；`review_task_plan` 缺 evidence → closeout_allowed=false |
+| 未规划 / 未 TDD / unit 无真实跑测 evidence | [AI工程交付流程.md](./AI工程交付流程.md)；MCP `plan_then_tdd_required`（计划须含 unit；红→绿；PASS evidence） |
 | 未 Browser 自测就宣称完成 | 同上；只能报「代码已改，WebUI 验收未完成」 |
 | 多 todo 计划未逐项举证就说「已完成」 | [AI工程交付流程.md](./AI工程交付流程.md) §7（`plan_todo_evidence_closeout`）；须报「部分完成」+ 未完成清单 | |
 | 让用户手写 MCP Settings | [AGENTS.md](../../../AGENTS.md) |
+| 手写 `.cursor/rules` / Codex 私有规则当权威 | 本文 `host_editor_rules_mcp_generated_only`；仅允许 MCP 生成宿主规则产物 |
 | 改 Model 字段不 bump 模块 version | [模块版本与升级门禁.md](../Framework/doc/3-开发/模块版本与升级门禁.md)（MCP 密封编辑强制 `EDIT_MODULE_VERSION_REQUIRED`） |
 | 无会话计划就密封编辑 | [AI工程交付流程.md](./AI工程交付流程.md)（`submit_task_plan` → `task-plan.v1` 含 `requirements`；否则 `PLAN_REQUIRED`） |
 | 用户提出需求后不建完整工作流 | 同上 §1（`user_requirement_full_workflow`：需求分析→验收） |

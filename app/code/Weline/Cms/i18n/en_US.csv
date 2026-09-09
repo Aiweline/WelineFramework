@@ -144,14 +144,17 @@ ID,ID
 翻译任务未完成，请稍后重试。,"Translation did not complete. Please try again later."
 连接暂时中断，点击按钮可继续查看任务。,"The connection was interrupted. Click the button to resume the task."
 返回列表,"Back to list"
-"站点 / 一级 path","Site / first level path"
+发布上下文,"Publishing context"
 店铺,Store
-标题,Title
-我已审核当前语言标题，可用于发布,"I reviewed the current-language title and approve it for publishing"
 "path 别名","path alias"
-恢复标题自动联动,"Restore automatic title linkage"
+主题布局,"Theme layout"
 状态,Status
-"Theme 布局","Theme layout"
+技术范围,"Technical scope"
+标题,Title
+语言,Language
+我已审核当前语言标题，可用于发布,"I reviewed the current-language title and approve it for publishing"
+链接标识,"URL slug"
+恢复标题自动联动,"Restore automatic title linkage"
 保存页面设置,"Save page settings"
 新窗口打开编辑器,"Open editor in new window"
 "先保存页面设置，然后直接在这里进行 Theme 可视化编辑。","Save the page settings first, then edit visually here with Theme."
@@ -212,6 +215,7 @@ ID,ID
 "新建 CMS 页面必须先在网站默认店铺保存源语言变体。","A new CMS page must first save its source-locale variant in the website default store."
 "新建 CMS 页面时必须先保存源语言标题。","When creating a new CMS page, you must first save the source language title."
 "CMS 页面保存后未能读取页面ID。","Failed to read the page ID after saving the CMS page."
+"新建 %{1} 页面","新建 %{1} 页面"
 "CMS 页面复制必须位于写意图事务内。","CMS page copy must run inside a write-intent transaction."
 源站点和目标站点相同，无需拷贝。,"The source site and target site are the same; no copy is needed."
 "CMS 页面组复制必须位于写意图事务内。","CMS page-group copy must run inside a write-intent transaction."
@@ -222,6 +226,7 @@ ID,ID
 "CMS 一级 path 恢复后仍处于删除状态，请检查数据库 soft delete 字段写入。","The CMS first-level path is still in a deleted state after recovery. Please check the soft delete field writing in the database."
 "CMS 页面锁定读取必须位于写意图事务内。","CMS page locking reads must run inside a write-intent transaction."
 "CMS 页面不存在","CMS page does not exist"
+"当前页面类型不支持布局 %{1}。","当前页面类型不支持布局 %{1}。"
 "保存 CMS 页面布局选择","Save CMS page layout selection"
 "CMS 预览凭据生成失败。","Failed to generate CMS preview credentials."
 "CMS 清理 Theme 运行时缓存失败：%{1}","CMS failed to clear Theme runtime cache: %{1}"
@@ -269,6 +274,14 @@ ID,ID
 请先填写源语言标题。,"Enter the source-language title first."
 "墓碑店铺不能用于 CMS 页面编辑或发布。","A tombstoned store cannot be used to edit or publish CMS pages."
 "已停用店铺只能保留草稿，不能发布 CMS 页面变体。","A disabled store can retain drafts but cannot publish CMS page variants."
+页面身份与发布面,"Page identity and publishing surface"
+"站点 / 一级 path","Site / first level path"
+点击选择语言（可多选）,点击选择语言（可多选）
+点击选择语言,点击选择语言
+搜索国家、语言或代码...,搜索国家、语言或代码...
+已支持,已支持
+清空选择,清空选择
+"Theme 布局","Theme layout"
 """CMS page saved""","CMS page saved"
 "CMS 页面变体在发布期间已被修改，请重新校验后发布。","The CMS page variant changed while publishing. Validate it again before publishing."
 "CMS 页面已保存。","CMS page saved."

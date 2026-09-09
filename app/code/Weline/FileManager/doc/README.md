@@ -11,6 +11,8 @@ Cross-module code may depend only on `Weline\FileManager\Api\*`:
   and rendering contracts.
 - `FileAssetManagerInterface`: page rendering and image-usage validation. This
   established interface still exposes legacy model return types for compatibility.
+  Storefront images use `<w:file:image>` with UI `width`/`height` or `aspect_ratio`
+  (see `doc/file-image-cls-尺寸与响应式.md`).
 - `FileAssetLibraryInterface`: the data-only management boundary for asset lookup,
   upload, localized metadata, revision-guarded asset provenance metadata,
   authorized reference counts, URL resolution, move and delete. New management

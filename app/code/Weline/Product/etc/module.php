@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 return [
     'name' => 'Weline_Product',
-    'version' => '1.0.165',
+    'version' => '1.0.218',
     'requires' => [
         'Weline_Catalog' => '*',
         'Weline_DataTable' => '*',
@@ -14,17 +14,24 @@ return [
         'Weline_FileManager' => '*',
     ],
     'optional' => [
+        'Weline_Api' => '*',
+        'Weline_DeveloperWorkspace' => '*',
         'Weline_Cart' => '*',
         'Weline_Customer' => '*',
         'Weline_Inventory' => '*',
         'Weline_MediaManager' => '*',
         'Weline_Order' => '*',
+        'Weline_Review' => '*',
         'Weline_Seo' => '*',
+        'Weline_Geo' => '*',
         'Weline_Promotion' => '*',
         'Weline_Marketing' => '*',
         'Weline_Captcha' => '*',
         'Weline_Mail' => '*',
         'Weline_Theme' => '*',
+        'Weline_Shipping' => '*',
+        'Weline_EditorManager' => '*',
+        'Weline_CKEditorEditorManager' => '*',
     ],
     'provides' => [
         'view_warmup_contribution.Weline_Product'

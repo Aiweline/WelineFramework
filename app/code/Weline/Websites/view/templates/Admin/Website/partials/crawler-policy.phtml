@@ -1,0 +1,348 @@
+<?php
+/**
+ * Website-owned crawler allow/block policy — table only (search + paginate).
+ * Verdict: fold A-table; drop chip/card prototypes.
+ */
+
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Websites\Service\WebsiteCrawlerPolicyService;
+
+$website = (array)($this->getData('website') ?? []);
+$hasWebsiteIdentity = \array_key_exists('website_id', $website) || \array_key_exists('id', $website);
+$websiteId = $hasWebsiteIdentity ? (int)($website['website_id'] ?? $website['id']) : -1;
+$hookId = \preg_replace('/[^\w\-]+/', '_', (string)($this->getData('id') ?? 'website'));
+if (!\is_string($hookId) || $hookId === '' || \preg_match('/^[A-Za-z_]/D', $hookId) !== 1) {
+    $hookId = 'website_crawler';
+}
+$sectionId = $hookId . '_crawler_policy';
+
+$enabled = true;
+$entries = [];
+try {
+    /** @var WebsiteCrawlerPolicyService $service */
+    $service = ObjectManager::getInstance(WebsiteCrawlerPolicyService::class);
+    $state = $service->getEditorState($websiteId >= 0 ? $websiteId : -1);
+    $enabled = (bool)$state['enabled'];
+    $entries = \is_array($state['entries']) ? $state['entries'] : [];
+} catch (\Throwable) {
+    $entries = [];
+}
+if ($entries === [] && \class_exists(\Weline\Server\Security\CrawlerBlockCatalog::class)) {
+    $entries = \Weline\Server\Security\CrawlerBlockCatalog::defaultWebsiteEntries();
+}
+
+$escape = static fn(mixed $v): string => \htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
+$entriesJson = \json_encode(\array_values($entries), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+if (!\is_string($entriesJson)) {
+    $entriesJson = '[]';
+}
+$pageSize = 10;
+?>
+<div class="w-disclosure"
+     data-w-component="disclosure"
+     data-weline-website-crawler
+     data-crawler-page-size="<?= (int)$pageSize ?>">
+    <div id="<?= $escape($sectionId . '_heading') ?>">
+        <button class="w-disclosure__trigger" type="button" aria-expanded="false"
+                aria-controls="<?= $escape($sectionId . '_body') ?>"
+                data-w-target="#<?= $escape($sectionId . '_body') ?>"
+                data-w-action="disclosure.toggle"
+                data-w-disclosure-trigger>
+            <w:icon name="shield" size="sm"></w:icon>
+            <span><lang>爬虫拦截 / 放行</lang></span>
+            <w:icon name="chevron-down" size="sm"></w:icon>
+        </button>
+    </div>
+    <div id="<?= $escape($sectionId . '_body') ?>"
+         class="w-disclosure__panel"
+         aria-labelledby="<?= $escape($sectionId . '_heading') ?>"
+         data-w-disclosure-panel
+         hidden>
+        <div class="w-disclosure__body">
+            <p class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-3);">
+                <lang>由本网站自行管理爬虫策略。每条可选择拦截或放行；命中即拒绝本次请求，不额外封 IP。保存后同步到 WLS 对应域名。</lang>
+            </p>
+
+            <input type="hidden" name="extensions[crawler][enabled]" value="0">
+            <div class="w-switch" style="--w-mb:var(--weline-space-3);">
+                <input type="checkbox"
+                       id="<?= $escape($sectionId . '_enabled') ?>"
+                       name="extensions[crawler][enabled]"
+                       value="1"
+                       <?= $enabled ? 'checked' : '' ?>>
+                <label for="<?= $escape($sectionId . '_enabled') ?>"><lang>启用本站爬虫策略</lang></label>
+            </div>
+
+            <div class="w-cluster" data-align="end" data-wrap="true" style="--w-mb:var(--weline-space-3); --w-gap:var(--weline-space-2);">
+                <div class="w-field" style="--w-flex:1; min-width:12rem;">
+                    <label class="w-field__label" for="<?= $escape($sectionId . '_search') ?>"><lang>查找</lang></label>
+                    <input class="w-input"
+                           data-size="sm"
+                           type="search"
+                           id="<?= $escape($sectionId . '_search') ?>"
+                           data-crawler-search
+                           placeholder="<?= $escape(__('名称 / UA / 说明')) ?>"
+                           autocomplete="off">
+                </div>
+                <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);">
+                    <span class="w-text" data-tone="muted" data-crawler-meta></span>
+                    <button type="button" class="w-button" data-tone="neutral" data-size="sm" data-crawler-prev disabled>
+                        <lang>上一页</lang>
+                    </button>
+                    <button type="button" class="w-button" data-tone="neutral" data-size="sm" data-crawler-next disabled>
+                        <lang>下一页</lang>
+                    </button>
+                </div>
+                <button type="button" class="w-button" data-tone="neutral" data-size="sm" data-crawler-add>
+                    <lang>添加条目</lang>
+                </button>
+            </div>
+
+            <div class="w-table-wrap" style="--w-mb:var(--weline-space-2); overflow-x:auto;">
+                <table class="w-table" data-crawler-table>
+                    <thead>
+                    <tr>
+                        <th><lang>启用</lang></th>
+                        <th><lang>名称</lang></th>
+                        <th><lang>UA 正则</lang></th>
+                        <th><lang>动作</lang></th>
+                        <th><lang>说明</lang></th>
+                        <th></th>
+                    </tr>
+                    </thead>
+                    <tbody data-crawler-tbody></tbody>
+                </table>
+            </div>
+
+            <div class="w-cluster" data-justify="between" data-align="center" style="--w-gap:var(--weline-space-2);">
+                <p class="w-text" data-tone="muted" data-crawler-meta></p>
+                <div class="w-cluster" style="--w-gap:var(--weline-space-2);">
+                    <button type="button" class="w-button" data-tone="neutral" data-size="sm" data-crawler-prev disabled>
+                        <lang>上一页</lang>
+                    </button>
+                    <button type="button" class="w-button" data-tone="neutral" data-size="sm" data-crawler-next disabled>
+                        <lang>下一页</lang>
+                    </button>
+                </div>
+            </div>
+
+            <div data-crawler-hidden-fields hidden></div>
+            <script type="application/json" data-crawler-entries><?= $entriesJson ?></script>
+        </div>
+    </div>
+</div>
+<script>
+(function () {
+    var root = document.currentScript && document.currentScript.previousElementSibling;
+    if (!root || !root.hasAttribute || !root.hasAttribute('data-weline-website-crawler')) {
+        root = document.querySelector('[data-weline-website-crawler]');
+    }
+    if (!root || root.getAttribute('data-crawler-ready') === '1') return;
+    root.setAttribute('data-crawler-ready', '1');
+
+    var pageSize = Math.max(5, parseInt(root.getAttribute('data-crawler-page-size') || '10', 10) || 10);
+    var jsonNode = root.querySelector('[data-crawler-entries]');
+    var tbody = root.querySelector('[data-crawler-tbody]');
+    var hidden = root.querySelector('[data-crawler-hidden-fields]');
+    var searchInput = root.querySelector('[data-crawler-search]');
+    var metaNodes = root.querySelectorAll('[data-crawler-meta]');
+    var prevBtns = root.querySelectorAll('[data-crawler-prev]');
+    var nextBtns = root.querySelectorAll('[data-crawler-next]');
+    var addBtn = root.querySelector('[data-crawler-add]');
+    if (!tbody || !hidden || !jsonNode) return;
+
+    var entries = [];
+    try {
+        entries = JSON.parse(jsonNode.textContent || '[]');
+        if (!Array.isArray(entries)) entries = [];
+    } catch (e) {
+        entries = [];
+    }
+
+    var page = 1;
+    var query = '';
+    var labels = {
+        allow: <?= \json_encode((string)__('放行'), JSON_UNESCAPED_UNICODE) ?>,
+        block: <?= \json_encode((string)__('拦截'), JSON_UNESCAPED_UNICODE) ?>,
+        remove: <?= \json_encode((string)__('删除'), JSON_UNESCAPED_UNICODE) ?>,
+        empty: <?= \json_encode((string)__('无匹配条目'), JSON_UNESCAPED_UNICODE) ?>,
+        meta: <?= \json_encode((string)__('第 {page}/{pages} 页 · 共 {total} 条'), JSON_UNESCAPED_UNICODE) ?>
+    };
+
+    function normalizeEntry(row) {
+        row = row && typeof row === 'object' ? row : {};
+        var action = String(row.action || 'block').toLowerCase() === 'allow' ? 'allow' : 'block';
+        return {
+            id: String(row.id || ''),
+            name: String(row.name || ''),
+            pattern: String(row.pattern || ''),
+            category: String(row.category || 'custom') || 'custom',
+            reason: String(row.reason || ''),
+            action: action,
+            enabled: row.enabled === undefined || row.enabled === null ? true : !(row.enabled === false || row.enabled === 0 || row.enabled === '0'),
+            builtin: !!row.builtin
+        };
+    }
+
+    entries = entries.map(normalizeEntry);
+
+    function filteredIndexes() {
+        var q = query.trim().toLowerCase();
+        var out = [];
+        for (var i = 0; i < entries.length; i++) {
+            var e = entries[i];
+            if (!q) {
+                out.push(i);
+                continue;
+            }
+            var hay = (e.name + ' ' + e.pattern + ' ' + e.reason + ' ' + e.id + ' ' + e.action).toLowerCase();
+            if (hay.indexOf(q) !== -1) out.push(i);
+        }
+        return out;
+    }
+
+    function escapeHtml(s) {
+        return String(s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    function syncPageFromDom() {
+        tbody.querySelectorAll('tr[data-entry-index]').forEach(function (tr) {
+            var idx = parseInt(tr.getAttribute('data-entry-index') || '-1', 10);
+            if (idx < 0 || !entries[idx]) return;
+            var get = function (sel) { return tr.querySelector(sel); };
+            var enabledEl = get('[data-f="enabled"]');
+            var nameEl = get('[data-f="name"]');
+            var patternEl = get('[data-f="pattern"]');
+            var actionEl = get('[data-f="action"]');
+            var reasonEl = get('[data-f="reason"]');
+            entries[idx].enabled = !!(enabledEl && enabledEl.checked);
+            entries[idx].name = nameEl ? nameEl.value : entries[idx].name;
+            entries[idx].pattern = patternEl ? patternEl.value : entries[idx].pattern;
+            entries[idx].action = actionEl && actionEl.value === 'allow' ? 'allow' : 'block';
+            entries[idx].reason = reasonEl ? reasonEl.value : entries[idx].reason;
+        });
+    }
+
+    function writeHiddenFields() {
+        var html = [];
+        entries.forEach(function (e, i) {
+            html.push('<input type="hidden" name="extensions[crawler][entries][' + i + '][enabled]" value="0">');
+            if (e.enabled) {
+                html.push('<input type="hidden" name="extensions[crawler][entries][' + i + '][enabled]" value="1">');
+            }
+            html.push('<input type="hidden" name="extensions[crawler][entries][' + i + '][id]" value="' + escapeHtml(e.id) + '">');
+            html.push('<input type="hidden" name="extensions[crawler][entries][' + i + '][name]" value="' + escapeHtml(e.name) + '">');
+            html.push('<input type="hidden" name="extensions[crawler][entries][' + i + '][pattern]" value="' + escapeHtml(e.pattern) + '">');
+            html.push('<input type="hidden" name="extensions[crawler][entries][' + i + '][category]" value="' + escapeHtml(e.category) + '">');
+            html.push('<input type="hidden" name="extensions[crawler][entries][' + i + '][reason]" value="' + escapeHtml(e.reason) + '">');
+            html.push('<input type="hidden" name="extensions[crawler][entries][' + i + '][action]" value="' + escapeHtml(e.action) + '">');
+            html.push('<input type="hidden" name="extensions[crawler][entries][' + i + '][builtin]" value="' + (e.builtin ? '1' : '0') + '">');
+        });
+        hidden.innerHTML = html.join('');
+    }
+
+    function render() {
+        syncPageFromDom();
+        var indexes = filteredIndexes();
+        var pages = Math.max(1, Math.ceil(indexes.length / pageSize) || 1);
+        if (page > pages) page = pages;
+        if (page < 1) page = 1;
+        var start = (page - 1) * pageSize;
+        var slice = indexes.slice(start, start + pageSize);
+
+        if (slice.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6"><span class="w-text" data-tone="muted">' + escapeHtml(labels.empty) + '</span></td></tr>';
+        } else {
+            tbody.innerHTML = slice.map(function (idx) {
+                var e = entries[idx];
+                return ''
+                    + '<tr data-entry-index="' + idx + '">'
+                    + '<td><label class="w-switch"><input type="checkbox" data-f="enabled"' + (e.enabled ? ' checked' : '') + '></label></td>'
+                    + '<td><input class="w-input" data-size="sm" type="text" data-f="name" value="' + escapeHtml(e.name) + '"></td>'
+                    + '<td><input class="w-input" data-size="sm" type="text" data-f="pattern" value="' + escapeHtml(e.pattern) + '" spellcheck="false"></td>'
+                    + '<td><select class="w-select" data-size="sm" data-f="action">'
+                    + '<option value="block"' + (e.action !== 'allow' ? ' selected' : '') + '>' + escapeHtml(labels.block) + '</option>'
+                    + '<option value="allow"' + (e.action === 'allow' ? ' selected' : '') + '>' + escapeHtml(labels.allow) + '</option>'
+                    + '</select></td>'
+                    + '<td><input class="w-input" data-size="sm" type="text" data-f="reason" value="' + escapeHtml(e.reason) + '"></td>'
+                    + '<td><button type="button" class="w-button" data-tone="neutral" data-size="sm" data-crawler-remove="' + idx + '">' + escapeHtml(labels.remove) + '</button></td>'
+                    + '</tr>';
+            }).join('');
+        }
+
+        var metaText = labels.meta
+            .replace('{page}', String(page))
+            .replace('{pages}', String(pages))
+            .replace('{total}', String(indexes.length));
+        metaNodes.forEach(function (node) { node.textContent = metaText; });
+        prevBtns.forEach(function (btn) { btn.disabled = page <= 1; });
+        nextBtns.forEach(function (btn) { btn.disabled = page >= pages; });
+        writeHiddenFields();
+    }
+
+    var searchTimer = null;
+    searchInput && searchInput.addEventListener('input', function () {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(function () {
+            query = searchInput.value || '';
+            page = 1;
+            render();
+        }, 120);
+    });
+
+    function goPrev() {
+        syncPageFromDom();
+        page -= 1;
+        render();
+    }
+    function goNext() {
+        syncPageFromDom();
+        page += 1;
+        render();
+    }
+    prevBtns.forEach(function (btn) { btn.addEventListener('click', goPrev); });
+    nextBtns.forEach(function (btn) { btn.addEventListener('click', goNext); });
+    addBtn && addBtn.addEventListener('click', function () {
+        syncPageFromDom();
+        entries.push(normalizeEntry({
+            id: '',
+            name: '',
+            pattern: '',
+            action: 'block',
+            enabled: true,
+            builtin: false
+        }));
+        query = '';
+        if (searchInput) searchInput.value = '';
+        page = Math.max(1, Math.ceil(entries.length / pageSize));
+        render();
+    });
+
+    tbody.addEventListener('change', function () { writeHiddenFields(); syncPageFromDom(); writeHiddenFields(); });
+    tbody.addEventListener('input', function () { syncPageFromDom(); writeHiddenFields(); });
+    tbody.addEventListener('click', function (event) {
+        var btn = event.target && event.target.closest ? event.target.closest('[data-crawler-remove]') : null;
+        if (!btn) return;
+        var idx = parseInt(btn.getAttribute('data-crawler-remove') || '-1', 10);
+        syncPageFromDom();
+        if (idx >= 0 && idx < entries.length) {
+            entries.splice(idx, 1);
+            render();
+        }
+    });
+
+    var form = root.closest('form');
+    if (form) {
+        form.addEventListener('submit', function () {
+            syncPageFromDom();
+            writeHiddenFields();
+        });
+    }
+
+    render();
+})();
+</script>

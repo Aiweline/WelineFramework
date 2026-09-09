@@ -85,16 +85,41 @@
         return [];
     }
 
-    async function buildQuotePayload(code) {
-        var payload = {
+    function resolveCartType(root, forcedType) {
+        if (forcedType === 'tob' || forcedType === 'toc') {
+            return forcedType;
+        }
+        var host = root && (root.closest('[data-cart-type]') || root.closest('[data-w-mini-cart="1"]') || root.closest('[data-selling-mode]'));
+        if (!host) {
+            host = document.querySelector('[data-w-mini-cart="1"]')
+                || document.querySelector('.weline-checkout[data-cart-type]')
+                || document.documentElement;
+        }
+        var fromAttr = String(
+            (host && (host.getAttribute('data-cart-type') || host.getAttribute('data-selling-mode')))
+            || document.documentElement.getAttribute('data-selling-mode')
+            || 'toc'
+        ).toLowerCase();
+        return fromAttr === 'tob' ? 'tob' : (fromAttr || 'toc');
+    }
+
+    function withCartType(root, payload, forcedType) {
+        var next = payload && typeof payload === 'object' ? Object.assign({}, payload) : {};
+        next.cart_type = resolveCartType(root, forcedType);
+        next.selling_mode = next.cart_type;
+        return next;
+    }
+
+    async function buildQuotePayload(root, code, forcedType) {
+        var payload = withCartType(root, {
             coupon_code: code,
             currency: 'CNY',
             currency_precision: 2,
             lines: [],
-        };
+        }, forcedType);
         try {
             var cartClient = await waitForCartApi();
-            var params = {};
+            var params = withCartType(root, {}, forcedType);
             var token = guestToken();
             if (token) {
                 params.guest_token = token;
@@ -114,6 +139,13 @@
                 payload.currency = String(cartResponse.currency);
             } else if (cartResponse && cartResponse.summary && cartResponse.summary.currency) {
                 payload.currency = String(cartResponse.summary.currency);
+            }
+            if (forcedType === 'tob' || forcedType === 'toc') {
+                payload.cart_type = forcedType;
+                payload.selling_mode = forcedType;
+            } else if (cartResponse && cartResponse.cart_type) {
+                payload.cart_type = String(cartResponse.cart_type).toLowerCase() === 'tob' ? 'tob' : 'toc';
+                payload.selling_mode = payload.cart_type;
             }
         } catch (e) {
             // Session apply can still succeed without quote lines.
@@ -254,11 +286,18 @@
             renderTags([]);
         }
 
-        function quoteSavedCoupon(code) {
+        function quoteSavedCoupon(code, forcedType, opts) {
+            opts = opts && typeof opts === 'object' ? opts : {};
+            var restoreOnly = opts.restoreOnly === true;
             if (!code) {
                 return Promise.resolve(null);
             }
-            return buildQuotePayload(code).then(function (payload) {
+            var type = resolveCartType(root, forcedType);
+            if (type !== 'toc') {
+                clearAppliedState();
+                return Promise.resolve(null);
+            }
+            return buildQuotePayload(root, code, type).then(function (payload) {
                 return client.quoteDiscount(payload);
             }).then(function (quoteResponse) {
                 var discount = quoteResponse && quoteResponse.success ? quoteResponse.discount : null;
@@ -267,11 +306,15 @@
                     return quoteResponse;
                 }
                 clearAppliedState();
-                return client.removeCoupon({}, { silent: true }).then(function () {
-                    return quoteResponse;
-                }).catch(function () {
-                    return quoteResponse;
-                });
+                // Hydrate/restore must never wipe the toc session coupon on a transient 0 quote.
+                if (!restoreOnly && resolveCartType(root, type) === 'toc') {
+                    return client.removeCoupon(withCartType(root, {}, type), { silent: true }).then(function () {
+                        return quoteResponse;
+                    }).catch(function () {
+                        return quoteResponse;
+                    });
+                }
+                return quoteResponse;
             });
         }
 
@@ -279,6 +322,11 @@
             var normalized = String(code || '').trim().toUpperCase();
             if (!normalized) {
                 setMessage(i18n('data-i18n-enter-code', '请输入优惠券代码'), true);
+                return Promise.resolve(null);
+            }
+            if (resolveCartType(root) !== 'toc' || root.classList.contains('is-tob-unavailable')) {
+                clearAppliedState();
+                setMessage(i18n('data-i18n-coupon-tob-unavailable', '批发不可用'), true);
                 return Promise.resolve(null);
             }
             var existingTags = tagsEl.querySelectorAll('[data-marketing-coupon-tag]');
@@ -293,7 +341,7 @@
             setApplyLoading(true);
             miniCartBusyDelta(1);
             // applyCoupon descriptor only accepts coupon_code; quote with cart lines afterwards.
-            return client.applyCoupon({ coupon_code: normalized }, { silent: true }).then(function (response) {
+            return client.applyCoupon(withCartType(root, { coupon_code: normalized }), { silent: true }).then(function (response) {
                 if (!response || !response.success) {
                     setMessage((response && response.message) || i18n('data-i18n-unavailable', '优惠券不可用'), true);
                     return null;
@@ -301,7 +349,7 @@
                 var appliedCode = String(response.coupon_code || normalized);
                 setMessage('', false);
                 input.value = '';
-                return quoteSavedCoupon(appliedCode).then(function (quoteResponse) {
+                return quoteSavedCoupon(appliedCode, 'toc', { restoreOnly: false }).then(function (quoteResponse) {
                     var discount = quoteResponse && quoteResponse.success ? quoteResponse.discount : null;
                     if (!discount || Number(discount.amount_minor || 0) <= 0) {
                         setMessage(i18n('data-i18n-invalid-limit', '优惠券无效、不可用或已达使用上限'), true);
@@ -321,7 +369,7 @@
         function removeCouponCode() {
             setRemoving(true);
             miniCartBusyDelta(1);
-            return client.removeCoupon({}, { silent: true }).then(function (response) {
+            return client.removeCoupon(withCartType(root, {}), { silent: true }).then(function (response) {
                 clearAppliedState();
                 setMessage((response && response.message) || i18n('data-i18n-removed', '已移除优惠券'), false);
                 notifyCartDiscountChanged();
@@ -333,18 +381,56 @@
             });
         }
 
+        function hydrateForCurrentType(forcedType) {
+            var type = resolveCartType(root, forcedType);
+            if (type !== 'toc') {
+                clearAppliedState();
+                return Promise.resolve(null);
+            }
+            // DOM may still say tob until syncMiniCartChrome runs; trust event-forced toc.
+            root.classList.remove('is-tob-unavailable');
+            root.setAttribute('data-b2b-coupon-unavailable', '0');
+            root.querySelectorAll('[data-marketing-coupon-input], [data-marketing-coupon-apply]').forEach(function (el) {
+                if ('disabled' in el) {
+                    el.disabled = false;
+                }
+                el.removeAttribute('tabindex');
+            });
+            if (messageEl && messageEl.getAttribute('data-b2b-coupon-msg') === '1') {
+                messageEl.textContent = '';
+                messageEl.removeAttribute('data-b2b-coupon-msg');
+            }
+            return client.getCoupon(withCartType(root, {}, 'toc')).then(function (response) {
+                var savedCode = response && response.success ? String(response.coupon_code || '').trim() : '';
+                if (!savedCode || response.coupons_allowed === false) {
+                    clearAppliedState();
+                    return null;
+                }
+                return quoteSavedCoupon(savedCode, 'toc', { restoreOnly: true });
+            }).catch(function () {
+                // ignore preload failures
+            });
+        }
+
         applyBtn.addEventListener('click', function () {
             applyCouponCode(String(input.value || '').trim());
         });
 
-        client.getCoupon({}).then(function (response) {
-            var savedCode = response && response.success ? String(response.coupon_code || '').trim() : '';
-            if (!savedCode) {
-                return null;
+        hydrateForCurrentType();
+        window.addEventListener('weline:selling-mode-changed', function (event) {
+            var detail = event && event.detail && typeof event.detail === 'object' ? event.detail : {};
+            var mode = String(detail.selling_mode || detail.cart_type || '').toLowerCase();
+            hydrateForCurrentType(mode === 'tob' || mode === 'toc' ? mode : null);
+        });
+        // After mini-cart network refresh finishes switching type, restore tags again.
+        window.addEventListener('weline:cart-updated', function (event) {
+            var detail = event && event.detail && typeof event.detail === 'object' ? event.detail : {};
+            if (detail && detail.refresh === false) {
+                return;
             }
-            return quoteSavedCoupon(savedCode);
-        }).catch(function () {
-            // ignore preload failures
+            if (resolveCartType(root) === 'toc') {
+                hydrateForCurrentType('toc');
+            }
         });
     }
 

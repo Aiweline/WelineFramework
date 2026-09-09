@@ -4,14 +4,17 @@ declare(strict_types=1);
 namespace Weline\Cms\Extends\Module\Weline_Theme\TargetType;
 
 use Weline\Cms\Model\Page;
+use Weline\Cms\Service\CmsPageKindRegistry;
 use Weline\Cms\Service\PageService;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Api\TargetPreviewPayloadProviderInterface;
 use Weline\Theme\Api\TargetTypeProviderInterface;
 
 class CmsPageTargetTypeProvider implements TargetTypeProviderInterface, TargetPreviewPayloadProviderInterface
 {
     public function __construct(
-        private readonly PageService $pageService
+        private readonly PageService $pageService,
+        private ?CmsPageKindRegistry $pageKindRegistry = null,
     ) {
     }
 
@@ -32,7 +35,9 @@ class CmsPageTargetTypeProvider implements TargetTypeProviderInterface, TargetPr
 
     public function getLayoutTypes(): array
     {
-        return [Page::LAYOUT_TYPE];
+        $types = $this->pageKinds()->allLayoutTypes();
+
+        return $types !== [] ? $types : [Page::LAYOUT_TYPE];
     }
 
     public function getCapabilities(): array
@@ -56,7 +61,20 @@ class CmsPageTargetTypeProvider implements TargetTypeProviderInterface, TargetPr
 
     public function canUseLayoutType(string $layoutType): bool
     {
-        return strtolower(trim($layoutType)) === Page::LAYOUT_TYPE;
+        $layoutType = strtolower(trim($layoutType));
+        if ($layoutType === '') {
+            return false;
+        }
+
+        // Registry listing / editor picker: allow any registered kind layout.
+        // Per-page enforcement happens in PageService::saveLayoutSelection via path_group.
+        foreach ($this->getLayoutTypes() as $allowed) {
+            if (strtolower(trim((string)$allowed)) === $layoutType) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function resolvePreviewPayload(int $targetId, array $context = []): ?array
@@ -85,5 +103,10 @@ class CmsPageTargetTypeProvider implements TargetTypeProviderInterface, TargetPr
         );
 
         return $payload;
+    }
+
+    private function pageKinds(): CmsPageKindRegistry
+    {
+        return $this->pageKindRegistry ??= ObjectManager::getInstance(CmsPageKindRegistry::class);
     }
 }

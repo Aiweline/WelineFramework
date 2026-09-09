@@ -217,6 +217,23 @@ File: Main Js File
         var currentSegments = currentPathname.split('/').filter(function(s) { return s.length > 0; });
         var menuSegments = menuPathname.split('/').filter(function(s) { return s.length > 0; });
 
+        // 菜单常带 …/index，当前路由常省略 /index
+        if (
+            menuSegments.length === currentSegments.length + 1
+            && String(menuSegments[menuSegments.length - 1] || '').toLowerCase() === 'index'
+        ) {
+            var indexPrefixMatch = true;
+            for (var pi = 0; pi < currentSegments.length; pi++) {
+                if (menuSegments[pi] !== currentSegments[pi]) {
+                    indexPrefixMatch = false;
+                    break;
+                }
+            }
+            if (indexPrefixMatch) {
+                return Number.MAX_SAFE_INTEGER;
+            }
+        }
+
         // 如果菜单路径比当前路径长，不可能匹配
         if (menuSegments.length > currentSegments.length) {
             return -1;

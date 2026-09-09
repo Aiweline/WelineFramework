@@ -8,6 +8,10 @@ use PHPUnit\Framework\TestCase;
 use Weline\Geo\Model\Feed;
 use Weline\Geo\Service\FeedGeneratorService;
 
+if (!\defined('BP')) {
+    \define('BP', \sys_get_temp_dir());
+}
+
 class FeedGeneratorServiceMetadataTest extends TestCase
 {
     public function testJsonFeedPreservesGeoMetadataExtension(): void
@@ -46,6 +50,37 @@ class FeedGeneratorServiceMetadataTest extends TestCase
         self::assertSame('product', $payload['items'][0]['_weline_geo']['type']);
         self::assertSame('DRESS-001', $payload['items'][0]['_weline_geo']['sku']);
     }
+
+    public function testRssFeedEmitsAuthorFromMetadata(): void
+    {
+        $feed = $this->getMockBuilder(Feed::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['getData', 'getConfigArray'])
+            ->getMock();
+        $feed->method('getData')->willReturnCallback(static function (string $key = ''): string {
+            return match ($key) {
+                Feed::schema_fields_FEED_NAME => 'Articles',
+                Feed::schema_fields_FEED_URL => '/geo-feed.xml',
+                default => '',
+            };
+        });
+        $feed->method('getConfigArray')->willReturn(['description' => 'Article feed']);
+
+        $xml = (new FeedGeneratorServiceMetadataProxy())->renderRss($feed, [
+            [
+                'url' => 'https://shop.test/blog/a',
+                'title' => 'Post',
+                'content' => 'Body',
+                'metadata' => [
+                    'authors' => [['name' => 'Editor', 'url' => 'https://shop.test/about/editor']],
+                ],
+                'published_at' => 1710000000,
+                'updated_at' => 1710000000,
+            ],
+        ]);
+
+        self::assertStringContainsString('<author>Editor</author>', $xml);
+    }
 }
 
 final class FeedGeneratorServiceMetadataProxy extends FeedGeneratorService
@@ -56,5 +91,13 @@ final class FeedGeneratorServiceMetadataProxy extends FeedGeneratorService
     public function renderJson(Feed $feed, array $items): string
     {
         return $this->generateJsonFeed($feed, $items);
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $items
+     */
+    public function renderRss(Feed $feed, array $items): string
+    {
+        return $this->generateRssFeed($feed, $items);
     }
 }

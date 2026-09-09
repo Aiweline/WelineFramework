@@ -13,6 +13,9 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 #[Index(name: 'idx_blog_category_website_slug', columns: ['website_id', 'slug'], type: 'UNIQUE')]
 class Category extends Model
 {
+    use \Weline\Blog\Model\PublishesContentChanges;
+    public const CONTENT_RESOURCE_TYPE = 'blog.category';
+
     public const schema_table = 'weline_blog_category';
     public const schema_primary_key = 'category_id';
 

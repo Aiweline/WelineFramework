@@ -2,7 +2,13 @@
 
 declare(strict_types=1);
 
+use Weline\Backend\Api\NotificationTopicProviderInterface;
+use Weline\Seo\Extends\NotificationTopicProvider;
+
 return [
+    NotificationTopicProviderInterface::class => [
+        NotificationTopicProvider::class,
+    ],
     'type' => 'module',
     'documentation' => 'doc/扩展规约说明.md',
     'extends' => [

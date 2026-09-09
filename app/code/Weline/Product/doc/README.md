@@ -2,10 +2,18 @@
 
 商品目录 Website 物理分片与 Provider SPI（万能商城内核 P2A）。
 
+外部应用创建、编辑和读取产品见 [产品 REST API](rest-api.md)；按语言保存、批量多语言及翻译接入见 [REST 多语言指南](rest-api-multilingual.md)。
+
 总体完善路线与待确认产品决策见：[万能产品完善计划](万能产品完善计划.md)。
 
 商品搜索引擎 URL 接入见 [商品 Sitemap 与 URL 变更](product-seo-sitemap.md)：
 Product 提供 SitemapUrlProvider，保存/发布/下架复用现有 ResourceChange 并携带当前及旧 URL。
+
+店面读模型：PDP 报价只在框架 Context 传递；分类文本按 website/实际 locale 共享，URL 留在请求内；新品候选按 website/日期窗口/分页共享，卡片价格和可见性继续按有效 channel 投影。小型推荐采用 SQL 分批候选并补足有效商品，复用现成列表。实现与验收状态见 [开发日志](开发日志.md) 的 1.0.181 条目。
+
+促销标识选择在冷读取时按 200 商品批量查店铺与权威身份，SKU/名称关联数据按实际筛选读取；搜索分类下拉直接消费既有基础分类树，不生成导航 URL。此路径无新增共享缓存，验收证据见开发日志 1.0.185 条目。
+
+商品卡片规格链接通过 Eav 可选共享身份接口，按实际变体轴批量读取 ID/code/原始值；同请求后续卡片复用轴投影，避免为了生成链接加载全实体的选项翻译。显示标签、商品私有选项、非可选 provider 的原有读取路径与 token 回退不变，见开发日志 1.0.190。
 
 ## P2A-002：Product shard schema/state
 
@@ -114,6 +122,16 @@ Product 提供 SitemapUrlProvider，保存/发布/下架复用现有 ResourceCha
 - 安全：字段 `htmlspecialchars`；拒绝 `options.template(_path)` 请求指定模板
 - DI/cache：custom renderer 经 ObjectManager 创建；缓存键覆盖规范化完整渲染输入
 - Framework：`Hook/HookRenderResult` + `Template::getHookResult()`；Taglib `<else/>` 在 DEV 注释之前运行时 opt-in
+
+## 外部应用 REST 多语言管理（首版 1.0.176，复验 1.0.184）
+
+`REQ-PRODUCT-0044` 扩展为按请求语言创建和编辑商品、一次提交多语言，以及经已配置翻译渠道生成译文后保存。名称、短描述、详情及三类 SEO 文案按语言增量写入；未提交的语言和字段保留。公共商品参数继续使用既有管理命令。
+
+新建时源文只初始化一次默认回退；后续指定语言编辑不改写默认回退。批量语言写入位于同一商品事务，保存仍只更新一次版本。详情新增 `locale`、`content`、`translations`，并保留原始 `attributes` 和完整管理快照。
+
+接入方式、语言优先级、JSON 示例、自定义属性、店铺覆盖和翻译失败行为见 [REST 多语言接入指南](rest-api-multilingual.md)。
+
+Product REST 定向单测 11 tests / 58 assertions 已通过。多语言创建、请求体 locale 与请求头语言编辑、一次保存多个语言、自定义属性语言、409/400 回滚，以及无渠道自动创建和编辑返回 502 且不写入，已通过真实 HTTP 验证。最终主阶段为 13 次请求、47/47 项断言；手工译文配合 translate_to 的优先覆盖补充为 4 次请求、15/15 项断言；请求头选择及查询参数优先的两个只读复验也通过。 官方路由升级完成后，语言选择、手工译文持久化及文档页共 4/4 项回读通过。 环境翻译渠道记录为 0，真实自动翻译成功仍待配置后验收。API 文档页已恢复 HTTP 200、`text/html`、1,165,919 字节；独立 fresh Weline Chrome 新任务标签页 `goto` 30 秒超时或返回 `Debugger unattached`，另一入口创建内置浏览器立即返回 `Browser is not available: iab`；均未在页面 UI 发请求，在线调用尚未验收。 验收商品 324、339、340 已归档，最终版本分别为 1、9、2；应用 3、4 及令牌已撤销，旧令牌实测 HTTP 401，私有验收凭据文件已删除。
 
 ## P2C-002：Store Copy
 
@@ -290,7 +308,7 @@ FileManager；未实现该能力的第三方 manager 继续原单项路径。
 排序/筛选/分页操作；完整 WLS 冷请求低于 1 秒的目标仍在进行中。
 交付地址：[商品页](https://p05113ef3.test.weline.com:9555/en_US/products)。
 
-当前模块版本：`1.0.23`。V1 `ProductIdentityResolverInterface` 继续兼容读取，
+当前模块版本：`1.0.185`。V1 `ProductIdentityResolverInterface` 继续兼容读取，
 新 Product/Offer 身份、后台命令/读模型、五类 Provider 与 Search/Cart 等消费链
 统一使用 V2 契约。
 

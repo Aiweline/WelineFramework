@@ -181,14 +181,18 @@ $cardShowQuickview = !empty($shopperActions['show_quickview']);
     width: 100%;
     max-width: none;
     margin-inline: 0;
-    padding-block: var(--weline-space-8);
+    padding-block: var(--weline-space-2);
     padding-inline: 0;
     box-sizing: border-box;
 }
 
 .<?= $wc ?> .widget-header {
     text-align: center;
-    margin-bottom: var(--weline-space-8);
+    margin-bottom: var(--weline-space-5);
+    /* 覆盖 theme.css 面板式 .widget-header，避免推荐区再叠一层卡片头 padding */
+    padding: 0;
+    border-bottom: none;
+    background: transparent;
 }
 
 .<?= $wc ?> .widget-title {

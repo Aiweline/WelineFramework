@@ -231,9 +231,19 @@ final class ThemeColorModeContractTest extends TestCase
             self::assertStringContainsString('Weline_Theme::ui/weline-frontend.css', $frontend);
             self::assertStringContainsString('Weline_Theme::ui/weline-ui.js', $frontend);
             self::assertSame(1, substr_count($frontend, 'colors/_light.css'));
-            self::assertSame(0, substr_count($frontend, 'colors/_default.css'));
+            self::assertSame(1, substr_count($frontend, 'colors/_default.css'));
             self::assertSame(1, substr_count($frontend, 'colors/_ink.css'));
             self::assertSame(1, substr_count($frontend, 'colors/_dark.css'));
+            self::assertLessThan(
+                strpos($frontend, 'colors/_default.css'),
+                strpos($frontend, 'colors/_light.css'),
+                'Default inheritable palette must load after light mode base.',
+            );
+            self::assertLessThan(
+                strpos($frontend, 'colors/_ink.css'),
+                strpos($frontend, 'colors/_default.css'),
+                'Brand ink overlay must load after the default semantic contract.',
+            );
             self::assertLessThan(
                 strpos($frontend, 'colors/_dark.css'),
                 strpos($frontend, 'colors/_ink.css'),

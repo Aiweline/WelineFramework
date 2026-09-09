@@ -136,6 +136,8 @@ settings,settings
 复制,Copy
 已复制,已复制
 "搜索支付方式 / Provider / 端点编码","搜索支付方式 / Provider / 端点编码"
+或使用下方结账,"Or continue below"
+"使用 PayPal 快捷支付","Pay with PayPal"
 查看各支付供应商的客户支付指南、支付政策与用户协议。,"Browse customer payment guides, payment policies, and user agreements for each provider."
 当前暂无已接入的支付供应商指南。,"No payment provider guides are available yet."
 查看支付指南,"View Payment Guide"
@@ -274,8 +276,6 @@ More,More
 "PayPal checkout will open after you confirm payment.","PayPal checkout will open after you confirm payment."
 "【开发环境提示】此地址是支付模块统一浏览器回跳入口，已就绪。正常支付或 OAuth 授权会自动带回参数；直接打开不会完成支付。生产环境空参访问会跳转首页。","[DEV] This is the unified payment browser return endpoint and it is ready. Real checkout or OAuth will append parameters; opening this page alone does not complete a payment. In production, empty visits redirect to the homepage."
 返回首页,"Back to Home"
-或使用下方结账,"Or continue below"
-"使用 PayPal 快捷支付","Pay with PayPal"
 失败率,"Failure Rate"
 "优先使用 attempt 口径；没有 attempt 数据时使用交易记录口径","Prefer attempt metrics; use transaction records when attempt data is unavailable"
 未完成支付,"Incomplete Payments"

@@ -32,6 +32,20 @@ final class StorefrontCatalogCacheCoordinator
         );
     }
 
+    /** Localized category display maps (name/image/…) — website + lang; URLs stay request-local. */
+    public static function categoryLocalizedPresentationPolicy(): CachePolicy
+    {
+        return new CachePolicy(
+            resource: 'product.category_presentation',
+            pool: StorefrontCategoryTreeIndex::cachePool(),
+            scope: 'website',
+            vary: ['lang'],
+            dependencies: ['catalog'],
+            freshTtlSeconds: 3600,
+            staleTtlSeconds: 86400,
+        );
+    }
+
     /** The cached index contains all store rows; filtering happens after retrieval. */
     public static function categoryLinksPolicy(): CachePolicy
     {
@@ -53,7 +67,7 @@ final class StorefrontCatalogCacheCoordinator
             pool: StorefrontAllMenuCategoryTreeService::cachePool(),
             scope: 'channel',
             vary: ['lang', 'currency', 'area'],
-            dependencies: ['catalog', 'config'],
+            dependencies: ['catalog', 'config', 'global/i18n'],
             freshTtlSeconds: 3600,
             staleTtlSeconds: 86400,
         );
@@ -66,7 +80,7 @@ final class StorefrontCatalogCacheCoordinator
             pool: StorefrontCatalogViewService::cachePool(),
             scope: 'channel',
             vary: ['lang', 'currency'],
-            dependencies: ['catalog', 'price', 'config'],
+            dependencies: ['catalog', 'price', 'config', 'global/i18n'],
             freshTtlSeconds: 300,
             staleTtlSeconds: 1800,
         );
@@ -80,7 +94,7 @@ final class StorefrontCatalogCacheCoordinator
             pool: StorefrontCatalogViewService::cachePool(),
             scope: 'channel',
             vary: ['lang', 'currency'],
-            dependencies: ['catalog', 'price', 'config'],
+            dependencies: ['catalog', 'price', 'config', 'global/i18n'],
             freshTtlSeconds: 300,
             staleTtlSeconds: 1800,
         );
@@ -94,7 +108,7 @@ final class StorefrontCatalogCacheCoordinator
             pool: StorefrontCatalogViewService::cachePool(),
             scope: 'channel',
             vary: ['lang', 'currency'],
-            dependencies: ['catalog', 'price', 'config'],
+            dependencies: ['catalog', 'price', 'config', 'global/i18n'],
             freshTtlSeconds: 300,
             staleTtlSeconds: 1800,
         );
@@ -126,6 +140,26 @@ final class StorefrontCatalogCacheCoordinator
             freshTtlSeconds: 120,
             staleTtlSeconds: 900,
         );
+    }
+
+    /** Website-level new-arrival candidate ids (created_at), before channel offer projection. */
+    public static function newArrivalCandidatesPolicy(): CachePolicy
+    {
+        return new CachePolicy(
+            resource: 'product.new_arrival_candidates',
+            pool: StorefrontCatalogViewService::cachePool(),
+            scope: 'website',
+            dependencies: ['catalog'],
+            freshTtlSeconds: 300,
+            staleTtlSeconds: 1800,
+        );
+    }
+
+    public static function newArrivalCandidatesLogicalKey(int $websiteId, string $cutoff, int $limit, int $offset = 0): string
+    {
+        return 'product.new_arrival.v2.' . hash('sha256', serialize([
+            max(0, $websiteId), trim($cutoff), max(1, $limit), max(0, $offset),
+        ]));
     }
 
     public function __construct(
@@ -199,7 +233,7 @@ final class StorefrontCatalogCacheCoordinator
 
     public function catalogSummaryOffersLogicalKey(int $websiteId, int $limit = 48): string
     {
-        return 'product.catalog_offers.summary.v1.'
+        return 'product.catalog_offers.summary.v2.'
             . max(0, $websiteId)
             . '.'
             . max(1, min(2000, $limit));

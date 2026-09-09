@@ -6,6 +6,8 @@ namespace Weline\Checkout\Service;
 
 use Weline\Checkout\Api\CheckoutSessionStoreInterface;
 use Weline\Checkout\Model\CheckoutSession;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Order\Api\Data\OrderReadResult;
 use Weline\Order\Api\OrderFacadeInterface;
 use Weline\Payment\Api\Data\PaymentTransactionRecord;
 use Weline\Payment\Api\PaymentFacadeInterface;
@@ -30,11 +32,12 @@ final class CheckoutOrderPaymentService
      * @param array<string, mixed> $context Non-monetary payment context only.
      * @return array{
      *     paid:bool,
-     *     outcome:'paid'|'pending'|'failed',
+     *     outcome:'paid'|'partial'|'pending'|'failed',
      *     status:string,
      *     requires_action:bool,
      *     recoverable:bool,
      *     redirect_url:?string,
+     *     purpose?:string,
      *     transactions:list<array<string,mixed>>
      * }
      */
@@ -62,8 +65,10 @@ final class CheckoutOrderPaymentService
         $transactions = [];
         $hasPending = false;
         $hasFailed = false;
+        $hasPartial = false;
         $notificationPending = false;
         $redirectUrl = null;
+        $lastPurpose = '';
         foreach ($orderUuids as $orderUuid) {
             $order = $this->orders->get($orderUuid);
             if (in_array(strtolower(trim($order->status)), ['paid', 'fulfilled', 'completed'], true)) {
@@ -78,7 +83,10 @@ final class CheckoutOrderPaymentService
                 continue;
             }
             $amountMinor = (int)($order->money['grand_total_minor'] ?? 0);
-            $hangPurpose = strtolower(trim((string)($context['hang_purpose'] ?? $context['purpose'] ?? '')));
+            $hangPurpose = $this->resolveHangPurpose(
+                $order,
+                strtolower(trim((string)($context['hang_purpose'] ?? $context['purpose'] ?? ''))),
+            );
             $typePayload = $order->typePayload;
             if (isset($context['deposit_amount_minor']) && (int)$context['deposit_amount_minor'] > 0
                 && ($hangPurpose === 'deposit' || $hangPurpose === '')
@@ -93,10 +101,18 @@ final class CheckoutOrderPaymentService
                 $amountMinor = (int)$typePayload['deposit_amount_minor'];
             } elseif ($hangPurpose === 'balance' && isset($typePayload['balance_amount_minor'])) {
                 $amountMinor = (int)$typePayload['balance_amount_minor'];
+            } elseif ($hangPurpose === 'deposit' || $hangPurpose === 'balance') {
+                $hangAmounts = $this->hangAmountsForOrder($order->orderUuid);
+                if ($hangPurpose === 'deposit' && ($hangAmounts['deposit_amount_minor'] ?? 0) > 0) {
+                    $amountMinor = (int)$hangAmounts['deposit_amount_minor'];
+                } elseif ($hangPurpose === 'balance' && ($hangAmounts['balance_amount_minor'] ?? 0) > 0) {
+                    $amountMinor = (int)$hangAmounts['balance_amount_minor'];
+                }
             }
             if ($amountMinor <= 0) {
                 throw new \RuntimeException('checkout_payment_amount_invalid');
             }
+            $lastPurpose = $hangPurpose;
 
             $customerId = (int)($order->customerId ?? 0);
             $paymentContext = [
@@ -193,11 +209,29 @@ final class CheckoutOrderPaymentService
             ];
             if ($paid) {
                 try {
-                    $this->orders->notifyOrderPaid($order->orderUuid, [
-                        'payment_method' => $transaction->methodCode,
-                        'payment_transaction_id' => $transaction->id,
-                        'payment_transaction_no' => $transaction->transactionNumber,
-                    ]);
+                    if ($hangPurpose === 'deposit') {
+                        $this->notifyHangDepositPaid(
+                            $order->orderUuid,
+                            (string)$transaction->transactionNumber,
+                        );
+                        $hasPartial = true;
+                    } elseif ($hangPurpose === 'balance') {
+                        $this->notifyHangBalancePaid(
+                            $order->orderUuid,
+                            (string)$transaction->transactionNumber,
+                        );
+                        $this->orders->notifyOrderPaid($order->orderUuid, [
+                            'payment_method' => $transaction->methodCode,
+                            'payment_transaction_id' => $transaction->id,
+                            'payment_transaction_no' => $transaction->transactionNumber,
+                        ]);
+                    } else {
+                        $this->orders->notifyOrderPaid($order->orderUuid, [
+                            'payment_method' => $transaction->methodCode,
+                            'payment_transaction_id' => $transaction->id,
+                            'payment_transaction_no' => $transaction->transactionNumber,
+                        ]);
+                    }
                 } catch (\Throwable) {
                     // The provider has already captured/accepted payment. Do
                     // not report a retryable failure that could charge again;
@@ -208,11 +242,13 @@ final class CheckoutOrderPaymentService
             }
         }
 
-        $outcome = $hasFailed ? 'failed' : ($hasPending ? 'pending' : 'paid');
+        $outcome = $hasFailed
+            ? 'failed'
+            : ($hasPending ? 'pending' : ($hasPartial ? 'partial' : 'paid'));
         $status = $notificationPending
             ? PaymentTransactionRecord::STATUS_PROCESSING
             : match ($outcome) {
-            'paid' => PaymentTransactionRecord::STATUS_SUCCESS,
+            'paid', 'partial' => PaymentTransactionRecord::STATUS_SUCCESS,
             'failed' => PaymentTransactionRecord::STATUS_FAILED,
             default => PaymentTransactionRecord::STATUS_PENDING,
         };
@@ -222,15 +258,101 @@ final class CheckoutOrderPaymentService
             'outcome' => $outcome,
             'status' => $status,
             'requires_action' => $redirectUrl !== null,
-            'recoverable' => $outcome !== 'paid' && !$notificationPending,
+            'recoverable' => !in_array($outcome, ['paid', 'partial'], true) && !$notificationPending,
             'redirect_url' => $redirectUrl,
             'transactions' => $transactions,
         ];
+        if ($lastPurpose !== '') {
+            $result['purpose'] = $lastPurpose;
+        }
         if ($notificationPending) {
             $result['error_code'] = 'checkout_order_payment_notification_pending';
         }
 
         return $result;
+    }
+
+    private function resolveHangPurpose(OrderReadResult $order, string $hangPurpose): string
+    {
+        if ($hangPurpose !== '') {
+            return $hangPurpose;
+        }
+        if (strtolower(trim($order->orderType)) !== 'tob') {
+            return '';
+        }
+        $hang = $this->hangForOrder($order->orderUuid);
+        if ($hang === null) {
+            return '';
+        }
+        $status = (string)($hang['hang_status'] ?? '');
+
+        return match ($status) {
+            'awaiting_deposit' => 'deposit',
+            'awaiting_balance' => 'balance',
+            default => '',
+        };
+    }
+
+    /** @return array{deposit_amount_minor?:int,balance_amount_minor?:int,hang_status?:string}|null */
+    private function hangForOrder(string $orderUuid): ?array
+    {
+        if (!class_exists(\Weline\B2B\Service\B2BHangOrderService::class)) {
+            return null;
+        }
+        try {
+            $service = ObjectManager::getInstance(\Weline\B2B\Service\B2BHangOrderService::class);
+            if (!$service instanceof \Weline\B2B\Service\B2BHangOrderService) {
+                return null;
+            }
+            $hang = $service->getByOrderRef($orderUuid);
+
+            return $hang?->toArray();
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /** @return array{deposit_amount_minor:int,balance_amount_minor:int} */
+    private function hangAmountsForOrder(string $orderUuid): array
+    {
+        $hang = $this->hangForOrder($orderUuid);
+
+        return [
+            'deposit_amount_minor' => (int)($hang['deposit_amount_minor'] ?? 0),
+            'balance_amount_minor' => (int)($hang['balance_amount_minor'] ?? 0),
+        ];
+    }
+
+    private function notifyHangDepositPaid(string $orderUuid, string $intentCode): void
+    {
+        if (!class_exists(\Weline\B2B\Service\B2BHangOrderService::class)) {
+            return;
+        }
+        try {
+            $service = ObjectManager::getInstance(\Weline\B2B\Service\B2BHangOrderService::class);
+            if (!$service instanceof \Weline\B2B\Service\B2BHangOrderService) {
+                return;
+            }
+            $service->onDepositPaid($orderUuid, $intentCode !== '' ? $intentCode : 'deposit_' . $orderUuid);
+        } catch (\Throwable) {
+            // Hang row may be absent in unit fixtures; payment amount path still stands.
+        }
+    }
+
+    private function notifyHangBalancePaid(string $orderUuid, string $intentCode): void
+    {
+        if (!class_exists(\Weline\B2B\Service\B2BHangOrderService::class)) {
+            return;
+        }
+        try {
+            $service = ObjectManager::getInstance(\Weline\B2B\Service\B2BHangOrderService::class);
+            if (!$service instanceof \Weline\B2B\Service\B2BHangOrderService) {
+                return;
+            }
+            $service->onBalancePaid($orderUuid, $intentCode !== '' ? $intentCode : 'balance_' . $orderUuid);
+        } catch (\Throwable) {
+            // Soft-fail: balance charge already succeeded at Payment boundary.
+        }
     }
 
     /**

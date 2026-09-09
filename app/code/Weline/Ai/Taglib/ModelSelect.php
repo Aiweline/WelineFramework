@@ -6,9 +6,12 @@ namespace Weline\Ai\Taglib;
 
 use Weline\Framework\Taglib\AttributeCodeCompiler;
 use Weline\Framework\Taglib\TaglibInterface;
+use Weline\Framework\View\Template;
 
 /**
  * Declarative AI model selector. Behaviour and styling are owned by the route bundle.
+ *
+ * 动态属性（foreach / embed 内 <?= ?>）走 renderRuntimeTag，必须通过 runtimeCallback 直接输出 HTML。
  */
 final class ModelSelect implements TaglibInterface
 {
@@ -62,23 +65,78 @@ final class ModelSelect implements TaglibInterface
             ];
             $attributes['limit'] = max(1, min(200, (int)$attributes['limit']));
             $compiled = AttributeCodeCompiler::attributes($attributes);
-            $allSuppliers = htmlspecialchars((string)__('全部供应商'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-            $defaultModel = htmlspecialchars((string)__('使用默认模型'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-            $hint = htmlspecialchars((string)__('先选择供应商，再搜索并选择模型'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-            $noMatch = htmlspecialchars((string)__('未找到匹配的模型'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-            $loadFail = htmlspecialchars((string)__('模型列表加载失败'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-            $loading = htmlspecialchars((string)__('正在加载模型...'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-            $supplierLabel = htmlspecialchars((string)__('供应商筛选'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 
-            return <<<HTML
-<?php {$compiled}
-\$Taglib__escape = static fn(mixed \$value): string => htmlspecialchars((string)\$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-\$Taglib__dom_id = preg_replace('/[^A-Za-z0-9_-]+/', '-', (string)\$Taglib__id) ?: 'w-ai-model';
-?>
+            $phpOpen = '<' . '?php ';
+            $phpClose = '?' . '>';
+            $echoOpen = '<' . '?= ';
+
+            return $phpOpen . $compiled . ' ' . $phpClose . "\n"
+                . $echoOpen . '\\' . self::class . '::buildMarkup(['
+                . "'id' => (string)(\$Taglib__id ?? ''),"
+                . "'name' => (string)(\$Taglib__name ?? 'model_code'),"
+                . "'value' => (string)(\$Taglib__value ?? ''),"
+                . "'display' => (string)(\$Taglib__display ?? ''),"
+                . "'placeholder' => (string)(\$Taglib__placeholder ?? ''),"
+                . "'limit' => (int)(\$Taglib__limit ?? 50),"
+                . "'service_type' => (string)(\$Taglib__service_type ?? ''),"
+                . ']) ' . $phpClose;
+        };
+    }
+
+    public static function runtimeCallback(): callable
+    {
+        return static function (
+            Template $template,
+            string $tagKey,
+            array $attributes,
+            string $content,
+        ): string {
+            unset($template, $content);
+            if ($tagKey !== 'tag-self-close' && $tagKey !== 'tag-self-close-with-attrs') {
+                return '';
+            }
+
+            return self::buildMarkup(is_array($attributes) ? $attributes : []);
+        };
+    }
+
+    /**
+     * @param array<string, mixed> $attributes
+     */
+    public static function buildMarkup(array $attributes): string
+    {
+        $decode = static fn($value): string => html_entity_decode((string)$value, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+        $id = trim($decode($attributes['id'] ?? ''));
+        if ($id === '') {
+            $id = 'w-ai-model-' . substr(md5(uniqid('', true)), 0, 8);
+        }
+        $domId = preg_replace('/[^A-Za-z0-9_-]+/', '-', $id) ?: 'w-ai-model';
+        $name = $decode($attributes['name'] ?? 'model_code');
+        $value = $decode($attributes['value'] ?? '');
+        $display = trim($decode($attributes['display'] ?? ''));
+        $placeholder = trim($decode($attributes['placeholder'] ?? ''));
+        if ($placeholder === '') {
+            $placeholder = (string)__('搜索AI模型...');
+        }
+        $limit = max(1, min(200, (int)$decode($attributes['limit'] ?? '50')));
+        $serviceType = $decode($attributes['service_type'] ?? '');
+
+        $allSuppliers = $escape((string)__('全部供应商'));
+        $defaultModel = $escape((string)__('使用默认模型'));
+        $hint = $escape((string)__('先选择供应商，再搜索并选择模型'));
+        $noMatch = $escape((string)__('未找到匹配的模型'));
+        $loadFail = $escape((string)__('模型列表加载失败'));
+        $loading = $escape((string)__('正在加载模型...'));
+        $supplierLabel = $escape((string)__('供应商筛选'));
+        $displayText = $display !== '' ? $escape($display) : $defaultModel;
+
+        return <<<HTML
 <div
     class="w-ai-model-select"
     data-w-component="ai-model-select"
-    data-ai-model-limit="<?= max(1, min(200, (int)\$Taglib__limit)) ?>"
+    data-ai-model-limit="{$limit}"
     data-ai-model-no-match="{$noMatch}"
     data-ai-model-load-fail="{$loadFail}"
     data-ai-model-loading="{$loading}"
@@ -86,18 +144,18 @@ final class ModelSelect implements TaglibInterface
     <button
         type="button"
         class="w-button w-ai-model-select__trigger"
-        id="<?= \$Taglib__escape(\$Taglib__dom_id) ?>-trigger"
+        id="{$escape($domId)}-trigger"
         data-tone="neutral"
         data-w-ai-model-trigger
-        aria-controls="<?= \$Taglib__escape(\$Taglib__dom_id) ?>-panel"
+        aria-controls="{$escape($domId)}-panel"
         aria-expanded="false"
     >
-        <span data-w-ai-model-display><?= trim((string)\$Taglib__display) !== '' ? \$Taglib__escape(\$Taglib__display) : '{$defaultModel}' ?></span>
+        <span data-w-ai-model-display>{$displayText}</span>
         <w-icon name="chevron-down" size="xs"></w-icon>
     </button>
     <div
         class="w-combobox__panel w-ai-model-select__panel"
-        id="<?= \$Taglib__escape(\$Taglib__dom_id) ?>-panel"
+        id="{$escape($domId)}-panel"
         data-w-ai-model-panel
         hidden
     >
@@ -108,32 +166,31 @@ final class ModelSelect implements TaglibInterface
             </select>
         </label>
         <label class="w-field">
-            <span class="w-visually-hidden"><?= \$Taglib__escape(\$Taglib__placeholder) ?></span>
+            <span class="w-visually-hidden">{$escape($placeholder)}</span>
             <input
                 class="w-input"
                 type="search"
                 role="combobox"
                 data-w-ai-model-search
                 autocomplete="off"
-                placeholder="<?= \$Taglib__escape(\$Taglib__placeholder) ?>"
-                aria-controls="<?= \$Taglib__escape(\$Taglib__dom_id) ?>-list"
+                placeholder="{$escape($placeholder)}"
+                aria-controls="{$escape($domId)}-list"
                 aria-expanded="false"
             >
         </label>
         <input
             type="hidden"
-            name="<?= \$Taglib__escape(\$Taglib__name) ?>"
-            value="<?= \$Taglib__escape(\$Taglib__value) ?>"
+            name="{$escape($name)}"
+            value="{$escape($value)}"
             data-ai-model-value
-            data-service-type="<?= \$Taglib__escape(\$Taglib__service_type) ?>"
+            data-service-type="{$escape($serviceType)}"
         >
         <div class="w-ai-model-select__status" data-w-ai-model-status hidden></div>
-        <div class="w-ai-model-select__list" id="<?= \$Taglib__escape(\$Taglib__dom_id) ?>-list" data-w-ai-model-list role="listbox"></div>
+        <div class="w-ai-model-select__list" id="{$escape($domId)}-list" data-w-ai-model-list role="listbox"></div>
     </div>
     <small class="w-field__hint">{$hint}</small>
 </div>
 HTML;
-        };
     }
 
     public static function tag_self_close(): bool

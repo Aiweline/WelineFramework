@@ -61,17 +61,19 @@
 ### 语法格式
 
 ```html
-<dd>variable</dd>
+<w:dd>variable</w:dd>
 @dd(variable)
 @dd{variable}
 ```
+
+> **硬约束**：原生 HTML 描述列表请用 `<dd>`；调试 dump **禁止**写裸 `<dd>variable</dd>`（会与 HTML 冲突）。框架仅识别 `w:dd` / `@dd`（`w_only`）。
 
 ### 使用方法
 
 #### 基本用法
 
 ```html
-<dd>user</dd>
+<w:dd>user</w:dd>
 @dd(user)
 @dd{user}
 ```
@@ -87,10 +89,10 @@
 
 ```html
 <!-- 调试用户数据 -->
-<dd>user</dd>
+<w:dd>user</w:dd>
 
 <!-- 调试商品数据 -->
-<dd>products</dd>
+@dd(products)
 ```
 
 **注意**：`dd` 标签会终止脚本执行，生产环境应移除。

@@ -15,6 +15,9 @@
 "腾讯云验证码校验失败：HTTP %{1} %{2}","Tencent Cloud CAPTCHA verification failed: HTTP %{1} %{2}"
 腾讯云验证码返回了无效响应,"Tencent Cloud CAPTCHA returned an invalid response"
 "此表单受 Google reCAPTCHA Enterprise 保护","This form is protected by Google reCAPTCHA Enterprise"
+隐私权,Privacy
+条款,Terms
+"受 Google 保护","Protected by Google"
 "Google reCAPTCHA Enterprise 验证失败：HTTP %{1} %{2}","Google reCAPTCHA Enterprise verification failed: HTTP %{1} %{2}"
 "Google reCAPTCHA Enterprise 返回了无效响应","Google reCAPTCHA Enterprise returned an invalid response"
 "无法初始化 Google 验证请求","Unable to initialize the Google verification request"

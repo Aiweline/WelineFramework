@@ -1,172 +1,202 @@
 <?php
-/**@var \Weline\Framework\View\Template $this */
-
-
 /**
- * 变量：
- * @var array $subjects SEO主体列表
- * @var string $title 页面标题
+ * @var \Weline\Framework\View\Template $this
+ * @var array $subjects
  */
+$subjects = is_array($subjects ?? null) ? $subjects : [];
+$title = (string)($seo_page_title ?? __('SEO总览'));
 
-$subjects = $this->getData('subjects') ?: [];
-$title = $this->getData('seo_page_title') ?: __('SEO总览');
+$totalSubjects = count($subjects);
+$totalKeywords = 0;
+foreach ($subjects as $subject) {
+    if (!is_array($subject)) {
+        continue;
+    }
+    $totalKeywords += (int)($subject['keyword_count'] ?? 0);
+}
+$avgKeywords = $totalSubjects > 0 ? (int)round($totalKeywords / $totalSubjects) : 0;
+
+$kpis = [
+    ['icon' => 'file', 'value' => $totalSubjects, 'label' => __('SEO 主体')],
+    ['icon' => 'tag', 'value' => $totalKeywords, 'label' => __('关键词')],
+    ['icon' => 'check', 'value' => $totalSubjects, 'label' => __('已启用')],
+    ['icon' => 'circle', 'value' => $avgKeywords, 'label' => __('平均关键词')],
+];
+
+$nextSteps = [
+    [
+        'title' => __('接入搜索平台'),
+        'desc' => __('新增 Google / Bing / 百度等账户并完成验证。'),
+        'href' => 'seo/backend/account/form',
+        'cta' => __('新增账户'),
+        'icon' => 'user',
+        'primary' => false,
+    ],
+    [
+        'title' => __('绑定站点'),
+        'desc' => __('把已验证账户挂到要优化的网站。'),
+        'href' => 'seo/backend/website-account',
+        'cta' => __('去绑定'),
+        'icon' => 'link',
+        'primary' => false,
+    ],
+    [
+        'title' => __('创建 SEO 主体'),
+        'desc' => __('为主体挂关键词后，总览才会出现可运营数据。'),
+        'href' => 'seo/backend/embed/index',
+        'cta' => __('创建主体'),
+        'icon' => 'plus',
+        'primary' => true,
+    ],
+];
 ?>
-<!-- 消息提示 -->
-                <div class="w-grid">
-                    <div style="--w-span:12;">
-                        <template>Weline_Component::message.phtml</template>
+<css>Weline_Seo::css/seo-admin.css</css>
+
+<main class="seo-admin seo-dashboard-page" data-seo-admin-page="dashboard" data-seo-dash-ui-variant="A" data-testid="seo-dashboard-management">
+    <div class="w-grid">
+        <div style="--w-span:12;"><template>Weline_Component::message.phtml</template></div>
+    </div>
+
+    <header class="seo-admin__header w-backend-page__heading w-cluster" data-align="start" data-justify="between" data-wrap="true">
+        <div class="w-stack" data-gap="xs">
+            <p class="seo-admin__eyebrow w-text" data-tone="primary" data-size="sm"><lang>SEO 运维</lang></p>
+            <h1 class="seo-admin__title w-cluster" data-align="center" data-gap="sm">
+                <w:icon name="grid" size="sm"></w:icon>
+                <?= htmlspecialchars($title, ENT_QUOTES, 'UTF-8') ?>
+            </h1>
+            <p class="seo-admin__description w-text" data-tone="muted">
+                <lang>一眼看主体与关键词健康度；空站时按推荐步骤接入账户、绑定站点并创建主体。</lang>
+            </p>
+        </div>
+        <div class="seo-admin__actions w-cluster" data-gap="sm" data-wrap="true" aria-label="<?= htmlspecialchars((string)__('总览操作'), ENT_QUOTES, 'UTF-8') ?>">
+            <a class="w-button" href="@backend-url{'seo/backend/account/index'}" data-tone="primary" data-variant="outline">
+                <w:icon name="user" size="sm"></w:icon> <lang>SEO 账户</lang>
+            </a>
+            <a class="w-button" href="@backend-url{'seo/backend/embed/index'}" data-tone="primary" data-testid="seo-dash-create-subject">
+                <w:icon name="plus" size="sm"></w:icon> <lang>创建主体</lang>
+            </a>
+        </div>
+    </header>
+
+    <section class="w-stat-tiles seo-dashboard-stats" aria-label="<?= htmlspecialchars((string)__('总览指标'), ENT_QUOTES, 'UTF-8') ?>" style="--w-stat-tile-min:9rem;--w-gap:var(--weline-space-3);--w-mb:var(--weline-space-4);">
+        <?php foreach ($kpis as $kpi): ?>
+            <article class="w-card seo-dashboard-stat" data-w-height="full" data-w-shadow="sm">
+                <div class="w-card__body w-cluster" data-align="center" data-gap="md">
+                    <span class="seo-dashboard-stat__icon" aria-hidden="true">
+                        <w:icon name="<?= htmlspecialchars((string)$kpi['icon'], ENT_QUOTES, 'UTF-8') ?>" size="sm"></w:icon>
+                    </span>
+                    <div class="w-stack" data-gap="2xs">
+                        <strong class="seo-dashboard-stat__value"><?= number_format((int)$kpi['value']) ?></strong>
+                        <span class="w-text" data-tone="muted" data-size="sm"><?= htmlspecialchars((string)$kpi['label'], ENT_QUOTES, 'UTF-8') ?></span>
                     </div>
                 </div>
-                
-                <!-- Page Title -->
-                <div class="w-grid" data-testid="seo-dashboard-management">
-                    <div style="--w-span:12;">
-                        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
-                            <h4 style="--w-mb-sm:0;">
-                                <w:icon name="grid" size="sm"></w:icon>
-                                <?= htmlspecialchars($title) ?>
-                            </h4>
-                            <div class="w-cluster">
-                                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
-                                    <li class="w-breadcrumb__item"><span>
-                                            <lang>SEO管理</lang>
-                                        </span></li>
-                                    <li class="w-breadcrumb__item" data-state="active">
-                                        <lang>总览</lang>
+            </article>
+        <?php endforeach; ?>
+    </section>
+
+    <?php if ($subjects === []): ?>
+        <section class="w-card seo-dashboard-panel" data-w-shadow="sm" aria-label="<?= htmlspecialchars((string)__('空态引导'), ENT_QUOTES, 'UTF-8') ?>">
+            <div class="w-card__body">
+                <div class="w-empty seo-dashboard-empty" data-testid="seo-dashboard-empty">
+                    <w:icon name="file" size="lg"></w:icon>
+                    <p class="w-text" data-weight="strong"><lang>暂无 SEO 主体</lang></p>
+                    <p class="w-text" data-tone="muted" data-size="sm">
+                        <lang>当前没有启用的主体。先创建主体，或按下方推荐步骤把平台账户接好。</lang>
+                    </p>
+                    <a class="w-button" href="@backend-url{'seo/backend/embed/index'}" data-tone="primary" data-size="sm">
+                        <w:icon name="plus" size="sm"></w:icon> <lang>创建 SEO 主体</lang>
+                    </a>
+                </div>
+            </div>
+        </section>
+
+        <section class="seo-dashboard-next" aria-label="<?= htmlspecialchars((string)__('推荐下一步'), ENT_QUOTES, 'UTF-8') ?>">
+            <h2 class="seo-dashboard-next__title"><lang>推荐下一步</lang></h2>
+            <p class="seo-dashboard-next__desc w-text" data-tone="muted" data-size="sm">
+                <lang>总览要有数据，通常按「账户 → 绑定 → 主体」完成接入。</lang>
+            </p>
+            <div class="seo-dashboard-next__grid">
+                <?php foreach ($nextSteps as $i => $step): ?>
+                    <article class="seo-dashboard-next__card">
+                        <span class="seo-dashboard-next__index" aria-hidden="true"><?= (int)$i + 1 ?></span>
+                        <div class="w-stack" data-gap="xs">
+                            <strong class="w-cluster" data-gap="sm" data-align="center">
+                                <w:icon name="<?= htmlspecialchars((string)$step['icon'], ENT_QUOTES, 'UTF-8') ?>" size="sm"></w:icon>
+                                <?= htmlspecialchars((string)$step['title'], ENT_QUOTES, 'UTF-8') ?>
+                            </strong>
+                            <p class="w-text" data-tone="muted" data-size="sm"><?= htmlspecialchars((string)$step['desc'], ENT_QUOTES, 'UTF-8') ?></p>
+                            <a class="w-button" href="<?= htmlspecialchars($this->getBackendUrl((string)$step['href']), ENT_QUOTES, 'UTF-8') ?>"
+                               data-tone="primary"
+                               data-variant="<?= !empty($step['primary']) ? 'solid' : 'outline' ?>"
+                               data-size="sm">
+                                <?= htmlspecialchars((string)$step['cta'], ENT_QUOTES, 'UTF-8') ?>
+                            </a>
+                        </div>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+        </section>
+    <?php else: ?>
+        <section class="w-stack" data-gap="md" aria-label="<?= htmlspecialchars((string)__('主体列表'), ENT_QUOTES, 'UTF-8') ?>" data-testid="seo-dashboard-subjects">
+            <?php foreach ($subjects as $subject):
+                if (!is_array($subject)) {
+                    continue;
+                }
+                $subjectId = (int)($subject['subject_id'] ?? 0);
+                $keywords = is_array($subject['keywords'] ?? null) ? $subject['keywords'] : [];
+                $keywordCount = (int)($subject['keyword_count'] ?? count($keywords));
+                ?>
+                <article class="w-card seo-dashboard-subject" data-w-shadow="sm">
+                    <div class="w-card__body w-stack" data-gap="sm">
+                        <div class="w-cluster" data-align="start" data-justify="between" data-wrap="true" data-gap="md">
+                            <div class="w-stack" data-gap="2xs">
+                                <h2 class="seo-dashboard-subject__title">
+                                    <?= htmlspecialchars((string)($subject['title'] ?? __('未命名主体')), ENT_QUOTES, 'UTF-8') ?>
+                                </h2>
+                                <?php if (!empty($subject['url'])): ?>
+                                    <a class="w-text" data-tone="muted" data-size="sm" href="<?= htmlspecialchars((string)$subject['url'], ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener">
+                                        <?= htmlspecialchars((string)$subject['url'], ENT_QUOTES, 'UTF-8') ?>
+                                    </a>
+                                <?php endif; ?>
+                            </div>
+                            <div class="w-cluster" data-gap="sm" data-align="center">
+                                <span class="w-badge" data-w-background="info">
+                                    <?= number_format($keywordCount) ?> <lang>个关键词</lang>
+                                </span>
+                                <a class="w-button" href="@backend-url{'seo/backend/dashboard/subject'|['id' => $subjectId]}" data-variant="outline" data-size="sm">
+                                    <w:icon name="eye" size="sm"></w:icon> <lang>查看详情</lang>
+                                </a>
+                            </div>
+                        </div>
+
+                        <?php if (!empty($subject['description'])): ?>
+                            <p class="w-text" data-tone="muted" data-size="sm">
+                                <?= htmlspecialchars(mb_substr((string)$subject['description'], 0, 200), ENT_QUOTES, 'UTF-8') ?>
+                                <?= mb_strlen((string)$subject['description']) > 200 ? '…' : '' ?>
+                            </p>
+                        <?php endif; ?>
+
+                        <?php if ($keywords !== []): ?>
+                            <ul class="seo-dashboard-keywords">
+                                <?php foreach ($keywords as $index => $keyword):
+                                    if (!is_array($keyword)) {
+                                        continue;
+                                    }
+                                    ?>
+                                    <li>
+                                        <span class="seo-dashboard-keywords__n"><?= (int)$index + 1 ?></span>
+                                        <?= htmlspecialchars((string)($keyword['keyword'] ?? ''), ENT_QUOTES, 'UTF-8') ?>
                                     </li>
-                                </ol>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Stats Cards -->
-                <div class="w-grid">
-                    <div style="--w-span-lg:3;--w-span-md:6;--w-mb:var(--weline-space-4);">
-                        <div class="stat-card">
-                            <w:icon name="file" size="sm"></w:icon>
-                            <div class="stat-label"><lang>SEO主体总数</lang></div>
-                            <div class="stat-number"><?= count($subjects) ?></div>
-                        </div>
-                    </div>
-                    
-                    <div style="--w-span-lg:3;--w-span-md:6;--w-mb:var(--weline-space-4);">
-                        <div class="stat-card success">
-                            <w:icon name="tag" size="sm"></w:icon>
-                            <div class="stat-label"><lang>关键词总数</lang></div>
-                            <div class="stat-number">
-                                <?php
-                                $totalKeywords = 0;
-                                foreach ($subjects as $subject) {
-                                    $totalKeywords += $subject['keyword_count'] ?? 0;
-                                }
-                                echo $totalKeywords;
-                                ?>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div style="--w-span-lg:3;--w-span-md:6;--w-mb:var(--weline-space-4);">
-                        <div class="stat-card info">
-                            <w:icon name="check" size="sm"></w:icon>
-                            <div class="stat-label"><lang>已启用主体</lang></div>
-                            <div class="stat-number"><?= count($subjects) ?></div>
-                        </div>
-                    </div>
-                    
-                    <div style="--w-span-lg:3;--w-span-md:6;--w-mb:var(--weline-space-4);">
-                        <div class="stat-card">
-                            <w:icon name="circle" size="sm"></w:icon>
-                            <div class="stat-label"><lang>平均关键词数</lang></div>
-                            <div class="stat-number">
-                                <?php
-                                $avgKeywords = count($subjects) > 0 
-                                    ? round($totalKeywords / count($subjects)) 
-                                    : 0;
-                                echo $avgKeywords;
-                                ?>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- SEO主体列表 -->
-                <div class="w-grid">
-                    <div style="--w-span:12;">
-                        <?php if (empty($subjects)): ?>
-                            <div class="w-card dashboard-card">
-                                <div class="w-card__body">
-                                    <div class="empty-state">
-                                        <w:icon name="file" size="sm"></w:icon>
-                                        <h5><lang>暂无SEO主体</lang></h5>
-                                        <p class="w-text" data-tone="muted"><lang>当前没有启用的SEO主体，请先创建SEO主体。</lang></p>
-                                    </div>
-                                </div>
-                            </div>
+                                <?php endforeach; ?>
+                            </ul>
                         <?php else: ?>
-                            <?php foreach ($subjects as $subject): ?>
-                                <div class="w-card dashboard-card">
-                                    <div class="w-card__body">
-                                        <div class="subject-header">
-                                            <div>
-                                                <h5 class="subject-title">
-                                                    <?= htmlspecialchars($subject['title'] ?? __('未命名主体')) ?>
-                                                </h5>
-                                                <?php if (!empty($subject['url'])): ?>
-                                                    <small class="w-text" data-tone="muted">
-                                                        <w:icon name="link" size="sm"></w:icon>
-                                                        <a href="<?= htmlspecialchars($subject['url']) ?>" target="_blank" data-w-decoration="none">
-                                                            <?= htmlspecialchars($subject['url']) ?>
-                                                        </a>
-                                                    </small>
-                                                <?php endif; ?>
-                                            </div>
-                                            <div class="subject-meta">
-                                                <span class="w-badge badge-custom" data-w-background="info">
-                                                    <w:icon name="tag" size="sm"></w:icon>
-                                                    <?= $subject['keyword_count'] ?? 0 ?> <lang>个关键词</lang>
-                                                </span>
-                                                <a href="@url{'*/backend/dashboard/subject'|['id' => $subject['subject_id']]}" class="w-button weline-btn-view-detail">
-                                                    <w:icon name="eye" size="sm"></w:icon>
-                                                    <lang>查看详情</lang>
-                                                </a>
-                                            </div>
-                                        </div>
-                                        
-                                        <?php if (!empty($subject['description'])): ?>
-                                            <p class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-4);">
-                                                <?= htmlspecialchars(mb_substr($subject['description'], 0, 200)) ?>
-                                                <?= mb_strlen($subject['description']) > 200 ? '...' : '' ?>
-                                            </p>
-                                        <?php endif; ?>
-                                        
-                                        <?php if (!empty($subject['keywords']) && is_array($subject['keywords'])): ?>
-                                            <div class="keyword-list">
-                                                <?php foreach ($subject['keywords'] as $index => $keyword): ?>
-                                                    <div class="keyword-item">
-                                                        <span class="priority"><?= $index + 1 ?></span>
-                                                        <?= htmlspecialchars($keyword['keyword'] ?? '') ?>
-                                                        <?php if (!empty($keyword['priority'])): ?>
-                                                            <span class="w-badge" data-w-background="muted"><?= $keyword['priority'] ?></span>
-                                                        <?php endif; ?>
-                                                    </div>
-                                                <?php endforeach; ?>
-                                                <?php if (($subject['keyword_count'] ?? 0) > count($subject['keywords'])): ?>
-                                                    <div class="keyword-item">
-                                                        <w:icon name="more-horizontal" size="sm"></w:icon>
-                                                        <lang>还有 <?= ($subject['keyword_count'] ?? 0) - count($subject['keywords']) ?> 个关键词</lang>
-                                                    </div>
-                                                <?php endif; ?>
-                                            </div>
-                                        <?php else: ?>
-                                            <div class="w-alert" data-tone="info" style="--w-mb:0;">
-                                                <w:icon name="info" size="sm"></w:icon>
-                                                <lang>该主体暂无关键词</lang>
-                                            </div>
-                                        <?php endif; ?>
-                                    </div>
-                                </div>
-                            <?php endforeach; ?>
+                            <div class="w-alert" data-tone="info" style="--w-mb:0;">
+                                <lang>该主体暂无关键词</lang>
+                            </div>
                         <?php endif; ?>
                     </div>
-                </div>
+                </article>
+            <?php endforeach; ?>
+        </section>
+    <?php endif; ?>
+</main>

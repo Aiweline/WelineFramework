@@ -50,6 +50,8 @@ class SeoProfileGeoMetadataNormalizer
             $metadata['type'] = $this->normalizeType((string)$profile['page_type']);
         }
 
+        $this->backfillAuthorFromPersons($metadata);
+
         return $this->filterEmpty($metadata);
     }
 
@@ -125,6 +127,60 @@ class SeoProfileGeoMetadataNormalizer
                 if ($value !== []) {
                     $metadata[$key] = $value;
                 }
+            }
+        }
+    }
+
+    /**
+     * Prefer deep Person authors; also fill scalar author from Person.name when missing.
+     *
+     * @param array<string, mixed> $metadata
+     */
+    private function backfillAuthorFromPersons(array &$metadata): void
+    {
+        $authors = $this->listValue($metadata['authors'] ?? []);
+        if ($authors === []) {
+            return;
+        }
+        $normalized = [];
+        foreach ($authors as $author) {
+            if (is_string($author) && trim($author) !== '') {
+                $normalized[] = ['name' => trim($author)];
+                continue;
+            }
+            if (!is_array($author)) {
+                continue;
+            }
+            $name = trim((string)($author['name'] ?? $author['author_name'] ?? ''));
+            if ($name === '') {
+                continue;
+            }
+            $person = ['name' => $name];
+            if (isset($author['@type'])) {
+                $person['@type'] = $author['@type'];
+            }
+            foreach (['url', 'description', 'jobTitle'] as $key) {
+                $value = trim((string)($author[$key] ?? ''));
+                if ($value !== '') {
+                    $person[$key] = $value;
+                }
+            }
+            $sameAs = $this->listValue($author['sameAs'] ?? []);
+            $urls = [];
+            foreach ($sameAs as $url) {
+                if (is_string($url) && str_starts_with(strtolower(trim($url)), 'http')) {
+                    $urls[] = trim($url);
+                }
+            }
+            if ($urls !== []) {
+                $person['sameAs'] = array_values(array_unique($urls));
+            }
+            $normalized[] = $person;
+        }
+        if ($normalized !== []) {
+            $metadata['authors'] = $normalized;
+            if (!isset($metadata['author']) || $metadata['author'] === '') {
+                $metadata['author'] = (string)$normalized[0]['name'];
             }
         }
     }

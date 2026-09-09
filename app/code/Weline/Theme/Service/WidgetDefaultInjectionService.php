@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service;
 
+use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Dto\ThemeComponentDefinition;
 use Weline\Theme\Helper\FooterDefaultLinksHelper;
@@ -1921,6 +1922,14 @@ class WidgetDefaultInjectionService
         string $status,
         string $componentArea = PreviewContextService::AREA_FRONTEND,
     ): ?array {
+        $module = trim((string)($item['module'] ?? ''));
+        if ($module !== '' && !isset(Env::getInstance()->getModuleList()[$module])) {
+            return [
+                'code' => 'module_missing',
+                'message' => 'widget_module_not_installed',
+            ];
+        }
+
         $slotId = trim((string)($item['slot_id'] ?? ''));
         $area = trim((string)($item['area'] ?? ThemeLayout::AREA_CONTENT));
         if ($area === '') {

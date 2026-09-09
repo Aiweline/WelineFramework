@@ -55,15 +55,25 @@ final class StorefrontCategoryTreeIndex
             fn(): array => $this->build($websiteId),
         );
 
-        // The shared website tree is immutable for the request, while its
-        // localized presentation is rebuilt from EAV attributes. Department
-        // navigation calls childrenOf() once per parent, so memoize that
-        // presentation for this request and keep the shared cache scope
-        // unchanged (website tree, locale-localized view).
+        $categoryIds = array_values(array_filter(
+            array_map('intval', array_keys($index['by_id'])),
+            static fn(int $id): bool => $id > 0,
+        ));
+        /** @var array<string, array<int, string>> $presentation */
+        $presentation = $this->hotCache->rememberPolicy(
+            StorefrontCatalogCacheCoordinator::categoryLocalizedPresentationPolicy(),
+            'product.category_presentation.' . $websiteId . '.' . hash('sha256', $locale),
+            fn(): array => $categoryIds === []
+                ? ['name' => [], 'image' => [], 'banner' => [], 'summary' => [], 'description' => []]
+                : $this->categoryAttributes->readPresentationMaps($websiteId, $categoryIds, $locale),
+        );
+
+        // Presentation is shared (website+lang). URLs depend on the active host/path
+        // and must stay request-local.
         return $this->hotCache->rememberForRequest(
             'product.category_tree.localized',
             serialize([$websiteId, $locale]),
-            fn(): array => $this->applyLocalizedNames($websiteId, $index, $locale),
+            fn(): array => $this->applyLocalizedNames($index, $presentation),
         );
     }
 
@@ -262,29 +272,20 @@ final class StorefrontCategoryTreeIndex
      *     by_parent: array<int, list<array<string, mixed>>>,
      *     by_path: array<string, int>
      * } $index
+     * @param array<string, array<int, string>> $presentation
      * @return array{
      *     by_id: array<int, array<string, mixed>>,
      *     by_parent: array<int, list<array<string, mixed>>>,
      *     by_path: array<string, int>
      * }
      */
-    private function applyLocalizedNames(int $websiteId, array $index, string $locale): array
+    private function applyLocalizedNames(array $index, array $presentation): array
     {
-        $categoryIds = array_values(array_filter(
-            array_map('intval', array_keys($index['by_id'])),
-            static fn(int $id): bool => $id > 0,
-        ));
-        if ($categoryIds === []) {
-            return $index;
-        }
-
-        $locale = $locale !== '' ? $locale : (string)State::getLangLocal();
-        $presentation = $this->categoryAttributes->readPresentationMaps($websiteId, $categoryIds, $locale);
-        $names = $presentation['name'];
-        $images = $presentation['image'];
-        $banners = $presentation['banner'];
-        $summaries = $presentation['summary'];
-        $descriptions = $presentation['description'];
+        $names = $presentation['name'] ?? [];
+        $images = $presentation['image'] ?? [];
+        $banners = $presentation['banner'] ?? [];
+        $summaries = $presentation['summary'] ?? [];
+        $descriptions = $presentation['description'] ?? [];
 
         // The same category rows are held in both by_id and by_parent. URL
         // generation also dispatches SEO rewrite resolution, so generate one
@@ -298,12 +299,11 @@ final class StorefrontCategoryTreeIndex
                         continue;
                     }
                     $path = \trim((string)($row['path'] ?? ''));
-                    if (!\array_key_exists($path, $urls)) {
-                        $urls[$path] = $this->categoryUrl($path);
-                    }
+                    $normalizedPath = \trim(\str_replace('\\', '/', $path), '/');
+                    $urls[$path] = $normalizedPath !== '' ? 'category/' . $normalizedPath : 'categories';
                 }
 
-                return $urls;
+                return $this->url->getFrontendUrls($urls);
             },
             ['categories' => \count($index['by_id'])],
         );

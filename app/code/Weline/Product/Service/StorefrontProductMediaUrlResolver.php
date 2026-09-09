@@ -236,7 +236,7 @@ final class StorefrontProductMediaUrlResolver
             return '';
         }
 
-        $cacheKey = strtolower($assetId) . "\0" . $locale . "\0" . (string)($scope->websiteId ?? 0);
+        $cacheKey = $this->referenceCacheKey($assetId, $scope, $locale);
         if (array_key_exists($cacheKey, $this->resolvedReferenceCache)) {
             return $this->resolvedReferenceCache[$cacheKey];
         }
@@ -249,7 +249,7 @@ final class StorefrontProductMediaUrlResolver
             try {
                 $this->assets->locale($assetId, $candidateLocale);
 
-                $resolvedUrl = trim($this->assets->resolveUrl(
+                $candidateUrl = trim($this->assets->resolveUrl(
                     $assetId,
                     new FileAccessContext(
                         scope: $scope,
@@ -257,6 +257,10 @@ final class StorefrontProductMediaUrlResolver
                         purpose: FileAccessContext::PURPOSE_PUBLIC_PUBLISH,
                     ),
                 )->url);
+                if ($candidateUrl === '') {
+                    continue;
+                }
+                $resolvedUrl = $candidateUrl;
                 break;
             } catch (Throwable) {
                 continue;
@@ -293,6 +297,11 @@ final class StorefrontProductMediaUrlResolver
             if (preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i', $assetId) !== 1) {
                 continue;
             }
+            $cacheKey = $this->referenceCacheKey($assetId, $scope, $locale);
+            if (array_key_exists($cacheKey, $this->resolvedReferenceCache)) {
+                $result[$key] = $this->resolvedReferenceCache[$cacheKey];
+                continue;
+            }
             $contexts ??= array_map(
                 static fn(string $candidateLocale): FileAccessContext => new FileAccessContext(
                     scope: $scope,
@@ -309,7 +318,10 @@ final class StorefrontProductMediaUrlResolver
         try {
             $resolved = $this->assets->resolveUrls($requests);
             foreach ($requests as $key => $_request) {
-                $result[$key] = trim($resolved[$key]?->url ?? '');
+                $url = trim($resolved[$key]?->url ?? '');
+                $result[$key] = $url;
+                $assetId = trim(substr((string)$references[$key], strlen(self::ASSET_PREFIX)));
+                $this->resolvedReferenceCache[$this->referenceCacheKey($assetId, $scope, $locale)] = $url;
             }
         } catch (Throwable) {
             foreach ($requests as $key => $_request) {
@@ -317,6 +329,11 @@ final class StorefrontProductMediaUrlResolver
             }
         }
         return $result;
+    }
+
+    private function referenceCacheKey(string $assetId, ScopeIdentity $scope, string $locale): string
+    {
+        return strtolower($assetId) . "\0" . trim($locale) . "\0" . $scope->canonicalKey();
     }
 
     /**
@@ -370,6 +387,67 @@ final class StorefrontProductMediaUrlResolver
         return trim($output);
     }
 
+    /**
+     * Fill empty/missing img alt on already-rendered description HTML with product-name fallbacks.
+     * Content photos must not ship as decorative empty alt.
+     */
+    public static function ensureDescriptionImageAlts(string $html, string $productName): string
+    {
+        $html = trim($html);
+        $productName = trim($productName);
+        if ($html === '' || $productName === '' || !str_contains(strtolower($html), '<img')) {
+            return $html;
+        }
+
+        $document = new \DOMDocument('1.0', 'UTF-8');
+        $previous = libxml_use_internal_errors(true);
+        try {
+            $loaded = $document->loadHTML(
+                '<!doctype html><html><head><meta charset="utf-8"></head><body>'
+                . '<div id="weline-storefront-alt-root">' . $html . '</div>'
+                . '</body></html>',
+                LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING,
+            );
+        } finally {
+            libxml_clear_errors();
+            libxml_use_internal_errors($previous);
+        }
+        if (!$loaded) {
+            return $html;
+        }
+
+        $xpath = new \DOMXPath($document);
+        $containers = $xpath->query('//*[@id="weline-storefront-alt-root"]');
+        $container = $containers !== false ? $containers->item(0) : null;
+        if (!$container instanceof \DOMElement) {
+            return $html;
+        }
+
+        $index = 0;
+        $images = $xpath->query('.//img', $container);
+        if ($images !== false) {
+            foreach ($images as $img) {
+                if (!$img instanceof \DOMElement) {
+                    continue;
+                }
+                $alt = trim($img->getAttribute('alt'));
+                if ($alt !== '') {
+                    continue;
+                }
+                $index++;
+                $fallback = mb_substr($productName . ' · ' . $index, 0, 180);
+                $img->setAttribute('alt', $fallback);
+            }
+        }
+
+        $output = '';
+        foreach ($container->childNodes as $child) {
+            $output .= (string)$document->saveHTML($child);
+        }
+
+        return trim($output) !== '' ? trim($output) : $html;
+    }
+
     private static function sanitizeDescriptionChildren(\DOMNode $parent, callable $assetResolver): void
     {
         for ($child = $parent->firstChild; $child !== null; $child = $next) {
@@ -398,6 +476,9 @@ final class StorefrontProductMediaUrlResolver
             if ($tag === 'img') {
                 $reference = trim($child->getAttribute('src'));
                 $alt = mb_substr(trim($child->getAttribute('alt')), 0, 180);
+                // Preserve importer/editor width+height before attribute wipe (CLS / SEO).
+                $width = self::positiveIntAttr($child->getAttribute('width'));
+                $height = self::positiveIntAttr($child->getAttribute('height'));
                 $resolved = '';
                 if (preg_match('#^asset://[a-f0-9-]{36}$#iD', $reference) === 1) {
                     try {
@@ -415,6 +496,9 @@ final class StorefrontProductMediaUrlResolver
                 $child->setAttribute('alt', $alt);
                 $child->setAttribute('loading', 'lazy');
                 $child->setAttribute('decoding', 'async');
+                // Default square placeholder ratio matches storefront product-card; CSS height:auto keeps responsive.
+                $child->setAttribute('width', (string)($width ?? 800));
+                $child->setAttribute('height', (string)($height ?? 800));
                 continue;
             }
 
@@ -446,6 +530,17 @@ final class StorefrontProductMediaUrlResolver
         if ($marker !== '' && preg_match('/^[a-z0-9_-]{1,40}$/D', $marker) === 1) {
             $element->setAttribute('data-weline-detail-text', $marker);
         }
+    }
+
+    private static function positiveIntAttr(string $value): ?int
+    {
+        $value = trim($value);
+        if ($value === '' || preg_match('/^\d{1,5}$/D', $value) !== 1) {
+            return null;
+        }
+        $int = (int)$value;
+
+        return $int >= 1 && $int <= 10000 ? $int : null;
     }
 
     private static function safeDetailTextClass(string $class): string
@@ -515,6 +610,12 @@ final class StorefrontProductMediaUrlResolver
         } catch (Throwable) {
             // A missing Website context must not make legacy paths unusable.
         }
+
+        // Catalog pixels are often authored once under the site primary locale
+        // (commonly zh_Hans_CN). When WebsiteData has no default language yet —
+        // CLI probes, early account AJAX, or incomplete website bind — en_US
+        // alone would empty every asset:// card image into a placeholder.
+        $candidates[] = 'zh_Hans_CN';
 
         $result = [];
         $seen = [];

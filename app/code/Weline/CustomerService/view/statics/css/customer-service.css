@@ -95,31 +95,6 @@
         line-height: 1;
     }
 
-    .cs-status-dot {
-        position: absolute;
-        bottom: 0.4rem;
-        right: 0.4rem;
-        width: 0.625rem;
-        height: 0.625rem;
-        border-radius: var(--weline-radius-round);
-        border: 2px solid var(--cs-header-bg);
-        box-sizing: border-box;
-        pointer-events: none;
-        transition: background-color var(--weline-motion-normal) ease;
-    }
-
-    .cs-status-dot.cs-status-online {
-        background-color: var(--cs-success);
-    }
-
-    .cs-status-dot.cs-status-ai {
-        background-color: var(--cs-info);
-    }
-
-    .cs-status-dot.cs-status-offline {
-        background-color: var(--cs-text-subtle);
-    }
-
     .cs-status-label {
         display: inline-flex;
         align-items: center;
@@ -440,6 +415,37 @@
         display: flex;
         gap: var(--weline-space-3);
         align-items: flex-end;
+    }
+
+    .cs-guest-send-gate {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: var(--weline-space-2) var(--weline-space-3);
+        margin: 0 0 var(--weline-space-2);
+        padding: var(--weline-space-2) var(--weline-space-3);
+        border: 1px solid var(--cs-border);
+        border-radius: var(--cs-radius-control);
+        background: var(--cs-surface-muted);
+        color: var(--cs-text-muted);
+    }
+
+    .cs-guest-send-gate[hidden] {
+        display: none !important;
+    }
+
+    .cs-guest-send-gate__text {
+        flex: 1 1 12rem;
+        margin: 0;
+        font-size: var(--weline-font-size-sm);
+        line-height: var(--weline-line-height);
+        color: var(--cs-text);
+    }
+
+    .cs-guest-send-gate__action {
+        flex: 0 0 auto;
+        white-space: nowrap;
     }
 
     /* 显式 background/color：避免 color-scheme:dark 下原生控件黑底白字 */

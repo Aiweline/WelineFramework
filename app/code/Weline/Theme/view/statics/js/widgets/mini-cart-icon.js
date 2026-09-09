@@ -100,68 +100,281 @@
         document.querySelectorAll('[data-w-mini-cart="1"]').forEach(resetDrawerBusy);
     }
 
+    var summaryCacheKeyPrefix = 'weline.cart.summary_cache';
+
+    /**
+     * Opaque cart_type SPI code (Cart core default CODE_TOC = 'toc').
+     * Theme never maps wholesale/retail labels — only passes preference strings.
+     */
+    function normalizeCartType(value) {
+        var mode = String(value || '').trim().toLowerCase();
+        return mode || 'toc';
+    }
+
+    /**
+     * Preferred cart_type from optional providers, then summary, else Cart SPI default 'toc'.
+     * Does not hardcode B2B dual-cart UI; Theme stays retail-only without those helpers.
+     */
+    function preferredCartType(summary) {
+        try {
+            if (window.WelineB2BSellingMode && typeof window.WelineB2BSellingMode.preferredMode === 'function') {
+                var fromB2b = String(window.WelineB2BSellingMode.preferredMode() || '').trim().toLowerCase();
+                if (fromB2b) {
+                    return fromB2b;
+                }
+            }
+        } catch (e0) {}
+        try {
+            if (window.Weline && window.Weline.CartTypePreference && typeof window.Weline.CartTypePreference.get === 'function') {
+                var fromPref = String(window.Weline.CartTypePreference.get() || '').trim().toLowerCase();
+                if (fromPref) {
+                    return fromPref;
+                }
+            }
+        } catch (e1) {}
+        if (summary && typeof summary === 'object') {
+            var fromSummary = String(summary.cart_type || summary.selling_mode || '').trim().toLowerCase();
+            if (fromSummary) {
+                return fromSummary;
+            }
+        }
+        return 'toc';
+    }
+
+    function summaryCacheStorageKey(cartType) {
+        return summaryCacheKeyPrefix + '.' + normalizeCartType(cartType || preferredCartType());
+    }
+
+    function emptySummaryForType(cartType, extras) {
+        var mode = normalizeCartType(cartType || preferredCartType());
+        var base = {
+            success: true,
+            cart_count: 0,
+            item_count: 0,
+            is_empty: true,
+            items: [],
+            subtotal: 0,
+            currency: 'CNY',
+            cart_type: mode,
+            selling_mode: mode,
+        };
+        if (extras && typeof extras === 'object') {
+            return Object.assign(base, extras);
+        }
+        return base;
+    }
+
+    function extractCartPayload(result) {
+        return result && result.data && typeof result.data === 'object' ? result.data : result;
+    }
+
+    function isCartTypeGateError(payload) {
+        var code = String(
+            (payload && (payload.error_code || payload.code)) || ''
+        ).toLowerCase();
+        return code === 'cart_commerce_type_login_required'
+            || code === 'cart_commerce_type_membership_required'
+            || code === 'cart_commerce_type_unregistered';
+    }
+
+    function gateReasonFromPayload(payload) {
+        var code = String((payload && payload.error_code) || '').toLowerCase();
+        if (code === 'cart_commerce_type_login_required') {
+            return 'login';
+        }
+        if (code === 'cart_commerce_type_membership_required') {
+            return 'membership';
+        }
+        return '';
+    }
+
+    function currentGuestTokenForCache() {
+        if (window.WelineCart && typeof window.WelineCart.getGuestSession === 'function') {
+            var session = window.WelineCart.getGuestSession();
+            if (session && session.token) {
+                return String(session.token).trim();
+            }
+        }
+        try {
+            var raw = window.localStorage.getItem('weline.cart.guest_session');
+            if (raw) {
+                var parsed = JSON.parse(raw);
+                if (parsed && parsed.token) {
+                    return String(parsed.token).trim();
+                }
+            }
+        } catch (e) {
+            // privacy modes
+        }
+        return guestToken();
+    }
+
     function rememberSummaryCache(summary) {
         if (!summary || typeof summary !== 'object' || summary.success === false) {
             return;
         }
+        var mode = normalizeCartType(summary.cart_type || summary.selling_mode || preferredCartType());
+        summary.cart_type = mode;
+        summary.selling_mode = mode;
+        var currency = String(summary.currency || '').trim().toUpperCase();
+        if (!/^[A-Z]{3}$/.test(currency)
+            && window.WelineCart && typeof window.WelineCart.currentDisplayCurrency === 'function') {
+            currency = String(window.WelineCart.currentDisplayCurrency() || 'CNY').toUpperCase();
+        }
+        if (!/^[A-Z]{3}$/.test(currency)) {
+            currency = 'CNY';
+        }
+        summary.currency = currency;
+        var locale = '';
+        if (window.WelineCart && typeof window.WelineCart.currentDisplayLocale === 'function') {
+            locale = String(window.WelineCart.currentDisplayLocale() || '');
+        }
         if (window.WelineCart && typeof window.WelineCart.rememberSummary === 'function') {
-            window.WelineCart.rememberSummary(summary);
+            try {
+                window.WelineCart.rememberSummary(summary, { cart_type: mode, currency: currency, locale: locale });
+            } catch (e0) {}
+        }
+        try {
+            window.localStorage.setItem(summaryCacheStorageKey(mode), JSON.stringify({
+                guest_token: currentGuestTokenForCache(),
+                scope_key: String(summary.scope_key || ''),
+                cart_type: mode,
+                currency: currency,
+                locale: locale,
+                saved_at: Date.now(),
+                summary: summary,
+            }));
+        } catch (e) {
+            // privacy modes
         }
     }
 
-    function sellingModeFromCookie() {
-        try {
-            if (window.WelineB2BSellingMode && typeof window.WelineB2BSellingMode.preferredMode === 'function') {
-                return window.WelineB2BSellingMode.preferredMode();
-            }
-            var match = document.cookie.match(/(?:^|; )weline_selling_mode=([^;]*)/);
-            var value = match ? decodeURIComponent(match[1]).toLowerCase() : '';
-            return value === 'tob' ? 'tob' : 'toc';
-        } catch (e) {
-            return 'toc';
+    function currentStorefrontCurrency() {
+        if (window.WelineCart && typeof window.WelineCart.currentDisplayCurrency === 'function') {
+            try {
+                var fromCart = String(window.WelineCart.currentDisplayCurrency() || '').toUpperCase();
+                if (/^[A-Z]{3}$/.test(fromCart)) {
+                    return fromCart;
+                }
+            } catch (e0) {}
         }
+        try {
+            var cfgNode = document.getElementById('weline-frontend-runtime-config');
+            if (cfgNode && cfgNode.textContent) {
+                var cfg = JSON.parse(cfgNode.textContent);
+                var fromCfg = String(cfg.currentCurrency || cfg.currency || '').toUpperCase();
+                if (/^[A-Z]{3}$/.test(fromCfg)) {
+                    return fromCfg;
+                }
+            }
+        } catch (e1) {}
+        return 'CNY';
+    }
+
+    function currentStorefrontLocale() {
+        if (window.WelineCart && typeof window.WelineCart.currentDisplayLocale === 'function') {
+            try {
+                return String(window.WelineCart.currentDisplayLocale() || '');
+            } catch (e0) {}
+        }
+        return String((document.documentElement && document.documentElement.getAttribute('lang')) || '')
+            .trim().replace(/-/g, '_');
+    }
+
+    function cacheMatchesStorefront(data) {
+        if (!data || !data.summary || data.summary.success === false) {
+            return false;
+        }
+        var wantCurrency = currentStorefrontCurrency();
+        var cachedCurrency = String(data.currency || data.summary.currency || '').trim().toUpperCase();
+        if (!cachedCurrency || cachedCurrency !== wantCurrency) {
+            return false;
+        }
+        var wantLocale = currentStorefrontLocale();
+        var cachedLocale = String(data.locale || '').trim().replace(/-/g, '_');
+        if (wantLocale && cachedLocale && wantLocale.toLowerCase() !== cachedLocale.toLowerCase()) {
+            return false;
+        }
+        return true;
     }
 
     function cartQueryParams(extra) {
         var params = Object.assign({}, extra || {});
-        var mode = sellingModeFromCookie();
+        var mode = preferredCartType();
         params.cart_type = mode;
         params.selling_mode = mode;
         return params;
     }
 
-    function applyCartTypeBadge(root, summary) {
+    /** Set opaque data-cart-type only; Theme does not rewrite titles/badges. */
+    function applyCartTypeAttr(root, summary) {
         if (!root) {
             return;
         }
-        var cartType = String(
-            (summary && (summary.cart_type || summary.selling_mode)) || sellingModeFromCookie() || 'toc'
-        ).toLowerCase();
-        if (cartType !== 'tob') {
-            cartType = 'toc';
-        }
+        var cartType = normalizeCartType(
+            (summary && (summary.cart_type || summary.selling_mode)) || preferredCartType(summary)
+        );
         root.setAttribute('data-cart-type', cartType);
-        var badge = root.querySelector('[data-cart-type-badge]');
-        if (!badge) {
-            return;
-        }
-        badge.hidden = false;
-        badge.setAttribute('data-tone', cartType === 'tob' ? 'warning' : 'secondary');
-        badge.setAttribute('data-cart-type', cartType);
-        var label = cartType === 'tob'
-            ? attr(root, 'data-i18n-cart-type-tob', '批发')
-            : attr(root, 'data-i18n-cart-type-toc', '零售');
-        text(badge, label);
     }
 
-    function readSummaryCache() {
+    function readSummaryCache(preferredType) {
+        var mode = normalizeCartType(preferredType || preferredCartType());
+        try {
+            var raw = window.localStorage.getItem(summaryCacheStorageKey(mode));
+            if (raw) {
+                var data = JSON.parse(raw);
+                if (cacheMatchesStorefront(data)) {
+                    var token = currentGuestTokenForCache();
+                    var cachedToken = String(data.guest_token || '').trim();
+                    if (!(token && cachedToken && token !== cachedToken)) {
+                        var typed = Object.assign({}, data.summary);
+                        typed.cart_type = mode;
+                        typed.selling_mode = mode;
+                        return typed;
+                    }
+                }
+            }
+        } catch (e) {}
         if (window.WelineCart && typeof window.WelineCart.getCachedSummary === 'function') {
-            return window.WelineCart.getCachedSummary();
+            try {
+                var shared = window.WelineCart.getCachedSummary({ cartType: mode });
+                if (shared && shared.success !== false) {
+                    var sharedType = normalizeCartType(shared.cart_type || shared.selling_mode || 'toc');
+                    var sharedCurrency = String(shared.currency || '').toUpperCase();
+                    if (sharedType === mode
+                        && (!sharedCurrency || sharedCurrency === currentStorefrontCurrency())) {
+                        return shared;
+                    }
+                }
+            } catch (e2) {}
+        }
+        // Legacy untyped key: only accept for toc to avoid sticking wholesale to retail lines.
+        if (mode === 'toc') {
+            try {
+                var legacyRaw = window.localStorage.getItem(summaryCacheKeyPrefix);
+                if (!legacyRaw) {
+                    return null;
+                }
+                var legacy = JSON.parse(legacyRaw);
+                if (!cacheMatchesStorefront(legacy)) {
+                    return null;
+                }
+                var legacyType = normalizeCartType(legacy.cart_type || legacy.summary.cart_type || 'toc');
+                if (legacyType !== 'toc') {
+                    return null;
+                }
+                return Object.assign({}, legacy.summary, { cart_type: 'toc', selling_mode: 'toc' });
+            } catch (e3) {
+                return null;
+            }
         }
         return null;
     }
 
     function applyCachedSummaryToRoots() {
+        if (window.Weline && window.Weline.MiniCart && window.Weline.MiniCart.__painting) {
+            return !!window.Weline.MiniCart.__lastPaintHit;
+        }
         var cached = normalizeSummary(readSummaryCache());
         if (!cached || cached.success === false) {
             return false;
@@ -169,13 +382,25 @@
         if (cached.cart_count == null && !Array.isArray(cached.items)) {
             return false;
         }
-        document.querySelectorAll('[data-w-mini-cart="1"]').forEach(function (root) {
-            if (isDemoChromeOnly(root)) {
-                return;
+        if (window.Weline && window.Weline.MiniCart) {
+            window.Weline.MiniCart.__painting = true;
+        }
+        try {
+            document.querySelectorAll('[data-w-mini-cart="1"]').forEach(function (root) {
+                if (isDemoChromeOnly(root)) {
+                    return;
+                }
+                applySummary(root, cached);
+            });
+            if (window.Weline && window.Weline.MiniCart) {
+                window.Weline.MiniCart.__lastPaintHit = true;
             }
-            applySummary(root, cached);
-        });
-        return true;
+            return true;
+        } finally {
+            if (window.Weline && window.Weline.MiniCart) {
+                window.Weline.MiniCart.__painting = false;
+            }
+        }
     }
 
     function formatMoney(amount, currency) {
@@ -432,6 +657,7 @@
 
         var input = document.createElement('input');
         input.type = 'number';
+        input.className = 'mini-cart-drawer__qty-input';
         input.min = '1';
         input.max = '999';
         input.value = String(qty);
@@ -527,7 +753,8 @@
             empty.setAttribute('data-mini-cart-empty', '1');
 
             var p = document.createElement('p');
-            p.textContent = attr(root, 'data-i18n-empty', '购物车是空的');
+            var emptyMessage = attr(root, 'data-empty-message', '');
+            p.textContent = emptyMessage || attr(root, 'data-i18n-empty', '购物车是空的');
             empty.appendChild(p);
 
             var shop = document.createElement('a');
@@ -595,6 +822,17 @@
         var precision = Number(preview && preview.currency_precision != null ? preview.currency_precision : 2);
 
         linesEl.innerHTML = '';
+        // Quote may return amount_minor without per-line items; still show one coupon row.
+        if (!items.length && preview && Number(preview.amount_minor || 0) > 0) {
+            items = [{
+                label: String(preview.coupon_code || preview.label || '').trim(),
+                coupon_code: String(preview.coupon_code || '').trim(),
+                source: preview.coupon_code ? 'coupon' : 'automatic',
+                kind: preview.coupon_code ? 'coupon' : 'automatic',
+                amount_minor: Number(preview.amount_minor || 0),
+                stackable: false,
+            }];
+        }
         if (!items.length) {
             breakdown.hidden = true;
             return;
@@ -642,12 +880,20 @@
         var payable = Math.max(0, subtotal - discountMajor);
         var formatted = formatMoney(payable, currency);
         var items = Array.isArray(summary.items) ? summary.items : [];
+        var cartType = normalizeCartType(summary.cart_type || summary.selling_mode || preferredCartType());
+        var gate = String(summary.gate_reason || '').toLowerCase();
 
         root.setAttribute('data-cart-count', String(count));
         root.setAttribute('data-cart-subtotal', formatted);
+        root.setAttribute('data-cart-type', cartType);
+        if (gate === 'login' || gate === 'membership') {
+            root.setAttribute('data-cart-gate', gate);
+        } else {
+            root.removeAttribute('data-cart-gate');
+        }
         root.classList.toggle('is-empty', count <= 0 || !!summary.is_empty);
         root.classList.toggle('is-demo', !!summary.is_demo);
-        applyCartTypeBadge(root, summary);
+        applyCartTypeAttr(root, summary);
 
         var badge = root.querySelector('[data-cart-count-badge]');
         if (badge) {
@@ -782,9 +1028,11 @@
             return;
         }
         options = options || {};
+        var mode = preferredCartType();
         if (!options.forceNetwork) {
-            var cached = normalizeSummary(readSummaryCache());
+            var cached = normalizeSummary(readSummaryCache(mode));
             if (cached && cached.success !== false
+                && normalizeCartType(cached.cart_type || cached.selling_mode) === mode
                 && (cached.cart_count != null || Array.isArray(cached.items))) {
                 applySummary(root, cached);
                 return;
@@ -807,16 +1055,25 @@
             } else {
                 return;
             }
-            var payload = result && result.data && typeof result.data === 'object' ? result.data : result;
+            var payload = extractCartPayload(result);
             if (!payload || payload.success === false) {
+                // Non-default cart_type (or gate): show empty for preferred type; B2B may set data-empty-message.
+                if (isCartTypeGateError(payload) || (mode && mode !== 'toc')) {
+                    applySummary(root, emptySummaryForType(mode, {
+                        gate_reason: gateReasonFromPayload(payload),
+                        message: payload && payload.message ? payload.message : '',
+                    }));
+                }
                 return;
             }
             var normalized = normalizeSummary(payload) || payload;
+            normalized.cart_type = normalizeCartType(normalized.cart_type || normalized.selling_mode || mode);
+            normalized.selling_mode = normalized.cart_type;
             applySummary(root, normalized);
             rememberSummaryCache(normalized);
             var count = Number(normalized.cart_count || normalized.item_count || 0);
-            if (count > 0 && window.Weline && window.Weline.Api && typeof window.Weline.Api.markCartActive === 'function') {
-                window.Weline.Api.markCartActive();
+            if (count > 0 && window.WelineCart && typeof window.WelineCart.markCartActive === 'function') {
+                window.WelineCart.markCartActive();
             }
         };
         if (options.drawerBusy && isDrawerOpen(root)) {
@@ -836,7 +1093,7 @@
         return runWithDrawerBusy(root, async function () {
             var api = await waitForCartApi();
             var token = guestToken();
-            var params = { item_id: itemId };
+            var params = cartQueryParams({ item_id: itemId });
             if (token) {
                 params.guest_token = token;
             }
@@ -845,23 +1102,21 @@
             if (remove) {
                 if (typeof api.remove === 'function') {
                     result = await api.remove(params, requestOptions);
-                } else if (typeof api.remove === 'function') {
-                    result = await api.remove(params, requestOptions);
                 } else {
                     return;
                 }
             } else if (typeof api.update === 'function') {
                 result = await api.update(Object.assign({}, params, { qty: qty }), requestOptions);
-            } else if (typeof api.update === 'function') {
-                result = await api.update(Object.assign({}, params, { qty: qty }), requestOptions);
             } else {
                 return;
             }
-            var payload = result && result.data && typeof result.data === 'object' ? result.data : result;
+            var payload = extractCartPayload(result);
             if (!payload || payload.success === false) {
                 return;
             }
             var summary = normalizeSummary(payload) || payload;
+            summary.cart_type = normalizeCartType(summary.cart_type || summary.selling_mode || preferredCartType());
+            summary.selling_mode = summary.cart_type;
             applySummary(root, summary);
             rememberSummaryCache(summary);
             window.dispatchEvent(new CustomEvent('weline:cart-updated', {
@@ -1088,9 +1343,11 @@
             return;
         }
         options = options || {};
+        var mode = preferredCartType();
         if (!options.forceNetwork) {
-            var cached = normalizeSummary(readSummaryCache());
+            var cached = normalizeSummary(readSummaryCache(mode));
             if (cached && cached.success !== false
+                && normalizeCartType(cached.cart_type || cached.selling_mode) === mode
                 && (cached.cart_count != null || Array.isArray(cached.items))) {
                 applySummary(root, cached);
                 return;
@@ -1112,18 +1369,24 @@
                 } else if (typeof api.summary === 'function') {
                     result = await withTimeout(api.summary(cartQueryParams({}), { silent: true }), 8000, 'summary timeout');
                 } else {
-                    applySummary(root, { success: true, cart_count: 0, item_count: 0, is_empty: true, items: [], subtotal: 0, currency: 'CNY' });
+                    applySummary(root, emptySummaryForType(mode));
                     return;
                 }
-                var payload = result && result.data && typeof result.data === 'object' ? result.data : result;
+                var payload = extractCartPayload(result);
                 if (!payload || payload.success === false) {
-                    applySummary(root, { success: true, cart_count: 0, item_count: 0, is_empty: true, items: [], subtotal: 0, currency: 'CNY' });
+                    applySummary(root, emptySummaryForType(mode, {
+                        gate_reason: gateReasonFromPayload(payload),
+                        message: payload && payload.message ? payload.message : '',
+                    }));
                     return;
                 }
-                applySummary(root, normalizeSummary(payload) || payload);
-                rememberSummaryCache(normalizeSummary(payload) || payload);
+                var normalized = normalizeSummary(payload) || payload;
+                normalized.cart_type = normalizeCartType(normalized.cart_type || normalized.selling_mode || mode);
+                normalized.selling_mode = normalized.cart_type;
+                applySummary(root, normalized);
+                rememberSummaryCache(normalized);
             } catch (e) {
-                applySummary(root, { success: true, cart_count: 0, item_count: 0, is_empty: true, items: [], subtotal: 0, currency: 'CNY' });
+                applySummary(root, emptySummaryForType(mode));
             }
         });
     }
@@ -1144,27 +1407,31 @@
         }
         cartRefreshTimer = window.setTimeout(function () {
             cartRefreshTimer = null;
+            // Coupon/Marketing may emit { refresh: true } without a cart payload.
+            // Never short-circuit on stale summary_cache — that hides discount_preview lines.
+            var forceRefresh = !!(summary && typeof summary === 'object'
+                && (summary.refresh === true || summary.forceNetwork === true));
             var normalized = normalizeSummary(summary);
+            var hasCartPayload = !!(normalized
+                && normalized.success !== false
+                && (normalized.cart_count != null || Array.isArray(normalized.items)));
             var roots = document.querySelectorAll('[data-w-mini-cart="1"]');
-            var drawerOpen = false;
             roots.forEach(function (root) {
-                if (normalized && normalized.success !== false && (normalized.cart_count != null || normalized.items)) {
+                if (!forceRefresh && hasCartPayload) {
                     applySummary(root, normalized);
                     rememberSummaryCache(normalized);
-                    return;
                 }
-                drawerOpen = drawerOpen || isDrawerOpen(root);
             });
-            if (normalized && normalized.success !== false && (normalized.cart_count != null || normalized.items)) {
+            if (!forceRefresh && hasCartPayload) {
                 rememberSummaryCache(normalized);
                 return;
             }
-            if (applyCachedSummaryToRoots()) {
+            if (!forceRefresh && applyCachedSummaryToRoots()) {
                 return;
             }
             roots.forEach(function (root) {
                 if (isDrawerOpen(root)) {
-                    refreshBadge(root).catch(function () {
+                    loadDrawer(root, { forceNetwork: true }).catch(function () {
                         // Keep last rendered drawer when refresh fails.
                     });
                     return;
@@ -1173,15 +1440,6 @@
                     // Keep server-rendered badge when cart API is unavailable.
                 });
             });
-            if (drawerOpen) {
-                roots.forEach(function (root) {
-                    if (isDrawerOpen(root)) {
-                        loadDrawer(root, { forceNetwork: true }).catch(function () {
-                            // Keep last rendered drawer when async load fails.
-                        });
-                    }
-                });
-            }
         }, 60);
     }
 
@@ -1208,11 +1466,24 @@
             setDrawerOpen(root, false);
         });
     };
+    window.Weline.MiniCart.refresh = function (opts) {
+        opts = opts || {};
+        // Prefer typed local summary_cache; only forceNetwork when caller opts in (mutations / miss).
+        var forceNetwork = opts.forceNetwork === true;
+        document.querySelectorAll('[data-w-mini-cart="1"]').forEach(function (root) {
+            if (isDemoChromeOnly(root)) {
+                return;
+            }
+            syncCartState(root, { forceNetwork: forceNetwork, drawerBusy: isDrawerOpen(root) }).then(function () {
+                if (isDrawerOpen(root)) {
+                    return loadDrawer(root, { forceNetwork: forceNetwork });
+                }
+                return null;
+            }).catch(function () {});
+        });
+    };
 
     function ensureDrawerCss() {
-        if (document.querySelector('link[data-weline-mini-cart-drawer-live="1"]')) {
-            return;
-        }
         var assetVersion = '';
         try {
             var cfgNode = document.getElementById('weline-frontend-runtime-config');
@@ -1223,11 +1494,22 @@
         } catch (err) {
             assetVersion = '';
         }
-        var href = '/Weline/Theme/view/statics/css/widgets/mini-cart-drawer.css';
+        var cssStamp = '20260908-theme-minicart-generic';
+        var href = '/Weline/Theme/view/statics/css/widgets/mini-cart-drawer.css?v=' + cssStamp;
         if (assetVersion) {
-            href += (href.indexOf('?') >= 0 ? '&' : '?') + '_weline_dev=' + encodeURIComponent(assetVersion);
-        } else {
-            href += (href.indexOf('?') >= 0 ? '&' : '?') + '_weline_dev=' + String(Date.now());
+            href += '&_weline_dev=' + encodeURIComponent(assetVersion);
+        }
+        // Drop stale drawer sheets (old &v=) so the current Theme generic sheet wins.
+        document.querySelectorAll('link[rel="stylesheet"][href*="mini-cart-drawer.css"]').forEach(function (node) {
+            var current = String(node.getAttribute('href') || '');
+            if (current.indexOf(cssStamp) === -1) {
+                if (node.parentNode) {
+                    node.parentNode.removeChild(node);
+                }
+            }
+        });
+        if (document.querySelector('link[data-weline-mini-cart-drawer-live="1"], link[href*="' + cssStamp + '"]')) {
+            return;
         }
         var link = document.createElement('link');
         link.rel = 'stylesheet';
@@ -1236,8 +1518,16 @@
         document.head.appendChild(link);
     }
 
-    function bootMiniCartRoots() {
-        var hydratedFromCache = applyCachedSummaryToRoots();
+    /**
+     * @param {{paintCache?: boolean}} options
+     * paintCache=true（默认）：首启/事件路径可刷缓存摘要。
+     * paintCache=false：MutationObserver 仅发现新根并绑定；禁止重绘摘要。
+     * 否则 applySummary 的 childList 变更会再次触发 observer → 同步死循环卡死页面。
+     */
+    function bootMiniCartRoots(options) {
+        options = options || {};
+        var paintCache = options.paintCache !== false;
+        var hydratedFromCache = paintCache ? applyCachedSummaryToRoots() : false;
         document.querySelectorAll('[data-w-mini-cart="1"]').forEach(function (root) {
             if (root.getAttribute('data-w-mini-cart-init') === '1') {
                 return;
@@ -1245,7 +1535,28 @@
             root.setAttribute('data-w-mini-cart-init', '1');
             bindDrawer(root);
             bindLineActions(root);
-            if (!hydratedFromCache) {
+            if (paintCache) {
+                if (!hydratedFromCache) {
+                    scheduleCartSync(root);
+                }
+                return;
+            }
+            // Observer 路径：新根只做一次单根缓存画，避免全树重绘风暴。
+            var cached = normalizeSummary(readSummaryCache());
+            if (cached && cached.success !== false
+                && (cached.cart_count != null || Array.isArray(cached.items))
+                && !isDemoChromeOnly(root)) {
+                if (window.Weline && window.Weline.MiniCart) {
+                    window.Weline.MiniCart.__painting = true;
+                }
+                try {
+                    applySummary(root, cached);
+                } finally {
+                    if (window.Weline && window.Weline.MiniCart) {
+                        window.Weline.MiniCart.__painting = false;
+                    }
+                }
+            } else {
                 scheduleCartSync(root);
             }
         });
@@ -1255,8 +1566,23 @@
         if (window.Weline.MiniCart.__observer || typeof MutationObserver !== 'function') {
             return;
         }
+        var queued = false;
         var observer = new MutationObserver(function () {
-            bootMiniCartRoots();
+            if (window.Weline.MiniCart.__painting) {
+                return;
+            }
+            if (queued) {
+                return;
+            }
+            queued = true;
+            Promise.resolve().then(function () {
+                queued = false;
+                if (window.Weline.MiniCart.__painting) {
+                    return;
+                }
+                // 只发现新插入的迷你购物车根；禁止在此重绘（防 childList 反馈死循环）。
+                bootMiniCartRoots({ paintCache: false });
+            });
         });
         observer.observe(document.documentElement, { childList: true, subtree: true });
         window.Weline.MiniCart.__observer = observer;
@@ -1264,12 +1590,12 @@
 
     function boot() {
         if (window.Weline.MiniCart.__booted) {
-            bootMiniCartRoots();
+            bootMiniCartRoots({ paintCache: true });
             return;
         }
         window.Weline.MiniCart.__booted = true;
         clearAllCheckoutNavigationState();
-        bootMiniCartRoots();
+        bootMiniCartRoots({ paintCache: true });
         bindGlobalNavigationActions();
         observeMiniCartRoots();
 
@@ -1282,7 +1608,7 @@
         });
 
         window.addEventListener('storage', function (event) {
-            if (!event || event.key !== 'weline.cart.summary_cache') {
+            if (!event || String(event.key || '').indexOf('weline.cart.summary_cache') !== 0) {
                 return;
             }
             applyCachedSummaryToRoots();
@@ -1291,6 +1617,25 @@
         window.addEventListener('weline:cart-updated', function (event) {
             var summary = event && event.detail && typeof event.detail === 'object' ? event.detail : null;
             scheduleCartRefreshFromEvent(summary);
+        });
+
+        window.addEventListener('weline:selling-mode-changed', function (event) {
+            var detail = event && event.detail && typeof event.detail === 'object' ? event.detail : {};
+            var mode = normalizeCartType(detail.selling_mode || detail.cart_type || preferredCartType());
+            // Type switch: paint that type's local bucket; network only on miss or explicit force.
+            var forceNetwork = detail.forceNetwork === true;
+            document.querySelectorAll('[data-w-mini-cart="1"]').forEach(function (root) {
+                if (isDemoChromeOnly(root)) {
+                    return;
+                }
+                applyCartTypeAttr(root, { cart_type: mode });
+                syncCartState(root, { forceNetwork: forceNetwork, drawerBusy: isDrawerOpen(root) }).then(function () {
+                    if (isDrawerOpen(root)) {
+                        return loadDrawer(root, { forceNetwork: forceNetwork });
+                    }
+                    return null;
+                }).catch(function () {});
+            });
         });
 
         window.addEventListener('weshop:mini-cart:open-request', function () {

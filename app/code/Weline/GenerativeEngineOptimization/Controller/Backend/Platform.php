@@ -19,6 +19,7 @@ use Weline\GenerativeEngineOptimization\Model\Platform as PlatformModel;
 use Weline\GenerativeEngineOptimization\Model\PlatformAccount;
 use Weline\GenerativeEngineOptimization\Service\SecretStoreService;
 use Weline\GenerativeEngineOptimization\Service\PlatformAdapterService;
+use Weline\Geo\Service\PlatformAccountGuideService;
 
 /**
  * 平台管理控制器
@@ -178,8 +179,15 @@ class Platform extends BackendController
                 ->select()
                 ->fetchArray();
 
+            /** @var PlatformAccountGuideService $guideService */
+            $guideService = ObjectManager::getInstance(PlatformAccountGuideService::class);
+            $accountGuide = $guideService->forPlatformCode(
+                (string)$platform->getData('platform_code')
+            );
+
             $this->assign('platform', $platform);
             $this->assign('accounts', $accounts);
+            $this->assign('account_guide', $accountGuide);
             return $this->fetch();
         } catch (\Exception $e) {
             Message::error(__('加载账户列表失败：%{1}', $e->getMessage()));

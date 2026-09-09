@@ -175,4 +175,108 @@ final class NamespaceContractTest extends TestCase
             $snapshot->processSnapshot(),
         );
     }
+
+    public function testMissingLoadDoesNotOverwriteConcurrentInvalidation(): void
+    {
+        $snapshot = new NamespaceGenerationSnapshot();
+        $snapshot->replaceProcessSnapshot(1, ['website/default' => 1]);
+        $snapshot->resolve(['website/default'], static fn(): array => [NamespacePath::AUTHORITY_CLOCK => 1]);
+
+        $resolved = $snapshot->resolve(['website/default/catalog'], static function () use ($snapshot): array {
+            $writer = new \Fiber(static function () use ($snapshot): void {
+                Context::enter(new Context());
+                try {
+                    RequestContext::setId('namespace-concurrent-writer');
+                    $snapshot->advance(2, ['website/default/catalog' => 9]);
+                } finally {
+                    Context::leave();
+                }
+            });
+            $writer->start();
+
+            return ['website/default/catalog' => 1];
+        });
+
+        self::assertSame(1, $resolved['authority_clock']);
+        self::assertSame(1, $resolved['generations']['website/default/catalog']);
+        self::assertSame(2, $snapshot->processSnapshot()['authority_clock']);
+        self::assertSame(9, $snapshot->processSnapshot()['generations']['website/default/catalog']);
+    }
+
+    public function testMissingLoadPreservesOtherNamespacesFilledDuringYield(): void
+    {
+        $snapshot = new NamespaceGenerationSnapshot();
+        $snapshot->replaceProcessSnapshot(1, ['website/default' => 1]);
+        $snapshot->resolve(['website/default'], static fn(): array => [NamespacePath::AUTHORITY_CLOCK => 1]);
+
+        $snapshot->resolve(['website/default/catalog'], static function () use ($snapshot): array {
+            $reader = new \Fiber(static function () use ($snapshot): void {
+                Context::enter(new Context());
+                try {
+                    RequestContext::setId('namespace-concurrent-reader');
+                    $snapshot->resolve(['website/default/price'], static fn(array $keys): array =>
+                        $keys === [NamespacePath::AUTHORITY_CLOCK]
+                            ? [NamespacePath::AUTHORITY_CLOCK => 1]
+                            : ['website/default/price' => 4]);
+                } finally {
+                    Context::leave();
+                }
+            });
+            $reader->start();
+
+            return ['website/default/catalog' => 2];
+        });
+
+        self::assertSame([
+            'website/default' => 1,
+            'website/default/catalog' => 2,
+            'website/default/price' => 4,
+        ], $snapshot->processSnapshot()['generations']);
+    }
+
+    public function testSameClockMissingNamespacesReuseProcessThenBatchOnlyRemainder(): void
+    {
+        $snapshot = new NamespaceGenerationSnapshot();
+        $snapshot->replaceProcessSnapshot(7, [
+            'website/default' => 2,
+            'website/default/catalog' => 4,
+        ]);
+
+        $calls = [];
+        $loader = static function (array $namespaces) use (&$calls): array {
+            $calls[] = $namespaces;
+            if ($namespaces === [NamespacePath::AUTHORITY_CLOCK]) {
+                return [NamespacePath::AUTHORITY_CLOCK => 7];
+            }
+
+            $out = [];
+            foreach ($namespaces as $namespace) {
+                $out[$namespace] = $namespace === 'website/default/price' ? 9 : 0;
+            }
+
+            return $out;
+        };
+
+        $first = $snapshot->resolve(['website/default'], $loader);
+        self::assertSame(2, $first['generations']['website/default']);
+        self::assertSame([[NamespacePath::AUTHORITY_CLOCK]], $calls);
+
+        $second = $snapshot->resolve(
+            ['website/default', 'website/default/catalog', 'website/default/price'],
+            $loader,
+        );
+        self::assertSame(
+            [
+                'website/default' => 2,
+                'website/default/catalog' => 4,
+                'website/default/price' => 9,
+            ],
+            $second['generations'],
+        );
+        self::assertSame(
+            [[NamespacePath::AUTHORITY_CLOCK], ['website/default/price']],
+            $calls,
+        );
+        self::assertSame(9, $snapshot->processSnapshot()['generations']['website/default/price']);
+    }
 }

@@ -2,105 +2,56 @@
 
 declare(strict_types=1);
 
-/*
- * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
- * 邮箱：aiweline@qq.com
- * 网址：aiweline.com
- * 论坛：https://bbs.aiweline.com
- */
-
 namespace Weline\CustomerService\Controller\Backend;
 
-use Weline\CustomerService\Model\CustomerServiceConfig;
-use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Acl\Acl;
+use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\SystemConfig\Service\SystemConfigTargetScopeService;
 
 /**
- * 客服配置管理控制器
+ * 客服配置页：本页用 config:embed 嵌入统一配置声明字段，并支持 URL 范围。
  */
 #[Acl('Weline_CustomerService::config', '客服配置', 'settings', '客服配置管理', 'Weline_CustomerService::customer_service')]
 class Config extends BackendController
 {
-    /**
-     * 配置页面
-     */
     #[Acl('Weline_CustomerService::config_index', '查看客服配置', 'settings', '查看客服配置')]
     public function index(): string
     {
-        try {
-            /** @var CustomerServiceConfig $config */
-            $config = ObjectManager::getInstance(CustomerServiceConfig::class);
-            
-            $configs = $config->reset()
-                ->select()
-                ->fetch()
-                ->getItems();
+        /** @var SystemConfigTargetScopeService $targetScopeService */
+        $targetScopeService = ObjectManager::getInstance(SystemConfigTargetScopeService::class);
+        $resolved = $targetScopeService->resolveFromInput([
+            'target_scope' => (string)$this->request->getGet('target_scope', ''),
+            'scope' => (string)$this->request->getGet('scope', ''),
+            'website_code' => (string)$this->request->getGet('website_code', ''),
+            'store_code' => (string)$this->request->getGet('store_code', ''),
+            'channel_code' => (string)$this->request->getGet('channel_code', ''),
+        ], false);
 
-            $configData = [];
-            foreach ($configs as $item) {
-                $configData[$item['key']] = $item['value'];
-            }
+        $storageScope = (string)($resolved['storage_scope'] ?? 'default.default.default');
+        $hasExplicit = trim((string)$this->request->getGet('target_scope', '')) !== ''
+            || trim((string)$this->request->getGet('scope', '')) !== ''
+            || array_key_exists('website_code', $this->request->getGet());
 
-            $this->assign('configs', $configData);
-            $this->assign('page_title', __('客服配置'));
-            
-            return $this->fetch();
-        } catch (\Exception $e) {
-            $this->getMessageManager()->addError(__('加载配置失败：%{1}', $e->getMessage()));
-            $this->assign('configs', []);
-            return $this->fetch();
+        if (!$hasExplicit) {
+            return $this->redirect($this->request->getUrlBuilder()->getBackendUrl(
+                '*/backend/config',
+                [
+                    'target_scope' => $storageScope,
+                    'website_code' => (string)($resolved['website_code'] ?? ''),
+                    'store_code' => (string)($resolved['store_code'] ?? ''),
+                    'channel_code' => (string)($resolved['channel_code'] ?? ''),
+                ]
+            ));
         }
-    }
 
-    /**
-     * 保存配置
-     * POST /customerservice/backend/config/save
-     */
-    #[Acl('Weline_CustomerService::config_save', '保存客服配置', 'save', '保存客服配置')]
-    public function postSave(): string
-    {
-        try {
-            $configs = $this->request->getPost('config', []);
+        $this->assign('page_title', __('客服配置'));
+        $this->assign('selected_scope', $storageScope);
+        $this->assign('target_scope', $storageScope);
+        $this->assign('scope_website_code', (string)($resolved['website_code'] ?? ''));
+        $this->assign('scope_store_code', (string)($resolved['store_code'] ?? ''));
+        $this->assign('scope_channel_code', (string)($resolved['channel_code'] ?? ''));
 
-            /** @var CustomerServiceConfig $configModel */
-            $configModel = ObjectManager::getInstance(CustomerServiceConfig::class);
-
-            foreach ($configs as $key => $value) {
-                $config = clone $configModel;
-                $config->reset()
-                    ->where(CustomerServiceConfig::schema_fields_key, $key)
-                    ->find()
-                    ->fetch();
-
-                if ($config->getId()) {
-                    $config->setValue($value)
-                        ->setData(CustomerServiceConfig::schema_fields_updated_at, date('Y-m-d H:i:s'))
-                        ->save();
-                } else {
-                    $config->reset()
-                        ->setKey($key)
-                        ->setValue($value)
-                        ->setData(CustomerServiceConfig::schema_fields_created_at, date('Y-m-d H:i:s'))
-                        ->setData(CustomerServiceConfig::schema_fields_updated_at, date('Y-m-d H:i:s'))
-                        ->save();
-                }
-            }
-
-            return $this->jsonResponse(true, __('保存成功'));
-        } catch (\Exception $e) {
-            return $this->jsonResponse(false, __('保存失败：%{1}', $e->getMessage()));
-        }
-    }
-
-    private function jsonResponse(bool $success, string $message, array $data = []): string
-    {
-        $this->request->getResponse()->setHeader('Content-Type', 'application/json');
-        return json_encode([
-            'success' => $success,
-            'message' => $message,
-            'data' => $data,
-        ], JSON_UNESCAPED_UNICODE);
+        return $this->fetch();
     }
 }
-

@@ -18,6 +18,7 @@ final class PromotionStorefrontPageService
         private readonly PromotionScopeResolver $scopeResolver,
         private readonly PromotionThemeDealDiscountSyncService $dealDiscountSync,
         private readonly ?StorefrontOfferPriceAssemblerInterface $priceAssembler = null,
+        private readonly ?PromotionSeoFactsBuilder $seoFactsBuilder = null,
     ) {
     }
 
@@ -50,15 +51,17 @@ final class PromotionStorefrontPageService
             'deal_discount_type' => (string)($themePage['deal_discount_type'] ?? PromotionThemeDealDiscountSyncService::DISCOUNT_NONE),
             'deal_discount_value' => (float)($themePage['deal_discount_value'] ?? 0),
         ];
+        $themeId = max(0, (int)($themePage['theme_id'] ?? $themePage['id'] ?? 0));
         $campaignFallback = [
             'label' => (string)($themePage['page_title'] ?? $themePage['title'] ?? $this->resolveTitle($pageType)),
             'url' => $pageType !== 'index' ? $this->storefrontUrl($pageType) : '',
         ];
-        $items = $this->applyStorefrontPricing($items, $deal, $campaignFallback);
+        $items = $this->applyStorefrontPricing($items, $deal, $campaignFallback, $themeId);
+        $items = $this->stampCampaignEntryLinks($items, $themeId, $pageType);
 
         $slugUrls = $this->slugUrlsFromNavTabs($navTabs);
 
-        return [
+        $pageData = [
             'title' => (string)($themePage['page_title'] ?? $themePage['title'] ?? $this->resolveTitle($pageType)),
             'hero_lede' => (string)($themePage['hero_lede'] ?? $this->defaultHeroLede($pageType)),
             'page_type' => $pageType,
@@ -79,6 +82,22 @@ final class PromotionStorefrontPageService
             ],
             'theme_scope' => is_array($themePage['scope'] ?? null) ? $themePage['scope'] : null,
         ];
+        $pageData['seo'] = $this->seoFacts()->buildListingProfile($pageType, $pageData);
+
+        return $pageData;
+    }
+
+    private function seoFacts(): PromotionSeoFactsBuilder
+    {
+        if ($this->seoFactsBuilder !== null) {
+            return $this->seoFactsBuilder;
+        }
+
+        try {
+            return ObjectManager::getInstance(PromotionSeoFactsBuilder::class);
+        } catch (\Throwable) {
+            return new PromotionSeoFactsBuilder(themeService: $this->themeService);
+        }
     }
 
     private function storefrontUrl(string $pageSlug = ''): string
@@ -111,9 +130,14 @@ final class PromotionStorefrontPageService
      * @param array{label?:string,url?:string} $campaignFallback
      * @return array<int, array<string, mixed>>
      */
-    private function applyStorefrontPricing(array $items, array $pageDeal, array $campaignFallback = []): array
-    {
+    private function applyStorefrontPricing(
+        array $items,
+        array $pageDeal,
+        array $campaignFallback = [],
+        int $preferredThemeId = 0,
+    ): array {
         $assembler = $this->priceAssembler();
+        $preferredThemeId = max(0, $preferredThemeId);
         $priced = [];
         foreach ($items as $item) {
             if (!is_array($item)) {
@@ -125,10 +149,14 @@ final class PromotionStorefrontPageService
             $catalogMinor = (int) round($catalogPrice * 100);
             $applied = null;
             if ($assembler instanceof StorefrontOfferPriceAssemblerInterface && $productId > 0 && $catalogMinor > 0) {
-                $view = $assembler->assemble(StorefrontPriceContext::fromCatalogMinor(
-                    $productId,
-                    $catalogMinor,
-                    $currency,
+                $selection = $preferredThemeId > 0
+                    ? ['promotion_theme_id' => $preferredThemeId]
+                    : [];
+                $view = $assembler->assemble(new StorefrontPriceContext(
+                    productId: $productId,
+                    catalogPriceMinor: $catalogMinor,
+                    currency: $currency,
+                    selection: $selection,
                 ));
                 if ($view->hasDeal) {
                     $applied = $view->toArray();
@@ -160,10 +188,56 @@ final class PromotionStorefrontPageService
             if ($item['has_deal'] && $item['campaign_url'] === '') {
                 $item['campaign_url'] = (string)($campaignFallback['url'] ?? '');
             }
+            if ($preferredThemeId > 0) {
+                $item['promotion_theme_id'] = $preferredThemeId;
+            }
             $priced[] = $item;
         }
 
         return $priced;
+    }
+
+    /**
+     * Append campaign entry query so PDP prefers this activity when eligible.
+     *
+     * @param list<array<string, mixed>> $items
+     * @return list<array<string, mixed>>
+     */
+    private function stampCampaignEntryLinks(array $items, int $themeId, string $pageSlug): array
+    {
+        $themeId = max(0, $themeId);
+        $pageSlug = strtolower(trim($pageSlug));
+        if ($themeId <= 0 && ($pageSlug === '' || $pageSlug === 'index')) {
+            return $items;
+        }
+
+        $stamped = [];
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $url = trim((string)($item['url'] ?? ''));
+            if ($url !== '' && $url !== '#') {
+                $parts = parse_url($url);
+                $path = (string)($parts['path'] ?? $url);
+                $query = [];
+                if (!empty($parts['query'])) {
+                    parse_str((string)$parts['query'], $query);
+                }
+                $query = \Weline\Product\Helper\StorefrontCampaignEntry::mergeIntoQuery(
+                    array_map('strval', $query),
+                    $themeId,
+                    $pageSlug,
+                );
+                $item['url'] = $path . ($query !== [] ? ('?' . http_build_query($query)) : '');
+            }
+            if ($themeId > 0) {
+                $item['promotion_theme_id'] = $themeId;
+            }
+            $stamped[] = $item;
+        }
+
+        return $stamped;
     }
 
     private function priceAssembler(): ?StorefrontOfferPriceAssemblerInterface
@@ -198,10 +272,10 @@ final class PromotionStorefrontPageService
     {
         return match ($pageType) {
             'index' => (string)__('活动中心'),
-            'deals' => (string)__('今日搭配精选'),
-            'sale' => (string)__('季节主题陈列'),
-            'weekend' => (string)__('周末焕新专场'),
-            'gifts' => (string)__('礼盒馈赠专场'),
+            'deals' => (string)__('今日特价专场'),
+            'sale' => (string)__('节令主题陈列'),
+            'weekend' => (string)__('出游常服专场'),
+            'wedding' => (string)__('婚嫁礼服陈列'),
             default => (string)__('活动主题'),
         };
     }
@@ -210,10 +284,10 @@ final class PromotionStorefrontPageService
     {
         return match ($pageType) {
             'index' => (string)__('浏览活动商品，进入商品详情、购物车与结账路径。本页不展示虚假折扣，只承接真实可售商品。'),
-            'deals' => (string)__('从价格友好的配饰和日常单品开始，引导买家进入购物车和结账路径。'),
-            'sale' => (string)__('围绕节庆、礼服和高客单穿搭做主题陈列，不改变商品原始成交价格。'),
-            'weekend' => (string)__('围绕周末出行、居家放松和轻运动场景，展示真实可售商品，不做虚假折扣。'),
-            'gifts' => (string)__('围绕送礼场景做主题陈列，只展示真实成交价，不虚构划线价或折扣比例。'),
+            'deals' => (string)__('从价格友好的配饰、发冠与日常常服单品开始，引导买家进入购物车和结账路径。'),
+            'sale' => (string)__('围绕传统节令与仪式场景，陈列节庆礼服与主题套装，展示真实成交价，不配置额外优惠。'),
+            'weekend' => (string)__('围绕踏青、市集与日常出游，陈列常服套装与轻便搭配，只展示真实可售商品，不虚构折扣。'),
+            'wedding' => (string)__('围绕婚礼、订婚与敬酒仪式，陈列嫁衣与礼服套装，只展示真实成交价，不虚构折扣。'),
             default => (string)__('浏览活动商品，进入商品详情、购物车与结账路径。本页不展示虚假折扣，只承接真实可售商品。'),
         };
     }
@@ -380,3 +454,4 @@ final class PromotionStorefrontPageService
         };
     }
 }
+

@@ -18,5 +18,9 @@ final class GoogleSitemapAdapterQueryDimensionContractTest extends TestCase
         self::assertStringContainsString('fetchSearchQueryAnalytics', $source);
         self::assertStringContainsString("'search_queries'", $source);
         self::assertStringContainsString('rowLimit', $source);
+        self::assertStringContainsString("\$body['type'] = \$type", $source);
+        self::assertStringContainsString("'discover'", $source);
+        self::assertStringContainsString('enable_discover_stats', $source);
+        self::assertStringContainsString('extractDistributionChannels', $source);
     }
 }
