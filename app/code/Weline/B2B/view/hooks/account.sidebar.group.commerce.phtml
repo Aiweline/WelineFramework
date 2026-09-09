@@ -1,0 +1,33 @@
+<?php
+/**
+ * Account sidebar B2B wholesale identity entry (commerce group).
+ *
+ * Hook: account.sidebar.group.commerce
+ *
+ * @hook-priority 165
+ * @hook-sort-order 11
+ * @hook-solo false
+ */
+use Weline\Framework\Runtime\RequestContext;
+
+$renderKey = 'weline_b2b.account_sidebar.rendered';
+if (RequestContext::get($renderKey, false)) {
+    return;
+}
+
+RequestContext::set($renderKey, true);
+?>
+<a class="account-hook-nav-link motor-account-sidebar__link"
+   href="@url{'customer/account/index'}#b2b-identity"
+   data-section="b2b-identity"
+   data-account-nav-link="true"
+   data-account-nav-parent="commerce"
+   data-testid="account-nav-b2b-identity">
+    <span class="account-hook-nav-link__label motor-account-sidebar__link-label">
+        <w:icon name="users" size="sm"></w:icon>
+        <span class="account-hook-nav-link__text motor-account-sidebar__link-text">
+            <strong><lang>批发身份</lang></strong>
+            <span><lang>B2B 等级、申请状态与联系信息</lang></span>
+        </span>
+    </span>
+</a>
