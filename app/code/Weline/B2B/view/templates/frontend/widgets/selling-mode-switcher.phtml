@@ -1,0 +1,218 @@
+<?php
+/**
+ * PDP selling-mode switcher + wholesale membership apply drawer.
+ *
+ * @var \Weline\Framework\View\Template $this
+ *
+ * @widget.code {b2b-selling-mode-switcher}
+ * @widget.name {售卖模式切换}
+ * @widget.description {商品详情价格旁 ToC/ToB 分段切换；批发身份申请抽屉}
+ * @widget.type {product}
+ * @widget.area {frontend}
+ * @widget.position {["content"]}
+ * @widget.page_layouts {["product"]}
+ * @widget.slot {product-selling-mode}
+ * @widget.supports {["product-selling-mode","layout-product-selling-mode","b2b-selling-mode"]}
+ * @widget.default_injections {[{ "layout_type":"product", "layout_option":"default", "slot":"product-selling-mode", "area":"content", "sort_order":0, "required":true, "reason":"商品详情价格旁默认展示 ToC/ToB 售卖模式切换", "config":{} }]}
+ */
+
+use Weline\B2B\Service\CommerceTypeMembershipChecker;
+use Weline\B2B\Service\SellingModePolicy;
+use Weline\Framework\Http\Cookie;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Session\SessionFactory;
+
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+$websiteId = max(0, (int)RequestContext::getWelineWebsiteId());
+$storeId = max(0, (int)RequestContext::getWelineStoreId());
+
+$tocEnabled = true;
+$tobEnabled = true;
+$moq = SellingModePolicy::DEFAULT_MOQ;
+$qtyStep = SellingModePolicy::DEFAULT_QTY_STEP;
+try {
+    /** @var SellingModePolicy $policy */
+    $policy = ObjectManager::getInstance(SellingModePolicy::class);
+    $tocEnabled = $policy->isModeEnabled(SellingModePolicy::MODE_TOC, $websiteId, $storeId);
+    $tobEnabled = $policy->isModeEnabled(SellingModePolicy::MODE_TOB, $websiteId, $storeId);
+    $moq = $policy->defaultMoq();
+    $qtyStep = $policy->defaultQtyStep();
+} catch (\Throwable) {
+}
+
+if (!$tocEnabled && !$tobEnabled) {
+    return;
+}
+
+$customerId = 0;
+$loggedIn = false;
+$assignedLoggedIn = $this->getData('b2b_customer_logged_in');
+$assignedMembership = $this->getData('b2b_has_membership');
+$assignedCustomerId = $this->getData('b2b_customer_id');
+$assignedWebsiteId = $this->getData('b2b_website_id');
+if ($assignedWebsiteId !== null && $assignedWebsiteId !== '') {
+    $websiteId = max(0, (int)$assignedWebsiteId);
+}
+try {
+    $session = ObjectManager::getInstance(SessionFactory::class)->createFrontendSession();
+    $loggedIn = (bool)$session->isLoggedIn();
+    $customerId = (int)($session->getUserId() ?? 0);
+} catch (\Throwable) {
+}
+if ($assignedLoggedIn !== null) {
+    $loggedIn = filter_var($assignedLoggedIn, FILTER_VALIDATE_BOOLEAN);
+}
+if ($assignedCustomerId !== null && $assignedCustomerId !== '') {
+    $customerId = max(0, (int)$assignedCustomerId);
+    if ($customerId > 0) {
+        $loggedIn = true;
+    }
+}
+
+$hasMembership = false;
+if ($assignedMembership !== null) {
+    $hasMembership = filter_var($assignedMembership, FILTER_VALIDATE_BOOLEAN);
+} elseif ($loggedIn && $customerId > 0) {
+    try {
+        /** @var CommerceTypeMembershipChecker $checker */
+        $checker = ObjectManager::getInstance(CommerceTypeMembershipChecker::class);
+        $hasMembership = $checker->hasMembership('tob', $customerId, $websiteId);
+    } catch (\Throwable) {
+        $hasMembership = false;
+    }
+}
+
+$cookiePref = strtolower(trim((string)Cookie::get('weline_selling_mode')));
+$sellingMode = ($cookiePref === 'tob' || $cookiePref === 'toc') ? $cookiePref : 'toc';
+if ($sellingMode === 'tob' && !$tobEnabled) {
+    $sellingMode = 'toc';
+}
+if ($sellingMode === 'toc' && !$tocEnabled && $tobEnabled) {
+    $sellingMode = 'tob';
+}
+
+$drawerId = 'b2b-membership-apply-' . substr(sha1((string)$websiteId . '-' . (string)$customerId), 0, 10);
+?>
+<link rel="stylesheet" href="/Weline/B2B/view/statics/css/b2b-storefront.css?v=20260908-panel-overflow2" data-no-extract="true">
+<div class="b2b-selling-mode product-native-detail__variant-axis"
+     data-b2b-selling-mode="1"
+     data-selling-mode="<?= $escape($sellingMode) ?>"
+     data-cart-type="<?= $escape($sellingMode) ?>"
+     data-toc-enabled="<?= $tocEnabled ? '1' : '0' ?>"
+     data-tob-enabled="<?= $tobEnabled ? '1' : '0' ?>"
+     data-customer-logged-in="<?= $loggedIn ? '1' : '0' ?>"
+     data-has-membership="<?= $hasMembership ? '1' : '0' ?>"
+     data-customer-id="<?= $escape((string)$customerId) ?>"
+     data-website-id="<?= (int)$websiteId ?>"
+     data-tob-moq="<?= (int)$moq ?>"
+     data-tob-qty-step="<?= (int)$qtyStep ?>"
+     data-i18n-submitting="<?= $escape(__('正在提交申请...')) ?>"
+     data-i18n-submitted="<?= $escape(__('申请已提交，请等待审核')) ?>"
+     data-i18n-submit-failed="<?= $escape(__('申请提交失败')) ?>"
+     data-i18n-login-required="<?= $escape(__('请先登录后再提交申请')) ?>"
+     data-weline-load="b2bSellingMode"
+     data-testid="b2b-selling-mode">
+    <?php /* 复用本页 product-native-detail 尺码/类型轴：同一套标签+胶囊选项，不另造按钮体系 */ ?>
+    <span class="product-native-detail__variant-axis-label" id="<?= $escape($drawerId) ?>-mode-label"><lang>购买方式</lang>:</span>
+    <div class="product-native-detail__variant-axis-options"
+         role="group"
+         aria-labelledby="<?= $escape($drawerId) ?>-mode-label"
+         data-testid="selling-mode-segment">
+        <?php if ($tocEnabled): ?>
+            <button type="button"
+                    class="product-native-detail__variant-option<?= $sellingMode === 'toc' ? ' is-selected' : '' ?>"
+                    data-selling-mode-option="toc"
+                    data-state="<?= $sellingMode === 'toc' ? 'active' : 'inactive' ?>"
+                    aria-pressed="<?= $sellingMode === 'toc' ? 'true' : 'false' ?>"
+                    data-testid="selling-mode-toc">
+                <lang>零售</lang>
+            </button>
+        <?php endif; ?>
+        <?php if ($tobEnabled): ?>
+            <button type="button"
+                    class="product-native-detail__variant-option<?= $sellingMode === 'tob' ? ' is-selected' : '' ?>"
+                    data-selling-mode-option="tob"
+                    data-state="<?= $sellingMode === 'tob' ? 'active' : 'inactive' ?>"
+                    aria-pressed="<?= $sellingMode === 'tob' ? 'true' : 'false' ?>"
+                    data-testid="selling-mode-tob">
+                <lang>批发</lang>
+            </button>
+        <?php endif; ?>
+    </div>
+    <p class="b2b-selling-mode__hint product-native-detail__price-label" data-b2b-tob-moq-hint <?= ($sellingMode === 'tob' && $loggedIn && $hasMembership) ? '' : 'hidden' ?>>
+        <lang>批发起订</lang> <?= (int)$moq ?> <lang>件</lang> · <lang>步进</lang> <?= (int)$qtyStep ?>
+    </p>
+    <p class="b2b-selling-mode__hint product-native-detail__price-label" data-b2b-guest-tob-hint <?= ($sellingMode === 'tob' && !$loggedIn) ? '' : 'hidden' ?>>
+        <lang>切换批发需先登录</lang>
+    </p>
+    <button type="button"
+            class="product-native-detail__variant-submit b2b-selling-mode__cta"
+            data-b2b-open-apply
+            data-testid="b2b-open-membership-apply"
+            <?= ($sellingMode === 'tob' && !$hasMembership) ? '' : 'hidden' ?>>
+        <lang>申请批发身份</lang>
+    </button>
+
+    <aside id="<?= $escape($drawerId) ?>"
+           class="w-drawer"
+           hidden
+           data-b2b-apply-drawer
+           data-w-component="drawer"
+           data-state="closed"
+           data-size="md"
+           data-w-side="end"
+           data-w-closable="true"
+           aria-hidden="true"
+           aria-labelledby="<?= $escape($drawerId) ?>-title"
+           data-testid="b2b-membership-apply-drawer">
+        <div class="w-drawer__header">
+            <div id="<?= $escape($drawerId) ?>-title" class="w-drawer__title"><lang>批发身份申请</lang></div>
+            <button type="button" class="w-button" data-variant="ghost" data-b2b-close-apply aria-label="<?= $escape(__('关闭')) ?>">×</button>
+        </div>
+        <div class="w-drawer__body">
+            <div class="b2b-selling-mode__guest-gate"
+                 data-b2b-apply-guest-gate
+                 data-testid="b2b-apply-guest-gate"
+                 <?= $loggedIn ? 'hidden' : '' ?>>
+                <p class="product-native-detail__price-label"><lang>登录后即可提交批发身份申请，无需离开本页。</lang></p>
+                <button type="button"
+                        class="w-button"
+                        data-variant="primary"
+                        data-b2b-guest-login
+                        data-testid="b2b-apply-guest-login">
+                    <lang>本页登录</lang>
+                </button>
+            </div>
+            <div class="b2b-membership-apply-wrap"
+                 data-b2b-apply-form-wrap
+                 <?= ($loggedIn && !$hasMembership) ? '' : 'hidden' ?>>
+                <form class="b2b-membership-apply"
+                      data-b2b-apply-form
+                      method="post"
+                      action="#"
+                      data-testid="b2b-membership-apply-form">
+                    <div class="w-field">
+                        <label class="w-label" for="<?= $escape($drawerId) ?>-company"><lang>公司名称</lang></label>
+                        <input class="w-input" id="<?= $escape($drawerId) ?>-company" name="company_name" type="text" required maxlength="191" autocomplete="organization">
+                    </div>
+                    <div class="w-field">
+                        <label class="w-label" for="<?= $escape($drawerId) ?>-phone"><lang>联系电话</lang></label>
+                        <input class="w-input" id="<?= $escape($drawerId) ?>-phone" name="contact_phone" type="tel" required maxlength="64" autocomplete="tel">
+                    </div>
+                    <div class="w-field">
+                        <label class="w-label" for="<?= $escape($drawerId) ?>-notes"><lang>备注</lang></label>
+                        <textarea class="w-textarea" id="<?= $escape($drawerId) ?>-notes" name="notes" rows="3" maxlength="2000"></textarea>
+                    </div>
+                    <p class="b2b-selling-mode__hint" data-b2b-apply-status aria-live="polite"></p>
+                    <div class="w-drawer__footer" style="padding:0;border:0;">
+                        <button type="submit" class="w-button" data-variant="primary" data-testid="b2b-membership-submit">
+                            <lang>提交申请</lang>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </aside>
+</div>

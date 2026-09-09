@@ -1,0 +1,68 @@
+<?php
+/**
+ * Sitewide bootstrap: B2B mini-cart dual-type UI (only when B2B is installed).
+ *
+ * Hook: Weline_Theme::frontend::layouts::base::body-end
+ *
+ * @hook-priority 170
+ * @hook-sort-order 55
+ * @hook-solo false
+ */
+
+use Weline\B2B\Service\CommerceTypeMembershipChecker;
+use Weline\Framework\Http\Cookie;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Session\SessionFactory;
+
+$isBackend = str_contains(strtolower((string)($_SERVER['REQUEST_URI'] ?? '')), '/admin');
+if ($isBackend) {
+    return;
+}
+
+$websiteId = max(0, (int)RequestContext::getWelineWebsiteId());
+$loggedIn = false;
+$customerId = 0;
+$hasMembership = false;
+try {
+    $session = ObjectManager::getInstance(SessionFactory::class)->createFrontendSession();
+    $loggedIn = (bool)$session->isLoggedIn();
+    $customerId = (int)($session->getUserId() ?? 0);
+} catch (\Throwable) {
+}
+if ($loggedIn && $customerId > 0) {
+    try {
+        /** @var CommerceTypeMembershipChecker $checker */
+        $checker = ObjectManager::getInstance(CommerceTypeMembershipChecker::class);
+        $hasMembership = $checker->hasMembership('tob', $customerId, $websiteId);
+    } catch (\Throwable) {
+        $hasMembership = false;
+    }
+}
+$cookiePref = strtolower(trim((string)Cookie::get('weline_selling_mode')));
+$sellingMode = ($cookiePref === 'tob' || $cookiePref === 'toc') ? $cookiePref : 'toc';
+// Guests may remember tob preference, but boot/display must stay toc (REQ-B2B-0004).
+if (!$loggedIn && $sellingMode === 'tob') {
+    $sellingMode = 'toc';
+}
+?>
+<div hidden
+     data-b2b-mini-cart-type="1"
+     data-weline-load="b2bSellingMode"
+     data-customer-logged-in="<?= ($loggedIn && $customerId > 0) ? '1' : '0' ?>"
+     data-has-membership="<?= $hasMembership ? '1' : '0' ?>"
+     data-customer-id="<?= (int)$customerId ?>"
+     data-website-id="<?= (int)$websiteId ?>"
+     data-selling-mode="<?= htmlspecialchars($sellingMode, ENT_QUOTES, 'UTF-8') ?>"
+     data-login-url="@url{'customer/account/login'}"
+     data-i18n-toc="<?= htmlspecialchars((string)__('零售'), ENT_QUOTES, 'UTF-8') ?>"
+     data-i18n-tob="<?= htmlspecialchars((string)__('批发'), ENT_QUOTES, 'UTF-8') ?>"
+     data-i18n-toc-cart="<?= htmlspecialchars((string)__('零售车'), ENT_QUOTES, 'UTF-8') ?>"
+     data-i18n-tob-cart="<?= htmlspecialchars((string)__('批发车'), ENT_QUOTES, 'UTF-8') ?>"
+     data-i18n-empty-tob="<?= htmlspecialchars((string)__('批发车是空的'), ENT_QUOTES, 'UTF-8') ?>"
+     data-i18n-empty-tob-login="<?= htmlspecialchars((string)__('批发车需登录后使用'), ENT_QUOTES, 'UTF-8') ?>"
+     data-i18n-empty-tob-membership="<?= htmlspecialchars((string)__('开通批发身份后可使用批发车'), ENT_QUOTES, 'UTF-8') ?>"
+     data-i18n-coupon-tob-unavailable="<?= htmlspecialchars((string)__('批发不可用'), ENT_QUOTES, 'UTF-8') ?>"
+     data-testid="b2b-mini-cart-type-boot"
+     aria-hidden="true"></div>
+<link rel="stylesheet" href="@static(Weline_B2B::css/b2b-storefront.css)&v=20260909-dual-cart1">

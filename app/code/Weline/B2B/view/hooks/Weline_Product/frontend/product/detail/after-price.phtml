@@ -1,0 +1,14 @@
+<?php
+/**
+ * Inject ToC/ToB selling mode switcher after PDP price.
+ *
+ * Hook: Weline_Product::frontend::product::detail::after-price
+ *
+ * @hook-priority 170
+ * @hook-sort-order 10
+ * @hook-solo false
+ */
+$path = BP . 'app/code/Weline/B2B/view/templates/frontend/widgets/selling-mode-switcher.phtml';
+if (is_file($path)) {
+    echo $this->fetch('Weline_B2B::templates/frontend/widgets/selling-mode-switcher.phtml');
+}

@@ -1,0 +1,239 @@
+<?php
+$code = (string)($this->getData('workspace_code') ?? 'unknown');
+$title = (string)($this->getData('workspace_title') ?? __('B2B 管理'));
+$status = (array)($this->getData('workspace_status') ?? []);
+$datasets = (array)($this->getData('workspace_datasets') ?? []);
+$form = (array)($this->getData('workspace_form') ?? []);
+$kind = (string)($form['kind'] ?? '');
+$formActionPath = $form === [] ? '' : trim((string)($form['action'] ?? ''));
+$rejectActionPath = $form === [] ? '' : trim((string)($form['reject_action'] ?? ''));
+$storefrontBase = rtrim(trim((string)($this->getData('storefront_base_url') ?? '')), '/');
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$hangPayUrl = static function (string $purpose, string $orderRef) use ($storefrontBase): string {
+    $orderRef = trim($orderRef);
+    if ($orderRef === '') {
+        return '';
+    }
+    $path = '/checkout?purpose=' . rawurlencode($purpose) . '&order_uuid=' . rawurlencode($orderRef);
+    return $storefrontBase !== '' ? ($storefrontBase . $path) : $path;
+};
+$display = static function (mixed $value) use ($escape): string {
+    if (is_bool($value)) return $value ? (string)__('是') : (string)__('否');
+    if (is_array($value)) return $escape(json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]');
+    return $escape($value);
+};
+$websiteSelectValue = '0';
+$websiteSelectOptions = [];
+try {
+    $queried = \w_query('websites', 'getWebsiteSelectOptions', [], 'backend');
+    if (\is_array($queried)) {
+        $websiteSelectOptions = $queried;
+    }
+} catch (\Throwable) {
+    $websiteSelectOptions = [];
+}
+$websiteSelectDisplay = '';
+foreach ($websiteSelectOptions as $option) {
+    if (!\is_array($option)) {
+        continue;
+    }
+    if ((string)($option['value'] ?? '') === $websiteSelectValue) {
+        $websiteSelectDisplay = \trim((string)($option['label'] ?? ''));
+        break;
+    }
+}
+if ($websiteSelectDisplay === '' && $websiteSelectValue !== '') {
+    $websiteSelectDisplay = '#' . $websiteSelectValue;
+}
+$websiteSelectOptionsJson = \json_encode($websiteSelectOptions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]';
+?>
+<section class="commerce-control-center" data-testid="b2b-<?= $escape($code) ?>-management" data-workspace="<?= $escape($code) ?>">
+    <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="end"><span class="w-badge <?= $form === [] ? 'bg-info text-dark' : 'bg-success' ?>"><?= $form === [] ? __('只读诊断') : __('可管理') ?></span></div>
+    <div class="w-alert" role="status" data-tone="info"><?php
+        if ($form === []) {
+            echo __('此页面显示不可变报价与订单价格快照；生产迁移仍由受控 CLI 完成。');
+        } elseif ($kind === 'hang-order') {
+            echo __('审批挂单后，可复制前台尾款支付链接发给客户；客户也可在个人中心支付。后台不直接收款。');
+        } else {
+            echo __('写操作受 B2B rollout 门禁保护，并复用候选解析、报价重检与不可变快照服务。');
+        }
+    ?></div>
+    <?php if ($form !== []): ?>
+        <div class="w-card" data-testid="b2b-<?= $escape($code) ?>-write-form" style="--w-mb:var(--weline-space-4);"><div class="w-card__header"><h5 style="--w-mb:0;"><?php
+            if ($kind === 'quote') {
+                echo __('签发并审批报价');
+            } elseif ($kind === 'hang-order') {
+                echo __('审批定金挂单');
+            } else {
+                echo __('新增配置');
+            }
+        ?></h5></div><div class="w-card__body">
+            <?php if ($kind === 'hang-order'): ?>
+                <div class="w-grid" style="--w-gap:var(--weline-space-4);">
+                    <div style="--w-span-md:4;">
+                        <w:form method="post" action="@backend-url{$formActionPath}">
+                            <label class="w-field__label"><?= __('挂单 ID 或订单引用') ?></label>
+                            <input class="w-input" name="hang_id" maxlength="64" required data-testid="b2b-hang-approve-key" placeholder="<?= $escape(__('hang_id 或 order_ref')) ?>">
+                            <div class="w-cluster" data-align="end" style="--w-mt:var(--weline-space-3);">
+                                <button class="w-button" type="submit" data-testid="b2b-hang-approve-submit" data-tone="primary"><?= __('批准进入尾款') ?></button>
+                            </div>
+                        </w:form>
+                    </div>
+                    <?php if ($rejectActionPath !== ''): ?>
+                    <div style="--w-span-md:4;">
+                        <w:form method="post" action="@backend-url{$rejectActionPath}">
+                            <label class="w-field__label"><?= __('驳回挂单') ?></label>
+                            <input class="w-input" name="hang_id" maxlength="64" required data-testid="b2b-hang-reject-key" placeholder="<?= $escape(__('hang_id 或 order_ref')) ?>">
+                            <div class="w-cluster" data-align="end" style="--w-mt:var(--weline-space-3);">
+                                <button class="w-button" type="submit" data-testid="b2b-hang-reject-submit" data-tone="danger"><?= __('驳回并退定金') ?></button>
+                            </div>
+                        </w:form>
+                    </div>
+                    <?php endif; ?>
+                </div>
+            <?php else: ?>
+            <w:form method="post" action="@backend-url{$formActionPath}"><div class="w-grid" style="--w-gap:var(--weline-space-4);">
+                <?php if ($kind === 'group'): ?>
+                    <div style="--w-span-md:3;"><label class="w-field__label"><?= __('客户组 ID') ?></label><input class="w-input" name="group_id" maxlength="64" required></div>
+                    <div style="--w-span-md:3;"><label class="w-field__label"><?= __('网站') ?></label>
+                        <w:websites:website:select
+                            id="b2b-cc-group-website"
+                            name="website_id"
+                            value="websiteSelectValue"
+                            display="websiteSelectDisplay"
+                            options="websiteSelectOptionsJson"
+                            multiple="false"
+                            allow-empty="false"
+                            empty-label="@lang(请选择站点)"
+                            placeholder="@lang(搜索站点名称或编码)"
+                        />
+                    </div>
+                    <div style="--w-span-md:3;"><label class="w-field__label"><?= __('代码') ?></label><input class="w-input" name="code" maxlength="64" required></div>
+                    <div style="--w-span-md:2;"><label class="w-field__label"><?= __('状态') ?></label><select class="w-select" name="status"><option value="active">active</option><option value="disabled">disabled</option></select></div>
+                <?php elseif ($kind === 'price-list'): ?>
+                    <div style="--w-span-md:3;"><label class="w-field__label"><?= __('价目表 ID') ?></label><input class="w-input" name="list_id" maxlength="64" required></div>
+                    <div style="--w-span-md:3;"><label class="w-field__label"><?= __('客户组 ID') ?></label><input class="w-input" name="group_id" maxlength="64" required></div>
+                    <div style="--w-span-md:3;"><label class="w-field__label"><?= __('网站') ?></label>
+                        <w:websites:website:select
+                            id="b2b-cc-price-list-website"
+                            name="website_id"
+                            value="websiteSelectValue"
+                            display="websiteSelectDisplay"
+                            options="websiteSelectOptionsJson"
+                            multiple="false"
+                            allow-empty="false"
+                            empty-label="@lang(请选择站点)"
+                            placeholder="@lang(搜索站点名称或编码)"
+                        />
+                    </div>
+                    <div style="--w-span-md:2;"><label class="w-field__label"><?= __('版本') ?></label><input class="w-input" type="number" min="1" name="version" value="1" required></div>
+                    <div style="--w-span-md:3;"><label class="w-field__label"><?= __('SKU') ?></label><input class="w-input" name="sku" maxlength="128" required></div>
+                    <div style="--w-span-md:3;"><label class="w-field__label"><?= __('金额（分）') ?></label><input class="w-input" type="number" min="0" name="amount_minor" required></div>
+                    <div style="--w-span-md:3;"><label class="w-field__label"><?= __('渠道 ID（可选）') ?></label><input class="w-input" name="channel_id" maxlength="64"></div>
+                <?php else: ?>
+                    <div style="--w-span-md:3;"><label class="w-field__label"><?= __('客户 ID') ?></label><input class="w-input" name="customer_id" maxlength="64" required></div>
+                    <div style="--w-span-md:3;"><label class="w-field__label"><?= __('网站') ?></label>
+                        <w:websites:website:select
+                            id="b2b-cc-quote-website"
+                            name="website_id"
+                            value="websiteSelectValue"
+                            display="websiteSelectDisplay"
+                            options="websiteSelectOptionsJson"
+                            multiple="false"
+                            allow-empty="false"
+                            empty-label="@lang(请选择站点)"
+                            placeholder="@lang(搜索站点名称或编码)"
+                        />
+                    </div>
+                    <div style="--w-span-md:2;"><label class="w-field__label"><?= __('SKU') ?></label><input class="w-input" name="sku" maxlength="128" required></div>
+                    <div style="--w-span-md:2;"><label class="w-field__label"><?= __('零售价（分）') ?></label><input class="w-input" type="number" min="0" name="retail_amount_minor" required></div>
+                    <div style="--w-span-md:3;"><label class="w-field__label"><?= __('订单引用') ?></label><input class="w-input" name="order_ref" maxlength="64" required></div>
+                    <div style="--w-span-md:3;"><label class="w-field__label"><?= __('渠道 ID（可选）') ?></label><input class="w-input" name="channel_id" maxlength="64"></div>
+                <?php endif; ?>
+                <div class="w-cluster" data-align="end" style="--w-span-md:2;"><button class="w-button" type="submit" data-testid="b2b-<?= $escape($code) ?>-submit" data-w-width="full" data-tone="primary"><?= $kind === 'quote' ? __('审批报价') : __('保存') ?></button></div>
+            </div></w:form>
+            <?php endif; ?>
+        </div></div>
+    <?php endif; ?>
+    <?php if ($status !== []): ?><div class="w-card" style="--w-mb:var(--weline-space-4);"><div class="w-card__body"><div class="w-grid" style="--w-gap:var(--weline-space-4);"><?php foreach ($status as $key => $value): ?><div style="--w-span-md:4;"><div class="w-text" data-tone="muted" data-size="sm"><?= $escape($key) ?></div><div class="w-text" data-weight="strong"><?= $display($value) ?></div></div><?php endforeach; ?></div></div></div><?php endif; ?>
+    <?php foreach ($datasets as $dataset): ?><div class="w-card" style="--w-mb:var(--weline-space-4);"><div class="w-card__header"><h5 style="--w-mb:0;"><?= $escape($dataset['label'] ?? '') ?></h5></div><div class="w-card__body">
+        <?php if (!empty($dataset['error'])): ?><div class="w-alert" data-tone="warning" style="--w-mb:0;"><?= $escape($dataset['error']) ?></div><?php elseif (empty($dataset['rows'])): ?><div class="w-text" data-tone="muted"><?= __('当前没有记录。') ?></div><?php else: ?>
+        <?php if ($code === 'hang-orders'): ?>
+        <div class="w-table-wrap"><table class="w-table" data-w-vertical="middle" data-testid="b2b-hang-orders-table" style="--w-mb:0;">
+            <thead><tr>
+                <th><?= __('hang_id') ?></th>
+                <th><?= __('order_ref') ?></th>
+                <th><?= __('hang_status') ?></th>
+                <th><?= __('定金(分)') ?></th>
+                <th><?= __('尾款(分)') ?></th>
+                <th><?= __('支付链接') ?></th>
+            </tr></thead>
+            <tbody>
+            <?php foreach ($dataset['rows'] as $row):
+                $orderRef = trim((string)($row['order_ref'] ?? ''));
+                $hangStatus = strtolower(trim((string)($row['hang_status'] ?? '')));
+                $depositUrl = $hangPayUrl('deposit', $orderRef);
+                $balanceUrl = $hangPayUrl('balance', $orderRef);
+                ?>
+                <tr data-hang-status="<?= $escape($hangStatus) ?>" data-order-ref="<?= $escape($orderRef) ?>">
+                    <td><?= $display($row['hang_id'] ?? '') ?></td>
+                    <td><?= $display($orderRef) ?></td>
+                    <td><?= $display($hangStatus) ?></td>
+                    <td><?= $display($row['deposit_amount_minor'] ?? '') ?></td>
+                    <td><?= $display($row['balance_amount_minor'] ?? '') ?></td>
+                    <td>
+                        <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);">
+                            <?php if ($hangStatus === 'awaiting_deposit' && $depositUrl !== ''): ?>
+                                <button type="button"
+                                        class="w-button"
+                                        data-tone="secondary"
+                                        data-testid="b2b-copy-deposit-pay-link"
+                                        data-copy-url="<?= $escape($depositUrl) ?>"><?= __('复制定金链接') ?></button>
+                            <?php endif; ?>
+                            <?php if ($hangStatus === 'awaiting_balance' && $balanceUrl !== ''): ?>
+                                <button type="button"
+                                        class="w-button"
+                                        data-tone="primary"
+                                        data-testid="b2b-copy-balance-pay-link"
+                                        data-copy-url="<?= $escape($balanceUrl) ?>"><?= __('复制尾款链接') ?></button>
+                            <?php endif; ?>
+                            <?php if (!in_array($hangStatus, ['awaiting_deposit', 'awaiting_balance'], true)): ?>
+                                <span class="w-text" data-tone="muted" data-size="sm"><?= __('—') ?></span>
+                            <?php endif; ?>
+                        </div>
+                    </td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table></div>
+        <script>
+        (function () {
+            var root = document.querySelector('[data-workspace="hang-orders"]');
+            if (!root || root.getAttribute('data-copy-bound') === '1') return;
+            root.setAttribute('data-copy-bound', '1');
+            root.addEventListener('click', function (event) {
+                var btn = event.target && event.target.closest ? event.target.closest('[data-copy-url]') : null;
+                if (!btn) return;
+                var url = String(btn.getAttribute('data-copy-url') || '').trim();
+                if (!url) return;
+                var done = function () {
+                    var prev = btn.textContent;
+                    btn.textContent = <?= json_encode((string)__('已复制'), JSON_UNESCAPED_UNICODE) ?>;
+                    setTimeout(function () { btn.textContent = prev; }, 1500);
+                };
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(url).then(done).catch(function () {
+                        window.prompt(<?= json_encode((string)__('复制链接'), JSON_UNESCAPED_UNICODE) ?>, url);
+                    });
+                } else {
+                    window.prompt(<?= json_encode((string)__('复制链接'), JSON_UNESCAPED_UNICODE) ?>, url);
+                }
+            });
+        })();
+        </script>
+        <?php else: ?>
+        <div class="w-table-wrap"><table class="w-table" data-w-vertical="middle" style="--w-mb:0;"><thead><tr><?php foreach (array_keys($dataset['rows'][0]) as $field): ?><th><?= $escape($field) ?></th><?php endforeach; ?></tr></thead><tbody><?php foreach ($dataset['rows'] as $row): ?><tr><?php foreach ($row as $value): ?><td><?= $display($value) ?></td><?php endforeach; ?></tr><?php endforeach; ?></tbody></table></div>
+        <?php endif; ?>
+        <?php endif; ?>
+    </div></div><?php endforeach; ?>
+</section>
