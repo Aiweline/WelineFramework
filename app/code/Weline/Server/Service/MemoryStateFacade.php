@@ -7,14 +7,14 @@ namespace Weline\Server\Service;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Framework\Cache\Contract\SharedBufferStateInterface;
 use Weline\Framework\Cache\Contract\SharedCacheStateHealthInterface;
-use Weline\Framework\Cache\Contract\SharedCacheStateInterface;
+use Weline\Framework\Cache\Contract\SharedCacheBatchStateInterface;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Service\Contract\MemoryStateFacadeInterface;
 use Weline\Server\Session\Server\SessionProtocol;
 use Weline\Server\Shared\Client\SharedStateClient;
 use Weline\Server\Shared\Service\SharedMemoryService;
 
-class MemoryStateFacade implements MemoryStateFacadeInterface, SharedCacheStateInterface, SharedCacheStateHealthInterface, SharedBufferStateInterface
+class MemoryStateFacade implements MemoryStateFacadeInterface, SharedCacheBatchStateInterface, SharedCacheStateHealthInterface, SharedBufferStateInterface
 {
     private SharedStateServiceManager $manager;
     private SharedMemoryService $sharedMemoryService;
@@ -234,6 +234,16 @@ class MemoryStateFacade implements MemoryStateFacadeInterface, SharedCacheStateI
         return $this->traceOperation('wls.memory.cache_set', ['operation' => 'cache_set', 'pool' => $poolIdentity], fn(): bool => $this->cacheMemoryService->set($poolIdentity, $key, $value, $ttl));
     }
 
+    public function getCacheMultiple(string $poolIdentity, array $keys): array
+    {
+        return $this->traceOperation('wls.memory.cache_mget', ['operation' => 'cache_mget', 'pool' => $poolIdentity, 'keys' => \count($keys)], fn(): array => $this->cacheMemoryService->getMultiple($poolIdentity, $keys));
+    }
+
+    public function setCacheMultiple(string $poolIdentity, array $values, int $ttl = 0): bool
+    {
+        return $this->traceOperation('wls.memory.cache_mset', ['operation' => 'cache_mset', 'pool' => $poolIdentity, 'keys' => \count($values)], fn(): bool => $this->cacheMemoryService->setMultiple($poolIdentity, $values, $ttl));
+    }
+
     public function deleteCache(string $poolIdentity, string $key): bool
     {
         return $this->traceOperation('wls.memory.cache_delete', ['operation' => 'cache_delete', 'pool' => $poolIdentity], fn(): bool => $this->cacheMemoryService->delete($poolIdentity, $key));
@@ -289,6 +299,7 @@ class MemoryStateFacade implements MemoryStateFacadeInterface, SharedCacheStateI
             'idle_timeout' => (float) ($config['idle_timeout'] ?? $defaults['idle_timeout']),
             'pool_health_ping_idle' => (bool) ($config['pool_health_ping_idle'] ?? $defaults['pool_health_ping_idle']),
             'fail_fast_on_cooldown' => (bool) ($config['fail_fast_on_cooldown'] ?? $defaults['fail_fast_on_cooldown']),
+            'throw_on_transport_failure' => (bool) ($config['throw_on_transport_failure'] ?? false),
             'pool_profile' => \trim((string)($config['pool_profile'] ?? '')),
             'token_file_name' => (string) (
                 $config['token_file_name']

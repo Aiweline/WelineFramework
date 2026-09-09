@@ -193,8 +193,10 @@ final class ConfigCacheInvalidationService
             foreach ($localesToTouch as $touchLocale) {
                 RequestContext::remove($this->requestKey('module_rows', $module, $area, null, $touchScope, $touchLocale));
                 RequestContext::remove($this->requestKey('module_map', $module, $area, null, $touchScope, $touchLocale));
+                RequestContext::remove($this->requestKey('module_exact_rows', $module, $area, null, $touchScope, $touchLocale));
                 $cache->delete($this->moduleRowsKey($module, $area, $touchScope, $touchLocale));
                 $cache->delete($this->moduleMapKey($module, $area, $touchScope, $touchLocale));
+                $cache->delete($this->moduleExactRowsKey($module, $area, $touchScope, $touchLocale));
             }
         }
 
@@ -300,6 +302,15 @@ final class ConfigCacheInvalidationService
         $vector = $impact->versionVectorFor($scope);
 
         return 'system_config_map_' . sha1(implode('|', [$area, $module, $scope, $locale, $vector]));
+    }
+
+    private function moduleExactRowsKey(string $module, string $area, string $scope, string $locale): string
+    {
+        /** @var ScopeConfigCacheInvalidator $impact */
+        $impact = ObjectManager::getInstance(ScopeConfigCacheInvalidator::class);
+        $vector = $impact->versionVectorFor($scope);
+
+        return 'system_config_exact_rows_' . sha1(implode('|', [$area, $module, $scope, $locale, $vector]));
     }
 
     private function requestKey(

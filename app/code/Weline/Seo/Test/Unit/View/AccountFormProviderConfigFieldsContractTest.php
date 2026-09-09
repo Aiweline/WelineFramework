@@ -93,5 +93,10 @@ final class AccountFormProviderConfigFieldsContractTest extends TestCase
         self::assertStringContainsString('须与 GSC 左侧属性名完全一致', $gscAdapterSrc);
         self::assertStringContainsString('加成所有者后，再粘贴到此处', $gscAdapterSrc);
         self::assertStringContainsString('属性 URL 不一致', $adapterSrc);
+        self::assertStringContainsString('enable_discover_stats', $gscAdapterSrc);
+        self::assertStringContainsString('youtube_channel_url', $gscAdapterSrc);
+        self::assertStringContainsString("'type' => 'section'", $gscAdapterSrc);
+        self::assertStringContainsString('seo-config-section', $templateSrc);
+        self::assertStringContainsString('Platform Property', $templateSrc);
     }
 }

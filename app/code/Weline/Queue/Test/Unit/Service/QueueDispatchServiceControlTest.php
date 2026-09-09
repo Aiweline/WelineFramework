@@ -99,11 +99,10 @@ final class QueueDispatchServiceControlTest extends TestCase
         $takeover = $service->takeoverQueueSafely(77, true);
         $delete = $service->deleteQueueSafely(77, true);
         $manual = $service->claimQueueForManualRun(77, 4242);
-        $requeue = $service->requeueQueueSafely(77);
         $terminate = $service->terminateClaimedQueue(77, self::TOKEN_A);
         $dispatch = $service->dispatchQueueIfEligible($service->queueSnapshot());
 
-        foreach ([$stop, $takeover, $delete, $manual, $requeue, $terminate] as $result) {
+        foreach ([$stop, $takeover, $delete, $manual, $terminate] as $result) {
             self::assertFalse($result['confirmed']);
             self::assertSame('queue_transaction_active', $result['error_code']);
             self::assertTrue($result['retryable']);
@@ -312,35 +311,44 @@ final class QueueDispatchServiceControlTest extends TestCase
         $dirtyUntil[Queue::schema_fields_DISPATCH_UNTIL] = '2099-01-01 00:00:00';
         $rows[] = $dirtyUntil;
 
-        foreach ($rows as $row) {
-            $service = new InMemoryQueueDispatchService($row);
-            $result = $service->requeueQueueSafely(77);
+        foreach ([false, true] as $insideTransaction) {
+            foreach ($rows as $row) {
+                $service = new InMemoryQueueDispatchService($row);
+                $service->activeQueueTransaction = $insideTransaction;
+                $result = $service->requeueQueueSafely(77);
 
-            self::assertFalse($result['confirmed']);
-            self::assertSame($row, $service->row);
-            self::assertSame([], $service->updateCalls);
-            self::assertSame([], $service->probeCalls);
-            self::assertSame([], $service->managedTerminationCalls);
+                self::assertFalse($result['confirmed']);
+                self::assertSame($row, $service->row);
+                self::assertSame([], $service->updateCalls);
+                self::assertSame([], $service->probeCalls);
+                self::assertSame([], $service->managedTerminationCalls);
+                self::assertSame([], $service->leaseRemovalCalls);
+            }
         }
     }
 
     public function testCleanTerminalQueueRequeuesWithExactFenceCas(): void
     {
-        $row = $this->row(status: Queue::status_stop, pid: 0, token: null);
-        $row[Queue::schema_fields_finished] = 1;
-        $service = new InMemoryQueueDispatchService($row);
+        foreach ([false, true] as $insideTransaction) {
+            $row = $this->row(status: Queue::status_stop, pid: 0, token: null);
+            $row[Queue::schema_fields_finished] = 1;
+            $service = new InMemoryQueueDispatchService($row);
 
-        $result = $service->requeueQueueSafely(77);
+            $service->activeQueueTransaction = $insideTransaction;
+            $result = $service->requeueQueueSafely(77);
 
-        self::assertTrue($result['confirmed']);
-        self::assertSame(Queue::status_pending, $service->row[Queue::schema_fields_status]);
-        self::assertSame(0, $service->row[Queue::schema_fields_finished]);
-        self::assertNull($service->row[Queue::schema_fields_DISPATCH_TOKEN]);
-        self::assertNull($service->row[Queue::schema_fields_DISPATCH_UNTIL]);
-        self::assertSame(0, $service->row[Queue::schema_fields_pid]);
-        self::assertSame(1, $service->updateCalls[0]['expected'][Queue::schema_fields_finished]);
-        self::assertArrayHasKey(Queue::schema_fields_DISPATCH_UNTIL, $service->updateCalls[0]['expected']);
-        self::assertSame([], $service->probeCalls);
+            self::assertTrue($result['confirmed']);
+            self::assertSame(Queue::status_pending, $service->row[Queue::schema_fields_status]);
+            self::assertSame(0, $service->row[Queue::schema_fields_finished]);
+            self::assertNull($service->row[Queue::schema_fields_DISPATCH_TOKEN]);
+            self::assertNull($service->row[Queue::schema_fields_DISPATCH_UNTIL]);
+            self::assertSame(0, $service->row[Queue::schema_fields_pid]);
+            self::assertSame(1, $service->updateCalls[0]['expected'][Queue::schema_fields_finished]);
+            self::assertArrayHasKey(Queue::schema_fields_DISPATCH_UNTIL, $service->updateCalls[0]['expected']);
+            self::assertSame([], $service->probeCalls);
+            self::assertSame([], $service->managedTerminationCalls);
+            self::assertSame([], $service->leaseRemovalCalls);
+        }
     }
 
     public function testConcurrentClaimWinsAgainstRequeueWithoutBeingOverwritten(): void
@@ -382,6 +390,20 @@ final class QueueDispatchServiceControlTest extends TestCase
             self::assertSame('queue_edit_field_forbidden', $result['error_code'], $field);
             self::assertSame([], $service->updateCalls, $field);
         }
+    }
+
+    public function testPendingEditDoesNotOverwriteContentChangedSinceCallerSnapshot(): void
+    {
+        $service = new InMemoryQueueDispatchService(
+            $this->row(status: Queue::status_pending, pid: 0, token: null),
+        );
+        $service->row[Queue::schema_fields_content] = '{"event_seq":4}';
+        $result = $service->updatePendingQueueSafely(77, [
+            Queue::schema_fields_content => '{"event_seq":3}',
+        ], '{"event_seq":2}');
+        self::assertFalse($result['confirmed']);
+        self::assertSame('queue_content_changed', $result['error_code']);
+        self::assertSame('{"event_seq":4}', $service->row[Queue::schema_fields_content]);
     }
 
     public function testAllowedPendingEditUsesFullSnapshotCas(): void
@@ -1052,6 +1074,22 @@ final class QueueDispatchServiceControlTest extends TestCase
         self::assertSame('{"job":1}', $service->updateCalls[0]['expected'][Queue::schema_fields_content]);
     }
 
+    public function testReconcileDeadWorkerMarksFinishedErrorTerminal(): void
+    {
+        $old = $this->row(status: Queue::status_running, pid: 9001, token: self::TOKEN_A);
+        $old[Queue::schema_fields_DISPATCH_UNTIL] = null;
+        $service = new InMemoryQueueDispatchService($old);
+        $service->runningRows = [$old];
+        $service->probeState = Processer::PROCESS_STATE_EXITED;
+
+        $service->reconcileRunningQueues();
+
+        self::assertSame(Queue::status_error, $service->row[Queue::schema_fields_status]);
+        self::assertSame(1, (int)$service->row[Queue::schema_fields_finished]);
+        self::assertSame(0, (int)$service->row[Queue::schema_fields_pid]);
+        self::assertStringContainsString('已不存在', $service->row[Queue::schema_fields_result]);
+    }
+
     public function testWorkerFailureClearsFenceAndExactLeaseImmediately(): void
     {
         $row = $this->row(status: Queue::status_running, pid: 9001, token: self::TOKEN_A);
@@ -1069,6 +1107,7 @@ final class QueueDispatchServiceControlTest extends TestCase
 
         self::assertTrue($result['confirmed']);
         self::assertSame(Queue::status_error, $service->row[Queue::schema_fields_status]);
+        self::assertSame(1, (int)$service->row[Queue::schema_fields_finished]);
         self::assertSame(0, $service->row[Queue::schema_fields_pid]);
         self::assertNull($service->row[Queue::schema_fields_DISPATCH_TOKEN]);
         self::assertNull($service->row[Queue::schema_fields_DISPATCH_UNTIL]);

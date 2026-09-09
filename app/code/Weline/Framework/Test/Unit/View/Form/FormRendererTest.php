@@ -41,4 +41,14 @@ final class FormRendererTest extends TestCase
         self::assertFalse(FormRenderer::isReservedLiteralAttributeValue('method', 'put'));
         self::assertFalse(FormRenderer::isReservedLiteralAttributeValue('class', 'post'));
     }
+
+    public function testRuntimeBootstrapCoalescesMutationObserver(): void
+    {
+        $js = FormRenderer::runtimeBootstrap();
+        self::assertStringContainsString('new MutationObserver', $js);
+        self::assertStringContainsString('mo.disconnect()', $js);
+        self::assertStringContainsString('requestAnimationFrame', $js);
+        self::assertStringContainsString('flushMo', $js);
+        self::assertStringNotContainsString('records.forEach', $js);
+    }
 }

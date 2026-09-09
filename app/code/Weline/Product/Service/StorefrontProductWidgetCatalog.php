@@ -6,10 +6,13 @@ namespace Weline\Product\Service;
 
 use Weline\Framework\Context;
 use Weline\Framework\Http\Url;
+use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\ScopeIdentity;
-use Weline\Product\Model\Shard\Product;
+use Weline\Product\Helper\StorefrontOfferResolver;
 use Weline\Product\Repository\ProductRepository;
+use Weline\Review\Api\ReviewSeoFactsInterface;
 use Weline\Theme\Helper\StorefrontImagePlaceholder;
 
 /**
@@ -43,13 +46,14 @@ final class StorefrontProductWidgetCatalog
     public function cards(int $limit = 8): array
     {
         $limit = max(1, min(24, $limit));
+        $fetchLimit = max($limit * 3, 24);
         // Filtered listing pages already built the full projection in the
         // controller. Reuse that cache entry in the recommendation Fiber so
         // the widget does not rebuild the same catalog as a summary view.
         if ($this->shouldUseListingProjection()) {
-            $offers = $this->catalog->publishedOffers($limit * 3, true);
+            $offers = $this->catalog->publishedOffers($fetchLimit, true);
         } else {
-            $offers = $this->catalog->publishedOffers($limit * 3, false);
+            $offers = $this->catalog->publishedOfferSummaries($fetchLimit);
         }
         usort(
             $offers,
@@ -70,7 +74,7 @@ final class StorefrontProductWidgetCatalog
             $seenProductIds[$productId] = true;
             $cards[] = $this->mapOffer($offer, count($cards));
             if (count($cards) >= $limit) {
-                return $cards;
+                return $this->withReviewAggregates($cards);
             }
         }
 
@@ -89,7 +93,7 @@ final class StorefrontProductWidgetCatalog
             }
         }
 
-        return $cards;
+        return $this->withReviewAggregates($cards);
     }
 
     /**
@@ -107,7 +111,7 @@ final class StorefrontProductWidgetCatalog
         // dedicated /best-sellers page is not empty when HF-* SKUs are absent.
         $pool = $this->cards(max($limit * 2, 24));
         if ($pool === []) {
-            $offers = $this->catalog->publishedOffers(max($limit * 3, 48), false);
+            $offers = $this->catalog->publishedOfferSummaries(max($limit * 3, 48));
             usort(
                 $offers,
                 static fn(array $left, array $right): int => (int)($right['product_id'] ?? 0)
@@ -126,6 +130,8 @@ final class StorefrontProductWidgetCatalog
                 }
             }
         }
+
+        $pool = $this->withReviewAggregates($pool);
 
         usort(
             $pool,
@@ -164,81 +170,80 @@ final class StorefrontProductWidgetCatalog
     {
         $limit = max(1, min(24, $limit));
         $days = max(1, min(365, $days));
-        $cutoffTs = (new \DateTimeImmutable('today'))
+        $cutoff = (new \DateTimeImmutable('today'))
             ->modify('-' . $days . ' days')
-            ->getTimestamp();
+            ->format('Y-m-d H:i:s');
         $websiteId = max(0, (int)$this->currentScope()->websiteId);
+        $candidateLimit = max($limit * 3, 48);
 
-        $createdAtByProductId = [];
-        foreach ($this->products->listAll($websiteId) as $product) {
-            if (\strtolower(\trim((string)($product[Product::schema_fields_STATUS] ?? '')))
-                !== Product::STATUS_PUBLISHED
-            ) {
-                continue;
-            }
-            $productId = (int)($product[Product::schema_fields_ID] ?? 0);
-            if ($productId <= 0) {
-                continue;
-            }
-            $createdRaw = \trim((string)($product[Product::schema_fields_CREATED_AT] ?? ''));
-            if ($createdRaw === '') {
-                continue;
-            }
-            $createdTs = \strtotime($createdRaw);
-            if ($createdTs === false || $createdTs < $cutoffTs) {
-                continue;
-            }
-            $createdAtByProductId[$productId] = $createdRaw;
-        }
-
-        if ($createdAtByProductId !== []) {
-            \uasort(
-                $createdAtByProductId,
-                static fn(string $left, string $right): int => (\strtotime($right) ?: 0) <=> (\strtotime($left) ?: 0),
+        $hotCache = ObjectManager::getInstance(StorefrontScopeHotCache::class);
+        $cards = [];
+        $offset = 0;
+        do {
+            /** @var array<int, string> $createdAtByProductId */
+            $createdAtByProductId = $hotCache->rememberForRequest(
+                'product.new_arrival.candidates.request',
+                serialize([$websiteId, $cutoff, $candidateLimit, $offset]),
+                fn(): array => $hotCache->rememberPolicy(
+                    StorefrontCatalogCacheCoordinator::newArrivalCandidatesPolicy(),
+                    StorefrontCatalogCacheCoordinator::newArrivalCandidatesLogicalKey($websiteId, $cutoff, $candidateLimit, $offset),
+                    fn(): array => $this->products->listRecentPublishedCreatedAt(
+                        $websiteId,
+                        $cutoff,
+                        $candidateLimit,
+                        $offset,
+                    ),
+                ),
             );
 
-            $offers = $this->catalog->publishedOffersForProductIds(
-                \array_keys($createdAtByProductId),
-                \max($limit * 3, 48),
-                false,
-            );
-            $offerByProductId = [];
-            foreach ($offers as $offer) {
-                if (!$this->isHanfuOffer($offer)) {
-                    continue;
+            if ($createdAtByProductId !== []) {
+                $offers = $this->catalog->publishedOffersForProductIds(
+                    \array_keys($createdAtByProductId),
+                    \max($limit * 3, 48),
+                    false,
+                );
+                $offerByProductId = [];
+                foreach ($offers as $offer) {
+                    if (!$this->isHanfuOffer($offer)) {
+                        continue;
+                    }
+                    $productId = (int)($offer['product_id'] ?? 0);
+                    if ($productId > 0 && !isset($offerByProductId[$productId])) {
+                        $offerByProductId[$productId] = $offer;
+                    }
                 }
-                $productId = (int)($offer['product_id'] ?? 0);
-                if ($productId > 0 && !isset($offerByProductId[$productId])) {
-                    $offerByProductId[$productId] = $offer;
+                // New-arrivals: prefer HF-* then fill non-HF published offers (import SKUs).
+                foreach ($offers as $offer) {
+                    $fallbackProductId = (int)($offer['product_id'] ?? 0);
+                    if ($fallbackProductId > 0 && !isset($offerByProductId[$fallbackProductId])) {
+                        $offerByProductId[$fallbackProductId] = $offer;
+                    }
                 }
-            }
-            // New-arrivals: prefer HF-* then fill non-HF published offers (import SKUs).
-            foreach ($offers as $offer) {
-                $fallbackProductId = (int)($offer['product_id'] ?? 0);
-                if ($fallbackProductId > 0 && !isset($offerByProductId[$fallbackProductId])) {
-                    $offerByProductId[$fallbackProductId] = $offer;
-                }
-            }
 
-            $cards = [];
-            $index = 0;
-            foreach (\array_keys($createdAtByProductId) as $productId) {
-                if (!isset($offerByProductId[$productId])) {
-                    continue;
+                $index = count($cards);
+                foreach (\array_keys($createdAtByProductId) as $productId) {
+                    if (!isset($offerByProductId[$productId])) {
+                        continue;
+                    }
+                    $card = $this->mapOffer($offerByProductId[$productId], $index);
+                    $card['created_at'] = $createdAtByProductId[$productId];
+                    $card['is_new'] = 1;
+                    $cards[] = $card;
+                    $index++;
+                    if (\count($cards) >= $limit) {
+                        break;
+                    }
                 }
-                $card = $this->mapOffer($offerByProductId[$productId], $index);
-                $card['created_at'] = $createdAtByProductId[$productId];
-                $card['is_new'] = 1;
-                $cards[] = $card;
-                $index++;
-                if (\count($cards) >= $limit) {
-                    break;
-                }
-            }
 
-            if ($cards !== []) {
-                return $cards;
+                if (count($cards) >= $limit) {
+                    return $this->withReviewAggregates($cards);
+                }
             }
+            $offset += count($createdAtByProductId);
+        } while (count($createdAtByProductId) === $candidateLimit);
+
+        if ($cards !== []) {
+            return $this->withReviewAggregates($cards);
         }
 
         // Day-window empty or no sellable offers: stable catalog fallback for widgets/page.
@@ -272,7 +277,7 @@ final class StorefrontProductWidgetCatalog
     {
         $limit = max(1, min(24, $limit));
         $excludeProductId = max(0, $excludeProductId);
-        $offers = $this->catalog->publishedOffers(max($limit * 4, 16), false);
+        $offers = $this->catalog->publishedOfferSummaries(max($limit * 4, 16));
         usort(
             $offers,
             static fn(array $left, array $right): int => (int)($right['product_id'] ?? 0)
@@ -299,7 +304,7 @@ final class StorefrontProductWidgetCatalog
             }
         }
 
-        return $cards;
+        return $this->withReviewAggregates($cards);
     }
     /**
      * Frequently-bought-together bundle: seed product first, then companions.
@@ -314,12 +319,17 @@ final class StorefrontProductWidgetCatalog
 
         $seed = null;
         if ($seedProductId > 0) {
-            foreach ($this->catalog->publishedOffersForProductIds([$seedProductId], 4, false) as $offer) {
-                if ((int)($offer['product_id'] ?? 0) !== $seedProductId) {
-                    continue;
+            $contextOffer = StorefrontOfferResolver::currentOffer();
+            if ((int)($contextOffer['product_id'] ?? 0) === $seedProductId) {
+                $seed = $this->mapOffer($contextOffer, 0);
+            } else {
+                foreach ($this->catalog->publishedOffersForProductIds([$seedProductId], 4, false) as $offer) {
+                    if ((int)($offer['product_id'] ?? 0) !== $seedProductId) {
+                        continue;
+                    }
+                    $seed = $this->mapOffer($offer, 0);
+                    break;
                 }
-                $seed = $this->mapOffer($offer, 0);
-                break;
             }
         }
 
@@ -335,7 +345,7 @@ final class StorefrontProductWidgetCatalog
             $bundle[] = $companion;
         }
 
-        return $bundle;
+        return $this->withReviewAggregates($bundle);
     }
 
 
@@ -394,11 +404,11 @@ final class StorefrontProductWidgetCatalog
         // Preserve the active locale while remaining host-agnostic.
         $productPath = $slug !== '' ? '/product/' . $slug : '/product/' . $productId;
         $route = rtrim(Url::getPrefix(), '/') . $productPath;
-        $reviewCount = max(12, (($productId * 23) + (($index + 1) * 17)) % 320);
 
         return [
             'id' => $productId,
             'product_id' => $productId,
+            'card_index' => max(0, $index),
             'name' => $name !== '' ? $name : (string)($offer['sku'] ?? ''),
             'url' => $route,
             'image' => $image,
@@ -410,11 +420,62 @@ final class StorefrontProductWidgetCatalog
             'has_deal' => $hasDeal,
             'campaign_label' => $campaignLabel,
             'campaign_url' => $campaignUrl,
-            'rating' => min(5.0, 4.2 + (($productId % 5) * 0.15)),
-            'review_count' => $reviewCount,
+            'rating' => 0.0,
+            'review_count' => 0,
             'global_offer_uuid' => trim((string)($offer['global_offer_uuid'] ?? '')),
             'sellable' => !empty($offer['sellable']),
         ];
+    }
+
+    /**
+     * Fill card rating/review_count from approved Review aggregates (no fake placeholders).
+     *
+     * @param list<array<string, mixed>> $cards
+     * @return list<array<string, mixed>>
+     */
+    private function withReviewAggregates(array $cards): array
+    {
+        if ($cards === [] || !interface_exists(ReviewSeoFactsInterface::class)) {
+            return $cards;
+        }
+
+        $uuids = [];
+        foreach ($cards as $card) {
+            $uuid = trim((string)($card['global_offer_uuid'] ?? ''));
+            if ($uuid !== '') {
+                $uuids[$uuid] = true;
+            }
+        }
+        if ($uuids === []) {
+            return $cards;
+        }
+
+        try {
+            $reviews = ObjectManager::getInstance(ReviewSeoFactsInterface::class);
+            if (!method_exists($reviews, 'aggregatesForExternalUuids')) {
+                return $cards;
+            }
+            /** @var array<string, array{review_count?:int, average_rating?:float}> $aggregates */
+            $aggregates = $reviews->aggregatesForExternalUuids('product', array_keys($uuids));
+        } catch (\Throwable) {
+            return $cards;
+        }
+
+        foreach ($cards as &$card) {
+            $uuid = trim((string)($card['global_offer_uuid'] ?? ''));
+            if ($uuid === '' || !isset($aggregates[$uuid]) || !is_array($aggregates[$uuid])) {
+                $card['rating'] = 0.0;
+                $card['review_count'] = 0;
+                continue;
+            }
+            $count = max(0, (int)($aggregates[$uuid]['review_count'] ?? 0));
+            $rating = $count > 0 ? max(0.0, (float)($aggregates[$uuid]['average_rating'] ?? 0)) : 0.0;
+            $card['rating'] = $rating;
+            $card['review_count'] = $count;
+        }
+        unset($card);
+
+        return $cards;
     }
 
     /** @param array<string, mixed> $offer */

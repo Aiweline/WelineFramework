@@ -7,6 +7,8 @@ namespace Weline\Product\Service;
 use Weline\Eav\Api\Attribute\Option\AttributeOptionRecord;
 use Weline\Eav\Api\Attribute\Option\AttributeOptionStoreInterface;
 use Weline\Eav\Api\Metadata\AttributeMetadataCatalogInterface;
+use Weline\Eav\Api\Metadata\AttributeOptionIdentityCatalogInterface;
+use Weline\Eav\Api\Metadata\AttributeOptionMetadata;
 use Weline\Eav\Api\Metadata\AttributeSetMetadata;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
@@ -84,23 +86,78 @@ class StorefrontEavLabelResolver
 
         $labels = $this->optionLabelsByAttribute($code);
         $attributeLabels = $labels[$code] ?? [];
-        if (array_key_exists($value, $attributeLabels)) {
-            return $attributeLabels[$value];
-        }
-        foreach ($attributeLabels as $optionCode => $label) {
-            // PHP casts numeric string keys to int; normalize before strcasecmp.
-            $optionCode = (string)$optionCode;
-            if (strcasecmp($optionCode, $value) === 0) {
-                return $label;
+        foreach (self::optionLookupTokens($value) as $token) {
+            if (array_key_exists($token, $attributeLabels)) {
+                $label = self::usableOptionLabel((string)$attributeLabels[$token], self::displayOptionToken($value));
+
+                return $label !== '' ? $label : self::displayOptionToken($value);
+            }
+            foreach ($attributeLabels as $optionCode => $label) {
+                // PHP casts numeric string keys to int; normalize before strcasecmp.
+                $optionCode = (string)$optionCode;
+                if (strcasecmp($optionCode, $token) === 0) {
+                    $usable = self::usableOptionLabel((string)$label, self::displayOptionToken($value));
+
+                    return $usable !== '' ? $usable : self::displayOptionToken($value);
+                }
+            }
+
+            $private = $this->findPrivateOption($token);
+            if ($private !== null && $private['label'] !== '') {
+                $usable = self::usableOptionLabel((string)$private['label'], self::displayOptionToken($value));
+
+                return $usable !== '' ? $usable : self::displayOptionToken($value);
             }
         }
 
-        $private = $this->findPrivateOption($value);
-        if ($private !== null && $private['label'] !== '') {
-            return $private['label'];
+        return self::displayOptionToken($value);
+    }
+
+    /**
+     * Tokens to try when matching cart/URL option identities.
+     * Percent-encoded Chinese values (from query strings) must decode before lookup.
+     *
+     * @return list<string>
+     */
+    public static function optionLookupTokens(string $token): array
+    {
+        $token = trim($token);
+        if ($token === '') {
+            return [];
+        }
+        $tokens = [$token];
+        $decoded = self::decodeOptionToken($token);
+        if ($decoded !== '' && $decoded !== $token) {
+            $tokens[] = $decoded;
         }
 
-        return $value;
+        return array_values(array_unique($tokens));
+    }
+
+    /** Prefer a human-readable token when the stored value is still percent-encoded. */
+    public static function displayOptionToken(string $token): string
+    {
+        $token = trim($token);
+        $decoded = self::decodeOptionToken($token);
+
+        return $decoded !== '' ? $decoded : $token;
+    }
+
+    private static function decodeOptionToken(string $token): string
+    {
+        $token = trim($token);
+        if ($token === '' || preg_match('/%[0-9A-Fa-f]{2}/', $token) !== 1) {
+            return $token;
+        }
+        $decoded = rawurldecode($token);
+        if ($decoded !== $token && preg_match('/%[0-9A-Fa-f]{2}/', $decoded) === 1) {
+            $again = rawurldecode($decoded);
+            if ($again !== '' && $again !== $decoded) {
+                $decoded = $again;
+            }
+        }
+
+        return $decoded !== '' ? $decoded : $token;
     }
 
     /**
@@ -122,18 +179,7 @@ class StorefrontEavLabelResolver
      */
     public function publicOptionCode(string $attributeCode, string $token): string
     {
-        $option = $this->findOption($attributeCode, $token);
-        if ($option === null) {
-            return trim($token);
-        }
-        if ($option['code'] !== '') {
-            return $option['code'];
-        }
-        if ($option['id'] !== '') {
-            return $option['id'];
-        }
-
-        return trim($token);
+        return $this->optionIdentityToken($this->findOption($attributeCode, $token), $token, 'code');
     }
 
     /**
@@ -141,17 +187,17 @@ class StorefrontEavLabelResolver
      */
     public function canonicalOptionId(string $attributeCode, string $token): string
     {
-        $option = $this->findOption($attributeCode, $token);
-        if ($option === null) {
-            return trim($token);
-        }
-        if ($option['id'] !== '') {
-            return $option['id'];
-        }
-        if ($option['code'] !== '') {
-            return $option['code'];
-        }
+        return $this->optionIdentityToken($this->findOption($attributeCode, $token), $token, 'id');
+    }
 
+    /** @param array{id:string,code:string,label:string}|null $option */
+    private function optionIdentityToken(?array $option, string $token, string $preferred): string
+    {
+        foreach ([$preferred, $preferred === 'id' ? 'code' : 'id'] as $field) {
+            if (($option[$field] ?? '') !== '') {
+                return $option[$field];
+            }
+        }
         return trim($token);
     }
 
@@ -162,6 +208,14 @@ class StorefrontEavLabelResolver
      */
     public function canonicalizeAxisQuery(array $query, array $axisCodes): array
     {
+        $participating = [];
+        foreach ($axisCodes as $axisCode) {
+            $axisCode = strtolower(trim((string)$axisCode));
+            if ($axisCode !== '' && array_key_exists($axisCode, $query) && is_scalar($query[$axisCode])) {
+                $participating[] = $axisCode;
+            }
+        }
+        $identities = $this->identityOptions($participating);
         foreach ($axisCodes as $axisCode) {
             $axisCode = strtolower(trim((string)$axisCode));
             if ($axisCode === '' || !array_key_exists($axisCode, $query)) {
@@ -170,7 +224,10 @@ class StorefrontEavLabelResolver
             if (!is_scalar($query[$axisCode])) {
                 continue;
             }
-            $query[$axisCode] = $this->canonicalOptionId($axisCode, (string)$query[$axisCode]);
+            $token = (string)$query[$axisCode];
+            $query[$axisCode] = $identities === null
+                ? $this->canonicalOptionId($axisCode, $token)
+                : $this->optionIdentityToken($this->findOption($axisCode, $token, $identities), $token, 'id');
         }
 
         return $query;
@@ -182,13 +239,17 @@ class StorefrontEavLabelResolver
      */
     public function toPublicQuery(array $query): array
     {
+        $identities = $this->identityOptions(array_keys(array_filter($query, 'is_scalar')));
         $public = [];
         foreach ($query as $axisCode => $token) {
             $axisCode = strtolower(trim((string)$axisCode));
             if ($axisCode === '' || !is_scalar($token)) {
                 continue;
             }
-            $public[$axisCode] = $this->publicOptionCode($axisCode, (string)$token);
+            $token = (string)$token;
+            $public[$axisCode] = $identities === null
+                ? $this->publicOptionCode($axisCode, $token)
+                : $this->optionIdentityToken($this->findOption($axisCode, $token, $identities), $token, 'code');
         }
 
         return $public;
@@ -197,7 +258,7 @@ class StorefrontEavLabelResolver
     /**
      * @return array{id:string,code:string,label:string}|null
      */
-    private function findOption(string $attributeCode, string $token): ?array
+    private function findOption(string $attributeCode, string $token, ?array $identities = null): ?array
     {
         $code = strtolower(trim($attributeCode));
         $token = trim($token);
@@ -205,19 +266,107 @@ class StorefrontEavLabelResolver
             return null;
         }
 
-        foreach ($this->optionsByAttribute($code)[$code] ?? [] as $option) {
-            foreach ($option['aliases'] as $alias) {
-                if ($alias === $token || strcasecmp($alias, $token) === 0) {
-                    return [
-                        'id' => $option['id'],
-                        'code' => $option['code'],
-                        'label' => $option['label'],
-                    ];
+        if ($this->productId === 0 && $this->metadata instanceof AttributeOptionIdentityCatalogInterface) {
+            $identities ??= $this->identityOptions([$code]);
+            $options = [];
+            foreach ($identities[$code] ?? [] as $option) {
+                $indexed = $this->indexOption($option);
+                if ($indexed !== null) {
+                    $options[] = $indexed;
                 }
+            }
+        } else {
+            $options = $this->optionsByAttribute($code)[$code] ?? [];
+        }
+        foreach (self::optionLookupTokens($token) as $candidate) {
+            foreach ($options as $option) {
+                foreach ($option['aliases'] as $alias) {
+                    if ($alias === $candidate || strcasecmp($alias, $candidate) === 0) {
+                        return [
+                            'id' => $option['id'],
+                            'code' => $option['code'],
+                            'label' => $option['label'],
+                        ];
+                    }
+                }
+            }
+
+            $private = $this->findPrivateOption($candidate);
+            if ($private !== null) {
+                return $private;
             }
         }
 
-        return $this->findPrivateOption($token);
+        return null;
+    }
+
+    /**
+     * 只持有本次方法调用的批量结果，请求复用由 Eav 的 Context 投影统一负责。
+     * @param list<string> $attributeCodes
+     * @return array<string, list<AttributeOptionMetadata>>|null
+     */
+    private function identityOptions(array $attributeCodes): ?array
+    {
+        if ($this->productId !== 0 || !$this->metadata instanceof AttributeOptionIdentityCatalogInterface) {
+            return null;
+        }
+        $codes = [];
+        foreach ($attributeCodes as $code) {
+            $code = strtolower(trim((string)$code));
+            if ($code !== '') {
+                $codes[$code] = true;
+            }
+        }
+        if ($codes === []) {
+            return [];
+        }
+        try {
+            return $this->metadata->sharedOptionIdentities($this->entity, array_keys($codes));
+        } catch (\Throwable) {
+            // 临时读取失败仍回退原始 token，后续调用可以再次尝试该轴。
+            return [];
+        }
+    }
+
+    /** @return array{id:string,code:string,label:string,aliases:list<string>}|null */
+    private function indexOption(AttributeOptionMetadata $option): ?array
+    {
+        $id = trim((string)$option->id);
+        $code = trim($option->code);
+        $storedValue = trim($option->value);
+        $aliases = [];
+        foreach ([$id, $code, $storedValue] as $identity) {
+            if ($identity !== '') {
+                $aliases[$identity] = true;
+            }
+        }
+        if ($aliases === []) {
+            return null;
+        }
+        $label = self::usableOptionLabel(trim($option->label), $storedValue);
+        if ($label === '') {
+            $label = $storedValue !== '' ? $storedValue : (string)array_key_first($aliases);
+        }
+        return ['id' => $id, 'code' => $code, 'label' => $label, 'aliases' => array_map('strval', array_keys($aliases))];
+    }
+
+    /**
+     * Reject percent-encoded LocalDescription payloads (wrong AI dumps).
+     * Prefer the catalog source value instead of decoding unrelated garbage.
+     */
+    public static function usableOptionLabel(string $label, string $sourceValue = ''): string
+    {
+        $label = trim($label);
+        if ($label === '') {
+            return '';
+        }
+        if (preg_match('/%[0-9A-Fa-f]{2}/', $label) === 1) {
+            $sourceValue = trim($sourceValue);
+
+            return $sourceValue !== '' ? $sourceValue : '';
+        }
+
+        return $label;
     }
 
     /**
@@ -441,31 +590,10 @@ class StorefrontEavLabelResolver
                             continue;
                         }
                         foreach ($attribute->options as $option) {
-                            $id = trim((string)$option->id);
-                            $code = trim($option->code);
-                            $storedValue = trim($option->value);
-                            $aliases = [];
-                            foreach ([$id, $code, $storedValue] as $identity) {
-                                if ($identity !== '') {
-                                    $aliases[(string)$identity] = true;
-                                }
+                            $indexed = $this->indexOption($option);
+                            if ($indexed !== null) {
+                                $index[$attributeCode][] = $indexed;
                             }
-                            if ($aliases === []) {
-                                continue;
-                            }
-                            $label = trim($option->label);
-                            if ($label === '') {
-                                $label = $storedValue;
-                            }
-                            if ($label === '') {
-                                $label = (string)array_key_first($aliases);
-                            }
-                            $index[$attributeCode][] = [
-                                'id' => $id,
-                                'code' => $code,
-                                'label' => $label,
-                                'aliases' => array_map('strval', array_keys($aliases)),
-                            ];
                         }
                     }
                 }

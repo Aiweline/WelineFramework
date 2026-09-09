@@ -26,6 +26,16 @@ class CacheMemoryService
         return $this->memoryService->set($this->ns($poolIdentity), $key, $value, $ttl);
     }
 
+    public function getMultiple(string $poolIdentity, array $keys): array
+    {
+        return $this->memoryService->mget($this->ns($poolIdentity), $keys);
+    }
+
+    public function setMultiple(string $poolIdentity, array $values, int $ttl = 0): bool
+    {
+        return $this->memoryService->mset($this->ns($poolIdentity), $values, $ttl);
+    }
+
     public function delete(string $poolIdentity, string $key): bool
     {
         return $this->memoryService->delete($this->ns($poolIdentity), $key);

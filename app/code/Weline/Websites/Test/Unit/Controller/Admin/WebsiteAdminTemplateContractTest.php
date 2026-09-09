@@ -62,6 +62,35 @@ final class WebsiteAdminTemplateContractTest extends TestCase
         self::assertStringContainsString('website_timezone_selector', $source);
         self::assertStringContainsString('openTimezone', $source);
         self::assertStringContainsString('data-w-timezone-label', $source);
+        self::assertStringContainsString('validateSubPathValue', $source);
+        self::assertStringContainsString('scheduleSubPathValidation', $source);
+        self::assertStringContainsString('subPathBanCurrencies', $source);
+        self::assertStringContainsString('setTimeout(runSubPathValidation, 300)', $source);
+    }
+
+    public function testWebsiteFormTemplateBansLocaleCurrencyInSubPath(): void
+    {
+        $source = (string)file_get_contents(
+            dirname(__DIR__, 4) . '/view/templates/Admin/Website/form.phtml',
+        );
+        self::assertStringContainsString('data-sub-path-ban-languages', $source);
+        self::assertStringContainsString('data-sub-path-ban-currencies', $source);
+        self::assertStringContainsString('data-sub-path-ban-msg-language-prefix', $source);
+        self::assertStringContainsString('data-sub-path-ban-msg-currency-prefix', $source);
+        self::assertStringContainsString('data-w-sub-path-input', $source);
+        self::assertStringContainsString('data-w-sub-path-error', $source);
+        self::assertStringContainsString('禁止使用语言编码或货币编码', $source);
+    }
+
+    public function testWebsiteControllerAssertsSubPathOnAddAndEdit(): void
+    {
+        $source = (string)file_get_contents(
+            dirname(__DIR__, 4) . '/Controller/Admin/Website.php',
+        );
+        self::assertStringContainsString('WebsiteSubPathValidator', $source);
+        self::assertStringContainsString('assertValidSubPath', $source);
+        self::assertStringContainsString('assignSubPathBanCatalog', $source);
+        self::assertGreaterThanOrEqual(2, substr_count($source, 'assertValidSubPath((string)($data[\'sub_path\']'));
     }
 
     public function testWebsiteFormTemplateUsesCollapsedTimezoneSelect(): void

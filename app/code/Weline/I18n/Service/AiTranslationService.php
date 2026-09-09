@@ -4,6 +4,10 @@ declare(strict_types=1);
 namespace Weline\I18n\Service;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Database\Transaction\Exception\UnsupportedAsyncTransactionConnectionException;
+use Weline\Framework\Database\Transaction\TransactionCoordinatorInterface;
+use Weline\Framework\Database\TransactionContext;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\I18n\Model\Dictionary;
 use Weline\I18n\Model\Locale\Dictionary as LocaleDictionary;
 
@@ -179,7 +183,13 @@ class AiTranslationService
         $errors = [];
 
         try {
-            $response = $this->translationAdapter->translateBatch($words, $sourceLocale, $targetLocale, $strategy);
+            $response = $this->translationAdapter->translateBatch(
+                $words,
+                $sourceLocale,
+                $targetLocale,
+                $strategy,
+                'dictionary',
+            );
             if (empty($response['success'])) {
                 $errors = array_values(array_map('strval', (array)($response['errors'] ?? [])));
                 $message = $errors ? implode('; ', $errors) : (string)__('AI 翻译服务返回失败。');
@@ -922,39 +932,52 @@ class AiTranslationService
         string $sourceModule = ''
     ): void
     {
-        $md5 = LocaleDictionary::generateMd5($word, $localeCode);
-        $existing = $this->localeDictionary->clear()->reset()
-            ->where(LocaleDictionary::schema_fields_MD5, $md5)
-            ->find()
-            ->fetch();
-
-        if ((int)$existing->getId() > 0) {
-            $patch = [LocaleDictionary::schema_fields_TRANSLATE => $translation];
-            if ($isAi) {
-                $patch[LocaleDictionary::schema_fields_IS_AI] = 1;
-                if ($sourceModule !== '') {
-                    $patch[LocaleDictionary::schema_fields_SOURCE_MODULE] = $sourceModule;
-                }
-            }
-            $this->localeDictionary->clear()->reset()
-                ->where(LocaleDictionary::schema_fields_MD5, $md5)
-                ->update($patch)
-                ->fetch();
-            $this->localeTranslatedWordIndex[$localeCode][$word] = true;
-            return;
+        $connection = $this->localeDictionary->getConnection();
+        $publisher = ObjectManager::getInstance(I18nResourceChangePublisher::class);
+        if (TransactionContext::logicalConnectionKey($connection->getConnector())
+            !== TransactionContext::logicalConnectionKey($publisher->connection()->getConnector())) {
+            throw new UnsupportedAsyncTransactionConnectionException(__('词典写入与资源变更必须使用同一逻辑数据库连接'));
         }
+        $transactions = ObjectManager::getInstance(TransactionCoordinatorInterface::class);
+        $transactions->run($connection, function () use ($word, $translation, $localeCode, $isAi, $sourceModule, $publisher, $transactions, $connection): void {
+            $md5 = LocaleDictionary::generateMd5($word, $localeCode);
+            $existing = $this->localeDictionary->clear()->reset()
+                ->where(LocaleDictionary::schema_fields_MD5, $md5)
+                ->find()
+                ->fetch();
 
-        $this->localeDictionary->clear()->reset()
-            ->insert([
-                LocaleDictionary::schema_fields_MD5 => $md5,
-                LocaleDictionary::schema_fields_WORD => $word,
-                LocaleDictionary::schema_fields_LOCALE_CODE => $localeCode,
-                LocaleDictionary::schema_fields_TRANSLATE => $translation,
-                LocaleDictionary::schema_fields_IS_AI => $isAi ? 1 : 0,
-                LocaleDictionary::schema_fields_SOURCE_MODULE => $sourceModule,
-            ], LocaleDictionary::schema_fields_MD5)
-            ->fetch();
-        $this->localeTranslatedWordIndex[$localeCode][$word] = true;
+            if ($existing->getId()) {
+                $patch = [LocaleDictionary::schema_fields_TRANSLATE => $translation];
+                if ($isAi) {
+                    $patch[LocaleDictionary::schema_fields_IS_AI] = 1;
+                    if ($sourceModule !== '') {
+                        $patch[LocaleDictionary::schema_fields_SOURCE_MODULE] = $sourceModule;
+                    }
+                }
+                $written = $this->localeDictionary->clear()->reset()
+                    ->where(LocaleDictionary::schema_fields_MD5, $md5)
+                    ->update($patch)
+                    ->fetch();
+            } else {
+                $written = $this->localeDictionary->clear()->reset()
+                    ->insert([
+                        LocaleDictionary::schema_fields_MD5 => $md5,
+                        LocaleDictionary::schema_fields_WORD => $word,
+                        LocaleDictionary::schema_fields_LOCALE_CODE => $localeCode,
+                        LocaleDictionary::schema_fields_TRANSLATE => $translation,
+                        LocaleDictionary::schema_fields_IS_AI => $isAi ? 1 : 0,
+                        LocaleDictionary::schema_fields_SOURCE_MODULE => $sourceModule,
+                    ], LocaleDictionary::schema_fields_MD5)
+                    ->fetch();
+            }
+            if ($written === false) {
+                throw new \RuntimeException(__('词典翻译写入失败'));
+            }
+            $publisher->publishAction('dictionary-ai-save', ['word' => $word, 'locale_code' => $localeCode]);
+            $transactions->afterCommit($connection, 'i18n.ai-word-index.' . $md5, function () use ($localeCode, $word): void {
+                $this->localeTranslatedWordIndex[$localeCode][$word] = true;
+            });
+        });
     }
 
     /**

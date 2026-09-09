@@ -88,6 +88,7 @@ final class DatabaseFrontendWorkerCredentialStore implements FrontendWorkerCrede
         private readonly WriteIntentTransactionCoordinatorInterface $transactions,
         private readonly UniqueConstraintViolationDetector $uniqueViolation,
         private readonly FrontendWorkerCredentialCipher $cipher,
+        private readonly FrontendWorkerSessionPayloadCache $sessionPayloadCache,
     ) {
         $this->connection = $this->credentialPrototype->getConnection();
         $this->databaseType = \strtolower(\trim((string)$this->connection
@@ -123,6 +124,7 @@ final class DatabaseFrontendWorkerCredentialStore implements FrontendWorkerCrede
                         $this->guardPrototype,
                         $this->cipher,
                         $this->databaseType,
+                        $this->sessionPayloadCache,
                     );
                     return $callback($transaction);
                 },

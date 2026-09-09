@@ -91,9 +91,12 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
         self::assertStringContainsString('weline-code="checkout.checkout.empty.section_1"', $template);
         self::assertStringContainsString('data-checkout-form hidden', $template);
         self::assertStringContainsString("const emptyState = root.querySelector('[data-checkout-empty]');", $template);
+        self::assertStringContainsString('const hangPurpose = (function () {', $template);
+        self::assertStringContainsString("params.get('purpose')", $template);
+        self::assertStringContainsString("params.get('order_uuid')", $template);
         self::assertStringContainsString('const cartIsEmpty = Boolean(checkoutState.cart.is_empty);', $template);
-        self::assertStringContainsString('form.hidden = cartIsEmpty;', $template);
-        self::assertStringContainsString('emptyState.hidden = !cartIsEmpty;', $template);
+        self::assertStringContainsString('form.hidden = cartIsEmpty || hangPurpose;', $template);
+        self::assertStringContainsString("emptyState.hidden = hangPurpose ? true : !cartIsEmpty;", $template);
         self::assertStringContainsString('--checkout-text: var(--color-text-primary);', $template);
         self::assertStringContainsString('--checkout-link: var(--color-link);', $template);
         self::assertStringContainsString('--checkout-cta-bg: var(--color-primary);', $template);
@@ -121,7 +124,7 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
         $issueGuestToken = strpos($template, '.issueGuestToken(', $rereadGuestToken ?: 0);
         $loadCheckoutWithToken = strpos($template, 'guest_token: await ensureGuestToken()', $issueGuestToken ?: 0);
 
-        self::assertStringContainsString('data-weline-load="cart"', $template);
+        self::assertStringContainsString('data-weline-load="cart,b2bCheckoutTob"', $template);
         self::assertIsInt($ensureGuestToken);
         self::assertIsInt($loadCartModule, 'Checkout must load the shared Cart browser session first.');
         self::assertIsInt($rereadGuestToken, 'Checkout must re-read the token after Cart initializes.');
@@ -188,7 +191,7 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
         self::assertStringContainsString('class="weline-checkout__express-slot"', $template);
         self::assertStringContainsString('weline:checkout:express-pay', $template);
         self::assertStringContainsString('submitCheckoutPayment', $template);
-        self::assertStringContainsString('expressHost.hidden = cartIsEmpty', $template);
+        self::assertStringContainsString('expressHost.hidden = cartIsEmpty || hangPurpose;', $template);
         self::assertStringNotContainsString('Weline_Payment::templates/frontend/widgets/checkout-express-payment.phtml', $template);
 
         $formPos = strpos($template, 'data-checkout-form');

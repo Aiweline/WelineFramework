@@ -143,6 +143,7 @@ $renderLine = static function (array $item) use ($esc, $placeholder, $cart): str
                 <div class="mini-cart-drawer__qty" data-qty-control>
                     <button type="button" data-qty-decrease aria-label="<?= $esc(__('减少数量')) ?>">−</button>
                     <input type="number"
+                           class="mini-cart-drawer__qty-input"
                            min="1"
                            max="999"
                            value="<?= $qty ?>"
@@ -180,7 +181,7 @@ $renderLine = static function (array $item) use ($esc, $placeholder, $cart): str
 };
 ?>
 <link rel="stylesheet"
-      href="@static(Weline_Theme::css/widgets/mini-cart-drawer.css)&v=20260907-price-header-layout"
+      href="@static(Weline_Theme::css/widgets/mini-cart-drawer.css)&v=20260908-theme-minicart-generic"
       data-no-extract="true"
       data-weline-mini-cart-drawer="1">
 <section class="header-cart header-action-item <?= $esc($wc) ?><?= $isEmpty ? ' is-empty' : '' ?>"
@@ -211,8 +212,6 @@ $renderLine = static function (array $item) use ($esc, $placeholder, $cart): str
          data-i18n-discount-coupon="<?= $esc(__('优惠券')) ?>"
          data-i18n-discount-stack="<?= $esc(__('叠加优惠')) ?>"
          data-i18n-discount-automatic="<?= $esc(__('自动优惠')) ?>"
-         data-i18n-cart-type-toc="<?= $esc(__('零售')) ?>"
-         data-i18n-cart-type-tob="<?= $esc(__('批发')) ?>"
          data-placeholder-image="<?= $esc($placeholder) ?>">
     <a href="@url{'cart'}"
        class="cart-link"
@@ -233,15 +232,19 @@ $renderLine = static function (array $item) use ($esc, $placeholder, $cart): str
                     <?= $cartQuantity > 99 ? '99+' : $cartQuantity ?>
                 </span>
             <?php endif; ?>
-            <span class="w-badge header-cart__cart-type"
-                  data-cart-type-badge
-                  data-tone="secondary"
-                  data-testid="mini-cart-type-badge"><lang>零售</lang></span>
         </span>
         <?php if ($showSubtotal): ?>
             <span class="cart-info">
                 <span class="cart-label"><?= __('购物车') ?></span>
-                <span class="cart-subtotal" data-cart-subtotal-text><?= $esc($cartSubtotal) ?></span>
+                <span class="cart-meta" data-mini-cart-meta>
+                    <span data-mini-cart-type-caption hidden></span>
+                    <span class="cart-subtotal" data-cart-subtotal-text><?= $esc($cartSubtotal) ?></span>
+                </span>
+            </span>
+        <?php else: ?>
+            <span class="cart-info">
+                <span class="cart-label"><?= __('购物车') ?></span>
+                <span data-mini-cart-type-caption hidden></span>
             </span>
         <?php endif; ?>
     </a>
@@ -259,13 +262,13 @@ $renderLine = static function (array $item) use ($esc, $placeholder, $cart): str
            aria-hidden="true"
            data-mini-cart-drawer>
         <header class="mini-cart-drawer__header">
-            <h2 class="mini-cart-drawer__title">
-                <?= __('购物车') ?>
-                (<span class="item-count" data-cart-item-count><?= $cartQuantity ?></span>)
-                <span class="w-badge mini-cart-drawer__cart-type"
-                      data-cart-type-badge
-                      data-tone="secondary"><lang>零售</lang></span>
-            </h2>
+            <div class="mini-cart-drawer__heading">
+                <div data-mini-cart-type-host></div>
+                <h2 class="mini-cart-drawer__title">
+                    <span data-mini-cart-title><?= __('购物车') ?></span>
+                    (<span class="item-count" data-cart-item-count><?= $cartQuantity ?></span>)
+                </h2>
+            </div>
             <button type="button"
                     class="mini-cart-drawer__close"
                     data-mini-cart-close

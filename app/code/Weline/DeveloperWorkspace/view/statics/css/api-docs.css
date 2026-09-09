@@ -33,7 +33,8 @@
 
     .w-api-docs__context > .w-cluster,
     .w-api-docs__context-controls,
-    .w-api-docs__tools {
+    .w-api-docs__tools,
+    .w-api-docs__tool-group {
         min-inline-size: 0;
         flex-wrap: wrap;
     }
@@ -60,11 +61,36 @@
         color: var(--weline-theme-text-muted);
     }
 
+    .w-api-docs__tools {
+        align-items: center;
+        gap: var(--weline-space-5);
+    }
+
+    .w-api-docs__tool-group {
+        align-items: center;
+        gap: var(--weline-space-3);
+    }
+
     .w-api-docs__theme-field {
+        display: inline-flex;
+        align-items: center;
+        margin: 0;
         min-inline-size: 8.5rem;
     }
 
+    .w-api-docs__theme-field .w-select,
+    .w-api-docs__tools .w-button {
+        min-block-size: var(--weline-control-height);
+    }
+
+    .w-api-docs__theme-field .w-select {
+        inline-size: 100%;
+    }
+
     .w-api-docs__production {
+        display: inline-flex;
+        align-items: center;
+        min-block-size: var(--weline-control-height);
         white-space: nowrap;
     }
 
@@ -93,6 +119,17 @@
     .w-api-docs__content {
         border-start-start-radius: 0;
         border-end-start-radius: 0;
+    }
+
+    .w-api-docs__content-bar {
+        gap: var(--weline-space-3);
+    }
+
+    .w-api-docs__api-search {
+        flex: 1 1 14rem;
+        min-inline-size: 10rem;
+        max-inline-size: 36rem;
+        margin: 0;
     }
 
     .w-api-docs__sidebar > .w-card__header {
@@ -306,7 +343,8 @@
     .w-api-detail__path {
         min-inline-size: 0;
         margin: 0;
-        overflow-wrap: anywhere;
+        overflow-wrap: break-word;
+        word-break: normal;
         font-family: var(--weline-font-mono);
         font-size: clamp(var(--weline-font-size-xl), 2vw, 1.75rem);
     }
@@ -324,6 +362,26 @@
         gap: var(--weline-space-3);
         padding-block: var(--weline-space-4);
         border-block-end: 1px solid var(--weline-theme-border);
+    }
+
+    /* Native <details.w-disclosure>：foundation 只给 __trigger/__panel 内边距，
+       summary/内容会贴边；测试面板环境区块必须自补内边距。 */
+    .w-api-docs details.w-disclosure.w-api-test__section {
+        gap: 0;
+        padding-block: 0;
+        border-block-end: 0;
+    }
+
+    .w-api-docs details.w-disclosure > summary {
+        padding: var(--weline-space-3) var(--weline-space-4);
+        background: var(--weline-theme-surface-muted);
+        color: var(--weline-theme-text);
+        font-weight: 650;
+        cursor: pointer;
+    }
+
+    .w-api-docs details.w-disclosure > :not(summary) {
+        padding: var(--weline-space-4);
     }
 
     .w-api-detail__section h2,
@@ -407,6 +465,31 @@
         gap: var(--weline-space-3);
     }
 
+    .w-api-settings-grid > .w-field,
+    .w-api-settings-grid > .w-api-mode {
+        min-inline-size: 0;
+    }
+
+    .w-api-settings-grid .w-select {
+        inline-size: 100%;
+        max-inline-size: 100%;
+    }
+
+    .w-api-mode {
+        display: flex;
+        flex-wrap: wrap;
+        align-content: flex-start;
+        gap: var(--weline-space-2);
+        grid-column: 1 / -1;
+        margin: 0;
+        border: 0;
+        padding: 0;
+    }
+
+    .w-api-mode .w-field__label {
+        inline-size: 100%;
+    }
+
     .w-api-worker-fields .w-field small,
     .w-field__help {
         color: var(--weline-theme-text-muted);
@@ -450,20 +533,6 @@
         grid-template-columns: minmax(8rem, 0.7fr) minmax(10rem, 1.3fr) auto;
         gap: var(--weline-space-2);
         min-inline-size: 0;
-    }
-
-    .w-api-mode {
-        display: flex;
-        flex-wrap: wrap;
-        align-content: flex-start;
-        gap: var(--weline-space-2);
-        margin: 0;
-        border: 0;
-        padding: 0;
-    }
-
-    .w-api-mode .w-field__label {
-        inline-size: 100%;
     }
 
     .w-api-response {
@@ -536,8 +605,6 @@
     }
 
     .w-api-dialog {
-        inline-size: min(32rem, calc(100vw - 2rem));
-        max-inline-size: none;
         padding: 0;
         color: var(--weline-theme-text);
         background: transparent;
@@ -629,6 +696,7 @@
     @media (max-width: 600px) {
         .w-api-docs__context-controls,
         .w-api-docs__tools,
+        .w-api-docs__tool-group,
         .w-api-docs__compact-field,
         .w-api-docs__theme-field {
             inline-size: 100%;
@@ -636,7 +704,8 @@
 
         .w-api-docs__context-controls .w-field,
         .w-api-docs__tools .w-field,
-        .w-api-docs__tools .w-button {
+        .w-api-docs__tools .w-button,
+        .w-api-docs__theme-field .w-select {
             flex: 1 1 100%;
         }
 
@@ -797,5 +866,18 @@
         body.w-api-toc-open { overflow: hidden; }
     }
 
+}
 
+
+/* Unlayered: beat theme.css unlayered `.w-button { background: primary }` for secondary CTA. */
+.w-api-docs__tool-actions .w-button[data-tone="neutral"][data-variant="outline"] {
+    background: transparent;
+    border-color: var(--weline-theme-border-strong);
+    color: var(--weline-theme-text);
+}
+
+.w-api-docs__tool-actions .w-button[data-tone="neutral"][data-variant="outline"]:hover {
+    background: var(--weline-theme-surface-hover);
+    border-color: var(--weline-theme-border-strong);
+    color: var(--weline-theme-text);
 }

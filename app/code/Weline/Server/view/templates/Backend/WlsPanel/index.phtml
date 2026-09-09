@@ -89,6 +89,7 @@ $securityLogsPath = '*/backend/wls-panel/security-logs';
 $securityRulesPanelPath = '*/backend/wls-panel/security-rules';
 $securityPolicyPath = '*/backend/wls-panel/security-policy';
 $securityAuditPath = '*/backend/wls-panel/security-audit';
+$securityProbesPath = '*/backend/wls-panel/security-probes';
 $projectSavePath = '*/backend/wls-panel/project-save';
 $projectDeletePath = '*/backend/wls-panel/project-delete';
 $securityRulesSavePath = '*/backend/wls-panel/security-rules-save';
@@ -96,7 +97,7 @@ $pluginRefreshPath = '*/backend/wls-panel/plugin-refresh';
 $projectAdminPath = 'admin';
 $appStoreIndexPath = 'appstore/backend';
 $appStoreInstalledPath = 'appstore/backend/installed';
-// PHP builders still need absolute URLs; templates use @backend-url{$*Path}.
+// PHP builders still need absolute URLs；HTML 属性里用 backend-url Taglib。切勿在 // 注释里写该 Taglib 花括号写法，编译注入的结束标记会提前结束 PHP 模式。
 $toBackendUrl = static function (string $path, array $params = []) use ($template): string {
     return (string)$template->getBackendUrl($path, $params);
 };
@@ -110,6 +111,7 @@ $securityLogsUrl = $toBackendUrl($securityLogsPath);
 $securityRulesPanelUrl = $toBackendUrl($securityRulesPanelPath);
 $securityPolicyUrl = $toBackendUrl($securityPolicyPath);
 $securityAuditUrl = $toBackendUrl($securityAuditPath);
+$securityProbesUrl = $toBackendUrl($securityProbesPath);
 $projectSaveUrl = $toBackendUrl($projectSavePath);
 $projectDeleteUrl = $toBackendUrl($projectDeletePath);
 $securityRulesSaveUrl = $toBackendUrl($securityRulesSavePath);
@@ -152,6 +154,7 @@ $panelTitle = match ($activePage) {
     'security_rules' => __('安全规则'),
     'security_policy' => __('项目安全策略'),
     'security_audit' => __('策略审计'),
+    'security_probes' => __('安全探针'),
     'projects' => __('项目'),
     'nginx' => __('Nginx 公网入口'),
     'plugin' => $panelPluginViewerLabel !== '' ? $panelPluginViewerLabel : __('插件能力'),
@@ -499,6 +502,7 @@ $navItems = [
             ['key' => 'security_rules', 'label' => __('规则'), 'path' => $securityRulesPanelPath],
             ['key' => 'security_policy', 'label' => __('项目策略'), 'path' => $securityPolicyPath],
             ['key' => 'security_audit', 'label' => __('策略审计'), 'path' => $securityAuditPath],
+            ['key' => 'security_probes', 'label' => __('探针'), 'path' => $securityProbesPath],
         ],
     ],
     ['key' => 'marketplace', 'label' => __('商城'), 'path' => $marketplacePath],
@@ -566,7 +570,7 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                         <span><?= $item['label'] ?></span>
                     </a>
                     <?php if ($navChildren !== [] && $isActive): ?>
-                        <div class="wls-nav-subnav" aria-label="<?= $escapeHtml(__('%{1} 二级菜单', [$item['label']])) ?>">
+                        <div class="wls-nav-subnav" aria-label="<?= htmlspecialchars((string)__('%{1} 二级菜单', [$item['label']]), ENT_QUOTES, 'UTF-8') ?>">
                             <?php foreach ($navChildren as $navChild): ?>
                                 <?php
                                 $navChildKey = (string)($navChild['key'] ?? '');
@@ -579,13 +583,51 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                                 <a class="wls-nav-subnav-item <?= $navChildActive ? 'is-active' : '' ?>"
                                    href="@backend-url{$navChildPath}"
                                    <?= $navChildActive ? 'aria-current="page"' : '' ?>>
-                                    <?= $escapeHtml((string)($navChild['label'] ?? $navChildKey)) ?>
+                                    <?= htmlspecialchars((string)($navChild['label'] ?? $navChildKey), ENT_QUOTES, 'UTF-8') ?>
                                 </a>
                             <?php endforeach; ?>
                         </div>
                     <?php endif; ?>
                 </div>
             <?php endforeach; ?>
+            <?php
+            // getBackendUrl 等热路径可能触发 Fiber 协作让出，include 局部闭包会被清空；导航后重建。
+            $escapeHtml = static fn (mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+            $normalizePanelPluginKey = static function (string $key): string {
+                $key = trim(strtolower($key));
+                if ($key === '') {
+                    return '';
+                }
+                $key = (string)preg_replace('/[^a-z0-9:_-]+/', '-', $key);
+                return trim($key, '-_');
+            };
+            $buildPluginShellUrl = static function (array $parent, ?array $child = null, array $params = []) use ($pluginViewerUrl, $normalizePanelPluginKey): string {
+                $parentKey = $normalizePanelPluginKey((string)($parent['key'] ?? ''));
+                $childKey = $child !== null ? $normalizePanelPluginKey((string)($child['key'] ?? '')) : '';
+                $moduleName = trim((string)($parent['module_name'] ?? $child['module_name'] ?? ''));
+                if ($parentKey === '' && $moduleName === '') {
+                    return '';
+                }
+                $query = ['plugin_key' => $parentKey];
+                if ($childKey !== '') {
+                    $query['child_key'] = $childKey;
+                }
+                if ($moduleName !== '') {
+                    $query['plugin_module'] = $moduleName;
+                }
+                foreach ($params as $key => $value) {
+                    $key = trim((string)$key);
+                    if ($key === '' || array_key_exists($key, $query) || !is_scalar($value)) {
+                        continue;
+                    }
+                    $value = trim((string)$value);
+                    if ($value !== '') {
+                        $query[$key] = $value;
+                    }
+                }
+                return $pluginViewerUrl . (str_contains($pluginViewerUrl, '?') ? '&' : '?') . http_build_query($query);
+            };
+            ?>
             <?php if ($panelPluginMenuItems !== []): ?>
                 <div class="wls-shell-nav-divider"><?= __('插件能力') ?></div>
                 <?php foreach ($panelPluginMenuItems as $pluginMenuItem): ?>
@@ -944,20 +986,45 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                             loading="eager"></iframe>
                 <?php endif; ?>
             </section>
-        <?php elseif (in_array($activePage, ['security', 'security_logs', 'security_rules', 'security_policy', 'security_audit'], true)): ?>
+        <?php elseif (in_array($activePage, ['security', 'security_logs', 'security_rules', 'security_policy', 'security_audit', 'security_probes'], true)): ?>
             <?php
+            // 导航路径：导航阶段 Fiber 让出后局部字符串也可能被清空。
+            $securityProbesPath = '*/backend/wls-panel/security-probes';
+            $securityRulesPanelPath = '*/backend/wls-panel/security-rules';
+            $securityLogsPath = '*/backend/wls-panel/security-logs';
+            $securityPolicyPath = '*/backend/wls-panel/security-policy';
+            $securityAuditPath = '*/backend/wls-panel/security-audit';
+            $securityPath = '*/backend/wls-panel/security';
+            $securityAdvancedRulesPath = '*/backend/server-monitor/security-rules';
+            $escapeHtml = static fn (mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
             $securityPageIsOverview = $activePage === 'security';
             $securityPageIsLogs = $activePage === 'security_logs';
             $securityPageIsRules = $activePage === 'security_rules';
             $securityPageIsPolicy = $activePage === 'security_policy';
             $securityPageIsAudit = $activePage === 'security_audit';
+            $securityPageIsProbes = $activePage === 'security_probes';
             $securityPageHeading = match ($activePage) {
                 'security_logs' => __('攻击日志'),
                 'security_rules' => __('安全规则'),
                 'security_policy' => __('项目安全策略'),
                 'security_audit' => __('策略审计'),
+                'security_probes' => __('安全探针'),
                 default => __('安全概览'),
             };
+            $panelSecurityProbe = $this->getData('panelSecurityProbe');
+            $panelSecurityProbe = is_array($panelSecurityProbe) ? $panelSecurityProbe : [];
+            $probeTokenMeta = is_array($panelSecurityProbe['token'] ?? null) ? $panelSecurityProbe['token'] : [];
+            $probeLiveBanMeta = is_array($panelSecurityProbe['live_ban'] ?? null) ? $panelSecurityProbe['live_ban'] : [];
+            $probeCases = is_array($panelSecurityProbe['cases'] ?? null) ? $panelSecurityProbe['cases'] : [];
+            $probeOrigin = trim((string)($panelSecurityProbe['origin'] ?? ''));
+            $probeTokenValue = trim((string)($probeTokenMeta['token'] ?? ''));
+            $probeTokenHeader = trim((string)($probeTokenMeta['header'] ?? 'X-Weline-Security-Probe-Token'));
+            $probeExpiresAt = (int)($probeTokenMeta['expires_at'] ?? 0);
+            $probeLiveBanToken = trim((string)($probeLiveBanMeta['token'] ?? ''));
+            $probeLiveBanHeader = trim((string)($probeLiveBanMeta['header'] ?? 'X-Weline-Security-Live-Ban-Test'));
+            $probeClientIp = trim((string)($panelSecurityProbe['client_ip'] ?? ''));
+            $probeBanned = !empty($panelSecurityProbe['banned']);
+            $probeUnlockUrl = trim((string)($panelSecurityProbe['unlock_url'] ?? ''));
             ?>
             <section class="wls-security-page" id="security-rules" aria-labelledby="wls-security-title">
                 <div class="wls-section-head">
@@ -966,6 +1033,7 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                         <h2 id="wls-security-title"><?= $escapeHtml($securityPageHeading) ?></h2>
                     </div>
                     <div class="wls-section-actions">
+                        <a class="wls-secondary-button" href="@backend-url{$securityProbesPath}"><?= __('探针') ?></a>
                         <a class="wls-secondary-button" href="@backend-url{$securityRulesPanelPath}"><?= __('规则') ?></a>
                         <a class="wls-secondary-button" href="@backend-url{$securityLogsPath}"><?= __('攻击日志') ?></a>
                         <a class="wls-secondary-button" href="@backend-url{$securityAdvancedRulesPath}"><?= __('高级规则') ?></a>
@@ -1686,6 +1754,12 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                     $unknownRouteRule = $ruleEditor('unknown_route_ban');
                     $ipWhitelistRule = $ruleEditor('ip_whitelist');
                     $protectedPathsRule = $ruleEditor('protected_paths');
+                    $crawlerBlockRule = $ruleEditor('crawler_block');
+                    $crawlerProtoVariant = strtoupper(trim((string)($_GET['variant'] ?? '')));
+                    if (!in_array($crawlerProtoVariant, ['A', 'B', 'C'], true)) {
+                        $crawlerProtoVariant = 'A';
+                    }
+                    $crawlerProtoMode = isset($_GET['variant']);
                     ?>
                     <w:form class="wls-security-rules-form"
                           data-wls-security-rules-form
@@ -1988,7 +2062,235 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                                            value="<?= $escapeHtml($ruleValue($protectedPathsRule, 'block_duration', 1800)) ?>">
                                 </label>
                             </fieldset>
+
+                            <?php
+                            $crawlerBuiltins = is_array($crawlerBlockRule['builtins'] ?? null) ? $crawlerBlockRule['builtins'] : [];
+                            $crawlerCustoms = is_array($crawlerBlockRule['custom_entries'] ?? null) ? array_values($crawlerBlockRule['custom_entries']) : [];
+                            $crawlerCustoms[] = [
+                                'id' => '',
+                                'name' => '',
+                                'pattern' => '',
+                                'category' => 'custom',
+                                'reason' => '',
+                                'enabled' => true,
+                            ];
+                            ?>
+                            <fieldset class="wls-rule-editor-panel wls-crawler-block-panel"
+                                      data-wls-crawler-block
+                                      data-crawler-variant="<?= $escapeHtml($crawlerProtoVariant) ?>"
+                                      <?= $crawlerProtoMode ? 'data-crawler-prototype="1"' : '' ?>>
+                                <legend><?= __('爬虫代理拦截') ?></legend>
+                                <p class="wls-help-text" style="--w-mb:var(--weline-space-2);">
+                                    <?= __('默认拦截只刮内容、不带来引荐流量的寄生爬虫（AI 训练 / SEO 刮取等）。Googlebot、Bingbot、百度等友好引擎始终放行。可关闭内置项或新增自定义正则。') ?>
+                                </p>
+                                <input type="hidden" name="visual_rules[crawler_block][enabled]" value="0">
+                                <label class="wls-rule-switch">
+                                    <input type="checkbox"
+                                           name="visual_rules[crawler_block][enabled]"
+                                           value="1"
+                                           <?= $ruleChecked($crawlerBlockRule) ?>>
+                                    <span><?= __('启用规则') ?></span>
+                                </label>
+                                <label class="wls-form-field">
+                                    <span><?= __('封禁秒数') ?></span>
+                                    <input type="number"
+                                           min="0"
+                                           max="2592000"
+                                           name="visual_rules[crawler_block][block_duration]"
+                                           value="<?= $escapeHtml($ruleValue($crawlerBlockRule, 'block_duration', 86400)) ?>">
+                                </label>
+
+                                <?php if ($crawlerProtoVariant === 'B'): ?>
+                                    <div class="wls-crawler-chip-board" aria-label="<?= __('内置爬虫') ?>">
+                                        <?php foreach ($crawlerBuiltins as $bot): ?>
+                                            <?php $botId = (string)($bot['id'] ?? ''); ?>
+                                            <label class="wls-crawler-chip">
+                                                <input type="hidden" name="visual_rules[crawler_block][builtin_enabled][<?= $escapeHtml($botId) ?>]" value="0">
+                                                <input type="checkbox"
+                                                       name="visual_rules[crawler_block][builtin_enabled][<?= $escapeHtml($botId) ?>]"
+                                                       value="1"
+                                                       <?= !empty($bot['enabled']) ? 'checked' : '' ?>>
+                                                <span>
+                                                    <strong><?= $escapeHtml((string)($bot['name'] ?? $botId)) ?></strong>
+                                                    <small><?= $escapeHtml((string)($bot['category'] ?? '')) ?></small>
+                                                </span>
+                                            </label>
+                                        <?php endforeach; ?>
+                                    </div>
+                                <?php elseif ($crawlerProtoVariant === 'C'): ?>
+                                    <div class="wls-crawler-split">
+                                        <aside>
+                                            <h4><?= __('分类') ?></h4>
+                                            <ul class="wls-crawler-cat-list">
+                                                <?php
+                                                $cats = [];
+                                                foreach ($crawlerBuiltins as $bot) {
+                                                    $cat = (string)($bot['category'] ?? 'other');
+                                                    $cats[$cat] = ($cats[$cat] ?? 0) + 1;
+                                                }
+                                                foreach ($cats as $cat => $count):
+                                                ?>
+                                                    <li><code><?= $escapeHtml($cat) ?></code> · <?= (int)$count ?></li>
+                                                <?php endforeach; ?>
+                                            </ul>
+                                        </aside>
+                                        <div class="wls-crawler-split-main">
+                                            <?php foreach ($crawlerBuiltins as $index => $bot): ?>
+                                                <?php $botId = (string)($bot['id'] ?? ''); ?>
+                                                <article class="wls-crawler-card">
+                                                    <header>
+                                                        <strong><?= $escapeHtml((string)($bot['name'] ?? $botId)) ?></strong>
+                                                        <input type="hidden" name="visual_rules[crawler_block][builtin_enabled][<?= $escapeHtml($botId) ?>]" value="0">
+                                                        <label class="wls-rule-switch">
+                                                            <input type="checkbox"
+                                                                   name="visual_rules[crawler_block][builtin_enabled][<?= $escapeHtml($botId) ?>]"
+                                                                   value="1"
+                                                                   <?= !empty($bot['enabled']) ? 'checked' : '' ?>>
+                                                            <span><?= __('拦截') ?></span>
+                                                        </label>
+                                                    </header>
+                                                    <code><?= $escapeHtml((string)($bot['pattern'] ?? '')) ?></code>
+                                                    <p><?= $escapeHtml((string)($bot['reason'] ?? '')) ?></p>
+                                                </article>
+                                            <?php endforeach; ?>
+                                        </div>
+                                    </div>
+                                <?php else: ?>
+                                    <div class="wls-security-rules-table-wrap" style="--w-mb:var(--weline-space-3);">
+                                        <table class="wls-security-rules-table wls-crawler-table">
+                                            <thead>
+                                            <tr>
+                                                <th><?= __('启用') ?></th>
+                                                <th><?= __('名称') ?></th>
+                                                <th><?= __('分类') ?></th>
+                                                <th><?= __('正则') ?></th>
+                                                <th><?= __('原因') ?></th>
+                                            </tr>
+                                            </thead>
+                                            <tbody>
+                                            <?php foreach ($crawlerBuiltins as $bot): ?>
+                                                <?php $botId = (string)($bot['id'] ?? ''); ?>
+                                                <tr>
+                                                    <td>
+                                                        <input type="hidden" name="visual_rules[crawler_block][builtin_enabled][<?= $escapeHtml($botId) ?>]" value="0">
+                                                        <input type="checkbox"
+                                                               name="visual_rules[crawler_block][builtin_enabled][<?= $escapeHtml($botId) ?>]"
+                                                               value="1"
+                                                               <?= !empty($bot['enabled']) ? 'checked' : '' ?>>
+                                                    </td>
+                                                    <td><strong><?= $escapeHtml((string)($bot['name'] ?? $botId)) ?></strong></td>
+                                                    <td><code><?= $escapeHtml((string)($bot['category'] ?? '')) ?></code></td>
+                                                    <td><code><?= $escapeHtml((string)($bot['pattern'] ?? '')) ?></code></td>
+                                                    <td><?= $escapeHtml((string)($bot['reason'] ?? '')) ?></td>
+                                                </tr>
+                                            <?php endforeach; ?>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                <?php endif; ?>
+
+                                <div class="wls-form-title-row" style="--w-mb:var(--weline-space-2);">
+                                    <h4 style="--w-mb:0;"><?= __('自定义拦截条目') ?></h4>
+                                    <span class="wls-help-text"><?= __('末行留空可继续新增；保存时忽略空正则。') ?></span>
+                                </div>
+                                <div class="wls-security-rules-table-wrap">
+                                    <table class="wls-security-rules-table" data-wls-crawler-custom-table>
+                                        <thead>
+                                        <tr>
+                                            <th><?= __('启用') ?></th>
+                                            <th><?= __('名称') ?></th>
+                                            <th><?= __('UA 正则') ?></th>
+                                            <th><?= __('说明') ?></th>
+                                        </tr>
+                                        </thead>
+                                        <tbody>
+                                        <?php foreach ($crawlerCustoms as $index => $custom): ?>
+                                            <tr>
+                                                <td>
+                                                    <input type="hidden" name="visual_rules[crawler_block][custom_entries][<?= (int)$index ?>][enabled]" value="0">
+                                                    <input type="checkbox"
+                                                           name="visual_rules[crawler_block][custom_entries][<?= (int)$index ?>][enabled]"
+                                                           value="1"
+                                                           <?= !empty($custom['enabled']) ? 'checked' : '' ?>>
+                                                    <input type="hidden"
+                                                           name="visual_rules[crawler_block][custom_entries][<?= (int)$index ?>][id]"
+                                                           value="<?= $escapeHtml((string)($custom['id'] ?? '')) ?>">
+                                                </td>
+                                                <td>
+                                                    <input type="text"
+                                                           class="w-input"
+                                                           data-size="sm"
+                                                           name="visual_rules[crawler_block][custom_entries][<?= (int)$index ?>][name]"
+                                                           value="<?= $escapeHtml((string)($custom['name'] ?? '')) ?>"
+                                                           placeholder="<?= __('显示名') ?>">
+                                                </td>
+                                                <td>
+                                                    <input type="text"
+                                                           class="w-input"
+                                                           data-size="sm"
+                                                           name="visual_rules[crawler_block][custom_entries][<?= (int)$index ?>][pattern]"
+                                                           value="<?= $escapeHtml((string)($custom['pattern'] ?? '')) ?>"
+                                                           placeholder="/EvilBot/i"
+                                                           spellcheck="false">
+                                                </td>
+                                                <td>
+                                                    <input type="text"
+                                                           class="w-input"
+                                                           data-size="sm"
+                                                           name="visual_rules[crawler_block][custom_entries][<?= (int)$index ?>][reason]"
+                                                           value="<?= $escapeHtml((string)($custom['reason'] ?? '')) ?>"
+                                                           placeholder="<?= __('拦截原因') ?>">
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </fieldset>
                         </div>
+                        <?php if ($crawlerProtoMode): ?>
+                            <div class="wls-crawler-prototype-bar" data-wls-crawler-prototype-bar>
+                                <button type="button" data-dir="-1" aria-label="<?= __('上一个变体') ?>">←</button>
+                                <span data-wls-crawler-proto-label><?= $escapeHtml('Variant ' . $crawlerProtoVariant) ?></span>
+                                <button type="button" data-dir="1" aria-label="<?= __('下一个变体') ?>">→</button>
+                            </div>
+                            <script>
+                            (function () {
+                                var order = ['A', 'B', 'C'];
+                                var names = {
+                                    A: 'A (表格清单)',
+                                    B: 'B (芯片开关)',
+                                    C: 'C (分类卡片)'
+                                };
+                                var bar = document.querySelector('[data-wls-crawler-prototype-bar]');
+                                if (!bar) return;
+                                var label = bar.querySelector('[data-wls-crawler-proto-label]');
+                                var current = <?= json_encode($crawlerProtoVariant, JSON_THROW_ON_ERROR) ?>;
+                                if (label) label.textContent = names[current] || current;
+                                function go(delta) {
+                                    var idx = order.indexOf(current);
+                                    if (idx < 0) idx = 0;
+                                    idx = (idx + delta + order.length) % order.length;
+                                    var url = new URL(window.location.href);
+                                    url.searchParams.set('variant', order[idx]);
+                                    window.location.replace(url.toString());
+                                }
+                                bar.querySelectorAll('button[data-dir]').forEach(function (btn) {
+                                    btn.addEventListener('click', function () {
+                                        go(Number(btn.getAttribute('data-dir') || '1'));
+                                    });
+                                });
+                                window.addEventListener('keydown', function (event) {
+                                    var tag = (event.target && event.target.tagName || '').toLowerCase();
+                                    if (tag === 'input' || tag === 'textarea' || (event.target && event.target.isContentEditable)) {
+                                        return;
+                                    }
+                                    if (event.key === 'ArrowLeft') go(-1);
+                                    if (event.key === 'ArrowRight') go(1);
+                                });
+                            })();
+                            </script>
+                        <?php endif; ?>
                         <section class="wls-rule-diff-preview"
                                  data-wls-rule-diff-preview
                                  data-label-empty="<?= $escapeHtml(__('没有待保存的规则变更。')) ?>"
@@ -2192,6 +2494,436 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                         </div>
                     </div>
                 </section>
+                <?php endif; ?>
+                <?php if ($securityPageIsProbes): ?>
+                <section class="wls-security-probes" data-wls-security-probes
+                         data-probe-origin="<?= $escapeHtml($probeOrigin !== '' ? $probeOrigin : '') ?>"
+                         data-probe-header="<?= $escapeHtml($probeTokenHeader) ?>"
+                         data-probe-token="<?= $escapeHtml($probeTokenValue) ?>"
+                         data-probe-expires="<?= (int)$probeExpiresAt ?>"
+                         data-live-ban-header="<?= $escapeHtml($probeLiveBanHeader) ?>"
+                         data-live-ban-token="<?= $escapeHtml($probeLiveBanToken) ?>"
+                         data-probe-client-ip="<?= $escapeHtml($probeClientIp) ?>"
+                         data-probe-banned="<?= $probeBanned ? '1' : '0' ?>"
+                         data-probe-unlock-url="<?= $escapeHtml($probeUnlockUrl) ?>"
+                         aria-label="<?= __('安全攻击用例探针') ?>">
+                    <div class="wls-form-title-row">
+                        <div>
+                            <h3><?= __('攻击用例快速测试') ?></h3>
+                            <span class="wls-help-text">
+                                <?= __('默认带探针豁免 token：返回 403/400 但不 ban。验收真实封禁请打开下方「实战封禁」。') ?>
+                            </span>
+                        </div>
+                        <div class="wls-section-actions">
+                            <button type="button" class="wls-primary-button" data-wls-probe-run-all><?= __('全部运行') ?></button>
+                            <button type="button" class="wls-secondary-button" data-wls-probe-run-failed><?= __('重跑失败') ?></button>
+                        </div>
+                    </div>
+                    <div class="wls-probe-live-zone" data-wls-probe-live-zone>
+                        <strong><?= __('实战封禁（危险）') ?></strong>
+                        <span class="wls-help-text"><?= __('开启后请求不带探针豁免，命中规则会锁定当前 IP。可用「解封本机」解除后再访问店面查看锁定表现。') ?></span>
+                        <div class="wls-probe-live-row">
+                            <label class="wls-probe-live-switch">
+                                <input type="checkbox" data-wls-probe-live-ban />
+                                <?= __('不带豁免 token（真实封禁）') ?>
+                            </label>
+                            <div class="wls-probe-live-actions">
+                                <span class="wls-probe-ban-state<?= $probeBanned ? ' is-banned' : '' ?>" data-wls-probe-ban-state>
+                                    <?= $probeBanned ? __('本机已锁定') : __('本机未锁定') ?>
+                                    · <?= $escapeHtml($probeClientIp !== '' ? $probeClientIp : '-') ?>
+                                </span>
+                                <button type="button" class="wls-secondary-button" data-wls-probe-unlock><?= __('解封本机 IP') ?></button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="wls-security-metric-grid" aria-label="<?= __('探针会话') ?>">
+                        <article>
+                            <span><?= __('Token 头') ?></span>
+                            <strong style="font-size:0.85rem;word-break:break-all;"><?= $escapeHtml($probeTokenHeader) ?></strong>
+                        </article>
+                        <article>
+                            <span><?= __('过期时间') ?></span>
+                            <strong data-wls-probe-expires-label><?= $probeExpiresAt > 0 ? $escapeHtml(date('Y-m-d H:i:s', $probeExpiresAt)) : '-' ?></strong>
+                        </article>
+                        <article>
+                            <span><?= __('用例数') ?></span>
+                            <strong><?= count($probeCases) ?></strong>
+                        </article>
+                        <article>
+                            <span><?= __('本轮结果') ?></span>
+                            <strong data-wls-probe-summary>0 / 0</strong>
+                        </article>
+                    </div>
+                    <?php if ($probeTokenValue === ''): ?>
+                        <section class="wls-inline-error" aria-label="<?= __('探针 token 警告') ?>">
+                            <?= __('未能签发探针 token，请刷新本页重试。') ?>
+                        </section>
+                    <?php endif; ?>
+                    <div class="wls-security-probe-list">
+                        <?php
+                        $probeGroups = [];
+                        foreach ($probeCases as $probeCase) {
+                            if (!is_array($probeCase)) {
+                                continue;
+                            }
+                            $caseGroup = trim((string)($probeCase['group'] ?? 'other'));
+                            if ($caseGroup === '') {
+                                $caseGroup = 'other';
+                            }
+                            if (!isset($probeGroups[$caseGroup])) {
+                                $probeGroups[$caseGroup] = [
+                                    'key' => $caseGroup,
+                                    'label' => \Weline\Server\Service\Security\SecurityProbeCatalog::groupLabel($caseGroup),
+                                    'items' => [],
+                                ];
+                            }
+                            $probeGroups[$caseGroup]['items'][] = $probeCase;
+                        }
+                        $probeGroupIndex = 0;
+                        foreach ($probeGroups as $probeGroup):
+                            $probeGroupIndex++;
+                            $groupOpen = $probeGroupIndex === 1;
+                            ?>
+                            <details class="wls-probe-acc" data-wls-probe-group="<?= $escapeHtml((string)$probeGroup['key']) ?>"<?= $groupOpen ? ' open' : '' ?>>
+                                <summary>
+                                    <span><?= $escapeHtml((string)$probeGroup['label']) ?></span>
+                                    <span class="wls-probe-acc-meta" data-wls-probe-group-meta><?= count($probeGroup['items']) ?> <?= __('条') ?></span>
+                                </summary>
+                                <div class="wls-probe-acc-body" data-wls-probe-group-body>
+                        <?php foreach ($probeGroup['items'] as $probeCase): ?>
+                            <?php
+                            $caseId = trim((string)($probeCase['id'] ?? ''));
+                            $caseGroup = trim((string)($probeCase['group'] ?? ''));
+                            $caseTitle = trim((string)($probeCase['title'] ?? $caseId));
+                            $caseDesc = trim((string)($probeCase['description'] ?? ''));
+                            $casePath = trim((string)($probeCase['path'] ?? '/'));
+                            $caseMethod = strtoupper(trim((string)($probeCase['method'] ?? 'GET')));
+                            $caseExpect = is_array($probeCase['expect_status'] ?? null) ? $probeCase['expect_status'] : [];
+                            $caseSeverity = trim((string)($probeCase['severity'] ?? 'medium'));
+                            $caseSeverityLabel = \Weline\Server\Service\Security\SecurityProbeCatalog::severityLabel($caseSeverity);
+                            $expectLabel = implode('/', array_map('strval', $caseExpect));
+                            $caseHeaders = is_array($probeCase['headers'] ?? null) ? $probeCase['headers'] : [];
+                            $caseBody = (string)($probeCase['body'] ?? '');
+                            $caseHeadersJson = json_encode($caseHeaders, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                            if (!is_string($caseHeadersJson)) {
+                                $caseHeadersJson = '{}';
+                            }
+                            ?>
+                            <article class="wls-security-probe-card"
+                                     data-probe-id="<?= $escapeHtml($caseId) ?>"
+                                     data-probe-group="<?= $escapeHtml($caseGroup) ?>"
+                                     data-probe-method="<?= $escapeHtml($caseMethod) ?>"
+                                     data-probe-path="<?= $escapeHtml($casePath) ?>"
+                                     data-probe-expect="<?= $escapeHtml($expectLabel) ?>"
+                                     data-probe-headers="<?= $escapeHtml($caseHeadersJson) ?>"
+                                     data-probe-body="<?= $escapeHtml($caseBody) ?>">
+                                <div class="wls-form-title-row">
+                                    <div>
+                                        <h4><?= $escapeHtml($caseTitle) ?></h4>
+                                        <span class="wls-help-text"><?= $escapeHtml($caseDesc) ?></span>
+                                    </div>
+                                    <div class="wls-section-actions">
+                                        <span class="wls-status-pill <?= $caseSeverity === 'critical' ? 'is-off' : ($caseSeverity === 'high' ? 'is-on' : '') ?>"><?= $escapeHtml($caseSeverityLabel) ?></span>
+                                        <button type="button" class="wls-secondary-button" data-wls-probe-run-one><?= __('运行') ?></button>
+                                    </div>
+                                </div>
+                                <code><?= $escapeHtml($caseMethod . ' ' . $casePath) ?></code>
+                                <small><?= __('期望状态码：%{1}', [$expectLabel !== '' ? $expectLabel : '-']) ?></small>
+                                <small data-wls-probe-result><?= __('尚未运行') ?></small>
+                            </article>
+                        <?php endforeach; ?>
+                                </div>
+                            </details>
+                        <?php endforeach; ?>
+                    </div>
+                </section>
+                <script>
+                (() => {
+                    const root = document.querySelector('[data-wls-security-probes]');
+                    if (!root) return;
+                    const listEl = root.querySelector('.wls-security-probe-list');
+                    const origin = (root.getAttribute('data-probe-origin') || window.location.origin || '').replace(/\/$/, '');
+                    const headerName = root.getAttribute('data-probe-header') || 'X-Weline-Security-Probe-Token';
+                    const token = root.getAttribute('data-probe-token') || '';
+                    const liveBanHeader = root.getAttribute('data-live-ban-header') || 'X-Weline-Security-Live-Ban-Test';
+                    const liveBanToken = root.getAttribute('data-live-ban-token') || '';
+                    const unlockUrl = root.getAttribute('data-probe-unlock-url') || '';
+                    let clientIp = root.getAttribute('data-probe-client-ip') || '-';
+                    let banned = root.getAttribute('data-probe-banned') === '1';
+                    let liveBanEnabled = false;
+                    const summaryEl = root.querySelector('[data-wls-probe-summary]');
+                    const banStateEl = root.querySelector('[data-wls-probe-ban-state]');
+                    let cards = Array.from(root.querySelectorAll('.wls-security-probe-card'));
+
+                    const parseExpect = (raw) => String(raw || '')
+                        .split('/')
+                        .map((v) => parseInt(v, 10))
+                        .filter((n) => Number.isFinite(n) && n > 0);
+
+                    const parseHeaders = (raw) => {
+                        try {
+                            const parsed = JSON.parse(String(raw || '{}'));
+                            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+                            const out = {};
+                            Object.keys(parsed).forEach((key) => {
+                                const name = String(key || '').trim();
+                                if (!name) return;
+                                out[name] = String(parsed[key] == null ? '' : parsed[key]);
+                            });
+                            return out;
+                        } catch (e) {
+                            return {};
+                        }
+                    };
+
+                    const setBanState = (isBanned, ip) => {
+                        banned = !!isBanned;
+                        if (ip) clientIp = String(ip);
+                        if (!banStateEl) return;
+                        banStateEl.classList.toggle('is-banned', banned);
+                        banStateEl.textContent = (banned
+                            ? <?= json_encode((string)__('本机已锁定'), JSON_UNESCAPED_UNICODE) ?>
+                            : <?= json_encode((string)__('本机未锁定'), JSON_UNESCAPED_UNICODE) ?>)
+                            + ' · ' + (clientIp || '-');
+                    };
+
+                    const sortCardsByResult = () => {
+                        if (!listEl) return;
+                        const sections = Array.from(listEl.querySelectorAll('.wls-probe-acc'));
+                        sections.forEach((section) => {
+                            const body = section.querySelector('[data-wls-probe-group-body]');
+                            if (!body) return;
+                            const sectionCards = Array.from(body.querySelectorAll('.wls-security-probe-card'));
+                            sectionCards.sort((a, b) => {
+                                const rank = (c) => c.classList.contains('is-fail') ? 0 : (c.classList.contains('is-pass') ? 2 : 1);
+                                return rank(a) - rank(b);
+                            });
+                            sectionCards.forEach((card) => body.appendChild(card));
+                            const failCount = sectionCards.filter((c) => c.classList.contains('is-fail')).length;
+                            const passCount = sectionCards.filter((c) => c.classList.contains('is-pass')).length;
+                            const meta = section.querySelector('[data-wls-probe-group-meta]');
+                            if (meta) {
+                                meta.textContent = sectionCards.length + ' <?= __('条') ?> · <?= __('通过') ?> ' + passCount + ' · <?= __('失败') ?> ' + failCount;
+                            }
+                            section.classList.toggle('is-fail', failCount > 0);
+                            if (failCount > 0) section.open = true;
+                        });
+                        sections.sort((a, b) => (a.classList.contains('is-fail') ? 0 : 1) - (b.classList.contains('is-fail') ? 0 : 1));
+                        sections.forEach((section) => listEl.appendChild(section));
+                        cards = Array.from(listEl.querySelectorAll('.wls-security-probe-card'));
+                    };
+
+                    const setResult = (card, text, ok) => {
+                        const el = card.querySelector('[data-wls-probe-result]');
+                        if (!el) return;
+                        el.textContent = text;
+                        card.classList.toggle('is-pass', ok === true);
+                        card.classList.toggle('is-fail', ok === false);
+                        if (ok === true || ok === false) sortCardsByResult();
+                    };
+
+                    const refreshSummary = () => {
+                        if (!summaryEl) return;
+                        const done = cards.filter((c) => c.classList.contains('is-pass') || c.classList.contains('is-fail')).length;
+                        const passed = cards.filter((c) => c.classList.contains('is-pass')).length;
+                        summaryEl.textContent = passed + ' / ' + done;
+                    };
+
+                    const runCard = async (card) => {
+                        const method = (card.getAttribute('data-probe-method') || 'GET').toUpperCase();
+                        const path = card.getAttribute('data-probe-path') || '/';
+                        const expect = parseExpect(card.getAttribute('data-probe-expect'));
+                        const extraHeaders = parseHeaders(card.getAttribute('data-probe-headers') || '{}');
+                        const body = card.getAttribute('data-probe-body') || '';
+                        const url = origin + path;
+                        setResult(card, <?= json_encode((string)__('运行中…'), JSON_UNESCAPED_UNICODE) ?>, null);
+                        try {
+                            const headers = {};
+                            if (liveBanEnabled) {
+                                if (liveBanToken) headers[liveBanHeader] = liveBanToken;
+                            } else if (token) {
+                                headers[headerName] = token;
+                            }
+                            Object.keys(extraHeaders).forEach((key) => {
+                                if (String(key).toLowerCase() === 'user-agent') {
+                                    headers['X-Weline-Security-Probe-UA'] = extraHeaders[key];
+                                }
+                                headers[key] = extraHeaders[key];
+                            });
+                            const fetchOpts = {
+                                method,
+                                headers,
+                                credentials: 'omit',
+                                cache: 'no-store',
+                                redirect: 'manual',
+                                signal: (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function')
+                                    ? AbortSignal.timeout(8000)
+                                    : undefined,
+                            };
+                            if (body !== '' && method !== 'GET' && method !== 'HEAD') {
+                                fetchOpts.body = body;
+                            }
+                            const resp = await fetch(url, fetchOpts);
+                            const status = resp.status;
+                            const ok = expect.length === 0 ? status >= 400 : expect.includes(status);
+                            const passLabel = <?= json_encode((string)__('通过'), JSON_UNESCAPED_UNICODE) ?>;
+                            const failLabel = <?= json_encode((string)__('未通过'), JSON_UNESCAPED_UNICODE) ?>;
+                            setResult(
+                                card,
+                                <?= json_encode((string)__('状态'), JSON_UNESCAPED_UNICODE) ?>
+                                    + ' ' + String(status) + ' · ' + (ok ? passLabel : failLabel),
+                                ok
+                            );
+                            if (liveBanEnabled && status === 403) setBanState(true, clientIp);
+                        } catch (err) {
+                            setResult(
+                                card,
+                                <?= json_encode((string)__('请求失败'), JSON_UNESCAPED_UNICODE) ?>
+                                    + '：' + ((err && err.message) ? err.message : String(err)),
+                                false
+                            );
+                        }
+                        refreshSummary();
+                    };
+
+                    const runAll = async (onlyFailed) => {
+                        for (const card of cards) {
+                            if (onlyFailed && !card.classList.contains('is-fail')) continue;
+                            await runCard(card);
+                        }
+                    };
+
+                    root.querySelector('[data-wls-probe-live-ban]')?.addEventListener('change', (ev) => {
+                        liveBanEnabled = !!ev.target.checked;
+                        if (liveBanEnabled && !liveBanToken) {
+                            alert(<?= json_encode((string)__('缺少实战封禁凭证，请刷新本页。'), JSON_UNESCAPED_UNICODE) ?>);
+                            ev.target.checked = false;
+                            liveBanEnabled = false;
+                        }
+                    });
+                    root.querySelector('[data-wls-probe-unlock]')?.addEventListener('click', async () => {
+                        if (!unlockUrl) {
+                            alert(<?= json_encode((string)__('解封地址不可用。'), JSON_UNESCAPED_UNICODE) ?>);
+                            return;
+                        }
+                        try {
+                            const resp = await fetch(unlockUrl, {
+                                method: 'POST',
+                                credentials: 'same-origin',
+                                cache: 'no-store',
+                                headers: (() => {
+                                    const h = { 'Accept': 'application/json' };
+                                    if (token) h[headerName] = token;
+                                    else if (liveBanToken) h[liveBanHeader] = liveBanToken;
+                                    return h;
+                                })(),
+                            });
+                            const payload = await resp.json().catch(() => ({}));
+                            setBanState(!!payload.banned, payload.client_ip || clientIp);
+                            alert(payload.message || (resp.ok
+                                ? <?= json_encode((string)__('已解封本机 IP。'), JSON_UNESCAPED_UNICODE) ?>
+                                : <?= json_encode((string)__('解封失败。'), JSON_UNESCAPED_UNICODE) ?>));
+                        } catch (err) {
+                            alert((err && err.message) ? err.message : String(err));
+                        }
+                    });
+                    root.querySelector('[data-wls-probe-run-all]')?.addEventListener('click', () => runAll(false));
+                    root.querySelector('[data-wls-probe-run-failed]')?.addEventListener('click', () => runAll(true));
+                    cards.forEach((card) => {
+                        card.querySelector('[data-wls-probe-run-one]')?.addEventListener('click', () => runCard(card));
+                    });
+                })();
+                </script>
+                <style>
+                    .wls-security-probe-list { display: flex; flex-direction: column; gap: 14px; margin-top: 16px; }
+                    .wls-probe-acc {
+                        border: 1px solid var(--wls-border);
+                        border-radius: 10px;
+                        background: color-mix(in srgb, var(--wls-surface) 92%, var(--wls-border));
+                        overflow: hidden;
+                    }
+                    .wls-probe-acc.is-fail {
+                        border-color: color-mix(in srgb, var(--wls-danger) 55%, transparent);
+                    }
+                    .wls-probe-acc > summary {
+                        list-style: none;
+                        cursor: pointer;
+                        display: flex;
+                        flex-wrap: wrap;
+                        gap: 8px;
+                        align-items: center;
+                        justify-content: space-between;
+                        padding: 12px 14px;
+                        font-weight: 600;
+                        color: var(--wls-text);
+                        user-select: none;
+                    }
+                    .wls-probe-acc > summary::-webkit-details-marker { display: none; }
+                    .wls-probe-acc > summary::before { content: '▸'; opacity: .7; margin-right: 4px; }
+                    .wls-probe-acc[open] > summary::before { content: '▾'; }
+                    .wls-probe-acc-meta { font-size: 12px; font-weight: 500; color: var(--wls-muted); }
+                    .wls-probe-acc-body { display: flex; flex-direction: column; gap: 12px; padding: 0 14px 14px; }
+                    .wls-security-probe-card {
+                        border: 1px solid var(--wls-border);
+                        border-radius: 8px;
+                        padding: 14px 16px;
+                        background: var(--wls-surface);
+                        color: var(--wls-text);
+                    }
+                    .wls-security-probe-card.is-pass {
+                        border-color: color-mix(in srgb, var(--wls-success) 55%, transparent);
+                    }
+                    .wls-security-probe-card.is-fail {
+                        border-color: color-mix(in srgb, var(--wls-danger) 55%, transparent);
+                    }
+                    .wls-security-probe-card code {
+                        display: block;
+                        margin: 8px 0 4px;
+                        word-break: break-all;
+                        color: var(--wls-muted);
+                    }
+                    .wls-security-probe-card small {
+                        display: block;
+                        color: var(--wls-muted);
+                    }
+                    .wls-security-probe-card .wls-help-text {
+                        color: var(--wls-muted);
+                    }
+                    .wls-probe-live-zone {
+                        margin: 14px 0;
+                        padding: 12px 14px;
+                        border: 1px solid color-mix(in srgb, var(--wls-danger) 40%, var(--wls-border));
+                        border-radius: 10px;
+                        background: color-mix(in srgb, var(--wls-danger) 8%, var(--wls-surface));
+                        display: grid;
+                        gap: 8px;
+                    }
+                    .wls-probe-live-zone .wls-help-text { color: var(--wls-muted); }
+                    .wls-probe-live-row {
+                        display: flex;
+                        flex-wrap: wrap;
+                        gap: 10px;
+                        align-items: center;
+                        justify-content: space-between;
+                    }
+                    .wls-probe-live-switch {
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 8px;
+                        font-size: 13px;
+                        cursor: pointer;
+                    }
+                    .wls-probe-live-actions {
+                        display: flex;
+                        flex-wrap: wrap;
+                        gap: 8px;
+                        align-items: center;
+                    }
+                    .wls-probe-ban-state.is-banned {
+                        color: var(--wls-danger);
+                        font-weight: 600;
+                    }
+                </style>
                 <?php endif; ?>
             </section>
         <?php elseif ($activePage === 'dashboard'): ?>
@@ -4388,6 +5120,104 @@ body:has(.wls-standalone-shell[data-wls-theme="dark"]) {
 .wls-path-rate-panel {
     grid-column: 1 / -1;
 }
+.wls-crawler-block-panel {
+    grid-column: 1 / -1;
+}
+.wls-security-rules-table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--wls-border);
+    border-radius: 8px;
+}
+.wls-security-rules-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+.wls-security-rules-table th,
+.wls-security-rules-table td {
+    border-bottom: 1px solid var(--wls-border);
+    padding: 8px 10px;
+    font-size: 12px;
+    vertical-align: top;
+    text-align: left;
+}
+.wls-security-rules-table code {
+    word-break: break-all;
+}
+.wls-crawler-chip-board {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.wls-crawler-chip {
+    align-items: center;
+    border: 1px solid var(--wls-border);
+    border-radius: 999px;
+    display: inline-flex;
+    gap: 8px;
+    padding: 6px 12px;
+    background: var(--wls-surface);
+}
+.wls-crawler-chip small {
+    color: var(--wls-muted);
+    display: block;
+}
+.wls-crawler-split {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: 160px minmax(0, 1fr);
+}
+.wls-crawler-cat-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 6px;
+}
+.wls-crawler-split-main {
+    display: grid;
+    gap: 10px;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+.wls-crawler-card {
+    border: 1px solid var(--wls-border);
+    border-radius: 8px;
+    padding: 10px;
+    background: var(--wls-surface);
+    display: grid;
+    gap: 6px;
+}
+.wls-crawler-card header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+}
+.wls-crawler-prototype-bar {
+    position: fixed;
+    left: 50%;
+    bottom: 18px;
+    transform: translateX(-50%);
+    z-index: 80;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--wls-border);
+    background: var(--wls-surface);
+    box-shadow: 0 8px 24px color-mix(in srgb, var(--wls-text) 18%, transparent);
+    font-size: 13px;
+    font-weight: 700;
+}
+.wls-crawler-prototype-bar button {
+    border: 0;
+    background: var(--wls-accent);
+    color: #fff;
+    border-radius: 999px;
+    width: 28px;
+    height: 28px;
+    cursor: pointer;
+}
 .wls-path-rate-table {
     display: grid;
     gap: 8px;
@@ -6182,6 +7012,66 @@ a.wls-meta-value:hover {
             enabled: checkboxValue('visual_rules[protected_paths][enabled]'),
             paths: listValue('visual_rules[protected_paths][paths]'),
             block_duration: numberValue('visual_rules[protected_paths][block_duration]', 0, 86400, 1800),
+        });
+        const crawlerEnabled = checkboxValue('visual_rules[crawler_block][enabled]');
+        const builtinEnabled = {};
+        form.querySelectorAll('input[name^="visual_rules[crawler_block][builtin_enabled]["]').forEach(function (input) {
+            const match = input.name.match(/^visual_rules\[crawler_block\]\[builtin_enabled\]\[([^\]]+)\]$/);
+            if (!match) {
+                return;
+            }
+            if (input.type === 'hidden') {
+                if (builtinEnabled[match[1]] === undefined) {
+                    builtinEnabled[match[1]] = false;
+                }
+                return;
+            }
+            if (input.type === 'checkbox') {
+                builtinEnabled[match[1]] = !!input.checked;
+            }
+        });
+        const disabledBuiltinIds = Object.keys(builtinEnabled).filter(function (id) {
+            return !builtinEnabled[id];
+        }).sort();
+        const customEntries = [];
+        form.querySelectorAll('input[name^="visual_rules[crawler_block][custom_entries]["]').forEach(function () {});
+        const customBuckets = {};
+        form.querySelectorAll('[name^="visual_rules[crawler_block][custom_entries]["]').forEach(function (input) {
+            const match = input.name.match(/^visual_rules\[crawler_block\]\[custom_entries\]\[(\d+)\]\[(id|name|pattern|reason|enabled)\]$/);
+            if (!match) {
+                return;
+            }
+            const idx = match[1];
+            if (!customBuckets[idx]) {
+                customBuckets[idx] = {enabled: false, id: '', name: '', pattern: '', reason: ''};
+            }
+            if (match[2] === 'enabled') {
+                if (input.type === 'checkbox') {
+                    customBuckets[idx].enabled = !!input.checked;
+                }
+                return;
+            }
+            customBuckets[idx][match[2]] = String(input.value || '');
+        });
+        Object.keys(customBuckets).sort(function (a, b) { return Number(a) - Number(b); }).forEach(function (idx) {
+            const row = customBuckets[idx];
+            if (!String(row.pattern || '').trim()) {
+                return;
+            }
+            customEntries.push({
+                id: row.id || '',
+                name: row.name || '',
+                pattern: row.pattern,
+                reason: row.reason || '',
+                category: 'custom',
+                enabled: !!row.enabled,
+            });
+        });
+        merged.crawler_block = Object.assign(cloneObject(merged.crawler_block || {}), {
+            enabled: crawlerEnabled,
+            block_duration: numberValue('visual_rules[crawler_block][block_duration]', 0, 2592000, 86400),
+            disabled_builtin_ids: disabledBuiltinIds,
+            custom_entries: customEntries,
         });
         return merged;
     };

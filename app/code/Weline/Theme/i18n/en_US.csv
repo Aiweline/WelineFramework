@@ -90,6 +90,7 @@
 按分类查看博客文章,"Browse articles by category"
 博客文章详情页,"Blog article detail page"
 自定义单页面内容,"Custom single page content"
+"主题店面静态页（about/products 等）","主题店面静态页（about/products 等）"
 任务进度,"Task progress"
 等待中,Waiting
 执行中,Executing
@@ -259,6 +260,8 @@
 "在渲染基础布局的 <body> 标签开始处触发，允许其他模块在 body 开始处注入内容。此 hook 适用于所有使用基础布局的页面。","Triggered at the start of the <body> tag when rendering the base layout, allowing other modules to inject content at the beginning of the body. This hook applies to all pages using the base layout."
 "基础布局 Body 结束","Base Layout Body End"
 "在渲染基础布局的 <body> 标签结束处触发，允许其他模块在 body 结束处注入内容。此 hook 适用于所有使用基础布局的页面。","Triggered at the end of the <body> tag when rendering the base layout, allowing other modules to inject content at the end of the body. This hook applies to all pages using the base layout."
+"后台基础布局 Body 结束","后台基础布局 Body 结束"
+"在后台通用壳布局 </body> 前触发，允许其他模块注入全局悬浮层或脚本。适用于 default / dashboard / fullscreen 等引用该 hook 的后台布局。","在后台通用壳布局 </body> 前触发，允许其他模块注入全局悬浮层或脚本。适用于 default / dashboard / fullscreen 等引用该 hook 的后台布局。"
 基础布局页头之前,"Before Base Layout Page Header"
 "在渲染基础布局的页头之前触发，允许其他模块在页头开始处注入内容。此 hook 适用于所有使用基础布局的页面。","Triggered before the header of the base layout, allowing other modules to inject content at the beginning of the header. This hook applies to all pages using the base layout."
 基础布局页头之后,"After Base Layout Page Header"
@@ -621,6 +624,18 @@
 确认发布,"Confirm release"
 取消,Cancel
 发布预览,"Release Preview"
+页面,页面
+了解云裳汉服品牌故事、匠心工艺与传统服饰选购理念。,了解云裳汉服品牌故事、匠心工艺与传统服饰选购理念。
+联系云裳汉服客服，咨询订单、定制与批发合作。,联系云裳汉服客服，咨询订单、定制与批发合作。
+阅读本站隐私、Cookie、退款与相关法律政策说明。,阅读本站隐私、Cookie、退款与相关法律政策说明。
+了解我们如何收集、使用与保护您的个人信息。,了解我们如何收集、使用与保护您的个人信息。
+阅读使用本站服务前需要了解的条款与条件。,阅读使用本站服务前需要了解的条款与条件。
+查看配送、退换与购物相关说明，帮助顺利完成汉服选购。,查看配送、退换与购物相关说明，帮助顺利完成汉服选购。
+了解可用支付方式、账单与安全保障说明。,了解可用支付方式、账单与安全保障说明。
+查找订单、物流、退换与账户相关自助帮助。,查找订单、物流、退换与账户相关自助帮助。
+查看已选汉服商品、调整数量并进入结算。,查看已选汉服商品、调整数量并进入结算。
+登录或注册账户，管理订单与收藏。,登录或注册账户，管理订单与收藏。
+浏览%{1}相关信息，了解汉服选购与服务说明。,浏览%{1}相关信息，了解汉服选购与服务说明。
 "Theme 预览需要有效 Token 或后台登录状态。","Theme preview requires a valid token or an authenticated backend session."
 "Theme 预览缺少冻结的 ScopeIdentity。","Theme preview requires a frozen ScopeIdentity."
 "缺少预览 Token","Missing Preview Token"
@@ -986,6 +1001,61 @@ Dashboard,Dashboard
 参数配置,"Parameter configuration"
 参数保存成功,"Parameters saved successfully"
 参数保存失败,"Failed to save parameters"
+面包屑,"bread crumbs"
+搜索汉服、形制与配饰...,"Search Hanfu, garment forms, and accessories..."
+分类,Classification
+查看全部,"View all"
+汉服分类展示图,"Hanfu category showcase image"
+"浏览 %{1} 相关商品与配件","Browse %{1} products and accessories"
+回到顶部,"Back to top"
+站点偏好,"Site preferences"
+法律与政策,"Law and Policy"
+商品,Products
+减少数量,"Decrease quantity"
+数量,Quantity
+增加数量,"Increase quantity"
+购物车是空的,"Shopping cart is empty"
+继续购物,"Continue shopping"
+小计,Subtotal
+去结算,"Proceed to Checkout"
+正在前往结算...,"Proceeding to checkout..."
+查看购物车,"View cart"
+税费与运费将在结算时计算,"Taxes and shipping calculated at checkout"
+正在加载购物车...,"Loading cart..."
+正在更新购物车...,"Updating cart..."
+商品小计,"Goods subtotal"
+优惠券,Coupon
+叠加优惠,"Stacked discount"
+自动优惠,"Automatic discount"
+关闭通知,"Close notification"
+SALE,SALE
+DEMO,DEMO
+NEW,NEW
+加入收藏,"Add to Favorites"
+加入对比,"Add to Compare"
+快速查看,"Quick View"
+件商品,"items of goods"
+安全支付,"Secure payment"
+SSL加密保护,"SSL encryption protection"
+无忧退款,"Worry-Free Refund"
+30天无理由退货,"30 days no reason to return"
+免费配送,"Free Shipping"
+满额包邮,"Free shipping for orders over the threshold"
+全天候客服,"24/7 Customer Support"
+7×24小时在线,"7×24 hours online"
+SSL安全,"SSL security"
+数据加密传输,"Encrypted Data Transmission"
+认证商家,"Certified Merchant"
+正品保证,"Genuine product guarantee"
+查看全部新品,"View all new products"
+上一张,"Previous picture"
+下一张,Next
+第%d张,"Slide %d"
+剩余,Remaining
+天,Day(s)
+时,Hour
+分,Minute
+秒,Second
 "近 7 日访问量 +18%","Number of visits in the past 7 days +18%"
 卡片内容,"Card content"
 拖入表单、表格、文本或按钮,"Drag in a form, table, text or button"
@@ -1002,9 +1072,6 @@ Dashboard,Dashboard
 拖入弹窗内容,"Drag into the pop-up window content"
 弹窗底部,"Bottom of pop-up window"
 拖入按钮,"drag button"
-SALE,SALE
-DEMO,DEMO
-NEW,NEW
 "您的订单已支付成功，预计 2 个工作日内发货。","Your order has been paid successfully and is expected to be shipped within 2 business days."
 订单已确认,"Order Confirmed"
 清晰表达你的页面主张,"Clearly express what your page stands for"
@@ -1058,7 +1125,6 @@ NEW,NEW
 订单提交成功！,"Order submitted successfully!"
 订单号：,"Order number:"
 查看订单,"View Orders"
-继续购物,"Continue shopping"
 拖拽部件或容器到此处,"Drag a component or container here"
 "空白布局不会渲染 header、footer 或面包屑","Empty layout will not render header, footer or breadcrumbs"
 "Weline 首页","Weline Home Page"
@@ -1085,7 +1151,6 @@ Category,Category
 "分类产品区域 - 展示该分类下的产品","Category Product Area - Display products under this category"
 筛选条件,"Screening criteria"
 关闭筛选,"Close filter"
-分类,Classification
 Pagination,Pagination
 Previous,Previous
 "Page %{1} of %{2}","Page %{1} of %{2}"
@@ -1224,7 +1289,6 @@ Product,Product
 支付与订单确认,"Payment and order confirmation"
 订单摘要,"Order summary"
 "摘要 slot，可由结账模块写入真实商品行与金额。","Summary slot, the real product line and amount can be written by the checkout module."
-商品,Products
 配送,Delivery
 合计,total
 您已退出登录,"You are logged out"
@@ -1249,7 +1313,6 @@ Product,Product
 "工具栏区域 - 拖拽排序/视图部件到此处","Toolbar area - Drag and drop/view widgets here"
 "产品网格区域 - 控制器渲染产品列表","Product Grid Area - Controller Renders Product List"
 "分页区域 - 控制器渲染分页组件","Pagination area - Controller renders pagination component"
-购物车是空的,"Shopping cart is empty"
 您的购物车是空的,"Your shopping cart is empty"
 个人中心,"Personal center"
 登录页工具,"Login page tools"
@@ -1494,33 +1557,6 @@ Product,Product
 搜索,search
 热门帮助主题,"Popular help topics"
 查找订单、配送、退换、支付与账户问题的自助指南。也可搜索关键词，或从下方主题快速进入。,查找订单、配送、退换、支付与账户问题的自助指南。也可搜索关键词，或从下方主题快速进入。
-物流配送,"Logistics delivery"
-发货时效、运费与配送范围,"Shipping time, shipping costs, and delivery range"
-退货条件、流程与退款进度,"Return conditions, process, and refund progress"
-支付与发票,"Payment and invoice"
-支付方式、账单与发票开具,"Payment methods, billing, and invoice issuance"
-下单、改单、取消与订单状态,"Order placement, modification, cancellation, and order status"
-账户与安全,"Account and security"
-登录、密码与个人信息,"Login, password, and personal information"
-电话、邮箱与在线支持通道,"Phone, email, and online support channels"
-下单后多久发货？,"How long does it take to ship after placing an order?"
-"现货订单通常在付款成功后 1–3 个工作日内发出（节假日顺延）；预售、定制或以商品页标注时效为准。详见「配送说明」。","现货订单通常在付款成功后 1–3 个工作日内发出（节假日顺延）；预售、定制或以商品页标注时效为准。详见「配送说明」。"
-如何查询物流？,"How do I check the logistics?"
-登录后打开「我的订单」可查看承运商与运单节点。长时间无更新时，可先排除节假日，再通过「联系客服」并提供订单号协助查询。,登录后打开「我的订单」可查看承运商与运单节点。长时间无更新时，可先排除节假日，再通过「联系客服」并提供订单号协助查询。
-运费如何计算？是否包邮？,运费如何计算？是否包邮？
-运费按收货地区、重量/体积与配送服务在结账页实时计算。满足满额包邮或活动门槛时会自动减免，以结算页显示为准。,运费按收货地区、重量/体积与配送服务在结账页实时计算。满足满额包邮或活动门槛时会自动减免，以结算页显示为准。
-支持哪些支付方式？,"Which payment methods are supported?"
-"支持站点已开通的在线支付渠道（如 PayPal 等）。具体可用方式以结算页与「支付方式」指南为准，并可查阅各支付商的用户协议。","支持站点已开通的在线支付渠道（如 PayPal 等）。具体可用方式以结算页与「支付方式」指南为准，并可查阅各支付商的用户协议。"
-如何申请退换货？,"How do I request a return or exchange?"
-请先阅读「退换政策」确认期限与品类要求，再在「我的订单」提交售后并上传凭证。质量问题与个人原因的运费承担规则不同，详见政策页。,请先阅读「退换政策」确认期限与品类要求，再在「我的订单」提交售后并上传凭证。质量问题与个人原因的运费承担规则不同，详见政策页。
-退款多久到账？,退款多久到账？
-"退回商品质检通过后，退款一般在 3–15 个工作日内原路退回，具体到账时间以支付渠道为准。完整规则见「退款政策」。","退回商品质检通过后，退款一般在 3–15 个工作日内原路退回，具体到账时间以支付渠道为准。完整规则见「退款政策」。"
-可以修改或取消订单吗？,可以修改或取消订单吗？
-未发货订单可在「我的订单」尝试取消或联系客服协助修改地址/备注。已发货订单无法直接取消，可按签收后的退换政策办理。,未发货订单可在「我的订单」尝试取消或联系客服协助修改地址/备注。已发货订单无法直接取消，可按签收后的退换政策办理。
-个人信息如何保护？,个人信息如何保护？
-"我们仅在提供交易与服务所必需的范围内处理个人信息，详见「隐私政策」与「Cookie 政策」。您可在账户设置中管理部分偏好。","我们仅在提供交易与服务所必需的范围内处理个人信息，详见「隐私政策」与「Cookie 政策」。您可在账户设置中管理部分偏好。"
-我的账户,"My Account"
-支付方式,"Payment Methods"
 帮助支持,帮助支持
 搜索帮助,"Search for help"
 搜索帮助主题，例如：退货、运费、发票,"Search for help topics, such as: returns, shipping costs, invoices"
@@ -1534,10 +1570,6 @@ Product,Product
 无法连接到服务器，请检查网络连接。,"Unable to connect to the server, please check your network connection."
 分页导航,"Pagination navigation"
 缺货,"Out of Stock"
-加入收藏,"Add to Favorites"
-加入对比,"Add to Compare"
-快速查看,"Quick View"
-面包屑,"bread crumbs"
 跳转到主要内容,"Skip to main content"
 展开搜索,"Expand search"
 我的,mine
@@ -1551,15 +1583,13 @@ Product,Product
 退货,"Return the goods"
 与我的订单,"With my order"
 关闭菜单,"Close menu"
-搜索汉服、形制与配饰...,"Search Hanfu, garment forms, and accessories..."
 Weline,Weline
 网站Logo,"Site Logo"
 搜索商品...,"Search products..."
 切换语言,"Switch Language"
 切换货币,"Switch Currency"
-"浏览 %{1} 相关商品与配件","Browse %{1} products and accessories"
-查看全部,"View all"
 导航菜单,"Navigation menu"
+我的账户,"My Account"
 我的收藏,"My Favorites"
 浏览历史,"Browsing History"
 地址管理,"Address Management"
@@ -1569,9 +1599,6 @@ Weline,Weline
 "示例商品 3","Example Item 3"
 去购物,"Go Shopping"
 删除,delete
-小计,Subtotal
-查看购物车,"View cart"
-去结算,"Proceed to Checkout"
 关注我们,"Follow Us"
 微信扫码关注,"Scan WeChat to follow"
 微信二维码,"WeChat QR code"
@@ -1601,6 +1628,7 @@ Weline,Weline
 我们不会分享您的邮箱地址,"We will not share your email address"
 第一页,"First Page"
 最后一页,"Last page"
+支付方式,"Payment Methods"
 您的浏览器不支持视频标签。,"Your browser does not support the video tag."
 视频加载中...,"Video loading..."
 欢迎回来,"Welcome back"
@@ -1636,7 +1664,6 @@ Weline,Weline
 婚礼与礼服,"Wedding & Ceremonial"
 节庆与雅集,"Festivals & Gatherings"
 日常通勤,"Everyday & Work"
-件商品,"items of goods"
 暂无匹配的问题,"No matching questions"
 搜索问题,"Search questions"
 今日特价,"Today's Deals"
@@ -1646,24 +1673,8 @@ Weline,Weline
 请在部件配置中添加真实内容,"Add your verified content in the block settings"
 限时活动,"Limited-Time Event"
 活动已结束,"Event Ended"
-天,Day(s)
-时,Hour
-分,Minute
-秒,Second
 内容标题,"Section title"
 请选择真实图片,"Choose an authentic image"
-安全支付,"Secure payment"
-SSL加密保护,"SSL encryption protection"
-无忧退款,"Worry-Free Refund"
-30天无理由退货,"30 days no reason to return"
-免费配送,"Free Shipping"
-满额包邮,"Free shipping for orders over the threshold"
-全天候客服,"24/7 Customer Support"
-7×24小时在线,"7×24 hours online"
-SSL安全,"SSL security"
-数据加密传输,"Encrypted Data Transmission"
-认证商家,"Certified Merchant"
-正品保证,"Genuine product guarantee"
 图文标题,"Image and text"
 在这里介绍内容、服务或品牌故事。,"Introduce your content, services or brand story here."
 查看地图,"View map"
@@ -1680,13 +1691,9 @@ SSL安全,"SSL security"
 全部加入购物车,"Add All to Cart"
 请至少选择一个商品,"Please select at least one product"
 已添加,Added
-查看全部新品,"View all new products"
 限时抢购，错过不再,"Flash Sale, Don't Miss Out"
 距离结束,"Ends in"
 精选轮播,"Featured Carousel"
-回到顶部,"Back to top"
-站点偏好,"Site preferences"
-法律与政策,"Law and Policy"
 "Hero 轮播区域","Hero Carousel Area"
 拖放轮播图或促销横幅到此处,"Drag and drop carousel or promotion banner here"
 推荐区域,"Recommended Area"
@@ -1710,20 +1717,6 @@ Logo,Logo
 面包屑导航,Breadcrumbs
 请输入您的邮箱,"Enter your email"
 我们不会向您发送垃圾邮件,"We will not send you spam"
-零售,零售
-减少数量,"Decrease quantity"
-数量,Quantity
-增加数量,"Increase quantity"
-正在前往结算...,"Proceeding to checkout..."
-税费与运费将在结算时计算,"Taxes and shipping calculated at checkout"
-正在加载购物车...,"Loading cart..."
-正在更新购物车...,"Updating cart..."
-商品小计,"Goods subtotal"
-优惠券,Coupon
-叠加优惠,"Stacked discount"
-自动优惠,"Automatic discount"
-批发,批发
-关闭通知,"Close notification"
 东方衣冠，全球配送,"Traditional elegance, delivered worldwide"
 收藏,Favorite
 热门形制,"Popular Hanfu Styles"
@@ -1734,10 +1727,6 @@ Logo,Logo
 新品,"New Product"
 暂停轮播,"Pause slideshow"
 播放轮播,"Play slideshow"
-上一张,"Previous picture"
-下一张,Next
-第%d张,"Slide %d"
-剩余,Remaining
 打印,Print
 仪表盘部件区域,"Dashboard widget area"
 指标区,"indicator area"
@@ -2267,6 +2256,8 @@ AI目录加载失败,"AI directory loading failed"
 激活失败：%{1},"Activation failed: %{1}"
 "Theme Scope 无法解析为 ScopeIdentity。","Theme scope cannot be resolved to a ScopeIdentity."
 "Theme Store Mode 无效：%{1}","Invalid Theme Store Mode: %{1}"
+"部件渲染失败: %{1} - %{2}","部件渲染失败: %{1} - %{2}"
+异常：你指定的模板文件所在的模块不存在！模块：%{1}，所使用的模板：%{2},异常：你指定的模板文件所在的模块不存在！模块：%{1}，所使用的模板：%{2}
 "类型化布局值解析缺少冻结的 locale_code。","Typed layout value resolution requires a frozen locale_code."
 "类型化布局值解析缺少冻结的 ScopeIdentity。","Typed layout value resolution requires a frozen ScopeIdentity."
 "Theme 布局渲染缺少冻结的 ScopeIdentity。","Theme layout rendering requires a frozen ScopeIdentity."
@@ -2801,6 +2792,36 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 静态文件：weline.modules.js编译文件！,"Static Files: weline.modules.js compiled file!"
 "编译 Weline UI 2.0 静态资源包！","Compile Weline UI 2.0 static resource package!"
 编译主题资源（less、weline.modules.js等）,"Compile Theme Resources (less, weline.modules.js, etc.)"
+选择作用范围,"Select scope."
+搜索作用范围,"Search scope."
+未找到匹配作用范围,"No matching scope found."
+零售,零售
+批发,批发
+物流配送,"Logistics delivery"
+发货时效、运费与配送范围,"Shipping time, shipping costs, and delivery range"
+退货条件、流程与退款进度,"Return conditions, process, and refund progress"
+支付与发票,"Payment and invoice"
+支付方式、账单与发票开具,"Payment methods, billing, and invoice issuance"
+下单、改单、取消与订单状态,"Order placement, modification, cancellation, and order status"
+账户与安全,"Account and security"
+登录、密码与个人信息,"Login, password, and personal information"
+电话、邮箱与在线支持通道,"Phone, email, and online support channels"
+下单后多久发货？,"How long does it take to ship after placing an order?"
+"现货订单通常在付款成功后 1–3 个工作日内发出（节假日顺延）；预售、定制或以商品页标注时效为准。详见「配送说明」。","现货订单通常在付款成功后 1–3 个工作日内发出（节假日顺延）；预售、定制或以商品页标注时效为准。详见「配送说明」。"
+如何查询物流？,"How do I check the logistics?"
+登录后打开「我的订单」可查看承运商与运单节点。长时间无更新时，可先排除节假日，再通过「联系客服」并提供订单号协助查询。,登录后打开「我的订单」可查看承运商与运单节点。长时间无更新时，可先排除节假日，再通过「联系客服」并提供订单号协助查询。
+运费如何计算？是否包邮？,运费如何计算？是否包邮？
+运费按收货地区、重量/体积与配送服务在结账页实时计算。满足满额包邮或活动门槛时会自动减免，以结算页显示为准。,运费按收货地区、重量/体积与配送服务在结账页实时计算。满足满额包邮或活动门槛时会自动减免，以结算页显示为准。
+支持哪些支付方式？,"Which payment methods are supported?"
+"支持站点已开通的在线支付渠道（如 PayPal 等）。具体可用方式以结算页与「支付方式」指南为准，并可查阅各支付商的用户协议。","支持站点已开通的在线支付渠道（如 PayPal 等）。具体可用方式以结算页与「支付方式」指南为准，并可查阅各支付商的用户协议。"
+如何申请退换货？,"How do I request a return or exchange?"
+请先阅读「退换政策」确认期限与品类要求，再在「我的订单」提交售后并上传凭证。质量问题与个人原因的运费承担规则不同，详见政策页。,请先阅读「退换政策」确认期限与品类要求，再在「我的订单」提交售后并上传凭证。质量问题与个人原因的运费承担规则不同，详见政策页。
+退款多久到账？,退款多久到账？
+"退回商品质检通过后，退款一般在 3–15 个工作日内原路退回，具体到账时间以支付渠道为准。完整规则见「退款政策」。","退回商品质检通过后，退款一般在 3–15 个工作日内原路退回，具体到账时间以支付渠道为准。完整规则见「退款政策」。"
+可以修改或取消订单吗？,可以修改或取消订单吗？
+未发货订单可在「我的订单」尝试取消或联系客服协助修改地址/备注。已发货订单无法直接取消，可按签收后的退换政策办理。,未发货订单可在「我的订单」尝试取消或联系客服协助修改地址/备注。已发货订单无法直接取消，可按签收后的退换政策办理。
+个人信息如何保护？,个人信息如何保护？
+"我们仅在提供交易与服务所必需的范围内处理个人信息，详见「隐私政策」与「Cookie 政策」。您可在账户设置中管理部分偏好。","我们仅在提供交易与服务所必需的范围内处理个人信息，详见「隐私政策」与「Cookie 政策」。您可在账户设置中管理部分偏好。"
 广告偏好,"Advertising Preferences"
 本页面向您说明我们如何基于兴趣偏好展示广告或推荐内容，以及您可用于管理这些偏好的选择。,"This page explains how we may show ads or recommendations based on interest preferences, and the choices available to manage them."
 "兴趣广告有助于展示更相关内容，您仍可随时通过浏览器、系统或账户入口管理偏好。完整个人信息处理见隐私政策与 Cookie 政策。","兴趣广告有助于展示更相关内容，您仍可随时通过浏览器、系统或账户入口管理偏好。完整个人信息处理见隐私政策与 Cookie 政策。"
@@ -2866,9 +2887,6 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 支付方式指南布局,"Payment Guide Page"
 新品上架,"New Arrivals"
 发现最新商品,"Discover our latest arrivals"
-选择作用范围,"Select scope."
-搜索作用范围,"Search scope."
-未找到匹配作用范围,"No matching scope found."
 品牌故事,"Our Story"
 我们专注提供高品质日常好物，从选材到交付都经过严格质检。,"We focus on providing high-quality everyday essentials, with strict quality control from material selection to delivery."
 "默认内容可直接预览排版效果，接入 CMS 后可替换为正式文案。","The default content can be previewed directly to see the layout effect; after connecting to the CMS, it can be replaced with official content."
@@ -3756,3 +3774,4 @@ Chiffon,Chiffon
 "手写模板重复放置时填写不同标识；可视化编辑器自动使用实例 ID","Use a unique key for each hand-written placement; the visual editor uses the instance ID automatically"
 左栏,"Left column"
 右栏,"Right column"
+"欢迎光临 · 精选好物上新","Welcome · Selected new arrivals"

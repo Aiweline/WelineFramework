@@ -107,4 +107,24 @@ $requiredOk = in_array('submit_task_plan', $required, true)
 fwrite($requiredOk ? STDOUT : STDERR, sprintf("[%s] required tools include plan gate pair\n", $requiredOk ? 'PASS' : 'FAIL'));
 $failed = $failed || !$requiredOk;
 
+$singleRegistration = ['name' => 'weline-project-intelligence', 'version' => '0.13.0'];
+$codexRefreshChecks = [
+    'matching Codex plugin generation does not refresh' => !function_exists('welineGuidanceCodexPluginNeedsRefresh')
+        ? false
+        : !welineGuidanceCodexPluginNeedsRefresh($singleRegistration, 'source-v1', 'source-v1'),
+    'stale Codex plugin generation refreshes' => !function_exists('welineGuidanceCodexPluginNeedsRefresh')
+        ? false
+        : welineGuidanceCodexPluginNeedsRefresh($singleRegistration, 'source-v0', 'source-v1'),
+    'duplicate Codex MCP declaration refreshes' => !function_exists('welineGuidanceCodexPluginNeedsRefresh')
+        ? false
+        : welineGuidanceCodexPluginNeedsRefresh(['mcpServers' => []], 'source-v1', 'source-v1'),
+    'missing Codex plugin manifest refreshes' => !function_exists('welineGuidanceCodexPluginNeedsRefresh')
+        ? false
+        : welineGuidanceCodexPluginNeedsRefresh(null, 'source-v1', 'source-v1'),
+];
+foreach ($codexRefreshChecks as $label => $passed) {
+    fwrite($passed ? STDOUT : STDERR, sprintf("[%s] %s\n", $passed ? 'PASS' : 'FAIL', $label));
+    $failed = $failed || !$passed;
+}
+
 exit($failed ? 1 : 0);

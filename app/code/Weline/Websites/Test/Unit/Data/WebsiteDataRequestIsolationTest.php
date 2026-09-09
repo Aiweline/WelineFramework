@@ -45,7 +45,7 @@ final class WebsiteDataRequestIsolationTest extends TestCase
         self::assertSame('default', WebsiteData::getCode());
     }
 
-    public function testSettingAnotherWebsiteInvalidatesOnlyCurrentContextCaches(): void
+    public function testSettingAnotherWebsiteReplacesRequestSnapshotCaches(): void
     {
         WebsiteData::setWebsite($this->website(0, 'default', 'CNY', 'zh_Hans_CN'));
         self::primeCurrentCaches('zero');
@@ -56,10 +56,13 @@ final class WebsiteDataRequestIsolationTest extends TestCase
         self::assertIsArray($state);
         self::assertSame(7, WebsiteData::getWebsiteId());
         self::assertSame('shop_b', WebsiteData::getCode());
-        self::assertNull($state['data'] ?? null);
-        self::assertNull($state['currency_codes'] ?? null);
-        self::assertNull($state['language_codes'] ?? null);
-        self::assertNull($state['currencies'] ?? null);
+        // setWebsite pastes association slots once; empty arrays are valid when DB is unavailable in stubs.
+        self::assertIsArray($state['currency_codes'] ?? null);
+        self::assertIsArray($state['language_codes'] ?? null);
+        self::assertIsArray($state['currencies'] ?? null);
+        self::assertIsArray($state['data'] ?? null);
+        self::assertSame(7, $state['data']['website_id'] ?? null);
+        self::assertNotSame('zero', $state['data']['marker'] ?? null);
     }
 
     public function testFiberContextsKeepWebsiteAndCachesIsolatedWhenPeerResets(): void

@@ -1,14 +1,36 @@
 /**
- * Weline Framework - 统一前端JS入口
- * 
- * 所有功能模块按需加载，页面只需引入此文件
- * 使用方式：
- *   const CartApi = await Weline.Api.resource('cart')
- *   await CartApi.add({ product_id, qty })
- *   Weline.Account.frontendLogin(username, password)
+ * Weline Framework — core ModuleLoader only.
+ *
+ * Allowed: load/preLoad/declare, attribute scan (data-weline-load|declare),
+ * concurrency/defer policy, and lazy-trigger of Maintenance module on 503.
+ * Forbidden: path-heuristic URL preloads; business UI/logic.
+ * Core i18n is Framework module `i18n` (Weline_Framework::js/i18n.js); Theme declares load.
+ * Weline_I18n is enhancement only.
+ *
+ * Usage:
+ *   await Weline.load('api')
+ *   await Weline.preLoad(['api'])
+ *   // modules: data-weline-load / Weline.declare + owning weline.modules.js
  */
 (function (window, document) {
     'use strict';
+
+    /**
+     * TEMP 诊断开关：true 时本文件后续逻辑全部不执行（ModuleLoader / declare / 属性扫描等）。
+     * 用于排查「页面异常是否由 weline.js 引起」。验完务必改回 false。
+     */
+    const WELINE_JS_KILL_SWITCH = false;
+    if (WELINE_JS_KILL_SWITCH) {
+        window.Weline = Object.assign({}, window.Weline || {}, {
+            __initialized: true,
+            __killSwitch: true,
+            config: (window.Weline && window.Weline.config) || {},
+        });
+        try {
+            console.warn('[Weline] TEMP kill-switch ON：weline.js 后续代码已短路，仅用于前端诊断。');
+        } catch (_) { /* ignore */ }
+        return;
+    }
 
     // 防止重复初始化
     if (window.Weline && window.Weline.__initialized) {
@@ -26,73 +48,173 @@
         api: {
             workerUrl: null,
             useCredentials: 'same-origin',
-            cartFlagStorageKey: 'weline_cart_has_items',
-            cartProbeSessionKey: 'weline_cart_probe_done',
-            cartCountCookieKey: 'weline_cart_item_count',
-            cartStatusUrl: null,
-            cartStatusResolver: null,
             autoRequests: [],
-            autoEnableOnCartClickSelector: '[data-weline-cart-trigger]',
+            // Set only as lazy bridge; UI lives in Maintenance module.
             maintenanceHandler: null,
         },
-        account: {
-            frontendTokenKey: 'weline_frontend_session',
-            apiTokenKey: 'weline_api_access_token',
-            apiRefreshTokenKey: 'weline_api_refresh_token',
-            backendApiTokenKey: 'weline_backend_api_token',
-            backendApiRefreshTokenKey: 'weline_backend_api_refresh_token',
-            apiUserKey: 'weline_api_user',
-            backendApiUserKey: 'weline_backend_api_user',
+        /**
+         * Attribute / declare module load policy (framework only).
+         * NEVER put business module names (cart/compare/wishlist/…) in defaults here.
+         * Business modules declare via data-weline-load / declare + weline.modules.js.
+         * deferByDefault=true → attribute modules idle-defer unless listed in eagerModules
+         * (site/runtime override only; keep defaults empty of business names).
+         */
+        modulesLoad: {
+            deferByDefault: true,
+            /** Opt-in immediate modules (runtime/site config). Defaults empty. */
+            eagerModules: [],
+            /** Opt-in forced idle-defer when deferByDefault is false. Defaults empty. */
+            deferredModules: [],
+            /** data-weline-declare also schedules idle load. */
+            loadDeclaredDeferred: true,
+            idleTimeoutMs: 2000,
         },
     };
 
     // 合并用户配置
+    const userConfig = (window.Weline && window.Weline.config) || {};
     const runtimeConfig = Object.assign(
         {},
         defaultConfig,
-        (window.Weline && window.Weline.config) || {}
+        userConfig
+    );
+    runtimeConfig.modulesLoad = Object.assign(
+        {},
+        defaultConfig.modulesLoad || {},
+        userConfig.modulesLoad && typeof userConfig.modulesLoad === 'object'
+            ? userConfig.modulesLoad
+            : {}
     );
 
-    function writeCookieValue(key, value, expiry = 365, options = {}) {
-        const normalizedOptions = Object.assign({ path: '/' }, options || {});
-        if (typeof window.setCookie === 'function') {
-            window.setCookie(key, value, expiry, normalizedOptions);
+    /**
+     * DEV-only：检测 MutationObserver「回调改 DOM → 再次投递」反馈环（曾导致迷你购物车卡死整页）。
+     * 生产不包装。触发后 disconnect 并 console.error，避免浏览器假死。
+     */
+    function isWelineDevRuntime() {
+        return !!(
+            runtimeConfig.debug
+            || window.DEV
+            || window.WELINE_ENV === 'DEV'
+            || (typeof DEV !== 'undefined' && DEV)
+            || (window.location && String(window.location.search || '').indexOf('debug=1') !== -1)
+        );
+    }
+
+    function installDevMutationObserverGuard() {
+        if (!isWelineDevRuntime() || typeof window.MutationObserver !== 'function') {
             return;
         }
-        const expires = new Date();
-        expires.setTime(expires.getTime() + (expiry * 24 * 60 * 60 * 1000));
-        let cookieString = key + '=' + encodeURIComponent(value) + ';expires=' + expires.toUTCString();
-        Object.keys(normalizedOptions).forEach((optionKey) => {
-            cookieString += ';' + optionKey + '=' + normalizedOptions[optionKey];
-        });
-        document.cookie = cookieString;
-    }
+        if (window.__WelineDevMutationObserverGuardInstalled) {
+            return;
+        }
+        window.__WelineDevMutationObserverGuardInstalled = true;
 
-    function writeCanonicalLocalStorage(canonicalKey, legacyKeys, value) {
-        try {
-            if (!window.localStorage) {
+        const NativeMO = window.MutationObserver;
+        /** 同一观察者：同步重入深度 */
+        const MAX_SYNC_DEPTH = 1;
+        /** 同一观察者：短窗内投递次数（含微任务连发） */
+        const MAX_DELIVERIES_PER_WINDOW = 40;
+        const WINDOW_MS = 250;
+
+        function captureStack(skip) {
+            try {
+                const err = new Error('[Weline:DEV] MutationObserver site');
+                const lines = String(err.stack || '').split('\n');
+                return lines.slice(Math.max(1, skip || 2), 12).join('\n');
+            } catch (_e) {
+                return '';
+            }
+        }
+
+        function reportAndStop(state, reason, observer) {
+            if (state.tripped) {
                 return;
             }
-            localStorage.setItem(canonicalKey, value);
-            legacyKeys.forEach((key) => {
-                if (key && key !== canonicalKey) {
-                    localStorage.removeItem(key);
-                }
-            });
-        } catch (error) {
-            // localStorage can be unavailable in privacy modes.
+            state.tripped = true;
+            try {
+                observer.disconnect();
+            } catch (_d) { /* ignore */ }
+            const detail = {
+                reason: reason,
+                deliveries: state.deliveries,
+                syncDepth: state.depth,
+                observeStack: state.observeStack || '',
+                createStack: state.createStack || '',
+            };
+            try {
+                console.error(
+                    '[Weline:DEV] MutationObserver 反馈环已截断（开发环境防护）。'
+                    + ' 回调内改 childList/subtree 又触发同一观察者会导致页面卡死。'
+                    + ' 请在回调里加重入守卫，或只发现新节点、禁止每次全量重绘。',
+                    detail
+                );
+            } catch (_c) { /* ignore */ }
+            try {
+                window.dispatchEvent(new CustomEvent('weline:dev:mutation-loop', { detail: detail }));
+            } catch (_e) { /* ignore */ }
+            try {
+                window.__WelineDevMutationLoopLast = detail;
+            } catch (_w) { /* ignore */ }
         }
+
+        function WrappedMutationObserver(callback) {
+            if (typeof callback !== 'function') {
+                return new NativeMO(callback);
+            }
+            const state = {
+                depth: 0,
+                deliveries: 0,
+                windowStart: 0,
+                tripped: false,
+                createStack: captureStack(3),
+                observeStack: '',
+            };
+            const wrapped = function (records, observer) {
+                if (state.tripped) {
+                    return;
+                }
+                const now = Date.now();
+                if (!state.windowStart || (now - state.windowStart) > WINDOW_MS) {
+                    state.windowStart = now;
+                    state.deliveries = 0;
+                }
+                state.deliveries += 1;
+                state.depth += 1;
+                if (state.depth > MAX_SYNC_DEPTH) {
+                    reportAndStop(state, 'sync_reentry', observer);
+                    state.depth -= 1;
+                    return;
+                }
+                if (state.deliveries > MAX_DELIVERIES_PER_WINDOW) {
+                    reportAndStop(state, 'delivery_storm', observer);
+                    state.depth -= 1;
+                    return;
+                }
+                try {
+                    return callback.call(this, records, observer);
+                } finally {
+                    state.depth -= 1;
+                }
+            };
+            const observer = new NativeMO(wrapped);
+            const nativeObserve = observer.observe.bind(observer);
+            observer.observe = function (target, options) {
+                if (!state.observeStack) {
+                    state.observeStack = captureStack(2);
+                }
+                return nativeObserve(target, options);
+            };
+            return observer;
+        }
+
+        WrappedMutationObserver.prototype = NativeMO.prototype;
+        try {
+            Object.defineProperty(WrappedMutationObserver, 'name', { value: 'MutationObserver' });
+        } catch (_n) { /* ignore */ }
+        window.MutationObserver = WrappedMutationObserver;
     }
 
-    function persistLangPreference(lang) {
-        writeCanonicalLocalStorage('weline_user_lang', ['weline_user_lang', 'api_doc_locale', 'WELINE_USER_LANG'], lang);
-        writeCookieValue('WELINE_USER_LANG', lang, 365);
-    }
-
-    function persistCurrencyPreference(currency) {
-        writeCanonicalLocalStorage('weline_user_currency', ['weline_user_currency', 'api_doc_currency', 'WELINE_USER_CURRENCY'], currency);
-        writeCookieValue('WELINE_USER_CURRENCY', currency, 365);
-    }
+    installDevMutationObserverGuard();
 
     /**
      * 模块加载器
@@ -101,8 +223,11 @@
         constructor() {
             this.loadedModules = new Map();
             this.loadingModules = new Map();
-            /** @type {Set<string>} 路径启发式已认领（优先于属性加载） */
-            this.pathHeuristicModules = new Set();
+            /** Cap parallel <script> inserts so one page cannot flood H2 streams. */
+            this.maxConcurrentScripts = 4;
+            this.scriptInflight = 0;
+            /** @type {Array<() => void>} */
+            this.scriptWaitQueue = [];
         }
 
         /**
@@ -154,7 +279,14 @@
                 return modulePath;
             }
             const moduleName = parts[0].trim();
-            const filePath = parts[1].trim().replace(/^\/+/, '');
+            let filePath = parts[1].trim().replace(/^\/+/, '');
+            // Keep ?query out of the filesystem path (e.g. Module::js/foo.js?v=mtime).
+            let querySuffix = '';
+            const queryPos = filePath.indexOf('?');
+            if (queryPos !== -1) {
+                querySuffix = filePath.slice(queryPos);
+                filePath = filePath.slice(0, queryPos);
+            }
             const modulePathParts = moduleName.split('_');
             const vendorName = modulePathParts[0];
             const moduleNamePart = modulePathParts.slice(1).join('_');
@@ -164,9 +296,9 @@
                 window.location.hostname === 'localhost' ||
                 window.location.hostname === '127.0.0.1';
             if (isDev) {
-                return `/${normalizedModuleName}/view/statics/${filePath}`;
+                return `/${normalizedModuleName}/view/statics/${filePath}${querySuffix}`;
             }
-            return `/static/${normalizedModuleName}/${filePath}`;
+            return `/static/${normalizedModuleName}/${filePath}${querySuffix}`;
         }
 
         ensureModulesConfig() {
@@ -240,7 +372,7 @@
                 return this.loadingModules.get(moduleName);
             }
 
-            // 先同步登记 loading，再 await 配置，避免路径启发式与属性加载并发双插 script
+            // 先同步登记 loading，再 await 配置，避免 declare 与属性扫描并发双插 script
             const loadPromise = (async () => {
                 await this.ensureModulesConfig();
 
@@ -280,7 +412,6 @@
                 }
 
                 const requiresFullGlobal = globalVarName === 'WelineApiModule'
-                    || globalVarName === 'WelineAccountModule'
                     || globalVarName === 'WelineTokenStorage';
                 if (this.isGlobalModuleReady(globalVarName, requiresFullGlobal)) {
                     const module = window[globalVarName];
@@ -289,57 +420,74 @@
                 }
 
                 const appendScript = (scriptPath, validateGlobal) => new Promise((resolve, reject) => {
-                    const script = document.createElement('script');
-                    script.src = this.getScriptUrl(scriptPath);
-                    script.async = true;
-                    // 同源不强制 CORS；跨域再设 anonymous
-                    try {
-                        const resolved = new URL(script.src, window.location.href);
-                        if (resolved.origin !== window.location.origin) {
-                            script.crossOrigin = 'anonymous';
-                        }
-                    } catch (_error) {
-                    }
-
-                    const loadTimeoutMs = 10000;
-                    let settled = false;
-                    const settle = (fn) => {
-                        if (settled) {
-                            return;
-                        }
-                        settled = true;
-                        window.clearTimeout(timeoutId);
-                        fn();
-                    };
-                    const timeoutId = window.setTimeout(() => {
+                    const run = () => {
+                        this.scriptInflight += 1;
+                        const script = document.createElement('script');
+                        script.src = this.getScriptUrl(scriptPath);
+                        script.async = true;
+                        // 同源不强制 CORS；跨域再设 anonymous
                         try {
-                            script.onload = null;
-                            script.onerror = null;
-                            if (script.parentNode) {
-                                script.parentNode.removeChild(script);
+                            const resolved = new URL(script.src, window.location.href);
+                            if (resolved.origin !== window.location.origin) {
+                                script.crossOrigin = 'anonymous';
                             }
-                        } catch (_cleanupError) {
+                        } catch (_error) {
                         }
-                        settle(() => reject(new Error(
-                            '[Weline] ' + __('模块 %{1} 加载超时：%{2}', { 1: moduleName, 2: scriptPath })
-                        )));
-                    }, loadTimeoutMs);
 
-                    script.onload = () => {
-                        settle(() => {
-                            if (validateGlobal && globalVarName && !this.isGlobalModuleReady(globalVarName, requiresFullGlobal)) {
-                                reject(new Error('[Weline] ' + __('模块 %{1} 加载失败：未找到 %{2}', { 1: moduleName, 2: globalVarName })));
+                        const loadTimeoutMs = 10000;
+                        let settled = false;
+                        const releaseSlot = () => {
+                            this.scriptInflight = Math.max(0, this.scriptInflight - 1);
+                            const next = this.scriptWaitQueue.shift();
+                            if (typeof next === 'function') {
+                                next();
+                            }
+                        };
+                        const settle = (fn) => {
+                            if (settled) {
                                 return;
                             }
-                            resolve();
-                        });
+                            settled = true;
+                            window.clearTimeout(timeoutId);
+                            releaseSlot();
+                            fn();
+                        };
+                        const timeoutId = window.setTimeout(() => {
+                            try {
+                                script.onload = null;
+                                script.onerror = null;
+                                if (script.parentNode) {
+                                    script.parentNode.removeChild(script);
+                                }
+                            } catch (_cleanupError) {
+                            }
+                            settle(() => reject(new Error(
+                                '[Weline] ' + __('模块 %{1} 加载超时：%{2}', { 1: moduleName, 2: scriptPath })
+                            )));
+                        }, loadTimeoutMs);
+
+                        script.onload = () => {
+                            settle(() => {
+                                if (validateGlobal && globalVarName && !this.isGlobalModuleReady(globalVarName, requiresFullGlobal)) {
+                                    reject(new Error('[Weline] ' + __('模块 %{1} 加载失败：未找到 %{2}', { 1: moduleName, 2: globalVarName })));
+                                    return;
+                                }
+                                resolve();
+                            });
+                        };
+                        script.onerror = () => {
+                            settle(() => reject(new Error(
+                                '[Weline] ' + __('模块 %{1} 加载失败：无法加载 %{2}', { 1: moduleName, 2: scriptPath })
+                            )));
+                        };
+                        document.head.appendChild(script);
                     };
-                    script.onerror = () => {
-                        settle(() => reject(new Error(
-                            '[Weline] ' + __('模块 %{1} 加载失败：无法加载 %{2}', { 1: moduleName, 2: scriptPath })
-                        )));
-                    };
-                    document.head.appendChild(script);
+
+                    if (this.scriptInflight >= this.maxConcurrentScripts) {
+                        this.scriptWaitQueue.push(run);
+                        return;
+                    }
+                    run();
                 });
 
                 for (let index = 0; index < paths.length; index += 1) {
@@ -363,25 +511,13 @@
          * @returns {string}
          */
         getGlobalVarName(moduleName) {
+            // Transport/microkernel aliases only. Business modules MUST set globalVar in weline.modules.js.
             const nameMap = {
                 'api': 'WelineApiModule',
-                'account': 'WelineAccountModule',
                 'welineApi': 'WelineApiModule',
-                'welineApiAccount': 'WelineAccountModule',
                 'welineApiTokenStorage': 'WelineTokenStorage',
                 'dom': 'WelineDomModule',
                 'welineDom': 'WelineDomModule',
-                'cart': 'WelineCartPurchaseActions',
-                'wishlist': 'WelineWishlistModule',
-                'customerAccount': 'WelineCustomerAccount',
-                'customerLogout': 'WelineCustomerLogout',
-                'miniCartExtras': 'WelineMiniCartExtras',
-                'miniCartIcon': 'WelineMiniCartIcon',
-                'comparePage': 'WelineComparePage',
-                'compareShopper': 'WelineCompareShopper',
-                'productReviews': 'WelineReviewProductWidget',
-                'customerService': 'CustomerServiceWidget',
-                'currency': 'WelineCurrency',
             };
             return nameMap[moduleName] || `Weline${moduleName.charAt(0).toUpperCase() + moduleName.slice(1)}Module`;
         }
@@ -396,7 +532,7 @@
         }
 
         /**
-         * 模块是否正在加载（含路径启发式已认领）
+         * 模块是否正在加载
          * @param {string} moduleName
          * @returns {boolean}
          */
@@ -405,37 +541,13 @@
         }
 
         /**
-         * 路径启发式认领模块：属性加载通道应跳过
-         * @param {string|string[]} modules
-         */
-        markPathHeuristic(modules) {
-            const list = Array.isArray(modules) ? modules : [modules];
-            list.forEach((name) => {
-                const key = String(name || '').trim();
-                if (key) {
-                    this.pathHeuristicModules.add(key);
-                }
-            });
-        }
-
-        /**
-         * 是否已由路径启发式认领（优先级高于 data-weline-load）
-         * @param {string} moduleName
-         * @returns {boolean}
-         */
-        isPathHeuristic(moduleName) {
-            return this.pathHeuristicModules.has(moduleName);
-        }
-
-        /**
-         * 属性加载是否应跳过（已加载 / 加载中 / 路径启发式已认领）
+         * 属性 / declare 加载是否应跳过（已加载 / 加载中）
          * @param {string} moduleName
          * @returns {boolean}
          */
         shouldSkipAttributeLoad(moduleName) {
             return this.isModuleLoaded(moduleName)
-                || this.isModuleLoading(moduleName)
-                || this.isPathHeuristic(moduleName);
+                || this.isModuleLoading(moduleName);
         }
     }
 
@@ -448,409 +560,67 @@
      * @returns {string} 翻译后的文本
      */
     const __ = (key, params = {}) => {
-        // 如果 Weline 对象已存在，使用其翻译方法
-        if (window.Weline && window.Weline.i18n && window.Weline.i18n.translate) {
+        // 核心 i18n：Framework 模组；Theme declare / data-weline-load 加载。
+        if (window.WelineI18n && typeof window.WelineI18n.translate === 'function') {
+            return window.WelineI18n.translate(key, params);
+        }
+        if (window.Weline && window.Weline.i18n && typeof window.Weline.i18n.translate === 'function') {
             return window.Weline.i18n.translate(key, params);
         }
-        // 否则返回原始键（Weline 对象初始化后会设置字典）
         return key;
     };
 
     /**
-     * Async 503 modal + simple wait-gift: same document URL only.
-     * Issue token while waiting; after recovery reload same URL; redeem if url still matches.
+     * Maintenance / 503 UI lives in Weline_Maintenance (maintenanceAsyncWait).
+     * Framework only wires a lazy loader — forbid business/HTML here.
      */
-    (function installMaintenanceWaitGiftHandler() {
-        let modalVisible = false;
-        let recoveryTimer = 0;
+    (function installMaintenanceHandlerLazyBridge() {
+        const MODULE_NAME = 'maintenanceAsyncWait';
         const WAIT_STORAGE_KEY = 'weline_mw_wait_gift';
-        const endpoints = {
-            issue: '/maintenance/frontend/wait-gift/issue',
-            redeem: '/maintenance/frontend/wait-gift/redeem',
-            wave: '/maintenance/frontend/wait-gift/wave',
-        };
 
-        function pageKey(href) {
-            try {
-                const url = new URL(href || window.location.href);
-                return url.pathname + url.search;
-            } catch (e) {
-                return String(href || '');
+        function loadMaintenanceModule() {
+            if (window.WelineMaintenanceAsyncWait
+                && typeof window.WelineMaintenanceAsyncWait.handle === 'function') {
+                return Promise.resolve(window.WelineMaintenanceAsyncWait);
             }
-        }
-
-        function readWaitGift() {
-            try {
-                const raw = sessionStorage.getItem(WAIT_STORAGE_KEY);
-                if (!raw) {
-                    return null;
-                }
-                const data = JSON.parse(raw);
-                if (!data || !data.token || !data.url) {
-                    return null;
-                }
-                return { token: String(data.token), url: String(data.url) };
-            } catch (e) {
-                return null;
-            }
-        }
-
-        function storeWaitGift(token) {
-            const value = String(token || '');
-            try {
-                if (!value) {
-                    sessionStorage.removeItem(WAIT_STORAGE_KEY);
-                    return;
-                }
-                sessionStorage.setItem(WAIT_STORAGE_KEY, JSON.stringify({
-                    token: value,
-                    url: pageKey(),
-                }));
-            } catch (e) {
-                // ignore
-            }
-        }
-
-        function clearWaitGift() {
-            storeWaitGift('');
-        }
-
-        function postJson(url, body) {
-            return fetch(url, {
-                method: 'POST',
-                credentials: 'same-origin',
-                cache: 'no-store',
-                headers: {
-                    Accept: 'application/json',
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(body || {}),
-            }).then(async (response) => {
-                const data = await response.json().catch(() => ({}));
-                return { ok: response.ok, status: response.status, data: data || {} };
-            });
-        }
-
-        function applyCouponBestEffort(code) {
-            const normalized = String(code || '').trim().toUpperCase();
-            if (!normalized) {
-                return Promise.resolve();
-            }
-            const expiresAt = Date.now() + (7 * 24 * 3600 * 1000);
-            const meta = {
-                source: 'maintenance_wait_gift',
-                expires_at: expiresAt,
-            };
-            const publish = () => {
-                if (window.WelineCart && typeof window.WelineCart.dispatchApplyCoupon === 'function') {
-                    window.WelineCart.dispatchApplyCoupon(normalized, meta);
-                    return Promise.resolve();
-                }
-                try {
-                    localStorage.setItem('weline.cart.pending_coupon', JSON.stringify({
-                        coupon_code: normalized,
-                        source: meta.source,
-                        issued_at: Date.now(),
-                        expires_at: expiresAt,
-                    }));
-                } catch (e) {
-                    // ignore
-                }
-                window.dispatchEvent(new CustomEvent('weline:cart:apply-coupon', {
-                    detail: {
-                        coupon_code: normalized,
-                        source: meta.source,
-                        expires_at: expiresAt,
-                    },
-                }));
-                return Promise.resolve();
-            };
-            // Ensure万能购物车 cart.js is present to listen/apply.
-            if (window.Weline && typeof window.Weline.preLoad === 'function') {
-                return window.Weline.preLoad('cart').then(publish).catch(publish);
-            }
-            return publish();
-        }
-
-        function tryRedeemSameUrlToken() {
-            // Maintenance document itself must not redeem.
-            if (document.documentElement.getAttribute('data-w-wait-gift') === '1') {
-                return;
-            }
-            const stored = readWaitGift();
-            if (!stored) {
-                return;
-            }
-            if (stored.url !== pageKey()) {
-                clearWaitGift();
-                return;
-            }
-            postJson(endpoints.redeem, { token: stored.token }).then((result) => {
-                clearWaitGift();
-                if (result.ok && result.data && result.data.success && result.data.coupon_code) {
-                    return applyCouponBestEffort(String(result.data.coupon_code));
-                }
-                return null;
-            }).catch(() => {
-                clearWaitGift();
-            });
-        }
-
-        function closeModal(leave) {
-            const overlay = document.getElementById('weline-maintenance-wait-modal');
-            if (overlay) {
-                overlay.remove();
-            }
-            modalVisible = false;
-            window.clearTimeout(recoveryTimer);
-            recoveryTimer = 0;
-            if (leave) {
-                // Left the wait flow / will navigate away → cannot claim.
-                clearWaitGift();
-            }
-        }
-
-        function scheduleRecoveryReload() {
-            window.clearTimeout(recoveryTimer);
-            recoveryTimer = window.setTimeout(() => {
-                recoveryTimer = 0;
-                if (document.hidden) {
-                    scheduleRecoveryReload();
-                    return;
-                }
-                fetch(window.location.pathname + window.location.search, {
-                    method: 'HEAD',
-                    cache: 'no-store',
-                    credentials: 'same-origin',
-                    redirect: 'manual',
-                    headers: { Accept: 'text/html,*/*;q=0.8', 'X-Maintenance-Recovery-Check': '1' },
-                }).then((response) => {
-                    const recovered = response.type === 'opaqueredirect'
-                        || (response.status !== 503 && response.status !== 0 && response.status !== 500
-                            && response.status !== 502 && response.status !== 504);
-                    if (recovered) {
-                        window.location.reload();
-                        return;
-                    }
-                    scheduleRecoveryReload();
-                }).catch(() => scheduleRecoveryReload());
-            }, 5000);
-        }
-
-        function issueOnCurrentPage() {
-            const existing = readWaitGift();
-            const body = existing && existing.url === pageKey() ? { token: existing.token } : {};
-            return postJson(endpoints.issue, body).then((result) => {
-                if (result.data && result.data.success && result.data.token) {
-                    storeWaitGift(result.data.token);
-                }
-            }).catch(() => undefined);
-        }
-
-        function truthyFlag(value) {
-            return value === true || value === 1 || value === '1' || value === 'true';
-        }
-
-        function collectMaintenanceBags(ctx) {
-            const bags = [];
-            const push = (value) => {
-                if (value && typeof value === 'object') {
-                    bags.push(value);
-                }
-            };
-            push(ctx);
-            push(ctx && ctx.data);
-            push(ctx && ctx.payload);
-            push(ctx && ctx.payload && ctx.payload.data);
-            push(ctx && ctx.error && ctx.error.response);
-            push(ctx && ctx.error && ctx.error.response && ctx.error.response.data);
-            push(ctx && ctx.error && ctx.error.response && ctx.error.response.data && ctx.error.response.data.data);
-            return bags;
-        }
-
-        function resolveMaintenanceMeta(ctx) {
-            const bags = collectMaintenanceBags(ctx);
-            let waitGift = false;
-            let systemVersion = '';
-            let themeVersion = '';
-            let message = '';
-            bags.forEach((bag) => {
-                if (truthyFlag(bag.wait_gift_enabled)) {
-                    waitGift = true;
-                }
-                if (!systemVersion && bag.system_version) {
-                    systemVersion = String(bag.system_version);
-                }
-                if (!themeVersion && bag.theme_version) {
-                    themeVersion = String(bag.theme_version);
-                }
-                if (!message && bag.message) {
-                    message = String(bag.message);
-                }
-            });
-            if (!message && ctx && ctx.error && ctx.error.message) {
-                message = String(ctx.error.message);
-            }
-            if (!waitGift && /礼金|gift|compensation/i.test(message)) {
-                waitGift = true;
-            }
-            return { waitGift, systemVersion, themeVersion, message };
-        }
-
-        function giftPanelHtml() {
-            return [
-                '<div data-w-mw-gift style="margin:0 0 16px;padding:12px 14px;text-align:left;background:#fff8e7;border:1px solid #f0c14b;border-radius:8px;">',
-                '<div style="font-size:13px;font-weight:700;color:#0f1111;margin:0 0 6px;">' + __('维护补偿礼金') + '</div>',
-                '<p style="margin:0 0 6px;line-height:1.55;font-size:13px;color:#0f1111;">'
-                    + __('不过也要恭喜您——若您耐心等到升级完成，我们将发放补偿礼金。请先不要关闭。')
-                    + '</p>',
-                '<p style="margin:0;font-size:12px;color:#565959;">'
-                    + __('恢复后约 10 分钟内自动领取，请勿关闭本页。')
-                    + '</p>',
-                '</div>',
-            ].join('');
-        }
-
-        function applyGiftUi(card, waitBtn) {
-            if (!card || card.querySelector('[data-w-mw-gift]')) {
-                return;
-            }
-            const body = card.querySelector('[data-w-mw-body]');
-            if (body) {
-                body.textContent = __('非常抱歉，给您带来不便。');
-            }
-            const slot = card.querySelector('[data-w-mw-gift-slot]');
-            if (slot) {
-                slot.innerHTML = giftPanelHtml();
-            }
-            if (waitBtn) {
-                waitBtn.disabled = false;
-                waitBtn.textContent = __('耐心等待');
-            }
-        }
-
-        function fetchWaveGiftEnabled() {
-            return fetch(endpoints.wave, {
-                method: 'GET',
-                credentials: 'same-origin',
-                cache: 'no-store',
-                headers: { Accept: 'application/json' },
-            }).then(async (response) => {
-                const data = await response.json().catch(() => ({}));
-                return !!(data && truthyFlag(data.wait_gift_enabled));
-            }).catch(() => false);
-        }
-
-        function showModal(ctx) {
-            if (modalVisible) {
-                return;
-            }
-            modalVisible = true;
-            const meta = resolveMaintenanceMeta(ctx || {});
-            let waitGift = !!meta.waitGift;
-            const systemVersion = String(meta.systemVersion || '');
-            const themeVersion = String(meta.themeVersion || '');
-            const overlay = document.createElement('div');
-            overlay.id = 'weline-maintenance-wait-modal';
-            overlay.setAttribute('role', 'dialog');
-            overlay.setAttribute('aria-modal', 'true');
-            overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;display:flex;align-items:center;justify-content:center;background:rgba(15,17,17,0.55);padding:20px;';
-            const card = document.createElement('div');
-            card.style.cssText = 'max-width:460px;width:100%;overflow:hidden;background:#fff;border:1px solid #d5d9d9;border-radius:8px;box-shadow:0 4px 14px rgba(15,17,17,0.18);font-family:\"Amazon Ember\",Arial,\"PingFang SC\",\"Hiragino Sans GB\",\"Microsoft YaHei\",sans-serif;color:#0f1111;';
-            card.innerHTML = [
-                '<div style="background:linear-gradient(180deg,#131921 0%,#232f3e 100%);padding:14px 18px;color:#fff;text-align:left;">',
-                '<div style="font-size:15px;font-weight:700;letter-spacing:0.01em;">Weline</div>',
-                '<div style="width:3.2rem;height:0.35rem;margin-top:4px;border:2px solid #ff9900;border-top:0;border-radius:0 0 2rem 2rem;" aria-hidden="true"></div>',
-                '</div>',
-                '<div style="padding:22px 20px 20px;text-align:center;">',
-                '<h2 style="margin:0 0 10px;font-size:1.25rem;font-weight:700;line-height:1.3;color:#0f1111;">'
-                    + __('抱歉，网站正在升级维护')
-                    + '</h2>',
-                '<p data-w-mw-body style="margin:0 0 12px;line-height:1.6;color:#565959;font-size:14px;">'
-                    + __('非常抱歉，给您带来不便。')
-                    + '</p>',
-                '<div data-w-mw-gift-slot>',
-                waitGift
-                    ? giftPanelHtml()
-                    : '<p data-w-mw-plain style="margin:0 0 14px;line-height:1.6;color:#565959;font-size:14px;">'
-                        + __('请稍候片刻，恢复后即可继续。')
-                        + '</p>',
-                '</div>',
-                (systemVersion || themeVersion)
-                    ? '<p style="margin:0 0 16px;font-size:12px;color:#565959;">SYS '
-                        + systemVersion
-                        + ' · Theme '
-                        + themeVersion
-                        + '</p>'
-                    : '',
-                '<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">',
-                '<button type="button" data-w-mw-leave style="min-height:2.4rem;border:1px solid #d5d9d9;border-radius:20px;padding:8px 18px;background:linear-gradient(180deg,#fff 0%,#f7fafa 100%);color:#0f1111;cursor:pointer;font-size:14px;font-family:inherit;box-shadow:0 1px 0 rgba(213,217,217,0.55);">'
-                    + __('稍后再来')
-                    + '</button>',
-                '<button type="button" data-w-mw-wait style="min-height:2.4rem;border:1px solid #fcd200;border-radius:20px;padding:8px 18px;background:linear-gradient(180deg,#ffe566 0%,#ffd814 55%,#f0c14b 100%);color:#0f1111;cursor:pointer;font-size:14px;font-weight:500;font-family:inherit;box-shadow:0 2px 0 rgba(213,217,217,0.5);">'
-                    + __('耐心等待')
-                    + '</button>',
-                '</div>',
-                '</div>',
-            ].join('');
-            overlay.appendChild(card);
-            document.body.appendChild(overlay);
-
-            const waitBtn = card.querySelector('[data-w-mw-wait]');
-            const leaveBtn = card.querySelector('[data-w-mw-leave]');
-            if (waitBtn) {
-                waitBtn.addEventListener('click', () => {
-                    if (!waitGift) {
-                        return;
-                    }
-                    issueOnCurrentPage().then(() => {
-                        waitBtn.textContent = __('正在等待恢复…');
-                        waitBtn.disabled = true;
-                        scheduleRecoveryReload();
-                    });
-                });
-            }
-            if (leaveBtn) {
-                leaveBtn.addEventListener('click', () => closeModal(true));
-            }
-
-            const startWaitFlow = () => {
-                if (waitGift) {
-                    issueOnCurrentPage().then(() => scheduleRecoveryReload());
-                } else {
-                    scheduleRecoveryReload();
-                }
-            };
-
-            if (waitGift) {
-                startWaitFlow();
-                return;
-            }
-
-            // Payload may omit wait_gift_enabled (protocol wrapper). Reconcile from wave API.
-            fetchWaveGiftEnabled().then((enabled) => {
-                if (!enabled || !document.body.contains(overlay)) {
-                    startWaitFlow();
-                    return;
-                }
-                waitGift = true;
-                applyGiftUi(card, waitBtn);
-                startWaitFlow();
-            });
+            // Prefer ModuleLoader directly so this works before window.Weline is assigned.
+            return moduleLoader.loadModule(MODULE_NAME).then(() => window.WelineMaintenanceAsyncWait || null);
         }
 
         runtimeConfig.api = runtimeConfig.api || {};
         if (typeof runtimeConfig.api.maintenanceHandler !== 'function') {
             runtimeConfig.api.maintenanceHandler = function maintenanceHandler(ctx) {
-                showModal(ctx && typeof ctx === 'object' ? ctx : {});
+                loadMaintenanceModule().then((mod) => {
+                    if (mod && typeof mod.handle === 'function') {
+                        mod.handle(ctx && typeof ctx === 'object' ? ctx : {});
+                    }
+                }).catch((error) => {
+                    console.warn('[Weline] maintenanceAsyncWait load failed:', error && error.message ? error.message : error);
+                });
             };
         }
 
-        // After recovery reload on the same URL, claim once.
+        function maybeRedeemWaitGiftAfterReload() {
+            let hasToken = false;
+            try {
+                hasToken = !!sessionStorage.getItem(WAIT_STORAGE_KEY);
+            } catch (e) {
+                hasToken = false;
+            }
+            if (!hasToken) {
+                return;
+            }
+            loadMaintenanceModule().then((mod) => {
+                if (mod && typeof mod.tryRedeemSameUrlToken === 'function') {
+                    mod.tryRedeemSameUrlToken();
+                }
+            }).catch(() => undefined);
+        }
+
         if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', tryRedeemSameUrlToken);
+            document.addEventListener('DOMContentLoaded', maybeRedeemWaitGiftAfterReload);
         } else {
-            tryRedeemSameUrlToken();
+            maybeRedeemWaitGiftAfterReload();
         }
     })();
 
@@ -934,14 +704,6 @@
                 const ApiModule = await moduleLoader.loadModule('api');
                 return ApiModule.request(url, options);
             },
-            markCartActive: async () => {
-                const ApiModule = await moduleLoader.loadModule('api');
-                return ApiModule.markCartActive();
-            },
-            markCartEmpty: async () => {
-                const ApiModule = await moduleLoader.loadModule('api');
-                return ApiModule.markCartEmpty();
-            },
             enableAutoRequests: async () => {
                 const ApiModule = await moduleLoader.loadModule('api');
                 return ApiModule.enableAutoRequests();
@@ -965,304 +727,153 @@
         /**
          * 声明模块（主题规范：部件/布局必须 declare 或 data-weline-load，禁止直引 script）。
          * @param {string|string[]} moduleNames
-         * @param {boolean|string|string[]} loadImmediatelyOrCustomPath
+         * @param {boolean|string|string[]|{load?: 'eager'|'defer'|'none', path?: string|string[]}} loadImmediatelyOrCustomPath
          * @param {string|string[]|null} customPath
          */
         declare: async (moduleNames, loadImmediatelyOrCustomPath = false, customPath = null) => {
             if (!moduleNames) {
                 return;
             }
-            let loadImmediately = false;
+            let mode = 'none';
             let path = customPath;
-            if (typeof loadImmediatelyOrCustomPath === 'boolean') {
-                loadImmediately = loadImmediatelyOrCustomPath;
+            if (loadImmediatelyOrCustomPath && typeof loadImmediatelyOrCustomPath === 'object'
+                && !Array.isArray(loadImmediatelyOrCustomPath)
+            ) {
+                const opts = loadImmediatelyOrCustomPath;
+                if (opts.path !== undefined) {
+                    path = opts.path;
+                }
+                if (opts.load === 'eager' || opts.load === 'defer' || opts.load === 'none') {
+                    mode = opts.load;
+                } else if (opts.loadImmediately === true) {
+                    mode = 'eager';
+                } else if (opts.loadImmediately === false) {
+                    mode = (runtimeConfig.modulesLoad && runtimeConfig.modulesLoad.loadDeclaredDeferred)
+                        ? 'defer'
+                        : 'none';
+                }
+            } else if (typeof loadImmediatelyOrCustomPath === 'boolean') {
+                if (loadImmediatelyOrCustomPath) {
+                    mode = 'eager';
+                } else if (runtimeConfig.modulesLoad && runtimeConfig.modulesLoad.loadDeclaredDeferred) {
+                    // 默认：声明即延后加载（不再是“只登记不加载”）
+                    mode = 'defer';
+                } else {
+                    mode = 'none';
+                }
             } else if (
                 typeof loadImmediatelyOrCustomPath === 'string'
                 || Array.isArray(loadImmediatelyOrCustomPath)
             ) {
                 path = loadImmediatelyOrCustomPath;
+                mode = (runtimeConfig.modulesLoad && runtimeConfig.modulesLoad.loadDeclaredDeferred)
+                    ? 'defer'
+                    : 'none';
             }
-            if (!loadImmediately) {
+
+            if (mode === 'none') {
                 return;
             }
             const list = Array.isArray(moduleNames) ? moduleNames : [moduleNames];
-            await Promise.all(list.map((name) => moduleLoader.loadModule(name, path).catch(() => null)));
+            const runLoad = () => Promise.all(
+                list.map((name) => moduleLoader.loadModule(name, path).catch(() => null))
+            );
+            if (mode === 'eager') {
+                await runLoad();
+                return;
+            }
+            const idleTimeout = Math.max(
+                0,
+                Number((runtimeConfig.modulesLoad && runtimeConfig.modulesLoad.idleTimeoutMs) || 2000) || 2000
+            );
+            if (typeof window.requestIdleCallback === 'function') {
+                window.requestIdleCallback(() => { runLoad(); }, { timeout: idleTimeout });
+            } else {
+                window.setTimeout(() => { runLoad(); }, 0);
+            }
         },
 
-        /**
-         * i18n 国际化对象
-         */
-        i18n: {
-            /**
-             * 当前语言
-             */
-            currentLang: runtimeConfig.currentLang || 'zh_Hans_CN',
-
-            /**
-             * 翻译字典
-             */
-            dictionary: {},
-
-            /**
-             * 设置翻译字典
-             * @param {Object} dict 翻译字典
-             */
-            setDictionary: (dict) => {
-                Weline.i18n.dictionary = dict || {};
-            },
-
-            /**
-             * 翻译文本
-             * @param {string} key 翻译键
-             * @param {Object} params 参数对象
-             * @returns {string} 翻译后的文本
-             */
-            translate: (key, params = {}) => {
-                let text = Weline.i18n.dictionary[key] || key;
-                // 替换参数
-                Object.keys(params).forEach(paramKey => {
-                    text = text.replace(new RegExp(`%{${paramKey}}`, 'g'), params[paramKey]);
-                });
-                return text;
-            },
-
-            /**
-             * 切换语言
-             * @param {string} lang 语言代码
-             * @returns {Promise<void>}
-             */
-            switchLang: async (lang) => {
-                // 保存语言偏好
-                persistLangPreference(lang);
-                // 重新加载页面
-                const url = new URL(window.location.href);
-                url.searchParams.set('lang', lang);
-                window.location.href = url.toString();
-            },
-        },
-
-        /**
-         * 货币和语言切换对象
-         */
-        Locale: {
-            /**
-             * 当前货币
-             */
-            currentCurrency: runtimeConfig.currentCurrency || 'CNY',
-
-            /**
-             * 当前语言
-             */
-            currentLang: runtimeConfig.currentLang || 'zh_Hans_CN',
-
-            /**
-             * 切换货币
-             * @param {string} currency 货币代码
-             * @returns {Promise<void>}
-             */
-            switchCurrency: async (currency) => {
-                // 保存货币偏好
-                persistCurrencyPreference(currency);
-                // 重新加载页面
-                const url = new URL(window.location.href);
-                url.searchParams.set('currency', currency);
-                window.location.href = url.toString();
-            },
-
-            /**
-             * 切换语言
-             * @param {string} lang 语言代码
-             * @returns {Promise<void>}
-             */
-            switchLang: async (lang) => {
-                return Weline.i18n.switchLang(lang);
-            },
-        },
-
-        /**
-         * Account 模块代理
-         */
-        Account: {
-            // 前端用户（session）
-            checkFrontendUserLogin: async () => {
-                const AccountModule = await moduleLoader.loadModule('account');
-                return AccountModule.checkFrontendUserLogin();
-            },
-            frontendUserLogin: async (username, password, rememberDuration) => {
-                const AccountModule = await moduleLoader.loadModule('account');
-                return AccountModule.frontendUserLogin(username, password, rememberDuration);
-            },
-            frontendUserLogout: async () => {
-                const AccountModule = await moduleLoader.loadModule('account');
-                return AccountModule.frontendUserLogout();
-            },
-            /**
-             * FPC / auth redirect: one-shot header chrome refresh on w_auth=0|1.
-             * Prefer widget data-weline-load="api,account" so this module is already present.
-             */
-            handleAuthRefreshSignal: async () => {
-                const AccountModule = await moduleLoader.loadModule('account');
-                if (AccountModule && typeof AccountModule.handleAuthRefreshSignal === 'function') {
-                    return AccountModule.handleAuthRefreshSignal();
-                }
-                return { handled: false, reason: 'unsupported' };
-            },
-            getFrontendUser: () => {
-                // 同步方法，如果未加载则返回null
-                const globalVarName = moduleLoader.getGlobalVarName('account');
-                if (window[globalVarName] && window[globalVarName]._instance) {
-                    return window[globalVarName]._instance.getFrontendUser();
-                }
-                return null;
-            },
-            // API用户（token）
-            checkFrontendApiLogin: async () => {
-                const AccountModule = await moduleLoader.loadModule('account');
-                return AccountModule.checkFrontendApiLogin();
-            },
-            frontendApiLogin: async (username, password, expireTime) => {
-                const AccountModule = await moduleLoader.loadModule('account');
-                return AccountModule.frontendApiLogin(username, password, expireTime);
-            },
-            frontendApiLogout: async () => {
-                const AccountModule = await moduleLoader.loadModule('account');
-                return AccountModule.frontendApiLogout();
-            },
-            getFrontendApiUser: () => {
-                const globalVarName = moduleLoader.getGlobalVarName('account');
-                if (window[globalVarName] && window[globalVarName]._instance) {
-                    return window[globalVarName]._instance.getFrontendApiUser();
-                }
-                return null;
-            },
-            getFrontendApiToken: () => {
-                // 直接从localStorage读取，不需要加载模块
-                const apiTokenKey = runtimeConfig.account?.apiTokenKey || 'weline_api_access_token';
-                return localStorage.getItem(apiTokenKey);
-            },
-            // 后端API用户（token）
-            checkBackendApiLogin: async () => {
-                const AccountModule = await moduleLoader.loadModule('account');
-                return AccountModule.checkBackendApiLogin();
-            },
-            backendApiLogin: async (username, password, expireTime) => {
-                const AccountModule = await moduleLoader.loadModule('account');
-                return AccountModule.backendApiLogin(username, password, expireTime);
-            },
-            backendApiLogout: async () => {
-                const AccountModule = await moduleLoader.loadModule('account');
-                return AccountModule.backendApiLogout();
-            },
-            getBackendApiUser: () => {
-                const globalVarName = moduleLoader.getGlobalVarName('account');
-                if (window[globalVarName] && window[globalVarName]._instance) {
-                    return window[globalVarName]._instance.getBackendApiUser();
-                }
-                return null;
-            },
-            getBackendApiToken: () => {
-                const backendApiTokenKey = runtimeConfig.account?.backendApiTokenKey || 'weline_backend_api_token';
-                return localStorage.getItem(backendApiTokenKey);
-            },
-        },
     };
+
+    /**
+     * Run after DOM is interactive (DOMContentLoaded), or immediately if already past that.
+     * @param {() => void} fn
+     */
+    function whenDomReady(fn) {
+        if (typeof fn !== 'function') {
+            return;
+        }
+        const run = () => {
+            try {
+                fn();
+            } catch (error) {
+                console.warn('[Weline] whenDomReady callback failed:', error);
+            }
+        };
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', run, { once: true });
+            return;
+        }
+        run();
+    }
+
+    /**
+     * @deprecated Use whenDomReady. Kept as alias so older callers keep DOM timing.
+     * @param {() => void} fn
+     */
+    function whenHtmlDocumentLoaded(fn) {
+        whenDomReady(fn);
+    }
+
+    /**
+     * Whether attribute/declare module should idle-defer.
+     * @param {string} name
+     * @returns {boolean}
+     */
+    function shouldDeferAttributeModule(name) {
+        const cfg = runtimeConfig.modulesLoad || {};
+        const eager = Array.isArray(cfg.eagerModules) ? cfg.eagerModules : [];
+        const deferred = Array.isArray(cfg.deferredModules) ? cfg.deferredModules : [];
+        if (eager.indexOf(name) !== -1) {
+            return false;
+        }
+        if (deferred.indexOf(name) !== -1) {
+            return true;
+        }
+        // Per-module policy from owning module's weline.modules.js (load: 'defer'|'eager').
+        try {
+            const lookup = moduleLoader.lookupModuleConfig(name);
+            const modLoad = lookup && lookup.moduleConfig
+                ? String(lookup.moduleConfig.load || '').toLowerCase()
+                : '';
+            if (modLoad === 'eager') {
+                return false;
+            }
+            if (modLoad === 'defer') {
+                return true;
+            }
+        } catch (e) {
+            // ignore lookup errors; fall through to deferByDefault
+        }
+        return cfg.deferByDefault !== false;
+    }
+
+    /**
+     * @returns {number}
+     */
+    function modulesLoadIdleTimeoutMs() {
+        const n = Number((runtimeConfig.modulesLoad && runtimeConfig.modulesLoad.idleTimeoutMs) || 2000);
+        return Number.isFinite(n) && n >= 0 ? n : 2000;
+    }
 
     // 挂载到全局
     window.Weline = Weline;
+    Weline.whenDomReady = whenDomReady;
+    Weline.whenHtmlDocumentLoaded = whenHtmlDocumentLoaded;
+    Weline.shouldDeferAttributeModule = shouldDeferAttributeModule;
 
     // 将翻译函数也挂载到 Weline 对象上，方便后续更新
     Weline.__ = __;
-
-    /**
-     * 根据页面路径自动预加载模块
-     */
-    /**
-     * 路径启发式预加载（仅少数路由提前拉 api/account；与部件 data-weline-load 无关）
-     * 首页等一般页：部件模块由下方 autoLoadDataAttributes 扫描属性加载。
-     */
-    (function autoPreLoadModules() {
-        const pathname = window.location.pathname;
-        const isDev = runtimeConfig.debug ||
-            (typeof DEV !== 'undefined' && DEV) ||
-            window.location.hostname === 'localhost' ||
-            window.location.hostname === '127.0.0.1' ||
-            window.location.search.includes('debug=1');
-
-        let modulesToLoad = null;
-        let reason = '';
-
-        // 登录/注册页面：预加载账户模块
-        if (pathname.includes('/account/login') || pathname.includes('/account/register')) {
-            modulesToLoad = 'account';
-            reason = __('登录/注册页面');
-        }
-        // 用户中心/账户相关页面：预加载账户和API模块
-        else if (pathname.includes('/account')) {
-            modulesToLoad = ['api', 'account'];
-            reason = __('用户中心/账户相关页面');
-        }
-        // API相关页面：预加载API模块
-        else if (pathname.includes('/api') || pathname.includes('/rest/')) {
-            modulesToLoad = 'api';
-            reason = __('API相关页面');
-        }
-        // 购物车相关页面：预加载API模块（用于购物车功能）
-        else if (pathname.includes('/cart') || pathname.includes('/checkout')) {
-            modulesToLoad = 'api';
-            reason = __('购物车相关页面');
-        }
-
-        // 如果有需要预加载的模块
-        if (modulesToLoad) {
-            const moduleList = Array.isArray(modulesToLoad) ? modulesToLoad : [modulesToLoad];
-            // 路径启发式优先：先认领，属性通道见 shouldSkipAttributeLoad 后跳过
-            moduleLoader.markPathHeuristic(moduleList);
-
-            // 开发模式下输出提示
-            if (isDev) {
-                console.log(
-                    `%c[Weline] ${__('路径启发式预加载')}`,
-                    'color: #4CAF50; font-weight: bold; font-size: 12px;',
-                    '\n',
-                    `${__('页面')}: ${pathname}`,
-                    `\n${__('原因')}: ${reason}`,
-                    `\n${__('模块')}: ${moduleList.join(', ')}`,
-                    `\n${__('时间')}: ${new Date().toLocaleTimeString()}`
-                );
-            }
-
-            // 执行预加载
-            Weline.preLoad(modulesToLoad)
-                .then(() => {
-                    if (isDev) {
-                        console.log(
-                            `%c[Weline] ${__('路径启发式预加载完成')}`,
-                            'color: #2196F3; font-weight: bold; font-size: 12px;',
-                            `\n${__('模块')}: ${moduleList.join(', ')}`,
-                            `\n${__('时间')}: ${new Date().toLocaleTimeString()}`
-                        );
-                    }
-                })
-                .catch((error) => {
-                    if (isDev) {
-                        console.warn(
-                            `%c[Weline] ${__('路径启发式预加载失败')}`,
-                            'color: #FF9800; font-weight: bold; font-size: 12px;',
-                            `\n${__('模块')}: ${moduleList.join(', ')}`,
-                            `\n${__('错误')}: ${error.message}`,
-                            `\n${__('时间')}: ${new Date().toLocaleTimeString()}`
-                        );
-                    }
-                });
-        } else if (isDev) {
-            // 开发模式：说明本页不走路径启发式；部件仍可能有 data-weline-load
-            console.log(
-                `%c[Weline] ${__('路径启发式：本页无匹配路由（部件模块见 data-weline-load）')}`,
-                'color: #9E9E9E; font-size: 11px;',
-                `\n${__('页面')}: ${pathname}`
-            );
-        }
-    })();
 
     /**
      * Dom 微核按需探测：仅当出现动态标记属性时 load('dom')。
@@ -1353,39 +964,52 @@
             if (typeof MutationObserver !== 'function') {
                 return;
             }
-            discoveryObserver = new MutationObserver((records) => {
+            let scanScheduled = false;
+            const observeOptions = {
+                childList: true,
+                subtree: true,
+                attributes: true,
+                attributeFilter: ['data-weline-when', 'data-weline-on', 'data-weline-load'],
+            };
+            const flushScan = () => {
+                scanScheduled = false;
                 if (ensurePromise || (window.Weline && window.Weline.Dom && window.Weline.Dom.__full)) {
                     stopDiscovery();
                     return;
                 }
-                for (let i = 0; i < records.length; i++) {
-                    const record = records[i];
-                    if (record.type === 'attributes') {
-                        const t = record.target;
-                        if (t && t.nodeType === 1 && (
-                            (t.matches && t.matches(MARKER_SELECTOR)) || elementDeclaresDomLoad(t)
-                        )) {
-                            ensureDom();
-                            return;
-                        }
+                if (scan(document)) {
+                    return;
+                }
+                if (discoveryObserver) {
+                    try {
+                        discoveryObserver.observe(document.documentElement || document.body, observeOptions);
+                    } catch (_error) {
                     }
-                    const nodes = record.addedNodes;
-                    for (let j = 0; j < nodes.length; j++) {
-                        if (subtreeNeedsDom(nodes[j])) {
-                            ensureDom();
-                            return;
-                        }
-                    }
+                }
+            };
+            discoveryObserver = new MutationObserver(() => {
+                if (ensurePromise || (window.Weline && window.Weline.Dom && window.Weline.Dom.__full)) {
+                    stopDiscovery();
+                    return;
+                }
+                // Dense widget childList would otherwise trip DEV delivery_storm (>40 / ~250ms).
+                try {
+                    discoveryObserver.disconnect();
+                } catch (_error) {
+                }
+                if (scanScheduled) {
+                    return;
+                }
+                scanScheduled = true;
+                if (typeof window.requestAnimationFrame === 'function') {
+                    window.requestAnimationFrame(() => window.requestAnimationFrame(flushScan));
+                } else {
+                    window.setTimeout(flushScan, 0);
                 }
             });
             const rootEl = document.documentElement || document.body;
             if (rootEl) {
-                discoveryObserver.observe(rootEl, {
-                    childList: true,
-                    subtree: true,
-                    attributes: true,
-                    attributeFilter: ['data-weline-when', 'data-weline-on', 'data-weline-load'],
-                });
+                discoveryObserver.observe(rootEl, observeOptions);
             }
         }
 
@@ -1396,15 +1020,10 @@
             if (scan(document)) {
                 return;
             }
-            // 首屏无标记：轻量发现晚到标记；模块一旦加载即 disconnect
             startMarkerDiscovery();
         };
 
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', boot, { once: true });
-        } else {
-            setTimeout(boot, 0);
-        }
+        whenDomReady(boot);
     })();
 
     /**
@@ -1424,10 +1043,31 @@
                 .filter((name) => name);
         }
 
+        function loadModuleNames(names) {
+            const unique = [];
+            const seen = new Set();
+            names.forEach((name) => {
+                if (!name || seen.has(name) || moduleLoader.shouldSkipAttributeLoad(name)) {
+                    return;
+                }
+                seen.add(name);
+                unique.push(name);
+            });
+            return Promise.all(unique.map((name) => Weline.load(name).catch((error) => {
+                if (isDev) {
+                    console.warn('[Weline] attribute module failed:', name, error && error.message);
+                }
+                return null;
+            })));
+        }
+
         function process() {
             const declareNames = new Set();
-            const loadNames = new Set();
+            const immediateNames = [];
+            const deferredNames = [];
             const skippedNames = new Set();
+            /** @type {Array<{el: Element, modules: string[]}>} */
+            const elementLoads = [];
 
             document.querySelectorAll('[data-weline-declare]').forEach((el) => {
                 const modules = splitModules(el.getAttribute('data-weline-declare'));
@@ -1435,6 +1075,7 @@
                 if (modules.length === 0) {
                     return;
                 }
+                // declare 默认延后加载（modulesLoad.loadDeclaredDeferred）
                 Weline.declare(modules, false);
             });
 
@@ -1443,45 +1084,83 @@
                 if (modules.length === 0) {
                     return;
                 }
-                // 路径启发式优先：已认领 / 已加载 / 加载中的模块属性通道不再发起加载
-                const toLoad = modules.filter((name) => {
+                const requested = [];
+                modules.forEach((name) => {
                     if (moduleLoader.shouldSkipAttributeLoad(name)) {
                         skippedNames.add(name);
-                        return false;
+                        return;
                     }
-                    loadNames.add(name);
-                    return true;
+                    requested.push(name);
+                    if (shouldDeferAttributeModule(name)) {
+                        deferredNames.push(name);
+                        return;
+                    }
+                    immediateNames.push(name);
                 });
-                if (toLoad.length === 0) {
-                    return;
+                if (requested.length) {
+                    elementLoads.push({ el: el, modules: requested });
                 }
-                Weline.load
-                    ? Promise.all(toLoad.map((name) => Weline.load(name).catch((error) => {
-                        el.dispatchEvent(new CustomEvent('weline-modules-error', {
-                            detail: { modules: toLoad, error: error, element: el },
-                        }));
-                        return null;
-                    }))).then(() => {
-                        el.dispatchEvent(new CustomEvent('weline-modules-loaded', {
-                            detail: { modules: toLoad, element: el },
-                        }));
-                    })
-                    : null;
             });
 
+            const notifyElements = (loadedNames) => {
+                const loaded = new Set(loadedNames);
+                elementLoads.forEach((entry) => {
+                    if (!entry.modules.some((name) => loaded.has(name))) {
+                        return;
+                    }
+                    entry.el.dispatchEvent(new CustomEvent('weline-modules-loaded', {
+                        detail: { modules: entry.modules, element: entry.el },
+                    }));
+                });
+            };
+
+            const runDeferred = () => {
+                const deferredUnique = Array.from(new Set(deferredNames));
+                loadModuleNames(deferredUnique).then(() => {
+                    notifyElements(deferredUnique);
+                    if (!isDev || deferredUnique.length === 0) {
+                        return;
+                    }
+                    console.log(
+                        `%c[Weline] ${__('延迟部件模块加载完成')}`,
+                        'color: #2196F3; font-weight: bold; font-size: 12px;',
+                        `\n${__('模块')}: ${deferredUnique.join(', ')}`
+                    );
+                });
+            };
+
+            const immediateUnique = Array.from(new Set(immediateNames));
+            const scheduleDeferred = () => {
+                if (typeof window.requestIdleCallback === 'function') {
+                    window.requestIdleCallback(runDeferred, { timeout: modulesLoadIdleTimeoutMs() });
+                    return;
+                }
+                window.setTimeout(runDeferred, 0);
+            };
+
+            if (immediateUnique.length === 0) {
+                scheduleDeferred();
+            } else {
+                loadModuleNames(immediateUnique).then(() => {
+                    notifyElements(immediateUnique);
+                }).finally(scheduleDeferred);
+            }
+
             if (isDev) {
-                const loadList = Array.from(loadNames);
+                const loadList = immediateUnique;
+                const deferredList = Array.from(new Set(deferredNames));
                 const declareList = Array.from(declareNames);
                 const skippedList = Array.from(skippedNames);
-                if (loadList.length || declareList.length || skippedList.length) {
+                if (loadList.length || deferredList.length || declareList.length || skippedList.length) {
                     console.log(
                         `%c[Weline] ${__('部件属性模块加载')}`,
                         'color: #4CAF50; font-weight: bold; font-size: 12px;',
                         '\n',
                         `${__('页面')}: ${window.location.pathname}`,
                         loadList.length ? `\n${__('立即加载')}: ${loadList.join(', ')}` : '',
-                        skippedList.length ? `\n${__('已跳过（路径启发式/已加载）')}: ${skippedList.join(', ')}` : '',
-                        declareList.length ? `\n${__('仅声明')}: ${declareList.join(', ')}` : '',
+                        deferredList.length ? `\n${__('空闲延迟')}: ${deferredList.join(', ')}` : '',
+                        skippedList.length ? `\n${__('已跳过（已加载/加载中）')}: ${skippedList.join(', ')}` : '',
+                        declareList.length ? `\n${__('声明延后')}: ${declareList.join(', ')}` : '',
                         `\n${__('时间')}: ${new Date().toLocaleTimeString()}`
                     );
                 } else {
@@ -1498,18 +1177,14 @@
             moduleLoader.ensureModulesConfig().then(process);
         };
 
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', run, { once: true });
-        } else {
-            setTimeout(run, 0);
-        }
+        // data-weline-load 在 DOMContentLoaded 后扫描（默认延后插 script）
+        whenDomReady(run);
     })();
 
     /**
      * A server-issued Scope bootstrap is short-lived and one-time. Load the
-     * official API module as soon as the complete document (including the
-     * response-injected meta marker) is available, even on pages that do not
-     * otherwise preload business APIs.
+     * official API module after DOM is ready so the response-injected meta
+     * marker is present without racing Document parse.
      */
     (function preLoadScopeBootstrapApi() {
         const preload = () => {
@@ -1527,13 +1202,7 @@
             });
         };
 
-        if (document.querySelector('meta[name="weline-worker-scope-bootstrap"]')) {
-            preload();
-        } else if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', preload, { once: true });
-        } else {
-            setTimeout(preload, 0);
-        }
+        whenDomReady(preload);
     })();
 
 })(window, document);

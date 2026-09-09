@@ -1,0 +1,63 @@
+<?php
+/**
+ * @meta.title {default="客服服务",description="客服入口、默认语言与 AI 自动回复（支持 Global / Website / Store 范围）"}
+ * @meta.description {default="按范围配置客服是否开放、客服/访客默认语言与离线 AI 回复。语言留空则跟随当前网站默认语言。"}
+ * @config.area {frontend}
+ * @config.sort {55}
+ * @config.acl {Weline_CustomerService::config}
+ */
+?>
+
+<w:config:group code="customer_service_general" label="基础设置" description="控制客服入口是否开放，以及客服与访客的默认语言。" sort="10">
+    <w:config:field
+        key="customer_service/general/enabled"
+        label="启用客服服务"
+        description="关闭后前台不再展示客服浮窗入口。"
+        type="switch"
+        value-type="bool"
+        default="1"
+        scope="global,website,store"
+    />
+    <w:config:field
+        key="customer_service/general/default_agent_locale"
+        label="默认客服语言"
+        description="客服工作台默认界面语言。留空则使用当前网站的默认语言。"
+        type="locale"
+        value-type="string"
+        default=""
+        scope="global,website,store"
+        validation="max:32"
+    />
+    <w:config:field
+        key="customer_service/general/default_customer_locale"
+        label="默认客户语言"
+        description="访客进入客服窗时默认展示的语言。留空则使用当前网站的默认语言。"
+        type="locale"
+        value-type="string"
+        default=""
+        scope="global,website,store"
+        validation="max:32"
+    />
+</w:config:group>
+
+<w:config:group code="customer_service_ai" label="AI 智能客服" description="当没有客服人员在线时，可启用 AI 自动回复客户消息。" sort="20">
+    <w:config:field
+        key="customer_service/ai/enabled"
+        label="启用 AI 自动回复"
+        description="启用后，客户端将显示蓝色「AI 智能客服」状态，而不是灰色「离线」。"
+        type="switch"
+        value-type="bool"
+        default="0"
+        scope="global,website,store"
+    />
+    <w:config:field
+        key="customer_service/ai/model"
+        label="AI 模型"
+        description="从已配置供应商中选择模型；留空则使用系统默认模型。"
+        type="ai_model"
+        value-type="string"
+        default="gpt-4o"
+        scope="global,website,store"
+        validation="max:128"
+    />
+</w:config:group>

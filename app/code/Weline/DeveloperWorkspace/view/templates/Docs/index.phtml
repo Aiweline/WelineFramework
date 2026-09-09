@@ -29,10 +29,12 @@ $config = [
         'loading' => (string)__('加载中…'),
         'chooseCatalog' => (string)__('请选择分类查看文档'),
         'emptyCatalog' => (string)__('该分类下暂无文档'),
+        'emptyCatalogFilter' => (string)__('没有匹配的分类'),
         'emptySearch' => (string)__('没有找到匹配的文档'),
         'requestFailed' => (string)__('文档加载失败，请稍后重试'),
         'catalogs' => (string)__('分类'),
         'documents' => (string)__('文档'),
+        'filterCatalog' => (string)__('筛选分类'),
         'search' => (string)__('搜索'),
         'copy' => (string)__('复制'),
         'copied' => (string)__('已复制'),
@@ -108,16 +110,22 @@ $configJsonTailBody = substr($configJsonTail, 1); // drop leading "{"
             <header class="w-card__header"><h2 class="w-card__title" id="docs-catalog-title"><w:icon name="tree" size="sm"></w:icon><?= $escape(__('文档分类')) ?></h2></header>
             <div class="w-card__body w-stack">
                 <label class="w-field">
-                    <span class="w-visually-hidden"><?= $escape(__('搜索文档')) ?></span>
-                    <input class="w-input" type="search" data-docs-search placeholder="<?= $escape(__('搜索文档…')) ?>" autocomplete="off">
+                    <span class="w-visually-hidden"><?= $escape(__('筛选分类')) ?></span>
+                    <input class="w-input" type="search" data-docs-catalog-filter placeholder="<?= $escape(__('筛选分类…')) ?>" autocomplete="off">
                 </label>
                 <div class="w-docs-browser__tree" data-docs-tree aria-live="polite"></div>
             </div>
         </aside>
 
         <section class="w-card w-docs-browser__content">
-            <header class="w-card__header w-cluster" data-justify="between" data-align="center">
-                <button class="w-button" type="button" data-tone="quiet" data-docs-back hidden><w:icon name="arrow-left" size="sm"></w:icon><?= $escape(__('返回列表')) ?></button>
+            <header class="w-card__header w-docs-browser__content-bar w-cluster" data-justify="between" data-align="center">
+                <div class="w-cluster w-docs-browser__content-actions" data-align="center">
+                    <button class="w-button" type="button" data-tone="quiet" data-docs-back hidden><w:icon name="arrow-left" size="sm"></w:icon><?= $escape(__('返回列表')) ?></button>
+                    <label class="w-field w-docs-browser__doc-search">
+                        <span class="w-visually-hidden"><?= $escape(__('搜索文档')) ?></span>
+                        <input class="w-input" type="search" data-docs-search placeholder="<?= $escape(__('搜索文档…')) ?>" autocomplete="off">
+                    </label>
+                </div>
                 <span class="w-badge" data-tone="neutral" data-docs-context><?= $escape(__('文档')) ?></span>
             </header>
             <div class="w-card__body w-docs-browser__body" data-docs-content aria-live="polite"></div>

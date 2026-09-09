@@ -169,12 +169,30 @@ final class PageHeaderResolver
             return [];
         }
 
-        return array_values(array_unique(array_filter([
+        $candidates = [
             $trimmed,
             '/' . $trimmed,
             strtolower($trimmed),
             '/' . strtolower($trimmed),
-        ])));
+        ];
+
+        // menu.xml 常写 …/index，而路由可能省略 /index
+        if (str_ends_with(strtolower($trimmed), '/index')) {
+            $without = substr($trimmed, 0, -strlen('/index'));
+            if ($without !== '') {
+                $candidates[] = $without;
+                $candidates[] = '/' . $without;
+                $candidates[] = strtolower($without);
+                $candidates[] = '/' . strtolower($without);
+            }
+        } else {
+            $candidates[] = $trimmed . '/index';
+            $candidates[] = '/' . $trimmed . '/index';
+            $candidates[] = strtolower($trimmed) . '/index';
+            $candidates[] = '/' . strtolower($trimmed) . '/index';
+        }
+
+        return array_values(array_unique(array_filter($candidates)));
     }
 
     private function isExactActionMatch(Request $request, string $action): bool

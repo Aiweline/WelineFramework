@@ -28,6 +28,16 @@ final class MegaMenuPanelBannerContractTest extends TestCase
         self::assertStringContainsString('$resolveBanner', $panel);
         self::assertStringContainsString('$resolveIntroDescription', $panel);
         self::assertStringNotContainsString('暂无子分类', $panel);
+
+        $assignNeedle = "\$childTextPlain = trim((string)(\$child['text'] ?? \$child['name'] ?? ''));";
+        $sidebarPlainPos = strpos($panel, $assignNeedle);
+        self::assertNotFalse($sidebarPlainPos, 'sidebar loop must define $childTextPlain');
+        self::assertStringContainsString('mega-menu-sidebar-item__media', $panel);
+        self::assertMatchesRegularExpression(
+            '/mega-menu-sidebar-item__media[\s\S]{0,240}alt=""/',
+            $panel,
+            'sidebar thumbs must use empty decorative alt beside visible labels'
+        );
     }
 
     public function testCategoryMenuWidgetExposesBannerParam(): void

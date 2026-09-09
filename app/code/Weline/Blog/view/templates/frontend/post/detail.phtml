@@ -12,6 +12,11 @@ $excerpt = trim((string)($article['excerpt'] ?? ''));
 $publishedAt = trim((string)($article['published_at'] ?? ''));
 $updatedAt = trim((string)($article['updated_at'] ?? ''));
 $author = trim((string)($article['author'] ?? ''));
+$authorJobTitle = trim((string)($article['author_job_title'] ?? ''));
+$authorUrl = trim((string)($article['author_url'] ?? ''));
+if ($authorUrl !== '' && !preg_match('#^https?://#i', $authorUrl)) {
+    $authorUrl = (string)$this->getUrl(ltrim($authorUrl, '/'));
+}
 $keywordsRaw = trim((string)($article['keywords'] ?? ''));
 $categories = is_array($article['categories'] ?? null) ? $article['categories'] : [];
 $sourceRef = is_array($article['source_ref'] ?? null) ? $article['source_ref'] : [];
@@ -24,6 +29,9 @@ foreach ($categories as $name) {
     }
 }
 $categoryUrl = trim((string)($sourceRef['category_url'] ?? ''));
+$categoryHref = $categoryUrl !== ''
+    ? (string)$this->getUrl(ltrim($categoryUrl, '/'))
+    : '';
 $cover = StorefrontImagePlaceholder::resolve(
     (string)($article['cover_image'] ?? ''),
     (int)($sourceRef['post_id'] ?? 0),
@@ -50,8 +58,8 @@ $keywordsLabelEsc = $escape((string)__('关键词'));
         <a href="@url{'blog'}"><lang>博客</lang></a>
         <?php if ($categoryLabel !== ''): ?>
             <span aria-hidden="true">›</span>
-            <?php if ($categoryUrl !== ''): ?>
-                <a href="<?= $escape($categoryUrl) ?>"><?= $escape($categoryLabel) ?></a>
+            <?php if ($categoryHref !== ''): ?>
+                <a href="<?= $escape($categoryHref) ?>"><?= $escape($categoryLabel) ?></a>
             <?php else: ?>
                 <span><?= $escape($categoryLabel) ?></span>
             <?php endif; ?>
@@ -60,11 +68,15 @@ $keywordsLabelEsc = $escape((string)__('关键词'));
         <span aria-current="page"><?= $escape($title !== '' ? $title : (string)__('文章')) ?></span>
     </nav>
 
-    <header class="amazon-blog-article__header">
-        <h1 class="amazon-blog-article__title"><?= $escape($title) ?></h1>
+    <div class="amazon-blog-article__header">
+        <div class="amazon-blog-article__title-row">
+            <?php /* Use div (not <header>): SEO inspector excludes headings inside <header>, which zeroed H1. */ ?>
+            <h1 class="amazon-blog-article__title"><?= $escape($title) ?></h1>
+            <?= $this->fetch('Weline_Blog::templates/frontend/partials/rss-subscribe.phtml') ?>
+        </div>
         <div class="amazon-blog-article__byline">
             <?php if ($author !== ''): ?>
-                <span class="amazon-blog-article__author-inline"><lang>作者</lang>：<?= $escape($author) ?></span>
+                <span class="amazon-blog-article__author-inline"><lang>作者</lang>：<?php if ($authorUrl !== ''): ?><a href="<?= $escape($authorUrl) ?>" rel="author"><?= $escape($author) ?></a><?php else: ?><?= $escape($author) ?><?php endif; ?><?php if ($authorJobTitle !== ''): ?> · <?= $escape($authorJobTitle) ?><?php endif; ?></span>
             <?php endif; ?>
             <?php if ($publishedAt !== ''): ?>
                 <time datetime="<?= $escape($publishedAt) ?>"><?= $escape($publishedAt) ?></time>
@@ -74,8 +86,8 @@ $keywordsLabelEsc = $escape((string)__('关键词'));
             <?php endif; ?>
             <span><?= $escape((string)$readingMinutes) ?> <lang>分钟阅读</lang></span>
             <?php if ($categoryLabel !== ''): ?>
-                <?php if ($categoryUrl !== ''): ?>
-                    <a class="amazon-blog-article__category" href="<?= $escape($categoryUrl) ?>"><?= $escape($categoryLabel) ?></a>
+                <?php if ($categoryHref !== ''): ?>
+                    <a class="amazon-blog-article__category" href="<?= $escape($categoryHref) ?>"><?= $escape($categoryLabel) ?></a>
                 <?php else: ?>
                     <span class="amazon-blog-article__category"><?= $escape($categoryLabel) ?></span>
                 <?php endif; ?>
@@ -84,7 +96,7 @@ $keywordsLabelEsc = $escape((string)__('关键词'));
         <?php if ($excerpt !== ''): ?>
             <p class="amazon-blog-article__excerpt"><?= $escape($excerpt) ?></p>
         <?php endif; ?>
-    </header>
+    </div>
 
     <?php if ($keywordTags !== []): ?>
         <div class="amazon-blog-article__keywords" aria-label="<?= $keywordsLabelEsc ?>">
@@ -98,6 +110,8 @@ $keywordsLabelEsc = $escape((string)__('关键词'));
         <figure class="amazon-blog-article__cover">
             <img src="<?= $escape($cover['src']) ?>"
                  alt="<?= $escape($title) ?>"
+                 width="1200"
+                 height="800"
                  data-storefront-img="1"
                  data-fallback="<?= $escape($cover['fallback']) ?>"
                  loading="eager"
@@ -133,7 +147,8 @@ $keywordsLabelEsc = $escape((string)__('关键词'));
                             <a class="blog-storefront__card-hit" href="<?= $escape($rUrl) ?>" aria-label="<?= $escape($rTitle) ?>"></a>
                         <?php endif; ?>
                         <div class="blog-storefront__media">
-                            <img src="<?= $escape($rImage['src']) ?>" alt="" loading="lazy" decoding="async"
+                            <img src="<?= $escape($rImage['src']) ?>" alt="" width="1200" height="800"
+                                 loading="lazy" decoding="async"
                                  data-storefront-img="1" data-fallback="<?= $escape($rImage['fallback']) ?>">
                         </div>
                         <div class="blog-storefront__body">

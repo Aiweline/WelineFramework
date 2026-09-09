@@ -1,0 +1,26 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Weline\Checkout\Test\Unit\Query;
+
+use PHPUnit\Framework\TestCase;
+
+final class CheckoutShippingMethodsHomologyContractTest extends TestCase
+{
+    public function testLoadShippingMethodsUsesListQuoteOptionsNotGetByLocation(): void
+    {
+        $src = (string)file_get_contents(
+            dirname(__DIR__, 3)
+            . '/extends/module/Weline_Framework/Query/CheckoutQueryProvider.php',
+        );
+        self::assertStringContainsString("w_query('shippingInfo', 'listQuoteOptions'", $src);
+        self::assertStringNotContainsString(
+            "w_query('shippingInfo', 'getByLocation'",
+            $src,
+        );
+        self::assertStringContainsString('fulfillment_metadata', $src);
+        self::assertStringContainsString('shipping_profile_code', $src);
+        self::assertStringContainsString('当前地址下所选配送方案不可用', $src);
+    }
+}

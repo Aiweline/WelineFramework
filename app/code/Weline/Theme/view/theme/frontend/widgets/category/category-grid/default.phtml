@@ -147,11 +147,19 @@ $rootStyle = '--wc-category-ratio:' . $paddingTop . ';';
 
     <div class="category-grid columns-<?= $esc($columns) ?>">
         <?php foreach ($categories as $category): ?>
+            <?php
+            $categoryImage = trim((string)($category['image'] ?? ''));
+            $categoryImageIsBanner = str_contains($categoryImage, '/banners/');
+            $categoryImageWidth = $categoryImageIsBanner ? 1500 : 800;
+            $categoryImageHeight = $categoryImageIsBanner ? 300 : 800;
+            ?>
             <a href="<?= $esc(\Weline\Theme\Helper\HeaderNavFragment::localizeHref((string)($category['url'] ?? '#'))) ?>" class="category-card">
                 <div class="category-image-wrapper">
-                    <img src="<?= $esc((string)($category['image'] ?? '')) ?>"
+                    <img src="<?= $esc($categoryImage) ?>"
                          alt="<?= $esc((string)($category['alt'] ?? $category['name'] ?? '')) ?>"
                          class="category-image"
+                         width="<?= (int)$categoryImageWidth ?>"
+                         height="<?= (int)$categoryImageHeight ?>"
                          loading="lazy"
                          decoding="async">
                     <div class="category-overlay"></div>

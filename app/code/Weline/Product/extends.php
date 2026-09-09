@@ -66,5 +66,20 @@ return [
                 ],
             ],
         ],
+        'StorefrontShippingProfileCatalogProvider' => [
+            'path' => 'extends/module/Weline_Product/StorefrontShippingProfileCatalogProvider',
+            'type' => ['module'],
+            'description' => '配送方案目录 SPI：Shipping 等模块提供可绑定 service_code；Product 仅存 opaque code',
+            'required' => false,
+            'multiple' => false,
+            'interface' => 'Weline\Product\Api\Storefront\StorefrontShippingProfileCatalogProviderInterface',
+            'details' => [
+                'file_location' => [
+                    'path' => 'extends/module/Weline_Product/StorefrontShippingProfileCatalogProvider/{Name}Provider.php',
+                    'description' => '实现 StorefrontShippingProfileCatalogProviderInterface',
+                    'example' => 'app/code/Weline/Shipping/extends/module/Weline_Product/StorefrontShippingProfileCatalogProvider/ShippingServiceProfileCatalogProvider.php',
+                ],
+            ],
+        ],
     ],
 ];

@@ -303,7 +303,7 @@ Next,Next
 "Website scope is required before creating an affiliate account.","Website scope is required before creating an affiliate account."
 "Customer ID or affiliate ID is required.","Customer ID or affiliate ID is required."
 "Store is required when a channel is selected.","Store is required when a channel is selected."
-商品不存在或已下架，无法生成分销分享链接。,"The product does not exist or is unavailable, so an affiliate share link cannot be generated."
+暂时无法生成分销分享链接（商品分享目标不可用）。,"Affiliate share link is temporarily unavailable for this product."
 缺少分享码。,"Share code is required."
 商城首页,"Store homepage"
 邀请注册页,"Invite registration page"
@@ -314,6 +314,7 @@ Next,Next
 微信,WeChat
 微博,Weibo
 "Global scope","Global scope"
+商品不存在或已下架，无法生成分销分享链接。,"The product does not exist or is unavailable, so an affiliate share link cannot be generated."
 "Website is required when a store is selected.","Website is required when a store is selected."
 """删除分销记录必须使用 POST 请求。""","删除分销记录必须使用 POST 请求。"
 "Leave empty for global scope. Select website, then store, then channel.","Leave empty for global scope. Select website, then store, then channel."

@@ -17,6 +17,7 @@ use Weline\SystemConfig\Api\Scope\ScopeContext;
 use Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface;
 use Weline\Theme\Api\Scoped\ThemeEditorContext;
 use Weline\Theme\Api\Scoped\ThemePatchCommand;
+use Weline\Theme\Api\Scoped\ThemePublishedSnapshotReaderInterface;
 use Weline\Theme\Api\Scoped\ThemeResolvedValue;
 use Weline\Theme\Api\Scoped\ThemeScopedResourceAdapterInterface;
 use Weline\Theme\Api\Scoped\ThemeScopedWorkspaceInterface;
@@ -28,7 +29,7 @@ use Weline\Theme\Model\ThemeScopeWorkspace;
 use Weline\Theme\Service\LayoutContentValidationRegistry;
 
 /** Canonical per-path draft, merge and immutable release service. */
-final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface
+final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, ThemePublishedSnapshotReaderInterface
 {
     private const REQUEST_LOAD_CACHE_PREFIX = 'theme.scoped.workspace.load.v1.';
     private const REQUEST_LOAD_CACHE_KEYS = 'theme.scoped.workspace.load.v1.keys';
@@ -53,6 +54,36 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface
     ) {
         $this->releaseBatches = $releaseBatches
             ?? ObjectManager::getInstance(ThemeScopeReleaseBatch::class);
+    }
+
+    public function readPublishedSnapshot(ThemeEditorContext $context): array
+    {
+        $cacheKey = $this->requestLoadCacheKey($context, false) . ':published-snapshot';
+        $allowRequestCache = !$this->transactions->isActive($this->workspaces->getConnection());
+        if (RequestContext::isInitialized()) {
+            if ($allowRequestCache) {
+                $cached = RequestContext::get($cacheKey);
+                if (\is_array($cached)) {
+                    return $cached;
+                }
+            } else {
+                // 事务内只清除此轻读快照；实际访问的行由 publishedState 定向跳过旧 memo。
+                RequestContext::remove($cacheKey);
+            }
+        }
+
+        $published = $this->publishedState($context, $allowRequestCache);
+        $snapshot = [
+            'payload' => $published['payload'],
+            'release_id' => $published['release_id'],
+            'source_scope' => $published['source_scope'],
+        ];
+        if ($allowRequestCache) {
+            // 复用工作区原有请求缓存及写入口的清理追踪，不缓存模型或编辑器溯源数据。
+            $this->rememberRequestLoad($cacheKey, $snapshot);
+        }
+
+        return $snapshot;
     }
 
     public function load(ThemeEditorContext $context, bool $includeDraft = true): array
@@ -664,6 +695,14 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface
                     ThemeScopeReleaseBatch::schema_fields_STATE => ThemeScopeReleaseBatch::STATE_PUBLISHED,
                 ])->save();
 
+                // 回退也是发布指针变更；沿用发布事件，在同一事务覆盖全部资源及后代回退/传播。
+                $this->dispatchScopedPublishResourceChange(
+                    $context,
+                    $batchRecord->getId(),
+                    'theme_scoped_release_batch_rollback',
+                    false,
+                );
+
                 return $receipt;
             },
         );
@@ -811,9 +850,9 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface
     }
 
     /** @return array{payload:array<string,mixed>,release_id:?int,source_scope:string,release:?ThemeScopeRelease} */
-    private function publishedState(ThemeEditorContext $context): array
+    private function publishedState(ThemeEditorContext $context, bool $allowRequestCache = true): array
     {
-        $workspace = $this->findWorkspace($context);
+        $workspace = $this->findWorkspace($context, false, $allowRequestCache);
         if ($workspace instanceof ThemeScopeWorkspace) {
             $release = $this->loadRelease((int)$workspace->getData(
                 ThemeScopeWorkspace::schema_fields_PUBLISHED_RELEASE_ID,
@@ -834,7 +873,7 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface
         // was seeded; i18n overlays still use the original context locale.
         if ($this->shouldInheritDefaultLocalePublished($context)) {
             $defaultLocale = $context->withLocale('default');
-            $workspace = $this->findWorkspace($defaultLocale);
+            $workspace = $this->findWorkspace($defaultLocale, false, $allowRequestCache);
             if ($workspace instanceof ThemeScopeWorkspace) {
                 $release = $this->loadRelease((int)$workspace->getData(
                     ThemeScopeWorkspace::schema_fields_PUBLISHED_RELEASE_ID,
@@ -854,6 +893,7 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface
         if ($parentIdentity instanceof ScopeIdentity) {
             return $this->publishedState(
                 $context->withScope($this->scopes->contextFromIdentity($parentIdentity)),
+                $allowRequestCache,
             );
         }
 
@@ -1574,7 +1614,7 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface
         return $workspace;
     }
 
-    private function findWorkspace(ThemeEditorContext $context, bool $lockingRead = false): ?ThemeScopeWorkspace
+    private function findWorkspace(ThemeEditorContext $context, bool $lockingRead = false, bool $allowRequestCache = true): ?ThemeScopeWorkspace
     {
         // A single render request resolves the same scoped workspace from
         // several observers (head/header/footer/slot). Reuse the immutable
@@ -1582,7 +1622,10 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface
         // still obtain a fresh row under FOR UPDATE after the request cache is
         // flushed.
         $requestCacheKey = self::REQUEST_WORKSPACE_CACHE_PREFIX . $context->identityHash();
-        if (!$lockingRead && RequestContext::isInitialized() && $context->identityHash() !== '') {
+        if (!$allowRequestCache && RequestContext::isInitialized()) {
+            RequestContext::remove($requestCacheKey);
+        }
+        if ($allowRequestCache && !$lockingRead && RequestContext::isInitialized() && $context->identityHash() !== '') {
             if (RequestContext::has($requestCacheKey)) {
                 $cached = RequestContext::get($requestCacheKey);
                 return $cached instanceof ThemeScopeWorkspace ? clone $cached : null;
@@ -1598,7 +1641,7 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface
         $workspace->find()->fetch();
 
         $resolved = $workspace->getId() > 0 ? $workspace : null;
-        if (!$lockingRead && RequestContext::isInitialized() && $context->identityHash() !== '') {
+        if ($allowRequestCache && !$lockingRead && RequestContext::isInitialized() && $context->identityHash() !== '') {
             RequestContext::set($requestCacheKey, $resolved);
             $keys = RequestContext::get(self::REQUEST_WORKSPACE_CACHE_KEYS, []);
             if (!is_array($keys)) {

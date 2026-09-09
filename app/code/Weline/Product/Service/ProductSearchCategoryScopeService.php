@@ -43,64 +43,15 @@ final class ProductSearchCategoryScopeService
         $websiteId = $this->resolveWebsiteId();
         $locale = (string)State::getLangLocal();
 
-        // The storefront menu already owns the localized category read model.
-        // Reuse it so the header search selector and the category nav do not
-        // issue two independent catalog tree queries in the same request (or
-        // on separate workers after the menu cache is warm).
-        try {
-            if (class_exists(StorefrontAllMenuCategoryTreeService::class)) {
-                /** @var StorefrontAllMenuCategoryTreeService $menu */
-                $menu = ObjectManager::getInstance(StorefrontAllMenuCategoryTreeService::class);
-                $menuTree = $this->mapMenuNodes($menu->navTree($websiteId));
-                if ($menuTree !== []) {
-                    return $this->trimDepth($menuTree, 1);
-                }
-            }
-        } catch (\Throwable) {
-            // Fall through to the catalog query bridge when the optional
-            // storefront presentation cache is unavailable.
-        }
-
+        // Search scopes contain IDs and labels, never navigation URLs. The
+        // existing Search registry caches this projection by scope + locale;
+        // building the menu here would query SEO rewrites for every category.
         $tree = $this->catalog->tree($websiteId, $locale);
         if ($tree === []) {
             return [];
         }
 
         return $this->trimDepth($this->mapSearchNodes($tree), 1);
-    }
-
-    /**
-     * @param list<array<string,mixed>> $nodes
-     * @return list<array{code:string,label:string,params:array<string,int|string|float|bool>,children:list<array<string,mixed>>}>
-     */
-    private function mapMenuNodes(array $nodes): array
-    {
-        $out = [];
-        foreach ($nodes as $node) {
-            if (!is_array($node)) {
-                continue;
-            }
-            $meta = is_array($node['meta'] ?? null) ? $node['meta'] : [];
-            $id = max(0, (int)($node['meta']['category_id'] ?? $node['category_id'] ?? $node['id'] ?? 0));
-            if ($id <= 0) {
-                continue;
-            }
-            $children = is_array($node['children'] ?? null)
-                ? $this->mapMenuNodes($node['children'])
-                : [];
-            $label = trim((string)($node['name'] ?? $node['label'] ?? ''));
-            if ($label === '') {
-                $label = $this->displayNameFromPath((string)($meta['path'] ?? ''));
-            }
-            $out[] = [
-                'code' => 'category_' . $id,
-                'label' => $label,
-                'params' => ['category_id' => $id],
-                'children' => $children,
-            ];
-        }
-
-        return $out;
     }
 
     /**

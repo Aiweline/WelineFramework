@@ -10,6 +10,7 @@
 namespace Weline\Framework\App;
 
 use Weline\Framework\App\Localization\LocalizationProviderRegistry;
+use Weline\Framework\Cache\StorefrontCacheKeyContext;
 use Weline\Framework\Context;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Http\Request;
@@ -106,6 +107,11 @@ class State extends DataObject
      */
     public static function getLang(): string
     {
+        // 路由已确定的语言直接随上下文复用；显式预览覆盖仍走原有优先级。
+        $resolved = StorefrontCacheKeyContext::current();
+        if ($resolved?->hasCompleteFrozenScope() && self::getRequestLanguageOverride() === '') {
+            return $resolved->lang;
+        }
         $pathLang = self::detectLanguageFromRequestPath();
         if ($pathLang !== '' && self::isAllowedLanguageCode($pathLang)) {
             return self::normalizeLanguageSegment($pathLang);
@@ -165,6 +171,10 @@ class State extends DataObject
      */
     public static function getCurrency(): string
     {
+        $resolved = StorefrontCacheKeyContext::current();
+        if ($resolved?->hasCompleteFrozenScope()) {
+            return $resolved->currency;
+        }
         $currency = self::detectCurrencyFromRequestPath();
         if ($currency !== '' && self::isAllowedCurrencyCode($currency)) {
             return $currency;
@@ -486,6 +496,21 @@ class State extends DataObject
      */
     public static function resolveWebsiteDefaultLanguage(): string
     {
+        try {
+            if (\class_exists(\Weline\Websites\Data\WebsiteData::class)) {
+                $fromWebsite = self::normalizeLanguageSegment(
+                    \trim((string)(\Weline\Websites\Data\WebsiteData::getDefaultLanguage() ?? '')),
+                );
+                if ($fromWebsite !== '' && self::isLanguageSegmentCandidate($fromWebsite)) {
+                    $allowedMap = self::resolveAllowedLanguageCodeMap();
+                    if ($allowedMap === [] || isset($allowedMap[\strtolower($fromWebsite)])) {
+                        return $fromWebsite;
+                    }
+                }
+            }
+        } catch (\Throwable) {
+        }
+
         $candidates = [];
         try {
             $candidates[] = trim((string)\w_env('website.language', ''));
@@ -497,12 +522,6 @@ class State extends DataObject
         }
         try {
             $candidates[] = trim((string)\Weline\Framework\Env\WelineEnv::server('WELINE-WEBSITE-LANG', ''));
-        } catch (\Throwable) {
-        }
-        try {
-            if (\class_exists(\Weline\Websites\Data\WebsiteData::class)) {
-                $candidates[] = trim((string)(\Weline\Websites\Data\WebsiteData::getDefaultLanguage() ?? ''));
-            }
         } catch (\Throwable) {
         }
 
@@ -541,6 +560,19 @@ class State extends DataObject
      */
     public static function resolveWebsiteDefaultCurrency(): string
     {
+        try {
+            if (\class_exists(\Weline\Websites\Data\WebsiteData::class)) {
+                $fromWebsite = \strtoupper(\trim((string)(\Weline\Websites\Data\WebsiteData::getDefaultCurrency() ?? '')));
+                if (self::isCurrencySegmentCandidate($fromWebsite)) {
+                    $allowedMap = self::resolveAllowedCurrencyCodeMap();
+                    if ($allowedMap === [] || isset($allowedMap[$fromWebsite])) {
+                        return $fromWebsite;
+                    }
+                }
+            }
+        } catch (\Throwable) {
+        }
+
         $candidates = [];
         try {
             $candidates[] = trim((string)\w_env('website.currency', ''));
@@ -548,12 +580,6 @@ class State extends DataObject
         }
         try {
             $candidates[] = trim((string)\Weline\Framework\Env\WelineEnv::server('WELINE_WEBSITE_CURRENCY', ''));
-        } catch (\Throwable) {
-        }
-        try {
-            if (\class_exists(\Weline\Websites\Data\WebsiteData::class)) {
-                $candidates[] = trim((string)(\Weline\Websites\Data\WebsiteData::getDefaultCurrency() ?? ''));
-            }
         } catch (\Throwable) {
         }
         try {

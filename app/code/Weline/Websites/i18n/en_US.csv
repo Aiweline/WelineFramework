@@ -1215,8 +1215,7 @@ branch,branch
 保存渠道,保存渠道
 "保存 Sales Channel","保存 Sales Channel"
 目标域名格式无效。,"The target domain name format is invalid."
-子路径格式无效。,"The subpath format is invalid."
-子路径首段为保留字，请更换。,"The first segment of the subpath is a reserved word, please change it."
+网站子路径不允许使用语言编码或货币编码。,"Website sub-path must not use language or currency codes."
 "域名 %{1} 已存在于域名池中","Domain %{1} already exists in the domain pool"
 "API 添加：%{1}","API added: %{1}"
 子域名添加成功,"Subdomain added successfully"
@@ -1398,7 +1397,7 @@ lock,lock
 您确定要删除此网站吗？,"Are you sure you want to delete this site?"
 可由选择域名自动生成（域名转下划线），可修改,"Auto-generated from first selected domain (dots to underscores)"
 网站子路径,"Site Subpath"
-可选；留空表示直接使用域名根路径，填写后会应用到当前选择的所有域名。,"Optional; leave blank to use the domain root path directly; if filled in, it will apply to all currently selected domains."
+"可选；留空表示直接使用域名根路径，填写后会应用到当前选择的所有域名。禁止使用语言编码或货币编码（如 usd、en_US）。","Optional; leave empty to use the domain root. Applied to all selected domains. Language and currency codes (e.g. usd, en_US) are not allowed."
 "Store / SalesChannel 只读目录","Read-only Store / SalesChannel Directory"
 "此处仅展示目录。Store 模式、生命周期与 SalesChannel 不会随 Website 表单保存而修改。","This directory is read-only. Store mode, lifecycle, and SalesChannel data are not changed when the Website form is saved."
 "保存 Website 后，系统会在升级与站点保存流程中建立默认 Store 和 SalesChannel。","After the Website is saved, the upgrade and website-save flows create its default Store and SalesChannel."
@@ -1411,6 +1410,10 @@ lock,lock
 搜索时区...,"Search Timezone..."
 点击选择时区，可输入关键词搜索,"Click to select a timezone; type keywords to search"
 返回,Back
+网站子路径不允许使用语言编码,网站子路径不允许使用语言编码
+网站子路径不允许使用货币编码,网站子路径不允许使用货币编码
+子路径首段为保留字，请更换。,"The first segment of the subpath is a reserved word, please change it."
+子路径格式无效。,"The subpath format is invalid."
 正式,Normal
 开发,Development
 测试,Test
@@ -2509,6 +2512,8 @@ download,download
 虚拟主题生成失败,"Virtual theme generation failed"
 "provider_code 不能为空","provider_code cannot be empty"
 "admin_user_id 必须大于 0","admin_user_id must be greater than 0"
+网站子路径不允许使用货币编码「%{1}」。,"Website sub-path must not use currency code ""%{1}""."
+网站子路径不允许使用语言编码「%{1}」。,"Website sub-path must not use language code ""%{1}""."
 "WLS 本地域名注册同步","WLS 本地域名注册同步"
 域名池保存后无法取得有效记录。,"Unable to obtain valid records after saving the domain name pool."
 "WLS 域名使用同步（%{1}）","WLS 域名使用同步（%{1}）"
@@ -3188,9 +3193,6 @@ download,download
 "发现 %{1} 条非法域名记录：","Found %{1} illegal domain name records:"
 "已删除 %{1} 条非法记录","Deleted %{1} illegal record(s)"
 "处理完成：%d 条非法记录","Processing completed: %d illegal records"
-"已选择 %s 个域名","%s domains selected"
-"已选择 %{1} 个域名","%{1} domains selected"
-搜索站点名称或编码,"Search site name or code"
 点击选择货币（可多选）,点击选择货币（可多选）
 点击选择货币,点击选择货币
 搜索货币代码、名称或符号,搜索货币代码、名称或符号
@@ -3199,6 +3201,10 @@ download,download
 点击选择语言,点击选择语言
 搜索国家、语言或代码...,搜索国家、语言或代码...
 已支持,已支持
+可选；留空表示直接使用域名根路径，填写后会应用到当前选择的所有域名。,"Optional; leave blank to use the domain root path directly; if filled in, it will apply to all currently selected domains."
+"已选择 %s 个域名","%s domains selected"
+"已选择 %{1} 个域名","%{1} domains selected"
+搜索站点名称或编码,"Search site name or code"
 "缺少 data-provider / data-operation","缺少 data-provider / data-operation"
 删除请求失败,删除请求失败
 确认删除吗？,确认删除吗？

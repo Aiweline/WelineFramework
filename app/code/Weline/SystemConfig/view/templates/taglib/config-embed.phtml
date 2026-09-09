@@ -86,10 +86,8 @@ if (!$wConfigEmbedAssets) {
                     </div>
                 <?php else: ?>
                     <?php
-                    if (is_file($embedFieldPartial)) {
-                        $field = $item;
-                        include $embedFieldPartial;
-                    }
+                    $fieldSource = (string)($embedFieldSource ?? 'Weline_SystemConfig::templates/taglib/config-embed-field.phtml');
+                    echo $block->fetchHtml($fieldSource, ['field' => $item]);
                     ?>
                 <?php endif; ?>
             <?php endforeach; ?>

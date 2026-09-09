@@ -292,7 +292,7 @@ final class MaintenanceStaticGenerator
 
     /**
      * @param list<string> $locales
-     * @return array<string, array{code: string, name: string, tag_label: string, flag: string}>
+     * @return array<string, array{code: string, name: string, tag_label: string, flag: string, country_code: string}>
      */
     private function buildLanguageCatalog(array $locales, string $displayLocale): array
     {
@@ -308,11 +308,20 @@ final class MaintenanceStaticGenerator
                 if ($label === '') {
                     continue;
                 }
+                $countryCode = $this->normalizeCountryCode(
+                    (string)($languages[$code]['country_code'] ?? ''),
+                    (string)$code,
+                );
+                // Storefront LanguageSelect SSR leaves flag empty (binquery hydrate).
+                // Standalone maintenance HTML cannot load Weline i18n JS / query-bin,
+                // so materialize country flags under /pub/errors/maintenance/flags/.
+                $flag = $this->materializeMaintenanceFlagMarkup($countryCode);
                 $catalog[$code] = [
                     'code' => $code,
                     'name' => (string)($languages[$code]['name'] ?? $label),
                     'tag_label' => $label,
-                    'flag' => (string)($languages[$code]['flag'] ?? ''),
+                    'flag' => $flag,
+                    'country_code' => $countryCode,
                 ];
             }
         } catch (\Throwable) {
@@ -323,15 +332,78 @@ final class MaintenanceStaticGenerator
                 continue;
             }
             $fallback = $this->getLocaleFallbackLabel($code);
+            $countryCode = $this->normalizeCountryCode('', (string)$code);
             $catalog[$code] = [
                 'code' => $code,
                 'name' => $fallback,
                 'tag_label' => $fallback,
-                'flag' => '',
+                'flag' => $this->materializeMaintenanceFlagMarkup($countryCode),
+                'country_code' => $countryCode,
             ];
         }
 
         return $catalog;
+    }
+
+    private function normalizeCountryCode(string $countryCode, string $localeCode): string
+    {
+        $countryCode = \strtoupper(\trim($countryCode));
+        if (\preg_match('/^[A-Z]{2}$/', $countryCode) === 1) {
+            return $countryCode;
+        }
+        $parts = \explode('_', \str_replace('-', '_', \trim($localeCode)));
+        $last = \end($parts);
+
+        return \is_string($last) && \preg_match('/^[A-Za-z]{2}$/', $last) === 1
+            ? \strtoupper($last)
+            : '';
+    }
+
+    /**
+     * Copy lipis flag SVG into pub/errors (maintenance whitelist) and return &lt;img&gt; markup.
+     */
+    private function materializeMaintenanceFlagMarkup(string $countryCode): string
+    {
+        if (!\class_exists(\Weline\I18n\Helper\CountryFlagMarkup::class)) {
+            return '';
+        }
+        $code = \Weline\I18n\Helper\CountryFlagMarkup::normalizeCountryCode($countryCode);
+        if ($code === '') {
+            return '';
+        }
+        $url = $this->materializeMaintenanceFlagUrl($code);
+        if ($url === '') {
+            return '';
+        }
+        $safeUrl = \htmlspecialchars($url, \ENT_QUOTES, 'UTF-8');
+        $safeAlt = \htmlspecialchars(\strtoupper($code), \ENT_QUOTES, 'UTF-8');
+
+        return '<img class="language-flag-img" src="' . $safeUrl . '" alt="' . $safeAlt . '"'
+            . ' width="22" height="16" decoding="async" loading="lazy" />';
+    }
+
+    private function materializeMaintenanceFlagUrl(string $countryCode): string
+    {
+        $code = \Weline\I18n\Helper\CountryFlagMarkup::normalizeCountryCode($countryCode);
+        if ($code === '') {
+            return '';
+        }
+        $src = \Weline\I18n\Helper\CountryFlagMarkup::staticFilePath($code);
+        if ($src === '' || !\is_file($src)) {
+            return '';
+        }
+        $destDir = BP . 'pub/errors/maintenance/flags';
+        $dest = $destDir . '/' . $code . '.svg';
+        if (!\is_file($dest)) {
+            if (!\is_dir($destDir) && !@\mkdir($destDir, 0755, true) && !\is_dir($destDir)) {
+                return '';
+            }
+            if (!@\copy($src, $dest) || !\is_file($dest)) {
+                return '';
+            }
+        }
+
+        return '/pub/errors/maintenance/flags/' . $code . '.svg';
     }
 
     private function getLocaleFallbackLabel(string $code): string
@@ -457,68 +529,62 @@ HTML;
 
     /**
      * Resolve logo/favicon for the standalone maintenance document.
-     * Same cascade as storefront header SiteBrand:
-     * Theme Scope published brand → Backend site_icon / logo_* → Theme default assets.
-     * Paths stay static (/pub/media or theme static).
+     * Same cascade as storefront header SiteBrand, but static publish / CLI /
+     * maintenance Worker often lack a storefront ScopeIdentity (global → empty
+     * appearance). Always try website-scoped ThemeBrandResolver first so the
+     * page follows the published website brand (e.g. default.__website__.default).
      *
      * @return array{logo: string, favicon: string, apple_touch_icon: string}
      */
     private function resolveMaintenanceBrandUrls(): array
     {
+        $defaultLogo = '/Weline/Theme/view/theme/frontend/assets/images/theme/logo.png';
         $favicon = \Weline\Theme\Helper\SiteBrand::DEFAULT_ICON_PUBLIC_PATH;
         $apple = \Weline\Theme\Helper\SiteBrand::DEFAULT_APPLE_TOUCH_ICON_PUBLIC_PATH;
-        $logo = '/Weline/Theme/view/theme/frontend/assets/images/theme/logo.png';
+        $logo = $defaultLogo;
         try {
             $siteBrand = ObjectManager::getInstance(\Weline\Theme\Helper\SiteBrand::class);
-            $template = null;
+
+            // Website-scoped published brand (matches storefront header when
+            // RequestContext is missing or still global during static generation).
+            $this->applyPublishedBrandUrls($this->resolveWebsiteScopedPublishedBrand(), $logo, $favicon, $apple, $defaultLogo);
+
             try {
                 $template = \Weline\Framework\View\Template::getInstance();
             } catch (\Throwable) {
                 $template = null;
             }
 
-            // Prefer the exact storefront cascade so maintenance matches website-selected brand.
             if ($template !== null) {
-                $resolvedLogo = \trim((string)$siteBrand->resolveFrontendLogoUrl($template));
-                if ($resolvedLogo !== '') {
-                    $logo = $resolvedLogo;
+                if ($logo === $defaultLogo) {
+                    $resolvedLogo = \trim((string)$siteBrand->resolveFrontendLogoUrl($template));
+                    if ($resolvedLogo !== '') {
+                        $logo = $resolvedLogo;
+                    }
                 }
-                $resolvedIcon = \trim((string)$siteBrand->resolveIconUrl($template));
-                if ($resolvedIcon !== '') {
-                    $favicon = $resolvedIcon;
+                if ($favicon === \Weline\Theme\Helper\SiteBrand::DEFAULT_ICON_PUBLIC_PATH) {
+                    $resolvedIcon = \trim((string)$siteBrand->resolveIconUrl($template));
+                    if ($resolvedIcon !== '') {
+                        $favicon = $resolvedIcon;
+                    }
                 }
-                $resolvedApple = \trim((string)$siteBrand->resolveAppleTouchIconUrl($template));
-                if ($resolvedApple !== '') {
-                    $apple = $resolvedApple;
+                if ($apple === \Weline\Theme\Helper\SiteBrand::DEFAULT_APPLE_TOUCH_ICON_PUBLIC_PATH) {
+                    $resolvedApple = \trim((string)$siteBrand->resolveAppleTouchIconUrl($template));
+                    if ($resolvedApple !== '') {
+                        $apple = $resolvedApple;
+                    }
                 }
+            }
 
+            if ($logo !== $defaultLogo
+                && $favicon !== \Weline\Theme\Helper\SiteBrand::DEFAULT_ICON_PUBLIC_PATH
+                && $apple !== \Weline\Theme\Helper\SiteBrand::DEFAULT_APPLE_TOUCH_ICON_PUBLIC_PATH
+            ) {
                 return [
                     'logo' => $logo,
                     'favicon' => $favicon,
                     'apple_touch_icon' => $apple,
                 ];
-            }
-
-            try {
-                $brand = ObjectManager::getInstance(\Weline\Theme\Service\ThemeBrandResolver::class)
-                    ->resolvePublishedBrand('frontend', null, null, false);
-                $themeFavicon = $this->toPublicMediaOrStaticUrl((string)($brand['favicon'] ?? ''));
-                if ($themeFavicon !== '') {
-                    $favicon = $themeFavicon;
-                    $apple = $themeFavicon;
-                }
-                $themeApple = $this->toPublicMediaOrStaticUrl((string)($brand['apple_touch_icon'] ?? ''));
-                if ($themeApple !== '') {
-                    $apple = $themeApple;
-                }
-                foreach (['logo_light', 'logo_dark'] as $logoKey) {
-                    $themeLogo = $this->toPublicMediaOrStaticUrl((string)($brand[$logoKey] ?? ''));
-                    if ($themeLogo !== '') {
-                        $logo = $themeLogo;
-                        break;
-                    }
-                }
-            } catch (\Throwable) {
             }
 
             $backendConfig = ObjectManager::getInstance(\Weline\Backend\Api\Config\BackendConfigStore::class);
@@ -539,7 +605,7 @@ HTML;
                 }
             }
 
-            if ($logo === '/Weline/Theme/view/theme/frontend/assets/images/theme/logo.png') {
+            if ($logo === $defaultLogo) {
                 $logoLight = \trim((string)($backendConfig->getConfig('logo_light', 'Weline_Backend') ?? ''));
                 if ($logoLight === '') {
                     $logoLight = \trim((string)($backendConfig->getConfig('logo_dark', 'Weline_Backend') ?? ''));
@@ -559,6 +625,81 @@ HTML;
             'favicon' => $favicon,
             'apple_touch_icon' => $apple,
         ];
+    }
+
+    /**
+     * @return array{favicon: string, apple_touch_icon: string, logo_light: string, logo_dark: string, source_scope: ?string}
+     */
+    private function resolveWebsiteScopedPublishedBrand(): array
+    {
+        $empty = [
+            'favicon' => '',
+            'apple_touch_icon' => '',
+            'logo_light' => '',
+            'logo_dark' => '',
+            'source_scope' => null,
+        ];
+        try {
+            $websiteId = 0;
+            $websiteCode = 'default';
+            if (\class_exists(\Weline\Websites\Data\WebsiteData::class)) {
+                $id = \Weline\Websites\Data\WebsiteData::getWebsiteId();
+                if ($id !== null) {
+                    $websiteId = (int)$id;
+                }
+                $code = \trim((string)(\Weline\Websites\Data\WebsiteData::getCode() ?? ''));
+                if ($code !== '') {
+                    $websiteCode = $code;
+                }
+            }
+            $identity = \Weline\Framework\Runtime\ScopeIdentity::website($websiteId, $websiteCode);
+            try {
+                $catalog = ObjectManager::getInstance(
+                    \Weline\SystemConfig\Api\Scope\ScopeIdentityCatalogInterface::class
+                );
+                $identity = $catalog->authoritativeIdentity($identity);
+            } catch (\Throwable) {
+            }
+            $scopes = ObjectManager::getInstance(\Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface::class);
+            $scope = $scopes->contextFromIdentity($identity);
+            $brand = ObjectManager::getInstance(\Weline\Theme\Service\ThemeBrandResolver::class)
+                ->resolvePublishedBrand('frontend', null, $scope, false);
+
+            return \is_array($brand) ? $brand + $empty : $empty;
+        } catch (\Throwable) {
+            return $empty;
+        }
+    }
+
+    /**
+     * @param array{favicon?: string, apple_touch_icon?: string, logo_light?: string, logo_dark?: string} $brand
+     */
+    private function applyPublishedBrandUrls(
+        array $brand,
+        string &$logo,
+        string &$favicon,
+        string &$apple,
+        string $defaultLogo,
+    ): void {
+        $themeFavicon = $this->toPublicMediaOrStaticUrl((string)($brand['favicon'] ?? ''));
+        if ($themeFavicon !== '' && $favicon === \Weline\Theme\Helper\SiteBrand::DEFAULT_ICON_PUBLIC_PATH) {
+            $favicon = $themeFavicon;
+        }
+        $themeApple = $this->toPublicMediaOrStaticUrl((string)($brand['apple_touch_icon'] ?? ''));
+        if ($themeApple !== '' && $apple === \Weline\Theme\Helper\SiteBrand::DEFAULT_APPLE_TOUCH_ICON_PUBLIC_PATH) {
+            $apple = $themeApple;
+        } elseif ($themeFavicon !== '' && $apple === \Weline\Theme\Helper\SiteBrand::DEFAULT_APPLE_TOUCH_ICON_PUBLIC_PATH) {
+            $apple = $themeFavicon;
+        }
+        if ($logo === $defaultLogo) {
+            foreach (['logo_light', 'logo_dark'] as $logoKey) {
+                $themeLogo = $this->toPublicMediaOrStaticUrl((string)($brand[$logoKey] ?? ''));
+                if ($themeLogo !== '') {
+                    $logo = $themeLogo;
+                    break;
+                }
+            }
+        }
     }
 
     private function toPublicMediaOrStaticUrl(string $path): string

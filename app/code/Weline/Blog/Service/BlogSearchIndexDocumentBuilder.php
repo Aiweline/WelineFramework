@@ -109,6 +109,10 @@ final class BlogSearchIndexDocumentBuilder
                 'category_id' => $categoryId,
             ],
             keywords: (string)($row[Post::schema_fields_KEYWORDS] ?? '') ?: null,
+            authorUrl: (string)($row[Post::schema_fields_AUTHOR_URL] ?? '') ?: null,
+            authorBio: (string)($row[Post::schema_fields_AUTHOR_BIO] ?? '') ?: null,
+            authorJobTitle: (string)($row[Post::schema_fields_AUTHOR_JOB_TITLE] ?? '') ?: null,
+            authorSameAs: BlogArticle::normalizeSameAs($row[Post::schema_fields_AUTHOR_SAME_AS] ?? null),
         );
 
         return $this->fromArticle($article);

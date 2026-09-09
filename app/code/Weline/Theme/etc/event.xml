@@ -211,6 +211,11 @@
                   disabled="false"
                   shared="true"
                   sort="20"/>
+        <observer name="Weline_Theme::seo_social_sameas_head_context_resolve"
+                  instance="Weline\Theme\Observer\SeoSocialSameAsHeadContextResolve"
+                  disabled="false"
+                  shared="true"
+                  sort="25"/>
     </event>
 
     <event name="Weline_Framework_Template::compile_decision">

@@ -58,7 +58,7 @@ final class FooterContainerWidgetContractTest extends TestCase
         ];
         $items = [
             ['group_key' => 'about', 'label' => '关于我们', 'url' => '/about', 'open_in_new' => false],
-            ['group_key' => 'help', 'label' => '帮助', 'url' => '/help', 'open_in_new' => false],
+            ['group_key' => 'help', 'label' => '帮助', 'url' => '/faq', 'open_in_new' => false],
         ];
         $rendered = FooterDefaultLinksHelper::normalizeRenderableGroups($groups, $items);
         self::assertCount(1, $rendered);

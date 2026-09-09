@@ -82,6 +82,8 @@ class PublicApiAuthRouteMatcher
         'visitor/rest/v1/statistics',
         'visitor/rest/v1/analytics',
         'visitor/rest/v1/panel',
+        // 像素加密版本号：店面前端匿名拉取，路径匹配兜底（路由未带 FQCN 时 controller 回退不可用）
+        'visitor/rest/v1/version',
         'api/rest/v1/weshop/checkout/methods',
         'api/rest/v1/weshop/cart/add',
         'api/rest/v1/weshop/cart/options',

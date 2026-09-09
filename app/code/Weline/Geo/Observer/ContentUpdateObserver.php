@@ -78,11 +78,7 @@ class ContentUpdateObserver
 
                 // 创建或更新Feed条目
                 $this->createOrUpdateFeedItem($feed, $data);
-
-                // 如果Feed配置了实时推送，立即推送
-                if ($feed->getData(Feed::schema_fields_UPDATE_FREQUENCY) === Feed::FREQUENCY_REALTIME) {
-                    $this->triggerAutoPush($feed);
-                }
+                // Feed publish is cron-owned (every 10 minutes when content changed).
             }
         } catch (\Exception $e) {
             w_log_error('ContentUpdateObserver error: ' . $e->getMessage());

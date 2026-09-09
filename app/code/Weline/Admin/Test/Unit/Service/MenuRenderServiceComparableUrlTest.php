@@ -51,4 +51,24 @@ final class MenuRenderServiceComparableUrlTest extends TestCase
         self::assertSame('product/backend/catalog/index', $withCurrencyLocale);
         self::assertSame('product/backend/catalog/index', $withoutLocalization);
     }
+
+    public function testIsMenuActiveMatchesControllerUrlWithoutIndexSuffix(): void
+    {
+        $service = new MenuRenderService($this->createStub(MenuAccessLog::class));
+        $current = new \ReflectionProperty(MenuRenderService::class, 'cachedCurrentUrl');
+        $current->setAccessible(true);
+        $current->setValue($service, 'shipping/backend/systemembargo');
+
+        $method = new ReflectionMethod(MenuRenderService::class, 'isMenuActive');
+        $method->setAccessible(true);
+
+        self::assertTrue($method->invoke(
+            $service,
+            'https://example.test/jRaxfEJaRUyO6ZBOA3wJX8bituje6oqH/shipping/backend/systemembargo/index'
+        ));
+        self::assertTrue($method->invoke(
+            $service,
+            '/jRaxfEJaRUyO6ZBOA3wJX8bituje6oqH/shipping/backend/systemembargo'
+        ));
+    }
 }

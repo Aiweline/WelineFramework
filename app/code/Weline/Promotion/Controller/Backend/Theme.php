@@ -147,11 +147,23 @@ class Theme extends BackendController
     )]
     public function postSave(): string
     {
-        $result = $this->themeService->saveTheme($this->request->getParams());
+        $params = $this->request->getParams();
+        $accept = (string)($this->request->getHeader('Accept') ?? '');
+        $wantsJson = str_contains(strtolower($accept), 'application/json')
+            || (string)$this->request->getParam('ajax', '') === '1';
+        $result = $this->themeService->saveTheme($params);
+        if ($wantsJson) {
+            return $this->fetchJson($result);
+        }
+        if (!empty($result['needs_overlap_confirm'])) {
+            $this->getMessageManager()->addWarning((string)($result['message'] ?? __('存在交叉 SKU，请确认后保存。')));
+
+            return $this->redirect('promotion/backend/theme/form', $params);
+        }
         if (!($result['success'] ?? false)) {
             $this->getMessageManager()->addError((string)($result['message'] ?? __('保存失败。')));
 
-            return $this->redirect('promotion/backend/theme/form', $this->request->getParams());
+            return $this->redirect('promotion/backend/theme/form', $params);
         }
 
         $this->getMessageManager()->addSuccess(

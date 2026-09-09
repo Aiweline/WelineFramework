@@ -12,7 +12,8 @@ use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
 #[Table(comment: '免邮规则表')]
-#[Index(name: 'idx_rule_code', columns: ['rule_code'], type: 'UNIQUE')]
+#[Index(name: 'uk_free_rule_scope_code', columns: ['scope_type', 'scope_id', 'rule_code'], type: 'UNIQUE')]
+#[Index(name: 'idx_free_rule_scope', columns: ['scope_type', 'scope_id', 'is_active'])]
 #[Index(name: 'idx_condition_type', columns: ['condition_type'])]
 #[Index(name: 'idx_priority', columns: ['priority'])]
 class FreeShippingRule extends AbstractModel
@@ -20,11 +21,20 @@ class FreeShippingRule extends AbstractModel
     public const schema_table = 'w_shipping_free_shipping_rules';
     public const schema_primary_key = 'rule_id';
     public const schema_primary_keys = ['rule_id'];
+
+    public const SCOPE_WEBSITE = 'website';
+    public const SCOPE_STORE = 'store';
+    public const SCOPE_CHANNEL = 'channel';
+
     #[Col('int', null, nullable: false, primaryKey: true, autoIncrement: true, comment: '规则ID')]
     public const schema_fields_ID = 'rule_id';
+    #[Col('varchar', 16, nullable: false, default: 'website', comment: '作用范围类型 website|store|channel')]
+    public const schema_fields_SCOPE_TYPE = 'scope_type';
+    #[Col('int', null, nullable: false, default: 0, comment: '作用范围ID')]
+    public const schema_fields_SCOPE_ID = 'scope_id';
     #[Col('varchar', 255, nullable: false, comment: '规则名称')]
     public const schema_fields_RULE_NAME = 'rule_name';
-    #[Col('varchar', 50, nullable: false, unique: true, comment: '规则代码')]
+    #[Col('varchar', 50, nullable: false, comment: '规则代码（同范围内唯一）')]
     public const schema_fields_RULE_CODE = 'rule_code';
     #[Col('varchar', 20, nullable: false, comment: '条件类型')]
     public const schema_fields_CONDITION_TYPE = 'condition_type';
@@ -55,8 +65,7 @@ class FreeShippingRule extends AbstractModel
     /**
      * 索引排序键
      */
-    public array $_index_sort_keys = ['rule_id', 'rule_code', 'priority'];
-    /**
+    public array $_index_sort_keys = ['rule_id', 'scope_type', 'scope_id', 'rule_code', 'priority'];    /**
      * 初始化模型
      */
     public function _init(): void

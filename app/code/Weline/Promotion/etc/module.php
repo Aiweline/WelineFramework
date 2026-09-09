@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 return [
     'name' => 'Weline_Promotion',
-    'version' => '1.1.15',
+    'version' => '1.1.21',
     'requires' => [
         'Weline_Framework' => '*',
         'Weline_Backend' => '*',
@@ -17,5 +17,6 @@ return [
         'Weline_Websites' => '*',
         'Weline_Report' => '*',
         'Weline_CustomerService' => '*',
+        'Weline_Seo' => '*',
     ],
 ];

@@ -19,7 +19,7 @@ final class FooterLayoutIntegrityContractTest extends TestCase
                 'label' => '底部区域',
                 'widgets' => [
                     [
-                        'widget_code' => 'footer-help-center-link',
+                        'widget_code' => 'footer-faq-link',
                         'slot_id' => 'footer-help-links',
                         'is_active' => true,
                     ],

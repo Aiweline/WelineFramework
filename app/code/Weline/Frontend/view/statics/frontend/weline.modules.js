@@ -23,13 +23,6 @@ Object.assign(window.WelineModulesConfig.modules, {
         globalVar: "WelineApiModule",
         description: "Weline API模块"
     },
-    welineApiAccount: {
-        paths: [
-            "Weline_Frontend::js/weline-api-account.js"
-        ],
-        globalVar: "WelineAccountModule",
-        description: "Weline API账户模块"
-    },
     welineApiTokenStorage: {
         paths: [
             "Weline_Frontend::js/weline-api-token-storage.js"
@@ -64,23 +57,14 @@ Object.assign(window.WelineModulesConfig.modules, {
         ],
         globalVar: null,
         description: "Cookie操作工具函数"
-    },
-    location: {
-        paths: [
-            "Weline_Location::statics/frontend/js/location.js"
-        ],
-        globalVar: "WelineLocation",
-        description: "Location定位模块（浏览器定位和IP定位）"
     }
 });
 
 // 合并模块别名（短名 → 注册名）
 Object.assign(window.WelineModulesConfig.moduleAliases, {
     api: "welineApi",
-    account: "welineApiAccount",
     tokenStorage: "welineApiTokenStorage",
     worker: "welineApiWorker",
     dom: "welineDom",
-    switcher: "welineSwitcher",
-    geolocation: "location"
+    switcher: "welineSwitcher"
 });

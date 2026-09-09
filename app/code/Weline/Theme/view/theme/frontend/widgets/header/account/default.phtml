@@ -70,9 +70,12 @@ if (empty($dropdownItems)) {
         <a href="@url{'customer/account/index'}" class="account-link" data-account-home-link>
             <?php if ($showAvatar): ?>
                 <span class="account-avatar" data-account-avatar-wrap>
-                    <?php /* Always emit img so account.current can paint a real avatar after guest SSR. */ ?>
+                    <?php /* Always emit img so account.current can paint a real avatar after guest SSR.
+                         HTML width/height 给 CLS 占位（与 --size-control-sm 方形头像比例一致）；显示尺寸仍由 CSS 控制。 */ ?>
                     <img<?= $userAvatar !== '' ? ' src="' . $esc($userAvatar) . '"' : '' ?>
                          alt="<?= $esc($userName) ?>"
+                         width="32"
+                         height="32"
                          data-account-avatar
                          class="account-avatar__img"
                          <?= $userAvatar === '' ? 'hidden' : '' ?>>

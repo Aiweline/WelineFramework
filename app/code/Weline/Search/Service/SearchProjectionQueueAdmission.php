@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Weline\Search\Service;
 
-use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\ScopeEnvelope;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Queue\Api\QueueStatus;
@@ -48,6 +47,7 @@ final class SearchProjectionQueueAdmission implements SearchProjectionQueueAdmis
         array $payload,
         ScopeIdentity $scope,
         bool $isFollowUp,
+        int $attempt = 0,
     ): void {
         $created = \w_query('queue', 'createIfAbsent', [
             'class' => SearchIndexIncrementalQueue::class,
@@ -76,7 +76,7 @@ final class SearchProjectionQueueAdmission implements SearchProjectionQueueAdmis
         $row = \is_array($created['data'] ?? null) ? $created['data'] : [];
 
         if ($status === Queue::status_pending) {
-            $this->refreshPendingSlot($queueId, $payload, $row, $isFollowUp, $scope);
+            $this->refreshPendingSlot($queueId, $payload, $row, $isFollowUp, $scope, $attempt);
             return;
         }
         if ($status === Queue::status_running) {
@@ -102,23 +102,59 @@ final class SearchProjectionQueueAdmission implements SearchProjectionQueueAdmis
         array $row,
         bool $isFollowUp,
         ScopeIdentity $scope,
+        int $attempt,
     ): void {
-        $existingSeq = $this->contentEventSeq($row[Queue::schema_fields_content] ?? null);
-        $incomingSeq = (int)$payload['event_seq'];
-        if ($existingSeq > $incomingSeq) {
-            return;
+        $raw = $row[Queue::schema_fields_content] ?? null;
+        $previous = is_array($raw) ? $raw : json_decode((string)$raw, true, 32, JSON_THROW_ON_ERROR);
+        if (!is_array($previous)
+            || ($previous['target_type'] ?? null) !== $payload['target_type']
+            || (int)($previous['target_id'] ?? 0) !== (int)$payload['target_id']
+        ) {
+            throw new \RuntimeException('search_incremental_slot_target_mismatch');
         }
+        // 异步事件可能乱序到达；保留最高版本投影，同时收集同槽位的每一个事件身份。
+        $latest = (int)$previous['event_seq'] > (int)$payload['event_seq'] ? $previous : $payload;
+        $covered = array_merge($previous['covered_events'] ?? [], $payload['covered_events'] ?? [], [
+            ['event_id' => $previous['event_id'], 'event_seq' => (int)$previous['event_seq']],
+            ['event_id' => $payload['event_id'], 'event_seq' => (int)$payload['event_seq']],
+        ]);
+        $identities = SearchIncrementalEventCoverage::identities(
+            (int)$latest['event_seq'], 'resource-change:' . $latest['event_id'], $covered,
+        );
+        $latest['covered_events'] = [];
+        foreach ($identities as $identity) {
+            if ($identity['event_seq'] !== (int)$latest['event_seq']) {
+                $latest['covered_events'][] = [
+                    'event_id' => substr($identity['idempotency_key'], strlen('resource-change:')),
+                    'event_seq' => $identity['event_seq'],
+                ];
+            }
+        }
+        $payload = $latest;
 
         $updated = \w_query('queue', 'update', [
             'queue_id' => $queueId,
-            'content' => $payload,
-            'name' => $this->queueName($payload, $isFollowUp),
+            'patch' => [
+                'content' => $payload,
+                'name' => $this->queueName($payload, $isFollowUp),
+            ],
+            'expected_content' => is_array($raw)
+                ? (string)json_encode($raw, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE)
+                : (string)$raw,
         ], 'backend');
         if (\is_array($updated) && !empty($updated['success'])) {
             return;
         }
 
         $errorCode = \is_array($updated) ? (string)($updated['error_code'] ?? '') : '';
+        if ($errorCode === 'queue_content_changed') {
+            if ($attempt >= 7) {
+                // 交还既有异步事件重试，不以旧快照覆盖另一个写入者的事件。
+                throw new \RuntimeException('search_incremental_queue_coalesce_contended');
+            }
+            $this->admitSlot((string)$row[Queue::schema_fields_BIZ_KEY], $payload, $scope, $isFollowUp, $attempt + 1);
+            return;
+        }
         if ($errorCode === 'queue_edit_active' || $errorCode === 'queue_state_changed') {
             if ($isFollowUp) {
                 return;
@@ -160,15 +196,9 @@ final class SearchProjectionQueueAdmission implements SearchProjectionQueueAdmis
             throw new \RuntimeException('search_incremental_queue_reopen_update_failed');
         }
 
-        $queue = ObjectManager::getInstance(Queue::class);
-        $queue->clearData()->setData(\is_array($updated['data'] ?? null) ? $updated['data'] : []);
-        if ((int)$queue->getId() < 1) {
-            $queue->clearData()->clearQuery()
-                ->where(Queue::schema_fields_ID, $queueId)
-                ->find()
-                ->fetch();
-        }
-        $this->dispatch->dispatchQueueIfEligible($queue);
+        // The public Queue dispatcher defers Worker startup until the owning
+        // Product transaction commits, and drops dispatch on rollback.
+        \w_query('queue', 'dispatch', ['queue_id' => $queueId], 'backend');
     }
 
     public function slotKey(ScopeIdentity $scope, string $targetType, int $targetId): string

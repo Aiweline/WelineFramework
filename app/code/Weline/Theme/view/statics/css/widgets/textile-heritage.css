@@ -1,6 +1,6 @@
 .weline-textile-heritage {
     width: 100%;
-    padding-block: var(--weline-space-10);
+    padding-block: var(--weline-space-6) var(--weline-space-2);
     color: var(--weline-theme-text);
 }
 

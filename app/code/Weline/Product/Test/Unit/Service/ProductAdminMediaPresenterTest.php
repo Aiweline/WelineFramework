@@ -69,4 +69,35 @@ final class ProductAdminMediaPresenterTest extends TestCase
         );
         self::assertSame('', $presenter->displayableImageUrl('../etc/passwd'));
     }
+
+    public function testPresentAndPersistDescriptionHtmlRoundTrip(): void
+    {
+        $assetId = '73b8afbc-6539-4293-a4b3-ea6949934dce';
+        $assets = $this->createMock(FileAssetManagerInterface::class);
+        $assets->method('locale')->with($assetId, 'zh_Hans_CN');
+        $assets->method('resolveUrl')->willReturn(new ResolvedStorageUrl(
+            'https://cdn.example.test/media/detail.jpg',
+            StorageUrlOptions::KIND_PUBLIC,
+            true,
+        ));
+
+        $presenter = new ProductAdminMediaPresenter($assets);
+        $source = '<div data-weline-product-description="1688">'
+            . '<p><img src="asset://' . $assetId . '" alt="chart"></p>'
+            . '</div>';
+        $presented = $presenter->presentDescriptionForEditor($source, 1);
+
+        self::assertStringContainsString('https://cdn.example.test/media/detail.jpg', $presented['html']);
+        self::assertStringContainsString('data-weline-asset-id="' . $assetId . '"', $presented['html']);
+        self::assertStringNotContainsString('asset://' . $assetId, $presented['html']);
+        self::assertSame(
+            $assetId,
+            $presented['preview_to_asset']['https://cdn.example.test/media/detail.jpg'] ?? '',
+        );
+
+        $persisted = $presenter->persistDescriptionHtml($presented['html']);
+        self::assertStringContainsString('src="asset://' . $assetId . '"', $persisted);
+        self::assertStringNotContainsString('data-weline-asset-id', $persisted);
+        self::assertStringNotContainsString('https://cdn.example.test/media/detail.jpg', $persisted);
+    }
 }

@@ -7,35 +7,32 @@ use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Acl\Acl;
 
 /**
- * 配送系统管理聚合页
+ * 配送系统管理入口
  *
- * 地区管理 | 快递公司 | 费用模板 | 免邮规则 | 配送服务 | 物流跟踪
- * Tab 聚合，URL 持久化 ?tab=region|carrier|...
- *
- * @package Weline_Shipping
+ * 真链跳转到分区页（地区 / 承运商 / … / 系统禁运 / 物流），禁止嵌套框架页。
  */
 #[Acl('Weline_Shipping::shipping_system', '配送系统', 'truck', '配送系统管理聚合页', 'Weline_Backend::shipping_group')]
 class Manager extends BackendController
 {
-    /**
-     * 聚合页：6 个 Tab（已移除遗留配送区域 Zone）
-     */
+    /** @var array<string, string> */
+    private const TAB_PATHS = [
+        'region' => 'shipping/backend/region',
+        'carrier' => 'shipping/backend/carrier',
+        'ratetemplate' => 'shipping/backend/ratetemplate',
+        'freeshippingrule' => 'shipping/backend/freeshippingrule',
+        'shippingservice' => 'shipping/backend/shippingservice',
+        'systemembargo' => 'shipping/backend/systemembargo',
+        'tracking' => 'shipping/backend/tracking',
+    ];
+
     #[Acl('Weline_Shipping::shipping_system_index', '查看配送系统', 'grid', '查看配送系统聚合页')]
-    public function index(): string
+    public function index()
     {
-        $tab = (string) $this->request->getGet('tab', 'region');
-        $allowedTabs = [
-            'region',
-            'carrier',
-            'ratetemplate',
-            'freeshippingrule',
-            'shippingservice',
-            'tracking',
-        ];
-        if (!in_array($tab, $allowedTabs, true)) {
+        $tab = (string)$this->request->getGet('tab', 'region');
+        if (!isset(self::TAB_PATHS[$tab])) {
             $tab = 'region';
         }
-        $this->assign('activeTab', $tab);
-        return $this->fetch();
+
+        return $this->redirect(self::TAB_PATHS[$tab]);
     }
 }

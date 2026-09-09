@@ -39,6 +39,12 @@ class ChatSession extends Model
     public const schema_fields_AGENT_LOCALE = 'agent_locale';
     #[Col(type: 'varchar', length: 20, nullable: false, default: 'waiting', comment: '状态')]
     public const schema_fields_STATUS = 'status';
+    #[Col(type: 'int', nullable: true, comment: '转让来源客服ID')]
+    public const schema_fields_TRANSFERRED_FROM_AGENT_ID = 'transferred_from_agent_id';
+    #[Col(type: 'datetime', nullable: true, comment: '转让时间')]
+    public const schema_fields_TRANSFERRED_AT = 'transferred_at';
+    #[Col(type: 'datetime', nullable: true, comment: '客服最后已读时间')]
+    public const schema_fields_LAST_READ_TIME = 'last_read_time';
     #[Col(type: 'datetime', nullable: true, comment: '创建时间')]
     public const schema_fields_CREATED_AT = 'created_at';
     #[Col(type: 'datetime', nullable: true, comment: '更新时间')]
@@ -112,5 +118,38 @@ class ChatSession extends Model
     public function setStatus(string $status): static
     {
         return $this->setData(self::schema_fields_STATUS, $status);
+    }
+
+    public function getTransferredFromAgentId(): ?int
+    {
+        $id = $this->getData(self::schema_fields_TRANSFERRED_FROM_AGENT_ID);
+        return $id ? (int)$id : null;
+    }
+
+    public function setTransferredFromAgentId(?int $agentId): static
+    {
+        return $this->setData(self::schema_fields_TRANSFERRED_FROM_AGENT_ID, $agentId);
+    }
+
+    public function getTransferredAt(): ?string
+    {
+        $value = $this->getData(self::schema_fields_TRANSFERRED_AT);
+        return $value !== null && $value !== '' ? (string)$value : null;
+    }
+
+    public function setTransferredAt(?string $transferredAt): static
+    {
+        return $this->setData(self::schema_fields_TRANSFERRED_AT, $transferredAt);
+    }
+
+    public function getLastReadTime(): ?string
+    {
+        $value = $this->getData(self::schema_fields_LAST_READ_TIME);
+        return $value !== null && $value !== '' ? (string)$value : null;
+    }
+
+    public function setLastReadTime(?string $lastReadTime): static
+    {
+        return $this->setData(self::schema_fields_LAST_READ_TIME, $lastReadTime);
     }
 }

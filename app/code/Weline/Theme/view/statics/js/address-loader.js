@@ -4,7 +4,7 @@
     var moduleName = 'themeAddress';
     var modulePath = 'Weline_Theme::js/address.js';
     // Keep an explicit bust token so country-only/global fixes are not stuck behind a sticky inherited query.
-    var fallbackUrl = '/Weline/Theme/view/statics/js/address.js?v=20260907-postal-lookup1';
+    var fallbackUrl = '/Weline/Theme/view/statics/js/address.js?v=20260909-subnational-embargo-block4';
 
     (function inheritLoaderVersion() {
         var cur = document.currentScript && document.currentScript.src;
@@ -67,6 +67,9 @@
         return;
     }
     window.WelineThemeAddressDeclared = true;
+    // 禁运打标修复期：强制走带 bust 的直链，避免 sticky _weline_dev 长期命中旧闭包。
+    directLoad();
+    return;
 
     var attempts = 0;
     (function waitForThemeLoader() {

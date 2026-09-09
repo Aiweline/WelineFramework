@@ -8,6 +8,7 @@ use Weline\Geo\Model\Feed;
 use Weline\Geo\Model\FeedItem;
 use Weline\Geo\Model\WebsiteProtocolConfig;
 use Weline\Geo\Service\FeedGeneratorService;
+use Weline\Geo\Service\FeedScheduleService;
 use Weline\Seo\Api\Protocol\WebsiteProtocolResolverInterface;
 
 class GeoProtocolRenderer
@@ -17,7 +18,8 @@ class GeoProtocolRenderer
         private readonly Feed $feed,
         private readonly FeedItem $feedItem,
         private readonly FeedGeneratorService $feedGenerator,
-        private readonly WebsiteProtocolConfig $protocolConfig
+        private readonly WebsiteProtocolConfig $protocolConfig,
+        private readonly ?FeedScheduleService $feedSchedule = null,
     ) {
     }
 
@@ -25,8 +27,8 @@ class GeoProtocolRenderer
     {
         $website = $this->websiteResolver->currentWebsite();
         $config = $this->loadWebsiteConfig($website->id);
-        $baseUrl = rtrim($website->url, '/');
-        $siteName = $website->name !== '' ? $website->name : 'Weline';
+        $baseUrl = $this->resolvePublicBaseUrl($website);
+        $siteName = $this->resolvePublicSiteName($website);
 
         if (!$config->isLlmsEnabled()) {
             return '# ' . $siteName . "\n\n> AI discovery is disabled for this website.\n";
@@ -68,7 +70,7 @@ class GeoProtocolRenderer
                 $lines[] = '## Content';
                 foreach ($contentItems as $item) {
                     $title = trim((string)($item[FeedItem::schema_fields_TITLE] ?? ''));
-                    $url = trim((string)($item[FeedItem::schema_fields_URL] ?? ''));
+                    $url = $this->publicItemUrl(trim((string)($item[FeedItem::schema_fields_URL] ?? '')), $baseUrl);
                     if ($title === '' || $url === '') {
                         continue;
                     }
@@ -93,12 +95,93 @@ class GeoProtocolRenderer
             return $this->emptyFeed($format);
         }
 
-        $feed = $this->preferredFeed($config->getFeedId()) ?: $this->firstEnabledFeed();
-        if ($feed) {
-            return $this->feedGenerator->generateFeed($feed, $format);
+        if ($this->feedSchedule !== null) {
+            $cached = $this->feedSchedule->readSiteFeed($format);
+            if ($cached !== null && $cached !== '') {
+                return $cached;
+            }
         }
 
-        return $this->emptyFeed($format);
+        return $this->renderFeedLive($format);
+    }
+
+    /**
+     * Build feed from current DB items (used by schedule publisher and cache miss).
+     */
+    public function renderFeedLive(string $format = 'json_feed'): string
+    {
+        $website = $this->websiteResolver->currentWebsite();
+        $config = $this->loadWebsiteConfig($website->id);
+        if (!$config->isFeedEnabled()) {
+            return $this->emptyFeed($format);
+        }
+
+        $feeds = $this->enabledFeeds();
+        if ($feeds === []) {
+            return $this->emptyFeed($format);
+        }
+
+        $channel = $this->preferredFeed($config->getFeedId()) ?: $feeds[0];
+        $items = [];
+        $seen = [];
+        foreach ($feeds as $feed) {
+            foreach ($this->feedGenerator->listPublishedItems($feed) as $item) {
+                $url = trim((string)($item[FeedItem::schema_fields_URL] ?? $item['url'] ?? ''));
+                $type = trim((string)($item[FeedItem::schema_fields_ITEM_TYPE] ?? $item['item_type'] ?? ''));
+                $id = (string)($item[FeedItem::schema_fields_ITEM_ID] ?? $item['item_id'] ?? '');
+                $key = $type . ':' . $id . ':' . $url;
+                if ($url === '' || isset($seen[$key])) {
+                    continue;
+                }
+                $seen[$key] = true;
+                $items[] = $item;
+            }
+        }
+
+        usort($items, static function (array $a, array $b): int {
+            $left = (int)($a[FeedItem::schema_fields_PUBLISHED_AT] ?? $a['published_at'] ?? 0);
+            $right = (int)($b[FeedItem::schema_fields_PUBLISHED_AT] ?? $b['published_at'] ?? 0);
+            return $right <=> $left;
+        });
+
+        return $this->feedGenerator->generateFeedFromItems($channel, $items, $format);
+    }
+
+    /**
+     * @return list<Feed>
+     */
+    private function enabledFeeds(): array
+    {
+        try {
+            $rows = $this->feed->reset()
+                ->where(Feed::schema_fields_IS_ENABLED, 1)
+                ->order(Feed::schema_fields_ID, 'ASC')
+                ->select()
+                ->fetchArray();
+        } catch (\Throwable) {
+            return [];
+        }
+        if (!is_array($rows) || $rows === []) {
+            return [];
+        }
+
+        $feeds = [];
+        foreach ($rows as $row) {
+            $id = (int)($row[Feed::schema_fields_ID] ?? 0);
+            if ($id <= 0) {
+                continue;
+            }
+            try {
+                $model = clone $this->feed;
+                $model->clearData()->reset()->load($id);
+                if ($model instanceof Feed && (int)$model->getId() === $id) {
+                    $feeds[] = $model;
+                }
+            } catch (\Throwable) {
+            }
+        }
+
+        return $feeds;
     }
 
     private function emptyFeed(string $format): string
@@ -188,7 +271,7 @@ class GeoProtocolRenderer
     private function productLine(array $item, bool $full): string
     {
         $title = trim((string)($item[FeedItem::schema_fields_TITLE] ?? ''));
-        $url = trim((string)($item[FeedItem::schema_fields_URL] ?? ''));
+        $url = $this->publicItemUrl(trim((string)($item[FeedItem::schema_fields_URL] ?? '')), $this->resolvePublicBaseUrl($this->websiteResolver->currentWebsite()));
         if ($title === '' || $url === '') {
             return '';
         }
@@ -306,5 +389,140 @@ class GeoProtocolRenderer
         }
 
         return $this->protocolConfig->reset();
+    }
+
+    /**
+     * Prefer the live request origin over stored website.url when the catalog
+     * still holds localhost / loopback placeholders from seeding.
+     */
+    private function resolvePublicBaseUrl(object $website): string
+    {
+        $candidates = [];
+        $fullUrl = (string) \Weline\Framework\Env\WelineEnv::server('WELINE_FULL_REQUEST_URI', '');
+        if ($fullUrl !== '' && preg_match('#^https?://#i', $fullUrl) === 1) {
+            $parts = parse_url($fullUrl);
+            if (is_array($parts) && !empty($parts['host'])) {
+                $port = isset($parts['port']) ? ':' . $parts['port'] : '';
+                $candidates[] = (string) ($parts['scheme'] ?? 'https') . '://' . (string) $parts['host'] . $port;
+            }
+        }
+        $host = (string) \Weline\Framework\Env\WelineEnv::server('HTTP_HOST', '');
+        if ($host !== '') {
+            $https = (string) \Weline\Framework\Env\WelineEnv::server('HTTPS', '');
+            $scheme = $https !== '' && strtolower($https) !== 'off' ? 'https' : 'https';
+            $requestScheme = (string) \Weline\Framework\Env\WelineEnv::server('REQUEST_SCHEME', '');
+            if ($requestScheme !== '') {
+                $scheme = $requestScheme;
+            }
+            $candidates[] = $scheme . '://' . $host;
+        }
+        $candidates[] = rtrim(trim((string)($website->url ?? '')), '/');
+
+        foreach ($candidates as $candidate) {
+            if ($candidate === '' || !$this->isHttpUrl($candidate) || $this->isLoopbackHost($candidate)) {
+                continue;
+            }
+
+            return rtrim($candidate, '/');
+        }
+
+        foreach ($candidates as $candidate) {
+            if ($candidate !== '' && $this->isHttpUrl($candidate)) {
+                return rtrim($candidate, '/');
+            }
+        }
+
+        return '';
+    }
+
+    private function publicItemUrl(string $url, string $baseUrl): string
+    {
+        $url = trim($url);
+        $baseUrl = rtrim($baseUrl, '/');
+        if ($url === '') {
+            return '';
+        }
+        if (preg_match('#^https?://#i', $url) === 1) {
+            if ($baseUrl !== '' && $this->isLoopbackHost($url)) {
+                $path = (string) (parse_url($url, PHP_URL_PATH) ?: '/');
+                $query = parse_url($url, PHP_URL_QUERY);
+                $fragment = parse_url($url, PHP_URL_FRAGMENT);
+
+                return $baseUrl
+                    . ($path === '' ? '/' : $path)
+                    . (is_string($query) && $query !== '' ? '?' . $query : '')
+                    . (is_string($fragment) && $fragment !== '' ? '#' . $fragment : '');
+            }
+
+            return $url;
+        }
+        if ($baseUrl === '') {
+            return $url;
+        }
+
+        return $baseUrl . '/' . ltrim($url, '/');
+    }
+
+    private function isHttpUrl(string $url): bool
+    {
+        $scheme = strtolower((string) (parse_url($url, PHP_URL_SCHEME) ?? ''));
+
+        return in_array($scheme, ['http', 'https'], true) && (string) (parse_url($url, PHP_URL_HOST) ?? '') !== '';
+    }
+
+    private function isLoopbackHost(string $url): bool
+    {
+        $host = strtolower((string) (parse_url($url, PHP_URL_HOST) ?? ''));
+        if ($host === '') {
+            return false;
+        }
+
+        return $host === 'localhost'
+            || $host === '127.0.0.1'
+            || $host === '::1'
+            || str_ends_with($host, '.localhost')
+            || str_ends_with($host, '.local');
+    }
+
+    /**
+     * Prefer SEO-resolved public brand over framework placeholder website names.
+     */
+    private function resolvePublicSiteName(object $website): string
+    {
+        $fallback = trim((string)($website->name ?? ''));
+        if ($fallback === '') {
+            $fallback = 'Weline';
+        }
+
+        try {
+            $context = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Seo\Api\Head\PageContextResolverInterface::class
+            )->resolve(null, [
+                'slot' => 'head',
+                'canonical_url' => rtrim((string)($website->url ?? ''), '/') . '/',
+                'url' => rtrim((string)($website->url ?? ''), '/') . '/',
+            ]);
+            $resolved = trim((string)($context->siteName ?? ''));
+            if ($resolved !== '') {
+                return $resolved;
+            }
+        } catch (\Throwable) {
+        }
+
+        if ($this->isFrameworkPlaceholderSiteName($fallback)) {
+            return 'Weline';
+        }
+
+        return $fallback;
+    }
+
+    private function isFrameworkPlaceholderSiteName(string $siteName): bool
+    {
+        $normalized = trim(preg_replace('/\s+/u', ' ', $siteName) ?? $siteName);
+
+        return (bool) preg_match(
+            '/^(默认网站|默认店铺|Default Website|Default Store|Weline|Weline Framework)(?:\s+(默认网站|默认店铺|Default Website|Default Store))*$/iu',
+            $normalized
+        );
     }
 }

@@ -170,8 +170,44 @@ product | category | blog_post | news_article | faq | qa | review_page | web_pag
 - **标签落地页**：使用 `tag_collection` 或 `tag_landing`，继续提供 `item_list`；不要新增非标准 `TagPage`
 - **软件/模块详情页**：可通过 `schema_nodes` 输出 `SoftwareApplication`；`applicationCategory` 建议取主 surface/tag
 - **博客/新闻**：提供 `article`；新闻页还需 `sitemap.news` 字段
+- Article / BlogPosting 的 `authors` 推荐形态（Helpful Content Who 身份链）：
+
+```php
+'authors' => [[
+    '@type' => 'Person',
+    'name' => 'Editor',
+    'url' => 'https://example.com/about/editor',       // 推荐：可延伸作者背景
+    'description' => 'Brief author bio',               // 可选
+    'jobTitle' => 'Researcher',                        // 可选；alone 不算身份链
+    'sameAs' => ['https://example.com/editor'],        // 推荐：与 url 二选一即可
+]],
+```
+
+仅 `name`（或缺 `url`/`sameAs`）时面板「Google Helpful Content 自测」会提示（`who_person_url_or_sameas` / 旧别名 `eeat_article_author_shallow`，不扣四维分）。
 - **FAQ/QA**：提供 `faqs` 或 `qa_list`，勿在模板手写 `FAQPage` / `QAPage`
 - **购物车、结账、登录、账户、预览、后台、API、低价值筛选页**：`robots => noindex,follow`，且 `sitemap.include` / `geo.include` 为 `false`
+
+### SEO 面板 Google Helpful Content 自测
+
+富文本 Tab 内「Google Helpful Content 自测」分区（`EEAT_STRICT_RULES`）对照官方 Who/How/Why 中**可机检**的内部项，**不是**完整 E-E-A-T 人工评级、也**不是**排名门槛。维度：Who / How / Why / Trust。
+
+| ID | 含义 |
+|----|------|
+| `who_visible_byline` | 文章页可见署名 |
+| `who_byline_schema_match` | 可见署名与 Person.name 一致 |
+| `who_person_author` | Article 含 Person 作者 |
+| `who_person_url_or_sameas` | Person 含 url 或 sameAs |
+| `who_author_background` | 作者背景可延伸 |
+| `who_publisher` | Article.publisher |
+| `why_main_content_first` | 主内容可定位（Why 代理） |
+| `why_primary_audience` | 主内容代理失败时 tip；通过时不标 pass、不计 tip（意图仍靠区头人工说明） |
+| `trust_org_sameas` / `trust_org_logo` | Organization 实体示例字段 |
+| `trust_about_contact` | About/Contact 可发现 |
+| `how_article_dates` | datePublished / dateModified |
+| `how_content_substance` | 正文充实度提示（≠ Experience） |
+| `how_review_author` | Review.author |
+
+旧 ID（如 `eeat_org_sameas`）在面板保留别名。文案标明「内部自测 · 非排名门槛」；各维展示通过项摘要；`scoringExempt`，不改可收录/可理解性/体验/引擎适配权重。
 
 ---
 

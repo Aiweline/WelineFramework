@@ -90,6 +90,21 @@ final class StorefrontCacheKeyContextTest extends TestCase
         self::assertSame('USD', $after['currency']);
     }
 
+    public function testGlobalTranslationChangeInvalidatesTheNextRequestFpcKey(): void
+    {
+        $authority = new TestNamespaceGenerationAuthority();
+        $resolver = new StorefrontCacheKeyContextResolver($authority, new NamespacePath());
+        $this->enterScope('shop_a', 'retail', 'web', ScopeIdentity::MODE_NORMAL);
+        $resolver->freezeCurrent();
+        $before = KeyBuilder::buildUnifiedRequestCacheKey('https://example.test/catalog', 'GET');
+        $authority->bump('global/i18n');
+        self::assertSame($before, KeyBuilder::buildUnifiedRequestCacheKey('https://example.test/catalog', 'GET'));
+
+        $this->enterScope('shop_a', 'retail', 'web', ScopeIdentity::MODE_NORMAL);
+        $resolver->freezeCurrent();
+        self::assertNotSame($before, KeyBuilder::buildUnifiedRequestCacheKey('https://example.test/catalog', 'GET'));
+    }
+
     public function testEveryRequiredVersionDimensionChangesTheNextRequestKey(): void
     {
         foreach (['config', 'catalog', 'price', 'theme'] as $dimension) {
@@ -152,6 +167,22 @@ final class StorefrontCacheKeyContextTest extends TestCase
             'scope_state=frozen',
             KeyBuilder::applyDimensionFlags('namespace-read', true, false, false, false),
         );
+    }
+
+    public function testCurrentFenceRetainsResolvedWebsiteBeforeStorefrontFreeze(): void
+    {
+        Context::enter(new Context(['meta' => ['type' => 'request', 'mode' => 'wls']]));
+        RequestContext::setId('website-before-scope');
+        RequestContext::setWelineWebsiteId(7);
+        RequestContext::setWelineWebsiteCode('site_a');
+
+        $context = StorefrontCacheKeyContext::currentOrRequestFence();
+
+        self::assertFalse($context->cacheable);
+        self::assertTrue($context->hasWebsiteScope());
+        self::assertSame(ScopeIdentity::KIND_WEBSITE, $context->scopeIdentity?->scopeKind);
+        self::assertSame(7, $context->scopeIdentity?->websiteId);
+        self::assertSame('site_a', $context->scopeIdentity?->websiteCode);
     }
 
     public function testFingerprintFailureUsesDifferentRequestFencesAndNeverShortensKey(): void

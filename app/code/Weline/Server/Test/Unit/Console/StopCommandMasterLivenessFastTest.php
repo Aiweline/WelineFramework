@@ -24,6 +24,22 @@ final class StopCommandMasterLivenessFastTest extends TestCase
         ));
     }
 
+    public function testMasterPidMissingUsesOsLivenessWithoutIndexLookup(): void
+    {
+        $stop = new class extends Stop {
+            public array $runningByPid = [];
+
+            protected function queryStopPidRunning(int $pid): bool
+            {
+                return (bool)($this->runningByPid[$pid] ?? false);
+            }
+        };
+        $stop->runningByPid[4242] = false;
+        self::assertTrue($this->invokeProtected($stop, 'isMasterPidMissingFromIndex', 4242));
+        $stop->runningByPid[4242] = true;
+        self::assertFalse($this->invokeProtected($stop, 'isMasterPidMissingFromIndex', 4242));
+    }
+
     public function testMasterAvailabilityReturnsFalseWhenEndpointCannotUseIpc(): void
     {
         $stop = new class extends Stop {

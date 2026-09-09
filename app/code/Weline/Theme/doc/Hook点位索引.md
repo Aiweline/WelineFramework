@@ -8,6 +8,7 @@
 | `Weline_Theme::frontend::layouts::base::head-after` | [head-after.md](./hook/frontend/layouts/base/head-after.md) | `.../head-after.phtml` |
 | `Weline_Theme::frontend::layouts::base::body-start` | [body-start.md](./hook/frontend/layouts/base/body-start.md) | `.../body-start.phtml` |
 | `Weline_Theme::frontend::layouts::base::body-end` | [body-end.md](./hook/frontend/layouts/base/body-end.md) | `.../body-end.phtml` |
+| `Weline_Theme::backend::layouts::base::body-end` | [body-end.md](./hook/backend/layouts/base/body-end.md) | `view/hooks/Weline_Theme/backend/layouts/base/body-end.phtml` |
 | `Weline_Theme::frontend::layouts::base::header-before` | [header-before.md](./hook/frontend/layouts/base/header-before.md) | `.../header-before.phtml` |
 | `Weline_Theme::frontend::layouts::base::header-after` | [header-after.md](./hook/frontend/layouts/base/header-after.md) | `.../header-after.phtml` |
 | `Weline_Theme::frontend::layouts::base::content-before` | [content-before.md](./hook/frontend/layouts/base/content-before.md) | `.../content-before.phtml` |

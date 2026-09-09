@@ -29,6 +29,10 @@ ai/archive/**/*.log
 !deploy/
 !deploy/**
 
+# 保留 Agent / MCP 指令文档（dev/ai-command/**）
+!ai-command/
+!ai-command/**
+
 !docker/
 !docker/**
 

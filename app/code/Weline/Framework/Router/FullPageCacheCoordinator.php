@@ -17,6 +17,8 @@ use Weline\Framework\Cache\StorefrontCacheKeyContextResolver;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\State;
 use Weline\Framework\Context;
+use Weline\Framework\Database\TransactionContext;
+use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Response;
@@ -145,7 +147,7 @@ final class FullPageCacheCoordinator
 
     private static int $processFpcPayloadTotalBytes = 0;
 
-    /** @var array<string, array{version:int,full_uri:string,method:string,cookie_header:string,identity_digest:string,cache_key:string}> */
+    /** @var array<string, array{version:int,full_uri:string,method:string,cookie_header:string,identity_digest:string,cache_key:string,scope_identity:array,namespace_fingerprint:string}> */
     private static array $processLocalizedHomepageReceipts = [];
 
     /** @var array<string, string> */
@@ -194,6 +196,12 @@ final class FullPageCacheCoordinator
         $response = $this->getUnifiedCachedResponse($method, $processOnly);
         if ($response !== null) {
             return $this->markCacheHit($response);
+        }
+
+        // processOnly probes are expected to miss when L1 is cold; App falls
+        // back to a shared read. Skip shared-hit diagnostics for that path.
+        if ($processOnly) {
+            return null;
         }
 
         return null;
@@ -253,7 +261,11 @@ final class FullPageCacheCoordinator
         $method = $this->normalizeCacheMethod($method);
         $timeoutMs = $this->resolvePublishedResponseWaitTimeoutMs($timeoutMs);
         if ($timeoutMs <= 0) {
-            return $this->getCachedResponse($method, true) ?? $this->getStaleCachedResponse($method);
+            // Must read shared FPC, not process L1 only. A peer publisher can land
+            // the payload in shared while this Worker's L1 is still empty; processOnly
+            // then reports process-miss and forces a duplicate SSR (debug 70285b:
+            // hit_source=process-miss with shared_hit=true hydrate_ok=true).
+            return $this->getCachedResponse($method, false) ?? $this->getStaleCachedResponse($method);
         }
 
         $deadline = \microtime(true) + ($timeoutMs / 1000);
@@ -294,6 +306,20 @@ final class FullPageCacheCoordinator
                 5000
             )));
         }
+        // Signed-in shoppers may HIT public FPC but cannot publish. When an
+        // anonymous peer holds the build lock, wait for that publish instead of
+        // stampeding into a second multi-second SSR (debug 70285b wait_miss).
+        if ($timeoutMs === self::LOCK_WAIT_TIMEOUT_MS
+            && Runtime::isPersistent()
+            && $this->hasLoggedInFrontendSession()
+            && !$this->canBuildCachedResponse('GET')
+            && $this->isBuildLockHeld('GET')
+        ) {
+            return \max(500, \min(15000, (int)Env::get(
+                'wls.performance.fpc_logged_in_publish_wait_ms',
+                8000
+            )));
+        }
         if ($timeoutMs !== self::LOCK_WAIT_TIMEOUT_MS || !Runtime::isPersistent()) {
             return \max(0, $timeoutMs);
         }
@@ -304,6 +330,24 @@ final class FullPageCacheCoordinator
         );
 
         return \min(\max(0, $configured), 250);
+    }
+
+    private function isBuildLockHeld(string $method): bool
+    {
+        try {
+            $lockKey = $this->getBuildLockKey($method);
+            $adapter = $this->resolveAtomicCacheAdapter('single_flight');
+            if ($adapter !== null && \method_exists($adapter, 'get')) {
+                $value = $adapter->get($lockKey);
+                return $value !== null && $value !== false && $value !== '';
+            }
+
+            $cache = $this->cacheManager()->pool('single_flight');
+            $value = $cache->get($lockKey);
+            return $value !== null && $value !== false && $value !== '';
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     private function internalStorefrontWarmupMode(): bool
@@ -508,7 +552,11 @@ final class FullPageCacheCoordinator
             return false;
         }
 
-        return !$this->hasLoggedInFrontendSession() && $this->hasCompleteFrozenStorefrontScope();
+        // Serve public guest FPC even when the shopper is signed in. Account soft-
+        // reconciles header chrome (w_auth / data-auth-state). Build/publish stay
+        // blocked for logged-in requests so personalized HTML never enters the
+        // shared cache (see canBuildCachedResponse / P1a private-session hard off).
+        return $this->hasCompleteFrozenStorefrontScope();
     }
 
     public function canBuildCachedResponse(string $method = 'GET'): bool
@@ -610,11 +658,13 @@ final class FullPageCacheCoordinator
 
         foreach (\explode(',', $cacheControl) as $directive) {
             $directive = \trim($directive);
-            if ($directive === 'no-cache'
-                || \str_starts_with($directive, 'no-cache=')
-                || $directive === 'no-store'
+            // Browser normal reload sends Cache-Control: max-age=0 (and often
+            // Pragma: no-cache). Chrome DevTools "Disable cache" sends
+            // Cache-Control: no-cache on every document. Both mean "revalidate
+            // the browser disk cache with the origin", not "force the origin to
+            // skip its own shared full-page cache". Only no-store forces SSR.
+            if ($directive === 'no-store'
                 || \str_starts_with($directive, 'no-store=')
-                || \preg_match('/^max-age\s*=\s*0+$/', $directive) === 1
             ) {
                 return true;
             }
@@ -642,6 +692,19 @@ final class FullPageCacheCoordinator
 
     private function clientPragmaRequestsNoCache(): bool
     {
+        // RFC 9111: Pragma: no-cache is an HTTP/1.0 equivalent of Cache-Control
+        // no-cache. Chrome pairs it with max-age=0 / no-cache on ordinary reload
+        // and DevTools Disable cache. Treating Pragma alone as an FPC bypass
+        // made every F5 pay cold SSR. When any Cache-Control is present, ignore
+        // Pragma (CC decides serve policy; only no-store bypasses). Honor
+        // Pragma only for legacy clients with no Cache-Control header.
+        $cacheControl = $this->normalizedRequestHeader('HTTP_CACHE_CONTROL');
+        if ($cacheControl !== '') {
+            // Present Cache-Control (max-age=0, no-cache, no-store, …):
+            // ignore legacy Pragma; serve bypass is decided by CC only.
+            return false;
+        }
+
         $pragma = $this->normalizedRequestHeader('HTTP_PRAGMA');
         if ($pragma === '') {
             return false;
@@ -658,7 +721,10 @@ final class FullPageCacheCoordinator
 
     private function normalizedRequestHeader(string $serverKey): string
     {
-        $value = WelineEnv::server($serverKey, '');
+        $value = Context::getCurrent()?->server($serverKey, null);
+        if (!\is_scalar($value) || \trim((string)$value) === '') {
+            $value = WelineEnv::server($serverKey, '');
+        }
         if (!\is_scalar($value)) {
             return '';
         }
@@ -1003,7 +1069,7 @@ final class FullPageCacheCoordinator
      * captured after Framework froze every Storefront cache-key dimension.
      * This method never reconstructs scope and never reads Shared L2.
      *
-     * @return array{version:int,full_uri:string,method:string,cookie_header:string,identity_digest:string,cache_key:string}|null
+     * @return array{version:int,full_uri:string,method:string,cookie_header:string,identity_digest:string,cache_key:string,scope_identity:array,namespace_fingerprint:string}|null
      */
     public function resolveLocalizedHomepageProcessReceipt(
         string $requestFullUri,
@@ -1020,7 +1086,7 @@ final class FullPageCacheCoordinator
      * Resolve an exact anonymous root-homepage identity learned from a
      * successful Framework FPC publish or hit in this Worker.
      *
-     * @return array{version:int,full_uri:string,method:string,cookie_header:string,identity_digest:string,cache_key:string}|null
+     * @return array{version:int,full_uri:string,method:string,cookie_header:string,identity_digest:string,cache_key:string,scope_identity:array,namespace_fingerprint:string}|null
      */
     public function resolveRootHomepageProcessReceipt(
         string $requestFullUri,
@@ -1034,7 +1100,7 @@ final class FullPageCacheCoordinator
     }
 
     /**
-     * @return array{version:int,full_uri:string,method:string,cookie_header:string,identity_digest:string,cache_key:string}|null
+     * @return array{version:int,full_uri:string,method:string,cookie_header:string,identity_digest:string,cache_key:string,scope_identity:array,namespace_fingerprint:string}|null
      */
     private function resolveHomepageProcessReceipt(
         string $requestFullUri,
@@ -1099,17 +1165,19 @@ final class FullPageCacheCoordinator
      * requires transport-injected server markers which HTTP headers cannot
      * create on their own.
      *
-     * @return array{version:int,full_uri:string,method:string,cookie_header:string,identity_digest:string,cache_key:string}|null
+     * @return array{version:int,full_uri:string,method:string,cookie_header:string,identity_digest:string,cache_key:string,scope_identity:array,namespace_fingerprint:string}|null
      */
     public function currentInternalHomepageWarmupReceipt(): ?array
     {
-        if (!InternalHomepagePrime::isCurrentRequest()) {
+        if (!InternalHomepagePrime::isCurrentRequest()
+            || TransactionContext::activeTransactionConnectionCount() > 0
+        ) {
             return null;
         }
 
         $publishedReceipt = RequestContext::get(self::INTERNAL_HOMEPAGE_RECEIPT_CONTEXT_KEY);
         if (\is_array($publishedReceipt)
-            && (int)($publishedReceipt['version'] ?? 0) === 1
+            && (int)($publishedReceipt['version'] ?? 0) === 2
             && (string)($publishedReceipt['method'] ?? '') === 'GET'
             && KeyBuilder::isValidFullPageCacheKey((string)($publishedReceipt['full_uri'] ?? ''))
             && \preg_match('/^[a-f0-9]{64}$/D', (string)($publishedReceipt['identity_digest'] ?? '')) === 1
@@ -1138,7 +1206,7 @@ final class FullPageCacheCoordinator
      * produce a different receipt.
      *
      * @param array<string, mixed> $variant
-     * @return array{version:int,full_uri:string,method:string,cookie_header:string,identity_digest:string,cache_key:string}|null
+     * @return array{version:int,full_uri:string,method:string,cookie_header:string,identity_digest:string,cache_key:string,scope_identity:array,namespace_fingerprint:string}|null
      */
     private function buildInternalHomepageWarmupReceipt(
         string $fullUri,
@@ -1152,17 +1220,31 @@ final class FullPageCacheCoordinator
             return null;
         }
 
+        $context = StorefrontCacheKeyContext::current();
+        // 只能发布当前请求已经冻结的公共范围；事务内回执不能成为 Worker 公共入口。
+        if (TransactionContext::activeTransactionConnectionCount() > 0
+            || !$context instanceof StorefrontCacheKeyContext
+            || !$context->hasCompleteFrozenScope()
+            || !is_string($context->namespaceFingerprint)
+            || (isset($variant['cache_version'])
+                && !hash_equals($context->cacheKeyFingerprint, (string)$variant['cache_version']))
+        ) {
+            return null;
+        }
+
         // Locale/currency identity lives in full_uri + cache_key/variant.
         // Prefer empty cookie_header so preference cookies are not implied.
         $cookieHeader = '';
 
         return [
-            'version' => 1,
+            'version' => 2,
             'full_uri' => $fullUri,
             'method' => 'GET',
             'cookie_header' => $cookieHeader,
             'identity_digest' => \hash('sha256', $unifiedCacheKey),
             'cache_key' => $unifiedCacheKey,
+            'scope_identity' => $context->scopeIdentity->toArray(),
+            'namespace_fingerprint' => $context->namespaceFingerprint,
         ];
     }
 
@@ -1234,7 +1316,8 @@ final class FullPageCacheCoordinator
      */
     private function internalHomepageReceiptCacheKey(array $receipt): ?string
     {
-        if ((int)($receipt['version'] ?? 0) !== 1
+        if ((int)($receipt['version'] ?? 0) !== 2
+            || TransactionContext::activeTransactionConnectionCount() > 0
             || \strtoupper(\trim((string)($receipt['method'] ?? ''))) !== 'GET'
         ) {
             return null;
@@ -1258,6 +1341,25 @@ final class FullPageCacheCoordinator
             || \preg_match('/^[a-f0-9]{64}$/D', $identityDigest) !== 1
             || !\hash_equals($identityDigest, \hash('sha256', $cacheKey))
         ) {
+            return null;
+        }
+
+        // 旧回执缺少版本证据时安全回落。每个请求由 NamespaceGenerationSnapshot
+        // 首次读取 @clock，同请求重复核验只读已冻结向量，不依赖广播是否送达。
+        $scope = $receipt['scope_identity'] ?? null;
+        $fingerprint = $receipt['namespace_fingerprint'] ?? null;
+        if (!is_array($scope) || !is_string($fingerprint)
+            || preg_match('/^[a-f0-9]{64}$/D', $fingerprint) !== 1
+        ) {
+            return null;
+        }
+        try {
+            $identity = ScopeIdentity::fromArray($scope);
+            $currentFingerprint = $this->storefrontCacheKeyContextResolver()->fingerprintForIdentity($identity);
+            if (!hash_equals($fingerprint, $currentFingerprint)) {
+                return null;
+            }
+        } catch (\Throwable) {
             return null;
         }
 
@@ -1301,8 +1403,13 @@ final class FullPageCacheCoordinator
         $acceptsGzip = $this->acceptEncodingAllowsGzip($acceptEncoding);
         $loggedInFrontendSession = $this->cookieHeaderHasLoggedInFrontendSession($cookieHeader, $fullUri);
         $privateSessionToken = '';
-        if ($loggedInFrontendSession || !$this->legacyPreRouterFpcAllowed()) {
+        // Signed-in shoppers may HIT the public guest FPC; Account soft-reconciles.
+        // Never use a private-session token here (P1a hard-off).
+        if (!$this->legacyPreRouterFpcAllowed()) {
             return null;
+        }
+        if ($loggedInFrontendSession) {
+            $privateSessionToken = '';
         }
         if ($this->isEditorOrPreviewRequest($fullUri) || $this->isExcludedFrontendPath($fullUri)) {
             return null;
@@ -1495,8 +1602,8 @@ final class FullPageCacheCoordinator
         if ($this->isEditorOrPreviewRequest($fullUri) || $this->isExcludedFrontendPath($fullUri)) {
             return false;
         }
-        if ($this->cookieHeaderHasLoggedInFrontendSession($cookieHeader, $fullUri)
-            || !$this->legacyPreRouterFpcAllowed()) {
+        // Logged-in shoppers may probe the public guest FPC (HIT only; never build).
+        if (!$this->legacyPreRouterFpcAllowed()) {
             return false;
         }
 
@@ -1998,8 +2105,14 @@ final class FullPageCacheCoordinator
 
             self::cooperativeBuildYield();
             $cached = $this->cache()->get($cacheKey);
+            $rawShared = \is_array($cached);
             if (\is_array($cached)) {
                 $cached = $this->hydrateSharedPayload($cached);
+                if ($cached === null && $rawShared) {
+                    // Externalized body missing/corrupt: drop stub so an anonymous
+                    // builder can republish. Logged-in shoppers cannot publish.
+                    $this->deleteCachedPayloadByKey($cacheKey);
+                }
             }
             self::cooperativeBuildYield();
             $cachePayloadFetched = \is_array($cached);
@@ -3131,6 +3244,7 @@ final class FullPageCacheCoordinator
         // Keep them paused even for a Framework-only install; App-level FPC can
         // still use the legacy default context after Context::enter().
         return Context::hasCurrent()
+            && Context::getCurrent()?->get('meta.type') !== 'fpc_probe'
             && $this->storefrontScopeProviderResolution()->status === RuntimeProviderResolution::NOT_CONFIGURED;
     }
 

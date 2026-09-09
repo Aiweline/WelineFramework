@@ -65,12 +65,26 @@ final class PromotionActivityThemeService
             'deal_discount_value' => (float)($theme[PromotionActivityTheme::schema_fields_DEAL_DISCOUNT_VALUE] ?? $theme['deal_discount_value'] ?? 0),
             'marketing_rule_id' => (int)($theme[PromotionActivityTheme::schema_fields_MARKETING_RULE_ID] ?? $theme['marketing_rule_id'] ?? 0),
             'product_ids' => $this->themeProductService->resolveStorefrontProductIds($theme, $scope),
+            'theme_id' => (int)$theme['id'],
+            'id' => (int)$theme['id'],
             'scope' => [
                 'website_id' => (int)$theme['website_id'],
                 'store_code' => (string)$theme['store_code'],
                 'channel_code' => (string)$theme['channel_code'],
             ],
         ];
+    }
+
+    /** Active theme id for a storefront page_slug in the current request scope (0 when none). */
+    public function resolveActiveThemeIdByPageSlug(string $pageSlug): int
+    {
+        $pageSlug = strtolower(trim($pageSlug));
+        if ($pageSlug === '' || $pageSlug === 'index') {
+            return 0;
+        }
+        $theme = $this->findActiveByPageSlug($pageSlug, $this->scopeResolver->resolve());
+
+        return $theme === null ? 0 : max(0, (int)($theme['id'] ?? 0));
     }
 
     /** @return list<array<string, mixed>> */
@@ -236,6 +250,56 @@ final class PromotionActivityThemeService
             }
         }
 
+        $dealType = $this->dealDiscountSync->normalizeType((string)($data['deal_discount_type'] ?? PromotionThemeDealDiscountSyncService::DISCOUNT_NONE));
+        $dealValue = round(max(0, (float)($data['deal_discount_value'] ?? 0)), 2);
+        $forceOverlap = !empty($data['force_overlap']) || !empty($data['force_product_overlap']);
+        if (
+            !$forceOverlap
+            && $dealType !== PromotionThemeDealDiscountSyncService::DISCOUNT_NONE
+            && $dealValue > 0
+        ) {
+            $overlapProductIds = array_values(array_map('intval', is_array($productIds) ? $productIds : []));
+            if ($pickMode === PromotionThemeProductService::PICK_MODE_FILTER) {
+                $filterPreview = $this->themeProductService->previewFilterProducts([
+                    'website_id' => $websiteId,
+                    'store_code' => $storeCode,
+                    'channel_code' => $channelCode,
+                    'filter_product_type' => (string)(($data['filter_product_type'] ?? '') ?: ''),
+                    'filter_status' => (string)(($data['filter_status'] ?? 'published') ?: 'published'),
+                    'filter_name' => (string)($data['filter_name'] ?? ''),
+                    'filter_sku' => (string)($data['filter_sku'] ?? ''),
+                    'filter_product_code' => (string)($data['filter_product_code'] ?? ''),
+                    'filter_new_within_days' => (int)($data['filter_new_within_days'] ?? 0),
+                    'filter_limit' => (int)($data['filter_limit'] ?? 12),
+                    'page' => 1,
+                    'page_size' => 48,
+                ]);
+                $overlapProductIds = [];
+                foreach (($filterPreview['items'] ?? []) as $item) {
+                    if (!is_array($item)) {
+                        continue;
+                    }
+                    $pid = (int)($item['product_id'] ?? $item['id'] ?? 0);
+                    if ($pid > 0) {
+                        $overlapProductIds[] = $pid;
+                    }
+                }
+            }
+            $overlaps = $this->themeProductService->findActiveDealOverlaps(
+                $overlapProductIds,
+                $scope,
+                $id,
+            );
+            if ($overlaps !== []) {
+                return [
+                    'success' => false,
+                    'needs_overlap_confirm' => true,
+                    'overlaps' => $overlaps,
+                    'message' => (string)__('以下 SKU 已出现在其他真实折扣活动中。确认后前台将允许顾客选择参考哪个活动（默认显示最强折扣）。'),
+                ];
+            }
+        }
+
         $model = clone $this->theme;
         $id = (int)($data['id'] ?? 0);
         $before = [];
@@ -260,8 +324,6 @@ final class PromotionActivityThemeService
         $model->setData(PromotionActivityTheme::schema_fields_IS_NAV_TAB, !empty($data['is_nav_tab']) ? 1 : 0);
         $model->setData(PromotionActivityTheme::schema_fields_PRICE_BAND, trim((string)($data['price_band'] ?? '')));
         $model->setData(PromotionActivityTheme::schema_fields_PRODUCT_PICK_MODE, $pickMode);
-        $dealType = $this->dealDiscountSync->normalizeType((string)($data['deal_discount_type'] ?? PromotionThemeDealDiscountSyncService::DISCOUNT_NONE));
-        $dealValue = round(max(0, (float)($data['deal_discount_value'] ?? 0)), 2);
         $model->setData(PromotionActivityTheme::schema_fields_DEAL_DISCOUNT_TYPE, $dealType);
         $model->setData(PromotionActivityTheme::schema_fields_DEAL_DISCOUNT_VALUE, $dealValue);
         $model->setData(
@@ -350,50 +412,53 @@ final class PromotionActivityThemeService
                 'page_slug' => 'deals',
                 'sort_order' => 10,
                 'price_band' => 'under_200',
-                'nav_label' => '今日精选',
-                'page_title' => '今日搭配精选',
-                'hero_lede' => '从价格友好的配饰和日常单品开始，引导买家进入购物车和结账路径。',
+                // 今日特价（deals）≠ 今日精选（featured 精选陈列）；活动标与顶栏同源。
+                'nav_label' => '今日特价',
+                'page_title' => '今日特价专场',
+                'hero_lede' => '从价格友好的配饰、发冠与日常常服单品开始，引导买家进入购物车和结账路径。',
                 'entry_title' => '轻量搭配入口',
-                'entry_subtitle' => '从价格友好的配饰和日常单品开始，引导买家进入购物车和结账路径。',
-                'entry_action_label' => '看今日精选',
+                'entry_subtitle' => '从价格友好的配饰、发冠与日常常服单品开始，引导买家进入购物车和结账路径。',
+                'entry_action_label' => '看今日特价',
             ],
             [
                 'theme_key' => 'sale',
                 'page_slug' => 'sale',
                 'sort_order' => 20,
                 'price_band' => '300_plus',
-                'nav_label' => '主题陈列',
-                'page_title' => '季节主题陈列',
-                'hero_lede' => '围绕节庆、礼服和高客单穿搭做主题陈列，不改变商品原始成交价格。',
-                'entry_title' => '季节主题搭配',
-                'entry_subtitle' => '围绕节庆、礼服和高客单穿搭做主题陈列，不改变商品原始成交价格。',
-                'entry_action_label' => '看主题陈列',
+                'nav_label' => '节令主题',
+                'page_title' => '节令主题陈列',
+                'hero_lede' => '围绕传统节令与仪式场景，陈列节庆礼服与主题套装，展示真实成交价，不配置额外优惠。',
+                'entry_title' => '节令主题搭配',
+                'entry_subtitle' => '围绕传统节令与仪式场景，陈列节庆礼服与主题套装，不虚构折扣。',
+                'entry_action_label' => '看节令主题',
             ],
             [
                 'theme_key' => 'weekend',
                 'page_slug' => 'weekend',
                 'sort_order' => 30,
                 'price_band' => 'under_200',
-                'nav_label' => '周末焕新',
-                'page_title' => '周末焕新专场',
-                'hero_lede' => '围绕周末出行、居家放松和轻运动场景，展示真实可售商品，不做虚假折扣。',
-                'entry_title' => '周末焕新',
-                'entry_subtitle' => '适合周末短途、居家升级和轻量运动场景的真实可售商品。',
-                'entry_action_label' => '进入周末专场',
+                'nav_label' => '出游常服',
+                'page_title' => '出游常服专场',
+                'hero_lede' => '围绕踏青、市集与日常出游，陈列常服套装与轻便搭配，只展示真实可售商品，不虚构折扣。',
+                'entry_title' => '出游常服',
+                'entry_subtitle' => '适合踏青、市集打卡与日常出行的常服套装与轻便搭配。',
+                'entry_action_label' => '看出游常服',
             ],
             [
-                'theme_key' => 'gifts',
-                'page_slug' => 'gifts',
+                'theme_key' => 'wedding',
+                'page_slug' => 'wedding',
                 'sort_order' => 40,
                 'price_band' => '300_plus',
-                'nav_label' => '礼盒专场',
-                'page_title' => '礼盒馈赠专场',
-                'hero_lede' => '围绕送礼场景做主题陈列，只展示真实成交价，不虚构划线价或折扣比例。',
-                'entry_title' => '礼盒馈赠',
-                'entry_subtitle' => '节庆、生日与企业赠礼场景下的高客单主题商品集合。',
-                'entry_action_label' => '进入礼盒专场',
+                'nav_label' => '婚嫁礼服',
+                'page_title' => '婚嫁礼服陈列',
+                'hero_lede' => '围绕婚礼、订婚与敬酒仪式，陈列嫁衣与礼服套装，只展示真实成交价，不虚构折扣。',
+                'entry_title' => '婚嫁礼服',
+                'entry_subtitle' => '婚礼嫁衣与仪式礼服主题陈列，便于挑款与搭配。',
+                'entry_action_label' => '看婚嫁礼服',
             ],
         ];
+
+        $this->retireGiftThemes();
 
         foreach ($defaults as $row) {
             foreach ($this->defaultThemeWebsiteIds() as $websiteId) {
@@ -406,7 +471,7 @@ final class PromotionActivityThemeService
                     ->find()
                     ->fetch();
                 if ($existing->getId()) {
-                    $this->backfillDefaultLocalizedCopy((int)$existing->getId(), $row);
+                    $this->overwriteDefaultLocalizedCopy((int)$existing->getId(), $row);
                     continue;
                 }
 
@@ -420,6 +485,8 @@ final class PromotionActivityThemeService
                     'sort_order' => $row['sort_order'],
                     'is_nav_tab' => 1,
                     'price_band' => $row['price_band'],
+                    'deal_discount_type' => PromotionThemeDealDiscountSyncService::DISCOUNT_NONE,
+                    'deal_discount_value' => 0,
                     'nav_label' => $row['nav_label'],
                     'page_title' => $row['page_title'],
                     'hero_lede' => $row['hero_lede'],
@@ -428,6 +495,151 @@ final class PromotionActivityThemeService
                     'entry_action_label' => $row['entry_action_label'],
                 ]);
             }
+        }
+
+        $this->migrateLegacyDealsFeaturedBranding();
+    }
+
+    /**
+     * deals 曾误用「今日精选 / Today's Picks」文案；与顶栏「今日特价」及 featured 精选陈列冲突。
+     * 仅改写已知遗留串，不覆盖运营自定义文案。
+     */
+    private function migrateLegacyDealsFeaturedBranding(): void
+    {
+        $legacyNav = [
+            '今日精选' => '今日特价',
+            "Today's Picks" => "Today's Deals",
+            "Today's picks" => "Today's Deals",
+            'مختارات اليوم' => 'عروض اليوم',
+            'الاختيارات المميزة لهذا اليوم' => 'عروض اليوم',
+            'Heute empfohlene Artikel' => 'Tagesangebote',
+            'Selección del día' => 'Ofertas de hoy',
+            'Sélection du jour' => 'Offres du jour',
+            '今日の厳選' => '今日の特価',
+            '오늘의 추천' => '오늘의 특가',
+            'Seleção do dia' => 'Ofertas de hoje',
+            'Сегодняшние избранные' => 'Сегодняшние скидки',
+            'วันนี้แนะนำ' => 'ดีลวันนี้',
+            'Sản phẩm nổi bật hôm nay' => 'Ưu đãi hôm nay',
+        ];
+        $legacyTitle = [
+            '今日搭配精选' => '今日特价专场',
+            "Today's Hanfu edit" => "Today's Deals",
+            "Today's Featured Looks" => "Today's Deals",
+            'أفضل الخيارات اليوم' => 'عروض اليوم',
+            'Heute ausgewählte Outfit-Vorschläge' => 'Tagesangebote',
+            'Selección de combinaciones para hoy' => 'Ofertas de hoy',
+            'Sélection de tenues du jour' => 'Offres du jour',
+            '今日のおすすめコーディネート' => '今日の特価',
+            '오늘의 추천 스타일' => '오늘의 특가',
+            'Sugestões de looks do dia' => 'Ofertas de hoje',
+            'Рекомендации по подбору на сегодня' => 'Сегодняшние скидки',
+            'วันนี้: เสื้อผ้าที่คัดสรรมาเป็นพิเศษ' => 'ดีลวันนี้',
+            'Gợi ý phối đồ hôm nay' => 'Ưu đãi hôm nay',
+        ];
+        $legacyAction = [
+            '看今日精选' => '看今日特价',
+            '查看今日精选' => '看今日特价',
+            "View today's picks" => "View today's deals",
+            "View Today's Picks" => "View today's deals",
+            'عرض مختارات اليوم' => 'عرض عروض اليوم',
+            'شاهد أفضل العروض لهذا اليوم' => 'عرض عروض اليوم',
+            'Heute ausgewählte Highlights ansehen' => 'Tagesangebote ansehen',
+            'Ver las mejores opciones de hoy' => 'Ver ofertas de hoy',
+            'Voir les meilleures offres du jour' => 'Voir les offres du jour',
+            '今日の厳選アイテムを見る' => '今日の特価を見る',
+            '오늘의 추천 보기' => '오늘의 특가 보기',
+            'Veja as melhores opções de hoje' => 'Ver ofertas de hoje',
+            'Посмотреть сегодняшние подборки' => 'Смотреть сегодняшние скидки',
+            'ดูรายการแนะนำวันนี้' => 'ดูดีลวันนี้',
+            'Xem các lựa chọn hàng ngày' => 'Xem ưu đãi hôm nay',
+        ];
+
+        $collection = clone $this->theme;
+        $collection->clear()
+            ->where(PromotionActivityTheme::schema_fields_PAGE_SLUG, 'deals')
+            ->select()
+            ->fetch();
+
+        foreach ($collection->getItems() as $item) {
+            $themeId = (int)$item->getId();
+            if ($themeId <= 0) {
+                continue;
+            }
+            $locals = clone $this->themeLocal;
+            $locals->clear()
+                ->where(PromotionActivityThemeLocal::schema_fields_ID, $themeId)
+                ->select()
+                ->fetch();
+            foreach ($locals->getItems() as $local) {
+                $changed = false;
+                $nav = trim((string)$local->getData(PromotionActivityThemeLocal::schema_fields_NAV_LABEL));
+                if (isset($legacyNav[$nav])) {
+                    $local->setData(PromotionActivityThemeLocal::schema_fields_NAV_LABEL, $legacyNav[$nav]);
+                    $changed = true;
+                }
+                $title = trim((string)$local->getData(PromotionActivityThemeLocal::schema_fields_PAGE_TITLE));
+                if (isset($legacyTitle[$title])) {
+                    $local->setData(PromotionActivityThemeLocal::schema_fields_PAGE_TITLE, $legacyTitle[$title]);
+                    $changed = true;
+                }
+                $action = trim((string)$local->getData(PromotionActivityThemeLocal::schema_fields_ENTRY_ACTION_LABEL));
+                if (isset($legacyAction[$action])) {
+                    $local->setData(PromotionActivityThemeLocal::schema_fields_ENTRY_ACTION_LABEL, $legacyAction[$action]);
+                    $changed = true;
+                }
+                if ($changed) {
+                    $local->save();
+                }
+            }
+        }
+    }
+
+    /** 礼盒活动已下线：暂停全部 gifts 主题并移出导航。 */
+    public function retireGiftThemes(): void
+    {
+        $collection = clone $this->theme;
+        $collection->clear()
+            ->where(PromotionActivityTheme::schema_fields_PAGE_SLUG, 'gifts')
+            ->select()
+            ->fetch();
+
+        foreach ($collection->getItems() as $item) {
+            $row = $this->normalizeThemeRow($item->getData());
+            $themeId = (int)($row['id'] ?? 0);
+            if ($themeId <= 0) {
+                continue;
+            }
+            if (
+                ($row['status'] ?? '') === PromotionActivityTheme::STATUS_PAUSED
+                && (int)($row['is_nav_tab'] ?? 0) === 0
+            ) {
+                continue;
+            }
+            $copy = $this->resolveLocalizedCopy($themeId, $row);
+            $this->saveTheme([
+                'id' => $themeId,
+                'theme_key' => (string)$row['theme_key'],
+                'page_slug' => 'gifts',
+                'website_id' => (int)$row['website_id'],
+                'store_code' => (string)$row['store_code'],
+                'channel_code' => (string)$row['channel_code'],
+                'status' => PromotionActivityTheme::STATUS_PAUSED,
+                'sort_order' => (int)$row['sort_order'],
+                'is_nav_tab' => 0,
+                'price_band' => (string)$row['price_band'],
+                'product_pick_mode' => (string)$row['product_pick_mode'],
+                'product_filter' => $this->themeProductService->decodeFilterJson((string)$row['product_filter_json']),
+                'product_ids' => $this->themeProductService->listProductIds($themeId),
+                'deal_discount_type' => PromotionThemeDealDiscountSyncService::DISCOUNT_NONE,
+                'deal_discount_value' => 0,
+                'nav_label' => (string)($copy['nav_label'] ?? ''),
+                'page_title' => (string)($copy['page_title'] ?? ''),
+                'hero_lede' => (string)($copy['hero_lede'] ?? ''),
+                'entry_title' => (string)($copy['entry_title'] ?? ''),
+                'entry_subtitle' => (string)($copy['entry_subtitle'] ?? ''),
+                'entry_action_label' => (string)($copy['entry_action_label'] ?? ''),
+            ]);
         }
     }
 
@@ -478,12 +690,12 @@ final class PromotionActivityThemeService
             'price_band' => 'under_200',
             'product_pick_mode' => 'manual',
             'product_filter' => ['status' => 'published', 'limit' => 12],
-            'nav_label' => (string)__('今日精选'),
-            'page_title' => (string)__('今日搭配精选'),
-            'hero_lede' => (string)__('从价格友好的配饰和日常单品开始，引导买家进入购物车和结账路径。'),
+            'nav_label' => (string)__('今日特价'),
+            'page_title' => (string)__('今日特价专场'),
+            'hero_lede' => (string)__('从价格友好的配饰、发冠与日常常服单品开始，引导买家进入购物车和结账路径。'),
             'entry_title' => (string)__('轻量搭配入口'),
-            'entry_subtitle' => (string)__('从价格友好的配饰和日常单品开始，引导买家进入购物车和结账路径。'),
-            'entry_action_label' => (string)__('看今日精选'),
+            'entry_subtitle' => (string)__('从价格友好的配饰、发冠与日常常服单品开始，引导买家进入购物车和结账路径。'),
+            'entry_action_label' => (string)__('看今日特价'),
         ];
     }
 
@@ -513,23 +725,44 @@ final class PromotionActivityThemeService
                 'page_title' => '',
             ];
         $slug = strtolower(trim((string)($fallback['page_slug'] ?? $copy['page_slug'] ?? '')));
-        $label = trim((string)($copy['nav_label'] ?: $copy['page_title'] ?: ''));
-        if ($label === '' && $slug !== '') {
-            $label = $this->defaultNavLabel($slug);
-        }
         $pageTitle = trim((string)($copy['page_title'] ?? ''));
         if ($pageTitle === '' && $slug !== '') {
             $pageTitle = $this->defaultPageTitle($slug);
         }
-        if ($label === '') {
-            $label = $pageTitle;
-        }
+        $label = $this->resolveCampaignDisplayLabel(
+            $slug,
+            trim((string)($copy['nav_label'] ?? '')),
+            $pageTitle,
+        );
 
         return [
             'campaign_label' => $label,
             'campaign_url' => $slug !== '' ? $this->storefrontUrl($slug) : '',
             'page_title' => $pageTitle,
         ];
+    }
+
+    /**
+     * Storefront badge/picker label: never expose raw page_slug (e.g. "deals").
+     */
+    public function resolveCampaignDisplayLabel(
+        string $pageSlug,
+        string $navLabel = '',
+        string $pageTitle = '',
+    ): string {
+        $slug = strtolower(trim($pageSlug));
+        $navLabel = trim($navLabel);
+        $pageTitle = trim($pageTitle);
+        foreach ([$navLabel, $pageTitle] as $candidate) {
+            if ($candidate !== '' && ($slug === '' || strcasecmp($candidate, $slug) !== 0)) {
+                return $candidate;
+            }
+        }
+        if ($slug !== '') {
+            return $this->defaultNavLabel($slug);
+        }
+
+        return $pageTitle !== '' ? $pageTitle : $navLabel;
     }
 
     /** @param array{website_id:int,store_code:string,channel_code:string} $scope */
@@ -736,7 +969,7 @@ final class PromotionActivityThemeService
 
     private function isBuiltInThemeSlug(string $pageSlug): bool
     {
-        return in_array($pageSlug, ['deals', 'sale', 'weekend', 'gifts'], true);
+        return in_array($pageSlug, ['deals', 'sale', 'weekend', 'wedding'], true);
     }
 
     private function isCopyCompatibleWithLocale(string $value, string $locale): bool
@@ -762,6 +995,18 @@ final class PromotionActivityThemeService
 
     /** @param array<string, mixed> $defaults */
     private function backfillDefaultLocalizedCopy(int $themeId, array $defaults): void
+    {
+        $this->writeDefaultLocalizedCopy($themeId, $defaults, false);
+    }
+
+    /** @param array<string, mixed> $defaults */
+    private function overwriteDefaultLocalizedCopy(int $themeId, array $defaults): void
+    {
+        $this->writeDefaultLocalizedCopy($themeId, $defaults, true);
+    }
+
+    /** @param array<string, mixed> $defaults */
+    private function writeDefaultLocalizedCopy(int $themeId, array $defaults, bool $overwrite): void
     {
         $locale = 'zh_Hans_CN';
         $local = clone $this->themeLocal;
@@ -790,9 +1035,14 @@ final class PromotionActivityThemeService
         ] as $field => $inputKey) {
             $current = trim((string)$local->getData($field));
             $fallback = trim((string)($defaults[$inputKey] ?? ''));
-            if ($current === '' && $fallback !== '') {
-                $local->setData($field, $fallback);
-                $changed = true;
+            if ($fallback === '') {
+                continue;
+            }
+            if ($overwrite || $current === '') {
+                if ($current !== $fallback) {
+                    $local->setData($field, $fallback);
+                    $changed = true;
+                }
             }
         }
 
@@ -804,10 +1054,10 @@ final class PromotionActivityThemeService
     private function defaultNavLabel(string $pageSlug): string
     {
         return match ($pageSlug) {
-            'deals' => (string)__('今日精选'),
-            'sale' => (string)__('主题陈列'),
-            'weekend' => (string)__('周末焕新'),
-            'gifts' => (string)__('礼盒专场'),
+            'deals' => (string)__('今日特价'),
+            'sale' => (string)__('节令主题'),
+            'weekend' => (string)__('出游常服'),
+            'wedding' => (string)__('婚嫁礼服'),
             default => ucfirst(str_replace(['-', '_'], ' ', $pageSlug)),
         };
     }
@@ -815,10 +1065,10 @@ final class PromotionActivityThemeService
     private function defaultPageTitle(string $pageSlug): string
     {
         return match ($pageSlug) {
-            'deals' => (string)__('今日搭配精选'),
-            'sale' => (string)__('季节主题陈列'),
-            'weekend' => (string)__('周末焕新专场'),
-            'gifts' => (string)__('礼盒馈赠专场'),
+            'deals' => (string)__('今日特价专场'),
+            'sale' => (string)__('节令主题陈列'),
+            'weekend' => (string)__('出游常服专场'),
+            'wedding' => (string)__('婚嫁礼服陈列'),
             default => (string)__('活动主题'),
         };
     }
@@ -826,10 +1076,10 @@ final class PromotionActivityThemeService
     private function defaultHeroLede(string $pageSlug): string
     {
         return match ($pageSlug) {
-            'deals' => (string)__('从价格友好的配饰和日常单品开始，引导买家进入购物车和结账路径。'),
-            'sale' => (string)__('围绕节庆、礼服和高客单穿搭做主题陈列，不改变商品原始成交价格。'),
-            'weekend' => (string)__('围绕周末出行、居家放松和轻运动场景，展示真实可售商品，不做虚假折扣。'),
-            'gifts' => (string)__('围绕送礼场景做主题陈列，只展示真实成交价，不虚构划线价或折扣比例。'),
+            'deals' => (string)__('从价格友好的配饰、发冠与日常常服单品开始，引导买家进入购物车和结账路径。'),
+            'sale' => (string)__('围绕传统节令与仪式场景，陈列节庆礼服与主题套装，展示真实成交价，不配置额外优惠。'),
+            'weekend' => (string)__('围绕踏青、市集与日常出游，陈列常服套装与轻便搭配，只展示真实可售商品，不虚构折扣。'),
+            'wedding' => (string)__('围绕婚礼、订婚与敬酒仪式，陈列嫁衣与礼服套装，只展示真实成交价，不虚构折扣。'),
             default => (string)__('浏览活动商品，进入商品详情、购物车与结账路径。本页不展示虚假折扣，只承接真实可售商品。'),
         };
     }
@@ -840,23 +1090,23 @@ final class PromotionActivityThemeService
         return match ($pageSlug) {
             'deals' => [
                 'entry_title' => (string)__('轻量搭配入口'),
-                'entry_subtitle' => (string)__('从价格友好的配饰和日常单品开始，引导买家进入购物车和结账路径。'),
-                'entry_action_label' => (string)__('看今日精选'),
+                'entry_subtitle' => (string)__('从价格友好的配饰、发冠与日常常服单品开始，引导买家进入购物车和结账路径。'),
+                'entry_action_label' => (string)__('看今日特价'),
             ],
             'sale' => [
-                'entry_title' => (string)__('季节主题搭配'),
-                'entry_subtitle' => (string)__('围绕节庆、礼服和高客单穿搭做主题陈列，不改变商品原始成交价格。'),
-                'entry_action_label' => (string)__('看主题陈列'),
+                'entry_title' => (string)__('节令主题搭配'),
+                'entry_subtitle' => (string)__('围绕传统节令与仪式场景，陈列节庆礼服与主题套装，不虚构折扣。'),
+                'entry_action_label' => (string)__('看节令主题'),
             ],
             'weekend' => [
-                'entry_title' => (string)__('周末焕新'),
-                'entry_subtitle' => (string)__('适合周末短途、居家升级和轻量运动场景的真实可售商品。'),
-                'entry_action_label' => (string)__('进入周末专场'),
+                'entry_title' => (string)__('出游常服'),
+                'entry_subtitle' => (string)__('适合踏青、市集打卡与日常出行的常服套装与轻便搭配。'),
+                'entry_action_label' => (string)__('看出游常服'),
             ],
-            'gifts' => [
-                'entry_title' => (string)__('礼盒馈赠'),
-                'entry_subtitle' => (string)__('节庆、生日与企业赠礼场景下的高客单主题商品集合。'),
-                'entry_action_label' => (string)__('进入礼盒专场'),
+            'wedding' => [
+                'entry_title' => (string)__('婚嫁礼服'),
+                'entry_subtitle' => (string)__('婚礼嫁衣与仪式礼服主题陈列，便于挑款与搭配。'),
+                'entry_action_label' => (string)__('看婚嫁礼服'),
             ],
             default => [
                 'entry_title' => '',

@@ -37,6 +37,7 @@ final class ProductReviewSeoProfileProviderContractTest extends TestCase
         self::assertStringContainsString('\'reviews\' => $reviews', $source);
         self::assertStringContainsString('\'rating\' => $average', $source);
         self::assertStringContainsString('\'review_count\' => $reviewCount', $source);
+        self::assertStringContainsString('global_product_uuid', $source);
         self::assertStringContainsString('storefront_offer', $source);
         self::assertStringNotContainsString('application/ld+json', $source);
         self::assertStringNotContainsString('@graph', $source);
@@ -79,6 +80,11 @@ final class ProductReviewSeoProfileProviderContractTest extends TestCase
                     ],
                 ];
             }
+
+            public function aggregatesForExternalUuids(string $typeCode, array $externalEntityUuids): array
+            {
+                return [];
+            }
         };
 
         $provider = new ProductReviewSeoProfileProvider($reviews);
@@ -106,6 +112,68 @@ final class ProductReviewSeoProfileProviderContractTest extends TestCase
         self::assertSame('匿名用户', $profile['reviews'][0]['author'] ?? null);
     }
 
+    public function testProviderFallsBackToProductUuidWhenOfferUuidCleared(): void
+    {
+        if (!interface_exists(SeoProfileProviderInterface::class)) {
+            self::markTestSkipped('Weline_Seo is not available.');
+        }
+
+        $reviews = new class implements ReviewSeoFactsInterface {
+            public string $seenUuid = '';
+
+            public function seoFacts(string $typeCode, string $externalEntityUuid, int $sampleSize = 10): array
+            {
+                $this->seenUuid = $externalEntityUuid;
+
+                return [
+                    'success' => true,
+                    'review_count' => 1,
+                    'average_rating' => 5.0,
+                    'reviews' => [
+                        [
+                            'author' => '买家',
+                            'rating' => 5,
+                            'content' => '非常满意这次购买体验。',
+                            'reviewBody' => '非常满意这次购买体验。',
+                            'created_at' => '2026-09-01 10:00:00',
+                            'datePublished' => '2026-09-01 10:00:00',
+                        ],
+                    ],
+                ];
+            }
+
+            public function aggregatesForExternalUuids(string $typeCode, array $externalEntityUuids): array
+            {
+                return [];
+            }
+        };
+
+        $provider = new ProductReviewSeoProfileProvider($reviews);
+        $profile = $provider->provideSeoProfile(
+            new class {
+                public function getData(string $key): mixed
+                {
+                    return null;
+                }
+            },
+            [
+                '_slot' => 'head',
+                'page_type' => 'product',
+                'product' => [
+                    'name' => '飞天敦煌马面裙',
+                    'global_offer_uuid' => '',
+                    'global_product_uuid' => 'product-uuid-94',
+                    'selection_required' => true,
+                ],
+            ],
+        );
+
+        self::assertSame('product-uuid-94', $reviews->seenUuid);
+        self::assertSame(1, $profile['product']['review_count'] ?? null);
+        self::assertSame(5.0, $profile['product']['rating'] ?? null);
+        self::assertCount(1, $profile['reviews'] ?? []);
+    }
+
     public function testProviderSkipsNonHeadSlotsAndMissingOffers(): void
     {
         if (!interface_exists(SeoProfileProviderInterface::class)) {
@@ -125,6 +193,11 @@ final class ProductReviewSeoProfileProviderContractTest extends TestCase
                     'average_rating' => 0.0,
                     'reviews' => [],
                 ];
+            }
+
+            public function aggregatesForExternalUuids(string $typeCode, array $externalEntityUuids): array
+            {
+                return [];
             }
         };
         $provider = new ProductReviewSeoProfileProvider($reviews);
@@ -146,6 +219,7 @@ final class ProductReviewSeoProfileProviderContractTest extends TestCase
         $source = (string)file_get_contents(dirname(__DIR__, 5) . '/Service/ReviewService.php');
         self::assertStringContainsString('implements ReviewSeoFactsInterface', $source);
         self::assertStringContainsString('public function seoFacts(', $source);
+        self::assertStringContainsString('public function aggregatesForExternalUuids(', $source);
         self::assertStringContainsString('AVG(', $source);
         self::assertStringContainsString('schema_fields_RATING', $source);
         self::assertStringContainsString("'author' =>", $source);

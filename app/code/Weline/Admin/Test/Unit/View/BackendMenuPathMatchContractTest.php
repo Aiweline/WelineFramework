@@ -21,6 +21,7 @@ final class BackendMenuPathMatchContractTest extends TestCase
         self::assertStringContainsString('禁止 products↔offers', $js);
         self::assertStringContainsString('actionAliases', $js);
         self::assertStringContainsString('actionAliases[menuAction] && actionAliases[currentAction]', $js);
+        self::assertStringContainsString('菜单常带 …/index，当前路由常省略 /index', $js);
         self::assertStringNotContainsString(
             '同级页面匹配（路径长度相同，前N-1段匹配，只有最后一段不同）',
             $js

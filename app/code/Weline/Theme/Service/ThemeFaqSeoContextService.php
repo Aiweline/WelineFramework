@@ -16,7 +16,6 @@ class ThemeFaqSeoContextService
     private const FAQ_PAGE_TYPES = [
         'cms_page',
         'faq',
-        'help',
         'customer_service',
         'contact',
         'contact_page',

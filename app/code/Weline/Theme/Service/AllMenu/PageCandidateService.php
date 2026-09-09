@@ -19,7 +19,7 @@ final class PageCandidateService
         return [
             'about' => '关于我们',
             'contact' => '联系我们',
-            'help' => '帮助中心',
+            'faq' => 'FAQ/常见问题',
             'support' => '支持',
             'faq' => '常见问题',
             'solutions' => '解决方案',

@@ -56,7 +56,7 @@ final class StorefrontCacheKeyContextResolver
         StorefrontCacheKeyContext::install($provisional);
 
         try {
-            $fingerprint = $this->generations->fingerprint($this->namespacePathsForIdentity($identity));
+            $fingerprint = $this->fingerprintForIdentity($identity);
             $resolved = new StorefrontCacheKeyContext(
                 $identity,
                 $provisional->lang,
@@ -97,7 +97,7 @@ final class StorefrontCacheKeyContextResolver
         $provisional = $this->requestFence($identity, $lang, $currency, 'legacy_namespace_pending');
         StorefrontCacheKeyContext::install($provisional);
         try {
-            $fingerprint = $this->generations->fingerprint($this->namespacePathsForIdentity($identity));
+            $fingerprint = $this->fingerprintForIdentity($identity);
             $resolved = new StorefrontCacheKeyContext(
                 $identity,
                 $provisional->lang,
@@ -113,6 +113,12 @@ final class StorefrontCacheKeyContextResolver
         }
     }
 
+    /** 复用权威请求快照核对已冻结回执；不信任广播更新的进程向量。 */
+    public function fingerprintForIdentity(ScopeIdentity $identity): string
+    {
+        return $this->generations->fingerprint($this->namespacePathsForIdentity($identity));
+    }
+
     /** @return list<string> */
     public function namespacePaths(string $websiteCode): array
     {
@@ -122,6 +128,7 @@ final class StorefrontCacheKeyContextResolver
         }
 
         return [
+            $this->namespacePath->global('i18n'),
             $this->namespacePath->global('storefront', ['config']),
             $this->namespacePath->global('storefront', ['price']),
             $this->namespacePath->global('storefront', ['theme']),

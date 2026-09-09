@@ -110,7 +110,8 @@ $translatedText = $eventData['translated_text'] ?? $message;
 - `GET /customerservice/backend/agent` - 客服人员列表
 - `GET /customerservice/backend/agent/agent-statistics` - 获取客服统计
 - `POST /customerservice/backend/agent/save` - 保存客服人员
-- `POST /customerservice/backend/agent/remove` - 删除客服人员
+- `POST /customerservice/backend/agent/remove` - 删除客服人员（有未关闭会话时须转让或释放）
+- `POST /customerservice/backend/agent/transfer-sessions` - 转让客服名下未关闭会话
 - `GET /customerservice/backend/session` - 会话列表
 - `GET /customerservice/backend/session/view` - 会话详情
 - `POST /customerservice/backend/session/close` - 关闭会话

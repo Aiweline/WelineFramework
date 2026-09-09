@@ -115,6 +115,19 @@ if (!function_exists('weline_is_static_file_path')) {
         if (\preg_match('#^sitemaps/[A-Za-z0-9_-]+/[A-Za-z0-9_-]+/[A-Za-z0-9._-]+\.xml$#iD', \strtolower($path)) === 1) {
             return false;
         }
+        // Reader RSS endpoints owned by Blog / Product (not on-disk static files).
+        $lowerPath = \strtolower($path);
+        if (
+            $lowerPath === 'blog/rss.xml'
+            || \preg_match('#^blog/category/[a-z][a-z0-9]*(?:-[a-z0-9]+)*/rss\.xml$#D', $lowerPath) === 1
+            || \in_array($lowerPath, [
+                'new-arrivals/rss.xml',
+                'newarrivals/rss.xml',
+                'new_arrivals/rss.xml',
+            ], true)
+        ) {
+            return false;
+        }
         $arr = \explode('/', $path);
         $last = \end($arr);
         return \str_contains($last, '.')

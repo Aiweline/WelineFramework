@@ -272,6 +272,7 @@ trait TraitTemplate
         $source = trim($source, DS);
         $cache_key = $type . '_' . $source . '|' . $this->viewEnvironmentCacheSuffix('tag-source');
         $dataIsUrl = false;
+        $cachedTemplatePath = null;
         switch ($type) {
             case DataInterface::dir_type_STATICS:
                 $dataIsUrl = true;
@@ -339,7 +340,7 @@ trait TraitTemplate
                     }
                 } else {
                     // 模板文件：返回文件路径
-                    $data = $this->viewCache->get($cache_key);
+                    $data = $cachedTemplatePath = $this->viewCache->get($cache_key);
                     if (PROD && $data && is_file($data)) {
                         return $data;
                     }
@@ -351,7 +352,7 @@ trait TraitTemplate
             case DataInterface::dir_type_TEMPLATE:
             case DataInterface::dir_type_BLOCKS:
             default:
-                $data = $this->viewCache->get($cache_key);
+                $data = $cachedTemplatePath = $this->viewCache->get($cache_key);
                 if (PROD && $data && is_file($data)) {
                     return $data;
                 }
@@ -386,7 +387,9 @@ trait TraitTemplate
         
         // 静态资源不缓存带版本号的 URL（版本号需要动态计算）
         // 只缓存基础 URL 可能导致问题，这里选择不缓存静态资源 URL
-        if (!$dataIsUrl) {
+        // DEV still resolves the source above to detect edits; an unchanged
+        // compiled path does not need another shared-cache write for each hook.
+        if (!$dataIsUrl && $data !== $cachedTemplatePath) {
             $this->viewCache->set($cache_key, $data);
         }
         return $data;

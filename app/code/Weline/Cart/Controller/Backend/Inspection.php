@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Cart\Controller\Backend;
 
-use Weline\Cart\Service\CartCacheStore;
+use Weline\Cart\Api\CartStoreInterface;
 use Weline\Cart\Service\CommerceCartTypeRegistry;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
@@ -13,7 +13,7 @@ use Weline\Framework\Manager\ObjectManager;
 #[Acl('Weline_Cart::cart_workspace', '购物车工作台', 'search', '购物车检查', 'Weline_Backend::order_group')]
 final class Inspection extends BackendController
 {
-    #[Acl('Weline_Cart::cart_inspection', '购物车检查', 'search', '按 Scope 检查真实 Cart 持久缓存')]
+    #[Acl('Weline_Cart::cart_inspection', '购物车检查', 'search', '按 Scope 检查真实 Cart 持久库')]
     public function index(): string
     {
         $scopeKey = trim((string)$this->request->getParam('scope_key', ''));
@@ -31,8 +31,8 @@ final class Inspection extends BackendController
 
         if ($scopeKey !== '') {
             try {
-                /** @var CartCacheStore $store */
-                $store = ObjectManager::getInstance(CartCacheStore::class);
+                /** @var CartStoreInterface $store */
+                $store = ObjectManager::getInstance(CartStoreInterface::class);
                 foreach ($store->listByScopeKey($scopeKey) as $cart) {
                     $items = is_array($cart['items'] ?? null) ? $cart['items'] : [];
                     $cartType = strtolower(trim((string)($cart['cart_type'] ?? '')));

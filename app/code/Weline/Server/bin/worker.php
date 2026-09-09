@@ -5726,7 +5726,8 @@ function handleRequest(
                 \is_array($cacheInfo) ? $cacheInfo : []
             );
         }
-        return $staticResponse;
+        // Static path returns before framework Response::compress(); gzip text/JS/CSS here.
+        return wlsMaybeCompressStaticHttpResponse($staticResponse, $rawRequest);
     }
     // ========== 静态文件处理结束 ==========
 

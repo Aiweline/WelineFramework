@@ -10,7 +10,7 @@ use Weline\Search\Model\SearchShardKey;
 /**
  * Explicit in-memory Search storage used only by focused tests/harnesses.
  */
-final class SearchIndexStore implements SearchIndexStorageInterface
+final class SearchIndexStore implements \Weline\Search\Api\SearchIndexEventCoverageStorageInterface
 {
     /** @var array<int,array<int,array<string,array<string,mixed>>>> */
     private array $documents = [];
@@ -125,6 +125,41 @@ final class SearchIndexStore implements SearchIndexStorageInterface
         array $documents,
         array $deleteKeys,
     ): array {
+        return $this->applyCoveredChange($websiteId, $eventSeq, $idempotencyKey, $documents, $deleteKeys, []);
+    }
+
+    /** @param list<array{event_id:string,event_seq:int}> $coveredEvents */
+    public function applyCoveredChange(
+        int $websiteId,
+        int $eventSeq,
+        string $idempotencyKey,
+        array $documents,
+        array $deleteKeys,
+        array $coveredEvents,
+    ): array {
+        $beforeDocuments = $this->documents;
+        $beforeEvents = $this->events;
+        $beforeWatermarks = $this->watermarks;
+        try {
+            return $this->applyCoveredChangeAtomically(
+                $websiteId, $eventSeq, $idempotencyKey, $documents, $deleteKeys, $coveredEvents,
+            );
+        } catch (\Throwable $exception) {
+            $this->documents = $beforeDocuments;
+            $this->events = $beforeEvents;
+            $this->watermarks = $beforeWatermarks;
+            throw $exception;
+        }
+    }
+
+    private function applyCoveredChangeAtomically(
+        int $websiteId,
+        int $eventSeq,
+        string $idempotencyKey,
+        array $documents,
+        array $deleteKeys,
+        array $coveredEvents,
+    ): array {
         SearchShardKey::fromWebsiteId($websiteId);
         $idempotencyKey = \trim($idempotencyKey);
         if ($eventSeq < 1 || $idempotencyKey === '') {
@@ -141,23 +176,30 @@ final class SearchIndexStore implements SearchIndexStorageInterface
             ));
         }
         $payloadHash = $this->changeHash($documents, $deleteKeys);
-        $existingEvent = $this->events[$websiteId][$generation][$idempotencyKey] ?? null;
-        if ($existingEvent !== null) {
-            if (!\hash_equals($existingEvent['payload_hash'], $payloadHash)) {
-                throw new \RuntimeException('search_incremental_idempotency_payload_conflict');
+        $identities = SearchIncrementalEventCoverage::identities($eventSeq, $idempotencyKey, $coveredEvents);
+        $newEvents = [];
+        $replayed = isset($this->events[$websiteId][$generation][$idempotencyKey]);
+        foreach ($identities as $identity) {
+            $key = $identity['idempotency_key'];
+            $existing = $this->events[$websiteId][$generation][$key] ?? null;
+            if ($existing !== null) {
+                if ($existing['event_seq'] !== $identity['event_seq']) {
+                    throw new \RuntimeException('search_incremental_sequence_identity_conflict');
+                }
+                if ($key === $idempotencyKey && !hash_equals($existing['payload_hash'], $payloadHash)) {
+                    throw new \RuntimeException('search_incremental_idempotency_payload_conflict');
+                }
+                continue;
             }
-
-            return [
-                'ok' => true,
-                'replayed' => true,
-                'applied' => false,
-                'reason' => 'duplicate_idempotency_key',
-                'watermark' => $watermark,
-            ];
+            foreach ($this->events[$websiteId][$generation] ?? [] as $applied) {
+                if ($applied['event_seq'] === $identity['event_seq']) {
+                    throw new \RuntimeException('search_incremental_sequence_identity_conflict');
+                }
+            }
+            $newEvents[] = $identity;
         }
-
         $coveredByFull = $eventSeq <= (int)$watermark['incremental_watermark'];
-        if (!$coveredByFull) {
+        if (!$coveredByFull && !$replayed) {
             $incomingKeys = [];
             foreach ($documents as $document) {
                 $incomingKeys[$this->documentKey(
@@ -194,17 +236,20 @@ final class SearchIndexStore implements SearchIndexStorageInterface
                 $this->documents[$websiteId][$generation][$key] = $incoming;
             }
         }
-        $this->events[$websiteId][$generation][$idempotencyKey] = [
-            'event_seq' => $eventSeq,
-            'payload_hash' => $payloadHash,
-        ];
+        // 只有全部文档写入成功，才记录被最终投影覆盖的每个事件。
+        foreach ($newEvents as $identity) {
+            $this->events[$websiteId][$generation][$identity['idempotency_key']] = [
+                'event_seq' => $identity['event_seq'],
+                'payload_hash' => $payloadHash,
+            ];
+        }
         $this->advanceContiguousWatermark($websiteId, $generation);
 
         return [
             'ok' => true,
-            'replayed' => false,
-            'applied' => !$coveredByFull,
-            'reason' => $coveredByFull ? 'covered_by_full_build' : 'applied',
+            'replayed' => $replayed,
+            'applied' => !$coveredByFull && !$replayed,
+            'reason' => $replayed ? 'duplicate_idempotency_key' : ($coveredByFull ? 'covered_by_full_build' : 'applied'),
             'watermark' => $this->watermark($websiteId),
         ];
     }

@@ -50,7 +50,7 @@ final class CheckoutShippingAddressWidgetContractTest extends TestCase
         self::assertStringContainsString('WelineShippingCheckoutAddress', $modules);
         self::assertStringContainsString('data-field-error-for="phone"', $template);
         self::assertStringContainsString("'err_name'", $template);
-        self::assertStringContainsString('checkout-shipping-address.css)?v=20260905-csa11', $template);
+        self::assertStringContainsString('checkout-shipping-address.css)?v=20260909-csa-add2', $template);
         self::assertStringNotContainsString('name="country_code" type="text"', $template);
         self::assertStringNotContainsString('<input name="province"', $template);
         self::assertStringNotContainsString('<input name="city"', $template);
@@ -110,6 +110,16 @@ final class CheckoutShippingAddressWidgetContractTest extends TestCase
         self::assertStringContainsString('--sca-link', $css);
         self::assertStringContainsString('data-mode="collapsed"', $css);
         self::assertStringContainsString('[data-mode="picking"]', $css);
+        // collapsed 显式保留「使用新地址」（覆盖旧缓存 display:none）
+        self::assertStringContainsString('[data-mode="collapsed"] [data-add-address]', $css);
+        self::assertStringContainsString(
+            ".w-shipping-checkout-address[data-mode=\"collapsed\"] [data-add-address] {\n  display: inline-block;\n}",
+            $css,
+        );
+        self::assertStringNotContainsString(
+            ".w-shipping-checkout-address[data-mode=\"collapsed\"] [data-add-address] {\n  display: none;\n}",
+            $css,
+        );
         self::assertStringContainsString('__saved[hidden]', $css);
         self::assertStringContainsString('w-shipping-checkout-address__saved-toolbar', $css);
         self::assertStringContainsString('w-shipping-checkout-address__editor-action-buttons', $css);

@@ -33,6 +33,7 @@ final class HeaderCommerceDataTest extends TestCase
         self::assertStringContainsString("theme.header.search_types", $source);
         self::assertStringContainsString('headerSearchTypesPolicy', $source);
         self::assertStringContainsString('theme.header.search_types.v1', $source);
+        self::assertStringContainsString("listTypes(area: 'frontend')", $source);
         self::assertStringContainsString('RequestLifecycleTrace::measurePhase', $source);
     }
 

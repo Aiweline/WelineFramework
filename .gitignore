@@ -96,7 +96,7 @@ debug_*.json
 debug_*.txt
 debug_*.php
 response_*.html
- 
+
 # Tests node_modules??????????
 tests/**/node_modules/
 tests/**/package-lock.json

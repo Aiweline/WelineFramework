@@ -60,7 +60,11 @@ class PlatformVisual
         'quark' => 'QK',
         'metager' => 'MG',
         'gibiru' => 'GB',
+        'indexnow' => 'IN',
     ];
+
+    /** @var array<string, string|null> */
+    private array $logoSvgCache = [];
 
     public function normalizeCode(string $platform): string
     {
@@ -100,20 +104,85 @@ class PlatformVisual
         return self::DEFAULT_COLOR;
     }
 
+    public function hasLogoAsset(string $platform): bool
+    {
+        return $this->loadLogoSvg($this->normalizeCode($platform)) !== null;
+    }
+
+    public function logoDirectory(): string
+    {
+        return dirname(__DIR__) . '/view/statics/platform-logos';
+    }
+
     public function renderIcon(string $platform, string $name = '', ?string $color = null, int $size = 32, string $class = ''): string
     {
         $size = max(20, min(64, $size));
         $code = $this->normalizeCode($platform);
-        $label = $this->getIconText($code);
-        $label = substr($label, 0, 3);
+        $title = $name !== '' ? $name : strtoupper($code);
+        $classes = trim('seo-platform-logo ' . $class);
+        $classAttr = ' class="' . htmlspecialchars($classes, ENT_QUOTES, 'UTF-8') . '"';
+        $aria = htmlspecialchars($title, ENT_QUOTES, 'UTF-8');
+
+        $logo = $this->loadLogoSvg($code);
+        if ($logo !== null) {
+            $svg = preg_replace('/<svg\b/', '<svg width="' . $size . '" height="' . $size . '"', $logo, 1) ?? $logo;
+            if (!str_contains($svg, 'aria-label=')) {
+                $svg = preg_replace('/<svg\b/', '<svg aria-label="' . $aria . '"', $svg, 1) ?? $svg;
+            }
+            if (!str_contains($svg, 'role=')) {
+                $svg = preg_replace('/<svg\b/', '<svg role="img"', $svg, 1) ?? $svg;
+            }
+
+            return '<span' . $classAttr . ' data-seo-platform-logo="' . htmlspecialchars($code, ENT_QUOTES, 'UTF-8') . '" style="width:' . $size . 'px;height:' . $size . 'px">' . $svg . '</span>';
+        }
+
+        return $this->renderFallbackGlyph($code, $title, $color, $size, $classes);
+    }
+
+    private function loadLogoSvg(string $code): ?string
+    {
+        if (array_key_exists($code, $this->logoSvgCache)) {
+            return $this->logoSvgCache[$code];
+        }
+
+        if (!preg_match('/^[a-z0-9]+$/', $code)) {
+            $this->logoSvgCache[$code] = null;
+            return null;
+        }
+
+        $path = $this->logoDirectory() . '/' . $code . '.svg';
+        if (!is_file($path)) {
+            $this->logoSvgCache[$code] = null;
+            return null;
+        }
+
+        $raw = (string)file_get_contents($path);
+        if ($raw === '' || !str_contains($raw, '<svg')) {
+            $this->logoSvgCache[$code] = null;
+            return null;
+        }
+
+        // Strip XML declaration / scripts for safe inline use.
+        $raw = preg_replace('/<\?xml[^>]*>/', '', $raw) ?? $raw;
+        $raw = preg_replace('#<script\b[^>]*>.*?</script>#is', '', $raw) ?? $raw;
+        $this->logoSvgCache[$code] = trim($raw);
+
+        return $this->logoSvgCache[$code];
+    }
+
+    private function renderFallbackGlyph(string $code, string $title, ?string $color, int $size, string $classes): string
+    {
+        $label = substr($this->getIconText($code), 0, 3);
         $fontSize = strlen($label) >= 3 ? 8 : (strlen($label) === 2 ? 10 : 13);
         $color = $this->sanitizeColor($color);
-        $title = $name !== '' ? $name : strtoupper($code);
-        $classAttr = $class !== '' ? ' class="' . htmlspecialchars($class, ENT_QUOTES, 'UTF-8') . '"' : '';
+        $classAttr = $classes !== '' ? ' class="' . htmlspecialchars($classes, ENT_QUOTES, 'UTF-8') . '"' : '';
 
         return sprintf(
-            '<svg%s width="%d" height="%d" viewBox="0 0 32 32" role="img" aria-label="%s" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="28" height="28" rx="7" fill="%s"/><circle cx="20.5" cy="11.5" r="3.5" fill="none" stroke="#fff" stroke-width="2"/><path d="M23 14.5 26 17.5" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/><text x="16" y="23.4" text-anchor="middle" font-size="%d" font-family="Arial, Helvetica, sans-serif" font-weight="700" fill="#fff">%s</text></svg>',
+            '<span%s data-seo-platform-logo-fallback="%s" style="width:%dpx;height:%dpx"><svg width="%d" height="%d" viewBox="0 0 32 32" role="img" aria-label="%s" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="28" height="28" rx="7" fill="%s"/><text x="16" y="20.5" text-anchor="middle" font-size="%d" font-family="Arial, Helvetica, sans-serif" font-weight="700" fill="#fff">%s</text></svg></span>',
             $classAttr,
+            htmlspecialchars($code, ENT_QUOTES, 'UTF-8'),
+            $size,
+            $size,
             $size,
             $size,
             htmlspecialchars($title, ENT_QUOTES, 'UTF-8'),

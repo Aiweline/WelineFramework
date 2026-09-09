@@ -93,7 +93,11 @@ class ModuleBackupService
                     ? (int)$countRow[0]['cnt']
                     : ((int)($countRow['cnt'] ?? 0));
 
-                $backupTableName = $tableName . '_backup_' . $timestamp;
+                // PostgreSQL：登记名可能是 "schema"."table"；RENAME TO 只能是未限定表名
+                $parts = $this->parseQualifiedTableName($tableName);
+                $backupBare = $parts['table'] . '_backup_' . $timestamp;
+                $backupTableName = $this->formatQualifiedTableName($parts['schema'], $backupBare);
+                $renameTargetSql = $this->quoteIdent($backupBare);
 
                 $this->printer->note(__('备份模块 %{1} 表：%{2} → %{3}', [
                     $moduleName,
@@ -102,7 +106,7 @@ class ModuleBackupService
                 ]));
 
                 // 使用通用 ALTER TABLE RENAME 语法，兼容 MySQL / PostgreSQL / SQLite
-                $connection->query("ALTER TABLE {$tableName} RENAME TO {$backupTableName}")->fetch();
+                $connection->query("ALTER TABLE {$tableName} RENAME TO {$renameTargetSql}")->fetch();
 
                 $tables[] = [
                     'original_name' => $tableName,
@@ -212,8 +216,11 @@ class ModuleBackupService
                 // 删除可能存在的当前表
                 $connection->query("DROP TABLE IF EXISTS {$originalName}")->fetch();
 
+                $originalParts = $this->parseQualifiedTableName($originalName);
+                $renameTargetSql = $this->quoteIdent($originalParts['table']);
+
                 $this->printer->note(__('恢复表：%{1} → %{2}', [$backupName, $originalName]));
-                $connection->query("ALTER TABLE {$backupName} RENAME TO {$originalName}")->fetch();
+                $connection->query("ALTER TABLE {$backupName} RENAME TO {$renameTargetSql}")->fetch();
 
                 $this->printer->success(__('  ✓ 表 %{1} 恢复完成', [$originalName]));
             } catch (\Throwable $e) {
@@ -231,6 +238,46 @@ class ModuleBackupService
             'message'   => __('模块 %{1} 数据库表已从备份恢复', [$moduleName]),
             'backup_id' => (int)$backup->getId(),
         ];
+    }
+
+    /**
+     * 解析可能带 schema 的表标识（如 "public"."w_foo" / public.w_foo / w_foo）。
+     *
+     * @return array{schema: ?string, table: string}
+     */
+    private function parseQualifiedTableName(string $name): array
+    {
+        $name = trim($name);
+        if ($name === '') {
+            return ['schema' => null, 'table' => ''];
+        }
+
+        if (preg_match(
+            '/^(?:"([^"]+)"|([A-Za-z_][\w$]*))\.(?:"([^"]+)"|([A-Za-z_][\w$]*))$/',
+            $name,
+            $m
+        )) {
+            $schema = ($m[1] !== '' ? $m[1] : $m[2]);
+            $table = ($m[3] !== '' ? $m[3] : $m[4]);
+
+            return ['schema' => $schema, 'table' => $table];
+        }
+
+        return ['schema' => null, 'table' => trim($name, '"')];
+    }
+
+    private function quoteIdent(string $ident): string
+    {
+        return '"' . str_replace('"', '""', $ident) . '"';
+    }
+
+    private function formatQualifiedTableName(?string $schema, string $table): string
+    {
+        if ($schema === null || $schema === '') {
+            return $this->quoteIdent($table);
+        }
+
+        return $this->quoteIdent($schema) . '.' . $this->quoteIdent($table);
     }
 
     /**

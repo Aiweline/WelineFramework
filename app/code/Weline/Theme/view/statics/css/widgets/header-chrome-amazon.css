@@ -809,12 +809,18 @@ body > .categories-overflow-panel.w-surface-body:not(.is-megamenu) {
     color: var(--weline-chrome-text-light, #ffffff);
 }
 
-.weline-header .header-actions a,
-.weline-header .header-actions a:visited,
-.weline-header .header-user-area a,
-.weline-header .header-user-area a:visited {
+.weline-header .header-actions a:not(.mini-cart-drawer__btn),
+.weline-header .header-actions a:not(.mini-cart-drawer__btn):visited,
+.weline-header .header-user-area a:not(.mini-cart-drawer__btn),
+.weline-header .header-user-area a:not(.mini-cart-drawer__btn):visited {
     color: inherit;
     text-decoration: none;
+}
+
+/* Mini-cart primary CTA uses on-primary; chrome inverse inherit must not force dark drawer text. */
+.weline-header .header-actions .mini-cart-drawer a.mini-cart-drawer__btn--primary,
+.weline-header .header-actions .mini-cart-drawer a.mini-cart-drawer__btn--primary:visited {
+    color: var(--amz-drawer-cta-text, var(--color-on-primary, #f7f4ef));
 }
 
 /* Raised account panel sits on light surface; do not inherit chrome light text. */
@@ -912,7 +918,8 @@ body > .categories-overflow-panel.w-surface-body:not(.is-megamenu) {
 
 .weline-header .currency-switcher-icon,
 .weline-header .language-switcher-icon,
-.weline-header .header-cart-icon {
+.weline-header .header-cart-icon,
+.weline-header .header-wishlist-icon {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -923,7 +930,8 @@ body > .categories-overflow-panel.w-surface-body:not(.is-megamenu) {
 
 .weline-header .currency-switcher-icon svg,
 .weline-header .language-switcher-icon svg,
-.weline-header .header-cart-icon svg {
+.weline-header .header-cart-icon svg,
+.weline-header .header-wishlist-icon svg {
     display: block;
     width: 100%;
     height: 100%;
@@ -958,21 +966,69 @@ body > .categories-overflow-panel.w-surface-body:not(.is-megamenu) {
     line-height: 1.2;
 }
 
+.weline-header .header-cart .cart-info {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.125rem;
+    min-width: 0;
+}
+
+.weline-header .header-cart .cart-meta {
+    display: inline-flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 0;
+    max-width: 9.5rem;
+    font-size: var(--font-size-xs, 0.75rem);
+    line-height: 1.2;
+    color: var(--weline-chrome-text-light-secondary, #dddddd);
+}
+
+.weline-header .header-cart .cart-type-caption,
+.weline-header .header-cart [data-cart-type-badge] {
+    font-size: inherit;
+    font-weight: 500;
+    color: inherit;
+    white-space: nowrap;
+}
+
+.weline-header .header-cart .cart-meta__sep {
+    opacity: 0.7;
+}
+
 .weline-header .header-cart .cart-subtotal,
 .weline-header .header-cart .cart-info .cart-subtotal {
-    font-size: var(--font-size-sm, 0.875rem);
+    font-size: inherit;
     font-weight: 700;
     color: var(--weline-chrome-text-light, #ffffff) !important;
     line-height: 1.2;
+    white-space: nowrap;
+}
+
+.weline-header .header-cart .cart-icon-wrapper {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
 }
 
 .weline-header .header-cart .cart-count,
 .weline-header .header-cart [data-cart-count-badge] {
+    position: absolute;
     top: calc(var(--spacing-0_5, 0.125rem) * -1);
     right: calc(var(--spacing-0_5, 0.125rem) * -1);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     min-width: var(--spacing-4_5, 1.125rem);
     height: var(--spacing-4_5, 1.125rem);
+    padding: 0 0.2rem;
+    border-radius: 999px;
     font-size: var(--font-size-xs, 0.75rem);
+    font-weight: 700;
+    line-height: 1;
     background-color: var(--weline-chrome-primary, var(--color-primary));
     color: var(--weline-chrome-text-primary, #111111);
     border: var(--border-width-thin, 1px) solid var(--weline-chrome-bg-dark, var(--color-bg-dark-secondary));

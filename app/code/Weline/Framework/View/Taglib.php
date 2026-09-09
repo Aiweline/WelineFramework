@@ -1381,6 +1381,9 @@ class Taglib
                     }
             ],
             'dd' => [
+                // Native HTML <dd> (description list) must not be hijacked.
+                // Debug dump only via <w:dd>…</w:dd>, @dd(var), @dd{var}.
+                'w_only' => true,
                 'tag' => 1,
                 'callback' =>
                     function ($tag_key, $config, $tag_data, $attributes) {
@@ -1392,7 +1395,7 @@ class Taglib
                             case '@tag()':
                                 $var_name = $tag_data[1];
                                 if (!str_starts_with($var_name, '$')) {
-                                    $var_name .= '$' . $var_name;
+                                    $var_name = '$' . $var_name;
                                 }
                                 $var_name = $this->varParser($var_name);
                                 return self::PHP_OPEN_TAG . '=dd(' . $var_name . ')' . self::PHP_CLOSE_TAG;

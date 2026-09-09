@@ -38,6 +38,8 @@ class EventsManager
      * 性能优化：缓存事件观察者查找结果
      */
     private array $observerCache = [];
+    private ?array $observerRegistrySnapshot = null;
+    private bool $observersScanned = false;
     
     /**
      * 性能优化：缓存模块状态检查结果
@@ -45,8 +47,8 @@ class EventsManager
     private static array $moduleStatusCache = [];
 
     /**
-     * 扫描观察者时的重入保护：避免 dispatch → getEventObservers → scanEvents → reader->read()
-     * 过程中再次触发事件导致递归扫描各模块 event.xml，造成内存或死循环。
+     * 显式扫描观察者时的重入保护：reader->read() 中再次请求扫描时，
+     * 复用正在构建的列表，避免递归读取各模块 event.xml。
      */
     private static bool $scanningObservers = false;
 
@@ -66,6 +68,9 @@ class EventsManager
     {
         $this->observerCache = [];
         $this->eventsObservers = [];
+        $this->observerRegistrySnapshot = null;
+        $this->observersScanned = false;
+        self::$moduleStatusCache = [];
     }
 
     /**
@@ -80,10 +85,11 @@ class EventsManager
 
     public function scanEvents()
     {
+        $this->currentObserverRegistry();
         if (self::$scanningObservers) {
             return $this->eventsObservers;
         }
-        if (empty($this->eventsObservers)) {
+        if (!$this->observersScanned) {
             self::$scanningObservers = true;
             try {
                 foreach ($this->reader->read() as $module_and_file => $eventObservers) {
@@ -108,6 +114,8 @@ class EventsManager
                         });
                     }
                 }
+                $this->observersScanned = true;
+                $this->observerCache = [];
             } finally {
                 self::$scanningObservers = false;
             }
@@ -118,22 +126,14 @@ class EventsManager
 
     public function getEventObservers(string $eventName, bool $registryKnownToHaveObservers = false)
     {
+        // Registry owns the complete runtime snapshot, including dynamic patterns.
+        // A reload/change invalidates positive and negative lookup results together.
+        $registry = $this->currentObserverRegistry();
         // 性能优化：检查缓存
         if (isset($this->observerCache[$eventName])) {
             return $this->observerCache[$eventName];
         }
 
-        // 性能优化：注册表明确无观察者时直接返回，避免 getRegistry + 动态模式匹配 + scanEvents 回退
-        if (!$registryKnownToHaveObservers && !$this->eventRegistry->hasObservers($eventName)) {
-            $this->observerCache[$eventName] = [];
-            return [];
-        }
-        
-        // 优先从 generated/events.php 读取观察者（性能优化）
-        $registry = $this->eventRegistry->getRegistry();
-        if(empty($registry['events'])) {
-            return [];
-        }
         $observers = [];
         // 先检查精确匹配
         if (isset($registry['events'][$eventName]['observers'])) {
@@ -149,11 +149,10 @@ class EventsManager
                 }
             }
             
-            // 如果还没有找到，回退到扫描所有模块的 event.xml（确保新增/未写入缓存的观察者也能生效）
-            // 重入保护：若当前正在 scanEvents() 中，不再递归扫描，避免事件链触发“收集各模块 event.xml”导致内存/循环
+            // Explicit scanEvents() callers may supply local observers. An ordinary
+            // registry miss must never execute every module's event.php/XML on a request.
             if (empty($observers)) {
-                $evenObserverLists = $this->scanEvents();
-                $observers = $evenObserverLists[$eventName] ?? [];
+                $observers = $this->eventsObservers[$eventName] ?? [];
             }
         }
         
@@ -166,18 +165,17 @@ class EventsManager
 
     public function hasObservers(string $eventName): bool
     {
-        if (isset($this->observerCache[$eventName])) {
-            return $this->observerCache[$eventName] !== [];
-        }
+        return $this->getEventObservers($eventName) !== [];
+    }
 
-        if ($this->eventRegistry->hasObservers($eventName)) {
-            return true;
+    private function currentObserverRegistry(): array
+    {
+        $registry = $this->eventRegistry->getRegistry();
+        if ($this->observerRegistrySnapshot !== $registry) {
+            $this->clearObserverCache();
+            $this->observerRegistrySnapshot = $registry;
         }
-
-        // Registry may lag newly added etc/event.xml observers when the event
-        // spec (event.php) was missing at last rebuild. Resolve via the same
-        // scan-capable path dispatch uses ($registryKnownToHaveObservers=true).
-        return $this->getEventObservers($eventName, true) !== [];
+        return $registry;
     }
     
     /**
@@ -247,16 +245,8 @@ class EventsManager
     {
         $traceStart = RequestLifecycleTrace::isEnabled() ? microtime(true) : 0.0;
 
-        // 快速检测是否有观察者（仅基于注册表，避免为「无监听事件」触发昂贵的扫描）
-        if (!$this->hasObservers($eventName)) {
-            if ($traceStart > 0) {
-                RequestLifecycleTrace::recordSpan('event::' . $eventName, (microtime(true) - $traceStart) * 1000, 'event');
-            }
-            return $this;
-        }
-
-        // 获取事件监听器（观察者）
-        $observers = $this->getEventObservers($eventName, true);
+        // Resolve the current registry snapshot once, including cached negative results.
+        $observers = $this->getEventObservers($eventName);
 
         // 检查是否有监听器，没有则直接跳过
         if (empty($observers)) {

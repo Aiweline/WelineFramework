@@ -2,13 +2,6 @@
 
 declare(strict_types=1);
 
-/*
- * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
- * 邮箱：aiweline@qq.com
- * 网址：aiweline.com
- * 论坛：https://bbs.aiweline.com
- */
-
 namespace Weline\Shipping\Controller\Backend;
 
 use Weline\Framework\Acl\Acl;
@@ -21,6 +14,7 @@ use Weline\Shipping\Service\ShippingConfigurationAdminService;
 class RateTemplate extends BackendController
 {
     use ShippingBackendEmbedTrait;
+    use ShippingBackendScopeTrait;
 
     private RateTemplateModel $rateTemplate;
     private ShippingConfigurationAdminService $adminService;
@@ -31,13 +25,17 @@ class RateTemplate extends BackendController
         $this->adminService = $objectManager->getInstance(ShippingConfigurationAdminService::class);
     }
 
-    /**
-     * 费用模板列表页（占位实现，保证页面可用）
-     */
     #[Acl('Weline_Shipping::rate_template_index', '查看费用模板', 'list', '查看费用模板列表')]
     public function index()
     {
+        if ($redirect = $this->redirectUnlessShippingScopeExplicit('shipping/backend/ratetemplate/index')) {
+            return $redirect;
+        }
+        $target = $this->assignShippingWorkScope(false);
+
         $templates = $this->rateTemplate->reset()
+            ->where(RateTemplateModel::schema_fields_SCOPE_TYPE, $target['scope_type'])
+            ->where(RateTemplateModel::schema_fields_SCOPE_ID, $target['scope_id'])
             ->order(RateTemplateModel::schema_fields_ID, 'ASC')
             ->select()
             ->fetch()
@@ -52,14 +50,21 @@ class RateTemplate extends BackendController
     #[Acl('Weline_Shipping::rate_template_save', '保存费用模板', 'save', '创建费用模板')]
     public function save()
     {
+        $target = $this->assignShippingWorkScope(true);
         try {
-            if (!$this->request->isPost()) throw new \InvalidArgumentException((string)__('仅允许 POST 请求。'));
-            $this->adminService->createRateTemplate((array)$this->request->getPost());
+            if (!$this->request->isPost()) {
+                throw new \InvalidArgumentException((string)__('仅允许 POST 请求。'));
+            }
+            $post = (array)$this->request->getPost();
+            $post['scope_type'] = $target['scope_type'];
+            $post['scope_id'] = $target['scope_id'];
+            $post['target_scope'] = $target['storage_scope'];
+            $this->adminService->createRateTemplate($post);
             $this->getMessageManager()->addSuccess(__('费用模板创建成功。'));
         } catch (\Throwable $throwable) {
             $this->getMessageManager()->addError($throwable->getMessage());
         }
-        return $this->redirect('shipping/backend/ratetemplate/index');
+
+        return $this->redirect('shipping/backend/ratetemplate/index', $this->shippingScopeQuery($target));
     }
 }
-

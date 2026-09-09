@@ -91,13 +91,21 @@ final class ProviderTimeoutPolicy
     }
 
     /**
-     * Long structured generations may legitimately return no response bytes
-     * while the provider is still producing the first JSON token. Callers can
-     * opt into a longer low-speed window without weakening the default policy
-     * for every OpenAI-compatible request.
-     *
      * @param array<string,mixed> $params
      */
+    public static function resolveConnectTimeout(array $params, int $timeout): int
+    {
+        if (\array_key_exists('connect_timeout', $params)) {
+            return \max(0, (int)$params['connect_timeout']);
+        }
+
+        $timeout = \max(0, $timeout);
+
+        return $timeout > 0
+            ? \min(self::DEFAULT_CONNECT_TIMEOUT, $timeout)
+            : self::DEFAULT_CONNECT_TIMEOUT;
+    }
+
     public static function resolveRequestLowSpeedTime(array $params, int $timeout): int
     {
         if (!\array_key_exists('low_speed_time', $params)) {

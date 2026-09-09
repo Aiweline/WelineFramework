@@ -70,7 +70,12 @@ final class CmsBlogPageRenderBridge
         $controller->assign('cms_payload', $payload);
         $controller->assign('meta_title', $article->title);
         $controller->assign('meta_description', $article->excerpt);
-        $controller->assign('canonical_url', $article->canonicalUrl);
+        // Keep currency/locale canonical from View (RequestContext) when present.
+        $canonical = trim((string)(RequestContext::get('blog.seo.canonical.v1') ?? ''));
+        if ($canonical === '') {
+            $canonical = $article->canonicalUrl;
+        }
+        $controller->assign('canonical_url', $canonical);
 
         return (string)$controller->fetch('Weline_Cms::templates/frontend/page/content.phtml');
     }

@@ -14,6 +14,8 @@ final class BlogCategoryAdminService
 {
     public const MAX_DEPTH = 2;
 
+    private ?BlogContentCache $contentCache = null;
+
     public function __construct(
         private readonly Category $categoryModel,
         private readonly BlogCategoryAttributeService $categoryAttributes,
@@ -24,6 +26,17 @@ final class BlogCategoryAdminService
      * @return list<array<string, mixed>>
      */
     public function tree(int $websiteId, string $locale = ''): array
+    {
+        if (!\Weline\Framework\Context::hasCurrent()) {
+            return $this->buildTree($websiteId, $locale);
+        }
+        $locale = trim(str_replace('-', '_', $locale !== '' ? $locale : (string)\Weline\Framework\App\State::getLangLocal()));
+        $this->contentCache ??= \Weline\Framework\Manager\ObjectManager::getInstance(BlogContentCache::class);
+        return $this->contentCache->rememberForRequest('category_tree', [$websiteId, $locale], fn(): array => $this->buildTree($websiteId, $locale));
+    }
+
+    /** @return list<array<string, mixed>> */
+    private function buildTree(int $websiteId, string $locale): array
     {
         $presented = $this->enrichedRows($websiteId, $locale);
         $byParent = [];
@@ -229,11 +242,12 @@ final class BlogCategoryAdminService
             static fn(array $row): int => (int)($row[Category::schema_fields_ID] ?? 0),
             $rows,
         )));
-        $names = $this->categoryAttributes->readNameMap($websiteId, $ids, $locale);
-        $images = $this->categoryAttributes->readImageMap($websiteId, $ids, $locale);
-        $banners = $this->categoryAttributes->readBannerMap($websiteId, $ids, $locale);
-        $summaries = $this->categoryAttributes->readSummaryMap($websiteId, $ids, $locale);
-        $descriptions = $this->categoryAttributes->readDescriptionMap($websiteId, $ids, $locale);
+        $attributes = $this->categoryAttributes->readDisplayMaps($websiteId, $ids, $locale);
+        $names = $attributes['name'] ?? [];
+        $images = $attributes['image'] ?? [];
+        $banners = $attributes['banner'] ?? [];
+        $summaries = $attributes['summary'] ?? [];
+        $descriptions = $attributes['description'] ?? [];
         $levelById = $this->levelMap($rows);
 
         $nodes = [];
@@ -258,7 +272,7 @@ final class BlogCategoryAdminService
                 'status' => 'active',
                 'is_active' => 1,
                 'name' => $names[$categoryId]
-                    ?? $this->categoryAttributes->resolveDisplayName($websiteId, $categoryId, $locale, $fallbackName),
+                    ?? $this->categoryAttributes->resolveFallbackName($fallbackName),
                 'image' => (string)($images[$categoryId] ?? ''),
                 'banner' => (string)($banners[$categoryId] ?? ''),
                 'summary' => (string)($summaries[$categoryId] ?? ''),

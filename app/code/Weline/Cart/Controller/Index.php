@@ -26,6 +26,12 @@ class Index extends FrontendController
 
         $this->assign('page_title', __('购物车'));
         $this->assign('title', __('购物车'));
+        $this->assign('seo', [
+            'page_type' => 'cart',
+            'title' => (string)__('购物车'),
+            'description' => (string)__('查看已选汉服商品、调整规格数量并进入结算。'),
+            'robots' => 'noindex,follow',
+        ]);
         $this->assign('cart', $cart);
         $this->assign('items', $cart['items'] ?? []);
         $this->assign('meta', [

@@ -36,6 +36,20 @@ final class MaintenanceFaviconContractTest extends TestCase
         self::assertStringContainsString('toPublicMediaOrStaticUrl', $source);
         self::assertStringContainsString('resolveFrontendLogoUrl', $source);
         self::assertStringContainsString('/Weline/Theme/view/theme/frontend/assets/images/theme/logo.png', $source);
+        self::assertStringContainsString('resolveWebsiteScopedPublishedBrand', $source);
+        self::assertStringContainsString('materializeMaintenanceFlagMarkup', $source);
+        self::assertStringContainsString('CountryFlagMarkup', $source);
+        self::assertStringContainsString('/pub/errors/maintenance/flags/', $source);
+    }
+
+    public function testStandaloneTemplateStylesLanguageFlagImages(): void
+    {
+        $template = (string)\file_get_contents(
+            \dirname(__DIR__, 3) . '/view/templates/maintenance.phtml'
+        );
+
+        self::assertStringContainsString('.language-flag-img', $template);
+        self::assertStringContainsString('language-flag', $template);
     }
 
     public function testStandaloneTemplateUsesResolvedLogoUrl(): void

@@ -84,6 +84,19 @@ class RegionQueryProvider implements QueryProviderInterface
             'embargo_countries' => array_keys(
                 ObjectManager::getInstance(\Weline\Shipping\Service\EmbargoService::class)->embargoedCountryCodes()
             ),
+            'embargo_regions' => (static function () use ($params): array {
+                $embargo = ObjectManager::getInstance(\Weline\Shipping\Service\EmbargoService::class);
+                $rows = $embargo->activeSubnationalRules();
+                $country = strtoupper(trim((string)($params['country_code'] ?? '')));
+                if ($country !== '' && preg_match('/^[A-Z]{2}$/', $country)) {
+                    $rows = array_values(array_filter(
+                        $rows,
+                        static fn(array $row): bool => ($row['country_code'] ?? '') === $country
+                    ));
+                }
+
+                return $rows;
+            })(),
             default => throw new \InvalidArgumentException('Region query provider does not support operation: ' . $operation),
         };
     }
@@ -102,7 +115,7 @@ class RegionQueryProvider implements QueryProviderInterface
                     'mode' => 'read',
                     'graph' => true,
                     'cost' => 2,
-                    'cache_ttl' => 30,
+                    'cache_ttl' => 14400,
                     'params' => [
                         'country_code' => ['type' => 'string', 'max_length' => 8],
                         'catalog' => ['type' => 'string', 'enum' => ['installed', 'global']],
@@ -116,7 +129,7 @@ class RegionQueryProvider implements QueryProviderInterface
                     'mode' => 'read',
                     'graph' => true,
                     'cost' => 2,
-                    'cache_ttl' => 30,
+                    'cache_ttl' => 14400,
                     'params' => [
                         'parent_region_id' => ['type' => 'int', 'min' => 0],
                         'country_code' => ['type' => 'string', 'max_length' => 8],
@@ -161,7 +174,7 @@ class RegionQueryProvider implements QueryProviderInterface
                     'mode' => 'read',
                     'graph' => true,
                     'cost' => 1,
-                    'cache_ttl' => 60,
+                    'cache_ttl' => 43200,
                     'params' => [
                         'country_code' => ['type' => 'string', 'max_length' => 8],
                     ],
@@ -256,6 +269,19 @@ class RegionQueryProvider implements QueryProviderInterface
                     'params' => [],
                     'returns' => ['type' => 'array'],
                     'summary' => 'Country codes blocked by shipping embargo union',
+                ],
+                [
+                    'name' => 'embargo_regions',
+                    'frontend' => true,
+                    'mode' => 'read',
+                    'graph' => true,
+                    'cost' => 1,
+                    'cache_ttl' => 15,
+                    'params' => [
+                        'country_code' => ['type' => 'string', 'max_length' => 8],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Active subnational embargo rules for address option marking',
                 ],
             ],
         ];

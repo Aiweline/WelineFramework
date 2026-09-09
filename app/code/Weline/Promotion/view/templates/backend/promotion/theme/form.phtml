@@ -66,7 +66,7 @@ $pageTitle = ((int)$val('id', 0) > 0) ? (string)__('编辑活动主题') : (stri
                         </div>
                         <div style="--w-span-md:4;--w-mb:var(--weline-space-4);">
                             <label class="w-field__label" for="promotion-theme-slug"><?= __('路径 slug') ?></label>
-                            <input id="promotion-theme-slug" class="w-input" type="text" name="page_slug" required maxlength="64" value="<?= $escape($val('page_slug')) ?>" placeholder="deals / weekend / gifts">
+                            <input id="promotion-theme-slug" class="w-input" type="text" name="page_slug" required maxlength="64" value="<?= $escape($val('page_slug')) ?>" placeholder="deals / weekend / wedding">
                         </div>
                         <div style="--w-span-md:4;--w-mb:var(--weline-space-4);">
                             <label class="w-field__label" for="promotion-theme-status"><?= __('状态') ?></label>
@@ -414,4 +414,65 @@ function promotionThemeReloadScope(level) {
     }
     window.location.search = params.toString();
 }
+
+(function bindPromotionThemeOverlapConfirm() {
+    var root = document.querySelector('[data-testid="promotion-theme-form"]');
+    var form = root && root.querySelector('form');
+    if (!form || form.dataset.overlapBound === '1') {
+        return;
+    }
+    form.dataset.overlapBound = '1';
+    form.addEventListener('submit', function (event) {
+        if (form.dataset.overlapConfirmed === '1') {
+            return;
+        }
+        event.preventDefault();
+        var body = new FormData(form);
+        body.set('ajax', '1');
+        fetch(form.getAttribute('action') || window.location.href, {
+            method: 'POST',
+            body: body,
+            credentials: 'same-origin',
+            headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        }).then(function (response) {
+            return response.json().catch(function () { return null; }).then(function (data) {
+                return { ok: response.ok, data: data || {} };
+            });
+        }).then(function (result) {
+            var data = result.data || {};
+            if (data.needs_overlap_confirm && Array.isArray(data.overlaps) && data.overlaps.length) {
+                var lines = data.overlaps.map(function (row) {
+                    var themes = (row.themes || []).map(function (theme) {
+                        return theme.label || theme.page_slug || ('#' + theme.theme_id);
+                    }).join('、');
+                    return (row.sku || ('ID ' + row.product_id)) + (row.name ? (' · ' + row.name) : '') + ' → ' + themes;
+                });
+                var message = (data.message || '存在交叉 SKU') + '\n\n' + lines.join('\n')
+                    + '\n\n确认后顾客可在详情页选择参考哪个活动（默认显示一个）。';
+                if (!window.confirm(message)) {
+                    return;
+                }
+                var force = form.querySelector('input[name="force_overlap"]');
+                if (!force) {
+                    force = document.createElement('input');
+                    force.type = 'hidden';
+                    force.name = 'force_overlap';
+                    form.appendChild(force);
+                }
+                force.value = '1';
+                form.dataset.overlapConfirmed = '1';
+                form.submit();
+                return;
+            }
+            if (data.success) {
+                window.location.href = '@admin-url{\'promotion/backend/theme/index\'}';
+                return;
+            }
+            window.alert(data.message || '保存失败。');
+        }).catch(function () {
+            form.dataset.overlapConfirmed = '1';
+            form.submit();
+        });
+    });
+})();
 </script>

@@ -47,12 +47,32 @@ class CacheManagerRoutingTest extends TestCase
         $this->assertSame('redis', $driver);
     }
 
+    public function testWlsModeKeepsDurableCartPoolOnFile(): void
+    {
+        Runtime::setMode('wls');
+        RoutingPolicyRegistry::clear();
+
+        $manager = new CacheManager();
+        $driver = $this->invokeResolveDriver(
+            $manager,
+            ['default' => 'file'],
+            ['driver' => 'file', 'hijack_exempt' => true, 'durable' => true],
+            'cart'
+        );
+
+        $this->assertSame('file', $driver);
+    }
+
     /**
      * @param array<string, mixed> $globalConfig
      * @param array<string, mixed> $poolConfig
      */
-    private function invokeResolveDriver(CacheManager $manager, array $globalConfig, array $poolConfig): string
-    {
+    private function invokeResolveDriver(
+        CacheManager $manager,
+        array $globalConfig,
+        array $poolConfig,
+        string $identity = 'default',
+    ): string {
         $ref = new ReflectionClass($manager);
 
         $configProp = $ref->getProperty('config');
@@ -63,7 +83,7 @@ class CacheManagerRoutingTest extends TestCase
         $method->setAccessible(true);
 
         /** @var string $driver */
-        $driver = $method->invoke($manager, 'default', $poolConfig);
+        $driver = $method->invoke($manager, $identity, $poolConfig);
         return $driver;
     }
 }

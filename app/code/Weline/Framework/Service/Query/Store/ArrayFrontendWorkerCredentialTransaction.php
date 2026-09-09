@@ -54,14 +54,14 @@ final class ArrayFrontendWorkerCredentialTransaction implements FrontendWorkerCr
             if (\is_int($value)) {
                 return $value > $now ? ['expires_at' => $value] : null;
             }
-            return $this->activePayload($value, $now);
+            return $this->activePayload($value, $now, $type);
         }
 
         $legacyHash = \hash('sha256', $credential);
         $value = $bucket[$legacyHash]
             ?? $bucket[$this->credentialHash($type, $credential, '')]
             ?? null;
-        return $this->activePayload($value, $now);
+        return $this->activePayload($value, $now, $type);
     }
 
     public function insert(
@@ -219,7 +219,7 @@ final class ArrayFrontendWorkerCredentialTransaction implements FrontendWorkerCr
 
         $count = 0;
         foreach ($bucket as $value) {
-            if (\is_int($value) ? $value > $now : $this->activePayload($value, $now) !== null) {
+            if (\is_int($value) ? $value > $now : $this->activePayload($value, $now, $type) !== null) {
                 $count++;
             }
         }
@@ -257,7 +257,7 @@ final class ArrayFrontendWorkerCredentialTransaction implements FrontendWorkerCr
                     unset($entries[$key]);
                     continue;
                 }
-                if (\is_int($value) ? $value > $now : $this->activePayload($value, $now) !== null) {
+                if (\is_int($value) ? $value > $now : $this->activePayload($value, $now, FrontendWorkerCredentialType::NONCE) !== null) {
                     $count++;
                 }
             }
@@ -289,7 +289,7 @@ final class ArrayFrontendWorkerCredentialTransaction implements FrontendWorkerCr
         foreach ($bucket as $value) {
             $payload = \is_int($value)
                 ? ($value > $now ? ['expires_at' => $value] : null)
-                : $this->activePayload($value, $now);
+                : $this->activePayload($value, $now, $type);
             if (\is_array($payload)) {
                 $bytes += $this->encodedPayloadBytes($payload);
             }
@@ -332,7 +332,7 @@ final class ArrayFrontendWorkerCredentialTransaction implements FrontendWorkerCr
                 );
             }
             foreach ($bucket as $key => $value) {
-                if ($this->activePayload($value, $now) === null) {
+                if ($this->activePayload($value, $now, $currentType) === null) {
                     unset($bucket[$key]);
                 }
             }
@@ -394,11 +394,23 @@ final class ArrayFrontendWorkerCredentialTransaction implements FrontendWorkerCr
     }
 
     /** @return array<string, mixed>|null */
-    private function activePayload(mixed $value, int $now): ?array
+    private function activePayload(mixed $value, int $now, ?string $type = null): ?array
     {
-        if (!\is_array($value) || (int)($value['expires_at'] ?? 0) <= $now) {
+        if (!\is_array($value)) {
             return null;
         }
+
+        // Legacy unbound sessions were written with SESSION_TTL=7200. Capacity
+        // reclaim must use the same effective TTL as FrontendWorkerSessionService
+        // or MAX_ACTIVE_SESSIONS fills with abandoned handshakes and blocks
+        // backend QueryBin (SystemConfig / config:embed saves).
+        $expiresAt = $type === FrontendWorkerCredentialType::SESSION
+            ? \Weline\Framework\Service\Query\FrontendWorkerSessionService::effectiveSessionExpiresAt($value, $now)
+            : (int)($value['expires_at'] ?? 0);
+        if ($expiresAt <= $now) {
+            return null;
+        }
+
         return $value;
     }
 }

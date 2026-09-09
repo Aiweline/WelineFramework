@@ -8,6 +8,8 @@ Weline I18n 是系统的国际化翻译模块，提供了完整的多语言支�
 
 ## 跨模块公共契约
 
+`Api\Localization\GlobalDictionaryProvider` 同时实现 Framework 可选 `ModuleGlobalDictionaryProviderInterface::wordsByModule(locale, modules)`：一次按来源模块批量 SELECT，返回每模块独立词表及确认空模块。Framework Phrase 使用稳定的语言/模块共享键，按当前 Worker 缺失模块批量补齐，不再把不同模块组合当成不同词典事实；复用原 phrase 池、single-flight 和现有清理/广播链。原 `words(locale, [])` 全词典、精确词批量接口及非可选 Provider 保持兼容。
+
 其他模块只能引用 `Weline\I18n\Api\*`。禁止直接引用 I18n 的 `Model`、`Service`、`Helper`，也不要通过
 `Weline_I18n::query` 事件绕过 PHP 契约。当前稳定边界如下：
 

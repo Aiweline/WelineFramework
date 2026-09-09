@@ -75,11 +75,14 @@ class FeedQueueService
     }
 
     /**
+     * Legacy hook — must not enqueue generate/push on item events (blocking).
+     * Content is published by FeedScheduleService on the 10-minute cron.
+     *
      * @param array<string, mixed> $itemData
      */
     public function enqueueFeedItemAdd(int $feedId, string $itemType, int $itemId, array $itemData = []): int
     {
-        return $this->enqueueFeedGenerate($feedId, 'json_feed', false);
+        return 0;
     }
 
     public function generateSlotKey(int $feedId, string $format = 'json_feed'): string

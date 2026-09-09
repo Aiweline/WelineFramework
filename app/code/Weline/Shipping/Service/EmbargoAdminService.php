@@ -104,6 +104,9 @@ final class EmbargoAdminService
      */
     public function replaceForScope(string $scopeType, int $scopeId, array $rows): int
     {
+        if (strtolower(trim($scopeType)) === EmbargoRegion::SCOPE_SYSTEM) {
+            throw new \InvalidArgumentException(SystemEmbargoAdminService::ERROR_REPLACE_FORBIDDEN);
+        }
         $scopeType = $this->normalizeScopeType($scopeType);
         $normalized = $this->normalizeRows($rows);
 
@@ -131,10 +134,12 @@ final class EmbargoAdminService
                 EmbargoRegion::schema_fields_SCOPE_ID => $scopeId,
                 EmbargoRegion::schema_fields_REGION_TYPE => $row['region_type'],
                 EmbargoRegion::schema_fields_COUNTRY_CODE => $row['country_code'],
-                EmbargoRegion::schema_fields_REGION_ID => $row['region_id'],
-                EmbargoRegion::schema_fields_REGION_CODE => $row['region_code'],
-                EmbargoRegion::schema_fields_STREET_ID => $row['street_id'],
+                EmbargoRegion::schema_fields_REGION_ID => (int)($row['region_id'] ?? 0),
+                EmbargoRegion::schema_fields_REGION_CODE => (string)($row['region_code'] ?? ''),
+                EmbargoRegion::schema_fields_STREET_ID => (int)($row['street_id'] ?? 0),
+                EmbargoRegion::schema_fields_REASON_CODE => '',
                 EmbargoRegion::schema_fields_IS_ACTIVE => 1,
+                EmbargoRegion::schema_fields_DISABLED_BY => '',
                 EmbargoRegion::schema_fields_CREATED_AT => $now,
                 EmbargoRegion::schema_fields_UPDATED_AT => $now,
             ])->save();

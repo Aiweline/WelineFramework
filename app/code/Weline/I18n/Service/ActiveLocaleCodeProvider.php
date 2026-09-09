@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\I18n\Service;
 
 use Weline\I18n\Model\Locale;
+use Weline\Framework\Phrase\DictionaryCacheNamespace;
 use Weline\I18n\Model\Locals;
 
 /**
@@ -17,8 +18,8 @@ class ActiveLocaleCodeProvider
     private const FIELD_IS_ACTIVE = 'is_active';
     private const FIELD_CODE = 'code';
 
-    /** @var string[]|null */
-    private ?array $installedActiveCodes = null;
+    /** @var array<string, list<string>> */
+    private array $installedActiveCodes = [];
 
     public function __construct(
         private readonly Locals $locals,
@@ -45,7 +46,7 @@ class ActiveLocaleCodeProvider
      */
     public function reset(): void
     {
-        $this->installedActiveCodes = null;
+        $this->installedActiveCodes = [];
     }
 
     /**
@@ -53,8 +54,9 @@ class ActiveLocaleCodeProvider
      */
     public function getInstalledActiveCodes(): array
     {
-        if ($this->installedActiveCodes !== null) {
-            return $this->installedActiveCodes;
+        $cacheKey = DictionaryCacheNamespace::cacheKey('installed-active-locales');
+        if (isset(DictionaryCacheNamespace::localCache($this->installedActiveCodes, 128)[$cacheKey])) {
+            return DictionaryCacheNamespace::localCache($this->installedActiveCodes, 128)[$cacheKey];
         }
 
         $codes = [];
@@ -66,7 +68,7 @@ class ActiveLocaleCodeProvider
             $this->pushCode($codes, $seen, $code);
         }
 
-        return $this->installedActiveCodes = $codes;
+        return DictionaryCacheNamespace::localCache($this->installedActiveCodes, 128)[$cacheKey] = $codes;
     }
 
     /**

@@ -134,6 +134,16 @@ final class Cli
                 || ($canonicalEvent === 'UserPromptSubmit' && empty($result['skipped']))) {
                 $learningSkillJobs = $store->enqueueLearningSkillSyncs();
             }
+            if ($canonicalEvent === 'SessionStart'
+                && (bool) $config->get('index.enabled', true)
+                && isset($result['session_id'])) {
+                try {
+                    $autoContext = (new ProjectAutoContext($store, $config))->describe($result);
+                } catch (Throwable $exception) {
+                    [$message] = Redactor::string($exception->getMessage());
+                    fwrite(STDERR, 'learningctl session context (non-blocking): ' . Text::truncate($message, 500) . "\n");
+                }
+            }
             if ($canonicalEvent === 'PostToolUse'
                 && (bool) $config->get('index.enabled', true)
                 && (bool) $config->get('index.auto_refresh', true)
@@ -153,6 +163,9 @@ final class Cli
             $additionalContext = [];
             if ($injectProjectContext || self::bool($options['inject-project-rules'] ?? false)) {
                 $additionalContext[] = 'Step 0: run `php app/code/Weline/Ai/Mcp/scripts/ensure-project-guidance.php` and auto-repair host guidance when status is not ready. Then git switch dev if needed, call prepare_project status=ready, and carry a session-bound readiness_id. Resolve task guidance through the MCP; no repository rules are injected by this Hook.';
+                if ($injectProjectContext && is_array($autoContext)) {
+                    $additionalContext[] = (string) ($autoContext['context'] ?? '');
+                }
             }
             if ($additionalContext !== []) {
                 self::writeJson([

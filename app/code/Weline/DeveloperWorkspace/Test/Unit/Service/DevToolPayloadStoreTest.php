@@ -75,6 +75,55 @@ final class DevToolPayloadStoreTest extends TestCase
         self::assertSame($value, $fileStore->get('trace', $key));
     }
 
+    public function testSeoCrawlAlsoDualWritesFileWhenMemorySucceeds(): void
+    {
+        $key = 'crawl:seo-crawl-test-' . \bin2hex(\random_bytes(4));
+        $value = ['status' => 'running', 'cursor' => 2, 'urls' => ['https://example.test/a']];
+
+        $memory = $this->createMock(MemoryStateFacade::class);
+        $memory->expects(self::once())
+            ->method('set')
+            ->willReturn(true);
+
+        $store = new DevToolPayloadStore();
+        $this->setPrivateProperty($store, 'memoryResolved', true);
+        $this->setPrivateProperty($store, 'memory', $memory);
+
+        self::assertTrue($store->set('seo_crawl', $key, $value, 1800));
+
+        $fileStore = new DevToolPayloadStore(['force_file' => true]);
+        $filePath = $this->invokePrivateMethod($fileStore, 'filePath', ['seo_crawl', $key]);
+        if (\is_string($filePath)) {
+            $this->filesToCleanup[] = $filePath;
+        }
+
+        self::assertSame($value, $fileStore->get('seo_crawl', $key));
+    }
+
+    public function testGetFallsBackToFileWhenMemoryMisses(): void
+    {
+        $key = 'crawl:seo-crawl-miss-' . \bin2hex(\random_bytes(4));
+        $value = ['status' => 'running', 'cursor' => 0];
+
+        $fileStore = new DevToolPayloadStore(['force_file' => true]);
+        self::assertTrue($fileStore->set('seo_crawl', $key, $value, 1800));
+        $filePath = $this->invokePrivateMethod($fileStore, 'filePath', ['seo_crawl', $key]);
+        if (\is_string($filePath)) {
+            $this->filesToCleanup[] = $filePath;
+        }
+
+        $memory = $this->createMock(MemoryStateFacade::class);
+        $memory->expects(self::once())
+            ->method('get')
+            ->willReturn(null);
+
+        $store = new DevToolPayloadStore();
+        $this->setPrivateProperty($store, 'memoryResolved', true);
+        $this->setPrivateProperty($store, 'memory', $memory);
+
+        self::assertSame($value, $store->get('seo_crawl', $key));
+    }
+
     public function testGetLatestReturnsNewestFilePayloadWithinWindow(): void
     {
         $store = new DevToolPayloadStore(['force_file' => true]);

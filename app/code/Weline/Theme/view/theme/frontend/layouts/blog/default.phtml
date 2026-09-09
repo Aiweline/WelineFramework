@@ -80,6 +80,16 @@ $this->assign('meta', $meta);
             text-decoration: none;
         }
         .amazon-blog-article__breadcrumb a:hover { text-decoration: underline; color: var(--color-link-hover); }
+        .amazon-blog-article__title-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: var(--weline-space-3, 0.75rem);
+            margin: 0 0 0.5rem;
+        }
+        .amazon-blog-article__title-row .amazon-blog-article__title { margin: 0; flex: 1 1 12rem; }
+        .amazon-blog-article__title-row .amazon-blog-listing__rss { flex-shrink: 0; text-decoration: none; }
         .amazon-blog-article__title {
             margin: 0 0 0.5rem;
             font-size: clamp(1.5rem, 2.2vw, 1.875rem);
@@ -299,7 +309,8 @@ $this->assign('meta', $meta);
             padding: 8px 10px 10px;
         }
         .blog-storefront__body h2,
-        .blog-storefront__body h3 {
+        .blog-storefront__body h3,
+        .blog-storefront__card-title {
             margin: 0;
             font-size: 13px;
             font-weight: 600;
@@ -431,5 +442,6 @@ $this->assign('meta', $meta);
 
     <w:hook>Weline_Theme::frontend::layouts::blog::body-end</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+    <w:hook>seo::footer</w:hook>
 </body>
 </html>

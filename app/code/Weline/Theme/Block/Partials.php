@@ -161,6 +161,12 @@ class Partials extends Block
         string $type,
         string $defaultOption
     ): string {
+        // Page-specific SEO lives in frontend head. Skip all output caches so one
+        // Product head can never be replayed onto listing/search/locale routes.
+        if (\strtolower($area) === 'frontend' && \strtolower($type) === 'head') {
+            return $this->renderCompiledPartial($fileName, $dictionary);
+        }
+
         $policy = $this->resolveChromeCachePolicy($fileName, \is_array($dictionary['meta'] ?? null) ? (array)$dictionary['meta'] : [], $type);
         if ($policy === null) {
             return $this->renderCompiledPartial($fileName, $dictionary);
@@ -248,8 +254,10 @@ class Partials extends Block
 
     private function shouldUseSharedStorefrontChromeCache(string $area, string $type): bool
     {
+        // Frontend head embeds page SEO/JSON-LD and must never ride the shared chrome
+        // cache — a single warm Product head would otherwise pollute /products, /search, etc.
         return \strtolower($area) === 'frontend'
-            && \in_array(\strtolower($type), ['head', 'header', 'footer'], true);
+            && \in_array(\strtolower($type), ['header', 'footer'], true);
     }
 
     /**
@@ -435,7 +443,7 @@ class Partials extends Block
 
             return KeyBuilder::environmentHash([
                 // v9: language-switcher SSR no longer inlines flags; bust stale SVG chrome.
-                'schema' => 'chrome-partial-v9',
+                'schema' => 'chrome-partial-v10-seo-path',
                 'nested_widgets' => ($area === 'frontend' && $type === 'header')
                     ? $this->frontendHeaderNestedChromeFingerprint()
                     : '',
@@ -738,6 +746,13 @@ class Partials extends Block
             'theme' => $data['theme'] ?? null,
             'colors' => $data['colors'] ?? null,
             'site_name' => $data['site_name'] ?? null,
+            // Head embeds page SEO/JSON-LD; never share one chrome blob across URLs.
+            'request_path' => \class_exists(\Weline\Seo\Service\Head\SeoPageProfileBag::class)
+                ? \Weline\Seo\Service\Head\SeoPageProfileBag::currentRequestPath()
+                : (string)(\parse_url((string)(\w_env_request_uri() ?? ''), \PHP_URL_PATH) ?: ''),
+            'seo_fp' => \class_exists(\Weline\Seo\Service\Head\SeoPageProfileBag::class)
+                ? \Weline\Seo\Service\Head\SeoPageProfileBag::fingerprint()
+                : '',
         ]);
     }
 

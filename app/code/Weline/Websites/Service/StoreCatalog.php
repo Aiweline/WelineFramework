@@ -9,6 +9,8 @@ use Weline\Framework\Context;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Api\Catalog\Data\StoreSummary;
 use Weline\Websites\Api\Catalog\StoreCatalogInterface;
+use Weline\Websites\Data\ScopeData;
+use Weline\Websites\Data\WebsiteData;
 use Weline\Websites\Model\Store;
 use Weline\Websites\Model\Website;
 
@@ -81,6 +83,13 @@ final class StoreCatalog implements StoreCatalogInterface
             return null;
         }
         $this->assertPositiveCatalogId($storeId, __('店铺 ID'));
+        if (ScopeData::matchesStoreId($storeId)) {
+            return ScopeData::getStore();
+        }
+        $shared = ObjectManager::getInstance(ScopePathMatchCache::class)->readStoreSnapshot($storeId);
+        if ($shared instanceof StoreSummary) {
+            return $shared;
+        }
         $key = 'id:' . $storeId;
         return $this->remember($key, function () use ($storeId): ?StoreSummary {
             $rows = $this->newStore()
@@ -516,6 +525,25 @@ final class StoreCatalog implements StoreCatalogInterface
 
     private function assertWebsiteExists(int $websiteId): void
     {
+        // Website resolution already freezes the authoritative row in
+        // WebsiteData. Reuse that request snapshot before touching the model;
+        // this is the normal storefront path and must not issue a second
+        // parent-Website query merely to validate a cached Store catalog.
+        if (WebsiteData::matchesWebsiteId($websiteId)) {
+            return;
+        }
+
+        // Backend or worker paths may not have a request Website installed,
+        // but another worker can still have published the immutable Website
+        // snapshot to the shared registry cache. A valid snapshot proves the
+        // parent exists; invalid/missing snapshots retain the DB validation
+        // below so deletion and cache failures remain fail-closed.
+        $shared = WebsiteData::readSharedSnapshotById($websiteId);
+        $row = \is_array($shared['website'] ?? null) ? $shared['website'] : null;
+        if ($row !== null && (int)($row[Website::schema_fields_ID] ?? -1) === $websiteId) {
+            return;
+        }
+
         $hotCache = $this->hotCache();
         $assert = function () use ($websiteId): void {
             $website = clone $this->website;

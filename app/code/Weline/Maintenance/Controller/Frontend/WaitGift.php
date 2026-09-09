@@ -33,6 +33,8 @@ class WaitGift extends FrontendController
             'browser_key' => (string)(Cookie::get(WaitGiftService::COOKIE_BROWSER, '') ?: ($body['browser_key'] ?? '')),
             'guest_token' => (string)($body['guest_token'] ?? ''),
             'customer_id' => (string)($body['customer_id'] ?? ''),
+            'selling_mode' => (string)($body['selling_mode'] ?? $body['cart_type'] ?? ''),
+            'cookies' => $_COOKIE ?? [],
             'ip' => (string)$this->request->getClientIp(),
             'user_agent' => (string)\Weline\Framework\Env\WelineEnv::server('HTTP_USER_AGENT', ''),
         ]);
@@ -99,7 +101,10 @@ class WaitGift extends FrontendController
         $token = (string)(Cookie::get(WaitGiftService::COOKIE_WAIT, '') ?: ($body['token'] ?? ''));
         $result = $token === ''
             ? ['success' => false, 'error' => 'token_required', 'message' => (string)\__('缺少等待凭证')]
-            : $service->redeem($token);
+            : $service->redeem($token, [
+                'selling_mode' => (string)($body['selling_mode'] ?? $body['cart_type'] ?? ''),
+                'cookies' => $_COOKIE ?? [],
+            ]);
 
         throw new ResponseTerminateException(
             WaitGiftService::redeemHttpStatus($result),
@@ -112,10 +117,17 @@ class WaitGift extends FrontendController
     {
         $waves = new UpgradeWaveService();
         $wave = $waves->readWave();
+        $service = new WaitGiftService($waves);
+        $enabled = (bool)(($wave['wait_gift_enabled'] ?? false));
+        $sellingMode = $service->resolveSellingMode(['cookies' => $_COOKIE ?? []]);
+        $toc = $sellingMode !== 'tob';
         $payload = [
             'success' => true,
             'maintenance' => (bool)Env::system('maintenance'),
-            'wait_gift_enabled' => (bool)(($wave['wait_gift_enabled'] ?? false)),
+            'wait_gift_enabled' => $enabled,
+            'wait_gift_eligible' => $enabled && $toc,
+            'selling_mode' => $sellingMode,
+            'audience' => $toc ? 'toc' : 'tob',
             'wave_id' => (string)($wave['wave_id'] ?? ''),
             'system_version' => (string)($wave['system_version_to'] ?? ''),
             'theme_version' => (string)($wave['theme_version_to'] ?? ''),

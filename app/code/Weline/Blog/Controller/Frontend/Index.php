@@ -8,6 +8,7 @@ use Weline\Blog\Api\Data\BlogArticle;
 use Weline\Blog\Service\BlogContentResolver;
 use Weline\Blog\Service\BlogScopeResolver;
 use Weline\Blog\Service\BlogSearchCategoryScopeService;
+use Weline\Blog\Service\BlogSeoFactsBuilder;
 use Weline\Framework\App\Controller\FrontendController;
 
 /** Blog listing: /blog — Theme layout blog_category (Amazon-style card grid). */
@@ -17,6 +18,7 @@ final class Index extends FrontendController
         private readonly BlogContentResolver $resolver,
         private readonly BlogScopeResolver $scope,
         private readonly BlogSearchCategoryScopeService $categoryScopes,
+        private readonly BlogSeoFactsBuilder $seoFacts,
     ) {
     }
 
@@ -27,9 +29,14 @@ final class Index extends FrontendController
         $articles = $this->resolver->listPublishedArticles($websiteId, $locale, 50, $this->scope->baseUrl());
         $categories = $this->resolver->listCategories($websiteId, $locale);
 
-        $title = (string)__('博客');
+        // Keep H1 / theme_page_title / <title> leaf aligned with SEO list title (brand suffix added by Seo head).
+        $seo = $this->seoFacts->buildListProfile($articles, $this->getUrl('blog'));
+        $title = trim((string)($seo['title'] ?? ''));
+        if ($title === '') {
+            $title = (string)__('汉服博客 | 穿搭灵感与文化指南');
+        }
         $this->layoutType = 'blog_category';
-        $this->request->setGet('page_type', 'blog_category');
+        $this->request->setGet('page_type', 'blog_list');
         $this->request->setGet('theme_public_route', 'blog');
         $this->request->setGet('theme_page_title', $title);
         $this->assign('page_title', $title);
@@ -48,6 +55,9 @@ final class Index extends FrontendController
                 'description' => $article->excerpt,
             ];
         }, $articles));
+        $this->assign('blog_rss_url', \Weline\Blog\Api\Uri\BlogNamespace::rssPublicPath());
+        $this->assign('blog_rss_label', (string)__('订阅 RSS'));
+        $this->assign('seo', $seo);
 
         return (string)$this->fetch('Weline_Blog::templates/frontend/index.phtml');
     }

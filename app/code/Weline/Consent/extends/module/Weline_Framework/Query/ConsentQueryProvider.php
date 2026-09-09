@@ -57,6 +57,7 @@ class ConsentQueryProvider implements QueryProviderInterface
                     'description' => __('读取同意状态'),
                     'frontend' => true,
                     'mode' => 'read',
+                    'cache_ttl' => 3600,
                     'params' => [],
                     'returns' => ['type' => 'array'],
                 ],

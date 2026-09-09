@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="utf-8">
+  <title>PROTOTYPE throwaway — 系统禁运可达性状态机</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 1.5rem; max-width: 52rem; }
+    .badge { display: inline-block; padding: .15rem .45rem; border-radius: 4px; background: #eee; }
+    .bad { background: #fde8e8; color: #9b1c1c; }
+    .ok { background: #e8f8ef; color: #0f5132; }
+    button { margin: .25rem .25rem .25rem 0; }
+    pre { background: #f6f6f6; padding: .75rem; overflow: auto; }
+    .note { color: #666; font-size: .9rem; }
+  </style>
+</head>
+<body>
+  <p class="note">PROTOTYPE / throwaway — 验证：系统禁运最高优先、可解禁不可删、国禁运祖先继承灰下级、空 profile 全开。</p>
+  <h1>系统禁运 + 配送方案过滤</h1>
+  <div>
+    <button type="button" data-act="seed">种子 AQ 禁运</button>
+    <button type="button" data-act="add-kp">新增 KP</button>
+    <button type="button" data-act="deactivate-aq">解禁 AQ（全站）</button>
+    <button type="button" data-act="activate-aq">再启用 AQ</button>
+    <button type="button" data-act="try-delete">尝试删除 AQ（应失败）</button>
+    <button type="button" data-act="pick-aq">选地址 AQ</button>
+    <button type="button" data-act="pick-cn">选地址 CN</button>
+    <button type="button" data-act="bind-svc">绑配送方案 express</button>
+    <button type="button" data-act="clear-bind">清空绑定</button>
+  </div>
+  <p>下级选项：<span id="children"></span></p>
+  <p>结账可选服务：<span id="services"></span></p>
+  <pre id="state"></pre>
+  <script>
+    const state = {
+      system: [{ code: 'AQ', active: true, reason: 'territory' }],
+      address: { country: 'CN' },
+      profile: '',
+      available: ['standard', 'express'],
+      lastError: ''
+    };
+    function embargoedCountries() {
+      const m = {};
+      state.system.filter(r => r.active).forEach(r => { m[r.code] = true; });
+      return m;
+    }
+    function childOptions() {
+      const blocked = embargoedCountries();
+      const cc = state.address.country;
+      const provinces = cc === 'AQ' ? ['AQ-00'] : (cc === 'CN' ? ['Beijing', 'Shanghai'] : ['X']);
+      return provinces.map(p => ({
+        name: p,
+        unsupported: !!blocked[cc],
+        label: blocked[cc] ? p + '（不支持）' : p
+      }));
+    }
+    function quoteServices() {
+      if (Object.keys(embargoedCountries()).includes(state.address.country)) return [];
+      if (!state.profile) return state.available.slice();
+      return state.available.filter(s => s === state.profile);
+    }
+    function render() {
+      document.getElementById('children').innerHTML = childOptions().map(o =>
+        '<span class="badge ' + (o.unsupported ? 'bad' : 'ok') + '">' + o.label + '</span>'
+      ).join(' ');
+      const svc = quoteServices();
+      document.getElementById('services').innerHTML = svc.length
+        ? svc.map(s => '<span class="badge ok">' + s + '</span>').join(' ')
+        : '<span class="badge bad">当前地址下所选配送方案不可用</span>';
+      document.getElementById('state').textContent = JSON.stringify(state, null, 2);
+    }
+    document.body.addEventListener('click', (e) => {
+      const act = e.target.getAttribute('data-act');
+      if (!act) return;
+      state.lastError = '';
+      if (act === 'seed') state.system = [{ code: 'AQ', active: true, reason: 'territory' }];
+      if (act === 'add-kp' && !state.system.find(r => r.code === 'KP')) {
+        state.system.push({ code: 'KP', active: true, reason: 'no_commerce' });
+      }
+      if (act === 'deactivate-aq') {
+        const r = state.system.find(x => x.code === 'AQ');
+        if (r) r.active = false;
+      }
+      if (act === 'activate-aq') {
+        const r = state.system.find(x => x.code === 'AQ');
+        if (r) r.active = true;
+      }
+      if (act === 'try-delete') state.lastError = 'DELETE_FORBIDDEN';
+      if (act === 'pick-aq') state.address.country = 'AQ';
+      if (act === 'pick-cn') state.address.country = 'CN';
+      if (act === 'bind-svc') state.profile = 'express';
+      if (act === 'clear-bind') state.profile = '';
+      render();
+    });
+    render();
+  </script>
+</body>
+</html>

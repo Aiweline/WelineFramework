@@ -8,6 +8,16 @@ use PHPUnit\Framework\TestCase;
 
 final class QueueDispatchServiceTest extends TestCase
 {
+    public function testFailQueueWorkerMarksFinishedTerminal(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Service/QueueDispatchService.php');
+        $failSource = $this->extractPrivateMethodSource($source, 'failQueueWorkerSafely');
+
+        self::assertStringContainsString('Queue::schema_fields_status => Queue::status_error', $failSource);
+        self::assertStringContainsString('Queue::schema_fields_finished => 1', $failSource);
+        self::assertStringContainsString('Queue::schema_fields_DISPATCH_TOKEN => null', $failSource);
+    }
+
     public function testQueueWorkerCommandCarriesDedicatedMemoryLimit(): void
     {
         $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Service/QueueDispatchService.php');
@@ -77,6 +87,49 @@ final class QueueDispatchServiceTest extends TestCase
         self::assertStringContainsString("return \$value . 'M';", $normalizeMethodSource);
         self::assertStringContainsString('/^[1-9]\d*(?:K|M|G)$/', $normalizeMethodSource);
         self::assertStringContainsString('return $default;', $normalizeMethodSource);
+    }
+
+    public function testQueueResultAndProcessOutputAreByteBounded(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Service/QueueDispatchService.php');
+        $prependSource = $this->extractPrivateMethodSource($source, 'prependResultMessage');
+
+        self::assertMatchesRegularExpression('/RESULT_MAX_BYTES\s*=\s*\d+/', $source);
+        self::assertMatchesRegularExpression('/PROCESS_OUTPUT_MAX_BYTES\s*=\s*\d+/', $source);
+        self::assertLessThanOrEqual(
+            8192,
+            $this->extractNamedIntConstant($source, 'RESULT_MAX_BYTES'),
+            'queue.result must stay a short process trail, not a log dump.'
+        );
+        self::assertStringContainsString('private static function boundResultText', $source);
+        self::assertStringContainsString('private static function readFileTail', $source);
+        self::assertStringContainsString('self::boundResultText', $this->extractPrivateMethodSource($source, 'appendProcessMessage'));
+        self::assertStringContainsString('self::boundResultText', $prependSource);
+        self::assertStringNotContainsString(
+            'boundResultText($output',
+            $prependSource,
+            'prependResultMessage must not persist worker stdout into queue.result.'
+        );
+        self::assertStringNotContainsString(
+            'PROCESS_OUTPUT_MAX_BYTES',
+            $prependSource,
+            'process log caps belong to probing, not result persistence.'
+        );
+        self::assertStringContainsString('self::readFileTail', $this->extractPrivateMethodSource($source, 'getManagedProcessOutput'));
+        self::assertStringNotContainsString(
+            'file_get_contents($path)',
+            $this->extractPrivateMethodSource($source, 'getManagedProcessOutput'),
+            'Unbounded file_get_contents of process logs must not remain in getManagedProcessOutput.'
+        );
+    }
+
+    private function extractNamedIntConstant(string $source, string $name): int
+    {
+        if (!\preg_match('/' . \preg_quote($name, '/') . '\s*=\s*(\d+)/', $source, $m)) {
+            self::fail($name . ' missing');
+        }
+
+        return (int)$m[1];
     }
 
     public function testReconcileRepairsFinishedRunningQueues(): void
@@ -231,6 +284,29 @@ final class QueueDispatchServiceTest extends TestCase
         self::assertStringContainsString('Queue::schema_fields_start_at => null', $reconcileMethodSource);
         self::assertStringContainsString('Queue::schema_fields_end_at => null', $reconcileMethodSource);
         self::assertStringContainsString('Queue::schema_fields_result => $message', $reconcileMethodSource);
+    }
+
+    public function testReconcileDeadWorkerErrorPathMarksFinishedTerminal(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Service/QueueDispatchService.php');
+        $reconcileMethodSource = $this->extractPrivateMethodSource($source, 'reconcileRunningQueues');
+
+        $errorOffset = \strpos($reconcileMethodSource, 'Queue::schema_fields_status => Queue::status_error');
+        self::assertNotFalse($errorOffset, 'generic dead-worker error path missing');
+        $finishedAfterError = \strpos(
+            $reconcileMethodSource,
+            'Queue::schema_fields_finished => 1',
+            $errorOffset
+        );
+        self::assertNotFalse(
+            $finishedAfterError,
+            'Dead-PID error closeout must set finished=1 (same terminal as failQueueWorkerSafely).'
+        );
+        self::assertLessThan(
+            400,
+            $finishedAfterError - $errorOffset,
+            'finished=1 must sit on the dead-PID error update block, not a distant branch.'
+        );
     }
 
     public function testRecoverableNoPidRunningQueuesMustPassRecoveryContract(): void

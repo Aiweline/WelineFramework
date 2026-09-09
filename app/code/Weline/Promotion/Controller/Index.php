@@ -37,6 +37,10 @@ class Index extends FrontendController
         $this->forceThemeShell();
         $this->assign($data);
         $this->assign('title', (string)($data['title'] ?? __('活动中心')));
+        // SEO ownership: product_list profile lives only under seo.* (UI page_type stays slug).
+        if (isset($data['seo']) && is_array($data['seo'])) {
+            $this->assign('seo', $data['seo']);
+        }
 
         return (string)$this->fetch('Weline_Promotion::templates/frontend/promotion/index.phtml');
     }

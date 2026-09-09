@@ -19,6 +19,7 @@ class SharedStateClient
     private ConnectionPoolInterface $pool;
     private float $acquireTimeout;
     private bool $released = false;
+    private bool $throwOnTransportFailure = false;
 
     public function __construct(
         string $host = '127.0.0.1',
@@ -48,6 +49,7 @@ class SharedStateClient
         }
         $this->pool = ConnectionPoolManager::getInstance($host, $port, $options);
         $this->acquireTimeout = (float)($options['acquire_timeout'] ?? $options['pool_acquire_timeout'] ?? 0.2);
+        $this->throwOnTransportFailure = (bool)($options['throw_on_transport_failure'] ?? false);
     }
 
     public function request(string $cmd, array $params = []): ?array
@@ -187,6 +189,9 @@ class SharedStateClient
             }
         }
         if ($conn === null) {
+            if ($this->throwOnTransportFailure) {
+                throw new \RuntimeException('shared_state_transport_acquire_failed');
+            }
             return null;
         }
 
@@ -194,10 +199,12 @@ class SharedStateClient
         // 具体校验在 ConnectionPoolManager::release；此处用 finally 杜绝异常路径下 busy 泄漏。
         $dispose = 'invalidate';
         $result = null;
+        $failure = null;
         try {
             $result = $callback($conn);
             $dispose = \is_array($result) ? 'release' : 'invalidate';
-        } catch (\Throwable) {
+        } catch (\Throwable $throwable) {
+            $failure = $throwable;
             $result = null;
         } finally {
             $disposeStart = $trace !== null ? self::monotonicSeconds() : null;
@@ -218,6 +225,11 @@ class SharedStateClient
                     $trace['dispose_ms'] = \round((self::monotonicSeconds() - $disposeStart) * 1000, 3);
                 }
             }
+        }
+
+        // 先回收连接，再向显式启用的内部调用方报告传输故障；协议数组中的业务结果原样返回。
+        if ($this->throwOnTransportFailure && !\is_array($result)) {
+            throw $failure ?? new \RuntimeException('shared_state_transport_failed');
         }
 
         return $result;

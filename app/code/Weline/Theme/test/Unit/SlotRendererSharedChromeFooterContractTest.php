@@ -42,13 +42,23 @@ final class SlotRendererSharedChromeFooterContractTest extends TestCase
 
         self::assertStringContainsString('function mergeSharedChromeSlotWidgets(', $src);
         self::assertStringContainsString('function slotWidgetsBelongToSharedChrome(', $src);
+        self::assertStringContainsString('function sharedChromeCarrierIdentity(', $src);
         self::assertStringContainsString('if ($pageType === ThemeLayout::PAGE_TYPE_HOME)', $src);
         self::assertStringContainsString('if (empty($slotWidgets[$slotId]))', $src);
-        self::assertStringContainsString(
-            '$globalChromeLayout = $this->getLayoutData($themeId, ThemeLayout::PAGE_TYPE_HOME, $status, $area);',
-            $src
-        );
-        self::assertStringContainsString('存储载体，不是归属', $src);
+        self::assertStringContainsString('ThemeVirtualLayout::TARGET_GLOBAL', $src);
+        self::assertStringContainsString('sharedChromeCarrierIdentity($this->currentLayoutIdentity($area))', $src);
         self::assertStringContainsString("\$widgetArea === 'header' || \$widgetArea === 'footer'", $src);
+    }
+
+    public function testProcessSlotsWithLayoutAlsoMergesSharedChrome(): void
+    {
+        $src = $this->readService();
+        $fnPos = strpos($src, 'public function processSlotsWithLayout(');
+        self::assertNotFalse($fnPos);
+        $nextFn = strpos($src, 'private function doProcessSlots(', $fnPos);
+        self::assertNotFalse($nextFn);
+        $body = substr($src, $fnPos, $nextFn - $fnPos);
+        self::assertStringContainsString('mergeSharedChromeSlotWidgets(', $body);
+        self::assertStringContainsString('mergeLayoutScopedSlotWidgets(', $body);
     }
 }

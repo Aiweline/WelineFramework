@@ -101,6 +101,10 @@ final class BlogPostAdminService
         }
         $model->setData(Post::schema_fields_COVER_IMAGE, trim((string)($data['cover_image'] ?? '')));
         $model->setData(Post::schema_fields_AUTHOR, trim((string)($data['author'] ?? '')));
+        $model->setData(Post::schema_fields_AUTHOR_URL, trim((string)($data['author_url'] ?? '')));
+        $model->setData(Post::schema_fields_AUTHOR_BIO, trim((string)($data['author_bio'] ?? '')));
+        $model->setData(Post::schema_fields_AUTHOR_JOB_TITLE, trim((string)($data['author_job_title'] ?? '')));
+        $model->setData(Post::schema_fields_AUTHOR_SAME_AS, trim((string)($data['author_same_as'] ?? '')));
         $model->setData(Post::schema_fields_KEYWORDS, trim((string)($data['keywords'] ?? '')));
         $model->setData(Post::schema_fields_CATEGORY_ID, (int)($data['category_id'] ?? 0));
         $model->setData(Post::schema_fields_STATUS, $status);

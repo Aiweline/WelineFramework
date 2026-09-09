@@ -23,6 +23,9 @@ final class FileImageRenderer
         string $locale = '',
         string $class = '',
         ?bool $complement = null,
+        mixed $width = null,
+        mixed $height = null,
+        string $aspectRatio = '',
     ): string {
         if (is_string($usage) && trim($usage) !== '') {
             try {
@@ -36,10 +39,17 @@ final class FileImageRenderer
         if (!hash_equals($requestLocale, $locale)) {
             throw new \RuntimeException((string)__('文件图片语言必须与当前请求语言一致。'));
         }
+        [$layoutWidth, $layoutHeight] = ImageUsage::layoutPairFromMixed($width, $height, $aspectRatio);
         if (is_array($usage)) {
             $imageUsage = ImageUsage::fromArray($usage);
             if (!hash_equals($locale, $imageUsage->localeCode)) {
                 throw new \RuntimeException((string)__('图片语境语言与当前请求语言不一致。'));
+            }
+            if ($layoutWidth !== null && $layoutHeight !== null) {
+                $imageUsage = ImageUsage::fromArray(array_merge($imageUsage->toArray(), [
+                    'layout_width' => $layoutWidth,
+                    'layout_height' => $layoutHeight,
+                ]));
             }
         } else {
             $imageUsage = new ImageUsage(
@@ -49,6 +59,8 @@ final class FileImageRenderer
                 ImageUsage::ALT_CONFIRMED,
                 $decorative,
                 complement: $complement ?? true,
+                layoutWidth: $layoutWidth,
+                layoutHeight: $layoutHeight,
             );
         }
         $scope = RequestContext::scopeIdentity();

@@ -57,9 +57,13 @@ $config = [
         'apiList' => (string)__('接口列表'),
         'frontendApi' => (string)__('前端 API'),
         'backendApi' => (string)__('后台 API'),
+        'filterModule' => (string)__('筛选模块'),
+        'filterModulePlaceholder' => (string)__('筛选模块…'),
+        'emptyModuleFilter' => (string)__('没有匹配的模块'),
         'search' => (string)__('搜索接口'),
         'searchPlaceholder' => (string)__('搜索名称、路径、方法、参数或说明…'),
         'chooseApi' => (string)__('从左侧选择一个接口查看详情并发起测试'),
+        'apiContext' => (string)__('接口'),
         'toc' => (string)__('目录'),
         'tocShow' => (string)__('显示目录'),
         'tocHide' => (string)__('隐藏目录'),
@@ -127,6 +131,7 @@ $config = [
         'body' => (string)__('请求体'),
         'jsonBody' => (string)__('请输入 JSON 格式的请求体'),
         'i18nSettings' => (string)__('语言、货币和环境'),
+        'i18nMode' => (string)__('切换方式'),
         'pathMode' => (string)__('路径切换'),
         'paramMode' => (string)__('参数切换'),
         'workerTarget' => (string)__('Worker 目标'),
@@ -161,6 +166,27 @@ $config = [
         'resizeSidebar' => (string)__('调整接口列表宽度'),
         'resizePanels' => (string)__('调整文档与测试面板宽度'),
         'productionWarning' => (string)__('正式环境调试模式已开启，请谨慎操作。'),
+        'demoTitle' => (string)__('示例应用'),
+        'demoOpen' => (string)__('打开示例'),
+        'demoClose' => (string)__('返回单接口测试'),
+        'demoReset' => (string)__('填入新示例'),
+        'demoRequest' => (string)__('请求预览'),
+        'demoState' => (string)__('当前数据'),
+        'demoHistory' => (string)__('调用记录'),
+        'demoRun' => (string)__('运行'),
+        'demoRequired' => (string)__('请先填写必填项或完成前一步'),
+        'demoMissingApi' => (string)__('示例依赖的接口不可用'),
+        'demoInvalidValue' => (string)__('字段格式不正确'),
+        'demoCurrentIdentity' => (string)__('当前登录身份'),
+        'demoUnauthenticated' => (string)__('请先登录'),
+        'demoResult' => (string)__('响应结果'),
+        'demoOpenProduct' => (string)__('查看店面产品'),
+        'demoSteps' => (string)__('调用步骤'),
+        'demoWorking' => (string)__('调用中'),
+        'demoCompleted' => (string)__('已完成'),
+        'demoFailed' => (string)__('调用失败'),
+        'demoResponse' => (string)__('响应'),
+        'demoFillExample' => (string)__('填写示例数据'),
         'deprecated' => (string)__('已废弃'),
     ],
 ];
@@ -192,22 +218,25 @@ $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG
             <h1><w:icon name="code" size="md"></w:icon><?= $escape(__('API 文档管理')) ?></h1>
             <p class="w-text" data-tone="muted"><?= $escape(__('Weline Framework API 接口文档和完整调用测试工具')) ?></p>
         </div>
-        <nav class="w-api-docs__tools w-cluster" aria-label="<?= $escape(__('API 文档工具')) ?>">
-            <label class="w-field w-api-docs__theme-field">
-                <span class="w-visually-hidden"><?= $escape(__('界面主题')) ?></span>
-                <select class="w-select" data-api-theme aria-label="<?= $escape(__('界面主题')) ?>">
-                    <option value="system"><?= $escape(__('跟随系统')) ?></option>
-                    <option value="light"><?= $escape(__('亮色')) ?></option>
-                    <option value="dark"><?= $escape(__('暗色')) ?></option>
-                </select>
-            </label>
-            <label class="w-switch w-api-docs__production">
-                <input type="checkbox" data-api-production>
-                <span class="w-switch__control" aria-hidden="true"></span>
-                <span class="w-switch__label"><?= $escape(__('正式环境调试')) ?></span>
-            </label>
-            <button class="w-button" type="button" data-tone="primary" data-api-action="open-login" data-api-login-button><w:icon name="lock" size="sm"></w:icon><span data-api-login-label><?= $escape(__('登录')) ?></span></button>
-            <a class="w-button" data-tone="neutral" href="@url{'dev/tool/docs'}"><w:icon name="book" size="sm"></w:icon><?= $escape(__('开发文档')) ?></a>
+        <nav class="w-api-docs__tools w-cluster" data-align="center" aria-label="<?= $escape(__('API 文档工具')) ?>">
+            <div class="w-api-docs__tool-group w-api-docs__tool-settings w-cluster" data-align="center" role="group" aria-label="<?= $escape(__('显示与调试')) ?>">
+                <label class="w-api-docs__theme-field">
+                    <span class="w-visually-hidden"><?= $escape(__('界面主题')) ?></span>
+                    <select class="w-select" data-api-theme aria-label="<?= $escape(__('界面主题')) ?>">
+                        <option value="system"><?= $escape(__('跟随系统')) ?></option>
+                        <option value="light"><?= $escape(__('亮色')) ?></option>
+                        <option value="dark"><?= $escape(__('暗色')) ?></option>
+                    </select>
+                </label>
+                <label class="w-switch w-api-docs__production">
+                    <input type="checkbox" data-api-production>
+                    <span class="w-switch__label"><?= $escape(__('正式环境调试')) ?></span>
+                </label>
+            </div>
+            <div class="w-api-docs__tool-group w-api-docs__tool-actions w-cluster" data-align="center" role="group" aria-label="<?= $escape(__('账户与文档')) ?>">
+                <button class="w-button" type="button" data-tone="primary" data-api-action="open-login" data-api-login-button><w:icon name="lock" size="sm"></w:icon><span data-api-login-label><?= $escape(__('登录')) ?></span></button>
+                <a class="w-button" data-tone="neutral" data-variant="outline" href="@url{'dev/tool/docs'}"><w:icon name="book" size="sm"></w:icon><?= $escape(__('开发文档')) ?></a>
+            </div>
         </nav>
     </header>
 
@@ -225,8 +254,8 @@ $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG
                     </div>
                 </div>
                 <label class="w-field">
-                    <span class="w-visually-hidden"><?= $escape(__('搜索接口')) ?></span>
-                    <input class="w-input" type="search" data-api-search placeholder="<?= $escape(__('搜索名称、路径、方法、参数或说明…')) ?>" autocomplete="off">
+                    <span class="w-visually-hidden"><?= $escape(__('筛选模块')) ?></span>
+                    <input class="w-input" type="search" data-api-module-filter placeholder="<?= $escape(__('筛选模块…')) ?>" autocomplete="off">
                 </label>
                 <div class="w-api-docs__list" data-api-list aria-live="polite"></div>
             </div>
@@ -235,6 +264,13 @@ $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG
         <div class="w-api-docs__resizer" role="separator" tabindex="0" aria-orientation="vertical" aria-label="<?= $escape(__('调整接口列表宽度')) ?>" data-api-resizer="sidebar"></div>
 
         <section class="w-card w-api-docs__content">
+            <header class="w-card__header w-api-docs__content-bar w-cluster" data-justify="between" data-align="center">
+                <label class="w-field w-api-docs__api-search">
+                    <span class="w-visually-hidden"><?= $escape(__('搜索接口')) ?></span>
+                    <input class="w-input" type="search" data-api-search placeholder="<?= $escape(__('搜索名称、路径、方法、参数或说明…')) ?>" autocomplete="off">
+                </label>
+                <span class="w-badge" data-tone="neutral" data-api-context><?= $escape(__('接口')) ?></span>
+            </header>
             <div class="w-api-docs__workspace" data-api-workspace>
                 <section class="w-api-docs__detail" data-api-detail aria-live="polite"></section>
                 <div class="w-api-docs__resizer" role="separator" tabindex="0" aria-orientation="vertical" aria-label="<?= $escape(__('调整文档与测试面板宽度')) ?>" data-api-resizer="panels"></div>

@@ -1,48 +1,393 @@
 <?php
 /** @var \Weline\Framework\View\Template $this */
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Theme\Service\Ui\IconRegistry;
+
 $code = (string)($this->getData('workspace_code') ?? 'unknown');
 $title = (string)($this->getData('workspace_title') ?? __('队列诊断'));
 $datasets = (array)($this->getData('workspace_datasets') ?? []);
+$iconRegistry = ObjectManager::getInstance(IconRegistry::class);
 $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-$display = static function (mixed $value): string {
-    if ($value === null || $value === '') return '—';
-    if (is_bool($value)) return (string)($value ? __('是') : __('否'));
+
+$blank = static fn(mixed $value): bool => $value === null || $value === '';
+$textOrDash = static function (mixed $value) use ($blank): string {
+    if ($blank($value)) {
+        return '—';
+    }
+    if (is_bool($value)) {
+        return (string)($value ? __('是') : __('否'));
+    }
     if (is_array($value) || is_object($value)) {
         $json = json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
         return is_string($json) ? $json : '—';
     }
     return (string)$value;
 };
+$isOn = static fn(mixed $value): bool => $value === true || $value === 1 || $value === '1';
+
+$statusMeta = static function (string $status): array {
+    return match ($status) {
+        'running' => ['label' => __('运行中'), 'tone' => 'info', 'icon' => 'play'],
+        'done', 'completed', 'success' => ['label' => __('已完成'), 'tone' => 'success', 'icon' => 'check'],
+        'published', 'delivered' => ['label' => __('已投递'), 'tone' => 'success', 'icon' => 'check'],
+        'error', 'failed' => ['label' => __('出错'), 'tone' => 'danger', 'icon' => 'warning'],
+        'stop', 'paused' => ['label' => __('已暂停'), 'tone' => 'warning', 'icon' => 'pause'],
+        'pending', 'waiting', 'available' => ['label' => __('等待中'), 'tone' => 'neutral', 'icon' => 'clock'],
+        default => ['label' => $status !== '' ? $status : '—', 'tone' => 'neutral', 'icon' => 'info'],
+    };
+};
+
+$emptyProfiles = [
+    'outbox' => [
+        'icon' => 'arrow-up',
+        'title' => __('暂无发件箱记录'),
+        'body' => __('当前没有可展示的异步事件发件事实。尚未产生可靠异步事件时会出现此状态。本页只读，不会投递或重试。'),
+    ],
+    'inbox' => [
+        'icon' => 'arrow-down',
+        'title' => __('暂无收件箱记录'),
+        'body' => __('当前没有可展示的队列收件事实。没有任务入队或数据暂时不可见时会出现此状态。本页只读，不会消费或删除。'),
+    ],
+    'retries' => [
+        'icon' => 'refresh',
+        'title' => __('暂无待重试失败队列'),
+        'body' => __('当前没有状态为失败的队列任务。业务运行正常时此页为空是预期结果。本页只读，不会触发重试。'),
+    ],
+    'consumers' => [
+        'icon' => 'user',
+        'title' => __('暂无消费者注册'),
+        'body' => __('当前没有可展示的队列类型/消费者注册。请确认相关模块已安装且队列类型已启用。'),
+    ],
+];
+$empty = $emptyProfiles[$code] ?? [
+    'icon' => 'database',
+    'title' => __('暂无诊断记录'),
+    'body' => __('此只读工作台暂无可展示的脱敏运行事实。'),
+];
+$relatedLinks = match ($code) {
+    'outbox' => [
+        ['queue/backend/queue', __('队列列表'), 'list'],
+        ['queue/backend/diagnostics/consumers', __('消费者'), 'user'],
+        ['queue/backend/diagnostics/inbox', __('收件箱'), 'arrow-down'],
+    ],
+    'inbox' => [
+        ['queue/backend/queue', __('队列列表'), 'list'],
+        ['queue/backend/diagnostics/outbox', __('发件箱'), 'arrow-up'],
+        ['queue/backend/diagnostics/retries', __('重试诊断'), 'refresh'],
+    ],
+    'retries' => [
+        ['queue/backend/queue', __('队列列表'), 'list'],
+        ['queue/backend/diagnostics/inbox', __('收件箱'), 'arrow-down'],
+        ['queue/backend/diagnostics/consumers', __('消费者'), 'user'],
+    ],
+    'consumers' => [
+        ['queue/backend/type', __('队列类型'), 'circle'],
+        ['queue/backend/queue', __('队列列表'), 'list'],
+    ],
+    default => [
+        ['queue/backend/queue', __('队列列表'), 'list'],
+    ],
+};
+
+/**
+ * 将宽表字段折叠为可读列，避免 14+ 列挤出竖排字。
+ *
+ * @param array<string,mixed> $row
+ * @return list<array{key:string,label:string,kind:string,cells?:list<array<string,mixed>>,meta?:array<string,mixed>}>
+ */
+$presentQueueRow = static function (array $row) use ($blank, $textOrDash, $isOn, $statusMeta): array {
+    $status = $statusMeta((string)($row['status'] ?? ''));
+    $flags = [];
+    if (array_key_exists('finished', $row)) {
+        $flags[] = ['label' => $isOn($row['finished']) ? __('已结束') : __('未结束'), 'tone' => $isOn($row['finished']) ? 'neutral' : 'warning'];
+    }
+    if (array_key_exists('auto', $row) && $isOn($row['auto'])) {
+        $flags[] = ['label' => __('自动'), 'tone' => 'info'];
+    }
+
+    $start = $textOrDash($row['start_at'] ?? null);
+    $end = $textOrDash($row['end_at'] ?? null);
+    $timePrimary = $start === '—' && $end === '—' ? '—' : $start . ' → ' . $end;
+    $timeSecondary = [];
+    if (!$blank($row['dispatch_until'] ?? null)) {
+        $timeSecondary[] = __('截止') . ' ' . $textOrDash($row['dispatch_until']);
+    }
+
+    $scopeParts = [];
+    if (!$blank($row['scope_kind'] ?? null)) {
+        $scopeParts[] = (string)$row['scope_kind'];
+    }
+    $siteCode = $row['scope_website_code'] ?? null;
+    $siteId = $row['scope_website_id'] ?? null;
+    if (!$blank($siteCode) || !$blank($siteId)) {
+        $scopeParts[] = (!$blank($siteCode) ? (string)$siteCode : '—')
+            . (!$blank($siteId) ? ' (#' . $textOrDash($siteId) . ')' : '');
+    }
+    if (!$blank($row['scope_store_code'] ?? null)) {
+        $scopeParts[] = __('店') . ' ' . $textOrDash($row['scope_store_code']);
+    }
+    if (!$blank($row['scope_channel_code'] ?? null)) {
+        $scopeParts[] = __('渠') . ' ' . $textOrDash($row['scope_channel_code']);
+    }
+
+    return [
+        ['key' => 'id', 'label' => __('ID'), 'kind' => 'id', 'meta' => ['text' => $textOrDash($row['queue_id'] ?? null)]],
+        [
+            'key' => 'task',
+            'label' => __('任务'),
+            'kind' => 'task',
+            'meta' => [
+                'title' => $textOrDash($row['name'] ?? null),
+                'lines' => array_values(array_filter([
+                    !$blank($row['module'] ?? null) ? (string)$row['module'] : null,
+                    !$blank($row['biz_key'] ?? null) ? (string)$row['biz_key'] : null,
+                    !$blank($row['type_id'] ?? null) ? (__('类型') . ' #' . $textOrDash($row['type_id'])) : null,
+                ], static fn($v) => $v !== null && $v !== '')),
+            ],
+        ],
+        [
+            'key' => 'status',
+            'label' => __('状态'),
+            'kind' => 'status_flags',
+            'meta' => ['status' => $status, 'flags' => $flags],
+        ],
+        [
+            'key' => 'time',
+            'label' => __('时间'),
+            'kind' => 'time',
+            'meta' => ['primary' => $timePrimary, 'secondary' => $timeSecondary],
+        ],
+        [
+            'key' => 'scope',
+            'label' => __('作用域'),
+            'kind' => 'scope',
+            'meta' => ['text' => $scopeParts === [] ? '—' : implode(' · ', $scopeParts)],
+        ],
+    ];
+};
+
+/**
+ * @param array<string,mixed> $row
+ * @return list<array{key:string,label:string,kind:string,meta?:array<string,mixed>}>
+ */
+$presentOutboxRow = static function (array $row) use ($blank, $textOrDash, $statusMeta): array {
+    $status = $statusMeta((string)($row['status'] ?? ''));
+    $timeLines = [];
+    if (!$blank($row['available_at'] ?? null)) {
+        $timeLines[] = __('可投递') . ' ' . $textOrDash($row['available_at']);
+    }
+    if (!$blank($row['occurred_at'] ?? null)) {
+        $timeLines[] = __('发生') . ' ' . $textOrDash($row['occurred_at']);
+    }
+    if (!$blank($row['created_at'] ?? null)) {
+        $timeLines[] = __('创建') . ' ' . $textOrDash($row['created_at']);
+    }
+    if (!$blank($row['updated_at'] ?? null)) {
+        $timeLines[] = __('更新') . ' ' . $textOrDash($row['updated_at']);
+    }
+    $error = $textOrDash($row['last_error'] ?? null);
+    if (!$blank($row['last_error_code'] ?? null) && $error !== '—') {
+        $error = '[' . $textOrDash($row['last_error_code']) . '] ' . $error;
+    } elseif (!$blank($row['last_error_code'] ?? null)) {
+        $error = $textOrDash($row['last_error_code']);
+    }
+
+    return [
+        ['key' => 'id', 'label' => __('ID'), 'kind' => 'id', 'meta' => ['text' => $textOrDash($row['outbox_id'] ?? null)]],
+        [
+            'key' => 'event',
+            'label' => __('事件'),
+            'kind' => 'task',
+            'meta' => [
+                'title' => $textOrDash($row['event_name'] ?? null),
+                'lines' => array_values(array_filter([
+                    !$blank($row['event_id'] ?? null) ? (__('事件') . ' #' . $textOrDash($row['event_id'])) : null,
+                    !$blank($row['payload_schema_version'] ?? null) ? (__('载荷') . ' v' . $textOrDash($row['payload_schema_version'])) : null,
+                ], static fn($v) => $v !== null && $v !== '')),
+            ],
+        ],
+        [
+            'key' => 'status',
+            'label' => __('状态'),
+            'kind' => 'status_flags',
+            'meta' => [
+                'status' => $status,
+                'flags' => !$blank($row['attempt_count'] ?? null)
+                    ? [['label' => __('尝试') . ' ' . $textOrDash($row['attempt_count']), 'tone' => 'neutral']]
+                    : [],
+            ],
+        ],
+        [
+            'key' => 'time',
+            'label' => __('时间'),
+            'kind' => 'time',
+            'meta' => ['primary' => $timeLines[0] ?? '—', 'secondary' => array_slice($timeLines, 1)],
+        ],
+        [
+            'key' => 'error',
+            'label' => __('错误'),
+            'kind' => 'scope',
+            'meta' => ['text' => $error],
+        ],
+    ];
+};
+
+/**
+ * @param array<string,mixed> $row
+ * @return list<array{key:string,label:string,kind:string,meta?:array<string,mixed>}>
+ */
+$presentConsumerRow = static function (array $row) use ($blank, $textOrDash, $isOn): array {
+    return [
+        ['key' => 'id', 'label' => __('ID'), 'kind' => 'id', 'meta' => ['text' => $textOrDash($row['type_id'] ?? null)]],
+        [
+            'key' => 'name',
+            'label' => __('消费者'),
+            'kind' => 'task',
+            'meta' => [
+                'title' => $textOrDash($row['name'] ?? null),
+                'lines' => array_values(array_filter([
+                    !$blank($row['module_name'] ?? null) ? (string)$row['module_name'] : null,
+                    !$blank($row['tip'] ?? null) ? (string)$row['tip'] : null,
+                ], static fn($v) => $v !== null && $v !== '')),
+            ],
+        ],
+        [
+            'key' => 'enable',
+            'label' => __('启用'),
+            'kind' => 'status_flags',
+            'meta' => [
+                'status' => [
+                    'label' => $isOn($row['enable'] ?? false) ? __('已启用') : __('已停用'),
+                    'tone' => $isOn($row['enable'] ?? false) ? 'success' : 'neutral',
+                    'icon' => $isOn($row['enable'] ?? false) ? 'check' : 'minus',
+                ],
+                'flags' => [],
+            ],
+        ],
+        [
+            'key' => 'class',
+            'label' => __('类'),
+            'kind' => 'scope',
+            'meta' => ['text' => $textOrDash($row['class'] ?? null), 'code' => true],
+        ],
+    ];
+};
+
+$presenter = match ($code) {
+    'outbox' => $presentOutboxRow,
+    'consumers' => $presentConsumerRow,
+    default => $presentQueueRow,
+};
 ?>
 <link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-queue-admin.css)">
 
 <main class="w-queue-diagnostics w-stack" data-testid="queue-<?= $escape($code) ?>-management">
     <header class="w-queue-admin__heading">
-        <h1><w:icon name="database" size="sm" /> <?= $escape($title) ?></h1>
+        <h1><w:icon name="<?= $escape((string)$empty['icon']) ?>" size="sm" /> <?= $escape($title) ?></h1>
     </header>
-    <div class="w-alert" role="status" data-tone="info"><w:icon name="info" size="sm" /><div class="w-alert__content"><?= $escape(__('此工作台仅显示脱敏运行事实，不执行消费、重试、删除或投递。')) ?></div></div>
+    <div class="w-alert" role="status" data-tone="info">
+        <w:icon name="info" size="sm" />
+        <div class="w-alert__content"><?= $escape(__('此工作台仅显示脱敏运行事实，不执行消费、重试、删除或投递。')) ?></div>
+    </div>
 
     <?php foreach ($datasets as $dataset): ?>
         <?php
-        if (!is_array($dataset)) continue;
+        if (!is_array($dataset)) {
+            continue;
+        }
         $rows = is_array($dataset['rows'] ?? null) ? $dataset['rows'] : [];
-        $firstRow = is_array($rows[0] ?? null) ? $rows[0] : [];
+        $presented = [];
+        foreach ($rows as $row) {
+            if (is_array($row)) {
+                $presented[] = $presenter($row);
+            }
+        }
+        $columns = $presented[0] ?? [];
         ?>
         <section class="w-card w-queue-diagnostics__dataset">
-            <header class="w-card__header"><h2 class="w-card__title"><?= $escape($dataset['label'] ?? '') ?></h2></header>
+            <header class="w-card__header">
+                <h2 class="w-card__title"><?= $escape($dataset['label'] ?? '') ?></h2>
+                <?php if ($presented !== [] && empty($dataset['error'])): ?>
+                    <p class="w-queue-diagnostics__hint"><?= $escape(__('最近 %{1} 条只读记录', (string)count($presented))) ?></p>
+                <?php endif; ?>
+            </header>
             <div class="w-card__body">
                 <?php if (!empty($dataset['error'])): ?>
                     <div class="w-alert" data-tone="warning"><w:icon name="warning" size="sm" /><div class="w-alert__content"><?= $escape($dataset['error']) ?></div></div>
-                <?php elseif ($rows === []): ?>
-                    <div class="w-empty"><w:icon name="database" size="lg" /><p><?= $escape(__('当前没有记录。')) ?></p></div>
+                <?php elseif ($presented === []): ?>
+                    <div class="w-empty w-queue-diagnostics__empty" role="status">
+                        <w:icon name="<?= $escape((string)$empty['icon']) ?>" size="lg" />
+                        <h3><?= $escape((string)$empty['title']) ?></h3>
+                        <p><?= $escape((string)$empty['body']) ?></p>
+                        <div class="w-cluster w-queue-diagnostics__empty-actions" data-wrap="true">
+                            <?php foreach ($relatedLinks as [$path, $linkLabel, $linkIcon]): ?>
+                                <a class="w-button" href="@backend-url('<?= $escape((string)$path) ?>')" data-tone="neutral" data-variant="outline" data-size="sm">
+                                    <w:icon name="<?= $escape((string)$linkIcon) ?>" size="sm" /><?= $escape((string)$linkLabel) ?>
+                                </a>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
                 <?php else: ?>
-                    <div class="w-table-wrap">
-                        <table class="w-table">
-                            <thead><tr><?php foreach (array_keys($firstRow) as $field): ?><th scope="col"><?= $escape($field) ?></th><?php endforeach; ?></tr></thead>
+                    <div class="w-table-wrap w-queue-diagnostics__table-wrap">
+                        <table class="w-table w-queue-diagnostics__table w-queue-diagnostics__table--merged">
+                            <thead>
+                            <tr>
+                                <?php foreach ($columns as $column): ?>
+                                    <th scope="col" data-col="<?= $escape((string)$column['key']) ?>"><?= $escape((string)$column['label']) ?></th>
+                                <?php endforeach; ?>
+                            </tr>
+                            </thead>
                             <tbody>
-                            <?php foreach ($rows as $row): ?>
-                                <?php if (!is_array($row)) continue; ?>
-                                <tr><?php foreach (array_keys($firstRow) as $field): ?><td><span class="w-queue-diagnostics__value"><?= $escape($display($row[$field] ?? null)) ?></span></td><?php endforeach; ?></tr>
+                            <?php foreach ($presented as $cells): ?>
+                                <tr>
+                                    <?php foreach ($cells as $cell): ?>
+                                        <?php
+                                        $kind = (string)($cell['kind'] ?? 'text');
+                                        $meta = is_array($cell['meta'] ?? null) ? $cell['meta'] : [];
+                                        ?>
+                                        <td data-col="<?= $escape((string)$cell['key']) ?>" data-kind="<?= $escape($kind) ?>">
+                                            <?php if ($kind === 'id'): ?>
+                                                <span class="w-queue-diagnostics__id"><?= $escape((string)($meta['text'] ?? '—')) ?></span>
+                                            <?php elseif ($kind === 'task'): ?>
+                                                <div class="w-queue-diagnostics__task">
+                                                    <div class="w-queue-diagnostics__task-title"><?= $escape((string)($meta['title'] ?? '—')) ?></div>
+                                                    <?php foreach ((array)($meta['lines'] ?? []) as $line): ?>
+                                                        <code class="w-queue-diagnostics__task-line"><?= $escape((string)$line) ?></code>
+                                                    <?php endforeach; ?>
+                                                </div>
+                                            <?php elseif ($kind === 'status_flags'): ?>
+                                                <?php $st = is_array($meta['status'] ?? null) ? $meta['status'] : []; ?>
+                                                <div class="w-queue-diagnostics__status">
+                                                    <span class="w-badge" data-tone="<?= $escape((string)($st['tone'] ?? 'neutral')) ?>">
+                                                        <?= $iconRegistry->render((string)($st['icon'] ?? 'info'), 'xs') ?>
+                                                        <?= $escape((string)($st['label'] ?? '—')) ?>
+                                                    </span>
+                                                    <?php foreach ((array)($meta['flags'] ?? []) as $flag): ?>
+                                                        <?php if (!is_array($flag)) {
+                                                            continue;
+                                                        } ?>
+                                                        <span class="w-badge" data-tone="<?= $escape((string)($flag['tone'] ?? 'neutral')) ?>" data-variant="outline">
+                                                            <?= $escape((string)($flag['label'] ?? '')) ?>
+                                                        </span>
+                                                    <?php endforeach; ?>
+                                                </div>
+                                            <?php elseif ($kind === 'time'): ?>
+                                                <div class="w-queue-diagnostics__time">
+                                                    <div class="w-queue-diagnostics__time-primary"><?= $escape((string)($meta['primary'] ?? '—')) ?></div>
+                                                    <?php foreach ((array)($meta['secondary'] ?? []) as $line): ?>
+                                                        <div class="w-queue-diagnostics__time-secondary"><?= $escape((string)$line) ?></div>
+                                                    <?php endforeach; ?>
+                                                </div>
+                                            <?php else: ?>
+                                                <?php if (!empty($meta['code'])): ?>
+                                                    <code class="w-queue-diagnostics__value w-queue-diagnostics__value--code"><?= $escape((string)($meta['text'] ?? '—')) ?></code>
+                                                <?php else: ?>
+                                                    <span class="w-queue-diagnostics__value"><?= $escape((string)($meta['text'] ?? '—')) ?></span>
+                                                <?php endif; ?>
+                                            <?php endif; ?>
+                                        </td>
+                                    <?php endforeach; ?>
+                                </tr>
                             <?php endforeach; ?>
                             </tbody>
                         </table>

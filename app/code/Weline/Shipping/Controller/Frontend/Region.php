@@ -87,6 +87,24 @@ class Region extends FrontendController
                     'data' => array_keys($embargo->embargoedCountryCodes()),
                 ]);
             }
+            if ($mode === 'embargo_regions' || $mode === 'embargo_subnational') {
+                /** @var \Weline\Shipping\Service\EmbargoService $embargo */
+                $embargo = ObjectManager::getInstance(\Weline\Shipping\Service\EmbargoService::class);
+                $country = strtoupper(trim((string)$this->request->getParam('country_code', '')));
+                $rows = $embargo->activeSubnationalRules();
+                if ($country !== '' && preg_match('/^[A-Z]{2}$/', $country)) {
+                    $rows = array_values(array_filter(
+                        $rows,
+                        static fn(array $row): bool => ($row['country_code'] ?? '') === $country
+                    ));
+                }
+
+                return $this->json([
+                    'success' => true,
+                    'message' => __('Embargo regions success'),
+                    'data' => $rows,
+                ]);
+            }
             if ($mode === 'postal_countries') {
                 $postal = trim((string)$this->request->getParam('postal_code', $this->request->getParam('postal', '')));
 

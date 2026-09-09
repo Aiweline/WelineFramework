@@ -45,3 +45,5 @@ amount_in_target = target == base ? amount_in_base : amount_in_base / target_rat
 
 - `manual` 模式下禁止执行自动导入与基准币自动重算接口。
 - 若基准币发生切换且仍处于 `manual` 模式，需要人工同步维护各币种 `rate`。
+- **`rate <= 0` 视为不可换算**：`tryConvert()` 返回 `null`，`convert()` 抛错；调用方不得把原金额贴上目标币符号（避免「只改符号」）。
+- 店面目录定价走 `tryConvert`：缺汇率时该展示币价格记为 unresolved，而不是用基准币数字冒充。

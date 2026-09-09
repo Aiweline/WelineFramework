@@ -38,8 +38,8 @@ final class MarketingQueryProvider implements QueryProviderInterface
                     $quotes,
                     $params,
                 ),
-                'removeCoupon' => $this->couponSession->removeCoupon(),
-                'getCoupon' => $this->couponSession->getCoupon(),
+                'removeCoupon' => $this->couponSession->removeCoupon($params),
+                'getCoupon' => $this->couponSession->getCoupon($params),
                 default => throw new \InvalidArgumentException((string)__('营销接口不支持操作：%{1}', [$operation])),
             };
         } catch (\InvalidArgumentException $exception) {
@@ -75,7 +75,10 @@ final class MarketingQueryProvider implements QueryProviderInterface
                     'name' => 'getCoupon',
                     'frontend' => true,
                     'mode' => 'read',
-                    'params' => [],
+                    'params' => [
+                        'cart_type' => ['type' => 'string', 'max_length' => 16],
+                        'selling_mode' => ['type' => 'string', 'max_length' => 16],
+                    ],
                 ],
                 [
                     'name' => 'applyCoupon',
@@ -87,7 +90,10 @@ final class MarketingQueryProvider implements QueryProviderInterface
                     'name' => 'removeCoupon',
                     'frontend' => true,
                     'mode' => 'write',
-                    'params' => [],
+                    'params' => [
+                        'cart_type' => ['type' => 'string', 'max_length' => 16],
+                        'selling_mode' => ['type' => 'string', 'max_length' => 16],
+                    ],
                 ],
             ],
         ];
@@ -117,6 +123,8 @@ final class MarketingQueryProvider implements QueryProviderInterface
             'shipping_amount_minor' => ['type' => 'int', 'min' => 0],
             'payment_method' => ['type' => 'string', 'max_length' => 64],
             'cart_hash' => ['type' => 'string', 'max_length' => 128],
+            'cart_type' => ['type' => 'string', 'max_length' => 16],
+            'selling_mode' => ['type' => 'string', 'max_length' => 16],
         ];
     }
 

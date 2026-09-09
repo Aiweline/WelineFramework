@@ -7,9 +7,6 @@ namespace Weline\Promotion\Extends\Module\Weline_Product\StorefrontPriceAdjustme
 use Weline\Product\Api\Data\StorefrontPriceAdjustment;
 use Weline\Product\Api\Data\StorefrontPriceContext;
 use Weline\Product\Api\Storefront\StorefrontPriceAdjustmentProviderInterface;
-use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
-use Weline\Framework\Manager\ObjectManager;
-use Weline\Promotion\Service\PromotionActivityThemeService;
 use Weline\Promotion\Service\PromotionStorefrontActiveDealResolver;
 use Weline\Promotion\Service\PromotionThemeDealDiscountSyncService;
 
@@ -20,7 +17,6 @@ final class PromotionThemeDealPriceAdjustmentProvider implements StorefrontPrice
 {
     public function __construct(
         private readonly PromotionStorefrontActiveDealResolver $dealResolver,
-        private readonly PromotionActivityThemeService $themeService,
     ) {
     }
 
@@ -41,9 +37,11 @@ final class PromotionThemeDealPriceAdjustmentProvider implements StorefrontPrice
             return [];
         }
 
+        $preferredThemeId = (int)($context->selection['promotion_theme_id'] ?? 0);
         $deal = $this->dealResolver->resolveForProduct(
             $productId,
             $context->catalogPriceMinor > 0 ? $context->catalogPriceMinor / 100 : null,
+            $preferredThemeId > 0 ? $preferredThemeId : null,
         );
         if ($deal === null) {
             return [];
@@ -64,32 +62,8 @@ final class PromotionThemeDealPriceAdjustmentProvider implements StorefrontPrice
 
         $themeId = (int)($deal['theme_id'] ?? 0);
         $pageSlug = strtolower(trim((string)($deal['page_slug'] ?? '')));
-        $meta = $themeId > 0
-            ? ObjectManager::getInstance(StorefrontScopeHotCache::class)->rememberForRequest(
-                'promotion.storefront_campaign_meta',
-                serialize([$themeId, $pageSlug]),
-                fn(): array => $this->themeService->resolveStorefrontCampaignMeta($themeId, [
-                    'page_slug' => $pageSlug,
-                ]),
-            )
-            : [
-                'campaign_label' => '',
-                'campaign_url' => $pageSlug !== '' ? $this->themeService->storefrontUrl($pageSlug) : '',
-                'page_title' => '',
-            ];
-
-        $label = trim((string)($meta['campaign_label'] ?? ''));
-        if ($label === '') {
-            $label = trim((string)($meta['page_title'] ?? ''));
-        }
-        if ($label === '' && $pageSlug !== '') {
-            $label = $pageSlug;
-        }
-
-        $url = trim((string)($meta['campaign_url'] ?? ''));
-        if ($url === '' && $pageSlug !== '') {
-            $url = $this->themeService->storefrontUrl($pageSlug);
-        }
+        $label = trim((string)($deal['campaign_label'] ?? ''));
+        $url = trim((string)($deal['campaign_url'] ?? ''));
 
         return [
             new StorefrontPriceAdjustment(
@@ -107,5 +81,47 @@ final class PromotionThemeDealPriceAdjustmentProvider implements StorefrontPrice
                 badge: $label,
             ),
         ];
+    }
+
+    /**
+     * Campaign choices for PDP when multiple real-discount themes overlap.
+     *
+     * @return list<array{
+     *     theme_id:int,
+     *     label:string,
+     *     url:string,
+     *     deal_discount_type:string,
+     *     deal_discount_value:float,
+     *     page_slug:string
+     * }>
+     */
+    public function listEligibleCampaignChoices(StorefrontPriceContext $context): array
+    {
+        $productId = max(0, $context->productId);
+        if ($productId <= 0 || $context->catalogPriceMinor <= 0) {
+            return [];
+        }
+
+        $choices = [];
+        foreach ($this->dealResolver->listEligibleDealsForProduct(
+            $productId,
+            $context->catalogPriceMinor / 100,
+        ) as $deal) {
+            $themeId = (int)($deal['theme_id'] ?? 0);
+            $label = trim((string)($deal['campaign_label'] ?? ''));
+            if ($label === '') {
+                continue;
+            }
+            $choices[] = [
+                'theme_id' => $themeId,
+                'label' => $label,
+                'url' => trim((string)($deal['campaign_url'] ?? '')),
+                'deal_discount_type' => (string)($deal['deal_discount_type'] ?? ''),
+                'deal_discount_value' => (float)($deal['deal_discount_value'] ?? 0),
+                'page_slug' => (string)($deal['page_slug'] ?? ''),
+            ];
+        }
+
+        return $choices;
     }
 }

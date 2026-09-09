@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\I18n\Service;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Phrase\DictionaryCacheNamespace;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\I18n\Api\Scope\PhraseScopeValue;
@@ -103,9 +104,9 @@ final class TranslationResolver implements TranslationResolverInterface
     /** @return array<string, string> */
     private function moduleWords(string $moduleName, string $localeCode): array
     {
-        $cacheKey = $localeCode . '|' . $moduleName;
-        if (isset($this->moduleWords[$cacheKey])) {
-            return $this->moduleWords[$cacheKey];
+        $cacheKey = DictionaryCacheNamespace::cacheKey($localeCode . '|' . $moduleName);
+        if (isset(DictionaryCacheNamespace::localCache($this->moduleWords, 2048)[$cacheKey])) {
+            return DictionaryCacheNamespace::localCache($this->moduleWords, 2048)[$cacheKey];
         }
 
         $words = [];
@@ -113,12 +114,12 @@ final class TranslationResolver implements TranslationResolverInterface
             $moduleInfo = Env::getInstance()->getModuleInfo($moduleName);
             $csvFile = (string)($moduleInfo['base_path'] ?? '') . '/i18n/' . $localeCode . '.csv';
             if (!\is_file($csvFile)) {
-                return $this->moduleWords[$cacheKey] = [];
+                return DictionaryCacheNamespace::localCache($this->moduleWords, 2048)[$cacheKey] = [];
             }
 
             $handle = @\fopen($csvFile, 'r');
             if ($handle === false) {
-                return $this->moduleWords[$cacheKey] = [];
+                return DictionaryCacheNamespace::localCache($this->moduleWords, 2048)[$cacheKey] = [];
             }
             try {
                 while (($data = \fgetcsv($handle, 100000, ',', '"', '\\')) !== false) {
@@ -139,7 +140,7 @@ final class TranslationResolver implements TranslationResolverInterface
         } catch (\Throwable) {
         }
 
-        return $this->moduleWords[$cacheKey] = $words;
+        return DictionaryCacheNamespace::localCache($this->moduleWords, 2048)[$cacheKey] = $words;
     }
 
     private function getPhraseScopeResolver(): PhraseScopeResolver

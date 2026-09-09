@@ -214,6 +214,17 @@ final class HeaderCommerceData
     public static function resolveCartSummary(bool $allowDemoFallback = true, int $itemLimit = 5): array
     {
         $itemLimit = max(1, min(20, $itemLimit));
+
+        return self::rememberRequestMemo(
+            'theme.header.cart_summary',
+            ($allowDemoFallback ? 'demo' : 'live') . '|' . $itemLimit,
+            static fn(): array => self::resolveCartSummaryUncached($allowDemoFallback, $itemLimit),
+        );
+    }
+
+    private static function resolveCartSummaryUncached(bool $allowDemoFallback, int $itemLimit): array
+    {
+        $itemLimit = max(1, min(20, $itemLimit));
         $queried = false;
         try {
             if (\function_exists('w_query')) {
@@ -388,7 +399,10 @@ final class HeaderCommerceData
                 try {
                     /** @var SearchProviderRegistry $registry */
                     $registry = ObjectManager::getInstance(SearchProviderRegistry::class);
-                    $types = $registry->listTypes();
+                    // The header is a storefront surface. Restrict provider
+                    // discovery to frontend types so backend-only providers do
+                    // not build their scopes during every cold page render.
+                    $types = $registry->listTypes(area: 'frontend');
                     if ($types !== []) {
                         return $types;
                     }

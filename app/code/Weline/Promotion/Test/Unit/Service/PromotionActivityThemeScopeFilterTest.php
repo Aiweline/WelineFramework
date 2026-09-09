@@ -15,7 +15,7 @@ final class PromotionActivityThemeScopeFilterTest extends TestCase
         $themes = [
             ['page_slug' => 'deals', 'website_id' => 0, 'store_code' => '', 'channel_code' => ''],
             ['page_slug' => 'sale', 'website_id' => 1, 'store_code' => 'default', 'channel_code' => ''],
-            ['page_slug' => 'gifts', 'website_id' => 2, 'store_code' => '', 'channel_code' => ''],
+            ['page_slug' => 'wedding', 'website_id' => 2, 'store_code' => '', 'channel_code' => ''],
         ];
 
         $matched = array_values(array_filter(

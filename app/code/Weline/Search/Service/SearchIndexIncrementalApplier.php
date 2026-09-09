@@ -84,13 +84,24 @@ final class SearchIndexIncrementalApplier
         ) {
             throw new \UnexpectedValueException('product_search_incremental_projection_invalid');
         }
-        $result = $this->store->applyChange(
-            $websiteId,
-            $eventSeq,
-            $idempotencyKey,
-            $projection['documents'],
-            $projection['delete_keys'],
-        );
+        $coveredEvents = $event['covered_events'] ?? [];
+        if (!is_array($coveredEvents) || !array_is_list($coveredEvents)) {
+            throw new \InvalidArgumentException('search_incremental_coverage_invalid');
+        }
+        if ($coveredEvents !== []) {
+            if (!$this->store instanceof \Weline\Search\Api\SearchIndexEventCoverageStorageInterface) {
+                throw new \RuntimeException('search_incremental_coverage_storage_unsupported');
+            }
+            $result = $this->store->applyCoveredChange(
+                $websiteId, $eventSeq, $idempotencyKey,
+                $projection['documents'], $projection['delete_keys'], $coveredEvents,
+            );
+        } else {
+            $result = $this->store->applyChange(
+                $websiteId, $eventSeq, $idempotencyKey,
+                $projection['documents'], $projection['delete_keys'],
+            );
+        }
 
         return $result + [
             'website_id' => $websiteId,

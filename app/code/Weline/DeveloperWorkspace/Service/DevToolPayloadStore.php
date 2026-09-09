@@ -46,7 +46,12 @@ class DevToolPayloadStore
         $memory = $this->memory();
         if ($memory !== null) {
             try {
-                return $memory->get(self::NAMESPACE, $storeKey);
+                $cached = $memory->get(self::NAMESPACE, $storeKey);
+                if ($cached !== null) {
+                    return $cached;
+                }
+                // Shared-memory miss must fall through to durable file storage so
+                // multi-worker panel polls (e.g. seo/crawl/result) can see jobs.
             } catch (\Throwable) {
                 $this->memory = null;
             }
@@ -69,17 +74,11 @@ class DevToolPayloadStore
             }
         }
 
-        if ($type === 'trace') {
-            $storedOnFile = $this->setToFile($type, $key, $value, $ttl);
+        // Always dual-write to file for cross-worker durability. Memory alone is
+        // not enough when the next poll lands on a different HTTP worker.
+        $storedOnFile = $this->setToFile($type, $key, $value, $ttl);
 
-            return $storedInMemory || $storedOnFile;
-        }
-
-        if ($storedInMemory) {
-            return true;
-        }
-
-        return $this->setToFile($type, $key, $value, $ttl);
+        return $storedInMemory || $storedOnFile;
     }
 
     public function getLatest(string $type, int $withinSeconds = self::DEFAULT_TTL): mixed

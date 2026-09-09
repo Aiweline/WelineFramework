@@ -97,8 +97,21 @@ class HeadRendererProductCommerceTest extends TestCase
         self::assertStringContainsString('"@type": "ProductGroup"', $html);
         self::assertStringContainsString('"productGroupID": "SPU-DRS"', $html);
         self::assertStringContainsString('"gtin13": "1234567890123"', $html);
-        self::assertStringNotContainsString('"@type": "AggregateOffer"', $html);
+        self::assertStringContainsString('"@type": "AggregateOffer"', $html);
+        self::assertStringContainsString('"lowPrice": "29.99"', $html);
+        self::assertStringContainsString('"highPrice": "31.99"', $html);
+        self::assertTrue(
+            (bool) preg_match(
+                '/"@type"\s*:\s*"AggregateOffer"[\s\S]*?"lowPrice"\s*:\s*"29\.99"[\s\S]*?"availability"\s*:\s*"https:\/\/schema\.org\/InStock"/',
+                $html
+            ) || (bool) preg_match(
+                '/"@type"\s*:\s*"AggregateOffer"[\s\S]*?"availability"\s*:\s*"https:\/\/schema\.org\/InStock"[\s\S]*?"lowPrice"\s*:\s*"29\.99"/',
+                $html
+            ),
+            'AggregateOffer must expose top-level availability derived from child offers'
+        );
         self::assertStringContainsString('"hasVariant": [', $html);
+        self::assertStringContainsString('"potentialAction": {', $html);
         self::assertStringContainsString('"sku": "DRS-001-RED-S"', $html);
         self::assertStringContainsString('"shippingDetails": {', $html);
         self::assertStringContainsString('"hasMerchantReturnPolicy": {', $html);
@@ -108,6 +121,79 @@ class HeadRendererProductCommerceTest extends TestCase
         self::assertStringContainsString('"reviewBody": "Comfortable linen dress with accurate sizing."', $html);
         self::assertStringContainsString('"ratingValue": "4.6"', $html);
         self::assertStringContainsString('"reviewCount": 27', $html);
+        self::assertStringContainsString('"@type": "ProductGroup"', $html);
+        self::assertStringContainsString('"itemReviewed": {', $html);
+        self::assertMatchesRegularExpression('/"itemReviewed":\s*\{[^}]*"@type":\s*"ProductGroup"/s', $html);
+    }
+
+    public function testProductGroupVariantsCarryPatternAndDistinctOfferUrls(): void
+    {
+        $resolver = $this->getMockBuilder(PageSeoContextResolver::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['resolve'])
+            ->getMock();
+        $resolver->method('resolve')->willReturn([
+            'page_type' => 'product',
+            'site_name' => 'Shop',
+            'title' => '飞天敦煌马面裙',
+            'description' => '新中式飞天敦煌马面裙。',
+            'canonical_url' => 'https://shop.test/product/feitian',
+            'url' => 'https://shop.test/product/feitian',
+            'organization' => ['name' => 'Shop', 'url' => 'https://shop.test/'],
+            'product' => [
+                'schema_type' => 'ProductGroup',
+                'name' => '飞天敦煌马面裙',
+                'product_group_id' => '94',
+                'varies_by' => ['pattern', 'size'],
+                'variants' => [
+                    [
+                        'id' => 'offer-a',
+                        'name' => '飞天敦煌马面裙 - 长袖套装 / S',
+                        'sku' => 'FEITIAN-A-S',
+                        'price' => '71.10',
+                        'currency' => 'CNY',
+                        'availability' => 'https://schema.org/InStock',
+                        'size' => 'S',
+                        'pattern' => '长袖套装',
+                        'url' => 'https://shop.test/product/feitian?offer=offer-a',
+                        'image' => '/media/a.jpg',
+                    ],
+                    [
+                        'id' => 'offer-b',
+                        'name' => '飞天敦煌马面裙 - 单件 / M',
+                        'sku' => 'FEITIAN-B-M',
+                        'price' => '196.20',
+                        'currency' => 'CNY',
+                        'availability' => 'https://schema.org/InStock',
+                        'size' => 'M',
+                        'pattern' => '单件',
+                        'url' => 'https://shop.test/product/feitian?offer=offer-b',
+                    ],
+                ],
+                'rating' => 4.8,
+                'review_count' => 3,
+            ],
+            'reviews' => [
+                [
+                    'author' => '买家甲',
+                    'rating' => 5,
+                    'content' => '款式漂亮，尺码准确。',
+                    'created_at' => '2026-09-01 10:00:00',
+                ],
+            ],
+        ]);
+
+        $html = (new HeadRenderer($resolver))->render(new ProductCommerceHeadTemplateStub());
+
+        self::assertStringContainsString('"https://schema.org/pattern"', $html);
+        self::assertStringContainsString('"https://schema.org/size"', $html);
+        self::assertStringNotContainsString('"style_type"', $html);
+        self::assertStringContainsString('"pattern": "长袖套装"', $html);
+        self::assertStringContainsString('offer=offer-a', $html);
+        self::assertStringContainsString('offer=offer-b', $html);
+        self::assertStringContainsString('"sku": "FEITIAN-A-S"', $html);
+        self::assertStringContainsString('"aggregateRating": {', $html);
+        self::assertMatchesRegularExpression('/"itemReviewed":\s*\{[^}]*"@type":\s*"ProductGroup"/s', $html);
     }
 
     public function testDerivesAggregateRatingFromReviewNodesWhenProductRatingMissing(): void

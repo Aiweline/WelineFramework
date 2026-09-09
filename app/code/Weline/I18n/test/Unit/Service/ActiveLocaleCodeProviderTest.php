@@ -11,6 +11,23 @@ use Weline\I18n\Service\ActiveLocaleCodeProvider;
 
 class ActiveLocaleCodeProviderTest extends TestCase
 {
+    private array $instances;
+
+    protected function setUp(): void
+    {
+        $this->instances = \Weline\Framework\Manager\ObjectManager::getInstances();
+        \Weline\Framework\Runtime\RequestContext::init();
+        $authority = $this->createStub(\Weline\Framework\Cache\Contract\NamespaceGenerationInterface::class);
+        $authority->method('fingerprint')->willReturn('locale-provider-fixture');
+        \Weline\Framework\Manager\ObjectManager::setInstance(\Weline\Framework\Cache\Contract\NamespaceGenerationInterface::class, $authority);
+    }
+
+    protected function tearDown(): void
+    {
+        \Weline\Framework\Runtime\RequestContext::cleanup();
+        (new \ReflectionProperty(\Weline\Framework\Manager\ObjectManager::class, 'instances'))->setValue(null, $this->instances);
+    }
+
     public function testMergesLocaleInstallRegistryWithLocalsRows(): void
     {
         $locale = $this->mockQueryModel(Locale::class, [

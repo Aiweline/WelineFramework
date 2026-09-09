@@ -344,7 +344,7 @@ class Template extends DataObject
     public function init()
     {
         // 语言初始化
-        $this->initLanguage();
+        $local = $this->initLanguage();
         $this->theme ??= Env::getInstance()->getConfig('theme', Env::default_theme_DATA);
         $this->eventsManager ??= ObjectManager::getInstance(EventsManager::class);
         $this->viewCache ??= w_cache('view');
@@ -366,9 +366,16 @@ class Template extends DataObject
                 }
             }
             $this->request->setData('url', $this->request->getUrlBuilder()->getCurrentUrl());
-            $this->setData('req', new TemplateRequestView());
-            $this->setData('env', new TemplateEnvView());
-            $this->setData('local', ['code' => Cookie::getLangLocal(), 'lang' => Cookie::getLang()]);
+            // 两个代理在读取时解析当前请求/环境；仅复用载体，嵌套模板仍每次重新绑定数据。
+            $context = Context::getCurrent();
+            $carriers = $context?->get('view.template.init_carriers');
+            if ($carriers === null) {
+                $carriers = ['req' => new TemplateRequestView(), 'env' => new TemplateEnvView()];
+                $context?->set('view.template.init_carriers', $carriers);
+            }
+            $this->setData('req', $carriers['req']);
+            $this->setData('env', $carriers['env']);
+            $this->setData('local', $local);
         }
 
         if (empty($this->statics_dir)) {
@@ -383,19 +390,24 @@ class Template extends DataObject
         return $this;
     }
 
-    private function initLanguage(): void
+    /** @return array{code: string, lang: string} */
+    private function initLanguage(): array
     {
         $lang = State::getLang();
         $this->setData('lang', $lang);
         // lang变量用于HTML lang属性，必须符合BCP 47规范（将下划线替换为连字符）
         $htmlLang = str_replace('_', '-', $lang);
         $htmlDir = $this->resolveTextDirection($lang);
-        $this->setData('lang_local', State::getLangLocal());
+        $langLocal = State::getLangLocal();
+        $this->setData('lang_local', $langLocal);
         // htmlLang变量与lang相同，保持向后兼容
         $this->setData('htmlLang', $htmlLang);
         $this->setData('htmlDir', $htmlDir);
         $this->setData('textDirection', $htmlDir);
         $this->setData('isRtl', $htmlDir === 'rtl');
+
+        // local 与语言属性共享本次读取结果；下次 init 仍交由 State 处理语言覆盖及重置。
+        return ['code' => $langLocal, 'lang' => $lang];
     }
 
     private function resolveTextDirection(string $lang): string
@@ -522,6 +534,56 @@ class Template extends DataObject
             $this->syncAssignedTitleToMeta($value);
         }
         return $this;
+    }
+
+    public function setData(string|array $key, mixed $value = null): static
+    {
+        parent::setData($key, $value);
+        if (is_array($key)) {
+            $this->publishAssignedSeoPageProfile($key);
+        } elseif ($key === 'seo' && is_array($value)) {
+            // Only explicit controller/page seo payloads may update the request SEO bag.
+            // Widget/card setData('product'|'storefront_offer'|...) must never redefine page SEO:
+            // ControllerFetchFileAfter renders content (product cards) before layout head.
+            $this->publishAssignedSeoPageProfile(['seo' => $value]);
+        }
+
+        return $this;
+    }
+
+    /**
+     * Publish controller page SEO into RequestContext so Partials head still sees it after
+     * Theme layout/widget unsetData().
+     *
+     * Root-cause rule: ONLY the `seo` assign owns this bag. Product cards call
+     * setData('storefront_offer') while content is primed before head; promoting that
+     * into page_type=product is what polluted /, /products, /search, /en_US.
+     *
+     * @param array<string, mixed> $assigned
+     */
+    private function publishAssignedSeoPageProfile(array $assigned): void
+    {
+        if (!class_exists(\Weline\Seo\Service\Head\SeoPageProfileBag::class)) {
+            return;
+        }
+        if (!isset($assigned['seo']) || !is_array($assigned['seo'])) {
+            return;
+        }
+
+        $seo = $assigned['seo'];
+        // Controller convenience: assign(['seo' => ..., 'product' => ...]) in one shot.
+        if (isset($assigned['product']) && is_array($assigned['product']) && !isset($seo['product'])) {
+            $seo['product'] = $assigned['product'];
+        }
+        if (
+            (!isset($seo['page_type']) || trim((string) $seo['page_type']) === '')
+            && isset($seo['product'])
+            && is_array($seo['product'])
+        ) {
+            $seo['page_type'] = 'product';
+        }
+
+        \Weline\Seo\Service\Head\SeoPageProfileBag::replace($seo);
     }
 
     /**

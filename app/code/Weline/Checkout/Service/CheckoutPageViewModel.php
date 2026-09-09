@@ -124,7 +124,30 @@ final class CheckoutPageViewModel
             'grand_total' => $grandTotal,
             'discount_preview' => $discountPreview,
             'cart_type' => strtolower(trim((string)($cart['cart_type'] ?? 'toc'))) ?: 'toc',
+            'checkout_blocked' => !empty($cart['checkout_blocked']) || $this->itemsHaveBlockingIssues($items),
+            'line_issues' => \is_array($cart['line_issues'] ?? null) ? $cart['line_issues'] : [],
+            'blocking_message' => trim((string)($cart['blocking_message'] ?? '')),
         ];
+    }
+
+    /**
+     * @param list<array<string, mixed>> $items
+     */
+    private function itemsHaveBlockingIssues(array $items): bool
+    {
+        foreach ($items as $item) {
+            if (!\is_array($item)) {
+                continue;
+            }
+            if (\array_key_exists('found', $item) && empty($item['found'])) {
+                return true;
+            }
+            if (\array_key_exists('sellable', $item) && empty($item['sellable'])) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function resolveGuestToken(?string $guestToken): string
@@ -151,6 +174,9 @@ final class CheckoutPageViewModel
             'grand_total' => 0.0,
             'discount_preview' => null,
             'cart_type' => 'toc',
+            'checkout_blocked' => false,
+            'line_issues' => [],
+            'blocking_message' => '',
         ];
     }
 }

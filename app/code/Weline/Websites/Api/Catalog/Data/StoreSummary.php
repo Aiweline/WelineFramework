@@ -37,4 +37,54 @@ final readonly class StoreSummary
             'url' => $this->url,
         ];
     }
+
+    /** @param array<string, mixed> $row */
+    public static function tryFromArray(array $row): ?self
+    {
+        if (!\array_key_exists('store_id', $row) || !\array_key_exists('website_id', $row)) {
+            return null;
+        }
+        $id = $row['store_id'];
+        $websiteId = $row['website_id'];
+        if (!\is_int($id) && !(\is_string($id) && \preg_match('/^(?:0|[1-9][0-9]*)$/D', $id) === 1)) {
+            return null;
+        }
+        if (!\is_int($websiteId) && !(\is_string($websiteId) && \preg_match('/^(?:0|[1-9][0-9]*)$/D', $websiteId) === 1)) {
+            return null;
+        }
+        $code = \trim((string)($row['code'] ?? ''));
+        $name = \trim((string)($row['name'] ?? ''));
+        $storeMode = \trim((string)($row['store_mode'] ?? ''));
+        $lifecycle = \trim((string)($row['lifecycle_status'] ?? ''));
+        if ($code === '' || $name === '' || $storeMode === '' || $lifecycle === '') {
+            return null;
+        }
+        $url = $row['url'] ?? null;
+        if ($url !== null) {
+            $url = \trim((string)$url);
+            if ($url === '') {
+                $url = null;
+            }
+        }
+        $tombstonedAt = $row['tombstoned_at'] ?? null;
+        if ($tombstonedAt !== null) {
+            $tombstonedAt = \trim((string)$tombstonedAt);
+            if ($tombstonedAt === '') {
+                $tombstonedAt = null;
+            }
+        }
+
+        return new self(
+            (int)$id,
+            (int)$websiteId,
+            $code,
+            $name,
+            $storeMode,
+            (bool)($row['is_default'] ?? false),
+            (bool)($row['enabled'] ?? false),
+            $lifecycle,
+            $tombstonedAt,
+            $url,
+        );
+    }
 }

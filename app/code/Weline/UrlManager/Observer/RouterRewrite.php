@@ -194,6 +194,10 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
         // Pretty URLs are stored without currency/locale prefixes. Strip them
         // before lookup so /en_US/contact still hits rewrite=contact.
         $lookupUri = $this->stripLocalizationPrefix($cacheUri);
+        // 非法 UTF-8 不得作为 rewrite 绑定参数进入 PostgreSQL（SQLSTATE 22021）。
+        if ($lookupUri !== '' && !Url::isValidUtf8Text($lookupUri)) {
+            return;
+        }
         $cacheKey = $this->getCacheKey($lookupUri, $websiteId);
         
         // 尝试从缓存获取（缓存按 website_id 隔离）

@@ -82,6 +82,10 @@ class Policy extends FrontendController
         if ($title !== '') {
             $this->assign('title', __($title));
         }
+        $this->assignThemeShellSeo(
+            $title !== '' ? (string)__($title) : '',
+            (string)$layoutType,
+        );
 
         return $this->renderThroughThemeLayout();
     }
@@ -113,6 +117,7 @@ class Policy extends FrontendController
         
         $title = $titles[$layout] ?? $titles['default'];
         $this->assign('title', $title);
+        $this->assignThemeShellSeo((string)__($title), 'policy');
         
         $this->layoutType = 'policy.' . $layout;
         $this->request->setGet('page_type', 'policy');
@@ -165,6 +170,49 @@ class Policy extends FrontendController
     private function renderThroughThemeLayout(): string
     {
         return (string)$this->fetch('Weline_Theme::templates/frontend/theme-preview/content.phtml');
+    }
+
+    /**
+     * Publish Theme shell SEO facts so head survives layout unsetData().
+     */
+    private function assignThemeShellSeo(string $title, string $pageType): void
+    {
+        $title = trim($title);
+        $pageType = strtolower(trim(str_replace(['-', ' '], '_', $pageType)));
+        if ($title === '') {
+            $title = (string)__('页面');
+        }
+        if ($pageType === '') {
+            $pageType = 'web_page';
+        }
+
+        $privateTypes = [
+            'cart', 'checkout', 'checkout_success', 'checkout_failure', 'checkout_failer',
+            'account', 'account_auth', 'account_logout', 'account_orders', 'account_profile',
+        ];
+        $robots = in_array($pageType, $privateTypes, true) ? 'noindex,follow' : 'index,follow';
+
+        $descriptions = [
+            'about' => (string)__('了解云裳汉服品牌故事、匠心工艺与传统服饰选购理念。'),
+            'contact' => (string)__('联系云裳汉服客服，咨询订单、定制与批发合作。'),
+            'policy' => (string)__('阅读本站隐私、Cookie、退款与相关法律政策说明。'),
+            'privacy' => (string)__('了解我们如何收集、使用与保护您的个人信息。'),
+            'terms' => (string)__('阅读使用本站服务前需要了解的条款与条件。'),
+            'guide' => (string)__('查看配送、退换与购物相关说明，帮助顺利完成汉服选购。'),
+            'payment_guide' => (string)__('了解可用支付方式、账单与安全保障说明。'),
+            'help' => (string)__('查找订单、物流、退换与账户相关自助帮助。'),
+            'cart' => (string)__('查看已选汉服商品、调整数量并进入结算。'),
+            'account_auth' => (string)__('登录或注册账户，管理订单与收藏。'),
+        ];
+        $description = $descriptions[$pageType]
+            ?? ((string)__('浏览%{1}相关信息，了解汉服选购与服务说明。', [$title]));
+
+        $this->assign('seo', [
+            'page_type' => $pageType,
+            'title' => $title,
+            'description' => $description,
+            'robots' => $robots,
+        ]);
     }
 
     private function publicLayoutExists(string $layoutType, string $layoutOption): bool

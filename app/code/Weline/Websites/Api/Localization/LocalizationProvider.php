@@ -24,7 +24,7 @@ final class LocalizationProvider implements LocalizationProviderInterface
     public function languageCodes(): array
     {
         $codes = WebsiteData::getLanguageCodes();
-        if ($codes !== []) {
+        if (WebsiteData::hasLanguageSnapshot()) {
             return $codes;
         }
         $websiteId = $this->websiteId();
@@ -44,7 +44,7 @@ final class LocalizationProvider implements LocalizationProviderInterface
     public function currencyCodes(): array
     {
         $codes = WebsiteData::getCurrencyCodes();
-        if ($codes !== []) {
+        if (WebsiteData::hasCurrencySnapshot()) {
             return $codes;
         }
         $websiteId = $this->websiteId();

@@ -183,6 +183,39 @@ abstract class BaseAdapter implements BaseAdapterInterface
     }
 
     /**
+     * Build a human-readable push failure from HTTP status + body snippet.
+     */
+    protected function formatHttpFailureMessage(int $httpCode, string $body): string
+    {
+        $hint = '';
+        $trimmed = trim($body);
+        if ($trimmed !== '') {
+            $decoded = json_decode($trimmed, true);
+            if (is_array($decoded)) {
+                $error = $decoded['error'] ?? null;
+                if (is_array($error)) {
+                    $hint = (string)($error['message'] ?? $error['status'] ?? '');
+                } elseif (is_string($error)) {
+                    $hint = $error;
+                }
+                if ($hint === '') {
+                    $hint = (string)($decoded['error_description'] ?? $decoded['message'] ?? '');
+                }
+            }
+            if ($hint === '') {
+                $hint = trim(preg_replace('/\s+/u', ' ', $trimmed) ?? $trimmed);
+            }
+            if (strlen($hint) > 240) {
+                $hint = substr($hint, 0, 240) . '…';
+            }
+        }
+
+        return $hint !== ''
+            ? "推送失败: HTTP {$httpCode} — {$hint}"
+            : "推送失败: HTTP {$httpCode}";
+    }
+
+    /**
      * 验证推送结果
      * 
      * @param array $response 响应数据

@@ -1,121 +1,972 @@
 <?php
-/** * 客服人员管理页面 */
-use Weline\Backend\Model\BackendUser;
-use Weline\Framework\Manager\ObjectManager; $agents = $this->getData('agents') ?? [];
-$statisticsCssUrl = $this->getViewFileUrl('Weline_CustomerService::css/backend-statistics.css');
-// 获取后台用户列表（用于选择关联用户）
-/** @var BackendUser $backendUser */
-$backendUser = ObjectManager::getInstance(BackendUser::class);
-$backendUsers = $backendUser->reset()->select()->csAdmin()->getItems(); // 语言列表
+/**
+ * 客服人员管理页面
+ */
+$agents = $this->getData('agents') ?? [];
+$backendUsers = $this->getData('backend_users') ?? [];
+$agentCount = is_array($agents) ? count($agents) : 0;
 $locales = \Weline\CustomerService\Model\ServiceAgent::getAvailableLocales();
 $customerServiceDefaultLocale = isset($locales['zh_Hans_CN']) ? 'zh_Hans_CN' : (string)(array_key_first($locales) ?: '');
 $customerServiceDefaultSupportedLocales = $customerServiceDefaultLocale !== '' ? [$customerServiceDefaultLocale] : [];
 $jsonForScriptFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_INVALID_UTF8_SUBSTITUTE;
-$jsonForHtmlAttr = static function ($value) use ($jsonForScriptFlags): string { return htmlspecialchars(json_encode($value, $jsonForScriptFlags), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$jsonForHtmlAttr = static function ($value) use ($jsonForScriptFlags): string {
+    return htmlspecialchars(json_encode($value, $jsonForScriptFlags), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+};
+$escape = static function ($value): string {
+    return htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 };
 ?>
-<link rel="stylesheet" href="<?= $statisticsCssUrl ?>">
+<link rel="stylesheet" href="@static(Weline_CustomerService::css/backend-agent.css)">
+<link rel="stylesheet" href="@static(Weline_CustomerService::css/backend-statistics.css)">
 <link rel="stylesheet" href="@static(Weline_Theme::ui/components/weline-language-select.css)">
-<style>
-.cs-agent-page .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;
+
+<div class="cs-agent-page w-stack" style="--w-gap:var(--weline-space-5);" data-testid="customer-service-agent">
+    <div class="w-cluster" data-align="center" data-justify="between" style="--w-gap:var(--weline-space-3);">
+        <div class="w-stack" style="--w-gap:var(--weline-space-1);">
+            <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0;">
+                <?= __('关联后台用户并配置语言与并发上限，便于工作台分配会话。') ?>
+            </p>
+        </div>
+        <button type="button" class="w-button" data-agent-action="create" data-tone="primary">
+            <w:icon name="plus" size="sm"></w:icon>
+            <?= __('添加客服') ?>
+        </button>
+    </div>
+
+    <section class="w-card cs-agent-page__panel" aria-labelledby="cs-agent-list-heading">
+        <header class="w-card__header">
+            <h2 class="w-card__title" id="cs-agent-list-heading">
+                <w:icon name="users" size="sm"></w:icon>
+                <?= __('人员列表') ?>
+            </h2>
+            <span class="w-text" data-tone="muted" data-size="sm"><?= __('共 %{1} 人', (string)$agentCount) ?></span>
+        </header>
+        <div class="w-card__body" style="--w-p:0;">
+            <?php if ($agentCount === 0): ?>
+                <div class="w-empty">
+                    <w:icon name="users" size="lg"></w:icon>
+                    <p><?= __('暂无客服人员') ?></p>
+                    <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0;">
+                        <?= __('添加第一位客服后，即可在工作台接待客户。') ?>
+                    </p>
+                    <button type="button" class="w-button" data-agent-action="create" data-tone="primary">
+                        <?= __('添加客服') ?>
+                    </button>
+                </div>
+            <?php else: ?>
+                <div class="cs-agent-page__table-wrap">
+                    <table class="w-table cs-agent-page__table">
+                        <thead>
+                            <tr>
+                                <th><?= __('客服') ?></th>
+                                <th><?= __('语言') ?></th>
+                                <th><?= __('接待') ?></th>
+                                <th><?= __('操作') ?></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($agents as $agent): ?>
+                                <?php
+                                $agentId = (int)($agent['agent_id'] ?? 0);
+                                $agentName = (string)($agent['name'] ?? '');
+                                $userName = trim((string)($agent['user_name'] ?? ''));
+                                $email = trim((string)($agent['email'] ?? ''));
+                                $maxSessions = (int)($agent['max_sessions'] ?? 0);
+                                $isActive = !empty($agent['is_active']);
+                                $supportedLocales = $agent['supported_locales'] ?? null;
+                                if (is_string($supportedLocales)) {
+                                    $supportedLocales = json_decode($supportedLocales, true);
+                                }
+                                if (!is_array($supportedLocales)) {
+                                    $supportedLocales = [];
+                                }
+                                ?>
+                                <tr data-agent="<?= $jsonForHtmlAttr($agent) ?>">
+                                    <td>
+                                        <div class="cs-agent-page__identity">
+                                            <div class="cs-agent-page__identity-title">
+                                                <span class="cs-agent-page__name"><?= $escape($agentName) ?></span>
+                                                <span class="cs-agent-page__id w-text" data-tone="muted" data-size="sm">#<?= $agentId ?></span>
+                                            </div>
+                                            <div class="cs-agent-page__identity-meta w-text" data-tone="muted" data-size="sm">
+                                                <?php if ($userName !== ''): ?>
+                                                    <span><?= __('用户') ?> <?= $escape($userName) ?></span>
+                                                <?php endif; ?>
+                                                <?php if ($email !== ''): ?>
+                                                    <?php if ($userName !== ''): ?><span class="cs-agent-page__meta-sep" aria-hidden="true">·</span><?php endif; ?>
+                                                    <span><?= $escape($email) ?></span>
+                                                <?php endif; ?>
+                                                <?php if ($userName === '' && $email === ''): ?>
+                                                    <span>—</span>
+                                                <?php endif; ?>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="cs-agent-page__locale">
+                                            <span><?= $escape($locales[$agent['locale']] ?? ($agent['locale'] ?? '')) ?></span>
+                                            <?php if ($supportedLocales): ?>
+                                                <div class="cs-agent-page__locale-tags" title="<?= $escape(__('支持的语言')) ?>">
+                                                    <?php foreach ($supportedLocales as $sl): ?>
+                                                        <?php if ($sl !== ($agent['locale'] ?? null)): ?>
+                                                            <span class="w-badge" data-tone="info" data-size="sm"><?= $escape($locales[$sl] ?? $sl) ?></span>
+                                                        <?php endif; ?>
+                                                    <?php endforeach; ?>
+                                                </div>
+                                            <?php endif; ?>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="cs-agent-page__capacity">
+                                            <?php if ($isActive): ?>
+                                                <span class="w-badge" data-tone="success"><?= __('激活') ?></span>
+                                            <?php else: ?>
+                                                <span class="w-badge" data-tone="muted"><?= __('禁用') ?></span>
+                                            <?php endif; ?>
+                                            <span class="w-text" data-tone="muted" data-size="sm"><?= __('最多 %{1} 会话', (string)$maxSessions) ?></span>
+                                        </div>
+                                    </td>
+                                    <td class="cs-agent-page__actions-cell">
+                                        <div class="cs-agent-page__actions w-button-group">
+                                            <button type="button" class="w-button" data-agent-action="statistics" data-agent-id="<?= $jsonForHtmlAttr($agentId) ?>" title="<?= $escape(__('查看统计')) ?>" aria-label="<?= $escape(__('查看统计')) ?>" data-tone="info" data-size="sm" data-variant="outline">
+                                                <w:icon name="chart" size="sm"></w:icon>
+                                            </button>
+                                            <button type="button" class="w-button" data-agent-action="edit" data-agent-id="<?= $jsonForHtmlAttr($agentId) ?>" title="<?= $escape(__('编辑')) ?>" aria-label="<?= $escape(__('编辑')) ?>" data-tone="primary" data-size="sm" data-variant="outline">
+                                                <w:icon name="edit" size="sm"></w:icon>
+                                            </button>
+                                            <button type="button" class="w-button" data-agent-action="transfer" data-agent-id="<?= $jsonForHtmlAttr($agentId) ?>" title="<?= $escape(__('转让会话')) ?>" aria-label="<?= $escape(__('转让会话')) ?>" data-w-component="tooltip" data-w-tooltip="<?= $escape(__('转让会话：将未关闭会话转给其他客服')) ?>" data-w-placement="top" data-tone="neutral" data-size="sm" data-variant="outline">
+                                                <w:icon name="share" size="sm"></w:icon>
+                                                <span class="cs-agent-page__action-text"><?= __('转让') ?></span>
+                                            </button>
+                                            <button type="button" class="w-button" data-agent-action="delete" data-agent-id="<?= $jsonForHtmlAttr($agentId) ?>" title="<?= $escape(__('删除')) ?>" aria-label="<?= $escape(__('删除')) ?>" data-tone="danger" data-size="sm" data-variant="outline">
+                                                <w:icon name="trash" size="sm"></w:icon>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php endif; ?>
+        </div>
+    </section>
+</div>
+
+<div class="w-dialog" id="agent-modal" tabindex="-1" aria-hidden="true" aria-labelledby="modal-title" data-w-component="dialog" data-state="closed" hidden data-size="md" data-testid="customer-service-agent-dialog">
+    <div class="w-dialog__frame">
+        <div class="w-dialog__surface">
+            <div class="w-dialog__header">
+                <h3 class="w-dialog__title" id="modal-title"><?= __('添加客服') ?></h3>
+                <button type="button" class="w-button" data-agent-action="close-modal" data-w-action="dialog.close" data-tone="quiet" data-size="sm" aria-label="<?= $escape(__('关闭')) ?>"></button>
+            </div>
+            <div class="w-dialog__body">
+                <w:form id="agent-form">
+                    <input type="hidden" id="agent_id" name="agent_id" value="0">
+                    <div class="w-stack" style="--w-gap:var(--weline-space-4);">
+                        <div class="w-field">
+                            <label class="w-field__label" for="user_id"><?= __('关联后台用户') ?> <span class="w-text" data-tone="danger">*</span></label>
+                            <div class="w-field__control">
+                                <select class="w-select" id="user_id" name="user_id" required>
+                                    <option value=""><?= __('请选择用户') ?></option>
+                                    <?php foreach ($backendUsers as $user): ?>
+                                        <option value="<?= (int)$user['user_id'] ?>" data-name="<?= $escape($user['username'] ?? '') ?>" data-email="<?= $escape($user['email'] ?? '') ?>"><?= $escape($user['username'] ?? '') ?> (<?= $escape(($user['email'] ?? '') !== '' ? $user['email'] : ($user['realname'] ?? '')) ?>)</option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="w-field">
+                            <label class="w-field__label" for="name"><?= __('客服名称') ?> <span class="w-text" data-tone="danger">*</span></label>
+                            <div class="w-field__control">
+                                <input class="w-input" type="text" id="name" name="name" required placeholder="<?= $escape(__('请输入客服名称')) ?>">
+                            </div>
+                        </div>
+                        <div class="w-field">
+                            <label class="w-field__label" for="email"><?= __('邮箱') ?> <span class="w-text" data-tone="danger">*</span></label>
+                            <div class="w-field__control">
+                                <input class="w-input" type="email" id="email" name="email" required placeholder="<?= $escape(__('请输入邮箱地址')) ?>">
+                            </div>
+                        </div>
+                        <div class="w-field">
+                            <label class="w-field__label" for="locale"><?= __('主要语言') ?></label>
+                            <div class="w-field__control">
+                                <w:i18n:language:select id="customer_service_primary_locale_selector" name="locale" input-id="locale" value="customerServiceDefaultLocale" required="true" data-w-width="full" />
+                            </div>
+                            <small class="w-field__hint"><?= __('客服的首选沟通语言') ?></small>
+                        </div>
+                        <div class="w-field">
+                            <label class="w-field__label"><?= __('支持的语言') ?></label>
+                            <div class="w-field__control">
+                                <w:i18n:language:select id="customer_service_supported_locales_selector" name="supported_locales[]" input-id="supported-locales" value="customerServiceDefaultSupportedLocales" readonly-values="customerServiceDefaultSupportedLocales" multiple="true" data-w-width="full" />
+                            </div>
+                            <small class="w-field__hint"><?= __('客服可以接待的所有语言（勾选多个可接待全球客户）') ?></small>
+                        </div>
+                        <div class="w-field">
+                            <label class="w-field__label" for="max_sessions"><?= __('最大并发会话数') ?></label>
+                            <div class="w-field__control">
+                                <input class="w-input" type="number" id="max_sessions" name="max_sessions" value="10" min="1" max="100">
+                            </div>
+                        </div>
+                        <div class="w-field">
+                            <div class="w-check">
+                                <input type="checkbox" id="is_active" name="is_active" value="1" checked>
+                                <label for="is_active"><?= __('激活状态') ?></label>
+                            </div>
+                        </div>
+                    </div>
+                </w:form>
+            </div>
+            <div class="w-dialog__footer">
+                <button type="button" class="w-button" data-agent-action="close-modal" data-w-action="dialog.close" data-tone="neutral" data-variant="outline"><?= __('取消') ?></button>
+                <button type="button" class="w-button" data-agent-action="save" data-tone="primary"><?= __('保存') ?></button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="w-dialog" id="agent-session-handoff-modal" tabindex="-1" aria-hidden="true" aria-labelledby="agent-handoff-title" data-w-component="dialog" data-state="closed" hidden data-size="md" data-testid="customer-service-agent-handoff-dialog">
+    <div class="w-dialog__frame">
+        <div class="w-dialog__surface">
+            <div class="w-dialog__header">
+                <h3 class="w-dialog__title" id="agent-handoff-title"><?= __('转让会话') ?></h3>
+                <button type="button" class="w-button" data-agent-action="close-handoff" data-w-action="dialog.close" data-tone="quiet" data-size="sm" aria-label="<?= $escape(__('关闭')) ?>"></button>
+            </div>
+            <div class="w-dialog__body">
+                <input type="hidden" id="handoff-from-agent-id" value="0">
+                <input type="hidden" id="handoff-mode" value="transfer">
+                <p class="w-text" data-tone="muted" data-size="sm" id="handoff-summary" style="--w-m:0 0 var(--weline-space-4);"></p>
+                <div class="w-field">
+                    <label class="w-field__label" for="handoff-from-agent-label"><?= __('转出客服') ?></label>
+                    <div class="w-field__control">
+                        <input class="w-input" type="text" id="handoff-from-agent-label" readonly data-w-width="full" value="">
+                    </div>
+                    <small class="w-field__hint"><?= __('会话将从该客服名下转出（以人员列表所点行的客服为准，不是当前登录的操作者）') ?></small>
+                </div>
+                <div class="w-field">
+                    <label class="w-field__label" for="handoff-to-agent-id"><?= __('接收客服') ?></label>
+                    <div class="w-field__control">
+                        <select class="w-select" id="handoff-to-agent-id" data-w-width="full">
+                            <option value=""><?= __('请选择客服') ?></option>
+                        </select>
+                    </div>
+                    <small class="w-field__hint"><?= __('未关闭的会话将转入所选客服；工作台「来自客服」标记为上方转出客服') ?></small>
+                </div>
+                <div class="w-field" id="handoff-release-field" hidden>
+                    <div class="w-check">
+                        <input type="checkbox" id="handoff-release-sessions" value="1">
+                        <label for="handoff-release-sessions"><?= __('不转让，直接释放回等待池后删除') ?></label>
+                    </div>
+                </div>
+            </div>
+            <div class="w-dialog__footer">
+                <button type="button" class="w-button" data-agent-action="close-handoff" data-w-action="dialog.close" data-tone="neutral" data-variant="outline"><?= __('取消') ?></button>
+                <button type="button" class="w-button" data-agent-action="confirm-handoff" data-tone="primary" id="handoff-confirm-btn"><?= __('确认转让') ?></button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function csAdmin(url, options){
+  options=options||{};
+  var body=options.body;
+  var headers=Object.assign({}, options.headers||{});
+  if(body && typeof FormData!=='undefined' && body instanceof FormData){
+    var p=new URLSearchParams(); body.forEach(function(v,k){p.append(k,String(v));}); body=p.toString();
+  } else if(body && typeof URLSearchParams!=='undefined' && body instanceof URLSearchParams){
+    body=body.toString();
+  } else if(body && typeof body!=='string'){ try{body=JSON.stringify(body);}catch(e){body='';} }
+  if(typeof body==='string' && body.indexOf('=')!==-1 && !headers['Content-Type'] && !headers['content-type']){
+    headers['Content-Type']='application/x-www-form-urlencoded;charset=UTF-8';
+  }
+  var run=function(api){ return api.resource('customerService').adminRequest({url:url, method:options.method||'GET', headers:headers, body:body||''}); };
+  var toResp=function(data){
+    var biz=window.WelineApiBusiness||(window.Weline&&window.Weline.ApiBusiness);
+    if(biz&&typeof biz.wrapAdminBridgeResult==='function'){
+      return biz.wrapAdminBridgeResult(data);
+    }
+    var payload=(data&&typeof data==='object'&&!Array.isArray(data))?data:{success:true,data:data};
+    var ok=!(payload&&payload.success===false);
+    return {
+      ok:ok,
+      status:ok?200:400,
+      json:function(){return Promise.resolve(payload);},
+      text:function(){return Promise.resolve(typeof payload==='string'?payload:JSON.stringify(payload==null?{}:payload));}
+    };
+  };
+  var p=(window.Weline&&window.Weline.load)?window.Weline.load('api').then(run):Promise.resolve(run(window.Weline.Api));
+  return p.then(toResp);
 }
-.cs-agent-page .agent-table { width: 100%; border-collapse: collapse;
-}
-.cs-agent-page .agent-table th,
-.cs-agent-page .agent-table td { padding: 12px; text-align: left; border-bottom: 1px solid var(--border-color, #e5e5e5);
-}
-.cs-agent-page .agent-table th { background: var(--bg-secondary, #f5f5f5); font-weight: 600;
-}
-.cs-agent-page .badge { padding: 4px 8px; border-radius: 4px; font-size: 12px;
-}
-.cs-agent-page .badge-success { background: #28a745; color: white;
-}
-.cs-agent-page .badge-secondary { background: #6c757d; color: white;
-}
-.cs-agent-page .btn-group { display: flex; gap: 8px;
-}
-.cs-modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center; z-index: 9999;
-}
-.cs-modal { background: var(--bg-primary, white); border-radius: 8px; width: 500px; max-width: 90%; max-height: 90vh; overflow: auto;
-}
-.cs-modal-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--border-color, #e5e5e5);
-}
-.cs-modal-header h3 { margin: 0;
-}
-.cs-modal-close { background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-secondary, #666);
-}
-.cs-modal-body { padding: 20px;
-}
-.cs-w-field { margin-bottom: 16px;
-}
-.cs-w-field label { display: block; margin-bottom: 6px; font-weight: 500;
-}
-.cs-w-field input,
-.cs-w-field select { width: 100%; padding: 8px 12px; border: 1px solid var(--border-color, #ddd); border-radius: 4px; font-size: 14px;
-}
-.cs-w-field .form-check { display: flex; align-items: center; gap: 8px;
-}
-.cs-w-field .form-check input { width: auto;
-}
-.cs-w-field .form-hint { display: block; font-size: 12px; color: var(--text-secondary, #666); margin-top: 4px;
-}
-.locale-checkboxes { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px; border: 1px solid var(--border-color, #ddd); border-radius: 4px; background: var(--bg-secondary, #f9f9f9);
-}
-.locale-checkbox { display: flex; align-items: center; gap: 4px; padding: 4px 8px; background: var(--bg-primary, white); border-radius: 4px; font-size: 13px; cursor: pointer; transition: background 0.2s;
-}
-.locale-checkbox:hover { background: var(--bg-hover, #e5e5e5);
-}
-.locale-checkbox input { width: auto !important; margin: 0;
-}
-.locale-checkbox input:checked + span { color: var(--primary-color, #667eea); font-weight: 500;
-}
-.locale-tags { display: flex; flex-wrap: wrap; gap: 4px;
-}
-.locale-tag { display: inline-block; padding: 2px 6px; background: var(--primary-color, #667eea); color: white; border-radius: 3px; font-size: 11px;
-}
-.cs-modal-footer { padding: 16px 20px; border-top: 1px solid var(--border-color, #e5e5e5); display: flex; justify-content: flex-end; gap: 12px;
-}
-.statistics-modal { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center; z-index: 9999;
-}
-.statistics-modal .modal-content { background: var(--bg-primary, white); border-radius: 8px; width: 500px; max-width: 90%;
-}
-.statistics-modal .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--border-color, #e5e5e5);
-}
-.statistics-modal .close-btn { background: none; border: none; font-size: 24px; cursor: pointer;
-}
-.statistics-modal .modal-body { padding: 20px;
-}
-.stat-detail-section { margin-bottom: 16px;
-}
-.stat-detail-section h4 { margin: 0 0 8px 0; color: var(--text-primary, #333);
-}
-.stat-detail-section p { margin: 4px 0; color: var(--text-secondary, #666);
-}
-</style> <div class="cs-agent-page customer-service-agent"> <div class="page-header"> <h1><?= __('客服人员管理') ?></h1> <button class="w-button" data-agent-action="create" data-tone="primary"> <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="vertical-align: middle; margin-right: 4px;"> <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/> </svg> <?= __('添加客服') ?> </button> </div> <div class="agent-list"> <table class="agent-table w-table"> <thead> <tr> <th><?= __('ID') ?></th> <th><?= __('客服名称') ?></th> <th><?= __('关联用户') ?></th> <th><?= __('邮箱') ?></th> <th><?= __('语言') ?></th> <th><?= __('状态') ?></th> <th><?= __('最大会话数') ?></th> <th><?= __('总会话数') ?></th> <th><?= __('总消息数') ?></th> <th><?= __('平均响应时间') ?></th> <th><?= __('操作') ?></th> </tr> </thead> <tbody> <?php if (empty($agents)): ?> <tr> <td colspan="11" class="w-text" data-align="center"><?= __('暂无客服人员') ?></td> </tr> <?php else: ?> <?php foreach ($agents as $agent): ?> <tr data-agent="<?= $jsonForHtmlAttr($agent) ?>"> <td><?= (int)($agent['agent_id'] ?? 0) ?></td> <td><?= htmlspecialchars($agent['name']) ?></td> <td><?= htmlspecialchars($agent['user_name'] ?? '-') ?></td> <td><?= htmlspecialchars($agent['email']) ?></td> <td> <?= htmlspecialchars($locales[$agent['locale']] ?? $agent['locale']) ?> <?php $supportedLocales = $agent['supported_locales'] ?? null; if (is_string($supportedLocales)) { $supportedLocales = json_decode($supportedLocales, true); } if (!empty($supportedLocales) && is_array($supportedLocales)): ?> <div class="locale-tags" title="<?= __('支持的语言') ?>"> <?php foreach ($supportedLocales as $sl): ?> <?php if ($sl !== $agent['locale']): ?> <span class="locale-tag"><?= htmlspecialchars($locales[$sl] ?? $sl) ?></span> <?php endif; ?> <?php endforeach; ?> </div> <?php endif; ?> </td> <td> <?php if ($agent['is_active']): ?> <span class="w-badge" data-tone="success"><?= __('激活') ?></span> <?php else: ?> <span class="w-badge" data-tone="muted"><?= __('禁用') ?></span> <?php endif; ?> </td> <td><?= $agent['max_sessions'] ?></td> <td><?= $agent['statistics']['total_sessions'] ?? 0 ?></td> <td><?= $agent['statistics']['total_messages'] ?? 0 ?></td> <td> <?php $avgTime = $agent['statistics']['avg_response_time'] ?? 0; if ($avgTime > 0) { echo $avgTime < 60 ? round($avgTime, 1) . __('秒') : round($avgTime / 60, 1) . __('分钟'); } else { echo '-'; } ?> </td> <td> <div class="w-button-group"> <button class="w-button" data-agent-action="statistics" data-agent-id="<?= $jsonForHtmlAttr((int)($agent['agent_id'] ?? 0)) ?>" title="<?= __('查看统计') ?>" data-tone="info" data-size="sm"> <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg> </button> <button class="w-button" data-agent-action="edit" data-agent-id="<?= $jsonForHtmlAttr((int)($agent['agent_id'] ?? 0)) ?>" title="<?= __('编辑') ?>" data-tone="primary" data-size="sm"> <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg> </button> <button class="w-button" data-agent-action="delete" data-agent-id="<?= $jsonForHtmlAttr((int)($agent['agent_id'] ?? 0)) ?>" title="<?= __('删除') ?>" data-tone="danger" data-size="sm"> <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg> </button> </div> </td> </tr> <?php endforeach; ?> <?php endif; ?> </tbody> </table> </div>
-</div> <!-- 添加/编辑客服弹窗 -->
-<div id="agent-modal" class="cs-modal-overlay" style="display: none;"> <div class="cs-modal"> <div class="cs-modal-header"> <h3 id="modal-title"><?= __('添加客服') ?></h3> <button class="cs-modal-close" data-agent-action="close-modal">&times;</button> </div> <div class="cs-modal-body"> <w:form id="agent-form"> <input type="hidden" id="agent_id" name="agent_id" value="0"> <div class="cs-w-field"> <label for="user_id"><?= __('关联后台用户') ?> <span class="w-text" data-tone="danger">*</span></label> <select id="user_id" name="user_id" required> <option value=""><?= __('请选择用户') ?></option> <?php foreach ($backendUsers as $user): ?> <option value="<?= $user['user_id'] ?>"><?= htmlspecialchars($user['username']) ?> (<?= htmlspecialchars($user['realname'] ?? '') ?>)</option> <?php endforeach; ?> </select> </div> <div class="cs-w-field"> <label for="name"><?= __('客服名称') ?> <span class="w-text" data-tone="danger">*</span></label> <input type="text" id="name" name="name" required placeholder="<?= __('请输入客服名称') ?>"> </div> <div class="cs-w-field"> <label for="email"><?= __('邮箱') ?> <span class="w-text" data-tone="danger">*</span></label> <input type="email" id="email" name="email" required placeholder="<?= __('请输入邮箱地址') ?>"> </div> <div class="cs-w-field"> <label for="locale"><?= __('主要语言') ?></label> <w:i18n:language:select id="customer_service_primary_locale_selector" name="locale" input-id="locale" value="customerServiceDefaultLocale" required="true" data-w-width="full" /> <small class="form-hint"><?= __('客服的首选沟通语言') ?></small> </div> <div class="cs-w-field"> <label><?= __('支持的语言') ?></label> <w:i18n:language:select id="customer_service_supported_locales_selector" name="supported_locales[]" input-id="supported-locales" value="customerServiceDefaultSupportedLocales" readonly-values="customerServiceDefaultSupportedLocales" multiple="true" data-w-width="full" /> <small class="form-hint"><?= __('客服可以接待的所有语言（勾选多个可接待全球客户）') ?></small> </div> <div class="cs-w-field"> <label for="max_sessions"><?= __('最大并发会话数') ?></label> <input type="number" id="max_sessions" name="max_sessions" value="10" min="1" max="100"> </div> <div class="cs-w-field"> <div class="w-check"> <input type="checkbox" id="is_active" name="is_active" value="1" checked> <label for="is_active"><?= __('激活状态') ?></label> </div> </div> </w:form> </div> <div class="cs-modal-footer"> <button class="w-button" data-agent-action="close-modal" data-tone="neutral"><?= __('取消') ?></button> <button class="w-button" data-agent-action="save" data-tone="primary"><?= __('保存') ?></button> </div> </div>
-</div> <script>
-function csAdmin(url, options){ options=options||{}; var body=options.body; if(body && typeof FormData!=='undefined' && body instanceof FormData){ var p=new URLSearchParams(); body.forEach(function(v,k){p.append(k,String(v));}); body=p.toString(); } else if(body && typeof body!=='string'){ try{body=JSON.stringify(body);}catch(e){body='';} } var run=function(api){ return api.resource('customerService').adminRequest({url:url, method:options.method||'GET', headers:options.headers||{}, body:body||''}); }; if(window.Weline&&window.Weline.load) return window.Weline.load('api').then(run); return Promise.resolve(run(window.Weline.Api));
+function csFormatError(error, fallback){
+  var msg='';
+  if(window.Weline&&Weline.ApiBusiness&&typeof Weline.ApiBusiness.formatApiError==='function'){
+    msg=String(Weline.ApiBusiness.formatApiError(error, fallback||'')||'');
+  } else if(error&&error.message){
+    msg=String(error.message);
+  }
+  msg=String(msg||fallback||'').trim();
+  if(/Frontend worker operation is not allowed/i.test(msg)){
+    return '<?= __('后台接口未授权或会话失效，请刷新页面后重试') ?>';
+  }
+  if(/NoRouterException/i.test(msg) || /Response terminate with status 404/i.test(msg)){
+    return '<?= __('后台保存路由不可用，请刷新页面后重试；若仍失败请联系管理员检查客服模块路由') ?>';
+  }
+  if(/Failed to fetch/i.test(msg) || /worker session/i.test(msg) || /Shared worker session/i.test(msg)){
+    return '<?= __('网络或工作会话暂不可用，请刷新页面后重试') ?>';
+  }
+  return msg || fallback || '<?= __('请求失败') ?>';
 }
 </script>
 <script>
-const AgentManager = { saveUrl: "@backend-url{'customerservice/backend/agent/save'}", deleteUrl: "@backend-url{'customerservice/backend/agent/remove'}", statisticsUrl: "@backend-url{'customerservice/backend/agent/agent-statistics'}", agents: <?= json_encode($agents, $jsonForScriptFlags) ?>
-}; const CustomerServiceDefaultLocale = <?= json_encode($customerServiceDefaultLocale, $jsonForScriptFlags) ?>; function getAgentLanguageSelector(id) { const root = document.getElementById(id + '_wrapper'); return root && window.Weline && window.Weline.UI ? window.Weline.UI.get(root, 'language-select') : null;
-} function syncAgentLanguageSelection(locale, supportedLocales) { const primarySelector = getAgentLanguageSelector('customer_service_primary_locale_selector'); const supportedSelector = getAgentLanguageSelector('customer_service_supported_locales_selector'); const primaryLocale = String(locale || CustomerServiceDefaultLocale || '').trim(); let nextSupportedLocales = Array.isArray(supportedLocales) ? supportedLocales.slice() : []; nextSupportedLocales = nextSupportedLocales .map(value => String(value || '').trim()) .filter((value, index, list) => value && list.indexOf(value) === index); if (primaryLocale && nextSupportedLocales.indexOf(primaryLocale) === -1) { nextSupportedLocales.unshift(primaryLocale); } if (primarySelector) { primarySelector.setValue(primaryLocale); } if (supportedSelector) { supportedSelector.setReadonlyValues(primaryLocale ? [primaryLocale] : []); supportedSelector.setValues(nextSupportedLocales); }
-} document.addEventListener('weline:ui:language-select:change', event => { if (event.target && event.target.id === 'customer_service_primary_locale_selector_wrapper') { const primary = getAgentLanguageSelector('customer_service_primary_locale_selector'); const supported = getAgentLanguageSelector('customer_service_supported_locales_selector'); if (primary && supported) { syncAgentLanguageSelection(primary.getValue(), supported.getValues()); } }
-}); function normalizeAgentId(value) { const parsed = parseInt(value, 10); return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
-} function showAgentModal(agentId = 0) { agentId = normalizeAgentId(agentId); const modal = document.getElementById('agent-modal'); const form = document.getElementById('agent-form'); const title = document.getElementById('modal-title'); form.reset(); document.getElementById('agent_id').value = 0; document.getElementById('is_active').checked = true; // 重置所有语言复选框 syncAgentLanguageSelection(CustomerServiceDefaultLocale, CustomerServiceDefaultLocale ? [CustomerServiceDefaultLocale] : []); if (agentId > 0) { title.textContent = '<?= __('编辑客服') ?>'; const agent = AgentManager.agents.find(a => parseInt(a.agent_id) === agentId); if (agent) { document.getElementById('agent_id').value = agent.agent_id; document.getElementById('user_id').value = agent.user_id; document.getElementById('name').value = agent.name; document.getElementById('email').value = agent.email; document.getElementById('max_sessions').value = agent.max_sessions; document.getElementById('is_active').checked = agent.is_active == 1; // 设置支持的语言 let supportedLocales = agent.supported_locales || []; if (typeof supportedLocales === 'string') { try { supportedLocales = JSON.parse(supportedLocales); } catch (e) { supportedLocales = [agent.locale]; } } if (!Array.isArray(supportedLocales) || supportedLocales.length === 0) { supportedLocales = [agent.locale]; } syncAgentLanguageSelection(agent.locale, supportedLocales); } } else { title.textContent = '<?= __('添加客服') ?>'; // 默认选中简体中文 syncAgentLanguageSelection(CustomerServiceDefaultLocale, CustomerServiceDefaultLocale ? [CustomerServiceDefaultLocale] : []); } modal.style.display = 'flex';
-} function closeAgentModal() { document.getElementById('agent-modal').style.display = 'none';
-} function csToastError(message) { if (typeof Weline.UI.toast !== 'undefined' && Weline.UI.toast && typeof Weline.UI.toast.error === 'function') { Weline.UI.toast.error(message); return; } // 兜底：不使用浏览器原生 alert，改为页面内提示 let el = document.getElementById('cs-agent-toast-error'); if (!el) { el = document.createElement('div'); el.id = 'cs-agent-toast-error'; el.style.cssText = [ 'position:fixed', 'left:50%', 'top:20px', 'transform:translateX(-50%)', 'z-index:10050', 'background:#dc3545', 'color:#fff', 'padding:10px 14px', 'border-radius:8px', 'max-width:92vw', 'white-space:pre-wrap', 'box-shadow:0 8px 24px rgba(0,0,0,.15)', 'opacity:0', 'transition:opacity .15s ease-in-out', ].join(';'); document.body.appendChild(el); } el.textContent = message || ''; el.style.opacity = '1'; if (el._timer) clearTimeout(el._timer); el._timer = setTimeout(function () { el.style.opacity = '0'; }, 3000);
-} function csShowConfirmDialog(message, options) { options = options || {}; return Weline.UI.dialog.confirm(message, { title: options.title || '<?= __('提示') ?>', confirmLabel: options.confirmText || '<?= __('确认') ?>', cancelLabel: options.cancelText || '<?= __('取消') ?>', tone: options.type || 'warning', dangerous: options.type === 'danger' });
-} function editAgent(agentId) { agentId = normalizeAgentId(agentId); if (agentId > 0) { showAgentModal(agentId); }
-} function saveAgent() { const form = document.getElementById('agent-form'); const formData = new FormData(form); // 处理复选框 formData.set('is_active', document.getElementById('is_active').checked ? '1' : '0'); csAdmin(AgentManager.saveUrl, { method: 'POST', body: new URLSearchParams(formData) }) .then(response => response.json()) .then(data => { if (data.success) { closeAgentModal(); location.reload(); } else { csToastError(data.message || '<?= __('保存失败') ?>'); } }) .catch(error => { console.error('Error:', error); csToastError('<?= __('保存失败') ?>'); });
-} function deleteAgent(agentId) { agentId = normalizeAgentId(agentId); if (agentId <= 0) { return; } csShowConfirmDialog( '<?= __('确定要删除此客服吗？') ?>', { title: '<?= __('删除确认') ?>', confirmText: '<?= __('确认') ?>', cancelText: '<?= __('取消') ?>', type: 'danger' } ).then(function (confirmed) { if (!confirmed) return; csAdmin(AgentManager.deleteUrl, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', }, body: new URLSearchParams({ agent_id: agentId }) }) .then(response => response.json()) .then(data => { if (data.success) { location.reload(); } else { csToastError(data.message || '<?= __('删除失败') ?>'); } }) .catch(error => { console.error('Error:', error); csToastError('<?= __('删除失败') ?>'); }); });
-} function viewStatistics(agentId) { agentId = normalizeAgentId(agentId); if (agentId <= 0) { return; } const url = AgentManager.statisticsUrl + '?agent_id=' + encodeURIComponent(String(agentId)) + '&period=all'; csAdmin(url) .then(response => response.json()) .then(data => { if (data.success) { showStatisticsModal(data.data); } else { csToastError(data.message || '<?= __('获取统计数据失败') ?>'); } }) .catch(error => { console.error('Error:', error); csToastError('<?= __('获取统计数据失败') ?>'); });
-} function showStatisticsModal(statistics) { const modal = document.createElement('div'); modal.className = 'statistics-modal'; modal.innerHTML = ` <div class="w-dialog__surface"> <div class="w-dialog__header"> <h3><?= __('客服统计详情') ?></h3> <button class="close-btn" data-statistics-action="close">&times;</button> </div> <div class="w-dialog__body"> <div class="stat-detail-section"> <h4><?= __('会话统计') ?></h4> <p><?= __('总会话数') ?>: ${statistics.sessions.total}</p> <p><?= __('已关闭') ?>: ${statistics.sessions.closed}</p> <p><?= __('进行中') ?>: ${statistics.sessions.active}</p> </div> <div class="stat-detail-section"> <h4><?= __('消息统计') ?></h4> <p><?= __('总消息数') ?>: ${statistics.messages.total}</p> </div> <div class="stat-detail-section"> <h4><?= __('响应时间') ?></h4> <p><?= __('平均') ?>: ${formatResponseTime(statistics.response_time.average)}</p> <p><?= __('最快') ?>: ${formatResponseTime(statistics.response_time.min)}</p> <p><?= __('最慢') ?>: ${formatResponseTime(statistics.response_time.max)}</p> </div> <div class="stat-detail-section"> <h4><?= __('会话时长') ?></h4> <p><?= __('平均') ?>: ${statistics.session_duration.average} <?= __('分钟') ?></p> <p><?= __('最短') ?>: ${statistics.session_duration.min} <?= __('分钟') ?></p> <p><?= __('最长') ?>: ${statistics.session_duration.max} <?= __('分钟') ?></p> </div> </div> </div> `; document.body.appendChild(modal); // 点击遮罩层关闭 modal.addEventListener('click', function(e) { if (e.target === modal) { modal.remove(); } });
-} function formatResponseTime(seconds) { if (!seconds || seconds === 0) return '-'; if (seconds < 60) { return seconds.toFixed(1) + '<?= __('秒') ?>'; } else { return (seconds / 60).toFixed(1) + '<?= __('分钟') ?>'; }
-} // 点击遮罩层关闭弹窗
-document.getElementById('agent-modal').addEventListener('click', function(e) { if (e.target === this) { closeAgentModal(); }
-}); document.addEventListener('click', function(event) { const statisticsAction = event.target.closest('[data-statistics-action]'); if (statisticsAction && statisticsAction.getAttribute('data-statistics-action') === 'close') { event.preventDefault(); const modal = statisticsAction.closest('.statistics-modal'); if (modal) { modal.remove(); } return; } const trigger = event.target.closest('[data-agent-action]'); if (!trigger) { return; } event.preventDefault(); const action = String(trigger.getAttribute('data-agent-action') || '').trim(); const agentId = normalizeAgentId(trigger.getAttribute('data-agent-id')); if (action === 'create') { showAgentModal(); } else if (action === 'statistics') { viewStatistics(agentId); } else if (action === 'edit') { editAgent(agentId); } else if (action === 'delete') { deleteAgent(agentId); } else if (action === 'close-modal') { closeAgentModal(); } else if (action === 'save') { saveAgent(); }
+const AgentManager = {
+  saveUrl: "@backend-url{'customerservice/backend/agent/save'}",
+  deleteUrl: "@backend-url{'customerservice/backend/agent/remove'}",
+  transferUrl: "@backend-url{'customerservice/backend/agent/transfer-sessions'}",
+  statisticsUrl: "@backend-url{'customerservice/backend/agent/agent-statistics'}",
+  agents: <?= json_encode($agents, $jsonForScriptFlags) ?>
+};
+const CustomerServiceDefaultLocale = <?= json_encode($customerServiceDefaultLocale, $jsonForScriptFlags) ?>;
+
+function getAgentLanguageSelector(id) {
+  const root = document.getElementById(id + '_wrapper');
+  return root && window.Weline && window.Weline.UI ? window.Weline.UI.get(root, 'language-select') : null;
+}
+
+function syncAgentLanguageSelection(locale, supportedLocales) {
+  const primarySelector = getAgentLanguageSelector('customer_service_primary_locale_selector');
+  const supportedSelector = getAgentLanguageSelector('customer_service_supported_locales_selector');
+  const primaryLocale = String(locale || CustomerServiceDefaultLocale || '').trim();
+  let nextSupportedLocales = Array.isArray(supportedLocales) ? supportedLocales.slice() : [];
+  nextSupportedLocales = nextSupportedLocales
+    .map(value => String(value || '').trim())
+    .filter((value, index, list) => value && list.indexOf(value) === index);
+  if (primaryLocale && nextSupportedLocales.indexOf(primaryLocale) === -1) {
+    nextSupportedLocales.unshift(primaryLocale);
+  }
+  if (primarySelector) {
+    primarySelector.setValue(primaryLocale);
+  }
+  if (supportedSelector) {
+    supportedSelector.setReadonlyValues(primaryLocale ? [primaryLocale] : []);
+    supportedSelector.setValues(nextSupportedLocales);
+  }
+}
+
+document.addEventListener('weline:ui:language-select:change', event => {
+  if (event.target && event.target.id === 'customer_service_primary_locale_selector_wrapper') {
+    const primary = getAgentLanguageSelector('customer_service_primary_locale_selector');
+    const supported = getAgentLanguageSelector('customer_service_supported_locales_selector');
+    if (primary && supported) {
+      syncAgentLanguageSelection(primary.getValue(), supported.getValues());
+    }
+  }
+});
+
+function fillAgentFieldsFromSelectedUser() {
+  const select = document.getElementById('user_id');
+  if (!select) {
+    return;
+  }
+  const option = select.options[select.selectedIndex];
+  if (!option || !String(option.value || '').trim()) {
+    return;
+  }
+  const name = String(option.getAttribute('data-name') || '').trim();
+  const email = String(option.getAttribute('data-email') || '').trim();
+  const nameInput = document.getElementById('name');
+  const emailInput = document.getElementById('email');
+  if (nameInput && name) {
+    nameInput.value = name;
+  }
+  if (emailInput && email) {
+    emailInput.value = email;
+  }
+}
+
+const agentUserSelect = document.getElementById('user_id');
+if (agentUserSelect) {
+  agentUserSelect.addEventListener('change', fillAgentFieldsFromSelectedUser);
+}
+
+function normalizeAgentId(value) {
+  const parsed = parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+function openAgentDialog(modal) {
+  if (!modal) {
+    return;
+  }
+  modal.style.removeProperty('display');
+  if (window.Weline && Weline.UI && Weline.UI.dialog && typeof Weline.UI.dialog.open === 'function') {
+    Weline.UI.dialog.open(modal);
+    return;
+  }
+  modal.hidden = false;
+  modal.setAttribute('aria-hidden', 'false');
+  modal.setAttribute('data-state', 'open');
+}
+
+function closeAgentDialog(modal) {
+  if (!modal) {
+    return;
+  }
+  if (window.Weline && Weline.UI && Weline.UI.dialog && typeof Weline.UI.dialog.close === 'function') {
+    Weline.UI.dialog.close(modal);
+  }
+  modal.hidden = true;
+  modal.setAttribute('aria-hidden', 'true');
+  modal.setAttribute('data-state', 'closed');
+  modal.style.removeProperty('display');
+}
+
+function findAgentRecord(agentId) {
+  agentId = normalizeAgentId(agentId);
+  if (agentId <= 0) {
+    return null;
+  }
+  const list = Array.isArray(AgentManager.agents) ? AgentManager.agents : [];
+  let agent = list.find(a => normalizeAgentId(a && a.agent_id) === agentId) || null;
+  if (agent && normalizeAgentId(agent.agent_id) === agentId && (agent.name || agent.email || agent.user_id)) {
+    return agent;
+  }
+  const btn = document.querySelector('[data-agent-action="edit"][data-agent-id="' + agentId + '"]');
+  const tr = btn ? btn.closest('tr[data-agent]') : null;
+  if (tr) {
+    try {
+      const raw = JSON.parse(tr.getAttribute('data-agent') || '{}');
+      if (raw && normalizeAgentId(raw.agent_id) === agentId) {
+        return raw;
+      }
+    } catch (e) {}
+  }
+  return agent && normalizeAgentId(agent.agent_id) === agentId ? agent : null;
+}
+
+function showAgentModal(agentId = 0) {
+  agentId = normalizeAgentId(agentId);
+  const modal = document.getElementById('agent-modal');
+  const form = document.getElementById('agent-form');
+  const title = document.getElementById('modal-title');
+  form.reset();
+  document.getElementById('agent_id').value = 0;
+  document.getElementById('is_active').checked = true;
+  syncAgentLanguageSelection(CustomerServiceDefaultLocale, CustomerServiceDefaultLocale ? [CustomerServiceDefaultLocale] : []);
+  if (agentId > 0) {
+    title.textContent = '<?= __('编辑客服') ?>';
+    const agent = findAgentRecord(agentId);
+    if (agent) {
+      document.getElementById('agent_id').value = agent.agent_id;
+      document.getElementById('user_id').value = String(agent.user_id || '');
+      document.getElementById('name').value = agent.name || '';
+      document.getElementById('email').value = agent.email || '';
+      document.getElementById('max_sessions').value = agent.max_sessions || 10;
+      document.getElementById('is_active').checked = agent.is_active == 1 || agent.is_active === true;
+      let supportedLocales = agent.supported_locales || [];
+      if (typeof supportedLocales === 'string') {
+        try { supportedLocales = JSON.parse(supportedLocales); } catch (e) { supportedLocales = [agent.locale]; }
+      }
+      if (!Array.isArray(supportedLocales) || supportedLocales.length === 0) {
+        supportedLocales = agent.locale ? [agent.locale] : [];
+      }
+      syncAgentLanguageSelection(agent.locale, supportedLocales);
+    } else {
+      csToastError('<?= __('未找到客服数据，请刷新页面后重试') ?>');
+    }
+  } else {
+    title.textContent = '<?= __('添加客服') ?>';
+    syncAgentLanguageSelection(CustomerServiceDefaultLocale, CustomerServiceDefaultLocale ? [CustomerServiceDefaultLocale] : []);
+  }
+  openAgentDialog(modal);
+}
+
+function closeAgentModal() {
+  closeAgentDialog(document.getElementById('agent-modal'));
+}
+
+function csToast(type, message, options) {
+  var text = String(message || '').trim();
+  if (!text) return;
+  var tone = String(type || 'info');
+  var opts = options && typeof options === 'object' ? options : {};
+  if (typeof Weline !== 'undefined' && Weline.UI && Weline.UI.toast) {
+    if (typeof Weline.UI.toast[tone] === 'function') {
+      Weline.UI.toast[tone](text, opts);
+      return;
+    }
+    if (typeof Weline.UI.toast.show === 'function') {
+      Weline.UI.toast.show(text, Object.assign({ tone: tone === 'error' ? 'danger' : tone }, opts));
+      return;
+    }
+  }
+  let el = document.getElementById('cs-agent-toast-fallback');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'cs-agent-toast-fallback';
+    el.setAttribute('role', 'status');
+    el.style.cssText = 'position:fixed;top:1rem;right:1rem;z-index:100000;padding:0.75rem 1rem;border-radius:0.5rem;background:var(--weline-theme-surface,#fff);color:var(--weline-theme-text,#111);border:1px solid var(--weline-theme-border,#ddd);box-shadow:0 8px 24px rgba(0,0,0,.12);max-width:24rem;';
+    document.body.appendChild(el);
+  }
+  el.textContent = text;
+  el.dataset.tone = tone;
+  el.style.opacity = '1';
+  if (el._timer) clearTimeout(el._timer);
+  el._timer = setTimeout(function () { el.style.opacity = '0'; }, Number(opts.duration) > 0 ? Number(opts.duration) : 5000);
+}
+
+function csToastError(message, options) {
+  csToast('error', message, options);
+}
+
+function csToastSuccess(message, options) {
+  csToast('success', message, options);
+}
+
+function csToastInfo(message, options) {
+  csToast('info', message, options);
+}
+
+/** 刷新前写入提示，避免 reload 冲掉 toast */
+function csFlashThenReload(type, message) {
+  var text = String(message || '').trim();
+  var tone = String(type || 'info');
+  try {
+    if (text && window.sessionStorage) {
+      sessionStorage.setItem('cs_agent_flash_toast', JSON.stringify({
+        type: tone,
+        message: text,
+        at: Date.now()
+      }));
+    }
+  } catch (e) {}
+  location.reload();
+}
+
+function csConsumeFlashToast() {
+  var raw = '';
+  try {
+    raw = window.sessionStorage ? String(sessionStorage.getItem('cs_agent_flash_toast') || '') : '';
+    if (raw) sessionStorage.removeItem('cs_agent_flash_toast');
+  } catch (e) {
+    raw = '';
+  }
+  if (!raw) return;
+  var payload = null;
+  try { payload = JSON.parse(raw); } catch (e) { payload = null; }
+  if (!payload || !payload.message) return;
+  if (payload.at && (Date.now() - Number(payload.at)) > 60000) return;
+  var attempts = 0;
+  var tryShow = function () {
+    attempts += 1;
+    var ready = typeof Weline !== 'undefined' && Weline.UI && Weline.UI.toast;
+    if (ready || attempts >= 50) {
+      csToast(payload.type || 'info', payload.message, { duration: 6500 });
+      return;
+    }
+    setTimeout(tryShow, 60);
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function () { setTimeout(tryShow, 0); });
+  } else {
+    setTimeout(tryShow, 0);
+  }
+}
+csConsumeFlashToast();
+
+/** bfcache / 异常态：关闭态非 native dialog 若丢 hidden 会白屏盖主区 */
+function csForceCloseAgentDialogs(reason) {
+  ['agent-modal', 'agent-session-handoff-modal'].forEach(function (id) {
+    const dialog = document.getElementById(id);
+    if (!dialog) return;
+    if (dialog.getAttribute('data-state') === 'open' && reason === 'user') return;
+    // 勿依赖此时 Weline.UI 是否就绪；禁止写 inline display:none（会堵死后续 open）
+    dialog.hidden = true;
+    dialog.setAttribute('aria-hidden', 'true');
+    dialog.setAttribute('data-state', 'closed');
+    dialog.style.removeProperty('display');
+    if (window.Weline && Weline.UI && Weline.UI.dialog && typeof Weline.UI.dialog.close === 'function') {
+      try { Weline.UI.dialog.close(dialog); } catch (e) {}
+    }
+  });
+}
+window.addEventListener('pageshow', function (event) {
+  if (event.persisted) csForceCloseAgentDialogs('bfcache');
+});
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', function () { csForceCloseAgentDialogs('boot'); });
+} else {
+  csForceCloseAgentDialogs('boot');
+}
+
+function csShowConfirmDialog(message, options) {
+  options = options || {};
+  return Weline.UI.dialog.confirm(message, {
+    title: options.title || '<?= __('提示') ?>',
+    confirmLabel: options.confirmText || '<?= __('确认') ?>',
+    cancelLabel: options.cancelText || '<?= __('取消') ?>',
+    tone: options.type || 'warning',
+    dangerous: options.type === 'danger'
+  });
+}
+
+function editAgent(agentId) {
+  agentId = normalizeAgentId(agentId);
+  if (agentId > 0) {
+    showAgentModal(agentId);
+  }
+}
+
+function saveAgent() {
+  const form = document.getElementById('agent-form');
+  const formData = new FormData(form);
+  formData.set('is_active', document.getElementById('is_active').checked ? '1' : '0');
+  csAdmin(AgentManager.saveUrl, { method: 'POST', body: formData })
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        closeAgentModal();
+        location.reload();
+      } else {
+        csToastError(data.message || '<?= __('保存失败') ?>');
+      }
+    })
+    .catch(error => {
+      console.error('Error:', error);
+      csToastError(csFormatError(error, '<?= __('保存失败') ?>'));
+    });
+}
+
+function openHandoffDialog() {
+  const dialog = document.getElementById('agent-session-handoff-modal');
+  if (!dialog) return;
+  dialog.style.removeProperty('display');
+  // 必须走 UI.dialog.open：先 hidden=false 会让 :not(dialog) 全屏白遮罩盖住主区
+  if (window.Weline && Weline.UI && Weline.UI.dialog && typeof Weline.UI.dialog.open === 'function') {
+    Weline.UI.dialog.open(dialog);
+    return;
+  }
+  dialog.hidden = false;
+  dialog.setAttribute('aria-hidden', 'false');
+  dialog.setAttribute('data-state', 'open');
+}
+
+function closeHandoffDialog() {
+  const dialog = document.getElementById('agent-session-handoff-modal');
+  if (!dialog) return;
+  if (window.Weline && Weline.UI && Weline.UI.dialog && typeof Weline.UI.dialog.close === 'function') {
+    Weline.UI.dialog.close(dialog);
+  }
+  dialog.hidden = true;
+  dialog.setAttribute('aria-hidden', 'true');
+  dialog.setAttribute('data-state', 'closed');
+  dialog.style.removeProperty('display');
+}
+
+function populateHandoffTargets(fromAgentId) {
+  const select = document.getElementById('handoff-to-agent-id');
+  if (!select) return;
+  const list = Array.isArray(AgentManager.agents) ? AgentManager.agents : [];
+  const options = ['<option value=\"\">' + '<?= __('请选择客服') ?>' + '</option>'];
+  list.forEach(function (row) {
+    const id = normalizeAgentId(row && row.agent_id);
+    if (id <= 0 || id === fromAgentId) return;
+    if (!(row.is_active === 1 || row.is_active === true || row.is_active === '1')) return;
+    const name = String(row.name || ('#' + id));
+    const openCount = parseInt(row.open_session_count, 10) || 0;
+    options.push('<option value=\"' + id + '\">' + name.replace(/</g, '&lt;') + ' (ID ' + id + (openCount ? ', <?= __('当前会话') ?> ' + openCount : '') + ')</option>');
+  });
+  select.innerHTML = options.join('');
+}
+
+function showSessionHandoffModal(agentId, mode) {
+  agentId = normalizeAgentId(agentId);
+  if (agentId <= 0) return;
+  const agent = findAgentRecord(agentId);
+  const openCount = agent ? (parseInt(agent.open_session_count, 10) || 0) : 0;
+  const isDelete = mode === 'delete';
+  document.getElementById('handoff-from-agent-id').value = String(agentId);
+  document.getElementById('handoff-mode').value = isDelete ? 'delete' : 'transfer';
+  document.getElementById('agent-handoff-title').textContent = isDelete ? '<?= __('删除客服') ?>' : '<?= __('转让会话') ?>';
+  document.getElementById('handoff-confirm-btn').textContent = isDelete ? '<?= __('确认删除') ?>' : '<?= __('确认转让') ?>';
+  const fromLabel = document.getElementById('handoff-from-agent-label');
+  const agentName = String((agent && agent.name) || '').trim() || ('#' + agentId);
+  const userName = String((agent && agent.user_name) || '').trim();
+  if (fromLabel) {
+    fromLabel.value = userName && userName !== '-' && userName.toLowerCase() !== agentName.toLowerCase()
+      ? (agentName + ' · <?= __('用户') ?> ' + userName + ' (ID ' + agentId + ')')
+      : (agentName + ' (ID ' + agentId + ')');
+  }
+  const releaseField = document.getElementById('handoff-release-field');
+  const releaseCheck = document.getElementById('handoff-release-sessions');
+  if (releaseField) releaseField.hidden = !isDelete;
+  if (releaseCheck) releaseCheck.checked = false;
+  const summary = document.getElementById('handoff-summary');
+  if (summary) {
+    if (isDelete) {
+      summary.textContent = openCount > 0
+        ? ('<?= __('即将删除客服「__AGENT__」，其名下有 __COUNT__ 个未关闭会话，请选择接收客服或释放回等待池。') ?>'.replaceAll('__AGENT__', agentName).replaceAll('__COUNT__', String(openCount)))
+        : ('<?= __('确定删除客服「__AGENT__」？') ?>'.replaceAll('__AGENT__', agentName));
+    } else {
+      summary.textContent = openCount > 0
+        ? ('<?= __('将从客服「__AGENT__」转出 __COUNT__ 个未关闭会话，请选择接收客服。') ?>'.replaceAll('__AGENT__', agentName).replaceAll('__COUNT__', String(openCount)))
+        : ('<?= __('客服「__AGENT__」当前没有未关闭会话。') ?>'.replaceAll('__AGENT__', agentName));
+    }
+  }
+  populateHandoffTargets(agentId);
+  openHandoffDialog();
+}
+
+function deleteAgent(agentId) {
+  agentId = normalizeAgentId(agentId);
+  if (agentId <= 0) return;
+  const agent = findAgentRecord(agentId);
+  const openCount = agent ? (parseInt(agent.open_session_count, 10) || 0) : 0;
+  if (openCount > 0) {
+    showSessionHandoffModal(agentId, 'delete');
+    return;
+  }
+  csShowConfirmDialog(
+    '<?= __('确定要删除此客服吗？') ?>',
+    { title: '<?= __('删除确认') ?>', confirmText: '<?= __('确认') ?>', cancelText: '<?= __('取消') ?>', type: 'danger' }
+  ).then(function (confirmed) {
+    if (!confirmed) return;
+    submitDeleteAgent(agentId, 0, false);
+  });
+}
+
+function transferAgentSessions(agentId) {
+  agentId = normalizeAgentId(agentId);
+  if (agentId <= 0) return;
+  const agent = findAgentRecord(agentId);
+  const openCount = agent ? (parseInt(agent.open_session_count, 10) || 0) : 0;
+  if (openCount <= 0) {
+    csToastInfo('<?= __('没有可转让的未关闭会话') ?>');
+    return;
+  }
+  showSessionHandoffModal(agentId, 'transfer');
+}
+
+function submitDeleteAgent(agentId, transferToAgentId, releaseSessions) {
+  const body = new URLSearchParams({ agent_id: String(agentId) });
+  if (transferToAgentId > 0) body.set('transfer_to_agent_id', String(transferToAgentId));
+  if (releaseSessions) body.set('release_sessions', '1');
+  csAdmin(AgentManager.deleteUrl, { method: 'POST', body: body })
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        closeHandoffDialog();
+        location.reload();
+      } else {
+        csToastError(data.message || '<?= __('删除失败') ?>');
+      }
+    })
+    .catch(error => {
+      console.error('Error:', error);
+      csToastError(csFormatError(error, '<?= __('删除失败') ?>'));
+    });
+}
+
+function applyAgentOpenSessionDelta(agentId, delta) {
+  agentId = normalizeAgentId(agentId);
+  delta = parseInt(delta, 10) || 0;
+  if (agentId <= 0 || !delta) return;
+  const list = Array.isArray(AgentManager.agents) ? AgentManager.agents : [];
+  list.forEach(function (row) {
+    if (normalizeAgentId(row && row.agent_id) !== agentId) return;
+    const next = Math.max(0, (parseInt(row.open_session_count, 10) || 0) + delta);
+    row.open_session_count = next;
+  });
+  const btn = document.querySelector('[data-agent-action="edit"][data-agent-id="' + agentId + '"]');
+  const tr = btn ? btn.closest('tr[data-agent]') : null;
+  if (!tr) return;
+  try {
+    const raw = JSON.parse(tr.getAttribute('data-agent') || '{}');
+    if (raw && normalizeAgentId(raw.agent_id) === agentId) {
+      raw.open_session_count = Math.max(0, (parseInt(raw.open_session_count, 10) || 0) + delta);
+      tr.setAttribute('data-agent', JSON.stringify(raw));
+    }
+  } catch (e) {}
+}
+
+function setHandoffBusy(busy) {
+  const btn = document.getElementById('handoff-confirm-btn');
+  const select = document.getElementById('handoff-to-agent-id');
+  if (btn) {
+    btn.disabled = !!busy;
+    if (busy) {
+      btn.dataset.prevLabel = btn.textContent || '';
+      btn.textContent = '<?= __('处理中…') ?>';
+    } else if (btn.dataset.prevLabel) {
+      btn.textContent = btn.dataset.prevLabel;
+      delete btn.dataset.prevLabel;
+    }
+  }
+  if (select) select.disabled = !!busy;
+}
+
+function submitTransferSessions(fromAgentId, toAgentId) {
+  const body = new URLSearchParams({
+    agent_id: String(fromAgentId),
+    transfer_to_agent_id: String(toAgentId)
+  });
+  setHandoffBusy(true);
+  csAdmin(AgentManager.transferUrl, { method: 'POST', body: body })
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        const transferred = data && data.data ? (parseInt(data.data.transferred, 10) || 0) : 0;
+        if (transferred > 0) {
+          applyAgentOpenSessionDelta(fromAgentId, -transferred);
+          applyAgentOpenSessionDelta(toAgentId, transferred);
+          csToastSuccess(data.message || '<?= __('转让成功') ?>', { duration: 6500 });
+        } else {
+          csToastInfo(data.message || '<?= __('没有可转让的未关闭会话') ?>', { duration: 6500 });
+        }
+        closeHandoffDialog();
+      } else {
+        csToastError(data.message || '<?= __('转让失败') ?>');
+      }
+    })
+    .catch(error => {
+      console.error('Error:', error);
+      csToastError(csFormatError(error, '<?= __('转让失败') ?>'));
+    })
+    .finally(function () {
+      setHandoffBusy(false);
+    });
+}
+
+function confirmHandoff() {
+  const fromAgentId = normalizeAgentId(document.getElementById('handoff-from-agent-id')?.value);
+  const mode = String(document.getElementById('handoff-mode')?.value || 'transfer');
+  const toAgentId = normalizeAgentId(document.getElementById('handoff-to-agent-id')?.value);
+  const releaseSessions = !!(document.getElementById('handoff-release-sessions')?.checked);
+  if (fromAgentId <= 0) return;
+  if (mode === 'delete') {
+    if (!releaseSessions && toAgentId <= 0) {
+      const agent = findAgentRecord(fromAgentId);
+      const openCount = agent ? (parseInt(agent.open_session_count, 10) || 0) : 0;
+      if (openCount > 0) {
+        csToastError('<?= __('请选择目标客服，或勾选释放回等待池') ?>');
+        return;
+      }
+    }
+    submitDeleteAgent(fromAgentId, releaseSessions ? 0 : toAgentId, releaseSessions);
+    return;
+  }
+  if (toAgentId <= 0) {
+    csToastError('<?= __('请选择目标客服') ?>');
+    return;
+  }
+  submitTransferSessions(fromAgentId, toAgentId);
+}
+
+function viewStatistics(agentId) {
+  agentId = normalizeAgentId(agentId);
+  if (agentId <= 0) {
+    return;
+  }
+  const url = AgentManager.statisticsUrl + '?agent_id=' + encodeURIComponent(String(agentId)) + '&period=all';
+  csAdmin(url)
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        showStatisticsModal(data.data);
+      } else {
+        csToastError(csFormatError({ message: data.message }, '<?= __('获取统计数据失败') ?>'));
+      }
+    })
+    .catch(error => {
+      console.error('Error:', error);
+      csToastError(csFormatError(error, '<?= __('获取统计数据失败') ?>'));
+    });
+}
+
+function showStatisticsModal(statistics) {
+  const modal = document.createElement('div');
+  modal.className = 'cs-agent-stats-modal statistics-modal';
+  modal.innerHTML = `
+    <div class="w-dialog__surface">
+      <div class="w-dialog__header">
+        <h3><?= __('客服统计详情') ?></h3>
+        <button type="button" class="close-btn" data-statistics-action="close" aria-label="<?= $escape(__('关闭')) ?>">&times;</button>
+      </div>
+      <div class="w-dialog__body">
+        <div class="stat-detail-section">
+          <h4><?= __('会话统计') ?></h4>
+          <p><?= __('总会话数') ?>: ${statistics.sessions.total}</p>
+          <p><?= __('已关闭') ?>: ${statistics.sessions.closed}</p>
+          <p><?= __('进行中') ?>: ${statistics.sessions.active}</p>
+        </div>
+        <div class="stat-detail-section">
+          <h4><?= __('消息统计') ?></h4>
+          <p><?= __('总消息数') ?>: ${statistics.messages.total}</p>
+        </div>
+        <div class="stat-detail-section">
+          <h4><?= __('响应时间') ?></h4>
+          <p><?= __('平均') ?>: ${formatResponseTime(statistics.response_time.average)}</p>
+          <p><?= __('最快') ?>: ${formatResponseTime(statistics.response_time.min)}</p>
+          <p><?= __('最慢') ?>: ${formatResponseTime(statistics.response_time.max)}</p>
+        </div>
+        <div class="stat-detail-section">
+          <h4><?= __('会话时长') ?></h4>
+          <p><?= __('平均') ?>: ${statistics.session_duration.average} <?= __('分钟') ?></p>
+          <p><?= __('最短') ?>: ${statistics.session_duration.min} <?= __('分钟') ?></p>
+          <p><?= __('最长') ?>: ${statistics.session_duration.max} <?= __('分钟') ?></p>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener('click', function(e) {
+    if (e.target === modal) {
+      modal.remove();
+    }
+  });
+}
+
+function formatResponseTime(seconds) {
+  if (!seconds || seconds === 0) return '-';
+  if (seconds < 60) {
+    return seconds.toFixed(1) + '<?= __('秒') ?>';
+  }
+  return (seconds / 60).toFixed(1) + '<?= __('分钟') ?>';
+}
+
+document.addEventListener('click', function(event) {
+  const statisticsAction = event.target.closest('[data-statistics-action]');
+  if (statisticsAction && statisticsAction.getAttribute('data-statistics-action') === 'close') {
+    event.preventDefault();
+    const modal = statisticsAction.closest('.statistics-modal, .cs-agent-stats-modal');
+    if (modal) {
+      modal.remove();
+    }
+    return;
+  }
+  const trigger = event.target.closest('[data-agent-action]');
+  if (!trigger) {
+    return;
+  }
+  event.preventDefault();
+  const action = String(trigger.getAttribute('data-agent-action') || '').trim();
+  const agentId = normalizeAgentId(trigger.getAttribute('data-agent-id'));
+  if (action === 'create') {
+    showAgentModal();
+  } else if (action === 'statistics') {
+    viewStatistics(agentId);
+  } else if (action === 'edit') {
+    editAgent(agentId);
+  } else if (action === 'transfer') {
+    transferAgentSessions(agentId);
+  } else if (action === 'delete') {
+    deleteAgent(agentId);
+  } else if (action === 'close-modal') {
+    closeAgentModal();
+  } else if (action === 'close-handoff') {
+    closeHandoffDialog();
+  } else if (action === 'confirm-handoff') {
+    confirmHandoff();
+  } else if (action === 'save') {
+    saveAgent();
+  }
 });
 </script>

@@ -4,6 +4,7 @@
 促销后台服务暂时不可用。,促销后台服务暂时不可用。
 万能促销运营,"Universal Promotion Desk"
 "读取促销运营台快照与 campaign run 状态。","读取促销运营台快照与 campaign run 状态。"
+"促销活动 sitemap URL 提供器","促销活动 sitemap URL 提供器"
 活动页商品列表前,活动页商品列表前
 在活动页商品列表渲染前输出轻量扩展内容，适合提示、活动说明或筛选入口。,在活动页商品列表渲染前输出轻量扩展内容，适合提示、活动说明或筛选入口。
 活动页商品列表后,活动页商品列表后
@@ -13,6 +14,7 @@
 "Weline 促销运营台","Weline 促销运营台"
 查看促销运营台,查看促销运营台
 "查看 Weline 促销运营台","查看 Weline 促销运营台"
+"存在交叉 SKU，请确认后保存。","存在交叉 SKU，请确认后保存。"
 保存失败。,保存失败。
 活动主题已保存。可点击各字段旁的「多语言」补全其它语言文案。,"Theme saved. Click Multilingual beside each field to fill other locales."
 活动主题,活动主题
@@ -163,27 +165,28 @@ ID,ID
 "活动主题必须指定 Website（一站一活动）。","Activity themes require a Website (one site per campaign)."
 "活动主题 Website 无效。","Activity theme Website is invalid."
 "配置渠道范围时必须同时指定店铺 code。","配置渠道范围时必须同时指定店铺 code。"
-今日精选,"Today's picks"
-今日搭配精选,"Today's Hanfu edit"
-从价格友好的配饰和日常单品开始，引导买家进入购物车和结账路径。,"Begin with accessible accessories and everyday Hanfu, then move smoothly into cart and checkout."
+"以下 SKU 已出现在其他真实折扣活动中。确认后前台将允许顾客选择参考哪个活动（默认显示最强折扣）。","以下 SKU 已出现在其他真实折扣活动中。确认后前台将允许顾客选择参考哪个活动（默认显示最强折扣）。"
+今日特价,"Today's Deals"
+今日特价专场,"Today's Deals"
+从价格友好的配饰、发冠与日常常服单品开始，引导买家进入购物车和结账路径。,"Begin with accessible accessories, hairpieces and everyday Hanfu, then move smoothly into cart and checkout."
 轻量搭配入口,"Everyday Hanfu edit"
-看今日精选,"View today's picks"
-主题陈列,"Seasonal edit"
-周末焕新,"Weekend refresh"
-礼盒专场,"Gift edit"
-季节主题陈列,"Seasonal Hanfu edit"
-周末焕新专场,"Weekend refresh"
-礼盒馈赠专场,"Hanfu gifting"
-围绕节庆、礼服和高客单穿搭做主题陈列，不改变商品原始成交价格。,"A seasonal edit for ceremonies, occasion dress and premium ensembles, shown at their real selling prices."
-围绕周末出行、居家放松和轻运动场景，展示真实可售商品，不做虚假折扣。,"Pieces for short trips, relaxed weekends and light movement — real sellable stock, no fabricated discounts."
-围绕送礼场景做主题陈列，只展示真实成交价，不虚构划线价或折扣比例。,"A gifting edit that shows real selling prices only — no invented compare-at prices or discount percentages."
-季节主题搭配,"Seasonal styling"
-看主题陈列,"View seasonal edit"
-适合周末短途、居家升级和轻量运动场景的真实可售商品。,"Sellable pieces chosen for short trips, relaxed weekends and light movement."
-进入周末专场,"Explore weekend edit"
-礼盒馈赠,"Hanfu gifting"
-节庆、生日与企业赠礼场景下的高客单主题商品集合。,"Premium Hanfu and accessories selected for festivals, birthdays and considered gifting."
-进入礼盒专场,"Explore gift edit"
+看今日特价,"View today's deals"
+节令主题,"Festival edit"
+出游常服,"Outing daywear"
+婚嫁礼服,"Wedding attire"
+节令主题陈列,"Festival Hanfu edit"
+出游常服专场,"Outing daywear edit"
+婚嫁礼服陈列,"Wedding attire edit"
+围绕传统节令与仪式场景，陈列节庆礼服与主题套装，展示真实成交价，不配置额外优惠。,"A festival edit for seasonal ceremonies and occasion sets, shown at real selling prices with no extra discounts."
+围绕踏青、市集与日常出游，陈列常服套装与轻便搭配，只展示真实可售商品，不虚构折扣。,"Daywear and light layering for outings, markets and everyday trips — real sellable stock, no fabricated discounts."
+围绕婚礼、订婚与敬酒仪式，陈列嫁衣与礼服套装，只展示真实成交价，不虚构折扣。,"Bridal and ceremonial Hanfu for weddings, engagements and toasts — real selling prices only, no fabricated discounts."
+节令主题搭配,"Festival styling"
+围绕传统节令与仪式场景，陈列节庆礼服与主题套装，不虚构折扣。,"Festival and ceremonial Hanfu sets shown at real prices — no fabricated discounts."
+看节令主题,"View festival edit"
+适合踏青、市集打卡与日常出行的常服套装与轻便搭配。,"Daywear sets and light layering for outings, markets and everyday trips."
+看出游常服,"Explore outing daywear"
+婚礼嫁衣与仪式礼服主题陈列，便于挑款与搭配。,"Bridal and ceremonial attire curated for choosing and styling."
+看婚嫁礼服,"View wedding attire"
 活动键不能为空。,活动键不能为空。
 不支持的活动状态。,不支持的活动状态。
 交接包格式无效。,交接包格式无效。
@@ -293,6 +296,9 @@ ID,ID
 全部店铺,"All stores"
 全部渠道,"All channels"
 "活动主题 ResourceChange 缺少有效 id","活动主题 ResourceChange 缺少有效 id"
+今日精选,"Today's picks"
+今日搭配精选,"Today's Hanfu edit"
+看今日精选,"View today's picks"
 查看商品,"View product"
 "已接入 Weline 商品、购物车和结账链路。","已接入 Weline 商品、购物车和结账链路。"
 精选,精选

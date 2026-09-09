@@ -236,17 +236,7 @@ class LayoutDataService
      */
     private function getLayoutTypeName(string $type, array $options): string
     {
-        // 优先使用 meta 中的名称
-        foreach ($options as $option) {
-            if (!empty($option['meta']['name'])) {
-                // 如果 meta.name 与 option.value 相同（如 "Default"），则使用类型名
-                if (strtolower($option['meta']['name']) !== strtolower($option['value'])) {
-                    return $option['meta']['name'];
-                }
-            }
-        }
-
-        // 使用预定义的名称映射
+        // 布局类型名 ≠ 布局选项名：类型级映射优先，避免 blank 等选项 meta 污染「布局类型」下拉
         $nameMap = [
             'homepage' => __('首页'),
             'category' => __('分类页'),
@@ -271,7 +261,7 @@ class LayoutDataService
             'about' => __('关于我们'),
             'contact' => __('联系我们'),
             'guide' => __('指南页'),
-            'help' => __('帮助中心'),
+            'faq' => __('FAQ/常见问题'),
             'payment_guide' => __('支付指南'),
             'policy' => __('政策页面'),
             'promotion' => __('促销页'),
@@ -285,6 +275,36 @@ class LayoutDataService
 
         if (isset($nameMap[$type])) {
             return $nameMap[$type];
+        }
+
+        // 未知类型：优先 default 选项 meta，并剥离「默认/空白…布局」等选项级后缀
+        $ordered = $options;
+        usort($ordered, static function (array $a, array $b): int {
+            $av = (string)($a['value'] ?? '');
+            $bv = (string)($b['value'] ?? '');
+            if ($av === 'default' && $bv !== 'default') {
+                return -1;
+            }
+            if ($bv === 'default' && $av !== 'default') {
+                return 1;
+            }
+
+            return 0;
+        });
+
+        foreach ($ordered as $option) {
+            $metaName = trim((string)($option['meta']['name'] ?? ''));
+            $value = (string)($option['value'] ?? '');
+            if ($metaName === '' || strtolower($metaName) === strtolower($value)) {
+                continue;
+            }
+            $typeLabel = preg_replace('/(?:默认|空白|简易|简洁)?布局$/u', '', $metaName);
+            $typeLabel = trim((string)$typeLabel);
+            if ($typeLabel !== '') {
+                return $typeLabel;
+            }
+
+            return $metaName;
         }
 
         // 默认：将下划线转换为空格，首字母大写

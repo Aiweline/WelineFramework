@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_CKEditorEditorManager',
-    "version" => '1.0.0',
+    "version" => '1.0.2',
     "requires" => [
         'Weline_Backend' => '*',
         'Weline_EditorManager' => '*',

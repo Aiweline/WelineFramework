@@ -16,7 +16,6 @@ use Weline\Framework\Event\Event;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Geo\Model\Feed;
 use Weline\Geo\Model\FeedItem;
-use Weline\Geo\Service\FeedQueueService;
 
 /**
  * Feed条目事件观察者
@@ -184,11 +183,6 @@ class FeedItemObserver implements ObserverInterface
         ]);
 
         $feedItem->save();
-
-        // 如果Feed配置了实时推送，入队推送任务
-        if ($feed->isAutoPush() && $feed->getData(Feed::schema_fields_UPDATE_FREQUENCY) === Feed::FREQUENCY_REALTIME) {
-            $this->enqueueAutoPush($feed);
-        }
     }
 
     /**
@@ -221,34 +215,17 @@ class FeedItemObserver implements ObserverInterface
         }
 
         $feedItem->save();
-
-        // 如果Feed配置了实时推送，入队推送任务
-        /** @var Feed $feedModel */
-        $feedModel = ObjectManager::getInstance(Feed::class);
-        $feed = $feedModel->load($feedItem->getData(FeedItem::schema_fields_FEED_ID));
-        
-        if ($feed->isAutoPush() && $feed->getData(Feed::schema_fields_UPDATE_FREQUENCY) === Feed::FREQUENCY_REALTIME) {
-            $this->enqueueAutoPush($feed);
-        }
     }
 
     /**
-     * 入队自动推送任务
-     * 
+     * Realtime generate/push on item save is disabled — FeedScheduleService cron owns publish.
+     *
      * @param Feed $feed
      * @return void
      */
     protected function enqueueAutoPush(Feed $feed): void
     {
-        try {
-            /** @var FeedQueueService $queueService */
-            $queueService = ObjectManager::getInstance(FeedQueueService::class);
-            
-            // 入队推送任务（空数组表示所有平台）
-            $queueService->enqueueFeedPush($feed->getId(), [], \Weline\Geo\Model\PushLog::TYPE_AUTO);
-        } catch (\Exception $e) {
-            w_log_error('Enqueue auto push error: ' . $e->getMessage());
-        }
+        // Intentionally no-op: scheduled generation only (every 10 minutes when content changed).
     }
 }
 

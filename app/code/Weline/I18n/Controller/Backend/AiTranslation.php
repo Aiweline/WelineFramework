@@ -18,6 +18,9 @@ use Weline\I18n\Service\LocalModelTranslation\LocalModelTranslationQueueService;
 
 class AiTranslation extends BaseController
 {
+    /** Keep page HTML far below WLS FiberOutputBuffer capture_limit (16MB). */
+    private const QUEUE_RESULT_DISPLAY_MAX_BYTES = 4096;
+
     public function __construct(
         Locale $locale,
         I18n $i18n,
@@ -475,7 +478,7 @@ class AiTranslation extends BaseController
         $rows = [];
         $displayLocale = \Weline\Framework\Http\Cookie::getLangLocal();
         $sourceLocale = (string)($config['source_locale'] ?? AiTranslationConfig::DEFAULT_SOURCE_LOCALE);
-        foreach ($this->config->getInstalledActiveLocaleCodes() as $localeCode) {
+        foreach ($this->config->getTranslationCandidateLocaleCodes() as $localeCode) {
             $displayName = $localeCode;
             try {
                 $displayName = $this->i18n->getLocaleName($localeCode, $displayLocale);
@@ -483,8 +486,18 @@ class AiTranslation extends BaseController
             }
 
             $localeConfig = $config['locales'][$localeCode] ?? [];
-            $enabled = !empty($localeConfig['enabled']);
             $isSource = $localeCode === $sourceLocale;
+            $websiteAssigned = $this->config->isWebsiteAssignedLocale($localeCode);
+            $tracksUnion = $this->config->tracksWebsiteLocaleUnion();
+            $installed = $this->config->isInstalledActiveLocale($localeCode);
+            if ($isSource) {
+                $enabled = false;
+            } elseif ($tracksUnion) {
+                $enabled = $websiteAssigned;
+            } else {
+                $enabled = !empty($localeConfig['enabled']);
+            }
+            $skippedFromUnion = $tracksUnion && !$isSource && !$websiteAssigned;
 
             $translated = (int)$this->localeDictionary->clear()->reset()
                 ->where(LocaleDictionary::schema_fields_LOCALE_CODE, $localeCode)
@@ -502,19 +515,24 @@ class AiTranslation extends BaseController
             $queueStatus = strtolower(trim((string)($queue['status'] ?? '')));
             $queueResult = trim((string)($queue['result'] ?? ''));
             $queueIsError = in_array($queueStatus, ['error', 'failed', 'fail'], true);
-            $queueSummary = $this->summarizeQueueResult($queueResult);
+            $queueSummary = $this->summarizeQueueResult(
+                $this->boundQueueResultForDisplay($queueResult)
+            );
 
             $rows[] = [
                 'code' => $localeCode,
                 'name' => $displayName ?: $localeCode,
                 'enabled' => $enabled,
                 'is_source' => $isSource,
+                'website_assigned' => $websiteAssigned,
+                'skipped_from_union' => $skippedFromUnion,
+                'installed' => $installed,
                 'translated' => $translated,
                 'ai_translated' => $aiTranslated,
                 'pending' => $pending,
                 'queue_id' => (int)($queue['queue_id'] ?? 0),
                 'queue_status' => (string)($queue['status'] ?? ''),
-                'queue_result' => $queueResult,
+                'queue_result' => $this->boundQueueResultForDisplay($queueResult),
                 'queue_result_summary' => $queueSummary,
                 'queue_is_error' => $queueIsError,
                 'export_modules' => $isSource ? [] : $this->exportService->listAiSourceModules($localeCode),
@@ -522,6 +540,22 @@ class AiTranslation extends BaseController
         }
 
         return $rows;
+    }
+
+    private function boundQueueResultForDisplay(string $result): string
+    {
+        $result = trim($result);
+        if ($result === '') {
+            return '';
+        }
+        $max = self::QUEUE_RESULT_DISPLAY_MAX_BYTES;
+        if (strlen($result) <= $max) {
+            return $result;
+        }
+        $notice = '[truncated ' . strlen($result) . ' bytes → last ' . $max . "]\n";
+        $budget = max(0, $max - strlen($notice));
+
+        return $notice . substr($result, -$budget);
     }
 
     private function summarizeQueueResult(string $result): string

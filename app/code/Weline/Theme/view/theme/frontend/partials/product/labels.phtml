@@ -39,9 +39,13 @@ if (!$isNew && !$isSale && !$isDemo) {
 }
 
 $renderLabel = function (string $kind, string $text) {
+    // 显式清空 class：父级容器的 class（如 wpc-badges）会经 Template 临时字典泄漏到子片段，
+    // 导致 .w-product-label 误吃容器布局（absolute + column），粉胶囊宽度塌缩、文字溢出。
     return $this->fetch('Weline_Theme::theme/frontend/components/product-label.phtml', [
         'kind' => $kind,
         'text' => $text,
+        'class' => '',
+        'icon' => '',
     ]);
 };
 

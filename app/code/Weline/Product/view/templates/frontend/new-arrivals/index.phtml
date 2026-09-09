@@ -10,6 +10,10 @@ $items = is_array($items) ? array_values($items) : [];
 $count = (int)($this->getData('storefront_new_arrivals_count') ?? count($items));
 $pageTitle = trim((string)($this->getData('page_title') ?? ''));
 $pageTitle = $pageTitle !== '' ? $pageTitle : (string)__('新品上架');
+$rssUrl = trim((string)($this->getData('storefront_new_arrivals_rss_url') ?? '/new-arrivals/rss.xml'));
+$rssHref = preg_match('#^https?://#i', $rssUrl) === 1
+    ? $rssUrl
+    : (string)$this->getUrl(ltrim($rssUrl, '/'));
 
 $escape = static fn(mixed $value): string => htmlspecialchars(
     (string)$value,
@@ -31,7 +35,21 @@ $pick = static function (array $item, array $keys, mixed $fallback = ''): mixed 
          weline-code="product.frontend.new_arrivals.section_1">
     <header class="new-arrivals-page__hero">
         <p class="new-arrivals-page__eyebrow"><?= $escape(__('新作入藏')) ?></p>
-        <h1 class="new-arrivals-page__title"><?= $escape($pageTitle) ?></h1>
+        <div class="new-arrivals-page__title-row">
+            <h1 class="new-arrivals-page__title"><?= $escape($pageTitle) ?></h1>
+            <?php if ($rssHref !== ''): ?>
+                <a class="new-arrivals-page__rss w-button"
+                   data-tone="neutral"
+                   data-variant="outline"
+                   data-size="sm"
+                   href="<?= $escape($rssHref) ?>"
+                   type="application/rss+xml"
+                   rel="alternate"
+                   data-testid="new-arrivals-rss-subscribe">
+                    <?= $escape(__('订阅 RSS')) ?>
+                </a>
+            <?php endif; ?>
+        </div>
         <p class="new-arrivals-page__lede">
             <?= $escape(__('甄选近期上架的汉服、马面裙与传统配饰，循时序发现新的东方衣冠。')) ?>
         </p>
@@ -106,6 +124,17 @@ $pick = static function (array $item, array $keys, mixed $fallback = ''): mixed 
     display: grid;
     max-width: 48rem;
     gap: var(--weline-space-3);
+}
+.new-arrivals-page__title-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--weline-space-3);
+}
+.new-arrivals-page__rss {
+    flex-shrink: 0;
+    text-decoration: none;
 }
 .new-arrivals-page__eyebrow,
 .new-arrivals-page__title,

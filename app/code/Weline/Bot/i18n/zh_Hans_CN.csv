@@ -54,7 +54,7 @@
 "Role not found","Role not found"
 "Role code and name are required","Role code and name are required"
 "Role code already exists","Role code already exists"
-"Saved successfully","Saved successfully"
+"Saved successfully",保存成功
 "Suggestion generated","Suggestion generated"
 "Default role cannot be deleted","Default role cannot be deleted"
 "Deleted successfully","Deleted successfully"
@@ -80,7 +80,7 @@
 "Toggle Role","Toggle Role"
 "Toggle role status","Toggle role status"
 技能不存在,技能不存在
-状态已更新,"Status updated"
+状态已更新,状态已更新
 "Shell 命令","Shell 命令"
 浏览器,浏览器
 "API 请求","API 请求"
@@ -96,8 +96,8 @@
 启用/禁用技能,启用/禁用技能
 任务不存在,任务不存在
 任务名称和提示词不能为空,任务名称和提示词不能为空
-保存成功,"Saved successfully"
-删除成功,"Deleted successfully"
+保存成功,保存成功
+删除成功,删除成功
 任务已加入执行队列,任务已加入执行队列
 调度任务,调度任务
 "管理 AI 智能体调度任务","管理 AI 智能体调度任务"
@@ -124,7 +124,7 @@
 访问聊天控制台,访问聊天控制台
 消息不能为空,"Message cannot be empty"
 角色不存在或已禁用,"Role does not exist or is disabled"
-成功,Success
+成功,成功
 "会话 ID 无效","Invalid session ID"
 历史已清除,"History cleared"
 "Schedule Management","Schedule Management"

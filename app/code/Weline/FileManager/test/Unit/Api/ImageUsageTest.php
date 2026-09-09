@@ -57,6 +57,44 @@ final class ImageUsageTest extends TestCase
         self::assertFalse($reloaded->toArray()['complement']);
     }
 
+    public function testLayoutWidthHeightRoundTripAndAspectRatio(): void
+    {
+        $usage = ImageUsage::fromArray([
+            'asset_id' => self::ASSET_ID,
+            'locale_code' => 'en_US',
+            'alt' => 'Hero',
+            'layout_width' => 16,
+            'layout_height' => 9,
+        ]);
+        self::assertSame(16, $usage->layoutWidth);
+        self::assertSame(9, $usage->layoutHeight);
+        self::assertSame(16, $usage->toArray()['layout_width']);
+        self::assertSame(9, $usage->toArray()['layout_height']);
+
+        self::assertSame([4, 3], ImageUsage::parseAspectRatio('4/3'));
+        self::assertSame([16, 9], ImageUsage::layoutPairFromMixed(null, null, '16:9'));
+
+        $fromAspect = ImageUsage::fromArray([
+            'asset_id' => self::ASSET_ID,
+            'locale_code' => 'en_US',
+            'alt' => 'Hero',
+            'aspect_ratio' => '3/2',
+        ]);
+        self::assertSame(3, $fromAspect->layoutWidth);
+        self::assertSame(2, $fromAspect->layoutHeight);
+    }
+
+    public function testRejectsPartialLayoutDimensions(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        ImageUsage::fromArray([
+            'asset_id' => self::ASSET_ID,
+            'locale_code' => 'en_US',
+            'alt' => 'Hero',
+            'layout_width' => 16,
+        ]);
+    }
+
     public function testDecorativeImageRequiresExplicitEmptyAltAndCanPublish(): void
     {
         $usage = new ImageUsage(

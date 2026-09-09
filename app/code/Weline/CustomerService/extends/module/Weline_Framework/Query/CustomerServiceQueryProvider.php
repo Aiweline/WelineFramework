@@ -4,10 +4,10 @@ declare(strict_types=1);
 namespace Weline\CustomerService\Extends\Module\Weline_Framework\Query;
 
 use Weline\CustomerService\Model\ChatMessage;
-use Weline\CustomerService\Model\CustomerServiceConfig;
 use Weline\CustomerService\Model\ServiceAgent;
 use Weline\CustomerService\Service\BindCaptchaGuard;
 use Weline\CustomerService\Service\ChatService;
+use Weline\CustomerService\Service\CustomerServiceSettings;
 use Weline\CustomerService\Service\EmailBindingService;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
@@ -52,7 +52,7 @@ class CustomerServiceQueryProvider implements QueryProviderInterface
     private function adminRequest(array $params): mixed
     {
         $url = trim((string)($params['url'] ?? ''));
-        $method = strtoupper(trim((string)($params['method'] ?? 'GET'))) ?: 'GET';
+        $method = strtoupper(trim((string)($params['method'] ?? 'POST'))) ?: 'POST';
         $headers = is_array($params['headers'] ?? null) ? $params['headers'] : [];
         $body = array_key_exists('body', $params) && $params['body'] !== null ? (string)$params['body'] : '';
         if ($url === '') {
@@ -70,8 +70,11 @@ class CustomerServiceQueryProvider implements QueryProviderInterface
         if (!preg_match('#^/(?:customerservice|customer-service)/backend/([a-z0-9_-]+)(?:/([a-z0-9_-]+))?$#', $path, $m)) {
             return ['success' => false, 'message' => (string)__('Unsupported customer service admin path')];
         }
-        $controllerSeg = str_replace(['-', '_'], '', ucwords(str_replace(['-', '_'], ' ', $m[1])));
-        $actionSeg = str_replace('-', '', (string)($m[2] ?? 'index'));
+        // kebab/snake → Studly：先变空格再 ucwords，最后去掉空格（勿只 strip -/_, 否则留下 "Agent Statistics"）
+        $controllerSeg = str_replace(' ', '', ucwords(str_replace(['-', '_'], ' ', $m[1])));
+        $actionRaw = (string)($m[2] ?? 'index');
+        $actionSeg = str_replace(' ', '', ucwords(str_replace(['-', '_'], ' ', $actionRaw)));
+        $actionSegLc = lcfirst($actionSeg !== '' ? $actionSeg : 'index');
         $class = 'Weline\\CustomerService\\Controller\\Backend\\' . $controllerSeg;
         if (!class_exists($class)) {
             return ['success' => false, 'message' => (string)__('Controller missing: %{1}', $controllerSeg)];
@@ -94,34 +97,21 @@ class CustomerServiceQueryProvider implements QueryProviderInterface
                 if (!is_array($bodyParams)) { $bodyParams = []; }
             }
         }
-        $request = ObjectManager::getInstance(\Weline\Framework\Http\Request::class);
-        foreach ($queryParams as $k => $v) { $request->setGet((string)$k, $v); }
-        foreach ($bodyParams as $k => $v) { $request->setPost((string)$k, $v); }
-        $request->setData('params', array_merge($queryParams, $bodyParams));
-        $request->getParameterBag()->setBody($bodyParams);
-        $request->getParameterBag()->setRawBody($body);
-        $controller = ObjectManager::getInstance($class);
-        $candidates = [$actionSeg, 'get' . ucfirst($actionSeg), 'post' . ucfirst($actionSeg)];
-        if ($method === 'POST') {
-            array_unshift($candidates, 'post' . ucfirst($actionSeg));
+        $candidates = [$actionSegLc, 'get' . $actionSeg, 'post' . $actionSeg];
+        if ($method === 'GET') {
+            array_unshift($candidates, 'get' . $actionSeg);
         } else {
-            array_unshift($candidates, 'get' . ucfirst($actionSeg));
+            array_unshift($candidates, 'post' . $actionSeg);
         }
-        // console path helpers: /sessions -> getSessions
-        if ($actionSeg !== '' && !str_starts_with(strtolower($actionSeg), 'get') && !str_starts_with(strtolower($actionSeg), 'post')) {
-            $candidates[] = 'get' . ucfirst($actionSeg);
-            $candidates[] = 'post' . ucfirst($actionSeg);
-        }
-        foreach (array_unique($candidates) as $candidate) {
-            if (!method_exists($controller, $candidate)) continue;
-            $response = $controller->{$candidate}();
-            if (is_string($response)) {
-                $decoded = json_decode($response, true);
-                if (json_last_error() === JSON_ERROR_NONE) return $decoded;
-            }
-            return $response;
-        }
-        return ['success' => false, 'message' => (string)__('Action missing: %{1}', $actionSeg)];
+
+        return \Weline\Framework\Service\Query\AdminControllerBridge::invoke(
+            $class,
+            $candidates,
+            $queryParams,
+            $bodyParams,
+            $method,
+            $body
+        );
     }
 
 
@@ -129,10 +119,11 @@ class CustomerServiceQueryProvider implements QueryProviderInterface
     {
         $frontendSession = $this->sessionFactory->createFrontendSession();
         $customerId = $frontendSession->isLoggedIn() ? (int)($frontendSession->getUserId() ?? 0) : null;
+        $locale = trim((string)($params['locale'] ?? ''));
         $session = $this->chatService->getOrCreateSession(
             $customerId,
             trim((string)($params['session_token'] ?? '')),
-            trim((string)($params['locale'] ?? 'zh_Hans_CN')) ?: 'zh_Hans_CN'
+            $locale
         );
 
         return [
@@ -144,6 +135,10 @@ class CustomerServiceQueryProvider implements QueryProviderInterface
                 'agent_locale' => $session->getAgentLocale(),
                 'status' => $session->getStatus(),
                 'agent_id' => $session->getAgentId(),
+                'guest_send' => $this->chatService->resolveGuestSendGate(
+                    (int)$session->getId(),
+                    $customerId !== null && $customerId > 0
+                ),
             ],
         ];
     }
@@ -161,6 +156,18 @@ class CustomerServiceQueryProvider implements QueryProviderInterface
 
         $frontendSession = $this->sessionFactory->createFrontendSession();
         $customerId = $frontendSession->isLoggedIn() ? (int)($frontendSession->getUserId() ?? 0) : 0;
+        try {
+            $this->chatService->assertCustomerMaySend($sessionId, $customerId > 0);
+        } catch (\RuntimeException $e) {
+            $gate = $this->chatService->resolveGuestSendGate($sessionId, $customerId > 0);
+            return [
+                'success' => false,
+                'message' => $e->getMessage(),
+                'guest_send' => $gate,
+                'guest_send_locked' => true,
+            ];
+        }
+
         $message = $this->chatService->sendMessage(
             $sessionId,
             ChatMessage::SENDER_TYPE_CUSTOMER,
@@ -169,10 +176,12 @@ class CustomerServiceQueryProvider implements QueryProviderInterface
         );
         $viewerLocale = $this->resolveViewerLocale($params, $sessionId);
         $messageData = $this->chatService->formatMessageForCustomerView($message, $viewerLocale);
+        $gate = $this->chatService->resolveGuestSendGate($sessionId, $customerId > 0);
 
         return [
             'success' => true,
             'data' => $messageData,
+            'guest_send' => $gate,
         ];
     }
 
@@ -186,6 +195,9 @@ class CustomerServiceQueryProvider implements QueryProviderInterface
             ];
         }
 
+        $frontendSession = $this->sessionFactory->createFrontendSession();
+        $isLoggedIn = $frontendSession->isLoggedIn();
+
         return [
             'success' => true,
             'data' => $this->chatService->getMessagesForCustomerView(
@@ -194,6 +206,7 @@ class CustomerServiceQueryProvider implements QueryProviderInterface
                 min(100, max(1, (int)($params['limit'] ?? 50))),
                 max(0, (int)($params['offset'] ?? 0))
             ),
+            'guest_send' => $this->chatService->resolveGuestSendGate($sessionId, $isLoggedIn),
         ];
     }
 
@@ -244,9 +257,9 @@ class CustomerServiceQueryProvider implements QueryProviderInterface
 
             $aiEnabled = false;
             try {
-                /** @var CustomerServiceConfig $config */
-                $config = ObjectManager::getInstance(CustomerServiceConfig::class);
-                $aiEnabled = $config->getConfigValue('ai_enabled', '0') === '1';
+                /** @var CustomerServiceSettings $settings */
+                $settings = ObjectManager::getInstance(CustomerServiceSettings::class);
+                $aiEnabled = $settings->isAiEnabled();
             } catch (\Throwable) {
             }
 
@@ -286,10 +299,20 @@ class CustomerServiceQueryProvider implements QueryProviderInterface
         }
 
         if (!$this->bindCaptchaGuard->verify($params, $this->request)) {
+            $degrade = $this->bindCaptchaGuard->allowsLocalDegrade() ? 'local_image' : '';
+            $provider = \strtolower(\trim((string)($params['captcha_provider'] ?? '')));
+            // Empty provider (stale/SSR slot) or remote provider failure → offer local degrade.
+            $shouldDegrade = $degrade !== '' && $provider !== 'local_image';
+
             return [
                 'success' => false,
-                'message' => (string)__('Captcha verification failed or expired. Please try again.'),
+                'message' => (string)(
+                    $shouldDegrade
+                        ? __('人机验证服务暂不可用，已切换为本地图码，请填写后重试')
+                        : __('人机验证失败或已过期，请重试')
+                ),
                 'captcha_error' => true,
+                'captcha_degrade' => $shouldDegrade ? $degrade : null,
             ];
         }
 
@@ -320,7 +343,9 @@ class CustomerServiceQueryProvider implements QueryProviderInterface
         $session = ObjectManager::getInstance(\Weline\CustomerService\Model\ChatSession::class);
         $session->load($sessionId);
 
-        return $session->getId() ? $session->getCustomerLocale() : 'zh_Hans_CN';
+        return $session->getId()
+            ? $session->getCustomerLocale()
+            : ObjectManager::getInstance(CustomerServiceSettings::class)->defaultCustomerLocale();
     }
 
     public function getDescriptor(): array
@@ -409,11 +434,30 @@ class CustomerServiceQueryProvider implements QueryProviderInterface
                         'session_token' => ['type' => 'string', 'required' => true, 'max_length' => 128],
                         'captcha_provider' => ['type' => 'string', 'required' => false, 'max_length' => 32],
                         'captcha_token' => ['type' => 'string', 'required' => false, 'max_length' => 128],
-                        'captcha_response' => ['type' => 'string', 'required' => false, 'max_length' => 512],
+                        'captcha_response' => ['type' => 'string', 'required' => false, 'max_length' => 8192],
                         'captcha_action' => ['type' => 'string', 'required' => false, 'max_length' => 100],
                     ],
                     'returns' => ['type' => 'array'],
                     'summary' => 'Send guest chat bind-email verification',
+                ],
+                [
+                    'name' => 'adminRequest',
+                    'description' => 'Backend customer-service controller bridge via bin-query',
+                    'frontend' => true,
+                    'auth' => 'backend',
+                    'backend' => true,
+                    'backend_acl' => ['kind' => 'self'],
+                    'mode' => 'write',
+                    'graph' => false,
+                    'cost' => 5,
+                    'params' => [
+                        ['name' => 'url', 'type' => 'string', 'required' => true],
+                        ['name' => 'method', 'type' => 'string', 'required' => false],
+                        ['name' => 'headers', 'type' => 'array', 'required' => false],
+                        ['name' => 'body', 'type' => 'string', 'required' => false],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Proxy backend customer-service admin controllers',
                 ],
             ],
         ];

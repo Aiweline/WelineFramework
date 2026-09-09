@@ -64,5 +64,7 @@ final class EmbargoServiceContractTest extends TestCase
         $addressJs = (string)file_get_contents(dirname(__DIR__, 4) . '/Theme/view/statics/js/address.js');
         self::assertStringContainsString('evaluateEmbargo', $addressJs);
         self::assertStringContainsString('is-embargoed', $addressJs);
+        self::assertStringContainsString('embargoCoversControl', $addressJs);
+        self::assertStringContainsString('markChildrenInheritedEmbargo', $addressJs);
     }
 }

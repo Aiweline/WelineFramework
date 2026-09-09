@@ -7,8 +7,8 @@ const ITEMS = [
   ['Weline_Queue::type_manager', '队列类型', 'queue-type-management', 'CK-R43-QUEUE-002'],
   ['Weline_Queue::consumer_diagnostics', '消费者', 'queue-consumers-management', 'CK-R43-QUEUE-003'],
   ['Weline_Queue::retry_diagnostics', '重试诊断', 'queue-retries-management', 'CK-R43-QUEUE-004'],
-  ['Weline_Queue::inbox_diagnostics', 'Inbox', 'queue-inbox-management', 'CK-R43-QUEUE-005'],
-  ['Weline_Queue::outbox_diagnostics', 'Outbox', 'queue-outbox-management', 'CK-R43-QUEUE-006'],
+  ['Weline_Queue::inbox_diagnostics', '收件箱', 'queue-inbox-management', 'CK-R43-QUEUE-005'],
+  ['Weline_Queue::outbox_diagnostics', '发件箱', 'queue-outbox-management', 'CK-R43-QUEUE-006'],
 ];
 moduleDescribe(test, MODULE, 'R4.3 队列后台菜单', () => {
   for (const [source, title, anchor, caseId] of ITEMS) moduleCase(test, { module: MODULE, id: caseId }, `从后台菜单进入${title}`, async ({ page }) => {

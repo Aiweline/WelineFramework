@@ -56,10 +56,8 @@
            data_contract="resource_change.v1">
         <observer name="i18n_resource_changed"
                   instance="Weline\I18n\Observer\ResourceChanged"
-                  delivery="async"
-                  retry="standard"
-                  coalesce="latest"
-                  timeout="30"
+                  delivery="sync"
+                  failure="critical"
                   disabled="false"
                   shared="true"
                   sort="100"/>

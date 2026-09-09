@@ -41,9 +41,10 @@ final class ProviderCooperativeStreamPumpContractTest extends TestCase
 
         $jsonApi = $this->methodSlice($source, 'private function callApiWithRetry', 'private function executeJsonCurl');
         self::assertStringContainsString(
-            '$this->initCurl($url, $apiKey, $data, $proxyInfo, $timeout, $lowSpeedTime)',
+            '$this->initCurl($url, $apiKey, $data, $proxyInfo, $timeout, $lowSpeedTime, $connectTimeout)',
             $jsonApi
         );
+        self::assertStringContainsString('$connectTimeout', $jsonApi);
         self::assertGreaterThanOrEqual(3, \substr_count($jsonApi, '$lowSpeedTime'));
     }
 

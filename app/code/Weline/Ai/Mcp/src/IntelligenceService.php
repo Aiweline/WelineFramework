@@ -1257,27 +1257,78 @@ final class IntelligenceService
     /** @param array<string, mixed> $input */
     private function resolveSkill(array $input): array
     {
-        $result = $this->resolveTaskContext($input);
-        $result['compatibility_alias'] = 'resolve_skill';
-        $result['static_skill_files'] = false;
+        return $this->withProject($input, true, function (ProjectIndex $index, array $resolved) use ($input): array {
+            $repository = (string) ($resolved['repository'] ?? $index->root());
+            $task = trim((string) ($input['task'] ?? $input['query'] ?? ''));
+            $listAll = !empty($input['list_all'])
+                || in_array(mb_strtolower($task, 'UTF-8'), ['提取技能', 'list', 'list_all', 'list skills', 'mcp skills', 'all'], true);
+            $limit = (int) ($input['limit'] ?? ($listAll ? 500 : 5));
+            $includeContent = !empty($input['include_content']);
+            $skills = McpSkillCatalog::resolve($task, $limit, $includeContent, $repository, $listAll);
+            $policy = McpSkillCatalog::policy($repository);
 
-        return $result;
+            return [
+                'schema_version' => McpSkillCatalog::SCHEMA,
+                'provider' => McpSkillCatalog::PROVIDER,
+                'static_skill_files' => false,
+                'task' => $task,
+                'list_all' => $listAll,
+                'skills' => $skills,
+                'catalog_count' => count(McpSkillCatalog::summary($repository)),
+                'catalog_counts' => $policy['catalog_counts'] ?? [],
+                'commands' => $listAll ? ($policy['commands'] ?? []) : [],
+                'greeting' => $listAll ? ($policy['greeting'] ?? null) : null,
+                'fetch' => [
+                    'tool' => 'get_skill',
+                    'required' => ['skill_id'],
+                    'note' => 'Call get_skill(skill_id) for full skill body. Host SKILL.md is not authoritative.',
+                ],
+                'related_tools' => ['get_skill', 'resolve_task_context', 'search_project_knowledge'],
+                'policy' => [
+                    'authority' => 'mcp',
+                    'host_shell_role' => 'optional_thin_mirror',
+                    'extract_skills_command' => $policy['extract_skills_command'] ?? null,
+                ],
+            ];
+        });
     }
 
     /** @param array<string, mixed> $input */
     private function getSkill(array $input): array
     {
-        $task = trim((string) ($input['task'] ?? ''));
-        if ($task === '') {
-            $hint = trim((string) ($input['path'] ?? $input['skill_id'] ?? ''));
-            $task = $hint === '' ? '查询当前任务适用的框架开发规范' : '查询与 ' . $hint . ' 相关的框架开发规范';
-        }
-        $input['task'] = $task;
-        $result = $this->resolveTaskContext($input);
-        $result['compatibility_alias'] = 'get_skill';
-        $result['static_skill_files'] = false;
+        return $this->withProject($input, true, function (ProjectIndex $index, array $resolved) use ($input): array {
+            $repository = (string) ($resolved['repository'] ?? $index->root());
+            $selector = trim((string) ($input['skill_id'] ?? $input['name'] ?? ''));
+            if ($selector === '') {
+                $selector = trim((string) ($input['path'] ?? ''));
+            }
+            $skill = $selector !== '' ? McpSkillCatalog::get($selector, true, $repository) : null;
+            if ($skill === null) {
+                $task = trim((string) ($input['task'] ?? ''));
+                if ($task === '' && $selector !== '') {
+                    $task = $selector;
+                }
+                if ($task !== '') {
+                    $matches = McpSkillCatalog::resolve($task, 1, true, $repository, false);
+                    $skill = $matches[0] ?? null;
+                }
+            }
 
-        return $result;
+            return [
+                'schema_version' => McpSkillCatalog::SCHEMA,
+                'provider' => McpSkillCatalog::PROVIDER,
+                'static_skill_files' => false,
+                'skill' => $skill,
+                'warnings' => $skill === null
+                    ? ['Skill was not found in the MCP skill catalog. Call resolve_skill(list_all=true) or resolve_task_context.']
+                    : [],
+                'related_tools' => ['resolve_skill', 'resolve_task_context'],
+                'policy' => [
+                    'authority' => 'mcp',
+                    'host_shell_role' => 'optional_thin_mirror',
+                ],
+            ];
+        });
     }
 
     /** @param array<string, mixed> $input */

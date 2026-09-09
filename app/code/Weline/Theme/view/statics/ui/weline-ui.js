@@ -15,6 +15,7 @@ const lazyComponentSources = new Map([
     ['icon-picker', './weline-ui-advanced.js'],
     ['dependent-field', './weline-ui-advanced.js'],
     ['language-select', './components/weline-language-select.js'],
+    ['ai-model-select', './components/weline-ai-model-select.js'],
     ['currency-select', './components/weline-currency-select.js'],
     ['language-switcher', './components/weline-language-switcher.js'],
     ['online-translation-collector', './components/weline-online-translation-collector.js'],
@@ -30,6 +31,7 @@ const lazyComponentSources = new Map([
 ]);
 const lazyComponentStyles = new Map([
     ['language-select', './components/weline-language-select.css'],
+    ['ai-model-select', './components/weline-ai-model-select.css'],
     ['currency-select', './components/weline-currency-select.css'],
     ['file-preview', './components/weline-file-picker.css'],
     ['file-picker', './components/weline-file-picker.css'],
@@ -1496,6 +1498,25 @@ function registerDialog() {
         const nativeDialog = element instanceof HTMLDialogElement;
         let lastFocus = null;
         let backdrop = null;
+        let homeMarker = null;
+        const ensureBodyHost = () => {
+            if (nativeDialog || element.parentElement === document.body) {
+                return;
+            }
+            if (!homeMarker) {
+                homeMarker = document.createComment(`w-dialog-home:${element.id || 'anon'}`);
+                element.before(homeMarker);
+            }
+            document.body.append(element);
+        };
+        const restoreHome = () => {
+            if (!homeMarker || !homeMarker.parentNode) {
+                return;
+            }
+            homeMarker.parentNode.insertBefore(element, homeMarker);
+            homeMarker.remove();
+            homeMarker = null;
+        };
         const open = (options = {}) => {
             const isOpen = nativeDialog ? element.open : element.dataset.state === 'open';
             if (isOpen || !emitLocal('before-open', { options })) return false;
@@ -1504,6 +1525,7 @@ function registerDialog() {
             if (nativeDialog) {
                 element.showModal();
             } else {
+                ensureBodyHost();
                 element.hidden = false;
                 element.setAttribute('role', 'dialog');
                 element.setAttribute('aria-modal', 'true');
@@ -1531,6 +1553,7 @@ function registerDialog() {
                 element.hidden = true;
                 backdrop?.remove();
                 backdrop = null;
+                restoreHome();
                 popOverlay(element);
                 emitLocal('close', { returnValue: String(returnValue) }, false);
             }
@@ -1570,6 +1593,7 @@ function registerDialog() {
                 if (nativeDialog && element.open) element.close('unmount');
                 backdrop?.remove();
                 backdrop = null;
+                restoreHome();
                 popOverlay(element);
             },
         };
@@ -2123,6 +2147,16 @@ function registerNavFilter() {
             const exact = currentSegments.length === menuSegments.length
                 && menuSegments.every((segment, index) => segment === currentSegments[index]);
             if (exact) return Number.MAX_SAFE_INTEGER;
+
+            // 菜单常带 …/index，当前路由常省略 /index —— 与 MenuRenderService::isMenuActive 对齐
+            if (
+                menuSegments.length === currentSegments.length + 1
+                && String(menuSegments.at(-1) || '').toLocaleLowerCase() === 'index'
+                && menuSegments.slice(0, -1).every((segment, index) => segment === currentSegments[index])
+            ) {
+                return Number.MAX_SAFE_INTEGER;
+            }
+
             if (menuSegments.length === 0 || menuSegments.length > currentSegments.length) return -1;
 
             let matched = 0;

@@ -34,6 +34,13 @@ class HeadRendererSeoProfileTest extends TestCase
             'locale' => 'zh_Hans_CN',
             'sitemap_url' => '/sitemap.xml',
             'alternates' => ['x-default' => 'https://shop.test/', 'zh-CN' => 'https://shop.test/blog/launch-news'],
+            'feeds' => [
+                [
+                    'type' => 'application/rss+xml',
+                    'title' => 'Blog RSS',
+                    'href' => 'https://shop.test/blog/rss.xml',
+                ],
+            ],
             'organization' => ['name' => 'News Shop', 'url' => 'https://shop.test/', 'logo' => 'https://shop.test/logo.png'],
             'article' => [
                 'headline' => 'Launch News',
@@ -54,6 +61,10 @@ class HeadRendererSeoProfileTest extends TestCase
         self::assertStringContainsString('<meta name="content-category" content="article">', $html);
         self::assertStringContainsString('<link rel="sitemap" type="application/xml" href="/sitemap.xml">', $html);
         self::assertStringContainsString('<link rel="alternate" hreflang="x-default" href="https://shop.test/">', $html);
+        self::assertStringContainsString(
+            '<link rel="alternate" type="application/rss+xml" title="Blog RSS" href="https://shop.test/blog/rss.xml">',
+            $html
+        );
         self::assertStringContainsString('<meta property="og:type" content="article">', $html);
         self::assertStringContainsString('<meta property="og:site_name" content="News Shop">', $html);
         self::assertStringContainsString('<meta property="og:image:alt" content="Launch News share preview">', $html);
@@ -64,7 +75,43 @@ class HeadRendererSeoProfileTest extends TestCase
         self::assertStringContainsString('"inLanguage": "zh-Hans-CN"', $html);
     }
 
-    public function testRendersCollectionPageItemListProfileGraph(): void
+    public function testRendersBlogListCollectionPageItemListGraph(): void
+    {
+        $resolver = $this->getMockBuilder(PageSeoContextResolver::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['resolve'])
+            ->getMock();
+        $resolver->method('resolve')->willReturn([
+            'page_type' => 'blog_list',
+            'site_name' => 'Shop',
+            'title' => 'Hanfu Blog',
+            'description' => 'Blog listing.',
+            'robots' => 'index,follow',
+            'canonical_url' => 'https://shop.test/blog',
+            'url' => 'https://shop.test/blog',
+            'organization' => ['name' => 'Shop', 'url' => 'https://shop.test/'],
+            'item_list' => [
+                [
+                    'name' => 'Summer Hanfu Guide',
+                    'url' => 'https://shop.test/blog/summer-hanfu',
+                    'description' => 'Seasonal tips.',
+                    'published_at' => '2026-09-01',
+                    'image' => 'https://shop.test/media/blog/summer.webp',
+                ],
+            ],
+        ]);
+
+        $html = (new HeadRenderer($resolver, new EmptySeoStructureRegistry()))->render(new SeoProfileHeadTemplateStub());
+
+        self::assertStringContainsString('"@type": "CollectionPage"', $html);
+        self::assertStringContainsString('"@type": "ItemList"', $html);
+        self::assertStringContainsString('"@type": "BlogPosting"', $html);
+        self::assertStringContainsString('"name": "Summer Hanfu Guide"', $html);
+        self::assertStringContainsString('"mainEntity": {', $html);
+        self::assertStringContainsString('#itemlist', $html);
+    }
+
+    public function testEcommerceListingDoesNotEmitProductItemList(): void
     {
         $resolver = $this->getMockBuilder(PageSeoContextResolver::class)
             ->disableOriginalConstructor()
@@ -86,10 +133,9 @@ class HeadRendererSeoProfileTest extends TestCase
 
         $html = (new HeadRenderer($resolver, new EmptySeoStructureRegistry()))->render(new SeoProfileHeadTemplateStub());
 
-        self::assertStringContainsString('"@type": "CollectionPage"', $html);
-        self::assertStringContainsString('"@type": "ItemList"', $html);
-        self::assertStringContainsString('"name": "Summer Dress"', $html);
-        self::assertStringContainsString('"mainEntity": {', $html);
+        self::assertStringContainsString('"@type": "WebPage"', $html);
+        self::assertStringNotContainsString('"@type": "ItemList"', $html);
+        self::assertStringNotContainsString('"@type": "CollectionPage"', $html);
     }
 
     public function testSeoProfileProviderReceivesSlotAndOptionsInContext(): void
@@ -165,6 +211,79 @@ class HeadRendererSeoProfileTest extends TestCase
         self::assertStringContainsString('<a href="https://blog.test/related">Related Post</a>', $html);
         self::assertStringContainsString('"@type": "WebPage"', $html);
         self::assertStringContainsString('"@id": "https://blog.test/related#webpage"', $html);
+    }
+
+    public function testMultipleBreadcrumbTrailsEmitMultipleBreadcrumbListNodes(): void
+    {
+        $resolver = $this->getMockBuilder(PageSeoContextResolver::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['resolve'])
+            ->getMock();
+        $resolver->method('resolve')->willReturn([
+            'page_type' => 'web_page',
+            'site_name' => 'Shop',
+            'title' => 'Coat',
+            'description' => 'Wool coat.',
+            'robots' => 'index,follow',
+            'canonical_url' => 'https://shop.test/product/coat',
+            'url' => 'https://shop.test/product/coat',
+            'organization' => ['name' => 'Shop', 'url' => 'https://shop.test/', 'logo' => 'https://shop.test/logo.png'],
+            'breadcrumb_trails' => [
+                [
+                    ['name' => '首页', 'url' => '/'],
+                    ['name' => '女装', 'url' => 'https://shop.test/category/women'],
+                    ['name' => 'Coat', 'url' => 'https://shop.test/product/coat'],
+                ],
+                [
+                    ['name' => '首页', 'url' => '/'],
+                    ['name' => '唐制', 'url' => 'https://shop.test/category/tang'],
+                    ['name' => 'Coat', 'url' => 'https://shop.test/product/coat'],
+                ],
+            ],
+        ]);
+
+        $html = (new HeadRenderer($resolver, new EmptySeoStructureRegistry()))->render(new SeoProfileHeadTemplateStub());
+        self::assertSame(2, substr_count($html, '"@type": "BreadcrumbList"'));
+        self::assertStringContainsString('"name": "女装"', $html);
+        self::assertStringContainsString('"name": "唐制"', $html);
+        self::assertStringContainsString('"item": "https://shop.test/category/women"', $html);
+        self::assertStringContainsString('"item": "https://shop.test/category/tang"', $html);
+    }
+
+    public function testBreadcrumbListMatchesGoogleAbsoluteUrlExample(): void
+    {
+        $resolver = $this->getMockBuilder(PageSeoContextResolver::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['resolve'])
+            ->getMock();
+        $resolver->method('resolve')->willReturn([
+            'page_type' => 'web_page',
+            'site_name' => 'Shop',
+            'title' => 'Coat | Shop Brand',
+            'description' => 'Wool coat for winter.',
+            'robots' => 'index,follow',
+            'canonical_url' => 'https://shop.test/product/coat',
+            'url' => 'https://shop.test/product/coat',
+            'organization' => ['name' => 'Shop', 'url' => 'https://shop.test/', 'logo' => 'https://shop.test/logo.png'],
+            'breadcrumbs' => [
+                ['name' => '首页', 'url' => '/'],
+                ['name' => 'Coat | Shop Brand', 'url' => 'https://shop.test/product/coat'],
+            ],
+        ]);
+
+        $html = (new HeadRenderer($resolver, new EmptySeoStructureRegistry()))->render(new SeoProfileHeadTemplateStub());
+
+        self::assertStringContainsString('"@type": "BreadcrumbList"', $html);
+        self::assertStringContainsString('"item": "https://shop.test/"', $html);
+        self::assertStringContainsString('"name": "Coat"', $html);
+        self::assertStringNotContainsString('"item": "/"', $html);
+        self::assertStringNotContainsString('"@id": "https://shop.test/product/coat#breadcrumb"', $html);
+        // Last ListItem omits item per Google examples.
+        self::assertMatchesRegularExpression(
+            '/"position":\s*2,\s*"name":\s*"Coat"\s*\}/s',
+            $html
+        );
+        self::assertStringContainsString('rel="sitemap"', $html);
     }
 
     public function testFooterSlotIncludesDefaultInspectorBootstrapWithoutProviderPayload(): void

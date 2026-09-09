@@ -25,19 +25,30 @@ final class StorefrontOfferDetailQuery
     {
         $uuid = trim((string)($offer['global_offer_uuid'] ?? ''));
         $selection = self::combination($offer);
+        $query = [];
         if ($selection !== []) {
             try {
                 /** @var StorefrontEavLabelResolver $labels */
                 $labels = ObjectManager::getInstance(StorefrontEavLabelResolver::class);
                 $public = $labels->toPublicQuery($selection);
                 if ($public !== []) {
-                    return $public;
+                    $query = $public;
                 }
             } catch (\Throwable) {
             }
         }
 
-        return $uuid !== '' ? ['offer' => $uuid] : [];
+        if ($query === [] && $uuid !== '') {
+            $query = ['offer' => $uuid];
+        }
+
+        $themeId = max(0, (int)($offer['promotion_theme_id'] ?? 0));
+        $campaignSlug = strtolower(trim((string)($offer['campaign_page_slug'] ?? $offer['page_slug'] ?? '')));
+        if ($themeId > 0 || ($campaignSlug !== '' && $campaignSlug !== 'index')) {
+            $query = StorefrontCampaignEntry::mergeIntoQuery($query, $themeId, $campaignSlug);
+        }
+
+        return $query;
     }
 
     /**

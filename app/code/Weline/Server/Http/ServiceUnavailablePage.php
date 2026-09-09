@@ -70,6 +70,7 @@ final class ServiceUnavailablePage
         }
         // Gate cookie proves the visitor hit a real WLS maintenance response (wait-gift anti-abuse).
         if ($variant === self::VARIANT_MAINTENANCE) {
+            $responseHeaders .= "X-Weline-Maintenance: 1\r\n";
             $responseHeaders .= 'Set-Cookie: ' . self::maintenanceGateSetCookie() . "\r\n";
         }
 

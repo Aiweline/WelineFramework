@@ -25,6 +25,21 @@ declare(strict_types=1);
  *   reason:string
  * }
  */
+function welineGuidanceCodexPluginNeedsRefresh(
+    mixed $manifestPayload,
+    string $artifactGeneration,
+    string $sourceGeneration,
+): bool {
+    if (!is_array($manifestPayload) || array_key_exists('mcpServers', $manifestPayload)) {
+        return true;
+    }
+    if ($artifactGeneration === '' || $sourceGeneration === '') {
+        return true;
+    }
+
+    return !hash_equals($sourceGeneration, $artifactGeneration);
+}
+
 function welineGuidanceReloadDecision(
     array $hostRuntime,
     bool $mcpConfigChanged,

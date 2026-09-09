@@ -3,6 +3,16 @@
  * @hook-priority 100
  * @hook-sort-order 0
  * @hook-solo false
+ *
+ * Compatibility extension point only.
+ *
+ * Frontend head already renders the single SEO head payload via
+ * `Weline_Frontend::templates/public/head.phtml` (`<w:seo slot="head"/>`).
+ * Do not emit another `<w:seo slot="head"/>` here — that double-renders
+ * title/meta/canonical/hreflang/OG/JSON-LD, and hook/FPC output caches can
+ * bypass HeadRenderer request-level dedupe.
+ *
+ * Other modules may still register additional `seo::head` hooks for
+ * head-safe additive markup. Core SEO tags stay in Frontend public head.
  */
 ?>
-<w:seo slot="head"/>

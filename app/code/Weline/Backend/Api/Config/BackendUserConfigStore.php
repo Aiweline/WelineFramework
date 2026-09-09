@@ -28,7 +28,7 @@ final class BackendUserConfigStore
     public function getConfig(string $key, string $module = '', string $name = '', bool $real = false): string
     {
         if ($this->isCommandLineConfigContext()) {
-            return $this->getDefaultConfig($key);
+            return $this->getDefaultConfigForKey($key, $module, $name);
         }
 
         return $this->getForUser(

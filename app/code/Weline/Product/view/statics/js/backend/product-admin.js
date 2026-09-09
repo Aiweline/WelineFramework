@@ -496,6 +496,7 @@
                 length: '',
                 width: '',
                 height: '',
+                shipping_profile_code: '',
                 short_description: '',
                 description: '',
                 slug: '',
@@ -2052,6 +2053,10 @@
                         }
                         payload[code] = num;
                     });
+                    var shippingProfileEl = document.getElementById('product-create-shipping-profile');
+                    if (shippingProfileEl) {
+                        payload.shipping_profile_code = String(shippingProfileEl.value || '').trim();
+                    }
                     var categoryIds = [];
                     var categorySelect = window.WelineCatalogCategorySelect
                         && window.WelineCatalogCategorySelect['product-create-categories'];
@@ -4579,6 +4584,78 @@
         );
     }
 
+    function persistProductDescriptionAssets(html) {
+        html = String(html || '');
+        if (html === '') {
+            return '';
+        }
+        var map = {};
+        var mapNode = document.getElementById('product-edit-description-asset-map');
+        if (mapNode) {
+            try {
+                var mapText = String(mapNode.textContent || '{}');
+                if (mapText.indexOf('&quot;') !== -1) {
+                    mapText = mapText
+                        .replace(/&quot;/g, '"')
+                        .replace(/&amp;/g, '&')
+                        .replace(/&lt;/g, '<')
+                        .replace(/&gt;/g, '>');
+                }
+                var parsed = JSON.parse(mapText);
+                if (parsed && typeof parsed === 'object') {
+                    map = parsed;
+                }
+            } catch (error) {
+                map = {};
+            }
+        }
+        if (html.indexOf('data-weline-asset-id') === -1 && Object.keys(map).length === 0) {
+            return html;
+        }
+        try {
+            var doc = new DOMParser().parseFromString(
+                '<div id="weline-product-admin-description-root">' + html + '</div>',
+                'text/html'
+            );
+            var root = doc.getElementById('weline-product-admin-description-root');
+            if (!root) {
+                return html;
+            }
+            root.querySelectorAll('img').forEach(function (img) {
+                var assetId = String(img.getAttribute('data-weline-asset-id') || '').trim();
+                if (!assetId) {
+                    var src = String(img.getAttribute('src') || '').trim();
+                    if (Object.prototype.hasOwnProperty.call(map, src)) {
+                        assetId = String(map[src] || '').trim();
+                    }
+                }
+                if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(assetId)) {
+                    return;
+                }
+                img.setAttribute('src', 'asset://' + assetId);
+                img.removeAttribute('data-weline-asset-id');
+            });
+            return String(root.innerHTML || '').trim();
+        } catch (error) {
+            return html;
+        }
+    }
+
+    function syncProductDescriptionEditorSource() {
+        var source = document.getElementById('product-edit-description');
+        if (!source) {
+            return '';
+        }
+        var editable = root.querySelector(
+            '.w-product-description-editor .ck-editor__editable'
+        );
+        if (editable && typeof editable.innerHTML === 'string') {
+            // CKEditor 已同步到 textarea；再读一次 DOM 兜底未触发 change:data 的瞬间。
+            source.dispatchEvent(new Event('input', {bubbles: true}));
+        }
+        return persistProductDescriptionAssets(String(source.value || '').trim());
+    }
+
     function editorPayload() {
         var form = document.getElementById('product-editor-form');
         var currency = String(document.getElementById('product-edit-currency').value || 'CNY')
@@ -4595,6 +4672,7 @@
             short_description: shortDescriptionInput
                 ? String(shortDescriptionInput.value || '').trim()
                 : '',
+            description: syncProductDescriptionEditorSource(),
             meta_name: metaNameInput ? String(metaNameInput.value || '').trim() : '',
             meta_description: metaDescriptionInput
                 ? String(metaDescriptionInput.value || '').trim()
@@ -4612,6 +4690,10 @@
             type_configuration: collectProviderConfiguration(root),
             offer_matrix: collectOfferMatrix()
         };
+        var shippingProfileEl = document.getElementById('product-edit-shipping-profile');
+        if (shippingProfileEl) {
+            payload.shipping_profile_code = String(shippingProfileEl.value || '').trim();
+        }
         var priceSelector = payload.offer_matrix
             ? '[data-offer-price]:not([data-variant-price])'
             : '[data-offer-price]';
@@ -6721,6 +6803,19 @@
                     root.querySelectorAll('[data-product-variant-axis]').forEach(function (row) {
                         refreshVariantAxisOptionClampForRow(row);
                     });
+                }
+                if (selected === 'basic') {
+                    // 详情 WYSIWYG 在 hidden 面板内首次挂载可能失败/无高度；切到可见后 remount。
+                    window.setTimeout(function () {
+                        var host = root.querySelector('.w-product-description-editor');
+                        if (host && window.Weline && window.Weline.UI) {
+                            if (typeof window.Weline.UI.unmount === 'function') {
+                                window.Weline.UI.unmount(host);
+                            }
+                            window.Weline.UI.mount(host);
+                        }
+                        window.dispatchEvent(new Event('resize'));
+                    }, 0);
                 }
             });
         });

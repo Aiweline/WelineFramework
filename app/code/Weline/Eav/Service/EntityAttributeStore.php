@@ -8,6 +8,7 @@ use Weline\Eav\Api\Attribute\AttributeDefinition;
 use Weline\Eav\Api\Attribute\AttributeRecord;
 use Weline\Eav\Api\Attribute\AttributeStorageException;
 use Weline\Eav\Api\Attribute\EntityAttributeStoreInterface;
+use Weline\Eav\Api\Attribute\ScopedAttributeBatchReaderInterface;
 use Weline\Eav\Api\Entity\EntityDefinitionInterface;
 use Weline\Eav\Api\Scope\EavScopeColumns;
 use Weline\Eav\Api\Scope\EavScopeValue;
@@ -21,7 +22,7 @@ use Weline\Framework\Database\Api\Db\Ddl\TableInterface as DdlTableInterface;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Framework\Setup\Db\ModelSetup;
 
-final class EntityAttributeStore implements EntityAttributeStoreInterface
+final class EntityAttributeStore implements EntityAttributeStoreInterface, ScopedAttributeBatchReaderInterface
 {
     public function __construct(
         private readonly EavEntity $entityModel,
@@ -359,6 +360,62 @@ final class EntityAttributeStore implements EntityAttributeStoreInterface
             ->select()
             ->fetchArray();
 
+        return $this->resolveScopedRows($rows, $attribute, $scope, $locale);
+    }
+
+    public function readScopedValues(
+        EntityDefinitionInterface $entity,
+        array $ownerIds,
+        array $attributes,
+        ScopeIdentity $scope,
+        string $locale = '',
+    ): array {
+        $ownerIds = array_values(array_unique($ownerIds, SORT_REGULAR));
+        if ($ownerIds === [] || $attributes === []) {
+            return [];
+        }
+
+        // Validate the registered entity once, then query each value table once.
+        $entityId = (int)$this->requireEntity($entity->getEntityCode())->getId();
+        $groups = [];
+        foreach ($attributes as $attribute) {
+            if (!$attribute instanceof AttributeRecord || $attribute->entityId !== $entityId) {
+                throw new \InvalidArgumentException('eav_attribute_entity_mismatch:' . ($attribute instanceof AttributeRecord ? $attribute->code : ''));
+            }
+            $groups[$attribute->typeCode][$attribute->id] = $attribute;
+        }
+
+        $values = [];
+        foreach ($groups as $group) {
+            $valueModel = $this->valueModel($entity, reset($group));
+            if (!$this->valueTableHasScopeColumns($valueModel)) {
+                throw new \LogicException('eav_value_table_missing_scope_columns:' . $valueModel->getTable());
+            }
+            $rows = $valueModel->reset()
+                ->where(Value::schema_fields_attribute_id, array_keys($group), 'IN')
+                ->where(Value::schema_fields_entity_id, $ownerIds, 'IN')
+                ->where(Value::schema_fields_SCOPE_KIND, null, '!=')
+                ->select()->fetchArray();
+            $byOwner = [];
+            foreach ($rows as $row) {
+                if (is_array($row)) {
+                    $byOwner[$row[Value::schema_fields_entity_id]][$row[Value::schema_fields_attribute_id]][] = $row;
+                }
+            }
+            foreach ($ownerIds as $ownerId) {
+                foreach ($group as $attribute) {
+                    $values[$ownerId][$attribute->code] = $this->resolveScopedRows(
+                        $byOwner[$ownerId][$attribute->id] ?? [], $attribute, $scope, $locale,
+                    );
+                }
+            }
+        }
+        return $values;
+    }
+
+    /** @param list<array<string, mixed>> $rows */
+    private function resolveScopedRows(array $rows, AttributeRecord $attribute, ScopeIdentity $scope, string $locale): EavScopeValue
+    {
         $records = [];
         foreach ($rows as $row) {
             if (!\is_array($row)) {

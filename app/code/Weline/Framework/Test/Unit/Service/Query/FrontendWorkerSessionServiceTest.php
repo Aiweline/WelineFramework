@@ -8,11 +8,59 @@ use Weline\Framework\App\Env;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Framework\Service\Query\FrontendQueryException;
 use Weline\Framework\Service\Query\FrontendWorkerSessionService;
+use Weline\Framework\Service\Query\Store\ArrayFrontendWorkerCredentialTransaction;
+use Weline\Framework\Service\Query\Store\FrontendWorkerCredentialType;
 use Weline\Framework\Service\Query\Store\FrontendWorkerStateStoreInterface;
 use Weline\Framework\Service\Query\Value\FrontendWorkerScopeBinding;
 
 final class FrontendWorkerSessionServiceTest extends TestCase
 {
+    public function testEffectiveSessionExpiresAtCapsLegacyUnboundTtl(): void
+    {
+        $now = 10_000;
+        $legacyUnbound = [
+            'created_at' => $now - 700,
+            'expires_at' => $now + 6_500,
+        ];
+        self::assertSame(
+            ($now - 700) + 600,
+            FrontendWorkerSessionService::effectiveSessionExpiresAt($legacyUnbound, $now),
+        );
+
+        $bound = $legacyUnbound + ['backend_binding' => ['principal' => 'backend:1']];
+        self::assertSame(
+            $now + 6_500,
+            FrontendWorkerSessionService::effectiveSessionExpiresAt($bound, $now),
+        );
+    }
+
+    public function testArrayCredentialTransactionReclaimsLegacyUnboundSessions(): void
+    {
+        $now = 10_000;
+        $unboundKey = \hash('sha256', 'legacy-unbound-session');
+        $boundKey = \hash('sha256', 'bound-backend-session');
+        $store = [
+            'weline_frontend_worker_sessions' => [
+                $unboundKey => [
+                    'created_at' => $now - 700,
+                    'expires_at' => $now + 6_500,
+                ],
+                $boundKey => [
+                    'created_at' => $now - 700,
+                    'expires_at' => $now + 6_500,
+                    'backend_binding' => ['principal' => 'backend:1'],
+                ],
+            ],
+        ];
+        $tx = new ArrayFrontendWorkerCredentialTransaction($store);
+
+        self::assertSame(1, $tx->countRetained(FrontendWorkerCredentialType::SESSION, null, $now));
+        $tx->deleteExpired($now, FrontendWorkerCredentialType::SESSION);
+        self::assertArrayNotHasKey($unboundKey, $store['weline_frontend_worker_sessions']);
+        self::assertArrayHasKey($boundKey, $store['weline_frontend_worker_sessions']);
+        self::assertSame(1, $tx->countRetained(FrontendWorkerCredentialType::SESSION, null, $now));
+    }
+
     public function testStreamUrlUsesTheConfiguredRestFrontendPrefix(): void
     {
         $reflection = new \ReflectionClass(FrontendWorkerSessionService::class);
@@ -131,6 +179,57 @@ final class FrontendWorkerSessionServiceTest extends TestCase
         }
     }
 
+    public function testResolveConfiguredSessionStoreDriverHonorsExplicitOverride(): void
+    {
+        $env = Env::getInstance();
+        $previousDriver = Env::get('wls.frontend_worker_session_store_driver', 'cache');
+        try {
+            $env->applyRuntimeConfig([
+                'wls' => ['frontend_worker_session_store_driver' => 'local'],
+            ]);
+            self::assertSame('local', FrontendWorkerSessionService::resolveConfiguredSessionStoreDriver());
+
+            $env->applyRuntimeConfig([
+                'wls' => ['frontend_worker_session_store_driver' => 'database'],
+            ]);
+            self::assertSame('database', FrontendWorkerSessionService::resolveConfiguredSessionStoreDriver());
+
+            $env->applyRuntimeConfig([
+                'wls' => ['frontend_worker_session_store_driver' => 'cache'],
+            ]);
+            self::assertSame('cache', FrontendWorkerSessionService::resolveConfiguredSessionStoreDriver());
+        } finally {
+            $env->applyRuntimeConfig([
+                'wls' => [
+                    'frontend_worker_session_store_driver' => \is_string($previousDriver) && $previousDriver !== ''
+                        ? $previousDriver
+                        : 'cache',
+                ],
+            ]);
+        }
+    }
+
+    public function testDefaultSessionStoreDriverIsCache(): void
+    {
+        $env = Env::getInstance();
+        $previousDriver = Env::get('wls.frontend_worker_session_store_driver', 'cache');
+        try {
+            $env->applyRuntimeConfig([
+                'wls' => ['frontend_worker_session_store_driver' => ''],
+            ]);
+            self::assertSame('cache', FrontendWorkerSessionService::defaultSessionStoreDriver());
+            self::assertSame('cache', FrontendWorkerSessionService::resolveConfiguredSessionStoreDriver());
+        } finally {
+            $env->applyRuntimeConfig([
+                'wls' => [
+                    'frontend_worker_session_store_driver' => \is_string($previousDriver) && $previousDriver !== ''
+                        ? $previousDriver
+                        : 'cache',
+                ],
+            ]);
+        }
+    }
+
     public function testRepairOwnedPrivateRegularFileTightensGroupWritableModes(): void
     {
         $path = \sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'weline-fw-store-' . \bin2hex(\random_bytes(6));
@@ -150,12 +249,79 @@ final class FrontendWorkerSessionServiceTest extends TestCase
             @\unlink($path);
         }
     }
+
+    public function testUnboundSessionUsesTenMinuteTtlNotBackendWindow(): void
+    {
+        $service = new FrontendWorkerSessionService(new SessionMemoryStateStore());
+        $created = $service->createSession('test-deploy', 'test-worker');
+        $ttl = (int)$created['expires_at'] - \time();
+        self::assertGreaterThanOrEqual(590, $ttl);
+        self::assertLessThanOrEqual(600, $ttl);
+        self::assertSame('frontend', $created['attested_area']);
+        self::assertFalse($created['scope_bound']);
+    }
+
+    public function testEffectiveSessionExpiresAtCapsLegacyUnboundRows(): void
+    {
+        $now = 1_000_000;
+        $legacy = [
+            'created_at' => $now - 601,
+            'expires_at' => $now + 6600,
+        ];
+        self::assertSame($now - 1, FrontendWorkerSessionService::effectiveSessionExpiresAt($legacy, $now));
+
+        $fresh = [
+            'created_at' => $now - 30,
+            'expires_at' => $now + 570,
+        ];
+        self::assertSame($now + 570, FrontendWorkerSessionService::effectiveSessionExpiresAt($fresh, $now));
+
+        $backend = [
+            'created_at' => $now - 601,
+            'expires_at' => $now + 6600,
+            'backend_binding' => ['x' => 1],
+        ];
+        self::assertSame($now + 6600, FrontendWorkerSessionService::effectiveSessionExpiresAt($backend, $now));
+    }
+
+    public function testLegacyUnboundSessionsAreReclaimedBeforeCapacityReject(): void
+    {
+        $store = new SessionMemoryStateStore();
+        $service = new FrontendWorkerSessionService($store);
+        $now = \time();
+        $sessions = [];
+        for ($i = 0; $i < 4096; $i++) {
+            $token = 'legacy-' . $i;
+            $sessions[\hash('sha256', $token)] = [
+                'secret' => 'secret',
+                'deploy_version' => 'test-deploy',
+                'worker_build_id' => 'test-worker',
+                'attested_area' => 'frontend',
+                'created_at' => $now - 700,
+                'expires_at' => $now + 6500,
+            ];
+        }
+        $store->seed([
+            'weline_frontend_worker_sessions' => $sessions,
+        ]);
+
+        $created = $service->createSession('test-deploy', 'test-worker');
+        self::assertSame('frontend', $created['attested_area']);
+        $ttl = (int)$created['expires_at'] - \time();
+        self::assertLessThanOrEqual(600, $ttl);
+    }
 }
 
 final class SessionMemoryStateStore implements FrontendWorkerStateStoreInterface
 {
     /** @var array<string, mixed> */
     private array $state = [];
+
+    /** @param array<string, mixed> $state */
+    public function seed(array $state): void
+    {
+        $this->state = $state;
+    }
 
     public function transaction(callable $callback): mixed
     {

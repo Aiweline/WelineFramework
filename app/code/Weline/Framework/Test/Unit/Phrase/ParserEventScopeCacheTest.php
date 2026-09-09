@@ -167,7 +167,7 @@ final class ParserEventScopeCacheTest extends TestCase
     private function publicLayers(): array
     {
         return [
-            'cache_key' => 'phrase_worker_scope|en_US|Weline_Test|db',
+            'cache_key' => (new ReflectionMethod(Parser::class, 'buildLayeredWordsCacheKey'))->invoke(null, 'en_US', ['Weline_Test']),
             'lang' => 'en_US',
             'modules' => ['Weline_Test'],
             'module_words' => ['Weline_Test' => ['Scoped title' => 'Public title']],

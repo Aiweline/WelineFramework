@@ -7,6 +7,7 @@ namespace Weline\Blog\Service;
 use Weline\Blog\Model\BlogCategoryAttributeEntity;
 use Weline\Eav\Api\Attribute\AttributeRecord;
 use Weline\Eav\Api\Attribute\EntityAttributeStoreInterface;
+use Weline\Eav\Api\Attribute\ScopedAttributeBatchReaderInterface;
 use Weline\Framework\App\State;
 use Weline\Framework\Runtime\ScopeIdentity;
 
@@ -146,6 +147,12 @@ final class BlogCategoryAttributeService
         return $this->readAttributeMap($websiteId, $categoryIds, 'description', $locale);
     }
 
+    /** @return array<string, array<int, string>> */
+    public function readDisplayMaps(int $websiteId, array $categoryIds, string $locale = ''): array
+    {
+        return $this->readAttributeMaps($websiteId, $categoryIds, ['name', 'image', 'banner', 'summary', 'description'], $locale);
+    }
+
     public function readName(int $websiteId, int $categoryId, string $locale = ''): string
     {
         $map = $this->readNameMap($websiteId, [$categoryId], $locale);
@@ -167,6 +174,11 @@ final class BlogCategoryAttributeService
             return $localized;
         }
 
+        return $this->resolveFallbackName($fallbackName);
+    }
+
+    public function resolveFallbackName(string $fallbackName): string
+    {
         $fallbackName = trim($fallbackName);
         if ($fallbackName === '') {
             return '';
@@ -224,30 +236,55 @@ final class BlogCategoryAttributeService
         string $attributeCode,
         string $locale = '',
     ): array {
+        return $this->readAttributeMaps($websiteId, $categoryIds, [$attributeCode], $locale)[$attributeCode] ?? [];
+    }
+
+    /** @return array<string, array<int, string>> */
+    private function readAttributeMaps(int $websiteId, array $categoryIds, array $attributeCodes, string $locale): array
+    {
         $categoryIds = array_values(array_filter(
-            array_map('intval', $categoryIds),
+            array_unique(array_map('intval', $categoryIds)),
             static fn(int $id): bool => $id > 0,
         ));
         if ($categoryIds === []) {
             return [];
         }
 
-        $attribute = $this->getAttribute($attributeCode);
-        if (!$attribute instanceof AttributeRecord) {
+        $attributes = [];
+        foreach (array_unique($attributeCodes) as $code) {
+            $attribute = $this->getAttribute($code);
+            if ($attribute instanceof AttributeRecord) {
+                $attributes[] = $attribute;
+            }
+        }
+        if ($attributes === []) {
             return [];
         }
 
         $locale = self::normalizeLocaleKey($locale !== '' ? $locale : (string)State::getLangLocal());
         $scope = ScopeIdentity::website($websiteId, 'default');
+        $hits = [];
+        if ($this->store instanceof ScopedAttributeBatchReaderInterface) {
+            $hits = $this->store->readScopedValues($this->entity, $categoryIds, $attributes, $scope, $locale);
+        } else {
+            // Preserve third-party single-value store implementations.
+            foreach ($categoryIds as $categoryId) {
+                foreach ($attributes as $attribute) {
+                    $hits[$categoryId][$attribute->code] = $this->store->readScopedValue($this->entity, $categoryId, $attribute, $scope, $locale);
+                }
+            }
+        }
         $values = [];
         foreach ($categoryIds as $categoryId) {
-            $hit = $this->store->readScopedValue($this->entity, $categoryId, $attribute, $scope, $locale);
-            if ($hit->isCleared()) {
-                continue;
-            }
-            $value = trim((string)($hit->value ?? ''));
-            if ($value !== '') {
-                $values[$categoryId] = $value;
+            foreach ($attributes as $attribute) {
+                $hit = $hits[$categoryId][$attribute->code] ?? null;
+                if ($hit === null || $hit->isCleared()) {
+                    continue;
+                }
+                $value = trim((string)($hit->value ?? ''));
+                if ($value !== '') {
+                    $values[$attribute->code][$categoryId] = $value;
+                }
             }
         }
 
@@ -274,6 +311,7 @@ final class BlogCategoryAttributeService
             trim($value),
             self::normalizeLocaleKey($locale),
         );
+        BlogContentCache::clearRequestSnapshots();
     }
 
     private function getAttribute(string $code): ?AttributeRecord

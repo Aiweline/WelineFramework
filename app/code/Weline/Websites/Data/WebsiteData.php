@@ -4,6 +4,9 @@ namespace Weline\Websites\Data;
 
 use Weline\Currency\Api\CurrencyCatalogInterface;
 use Weline\Framework\App\Localization\LocalizationProviderRegistry;
+use Weline\Framework\Cache\Contract\CachePoolInterface;
+use Weline\Framework\Cache\Contract\NamespaceScopedCachePoolInterface;
+use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
@@ -18,6 +21,16 @@ use Weline\Websites\Model\WebsiteLanguage;
 class WebsiteData
 {
     private const STATE_KEY = 'websites.website_data.state.v1';
+    private const SHARED_CACHE_TTL = 300;
+    private const SHARED_SNAPSHOT_BY_ID_PREFIX = 'websites.snapshot.by_id.v1.';
+    private const SHARED_SNAPSHOT_BY_CODE_PREFIX = 'websites.snapshot.by_code.v1.';
+    private const MAX_PROCESS_SNAPSHOTS = 256;
+
+    /** @var array<string, array{website: array<string, mixed>, currency_codes: list<string>, language_codes: list<string>, currencies: list<array<string, mixed>>}> */
+    private static array $processSnapshotsById = [];
+    /** @var array<string, array{website: array<string, mixed>, currency_codes: list<string>, language_codes: list<string>, currencies: list<array<string, mixed>>}> */
+    private static array $processSnapshotsByCode = [];
+    private static string $processSnapshotVersion = '';
 
     /**
      * @return array{
@@ -40,10 +53,10 @@ class WebsiteData
     }
 
     /**
-     * 设置当前网站数据
-     * 
-     * @param Website $website
-     * @return void
+     * 设置当前网站数据。
+     *
+     * 命中后一次粘贴站字段与语/币关联进 RequestContext；同时写入共享缓存，
+     * 供其它 WLS worker 先读缓存。普通读取走本快照；真要重载用 Website::load(..., forceReload: true)。
      */
     public static function setWebsite(Website $website): void
     {
@@ -52,7 +65,32 @@ class WebsiteData
         // an independent request snapshot so later mutations cannot rewrite the
         // Website already selected for this request.
         $state['website'] = clone $website;
+        $websiteId = $website->hasData(Website::schema_fields_ID)
+            ? (int)$website->getWebsiteId()
+            : -1;
+        $shared = $websiteId >= Website::ID_DEFAULT
+            ? self::readSharedSnapshotById($websiteId)
+            : null;
+        if ($shared !== null && self::snapshotMatchesWebsite($shared, $website)) {
+            // A complete snapshot is authoritative for this immutable request
+            // scope, including an intentionally empty association list.
+            $state['currency_codes'] = $shared['currency_codes'];
+            $state['language_codes'] = $shared['language_codes'];
+            $state['currencies'] = $shared['currencies'];
+        } else {
+            $state['currency_codes'] = $websiteId >= Website::ID_DEFAULT
+                ? self::loadCurrencyCodesOnce($websiteId)
+                : [];
+            $state['language_codes'] = $websiteId >= Website::ID_DEFAULT
+                ? self::loadLanguageCodesOnce($websiteId)
+                : [];
+            $state['currencies'] = self::buildCurrenciesFromCodes($state['currency_codes']);
+        }
+        $state['data'] = self::buildDataPayload($state);
         self::writeState($state);
+        if ($shared === null || !self::snapshotMatchesWebsite($shared, $website)) {
+            self::publishSharedSnapshot($state);
+        }
     }
 
     public static function resetRequestState(): void
@@ -164,8 +202,7 @@ class WebsiteData
             self::writeCache('currency_codes', []);
             return [];
         }
-        $websiteCurrency = ObjectManager::getInstance(WebsiteCurrency::class);
-        $currencyCodes = $websiteCurrency->getWebsiteCurrencyCodes($website->getWebsiteId());
+        $currencyCodes = self::loadCurrencyCodesOnce($website->getWebsiteId());
         self::writeCache('currency_codes', $currencyCodes);
 
         return $currencyCodes;
@@ -188,11 +225,24 @@ class WebsiteData
             self::writeCache('language_codes', []);
             return [];
         }
-        $websiteLanguage = ObjectManager::getInstance(WebsiteLanguage::class);
-        $languageCodes = $websiteLanguage->getWebsiteLanguageCodes($website->getWebsiteId());
+        $languageCodes = self::loadLanguageCodesOnce($website->getWebsiteId());
         self::writeCache('language_codes', $languageCodes);
 
         return $languageCodes;
+    }
+
+    /** True when the current request already resolved the website language association, including empty. */
+    public static function hasLanguageSnapshot(): bool
+    {
+        $state = self::readState();
+        return $state['website'] instanceof Website && $state['language_codes'] !== null;
+    }
+
+    /** True when the current request already resolved the website currency association, including empty. */
+    public static function hasCurrencySnapshot(): bool
+    {
+        $state = self::readState();
+        return $state['website'] instanceof Website && $state['currency_codes'] !== null;
     }
 
     /**
@@ -295,36 +345,7 @@ class WebsiteData
             return $state['currencies'];
         }
 
-        $currencyCodes = self::getCurrencyCodes();
-        $activeCurrencies = self::currencyCatalog()->active();
-        if ($currencyCodes !== []) {
-            $activeByCode = [];
-            foreach ($activeCurrencies as $currency) {
-                $activeByCode[strtoupper($currency->code)] = $currency;
-            }
-
-            $activeCurrencies = [];
-            foreach ($currencyCodes as $code) {
-                $currency = $activeByCode[strtoupper((string)$code)] ?? null;
-                if ($currency !== null) {
-                    $activeCurrencies[] = $currency;
-                }
-            }
-        }
-
-        $currencies = [];
-        foreach ($activeCurrencies as $currency) {
-            $currencies[] = [
-                'code' => $currency->code,
-                'name' => $currency->name,
-                'format' => $currency->format,
-                'symbol' => $currency->symbol,
-                'position' => $currency->position,
-                'rate' => $currency->rate,
-                'status' => $currency->active,
-            ];
-        }
-
+        $currencies = self::buildCurrenciesFromCodes(self::getCurrencyCodes());
         self::writeCache('currencies', $currencies);
         return $currencies;
     }
@@ -402,21 +423,111 @@ class WebsiteData
             return null;
         }
 
-        $data = [
-            'website_id' => $website->getWebsiteId(),
-            'code' => $website->getCode(),
-            'name' => $website->getName(),
-            'url' => $website->getUrl(),
-            'default_currency' => $website->getDefaultCurrency(),
-            'default_language' => $website->getDefaultLanguage(),
-            'default_timezone' => $website->getDefaultTimezone(),
+        $data = self::buildDataPayload([
+            'website' => $website,
             'currency_codes' => self::getCurrencyCodes(),
             'language_codes' => self::getLanguageCodes(),
             'currencies' => self::getCurrencies(),
-        ];
+        ]);
 
         self::writeCache('data', $data);
         return $data;
+    }
+
+    /**
+     * 当前请求站的行快照（供 load / w_query 普通路径复用）。
+     *
+     * @return array<string, mixed>|null
+     */
+    public static function getRowSnapshot(): ?array
+    {
+        $website = self::getWebsite();
+        if (!$website instanceof Website || !$website->hasData(Website::schema_fields_ID)) {
+            return null;
+        }
+
+        $row = $website->getData();
+        return \is_array($row) ? $row : null;
+    }
+
+    public static function matchesWebsiteId(int $websiteId): bool
+    {
+        if ($websiteId < Website::ID_DEFAULT) {
+            return false;
+        }
+        $current = self::getWebsiteId();
+        return $current !== null && $current === $websiteId;
+    }
+
+    public static function matchesWebsiteCode(string $code): bool
+    {
+        $code = \trim($code);
+        if ($code === '') {
+            return false;
+        }
+        $current = (string)(self::getCode() ?? '');
+        return $current !== '' && \hash_equals($current, $code);
+    }
+
+    /**
+     * @return array{website: array<string, mixed>, currency_codes: list<string>, language_codes: list<string>, currencies: list<array<string, mixed>>}|null
+     */
+    public static function readSharedSnapshotById(int $websiteId): ?array
+    {
+        if ($websiteId < Website::ID_DEFAULT) {
+            return null;
+        }
+        self::syncProcessSnapshotVersion();
+        $key = (string)$websiteId;
+        if (isset(self::$processSnapshotsById[$key])) {
+            return self::$processSnapshotsById[$key];
+        }
+        try {
+            $snapshot = self::normalizeSharedSnapshot(
+                self::sharedCache()->get(self::SHARED_SNAPSHOT_BY_ID_PREFIX . $websiteId),
+            );
+        } catch (\Throwable) {
+            return null;
+        }
+        if ($snapshot !== null) {
+            self::rememberProcessSnapshot(self::$processSnapshotsById, $key, $snapshot);
+        }
+        return $snapshot;
+    }
+
+    /**
+     * @return array{website: array<string, mixed>, currency_codes: list<string>, language_codes: list<string>, currencies: list<array<string, mixed>>}|null
+     */
+    public static function readSharedSnapshotByCode(string $code): ?array
+    {
+        $code = \trim($code);
+        if ($code === '') {
+            return null;
+        }
+        self::syncProcessSnapshotVersion();
+        $key = \sha1($code);
+        if (isset(self::$processSnapshotsByCode[$key])) {
+            return self::$processSnapshotsByCode[$key];
+        }
+        try {
+            $snapshot = self::normalizeSharedSnapshot(
+                self::sharedCache()->get(self::SHARED_SNAPSHOT_BY_CODE_PREFIX . $key),
+            );
+        } catch (\Throwable) {
+            return null;
+        }
+        if ($snapshot !== null) {
+            self::rememberProcessSnapshot(self::$processSnapshotsByCode, $key, $snapshot);
+        }
+        return $snapshot;
+    }
+
+    /** Clear immutable website snapshots after a changed event or worker reset. */
+    public static function clearProcessCache(): void
+    {
+        self::$processSnapshotsById = [];
+        self::$processSnapshotsByCode = [];
+        self::$processSnapshotVersion = '';
     }
 
     /**
@@ -476,5 +587,215 @@ class WebsiteData
         }
         $state[$key] = $value;
         self::writeState($state);
+    }
+
+    /** @return list<string> */
+    private static function loadCurrencyCodesOnce(int $websiteId): array
+    {
+        try {
+            $websiteCurrency = ObjectManager::getInstance(WebsiteCurrency::class);
+            $codes = $websiteCurrency->getWebsiteCurrencyCodes($websiteId);
+            return \is_array($codes) ? \array_values($codes) : [];
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /** @return list<string> */
+    private static function loadLanguageCodesOnce(int $websiteId): array
+    {
+        try {
+            $websiteLanguage = ObjectManager::getInstance(WebsiteLanguage::class);
+            $codes = $websiteLanguage->getWebsiteLanguageCodes($websiteId);
+            return \is_array($codes) ? \array_values($codes) : [];
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * @param list<string>|array<int, string> $currencyCodes
+     * @return list<array<string, mixed>>
+     */
+    private static function buildCurrenciesFromCodes(array $currencyCodes): array
+    {
+        try {
+            $activeCurrencies = self::currencyCatalog()->active();
+        } catch (\Throwable) {
+            return [];
+        }
+
+        if ($currencyCodes !== []) {
+            $activeByCode = [];
+            foreach ($activeCurrencies as $currency) {
+                $activeByCode[strtoupper($currency->code)] = $currency;
+            }
+
+            $activeCurrencies = [];
+            foreach ($currencyCodes as $code) {
+                $currency = $activeByCode[strtoupper((string)$code)] ?? null;
+                if ($currency !== null) {
+                    $activeCurrencies[] = $currency;
+                }
+            }
+        }
+
+        $currencies = [];
+        foreach ($activeCurrencies as $currency) {
+            $currencies[] = [
+                'code' => $currency->code,
+                'name' => $currency->name,
+                'format' => $currency->format,
+                'symbol' => $currency->symbol,
+                'position' => $currency->position,
+                'rate' => $currency->rate,
+                'status' => $currency->active,
+            ];
+        }
+
+        return $currencies;
+    }
+
+    /**
+     * @param array{
+     *     website?: Website|null,
+     *     currency_codes?: array<int, string>|null,
+     *     language_codes?: array<int, string>|null,
+     *     currencies?: array<int, array<string, mixed>>|null
+     * } $state
+     * @return array<string, mixed>
+     */
+    private static function buildDataPayload(array $state): array
+    {
+        $website = $state['website'] ?? null;
+        if (!$website instanceof Website) {
+            return [];
+        }
+
+        return [
+            'website_id' => $website->getWebsiteId(),
+            'code' => $website->getCode(),
+            'name' => $website->getName(),
+            'url' => $website->getUrl(),
+            'default_currency' => $website->getDefaultCurrency(),
+            'default_language' => $website->getDefaultLanguage(),
+            'default_timezone' => $website->getDefaultTimezone(),
+            'currency_codes' => \is_array($state['currency_codes'] ?? null) ? $state['currency_codes'] : [],
+            'language_codes' => \is_array($state['language_codes'] ?? null) ? $state['language_codes'] : [],
+            'currencies' => \is_array($state['currencies'] ?? null) ? $state['currencies'] : [],
+        ];
+    }
+
+    /**
+     * @param array{
+     *     website: Website|null,
+     *     data: array<string, mixed>|null,
+     *     currency_codes: array<int, string>|null,
+     *     language_codes: array<int, string>|null,
+     *     currencies: array<int, array<string, mixed>>|null
+     * } $state
+     */
+    private static function publishSharedSnapshot(array $state): void
+    {
+        $website = $state['website'] ?? null;
+        if (!$website instanceof Website || !$website->hasData(Website::schema_fields_ID)) {
+            return;
+        }
+        $row = $website->getData();
+        if (!\is_array($row)) {
+            return;
+        }
+        $websiteId = (int)$website->getWebsiteId();
+        $code = \trim((string)$website->getCode());
+        $payload = [
+            'website' => $row,
+            'currency_codes' => \is_array($state['currency_codes'] ?? null) ? \array_values($state['currency_codes']) : [],
+            'language_codes' => \is_array($state['language_codes'] ?? null) ? \array_values($state['language_codes']) : [],
+            'currencies' => \is_array($state['currencies'] ?? null) ? \array_values($state['currencies']) : [],
+        ];
+        self::syncProcessSnapshotVersion();
+        self::rememberProcessSnapshot(self::$processSnapshotsById, (string)$websiteId, $payload);
+        if ($code !== '') {
+            self::rememberProcessSnapshot(self::$processSnapshotsByCode, \sha1($code), $payload);
+        }
+        try {
+            $cache = self::sharedCache();
+            $cache->set(self::SHARED_SNAPSHOT_BY_ID_PREFIX . $websiteId, $payload, self::SHARED_CACHE_TTL);
+            if ($code !== '') {
+                $cache->set(self::SHARED_SNAPSHOT_BY_CODE_PREFIX . \sha1($code), $payload, self::SHARED_CACHE_TTL);
+            }
+        } catch (\Throwable) {
+            // Shared cache is an accelerator; request snapshot remains authoritative.
+        }
+    }
+
+    private static function sharedCache(): CachePoolInterface
+    {
+        $cache = w_cache('website_detect');
+        return $cache instanceof NamespaceScopedCachePoolInterface
+            ? $cache->withNamespace('global/websites-registry')
+            : $cache;
+    }
+
+    /**
+     * @return array{website: array<string, mixed>, currency_codes: list<string>, language_codes: list<string>, currencies: list<array<string, mixed>>}|null
+     */
+    private static function normalizeSharedSnapshot(mixed $cached): ?array
+    {
+        if (!\is_array($cached) || !\is_array($cached['website'] ?? null)) {
+            return null;
+        }
+        return [
+            'website' => $cached['website'],
+            'currency_codes' => \is_array($cached['currency_codes'] ?? null)
+                ? \array_values($cached['currency_codes'])
+                : [],
+            'language_codes' => \is_array($cached['language_codes'] ?? null)
+                ? \array_values($cached['language_codes'])
+                : [],
+            'currencies' => \is_array($cached['currencies'] ?? null)
+                ? \array_values($cached['currencies'])
+                : [],
+        ];
+    }
+
+    /** @param array<string, array{website: array<string, mixed>, currency_codes: list<string>, language_codes: list<string>, currencies: list<array<string, mixed>>}> $cache */
+    private static function rememberProcessSnapshot(array &$cache, string $key, array $snapshot): void
+    {
+        if (!isset($cache[$key]) && count($cache) >= self::MAX_PROCESS_SNAPSHOTS) {
+            $first = array_key_first($cache);
+            if ($first !== null) {
+                unset($cache[$first]);
+            }
+        }
+        $cache[$key] = $snapshot;
+    }
+
+    private static function syncProcessSnapshotVersion(): void
+    {
+        try {
+            $version = Url::websiteParserSitesVersion();
+        } catch (\Throwable) {
+            $version = '';
+        }
+        $version = $version !== '' ? $version : '0';
+        if (self::$processSnapshotVersion !== ''
+            && !hash_equals(self::$processSnapshotVersion, $version)
+        ) {
+            self::$processSnapshotsById = [];
+            self::$processSnapshotsByCode = [];
+        }
+        self::$processSnapshotVersion = $version;
+    }
+
+    /** @param array{website: array<string, mixed>, currency_codes: list<string>, language_codes: list<string>, currencies: list<array<string, mixed>>} $snapshot */
+    private static function snapshotMatchesWebsite(array $snapshot, Website $website): bool
+    {
+        $row = $snapshot['website'];
+        return (int)($row[Website::schema_fields_ID] ?? -1) === $website->getWebsiteId()
+            && (string)($row[Website::schema_fields_CODE] ?? '') === $website->getCode()
+            && (string)($row[Website::schema_fields_DEFAULT_CURRENCY] ?? '') === $website->getDefaultCurrency()
+            && (string)($row[Website::schema_fields_DEFAULT_LANGUAGE] ?? '') === $website->getDefaultLanguage()
+            && (string)($row[Website::schema_fields_DEFAULT_TIMEZONE] ?? '') === $website->getDefaultTimezone();
     }
 }

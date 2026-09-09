@@ -14,13 +14,17 @@ class I18nAiTranslationAdapter
 
     /**
      * @param list<string> $words
+     * @param string $concurrencyLane Empty uses AI default lane (dictionary/shared).
+     *                                 Pass "local-model" for LocalModel so it can
+     *                                 run parallel with dictionary AI translation.
      * @return array{success: bool, translations: array<string, string>, errors: list<string>}
      */
     public function translateBatch(
         array $words,
         string $sourceLocale,
         string $targetLocale,
-        string $strategy = AiTranslationConfig::DEFAULT_STRATEGY
+        string $strategy = AiTranslationConfig::DEFAULT_STRATEGY,
+        string $concurrencyLane = '',
     ): array {
         $wordMap = [];
         foreach ($words as $word) {
@@ -39,6 +43,7 @@ class I18nAiTranslationAdapter
             'target_locale' => $targetLocale,
             'source_locale' => $sourceLocale,
             'strategy' => $strategy,
+            'concurrency_lane' => $concurrencyLane,
             'translations' => [],
             'errors' => [],
             'success' => false,

@@ -6,11 +6,13 @@ namespace Weline\Product\Controller\Frontend;
 
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Product\Service\StorefrontProductWidgetCatalog;
+use Weline\Product\Service\StorefrontSeoListingFacts;
 
 final class NewArrivals extends FrontendController
 {
     public function __construct(
         private readonly StorefrontProductWidgetCatalog $widgetCatalog,
+        private readonly StorefrontSeoListingFacts $listingFacts = new StorefrontSeoListingFacts(),
     ) {
     }
 
@@ -33,6 +35,20 @@ final class NewArrivals extends FrontendController
         $this->assign('page_title', $title);
         $this->assign('storefront_new_arrivals', $items);
         $this->assign('storefront_new_arrivals_count', count($items));
+        $this->assign('storefront_new_arrivals_rss_url', '/new-arrivals/rss.xml');
+        $this->assign('seo', [
+            'page_type' => 'product_list',
+            'title' => $title,
+            'item_list' => $this->listingFacts->itemListFromCards($items),
+            'breadcrumbs' => $this->listingFacts->withHomeBreadcrumb([
+                ['name' => $title, 'url' => '/new-arrivals'],
+            ]),
+            'feeds' => [[
+                'type' => 'application/rss+xml',
+                'title' => (string)__('新品 RSS'),
+                'href' => '/new-arrivals/rss.xml',
+            ]],
+        ]);
 
         return (string)$this->fetch('Weline_Product::templates/frontend/new-arrivals/index.phtml');
     }

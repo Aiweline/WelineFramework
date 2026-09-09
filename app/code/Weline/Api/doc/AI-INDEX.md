@@ -57,6 +57,12 @@
 - `app/code/Weline/Api/doc/需求文档.md`
 - `app/code/Weline/Api/doc/需求文档隐患分析.md`
 
+## API 用户身份与角色授权
+
+- 公开请求身份：`Api/AuthenticatedApiUser.php`；由 `Observer/ApiControllerInitBefore.php` 在 token、用户状态、IP/UA 检查完成后绑定到 `api_authenticated_user`。
+- 受保护前台 REST 的角色路由授权位于 `Weline_Acl::Observer/RouteBefore`；禁止业务控制器按客户端传入 user_id 放行。
+- 身份/幂等主体契约测试：`test/Unit/Api/AuthenticatedApiUserTest.php`。
+
 ## 开发前门禁
 
 - 先声明本次任务命中的模块、代码面和应读文档；没有命中文档时先补读源码，不要按通用经验猜。
@@ -65,3 +71,9 @@
 - 涉及模板、主题、slot、widget、taglib 或 `view/theme` 时，必须先读 `app/code/Weline/Theme/doc/AI-INDEX.md`。
 - 禁止直接修改 `generated/`、`view/tpl/`、`routes.xml` 或复制旧文档里的过时路径。
 - 如果本文件与源码冲突，以源码为准，并在同次任务中修正模块文档。
+
+## 前端 Auth 文档地址对齐（2026-09-08）
+
+`ApiDocService::extractRoute` 为 `Weline\Api\Api\Rest\V1\Auth` 提供包含当前 `rest_frontend` 区域的注册地址，文档与登录共用该记录。当前 `api` 区域的登录路径为 `/api/api/api/rest/v1/auth/login`；本轮正常账号 HTTP 对照中，旧双 `api` 路径返回 404 HTML，正确路径返回 HTTP 200 / code 200。元数据规则仅用于已验证的前端 Auth 类，其他接口和后台路径保持现有契约。
+
+这是 HTTP 与定向代码验证，文档页面登录仍待浏览器重验；不在文档中记录用户名、密码或 Token。

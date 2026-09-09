@@ -18,6 +18,9 @@ use Weline\I18n\Api\Localization\LocalModel;
 #[Index(name: 'uk_blog_post_local', columns: ['post_id', 'local_code'], type: 'UNIQUE')]
 class LocalDescription extends LocalModel
 {
+    use \Weline\Blog\Model\PublishesContentChanges;
+    public const CONTENT_RESOURCE_TYPE = 'blog.post_local';
+
     public const schema_table = 'weline_blog_post_local';
     public const schema_primary_key = Post::schema_fields_ID;
     public const indexer = 'blog_post_local';

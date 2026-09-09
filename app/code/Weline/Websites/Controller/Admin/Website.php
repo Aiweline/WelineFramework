@@ -32,6 +32,7 @@ use Weline\Websites\Service\WebsiteCacheInvalidationService;
 use Weline\Websites\Service\WebsiteChangeSnapshotFactory;
 use Weline\Websites\Service\WebsiteEntryUrlService;
 use Weline\Websites\Service\WebsiteStoreChannelDirectory;
+use Weline\Websites\Service\WebsiteSubPathValidator;
 
 #[Acl('Weline_Websites::website', '网站管理', 'globe', '网站管理', 'Weline_Websites::website_service')]
 class Website extends BackendController
@@ -413,7 +414,7 @@ class Website extends BackendController
             $postData = $data;
             try {
                 $poolIds = $data['pool_ids'] ?? '';
-                $subPath = $this->normalizeSubPath((string)($data['sub_path'] ?? ''));
+                $subPath = $this->assertValidSubPath((string)($data['sub_path'] ?? ''));
                 $addressList = $this->buildAddressListFromPoolSelection($poolIds, $subPath);
                 if (empty($addressList)) {
                     throw new \Exception(__('请至少选择一个域名'));
@@ -549,6 +550,7 @@ class Website extends BackendController
         $this->assign('start_page_route_options', $this->getStartPageRouteOptions());
         $this->assign('selected_start_page_path', '');
         $this->assign('store_channel_directory', []);
+        $this->assignSubPathBanCatalog();
 
         // 获取所有货币
         $this->assign('currencies', $this->getAllCurrencies());
@@ -613,7 +615,7 @@ class Website extends BackendController
                     throw new \InvalidArgumentException(__('网站ID与当前编辑目标不一致'));
                 }
                 $poolIds = $data['pool_ids'] ?? '';
-                $subPath = $this->normalizeSubPath((string)($data['sub_path'] ?? ''));
+                $subPath = $this->assertValidSubPath((string)($data['sub_path'] ?? ''));
                 $addressList = $this->buildAddressListFromPoolSelection($poolIds, $subPath);
                 if (empty($addressList)) {
                     throw new \Exception(__('请至少选择一个域名'));
@@ -782,6 +784,7 @@ class Website extends BackendController
             ),
         );
         $this->assign('store_channel_directory', $this->storeChannelDirectory->forWebsite($websiteId));
+        $this->assignSubPathBanCatalog();
 
         // 获取所有货币
         $this->assign('currencies', $this->getAllCurrencies());
@@ -1595,6 +1598,9 @@ class Website extends BackendController
                 $key = $domain . '|' . $subPath;
                 if (!isset($seen[$key])) {
                     $seen[$key] = true;
+                    if ($subPath !== '') {
+                        $subPath = $this->assertValidSubPath($subPath);
+                    }
                     $list[] = ['domain' => $domain, 'sub_path' => $subPath, 'pool_id' => 0];
                 }
             }
@@ -1609,7 +1615,7 @@ class Website extends BackendController
     {
         $list = [];
         $seen = [];
-        $subPath = $this->normalizeSubPath($subPath);
+        $subPath = $this->assertValidSubPath($subPath);
         $poolIdArray = \is_array($poolIds)
             ? \array_values(\array_filter(\array_map('intval', $poolIds)))
             : \array_values(\array_filter(\array_map('intval', \explode(',', (string) $poolIds))));
@@ -1638,14 +1644,26 @@ class Website extends BackendController
         return $list;
     }
 
+    private function assertValidSubPath(string $subPath): string
+    {
+        return $this->subPathValidator()->assertValid($subPath);
+    }
+
     private function normalizeSubPath(string $subPath): string
     {
-        $subPath = \trim($subPath);
-        if ($subPath === '' || $subPath === '/') {
-            return '';
-        }
-        $subPath = '/' . \trim($subPath, '/');
-        return $subPath === '/' ? '' : $subPath;
+        return WebsiteSubPathValidator::normalize($subPath);
+    }
+
+    private function assignSubPathBanCatalog(): void
+    {
+        $validator = $this->subPathValidator();
+        $this->assign('sub_path_banned_language_codes', $validator->languageCodes());
+        $this->assign('sub_path_banned_currency_codes', $validator->currencyCodes());
+    }
+
+    private function subPathValidator(): WebsiteSubPathValidator
+    {
+        return WebsiteSubPathValidator::fromLocalizationRegistry();
     }
 
     /**

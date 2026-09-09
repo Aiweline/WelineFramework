@@ -649,7 +649,10 @@ class DocumentTranslationTaskService
                 ? $requestId . '_c' . str_pad((string)($batchIndex + 1), 3, '0', STR_PAD_LEFT)
                 : $requestId;
 
-            $this->translationConcurrencyGate->acquire();
+            $this->translationConcurrencyGate->acquire(
+                \Weline\Ai\Service\TranslationConcurrencyGate::DEFAULT_WAIT_SECONDS,
+                \Weline\Ai\Service\TranslationConcurrencyGate::LANE_DOCUMENT,
+            );
             try {
                 $response = $this->aiRuntime()->generate(
                     'Translate DeveloperWorkspace document segments.',
@@ -676,7 +679,9 @@ class DocumentTranslationTaskService
                     true
                 );
             } finally {
-                $this->translationConcurrencyGate->release();
+                $this->translationConcurrencyGate->release(
+                    \Weline\Ai\Service\TranslationConcurrencyGate::LANE_DOCUMENT,
+                );
             }
 
             foreach ($this->decodeTranslatedSegments($response) as $id => $text) {

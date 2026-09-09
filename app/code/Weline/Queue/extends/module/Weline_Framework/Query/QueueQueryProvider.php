@@ -504,7 +504,16 @@ class QueueQueryProvider implements QueryProviderInterface
         $updates = \is_array($patch)
             ? $this->applyQueuePatch($queue, $patch, false)
             : $this->applyQueuePatch($queue, $params, true);
-        $result = $this->queueDispatchService()->updatePendingQueueSafely($queueId, $updates);
+        if (array_key_exists('expected_content', $params)) {
+            if (!is_string($params['expected_content'])) {
+                throw new \InvalidArgumentException('queue_expected_content_invalid');
+            }
+            $result = $this->queueDispatchService()->updatePendingQueueSafely(
+                $queueId, $updates, $params['expected_content'],
+            );
+        } else {
+            $result = $this->queueDispatchService()->updatePendingQueueSafely($queueId, $updates);
+        }
         if (empty($result['confirmed'])) {
             return [
                 'success' => false,
@@ -746,7 +755,7 @@ class QueueQueryProvider implements QueryProviderInterface
      */
     private function applyQueuePatch(Queue $queue, array $patch, bool $flatParams): array
     {
-        $skip = ['queue_id', 'patch', 'id', 'provider', 'operation', 'force', 'class'];
+        $skip = ['queue_id', 'patch', 'id', 'provider', 'operation', 'force', 'class', 'expected_content'];
         if ($flatParams) {
             $skip[] = 'biz_key';
         }
@@ -1133,6 +1142,7 @@ class QueueQueryProvider implements QueryProviderInterface
                         ['name' => 'queue_id', 'type' => 'int', 'required' => false, 'description' => __('与 biz_key 二选一')],
                         ['name' => 'biz_key', 'type' => 'string', 'required' => false, 'description' => __('定位键')],
                         ['name' => 'patch', 'type' => 'array', 'required' => false, 'description' => __('允许字段：name/module/content/result/process/biz_key/auto/type_id；禁止直接修改状态与 dispatch fence')],
+                        ['name' => 'expected_content', 'type' => 'string', 'required' => false],
                     ],
                 ],
                 [

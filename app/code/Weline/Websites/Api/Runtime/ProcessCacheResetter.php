@@ -19,6 +19,8 @@ final class ProcessCacheResetter implements ProcessCacheResetterInterface
         // Website ACL grant memo must not survive cache_clear / worker soft reset,
         // or an empty [] entry can hide newly saved grants until process recycle.
         \Weline\Websites\Service\WebsiteAclGrantService::clearRequestCache();
+        \Weline\Websites\Data\WebsiteData::clearProcessCache();
+        \Weline\Websites\Service\ScopePathMatchCache::clearProcessCache();
 
         $pageClass = '\\GuoLaiRen\\PageBuilder\\Controller\\Frontend\\Page';
         if (!\class_exists($pageClass) || !\is_callable([$pageClass, 'clearProcessCaches'])) {

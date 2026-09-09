@@ -13,6 +13,7 @@ use Weline\Websites\Api\Catalog\Data\SalesChannelSummary;
 use Weline\Websites\Api\Catalog\Data\StoreSummary;
 use Weline\Websites\Api\Catalog\SalesChannelCatalogInterface;
 use Weline\Websites\Api\Catalog\StoreCatalogInterface;
+use Weline\Websites\Data\WebsiteData;
 use Weline\Websites\Model\Domain;
 use Weline\Websites\Model\DomainPool;
 use Weline\Websites\Model\DomainRegistrar;
@@ -378,6 +379,7 @@ class WebsitesQueryProvider implements QueryProviderInterface
                     'description' => __('根据 ID 获取站点信息'),
                     'params'      => [
                         ['name' => 'website_id', 'type' => 'int', 'required' => true],
+                        ['name' => 'force_reload', 'type' => 'bool', 'required' => false],
                     ],
                 ],
                 [
@@ -385,6 +387,7 @@ class WebsitesQueryProvider implements QueryProviderInterface
                     'description' => __('根据代码获取站点信息'),
                     'params'      => [
                         ['name' => 'code', 'type' => 'string', 'required' => true],
+                        ['name' => 'force_reload', 'type' => 'bool', 'required' => false],
                     ],
                 ],
                 [
@@ -1242,6 +1245,19 @@ class WebsitesQueryProvider implements QueryProviderInterface
         if ($websiteId < self::DEFAULT_WEBSITE_ID) {
             return null;
         }
+        $forceReload = (bool)($params['force_reload'] ?? false);
+        if (!$forceReload) {
+            if (WebsiteData::matchesWebsiteId($websiteId)) {
+                $row = WebsiteData::getRowSnapshot();
+                if (\is_array($row)) {
+                    return $this->normalizeWebsitePayload($row);
+                }
+            }
+            $shared = WebsiteData::readSharedSnapshotById($websiteId);
+            if ($shared !== null) {
+                return $this->normalizeWebsitePayload($shared['website']);
+            }
+        }
         $website = clone $this->websiteModel;
         $row = $website->clearQuery()->clearData()
             ->where(Website::schema_fields_ID, $websiteId)
@@ -1258,6 +1274,19 @@ class WebsitesQueryProvider implements QueryProviderInterface
         $code = \trim((string)($params['code'] ?? ''));
         if ($code === '') {
             return null;
+        }
+        $forceReload = (bool)($params['force_reload'] ?? false);
+        if (!$forceReload) {
+            if (WebsiteData::matchesWebsiteCode($code)) {
+                $row = WebsiteData::getRowSnapshot();
+                if (\is_array($row)) {
+                    return $this->normalizeWebsitePayload($row);
+                }
+            }
+            $shared = WebsiteData::readSharedSnapshotByCode($code);
+            if ($shared !== null) {
+                return $this->normalizeWebsitePayload($shared['website']);
+            }
         }
 
         $website = clone $this->websiteModel;
@@ -1451,6 +1480,16 @@ class WebsitesQueryProvider implements QueryProviderInterface
         $websiteId = (int)($params['website_id'] ?? 0);
         if ($websiteId < self::DEFAULT_WEBSITE_ID) {
             return [];
+        }
+        $forceReload = (bool)($params['force_reload'] ?? false);
+        if (!$forceReload && WebsiteData::matchesWebsiteId($websiteId)) {
+            return WebsiteData::getLanguageCodes();
+        }
+        if (!$forceReload) {
+            $shared = WebsiteData::readSharedSnapshotById($websiteId);
+            if ($shared !== null) {
+                return $shared['language_codes'];
+            }
         }
         return $this->websiteLanguageModel->getWebsiteLanguageCodes($websiteId);
     }

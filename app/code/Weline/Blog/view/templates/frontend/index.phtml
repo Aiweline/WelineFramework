@@ -6,17 +6,29 @@ $articles = is_array($this->getData('blog_articles') ?? null) ? $this->getData('
 $heading = trim((string)($this->getData('blog_page_heading') ?? ''));
 $subtitle = trim((string)($this->getData('blog_page_subtitle') ?? ''));
 $activeCategoryId = (int)($this->getData('blog_active_category_id') ?? 0);
+$rssUrl = trim((string)($this->getData('blog_rss_url') ?? ''));
 $escape = static fn(mixed $v): string => htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 $count = count($articles);
 ?>
 <section class="amazon-blog-listing" data-testid="blog-list" data-active-category="<?= $activeCategoryId ?>" weline-code="blog.listing.section">
-    <header class="amazon-blog-listing__header">
-        <h1 class="amazon-blog-listing__title"><?= $escape($heading !== '' ? $heading : (string)__('博客')) ?></h1>
-        <?php if ($subtitle !== ''): ?>
-            <p class="amazon-blog-listing__subtitle"><?= $escape($subtitle) ?></p>
+    <?php /* Use div (not <header>): SEO inspector excludes any heading inside <header>, which zeroed H1. */ ?>
+    <div class="amazon-blog-listing__header">
+        <div class="amazon-blog-listing__heading">
+            <h1 class="amazon-blog-listing__title"><?= $escape($heading !== '' ? $heading : (string)__('博客')) ?></h1>
+            <?php if ($subtitle !== ''): ?>
+                <p class="amazon-blog-listing__subtitle"><?= $escape($subtitle) ?></p>
+            <?php endif; ?>
+            <p class="amazon-blog-listing__meta"><?= $escape((string)__('共 %{1} 条', [(string)$count])) ?></p>
+        </div>
+        <?php if ($rssUrl !== ''): ?>
+            <div class="amazon-blog-listing__actions">
+                <?= $this->fetch('Weline_Blog::templates/frontend/partials/rss-subscribe.phtml', [
+                    'blog_rss_url' => $rssUrl,
+                    'blog_rss_label' => $this->getData('blog_rss_label'),
+                ]) ?>
+            </div>
         <?php endif; ?>
-        <p class="amazon-blog-listing__meta"><?= $escape((string)__('共 %{1} 条', [(string)$count])) ?></p>
-    </header>
+    </div>
 
     <?php if ($articles === []): ?>
         <div class="amazon-blog-listing__empty" data-testid="blog-list-empty">
@@ -24,7 +36,8 @@ $count = count($articles);
             <a class="amazon-blog-listing__back" href="@url{'blog'}"><lang>返回博客</lang></a>
         </div>
     <?php else: ?>
-        <div class="amazon-blog-listing__grid" data-testid="blog-list-grid">
+        <h2 class="amazon-blog-listing__section-title" id="blog-articles-heading"><?= $escape((string)__('文章列表')) ?></h2>
+        <div class="amazon-blog-listing__grid" data-testid="blog-list-grid" aria-labelledby="blog-articles-heading">
             <?php foreach ($articles as $article): ?>
                 <?php
                 if (!is_array($article)) {
@@ -66,23 +79,28 @@ $count = count($articles);
                     (string)($article['cover_image'] ?? ''),
                     (int)($sourceRef['post_id'] ?? $sourceRef['cms_page_id'] ?? 0),
                 );
+                $cardTitle = $title !== '' ? $title : (string)__('未命名文章');
+                $imageAlt = $title !== '' ? $title : (string)__('博客文章封面');
                 ?>
                 <article class="blog-storefront__card is-clickable" data-testid="storefront-blog-card">
                     <?php if ($href !== ''): ?>
                         <a class="blog-storefront__card-hit"
                            href="<?= $escape($href) ?>"
-                           aria-label="<?= $escape($title !== '' ? $title : (string)__('博客文章')) ?>"></a>
+                           aria-label="<?= $escape($cardTitle) ?>"></a>
                     <?php endif; ?>
                     <div class="blog-storefront__media">
                         <img src="<?= $escape($imageResolved['src']) ?>"
-                             alt=""
+                             alt="<?= $escape($imageAlt) ?>"
+                             width="1200"
+                             height="800"
                              data-storefront-img="1"
                              data-fallback="<?= $escape($imageResolved['fallback']) ?>"
                              loading="lazy"
                              decoding="async">
                     </div>
                     <div class="blog-storefront__body">
-                        <h2><?= $escape($title !== '' ? $title : (string)__('未命名文章')) ?></h2>
+                        <?php /* Card titles are not headings: listing pages keep H1 + one section H2 only. */ ?>
+                        <p class="blog-storefront__card-title"><?= $escape($cardTitle) ?></p>
                         <?php if ($categoryLabel !== '' || $publishedAt !== '' || $author !== ''): ?>
                             <p class="blog-storefront__meta">
                                 <?php if ($author !== ''): ?>

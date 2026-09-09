@@ -43,6 +43,49 @@ final class ScopeSelectorCatalogTest extends TestCase
         self::assertTrue($result['legacy_readonly']);
         self::assertSame('dashboard_view:42', $result['legacy_scope']);
     }
+    public function testStoreTriggerLabelIsShortAndHumanized(): void
+    {
+        $service = new ScopeSelectorCatalog(new SystemConfigScopeResolver(), new NoisySelectorCatalogFixture());
+
+        $result = $service->build('e2e-theme-default-e2e_default_injection_mso3wfcu_1.__store__.default');
+        $storeNode = $result['tree_options'][1]['children'][0] ?? [];
+
+        self::assertSame('E2E Theme Default', $result['selected_label']);
+        self::assertSame('E2E Theme Default', $storeNode['display_label'] ?? null);
+        self::assertSame('店铺：E2E Theme Default 默认店铺', $storeNode['label'] ?? null);
+        self::assertStringContainsString('e2e_default_injection_mso3wfcu_1', (string)($result['selected_title'] ?? ''));
+        self::assertStringNotContainsString('店铺：', (string)$result['selected_label']);
+        self::assertStringNotContainsString(' / ', (string)$result['selected_label']);
+    }
+}
+
+final class NoisySelectorCatalogFixture implements ScopeIdentityCatalogInterface
+{
+    public function websiteIdForCode(string $websiteCode): int
+    {
+        return \str_starts_with($websiteCode, 'e2e-theme-default') ? 1 : 0;
+    }
+
+    public function authoritativeIdentity(ScopeIdentity $candidate): ScopeIdentity
+    {
+        return $candidate;
+    }
+
+    public function options(): array
+    {
+        return [[
+            'code' => 'e2e-theme-default-e2e_default_injection_mso3wfcu_1',
+            'name' => 'E2E Theme Default e2e_default_injection_mso3wfcu_1 / e2e-theme-default-e2e_default_injection_mso3wfcu_1',
+            'website_id' => 1,
+            'stores' => [[
+                'id' => 2,
+                'code' => 'default',
+                'name' => 'E2E Theme Default e2e_default_injection_mso3wfcu_1 默认店铺',
+                'store_mode' => ScopeIdentity::MODE_NORMAL,
+                'channels' => [],
+            ]],
+        ]];
+    }
 }
 
 final class SelectorCatalogFixture implements ScopeIdentityCatalogInterface

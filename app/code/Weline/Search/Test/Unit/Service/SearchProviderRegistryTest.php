@@ -123,6 +123,41 @@ final class SearchProviderRegistryTest extends TestCase
         self::assertStringContainsString("vary: ['lang', 'area']", $source);
     }
 
+    public function testTranslatedTypeLabelsDependOnGlobalDictionaryVersion(): void
+    {
+        $policy = (new \ReflectionMethod(SearchProviderRegistry::class, 'typesPolicy'))->invoke(null);
+        $identity = \Weline\Framework\Runtime\ScopeIdentity::channel(0, 'default', 'default', 'default', \Weline\Framework\Runtime\ScopeIdentity::MODE_NORMAL);
+        self::assertContains('global/i18n', $policy->namespacePaths($identity));
+    }
+
+    public function testAreaReadsReuseUnfilteredProvidersWithoutLosingOtherAreas(): void
+    {
+        $frontend = $this->createStub(\Weline\Search\Api\SearchProviderInterface::class);
+        $frontend->method('areas')->willReturn(['frontend']);
+        $backend = $this->createStub(\Weline\Search\Api\SearchProviderInterface::class);
+        $backend->method('areas')->willReturn(['backend']);
+        $registry = new SearchProviderRegistry($this->createMock(ObjectManager::class));
+        (new \ReflectionProperty($registry, 'providers'))->setValue($registry, [
+            'product' => $frontend,
+            'system_config' => $backend,
+        ]);
+
+        self::assertSame(['product' => $frontend], $registry->all(area: ' FRONTEND '));
+        self::assertSame(['system_config' => $backend], $registry->all(area: 'backend'));
+        self::assertSame(['product' => $frontend, 'system_config' => $backend], $registry->all());
+    }
+
+    public function testAreaVisibilityIsStillEvaluatedOnEachRead(): void
+    {
+        $provider = $this->createStub(\Weline\Search\Api\SearchProviderInterface::class);
+        $provider->method('areas')->willReturnOnConsecutiveCalls(['frontend'], ['backend']);
+        $registry = new SearchProviderRegistry($this->createMock(ObjectManager::class));
+        (new \ReflectionProperty($registry, 'providers'))->setValue($registry, ['dynamic' => $provider]);
+
+        self::assertSame(['dynamic' => $provider], $registry->all(area: 'frontend'));
+        self::assertSame([], $registry->all(area: 'frontend'));
+    }
+
     public function testHitTemplateMapCollectsProviderTemplates(): void
     {
         $product = new class implements \Weline\Search\Api\SearchProviderInterface {

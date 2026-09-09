@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace Weline\Theme\Observer;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\App\State;
+use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\PreviewTokenService;
@@ -34,7 +37,8 @@ class ResolveThemeCacheSuffix implements ObserverInterface
         $filename = (string)$data->getData('filename');
 
         $area = strtolower(trim($area)) === 'backend' ? 'backend' : 'frontend';
-        $theme = $this->resolveExplicitRequestTheme($area)
+        $explicitRequest = $this->resolveExplicitRequestContext($area);
+        $theme = $this->resolveExplicitRequestTheme($explicitRequest)
             ?? $this->resolveThemeDataTheme($area)
             ?? $this->themeContextService->resolveTheme($area);
         $themeId = $theme && $theme->getId() ? (string)$theme->getId() : '';
@@ -47,9 +51,8 @@ class ResolveThemeCacheSuffix implements ObserverInterface
             'theme_path:' . $themePath,
         ];
 
-        $requestSuffix = $this->resolveExplicitRequestSuffix($area);
-        if ($requestSuffix !== '') {
-            $suffixParts[] = $requestSuffix;
+        if ($explicitRequest['theme_id'] > 0) {
+            $suffixParts[] = 'request_theme:' . $explicitRequest['area'] . ':' . $explicitRequest['theme_id'];
         }
 
         if ($this->previewTokenService->isPreviewMode()) {
@@ -76,19 +79,10 @@ class ResolveThemeCacheSuffix implements ObserverInterface
         return null;
     }
 
-    private function resolveExplicitRequestTheme(string $area): ?WelineTheme
+    /** @param array{area: string, theme_id: int} $context */
+    private function resolveExplicitRequestTheme(array $context): ?WelineTheme
     {
-        try {
-            $request = ObjectManager::getInstance(Request::class);
-        } catch (\Throwable) {
-            return null;
-        }
-        if (!$request instanceof Request || !$this->shouldHonorExplicitThemeRequest($request)) {
-            return null;
-        }
-
-        $requestArea = $this->resolveRequestArea($request, $area);
-        $themeId = $this->resolveAreaThemeId($request, $area, $requestArea);
+        $themeId = $context['theme_id'];
         if ($themeId <= 0) {
             return null;
         }
@@ -103,59 +97,76 @@ class ResolveThemeCacheSuffix implements ObserverInterface
         }
     }
 
-    private function resolveExplicitRequestSuffix(string $area): string
+    /** @return array{area: string, theme_id: int} */
+    private function resolveExplicitRequestContext(string $area): array
     {
+        $fallback = ['area' => $area, 'theme_id' => 0];
         try {
             $request = ObjectManager::getInstance(Request::class);
         } catch (\Throwable) {
-            return '';
+            return $fallback;
         }
-        if (!$request instanceof Request || !$this->shouldHonorExplicitThemeRequest($request)) {
-            return '';
-        }
-
-        $requestArea = $this->resolveRequestArea($request, $area);
-        $themeId = $this->resolveAreaThemeId($request, $area, $requestArea);
-        if ($themeId <= 0) {
-            return '';
-        }
-
-        return 'request_theme:' . $requestArea . ':' . $themeId;
-    }
-
-    private function resolveAreaThemeId(Request $request, string $area, string $requestArea): int
-    {
-        $themeId = 0;
-        if ($area === 'backend') {
-            $themeId = $this->readRequestInt($request, ['backend_theme_id']);
-        } else {
-            $themeId = $this->readRequestInt($request, ['frontend_theme_id', 'weline_theme_id']);
-        }
-
-        if ($themeId <= 0 && $requestArea === $area) {
-            $themeId = $this->readRequestInt($request, ['theme_id', 'preview_theme_id']);
-        }
-
-        return $themeId;
-    }
-
-    /**
-     * @param list<string> $keys
-     */
-    private function readRequestInt(Request $request, array $keys): int
-    {
-        foreach ($keys as $key) {
+        $values = [];
+        foreach ([
+            'editor_mode', 'preview_mode', 'visual_editor', 'preview_token', 'preview_area', 'editor_area',
+            'backend_theme_id', 'frontend_theme_id', 'weline_theme_id', 'theme_id', 'preview_theme_id',
+        ] as $key) {
             $value = $this->readRequestValue($request, $key);
-            if (!\is_scalar($value)) {
-                continue;
-            }
-            $intValue = (int)$value;
-            if ($intValue > 0) {
-                return $intValue;
-            }
+            $values[$key] = \is_scalar($value) ? $value : null;
         }
 
-        return 0;
+        $explicitMode = false;
+        foreach (['editor_mode', 'preview_mode', 'visual_editor', 'preview_token', 'preview_area', 'editor_area'] as $key) {
+            if (\trim((string)$values[$key]) !== '') {
+                $explicitMode = true;
+                break;
+            }
+        }
+        $requestArea = \trim((string)$values['preview_area']);
+        if ($requestArea === '') {
+            $requestArea = \trim((string)$values['editor_area']);
+        }
+        $requestArea = \strtolower($requestArea !== '' ? $requestArea : $area) === 'backend' ? 'backend' : 'frontend';
+        $idKeys = $area === 'backend' ? ['backend_theme_id'] : ['frontend_theme_id', 'weline_theme_id'];
+        if ($requestArea === $area) {
+            $idKeys = \array_merge($idKeys, ['theme_id', 'preview_theme_id']);
+        }
+        $themeId = 0;
+        foreach ($idKeys as $key) {
+            if ((int)$values[$key] > 0) {
+                $themeId = (int)$values[$key];
+                break;
+            }
+        }
+        $explicit = ['area' => $requestArea, 'theme_id' => $themeId];
+
+        // 请求路径和显式预览参数决定主题选择；文件名、当前 ThemeData 与 Token 验证不进入此缓存。
+        // getUrlPath 命中自身缓存前仍构造完整范围 hash，卡片循环只需按相同输入解释一次。
+        $builder = static function () use ($request, $explicitMode, $explicit, $fallback): array {
+            $path = \strtolower(\trim($request->getUrlPath()));
+            return $explicitMode || ($path !== '' && \str_contains($path, '/theme/')) ? $explicit : $fallback;
+        };
+        try {
+            $key = \serialize([
+                $area, $request->getUri(), $values,
+                RequestContext::scopeIdentity()?->canonicalKey(),
+                RequestContext::getWelineUserLang(), RequestContext::getWelineUserCurrency(),
+                State::getRequestLanguageOverride(),
+            ]);
+            return ObjectManager::getInstance(StorefrontScopeHotCache::class)->rememberForRequest(
+                'theme.template_explicit_request',
+                $key,
+                $builder,
+            );
+        } catch (\Throwable) {
+            // 缓存或缓存键不可用时仍执行原读取，不将正常 /theme/ 路由误判为普通请求。
+            try {
+                return $builder();
+            } catch (\Throwable) {
+            }
+            // 路径暂不可读时沿用显式参数回退；remember 不写异常，下次调用仍可重试。
+            return $explicitMode ? $explicit : $fallback;
+        }
     }
 
     private function readRequestValue(Request $request, string $key): mixed
@@ -184,43 +195,4 @@ class ResolveThemeCacheSuffix implements ObserverInterface
         }
     }
 
-    private function resolveRequestArea(Request $request, string $fallbackArea): string
-    {
-        $area = $this->readRequestValue($request, 'preview_area');
-        if (!\is_scalar($area) || trim((string)$area) === '') {
-            $area = $this->readRequestValue($request, 'editor_area');
-        }
-        if (!\is_scalar($area) || trim((string)$area) === '') {
-            $area = $fallbackArea;
-        }
-
-        return strtolower(trim((string)$area)) === 'backend' ? 'backend' : 'frontend';
-    }
-
-    private function shouldHonorExplicitThemeRequest(Request $request): bool
-    {
-        try {
-            $urlPath = strtolower(trim((string)$request->getUrlPath()));
-            if ($urlPath !== '' && str_contains($urlPath, '/theme/')) {
-                return true;
-            }
-        } catch (\Throwable) {
-        }
-
-        foreach ([
-            'editor_mode',
-            'preview_mode',
-            'visual_editor',
-            'preview_token',
-            'preview_area',
-            'editor_area',
-        ] as $key) {
-            $value = $this->readRequestValue($request, $key);
-            if (\is_scalar($value) && trim((string)$value) !== '') {
-                return true;
-            }
-        }
-
-        return false;
-    }
 }

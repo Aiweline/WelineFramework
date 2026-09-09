@@ -53,6 +53,9 @@ if ($seedProductId <= 0) {
     try {
         $resolvedOffer = \Weline\Product\Helper\StorefrontOfferResolver::resolve($this);
         $seedProductId = max(0, (int)($resolvedOffer['product_id'] ?? 0));
+        if ($seedProductId > 0 && (!is_array($offer) || $offer === [])) {
+            $offer = $resolvedOffer;
+        }
     } catch (\Throwable) {
         $seedProductId = 0;
     }

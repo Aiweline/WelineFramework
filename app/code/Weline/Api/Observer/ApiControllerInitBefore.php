@@ -77,6 +77,7 @@ class ApiControllerInitBefore implements ObserverInterface
         // WLS 闁稿繒鍘ч鎰版晬濮橆偆鐭?ObjectManager 闁兼儳鍢茶ぐ鍥亹閹惧啿顤呴悹鍥敱閻即鎯?Request 閻庡湱鍋樼欢?
         // Observer 閻庡湱鍋樼欢銉╁捶?WLS 濞戞搩鍘藉Σ鎼佸础閺囨氨浼愰柨?this->request 闁告瑯鍨甸崗姗€骞愰崶褎鍊婚柡鍐勫棭鍤炴慨?
         $this->request = ObjectManager::getInstance(Request::class);
+        $this->request->setData('api_authenticated_user', null);
         if ($this->publicApiAuthRouteMatcher->matches($this->request)) {
             return;
         }
@@ -345,6 +346,8 @@ class ApiControllerInitBefore implements ObserverInterface
      */
     private function validateFrontendApi(Event &$event, bool $requireAuthentication = true): void
     {
+        // Explicit API credentials take precedence over a browser session.
+        $token = $this->getTokenFromRequest();
         $isSessionAuthenticated = false;
         $user = null;
 
@@ -352,7 +355,7 @@ class ApiControllerInitBefore implements ObserverInterface
         try {
             /** @var AuthenticatedSessionInterface $frontendSession */
             $frontendSession = SessionFactory::getInstance()->createFrontendSession();
-            if ($frontendSession->isLoggedIn()) {
+            if (empty($token) && $frontendSession->isLoggedIn()) {
                 $user = $frontendSession->getUser();
                 if ($user !== null) {
                     // 婵☆偀鍋撻柡灞诲劤閺併倝骞嬮柨瀣﹂柛姘鹃檮濠€涔琫tIsEnabled闁哄倽顫夌涵鍫曟晬鐏炵瓔娲ら柡瀣矋濠€渚€宕氬▎鎰垫⒕闁哄被鍎虫慨鎼佸箑?
@@ -381,7 +384,6 @@ class ApiControllerInitBefore implements ObserverInterface
 
         // 2.2 濠碘€冲€归悘濉杄ssion闁哄牜浜炲▍銉ㄣ亹閺囶亞绀夋俊顐熷亾闁哄矈妾盤I Token
         if (!$isSessionAuthenticated) {
-            $token = $this->getTokenFromRequest();
             if (empty($token)) {
                 if (!$requireAuthentication) {
                     return;
@@ -466,6 +468,10 @@ class ApiControllerInitBefore implements ObserverInterface
             if ($role) {
                 $event->setData('role', $role);
             }
+            $this->request->setData('api_authenticated_user', new \Weline\Api\Api\AuthenticatedApiUser(
+                (int)$apiUser->getId(),
+                $role ? (int)$role->getId() : 0,
+            ));
             $this->applySandboxMode($apiUser);
         }
     }

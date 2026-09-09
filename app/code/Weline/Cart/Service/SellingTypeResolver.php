@@ -9,6 +9,7 @@ use Weline\Cart\Api\CommerceCartTypeInterface;
 /**
  * 解析当前售卖类型：仅认 Registry；会话偏好不是权威源。
  * 不 import Weline_B2B：需登录的类型由 Provider 元数据声明；membership 由可选钩子/Interface 注入。
+ * 未注册偏好（含已卸载 Provider 的残留 code）fail-soft 到内置 toc，不抛热路径冲突。
  */
 final class SellingTypeResolver
 {
@@ -54,15 +55,10 @@ final class SellingTypeResolver
         }
 
         if (!$this->registry->has($preferred)) {
-            if ($preferred === CommerceCartTypeRegistry::CODE_TOC) {
-                $type = $this->registry->require(CommerceCartTypeRegistry::CODE_TOC);
-                return ['code' => $type->getCode(), 'type' => $type];
-            }
-            throw new CartConflictException(
-                self::ERROR_PREFERENCE_UNKNOWN,
-                __('未注册的售卖类型：%{1}', [$preferred]),
-                ['code' => $preferred],
-            );
+            // Provider 已卸载（例：B2B 卸后会话/cookie 仍偏好 tob）→ 回落内置 toc，禁止热路径 500。
+            $type = $this->registry->require(CommerceCartTypeRegistry::CODE_TOC);
+
+            return ['code' => $type->getCode(), 'type' => $type];
         }
 
         $type = $this->registry->require($preferred);

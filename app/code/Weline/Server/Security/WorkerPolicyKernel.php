@@ -18,6 +18,7 @@ use Weline\Server\Service\Policy\RuntimePolicyCompiler;
 use Weline\Server\Service\Policy\RuntimePolicyStore;
 use Weline\Server\Service\Policy\RuntimePolicyValidator;
 use Weline\Server\Service\Runtime\RoutingPolicyRegistry;
+use Weline\Server\Service\Security\SecurityProbeTokenService;
 
 require_once \dirname(__DIR__) . '/bin/worker_http_message.php';
 
@@ -237,6 +238,16 @@ final class WorkerPolicyKernel
         return $cleared;
     }
 
+    public function isSecurityBanned(string $ip): bool
+    {
+        $ip = \trim($ip);
+        if ($ip === '') {
+            return false;
+        }
+
+        return $this->rateLimiter->isBanned($ip);
+    }
+
     public function policyDigest(): string
     {
         $this->refreshActivatedBundle();
@@ -311,12 +322,44 @@ final class WorkerPolicyKernel
 
         $parsed = $this->parseRequest($rawRequest, $parsedFrame);
         if (isset($parsed['error'])) {
+            $shapeIp = $this->identityResolver->normalizePeer($transportPeer) ?: '127.0.0.1';
+            $shapeError = (string)$parsed['error'];
+            $probeMode = SecurityProbeTokenService::headerHasValidToken(
+                \is_array($parsed['headers'] ?? null) ? $parsed['headers'] : []
+            );
+            // 非法编码 / 畸形目标多为扫描或探测：记攻击日志，短封禁，避免静默 400 无审计。
+            // 面板探针 token 有效时仍返回 400，但不 ban、不记真实攻击账。
+            if (!$probeMode
+                && \in_array($shapeError, ['invalid_path', 'invalid_query', 'invalid_target', 'path_traversal'], true)
+            ) {
+                $this->rateLimiter->ban($shapeIp, 300);
+                AttackLogService::log(
+                    [
+                        'is_attack' => true,
+                        'type' => 'request_shape',
+                        'reason' => 'malformed request target: ' . $shapeError,
+                        'should_block' => true,
+                    ],
+                    [
+                        'instance' => $this->instanceName,
+                        'ip' => $shapeIp,
+                        'domain' => (string)($parsed['host'] ?? ''),
+                        'uri' => (string)($parsed['target'] ?? '/'),
+                        'method' => (string)($parsed['method'] ?? 'GET'),
+                        'user_agent' => (string)(($parsed['headers']['user-agent'] ?? '') ?: ''),
+                        'headers' => $this->safeAttackLogHeaders(
+                            \is_array($parsed['headers'] ?? null) ? $parsed['headers'] : []
+                        ),
+                        'block_duration' => 300,
+                    ],
+                );
+            }
             return $this->deny(
                 $parsed,
-                $this->identityResolver->normalizePeer($transportPeer) ?: '127.0.0.1',
+                $shapeIp,
                 false,
                 400,
-                'request_shape',
+                ($probeMode ? 'probe:' : '') . 'request_shape:' . $shapeError,
             );
         }
         $parsed['client_protocol'] = $parsed['protocol'];
@@ -372,6 +415,9 @@ final class WorkerPolicyKernel
         );
         $clientIp = $identity['ip'];
         $trustedProxy = $identity['trusted_proxy'];
+        $whitelisted = $this->identityResolver->matchesAny($clientIp, $this->whitelistCidrs);
+        $probeMode = SecurityProbeTokenService::headerHasValidToken($parsed['headers']);
+        $liveBanMode = SecurityProbeTokenService::headerHasValidLiveBanToken($parsed['headers']);
         $envelope = new RequestEnvelope(
             peerIp: $clientIp,
             method: $parsed['method'],
@@ -387,15 +433,23 @@ final class WorkerPolicyKernel
                 'trusted_proxy' => $trustedProxy,
                 'topology' => $this->topology,
                 'policy_digest' => $this->loadedDigest,
+                'live_ban_mode' => $liveBanMode,
             ],
         );
 
-        // A loopback transport peer is common when Nginx proxies to a
-        // direct Worker. It is transport metadata, not proof that the original
-        // client is local. Only the compiled, explicit whitelist may bypass
-        // bans, quotas and request attack rules.
-        $whitelisted = $this->identityResolver->matchesAny($clientIp, $this->whitelistCidrs);
-        if (!$whitelisted && $this->rateLimiter->isBanned($clientIp)) {
+        // 探针自助解封：面板会话签发的豁免/实战凭证即可解本连接 peer IP（不依赖 PHP 读到 REMOTE_ADDR）。
+        if ($this->isSecurityProbeUnlockPath($parsed['method'], $parsed['path'])
+            && ($probeMode || $liveBanMode)
+        ) {
+            $this->clearSecurityBans($clientIp, false);
+        }
+
+        // 已封禁 IP：即便在白名单也要拦（否则无法验收「锁定后访问」）；
+        // 探针豁免 token 与探针自助解封/会话路径除外。
+        if (!$probeMode
+            && !$this->isSecurityProbeSelfServicePath($parsed['path'])
+            && $this->rateLimiter->isBanned($clientIp)
+        ) {
             return $this->deny($parsed, $clientIp, $trustedProxy, 403, 'shared_ban');
         }
 
@@ -621,7 +675,15 @@ final class WorkerPolicyKernel
 
             case 'attack_rules':
             case 'body_attack_rules':
-                if ($whitelisted || $systemPath) {
+                // 白名单跳过攻击规则；但安全探针 token / 实战封禁凭证仍要跑匹配。
+                // probe：deny 不 ban；live-ban：deny 且 ban（验收真实封禁）。
+                if ($systemPath) {
+                    return null;
+                }
+                $probeMode = $this->isSecurityProbeRequest($envelope);
+                $liveBanMode = !empty($envelope->attributes['live_ban_mode'])
+                    || SecurityProbeTokenService::headerHasValidLiveBanToken($envelope->headers);
+                if ($whitelisted && !$probeMode && !$liveBanMode) {
                     return null;
                 }
                 if ($type === 'attack_rules') {
@@ -638,14 +700,46 @@ final class WorkerPolicyKernel
                         )
                     ) {
                         $blockDuration = (int)($pathScan['block_duration'] ?? 600);
-                        $this->rateLimiter->ban($envelope->peerIp, $blockDuration);
+                        if (!$probeMode) {
+                            $this->rateLimiter->ban($envelope->peerIp, $blockDuration);
+                            AttackLogService::log(
+                                [
+                                    'is_attack' => true,
+                                    'type' => 'path_scan',
+                                    'reason' => 'unique request path threshold exceeded',
+                                    'should_block' => true,
+                                ],
+                                [
+                                    'instance' => $this->instanceName,
+                                    'ip' => $envelope->peerIp,
+                                    'domain' => $envelope->host,
+                                    'uri' => $envelope->path,
+                                    'method' => $envelope->method,
+                                    'user_agent' => (string)($envelope->headers['user-agent'] ?? ''),
+                                    'headers' => $this->safeAttackLogHeaders($envelope->headers),
+                                    'block_duration' => $blockDuration,
+                                ],
+                            );
+                        }
+                        return $this->deny(
+                            $parsed,
+                            $envelope->peerIp,
+                            (bool)$envelope->attributes['trusted_proxy'],
+                            403,
+                            ($probeMode ? 'probe:' : '') . $descriptor->id . ':path_scan',
+                        );
+                    }
+                }
+                $attack = $this->matchCompiledAttackRules($descriptor, $envelope, $type === 'body_attack_rules');
+                if ($attack !== null) {
+                    if (!$probeMode) {
+                        $banSeconds = (int)($attack['block_duration'] ?? 300);
+                        // 0 = deny this request only (GlobalRateLimiter::ban clamps ttl to >=1)
+                        if ($banSeconds > 0) {
+                            $this->rateLimiter->ban($envelope->peerIp, $banSeconds);
+                        }
                         AttackLogService::log(
-                            [
-                                'is_attack' => true,
-                                'type' => 'path_scan',
-                                'reason' => 'unique request path threshold exceeded',
-                                'should_block' => true,
-                            ],
+                            ['is_attack' => true, 'type' => $attack['type'], 'reason' => $attack['reason'], 'should_block' => true],
                             [
                                 'instance' => $this->instanceName,
                                 'ip' => $envelope->peerIp,
@@ -654,35 +748,17 @@ final class WorkerPolicyKernel
                                 'method' => $envelope->method,
                                 'user_agent' => (string)($envelope->headers['user-agent'] ?? ''),
                                 'headers' => $this->safeAttackLogHeaders($envelope->headers),
-                                'block_duration' => $blockDuration,
+                                'block_duration' => $banSeconds,
                             ],
                         );
-                        return $this->deny(
-                            $parsed,
-                            $envelope->peerIp,
-                            (bool)$envelope->attributes['trusted_proxy'],
-                            403,
-                            $descriptor->id . ':path_scan',
-                        );
                     }
-                }
-                $attack = $this->matchCompiledAttackRules($descriptor, $envelope, $type === 'body_attack_rules');
-                if ($attack !== null) {
-                    $this->rateLimiter->ban($envelope->peerIp, (int)($attack['block_duration'] ?? 300));
-                    AttackLogService::log(
-                        ['is_attack' => true, 'type' => $attack['type'], 'reason' => $attack['reason'], 'should_block' => true],
-                        [
-                            'instance' => $this->instanceName,
-                            'ip' => $envelope->peerIp,
-                            'domain' => $envelope->host,
-                            'uri' => $envelope->path,
-                            'method' => $envelope->method,
-                            'user_agent' => (string)($envelope->headers['user-agent'] ?? ''),
-                            'headers' => $this->safeAttackLogHeaders($envelope->headers),
-                            'block_duration' => (int)($attack['block_duration'] ?? 300),
-                        ],
+                    return $this->deny(
+                        $parsed,
+                        $envelope->peerIp,
+                        (bool)$envelope->attributes['trusted_proxy'],
+                        403,
+                        ($probeMode ? 'probe:' : '') . $descriptor->id,
                     );
-                    return $this->deny($parsed, $envelope->peerIp, (bool)$envelope->attributes['trusted_proxy'], 403, $descriptor->id);
                 }
                 return null;
 
@@ -690,8 +766,8 @@ final class WorkerPolicyKernel
                 if ($systemPath) {
                     return null;
                 }
-                // Wait-gift APIs must reach PHP (file ledger); do not serve static 503 JSON here.
-                if ($this->isMaintenanceWaitGiftPath((string)($parsed['path'] ?? ''))) {
+                // Wait-gift / recovery-check APIs must reach PHP; do not serve static 503 JSON here.
+                if ($this->isMaintenanceFrontendApiPath((string)($parsed['path'] ?? ''))) {
                     return null;
                 }
                 // Maintenance HTML embeds Theme logo/favicon under /Weline/.../*.png (and
@@ -784,26 +860,79 @@ final class WorkerPolicyKernel
                 if (!($rule['enabled'] ?? true)) {
                     continue;
                 }
+                $pathCandidates = $this->attackPathCandidates($envelope);
                 foreach ((array)($rule['paths'] ?? []) as $path) {
                     $path = \strtolower(\trim((string)$path));
-                    if ($path !== '' && \str_contains(\strtolower($envelope->path), $path)) {
-                        return [
-                            'type' => $ruleName,
-                            'reason' => 'request path matched a protected policy',
-                            'block_duration' => (int)($rule['block_duration'] ?? 1800),
-                        ];
+                    if ($path === '') {
+                        continue;
+                    }
+                    foreach ($pathCandidates as $candidate) {
+                        if (\str_contains($candidate, $path)) {
+                            return [
+                                'type' => $ruleName,
+                                'reason' => 'request path matched a protected policy',
+                                'block_duration' => (int)($rule['block_duration'] ?? 1800),
+                            ];
+                        }
                     }
                 }
             }
             $badUa = \is_array($matcher['bad_user_agents'] ?? null) ? $matcher['bad_user_agents'] : [];
             if ($badUa['enabled'] ?? true) {
-                $ua = (string)($envelope->headers['user-agent'] ?? '');
+                // Browser fetch cannot set User-Agent; probe UI mirrors it on
+                // X-Weline-Security-Probe-UA only when a valid probe token is present.
+                $uaSubjects = [
+                    (string)($envelope->headers['user-agent'] ?? $envelope->headers['User-Agent'] ?? ''),
+                ];
+                if ($this->isSecurityProbeRequest($envelope)) {
+                    $probeUa = (string)(
+                        $envelope->headers['x-weline-security-probe-ua']
+                        ?? $envelope->headers['X-Weline-Security-Probe-UA']
+                        ?? ''
+                    );
+                    if ($probeUa !== '') {
+                        $uaSubjects[] = $probeUa;
+                    }
+                }
                 foreach ((array)($badUa['patterns'] ?? []) as $pattern) {
-                    if ($this->safeRegexMatch((string)$pattern, $ua)) {
+                    foreach ($uaSubjects as $ua) {
+                        if ($ua !== '' && $this->safeRegexMatch((string)$pattern, $ua)) {
+                            return [
+                                'type' => 'bad_user_agent',
+                                'reason' => 'user agent matched a blocked policy',
+                                'block_duration' => (int)($badUa['block_duration'] ?? 300),
+                            ];
+                        }
+                    }
+                }
+            }
+
+            $crawlerRule = $this->resolveCrawlerBlockRuleForHost($matcher, (string)($envelope->host ?? ''));
+            if ($crawlerRule['enabled'] ?? true) {
+                $hasUaHeader = \array_key_exists('user-agent', $envelope->headers)
+                    || \array_key_exists('User-Agent', $envelope->headers);
+                $uaSubjects = [];
+                if ($hasUaHeader) {
+                    $uaSubjects[] = (string)($envelope->headers['user-agent'] ?? $envelope->headers['User-Agent'] ?? '');
+                }
+                if ($this->isSecurityProbeRequest($envelope)) {
+                    $hasProbeUa = \array_key_exists('x-weline-security-probe-ua', $envelope->headers)
+                        || \array_key_exists('X-Weline-Security-Probe-UA', $envelope->headers);
+                    if ($hasProbeUa) {
+                        $uaSubjects[] = (string)(
+                            $envelope->headers['x-weline-security-probe-ua']
+                            ?? $envelope->headers['X-Weline-Security-Probe-UA']
+                            ?? ''
+                        );
+                    }
+                }
+                foreach ($uaSubjects as $ua) {
+                    $hit = CrawlerBlockCatalog::match($ua, $crawlerRule);
+                    if ($hit !== null) {
                         return [
-                            'type' => 'bad_user_agent',
-                            'reason' => 'user agent matched a blocked policy',
-                            'block_duration' => (int)($badUa['block_duration'] ?? 300),
+                            'type' => 'crawler_block',
+                            'reason' => 'crawler blocked: ' . $hit['name'],
+                            'block_duration' => (int)($crawlerRule['block_duration'] ?? 0),
                         ];
                     }
                 }
@@ -849,6 +978,44 @@ final class WorkerPolicyKernel
         return null;
     }
 
+    /**
+     * Paths used for ban_on_path_match / protected_paths.
+     * Prefer envelope path, plus target/path variants (decoded) so rewrite/proxy
+     * shapes still hit scanner path policies.
+     *
+     * @return list<string>
+     */
+    private function attackPathCandidates(RequestEnvelope $envelope): array
+    {
+        $candidates = [];
+        $push = static function (string $value) use (&$candidates): void {
+            $value = \strtolower(\trim($value));
+            if ($value === '' || \in_array($value, $candidates, true)) {
+                return;
+            }
+            $candidates[] = $value;
+        };
+
+        $push($envelope->path);
+        $target = (string)($envelope->attributes['target'] ?? '');
+        if ($target !== '') {
+            try {
+                $rawPath = \parse_url($target, PHP_URL_PATH);
+            } catch (\ValueError) {
+                $rawPath = false;
+            }
+            if (\is_string($rawPath) && $rawPath !== '') {
+                $push($rawPath);
+                foreach ($this->attackDecodeVariants($rawPath) as $variant) {
+                    $push($variant);
+                }
+            }
+            $push($target);
+        }
+
+        return $candidates;
+    }
+
     /** @return array{subjects:list<string>,invalid:bool} */
     private function attackRuleSubjects(
         RuntimePolicyDescriptor $descriptor,
@@ -856,23 +1023,41 @@ final class WorkerPolicyKernel
     ): array {
         $target = (string)($envelope->attributes['target'] ?? $envelope->path);
         try {
+            $rawPath = \parse_url($target, PHP_URL_PATH);
             $rawQuery = \parse_url($target, PHP_URL_QUERY);
         } catch (\ValueError) {
+            $rawPath = false;
             $rawQuery = null;
         }
+        $rawPath = \is_string($rawPath) && $rawPath !== '' ? $rawPath : $envelope->path;
         $rawQuery = \is_string($rawQuery) ? $rawQuery : '';
-        $queryVariants = [\rawurldecode($rawQuery)];
+
+        // 扫描 wire / 一次解码 / 二次解码，堵住 %2527 → %27 → ' 等双重编码绕过。
+        $pathVariants = $this->attackDecodeVariants($rawPath);
+        $queryVariants = $this->attackDecodeVariants($rawQuery);
         $formQuery = \urldecode($rawQuery);
-        if ($formQuery !== $queryVariants[0]) {
+        if ($formQuery !== '' && !\in_array($formQuery, $queryVariants, true)) {
             $queryVariants[] = $formQuery;
+        }
+
+        foreach ([...$pathVariants, ...$queryVariants] as $variant) {
+            if ($variant !== '' && !$this->isValidUtf8Text($variant)) {
+                return ['subjects' => [], 'invalid' => true];
+            }
         }
 
         $subjects = [];
         $totalBytes = 0;
-        foreach ($queryVariants as $query) {
-            $canonicalUri = $envelope->path . ($query !== '' ? '?' . $query : '');
-            $subject = \substr($canonicalUri, 0, self::MAX_ATTACK_URI_BYTES);
-            if (!\in_array($subject, $subjects, true)) {
+        foreach ($pathVariants as $pathVariant) {
+            foreach ($queryVariants === [] ? [''] : $queryVariants as $query) {
+                $canonicalUri = $pathVariant . ($query !== '' ? '?' . $query : '');
+                $subject = \substr($canonicalUri, 0, self::MAX_ATTACK_URI_BYTES);
+                if (\in_array($subject, $subjects, true)) {
+                    continue;
+                }
+                if ($totalBytes + \strlen($subject) > self::MAX_ATTACK_SUBJECT_BYTES) {
+                    continue;
+                }
                 $subjects[] = $subject;
                 $totalBytes += \strlen($subject);
             }
@@ -887,15 +1072,16 @@ final class WorkerPolicyKernel
             if ($value === '') {
                 continue;
             }
-            $decodedValue = \rawurldecode($value);
-            if (\str_contains($value, "\0")
-                || \preg_match('/[\r\n]/', $value) === 1
-                || \str_contains($decodedValue, "\0")
-                || \preg_match('/[\r\n]/', $decodedValue) === 1
-            ) {
-                return ['subjects' => $subjects, 'invalid' => true];
+            $headerVariants = $this->attackDecodeVariants($value);
+            foreach ($headerVariants as $decodedValue) {
+                if (\str_contains($decodedValue, "\0")
+                    || \preg_match('/[\r\n]/', $decodedValue) === 1
+                    || !$this->isValidUtf8Text($decodedValue)
+                ) {
+                    return ['subjects' => $subjects, 'invalid' => true];
+                }
             }
-            foreach ([$value, $decodedValue] as $headerValue) {
+            foreach ($headerVariants as $headerValue) {
                 $subject = $headerName . ': ' . \substr($headerValue, 0, self::MAX_ATTACK_HEADER_BYTES);
                 if (\in_array($subject, $subjects, true)) {
                     continue;
@@ -909,6 +1095,24 @@ final class WorkerPolicyKernel
         }
 
         return ['subjects' => $subjects, 'invalid' => false];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function attackDecodeVariants(string $value): array
+    {
+        $variants = [$value];
+        $once = \rawurldecode($value);
+        if ($once !== $value) {
+            $variants[] = $once;
+        }
+        $twice = \rawurldecode($once);
+        if ($twice !== $once) {
+            $variants[] = $twice;
+        }
+
+        return \array_values(\array_unique($variants));
     }
 
     /**
@@ -1030,15 +1234,17 @@ final class WorkerPolicyKernel
     }
 
     /**
-     * Maintenance wait-gift endpoints (issue/heartbeat/abandon/redeem/wave).
+     * Maintenance frontend APIs (wait-gift + lightweight recovery-check).
      * These are intentionally allowed through the policy short-circuit so
-     * Weline_Maintenance can mint/validate file-ledger tokens without DB.
+     * Weline_Maintenance can mint/validate file-ledger tokens without DB,
+     * and recovery probes never render business HTML.
      */
-    private function isMaintenanceWaitGiftPath(string $path): bool
+    private function isMaintenanceFrontendApiPath(string $path): bool
     {
         $pathOnly = (string)(\parse_url($path, \PHP_URL_PATH) ?: $path);
 
-        return \str_starts_with($pathOnly, '/maintenance/frontend/wait-gift');
+        return \str_starts_with($pathOnly, '/maintenance/frontend/wait-gift')
+            || \str_starts_with($pathOnly, '/maintenance/frontend/recovery-check');
     }
 
     /**
@@ -1127,47 +1333,23 @@ final class WorkerPolicyKernel
         $method = \strtoupper($match[1]);
         $protocol = 'HTTP/' . $match[3];
         $target = $match[2];
-        try {
-            $path = \parse_url($target, PHP_URL_PATH);
-            $query = \parse_url($target, PHP_URL_QUERY);
-        } catch (\ValueError) {
-            $path = false;
-            $query = false;
-        }
-        if (!\is_string($path) || $path === '' || ($query !== null && !\is_string($query))) {
-            return $this->invalidParsed('invalid_target');
-        }
-        $decodedPath = \rawurldecode($path);
-        if (\str_contains($decodedPath, "\0") || \str_contains($decodedPath, '\\')) {
-            return $this->invalidParsed('invalid_path');
-        }
-        $segments = \explode('/', $decodedPath);
-        foreach ($segments as $segment) {
-            if ($segment === '..' || $segment === '.') {
-                return $this->invalidParsed('path_traversal');
-            }
-        }
-        $path = '/' . \ltrim((string)(\preg_replace('#/+#', '/', $decodedPath) ?? $decodedPath), '/');
-        $query = \is_string($query) ? \rawurldecode($query) : '';
-        if (\str_contains($query, "\0") || \preg_match('/[\r\n]/', $query) === 1) {
-            return $this->invalidParsed('invalid_query');
-        }
 
+        // 先解析 headers，再验 path/query：畸形目标仍要能读到 probe token，避免误 ban。
         $headers = [];
         foreach ($lines as $line) {
             if ($line === '' || \str_starts_with($line, ' ') || \str_starts_with($line, "\t")) {
-                return $this->invalidParsed('invalid_header_folding');
+                return $this->invalidParsed('invalid_header_folding', $headers);
             }
             $separator = \strpos($line, ':');
             if ($separator === false) {
-                return $this->invalidParsed('invalid_header');
+                return $this->invalidParsed('invalid_header', $headers);
             }
             $name = \strtolower(\trim(\substr($line, 0, $separator)));
             $value = \trim(\substr($line, $separator + 1));
             if ($name === '' || \preg_match('/^[a-z0-9!#$%&\'*+.^_`|~-]+$/D', $name) !== 1
                 || \preg_match('/[\x00-\x08\x0A-\x1F\x7F]/', $value) === 1
             ) {
-                return $this->invalidParsed('invalid_header');
+                return $this->invalidParsed('invalid_header', $headers);
             }
             $headers[$name] = isset($headers[$name])
                 ? (
@@ -1177,12 +1359,46 @@ final class WorkerPolicyKernel
                 )
                 : $value;
         }
+
+        try {
+            $path = \parse_url($target, PHP_URL_PATH);
+            $query = \parse_url($target, PHP_URL_QUERY);
+        } catch (\ValueError) {
+            $path = false;
+            $query = false;
+        }
+        if (!\is_string($path) || $path === '' || ($query !== null && !\is_string($query))) {
+            return $this->invalidParsed('invalid_target', $headers);
+        }
+        $decodedPath = \rawurldecode($path);
+        if (\str_contains($decodedPath, "\0")
+            || \str_contains($decodedPath, '\\')
+            || \str_contains($decodedPath, '://')
+            || !$this->isValidUtf8Text($decodedPath)
+        ) {
+            return $this->invalidParsed('invalid_path', $headers);
+        }
+        $segments = \explode('/', $decodedPath);
+        foreach ($segments as $segment) {
+            if ($segment === '..' || $segment === '.') {
+                return $this->invalidParsed('path_traversal', $headers);
+            }
+        }
+        $path = '/' . \ltrim((string)(\preg_replace('#/+#', '/', $decodedPath) ?? $decodedPath), '/');
+        $query = \is_string($query) ? \rawurldecode($query) : '';
+        if (\str_contains($query, "\0")
+            || \preg_match('/[\r\n]/', $query) === 1
+            || !$this->isValidUtf8Text($query)
+        ) {
+            return $this->invalidParsed('invalid_query', $headers);
+        }
+
         $host = (string)($headers['host'] ?? '');
         if ($host === '') {
-            return $this->invalidParsed('missing_host');
+            return $this->invalidParsed('missing_host', $headers);
         }
         if (!$this->requestTargetMatchesHost($target, $host)) {
-            return $this->invalidParsed('target_host_mismatch');
+            return $this->invalidParsed('target_host_mismatch', $headers);
         }
         return [
             'method' => $method,
@@ -1207,6 +1423,18 @@ final class WorkerPolicyKernel
     private function parseValidatedFrame(array $frame): array
     {
         $target = (string)$frame['target'];
+        $rawHeaders = \is_array($frame['headers'] ?? null) ? $frame['headers'] : [];
+        $headers = [];
+        foreach ($rawHeaders as $name => $value) {
+            $key = \strtolower(\trim((string)$name));
+            if ($key === '') {
+                continue;
+            }
+            if (\is_array($value)) {
+                $value = (string)($value[0] ?? '');
+            }
+            $headers[$key] = (string)$value;
+        }
         try {
             $path = \parse_url($target, PHP_URL_PATH);
             $query = \parse_url($target, PHP_URL_QUERY);
@@ -1215,34 +1443,40 @@ final class WorkerPolicyKernel
             $query = false;
         }
         if (!\is_string($path) || $path === '' || ($query !== null && !\is_string($query))) {
-            return $this->invalidParsed('invalid_target');
+            return $this->invalidParsed('invalid_target', $headers);
         }
         $decodedPath = \rawurldecode($path);
-        if (\str_contains($decodedPath, "\0") || \str_contains($decodedPath, '\\')) {
-            return $this->invalidParsed('invalid_path');
+        if (\str_contains($decodedPath, "\0")
+            || \str_contains($decodedPath, '\\')
+            || \str_contains($decodedPath, '://')
+            || !$this->isValidUtf8Text($decodedPath)
+        ) {
+            return $this->invalidParsed('invalid_path', $headers);
         }
         foreach (\explode('/', $decodedPath) as $segment) {
             if ($segment === '..' || $segment === '.') {
-                return $this->invalidParsed('path_traversal');
+                return $this->invalidParsed('path_traversal', $headers);
             }
         }
         $path = '/' . \ltrim((string)(\preg_replace('#/+#', '/', $decodedPath) ?? $decodedPath), '/');
         $query = \is_string($query) ? \rawurldecode($query) : '';
-        if (\str_contains($query, "\0") || \preg_match('/[\r\n]/', $query) === 1) {
-            return $this->invalidParsed('invalid_query');
+        if (\str_contains($query, "\0")
+            || \preg_match('/[\r\n]/', $query) === 1
+            || !$this->isValidUtf8Text($query)
+        ) {
+            return $this->invalidParsed('invalid_query', $headers);
         }
 
-        $headers = \is_array($frame['headers']) ? $frame['headers'] : [];
         $host = (string)($headers['host'] ?? '');
         if ($host === '') {
-            return $this->invalidParsed('missing_host');
+            return $this->invalidParsed('missing_host', $headers);
         }
         if (!$this->requestTargetMatchesHost($target, $host)) {
-            return $this->invalidParsed('target_host_mismatch');
+            return $this->invalidParsed('target_host_mismatch', $headers);
         }
         $protocol = $this->normalizeValidatedProtocol((string)$frame['protocol']);
         if ($protocol === null) {
-            return $this->invalidParsed('invalid_protocol');
+            return $this->invalidParsed('invalid_protocol', $headers);
         }
 
         return [
@@ -1269,17 +1503,66 @@ final class WorkerPolicyKernel
         };
     }
 
-    /** @return array{method:string,protocol:string,target:string,path:string,query:string,host:string,headers:array<string,string>,body:string,header_bytes:int,error:string} */
-    private function invalidParsed(string $reason): array
+    /**
+     * Reject non-UTF-8 request text before it reaches Url rewrite / PDO.
+     * Empty strings are allowed (no query).
+     */
+    private function isValidUtf8Text(string $value): bool
     {
+        return $value === '' || \preg_match('//u', $value) === 1;
+    }
+
+    private function isSecurityProbeRequest(RequestEnvelope $envelope): bool
+    {
+        return SecurityProbeTokenService::headerHasValidToken($envelope->headers);
+    }
+
+    /**
+     * 被封禁后仍可访问的探针自助路径（刷新会话 / 解封本机 IP）。
+     */
+    private function isSecurityProbeSelfServicePath(string $path): bool
+    {
+        $path = \strtolower(\rtrim(\trim($path), '/') ?: '/');
+        return $path === '/server/test/wls-security-probes'
+            || \str_starts_with($path, '/server/test/wls-security-probes/');
+    }
+
+    private function isSecurityProbeUnlockPath(string $method, string $path): bool
+    {
+        if (!\in_array(\strtoupper(\trim($method)), ['POST', 'GET'], true)) {
+            return false;
+        }
+        $path = \strtolower(\rtrim(\trim($path), '/') ?: '/');
+
+        return $path === '/server/test/wls-security-probes/unlock';
+    }
+
+    /**
+     * @param array<string, string|list<string>> $headers
+     * @return array{method:string,protocol:string,target:string,path:string,query:string,host:string,headers:array<string,string>,body:string,header_bytes:int,error:string}
+     */
+    private function invalidParsed(string $reason, array $headers = []): array
+    {
+        $normalized = [];
+        foreach ($headers as $name => $value) {
+            $key = \strtolower(\trim((string)$name));
+            if ($key === '') {
+                continue;
+            }
+            if (\is_array($value)) {
+                $value = (string)($value[0] ?? '');
+            }
+            $normalized[$key] = (string)$value;
+        }
+
         return [
             'method' => 'GET',
             'protocol' => 'HTTP/1.1',
             'target' => '/',
             'path' => '/',
             'query' => '',
-            'host' => '',
-            'headers' => [],
+            'host' => (string)($normalized['host'] ?? ''),
+            'headers' => $normalized,
             'body' => '',
             'header_bytes' => 0,
             'error' => $reason,
@@ -1313,6 +1596,50 @@ final class WorkerPolicyKernel
             }
         }
         return false;
+    }
+
+    /**
+     * Prefer website-synced domain_overrides[host].rules.crawler_block; fall back to global.
+     *
+     * @param array<string, mixed> $matcher
+     * @return array<string, mixed>
+     */
+    private function resolveCrawlerBlockRuleForHost(array $matcher, string $host): array
+    {
+        $base = \is_array($matcher['crawler_block'] ?? null) ? $matcher['crawler_block'] : [];
+        $host = $this->hostWithoutPort(\strtolower(\trim($host)));
+        if ($host === '') {
+            return $base;
+        }
+
+        $domainOverrides = \is_array($matcher['domain_overrides'] ?? null) ? $matcher['domain_overrides'] : [];
+        if (!($domainOverrides['enabled'] ?? true)) {
+            return $base;
+        }
+        $domains = \is_array($domainOverrides['domains'] ?? null) ? $domainOverrides['domains'] : [];
+        $override = \is_array($domains[$host] ?? null) ? $domains[$host] : [];
+        if ($override === [] || !($override['enabled'] ?? true)) {
+            return $base;
+        }
+        $overrideRules = \is_array($override['rules'] ?? null) ? $override['rules'] : [];
+        if (!\is_array($overrideRules['crawler_block'] ?? null)) {
+            return $base;
+        }
+
+        $siteRule = $overrideRules['crawler_block'];
+        // Website policies publish explicit entries — replace wholesale, do not recursive-merge lists.
+        if (\is_array($siteRule['entries'] ?? null) && $siteRule['entries'] !== []) {
+            return $siteRule;
+        }
+
+        $merged = \array_replace_recursive($base, $siteRule);
+        foreach (['disabled_builtin_ids', 'custom_entries', 'entries'] as $listKey) {
+            if (\array_key_exists($listKey, $siteRule) && \is_array($siteRule[$listKey])) {
+                $merged[$listKey] = \array_values($siteRule[$listKey]);
+            }
+        }
+
+        return $merged;
     }
 
     private function isLocalizationSegment(string $segment): bool

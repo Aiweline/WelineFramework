@@ -428,7 +428,7 @@ final class ThemePatchEngineTest extends TestCase
                 $parentHelp => [
                     'node_uid' => $parentHelp,
                     'slot_id' => 'footer-help-links',
-                    'widget_code' => 'footer-help-center-link',
+                    'widget_code' => 'footer-faq-link',
                 ],
             ],
         ];

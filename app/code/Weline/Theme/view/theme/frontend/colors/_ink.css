@@ -28,15 +28,22 @@
     --color-on-primary: #f7f4ef;
 
     /* ========== 文本色（墨分五色：焦 / 浓 / 重 / 淡 / 清） ========== */
-    --color-text-primary: #1c1c1c;
+    --color-text: #1c1c1c;
+    --color-text-rgb: 28, 28, 28;
+    --color-emphasis-rgb: 28, 28, 28;
+    --color-text-primary: var(--color-text);
     --color-text-secondary: #4a4a48;
     --color-text-tertiary: #7a7874;
+    --color-text-subtle: #7a7874;
     --color-text-disabled: #b8b4ac;
     --color-text-dark: #1c1c1c;
     --color-text-muted: #5c5a56;
     --color-text-placeholder: #9a968e;
+    --color-text-inverse: #f7f4ef;
     --color-text-light: #f7f4ef;
     --color-text-light-secondary: #d4cfc5;
+    --color-text-on-dark: #f7f4ef;
+    --color-text-on-dark-muted: #d4cfc5;
 
     /* ========== 背景色（宣纸留白） ========== */
     --color-bg-canvas: #f7f4ef;
@@ -50,10 +57,17 @@
     --color-bg-dark: #1f2124;
     --color-bg-dark-secondary: #16181a;
     --color-bg-dark-tertiary: #2c3034;
+    --color-bg-overlay: rgb(28 28 28 / 0.42);
+    --color-surface: var(--color-bg-primary);
+    --color-surface-subtle: var(--color-bg-secondary);
+    --color-surface-muted: var(--color-bg-tertiary);
     --color-surface-hover: #f0ebe3;
+    --color-surface-disabled: #ede9e1;
 
     /* ========== 边框色（淡墨线） ========== */
     --color-border-default: #d4cfc5;
+    --color-border-subtle: #e8e4dc;
+    --color-border-strong: #a8a299;
     --color-border-emphasis: #a8a299;
     --color-border-focus: #b84a3c;
     --color-border-light: #e8e4dc;
@@ -65,13 +79,54 @@
     --color-accent-medium: rgba(184, 74, 60, 0.14);
     --color-accent-dark: rgba(184, 74, 60, 0.22);
 
-    /* ========== 功能色（石绿 / 赭石 / 胭脂 / 花青） ========== */
+    /* ========== 次色（secondary — 继承默认合同，水墨中性灰） ========== */
+    --color-secondary: #5c5a56;
+    --color-secondary-rgb: 92, 90, 86;
+    --color-secondary-hover: #4a4a48;
+    --color-secondary-active: #1c1c1c;
+    --color-on-secondary: #f7f4ef;
+    --color-secondary-bg-subtle: #ede9e1;
+    --color-secondary-border-subtle: #a8a299;
+    --color-secondary-text-emphasis: #4a4a48;
+
+    /* ========== 功能色（石绿 / 赭石 / 胭脂 / 花青 — status 全家） ========== */
     --color-success: #4a7c59;
+    --color-success-rgb: 74, 124, 89;
+    --color-success-hover: #3d684a;
+    --color-success-active: #31543c;
+    --color-on-success: #ffffff;
+    --color-success-bg-subtle: #e4efe7;
+    --color-success-border-subtle: #a8cbb3;
+    --color-success-text-emphasis: #31543c;
     --color-warning: #c4893f;
-    --color-error: #a63d3d;
-    --color-error-hover: #8b3333;
+    --color-warning-rgb: 196, 137, 63;
+    --color-warning-hover: #a87334;
+    --color-warning-active: #8c602b;
+    --color-on-warning: #ffffff;
+    --color-warning-bg-subtle: #f8efe3;
+    --color-warning-border-subtle: #e8cda3;
+    --color-warning-text-emphasis: #8c602b;
+    --color-danger: #a63d3d;
+    --color-danger-rgb: 166, 61, 61;
+    --color-danger-hover: #8b3333;
+    --color-danger-active: #702929;
+    --color-on-danger: #ffffff;
+    --color-danger-bg-subtle: #f8ede9;
+    --color-danger-border-subtle: #e8c4bc;
+    --color-danger-text-emphasis: #702929;
+    --color-error: var(--color-danger);
+    --color-error-hover: var(--color-danger-hover);
     --color-error-light: rgba(166, 61, 61, 0.08);
     --color-info: #4a6b8a;
+    --color-info-rgb: 74, 107, 138;
+    --color-info-hover: #3d5a74;
+    --color-info-active: #31495e;
+    --color-on-info: #ffffff;
+    --color-info-bg-subtle: #e8eef3;
+    --color-info-border-subtle: #b3c5d4;
+    --color-info-text-emphasis: #31495e;
+    --color-success-focus-ring-color: rgba(74, 124, 89, 0.32);
+    --color-danger-focus-ring-color: rgba(166, 61, 61, 0.32);
 
     /* ========== 链接色（石青 + 朱砂 hover） ========== */
     --color-link: #3d6b78;

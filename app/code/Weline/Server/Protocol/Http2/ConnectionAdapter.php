@@ -391,6 +391,14 @@ final class ConnectionAdapter
     public function encodeResponse(int $streamId, string $httpResponse): string
     {
         [$status, $headers, $body] = $this->parseHttpResponse($httpResponse);
+        if (isset($headers['content-length'][0])
+            && \ctype_digit((string)$headers['content-length'][0])
+            && (int)$headers['content-length'][0] > 0
+            && $body === ''
+        ) {
+            // Never advertise a body then END_STREAM — Chrome will wait forever.
+            unset($headers['content-length']);
+        }
         return $this->encodeSimpleResponse($streamId, $status, $headers, $body);
     }
 
@@ -418,14 +426,56 @@ final class ConnectionAdapter
             return $frames;
         }
 
+        $isHtmlDocument = $this->headerListLooksLikeHtml($headers);
         $frames = $this->encodeHeaderBlockFrames($streamId, $headerBlock, false);
         $this->pendingResponses[$streamId] = [
             'body' => $body,
             'offset' => 0,
             'end_stream' => true,
+            'document' => $isHtmlDocument,
         ];
 
-        return $frames . $this->flushPendingResponses($streamId);
+        // Keep the first response batch bounded even when the peer grants a large
+        // window. The Worker re-arms the socket after each write and drains the
+        // next quantum, so a megabyte HTML body cannot monopolise the connection's
+        // write buffer and delay CSS/JS streams behind it.
+        //
+        // Document (text/html) bodies are an exception: Chrome waits for the full
+        // Content-Length, so stopping after one quantum leaves a half-rendered page
+        // that never reaches </html>. Keep draining this stream in the same encode
+        // call (up to ~2MB) even when other pending streams exist. Non-HTML bodies
+        // still solo-drain only when they are the only pending response.
+        $out = $frames . $this->flushPendingResponses($streamId);
+        $encodeCap = $isHtmlDocument ? 2097152 : 1048576;
+        while (isset($this->pendingResponses[$streamId])
+            && ($isHtmlDocument || \count($this->pendingResponses) === 1)
+        ) {
+            $more = $this->flushPendingResponses($streamId);
+            if ($more === '') {
+                break;
+            }
+            $out .= $more;
+            if (\strlen($out) >= $encodeCap) {
+                break;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Stream id of an in-flight text/html body that must finish before the Worker
+     * admits competing multiplexed requests on the same connection.
+     */
+    public function exclusiveDocumentStreamId(): ?int
+    {
+        foreach ($this->pendingResponses as $streamId => $pending) {
+            if (!empty($pending['document'])) {
+                return (int)$streamId;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -490,6 +540,7 @@ final class ConnectionAdapter
                 'body' => $data,
                 'offset' => 0,
                 'end_stream' => false,
+                'document' => false,
             ];
         }
 
@@ -516,6 +567,7 @@ final class ConnectionAdapter
                 'body' => '',
                 'offset' => 0,
                 'end_stream' => true,
+                'document' => false,
             ];
         }
 
@@ -609,6 +661,24 @@ final class ConnectionAdapter
     public function drainPendingResponseData(): string
     {
         return $this->flushPendingResponses();
+    }
+
+    /**
+     * Refund connection-level send window for DATA frames discarded before write.
+     *
+     * Peer RST_STREAM can leave already-encoded DATA sitting in the Worker write
+     * buffer. Stripping those frames without crediting the window permanently
+     * shrinks connectionSendWindow and can starve the next Document body.
+     */
+    public function creditConnectionSendWindow(int $bytes): void
+    {
+        if ($bytes <= 0) {
+            return;
+        }
+        $this->connectionSendWindow += $bytes;
+        if ($this->connectionSendWindow > self::MAX_FLOW_WINDOW) {
+            $this->connectionSendWindow = self::MAX_FLOW_WINDOW;
+        }
     }
 
     public function hasActiveStreams(): bool
@@ -928,7 +998,7 @@ final class ConnectionAdapter
         do {
             $progress = false;
             $streamIds = $onlyStreamId === null
-                ? \array_keys($this->pendingResponses)
+                ? $this->pendingResponseDrainOrder()
                 : [$onlyStreamId];
 
             foreach ($streamIds as $streamId) {
@@ -992,6 +1062,47 @@ final class ConnectionAdapter
         } while ($progress && $budget > 0 && $this->connectionSendWindow > 0);
 
         return $frames;
+    }
+
+    /**
+     * Drain incomplete local bodies with document streams first so a half-sent
+     * HTML Content-Length cannot lose the rotation to later CSS/JS streams.
+     *
+     * @return list<int>
+     */
+    private function pendingResponseDrainOrder(): array
+    {
+        $documents = [];
+        $others = [];
+        foreach ($this->pendingResponses as $streamId => $pending) {
+            if (!empty($pending['document'])) {
+                $documents[] = (int)$streamId;
+            } else {
+                $others[] = (int)$streamId;
+            }
+        }
+
+        return \array_merge($documents, $others);
+    }
+
+    /**
+     * @param array<string,string|int|float|list<string|int|float>> $headers
+     */
+    private function headerListLooksLikeHtml(array $headers): bool
+    {
+        foreach ($headers as $name => $values) {
+            if (\strtolower((string)$name) !== 'content-type') {
+                continue;
+            }
+            $list = \is_array($values) ? $values : [$values];
+            foreach ($list as $value) {
+                if (\str_contains(\strtolower((string)$value), 'text/html')) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**

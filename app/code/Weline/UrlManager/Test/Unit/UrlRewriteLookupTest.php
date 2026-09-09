@@ -51,6 +51,9 @@ final class UrlRewriteLookupTest extends TestCase
                         $statement->execute($this->bound_values);
                         $rows = $statement->fetchAll(PDO::FETCH_ASSOC);
                         $this->ledger->queries[] = ['sql' => $this->sql, 'bindings' => $this->bound_values, 'rows' => $rows];
+                        if (($this->ledger->associativeSingleRow ?? false) && count($rows) === 1) {
+                            return $rows[0];
+                        }
                         return $rows;
                     }
                 };
@@ -133,6 +136,83 @@ final class UrlRewriteLookupTest extends TestCase
         $this->database->exec('DELETE FROM url_rewrite_fixture WHERE rewrite_id = 200');
         self::assertNull($this->model->findLatestByWebsiteAndPath(7, $path));
         self::assertCount(5, $this->ledger->queries);
+    }
+
+    public function testBatchLookupPreservesExactPathsPriorityAndWebsiteIsolation(): void
+    {
+        $paths = ['/priority', '/legacy', '/empty', '/missing', '/Case', '/case', '/Case ', "/quo'te\n", '/broken'];
+        foreach ([[10, UrlRewrite::pathFingerprint('/priority')], [20, UrlRewrite::pathFingerprint('/priority')], [30, null], [40, null], [50, ''], [60, '']] as [$id, $fingerprint]) {
+            $this->insertRow($id, 7, '/priority', $fingerprint);
+        }
+        $this->insertRow(110, 7, '/legacy', null);
+        $this->insertRow(120, 7, '/legacy', '');
+        $this->insertRow(130, 7, '/empty', '');
+        $this->insertRow(140, 7, '/Case', UrlRewrite::pathFingerprint('/Case'));
+        $this->insertRow(150, 7, '/case', null);
+        $this->insertRow(160, 7, '/Case ', '');
+        $this->insertRow(170, 7, "/quo'te\n", null);
+        $this->insertRow(180, 7, '/broken', UrlRewrite::pathFingerprint('/another'));
+        $this->insertRow(190, 7, '/not-missing', UrlRewrite::pathFingerprint('/missing'));
+        $this->insertRow(200, 7, '/case', UrlRewrite::pathFingerprint('/Case'));
+        foreach ($paths as $index => $path) {
+            $this->insertRow(900 + $index, 8, $path, UrlRewrite::pathFingerprint($path));
+            $this->insertRow(1000 + $index, 8, $path, null);
+        }
+
+        $rows = $this->model->findLatestByWebsiteAndPaths(7, [...$paths, '/priority', '/missing']);
+
+        self::assertSame($paths, array_keys($rows));
+        self::assertSame([20, 110, 130, null, 140, 150, 160, 170, null], array_map(static fn(?array $row): ?int => $row['rewrite_id'] ?? null, array_values($rows)));
+        self::assertCount(1, $this->ledger->queries);
+        foreach ($this->ledger->queries[0]['rows'] as $row) {
+            self::assertSame(7, (int)$row['website_id']);
+        }
+        self::assertStringNotContainsString("/quo'te\n", $this->ledger->queries[0]['sql']);
+    }
+
+    public function testBatchLookupBoundsParametersAndPreservesEveryResult(): void
+    {
+        $paths = [];
+        for ($index = 0; $index < 257; ++$index) {
+            $path = '/batch/' . $index;
+            $paths[] = $path;
+            $this->insertRow($index + 1, 7, $path, UrlRewrite::pathFingerprint($path));
+        }
+
+        $rows = $this->model->findLatestByWebsiteAndPaths(7, $paths);
+
+        self::assertSame($paths, array_keys($rows));
+        self::assertSame(range(1, 257), array_column(array_values($rows), 'rewrite_id'));
+        self::assertCount(2, $this->ledger->queries);
+        foreach ($this->ledger->queries as $query) {
+            self::assertLessThanOrEqual(259, count($query['bindings']));
+        }
+    }
+
+    public function testBatchLookupEmptyInputAndLaterWritesStayVisible(): void
+    {
+        self::assertSame([], $this->model->findLatestByWebsiteAndPaths(7, []));
+        self::assertCount(0, $this->ledger->queries);
+        self::assertSame(['/future' => null], $this->model->findLatestByWebsiteAndPaths(7, ['/future']));
+        $this->insertRow(100, 7, '/future', null);
+        self::assertSame(100, $this->model->findLatestByWebsiteAndPaths(7, ['/future'])['/future']['rewrite_id']);
+        $this->database->exec('DELETE FROM url_rewrite_fixture WHERE rewrite_id = 100');
+        self::assertSame(['/future' => null], $this->model->findLatestByWebsiteAndPaths(7, ['/future']));
+        self::assertCount(3, $this->ledger->queries);
+    }
+
+    public function testBatchLookupPreservesAssociativeSingleRowCompatibility(): void
+    {
+        $path = '/single-row';
+        $this->insertRow(11, 7, $path, UrlRewrite::pathFingerprint($path));
+        $this->ledger->associativeSingleRow = true;
+
+        $single = $this->model->findLatestByWebsiteAndPath(7, $path);
+        $batch = $this->model->findLatestByWebsiteAndPaths(7, [$path]);
+
+        self::assertSame(11, $single['rewrite_id']);
+        self::assertSame([$path => $single], $batch);
+        self::assertCount(2, $this->ledger->queries);
     }
 
     private function insertRow(int $id, int $website, string $path, ?string $fingerprint): void

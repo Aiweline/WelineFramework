@@ -5,9 +5,13 @@ declare(strict_types=1);
 namespace Weline\Product\Controller\Frontend;
 
 use Weline\Framework\App\Controller\FrontendController;
+use Weline\Framework\Context;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Product\Helper\StorefrontCampaignEntry;
+use Weline\Product\Helper\StorefrontOfferResolver;
 use Weline\Product\Repository\CategoryLinkRepository;
+use Weline\Product\Service\ProductStorefrontBreadcrumbBuilder;
 use Weline\Product\Service\StorefrontCatalogViewService;
 use Weline\Product\Service\StorefrontEavLabelResolver;
 use Weline\Product\Service\StorefrontVariantSelectionService;
@@ -22,6 +26,7 @@ final class Detail extends FrontendController
         private readonly StorefrontVariantSelectionService $variantSelection,
         private readonly StorefrontEavLabelResolver $variantLabels,
         private readonly EventsManager $events,
+        private readonly ProductStorefrontBreadcrumbBuilder $breadcrumbs,
     ) {
     }
 
@@ -48,6 +53,8 @@ final class Detail extends FrontendController
             0,
             (int)($offers[0]['product_id'] ?? $productId),
         );
+        // id/slug 解析一次后写回请求上下文；后续只读 Context / Request，不再拆地址。
+        $this->carryResolvedIdentity($productIdForLabels, $canonicalSlug !== '' ? $canonicalSlug : $slug);
         $variantLabels = $this->variantLabels->forProduct($productIdForLabels);
         if ($slug === '' && $canonicalSlug !== '') {
             $target = $this->getUrl('product/' . $canonicalSlug);
@@ -65,6 +72,16 @@ final class Detail extends FrontendController
             if ($query !== []) {
                 $target .= '?' . http_build_query($query);
             }
+            $entryThemeId = StorefrontCampaignEntry::preferredThemeIdFromParams($this->request->getParams());
+            $entryCampaign = strtolower(trim((string)$this->request->getParam(StorefrontCampaignEntry::QUERY_CAMPAIGN, '')));
+            if ($entryThemeId > 0 || $entryCampaign !== '') {
+                $entryQuery = StorefrontCampaignEntry::mergeIntoQuery(
+                    [],
+                    $entryThemeId,
+                    $entryCampaign,
+                );
+                $target .= (str_contains($target, '?') ? '&' : '?') . http_build_query($entryQuery);
+            }
             return (string)$this->redirect($target);
         }
 
@@ -76,6 +93,7 @@ final class Detail extends FrontendController
             ),
         );
         $displayOffer = $selectedOffer ?? $offers[0];
+        $displayOffer = $this->applyCampaignEntryPricing($displayOffer);
         $requiresExplicitSelection = count($offers) > 1
             && $selectedOffer === null
             && $requestedOfferUuid === ''
@@ -125,6 +143,11 @@ final class Detail extends FrontendController
         if ($seoDescription === '') {
             $seoDescription = trim((string)($displayOffer['short_description'] ?? $displayOffer['description'] ?? ''));
         }
+        $seoDescription = $this->ensureSeoDescriptionLength(
+            $seoDescription,
+            $seoTitle,
+            trim((string)($displayOffer['brand'] ?? $displayOffer['brand_name'] ?? '')),
+        );
         $seoKeywords = trim((string)($displayOffer['meta_keywords'] ?? ''));
         $seoImage = trim((string)($displayOffer['image'] ?? ''));
 
@@ -133,7 +156,34 @@ final class Detail extends FrontendController
         // assignment, and publish the same EAV projection through the shared SEO profile.
         $seoProduct = $displayOffer;
         $seoProduct['storefront_offers'] = $offers;
+
+        $productIdForCrumbs = max(0, (int)($displayOffer['product_id'] ?? $productIdForLabels));
+        $websiteIdForCrumbs = max(0, (int)($displayOffer['website_id'] ?? $this->request->getParam('website_id', 0)));
+        $canonicalUrl = '';
+        try {
+            $canonicalUrl = $this->getUrl(
+                'product/' . ($canonicalSlug !== '' ? $canonicalSlug : (string)$productIdForCrumbs)
+            );
+        } catch (\Throwable) {
+            $canonicalUrl = '';
+        }
+        $preferredCategoryId = max(0, (int)$this->request->getParam('category_id', 0));
+        $crumbBundle = $this->breadcrumbs->build(
+            $websiteIdForCrumbs,
+            $productIdForCrumbs,
+            $seoProduct,
+            $name !== '' ? $name : $seoTitle,
+            $canonicalUrl,
+            $preferredCategoryId,
+            (string)($_SERVER['HTTP_REFERER'] ?? ''),
+        );
+        $visibleCrumbs = $this->breadcrumbs->toVisibleItems($crumbBundle['primary']);
+        ProductStorefrontBreadcrumbBuilder::remember($crumbBundle);
+
         $this->assign('product', $seoProduct);
+        $this->assign('storefront_product_breadcrumbs', $crumbBundle['primary']);
+        $this->assign('storefront_product_breadcrumb_trails', $crumbBundle['trails']);
+        $this->assign('items', $visibleCrumbs);
         $this->assign('seo', [
             'page_type' => 'product',
             'title' => $seoTitle,
@@ -141,12 +191,31 @@ final class Detail extends FrontendController
             'keywords' => $seoKeywords,
             'image' => $seoImage,
             'product' => $seoProduct,
+            'breadcrumbs' => $crumbBundle['primary'],
+            'breadcrumb_trails' => $crumbBundle['trails'],
         ]);
+        if (class_exists(\Weline\Seo\Service\Head\SeoPageProfileBag::class)) {
+            \Weline\Seo\Service\Head\SeoPageProfileBag::publish([
+                'page_type' => 'product',
+                'title' => $seoTitle,
+                'description' => $seoDescription,
+                'keywords' => $seoKeywords,
+                'image' => $seoImage,
+                'product' => $seoProduct,
+                'breadcrumbs' => $crumbBundle['primary'],
+                'breadcrumb_trails' => $crumbBundle['trails'],
+            ]);
+        }
         $this->assign('meta_title', $seoTitle);
         $this->assign('meta_description', $seoDescription);
         $this->assign('meta_keywords', $seoKeywords);
         $this->assign('storefront_offer', $displayOffer);
         $this->assign('storefront_offers', $offers);
+        StorefrontOfferResolver::rememberResolvedOffer($displayOffer);
+        $this->carryResolvedIdentity(
+            max(0, (int)($displayOffer['product_id'] ?? $productIdForLabels)),
+            $canonicalSlug !== '' ? $canonicalSlug : $slug,
+        );
         $this->assign(
             'selected_offer_uuid',
             $selectedOffer === null ? '' : trim((string)($selectedOffer['global_offer_uuid'] ?? '')),
@@ -170,6 +239,115 @@ final class Detail extends FrontendController
         return $html;
     }
 
+    private function ensureSeoDescriptionLength(string $description, string $title, string $brand): string
+    {
+        $description = trim(preg_replace('/\s+/u', ' ', strip_tags($description)) ?? $description);
+        $length = mb_strlen($description);
+        if ($length >= 80 && $length <= 170) {
+            return $description;
+        }
+        if ($description === '') {
+            $label = $title !== '' ? $title : (string)__('汉服商品');
+            $prefix = $brand !== '' ? ($brand . (string)__('正品汉服：')) : '';
+            $description = $prefix . $label . (string)__('。查看颜色与尺码、实拍图片、库存与发货说明，便于日常与礼仪场景选购。');
+        }
+        if (mb_strlen($description) < 80) {
+            $suffixOptions = [
+                (string)__('适合日常穿着、节日出行与礼仪场合选购参考。'),
+                (string)__('支持颜色与尺码选择，提供实拍图、库存与发货信息，适合日常穿着与礼仪场合。'),
+            ];
+            foreach ($suffixOptions as $suffix) {
+                if (mb_strlen($description) >= 80) {
+                    break;
+                }
+                if (str_contains($description, $suffix)) {
+                    continue;
+                }
+                $description = rtrim($description, "。.;； ") . '。' . $suffix;
+            }
+            if (mb_strlen($description) < 80) {
+                $description .= (string)__('欢迎对比形制与面料后再下单。');
+            }
+        }
+        if (mb_strlen($description) > 170) {
+            $description = rtrim(mb_substr($description, 0, 167)) . '…';
+        }
+
+        return $description;
+    }
+
+    /**
+     * Prefer the campaign carried from an activity shelf when the SKU is eligible.
+     *
+     * @param array<string, mixed> $offer
+     * @return array<string, mixed>
+     */
+    private function applyCampaignEntryPricing(array $offer): array
+    {
+        $themeId = StorefrontCampaignEntry::preferredThemeIdFromParams($this->request->getParams());
+        if ($themeId <= 0) {
+            return $offer;
+        }
+
+        $productId = max(0, (int)($offer['product_id'] ?? 0));
+        $catalogMinor = max(0, (int)($offer['catalog_price_minor'] ?? $offer['unit_price_minor'] ?? 0));
+        $currency = strtoupper(trim((string)($offer['currency'] ?? 'CNY'))) ?: 'CNY';
+        if ($productId <= 0 || $catalogMinor <= 0) {
+            return $offer;
+        }
+
+        try {
+            $assembler = ObjectManager::getInstance(
+                \Weline\Product\Api\StorefrontOfferPriceAssemblerInterface::class,
+            );
+            if (!$assembler instanceof \Weline\Product\Api\StorefrontOfferPriceAssemblerInterface) {
+                $assembler = ObjectManager::getInstance(
+                    \Weline\Product\Service\Storefront\StorefrontOfferPriceAssembler::class,
+                );
+            }
+            if (!$assembler instanceof \Weline\Product\Api\StorefrontOfferPriceAssemblerInterface) {
+                return $offer;
+            }
+            $view = $assembler->assemble(new \Weline\Product\Api\Data\StorefrontPriceContext(
+                productId: $productId,
+                catalogPriceMinor: $catalogMinor,
+                currency: $currency,
+                selection: ['promotion_theme_id' => $themeId],
+            ));
+            $offer['unit_price_minor'] = max(0, $view->finalPriceMinor);
+            $offer['compare_at_minor'] = max(0, $view->compareAtMinor);
+            $offer['has_deal'] = $view->hasDeal;
+            $offer['campaign_label'] = $view->campaignLabel();
+            $offer['campaign_url'] = $view->campaignUrl();
+            $offer['eligible_campaigns'] = $view->eligibleCampaigns;
+            $primary = $view->appliedAdjustments[0] ?? null;
+            if ($primary instanceof \Weline\Product\Api\Data\StorefrontPriceAdjustment) {
+                $offer['deal_discount_type'] = $primary->type;
+                $offer['deal_discount_value'] = $primary->value;
+            }
+            $appliedThemeId = 0;
+            foreach ($view->eligibleCampaigns as $choice) {
+                if (!is_array($choice)) {
+                    continue;
+                }
+                if ((int)($choice['theme_id'] ?? 0) === $themeId) {
+                    $appliedThemeId = $themeId;
+                    break;
+                }
+            }
+            if ($appliedThemeId <= 0 && $primary instanceof \Weline\Product\Api\Data\StorefrontPriceAdjustment) {
+                $appliedThemeId = max(0, (int)$primary->sourceId);
+            }
+            if ($appliedThemeId > 0) {
+                $offer['promotion_theme_id'] = $appliedThemeId;
+            }
+        } catch (\Throwable) {
+            // Keep catalog default pricing when Assembler is unavailable.
+        }
+
+        return $offer;
+    }
+
     /** @param list<array<string, mixed>> $offers */
     private function hasAxisSelection(array $offers): bool
     {
@@ -180,6 +358,20 @@ final class Detail extends FrontendController
         }
 
         return false;
+    }
+
+    private function carryResolvedIdentity(int $productId, string $slug): void
+    {
+        $productId = max(0, $productId);
+        $slug = strtolower(trim($slug));
+        if ($productId > 0) {
+            $this->request->setGet('id', $productId);
+            Context::current()->set('input.query.id', $productId);
+        }
+        if ($slug !== '') {
+            $this->request->setGet('slug', $slug);
+            Context::current()->set('input.query.slug', $slug);
+        }
     }
 
     /**

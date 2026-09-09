@@ -34,10 +34,34 @@ final class StorefrontOfferPriceAssembler implements StorefrontOfferPriceAssembl
         $currency = strtoupper(trim($context->currency)) ?: 'CNY';
 
         $candidates = [];
+        $eligibleCampaigns = [];
         foreach ($this->resolvedProviders ??= $this->providers->all() as $provider) {
             $providerCode = strtolower(trim($provider->getCode()));
             $providerLabel = preg_replace('/[^a-z0-9_.-]+/', '_', $providerCode) ?: 'unknown';
             try {
+                if (method_exists($provider, 'listEligibleCampaignChoices')) {
+                    $choices = $provider->listEligibleCampaignChoices($context);
+                    if (is_array($choices)) {
+                        foreach ($choices as $choice) {
+                            if (!is_array($choice)) {
+                                continue;
+                            }
+                            $themeId = (int)($choice['theme_id'] ?? 0);
+                            $label = trim((string)($choice['label'] ?? ''));
+                            if ($themeId <= 0 || $label === '') {
+                                continue;
+                            }
+                            $eligibleCampaigns[$themeId] = [
+                                'theme_id' => $themeId,
+                                'label' => $label,
+                                'url' => trim((string)($choice['url'] ?? '')),
+                                'deal_discount_type' => (string)($choice['deal_discount_type'] ?? ''),
+                                'deal_discount_value' => (float)($choice['deal_discount_value'] ?? 0),
+                                'page_slug' => (string)($choice['page_slug'] ?? ''),
+                            ];
+                        }
+                    }
+                }
                 $adjustments = RequestLifecycleTrace::measurePhase(
                     'product.price.adjustment.' . $providerLabel,
                     fn(): array => $provider->collectAdjustments($context),
@@ -150,6 +174,7 @@ final class StorefrontOfferPriceAssembler implements StorefrontOfferPriceAssembl
             hasDeal: $hasDeal,
             appliedAdjustments: $applied,
             primaryCampaign: $primary,
+            eligibleCampaigns: array_values($eligibleCampaigns),
         );
     }
 

@@ -9,6 +9,7 @@ use Weline\DeveloperWorkspace\Api\Rest\V1\Db;
 use Weline\DeveloperWorkspace\Api\Rest\V1\Document as ApiDocument;
 use Weline\DeveloperWorkspace\Api\Rest\V1\Routes;
 use Weline\DeveloperWorkspace\Api\Rest\V1\Seo\Crawl;
+use Weline\DeveloperWorkspace\Api\Rest\V1\Seo\Gsc;
 use Weline\DeveloperWorkspace\Api\Rest\V1\Trace;
 use Weline\DeveloperWorkspace\Controller\Admin\Document as AdminDocumentController;
 use Weline\DeveloperWorkspace\Controller\Admin\Document\Catalog as AdminCatalogController;
@@ -30,6 +31,7 @@ class DeveloperWorkspaceAdminQueryProvider implements QueryProviderInterface
         'db/explain' => ['method' => 'POST', 'class' => Db::class, 'action' => 'postExplain'],
         'seo/crawl/start' => ['method' => 'POST', 'class' => Crawl::class, 'action' => 'postStart'],
         'seo/crawl/result' => ['method' => 'GET', 'class' => Crawl::class, 'action' => 'getResult'],
+        'seo/gsc/inspect' => ['method' => 'POST', 'class' => Gsc::class, 'action' => 'postInspect'],
     ];
 
     public function getProviderName(): string

@@ -126,7 +126,8 @@ token 且仍为 `pid=0` 的调度者恢复 `pending`，不会覆盖已经被 Wor
   `type_id/name/module/biz_key/content/result/process/auto`，业务字段和完整快照共同 CAS；
 - `requeueQueueSafely()`：仅对无 active/dirty attempt 的行执行
   `pending + finished=0`，并清理 PID/fence；reset/continue/retry 共用该边界，
-  不探测、不终止 Worker；
+  不探测、不终止 Worker；clean 行的纯数据库 CAS 可加入调用方事务，rollback 会恢复原状态，
+  后续派发通过公开 Queue `dispatch` 的 `afterCommit` 完成；
 - `stopQueueSafely()`：确认当前 Worker 已释放后，把同一执行代次条件更新为 `stop`；
 - `takeoverQueueSafely()`：确认释放后，把同一执行代次重置为 `pending`，写入接管证据，
   再交给系统调度器或显式指定的 owner；
@@ -140,7 +141,9 @@ token 且仍为 `pid=0` 的调度者恢复 `pending`，不会覆盖已经被 Wor
   精确匹配的受管租约，不发送信号；lease 移除时传入 canonical `--name=… --launch-id=…`，
   避免非 ASCII 队列名被 Processer 误哈希成 `weline-cmd-*` 后删不掉 `*-pid.json`。
 - `reconcileRunningQueues()`：在同步 Queue 行状态后，额外快速清理已死进程的
-  `var/process/pid/*-pid.json` 孤儿，防止短命队列 Worker 元数据无限堆积。
+  `queue-*-pid.json`；死 PID 且不可恢复时写 `error + finished=1`（与
+  `failQueueWorkerSafely` 终态一致），可恢复消费者则回 `pending` 再派发；
+  顺带清扫 `var/process/pid/*-pid.json` 孤儿，防止短命队列 Worker 元数据无限堆积。
 
 控制操作遵循以下不变量：
 
@@ -171,7 +174,7 @@ token 且仍为 `pid=0` 的调度者恢复 `pending`，不会覆盖已经被 Wor
 带 dispatch token 的 `queue:run` Worker 会注册 shutdown 清理器，正常返回、异常和
 PHP fatal 都会尝试移除自身精确租约。所有 Worker 的执行中、成功和失败写入
 均校验当前 PID 与 token 代次，并以完整 Queue 快照 CAS。成功默认写
-`done + finished=1`，失败写 `error`，两者清 PID/token/until；消费者显式留下
+`done + finished=1`，失败写 `error + finished=1`，两者清 PID/token/until；消费者显式留下
 未完成的 `pending/error/stop` 时，成功收口会保留该业务状态。代次变化时旧 Worker
 不写任何终态；shutdown 仍作为精确租约清理的幂等兜底。
 

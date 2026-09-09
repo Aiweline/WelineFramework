@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="utf-8">
+  <title>PROTOTYPE · 配送航线相对当前位置报价</title>
+  <style>
+    :root { --bg:#f4f6f8; --card:#fff; --ink:#1a1f2c; --muted:#5b6578; --line:#d7dde8; --accent:#1f6feb; }
+    body { margin:0; font:15px/1.5 system-ui,sans-serif; background:var(--bg); color:var(--ink); }
+    .wrap { max-width:960px; margin:24px auto; padding:0 16px; }
+    .banner { background:#111827; color:#fff; padding:10px 14px; border-radius:8px; margin-bottom:16px; }
+    .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:16px; }
+    h1,h2 { margin:0 0 8px; }
+    .muted { color:var(--muted); }
+    .grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .lane { border:1px dashed var(--line); border-radius:8px; padding:12px; }
+    .price { font-size:22px; font-weight:700; color:var(--accent); }
+    button { background:var(--accent); color:#fff; border:0; border-radius:8px; padding:8px 12px; cursor:pointer; }
+    table { width:100%; border-collapse:collapse; }
+    th,td { text-align:left; padding:8px; border-bottom:1px solid var(--line); }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="banner">PROTOTYPE · throwaway · 回答「相对发货仓的目的地航线如何报价」</div>
+  <h1>配送航线 · 相对当前位置</h1>
+  <p class="muted">发货锚点=默认仓（上海）；当前位置切换后，匹配最具体目的地航线。</p>
+
+  <div class="card">
+    <h2>当前位置（收货）</h2>
+    <div class="grid">
+      <button type="button" data-dest="CN-SH">上海（同城）</button>
+      <button type="button" data-dest="CN-BJ">北京（跨省）</button>
+      <button type="button" data-dest="US">美国（跨境）</button>
+      <button type="button" data-dest="XX">无覆盖目的地</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>报价结果</h2>
+    <p>目的地：<strong id="destLabel">—</strong></p>
+    <p class="price" id="price">—</p>
+    <p class="muted" id="lane">—</p>
+  </div>
+
+  <div class="card">
+    <h2>配置的航线</h2>
+    <table>
+      <thead><tr><th>航线</th><th>目的地</th><th>模板价</th></tr></thead>
+      <tbody>
+        <tr><td>同城快递</td><td>CN / 上海</td><td>¥8</td></tr>
+        <tr><td>国内标快</td><td>CN（国家）</td><td>¥18</td></tr>
+        <tr><td>国际标快</td><td>US</td><td>¥128</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+<script>
+const lanes = [
+  { id:'local', label:'同城快递', dest:'CN-SH', specificity:20, price:8 },
+  { id:'cn', label:'国内标快', dest:'CN', specificity:10, price:18 },
+  { id:'us', label:'国际标快', dest:'US', specificity:10, price:128 },
+];
+function match(dest) {
+  const hits = lanes.filter(l => dest === l.dest || (l.dest === 'CN' && dest.startsWith('CN')));
+  hits.sort((a,b) => b.specificity - a.specificity);
+  return hits[0] || null;
+}
+document.querySelectorAll('[data-dest]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const dest = btn.getAttribute('data-dest');
+    document.getElementById('destLabel').textContent = btn.textContent;
+    const hit = match(dest);
+    document.getElementById('price').textContent = hit ? ('¥' + hit.price) : '不可达';
+    document.getElementById('lane').textContent = hit ? ('命中航线：' + hit.label) : '无航线覆盖';
+  });
+});
+</script>
+</body>
+</html>

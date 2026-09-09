@@ -301,6 +301,9 @@ class Pixel extends Model
     {
         $model = w_obj(self::class)->reset()->where(self::schema_fields_WEBSITE_ID, $websiteId);
         
+        $startDate = ($startDate !== null && trim((string)$startDate) !== '') ? trim((string)$startDate) : null;
+        $endDate = ($endDate !== null && trim((string)$endDate) !== '') ? trim((string)$endDate) : null;
+
         // 添加时间范围条件（使用created_at字段）
         if ($startDate !== null) {
             $model->where(self::schema_fields_CREATED_AT, $startDate, '>=');
