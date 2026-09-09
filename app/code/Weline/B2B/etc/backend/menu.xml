@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    <menu source="Weline_B2B::commerce:partner:control-center" name="b2b_control_center"
+          title="B2B 管理" action="" parent="Weline_Backend::commerce:partner:group"
+          icon="globe" order="30">
+        <menu source="Weline_B2B::commerce:partner:groups" name="b2b_groups" title="客户组"
+              action="b2b/backend/controlcenter/groups" icon="users" order="10"/>
+        <menu source="Weline_B2B::commerce:partner:price-lists" name="b2b_price_lists" title="价目表"
+              action="b2b/backend/controlcenter/pricelists" icon="tag" order="20"/>
+        <menu source="Weline_B2B::commerce:partner:quotes" name="b2b_quotes" title="报价令牌"
+              action="b2b/backend/controlcenter/quotes" icon="file" order="30"/>
+        <menu source="Weline_B2B::commerce:partner:snapshots" name="b2b_snapshots" title="订单价格快照"
+              action="b2b/backend/controlcenter/snapshots" icon="camera" order="40"/>
+        <menu source="Weline_B2B::commerce:partner:applications" name="b2b_applications" title="身份申请"
+              action="b2b/backend/controlcenter/applications" icon="user-check" order="45"/>
+        <menu source="Weline_B2B::commerce:partner:hang-orders" name="b2b_hang_orders" title="定金挂单"
+              action="b2b/backend/controlcenter/hangorders" icon="clock" order="47"/>
+        <menu source="Weline_B2B::commerce:partner:migration" name="b2b_migration" title="迁移状态"
+              action="b2b/backend/controlcenter/migration" icon="eye" order="50"/>
+    </menu>
+</menus>

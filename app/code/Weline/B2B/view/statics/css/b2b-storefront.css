@@ -1,0 +1,418 @@
+.b2b-qty-tiers {
+    margin: var(--spacing-sm, 0.5rem) 0;
+    padding: var(--spacing-sm, 0.5rem) var(--spacing-md, 0.75rem);
+    border: 1px solid var(--color-border-default, var(--weline-theme-border, #d4cfc5));
+    border-radius: var(--radius-md, 8px);
+    background: var(--color-bg-secondary, var(--weline-theme-surface-muted, #f7f4ef));
+}
+
+.b2b-qty-tiers__moq {
+    margin: 0 0 var(--spacing-xs, 0.25rem);
+    color: var(--color-primary, var(--weline-theme-primary, #b84a3c));
+    font-weight: 600;
+    font-size: var(--font-size-sm, 0.875rem);
+}
+
+.b2b-qty-tiers__list {
+    margin: 0;
+    padding-left: 1.1rem;
+    color: var(--color-text-primary, inherit);
+    font-size: var(--font-size-sm, 0.875rem);
+}
+
+.b2b-qty-tiers__hint {
+    margin: 0;
+    color: var(--color-text-secondary, #6b655c);
+    font-size: var(--font-size-sm, 0.875rem);
+}
+
+/* Native <dialog>.w-dialog: flex column so tall product-info scrolls inside body, never spills past the surface. */
+.w-dialog.w-product-purchase-panel {
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    width: min(1100px, calc(100dvw - 2rem));
+    max-width: calc(100dvw - 2rem);
+    max-height: min(86dvh, 52rem);
+    margin: auto;
+    padding: 0;
+    overflow: hidden;
+}
+
+.w-dialog.w-product-purchase-panel > .w-dialog__header {
+    flex: 0 0 auto;
+}
+
+.w-dialog.w-product-purchase-panel > .w-dialog__body.w-product-purchase-panel__body {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+    overflow: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
+}
+
+.w-dialog.w-product-purchase-panel > .w-dialog__body.w-product-purchase-panel__body::-webkit-scrollbar {
+    width: 8px;
+}
+
+.w-dialog.w-product-purchase-panel > .w-dialog__body.w-product-purchase-panel__body::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--color-text-secondary, #6b655c) 45%, transparent);
+    border-radius: 999px;
+}
+
+.w-product-purchase-panel__loading {
+    padding: var(--spacing-xl, 1.5rem);
+    text-align: center;
+    color: var(--color-text-secondary, #6b655c);
+}
+
+.product-native-detail--quick-add {
+    width: 100%;
+    max-width: none;
+    min-height: 0;
+    margin: 0;
+    padding: var(--spacing-sm, 0.5rem) var(--spacing-md, 0.75rem);
+    box-sizing: border-box;
+}
+
+/* Quick-add: keep buybox only; hide affiliate/share noise that needs full PDP URL. */
+.product-native-detail--quick-add .affiliate-share-panel,
+.product-native-detail--quick-add [data-affiliate-share-root],
+.w-product-purchase-panel .affiliate-share-panel,
+.w-product-purchase-panel [data-affiliate-share-root] {
+    display: none !important;
+}
+
+.product-native-detail--quick-add .product-native-detail__hero-grid {
+    grid-template-columns: minmax(0, 34%) minmax(0, 1fr);
+    gap: var(--spacing-sm, 0.5rem) var(--spacing-md, 1rem);
+    align-items: start;
+}
+
+.product-native-detail--quick-add .product-native-detail__buybox {
+    position: sticky;
+    top: var(--spacing-sm, 0.5rem);
+    align-self: start;
+    z-index: 2;
+}
+
+/* Cap gallery so variants + B2B tiers stay reachable without a giant white spill. */
+.product-native-detail--quick-add .product-native-detail__stage-wrap,
+.product-native-detail--quick-add .product-native-detail__stage {
+    max-height: min(28dvh, 16rem);
+}
+
+.product-native-detail--quick-add .product-native-detail__stage img,
+.product-native-detail--quick-add .product-native-detail__stage video {
+    max-height: min(28dvh, 16rem);
+    width: auto;
+    max-width: 100%;
+    object-fit: contain;
+}
+
+@media (max-width: 768px) {
+    .product-native-detail--quick-add .product-native-detail__hero-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .product-native-detail--quick-add .product-native-detail__buybox {
+        position: static;
+    }
+
+    .product-native-detail--quick-add .product-native-detail__stage-wrap,
+    .product-native-detail--quick-add .product-native-detail__stage,
+    .product-native-detail--quick-add .product-native-detail__stage img,
+    .product-native-detail--quick-add .product-native-detail__stage video {
+        max-height: min(32dvh, 14rem);
+    }
+}
+
+
+.b2b-selling-mode {
+    margin: 8px 0 4px;
+}
+
+.b2b-selling-mode__hint {
+    margin: 0;
+}
+
+.b2b-selling-mode__hint[hidden],
+.b2b-selling-mode__cta[hidden] {
+    display: none !important;
+}
+
+.b2b-selling-mode__cta {
+    justify-self: start;
+    width: auto;
+    margin-top: 4px;
+}
+
+.b2b-selling-mode__guest-gate {
+    display: grid;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.b2b-selling-mode__guest-gate[hidden],
+.b2b-membership-apply[hidden],
+.b2b-membership-apply-wrap[hidden] {
+    display: none !important;
+}
+
+.b2b-account-identity {
+    display: grid;
+    gap: 10px;
+    margin: 0;
+}
+
+.b2b-account-identity > div {
+    display: grid;
+    gap: 2px;
+}
+
+.b2b-account-identity__label {
+    margin: 0;
+    font-size: var(--weline-font-size-xs, 12px);
+    color: var(--weline-theme-text-muted, var(--color-text-secondary, #565959));
+}
+
+.b2b-account-identity__value {
+    margin: 0;
+    font-size: var(--weline-font-size-sm, 14px);
+    color: var(--weline-theme-text, var(--color-text-primary, #0f1111));
+}
+
+.b2b-account-identity-apply,
+.b2b-account-identity-actions {
+    display: grid;
+    gap: var(--weline-theme-space-3, 12px);
+    margin-top: var(--weline-theme-space-4, 16px);
+    max-width: 28rem;
+    padding-top: var(--weline-theme-space-3, 12px);
+    border-top: 1px solid var(--weline-theme-border, var(--color-border, #e7e7e7));
+}
+
+.b2b-account-identity-actions .w-button,
+.b2b-account-identity-apply .w-button {
+    justify-self: start;
+    min-height: var(--weline-control-height, 2.5rem);
+}
+
+.weline-checkout .b2b-checkout-deposit-note,
+.b2b-checkout-deposit-note {
+    display: grid;
+    gap: var(--weline-theme-space-2, var(--weline-space-2, 0.5rem));
+    margin: 0 0 var(--weline-theme-space-3, var(--weline-space-3, 12px));
+    padding: var(--weline-theme-space-3, var(--weline-space-3, 10px)) var(--weline-theme-space-3, var(--weline-space-3, 12px));
+    border: 1px solid var(--weline-theme-primary-border, color-mix(in srgb, var(--weline-theme-primary, var(--color-primary)) 34%, var(--weline-theme-border, transparent)));
+    border-inline-start: 3px solid var(--weline-theme-primary, var(--color-primary));
+    border-radius: var(--weline-theme-radius-sm, var(--weline-radius-sm, 4px));
+    background: var(--weline-theme-primary-surface, var(--color-primary-bg-subtle, color-mix(in srgb, var(--weline-theme-primary, var(--color-primary)) 12%, var(--weline-theme-surface, #fff))));
+    color: var(--weline-theme-text, var(--color-text-primary, inherit));
+    font-size: var(--weline-font-size-sm, 13px);
+}
+
+.weline-checkout .b2b-checkout-deposit-note .w-badge[data-tone="primary"],
+.b2b-checkout-deposit-note .w-badge[data-tone="primary"] {
+    background: var(--weline-theme-primary, var(--color-primary));
+    color: var(--weline-theme-on-primary, var(--color-on-primary));
+    border-color: transparent;
+}
+
+.b2b-checkout-deposit-note > p {
+    margin: 0;
+}
+
+.b2b-checkout-deposit-note[hidden],
+.b2b-account-hang[hidden] {
+    display: none !important;
+}
+
+.b2b-account-hang {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.b2b-account-hang__progress {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.b2b-account-hang__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+/* Mini-cart dual type (injected by B2B JS; Theme stays retail-only without B2B).
+ * Width follows label content (EN "Wholesale cart" must stay one line). */
+.b2b-mini-cart-type-seg {
+    display: inline-flex;
+    align-items: stretch;
+    width: max-content;
+    max-width: 100%;
+    border: 1px solid var(--amz-drawer-border, var(--weline-theme-border, #d4cfc5));
+    border-radius: var(--weline-theme-radius-md, 8px);
+    background: var(--amz-drawer-surface, var(--weline-theme-surface, #fffefa));
+    overflow: hidden;
+    gap: 0;
+}
+
+.b2b-mini-cart-type-option {
+    appearance: none;
+    flex: 0 1 auto;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    padding: 0.5rem 0.75rem;
+    font: inherit;
+    font-size: var(--weline-font-size-sm, 0.8125rem);
+    font-weight: 500;
+    line-height: 1.2;
+    white-space: nowrap;
+    color: var(--amz-drawer-muted, var(--weline-theme-text-muted, #565959));
+    background: transparent;
+    cursor: pointer;
+}
+
+.b2b-mini-cart-type-option + .b2b-mini-cart-type-option {
+    border-inline-start: 1px solid var(--amz-drawer-border, var(--weline-theme-border, #d4cfc5));
+}
+
+.b2b-mini-cart-type-option:hover {
+    background: var(--amz-drawer-surface-muted, var(--weline-theme-surface-muted, #ede9e1));
+    color: var(--amz-drawer-text, var(--weline-theme-text, #0f1111));
+}
+
+.b2b-mini-cart-type-option.is-selected,
+.b2b-mini-cart-type-option[data-state="active"],
+.b2b-mini-cart-type-option[aria-pressed="true"] {
+    font-weight: 700;
+    color: var(--amz-drawer-cta-bg, var(--color-primary, var(--weline-theme-primary)));
+    background: var(--amz-drawer-surface-muted, var(--weline-theme-surface-muted, #ede9e1));
+    box-shadow: inset 0 -2px 0 0 var(--amz-drawer-cta-bg, var(--color-primary, var(--weline-theme-primary)));
+}
+
+.header-cart[data-cart-type="tob"] [data-mini-cart-discount-breakdown],
+.header-cart.is-cart-type-tob [data-mini-cart-discount-breakdown],
+[data-weline-cart][data-cart-type="tob"] [data-cart-discount-breakdown],
+[data-weline-cart].is-cart-type-tob [data-cart-discount-breakdown] {
+    display: none !important;
+}
+
+/* tob：强制 extras 可见；页签结构与零售一致，不藏 tablist / 不堆叠双面板 */
+.header-cart[data-cart-type="tob"] .mini-cart-drawer__extras {
+    display: flex !important;
+}
+.header-cart.is-cart-type-tob .mini-cart-drawer__extras {
+    display: flex !important;
+}
+
+/* tob：优惠券灰化不可用，保留零售页签 */
+.header-cart[data-cart-type="tob"] .w-marketing-checkout-coupon--mini-cart.is-tob-unavailable,
+.header-cart.is-cart-type-tob .w-marketing-checkout-coupon--mini-cart.is-tob-unavailable,
+[data-weline-cart][data-cart-type="tob"] .w-marketing-checkout-coupon.is-tob-unavailable,
+[data-weline-cart].is-cart-type-tob .w-marketing-checkout-coupon.is-tob-unavailable {
+    opacity: 1;
+}
+
+.header-cart[data-cart-type="tob"] .w-marketing-checkout-coupon--mini-cart.is-tob-unavailable .w-marketing-checkout-coupon__input,
+.header-cart[data-cart-type="tob"] .w-marketing-checkout-coupon--mini-cart.is-tob-unavailable .w-marketing-checkout-coupon__apply,
+.header-cart.is-cart-type-tob .w-marketing-checkout-coupon--mini-cart.is-tob-unavailable .w-marketing-checkout-coupon__input,
+.header-cart.is-cart-type-tob .w-marketing-checkout-coupon--mini-cart.is-tob-unavailable .w-marketing-checkout-coupon__apply,
+[data-weline-cart][data-cart-type="tob"] .w-marketing-checkout-coupon.is-tob-unavailable .w-marketing-checkout-coupon__input,
+[data-weline-cart][data-cart-type="tob"] .w-marketing-checkout-coupon.is-tob-unavailable .w-marketing-checkout-coupon__apply,
+[data-weline-cart].is-cart-type-tob .w-marketing-checkout-coupon.is-tob-unavailable .w-marketing-checkout-coupon__input,
+[data-weline-cart].is-cart-type-tob .w-marketing-checkout-coupon.is-tob-unavailable .w-marketing-checkout-coupon__apply {
+    cursor: not-allowed;
+    pointer-events: none;
+    opacity: 0.55;
+    color: var(--weline-theme-text-muted, #565959);
+    background: var(--weline-theme-surface-muted, #f3f2ef);
+}
+
+.header-cart[data-cart-type="tob"] .w-marketing-checkout-coupon--mini-cart.is-tob-unavailable .w-marketing-checkout-coupon__message,
+.header-cart.is-cart-type-tob .w-marketing-checkout-coupon--mini-cart.is-tob-unavailable .w-marketing-checkout-coupon__message,
+[data-weline-cart][data-cart-type="tob"] .w-marketing-checkout-coupon.is-tob-unavailable .w-marketing-checkout-coupon__message,
+[data-weline-cart].is-cart-type-tob .w-marketing-checkout-coupon.is-tob-unavailable .w-marketing-checkout-coupon__message {
+    color: var(--weline-theme-text-muted, #565959);
+    font-size: var(--weline-font-size-sm, 0.875rem);
+}
+
+.b2b-cart-page-type-seg {
+    margin: 0 0 var(--weline-space-3, 0.75rem);
+}
+
+/* tob 结账：保留优惠券页签（与迷你车同构），仅隐藏优惠金额行 */
+.weline-checkout[data-cart-type="tob"] [data-checkout-discount-row] {
+    display: none !important;
+}
+
+.weline-checkout[data-cart-type="tob"] .weline-checkout__coupon-slot,
+.weline-checkout.is-cart-type-tob .weline-checkout__coupon-slot {
+    display: block !important;
+}
+
+.weline-checkout[data-cart-type="tob"] .w-marketing-checkout-coupon.is-tob-unavailable .w-marketing-checkout-coupon__input,
+.weline-checkout[data-cart-type="tob"] .w-marketing-checkout-coupon.is-tob-unavailable .w-marketing-checkout-coupon__apply,
+.weline-checkout.is-cart-type-tob .w-marketing-checkout-coupon.is-tob-unavailable .w-marketing-checkout-coupon__input,
+.weline-checkout.is-cart-type-tob .w-marketing-checkout-coupon.is-tob-unavailable .w-marketing-checkout-coupon__apply {
+    cursor: not-allowed;
+    pointer-events: none;
+    opacity: 0.55;
+    color: var(--weline-theme-text-muted, #565959);
+    background: var(--weline-theme-surface-muted, #f3f2ef);
+}
+
+.weline-checkout[data-cart-type="tob"] .w-marketing-checkout-coupon.is-tob-unavailable .w-marketing-checkout-coupon__message,
+.weline-checkout.is-cart-type-tob .w-marketing-checkout-coupon.is-tob-unavailable .w-marketing-checkout-coupon__message {
+    color: var(--weline-theme-text-muted, #565959);
+    font-size: var(--weline-font-size-sm, 0.875rem);
+}
+
+.b2b-hang-payment {
+    display: grid;
+    gap: 12px;
+    margin: 16px 0 24px;
+    padding: 16px;
+    border: 1px solid var(--weline-theme-border, #d4cfc5);
+    border-radius: var(--weline-theme-radius-md, 8px);
+    background: var(--weline-theme-surface, #fff);
+}
+
+.b2b-hang-payment__title {
+    margin: 0;
+    font-size: var(--weline-font-size-lg, 1.125rem);
+    color: var(--weline-theme-text, #0f1111);
+}
+
+.b2b-hang-payment__amount {
+    margin: 0;
+    font-size: var(--weline-font-size-xl, 1.5rem);
+    font-weight: 700;
+    color: var(--color-primary, var(--weline-theme-primary));
+}
+
+.b2b-hang-payment__status {
+    margin: 0;
+    color: var(--weline-theme-text-muted, #565959);
+}
+
+.b2b-hang-payment__status[hidden] {
+    display: none !important;
+}
+
+/* Hang deposit/balance checkout: never show retail empty-cart chrome. */
+.weline-checkout[data-b2b-hang-mode] [data-checkout-empty],
+.weline-checkout[data-b2b-hang-mode] [data-checkout-payment-recovery],
+.weline-checkout[data-b2b-hang-mode] [data-checkout-form],
+.weline-checkout[data-b2b-hang-mode] [data-checkout-express-host] {
+    display: none !important;
+}
