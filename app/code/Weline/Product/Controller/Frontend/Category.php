@@ -6,9 +6,11 @@ namespace Weline\Product\Controller\Frontend;
 
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\Event\EventsManager;
+use Weline\Framework\Runtime\StorefrontPageContext;
 use Weline\Product\Service\StorefrontCatalogViewService;
 use Weline\Product\Service\StorefrontCategoryListingFilter;
 use Weline\Product\Service\StorefrontCategoryViewService;
+use Weline\Product\Service\StorefrontSeoListingFacts;
 
 final class Category extends FrontendController
 {
@@ -69,6 +71,7 @@ final class Category extends FrontendController
         $offers = $productIds === []
             ? []
             : $this->catalog->publishedOffersForProductIds($productIds, 120, $includeListingDetails);
+        StorefrontPageContext::setListingOffers($offers);
         $priceBucket = $this->listingFilter->normalizePriceBucket((string)$this->request->getParam('price', ''));
         $sort = $this->listingFilter->normalizeSort((string)$this->request->getParam('sort', ''));
         $filteredOffers = $this->listingFilter->apply($offers, $priceBucket, $sort);
@@ -152,6 +155,22 @@ final class Category extends FrontendController
         $this->assign('storefront_listing_total_pages', $paged['total_pages']);
         $this->assign('storefront_listing_page_options', $pageOptions);
         $this->assign('storefront_listing_sort_options', $sortOptions);
+
+        $listingFacts = new StorefrontSeoListingFacts();
+        $breadcrumbs = $listingFacts->withHomeBreadcrumb(
+            $listingFacts->normalizeBreadcrumbs(is_array($page['breadcrumbs'] ?? null) ? $page['breadcrumbs'] : [])
+        );
+        $this->assign('seo', [
+            'page_type' => 'category',
+            'title' => $name !== '' ? $name : (string)__('分类'),
+            'description' => trim((string)($category['meta_description'] ?? $category['description'] ?? '')),
+            'image' => trim((string)($category['image'] ?? $category['banner'] ?? '')),
+            'category' => $category,
+            'item_list' => $listingFacts->itemListFromOffers($pageOffers),
+            'item_list_total' => (int)$paged['total'],
+            'item_list_page' => (int)$paged['page'],
+            'breadcrumbs' => $breadcrumbs,
+        ]);
 
         return (string)$this->fetch('Weline_Product::templates/frontend/category/index.phtml');
     }

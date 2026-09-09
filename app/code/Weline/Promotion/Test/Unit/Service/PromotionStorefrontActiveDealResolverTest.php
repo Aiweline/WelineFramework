@@ -83,15 +83,25 @@ final class PromotionStorefrontActiveDealResolverTest extends TestCase
         self::assertSame([[7, ['status' => 'published']]], $this->readerCalls);
     }
 
-    public function testEligibleProductsRetainTheStrongestDealAndReuseRequestSelection(): void
+    public function testEligibleProductsRetainEarliestSortOrderDealAndReuseRequestSelection(): void
     {
         $this->themeRows = [
-            $this->theme(11, 7, 'ten-percent', 10),
-            $this->theme(12, 7, 'twenty-percent', 20),
+            $this->theme(11, 7, 'ten-percent', 10, 20),
+            $this->theme(12, 7, 'twenty-percent', 20, 10),
         ];
         $this->productRowsByWebsite = [7 => [['product_id' => 27], ['product_id' => 9]]];
         $resolver = $this->resolver();
-        $expected = ['deal_discount_type' => 'percentage', 'deal_discount_value' => 20.0, 'theme_id' => 12, 'page_slug' => 'twenty-percent', 'marketing_rule_id' => 0];
+        // sort_order 10 (theme 12) wins over stronger 20% that is later in admin order.
+        $expected = [
+            'deal_discount_type' => 'percentage',
+            'deal_discount_value' => 20.0,
+            'theme_id' => 12,
+            'page_slug' => 'twenty-percent',
+            'marketing_rule_id' => 0,
+            'campaign_label' => 'Twenty percent',
+            'campaign_url' => 'https://store.example.test/promotion/test',
+            'sort_order' => 10,
+        ];
 
         self::assertSame($expected, $resolver->resolveForProduct(27));
         self::assertSame($expected, $resolver->resolveForProduct(27, 66.0));
@@ -99,6 +109,14 @@ final class PromotionStorefrontActiveDealResolverTest extends TestCase
         self::assertNull($resolver->resolveForProduct(44));
         self::assertSame(1, $this->themeQueries, 'Read the active themes once in this request and scope.');
         self::assertCount(2, $this->readerCalls, 'Select product IDs once per active theme, not once per product.');
+        self::assertSame(11, $resolver->resolveForProduct(27, null, 11)['theme_id'] ?? null);
+        self::assertSame(
+            [12, 11],
+            array_map(
+                static fn(array $deal): int => (int)$deal['theme_id'],
+                $resolver->listEligibleDealsForProduct(27),
+            ),
+        );
     }
 
     public function testManualEmptyBindingsRetainExplicitPriceBandEligibility(): void
@@ -171,14 +189,16 @@ final class PromotionStorefrontActiveDealResolverTest extends TestCase
         ));
         $class = new \ReflectionClass(PromotionActivityThemeService::class);
         $themes = $class->newInstanceWithoutConstructor();
-        foreach (['theme' => $model, 'themeProductService' => $products, 'scopeResolver' => $scope, 'dealDiscountSync' => $discount] as $name => $value) {
+        $url = $this->createStub(\Weline\Framework\Http\Url::class);
+        $url->method('getFrontendUrl')->willReturn('https://store.example.test/promotion/test');
+        foreach (['theme' => $model, 'themeProductService' => $products, 'scopeResolver' => $scope, 'dealDiscountSync' => $discount, 'url' => $url] as $name => $value) {
             $class->getProperty($name)->setValue($themes, $value);
         }
 
         return new PromotionStorefrontActiveDealResolver($themes, $products, $scope, $discount);
     }
 
-    private function theme(int $id, int $websiteId, string $slug, float $discount): array
+    private function theme(int $id, int $websiteId, string $slug, float $discount, ?int $sortOrder = null): array
     {
         return [
             'id' => $id,
@@ -189,7 +209,7 @@ final class PromotionStorefrontActiveDealResolverTest extends TestCase
             'page_slug' => $slug,
             'page_title' => $slug,
             'status' => 'active',
-            'sort_order' => $id,
+            'sort_order' => $sortOrder ?? $id,
             'product_pick_mode' => 'filter',
             'product_filter_json' => '{"status":"published","limit":12}',
             'deal_discount_type' => 'percentage',

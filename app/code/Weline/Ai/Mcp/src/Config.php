@@ -249,7 +249,7 @@ final class Config
                 'sidecar_enabled' => true,
                 // Empty = unbound (tests/CLI). Cursor registration injects LEARNING_MCP_BOUND_REPOSITORY.
                 'bound_repository' => '',
-                'refresh_interval' => '60s',
+                'refresh_interval' => '10m',
                 'max_file_bytes' => 1_048_576,
                 'max_chunk_chars' => 6_000,
                 'context_token_budget' => 6_000,

@@ -10,6 +10,7 @@ use Weline\Cart\Api\Data\OfferIdentity;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\ScopeIdentity;
 
 /**
@@ -39,7 +40,7 @@ final class CartService
         ?CommerceCartTypeRegistry $typeRegistry = null,
         ?SellingTypeResolver $sellingTypeResolver = null,
     ) {
-        $this->store = $store ?? ObjectManager::getInstance(CartCacheStore::class);
+        $this->store = $store ?? ObjectManager::getInstance(CartDbStore::class);
         $this->typeRegistry = $typeRegistry ?? ObjectManager::getInstance(CommerceCartTypeRegistry::class);
         $this->sellingTypeResolver = $sellingTypeResolver
             ?? new SellingTypeResolver($this->typeRegistry);
@@ -566,9 +567,36 @@ final class CartService
             if ((string)($item['item_id'] ?? '') !== $itemId) {
                 continue;
             }
-            $stock = $item['stock'] ?? null;
+            if (!is_array($item['offer'] ?? null)) {
+                throw new CartConflictException(
+                    self::ERROR_NOT_FOUND,
+                    __('该商品已不存在或已下架，请从购物车移除'),
+                );
+            }
+            $selection = CartSelectionHash::normalizeSelection(
+                is_array($item['selection'] ?? null) ? $item['selection'] : [],
+            );
+            $snapshot = $this->registry->resolve(
+                OfferIdentity::fromArray($item['offer']),
+                $scope,
+                $selection,
+            );
+            if (!$snapshot->found) {
+                throw new CartConflictException(
+                    self::ERROR_NOT_FOUND,
+                    $this->humanizeSnapshotMessage($snapshot),
+                );
+            }
+            if (!$snapshot->sellable) {
+                throw new CartConflictException(
+                    self::ERROR_NOT_SELLABLE,
+                    $this->humanizeSnapshotMessage($snapshot),
+                );
+            }
+            $stock = $snapshot->stock ?? ($item['stock'] ?? null);
             if ($stock !== null) {
                 $adjustedQty = min($adjustedQty, max(0, (int)$stock));
+                $item['stock'] = (int)$stock;
             }
             if ($adjustedQty <= 0) {
                 throw new CartConflictException(self::ERROR_NOT_SELLABLE, __('该商品暂不可售'));
@@ -576,12 +604,21 @@ final class CartService
             $this->assertQtyPolicy(
                 $cartType,
                 $adjustedQty,
-                (string)($item['sku'] ?? ''),
+                (string)($item['sku'] ?? $snapshot->sku),
                 $scope,
                 $customerId,
-                (int)($item['product_id'] ?? 0),
+                (int)($item['product_id'] ?? $snapshot->productId ?? 0),
             );
             $item['qty'] = $adjustedQty;
+            if ($snapshot->unitPriceMinor >= 0
+                && !($cartType === 'tob'
+                    && (
+                        array_key_exists('b2b_amount_minor', $item)
+                        || trim((string)($item['b2b_price_list_id'] ?? '')) !== ''
+                    ))
+            ) {
+                $item['unit_price_minor'] = $snapshot->unitPriceMinor;
+            }
             $item['row_total_minor'] = $adjustedQty * (int)($item['unit_price_minor'] ?? 0);
             $updated = true;
             break;
@@ -1003,6 +1040,7 @@ final class CartService
         $count = 0;
         $subtotal = 0;
         $items = [];
+        $lineIssues = [];
         foreach ($cart['items'] as $item) {
             if (!is_array($item)) {
                 continue;
@@ -1011,12 +1049,30 @@ final class CartService
             $count += (int)$item['qty'];
             $subtotal += (int)$item['row_total_minor'];
             $items[] = $item;
+            if (empty($item['found']) || empty($item['sellable'])) {
+                $lineIssues[] = [
+                    'item_id' => (string)($item['item_id'] ?? ''),
+                    'error_code' => empty($item['found']) ? self::ERROR_NOT_FOUND : self::ERROR_NOT_SELLABLE,
+                    'message' => trim((string)($item['message'] ?? '')),
+                ];
+            }
+        }
+        $checkoutBlocked = $lineIssues !== [];
+        $blockingMessage = '';
+        if ($checkoutBlocked) {
+            $blockingMessage = trim((string)($lineIssues[0]['message'] ?? ''));
+            if ($blockingMessage === '') {
+                $blockingMessage = (string)__('购物车中有不可结算的商品，请移除后重试');
+            }
+            if ($message === '') {
+                $message = $blockingMessage;
+            }
         }
         return [
             'success' => $success,
             'message' => $message,
             'scope_key' => $cart['scope_key'],
-            'currency' => $cart['currency'],
+            'currency' => $this->presentationCurrency($cart, $items),
             'owner_kind' => $cart['owner_kind'],
             'owner_id' => $cart['owner_id'],
             'guest_token' => $cart['guest_token'],
@@ -1029,7 +1085,59 @@ final class CartService
             'subtotal_minor' => $subtotal,
             'grand_total_minor' => $subtotal,
             'is_empty' => $items === [],
+            'checkout_blocked' => $checkoutBlocked,
+            'line_issues' => $lineIssues,
+            'blocking_message' => $blockingMessage,
         ] + $extra;
+    }
+
+    /**
+     * Storefront presentation currency: prefer the active request display currency
+     * so switching USD/EUR does not keep labeling prices as the cart's add-time CNY.
+     *
+     * @param array<string, mixed> $cart
+     * @param list<array<string, mixed>> $items
+     */
+    private function presentationCurrency(array $cart, array $items): string
+    {
+        $display = strtoupper(trim(RequestContext::getWelineUserCurrency()));
+        if ($display !== '') {
+            return $display;
+        }
+        foreach ($items as $item) {
+            $lineCurrency = strtoupper(trim((string)($item['currency'] ?? '')));
+            if ($lineCurrency !== '') {
+                return $lineCurrency;
+            }
+        }
+        $cartCurrency = strtoupper(trim((string)($cart['currency'] ?? '')));
+
+        return $cartCurrency !== '' ? $cartCurrency : 'CNY';
+    }
+
+    /**
+     * Convert cart line minors between currencies for storefront presentation.
+     * Returns null when FX is unavailable so callers do not relabel the currency.
+     */
+    private function convertPriceMinor(int $minor, string $fromCurrency, string $toCurrency): ?int
+    {
+        $from = strtoupper(trim($fromCurrency)) ?: 'CNY';
+        $to = strtoupper(trim($toCurrency)) ?: $from;
+        if ($minor === 0 || $from === $to) {
+            return max(0, $minor);
+        }
+        try {
+            /** @var \Weline\Currency\Service\CurrencyRateService $rates */
+            $rates = ObjectManager::getInstance(\Weline\Currency\Service\CurrencyRateService::class);
+            $major = $rates->tryConvert($minor / 100.0, $from, $to);
+            if ($major === null) {
+                return null;
+            }
+
+            return max(0, (int)round($major * 100));
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**
@@ -1060,8 +1168,8 @@ final class CartService
         $selection = is_array($item['selection'] ?? null) ? $item['selection'] : [];
         $existingOptions = $this->normalizeOptions(is_array($item['options'] ?? null) ? $item['options'] : []);
 
-        // One snapshot resolve: refresh options + Assembler unit price so mini-cart
-        // follows PDP/checkout (activity deals baked via Product provider).
+        // One snapshot resolve on every cart refresh/update presentation so stale
+        // Offer rows surface before checkout submit.
         $snapshot = null;
         if ($scope !== null && is_array($item['offer'] ?? null)) {
             try {
@@ -1075,7 +1183,21 @@ final class CartService
             }
         }
 
-        if ($snapshot !== null && $snapshot->found) {
+        if ($snapshot === null) {
+            $item['found'] = false;
+            $item['sellable'] = false;
+            $item['message'] = (string)__('该商品已不存在或已下架，请从购物车移除');
+            $item['options'] = $this->presentLineOptions($item, $scope);
+            return $item;
+        }
+
+        $item['found'] = $snapshot->found;
+        $item['sellable'] = $snapshot->found && $snapshot->sellable;
+        $item['message'] = ($snapshot->found && $snapshot->sellable)
+            ? ''
+            : $this->humanizeSnapshotMessage($snapshot);
+
+        if ($snapshot->found) {
             $fromSnapshot = $this->normalizeOptions($snapshot->options);
             $item['options'] = $fromSnapshot !== [] ? $fromSnapshot : (
                 $existingOptions !== [] ? $existingOptions : $this->optionsFromSelection($selection)
@@ -1087,6 +1209,7 @@ final class CartService
                 );
             if ($snapshot->sellable && $snapshot->unitPriceMinor >= 0) {
                 $qty = max(0, (int)($item['qty'] ?? 0));
+                $displayCurrency = strtoupper(trim(RequestContext::getWelineUserCurrency()));
                 if (!$preserveWholesale) {
                     $item['unit_price_minor'] = $snapshot->unitPriceMinor;
                     $item['row_total_minor'] = $qty * $snapshot->unitPriceMinor;
@@ -1102,10 +1225,32 @@ final class CartService
                         $item['currency'] = $snapshot->currency;
                     }
                 } else {
+                    $fromCurrency = strtoupper(trim((string)($item['currency'] ?? '')));
+                    if ($fromCurrency === '') {
+                        $fromCurrency = 'CNY';
+                    }
                     $unit = (int)($item['unit_price_minor'] ?? 0);
+                    if ($displayCurrency !== '' && $displayCurrency !== $fromCurrency) {
+                        $convertedUnit = $this->convertPriceMinor($unit, $fromCurrency, $displayCurrency);
+                        if ($convertedUnit !== null) {
+                            $unit = $convertedUnit;
+                            $item['currency'] = $displayCurrency;
+                        }
+                    } elseif ($displayCurrency !== '' && $displayCurrency === $fromCurrency) {
+                        $item['currency'] = $displayCurrency;
+                    }
+                    $item['unit_price_minor'] = $unit;
                     $item['row_total_minor'] = $qty * $unit;
                     $item['price'] = round($unit / 100, 2);
                     $item['row_total'] = round(((int)$item['row_total_minor']) / 100, 2);
+                }
+                // Keep the currency that matches the amount. Never stamp display
+                // currency onto unconverted minors (symbol-only switch).
+                $lineCurrency = strtoupper(trim((string)($item['currency'] ?? '')));
+                if ($displayCurrency !== '' && $lineCurrency === $displayCurrency) {
+                    $item['currency'] = $displayCurrency;
+                } elseif ($lineCurrency === '' && $snapshot->currency !== '') {
+                    $item['currency'] = $snapshot->currency;
                 }
                 if ($snapshot->name !== '') {
                     $item['name'] = $snapshot->name;
@@ -1113,12 +1258,29 @@ final class CartService
                 if ($snapshot->image !== '') {
                     $item['image'] = $this->presentableImage($snapshot->image);
                 }
+                if ($snapshot->stock !== null) {
+                    $item['stock'] = $snapshot->stock;
+                }
             }
         } else {
             $item['options'] = $this->presentLineOptions($item, $scope);
         }
 
         return $item;
+    }
+
+    private function humanizeSnapshotMessage(CartItemSnapshot $snapshot): string
+    {
+        $message = trim($snapshot->message);
+        if ($message === '' || stripos($message, 'Offer') !== false) {
+            if (!$snapshot->found) {
+                return (string)__('该商品已不存在或已下架，请从购物车移除');
+            }
+
+            return (string)__('该商品暂不可售，请从购物车移除或稍后再试');
+        }
+
+        return $message;
     }
 
     /**
@@ -1171,6 +1333,15 @@ final class CartService
             if ($code === '' || $value === '') {
                 continue;
             }
+            if (class_exists(\Weline\Product\Helper\StorefrontCampaignEntry::class)
+                && \Weline\Product\Helper\StorefrontCampaignEntry::isThemeSelectionCode($code)
+            ) {
+                $themeOption = \Weline\Product\Helper\StorefrontCampaignEntry::presentThemeOption($code, $value);
+                if ($themeOption !== null) {
+                    $options[] = $themeOption;
+                }
+                continue;
+            }
             $options[] = [
                 'code' => $code,
                 'label' => $code,
@@ -1198,8 +1369,35 @@ final class CartService
             if ($code === '' || $value === '') {
                 continue;
             }
+            if (class_exists(\Weline\Product\Helper\StorefrontCampaignEntry::class)
+                && \Weline\Product\Helper\StorefrontCampaignEntry::isThemeSelectionCode($code)
+            ) {
+                $hint = trim((string)($option['value_label'] ?? ''));
+                if ($hint === $value || $hint === $code) {
+                    $hint = '';
+                }
+                $themeOption = \Weline\Product\Helper\StorefrontCampaignEntry::presentThemeOption($code, $value, $hint);
+                if ($themeOption !== null) {
+                    $normalized[] = $themeOption;
+                }
+                continue;
+            }
             $label = trim((string)($option['label'] ?? ''));
             $valueLabel = trim((string)($option['value_label'] ?? ''));
+            if ($valueLabel === '' || preg_match('/%[0-9A-Fa-f]{2}/', $valueLabel) === 1) {
+                $valueLabel = \Weline\Product\Service\StorefrontEavLabelResolver::displayOptionToken(
+                    $valueLabel !== '' ? $valueLabel : $value,
+                );
+            }
+            if (preg_match('/%[0-9A-Fa-f]{2}/', $value) === 1
+                && class_exists(\Weline\Product\Service\StorefrontEavLabelResolver::class)
+            ) {
+                // Keep stored selection identity; only beautify display label.
+                $decodedValue = \Weline\Product\Service\StorefrontEavLabelResolver::displayOptionToken($value);
+                if ($valueLabel === '' || $valueLabel === $value) {
+                    $valueLabel = $decodedValue;
+                }
+            }
             $row = [
                 'code' => $code,
                 'label' => $label !== '' ? $label : $code,

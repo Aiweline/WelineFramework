@@ -662,8 +662,10 @@ function wlsCompressFormattedHttpResponse(string $response, string $acceptEncodi
         return $response;
     }
 
-    if (\preg_match('/^HTTP\/\d(?:\.\d)?\s+(204|205|304)\b/i', $headersPart)
-        || \preg_match('/^Content-Encoding:/mi', $headersPart)) {
+    // Range / empty statuses must stay identity; compressing them breaks clients.
+    if (\preg_match('/^HTTP\/\d(?:\.\d)?\s+(204|205|206|304)\b/i', $headersPart)
+        || \preg_match('/^Content-Encoding:/mi', $headersPart)
+        || \preg_match('/^Content-Range:/mi', $headersPart)) {
         return $response;
     }
 
@@ -691,6 +693,25 @@ function wlsCompressFormattedHttpResponse(string $response, string $acceptEncodi
     $headersPart = wlsAddFormattedVaryAcceptEncoding($headersPart);
 
     return $headersPart . "\r\n\r\n" . $compressed;
+}
+
+function wlsAcceptEncodingFromRawRequest(string $rawRequest): string
+{
+    if (\preg_match('/^Accept-Encoding:\s*([^\r\n]+)/mi', $rawRequest, $match) === 1) {
+        return \trim((string)$match[1]);
+    }
+
+    return '';
+}
+
+function wlsMaybeCompressStaticHttpResponse(string $response, string $rawRequest): string
+{
+    $acceptEncoding = wlsAcceptEncodingFromRawRequest($rawRequest);
+    if ($acceptEncoding === '') {
+        return $response;
+    }
+
+    return wlsCompressFormattedHttpResponse($response, $acceptEncoding);
 }
 
 function wlsSetFormattedHeader(string $headersPart, string $name, string $value): string

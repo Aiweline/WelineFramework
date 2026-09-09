@@ -156,6 +156,134 @@ final class ProductAdminMediaPresenter
         return is_string($url) && $url !== '' ? $url : '';
     }
 
+    /**
+     * Rewrite durable asset:// img sources to admin preview HTTP(S) URLs for WYSIWYG.
+     * Keeps data-weline-asset-id so save can persist back to asset://.
+     *
+     * @return array{html: string, preview_to_asset: array<string, string>}
+     */
+    public function presentDescriptionForEditor(string $html, int $websiteId = 0): array
+    {
+        $html = trim($html);
+        $previewToAsset = [];
+        if ($html === '' || !str_contains($html, self::ASSET_PREFIX)) {
+            return ['html' => $html, 'preview_to_asset' => $previewToAsset];
+        }
+
+        $presented = $this->transformDescriptionImages($html, function (\DOMElement $img) use ($websiteId, &$previewToAsset): void {
+            $src = trim($img->getAttribute('src'));
+            if (!str_starts_with(strtolower($src), self::ASSET_PREFIX)) {
+                return;
+            }
+            $assetId = trim(substr($src, strlen(self::ASSET_PREFIX)));
+            if (!$this->isAssetUuid($assetId)) {
+                return;
+            }
+            $preview = $this->previewUrlForAsset($assetId, $websiteId);
+            if ($preview === '') {
+                return;
+            }
+            $img->setAttribute('src', $preview);
+            $img->setAttribute('data-weline-asset-id', $assetId);
+            $previewToAsset[$preview] = $assetId;
+        });
+
+        return ['html' => $presented, 'preview_to_asset' => $previewToAsset];
+    }
+
+    /**
+     * Rewrite durable asset:// img sources to admin preview HTTP(S) URLs for WYSIWYG.
+     * Keeps data-weline-asset-id so save can persist back to asset://.
+     */
+    public function presentDescriptionHtml(string $html, int $websiteId = 0): string
+    {
+        return $this->presentDescriptionForEditor($html, $websiteId)['html'];
+    }
+
+    /**
+     * Rewrite WYSIWYG preview img sources back to durable asset:// references.
+     */
+    public function persistDescriptionHtml(string $html): string
+    {
+        $html = trim($html);
+        if ($html === '') {
+            return '';
+        }
+        if (!str_contains($html, 'data-weline-asset-id')
+            && !str_contains(strtolower($html), self::ASSET_PREFIX)
+        ) {
+            return $html;
+        }
+
+        return $this->transformDescriptionImages($html, function (\DOMElement $img): void {
+            $assetId = trim($img->getAttribute('data-weline-asset-id'));
+            if ($assetId === '') {
+                $src = trim($img->getAttribute('src'));
+                if (str_starts_with(strtolower($src), self::ASSET_PREFIX)) {
+                    $assetId = trim(substr($src, strlen(self::ASSET_PREFIX)));
+                }
+            }
+            if (!$this->isAssetUuid($assetId)) {
+                return;
+            }
+            $img->setAttribute('src', self::ASSET_PREFIX . $assetId);
+            $img->removeAttribute('data-weline-asset-id');
+        });
+    }
+
+    /**
+     * @param callable(\DOMElement): void $mutator
+     */
+    private function transformDescriptionImages(string $html, callable $mutator): string
+    {
+        $document = new \DOMDocument('1.0', 'UTF-8');
+        $previous = libxml_use_internal_errors(true);
+        try {
+            $loaded = $document->loadHTML(
+                '<!doctype html><html><head><meta charset="utf-8"></head><body>'
+                . '<div id="weline-product-admin-description-root">' . $html . '</div>'
+                . '</body></html>',
+                LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING,
+            );
+        } finally {
+            libxml_clear_errors();
+            libxml_use_internal_errors($previous);
+        }
+        if (!$loaded) {
+            return $html;
+        }
+
+        $xpath = new \DOMXPath($document);
+        $roots = $xpath->query('//*[@id="weline-product-admin-description-root"]');
+        $root = $roots !== false ? $roots->item(0) : null;
+        if (!$root instanceof \DOMElement) {
+            return $html;
+        }
+        $images = $xpath->query('.//img', $root);
+        if ($images !== false) {
+            foreach ($images as $img) {
+                if ($img instanceof \DOMElement) {
+                    $mutator($img);
+                }
+            }
+        }
+
+        $output = '';
+        foreach ($root->childNodes as $child) {
+            $output .= (string)$document->saveHTML($child);
+        }
+
+        return trim($output);
+    }
+
+    private function isAssetUuid(string $assetId): bool
+    {
+        return preg_match(
+            '/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i',
+            $assetId,
+        ) === 1;
+    }
+
     private function resolveAssetReference(string $reference, int $websiteId): string
     {
         $assetId = trim(substr($reference, strlen(self::ASSET_PREFIX)));

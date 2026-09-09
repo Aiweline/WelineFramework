@@ -80,7 +80,10 @@ final class ThemeHomepageWidgetWidthContractTest extends TestCase
         $this->assertFileExists($path);
         $content = (string) file_get_contents($path);
 
-        $this->assertStringContainsString('$height = trim((string)($this->getData(\'height\') ?? \'500px\'));', $content);
+        $this->assertStringContainsString(
+            "\$height = \\Weline\\Theme\\Helper\\SiteBlockConfig::length(\$this->getData('height'), 'var(--size-hero-height)');",
+            $content
+        );
         $this->assertDoesNotMatchRegularExpression('/\$height\s*=\s*[^;]*120px/', $content);
         $this->assertStringNotContainsString('$compactPreview', $content);
         $this->assertStringNotContainsString('.widget-preview-canvas', $content);

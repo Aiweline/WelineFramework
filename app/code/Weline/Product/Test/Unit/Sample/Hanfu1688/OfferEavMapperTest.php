@@ -202,4 +202,51 @@ final class OfferEavMapperTest extends TestCase
         self::assertNotContains('source_public_specs', $codes);
         self::assertNotContains('source_variant_combinations', $codes);
     }
+
+    public function testMapsSourceTypeAndFabricContentAwayFromVariantAxes(): void
+    {
+        $offer = [
+            'offer_id' => '687945556432',
+            'source_url' => 'https://detail.1688.com/offer/687945556432.html',
+            'specifications' => [
+                '颜色' => ['白色仅上衣2307', '蓝色仅上衣2307'],
+                '尺码' => ['S80-90斤', 'M90-100斤'],
+                '货源类型' => ['源头工厂'],
+                '主面料成分' => ['棉'],
+                '主面料成分含量' => ['90%（含）-95%（不含）'],
+                '面料名称' => ['棉'],
+                '工艺' => ['刺绣'],
+                '领标' => ['有领标'],
+                '吊牌' => ['有吊牌'],
+            ],
+            'variants' => [
+                [
+                    'specification' => '白色仅上衣2307>S80-90斤',
+                    'price' => '59.40',
+                    'public_available_quantity' => 10,
+                ],
+            ],
+        ];
+        $mapper = new OfferEavMapper();
+        $catalog = $mapper->catalog($offer, 'QIYIGE-5BF4B');
+        $byCode = [];
+        foreach ($catalog['definitions'] as $definition) {
+            $byCode[(string)$definition['code']] = $definition;
+        }
+
+        self::assertSame(['size', 'style_type'], array_column($catalog['axes'], 'code'));
+        self::assertArrayHasKey('hanfu_huo_yuan_lei_bie', $byCode);
+        self::assertFalse(!empty($byCode['hanfu_huo_yuan_lei_bie']['variant']));
+        self::assertSame(['源头工厂'], array_column($byCode['hanfu_huo_yuan_lei_bie']['options'], 'label'));
+        self::assertNotContains(
+            '源头工厂',
+            array_column($byCode['style_type']['options'] ?? [], 'label'),
+        );
+        self::assertSame(['棉'], array_column($byCode['material']['options'], 'label'));
+        self::assertNotContains(
+            '90%（含）-95%（不含）',
+            array_column($byCode['material']['options'], 'label'),
+        );
+        self::assertArrayHasKey('hanfu_zhu_mian_liao_cheng_fen_han_liang', $byCode);
+    }
 }

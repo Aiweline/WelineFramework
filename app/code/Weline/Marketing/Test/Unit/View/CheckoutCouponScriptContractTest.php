@@ -28,7 +28,12 @@ final class CheckoutCouponScriptContractTest extends TestCase
         self::assertStringContainsString('notifyCartDiscountChanged', $source);
         self::assertStringContainsString('buildQuotePayload', $source);
         self::assertStringContainsString('amount_minor', $source);
-        self::assertStringContainsString("applyCoupon({ coupon_code: normalized }", $source);
+        self::assertStringContainsString('withCartType(root, { coupon_code: normalized })', $source);
+        self::assertStringContainsString('resolveCartType', $source);
+        self::assertStringContainsString('hydrateForCurrentType', $source);
+        self::assertStringContainsString('restoreOnly', $source);
+        self::assertStringContainsString('forcedType', $source);
+        self::assertStringContainsString('weline:selling-mode-changed', $source);
         self::assertStringContainsString("function i18n(attr, fallback)", $source);
         self::assertStringContainsString("i18n('data-i18n-invalid-limit'", $source);
         self::assertStringContainsString("i18n('data-i18n-enter-code'", $source);

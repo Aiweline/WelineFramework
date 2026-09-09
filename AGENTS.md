@@ -51,4 +51,8 @@ php app/code/Weline/Ai/Mcp/scripts/ensure-project-guidance.php
 
 ## Git 策略
 
+**脏改不可丢弃（严重，`preserve_dirty_workspace`）**：宿主 Agent Shell **禁止**为 MCP 密封 / 对齐 HEAD 而 `git checkout --`、`git restore`、`git clean`、`git stash` 擦未提交修改。密封必须**脏改加载**当前磁盘哈希再 apply。权威：`app/code/Weline/Ai/doc/AI硬规则索引.md`。
+
 **智能编辑器协议只提交本文件 `AGENTS.md`。** 不要提交各编辑器私有协议或 MCP 注册文件（如 `.cursor/`、`.cursorrules`、`.cursorignore`、`CLAUDE.md`、`.mcp.json`、`.codex/`、`.vscode/mcp.json`、`.github/copilot-instructions.md` 等）。MCP 挂载由 Agent 在本机按 ensure 指引完成。
+
+**宿主编辑器规则（强制，MCP `host_editor_rules_mcp_generated_only`）**：工程规则只维护在 MCP `hard-constraints.v1` 与仓库文档；Cursor/Codex 等规则文件**禁止 Agent 手写**，仅可由 MCP 生成器产出（换项目否则找不到）。权威：`app/code/Weline/Ai/doc/AI硬规则索引.md`。

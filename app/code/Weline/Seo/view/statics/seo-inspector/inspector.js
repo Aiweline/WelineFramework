@@ -4,8 +4,9 @@
   var SEO_TEXT_LIMITS = {
     titleMin: 30,
     titleMax: 65,
-    descriptionMin: 90,
-    descriptionMax: 170,
+    // Google 未规定 description 字数；以下仅作「明显过短/过长」软提示，不作硬门槛。
+    descriptionSoftMin: 50,
+    descriptionSoftMax: 320,
     visibleTextMin: 2500
   };
   var SEO_AUDIT_IGNORE_SELECTOR = [
@@ -13,7 +14,17 @@
     "#dev-tool-panel",
     "#weline-panel-token-dialog",
     "[data-weline-panel-bootstrap]",
-    "[data-weline-panel-seo-bootstrap]"
+    "[data-weline-panel-seo-bootstrap]",
+    // Chrome UI (drawers/dialogs) must not pollute page SEO heading/image audits.
+    ".w-dialog",
+    "dialog",
+    ".mini-cart-drawer",
+    "[data-w-drawer]",
+    "[data-drawer]",
+    ".weline-header-drawer",
+    ".language-switcher-panel",
+    ".w-language-drawer",
+    "[aria-modal='true']"
   ].join(",");
 
   var PUBLIC_COPY_LEAKS = [
@@ -42,8 +53,157 @@
     { id: "schema", title: "结构化数据" },
     { id: "social", title: "社交分享" },
     { id: "structure", title: "语义结构" },
-    { id: "compliance", title: "合规与泄露" }
+    { id: "compliance", title: "合规与泄露" },
+    { id: "eeat", title: "Google 自测" }
   ];
+
+  /**
+   * Internal self-checks aligned to Google Search Central
+   * "Creating helpful, reliable, people-first content" (Who / How / Why).
+   * Machine-verifiable signals only. Not a ranking gate; E-E-A-T is not a single factor.
+   * Docs: https://developers.google.com/search/docs/fundamentals/creating-helpful-content
+   */
+  var EEAT_STRICT_RULES = [
+    {
+      id: "who_visible_byline",
+      dimension: "Who",
+      level: "warn",
+      scoringExempt: true,
+      when: ["article", "blog", "news"],
+      label: "Visible author byline",
+      detailMissing: "文章页未见可见署名（Google Who：读者应能看出谁写了内容）。内部自测 · 非排名门槛。"
+    },
+    {
+      id: "who_byline_schema_match",
+      dimension: "Who",
+      level: "warn",
+      scoringExempt: true,
+      when: ["article", "blog", "news"],
+      label: "Byline ↔ Person.name match",
+      detailMissing: "可见署名与 JSON-LD Person.name 不一致（避免壳 schema）。内部自测 · 非排名门槛。"
+    },
+    {
+      id: "who_person_author",
+      dimension: "Who",
+      level: "warn",
+      scoringExempt: true,
+      when: ["article", "blog", "news"],
+      label: "Article Person author",
+      detailMissing: "无 Person 作者（仅 Organization @id 回退或空）。Google 鼓励准确署名。内部自测 · 非排名门槛。"
+    },
+    {
+      id: "who_person_url_or_sameas",
+      dimension: "Who",
+      level: "tip",
+      scoringExempt: true,
+      when: ["article", "blog", "news"],
+      label: "Person url or sameAs",
+      detailMissing: "Person 缺可消歧的 url 或 sameAs（官方鼓励作者背景可延伸）。jobTitle 非必填。内部自测 · 非排名门槛。"
+    },
+    {
+      id: "who_author_background",
+      dimension: "Who",
+      level: "tip",
+      scoringExempt: true,
+      when: ["article", "blog", "news"],
+      label: "Author background reachable",
+      detailMissing: "无作者主页链接且页内无作者简介（Google Who：署名宜链到作者背景）。内部自测 · 非排名门槛。"
+    },
+    {
+      id: "who_publisher",
+      dimension: "Who",
+      level: "warn",
+      scoringExempt: true,
+      when: ["article", "blog", "news"],
+      label: "Article publisher",
+      detailMissing: "Article 缺 publisher / 未关联 Organization（站点「谁发布」）。内部自测 · 非排名门槛。"
+    },
+    {
+      id: "trust_about_contact",
+      dimension: "Trust",
+      level: "tip",
+      scoringExempt: true,
+      when: ["all"],
+      label: "About/Contact discoverability",
+      detailMissing: "无 AboutPage/ContactPage 且导航未见关于/联系（Google：站点背景可核查）。内部自测 · 非排名门槛。"
+    },
+    {
+      id: "trust_org_logo",
+      dimension: "Trust",
+      level: "warn",
+      scoringExempt: true,
+      when: ["home", "all"],
+      label: "Organization.logo",
+      detailMissing: "Organization 缺绝对 logo（商家实体示例字段）。≠ 权威性本体。内部自测 · 非排名门槛。"
+    },
+    {
+      id: "trust_org_sameas",
+      dimension: "Trust",
+      level: "warn",
+      scoringExempt: true,
+      when: ["home", "all"],
+      label: "Organization.sameAs",
+      detailMissing: "Organization 缺 sameAs（商家实体示例字段）。≠ 权威性本体。内部自测 · 非排名门槛。"
+    },
+    {
+      id: "how_article_dates",
+      dimension: "How",
+      level: "tip",
+      scoringExempt: true,
+      when: ["article", "blog", "news"],
+      label: "Article dates",
+      detailMissing: "缺 datePublished 或 dateModified（有助读者理解时效；勿仅改日期刷鲜）。内部自测 · 非排名门槛。"
+    },
+    {
+      id: "how_content_substance",
+      dimension: "How",
+      level: "tip",
+      scoringExempt: true,
+      when: ["article", "blog", "news"],
+      label: "Content substance (not Experience)",
+      detailMissing: "正文偏短或无配图（充实度提示，≠ Google Experience 一手体验）。内部自测 · 非排名门槛。"
+    },
+    {
+      id: "how_review_author",
+      dimension: "How",
+      level: "tip",
+      scoringExempt: true,
+      when: ["all"],
+      label: "Review author",
+      detailMissing: "存在 Review 但 author 为空。内部自测 · 非排名门槛。"
+    },
+    {
+      id: "why_primary_audience",
+      dimension: "Why",
+      level: "tip",
+      scoringExempt: true,
+      when: ["all"],
+      label: "Why: audience & intent (manual)",
+      detailMissing: "官方 Why（为谁写、是否主要为排名而写）需人工自审；面板无法代判意图。内部自测 · 非排名门槛。"
+    },
+    {
+      id: "why_main_content_first",
+      dimension: "Why",
+      level: "tip",
+      scoringExempt: true,
+      when: ["article", "blog", "news", "product", "home"],
+      label: "Why: main content present",
+      detailMissing: "主内容区偏短或难定位（Why 代理：页面应首先服务读者主任务）。内部自测 · 非排名门槛。"
+    }
+  ];
+
+  /** @deprecated id aliases kept for older evidence strings */
+  var EEAT_RULE_ID_ALIASES = {
+    eeat_org_sameas: "trust_org_sameas",
+    eeat_org_logo: "trust_org_logo",
+    eeat_article_author_missing: "who_person_author",
+    eeat_article_author_shallow: "who_person_url_or_sameas",
+    eeat_article_dates: "how_article_dates",
+    eeat_publisher: "who_publisher",
+    eeat_about_contact: "trust_about_contact",
+    eeat_review_author: "how_review_author",
+    eeat_experience_signal: "how_content_substance"
+  };
 
   var JSONLD_TYPE_EQUIVALENTS = {
     Article: [
@@ -70,8 +230,10 @@
       "ReviewNewsArticle"
     ],
     BlogPosting: ["BlogPosting", "LiveBlogPosting"],
+    Product: ["Product", "ProductGroup"],
+    ProductGroup: ["ProductGroup", "Product"],
     WebPage: ["WebPage", "AboutPage", "ContactPage", "FAQPage", "ProfilePage", "CollectionPage"],
-    Organization: ["Organization", "LocalBusiness", "Corporation", "NGO"],
+    Organization: ["Organization", "LocalBusiness", "OnlineStore", "OnlineBusiness", "Corporation", "NGO"],
     Review: ["Review", "CriticReview"]
   };
 
@@ -88,12 +250,24 @@
     product: "product",
     category: "collection",
     collection: "collection",
+    collection_page: "collection",
+    product_list: "collection",
+    best_sellers: "collection",
+    new_arrivals: "collection",
+    blog_list: "collection",
+    blog_category: "collection",
+    searchable_landing: "collection",
+    tag_collection: "collection",
+    tag_landing: "collection",
     contact: "contact",
     legal: "legal",
     privacy: "legal",
     terms: "legal",
     home: "home",
-    index: "home"
+    homepage: "home",
+    index: "home",
+    web_page: "web_page",
+    webpage: "web_page"
   };
 
   var ARTICLE_JSONLD_REQUIRED_FIELDS = [
@@ -108,7 +282,7 @@
   var PAGE_JSONLD_RULES = {
     home: {
       label: "首页",
-      requiredTypes: ["WebSite", "Organization", "BreadcrumbList"],
+      requiredTypes: ["WebSite", "Organization"],
       primaryType: "WebSite",
       requiredFields: ["name", "url"],
       recommendedFields: ["publisher", "potentialAction"]
@@ -150,17 +324,28 @@
     },
     product: {
       label: "产品页",
-      requiredTypes: ["Product", "BreadcrumbList"],
+      requiredTypes: ["Product"],
       primaryType: "Product",
-      requiredFields: ["name", "image"],
-      recommendedFields: ["description", "offers.price", "offers.priceCurrency", "offers.availability", "aggregateRating.ratingValue"]
+      requiredFields: ["name", "image", "offers|hasVariant"],
+      recommendedFields: [
+        "description",
+        "sku",
+        "brand.name",
+        "offers.price|offers.lowPrice",
+        "offers.priceCurrency",
+        "offers.availability|hasVariant",
+        "offers.url|hasVariant",
+        "aggregateRating.ratingValue",
+        "aggregateRating.reviewCount"
+      ]
     },
     collection: {
       label: "列表页",
-      requiredTypes: ["CollectionPage", "BreadcrumbList"],
-      primaryType: "CollectionPage",
+      // Google has no ecommerce CollectionPage/ItemList rich result; BreadcrumbList is the documented feature.
+      requiredTypes: ["BreadcrumbList", "Organization", "WebSite"],
+      primaryType: "WebPage",
       requiredFields: ["name", "url"],
-      recommendedFields: ["mainEntity", "description"]
+      recommendedFields: ["description"]
     },
     contact: {
       label: "联系页",
@@ -175,64 +360,105 @@
       primaryType: "WebPage",
       requiredFields: ["name", "url"],
       recommendedFields: ["dateModified", "publisher.name"]
+    },
+    web_page: {
+      label: "普通页面",
+      requiredTypes: ["WebSite", "Organization"],
+      primaryType: "WebPage",
+      requiredFields: ["name", "url"],
+      recommendedFields: ["description", "breadcrumb"]
     }
   };
 
   var REQUIRED_HEAD = [
     { name: "title", test: function () { return Boolean((document.title || "").trim()); } },
     {
+      // Google default is index,follow when robots meta is omitted — do not require the tag.
+      // Fail only when an explicit blocking directive is present (handled in auditSeoStandards).
       name: "robots meta",
+      soft: true,
+      levelWhenMissing: "pass",
+      detailWhenMissing: "Omitted; Google defaults to index,follow.",
+      detailWhenPresent: "Present in head.",
       test: function () {
         var node = document.querySelector('meta[name="robots"]');
-        return Boolean(
-          node &&
-            /index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1/i.test(
-              node.getAttribute("content") || ""
-            )
-        );
+        if (!node) return true;
+        var content = (node.getAttribute("content") || "").trim();
+        return content !== "" && !/noindex|none/i.test(content);
       }
     },
-    { name: "page-type meta", test: function () { return Boolean(document.querySelector('meta[name="page-type"]')); } },
+    { name: "page-type meta", soft: true, levelWhenMissing: "tip", test: function () { return Boolean(document.querySelector('meta[name="page-type"]')); } },
     {
       name: "content-category meta",
+      soft: true,
+      levelWhenMissing: "tip",
       test: function () { return Boolean(document.querySelector('meta[name="content-category"]')); }
     },
-    { name: "keywords meta", test: function () { return Boolean(document.querySelector('meta[name="keywords"]')); } },
+    {
+      // Google ignores meta keywords for ranking; keep as tip only.
+      name: "keywords meta",
+      soft: true,
+      levelWhenMissing: "tip",
+      test: function () { return Boolean(document.querySelector('meta[name="keywords"]')); }
+    },
     {
       name: "article:section",
       types: ["article", "blog_post", "post", "news", "news_article"],
+      soft: true,
+      levelWhenMissing: "warn",
       test: function () { return Boolean(document.querySelector('meta[property="article:section"]')); }
     },
     {
       name: "article:modified_time",
       types: ["article", "blog_post", "post", "news", "news_article"],
+      soft: true,
+      levelWhenMissing: "warn",
       test: function () { return Boolean(document.querySelector('meta[property="article:modified_time"]')); }
     },
-    { name: "og:site_name", test: function () { return Boolean(document.querySelector('meta[property="og:site_name"]')); } },
-    { name: "og:locale", test: function () { return Boolean(document.querySelector('meta[property="og:locale"]')); } },
+    { name: "og:site_name", soft: true, levelWhenMissing: "warn", test: function () { return Boolean(document.querySelector('meta[property="og:site_name"]')); } },
+    { name: "og:locale", soft: true, levelWhenMissing: "warn", test: function () { return Boolean(document.querySelector('meta[property="og:locale"]')); } },
     { name: "og:title", test: function () { return Boolean(document.querySelector('meta[property="og:title"]')); } },
     { name: "og:description", test: function () { return Boolean(document.querySelector('meta[property="og:description"]')); } },
     { name: "og:type", test: function () { return Boolean(document.querySelector('meta[property="og:type"]')); } },
     { name: "og:url", test: function () { return Boolean(document.querySelector('meta[property="og:url"]')); } },
     { name: "og:image", test: function () { return Boolean(document.querySelector('meta[property="og:image"]')); } },
-    { name: "og:image:alt", test: function () { return Boolean(document.querySelector('meta[property="og:image:alt"]')); } },
-    { name: "twitter:card", test: function () { return Boolean(document.querySelector('meta[name="twitter:card"]')); } },
-    { name: "twitter:title", test: function () { return Boolean(document.querySelector('meta[name="twitter:title"]')); } },
+    { name: "og:image:alt", soft: true, levelWhenMissing: "warn", test: function () { return Boolean(document.querySelector('meta[property="og:image:alt"]')); } },
+    { name: "twitter:card", soft: true, levelWhenMissing: "warn", test: function () { return Boolean(document.querySelector('meta[name="twitter:card"]')); } },
+    { name: "twitter:title", soft: true, levelWhenMissing: "warn", test: function () { return Boolean(document.querySelector('meta[name="twitter:title"]')); } },
     {
       name: "twitter:description",
+      soft: true,
+      levelWhenMissing: "warn",
       test: function () { return Boolean(document.querySelector('meta[name="twitter:description"]')); }
     },
-    { name: "twitter:image", test: function () { return Boolean(document.querySelector('meta[name="twitter:image"]')); } },
-    { name: "twitter:image:alt", test: function () { return Boolean(document.querySelector('meta[name="twitter:image:alt"]')); } },
-    { name: "sitemap link", test: function () { return Boolean(document.querySelector('link[rel="sitemap"][href]')); } },
-    { name: "favicon svg", test: function () { return Boolean(document.querySelector('link[rel="icon"][type="image/svg+xml"]')); } },
+    { name: "twitter:image", soft: true, levelWhenMissing: "warn", test: function () { return Boolean(document.querySelector('meta[name="twitter:image"]')); } },
+    { name: "twitter:image:alt", soft: true, levelWhenMissing: "tip", test: function () { return Boolean(document.querySelector('meta[name="twitter:image:alt"]')); } },
     {
-      name: "favicon png",
-      test: function () { return Boolean(document.querySelector('link[rel="icon"][type="image/png"][sizes="32x32"]')); }
+      // Google discovers sitemaps via robots.txt / Search Console — HTML link is optional convenience.
+      name: "sitemap link",
+      soft: true,
+      levelWhenMissing: "tip",
+      detailWhenMissing: "Optional HTML discovery. Prefer robots.txt Sitemap: (Google Search Central).",
+      test: function () { return Boolean(document.querySelector('link[rel="sitemap"][href]')); }
+    },
+    {
+      // Google favicon docs: any supported rel=icon / shortcut icon / apple-touch-icon is enough.
+      // Do not require both SVG and PNG 32x32.
+      name: "favicon",
+      soft: true,
+      levelWhenMissing: "warn",
+      detailWhenMissing: "Add <link rel=\"icon\" href=\"...\"> for SERP branding (Google favicon guidelines).",
+      test: function () {
+        return Boolean(document.querySelector(
+          'link[rel="icon"][href], link[rel="shortcut icon"][href], link[rel="apple-touch-icon"][href]'
+        ));
+      }
     },
     {
       name: "apple-touch-icon",
-      test: function () { return Boolean(document.querySelector('link[rel="apple-touch-icon"][sizes="180x180"]')); }
+      soft: true,
+      levelWhenMissing: "tip",
+      test: function () { return Boolean(document.querySelector('link[rel="apple-touch-icon"][href]')); }
     },
     { name: "charset", test: function () { return Boolean(document.querySelector('meta[charset="UTF-8"], meta[charset="utf-8"]')); } },
     { name: "viewport", test: function () { return Boolean(document.querySelector('meta[name="viewport"]')); } }
@@ -265,7 +491,7 @@
       name: "Yandex",
       label: "Yandex",
       userAgents: ["YandexBot", "YandexImages"],
-      focus: ["YandexBot", "sitemap", "canonical", "description", "BreadcrumbList"]
+      focus: ["YandexBot", "发现链", "canonical", "description", "Schema 子集"]
     },
     {
       id: "baidu",
@@ -293,14 +519,14 @@
       name: "Seznam",
       label: "Seznam.cz",
       userAgents: ["SeznamBot"],
-      focus: ["SeznamBot", "robots", "绝对 sitemap", "canonical 相似性", "结构化数据"]
+      focus: ["SeznamBot", "robots", "绝对 Sitemap URL", "canonical", "结构化数据"]
     },
     {
       id: "sogou",
       name: "Sogou",
       label: "Sogou",
       userAgents: ["Sogou web spider", "Sogou inst spider"],
-      focus: ["Sogou spider", "robots", "meta robots", "sitemap 限制", "低质 URL 风险"]
+      focus: ["Sogou spider", "robots", "meta robots", "提交质量", "低质 URL 风险"]
     },
     {
       id: "ecosia_qwant",
@@ -324,10 +550,268 @@
   ];
 
   var BROWSER_MODE_LIMITATIONS = [
-    "浏览器内检测只能读取当前渲染 DOM，不能可靠确认跨域 robots.txt、HTTP headers、X-Robots-Tag、证书详情、重定向链和真实状态码。",
-    "当前模式不能证明全站 sitemap 质量、全站重复 title/description、孤岛页、点击深度、站点级索引覆盖或搜索引擎真实收录状态。",
-    "Core Web Vitals、PageSpeed、CrUX、IndexNow key、各平台站长后台状态需要服务端爬虫/API 或人工凭据验证。"
+    "本地做不了、可先忽略：真实 CrUX / Core Web Vitals 场站分、GSC 收录与覆盖、外链画像。这些要站长后台或第三方 API，本面板无法本地验真。",
+    "浏览器内检测只能读取当前渲染 DOM；跨域 robots.txt、HTTP headers、X-Robots-Tag、证书详情、重定向链和真实状态码仍可能不完整。",
+    "同源会额外探测 /robots.txt 的 Sitemap: 与 /sitemap.xml 是否可达；仍不能证明全站 sitemap URL 质量、重复 TDK、孤岛页、点击深度或真实收录状态。",
+    "本地 Performance 仅为估算（传输体积/资源数），不作收录硬失败；上线再用 PageSpeed / CrUX / Search Console 验真即可。"
   ];
+
+  /** Local-first score guidance shown above the four health cards. */
+  var LOCAL_SCORE_FOCUS = {
+    title: "本地优先看什么",
+    lead: "本机验收重点修「站内可控」信号；CrUX、GSC 收录、外链本地做不了，不必纠结。",
+    primary: [
+      { key: "indexability", label: "可收录", why: "robots / canonical / 无 noindex" },
+      { key: "understandability", label: "可理解性", why: "title、描述、H1、正文、结构化数据" },
+      { key: "experience", label: "体验", why: "图片 alt、标题层级、明显页面问题" }
+    ],
+    reference: [
+      { key: "engineFit", label: "引擎适配", why: "矩阵参考分；其中性能多为本机估算，不等于 CrUX" },
+      { key: "eeat", label: "Google 自测", why: "Helpful Content Who/How/Trust 内部可验证项；非 E-E-A-T 排名门槛" }
+    ]
+  };
+
+  /**
+   * Browser matrix rules must cite official docs. Severity/score are Weline UX only.
+   * browserTestable=false → never hard-fail from DOM alone; leave external validation note.
+   */
+  var SEARCH_ENGINE_RULE_CATALOG = [
+    {
+      id: "META_ROBOTS_001_NOINDEX",
+      row: "indexability",
+      engines: ["*"],
+      officialUrls: ["https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag"],
+      signal: "meta[name=robots] contains noindex|none",
+      severity: "critical",
+      browserTestable: true
+    },
+    {
+      id: "SITEMAP_DISCOVERY_ROBOTS_TXT",
+      row: "sitemap",
+      engines: ["*"],
+      officialUrls: ["https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap"],
+      signal: "robots.txt Sitemap: or webmaster console submit (not HTML link rel=sitemap)",
+      severity: "info",
+      browserTestable: false,
+      notes: "HTML <link rel=sitemap> is optional convenience only; never an Indexability fail."
+    },
+    {
+      id: "FAVICON_SERP_OPTIONAL",
+      row: "engine_specific",
+      engines: ["google"],
+      officialUrls: ["https://developers.google.com/search/docs/appearance/favicon-in-search"],
+      signal: "link[rel=icon|shortcut icon|apple-touch-icon] (ICO/PNG/GIF/JPEG/BMP/...)",
+      severity: "info",
+      browserTestable: true,
+      notes: "SERP branding only; not an indexing gate. Do not require SVG specifically."
+    },
+    {
+      id: "CANONICAL_ABSOLUTE",
+      row: "canonical",
+      engines: ["*"],
+      officialUrls: ["https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls"],
+      signal: "single absolute canonical URL",
+      severity: "high",
+      browserTestable: true
+    },
+    {
+      id: "MOBILE_VIEWPORT",
+      row: "mobile",
+      engines: ["google", "bing", "baidu"],
+      officialUrls: [
+        "https://developers.google.com/search/docs/crawling-indexing/mobile/mobile-sites-mobile-first-indexing",
+        "https://ziyuan.baidu.com/wiki/3519"
+      ],
+      signal: "meta name=viewport present",
+      severity: "high",
+      browserTestable: true
+    },
+    {
+      id: "STRUCTURED_DATA_OPTIONAL",
+      row: "structured_data",
+      engines: ["*"],
+      officialUrls: ["https://developers.google.com/search/docs/appearance/structured-data/intro-structured-data"],
+      signal: "JSON-LD optional for indexing; invalid markup may be ignored",
+      severity: "medium",
+      browserTestable: true,
+      notes: "Parse error = fail; missing types = enhancement warn only."
+    },
+    {
+      id: "GOOGLE_CWV_EXTERNAL",
+      row: "performance",
+      engines: ["google"],
+      officialUrls: ["https://developers.google.com/search/docs/appearance/core-web-vitals"],
+      signal: "LCP/INP/CLS via CrUX/Search Console (browser estimate only)",
+      severity: "info",
+      browserTestable: false,
+      notes: "Local browser cannot verify CrUX/GSC; explain only, never deduct engineFit."
+    },
+    {
+      id: "BING_WEBMASTER_INDEXNOW",
+      row: "engine_specific",
+      engines: ["bing", "yahoo", "yandex", "seznam", "naver"],
+      officialUrls: [
+        "https://www.bing.com/webmasters/help/webmaster-guidelines-30fba23a",
+        "https://www.indexnow.org/documentation.html"
+      ],
+      signal: "IndexNow key + Bing Webmaster / participating engines (server/API)",
+      severity: "info",
+      browserTestable: false
+    },
+    {
+      id: "BAIDU_MOBILE_LANDING",
+      row: "mobile",
+      engines: ["baidu"],
+      officialUrls: [
+        "https://ziyuan.baidu.com/college/documentinfo?id=2315&page=3",
+        "https://ziyuan.baidu.com/wiki/3519"
+      ],
+      signal: "mobile landing experience + viewport",
+      severity: "high",
+      browserTestable: true
+    },
+    {
+      id: "BAIDU_THIN_CONTENT_HEURISTIC",
+      row: "content_spam",
+      engines: ["baidu"],
+      officialUrls: ["https://ziyuan.baidu.com/college/documentinfo?id=2315&page=3"],
+      signal: "qualitative 空短页 risk; Weline visibleText heuristic is not an official quota",
+      severity: "medium",
+      browserTestable: true
+    },
+    {
+      id: "YANDEX_SCHEMA_LIMITED",
+      row: "structured_data",
+      engines: ["yandex"],
+      officialUrls: [
+        "https://yandex.com/support/webmaster/en/schema-org/what-is-schema-org",
+        "https://yandex.com/support/webmaster/en/schema-org/semantic-faq"
+      ],
+      signal: "Yandex processes a limited Schema.org subset; unsupported types are skipped",
+      severity: "info",
+      browserTestable: true,
+      notes: "Do not treat BreadcrumbList as a Yandex hard requirement."
+    },
+    {
+      id: "YAHOO_VIA_BING",
+      row: "engine_specific",
+      engines: ["yahoo"],
+      officialUrls: ["https://www.bing.com/webmasters/help/webmaster-guidelines-30fba23a"],
+      signal: "Yahoo web results largely inherit Bing quality / crawl signals",
+      severity: "info",
+      browserTestable: false
+    },
+    {
+      id: "DDG_SOURCES",
+      row: "engine_specific",
+      engines: ["duckduckgo"],
+      officialUrls: ["https://duckduckgo.com/duckduckgo-help-pages/results/sources/"],
+      signal: "DuckDuckGo blends sources including Bing; keep pages crawlable/indexable",
+      severity: "info",
+      browserTestable: false,
+      notes: "Organization JSON-LD is not an official DDG hard rule."
+    },
+    {
+      id: "EQ_PARTNER_INDEX",
+      row: "engine_specific",
+      engines: ["ecosia_qwant"],
+      officialUrls: ["https://help.qwant.com/docs/search/divers/comment-referencer-mon-site-sur-qwant/"],
+      signal: "Ecosia/Qwant rely on partner indexes; no privacy-page SEO hard rule",
+      severity: "info",
+      browserTestable: false
+    },
+    {
+      id: "SEZNAM_SITEMAP_ABSOLUTE",
+      row: "sitemap",
+      engines: ["seznam"],
+      officialUrls: ["https://www.indexnow.org/documentation.html"],
+      signal: "Prefer absolute sitemap URL in robots.txt / IndexNow participation",
+      severity: "info",
+      browserTestable: false
+    }
+  ];
+
+  function catalogRulesForEngine(engineId, rowId) {
+    return SEARCH_ENGINE_RULE_CATALOG.filter(function (rule) {
+      if (rowId && rule.row !== rowId) return false;
+      var engines = rule.engines || [];
+      return engines.indexOf("*") !== -1 || engines.indexOf(engineId) !== -1;
+    });
+  }
+
+  function catalogUrls(ruleIds) {
+    var urls = [];
+    (ruleIds || []).forEach(function (id) {
+      var rule = SEARCH_ENGINE_RULE_CATALOG.find(function (item) { return item.id === id; });
+      if (!rule) return;
+      (rule.officialUrls || []).forEach(function (url) {
+        if (urls.indexOf(url) === -1) urls.push(url);
+      });
+    });
+    return urls;
+  }
+
+  var latestSitemapProbe = window.__WELINE_SEO_SITEMAP_PROBE__ || null;
+  var sitemapProbeInflight = null;
+
+  function ensureSitemapProbe(forceRefresh) {
+    if (!forceRefresh && latestSitemapProbe && (Date.now() - (latestSitemapProbe.at || 0)) < 60000) {
+      return Promise.resolve(latestSitemapProbe);
+    }
+    if (sitemapProbeInflight) return sitemapProbeInflight;
+    var origin = window.location.origin;
+    var fetchText = function (url) {
+      return fetch(url, { method: "GET", credentials: "same-origin", cache: "no-store" })
+        .then(function (response) {
+          if (!response.ok) {
+            return { ok: false, status: response.status, text: "" };
+          }
+          return response.text().then(function (text) {
+            return { ok: true, status: response.status, text: text || "" };
+          });
+        })
+        .catch(function (error) {
+          return { ok: false, status: 0, text: "", error: String((error && error.message) || error || "fetch failed") };
+        });
+    };
+    sitemapProbeInflight = Promise.all([
+      fetchText(origin + "/robots.txt"),
+      fetchText(origin + "/sitemap.xml")
+    ]).then(function (pair) {
+      var robots = pair[0];
+      var sitemap = pair[1];
+      var robotsSitemapUrls = [];
+      String(robots.text || "").split(/\r?\n/).forEach(function (line) {
+        var match = line.match(/^\s*Sitemap:\s*(\S+)/i);
+        if (match && match[1]) robotsSitemapUrls.push(match[1]);
+      });
+      var looksXml = /<(?:sitemapindex|urlset)[\s>]/i.test(sitemap.text || "");
+      latestSitemapProbe = {
+        at: Date.now(),
+        robotsOk: Boolean(robots.ok),
+        robotsStatus: robots.status,
+        robotsSitemapUrls: robotsSitemapUrls,
+        sitemapOk: Boolean(sitemap.ok && looksXml),
+        sitemapStatus: sitemap.status,
+        sitemapLooksXml: looksXml,
+        sitemapBytes: (sitemap.text || "").length
+      };
+      window.__WELINE_SEO_SITEMAP_PROBE__ = latestSitemapProbe;
+      sitemapProbeInflight = null;
+      return latestSitemapProbe;
+    });
+    return sitemapProbeInflight;
+  }
+
+  function refreshReportAfterSitemapProbe() {
+    return ensureSitemapProbe(false).then(function () {
+      if (typeof window.__WELINE_SEO_INSPECTOR__ !== "undefined" && window.__WELINE_SEO_INSPECTOR__.publish) {
+        window.__WELINE_SEO_INSPECTOR__.publish();
+      }
+      return latestSitemapProbe;
+    });
+  }
+
 
   function metaContent(selector) {
     var node = document.querySelector(selector);
@@ -561,6 +1045,8 @@
 
   function collectJsonLdNodesFromData(data) {
     var nodes = [];
+    var seen = [];
+
     function pushNode(node) {
       if (!node) return;
       if (Array.isArray(node)) {
@@ -568,11 +1054,18 @@
         return;
       }
       if (typeof node !== "object") return;
+      if (seen.indexOf(node) !== -1) return;
+      seen.push(node);
       nodes.push(node);
       if (Array.isArray(node["@graph"])) {
         node["@graph"].forEach(pushNode);
       }
+      // Product / ProductGroup embed reviews nested under review|reviews — surface them
+      // so local rich-result cards can validate Review + AggregateRating alignment.
+      if (node.review) pushNode(node.review);
+      if (node.reviews) pushNode(node.reviews);
     }
+
     pushNode(data);
     return nodes;
   }
@@ -638,7 +1131,7 @@
   function jsonLdRuleForSeoType(seoType) {
     var normalized = normalizeSeoType(seoType);
     var key = PAGE_JSONLD_RULE_ALIASES[normalized] || normalized;
-    return PAGE_JSONLD_RULES[key] || PAGE_JSONLD_RULES.article;
+    return PAGE_JSONLD_RULES[key] || PAGE_JSONLD_RULES.web_page;
   }
 
   function formatSchemaField(path) {
@@ -825,10 +1318,35 @@
   function isDecorativeImage(img) {
     var role = (img.getAttribute("role") || "").toLowerCase();
     var alt = img.getAttribute("alt");
-    return img.getAttribute("aria-hidden") === "true" ||
+    if (img.getAttribute("aria-hidden") === "true" ||
       role === "presentation" ||
-      role === "none" ||
-      alt === "";
+      role === "none") {
+      return true;
+    }
+    // Empty alt is decorative by HTML convention — except content photo slots where empty alt is a real SEO miss.
+    if (alt === "") {
+      if (img.closest(
+        ".product-native-detail__description-body, [data-testid='product-description-body'], " +
+        ".product-native-detail__primary-image, .product-native-detail__stage, " +
+        "article .entry-content, .cms-content, [data-seo-content-image]"
+      )) {
+        return false;
+      }
+      // Labeled thumb/control chrome: empty alt avoids double announcement.
+      if (img.closest("button[aria-label], a[aria-label], [role='tab'][aria-label]")) {
+        return true;
+      }
+      return true;
+    }
+    return false;
+  }
+
+  /** Empty alt = decorative (handled above). Useful content alt: CJK ≥2 chars, Latin ≥8. */
+  function hasUsefulImageAlt(alt) {
+    var text = String(alt || "").trim();
+    if (!text) return false;
+    if (/[\u3400-\u9fff]/.test(text)) return text.length >= 2;
+    return text.length >= 8;
   }
 
   function isLocalHost() {
@@ -906,7 +1424,13 @@
 
   function collectHeadingOutline() {
     var nodes = Array.from(document.querySelectorAll("h1, h2, h3, h4, h5, h6")).filter(function (node) {
-      return !isIgnoredSeoAuditNode(node);
+      if (isIgnoredSeoAuditNode(node)) return false;
+      // Chrome chrome (header/footer/nav/dialogs/drawers) must not drive page outline SEO.
+      if (node.closest(
+        "header, footer, nav, [role='navigation'], [role='dialog'], [role='alertdialog'], " +
+        "[data-w-component='drawer'], .w-drawer, [data-b2b-apply-drawer], [data-product-quote-modal]"
+      )) return false;
+      return true;
     });
 
     var items = nodes.map(function (node, index) {
@@ -1118,20 +1642,33 @@
     var longTaskTotal = longTasks.length
       ? sumNumbers(longTasks, function (entry) { return entry.duration; })
       : null;
+    var live = window.__WELINE_SEO_LIVE_CWV__ || {};
+    if (live.lcp != null && (lcp === null || live.lcp > lcp)) {
+      lcp = usableNumber(live.lcp);
+    }
+    if (live.cls != null) {
+      cls = usableNumber(live.cls);
+    }
+    var inp = live.inp != null ? usableNumber(live.inp) : null;
 
     return {
-      available: Boolean(nav || timing || paints.length || resources.length),
+      available: Boolean(nav || timing || paints.length || resources.length || live.lcp != null || live.cls != null || live.inp != null),
       hasNavigationTiming: Boolean(nav || timing),
       hasPaintTiming: Boolean(paints.length),
       hasLcp: lcp !== null,
       hasCls: cls !== null,
+      hasInp: inp !== null,
       hasLongTasks: longTaskTotal !== null,
+      samplingNote: live.started
+        ? "面板打开后短时 PerformanceObserver 采样（非完整导航 CrUX）"
+        : "仅读取打开时已有 Performance buffer",
       ttfb: usableNumber(ttfb),
       domContentLoaded: usableNumber(dcl),
       load: usableNumber(load),
       fcp: fcp,
       lcp: lcp,
       cls: cls,
+      inp: inp,
       longTaskTotal: longTaskTotal,
       resourceCount: resources.length,
       scriptCount: scriptCount,
@@ -1141,6 +1678,57 @@
     };
   }
 
+  function startLiveCwvObservers() {
+    if (window.__WELINE_SEO_LIVE_CWV__ && window.__WELINE_SEO_LIVE_CWV__.started) {
+      return;
+    }
+    if (typeof PerformanceObserver !== "function") {
+      window.__WELINE_SEO_LIVE_CWV__ = { started: false };
+      return;
+    }
+    var state = { started: true, lcp: null, cls: 0, inp: null };
+    window.__WELINE_SEO_LIVE_CWV__ = state;
+    try {
+      var lcpObserver = new PerformanceObserver(function (list) {
+        var entries = list.getEntries();
+        if (!entries.length) return;
+        var last = entries[entries.length - 1];
+        state.lcp = usableNumber(last.renderTime || last.loadTime || last.startTime);
+      });
+      lcpObserver.observe({ type: "largest-contentful-paint", buffered: true });
+    } catch (e) {}
+    try {
+      var clsObserver = new PerformanceObserver(function (list) {
+        list.getEntries().forEach(function (entry) {
+          if (!entry.hadRecentInput) {
+            state.cls += usableNumber(entry.value) || 0;
+          }
+        });
+      });
+      clsObserver.observe({ type: "layout-shift", buffered: true });
+    } catch (e2) {}
+    try {
+      var inpObserver = new PerformanceObserver(function (list) {
+        list.getEntries().forEach(function (entry) {
+          var delay = usableNumber(entry.duration);
+          if (delay === null) return;
+          if (state.inp === null || delay > state.inp) {
+            state.inp = delay;
+          }
+        });
+      });
+      inpObserver.observe({ type: "event", buffered: true, durationThreshold: 16 });
+    } catch (e3) {
+      try {
+        var fidObserver = new PerformanceObserver(function (list) {
+          var first = list.getEntries()[0];
+          if (!first) return;
+          state.inp = usableNumber(first.processingStart - first.startTime);
+        });
+        fidObserver.observe({ type: "first-input", buffered: true });
+      } catch (e4) {}
+    }
+  }
   function formatMs(value) {
     return value === null || value === undefined ? "未捕获" : Math.round(value) + "ms";
   }
@@ -1156,11 +1744,13 @@
       "FCP " + formatMs(perf.fcp),
       "LCP " + formatMs(perf.lcp),
       "CLS " + formatDecimal(perf.cls, 3),
+      "INP " + formatMs(perf.inp),
       "Load " + formatMs(perf.load),
       "资源 " + perf.resourceCount + " 个"
     ];
     if (perf.transferKb !== null) parts.push("传输 " + perf.transferKb + "KB");
     if (perf.longTaskTotal !== null) parts.push("长任务 " + formatMs(perf.longTaskTotal));
+    if (perf.samplingNote) parts.push(perf.samplingNote);
     return parts.join("；");
   }
 
@@ -1174,12 +1764,12 @@
   function buildPerformanceRow(signals) {
     var perf = signals.performance || null;
     if (!perf || !perf.available) {
-      return engineRow(
+      return localExternalInfoRow(
         "performance",
-        "pass",
-        "info",
-        "当前页面未暴露完整 Performance Timing，但浏览器渲染层未发现可判定的阻断性能风险。",
-        "生产发布前可补跑 Lighthouse/PageSpeed Insights/CrUX；外部真实用户数据不计入当前页面 SEO 阻断。"
+        "【本地无法验真 · 不扣分】当前页未暴露完整 Performance Timing；真实 Google CWV（CrUX / Search Console / PageSpeed）本地域名测不了，不扣引擎适配分。",
+        "生产发布前补跑 Lighthouse / PageSpeed Insights / CrUX。",
+        "PERF_000_TIMING_UNAVAILABLE_INFO",
+        catalogUrls(["GOOGLE_CWV_EXTERNAL"])
       );
     }
 
@@ -1187,60 +1777,73 @@
     addMetricIssue(issues, "TTFB", perf.ttfb, 800, 1800);
     addMetricIssue(issues, "FCP", perf.fcp, 1800, 3000);
     addMetricIssue(issues, "LCP", perf.lcp, 2500, 4000);
+    addMetricIssue(issues, "INP", perf.inp, 200, 500);
     addMetricIssue(issues, "Load", perf.load, 3000, 6000);
     addMetricIssue(issues, "CLS", perf.cls, 0.1, 0.25, "score");
     addMetricIssue(issues, "长任务", perf.longTaskTotal, 200, 600);
-    if (perf.resourceCount > 120) issues.fail.push("资源数 " + perf.resourceCount + " 个");
+    if (perf.resourceCount > 120) issues.warn.push("资源数 " + perf.resourceCount + " 个");
     else if (perf.resourceCount > 80) issues.warn.push("资源数 " + perf.resourceCount + " 个");
     if (perf.transferKb !== null) {
-      if (perf.transferKb > 3000) issues.fail.push("传输 " + perf.transferKb + "KB");
-      else if (perf.transferKb > 1500) issues.warn.push("传输 " + perf.transferKb + "KB");
+      // Transfer size alone is not a Google CWV hard fail; keep as warn when timing is healthy.
+      if (perf.transferKb > 1500) issues.warn.push("传输 " + perf.transferKb + "KB");
     }
 
     var missingCwv = [];
     if (!perf.hasLcp) missingCwv.push("LCP");
     if (!perf.hasCls) missingCwv.push("CLS");
-    missingCwv.push("INP");
+    if (!perf.hasInp) missingCwv.push("INP");
     var summary = performanceSummary(perf);
 
     if (issues.fail.length) {
-      return engineRow(
+      return localExternalInfoRow(
         "performance",
-        "fail",
-        "high",
-        "浏览器本地性能估算存在严重风险：" + issues.fail.join("；") + "。采样：" + summary + "。",
-        "优先压缩关键 JS/CSS/图片、降低阻塞资源和长任务；再用 Lighthouse/PageSpeed/CrUX 校验移动端与桌面端。",
-        "PERF_001_BROWSER_TIMING_FAIL"
+        "【本地无法验真 · 不扣分】本机 Performance 估算偏慢：" +
+          issues.fail.join("；") +
+          "。采样：" +
+          summary +
+          "。真实 Google Core Web Vitals（LCP/INP/CLS）来自 CrUX / Search Console / PageSpeed，本地域名测不了，故不扣引擎适配分。",
+        "可参考压缩关键 JS/CSS/图片；验真请用 Lighthouse、PageSpeed Insights 或 Search Console（生产域名）。",
+        "PERF_001_BROWSER_TIMING_LOCAL_INFO",
+        catalogUrls(["GOOGLE_CWV_EXTERNAL"])
       );
     }
 
     if (issues.warn.length) {
-      return engineRow(
+      return localExternalInfoRow(
         "performance",
-        "warn",
-        "medium",
-        "浏览器本地性能估算存在优化项：" + issues.warn.join("；") + "。采样：" + summary + "。",
-        "用 Lighthouse/PageSpeed/CrUX 补齐真实 CWV；面板内如需更准，应在首屏脚本最早阶段采集 LCP/CLS/INP。",
-        "PERF_010_CWV_EXTERNAL_REQUIRED"
+        "【本地无法验真 · 不扣分】本机性能估算有优化空间：" +
+          issues.warn.join("；") +
+          "。采样：" +
+          summary +
+          "。真实 CWV 需 CrUX / Search Console / PageSpeed；本面板只做本地估算说明，不代替站长后台，也不扣分。",
+        "可参考压缩首包/图片/阻塞资源；上线后用 Lighthouse / PageSpeed / Search Console 验真。",
+        "PERF_010_CWV_EXTERNAL_INFO",
+        catalogUrls(["GOOGLE_CWV_EXTERNAL"])
       );
     }
 
     if (missingCwv.length) {
-      return engineRow(
+      return localExternalInfoRow(
         "performance",
-        "pass",
-        "info",
-        "本地 timing 未发现明显慢指标。未捕获的 " + missingCwv.join("/") + " 属于外部或早期 PerformanceObserver 采样缺口，不作为当前页面 SEO 阻断。采样：" + summary + "。",
-        "上线前仍建议用 Lighthouse/PageSpeed/CrUX 补齐真实 CWV。"
+        "【本地无法验真 · 不扣分】本地 timing 未发现明显慢指标，但未捕获 " +
+          missingCwv.join("/") +
+          "（早期采样缺口）。真实场站级 CWV 仍需 CrUX / Search Console。采样：" +
+          summary +
+          "。",
+        "上线前建议用 Lighthouse / PageSpeed / CrUX 补齐真实 CWV。",
+        "PERF_011_CWV_SAMPLE_GAP_INFO",
+        catalogUrls(["GOOGLE_CWV_EXTERNAL"])
       );
     }
 
-    return engineRow(
+    return localExternalInfoRow(
       "performance",
-      "pass",
-      "info",
-      "浏览器本地 timing 未发现明显性能风险。采样：" + summary + "。",
-      "上线前仍需用真实网络和 CrUX/PageSpeed 校验移动端 CWV。"
+      "【本地无法验真 · 不扣分】本机 timing 未见明显性能风险。采样：" +
+        summary +
+        "。Google 真实移动端 CWV 仍须生产域名 + CrUX / PageSpeed 验真，本地不扣分。",
+      "上线后用真实网络与 CrUX / PageSpeed 校验移动端 CWV。",
+      "PERF_012_CWV_LOCAL_OK_INFO",
+      catalogUrls(["GOOGLE_CWV_EXTERNAL"])
     );
   }
 
@@ -1423,7 +2026,7 @@
     };
   }
 
-  function engineRow(id, status, severity, detail, recommendation, issueId) {
+  function engineRow(id, status, severity, detail, recommendation, issueId, officialUrls) {
     return {
       id: id,
       label: (ENGINE_MATRIX_ROWS.find(function (row) { return row.id === id; }) || {}).label || id,
@@ -1431,12 +2034,68 @@
       severity: severity || (status === "fail" ? "high" : status === "warn" ? "medium" : "info"),
       detail: detail,
       recommendation: recommendation || "",
-      issueId: issueId || ""
+      issueId: issueId || "",
+      officialUrls: Array.isArray(officialUrls) ? officialUrls : [],
+      scoringExempt: false,
+      noticeKind: ""
     };
   }
 
-  function externalValidationRow(detail, recommendation) {
-    return engineRow("engine_specific", "pass", "info", detail, recommendation || "使用服务端爬虫、平台站长工具或真实用户数据补充验证。");
+  /** 本地浏览器无法验真的外部项：醒目说明，绝不计入引擎适配扣分。 */
+  function localExternalInfoRow(id, detail, recommendation, issueId, officialUrls) {
+    var row = engineRow(
+      id,
+      "info",
+      "info",
+      detail,
+      recommendation || "上线后用站长工具 / CrUX / PageSpeed 验真；本面板本地模式不因此扣分。",
+      issueId || "",
+      officialUrls
+    );
+    row.scoringExempt = true;
+    row.noticeKind = "local_external";
+    return row;
+  }
+
+  function externalValidationRow(detail, recommendation, officialUrls) {
+    return localExternalInfoRow(
+      "engine_specific",
+      "【本地无法验真 · 不扣分】" + detail,
+      recommendation || "使用服务端爬虫、平台站长工具或真实用户数据补充验证。",
+      "ENGINE_EXTERNAL_VALIDATION_INFO",
+      officialUrls
+    );
+  }
+
+  function engineStatus(rows) {
+    var list = Object.keys(rows || {}).map(function (key) { return rows[key]; });
+    if (list.some(function (row) { return row && row.status === "fail" && !row.scoringExempt; })) return "fail";
+    if (list.some(function (row) { return row && row.status === "warn" && !row.scoringExempt; })) return "warning";
+    if (list.some(function (row) { return row && row.status === "unknown" && !row.scoringExempt; })) return "unknown";
+    return "pass";
+  }
+
+  function engineScore(rows) {
+    var score = 100;
+    Object.keys(rows || {}).forEach(function (key) {
+      var row = rows[key];
+      if (!row || row.scoringExempt) return;
+      if (row.status === "fail") score -= row.severity === "critical" ? 36 : 28;
+      else if (row.status === "warn") score -= row.severity === "high" ? 18 : 12;
+      else if (row.status === "unknown") score -= 4;
+    });
+    return Math.max(0, Math.min(100, score));
+  }
+
+  function engineRecommendations(rows) {
+    return Object.keys(rows || {})
+      .map(function (key) { return rows[key]; })
+      .filter(function (row) {
+        return row && row.recommendation && row.status !== "pass" && row.status !== "info" && !row.scoringExempt;
+      })
+      .map(function (row) { return row.recommendation; })
+      .filter(function (value, index, list) { return list.indexOf(value) === index; })
+      .slice(0, 5);
   }
 
   function collectEngineSignals(raw) {
@@ -1471,6 +2130,7 @@
       sitemapHref: sitemapHref,
       sitemapRootOrAbsolute: /^(https?:\/\/|\/)/i.test(sitemapHref),
       sitemapAbsolute: /^https?:\/\//i.test(sitemapHref),
+      sitemapProbe: latestSitemapProbe,
       robotsContent: robotsContent,
       noindex: /noindex/i.test(robotsContent),
       nofollow: /nofollow/i.test(robotsContent),
@@ -1504,8 +2164,11 @@
     };
   }
 
-  function buildCommonEngineRows(raw, signals) {
+  function buildEngineRows(engine, raw, signals) {
     var rows = {};
+    var engineId = engine.id;
+    var mobileStrict = ["google", "bing", "baidu"].indexOf(engineId) !== -1;
+    var schemaStrict = ["google", "bing"].indexOf(engineId) !== -1;
 
     if (signals.noindex || signals.jsRedirect || signals.hashRouting) {
       rows.crawlability = engineRow(
@@ -1517,16 +2180,17 @@
           signals.jsRedirect ? "JS redirect" : "",
           signals.hashRouting ? "hash route" : ""
         ].filter(Boolean).join("、") + "。",
-        "修复浏览器可见阻断后，再使用服务端爬虫模式按目标 User-Agent 验证 robots.txt、HTTP 状态码、重定向链和资源抓取权限。",
-        "CRAWL_001_BROWSER_VISIBLE_RISK"
+        "修复浏览器可见阻断后，再使用服务端爬虫按目标 User-Agent（" + (engine.userAgents || []).join(", ") + "）验证 robots.txt、HTTP 状态码与重定向链。",
+        "CRAWL_001_BROWSER_VISIBLE_RISK",
+        catalogUrls(["META_ROBOTS_001_NOINDEX"])
       );
     } else {
       rows.crawlability = engineRow(
         "crawlability",
         "pass",
         "info",
-        "当前页面已成功加载并渲染，DOM 未发现 noindex、JS redirect 或 hash route 等浏览器可见抓取阻断。",
-        "服务端爬虫模式仍可补充验证 robots.txt、HTTP 状态码、重定向链和目标搜索引擎 User-Agent。"
+        "当前页面已成功加载并渲染；未发现 noindex / JS redirect / hash route。目标爬虫 " + (engine.userAgents || []).join(", ") + " 的 robots.txt 仍需服务端验证。",
+        "服务端爬虫按该引擎 User-Agent 补查 robots.txt 与 HTTP 状态。"
       );
     }
 
@@ -1536,16 +2200,19 @@
         "fail",
         "critical",
         "页面 robots meta 包含 noindex 或索引阻断项。",
-        "如果页面应收录，移除 noindex 并确认 robots/header 没有目标引擎阻断。",
-        "META_ROBOTS_001_NOINDEX"
+        "若应收录，移除 noindex，并确认 X-Robots-Tag / robots.txt 未阻断目标引擎。",
+        "META_ROBOTS_001_NOINDEX",
+        catalogUrls(["META_ROBOTS_001_NOINDEX"])
       );
     } else {
       rows.indexability = engineRow(
         "indexability",
         "pass",
         "info",
-        "页面 meta robots 允许索引；HTTP header 与 robots.txt 仍需服务端验证。",
-        "服务端爬虫补查 X-Robots-Tag 和 robots.txt。"
+        "页面未声明 noindex（缺省等同可索引）；HTTP header 与 robots.txt 仍需服务端验证。",
+        "服务端补查 X-Robots-Tag 与目标引擎 robots 规则。",
+        "",
+        catalogUrls(["META_ROBOTS_001_NOINDEX"])
       );
     }
 
@@ -1554,45 +2221,88 @@
         "canonical",
         "fail",
         "high",
-        "canonical 缺失、重复、非 HTTPS，或与当前规范 URL 不一致。",
-        "保留唯一 HTTPS absolute canonical，并让 og:url、hreflang 与 canonical 对齐。",
-        "CANONICAL_001_CANONICAL_INVALID"
+        "canonical 缺失、重复，或与当前规范 URL 不一致。",
+        "保留唯一绝对 canonical，并让 og:url、hreflang 与之对齐。",
+        "CANONICAL_001_CANONICAL_INVALID",
+        catalogUrls(["CANONICAL_ABSOLUTE"])
+      );
+    } else if (!signals.canonicalAbsolute) {
+      rows.canonical = engineRow(
+        "canonical",
+        engineId === "naver" ? "fail" : "warn",
+        "high",
+        "canonical 不是绝对 URL。",
+        "使用 https:// 绝对地址作为 canonical。",
+        "CANONICAL_002_NOT_ABSOLUTE",
+        catalogUrls(["CANONICAL_ABSOLUTE"])
+      );
+    } else if (!signals.canonicalHttps) {
+      rows.canonical = engineRow(
+        "canonical",
+        "warn",
+        "medium",
+        "canonical 非 HTTPS。官方推荐 HTTPS 规范 URL，但非一律不可索引。",
+        "迁移到 HTTPS canonical，并同步 og:url / hreflang。",
+        "CANONICAL_003_NOT_HTTPS",
+        catalogUrls(["CANONICAL_ABSOLUTE"])
       );
     } else {
       rows.canonical = engineRow(
         "canonical",
         "pass",
         "info",
-        "canonical 为唯一 HTTPS URL，浏览器 DOM 层通过。",
-        "服务端爬虫可继续验证 canonical 目标是否 200、可索引且非 redirect。"
+        "canonical 为唯一 HTTPS 绝对 URL（浏览器 DOM）。",
+        "服务端可继续验证目标是否 200、可索引且非 redirect。"
       );
     }
 
-    if (!signals.sitemapHref || hasCheckLevel(raw, "sitemap discovery", "fail")) {
+    var probe = signals.sitemapProbe || latestSitemapProbe;
+    var robotsSitemapUrls = (probe && probe.robotsSitemapUrls) || [];
+    var probeReady = Boolean(probe);
+    var discoveryOk = Boolean((probe && (probe.sitemapOk || robotsSitemapUrls.length)) || signals.sitemapHref);
+    if (signals.sitemapHref && !signals.sitemapRootOrAbsolute) {
       rows.sitemap = engineRow(
         "sitemap",
         "warn",
         "medium",
-        "当前页面未发现 sitemap link。",
-        "在 head 或 robots.txt 中提供 sitemap，并由服务端验证 sitemap XML 可访问、可解析、URL 为 canonical。",
-        "SITEMAP_001_NOT_FOUND"
+        "页面 HTML sitemap link 不是绝对或根相对 URL。",
+        "官方发现主路径是 robots.txt Sitemap:；若保留 HTML link，请用绝对 URL。",
+        "SITEMAP_002_BAD_URL",
+        catalogUrls(["SITEMAP_DISCOVERY_ROBOTS_TXT", "SEZNAM_SITEMAP_ABSOLUTE"])
       );
-    } else if (!signals.sitemapRootOrAbsolute) {
-      rows.sitemap = engineRow(
-        "sitemap",
-        "warn",
-        "medium",
-        "sitemap link 不是绝对或根相对 URL。",
-        "使用绝对 URL，至少使用 /sitemap.xml。",
-        "SITEMAP_002_BAD_URL"
-      );
-    } else {
+    } else if (discoveryOk) {
       rows.sitemap = engineRow(
         "sitemap",
         "pass",
         "info",
-        "页面暴露 sitemap link：" + signals.sitemapHref + "。",
-        "服务端爬虫继续检查 XML、lastmod、redirect/noindex URL 和平台大小限制。"
+        "Sitemap 发现链已确认：" + [
+          robotsSitemapUrls.length ? ("robots.txt Sitemap: " + robotsSitemapUrls.join(", ")) : "",
+          probe && probe.sitemapOk ? ("/sitemap.xml HTTP " + probe.sitemapStatus + " · " + probe.sitemapBytes + "B") : "",
+          signals.sitemapHref ? ("HTML link " + signals.sitemapHref) : ""
+        ].filter(Boolean).join("；") + "。全站 URL 质量仍需服务端审计。",
+        "继续用全站审计检查 XML 内 URL 是否 canonical/可索引；勿把「关注点含 sitemap」当成缺失。",
+        "",
+        catalogUrls(["SITEMAP_DISCOVERY_ROBOTS_TXT", "SEZNAM_SITEMAP_ABSOLUTE"])
+      );
+    } else if (!probeReady) {
+      rows.sitemap = engineRow(
+        "sitemap",
+        "pass",
+        "info",
+        "同源 robots.txt / sitemap.xml 探测进行中；HTML link " + (signals.sitemapHref || "未声明（可选）") + "。",
+        "等待同源探测完成；官方主路径仍是 robots.txt Sitemap:。",
+        "",
+        catalogUrls(["SITEMAP_DISCOVERY_ROBOTS_TXT"])
+      );
+    } else {
+      rows.sitemap = engineRow(
+        "sitemap",
+        "warn",
+        "medium",
+        "同源未读到 robots.txt Sitemap:，且 /sitemap.xml 不可用或非 sitemap XML。",
+        "在 robots.txt 添加 Sitemap: https://…/sitemap.xml，并确保 XML 可访问。",
+        "SITEMAP_DISCOVERY_ROBOTS_TXT",
+        catalogUrls(["SITEMAP_DISCOVERY_ROBOTS_TXT"])
       );
     }
 
@@ -1602,38 +2312,44 @@
         "fail",
         "high",
         "JSON-LD 解析失败。",
-        "修复 JSON-LD 语法，并保持 schema 与可见内容一致。",
-        "SD_001_JSON_PARSE_ERROR"
+        "修复 JSON-LD 语法，并保持与可见内容一致。",
+        "SD_001_JSON_PARSE_ERROR",
+        catalogUrls(["STRUCTURED_DATA_OPTIONAL", "YANDEX_SCHEMA_LIMITED"])
       );
     } else if (signals.jsonLdValidation && signals.jsonLdValidation.status === "fail") {
       rows.structured_data = engineRow(
         "structured_data",
-        "fail",
-        "high",
-        "页面类型结构化数据不合格：" + [
+        schemaStrict ? "warn" : "pass",
+        "medium",
+        "页面类型结构化数据不完整（增强项，非索引硬门槛）：" + [
           signals.jsonLdValidation.missingTypes.length ? "缺少类型 " + signals.jsonLdValidation.missingTypes.join(", ") : "",
           signals.jsonLdValidation.missingFields.length ? "缺少字段 " + signals.jsonLdValidation.missingFields.join(", ") : ""
         ].filter(Boolean).join("；") + "。",
-        "按 " + signals.jsonLdValidation.label + " 补齐 " + signals.jsonLdValidation.expectedType + " JSON-LD 类型与必需字段，并保持与可见内容一致。",
-        "SD_004_PAGE_TYPE_SCHEMA_INVALID"
+        "按页面类型补齐 schema；Google/Bing 文档写明结构化数据不保证排名。",
+        "SD_004_PAGE_TYPE_SCHEMA_INVALID",
+        catalogUrls(["STRUCTURED_DATA_OPTIONAL"])
       );
     } else if (!signals.jsonTypes.length) {
       rows.structured_data = engineRow(
         "structured_data",
-        "warn",
+        schemaStrict ? "warn" : "pass",
         "medium",
-        "页面未发现 JSON-LD。",
-        "按页面类型补充 WebPage、BreadcrumbList、Product、Article、FAQPage 等 schema。",
-        "SD_003_TYPE_MISSING"
+        schemaStrict
+          ? "未发现 JSON-LD（富结果增强缺失，不代表不可索引）。"
+          : "未发现 JSON-LD；对本引擎浏览器模式不作为失败项（Yandex 等仅支持有限 Schema 子集）。",
+        "按需补充与可见内容一致的 schema；勿把缺省 JSON-LD 当收录失败。",
+        "SD_003_TYPE_MISSING",
+        catalogUrls(["STRUCTURED_DATA_OPTIONAL", "YANDEX_SCHEMA_LIMITED"])
       );
     } else if (signals.jsonLdValidation && signals.jsonLdValidation.status === "warn") {
       rows.structured_data = engineRow(
         "structured_data",
-        "warn",
-        "medium",
-        "页面类型结构化数据基本可读，但推荐字段不足：" + signals.jsonLdValidation.missingRecommended.join(", ") + "。",
-        "补齐推荐字段，尤其是 publisher、description、articleSection、offers 或 contactPoint 等能帮助搜索平台理解页面的属性。",
-        "SD_005_PAGE_TYPE_SCHEMA_RECOMMENDED_MISSING"
+        "pass",
+        "info",
+        "结构化数据可读；推荐字段可再补：" + (signals.jsonLdValidation.missingRecommended || []).join(", ") + "。",
+        "补齐推荐字段仅影响富结果理解，不作为索引阻断。",
+        "SD_005_PAGE_TYPE_SCHEMA_RECOMMENDED_MISSING",
+        catalogUrls(["STRUCTURED_DATA_OPTIONAL"])
       );
     } else {
       rows.structured_data = engineRow(
@@ -1641,165 +2357,269 @@
         "pass",
         "info",
         "已解析 schema 类型：" + signals.jsonTypes.join(", ") + "。",
-        "继续按平台规则检查 required/recommended 属性和可见内容一致性。"
+        "继续保持 schema 与可见内容一致。"
       );
     }
 
     if (!signals.viewport || hasCheckLevel(raw, "viewport", "fail")) {
       rows.mobile = engineRow(
         "mobile",
-        "fail",
+        mobileStrict ? "fail" : "warn",
         "high",
         "缺少移动端 viewport。",
-        "添加 <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"> 并做移动端溢出检查。",
-        "MOBILE_001_VIEWPORT_MISSING"
+        "添加 <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">。",
+        "MOBILE_001_VIEWPORT_MISSING",
+        catalogUrls(["MOBILE_VIEWPORT", "BAIDU_MOBILE_LANDING"])
       );
     } else {
       rows.mobile = engineRow(
         "mobile",
         "pass",
         "info",
-        "viewport 存在；浏览器模式未比较移动/桌面 HTML 差异。",
-        "服务端或浏览器自动化补查移动端宽度、tap target、移动/桌面内容一致性。"
+        "viewport 存在；" + (engineId === "baidu" ? "百度移动落地页体验仍需服务端/真机验证。" : "浏览器模式未比较移动/桌面 HTML 差异。"),
+        "服务端或自动化补查移动宽度、tap target 与内容一致性。",
+        "",
+        catalogUrls(engineId === "baidu" ? ["BAIDU_MOBILE_LANDING"] : ["MOBILE_VIEWPORT"])
       );
     }
 
     rows.performance = buildPerformanceRow(signals);
-    rows.content_spam = buildContentSpamRow(raw);
+    if (engineId === "google" && rows.performance && rows.performance.noticeKind === "local_external") {
+      rows.performance.detail =
+        "Google：" +
+        (rows.performance.detail || "【本地无法验真 · 不扣分】真实 CWV / CrUX / GSC 本地测不了。");
+      rows.performance.issueId = rows.performance.issueId || "GOOGLE_020_CWV_EXTERNAL_INFO";
+      rows.performance.officialUrls = catalogUrls(["GOOGLE_CWV_EXTERNAL"]);
+    } else if (engineId === "google") {
+      rows.performance.officialUrls = catalogUrls(["GOOGLE_CWV_EXTERNAL"]);
+    }
 
+    rows.content_spam = buildContentSpamRow(raw);
+    if (engineId === "baidu" && signals.visibleText < SEO_TEXT_LIMITS.visibleTextMin && rows.content_spam.status === "pass") {
+      rows.content_spam = engineRow(
+        "content_spam",
+        "warn",
+        "medium",
+        "可见正文偏薄（Weline 启发式 " + SEO_TEXT_LIMITS.visibleTextMin + "+ 字符）。百度文档讨论「空短页」是定性风险，并非公开固定字数门槛。",
+        "补充真实功能、示例、FAQ 与落地价值；再用百度搜索资源平台质量反馈核对。",
+        "BAIDU_THIN_CONTENT_HEURISTIC",
+        catalogUrls(["BAIDU_THIN_CONTENT_HEURISTIC"])
+      );
+    }
+
+    rows.engine_specific = buildEngineSpecificRow(engine, rows, raw, signals);
     return rows;
   }
 
   function buildEngineSpecificRow(engine, rows, raw, signals) {
     if (engine.id === "google") {
-      if (rows.indexability.status === "fail" || rows.structured_data.status === "fail" || rows.content_spam.status === "fail") {
-        return engineRow("engine_specific", "fail", "critical", "Google 基础索引、结构化数据或 spam 风险未通过。", "先修复 noindex/canonical/schema/spam，再考虑 AI Search 与 CWV。", "GOOGLE_010_SPAM_POLICY_RISK");
+      if (rows.indexability.status === "fail" || rows.content_spam.status === "fail") {
+        return engineRow(
+          "engine_specific",
+          "fail",
+          "critical",
+          "Google：索引阻断或 spam/低质信号未通过（Search Essentials）。",
+          "先修复 noindex/spam，再处理 CWV 与富结果。",
+          "GOOGLE_010_SPAM_POLICY_RISK",
+          catalogUrls(["META_ROBOTS_001_NOINDEX"])
+        );
       }
-      if (rows.performance.status === "fail") {
-        return engineRow("engine_specific", "warn", "medium", "Google 基础 DOM 信号可读，但性能/CWV 本地估算存在高风险。", "先修复性能/CWV 风险，再补跑 Lighthouse、PageSpeed、CrUX 和 Search Console。", "GOOGLE_020_CWV_RISK");
+      if (rows.performance && rows.performance.noticeKind === "local_external") {
+        return localExternalInfoRow(
+          "engine_specific",
+          "【本地无法验真 · 不扣分】Google 的 Lighthouse / PageSpeed Insights / CrUX / Search Console 覆盖与真实 Googlebot 渲染，本地域名测不了。下方「性能/CWV」仅为本机估算参考，不计入引擎适配扣分。",
+          "生产域名上用 Search Console、PageSpeed Insights 或 CrUX 验真；本面板只醒目说明限制，不因此扣分。",
+          "GOOGLE_020_CWV_EXTERNAL_INFO",
+          catalogUrls(["GOOGLE_CWV_EXTERNAL"])
+        );
       }
-      return externalValidationRow("Google 基础 DOM 信号可读；Search Console 覆盖、真实 Googlebot 渲染、CWV/INP 和 AI Search 可见性仍需外部验证。", "补跑 Lighthouse/PageSpeed/CrUX/Search Console，避免把 meta keywords 或 llms.txt 当 Google 排名保证。");
+      var faviconOk = Boolean(document.querySelector(
+        'link[rel="icon"][href], link[rel="shortcut icon"][href], link[rel="apple-touch-icon"][href]'
+      ));
+      if (!faviconOk) {
+        return engineRow(
+          "engine_specific",
+          "pass",
+          "info",
+          "Google：缺 favicon 只影响 SERP 品牌图标资格，不是索引失败。",
+          "按 Google favicon 指南提供任一支持的 rel=icon（勿强制 SVG）。",
+          "FAVICON_SERP_OPTIONAL",
+          catalogUrls(["FAVICON_SERP_OPTIONAL"])
+        );
+      }
+      return externalValidationRow(
+        "Google 基础 DOM 信号可读；Search Console 覆盖、真实 Googlebot 渲染、CWV/INP 仍需外部验证。",
+        "补跑 Lighthouse/PageSpeed/CrUX/Search Console。",
+        catalogUrls(["GOOGLE_CWV_EXTERNAL", "FAVICON_SERP_OPTIONAL"])
+      );
     }
 
     if (engine.id === "bing") {
-      if (rows.indexability.status === "fail" || rows.structured_data.status === "fail") {
-        return engineRow("engine_specific", "fail", "high", "Bing 基础索引或结构化数据存在阻断。", "修复基础 SEO 后再接入 Bing Webmaster Tools 与 IndexNow。", "BING_003_STRUCTURED_DATA_MISMATCH");
+      if (rows.indexability.status === "fail") {
+        return engineRow(
+          "engine_specific",
+          "fail",
+          "high",
+          "Bing：存在索引阻断。",
+          "修复 noindex 后再接入 Bing Webmaster Tools / IndexNow。",
+          "BING_001_INDEX_BLOCKED",
+          catalogUrls(["META_ROBOTS_001_NOINDEX", "BING_WEBMASTER_INDEXNOW"])
+        );
       }
-      return externalValidationRow("Bing 基础 DOM 信号可读；IndexNow key 文件、提交记录和 bingbot 抓取未在浏览器内验证。", "配置 Bing Webmaster Tools/IndexNow，并用服务端检查 /{key}.txt、提交 payload 与 bingbot robots。");
+      return externalValidationRow(
+        "Bing 基础 DOM 信号可读；IndexNow key、提交记录与 bingbot 抓取需服务端/API 验证。",
+        "配置 Bing Webmaster Tools / IndexNow。",
+        catalogUrls(["BING_WEBMASTER_INDEXNOW"])
+      );
     }
 
     if (engine.id === "yahoo") {
-      if (hasAnyCheckLevel(raw, ["title length", "title/H1 alignment", "description length", "image alt"], "fail")) {
-        return engineRow("engine_specific", "warn", "medium", "Yahoo 重视准确 title、description、HTML 文本和图片 ALT，当前存在相关失败项。", "让 title/description/H1/正文一致，关键文字不要只放图片里。", "YAHOO_001_TITLE_NOT_ACCURATE");
-      }
-      return engineRow("engine_specific", "pass", "info", "Yahoo 基础内容信号通过；自然结果仍需关注 Bing 适配。", "保持 Bing profile 通过，并确保 sitemap 可提交。");
+      return externalValidationRow(
+        "Yahoo 网页结果 largely 依赖 Bing；浏览器模式按 Bing 基础信号评估，无独立硬规。",
+        "保持 Bing profile / IndexNow 可用。",
+        catalogUrls(["YAHOO_VIA_BING", "BING_WEBMASTER_INDEXNOW"])
+      );
     }
 
     if (engine.id === "yandex") {
-      if (!signals.hasBreadcrumb) {
-        return engineRow("engine_specific", "warn", "medium", "Yandex 支持 BreadcrumbList，当前页面未发现 BreadcrumbList。", "为可索引页面补充 BreadcrumbList，并确认 sitemap 使用 canonical URL。", "YANDEX_004_BREADCRUMB_JSONLD_INVALID");
-      }
-      return externalValidationRow("BreadcrumbList 已存在；YandexBot 抓取、description 全站唯一性和区域语言匹配仍未验证。", "服务端检查 YandexBot robots、sitemap canonical URL、description 去重和站长后台区域语言。");
+      return externalValidationRow(
+        "Yandex 仅处理有限 Schema.org 子集；BreadcrumbList 不是 Yandex 硬性收录条件。YandexBot / 站长后台仍需外部验证。",
+        "服务端检查 YandexBot robots、sitemap 与 Webmaster 区域设置。",
+        catalogUrls(["YANDEX_SCHEMA_LIMITED", "BING_WEBMASTER_INDEXNOW"])
+      );
     }
 
     if (engine.id === "baidu") {
       if (rows.mobile.status === "fail" || rows.content_spam.status === "fail") {
-        return engineRow("engine_specific", "fail", "high", "Baidu 对移动体验、空短页、标题正文不符和低质采集风险敏感，当前存在相关阻断。", "优先修复移动端与内容质量，再检查 Baiduspider 可抓取和 URL 推送。", "BAIDU_002_MOBILE_UNFRIENDLY");
+        return engineRow(
+          "engine_specific",
+          "fail",
+          "high",
+          "Baidu：移动体验或内容质量相关阻断（对照百度移动/空短页文档方向）。",
+          "优先修复 viewport/移动落地页与低质内容，再检查 Baiduspider 与资源平台提交。",
+          "BAIDU_002_MOBILE_UNFRIENDLY",
+          catalogUrls(["BAIDU_MOBILE_LANDING", "BAIDU_THIN_CONTENT_HEURISTIC"])
+        );
       }
-      if (signals.visibleText < SEO_TEXT_LIMITS.visibleTextMin) {
-        return engineRow("engine_specific", "warn", "medium", "页面正文偏薄，中文搜索生态可能需要更明确的原创说明与落地页价值。", "补充真实功能、示例、FAQ、使用场景和可见文本。", "BAIDU_007_EMPTY_SHORT_PAGE");
-      }
-      return externalValidationRow("Baidu DOM 基础项通过；Baiduspider、移动友好真实渲染、原创/低质判定和提交接口状态需要外部验证。", "用服务端按 Baiduspider 抓取，检查百度搜索资源平台提交状态、移动适配和页面质量反馈。");
-    }
-
-    if (engine.id === "duckduckgo") {
-      if (rows.indexability.status === "fail") {
-        return engineRow("engine_specific", "fail", "high", "DuckDuckGo 仍依赖可抓取/可索引基础页面，当前存在索引阻断。", "先修复 indexability，再验证 DuckDuckBot 与 Bing 结果依赖。", "DDG_001_BLOCKED_DUCKDUCKBOT");
-      }
-      if (!signals.hasOrganization) {
+      if (rows.content_spam.status === "warn" && rows.content_spam.issueId === "BAIDU_THIN_CONTENT_HEURISTIC") {
         return engineRow(
           "engine_specific",
           "warn",
           "medium",
-          "品牌/实体信息较弱，隐私搜索生态可能难以理解站点实体。",
-          "补充 Organization/WebSite/sameAs，保持 Bing profile 通过，并服务端验证 DuckDuckBot 抓取。",
-          "DDG_003_ENTITY_SOURCE_WEAK"
+          "Baidu：存在空短页启发式风险（非官方固定字数）。",
+          "补充原创落地内容，并用百度搜索资源平台反馈核对。",
+          "BAIDU_THIN_CONTENT_HEURISTIC",
+          catalogUrls(["BAIDU_THIN_CONTENT_HEURISTIC"])
         );
       }
       return externalValidationRow(
-        "实体信息存在；DuckDuckBot 与 Bing 依赖仍需服务端验证。",
-        "保持 Bing profile 通过，并服务端验证 DuckDuckBot 抓取。"
+        "Baidu DOM 基础项通过；Baiduspider、真实移动渲染与提交接口需外部验证。",
+        "按 Baiduspider 服务端抓取，并检查搜索资源平台。",
+        catalogUrls(["BAIDU_MOBILE_LANDING"])
+      );
+    }
+
+    if (engine.id === "duckduckgo") {
+      if (rows.indexability.status === "fail") {
+        return engineRow(
+          "engine_specific",
+          "fail",
+          "high",
+          "DuckDuckGo：页面存在索引阻断；其结果源包含 Bing 等，需先可索引。",
+          "先修复 indexability，再验证 DuckDuckBot / Bing 依赖。",
+          "DDG_001_BLOCKED_DUCKDUCKBOT",
+          catalogUrls(["DDG_SOURCES", "META_ROBOTS_001_NOINDEX"])
+        );
+      }
+      return externalValidationRow(
+        "DuckDuckGo 无独立 Organization 硬规；保持可抓取并与 Bing 基础信号一致。",
+        "服务端验证 DuckDuckBot，并保持 Bing profile。",
+        catalogUrls(["DDG_SOURCES"])
       );
     }
 
     if (engine.id === "naver") {
-      if (!signals.canonicalAbsolute || signals.jsRedirect) {
-        return engineRow("engine_specific", "fail", "high", "Naver 要求 canonical 使用 absolute URL，并不建议只靠 JS redirect。", "使用 absolute canonical 和 HTTP redirect；独立移动 URL 需一一映射。", "NAVER_002_CANONICAL_NOT_ABSOLUTE");
+      if (!signals.canonicalAbsolute) {
+        return engineRow(
+          "engine_specific",
+          "fail",
+          "high",
+          "Naver：canonical 须为绝对 URL（浏览器可测）。",
+          "使用绝对 canonical；独立移动 URL 需映射并在 Search Advisor 验证。",
+          "NAVER_002_CANONICAL_NOT_ABSOLUTE",
+          catalogUrls(["CANONICAL_ABSOLUTE"])
+        );
       }
-      return externalValidationRow("Naver canonical/title/schema 基础信号可读；Yeti robots、移动/桌面映射和 Naver Search Advisor 状态需要服务端验证。", "服务端按 Yeti 抓取，并在 Search Advisor 检查收集/索引状态。");
+      if (signals.jsRedirect) {
+        return engineRow(
+          "engine_specific",
+          "warn",
+          "medium",
+          "检测到 JS redirect；更稳妥的是 HTTP 重定向（需服务端确认）。",
+          "改用 HTTP redirect，避免仅靠 JS 跳转。",
+          "NAVER_003_JS_REDIRECT",
+          catalogUrls(["CANONICAL_ABSOLUTE"])
+        );
+      }
+      return externalValidationRow(
+        "Naver canonical 基础信号可读；Yeti robots 与 Search Advisor 状态需服务端验证。",
+        "服务端按 Yeti 抓取并检查 Search Advisor。",
+        catalogUrls(["BING_WEBMASTER_INDEXNOW"])
+      );
     }
 
     if (engine.id === "seznam") {
-      if (signals.sitemapHref && !signals.sitemapAbsolute) {
-        return engineRow("engine_specific", "warn", "medium", "Seznam 对 sitemap 更偏好绝对 URL，当前页面 sitemap link 为根相对或非绝对。", "在 robots.txt 中声明绝对 sitemap URL，并检查 SeznamBot 规则。", "SEZNAM_002_SITEMAP_NOT_ABSOLUTE");
-      }
-      return externalValidationRow("Seznam 基础 DOM 信号可读；SeznamBot robots、X-Robots-Tag 差异和 canonical 相似性需服务端验证。", "服务端检查 SeznamBot、robots、canonical target 非 redirect 且内容相似。");
+      return externalValidationRow(
+        "Seznam 基础 DOM 信号可读；绝对 Sitemap / SeznamBot / IndexNow 需服务端验证。",
+        "在 robots.txt 声明绝对 Sitemap:，并检查 SeznamBot。",
+        catalogUrls(["SEZNAM_SITEMAP_ABSOLUTE", "BING_WEBMASTER_INDEXNOW"])
+      );
     }
 
     if (engine.id === "sogou") {
       if (rows.content_spam.status === "fail") {
-        return engineRow("engine_specific", "fail", "high", "Sogou 对作弊/低质 URL 风险敏感，当前页面存在内容泄露或低质阻断。", "清理低质/作弊信号，sitemap 只提交重要原创详情页。", "SOGOU_006_CHEATING_OR_LOW_QUALITY");
+        return engineRow(
+          "engine_specific",
+          "fail",
+          "high",
+          "Sogou：内容泄露/低质信号存在；sitemap 应只提交重要原创页（站长实践）。",
+          "清理低质信号后再提交。",
+          "SOGOU_006_CHEATING_OR_LOW_QUALITY"
+        );
       }
-      return externalValidationRow("Sogou 基础 DOM 信号可读；robots 生效延迟、邀请制 sitemap、10MB/50k 限制需服务端或站长平台验证。", "检查 Sogou spider robots、sitemap 文件大小、提交 URL 质量和站长平台收录反馈。");
+      return externalValidationRow(
+        "Sogou 基础 DOM 信号可读；robots 生效与 sitemap 限额需站长平台验证。",
+        "检查 Sogou spider robots 与提交质量。"
+      );
     }
 
     if (engine.id === "ecosia_qwant") {
-      if (rows.indexability.status === "fail" || rows.structured_data.status === "fail") {
-        return engineRow("engine_specific", "fail", "high", "Ecosia/Qwant/EUSP 依赖 Bing/Google 基础适配，当前基础项失败。", "先修复 Google/Bing 基础 SEO，再补多语言和实体可信度。", "EQ_001_BING_GOOGLE_BASELINE_FAIL");
+      if (rows.indexability.status === "fail") {
+        return engineRow(
+          "engine_specific",
+          "fail",
+          "high",
+          "Ecosia/Qwant 依赖合作方索引；当前存在索引阻断。",
+          "先修复 Google/Bing 基础可索引性。",
+          "EQ_001_BING_GOOGLE_BASELINE_FAIL",
+          catalogUrls(["EQ_PARTNER_INDEX", "META_ROBOTS_001_NOINDEX"])
+        );
       }
-      if (!signals.hasPrivacyLink) {
-        return engineRow("engine_specific", "warn", "medium", "未发现隐私政策或可信联系入口，欧洲隐私搜索生态的信任信号偏弱。", "添加可访问的隐私政策、联系信息和组织实体 sameAs。", "EQ_004_PRIVACY_PAGE_MISSING");
-      }
-      return externalValidationRow("Bing/Google 基础项可读；EUSP 独立索引策略、区域展示和隐私搜索结果仍需外部验证。", "保持多语言 hreflang、组织实体和隐私页面清晰，并检查 Bing/Google 来源收录。");
+      return externalValidationRow(
+        "Ecosia/Qwant 无「必须有隐私页」的官方 SEO 硬规；保持 Bing/Google 基础可发现性即可。",
+        "检查合作方收录与多语言 hreflang。",
+        catalogUrls(["EQ_PARTNER_INDEX"])
+      );
     }
 
-    return engineRow("engine_specific", "unknown", "info", "该平台的浏览器内专项规则尚无足够信号。", "使用服务端爬虫补充。");
-  }
-
-  function engineStatus(rows) {
-    var list = Object.keys(rows).map(function (key) { return rows[key]; });
-    if (list.some(function (row) { return row.status === "fail"; })) return "fail";
-    if (list.some(function (row) { return row.status === "warn"; })) return "warning";
-    if (list.some(function (row) { return row.status === "unknown"; })) return "unknown";
-    return "pass";
-  }
-
-  function engineScore(rows) {
-    var score = 100;
-    Object.keys(rows).forEach(function (key) {
-      var row = rows[key];
-      if (row.status === "fail") score -= row.severity === "critical" ? 36 : 28;
-      else if (row.status === "warn") score -= row.severity === "high" ? 18 : 12;
-      else if (row.status === "unknown") score -= 4;
-    });
-    return Math.max(0, Math.min(100, score));
-  }
-
-  function engineRecommendations(rows) {
-    return Object.keys(rows)
-      .map(function (key) { return rows[key]; })
-      .filter(function (row) { return row.status !== "pass" && row.recommendation; })
-      .map(function (row) { return row.recommendation; })
-      .filter(function (value, index, list) { return list.indexOf(value) === index; })
-      .slice(0, 5);
+    return engineRow("engine_specific", "unknown", "info", "该平台的浏览器内专项规则尚无足够官方可测信号。", "使用服务端爬虫补充。");
   }
 
   function buildEngineMatrix(raw) {
     var signals = collectEngineSignals(raw);
     var matrix = {};
     ENGINE_PROFILES.forEach(function (engine) {
-      var rows = buildCommonEngineRows(raw, signals);
-      rows.engine_specific = buildEngineSpecificRow(engine, rows, raw, signals);
+      var rows = buildEngineRows(engine, raw, signals);
       var score = engineScore(rows);
       var list = ENGINE_MATRIX_ROWS.map(function (row) {
         return rows[row.id] || engineRow(row.id, "unknown", "info", "未检测。", "补充检测规则。");
@@ -1810,6 +2630,7 @@
         label: engine.label,
         userAgents: engine.userAgents,
         focus: engine.focus,
+        catalogRules: catalogRulesForEngine(engine.id),
         score: score,
         status: engineStatus(rows),
         rows: list,
@@ -1830,6 +2651,7 @@
       var scoped = checks.filter(function (item) { return groups.indexOf(item.group) !== -1; });
       var deductions = [];
       scoped.forEach(function (item) {
+        if (item && item.scoringExempt) return;
         var points = item.level === "fail" ? 16 : item.level === "warn" ? 7 : 0;
         if (!points) return;
         deductions.push({
@@ -1897,7 +2719,9 @@
       experience: Math.max(0, Math.min(100, experience)),
       engineFit: engineFit,
       total: total,
-      legacyOverall: Math.max(0, Math.min(100, 100 - fail.length * 8 - warn.length * 3)),
+      legacyOverall: Math.max(0, Math.min(100, 100
+        - fail.filter(function (item) { return !item.scoringExempt; }).length * 8
+        - warn.filter(function (item) { return !item.scoringExempt; }).length * 3)),
       details: {
         indexability: indexabilityDetail,
         understandability: understandabilityDetail,
@@ -1962,6 +2786,7 @@
       },
       profiles: ENGINE_PROFILES,
       rows: ENGINE_MATRIX_ROWS,
+      ruleCatalog: SEARCH_ENGINE_RULE_CATALOG,
       scores: scores,
       counts: {
         critical: issues.filter(function (item) { return item.severity === "critical"; }).length,
@@ -2080,11 +2905,19 @@
   function languageSegmentFromUrl(url, knownCodes) {
     try {
       var parsed = new URL(url, window.location.href);
-      var first = parsed.pathname.split("/").filter(Boolean)[0] || "";
+      var parts = parsed.pathname.split("/").filter(Boolean);
+      // Strip leading ISO currency codes (e.g. /EUR/en_US/products).
+      while (parts.length && /^[A-Za-z]{3}$/.test(parts[0]) && parts[0].toUpperCase() === parts[0]) {
+        parts.shift();
+      }
+      var first = parts[0] || "";
       if (!first) return "";
       var normalized = canonicalizeLanguageCode(first);
       if (knownCodes[normalized.toLowerCase()]) return normalized;
       if (first.indexOf("-") !== -1 && validLanguageCode(first)) return normalized;
+      if (first.indexOf("_") !== -1 && validLanguageCode(first.replace(/_/g, "-"))) {
+        return canonicalizeLanguageCode(first);
+      }
     } catch (_error) {
       return "";
     }
@@ -2278,7 +3111,8 @@
     ].join(" ");
 
     if (!raw || !keywords.length) {
-      add("fail", "meta keywords", "Missing meta keywords. Add 4-12 page-intent keywords.", "head");
+      // Google Search does not use meta keywords for ranking; tip only, never fail score.
+      add("info", "meta keywords", "No meta keywords tag (optional). Google ignores keywords meta for ranking.", "head");
       return;
     }
 
@@ -2341,6 +3175,474 @@
     }
   }
 
+  function eeatRuleApplies(rule, seoType) {
+    var when = Array.isArray(rule.when) ? rule.when : ["all"];
+    if (when.indexOf("all") !== -1) return true;
+    var articleFamily = ["article", "blog", "news", "blog_post", "news_article", "post"];
+    if (when.some(function (w) { return articleFamily.indexOf(w) !== -1; })
+      && articleFamily.indexOf(seoType) !== -1) {
+      return true;
+    }
+    return when.indexOf(seoType) !== -1;
+  }
+
+  function eeatIsAbsoluteUrl(value) {
+    return typeof value === "string" && /^https?:\/\//i.test(value.trim());
+  }
+
+  function eeatLogoAbsolute(organization) {
+    if (!organization || !organization.logo) return false;
+    if (typeof organization.logo === "string") return eeatIsAbsoluteUrl(organization.logo);
+    if (typeof organization.logo === "object") {
+      var url = organization.logo.url || organization.logo.contentUrl || organization.logo["@id"] || "";
+      return eeatIsAbsoluteUrl(String(url));
+    }
+    return false;
+  }
+
+  function eeatPersonAuthors(article) {
+    if (!article) return [];
+    var raw = article.author;
+    var list = [];
+    if (Array.isArray(raw)) list = raw;
+    else if (raw) list = [raw];
+    return list.filter(function (author) {
+      if (!author || typeof author !== "object") return false;
+      var types = jsonLdTypeList(author);
+      if (types.length && !types.some(function (t) { return schemaTypeMatches(t, "Person"); })) {
+        return false;
+      }
+      var name = flattenJsonLdText(author.name || "");
+      return Boolean(name);
+    });
+  }
+
+  function eeatAuthorIsOrgOnly(article, organization) {
+    if (!article || !article.author) return true;
+    var raw = article.author;
+    var list = Array.isArray(raw) ? raw : [raw];
+    if (!list.length) return true;
+    var orgId = organization && organization["@id"] ? String(organization["@id"]) : "";
+    return list.every(function (author) {
+      if (!author) return true;
+      if (typeof author === "string") return false;
+      if (typeof author !== "object") return true;
+      if (eeatPersonAuthors({ author: author }).length) return false;
+      var id = author["@id"] ? String(author["@id"]) : "";
+      if (orgId && id && id === orgId) return true;
+      var types = jsonLdTypeList(author);
+      return types.some(function (t) { return schemaTypeMatches(t, "Organization"); }) && !flattenJsonLdText(author.name || "");
+    });
+  }
+
+  function eeatAuthorLacksIdentityUrl(person) {
+    if (!person) return true;
+    var hasUrl = eeatIsAbsoluteUrl(String(person.url || ""));
+    var hasSameAs = Array.isArray(person.sameAs) && person.sameAs.some(function (u) { return eeatIsAbsoluteUrl(String(u || "")); });
+    return !(hasUrl || hasSameAs);
+  }
+
+  /** @deprecated use eeatAuthorLacksIdentityUrl */
+  function eeatAuthorIsShallow(person) {
+    return eeatAuthorLacksIdentityUrl(person);
+  }
+
+  function eeatHasAboutContactInGraph(nodes) {
+    return jsonLdNodesOfType(nodes, "AboutPage").length > 0
+      || jsonLdNodesOfType(nodes, "ContactPage").length > 0;
+  }
+
+  function eeatCollectAboutContactAnchors() {
+    return Array.from(document.querySelectorAll("a[href]")).filter(function (a) {
+      if (isIgnoredSeoAuditNode(a)) return false;
+      var href = String(a.getAttribute("href") || "").toLowerCase();
+      var text = String(a.textContent || "").toLowerCase();
+      return /about|contact|关于|联系|隐私|privacy/.test(href + " " + text);
+    });
+  }
+
+  function eeatHasAboutContactNav() {
+    return eeatCollectAboutContactAnchors().length > 0;
+  }
+
+  function eeatFindVisibleBylineName() {
+    var selectors = [
+      "[itemprop='author']",
+      "[rel='author']",
+      ".author",
+      ".byline",
+      ".post-author",
+      ".article-author",
+      ".amazon-blog-article__author-inline",
+      "[data-author]",
+      "[class*='author']"
+    ];
+    var candidates = [];
+    selectors.forEach(function (sel) {
+      Array.from(document.querySelectorAll(sel)).forEach(function (node) {
+        if (isIgnoredSeoAuditNode(node)) return;
+        var text = String(node.textContent || "").replace(/\s+/g, " ").trim();
+        if (!text || text.length > 120) return;
+        text = text.replace(/^(作者|Author|By|撰稿)\s*[:：]?\s*/i, "").trim();
+        if (text) candidates.push(text);
+      });
+    });
+    return candidates[0] || "";
+  }
+
+  function eeatNormalizePersonName(name) {
+    return String(name || "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase();
+  }
+
+  function eeatNamesMatch(a, b) {
+    var left = eeatNormalizePersonName(a);
+    var right = eeatNormalizePersonName(b);
+    if (!left || !right) return false;
+    if (left === right) return true;
+    return left.indexOf(right) !== -1 || right.indexOf(left) !== -1;
+  }
+
+  function eeatAuthorBackgroundReachable(persons) {
+    var hasBio = Boolean(document.querySelector(".author-bio, .author-description, [data-author-bio], .amazon-blog-article__author-bio"));
+    if (hasBio) return true;
+    var pageText = String((document.body && document.body.innerText) || "");
+    if (/作者简介|About the author|Author bio/i.test(pageText)) return true;
+    return persons.some(function (p) {
+      if (eeatIsAbsoluteUrl(String(p.url || ""))) return true;
+      if (flattenJsonLdText(p.description || "")) return true;
+      return false;
+    });
+  }
+
+  function eeatPublisherLinked(article, organization) {
+    if (!article || !article.publisher) return false;
+    var pub = article.publisher;
+    if (typeof pub === "string") return Boolean(pub);
+    if (typeof pub !== "object") return false;
+    if (flattenJsonLdText(pub.name || "")) return true;
+    var pubId = pub["@id"] ? String(pub["@id"]) : "";
+    var orgId = organization && organization["@id"] ? String(organization["@id"]) : "";
+    if (pubId && orgId && pubId === orgId) return true;
+    return jsonLdTypeList(pub).some(function (t) { return schemaTypeMatches(t, "Organization"); });
+  }
+
+  function eeatFindRule(id) {
+    var resolved = EEAT_RULE_ID_ALIASES[id] || id;
+    return EEAT_STRICT_RULES.find(function (r) { return r.id === resolved || r.id === id; }) || null;
+  }
+
+  /**
+   * Google Helpful Content self-check (Who/How/Trust) — machine-verifiable only.
+   * @param {{seoType?:string,visibleText?:number,contentImages?:number}} context
+   * @param {function(string,string,string,string,Object=):void} add
+   */
+  function auditEeatStrict(context, add) {
+    var seoType = normalizeSeoType(context && context.seoType ? context.seoType : inferSeoTypeFromPage());
+    var nodes = collectJsonLdNodes();
+    var organization = jsonLdNodesOfType(nodes, "Organization")[0] || null;
+    var article = jsonLdNodesOfType(nodes, "Article")[0]
+      || jsonLdNodesOfType(nodes, "BlogPosting")[0]
+      || jsonLdNodesOfType(nodes, "NewsArticle")[0]
+      || null;
+    var reviews = jsonLdNodesOfType(nodes, "Review");
+    var hasSameAs = Boolean(organization && Array.isArray(organization.sameAs) && organization.sameAs.length);
+    var articleFamily = ["article", "blog", "news", "blog_post", "news_article", "post"];
+    var isArticlePage = articleFamily.indexOf(seoType) !== -1 || Boolean(article);
+    var isHome = seoType === "home";
+
+    function pushRule(rule, pass, detail) {
+      if (!rule) return;
+      var applies = eeatRuleApplies(rule, seoType);
+      if (!applies && isArticlePage && rule.when.some(function (w) {
+        return ["article", "blog", "news"].indexOf(w) !== -1;
+      })) {
+        applies = true;
+      }
+      if (!applies && (organization || isHome) && rule.when.indexOf("home") !== -1) {
+        applies = true;
+      }
+      if (!applies && rule.when.indexOf("all") !== -1) applies = true;
+      if (!applies) return;
+
+      if (pass) {
+        add("pass", rule.label, detail || "OK", "eeat", { scoringExempt: true, eeatId: rule.id, eeatDimension: rule.dimension });
+        return;
+      }
+      add(
+        rule.level,
+        rule.label,
+        detail || rule.detailMissing,
+        "eeat",
+        { scoringExempt: true, eeatId: rule.id, eeatDimension: rule.dimension }
+      );
+    }
+
+    if (organization || isHome) {
+      pushRule(
+        eeatFindRule("trust_org_sameas"),
+        hasSameAs,
+        hasSameAs ? "Organization.sameAs 已提供（实体示例字段）。" : null
+      );
+      var logoOk = eeatLogoAbsolute(organization);
+      pushRule(
+        eeatFindRule("trust_org_logo"),
+        logoOk,
+        logoOk ? "Organization.logo 为绝对 URL。" : null
+      );
+    }
+
+    if (isArticlePage) {
+      var persons = eeatPersonAuthors(article);
+      var orgOnly = eeatAuthorIsOrgOnly(article, organization);
+      var hasPerson = persons.length > 0 && !orgOnly;
+      var visibleByline = eeatFindVisibleBylineName();
+      var personName = hasPerson ? flattenJsonLdText(persons[0].name || "") : "";
+
+      pushRule(
+        eeatFindRule("who_person_author"),
+        hasPerson,
+        hasPerson ? "Article 含 Person 作者。" : null
+      );
+
+      // Visible byline: pass only when DOM byline exists; schema-only → tip via custom level
+      if (visibleByline) {
+        pushRule(
+          eeatFindRule("who_visible_byline"),
+          true,
+          "可见署名：「" + visibleByline + "」。"
+        );
+      } else if (hasPerson) {
+        add(
+          "tip",
+          "Visible author byline",
+          "未见 DOM 署名，仅有 schema Person（Google Who 强调读者可见署名）。内部自测 · 非排名门槛。",
+          "eeat",
+          { scoringExempt: true, eeatId: "who_visible_byline", eeatDimension: "Who" }
+        );
+      } else {
+        pushRule(eeatFindRule("who_visible_byline"), false, null);
+      }
+
+      if (visibleByline && hasPerson) {
+        var matchOk = eeatNamesMatch(visibleByline, personName);
+        pushRule(
+          eeatFindRule("who_byline_schema_match"),
+          matchOk,
+          matchOk
+            ? "可见署名与 Person.name 一致。"
+            : "可见署名「" + visibleByline + "」与 Person.name「" + personName + "」不一致。"
+        );
+      } else if (visibleByline && !hasPerson) {
+        pushRule(eeatFindRule("who_byline_schema_match"), false, "有可见署名但缺 Person schema。");
+      }
+
+      if (hasPerson) {
+        var identityOk = persons.some(function (p) { return !eeatAuthorLacksIdentityUrl(p); });
+        pushRule(
+          eeatFindRule("who_person_url_or_sameas"),
+          identityOk,
+          identityOk ? "Person 含 url 或 sameAs。" : null
+        );
+        var bgOk = eeatAuthorBackgroundReachable(persons);
+        pushRule(
+          eeatFindRule("who_author_background"),
+          bgOk,
+          bgOk ? "作者背景可延伸（主页/简介）。" : null
+        );
+      }
+
+      var hasPublished = Boolean(article && (article.datePublished || article.date_published));
+      var hasModified = Boolean(article && (article.dateModified || article.date_modified));
+      pushRule(
+        eeatFindRule("how_article_dates"),
+        hasPublished && hasModified,
+        hasPublished && hasModified ? "含 datePublished 与 dateModified。" : null
+      );
+
+      pushRule(
+        eeatFindRule("who_publisher"),
+        eeatPublisherLinked(article, organization),
+        eeatPublisherLinked(article, organization) ? "Article.publisher 已关联。" : null
+      );
+
+      var visibleText = typeof context.visibleText === "number"
+        ? context.visibleText
+        : visibleTextLength(document.body || document.documentElement);
+      var images = typeof context.contentImages === "number" ? context.contentImages : 0;
+      var substanceOk = visibleText >= SEO_TEXT_LIMITS.visibleTextMin && images >= 1;
+      pushRule(
+        eeatFindRule("how_content_substance"),
+        substanceOk,
+        substanceOk ? "正文与配图充实度尚可（≠ Experience）。" : null
+      );
+    }
+
+    var aboutRule = eeatFindRule("trust_about_contact");
+    var aboutOk = eeatHasAboutContactInGraph(nodes) || eeatHasAboutContactNav();
+    pushRule(aboutRule, aboutOk, aboutOk ? "已发现 About/Contact 页或导航入口。" : null);
+
+    var reviewRule = eeatFindRule("how_review_author");
+    if (reviews.length) {
+      var reviewAuthorOk = reviews.every(function (review) {
+        if (!review.author) return false;
+        if (typeof review.author === "string") return Boolean(review.author.trim());
+        return Boolean(flattenJsonLdText(review.author.name || review.author.author_name || ""));
+      });
+      pushRule(reviewRule, reviewAuthorOk, reviewAuthorOk ? "Review.author 齐全。" : null);
+    }
+
+    // Why: machine proxy for main content. Audience/intent is not machine-judged —
+    // when proxy passes, omit tip (and do not mark intent as pass); tip only if main content weak.
+    var whyMain = eeatFindRule("why_main_content_first");
+    var mainEl = document.querySelector("main, [role='main'], article, .amazon-blog-article, .product-native-detail");
+    var mainLen = mainEl ? visibleTextLength(mainEl) : 0;
+    var pageText = typeof context.visibleText === "number"
+      ? context.visibleText
+      : visibleTextLength(document.body || document.documentElement);
+    var whyMainOk = mainLen >= Math.min(SEO_TEXT_LIMITS.visibleTextMin, 280)
+      || (pageText >= SEO_TEXT_LIMITS.visibleTextMin && Boolean(mainEl));
+    pushRule(
+      whyMain,
+      whyMainOk,
+      whyMainOk ? "主内容区可定位且篇幅尚可（Why 代理）。" : null
+    );
+    if (!whyMainOk) {
+      pushRule(
+        eeatFindRule("why_primary_audience"),
+        false,
+        null
+      );
+    }
+  }
+
+  function buildEeatStrictReport(checks) {
+    var eeatChecks = (checks || []).filter(function (c) { return c && c.group === "eeat"; });
+    var dimensions = ["Who", "How", "Why", "Trust"];
+    var byDimension = {};
+    dimensions.forEach(function (dim) {
+      byDimension[dim] = { pass: 0, warn: 0, tip: 0, items: [] };
+    });
+    eeatChecks.forEach(function (check) {
+      var dim = check.eeatDimension || "Trust";
+      if (dim === "Experience" || dim === "Expertise" || dim === "Authoritativeness" || dim === "Trustworthiness") {
+        dim = dim === "Trustworthiness" || dim === "Authoritativeness" ? "Trust" : (dim === "Experience" ? "How" : "Who");
+      }
+      if (!byDimension[dim]) byDimension[dim] = { pass: 0, warn: 0, tip: 0, items: [] };
+      if (check.level === "pass") byDimension[dim].pass += 1;
+      else if (check.level === "warn") byDimension[dim].warn += 1;
+      else if (check.level === "tip" || check.level === "info") byDimension[dim].tip += 1;
+      byDimension[dim].items.push(check);
+    });
+    var gaps = eeatChecks.filter(function (c) { return c.level === "warn" || c.level === "tip"; });
+    var status = gaps.some(function (c) { return c.level === "warn"; })
+      ? "warn"
+      : gaps.length
+        ? "tip"
+        : eeatChecks.length
+          ? "pass"
+          : "empty";
+    return {
+      status: status,
+      note: "对照 Google Helpful Content（Who/How/Why）机检代理 · 与上方「对照 Google 官方示例」JSON-LD 字段对齐是两套机制 · Trust 为实体可核查代理 · 非排名门槛 · E-E-A-T 非单独因子",
+      officialUrl: "https://developers.google.com/search/docs/fundamentals/creating-helpful-content",
+      summary: {
+        total: eeatChecks.length,
+        pass: eeatChecks.filter(function (c) { return c.level === "pass"; }).length,
+        warn: eeatChecks.filter(function (c) { return c.level === "warn"; }).length,
+        tip: eeatChecks.filter(function (c) { return c.level === "tip" || c.level === "info"; }).length
+      },
+      dimensions: byDimension,
+      items: eeatChecks,
+      catalogSize: EEAT_STRICT_RULES.length
+    };
+  }
+
+  var latestEeatStrictReport = null;
+
+  function renderEeatStrictSection(report) {
+    if (!report) return "";
+    var summary = report.summary || {};
+    var tone = report.status === "pass" ? "pass" : report.status === "warn" ? "warn" : report.status === "tip" ? "warn" : "info";
+    var dimHtml = ["Who", "How", "Why", "Trust"]
+      .map(function (dim) {
+        var bucket = (report.dimensions && report.dimensions[dim]) || { pass: 0, warn: 0, tip: 0, items: [] };
+        var gapItems = (bucket.items || []).filter(function (c) { return c.level !== "pass"; });
+        var passItems = (bucket.items || []).filter(function (c) { return c.level === "pass"; });
+        var gapHtml = gapItems
+          .map(function (c) {
+            return (
+              '<li class="weline-seo-panel__eeat-item weline-seo-panel__eeat-item--' +
+              escapeHtml(c.level) +
+              '"><span class="weline-seo-panel__badge weline-seo-panel__badge--' +
+              escapeHtml(c.level === "tip" ? "tip" : c.level) +
+              '">' +
+              escapeHtml(formatCheckLevel(c.level)) +
+              "</span> " +
+              escapeHtml(c.label) +
+              (c.detail ? '<p class="weline-seo-panel__hint">' + escapeHtml(c.detail) + "</p>" : "") +
+              "</li>"
+            );
+          })
+          .join("");
+        var passHtml = "";
+        if (passItems.length) {
+          passHtml =
+            '<p class="weline-seo-panel__eeat-pass-summary">' +
+            escapeHtml("已通过 " + passItems.length + " 项：" + passItems.map(function (c) { return c.label; }).join(" · ")) +
+            "</p>";
+        }
+        var bodyHtml = gapHtml
+          ? "<ul>" + gapHtml + "</ul>" + passHtml
+          : (passHtml || '<p class="weline-seo-panel__issue-ok">本维无缺口。</p>');
+        return (
+          '<div class="weline-seo-panel__eeat-dim" data-eeat-dim="' +
+          escapeHtml(dim) +
+          '">' +
+          "<h4>" +
+          escapeHtml(dim === "Why" ? "Why（意图）" : dim) +
+          "</h4>" +
+          '<p class="weline-seo-panel__hint">通过 ' +
+          escapeHtml(String(bucket.pass || 0)) +
+          " · 警告 " +
+          escapeHtml(String(bucket.warn || 0)) +
+          " · 提示 " +
+          escapeHtml(String(bucket.tip || 0)) +
+          "</p>" +
+          bodyHtml +
+          "</div>"
+        );
+      })
+      .join("");
+    return (
+      '<section class="weline-seo-panel__section weline-seo-panel__section--eeat" data-weline-eeat-strict data-weline-google-selfcheck>' +
+      "<h3>Google Helpful Content 自测</h3>" +
+      '<p class="weline-seo-panel__hint">' +
+      escapeHtml(report.note || "内部自测 · 非排名门槛") +
+      " · 目录 " +
+      escapeHtml(String(report.catalogSize || EEAT_STRICT_RULES.length)) +
+      " 项 · 不计入四维本地分 · <a href=\"" +
+      escapeHtml(report.officialUrl || "https://developers.google.com/search/docs/fundamentals/creating-helpful-content") +
+      "\" target=\"_blank\" rel=\"noopener noreferrer\">官方文档</a></p>" +
+      '<div class="weline-seo-panel__local-rich-summary weline-seo-panel__local-rich-summary--' +
+      escapeHtml(tone) +
+      '"><strong>' +
+      escapeHtml(String(summary.total || 0)) +
+      " 项</strong><span>通过 " +
+      escapeHtml(String(summary.pass || 0)) +
+      "</span><span>警告 " +
+      escapeHtml(String(summary.warn || 0)) +
+      "</span><span>提示 " +
+      escapeHtml(String(summary.tip || 0)) +
+      "</span></div>" +
+      '<div class="weline-seo-panel__eeat-grid">' +
+      dimHtml +
+      "</div></section>"
+    );
+  }
+
   function auditJsonLdQuality(context, add) {
     var nodes = collectJsonLdNodes();
     if (!nodes.length) {
@@ -2365,8 +3667,13 @@
     var breadcrumb = jsonLdNodesOfType(nodes, "BreadcrumbList")[0];
     if (breadcrumb && Array.isArray(breadcrumb.itemListElement) && breadcrumb.itemListElement.length) {
       add("pass", "Breadcrumb items", breadcrumb.itemListElement.length + " breadcrumb item(s).", "schema");
-    } else {
+    } else if (breadcrumb) {
       add("warn", "Breadcrumb items", "BreadcrumbList should expose itemListElement.", "schema");
+    } else if (context.seoType === "home") {
+      // Google BreadcrumbList needs ≥2 ListItems; single-level homepage should omit the type.
+      add("info", "Breadcrumb items", "Homepage omits BreadcrumbList (expected; needs ≥2 trail items).", "schema");
+    } else {
+      add("tip", "Breadcrumb items", "No BreadcrumbList; add when the URL has a multi-level trail.", "schema");
     }
 
     var article = jsonLdNodesOfType(nodes, "Article")[0];
@@ -2493,10 +3800,21 @@
     }
   }
 
+  function isThirdPartyScriptUrl(href) {
+    try {
+      var host = new URL(href, window.location.href).hostname.toLowerCase();
+      return /(^|\.)(google\.com|gstatic\.com|googleapis\.com|googletagmanager\.com|google-analytics\.com|facebook\.net|fbcdn\.net|cloudflare\.com|cloudflareinsights\.com|recaptcha\.net)$/i.test(host)
+        || /recaptcha/i.test(href);
+    } catch (_e) {
+      return /recaptcha|gstatic\.com\/recaptcha|google\.com\/recaptcha/i.test(String(href || ""));
+    }
+  }
+
   function collectResourceTimingIssues() {
     var resources = performanceEntries("resource");
     var issues = {
       largeScripts: [],
+      largeThirdPartyScripts: [],
       largeStyles: [],
       compression: []
     };
@@ -2507,7 +3825,10 @@
       var decoded = usableNumber(entry.decodedBodySize);
       var size = decoded || transfer || usableNumber(entry.encodedBodySize) || 0;
       var item = { raw: resourceUrlLabel(entry), href: entry.name, size: size, transfer: transfer, decoded: decoded };
-      if (path.endsWith(".js") && size > 260 * 1024) issues.largeScripts.push(item);
+      if (path.endsWith(".js") && size > 260 * 1024) {
+        if (isThirdPartyScriptUrl(entry.name)) issues.largeThirdPartyScripts.push(item);
+        else issues.largeScripts.push(item);
+      }
       if (path.endsWith(".css") && size > 120 * 1024) issues.largeStyles.push(item);
       if ((path.endsWith(".js") || path.endsWith(".css")) && decoded && transfer && decoded > 30 * 1024 && transfer / decoded > 0.88) {
         issues.compression.push(item);
@@ -2557,29 +3878,87 @@
     var unminifiedJs = jsAssets.filter(function (asset) { return !assetLooksMinified(asset.href, "js"); });
     var unminifiedCss = cssAssets.filter(function (asset) { return !assetLooksMinified(asset.href, "css"); });
     if (unminifiedJs.length) {
-      add("warn", "unminified JavaScript", unminifiedJs.length + " JS file(s) do not look minified: " + issueSample(unminifiedJs, 5) + ".", "issues");
+      add(
+        "tip",
+        "unminified JavaScript",
+        unminifiedJs.length +
+          " JS file(s) look unminified on this page (common in DEV).【不扣分】生产 (!DEV) 经 deploy:upgrade / setup:upgrade 自动 minify。",
+        "issues"
+      );
     } else {
       add("pass", "unminified JavaScript", "JavaScript file names look minified or cache-built.", "issues");
     }
     if (unminifiedCss.length) {
-      add("warn", "unminified CSS", unminifiedCss.length + " CSS file(s) do not look minified: " + issueSample(unminifiedCss, 5) + ".", "issues");
+      add(
+        "tip",
+        "unminified CSS",
+        unminifiedCss.length +
+          " CSS file(s) look unminified on this page (common in DEV).【不扣分】生产 (!DEV) 经 deploy:upgrade / setup:upgrade 自动 minify。",
+        "issues"
+      );
     } else {
       add("pass", "unminified CSS", "CSS file names look minified or cache-built.", "issues");
     }
 
     var resourceIssues = collectResourceTimingIssues();
     if (resourceIssues.largeScripts.length) {
-      add("warn", "large JavaScript resources", resourceIssues.largeScripts.length + " JS resource(s) exceed 260KB decoded/transfer size: " + issueSample(resourceIssues.largeScripts, 5) + ".", "issues");
+      add("warn", "large JavaScript resources", resourceIssues.largeScripts.length + " first-party JS resource(s) exceed 260KB decoded/transfer size: " + issueSample(resourceIssues.largeScripts, 5) + ".", "issues");
     } else {
-      add("pass", "large JavaScript resources", "No large JS resource detected by Resource Timing.", "issues");
+      add("pass", "large JavaScript resources", "No large first-party JS resource detected by Resource Timing.", "issues");
+    }
+    if (resourceIssues.largeThirdPartyScripts.length) {
+      add(
+        "tip",
+        "large third-party JavaScript",
+        resourceIssues.largeThirdPartyScripts.length +
+          " third-party JS resource(s) exceed 260KB (e.g. reCAPTCHA/analytics): " +
+          issueSample(resourceIssues.largeThirdPartyScripts, 5) +
+          "。【不扣分】第三方脚本无法 tree-shake；本机体验主分不扣此项。",
+        "issues"
+      );
     }
     if (resourceIssues.largeStyles.length) {
-      add("warn", "large CSS resources", resourceIssues.largeStyles.length + " CSS resource(s) exceed 120KB decoded/transfer size: " + issueSample(resourceIssues.largeStyles, 5) + ".", "issues");
+      var unminifiedLargeCss = resourceIssues.largeStyles.filter(function (item) {
+        return !assetLooksMinified(item.href || item.raw || "", "css");
+      });
+      var productionLargeCss = resourceIssues.largeStyles.filter(function (item) {
+        return assetLooksMinified(item.href || item.raw || "", "css");
+      });
+      if (unminifiedLargeCss.length) {
+        add(
+          "tip",
+          "large CSS resources (DEV)",
+          unminifiedLargeCss.length +
+            " unminified CSS file(s) exceed 120KB in this DEV/source build: " +
+            issueSample(unminifiedLargeCss, 5) +
+            "。【不扣分】DEV 源码体积大属预期；面板无法在本页自动拆包。生产 (!DEV) minify 后复测；仍超标再按 large CSS resources 扣分。",
+          "issues"
+        );
+      }
+      if (productionLargeCss.length) {
+        add(
+          "warn",
+          "large CSS resources",
+          productionLargeCss.length +
+            " minified/production-looking CSS resource(s) still exceed 120KB: " +
+            issueSample(productionLargeCss, 5) +
+            ". Remove unused CSS / split critical CSS — this remains a real Experience deduction.",
+          "issues"
+        );
+      }
     } else {
       add("pass", "large CSS resources", "No large CSS resource detected by Resource Timing.", "issues");
     }
     if (resourceIssues.compression.length) {
-      add("warn", "static compression", resourceIssues.compression.length + " JS/CSS resource(s) look weakly compressed in Resource Timing: " + issueSample(resourceIssues.compression, 5) + ".", "issues");
+      add(
+        "tip",
+        "static compression",
+        resourceIssues.compression.length +
+          " JS/CSS resource(s) look weakly compressed in Resource Timing: " +
+          issueSample(resourceIssues.compression, 5) +
+          "。【不扣分】本机/DEV 常未开 gzip/Brotli；生产环境由 WLS/网关自动压缩，本地可忽略。",
+        "issues"
+      );
     } else {
       add("pass", "static compression", "Resource Timing did not expose obvious uncompressed JS/CSS transfer.", "issues");
     }
@@ -2644,15 +4023,35 @@
     else add("fail", "single canonical", "Expected one canonical link, found " + canonicalNodes.length + ".", "url");
 
     var sitemapLink = document.querySelector('link[rel="sitemap"][href]');
-    if (sitemapLink) {
+    var probe = latestSitemapProbe;
+    var robotsMaps = (probe && probe.robotsSitemapUrls) || [];
+    if (probe && (probe.sitemapOk || robotsMaps.length)) {
+      add(
+        "pass",
+        "sitemap discovery",
+        "Same-origin discovery OK: " +
+          (robotsMaps.length ? ("robots.txt Sitemap: " + robotsMaps.join(", ")) : "") +
+          (probe.sitemapOk ? ((robotsMaps.length ? "; " : "") + "/sitemap.xml HTTP " + probe.sitemapStatus) : "") +
+          (sitemapLink ? ("; HTML link " + (sitemapLink.getAttribute("href") || "")) : "") +
+          ".",
+        "technical"
+      );
+    } else if (sitemapLink) {
       var sitemapHref = sitemapLink.getAttribute("href") || "";
       if (/^(https?:\/\/|\/)/i.test(sitemapHref)) {
-        add("pass", "sitemap discovery", "Sitemap link present: " + sitemapHref + ".", "technical");
+        add("pass", "sitemap discovery", "HTML sitemap link present: " + sitemapHref + " (robots.txt probe pending or empty).", "technical");
       } else {
         add("warn", "sitemap discovery", "Sitemap link should be absolute or root-relative.", "technical");
       }
+    } else if (!probe) {
+      add("tip", "sitemap discovery", "Probing same-origin /robots.txt and /sitemap.xml…", "technical");
     } else {
-      add("fail", "sitemap discovery", "Missing <link rel=\"sitemap\" href=\"/sitemap.xml\">.", "technical");
+      add(
+        "warn",
+        "sitemap discovery",
+        "Same-origin robots.txt has no Sitemap: and /sitemap.xml is missing or not XML.",
+        "technical"
+      );
     }
 
     if (document.querySelector("header")) add("pass", "semantic header", "<header> present.", "structure");
@@ -2679,10 +4078,12 @@
     var ogDescription = metaContent('meta[property="og:description"]');
     var ogUrl = metaContent('meta[property="og:url"]');
     var ogType = metaContent('meta[property="og:type"]');
+    var ogImage = metaContent('meta[property="og:image"]');
     var ogImageAlt = metaContent('meta[property="og:image:alt"]');
     var twitterTitle = metaContent('meta[name="twitter:title"]');
     var twitterDescription = metaContent('meta[name="twitter:description"]');
     var twitterCard = metaContent('meta[name="twitter:card"]');
+    var twitterImage = metaContent('meta[name="twitter:image"]');
     var twitterImageAlt = metaContent('meta[name="twitter:image:alt"]');
 
     if (ogTitle && textsAlign(title, ogTitle)) add("pass", "og:title parity", "og:title matches page title.", "social");
@@ -2715,16 +4116,16 @@
       add("warn", "twitter:card", 'Prefer twitter:card="summary_large_image" for share previews.', "social");
     }
 
-    if (ogImageAlt && textsAlign(ogImageAlt, title)) {
-      add("pass", "og:image alt", "og:image:alt aligns with title.", "social");
-    } else if (ogImageAlt) {
-      add("warn", "og:image alt", "og:image:alt should describe the share image and page intent.", "social");
+    if (ogImageAlt && String(ogImageAlt).trim().length >= 2) {
+      add("pass", "og:image alt", "og:image:alt describes the share image.", "social");
+    } else if (ogImage) {
+      add("warn", "og:image alt", "Add og:image:alt describing the share image.", "social");
     }
 
-    if (twitterImageAlt && textsAlign(twitterImageAlt, title)) {
-      add("pass", "twitter:image alt", "twitter:image:alt aligns with title.", "social");
-    } else if (twitterImageAlt) {
-      add("warn", "twitter:image alt", "twitter:image:alt should describe the share image and page intent.", "social");
+    if (twitterImageAlt && String(twitterImageAlt).trim().length >= 2) {
+      add("pass", "twitter:image alt", "twitter:image:alt describes the share image.", "social");
+    } else if (twitterImage) {
+      add("warn", "twitter:image alt", "Add twitter:image:alt describing the share image.", "social");
     }
 
     if (canonical && /^https:\/\//i.test(canonical)) {
@@ -2826,6 +4227,7 @@
     }).length;
     var textLength = visibleTextLength(document.body || document.documentElement);
     var images = Array.from(document.querySelectorAll("main img, .site-shell img, body img"))
+      .filter(function (img) { return !isIgnoredSeoAuditNode(img); })
       .map(function (img) {
         return {
           src: img.getAttribute("src") || "",
@@ -2834,10 +4236,16 @@
         };
       })
       .filter(function (img) { return img.src && !img.decorative && !isBrandChromeImage(img.src); });
-    var missingAlt = images.filter(function (img) { return !img.alt || img.alt.length < 8; }).length;
+    var missingAlt = images.filter(function (img) { return !hasUsefulImageAlt(img.alt); }).length;
 
-    function add(level, label, detail, group) {
-      checks.push({ level: level, label: label, detail: detail || "", group: group || "technical" });
+    function add(level, label, detail, group, meta) {
+      var row = { level: level, label: label, detail: detail || "", group: group || "technical" };
+      if (meta && typeof meta === "object") {
+        if (meta.scoringExempt) row.scoringExempt = true;
+        if (meta.eeatId) row.eeatId = meta.eeatId;
+        if (meta.eeatDimension) row.eeatDimension = meta.eeatDimension;
+      }
+      checks.push(row);
     }
 
     if (document.body && document.body.innerHTML.indexOf("{{") !== -1) {
@@ -2846,8 +4254,20 @@
 
     REQUIRED_HEAD.forEach(function (rule) {
       if (rule.types && rule.types.indexOf(seoType) === -1) return;
-      if (rule.test()) add("pass", rule.name, "Present in head.", "head");
-      else add("fail", rule.name, "Missing from head.", "head");
+      if (rule.test()) {
+        add("pass", rule.name, rule.detailWhenPresent || "Present in head.", "head");
+        return;
+      }
+      if (rule.soft) {
+        add(
+          rule.levelWhenMissing || "tip",
+          rule.name,
+          rule.detailWhenMissing || "Missing from head (soft; not a Google hard requirement).",
+          "head"
+        );
+        return;
+      }
+      add("fail", rule.name, "Missing from head.", "head");
     });
 
     if (canonical && siteDomain && canonical.indexOf("https://" + siteDomain) === 0) {
@@ -2863,6 +4283,13 @@
 
     if (title.length >= SEO_TEXT_LIMITS.titleMin && title.length <= SEO_TEXT_LIMITS.titleMax) {
       add("pass", "title length", title.length + " chars", "content");
+    } else if (title.length > SEO_TEXT_LIMITS.titleMax && title.length <= SEO_TEXT_LIMITS.titleMax + 20) {
+      add(
+        "warn",
+        "title length",
+        "Slightly long (" + title.length + " chars; soft target " + SEO_TEXT_LIMITS.titleMax + "). Brand suffixes often push past SERP width.",
+        "content"
+      );
     } else {
       add(
         "fail",
@@ -2872,15 +4299,24 @@
       );
     }
 
-    if (description.length >= SEO_TEXT_LIMITS.descriptionMin && description.length <= SEO_TEXT_LIMITS.descriptionMax) {
-      add("pass", "description length", description.length + " chars", "content");
-    } else {
-      add(
-        "fail",
-        "description length",
-        "Expected " + SEO_TEXT_LIMITS.descriptionMin + "-" + SEO_TEXT_LIMITS.descriptionMax + ", got " + description.length + ".",
-        "content"
-      );
+    if (description) {
+      if (description.length < SEO_TEXT_LIMITS.descriptionSoftMin) {
+        add(
+          "warn",
+          "description length",
+          "Short description (" + description.length + " chars). Google has no fixed limit; enrich only if the pitch feels thin.",
+          "content"
+        );
+      } else if (description.length > SEO_TEXT_LIMITS.descriptionSoftMax) {
+        add(
+          "warn",
+          "description length",
+          "Long description (" + description.length + " chars). SERP snippets truncate by width; front-load the key pitch.",
+          "content"
+        );
+      } else {
+        add("pass", "description length", description.length + " chars (Google has no fixed length rule).", "content");
+      }
     }
 
     if (h1Count === 1) add("pass", "H1 count", "Exactly one H1.", "structure");
@@ -2946,7 +4382,20 @@
       add
     );
 
+    auditEeatStrict(
+      {
+        seoType: seoType,
+        visibleText: textLength,
+        contentImages: images.length
+      },
+      add
+    );
+
     var seoSummary = summarizeChecks(checks);
+    latestEeatStrictReport = buildEeatStrictReport(checks);
+    try {
+      window.__WELINE_PANEL_SEO_EEAT_REPORT__ = latestEeatStrictReport;
+    } catch (_e) {}
 
     var result = {
       seoSummary: seoSummary,
@@ -2999,7 +4448,6 @@
     "public copy leak": true,
     "title content": true,
     "meta description": true,
-    "meta keywords": true,
     "semantic main": true,
     "H1 count": true
   };
@@ -3017,6 +4465,14 @@
   var siteCrawlRunning = false;
   var siteCrawlStatus = "";
   var siteCrawlError = "";
+  var latestPageAuditReport = window.__WELINE_PANEL_SEO_PAGE_AUDIT_REPORT__ || null;
+  var pageAuditRunning = false;
+  var pageAuditStatus = "";
+  var pageAuditError = "";
+  var latestLocalRichReport = window.__WELINE_PANEL_SEO_LOCAL_RICH_REPORT__ || null;
+  var localRichRunning = false;
+  var localRichStatus = "";
+  var localRichError = "";
   var SITE_AUDIT_CATEGORY_LABELS = {
     crawlability: "Crawlability",
     indexability: "Indexability",
@@ -3360,15 +4816,15 @@
   function actionFixHint(item) {
     var hints = {
       "title length": "Adjust @page title to 30-65 chars with primary intent keyword near front.",
-      "description length": "Rewrite meta description to 90-170 chars with value + CTA cue.",
+      "description length": "Keep a clear, relevant meta description. Google has no fixed char rule; front-load value if it is very short or very long.",
       "meta keywords": "Add @page keywords or site.seo.keywords with 4-12 comma-separated page-intent phrases.",
       "keyword count": "Keep meta keywords focused: 4-12 comma-separated phrases.",
       "keyword relevance": "Use keywords that naturally appear in title, description, H1, or visible copy.",
       "primary keyword placement": "Place the primary keyword naturally in title or H1.",
       "keyword stuffing": "Remove repeated keyword variants and keep only distinct search intents.",
-      "sitemap discovery": "Add <link rel=\"sitemap\" type=\"application/xml\" href=\"/sitemap.xml\"> in base head.",
-      "visible text": "Add page-specific facts/modules until visible text reaches 2500+ chars.",
-      "image alt": "Give each content image descriptive alt tied to page intent, not keyword stuffing.",
+      "sitemap discovery": "Google discovers sitemaps via robots.txt Sitemap: / Search Console. HTML <link rel=\"sitemap\"> is optional convenience only.",
+      "visible text": "Add page-specific facts/modules. 2500+ chars is a Weline thin-page heuristic (Baidu documents 空短页 qualitatively, not a fixed quota).",
+      "image alt": "给内容图写描述性 alt（商品名/场景）。图库缩略图在带 aria-label 的按钮内可用空 alt；详情正文图禁止空 alt。",
       "html lang": "Add a valid BCP47 <html lang> value that matches the page language.",
       "html lang format": "Use BCP47 language tags for html lang, for example en-IN or zh-Hans-CN; do not use underscores.",
       "html lang mismatch": "Make <html lang>, body data language, canonical localized URL, and hreflang self agree.",
@@ -3382,11 +4838,14 @@
       "insecure form action": "Change form action URLs to https:// or same-origin relative endpoints.",
       "insecure internal links": "Replace same-site http:// links with https:// canonical URLs.",
       "protocol-relative URLs": "Use explicit https:// URLs instead of //example.com to avoid crawler and security ambiguity.",
-      "unminified JavaScript": "Use built/minified JS assets in production, preferably hashed bundles or .min.js files.",
-      "unminified CSS": "Use built/minified CSS assets in production, preferably hashed bundles or .min.css files.",
-      "large JavaScript resources": "Split, tree-shake, defer, or lazy-load large JavaScript bundles before promotion.",
-      "large CSS resources": "Remove unused CSS, split critical CSS, and ship compressed production CSS.",
-      "static compression": "Enable gzip or Brotli for JS/CSS and verify transferSize is materially smaller than decodedBodySize.",
+      "unminified JavaScript": "【不扣分】DEV 常出源码 JS；生产 (!DEV) 经 deploy:upgrade / setup:upgrade 自动 minify。",
+      "unminified CSS": "【不扣分】DEV 常出源码 CSS；生产 (!DEV) 经 deploy:upgrade / setup:upgrade 自动 minify。",
+      "large JavaScript resources": "Split, tree-shake, defer, or lazy-load large first-party JavaScript bundles before promotion.",
+      "large third-party JavaScript": "【不扣分】第三方脚本无法 tree-shake；可交互后再加载。不计入本机体验主扣分。",
+      "favicon": "Google favicon guidelines: provide one supported <link rel=\"icon\"> (ICO/PNG/GIF/JPEG/BMP/...). Square, preferably >48px. SERP branding only — not an indexing gate.",
+      "large CSS resources (DEV)": "【不扣分】DEV 源码 CSS 体积大属预期；面板无法在本页自动拆包。生产 minify 后复测；仍超标则按 large CSS resources 扣分。",
+      "large CSS resources": "Remove unused CSS, split critical CSS, and ship compressed production CSS. Real oversized bundles remain an Experience deduction.",
+      "static compression": "【不扣分】生产会自动 gzip/Brotli。本机弱压缩只作提示；上线后用 Network 或 curl -I 确认 Content-Encoding。",
       "image dimensions": "Add width and height attributes to content images to reduce CLS and improve rendering predictability.",
       "external link rel": 'Add rel="noopener noreferrer" to target="_blank" links.',
       "title/H1 alignment": "Make H1 the on-page expression of the same intent as title.",
@@ -3548,16 +5007,16 @@
       '<div class="weline-seo-panel__summary">' +
       '<div class="weline-seo-panel__stat weline-seo-panel__stat--pass"><strong>' +
       summary.pass +
-      '</strong><span>Passed</span></div>' +
+      ' 项</strong><span>通过</span></div>' +
       '<div class="weline-seo-panel__stat weline-seo-panel__stat--fail"><strong>' +
       summary.fail +
-      '</strong><span>Failed</span></div>' +
+      ' 项</strong><span>失败</span></div>' +
       '<div class="weline-seo-panel__stat weline-seo-panel__stat--warn"><strong>' +
       summary.warn +
-      '</strong><span>Warnings</span></div>' +
+      ' 项</strong><span>警告</span></div>' +
       '<div class="weline-seo-panel__stat weline-seo-panel__stat--info"><strong>' +
       (summary.info || 0) +
-      '</strong><span>Tips</span></div>' +
+      ' 项</strong><span>提示</span></div>' +
       "</div>"
     );
   }
@@ -3605,7 +5064,7 @@
   function engineStatusText(status) {
     return {
       pass: "Pass",
-      info: "Info",
+      info: "说明·不扣分",
       warn: "Warning",
       warning: "Warning",
       fail: "Fail",
@@ -3613,25 +5072,129 @@
     }[status] || status || "Unknown";
   }
 
+  function collectLocalExternalNotices(diagnostics) {
+    var matrix = diagnostics.engineMatrix || {};
+    var seen = {};
+    var notices = [];
+    Object.keys(matrix).forEach(function (engineId) {
+      var item = matrix[engineId] || {};
+      (item.rows || []).forEach(function (row) {
+        if (!row || row.noticeKind !== "local_external") return;
+        var key = (row.issueId || row.id) + "|" + (row.detail || "");
+        if (seen[key]) return;
+        seen[key] = true;
+        notices.push({
+          engine: item.name || engineId,
+          label: row.label || row.id,
+          detail: row.detail || "",
+          recommendation: row.recommendation || ""
+        });
+      });
+    });
+    return notices;
+  }
+
+  function renderLocalExternalNoticeBanner(diagnostics) {
+    var notices = collectLocalExternalNotices(diagnostics);
+    if (!notices.length) return "";
+    var googleFirst = notices.filter(function (item) {
+      return /Google|GOOGLE|CWV|CrUX|Search Console|PageSpeed/i.test(
+        (item.engine || "") + " " + (item.label || "") + " " + (item.detail || "")
+      );
+    });
+    var highlight = googleFirst[0] || notices[0];
+    return (
+      '<section class="weline-seo-panel__section weline-seo-panel__external-notice" role="note" aria-label="本地无法验真说明">' +
+      '<div class="weline-seo-panel__external-notice-banner">' +
+      '<p class="weline-seo-panel__external-notice-kicker">本地无法验真 · 不扣分</p>' +
+      "<h3>Google / CWV 等站外数据本机测不了</h3>" +
+      "<p>" +
+      escapeHtml(
+        highlight.detail ||
+          "Lighthouse、PageSpeed Insights、CrUX、Search Console 覆盖与真实爬虫渲染，需要生产域名与官方工具；本地浏览器模式只做说明，不计入引擎适配扣分。"
+      ) +
+      "</p>" +
+      (highlight.recommendation
+        ? '<p class="weline-seo-panel__external-notice-action"><b>建议：</b>' +
+          escapeHtml(highlight.recommendation) +
+          "</p>"
+        : "") +
+      '<p class="weline-seo-panel__hint weline-seo-panel__hint--compact">矩阵里标「说明·不扣分」的格子均属此类；真正的收录/内容/风险失败仍会显示 Warning / Fail 并扣分。</p>' +
+      "</div></section>"
+    );
+  }
+
+  function renderLocalScoreFocus() {
+    var focus = LOCAL_SCORE_FOCUS;
+    return (
+      '<section class="weline-seo-panel__section weline-seo-panel__local-focus" aria-label="本地优先指标">' +
+      "<h3>" +
+      escapeHtml(focus.title) +
+      "</h3>" +
+      '<p class="weline-seo-panel__hint">' +
+      escapeHtml(focus.lead) +
+      "</p>" +
+      '<div class="weline-seo-panel__local-focus-cols">' +
+      '<div class="weline-seo-panel__local-focus-col">' +
+      '<span class="weline-seo-panel__local-focus-badge weline-seo-panel__local-focus-badge--primary">本地主看</span>' +
+      "<ul>" +
+      focus.primary
+        .map(function (item) {
+          return (
+            "<li><b>" +
+            escapeHtml(item.label) +
+            "</b> — " +
+            escapeHtml(item.why) +
+            "</li>"
+          );
+        })
+        .join("") +
+      "</ul></div>" +
+      '<div class="weline-seo-panel__local-focus-col">' +
+      '<span class="weline-seo-panel__local-focus-badge weline-seo-panel__local-focus-badge--ref">本地参考</span>' +
+      "<ul>" +
+      focus.reference
+        .map(function (item) {
+          return (
+            "<li><b>" +
+            escapeHtml(item.label) +
+            "</b> — " +
+            escapeHtml(item.why) +
+            "</li>"
+          );
+        })
+        .join("") +
+      "</ul>" +
+      '<p class="weline-seo-panel__hint weline-seo-panel__hint--compact">外部（本地可不纠结）：CrUX / GSC 收录 / 外链 — 需 API 或站长后台。</p>' +
+      "</div></div></section>"
+    );
+  }
+
   function renderScoreCards(scores) {
     var items = [
-      ["Indexability", scores.indexability, "indexability"],
-      ["Understandability", scores.understandability, "understandability"],
-      ["Experience", scores.experience, "experience"],
-      ["Engine Fit", scores.engineFit, "engineFit"]
+      ["可收录", scores.indexability, "indexability", "本地主看"],
+      ["可理解性", scores.understandability, "understandability", "本地主看"],
+      ["体验", scores.experience, "experience", "本地主看"],
+      ["引擎适配", scores.engineFit, "engineFit", "本地参考"]
     ];
     var details = scores.details || {};
     return (
+      renderLocalScoreFocus() +
       '<div class="weline-seo-panel__score-grid">' +
       items
         .map(function (item) {
           var value = typeof item[1] === "number" ? item[1] : 0;
           var tone = value >= 90 ? "pass" : value >= 75 ? "warn" : "fail";
           var detail = details[item[2]] || null;
+          var focusTone = item[3] === "本地参考" ? "ref" : "primary";
           return (
             '<div class="weline-seo-panel__score-card weline-seo-panel__score-card--' +
             tone +
-            '"><span>' +
+            '"><span class="weline-seo-panel__score-focus weline-seo-panel__score-focus--' +
+            focusTone +
+            '">' +
+            escapeHtml(item[3]) +
+            "</span><span>" +
             escapeHtml(item[0]) +
             "</span><strong>" +
             escapeHtml(String(value)) +
@@ -3707,6 +5270,7 @@
       .join("");
     return (
       '<section class="weline-seo-panel__section"><h3>搜索引擎适配矩阵</h3>' +
+      '<p class="weline-seo-panel__hint">「性能/CWV」与多数「平台专项」在本地标为「说明·不扣分」：真实 CrUX / GSC / 官方 API 本机做不了。只有 Fail / Warning 才扣引擎适配分。</p>' +
       '<div class="weline-seo-panel__engine-table-wrap"><table class="weline-seo-panel__engine-table">' +
       "<thead>" +
       head +
@@ -3720,10 +5284,44 @@
     var findings = (item.rows || []).filter(function (row) {
       return row.status === "fail" || row.status === "warn" || row.status === "warning";
     });
+    var notices = (item.rows || []).filter(function (row) {
+      return row.noticeKind === "local_external" || row.status === "info";
+    });
+    var html = "";
+    if (notices.length) {
+      html +=
+        '<div class="weline-seo-panel__engine-notices">' +
+        notices
+          .map(function (row) {
+            return (
+              '<div class="weline-seo-panel__engine-finding weline-seo-panel__engine-finding--info">' +
+              '<div class="weline-seo-panel__engine-finding-head">' +
+              '<span class="weline-seo-panel__badge weline-seo-panel__badge--info">说明·不扣分</span><strong>' +
+              escapeHtml(row.label) +
+              "</strong></div>" +
+              '<dl class="weline-seo-panel__engine-finding-detail">' +
+              "<div><dt>原因</dt><dd>" +
+              escapeHtml(row.detail || "本地无法验真的外部项。") +
+              "</dd></div>" +
+              "<div><dt>建议</dt><dd>" +
+              escapeHtml(row.recommendation || "上线后用站长工具验真；本项不扣分。") +
+              "</dd></div>" +
+              "</dl></div>"
+            );
+          })
+          .join("") +
+        "</div>";
+    }
     if (!findings.length) {
-      return '<p class="weline-seo-panel__engine-ok">未发现平台合规失败或警告项。</p>';
+      return (
+        html +
+        (html
+          ? ""
+          : '<p class="weline-seo-panel__engine-ok">未发现平台合规失败或警告项。</p>')
+      );
     }
     return (
+      html +
       '<div class="weline-seo-panel__engine-findings">' +
       findings
         .map(function (row) {
@@ -3779,7 +5377,7 @@
             '<span class="weline-seo-panel__engine-score">' +
             escapeHtml(String(typeof item.score === "number" ? item.score : 0)) +
             "</span></div>" +
-            '<p class="weline-seo-panel__engine-focus">' +
+            '<p class="weline-seo-panel__engine-focus">关注点（非失败项）：' +
             escapeHtml((engine.focus || []).join(" · ")) +
             "</p>" +
             '<p><span class="weline-seo-panel__badge weline-seo-panel__badge--' +
@@ -3806,7 +5404,8 @@
   function renderLimitations(limitations) {
     if (!limitations || !limitations.length) return "";
     return (
-      '<section class="weline-seo-panel__section"><h3>浏览器模式限制</h3>' +
+      '<section class="weline-seo-panel__section"><h3>本地做不到 / 浏览器模式限制</h3>' +
+      '<p class="weline-seo-panel__hint">下列项本地无法验真，<b>不扣引擎适配分</b>；开发阶段看上方醒目说明即可，上线后再接站长工具或 API。</p>' +
       '<ul class="weline-seo-panel__limitations">' +
       limitations
         .map(function (item) {
@@ -3840,7 +5439,34 @@
   function unwrapApiPayload(payload) {
     if (payload && payload.data && payload.data.report) return payload.data.report;
     if (payload && payload.report) return payload.report;
+    if (payload && payload.data && payload.data.id && payload.data.status && payload.data.report === undefined) {
+      return payload.data;
+    }
     return payload || null;
+  }
+
+  function unwrapCrawlEnvelope(payload) {
+    var data = payload && payload.data && typeof payload.data === "object" ? payload.data : payload;
+    if (!data || typeof data !== "object") {
+      return { id: "", status: "", report: null };
+    }
+    var report = data.report || null;
+    if (!report && data.contractVersion) {
+      report = data;
+    }
+    var status = String(data.status || (report && report.crawl && report.crawl.status) || "");
+    return {
+      id: String(data.id || (report && report.crawl && report.crawl.id) || ""),
+      status: status,
+      report: report,
+      ttl: data.ttl
+    };
+  }
+
+  function delayMs(ms) {
+    return new Promise(function (resolve) {
+      window.setTimeout(resolve, ms);
+    });
   }
 
   function crawlSeverityTone(severity) {
@@ -3861,6 +5487,7 @@
     if (!report) return "";
     var health = report.health || {};
     var crawl = report.crawl || {};
+    var sampling = crawl.sampling || {};
     var score = typeof health.score === "number" ? health.score : 0;
     var scoreTone = score >= 90 ? "pass" : score >= 75 ? "warn" : "fail";
     var items = [
@@ -3870,6 +5497,13 @@
       ["Scanned", crawl.scanned || 0, "info"],
       ["Failed", crawl.failed || 0, (crawl.failed || 0) ? "fail" : "pass"]
     ];
+    if (sampling.discovered) {
+      items.push(["Discovered", sampling.discovered, "info"]);
+      items.push(["Sampled", sampling.sampled || crawl.totalUrls || 0, "info"]);
+      if (sampling.collapsed) {
+        items.push(["Collapsed", sampling.collapsed, "warn"]);
+      }
+    }
     return (
       '<div class="weline-seo-panel__crawl-health">' +
       items.map(function (item) {
@@ -3887,24 +5521,154 @@
     );
   }
 
+  function renderAffectedUrlList(urls, affectedCount, options) {
+    options = options || {};
+    var list = Array.isArray(urls) ? urls.filter(function (url) { return !!url; }) : [];
+    var total = Math.max(Number(affectedCount) || 0, list.length);
+    if (!list.length && !total) {
+      return "";
+    }
+    var preview = Math.max(1, Number(options.preview) || 12);
+    var open = options.open ? " open" : "";
+    var label = options.label || "受影响地址";
+    var shown = list.slice(0, preview);
+    var hidden = Math.max(0, total - list.length);
+    return (
+      '<details class="weline-seo-panel__crawl-url-details"' + open + ">" +
+      "<summary>" +
+      escapeHtml(label) +
+      "（" +
+      escapeHtml(String(total)) +
+      "）</summary>" +
+      '<div class="weline-seo-panel__crawl-url-list">' +
+      (list.length
+        ? shown.map(function (url) {
+            return '<code title="' + escapeHtml(url) + '">' + escapeHtml(url) + "</code>";
+          }).join("")
+        : '<small>报告未附带具体地址，请查看下方 Issue 或页面明细。</small>') +
+      (hidden > 0
+        ? "<small>另有 " + escapeHtml(String(hidden)) + " 个地址未附带在报告中。</small>"
+        : "") +
+      "</div></details>"
+    );
+  }
+
+  function resolveAffectedGroups(item, fallbackUrls) {
+    if (item && Array.isArray(item.affectedGroups) && item.affectedGroups.length) {
+      return item.affectedGroups;
+    }
+    var urls = Array.isArray(item && item.affectedUrls) && item.affectedUrls.length
+      ? item.affectedUrls
+      : (fallbackUrls || []);
+    var evidence = Array.isArray(item && item.evidence) ? item.evidence : [];
+    var imagesByPage = {};
+    evidence.forEach(function (row) {
+      if (!row || !row.url) return;
+      var list = [];
+      (row.images || []).forEach(function (img) { if (img) list.push(img); });
+      if (row.resource) list.push(row.resource);
+      if (row.image) list.push(row.image);
+      if (!imagesByPage[row.url]) imagesByPage[row.url] = [];
+      imagesByPage[row.url] = imagesByPage[row.url].concat(list);
+    });
+    return urls.filter(function (url) {
+      return url && !/\/pub\/media\/|\.(webp|png|jpe?g|gif|svg)(\?|$)/i.test(url);
+    }).map(function (url) {
+      var path = "/";
+      try { path = new URL(url, window.location.origin).pathname || "/"; } catch (e) { path = String(url); }
+      var images = Array.from(new Set(imagesByPage[url] || []));
+      return {
+        key: "page:" + url,
+        label: "发现页面",
+        parentPath: path,
+        parentUrl: url,
+        kind: "page",
+        count: 1,
+        imageCount: images.length,
+        urls: [url],
+        images: images
+      };
+    });
+  }
+
+  function renderAffectedGroups(groups, options) {
+    options = options || {};
+    var list = Array.isArray(groups) ? groups : [];
+    if (!list.length) {
+      return "";
+    }
+    var openFirst = !!options.openFirst;
+    return (
+      '<div class="weline-seo-panel__crawl-groups">' +
+      '<div class="weline-seo-panel__crawl-groups-title">按发现页面（点开看相关图片）</div>' +
+      list.map(function (group, index) {
+        var pageUrl = group.parentUrl || (group.urls && group.urls[0]) || "";
+        var images = Array.isArray(group.images) ? group.images : [];
+        var imageCount = Number(group.imageCount || images.length || 0);
+        var summary =
+          escapeHtml(group.label || "发现页面") +
+          " · " +
+          escapeHtml(group.parentPath || pageUrl || "") +
+          " · " +
+          (imageCount > 0 ? (escapeHtml(String(imageCount)) + " 张图") : "无图项");
+        return (
+          '<details class="weline-seo-panel__crawl-group"' +
+          (openFirst && index === 0 ? " open" : "") +
+          "><summary>" +
+          summary +
+          "</summary>" +
+          '<div class="weline-seo-panel__crawl-group-body">' +
+          '<div class="weline-seo-panel__crawl-url-list"><b>发现页面</b><code title="' +
+          escapeHtml(pageUrl) +
+          '">' +
+          escapeHtml(pageUrl) +
+          "</code></div>" +
+          (images.length
+            ? '<div class="weline-seo-panel__crawl-url-list"><b>相关图片</b>' +
+              images.map(function (url) {
+                return '<code title="' + escapeHtml(url) + '">' + escapeHtml(url) + "</code>";
+              }).join("") +
+              "</div>"
+            : '<p class="weline-seo-panel__hint">该项是页面级问题（如缺少 title），不是某张图片上的问题。</p>') +
+          "</div></details>"
+        );
+      }).join("") +
+      "</div>"
+    );
+  }
+
   function renderSiteCrawlDeductions(report) {
     var deductions = report && report.health && Array.isArray(report.health.deductions) ? report.health.deductions : [];
+    var issues = report && Array.isArray(report.issues) ? report.issues : [];
+    var issueMap = {};
+    issues.forEach(function (issue) {
+      if (issue && issue.id) {
+        issueMap[issue.id] = issue;
+      }
+    });
     if (!deductions.length) {
       return '<p class="weline-seo-panel__issue-ok">当前全站审计没有扣分项。</p>';
     }
     return (
       '<section class="weline-seo-panel__section"><h3>扣分来源</h3>' +
+      '<p class="weline-seo-panel__hint">先看是在哪个页面发现的问题；点开后看该页下相关图片。sitemap 中的图片 loc 不再当独立页面抓取。</p>' +
       '<div class="weline-seo-panel__crawl-deductions">' +
-      deductions.slice(0, 20).map(function (item) {
+      deductions.slice(0, 20).map(function (item, index) {
+        var linked = issueMap[item.issueId] || {};
+        var source = item.affectedGroups && item.affectedGroups.length ? item : linked;
+        var groups = resolveAffectedGroups(source, item.affectedUrls || linked.affectedUrls || []);
         return (
           '<div class="weline-seo-panel__crawl-deduction">' +
+          '<div class="weline-seo-panel__crawl-deduction-head">' +
           '<b>-' +
           escapeHtml(String(item.points || 0)) +
           "</b><span>" +
           escapeHtml(item.title || item.issueId || "SEO issue") +
           "</span><small>" +
-          escapeHtml(String(item.affectedCount || 0)) +
-          " URLs</small></div>"
+          escapeHtml(String(groups.length || item.affectedCount || 0)) +
+          " 个发现页</small></div>" +
+          renderAffectedGroups(groups, { openFirst: index === 0 }) +
+          "</div>"
         );
       }).join("") +
       (deductions.length > 20 ? '<p class="weline-seo-panel__hint">还有 ' + escapeHtml(String(deductions.length - 20)) + ' 个扣分项未展开。</p>' : "") +
@@ -3949,9 +5713,10 @@
           escapeHtml(issue.howToFix || "修复对应页面源 HTML 后重新扫描。") +
           "</dd></div>" +
           "</dl>" +
-          (urls.length ? '<div class="weline-seo-panel__crawl-url-list"><b>受影响 URL</b>' + urls.slice(0, 8).map(function (url) {
-            return '<code>' + escapeHtml(url) + "</code>";
-          }).join("") + (issue.affectedCount > urls.length ? '<small>+' + escapeHtml(String(issue.affectedCount - urls.length)) + " more</small>" : "") + "</div>" : "") +
+          renderAffectedGroups(
+            resolveAffectedGroups(issue, urls),
+            { openFirst: false }
+          ) +
           (evidence.length ? '<details class="weline-seo-panel__crawl-evidence"><summary>证据</summary><pre>' + escapeHtml(JSON.stringify(evidence.slice(0, 4), null, 2)) + "</pre></details>" : "") +
           "</article>"
         );
@@ -4032,7 +5797,7 @@
     return (
       '<section class="weline-seo-panel__section weline-seo-panel__crawl-start">' +
       "<h3>全站 Sitemap 审计</h3>" +
-      '<p class="weline-seo-panel__hint">按需扫描 sitemap 内同源页面，输出健康分、扣分原因、受影响 URL 和修复建议。生产环境必须通过 Weline Panel token。</p>' +
+      '<p class="weline-seo-panel__hint">按需扫描 sitemap 内同源页面，输出健康分、扣分原因、受影响 URL 和修复建议。单页请用「当前页检测」Tab；结构化数据请用「富文本」Tab。生产环境必须通过 Weline Panel token。</p>' +
       '<div class="weline-seo-panel__crawl-form">' +
       '<label><span>Sitemap</span><input type="url" data-weline-crawl-sitemap value="' +
       escapeHtml(sitemapUrl) +
@@ -4058,6 +5823,8 @@
       '<button type="button" class="weline-seo-panel__tab is-active" data-weline-tab="seo" role="tab" aria-selected="true">SEO 校验</button>' +
       '<button type="button" class="weline-seo-panel__tab" data-weline-tab="engines" role="tab" aria-selected="false">搜索平台</button>' +
       '<button type="button" class="weline-seo-panel__tab" data-weline-tab="crawl" role="tab" aria-selected="false">全站审计</button>' +
+      '<button type="button" class="weline-seo-panel__tab" data-weline-tab="page" role="tab" aria-selected="false">当前页检测</button>' +
+      '<button type="button" class="weline-seo-panel__tab" data-weline-tab="rich" role="tab" aria-selected="false">富文本</button>' +
       "</div>"
     );
   }
@@ -4075,8 +5842,14 @@
       '<div class="weline-seo-panel__page-heading"><span>H 标签</span><div class="weline-seo-panel__heading-summary weline-seo-panel__heading-summary--compact">' +
       renderHeadingCounts((report.headingOutline && report.headingOutline.counts) || {}) +
       "</div></div>" +
+      '<div class="weline-seo-panel__page-actions">' +
+      '<button type="button" class="weline-seo-panel__publish-btn" data-weline-page-audit data-weline-page-audit-use-current="1" ' +
+      (pageAuditRunning ? "disabled" : "") +
+      ">" +
+      (pageAuditRunning ? "检测中…" : "检测当前 URL") +
+      "</button>" +
       '<button type="button" class="weline-seo-panel__publish-btn" data-weline-seo-publish>发布 AI 报告</button>' +
-      "</div>"
+      "</div></div>"
     );
   }
 
@@ -4093,9 +5866,32 @@
     var diagnostics = report.engineDiagnostics || buildEngineDiagnostics(report);
     return (
       renderScoreCards(diagnostics.scores || {}) +
+      renderLocalExternalNoticeBanner(diagnostics) +
       renderEngineMatrixTable(diagnostics) +
       renderEngineCards(diagnostics) +
       renderLimitations(diagnostics.limitations)
+    );
+  }
+
+  function renderIssueCard(check, fixLabel) {
+    return (
+      '<article class="weline-seo-panel__issue-card weline-seo-panel__issue-card--' +
+      escapeHtml(check.level) +
+      '">' +
+      '<div class="weline-seo-panel__issue-head">' +
+      '<span class="weline-seo-panel__badge weline-seo-panel__badge--' +
+      escapeHtml(check.level === "tip" ? "tip" : check.level) +
+      '">' +
+      escapeHtml(formatCheckLevel(check.level)) +
+      "</span><strong>" +
+      escapeHtml(check.label) +
+      "</strong></div>" +
+      (check.detail ? '<p class="weline-seo-panel__hint">' + escapeHtml(check.detail) + "</p>" : "") +
+      '<p class="weline-seo-panel__issue-fix"><b>' +
+      escapeHtml(fixLabel || "建议") +
+      "</b> " +
+      escapeHtml(actionFixHint(check)) +
+      "</p></article>"
     );
   }
 
@@ -4103,42 +5899,1605 @@
     var issueChecks = (report.checks || []).filter(function (check) {
       return check.group === "issues" && (check.level === "fail" || check.level === "warn");
     });
+    var tipChecks = (report.checks || []).filter(function (check) {
+      return check.group === "issues" && (check.level === "tip" || check.level === "info");
+    });
     var titleSuffix = issueChecks.length ? " · " + issueChecks.length + " 个需处理" : " · 未发现阻断";
+    if (tipChecks.length) {
+      titleSuffix += " · " + tipChecks.length + " 条提示(不扣分)";
+    }
     var body = "";
     if (!issueChecks.length) {
-      body = '<p class="weline-seo-panel__issue-ok">当前未发现 Semrush 风格页面 Issue。</p>';
+      body = '<p class="weline-seo-panel__issue-ok">当前未发现需处理的 Issue（fail/warn）。</p>';
     } else {
-      body =
+      body = '<div class="weline-seo-panel__issue-list">' + issueChecks.map(function (check) {
+        return renderIssueCard(check, "建议");
+      }).join("") + "</div>";
+    }
+    if (tipChecks.length) {
+      body +=
+        '<div class="weline-seo-panel__issue-tips">' +
+        '<h4 class="weline-seo-panel__issue-tips-title">提示 · 不扣分</h4>' +
+        '<p class="weline-seo-panel__hint">以下项本地/DEV 常见或生产会自动处理，<b>不计分、不计入「需处理」</b>；文案已写明原因。</p>' +
         '<div class="weline-seo-panel__issue-list">' +
-        issueChecks
-          .map(function (check) {
-            return (
-              '<article class="weline-seo-panel__issue-card weline-seo-panel__issue-card--' +
-              escapeHtml(check.level) +
-              '">' +
-              '<div class="weline-seo-panel__issue-head">' +
-              '<span class="weline-seo-panel__badge weline-seo-panel__badge--' +
-              escapeHtml(check.level) +
-              '">' +
-              escapeHtml(formatCheckLevel(check.level)) +
-              "</span><strong>" +
-              escapeHtml(check.label) +
-              "</strong></div>" +
-              (check.detail ? '<p class="weline-seo-panel__hint">' + escapeHtml(check.detail) + "</p>" : "") +
-              '<p class="weline-seo-panel__issue-fix"><b>建议</b> ' +
-              escapeHtml(actionFixHint(check)) +
-              "</p></article>"
-            );
-          })
-          .join("") +
-        "</div>";
+        tipChecks.map(function (check) {
+          return renderIssueCard(check, "不扣分原因");
+        }).join("") +
+        "</div></div>";
     }
     return (
       '<section class="weline-seo-panel__section weline-seo-panel__section--issues"><h3>Issue 审计' +
       escapeHtml(titleSuffix) +
       "</h3>" +
-      '<p class="weline-seo-panel__hint">这里收敛非结构性站点问题：混合内容、语言 URL 对齐、静态资源压缩/minify、图片尺寸和外链安全。</p>' +
+      '<p class="weline-seo-panel__hint">需处理：混合内容、语言 URL、生产态超大资源、图片尺寸、外链安全。压缩/minify/第三方体积等本地提示见下方「不扣分」。</p>' +
       body +
+      "</section>"
+    );
+  }
+
+
+  /**
+   * Full local rich-result catalog. Opportunistic types are validated when present;
+   * page expectations (PAGE_RICH_EXPECTATIONS) decide which must appear.
+   */
+  var LOCAL_RICH_RESULT_RULES = [
+    {
+      type: "Product",
+      also: ["ProductGroup"],
+      label: "商品",
+      // Google product snippet: name + (offers | aggregateRating | review). Image recommended for merchant.
+      required: ["name"],
+      offerRequiredAny: ["offers", "hasVariant", "aggregateRating", "review"],
+      recommended: ["image", "description", "sku", "brand.name", "offers.price|offers.lowPrice", "offers.priceCurrency", "offers.availability", "offers.url"]
+    },
+    {
+      type: "Article",
+      also: ["NewsArticle", "BlogPosting"],
+      label: "文章",
+      required: ["headline", "image", "datePublished", "author", "publisher"],
+      recommended: ["dateModified", "mainEntityOfPage", "description"]
+    },
+    {
+      type: "FAQPage",
+      also: [],
+      label: "FAQ",
+      required: ["mainEntity"],
+      recommended: []
+    },
+    {
+      type: "BreadcrumbList",
+      also: [],
+      label: "面包屑",
+      required: ["itemListElement"],
+      recommended: []
+    },
+    {
+      type: "Organization",
+      also: ["LocalBusiness", "OnlineStore", "OnlineBusiness"],
+      label: "组织/商家",
+      required: ["name"],
+      recommended: ["url", "logo"]
+    },
+    {
+      type: "WebSite",
+      also: [],
+      label: "网站",
+      required: ["name", "url"],
+      recommended: ["publisher", "potentialAction"]
+    },
+    {
+      type: "Review",
+      also: [],
+      label: "评价",
+      required: ["itemReviewed", "reviewRating", "author"],
+      recommended: ["reviewBody", "datePublished"]
+    },
+    {
+      type: "ItemList",
+      also: [],
+      label: "列表(Carousel)",
+      required: ["itemListElement"],
+      recommended: []
+    },
+    {
+      type: "CollectionPage",
+      also: [],
+      label: "集合页",
+      required: ["name"],
+      recommended: ["url"]
+    },
+    {
+      type: "VideoObject",
+      also: [],
+      label: "视频",
+      required: ["name", "thumbnailUrl", "uploadDate"],
+      recommended: ["description", "contentUrl", "embedUrl"]
+    },
+    {
+      type: "HowTo",
+      also: [],
+      label: "操作指南",
+      required: ["name", "step"],
+      recommended: ["description", "totalTime", "tool", "supply"]
+    },
+    {
+      type: "Event",
+      also: [],
+      label: "活动",
+      required: ["name", "startDate", "location"],
+      recommended: ["description", "image", "offers", "organizer"]
+    },
+    {
+      type: "Recipe",
+      also: [],
+      label: "食谱",
+      required: ["name", "image", "recipeIngredient", "recipeInstructions"],
+      recommended: ["author", "totalTime", "recipeYield", "nutrition"]
+    }
+  ];
+
+  /**
+   * Page-type → rich catalog expectations (Google Search Central documented features only).
+   * required: missing ⇒ fail; optional: missing ⇒ warn; other catalog types only when present.
+   */
+  var PAGE_RICH_EXPECTATIONS = {
+    // Homepage: Google documents WebSite + Organization; BreadcrumbList needs ≥2 ListItems,
+    // so a lone「首页」trail is not a valid Google BreadcrumbList — do not warn as missing.
+    home: { required: ["WebSite", "Organization"], optional: [] },
+    product: { required: ["Product", "BreadcrumbList", "Organization", "WebSite"], optional: [] },
+    article: { required: ["Article", "BreadcrumbList", "Organization", "WebSite"], optional: [] },
+    blog: { required: ["Article", "BreadcrumbList", "Organization", "WebSite"], optional: [] },
+    news: { required: ["Article", "BreadcrumbList", "Organization", "WebSite"], optional: [] },
+    faq: { required: ["FAQPage", "BreadcrumbList", "Organization", "WebSite"], optional: [] },
+    review: { required: ["Review", "BreadcrumbList", "Organization", "WebSite"], optional: [] },
+    // Ecommerce list pages: BreadcrumbList is the Google rich result; Org/WebSite are site signals.
+    collection: { required: ["BreadcrumbList", "Organization", "WebSite"], optional: [] },
+    contact: { required: ["Organization", "WebSite", "BreadcrumbList"], optional: [] },
+    legal: { required: ["WebSite", "Organization", "BreadcrumbList"], optional: [] },
+    web_page: { required: ["Organization", "WebSite"], optional: ["BreadcrumbList"] }
+  };
+
+  function collectJsonLdFromRoot(root) {
+    var nodes = [];
+    var types = [];
+    var parseErrors = [];
+    if (!root || !root.querySelectorAll) {
+      return { nodes: nodes, types: types, parseErrors: parseErrors };
+    }
+    root.querySelectorAll('script[type="application/ld+json"]').forEach(function (script) {
+      var raw = String(script.textContent || "").trim();
+      if (!raw) return;
+      try {
+        var data = JSON.parse(raw);
+        collectJsonLdNodesFromData(data).forEach(function (node) {
+          nodes.push(node);
+          jsonLdTypeList(node).forEach(function (type) {
+            if (types.indexOf(type) === -1) types.push(type);
+          });
+        });
+      } catch (error) {
+        parseErrors.push((error && error.message) || "invalid JSON-LD");
+        types.push("INVALID_JSON");
+      }
+    });
+    return { nodes: nodes, types: types, parseErrors: parseErrors };
+  }
+
+  function localRichNodeMatches(node, rule) {
+    var wanted = [rule.type].concat(rule.also || []);
+    return jsonLdTypeList(node).some(function (type) {
+      return wanted.some(function (expected) { return schemaTypeMatches(type, expected); });
+    });
+  }
+
+  function resolvePageRichExpectations(seoType) {
+    var normalized = normalizeSeoType(seoType);
+    var aliased = PAGE_JSONLD_RULE_ALIASES[normalized] || normalized;
+    return PAGE_RICH_EXPECTATIONS[aliased]
+      || PAGE_RICH_EXPECTATIONS[normalized]
+      || PAGE_RICH_EXPECTATIONS.web_page;
+  }
+
+  function inferSeoTypeFromUrlPath(url) {
+    var path = "";
+    try {
+      path = new URL(url || "", window.location.href).pathname || "";
+    } catch (_e) {
+      path = String(url || "");
+    }
+    path = String(path).toLowerCase().replace(/\/+$/, "") || "/";
+    if (path === "/" || path === "") return "home";
+    if (/\/product(?:\/|$)/.test(path) || /\/p\//.test(path)) return "product";
+    if (/\/faq(?:\/|$|\?)/.test(path)) return "faq";
+    // Blog index/category are list pages (no Article); only /blog/{slug} is a post.
+    if (/\/blog\/category(?:\/|$)/.test(path)) return "collection";
+    if (/\/blog\/rss\.xml$/.test(path)) return "";
+    if (/\/blog$/.test(path)) return "collection";
+    if (/\/blog\/[^/]+$/.test(path)) return "blog";
+    if (/\/post(?:\/|$)/.test(path)) return "blog";
+    if (/\/news(?:\/|$)/.test(path)) return "news";
+    if (/\/review(?:\/|$)/.test(path)) return "review";
+    if (/\/contact(?:\/|$)/.test(path) || /\/about(?:\/|$)/.test(path)) return "contact";
+    if (/\/categor|\/collection|\/products(?:\/|$)|\/search(?:\/|$)|\/tag(?:\/|$)|\/best-sellers|\/new-arrivals/.test(path)) {
+      return "collection";
+    }
+    return "";
+  }
+
+  function inferSeoTypeForRich(doc, url, types) {
+    var root = doc && doc.querySelectorAll ? doc : document;
+    var explicit = "";
+    try {
+      var meta = root.querySelector('meta[name="page-type"]');
+      explicit = meta ? String(meta.getAttribute("content") || "").trim() : "";
+    } catch (_e) {}
+    var explicitNorm = explicit ? normalizeSeoType(explicit) : "";
+    // Explicit blog list/category beats any residual /blog* URL heuristic.
+    if (explicitNorm === "blog_list" || explicitNorm === "blog_category") {
+      return explicitNorm;
+    }
+    // Strong route signal — polluted page-type meta must not reclassify /product/ as list.
+    var fromUrl = inferSeoTypeFromUrlPath(url);
+    if (fromUrl) return fromUrl;
+    if (explicitNorm) return explicitNorm;
+    try {
+      var bodyClass = root.body ? String(root.body.className || "") : "";
+      var match = bodyClass.match(/\bseo-([a-z0-9-]+)\b/i);
+      if (match) return normalizeSeoType(match[1]);
+    } catch (_e2) {}
+
+    var typeList = Array.isArray(types) ? types : [];
+    if (jsonLdTypesInclude(typeList, "Product") || jsonLdTypesInclude(typeList, "ProductGroup")) return "product";
+    if (jsonLdTypesInclude(typeList, "FAQPage")) return "faq";
+    if (jsonLdTypesInclude(typeList, "BlogPosting")) return "blog";
+    if (jsonLdTypesInclude(typeList, "NewsArticle")) return "news";
+    if (jsonLdTypesInclude(typeList, "Review") && !jsonLdTypesInclude(typeList, "Product")) return "review";
+    if (jsonLdTypesInclude(typeList, "ItemList") || jsonLdTypesInclude(typeList, "CollectionPage")) return "collection";
+    if (jsonLdTypesInclude(typeList, "Article")) return "article";
+    if (jsonLdTypesInclude(typeList, "WebSite") && typeList.length <= 4) return "home";
+    return "web_page";
+  }
+
+  function flattenJsonLdText(value) {
+    if (value === null || value === undefined) return "";
+    if (Array.isArray(value)) {
+      return value
+        .map(flattenJsonLdText)
+        .filter(Boolean)
+        .join(" / ");
+    }
+    if (typeof value === "object") {
+      if (Object.prototype.hasOwnProperty.call(value, "name")) {
+        return flattenJsonLdText(value.name);
+      }
+      if (Object.prototype.hasOwnProperty.call(value, "@value")) {
+        return String(value["@value"] || "").trim();
+      }
+      return "";
+    }
+    return String(value).trim();
+  }
+
+  function shortSchemaEnum(value) {
+    var text = flattenJsonLdText(value);
+    if (!text) return "";
+    var match = text.match(/schema\.org\/([^\/\s?#]+)/i);
+    return match ? match[1] : text;
+  }
+
+  function pushRichFact(facts, label, value) {
+    var text = flattenJsonLdText(value);
+    if (!text) return;
+    facts.push({ label: label, value: text });
+  }
+
+  function localRichItemPreview(node, rule) {
+    var facts = [];
+    var title = "";
+    var detectedType = jsonLdTypeList(node).join(", ") || rule.type;
+
+    if (rule.type === "Product") {
+      title = flattenJsonLdText(node.name) || "商品";
+      pushRichFact(facts, "类型", detectedType);
+      pushRichFact(facts, "品牌", node.brand && node.brand.name ? node.brand.name : node.brand);
+      var currency = firstJsonLdScalar(node, "offers.priceCurrency") || firstJsonLdScalar(node, "offers.offers.priceCurrency");
+      var low = firstJsonLdScalar(node, "offers.lowPrice") || firstJsonLdScalar(node, "offers.price") || firstJsonLdScalar(node, "offers.offers.price");
+      var high = firstJsonLdScalar(node, "offers.highPrice");
+      if (low || high) {
+        var priceText = low && high && low !== high ? low + "–" + high : low || high;
+        pushRichFact(facts, "价格", (currency ? currency + " " : "") + priceText);
+      } else if (currency) {
+        pushRichFact(facts, "货币", currency);
+      }
+      pushRichFact(
+        facts,
+        "库存",
+        shortSchemaEnum(
+          firstJsonLdScalar(node, "offers.availability") || firstJsonLdScalar(node, "offers.offers.availability")
+        )
+      );
+      pushRichFact(facts, "SKU", node.sku);
+      var variantCount = Array.isArray(node.hasVariant) ? node.hasVariant.length : 0;
+      var offerCount = firstJsonLdScalar(node, "offers.offerCount");
+      if (variantCount) pushRichFact(facts, "变体", String(variantCount));
+      else if (offerCount) pushRichFact(facts, "报价数", String(offerCount));
+      var imageCount = Array.isArray(node.image) ? node.image.length : node.image ? 1 : 0;
+      if (imageCount) pushRichFact(facts, "图片", String(imageCount));
+      return { title: title, facts: facts };
+    }
+
+    if (rule.type === "BreadcrumbList") {
+      var crumbs = Array.isArray(node.itemListElement) ? node.itemListElement : [];
+      var trailNames = [];
+      var trailUrls = [];
+      crumbs.forEach(function (item, index) {
+        var crumbName = flattenJsonLdText(
+          item.name || (item.item && item.item.name) || ""
+        );
+        var crumbUrl = "";
+        if (typeof item.item === "string") crumbUrl = item.item.trim();
+        else if (item.item && typeof item.item === "object") {
+          crumbUrl = flattenJsonLdText(item.item.url || item.item["@id"] || "");
+        }
+        // Never use fragment node ids (#breadcrumb) as the human trail label.
+        if (crumbUrl && /#breadcrumb\b/i.test(crumbUrl) && !crumbName) {
+          crumbUrl = "";
+        }
+        if (crumbName) trailNames.push(crumbName);
+        else if (crumbUrl && !/#breadcrumb\b/i.test(crumbUrl)) trailNames.push(crumbUrl);
+        if (crumbName || crumbUrl) {
+          trailUrls.push(
+            String(index + 1) +
+              ". " +
+              (crumbName || "（未命名）") +
+              (crumbUrl ? " → " + crumbUrl : "")
+          );
+        }
+      });
+      title = trailNames.join(" › ") || "面包屑";
+      if (/#breadcrumb\b/i.test(title)) {
+        title = "面包屑";
+      }
+      pushRichFact(facts, "层数", String(crumbs.length || 0));
+      if (trailUrls.length) {
+        pushRichFact(facts, "路径", trailUrls.join(" · "));
+      }
+      return { title: title, facts: facts };
+    }
+
+    if (rule.type === "ItemList") {
+      var listItems = Array.isArray(node.itemListElement) ? node.itemListElement : [];
+      title = flattenJsonLdText(node.name) || "ItemList";
+      pushRichFact(facts, "条目", String(listItems.length || 0));
+      pushRichFact(facts, "说明", "仅 Course/Movie/Recipe/Restaurant 才是 Google Carousel");
+      return { title: title, facts: facts };
+    }
+
+    if (rule.type === "Organization" || rule.type === "WebSite") {
+      title = flattenJsonLdText(node.name) || rule.label || rule.type;
+      pushRichFact(facts, "URL", node.url);
+      if (rule.type === "Organization" && node.logo) {
+        pushRichFact(facts, "Logo", typeof node.logo === "string" ? "已提供" : flattenJsonLdText(node.logo.url || node.logo));
+      }
+      return { title: title, facts: facts };
+    }
+
+    if (rule.type === "Article") {
+      title = flattenJsonLdText(node.headline || node.name) || "文章";
+      pushRichFact(facts, "作者", node.author && node.author.name ? node.author.name : node.author);
+      pushRichFact(facts, "发布", node.datePublished);
+      pushRichFact(facts, "更新", node.dateModified);
+      return { title: title, facts: facts };
+    }
+
+    if (rule.type === "Review") {
+      title =
+        flattenJsonLdText(
+          (node.author && node.author.name) ||
+            node.name ||
+            node.headline ||
+            (node.reviewBody ? String(node.reviewBody).slice(0, 48) : "")
+        ) || "评价";
+      pushRichFact(facts, "评分", firstJsonLdScalar(node, "reviewRating.ratingValue"));
+      pushRichFact(facts, "对象", node.itemReviewed && node.itemReviewed.name ? node.itemReviewed.name : node.itemReviewed);
+      return { title: title, facts: facts };
+    }
+
+    if (rule.type === "FAQPage") {
+      var questions = Array.isArray(node.mainEntity) ? node.mainEntity : [];
+      title = flattenJsonLdText(node.name) || "FAQ";
+      pushRichFact(facts, "问答数", String(questions.length || 0));
+      return { title: title, facts: facts };
+    }
+
+    if (rule.type === "CollectionPage") {
+      title = flattenJsonLdText(node.name) || "集合页";
+      pushRichFact(facts, "URL", node.url);
+      pushRichFact(facts, "说明", "非 Google 电商列表富结果文档类型");
+      return { title: title, facts: facts };
+    }
+
+    title = flattenJsonLdText(node.name || node.headline || node["@id"]) || rule.label || rule.type;
+    pushRichFact(facts, "类型", detectedType);
+    return { title: title, facts: facts };
+  }
+
+  /**
+   * Trimmed Google Search Central JSON-LD samples for side-by-side compare.
+   * Keep shapes faithful to official docs; do not invent ecommerce CollectionPage/ItemList.
+   */
+  var GOOGLE_OFFICIAL_RICH_EXAMPLES = {
+    BreadcrumbList: {
+      docUrl: "https://developers.google.com/search/docs/appearance/structured-data/breadcrumb",
+      title: "Google BreadcrumbList 官方示例",
+      notes: [
+        "末级 ListItem 通常省略 item",
+        "非末级 item 必须是绝对 URL",
+        "不要给 BreadcrumbList 加 @id"
+      ],
+      example: {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: "Books", item: "https://example.com/books" },
+          { "@type": "ListItem", position: 2, name: "Science Fiction", item: "https://example.com/books/sciencefiction" },
+          { "@type": "ListItem", position: 3, name: "Award Winners" }
+        ]
+      }
+    },
+    Organization: {
+      docUrl: "https://developers.google.com/search/docs/appearance/structured-data/organization",
+      title: "Google OnlineStore（Organization 子类）官方示例",
+      notes: [
+        "电商站点 Google 建议用 OnlineStore，而不是泛 Organization",
+        "无硬性必填；推荐 name / url / logo / sameAs 等",
+        "可放首页或 About，不必每页重复完整商家政策"
+      ],
+      example: {
+        "@context": "https://schema.org",
+        "@type": "OnlineStore",
+        name: "Example Online Store",
+        url: "https://www.example.com",
+        logo: "https://www.example.com/assets/images/logo.png",
+        sameAs: [
+          "https://example.net/profile/example12",
+          "https://example.org/@example34"
+        ]
+      }
+    },
+    WebSite: {
+      docUrl: "https://developers.google.com/search/docs/appearance/structured-data/sitelinks-searchbox",
+      title: "Google WebSite + SearchAction 官方示例",
+      notes: [
+        "potentialAction 描述站内搜索（SearchAction）",
+        "urlTemplate 必须含字面量 {search_term_string}（Google 替换变量，不是待填示例）",
+        "target 可为 EntryPoint 或字符串模板"
+      ],
+      example: {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        url: "https://www.example.com/",
+        name: "Example",
+        potentialAction: {
+          "@type": "SearchAction",
+          target: {
+            "@type": "EntryPoint",
+            urlTemplate: "https://www.example.com/search?q={search_term_string}"
+          },
+          "query-input": "required name=search_term_string"
+        }
+      }
+    },
+    Product: {
+      docUrl: "https://developers.google.com/search/docs/appearance/structured-data/product-snippet",
+      title: "Google Product snippet 官方示例（精简）",
+      notes: [
+        "name 必填；另需 offers / aggregateRating / review 之一",
+        "商品富结果在详情页，不要塞进列表页 Product ItemList"
+      ],
+      example: {
+        "@context": "https://schema.org/",
+        "@type": "Product",
+        name: "Executive Anvil",
+        image: "https://example.com/anvil.jpg",
+        description: "Sleek anvil with a black steel head",
+        sku: "0446310786",
+        brand: { "@type": "Brand", name: "ACME" },
+        offers: {
+          "@type": "Offer",
+          url: "https://example.com/anvil",
+          priceCurrency: "USD",
+          price: "119.99",
+          availability: "https://schema.org/InStock"
+        }
+      }
+    },
+    Article: {
+      docUrl: "https://developers.google.com/search/docs/appearance/structured-data/article",
+      title: "Google Article 官方示例（精简）",
+      notes: ["headline / image / datePublished / author / publisher 为常见必填"],
+      example: {
+        "@context": "https://schema.org",
+        "@type": "NewsArticle",
+        headline: "Article headline",
+        image: ["https://example.com/photos/1x1/photo.jpg"],
+        datePublished: "2024-01-05T08:00:00+08:00",
+        dateModified: "2024-02-05T09:20:00+08:00",
+        author: [{ "@type": "Person", name: "Jane Doe" }],
+        publisher: { "@type": "Organization", name: "Example" }
+      }
+    },
+    FAQPage: {
+      docUrl: "https://developers.google.com/search/docs/appearance/structured-data/faqpage",
+      title: "Google FAQPage 官方示例（精简）",
+      notes: ["mainEntity 为 Question/Answer 列表"],
+      example: {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        mainEntity: [{
+          "@type": "Question",
+          name: "How to find return policy?",
+          acceptedAnswer: {
+            "@type": "Answer",
+            text: "Find return policy on the order page."
+          }
+        }]
+      }
+    },
+    Review: {
+      docUrl: "https://developers.google.com/search/docs/appearance/structured-data/review-snippet",
+      title: "Google Review 官方示例（精简）",
+      notes: ["itemReviewed / reviewRating / author 必填"],
+      example: {
+        "@context": "https://schema.org",
+        "@type": "Review",
+        itemReviewed: { "@type": "Product", name: "Executive Anvil" },
+        reviewRating: { "@type": "Rating", ratingValue: 4 },
+        author: { "@type": "Person", name: "Fred Benson" },
+        reviewBody: "Great product."
+      }
+    },
+    ItemList: {
+      docUrl: "https://developers.google.com/search/docs/appearance/structured-data/carousel",
+      title: "Google Carousel/ItemList 官方范围说明",
+      notes: [
+        "Carousel 仅文档化 Course / Movie / Recipe / Restaurant",
+        "电商 Product 列表不是 Google Carousel 富结果"
+      ],
+      example: {
+        "@context": "https://schema.org",
+        "@type": "ItemList",
+        itemListElement: [{
+          "@type": "ListItem",
+          position: 1,
+          url: "https://example.com/recipe/1"
+        }]
+      }
+    }
+  };
+
+  function resolveGoogleOfficialExample(type) {
+    return GOOGLE_OFFICIAL_RICH_EXAMPLES[type] || null;
+  }
+
+  function compactJsonLdForCompare(node) {
+    if (!node || typeof node !== "object") return null;
+    try {
+      var priority = [
+        "@context",
+        "@type",
+        "@id",
+        "name",
+        "url",
+        "logo",
+        "publisher",
+        "potentialAction",
+        "availableLanguage",
+        "offers",
+        "hasVariant",
+        "aggregateRating",
+        "review",
+        "brand",
+        "sku",
+        "image",
+        "description",
+        "sameAs",
+        "itemListElement",
+        "mainEntity",
+        "headline",
+        "author",
+        "datePublished",
+        "itemReviewed",
+        "reviewRating"
+      ];
+      var seen = {};
+      var out = {};
+      function putKey(key) {
+        if (seen[key] || !Object.prototype.hasOwnProperty.call(node, key)) return;
+        seen[key] = true;
+        var value = node[key];
+        // Always show the real on-page values — never invent "… +N" placeholders
+        // (those would look like fake schema to operators reviewing the panel).
+        if (key === "availableLanguage" || key === "sameAs") {
+          out[key] = value;
+          return;
+        }
+        if (key === "potentialAction" || key === "offers" || key === "publisher" || key === "brand") {
+          out[key] = value;
+          return;
+        }
+        if (key === "itemListElement" && Array.isArray(value)) {
+          // Keep every ListItem; nested BlogPosting bodies stay intact for review.
+          out[key] = value;
+          return;
+        }
+        if (Array.isArray(value)) {
+          out[key] = value.map(function (entry) {
+            if (!entry || typeof entry !== "object") return entry;
+            return entry;
+          });
+          return;
+        }
+        out[key] = value;
+      }
+      priority.forEach(putKey);
+      Object.keys(node).forEach(putKey);
+      return out;
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  function buildGoogleCompare(type, ourNode) {
+    var pack = resolveGoogleOfficialExample(type);
+    if (!pack || !pack.example) return null;
+    var example = pack.example;
+    var our = compactJsonLdForCompare(ourNode);
+    var diffs = [];
+
+    if (!ourNode) {
+      diffs.push({ level: "fail", text: "本站未检出该类型；右侧为 Google 官方示例形状" });
+      (pack.notes || []).forEach(function (note) {
+        diffs.push({ level: "note", text: note });
+      });
+    } else {
+      Object.keys(example).forEach(function (key) {
+        if (key === "@context") return;
+        if (key === "@type") {
+          var ourType = ourNode["@type"];
+          var exampleType = example["@type"];
+          if (String(ourType) !== String(exampleType)) {
+            diffs.push({
+              level: "note",
+              text:
+                "@type 本站=" +
+                String(ourType) +
+                " / 示例=" +
+                String(exampleType) +
+                (type === "Organization"
+                  ? "（电商推荐 OnlineStore，属 Organization 子类，可接受）"
+                  : "")
+            });
+          } else {
+            diffs.push({ level: "pass", text: "@type 与官方示例一致：" + String(exampleType) });
+          }
+          return;
+        }
+        if (ourNode[key] === undefined || ourNode[key] === null || ourNode[key] === "") {
+          diffs.push({ level: "warn", text: "相对官方示例，本站缺字段：" + key });
+        }
+      });
+
+      if (type === "BreadcrumbList") {
+        var crumbs = Array.isArray(ourNode.itemListElement) ? ourNode.itemListElement : [];
+        if (crumbs.length) {
+          var lastCrumb = crumbs[crumbs.length - 1];
+          if (lastCrumb && lastCrumb.item) {
+            diffs.push({ level: "warn", text: "官方示例末级 ListItem 省略 item；本站末级仍带 item" });
+          } else {
+            diffs.push({ level: "pass", text: "末级省略 item：与 Google 示例一致" });
+          }
+        }
+        if (ourNode["@id"]) {
+          diffs.push({ level: "fail", text: "官方示例无 BreadcrumbList.@id；本站有 @id" });
+        } else {
+          diffs.push({ level: "pass", text: "无 BreadcrumbList.@id：与 Google 示例一致" });
+        }
+      }
+
+      if (type === "WebSite") {
+        if (ourNode.potentialAction) {
+          diffs.push({ level: "pass", text: "已含 potentialAction（SearchAction）" });
+        } else {
+          diffs.push({ level: "warn", text: "官方示例含 potentialAction；本站缺失" });
+        }
+      }
+
+      if (type === "ItemList") {
+        diffs.push({
+          level: "note",
+          text: "若嵌套 Product：不是 Google Carousel 文档范围；商品请用详情页 Product"
+        });
+      }
+
+      (pack.notes || []).slice(0, 3).forEach(function (note) {
+        diffs.push({ level: "note", text: note });
+      });
+    }
+
+    return {
+      docUrl: pack.docUrl,
+      title: pack.title,
+      notes: pack.notes || [],
+      exampleJson: JSON.stringify(example, null, 2),
+      ourJson: our ? JSON.stringify(our, null, 2) : "",
+      diffs: diffs.slice(0, 14)
+    };
+  }
+
+  function renderGoogleCompareHtml(compare) {
+    if (!compare) return "";
+    var diffs = (compare.diffs || [])
+      .map(function (row) {
+        var level = row && row.level ? row.level : "note";
+        return (
+          '<li class="is-' +
+          escapeHtml(level) +
+          '">' +
+          escapeHtml((row && row.text) || "") +
+          "</li>"
+        );
+      })
+      .join("");
+    return (
+      '<details class="weline-seo-panel__google-compare" open>' +
+      "<summary>对照 Google 官方示例</summary>" +
+      '<p class="weline-seo-panel__hint">' +
+      '<a href="' +
+      escapeHtml(compare.docUrl || "#") +
+      '" target="_blank" rel="noopener noreferrer">Search Central 文档</a>' +
+      " · " +
+      escapeHtml(compare.title || "") +
+      "</p>" +
+      (diffs
+        ? '<ul class="weline-seo-panel__google-compare-diffs">' + diffs + "</ul>"
+        : "") +
+      '<div class="weline-seo-panel__google-compare-grid">' +
+      "<div>" +
+      '<span class="weline-seo-panel__google-compare-label">本站输出</span>' +
+      "<pre>" +
+      escapeHtml(compare.ourJson || "（未输出）") +
+      "</pre>" +
+      "</div>" +
+      "<div>" +
+      '<span class="weline-seo-panel__google-compare-label">Google 官方示例</span>' +
+      "<pre>" +
+      escapeHtml(compare.exampleJson || "") +
+      "</pre>" +
+      "</div>" +
+      "</div>" +
+      "</details>"
+    );
+  }
+
+  function evaluateLocalRichItem(node, rule, seoType) {
+    var issues = [];
+    var warnings = [];
+    var notes = [];
+    var pageType = normalizeSeoType(seoType || "");
+    (rule.required || []).forEach(function (path) {
+      if (!hasJsonLdPath(node, path)) {
+        issues.push("缺少必填字段 " + formatSchemaField(path));
+      }
+    });
+    if (Array.isArray(rule.offerRequiredAny) && rule.offerRequiredAny.length) {
+      var hasOfferShape = rule.offerRequiredAny.some(function (path) { return hasJsonLdPath(node, path); });
+      if (!hasOfferShape) {
+        issues.push("商品摘要需提供 offers、hasVariant、aggregateRating 或 review（Google product snippet）");
+      }
+    }
+    if (rule.type === "FAQPage") {
+      var faqCheck = validateFaqJsonLd(node);
+      if (faqCheck.level === "fail") {
+        issues.push(faqCheck.detail);
+      }
+    }
+    (rule.recommended || []).forEach(function (path) {
+      if (!hasJsonLdPath(node, path)) {
+        warnings.push("建议补充 " + formatSchemaField(path));
+      }
+    });
+    // AggregateRating only when the page already has review facts — never invent ratings.
+    if (rule.type === "Product"
+      && (hasJsonLdPath(node, "review") || hasJsonLdPath(node, "aggregateRating"))
+      && !hasJsonLdPath(node, "aggregateRating.ratingValue")
+    ) {
+      warnings.push("建议补充 aggregateRating.ratingValue");
+    }
+    if (rule.type === "Product" && (hasJsonLdPath(node, "review") || hasJsonLdPath(node, "aggregateRating"))) {
+      var ratingValue = firstJsonLdScalar(node, "aggregateRating.ratingValue");
+      var reviewCount = firstJsonLdScalar(node, "aggregateRating.reviewCount");
+      if (!reviewCount) {
+        var embedded = node.review;
+        if (Array.isArray(embedded)) reviewCount = String(embedded.length);
+        else if (embedded) reviewCount = "1";
+      }
+      if (ratingValue || reviewCount) {
+        notes.push(
+          "已对接评论评分 " +
+          (ratingValue || "—") +
+          (reviewCount ? "（" + reviewCount + " 条）" : "")
+        );
+      }
+    }
+    if (rule.type === "CollectionPage") {
+      if (pageType === "blog_list" || pageType === "blog_category") {
+        notes.push("博客列表 CollectionPage + Article/BlogPosting ItemList：页面发现信号（非电商 Product 富结果）");
+      } else {
+        warnings.push("CollectionPage 不是 Google 电商列表富结果文档类型；列表页请用 BreadcrumbList + 站点 Organization/WebSite");
+      }
+    }
+    if (rule.type === "BreadcrumbList") {
+      var crumbItems = Array.isArray(node.itemListElement) ? node.itemListElement : [];
+      if (crumbItems.length < 2) {
+        issues.push("Google BreadcrumbList 需要至少 2 个 ListItem");
+      }
+      var missingNames = 0;
+      var fragmentOnly = 0;
+      var nonAbsolute = 0;
+      crumbItems.forEach(function (item, index) {
+        var crumbName = flattenJsonLdText(
+          item.name || (item.item && item.item.name) || ""
+        );
+        var crumbUrl = "";
+        if (typeof item.item === "string") crumbUrl = item.item.trim();
+        else if (item.item && typeof item.item === "object") {
+          crumbUrl = flattenJsonLdText(item.item.url || item.item["@id"] || "");
+        }
+        if (!crumbName) missingNames += 1;
+        if (crumbUrl && /#breadcrumb\b/i.test(crumbUrl)) fragmentOnly += 1;
+        var isLast = index === crumbItems.length - 1;
+        // Google examples: non-last item is absolute URL; last ListItem usually omits item.
+        if (!isLast) {
+          if (!crumbUrl || !/^https?:\/\//i.test(crumbUrl)) nonAbsolute += 1;
+        } else if (crumbUrl && !/^https?:\/\//i.test(crumbUrl)) {
+          nonAbsolute += 1;
+        }
+      });
+      if (missingNames) {
+        issues.push("有 " + missingNames + " 级缺少 name（Google ListItem 必填）");
+      }
+      if (fragmentOnly) {
+        issues.push("ListItem.item 不能写 …#breadcrumb；应写该级页面的绝对 URL（见 Google BreadcrumbList 示例）");
+      }
+      if (nonAbsolute) {
+        issues.push("ListItem.item 须为绝对 URL（Google BreadcrumbList 示例）；相对路径如 / 不合规");
+      }
+      if (node["@id"] && /#breadcrumb\b/i.test(String(node["@id"]))) {
+        issues.push("不要给 BreadcrumbList 加 @id …#breadcrumb；Google 示例只有 itemListElement");
+      }
+    }
+    if (rule.type === "ItemList") {
+      var listItems = Array.isArray(node.itemListElement) ? node.itemListElement : [];
+      var nestedProduct = listItems.some(function (entry) {
+        var listed = entry && entry.item ? entry.item : entry;
+        var t = listed && listed["@type"];
+        if (Array.isArray(t)) return t.indexOf("Product") !== -1 || t.indexOf("ProductGroup") !== -1;
+        return t === "Product" || t === "ProductGroup";
+      });
+      var nestedArticle = listItems.some(function (entry) {
+        var listed = entry && entry.item ? entry.item : entry;
+        var t = listed && listed["@type"];
+        if (Array.isArray(t)) {
+          return t.indexOf("Article") !== -1 || t.indexOf("BlogPosting") !== -1 || t.indexOf("NewsArticle") !== -1;
+        }
+        return t === "Article" || t === "BlogPosting" || t === "NewsArticle";
+      });
+      if (nestedProduct) {
+        warnings.push("Google Carousel/ItemList 不支持电商 Product；商品富结果应在详情页 Product/ProductGroup 上，列表页请移除该 ItemList");
+      } else if (nestedArticle || pageType === "blog_list" || pageType === "blog_category") {
+        notes.push("博客 Article/BlogPosting ItemList：列表发现信号（页面输出完整条目，非省略占位）");
+      } else {
+        notes.push("ItemList 仅当与 Course/Movie/Recipe/Restaurant 组合时才是 Google Carousel 富结果");
+      }
+    }
+    var status = issues.length ? "fail" : warnings.length ? "warn" : "pass";
+    var preview = localRichItemPreview(node, rule);
+    return {
+      type: rule.type,
+      label: rule.label,
+      name: preview.title || rule.type,
+      facts: preview.facts || [],
+      status: status,
+      issues: issues,
+      warnings: warnings.slice(0, 8),
+      notes: notes.slice(0, 6),
+      expectation: "present",
+      googleCompare: buildGoogleCompare(rule.type, node)
+    };
+  }
+
+  function firstJsonLdScalar(node, path) {
+    var values = [];
+    String(path || "")
+      .split("|")
+      .forEach(function (candidate) {
+        var parts = candidate.split(".").filter(Boolean);
+        jsonLdValuesAtPath(node, parts).forEach(function (value) {
+          if (value === null || value === undefined) return;
+          if (typeof value === "object") return;
+          var text = String(value).trim();
+          if (text) values.push(text);
+        });
+      });
+    return values[0] || "";
+  }
+
+  function missingRichExpectationItem(rule, severity) {
+    return {
+      type: rule.type,
+      label: rule.label,
+      name: "未输出",
+      facts: [],
+      status: severity === "optional" ? "warn" : "fail",
+      issues: severity === "optional" ? [] : ["本页类型期望有 " + rule.label + "（" + rule.type + "），但 JSON-LD 中未检测到"],
+      warnings: severity === "optional"
+        ? ["建议补充 " + rule.label + "（" + rule.type + "）结构化数据"]
+        : [],
+      expectation: severity === "optional" ? "optional-missing" : "required-missing",
+      googleCompare: buildGoogleCompare(rule.type, null)
+    };
+  }
+
+  function buildLocalRichReport(payload) {
+    payload = payload || {};
+    var nodes = Array.isArray(payload.nodes) ? payload.nodes : [];
+    var types = Array.isArray(payload.types) ? payload.types : [];
+    var parseErrors = Array.isArray(payload.parseErrors) ? payload.parseErrors : [];
+    var seoType = normalizeSeoType(
+      payload.seoType || inferSeoTypeForRich(payload.doc || null, payload.url || "", types)
+    );
+    var expectations = resolvePageRichExpectations(seoType);
+    var requiredTypes = expectations.required || [];
+    var optionalTypes = expectations.optional || [];
+    var items = [];
+    var matched = {};
+    var coveredRuleTypes = {};
+
+    LOCAL_RICH_RESULT_RULES.forEach(function (rule) {
+      var found = false;
+      nodes.forEach(function (node) {
+        if (!localRichNodeMatches(node, rule)) return;
+        var key = rule.type + "::" + (
+          node["@id"] ||
+          node.name ||
+          node.headline ||
+          (node.author && node.author.name) ||
+          (node.reviewBody ? String(node.reviewBody).slice(0, 24) : "") ||
+          items.length
+        );
+        if (matched[key]) return;
+        matched[key] = true;
+        found = true;
+        coveredRuleTypes[rule.type] = true;
+        items.push(evaluateLocalRichItem(node, rule, seoType));
+      });
+      if (found) return;
+
+      if (requiredTypes.indexOf(rule.type) !== -1) {
+        coveredRuleTypes[rule.type] = true;
+        items.push(missingRichExpectationItem(rule, "required"));
+        return;
+      }
+      if (optionalTypes.indexOf(rule.type) !== -1) {
+        coveredRuleTypes[rule.type] = true;
+        items.push(missingRichExpectationItem(rule, "optional"));
+      }
+    });
+
+    // Stable order: required expectations first, then optional, then opportunistic extras.
+    var order = requiredTypes.concat(optionalTypes);
+    items.sort(function (a, b) {
+      var ai = order.indexOf(a.type);
+      var bi = order.indexOf(b.type);
+      if (ai === -1) ai = 1000;
+      if (bi === -1) bi = 1000;
+      if (ai !== bi) return ai - bi;
+      return String(a.label || "").localeCompare(String(b.label || ""));
+    });
+
+    if (parseErrors.length) {
+      items.unshift({
+        type: "ParseError",
+        label: "JSON-LD 解析",
+        name: "无效 JSON-LD",
+        status: "fail",
+        issues: parseErrors.slice(0, 5),
+        warnings: [],
+        expectation: "parse"
+      });
+    }
+
+    var pass = items.filter(function (item) { return item.status === "pass"; }).length;
+    var warn = items.filter(function (item) { return item.status === "warn"; }).length;
+    var fail = items.filter(function (item) { return item.status === "fail"; }).length;
+    var status = fail ? "fail" : warn ? "warn" : items.length ? "pass" : "empty";
+    var pageRule = jsonLdRuleForSeoType(seoType);
+    var requestedUrl = String(payload.requestedUrl || payload.url || "");
+    var finalUrl = String(payload.finalUrl || payload.url || "");
+    var requestedKind = inferSeoTypeFromUrlPath(requestedUrl);
+    var finalKind = inferSeoTypeFromUrlPath(finalUrl) || seoType;
+    var routeConflict = "";
+    if (requestedKind && finalKind && requestedKind !== finalKind) {
+      var requestedRule = jsonLdRuleForSeoType(requestedKind);
+      var finalRule = jsonLdRuleForSeoType(finalKind);
+      routeConflict =
+        "请求 URL 像「" +
+        ((requestedRule && requestedRule.label) || requestedKind) +
+        "」，但最终落到「" +
+        ((finalRule && finalRule.label) || finalKind) +
+        "」（常见原因：301 跳转 / 商品不存在）。以下按最终页面检测，不是按输入框里的商品路径硬判。";
+    }
+
+    return {
+      url: finalUrl || payload.url || "",
+      requestedUrl: requestedUrl,
+      finalUrl: finalUrl,
+      routeConflict: routeConflict,
+      source: payload.source || "local",
+      generatedAt: new Date().toISOString(),
+      seoType: seoType,
+      pageLabel: (pageRule && pageRule.label) || seoType,
+      expectedRequired: requiredTypes.slice(),
+      expectedOptional: optionalTypes.slice(),
+      catalogSize: LOCAL_RICH_RESULT_RULES.length,
+      types: types.filter(function (type) { return type !== "INVALID_JSON"; }),
+      hierarchy: null,
+      summary: {
+        status: status,
+        items: items.length,
+        pass: pass,
+        warn: warn,
+        fail: fail
+      },
+      items: items,
+      note: "按 Google Search Central 文档化富结果类型检测；不替代官方富媒体测试。"
+    };
+  }
+
+  function buildCollectionHierarchyHint() {
+    // Intentionally unused: ecommerce CollectionPage→ItemList hierarchy is not a Google rich result.
+    return null;
+  }
+
+  function analyzeLocalRichFromDocument(doc, url, source, options) {
+    options = options || {};
+    var extracted = collectJsonLdFromRoot(doc);
+    var finalUrl = String(options.finalUrl || url || "");
+    var requestedUrl = String(options.requestedUrl || url || "");
+    return buildLocalRichReport({
+      url: finalUrl,
+      requestedUrl: requestedUrl,
+      finalUrl: finalUrl,
+      source: source || "dom",
+      doc: doc,
+      nodes: extracted.nodes,
+      types: extracted.types,
+      parseErrors: extracted.parseErrors
+    });
+  }
+
+  function analyzeLocalRichFromCrawlPage(page, requestedUrl, finalUrl) {
+    var jsonLd = (page && page.jsonLd) || {};
+    var resolvedFinal = String(finalUrl || page.finalUrl || page.url || requestedUrl || "");
+    return buildLocalRichReport({
+      url: resolvedFinal,
+      requestedUrl: String(requestedUrl || resolvedFinal),
+      finalUrl: resolvedFinal,
+      source: "server-fetch",
+      seoType: page && (page.seoType || page.page_type || page.pageType) || "",
+      nodes: Array.isArray(jsonLd.nodes) ? jsonLd.nodes : [],
+      types: Array.isArray(jsonLd.types) ? jsonLd.types : [],
+      parseErrors: Array.isArray(jsonLd.errors) ? jsonLd.errors : []
+    });
+  }
+
+  function publishLocalRichReport(report) {
+    latestLocalRichReport = report || null;
+    try {
+      window.__WELINE_PANEL_SEO_LOCAL_RICH_REPORT__ = latestLocalRichReport;
+    } catch (_e) {}
+  }
+
+  function renderLocalRichReport(report) {
+    if (!report) return "";
+    var summary = report.summary || {};
+    var status = summary.status || "empty";
+    var tone = status === "pass" ? "pass" : status === "warn" ? "warn" : status === "fail" ? "fail" : "info";
+    var expectedRequired = Array.isArray(report.expectedRequired) ? report.expectedRequired : [];
+    var expectedOptional = Array.isArray(report.expectedOptional) ? report.expectedOptional : [];
+    var pageLabel = String(report.pageLabel || report.seoType || "未知页面");
+    var seoType = String(report.seoType || "");
+    var detectedTypes = Array.isArray(report.types) ? report.types : [];
+    var typeChips = detectedTypes
+      .map(function (type) {
+        return '<span class="weline-seo-panel__local-rich-chip">' + escapeHtml(String(type)) + "</span>";
+      })
+      .join("");
+    var expectChips = expectedRequired
+      .map(function (type) {
+        return '<span class="weline-seo-panel__local-rich-chip weline-seo-panel__local-rich-chip--expect">' + escapeHtml(String(type)) + "</span>";
+      })
+      .join("");
+    var pageBanner =
+      '<div class="weline-seo-panel__local-rich-pagetype' +
+      (report.routeConflict ? " weline-seo-panel__local-rich-pagetype--conflict" : "") +
+      '" role="status">' +
+      '<span class="weline-seo-panel__local-rich-pagetype-kicker">' +
+      (report.routeConflict ? "最终页类型（有跳转）" : "判定页类型") +
+      "</span>" +
+      '<strong class="weline-seo-panel__local-rich-pagetype-label">' +
+      escapeHtml(pageLabel) +
+      "</strong>" +
+      (seoType
+        ? '<code class="weline-seo-panel__local-rich-pagetype-code">' + escapeHtml(seoType) + "</code>"
+        : "") +
+      (report.routeConflict
+        ? '<p class="weline-seo-panel__local-rich-pagetype-conflict">' + escapeHtml(report.routeConflict) + "</p>"
+        : '<p class="weline-seo-panel__local-rich-pagetype-hint">对照下方卡片：若页类型与最终 URL/内容不符，说明检测器映射可能有误。</p>') +
+      (report.requestedUrl && report.finalUrl && report.requestedUrl !== report.finalUrl
+        ? '<p class="weline-seo-panel__local-rich-pagetype-urls"><span>请求</span><code>' +
+          escapeHtml(report.requestedUrl) +
+          "</code><span>最终</span><code>" +
+          escapeHtml(report.finalUrl) +
+          "</code></p>"
+        : "") +
+      (expectChips
+        ? '<div class="weline-seo-panel__local-rich-chips"><span class="weline-seo-panel__local-rich-chips-label">期望</span>' +
+          expectChips +
+          "</div>"
+        : "") +
+      (typeChips
+        ? '<div class="weline-seo-panel__local-rich-chips"><span class="weline-seo-panel__local-rich-chips-label">检出</span>' +
+          typeChips +
+          "</div>"
+        : "") +
+      "</div>";
+    var head =
+      '<section class="weline-seo-panel__section weline-seo-panel__section--local-rich">' +
+      "<h3>本地富结果检测结果</h3>" +
+      pageBanner +
+      '<p class="weline-seo-panel__hint">' +
+      escapeHtml(report.note || "") +
+      " · 来源 " +
+      escapeHtml(report.source || "local") +
+      " · 目录 " +
+      escapeHtml(String(report.catalogSize || LOCAL_RICH_RESULT_RULES.length)) +
+      " 类" +
+      " · 每张卡片含 Google 官方示例对照" +
+      (expectedOptional.length
+        ? " · 建议：" + escapeHtml(expectedOptional.join(", "))
+        : "") +
+      "</p>" +
+      '<div class="weline-seo-panel__local-rich-summary weline-seo-panel__local-rich-summary--' +
+      escapeHtml(tone) +
+      '">' +
+      "<strong>" +
+      escapeHtml(String(summary.items || 0)) +
+      " 项</strong>" +
+      "<span>通过 " +
+      escapeHtml(String(summary.pass || 0)) +
+      "</span><span>警告 " +
+      escapeHtml(String(summary.warn || 0)) +
+      "</span><span>失败 " +
+      escapeHtml(String(summary.fail || 0)) +
+      "</span>" +
+      "<code>" +
+      escapeHtml(report.url || "") +
+      "</code></div>";
+
+    var hierarchy = report.hierarchy;
+    var hierarchyHtml = "";
+    if (hierarchy) {
+      hierarchyHtml =
+        '<div class="weline-seo-panel__local-rich-hierarchy" role="note">' +
+        "<strong>集合页层级（JSON-LD）</strong>" +
+        "<pre>" +
+        escapeHtml(
+          "CollectionPage  " +
+            (hierarchy.collectionName || "") +
+            "\n└─ mainEntity → ItemList  " +
+            (hierarchy.itemListId || "") +
+            "\n   └─ 本页 " +
+            String(hierarchy.itemCount || 0) +
+            " 件 Product/ListItem" +
+            (hierarchy.sampleNames && hierarchy.sampleNames.length
+              ? "\n      · " + hierarchy.sampleNames.join("\n      · ")
+              : "")
+        ) +
+        "</pre>" +
+        '<p class="weline-seo-panel__hint">' +
+        escapeHtml(hierarchy.note || "") +
+        "</p></div>";
+    }
+
+    if (!report.items || !report.items.length) {
+      return (
+        head +
+        hierarchyHtml +
+        '<p class="weline-seo-panel__hint">未发现可识别的富结果结构化数据（JSON-LD）。可检查 head/body 中的 application/ld+json。</p>' +
+        "</section>"
+      );
+    }
+
+    var cards = report.items
+      .map(function (item) {
+        var issues = (item.issues || [])
+          .map(function (line) {
+            return "<li>" + escapeHtml(line) + "</li>";
+          })
+          .join("");
+        var warnings = (item.warnings || [])
+          .map(function (line) {
+            return "<li>" + escapeHtml(line) + "</li>";
+          })
+          .join("");
+        var notes = (item.notes || [])
+          .map(function (line) {
+            return "<li>" + escapeHtml(line) + "</li>";
+          })
+          .join("");
+        var expectationHint = "";
+        if (item.expectation === "required-missing") {
+          expectationHint = '<p class="weline-seo-panel__hint">期望类型缺失（必测）。</p>';
+        } else if (item.expectation === "optional-missing") {
+          expectationHint = '<p class="weline-seo-panel__hint">建议类型缺失（可选）。</p>';
+        }
+        var factsHtml = "";
+        if (item.facts && item.facts.length) {
+          factsHtml =
+            '<dl class="weline-seo-panel__local-rich-facts">' +
+            item.facts
+              .map(function (fact) {
+                return (
+                  "<div><dt>" +
+                  escapeHtml(fact.label || "") +
+                  "</dt><dd>" +
+                  escapeHtml(fact.value || "") +
+                  "</dd></div>"
+                );
+              })
+              .join("") +
+            "</dl>";
+        }
+        return (
+          '<article class="weline-seo-panel__local-rich-card weline-seo-panel__local-rich-card--' +
+          escapeHtml(item.status) +
+          '">' +
+          '<div class="weline-seo-panel__issue-head">' +
+          '<span class="weline-seo-panel__badge weline-seo-panel__badge--' +
+          escapeHtml(item.status === "pass" ? "pass" : item.status === "warn" ? "warn" : "fail") +
+          '">' +
+          escapeHtml(item.status === "pass" ? "通过" : item.status === "warn" ? "警告" : "失败") +
+          "</span><strong>" +
+          escapeHtml(item.label || item.type) +
+          "</strong></div>" +
+          (item.name
+            ? '<p class="weline-seo-panel__local-rich-title">' + escapeHtml(item.name) + "</p>"
+            : "") +
+          factsHtml +
+          (issues ? '<ul class="weline-seo-panel__local-rich-list is-fail">' + issues + "</ul>" : "") +
+          (warnings ? '<ul class="weline-seo-panel__local-rich-list is-warn">' + warnings + "</ul>" : "") +
+          (notes ? '<ul class="weline-seo-panel__local-rich-list is-note">' + notes + "</ul>" : "") +
+          expectationHint +
+          (!issues && !warnings && !notes && !expectationHint ? '<p class="weline-seo-panel__hint">必填字段齐全。</p>' : "") +
+          renderGoogleCompareHtml(item.googleCompare) +
+          "</article>"
+        );
+      })
+      .join("");
+
+    return (
+      head +
+      hierarchyHtml +
+      '<div class="weline-seo-panel__local-rich-list-wrap">' +
+      cards +
+      "</div>" +
+      "</section>"
+    );
+  }
+
+  function defaultToolUrl() {
+    return window.location.href;
+  }
+
+  function currentToolUrlPageKey() {
+    try {
+      var loc = new URL(window.location.href);
+      var path = String(loc.pathname || "/").replace(/\/+$/, "") || "/";
+      return String(loc.origin || "") + path;
+    } catch (_e) {
+      return String(window.location.pathname || "/").replace(/\/+$/, "") || "/";
+    }
+  }
+
+  function toolUrlPageKey(url) {
+    try {
+      var loc = new URL(String(url || ""), window.location.href);
+      var path = String(loc.pathname || "/").replace(/\/+$/, "") || "/";
+      return String(loc.origin || "") + path;
+    } catch (_e) {
+      return "";
+    }
+  }
+
+  function resolvePersistedToolUrl() {
+    var state = readPanelState();
+    var pageKey = currentToolUrlPageKey();
+    var savedPageKey = String((state && state.toolUrlPageKey) || "").trim();
+    var url = String((state && state.toolUrl) || "").trim();
+    var sameBrowsePage = !savedPageKey || savedPageKey === pageKey;
+    var sameTargetPath = !!url && toolUrlPageKey(url) === pageKey;
+    // Sticky only when both the browse page and the detection URL path match.
+    // Prevents foreign product slugs (e.g. you-ai-…) from sticking on another PDP.
+    if (sameBrowsePage && sameTargetPath) {
+      return url;
+    }
+    var fallback = defaultToolUrl();
+    if (url && (!sameBrowsePage || !sameTargetPath)) {
+      savePanelState({
+        toolUrl: fallback,
+        toolUrlPageKey: pageKey
+      });
+    }
+    return fallback;
+  }
+
+  function readToolUrlFromScope(scope, attrSelector) {
+    var input = scope && scope.querySelector(attrSelector);
+    var value = input ? String(input.value || "").trim() : "";
+    return value || resolvePersistedToolUrl();
+  }
+
+  function persistToolUrl(url) {
+    var next = String(url || "").trim() || defaultToolUrl();
+    var pageKey = currentToolUrlPageKey();
+    // Cross-path URLs stay usable for one-shot tests via the input, but must not
+    // become the sticky default for the current browse page.
+    if (toolUrlPageKey(next) === pageKey) {
+      savePanelState({
+        toolUrl: next,
+        toolUrlPageKey: pageKey
+      });
+    } else {
+      savePanelState({
+        toolUrl: defaultToolUrl(),
+        toolUrlPageKey: pageKey
+      });
+    }
+    return next;
+  }
+
+  function isSameAsCurrentPage(url) {
+    try {
+      return toolUrlPageKey(url) === currentToolUrlPageKey();
+    } catch (e) {
+      return String(url || "").trim() === window.location.href;
+    }
+  }
+
+  function syncToolUrlFormChrome(root) {
+    var forms = root.querySelectorAll(".weline-seo-panel__crawl-form--url-tool");
+    forms.forEach(function (form) {
+      var input = form.querySelector("[data-weline-tool-url]");
+      if (!input) {
+        return;
+      }
+      var samePage = isSameAsCurrentPage(input.value);
+      input.setAttribute("title", String(input.value || "").trim() || defaultToolUrl());
+      var mismatch = form.querySelector(".weline-seo-panel__url-mismatch");
+      if (!samePage && !mismatch) {
+        mismatch = document.createElement("p");
+        mismatch.className = "weline-seo-panel__url-mismatch";
+        mismatch.setAttribute("role", "status");
+        mismatch.textContent =
+          "检测 URL 与地址栏当前页不一致。请先对齐当前页，或确认你要测的是另一个地址。";
+        form.insertBefore(mismatch, form.firstChild);
+      } else if (samePage && mismatch) {
+        mismatch.remove();
+      }
+      var actions = form.querySelector(".weline-seo-panel__url-inline-actions");
+      if (!actions) {
+        return;
+      }
+      var copyBtn = actions.querySelector("[data-weline-tool-url-copy-site]");
+      var syncBtn = actions.querySelector("[data-weline-tool-url-current]");
+      var runBtn = actions.querySelector(
+        "[data-weline-rich-local-test], [data-weline-page-audit], [data-weline-tool-run]"
+      );
+      if (!syncBtn || !runBtn) {
+        return;
+      }
+      // Prefer: when mismatched, sync button is publish-btn (primary). Keep 复制 first.
+      if (!samePage) {
+        syncBtn.className = "weline-seo-panel__publish-btn";
+        runBtn.className = "weline-seo-panel__btn";
+        if (runBtn.compareDocumentPosition(syncBtn) & Node.DOCUMENT_POSITION_FOLLOWING) {
+          actions.insertBefore(syncBtn, runBtn);
+        }
+      } else {
+        runBtn.className = "weline-seo-panel__publish-btn";
+        syncBtn.className = "weline-seo-panel__btn";
+        if (syncBtn.compareDocumentPosition(runBtn) & Node.DOCUMENT_POSITION_FOLLOWING) {
+          actions.insertBefore(runBtn, syncBtn);
+        }
+      }
+      if (copyBtn && actions.firstElementChild !== copyBtn) {
+        actions.insertBefore(copyBtn, actions.firstElementChild);
+      }
+    });
+  }
+
+  function googleRichResultsTestUrl(pageUrl) {
+    return (
+      "https://search.google.com/test/rich-results?url=" +
+      encodeURIComponent(pageUrl) +
+      "&hl=zh-cn"
+    );
+  }
+
+  function renderToolUrlForm(options) {
+    options = options || {};
+    var url = options.url || resolvePersistedToolUrl();
+    var running = !!options.running;
+    var buttonLabel = options.buttonLabel || "开始检测";
+    var buttonAttr = options.buttonAttr || "data-weline-tool-run";
+    var useCurrentAttr = options.useCurrentAttr || "";
+    var samePage = isSameAsCurrentPage(url);
+    var primaryIsSync = !samePage && !!useCurrentAttr;
+    var primaryAttr = primaryIsSync ? useCurrentAttr : buttonAttr;
+    var primaryLabel = primaryIsSync ? "填入当前页" : buttonLabel;
+    var secondaryHtml = "";
+    if (useCurrentAttr) {
+      if (primaryIsSync) {
+        secondaryHtml =
+          '<button type="button" class="weline-seo-panel__btn" ' +
+          buttonAttr +
+          " " +
+          (running ? "disabled" : "") +
+          ">" +
+          (running ? "检测中…" : escapeHtml(buttonLabel)) +
+          "</button>";
+      } else {
+        secondaryHtml =
+          '<button type="button" class="weline-seo-panel__btn" ' +
+          useCurrentAttr +
+          " " +
+          (running ? "disabled" : "") +
+          ">填入当前页</button>";
+      }
+    }
+    return (
+      '<div class="weline-seo-panel__crawl-form weline-seo-panel__crawl-form--url-tool">' +
+      (!samePage
+        ? '<p class="weline-seo-panel__url-mismatch" role="status">检测 URL 与地址栏当前页不一致。请先对齐当前页，或确认你要测的是另一个地址。</p>'
+        : "") +
+      '<label class="weline-seo-panel__url-field"><span>检测 URL</span>' +
+      '<div class="weline-seo-panel__url-field-row">' +
+      '<input type="url" data-weline-tool-url value="' +
+      escapeHtml(url) +
+      '" placeholder="' +
+      escapeHtml(defaultToolUrl()) +
+      '" title="' +
+      escapeHtml(url) +
+      '">' +
+      '<div class="weline-seo-panel__url-inline-actions">' +
+      '<button type="button" class="weline-seo-panel__btn" data-weline-tool-url-copy-site title="复制本站当前页正确地址">复制</button>' +
+      '<button type="button" class="weline-seo-panel__publish-btn" ' +
+      primaryAttr +
+      " " +
+      (running ? "disabled" : "") +
+      ">" +
+      (running && !primaryIsSync ? "检测中…" : escapeHtml(primaryLabel)) +
+      "</button>" +
+      secondaryHtml +
+      "</div></div></label>" +
+      "</div>"
+    );
+  }
+
+  function renderLocalStructuredDataSummary(report) {
+    var snapshot = (report && report.snapshot) || {};
+    var types = Array.isArray(snapshot.jsonTypes) ? snapshot.jsonTypes : [];
+    var validation = snapshot.jsonLdValidation || null;
+    return (
+      '<section class="weline-seo-panel__section"><h3>当前打开页 · 本地结构化数据</h3>' +
+      '<p class="weline-seo-panel__hint">仅当检测 URL 等于当前打开页时可用。正式资格以 Google「富媒体搜索结果测试」为准。</p>' +
+      '<dl class="weline-seo-panel__grid">' +
+      '<div class="weline-seo-panel__field"><dt>JSON-LD types</dt><dd>' +
+      escapeHtml(types.join(", ") || "none") +
+      "</dd></div>" +
+      '<div class="weline-seo-panel__field"><dt>Contract</dt><dd>' +
+      escapeHtml(
+        validation
+          ? validation.label + " · " + validation.expectedType + " · " + validation.status
+          : "unknown"
+      ) +
+      "</dd></div>" +
+      "</dl></section>"
+    );
+  }
+
+  function renderRichResultsTab(report) {
+    var url = resolvePersistedToolUrl();
+    var gscBox = window.__WELINE_SEO_GSC_RESULT__
+      ? '<pre class="weline-seo-panel__gsc-result">' + escapeHtml(JSON.stringify(window.__WELINE_SEO_GSC_RESULT__, null, 2)) + "</pre>"
+      : '<p class="weline-seo-panel__hint" data-weline-seo-gsc-status>尚未查询。需已绑定 Google Search Console，且仅在面板授权后调用。</p>';
+    var samePage = isSameAsCurrentPage(url);
+    var status = localRichRunning
+      ? '<p class="weline-seo-panel__crawl-status is-running">正在本地解析结构化数据…</p>'
+      : (localRichStatus ? '<p class="weline-seo-panel__crawl-status">' + escapeHtml(localRichStatus) + "</p>" : "");
+    var error = localRichError
+      ? '<p class="weline-seo-panel__crawl-status is-error">' + escapeHtml(localRichError) + "</p>"
+      : "";
+    return (
+      '<section class="weline-seo-panel__section weline-seo-panel__section--tools">' +
+      "<h3>富文本 / 富结果检测</h3>" +
+      '<p class="weline-seo-panel__hint">本机/内网域名 Google 官方测不了。请优先用<strong>本地测试</strong>（解析页面 JSON-LD）。公开域名仍可打开 Google 富媒体测试或查 GSC。</p>' +
+      renderToolUrlForm({
+        url: url,
+        running: localRichRunning,
+        buttonLabel: "本地测试",
+        buttonAttr: "data-weline-rich-local-test",
+        useCurrentAttr: "data-weline-tool-url-current"
+      }) +
+      '<div class="weline-seo-panel__tool-actions">' +
+      '<button type="button" class="weline-seo-panel__btn" data-weline-rich-open-google>打开 Google 测试</button>' +
+      '<button type="button" class="weline-seo-panel__btn" data-weline-seo-gsc-inspect>查询 GSC 索引/富结果</button>' +
+      '<button type="button" class="weline-seo-panel__btn" data-weline-seo-copy-html ' +
+      (samePage ? "" : 'disabled title="仅当前打开页可复制 HTML"') +
+      ">复制当前页 HTML</button>" +
+      "</div>" +
+      '<div data-weline-seo-tool-status class="weline-seo-panel__hint"></div>' +
+      status +
+      error +
+      renderLocalRichReport(latestLocalRichReport) +
+      renderEeatStrictSection(latestEeatStrictReport || buildEeatStrictReport((report && report.checks) || [])) +
+      gscBox +
+      (samePage ? renderLocalStructuredDataSummary(report) : "") +
+      "</section>"
+    );
+  }
+
+  function renderPageAuditTab() {
+    var report = latestPageAuditReport;
+    var url = resolvePersistedToolUrl();
+    var status = pageAuditRunning
+      ? '<p class="weline-seo-panel__crawl-status is-running">正在服务端抓取并检测 URL…</p>'
+      : (pageAuditStatus ? '<p class="weline-seo-panel__crawl-status">' + escapeHtml(pageAuditStatus) + "</p>" : "");
+    var error = pageAuditError
+      ? '<p class="weline-seo-panel__crawl-status is-error">' + escapeHtml(pageAuditError) + "</p>"
+      : "";
+    return (
+      '<section class="weline-seo-panel__section weline-seo-panel__section--page-audit">' +
+      "<h3>当前页服务端检测</h3>" +
+      '<p class="weline-seo-panel__hint">用与全站审计相同的服务端抓取规则检测单个 URL（搜索引擎视角 HTML）。默认填当前打开页，可改成站点内其他地址。「SEO 校验」Tab 仍是浏览器侧即时检查。</p>' +
+      renderToolUrlForm({
+        url: url,
+        running: pageAuditRunning,
+        buttonLabel: "开始检测",
+        buttonAttr: "data-weline-page-audit",
+        useCurrentAttr: "data-weline-tool-url-current"
+      }) +
+      status +
+      error +
+      (report
+        ? renderSiteCrawlHealth(report) +
+          renderSiteCrawlDeductions(report) +
+          renderSiteCrawlIssues(report) +
+          renderSiteCrawlPages(report) +
+          renderSiteCrawlFailures(report)
+        : "") +
       "</section>"
     );
   }
@@ -4263,7 +7622,7 @@
   var SEO_PANEL_STATE_KEY = "weline-seo-panel-state-v1";
 
   function normalizePanelTab(tabId) {
-    return ["seo", "engines", "crawl"].indexOf(tabId) !== -1 ? tabId : "seo";
+    return ["seo", "engines", "crawl", "page", "rich"].indexOf(tabId) !== -1 ? tabId : "seo";
   }
 
   function readPanelState() {
@@ -4319,6 +7678,107 @@
     return match && scope && scope.contains(match) ? match : null;
   }
 
+  function setToolStatus(root, message) {
+    var node = root.querySelector("[data-weline-seo-tool-status]");
+    if (node) {
+      node.textContent = message || "";
+    }
+  }
+
+  function buildRichResultsHtmlExport() {
+    var clone = document.documentElement.cloneNode(true);
+    clone.querySelectorAll(
+      "[data-weline-panel], [data-weline-seo-inspector], [data-weline-panel-seo-bootstrap], script[data-weline-panel-seo-bootstrap], .weline-seo-panel, #weline-dev-tool-panel, #weline-panel-root"
+    ).forEach(function (node) {
+      if (node && node.parentNode) {
+        node.parentNode.removeChild(node);
+      }
+    });
+    return "<!DOCTYPE html>\n" + clone.outerHTML;
+  }
+
+  function copyTextToClipboard(text, onDone, onFail) {
+    var value = String(text || "");
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(value).then(onDone).catch(onFail);
+      return;
+    }
+    try {
+      var area = document.createElement("textarea");
+      area.value = value;
+      area.setAttribute("readonly", "readonly");
+      area.style.position = "fixed";
+      area.style.left = "-9999px";
+      document.body.appendChild(area);
+      area.select();
+      document.execCommand("copy");
+      document.body.removeChild(area);
+      onDone();
+    } catch (e) {
+      onFail(e);
+    }
+  }
+
+  function copySiteUrlToClipboard(root) {
+    var siteUrl = defaultToolUrl();
+    persistToolUrl(siteUrl);
+    root.querySelectorAll("[data-weline-tool-url]").forEach(function (input) {
+      input.value = siteUrl;
+      input.setAttribute("title", siteUrl);
+    });
+    syncToolUrlFormChrome(root);
+    copyTextToClipboard(
+      siteUrl,
+      function () {
+        setToolStatus(root, "已复制本站当前页地址：" + siteUrl);
+      },
+      function (err) {
+        setToolStatus(root, "复制失败：" + ((err && err.message) || "请手动复制地址栏 URL"));
+      }
+    );
+  }
+
+  function copyHtmlForRichResults(root) {
+    var html = buildRichResultsHtmlExport();
+    copyTextToClipboard(
+      html,
+      function () {
+        setToolStatus(root, "已复制 " + html.length + " 字符 HTML。请粘贴到 Google Rich Results Test → 代码。");
+      },
+      function (err) {
+        setToolStatus(root, "复制失败：" + ((err && err.message) || "请手动全选页面源码"));
+      }
+    );
+  }
+
+  function inspectUrlWithGsc(root, controlsRoot, pageUrl) {
+    if (!window.WelinePanel || typeof window.WelinePanel.apiFetch !== "function") {
+      setToolStatus(root, "WelinePanel.apiFetch 不可用，请重新打开 weline 面板。");
+      return;
+    }
+    var url = persistToolUrl(pageUrl || readToolUrlFromScope(root, "[data-weline-tool-url]"));
+    setToolStatus(root, "正在查询 Google URL Inspection…");
+    window.WelinePanel.apiFetch("seo/gsc/inspect", {
+      method: "POST",
+      body: { url: url }
+    })
+      .then(function (payload) {
+        var data = (payload && payload.data) || payload || {};
+        window.__WELINE_SEO_GSC_RESULT__ = data.data || data;
+        setToolStatus(root, "GSC 查询完成：" + url);
+        refreshRichPanel(root, controlsRoot);
+      })
+      .catch(function (error) {
+        var message = (error && error.message) || "GSC 查询失败";
+        var details = error && error.payload ? error.payload : null;
+        if (details && details.data) {
+          window.__WELINE_SEO_GSC_RESULT__ = details;
+        }
+        setToolStatus(root, message);
+        refreshRichPanel(root, controlsRoot);
+      });
+  }
+
   function bindPanelActions(root, controlsRoot) {
     bindPanelTabs(root, controlsRoot);
     if (!root.__welineSeoActionsDelegated) {
@@ -4331,11 +7791,80 @@
           startSiteCrawl(root, controlsRoot);
           return;
         }
+        var copySiteUrl = closestActionTarget(event.target, "[data-weline-tool-url-copy-site]", root);
+        if (copySiteUrl) {
+          event.preventDefault();
+          event.stopPropagation();
+          copySiteUrlToClipboard(root);
+          return;
+        }
+        var fillCurrent = closestActionTarget(event.target, "[data-weline-tool-url-current]", root);
+        if (fillCurrent) {
+          event.preventDefault();
+          event.stopPropagation();
+          persistToolUrl(defaultToolUrl());
+          refreshRichPanel(root, controlsRoot);
+          return;
+        }
+        var pageAuditButton = closestActionTarget(event.target, "[data-weline-page-audit]", root);
+        if (pageAuditButton) {
+          event.preventDefault();
+          event.stopPropagation();
+          var forceCurrent = pageAuditButton.getAttribute("data-weline-page-audit-use-current") === "1";
+          startCurrentUrlAudit(root, controlsRoot, forceCurrent ? defaultToolUrl() : null);
+          return;
+        }
+        var localRich = closestActionTarget(event.target, "[data-weline-rich-local-test]", root);
+        if (localRich) {
+          event.preventDefault();
+          event.stopPropagation();
+          startLocalRichResultsTest(root, controlsRoot);
+          return;
+        }
+        var openGoogle = closestActionTarget(event.target, "[data-weline-rich-open-google]", root);
+        if (openGoogle) {
+          event.preventDefault();
+          event.stopPropagation();
+          var richUrl = persistToolUrl(readToolUrlFromScope(root, "[data-weline-tool-url]"));
+          window.open(googleRichResultsTestUrl(richUrl), "_blank", "noopener");
+          setToolStatus(root, "已在新标签打开 Google 富媒体测试：" + richUrl);
+          return;
+        }
+        var copyButton = closestActionTarget(event.target, "[data-weline-seo-copy-html]", root);
+        if (copyButton) {
+          event.preventDefault();
+          event.stopPropagation();
+          copyHtmlForRichResults(root);
+          return;
+        }
+        var gscButton = closestActionTarget(event.target, "[data-weline-seo-gsc-inspect]", root);
+        if (gscButton) {
+          event.preventDefault();
+          event.stopPropagation();
+          inspectUrlWithGsc(root, controlsRoot, readToolUrlFromScope(root, "[data-weline-tool-url]"));
+          return;
+        }
         var publishButton = closestActionTarget(event.target, "[data-weline-seo-publish]", root);
         if (publishButton) {
           event.preventDefault();
           event.stopPropagation();
           publishAgentReport(auditAgentReport());
+        }
+      });
+      root.addEventListener("change", function (event) {
+        var target = event.target;
+        if (target && target.matches && target.matches("[data-weline-tool-url]")) {
+          persistToolUrl(target.value);
+          root.querySelectorAll("[data-weline-tool-url]").forEach(function (input) {
+            if (input !== target) input.value = String(target.value || "").trim() || defaultToolUrl();
+          });
+          syncToolUrlFormChrome(root);
+        }
+      });
+      root.addEventListener("input", function (event) {
+        var target = event.target;
+        if (target && target.matches && target.matches("[data-weline-tool-url]")) {
+          syncToolUrlFormChrome(root);
         }
       });
     }
@@ -4347,6 +7876,13 @@
           event.preventDefault();
           event.stopPropagation();
           startSiteCrawl(root, controlsRoot);
+          return;
+        }
+        var pageAuditButton = closestActionTarget(event.target, "[data-weline-page-audit]", controlsRoot);
+        if (pageAuditButton) {
+          event.preventDefault();
+          event.stopPropagation();
+          startCurrentUrlAudit(root, controlsRoot, defaultToolUrl());
           return;
         }
         var publishButton = closestActionTarget(event.target, "[data-weline-seo-publish]", controlsRoot);
@@ -4367,6 +7903,16 @@
       });
     });
     panelTabScopes(root, controlsRoot).forEach(function (scope) {
+      scope.querySelectorAll("[data-weline-page-audit]").forEach(function (button) {
+        if (button.__welinePageAuditBound) return;
+        button.__welinePageAuditBound = true;
+        button.addEventListener("click", function (event) {
+          event.preventDefault();
+          event.stopPropagation();
+          var forceCurrent = button.getAttribute("data-weline-page-audit-use-current") === "1";
+          startCurrentUrlAudit(root, controlsRoot, forceCurrent ? defaultToolUrl() : null);
+        });
+      });
       scope.querySelectorAll("[data-weline-seo-publish]").forEach(function (button) {
         if (button.__welineSeoPublishBound) return;
         button.__welineSeoPublishBound = true;
@@ -4377,12 +7923,211 @@
     });
   }
 
+  function refreshSeoPanel(root, controlsRoot) {
+    var panel = root.querySelector('[data-weline-panel="seo"]');
+    if (panel) {
+      panel.innerHTML = renderSeoTab(auditCurrentPage());
+    }
+    if (controlsRoot) {
+      controlsRoot.innerHTML = renderPanelToolbar(auditCurrentPage());
+    }
+    bindPanelActions(root, controlsRoot);
+  }
+
+  function refreshPageAuditPanel(root, controlsRoot) {
+    var panel = root.querySelector('[data-weline-panel="page"]');
+    if (panel) {
+      panel.innerHTML = renderPageAuditTab();
+    }
+    if (controlsRoot) {
+      controlsRoot.innerHTML = renderPanelToolbar(auditCurrentPage());
+    }
+    bindPanelActions(root, controlsRoot);
+    applyPanelTabUi(root, controlsRoot);
+  }
+
+
+  function startLocalRichResultsTest(root, controlsRoot) {
+    var pageUrl = persistToolUrl(readToolUrlFromScope(root.querySelector('[data-weline-panel="rich"]') || root, "[data-weline-tool-url]"));
+    localRichRunning = true;
+    localRichStatus = "正在本地解析…" + pageUrl;
+    localRichError = "";
+    // Do not force-sticky foreign URLs onto the current browse pageKey.
+    savePanelState({ activeTab: "rich" });
+    refreshRichPanel(root, controlsRoot);
+    root.querySelectorAll("[data-weline-tool-url]").forEach(function (input) {
+      input.value = pageUrl;
+    });
+
+    var finish = function (report) {
+      publishLocalRichReport(report);
+      var pageLabel = (report && (report.pageLabel || report.seoType)) || "";
+      localRichStatus =
+        "本地检测完成：" +
+        (report && report.routeConflict ? "有跳转 · " : "") +
+        (pageLabel ? pageLabel + " · " : "") +
+        (((report.summary && report.summary.items) || 0)) +
+        " 项 · 通过 " +
+        (((report.summary && report.summary.pass) || 0)) +
+        " / 警告 " +
+        (((report.summary && report.summary.warn) || 0)) +
+        " / 失败 " +
+        (((report.summary && report.summary.fail) || 0));
+      setToolStatus(root, localRichStatus);
+    };
+
+    var fail = function (error) {
+      localRichError = (error && error.message) || "本地富结果检测失败";
+      setToolStatus(root, localRichError);
+    };
+
+    var run = Promise.resolve();
+    if (isSameAsCurrentPage(pageUrl)) {
+      run = Promise.resolve(
+        analyzeLocalRichFromDocument(document, window.location.href, "current-dom", {
+          requestedUrl: pageUrl,
+          finalUrl: window.location.href
+        })
+      );
+    } else {
+      run = fetch(pageUrl, {
+        method: "GET",
+        credentials: "same-origin",
+        headers: { Accept: "text/html,application/xhtml+xml" },
+        redirect: "follow"
+      })
+        .then(function (response) {
+          if (!response.ok) {
+            throw new Error("抓取失败 HTTP " + response.status);
+          }
+          var finalUrl = response.url || pageUrl;
+          return response.text().then(function (html) {
+            var doc = new DOMParser().parseFromString(html, "text/html");
+            return analyzeLocalRichFromDocument(doc, finalUrl, "same-origin-fetch", {
+              requestedUrl: pageUrl,
+              finalUrl: finalUrl
+            });
+          });
+        })
+        .catch(function (fetchError) {
+          if (!window.WelinePanel || typeof window.WelinePanel.apiFetch !== "function") {
+            throw fetchError;
+          }
+          localRichStatus = "浏览器抓取失败，改用服务端抓取…" + ((fetchError && fetchError.message) || "");
+          refreshRichPanel(root, controlsRoot);
+          return window.WelinePanel.apiFetch("seo/crawl/start", {
+            method: "POST",
+            requestTimeoutMs: 25000,
+            body: {
+              mode: "page",
+              pageUrl: pageUrl,
+              startUrl: pageUrl,
+              limit: 1,
+              timeout: 8,
+              currentPage: { title: document.title || "", url: window.location.href }
+            }
+          }).then(function (payload) {
+            return pollSiteCrawlUntilDone(payload, root, controlsRoot, { pageMode: false, silent: true });
+          }).then(function (report) {
+            var pages = (report && report.pages) || [];
+            var page = pages[0] || null;
+            if (!page) {
+              throw new Error("服务端未返回页面结构化数据");
+            }
+            var finalUrl = page.finalUrl || page.url || pageUrl;
+            return analyzeLocalRichFromCrawlPage(page, pageUrl, finalUrl);
+          });
+        });
+    }
+
+    run
+      .then(finish)
+      .catch(fail)
+      .finally(function () {
+        localRichRunning = false;
+        refreshRichPanel(root, controlsRoot);
+      });
+  }
+
+  function refreshRichPanel(root, controlsRoot) {
+    var panel = root.querySelector('[data-weline-panel="rich"]');
+    if (panel) {
+      panel.innerHTML = renderRichResultsTab(auditCurrentPage());
+    }
+    bindPanelActions(root, controlsRoot);
+    applyPanelTabUi(root, controlsRoot);
+  }
+
+  function publishPageAuditReport(report) {
+    latestPageAuditReport = report || null;
+    try {
+      window.__WELINE_PANEL_SEO_PAGE_AUDIT_REPORT__ = latestPageAuditReport;
+    } catch (e) {}
+  }
+
+  function startCurrentUrlAudit(root, controlsRoot, forcedUrl) {
+    var pageUrl = String(forcedUrl || "").trim();
+    if (!pageUrl) {
+      pageUrl = readToolUrlFromScope(root.querySelector('[data-weline-panel="page"]') || root, "[data-weline-tool-url]");
+    }
+    pageUrl = persistToolUrl(pageUrl);
+
+    if (!window.WelinePanel || typeof window.WelinePanel.apiFetch !== "function") {
+      pageAuditError = "WelinePanel.apiFetch 不可用，请刷新页面后重新打开 weline 面板。";
+      refreshPageAuditPanel(root, controlsRoot);
+      return;
+    }
+
+    pageAuditRunning = true;
+    pageAuditStatus = "正在服务端抓取 URL…";
+    pageAuditError = "";
+    savePanelState({ activeTab: "page" });
+    refreshPageAuditPanel(root, controlsRoot);
+    root.querySelectorAll("[data-weline-tool-url]").forEach(function (input) {
+      input.value = pageUrl;
+    });
+
+    window.WelinePanel.apiFetch("seo/crawl/start", {
+      method: "POST",
+      requestTimeoutMs: 25000,
+      body: {
+        mode: "page",
+        pageUrl: pageUrl,
+        startUrl: pageUrl,
+        limit: 1,
+        timeout: 8,
+        currentPage: {
+          title: document.title || "",
+          url: window.location.href
+        }
+      }
+    }).then(function (payload) {
+      return pollSiteCrawlUntilDone(payload, root, controlsRoot, { pageMode: true });
+    }).then(function (report) {
+      if (!report || report.contractVersion !== SITE_CRAWL_CONTRACT_VERSION) {
+        throw new Error("当前 URL 审计返回格式不正确。");
+      }
+      publishPageAuditReport(report);
+      pageAuditStatus =
+        "检测完成：" + pageUrl + " · score " +
+        (((report.health && report.health.score) || 0)) +
+        "，" +
+        ((report.issues && report.issues.length) || 0) +
+        " 个 issue。";
+    }).catch(function (error) {
+      pageAuditError = (error && error.message) || "当前 URL 检测失败。";
+    }).finally(function () {
+      pageAuditRunning = false;
+      refreshPageAuditPanel(root, controlsRoot);
+    });
+  }
+
   function refreshCrawlPanel(root, controlsRoot) {
     var panel = root.querySelector('[data-weline-panel="crawl"]');
     if (!panel) return;
     panel.innerHTML = renderSiteCrawlTab();
     bindPanelActions(root, controlsRoot);
-    setPanelTab(root, "crawl", controlsRoot);
+    applyPanelTabUi(root, controlsRoot);
   }
 
   function startSiteCrawl(root, controlsRoot) {
@@ -4408,7 +8153,9 @@
 
     window.WelinePanel.apiFetch("seo/crawl/start", {
       method: "POST",
+      requestTimeoutMs: 25000,
       body: {
+        mode: "sitemap",
         startUrl: window.location.href,
         sitemapUrl: sitemapUrl,
         limit: limit,
@@ -4418,12 +8165,17 @@
         }
       }
     }).then(function (payload) {
-      var report = unwrapApiPayload(payload);
+      return pollSiteCrawlUntilDone(payload, root, controlsRoot, { pageMode: false });
+    }).then(function (report) {
       if (!report || report.contractVersion !== SITE_CRAWL_CONTRACT_VERSION) {
         throw new Error("SEO 全站审计返回格式不正确。");
       }
       publishSiteCrawlReport(report);
-      siteCrawlStatus = "审计完成：" + ((report.crawl && report.crawl.scanned) || 0) + " 个页面，" + ((report.issues && report.issues.length) || 0) + " 个 issue。";
+      var sampling = (report.crawl && report.crawl.sampling) || {};
+      var collapsedNote = sampling.collapsed
+        ? ("（sitemap " + (sampling.discovered || 0) + " → 抽样 " + (sampling.sampled || report.crawl.totalUrls || 0) + "，合并同结构 " + sampling.collapsed + "）")
+        : "";
+      siteCrawlStatus = "审计完成：" + ((report.crawl && report.crawl.scanned) || 0) + " 个页面，" + ((report.issues && report.issues.length) || 0) + " 个 issue。" + collapsedNote;
       publishAgentReport(buildAgentReport(auditCurrentPage()));
     }).catch(function (error) {
       siteCrawlError = (error && error.message) || "SEO 全站审计失败。";
@@ -4433,9 +8185,55 @@
     });
   }
 
-  function setPanelTab(root, tabId, controlsRoot) {
-    activePanelTab = normalizePanelTab(tabId);
-    savePanelState({ activeTab: activePanelTab });
+  function pollSiteCrawlUntilDone(payload, root, controlsRoot, options) {
+    options = options || {};
+    var pageMode = !!options.pageMode;
+    var envelope = unwrapCrawlEnvelope(payload);
+    var report = envelope.report || unwrapApiPayload(payload);
+    if (!report || report.contractVersion !== SITE_CRAWL_CONTRACT_VERSION) {
+      return Promise.reject(new Error(pageMode ? "当前 URL 审计返回格式不正确。" : "SEO 全站审计返回格式不正确。"));
+    }
+
+    var status = String(envelope.status || (report.crawl && report.crawl.status) || "completed").toLowerCase();
+    if (status === "failed" || status === "error") {
+      return Promise.reject(new Error(pageMode ? "当前 URL 检测失败。" : "SEO 全站审计失败。"));
+    }
+
+    if (status === "running") {
+      var scanned = (report.crawl && report.crawl.scanned) || 0;
+      var total = (report.crawl && report.crawl.totalUrls) || 0;
+      var progress = total > 0
+        ? ("正在审计页面 " + scanned + "/" + total + "…")
+        : ("正在审计页面…（已扫描 " + scanned + "）");
+      if (options.silent) {
+        localRichStatus = progress;
+        localRichRunning = true;
+        refreshRichPanel(root, controlsRoot);
+      } else if (pageMode) {
+        pageAuditStatus = progress;
+        pageAuditRunning = true;
+        refreshPageAuditPanel(root, controlsRoot);
+      } else {
+        siteCrawlStatus = progress;
+        siteCrawlRunning = true;
+        refreshCrawlPanel(root, controlsRoot);
+      }
+      var crawlId = envelope.id || (report.crawl && report.crawl.id) || "";
+      return delayMs(500).then(function () {
+        return window.WelinePanel.apiFetch("seo/crawl/result", {
+          method: "GET",
+          requestTimeoutMs: 25000,
+          params: crawlId ? { id: crawlId } : {}
+        });
+      }).then(function (nextPayload) {
+        return pollSiteCrawlUntilDone(nextPayload, root, controlsRoot, options);
+      });
+    }
+
+    return Promise.resolve(report);
+  }
+
+  function applyPanelTabUi(root, controlsRoot) {
     panelTabScopes(root, controlsRoot).forEach(function (scope) {
       scope.querySelectorAll("[data-weline-tab]").forEach(function (button) {
         var isActive = button.getAttribute("data-weline-tab") === activePanelTab;
@@ -4450,6 +8248,22 @@
     });
   }
 
+  function setPanelTab(root, tabId, controlsRoot) {
+    activePanelTab = normalizePanelTab(tabId);
+    savePanelState({ activeTab: activePanelTab });
+    // Re-render URL tools when opening them so cross-page stale localStorage
+    // cannot keep showing a previous PDP while the browser is on /products/.
+    if (activePanelTab === "rich") {
+      refreshRichPanel(root, controlsRoot);
+      return;
+    }
+    if (activePanelTab === "page") {
+      refreshPageAuditPanel(root, controlsRoot);
+      return;
+    }
+    applyPanelTabUi(root, controlsRoot);
+  }
+
   function renderPanelBody(report, options) {
     options = options || {};
     return (
@@ -4462,6 +8276,12 @@
       "</div>" +
       '<div class="weline-seo-panel__tab-panel" data-weline-panel="crawl" role="tabpanel" hidden>' +
       renderSiteCrawlTab(report) +
+      "</div>" +
+      '<div class="weline-seo-panel__tab-panel" data-weline-panel="page" role="tabpanel" hidden>' +
+      renderPageAuditTab() +
+      "</div>" +
+      '<div class="weline-seo-panel__tab-panel" data-weline-panel="rich" role="tabpanel" hidden>' +
+      renderRichResultsTab(report) +
       "</div>"
     );
   }
@@ -4479,6 +8299,7 @@
     if (!root) {
       throw new Error("SEO 诊断挂载点不存在。");
     }
+    startLiveCwvObservers();
     var raw = auditCurrentPage();
     var toolbarRoot = resolveContainer(options.toolbarContainer || null);
     if (toolbarRoot) {
@@ -4494,6 +8315,7 @@
     bindPanelActions(root, toolbarRoot);
     setPanelTab(root, activePanelTab, toolbarRoot);
     publishAgentReport(buildAgentReport(raw));
+    refreshReportAfterSitemapProbe();
     return raw;
   }
 
@@ -4507,4 +8329,5 @@
   };
 
   publishAgentReport(buildAgentReport(auditCurrentPage()));
+  refreshReportAfterSitemapProbe();
 })();

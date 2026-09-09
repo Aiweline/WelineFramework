@@ -82,17 +82,18 @@ class SeoPlatformCapabilityService
                 continue;
             }
             $type = strtolower(trim((string)($field['type'] ?? 'text')));
-            if (!in_array($type, ['text', 'password', 'url', 'website_url', 'textarea', 'json', 'checkbox'], true)) {
+            if (!in_array($type, ['text', 'password', 'url', 'website_url', 'textarea', 'json', 'checkbox', 'section'], true)) {
                 $type = 'text';
             }
             $normalized[] = [
                 'key' => $key,
                 'label' => (string)($field['label'] ?? $key),
                 'type' => $type,
-                'required' => !empty($field['required']),
+                'required' => $type !== 'section' && !empty($field['required']),
                 'placeholder' => (string)($field['placeholder'] ?? ''),
                 'hint' => (string)($field['hint'] ?? ''),
                 'accept' => (string)($field['accept'] ?? ''),
+                'group' => (string)($field['group'] ?? ''),
                 'sensitive' => !empty($field['sensitive']) || $type === 'password' || $key === 'service_account',
             ];
         }

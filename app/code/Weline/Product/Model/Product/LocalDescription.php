@@ -16,7 +16,7 @@ use Weline\Product\Repository\AttributeValueRepository;
 use Weline\Product\Service\ProductCategoryAttributeService;
 
 /**
- * Product basics translations for official &lt;local&gt; Taglib (name / SEO).
+ * Product basics translations for official &lt;local&gt; Taglib (name / short / detail / SEO).
  *
  * Drawer saves land here and sync into website-shard EAV (storefront source of truth).
  * Main-form {@see \Weline\Product\Service\ProductAdminCommandService} also upserts this table.
@@ -31,6 +31,7 @@ class LocalDescription extends LocalModel
     public const LOCAL_FIELDS = [
         self::schema_fields_NAME,
         self::schema_fields_SHORT_DESCRIPTION,
+        self::schema_fields_DESCRIPTION,
         self::schema_fields_META_NAME,
         self::schema_fields_META_DESCRIPTION,
         self::schema_fields_META_KEYWORDS,
@@ -47,6 +48,9 @@ class LocalDescription extends LocalModel
 
     #[Col(type: 'text', nullable: true, comment: '短描述')]
     public const schema_fields_SHORT_DESCRIPTION = 'short_description';
+
+    #[Col(type: 'mediumtext', nullable: true, comment: '详情描述')]
+    public const schema_fields_DESCRIPTION = 'description';
 
     #[Col(type: 'varchar', length: 255, nullable: true, comment: 'SEO 标题')]
     public const schema_fields_META_NAME = 'meta_name';

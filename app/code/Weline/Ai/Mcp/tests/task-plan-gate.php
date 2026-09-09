@@ -175,8 +175,9 @@ gateCheck(
         && count(is_array($blueprint['steps'] ?? null) ? $blueprint['steps'] : []) >= 8
         && in_array('requirement_analysis', $stepIds, true)
         && in_array('acceptance', $stepIds, true)
+        && in_array('tdd_red_green', $stepIds, true)
         && in_array('closeout', $stepIds, true),
-    'workflow blueprint starts at requirement_analysis with ≥8 steps',
+    'workflow blueprint starts at requirement_analysis with TDD and ≥8 steps',
 );
 
 $reviewOpen = TaskPlanWorkflow::reviewCompleteness($normalized);
@@ -204,9 +205,70 @@ gateCheck(
     'reviewCompleteness allows closeout when tasks and acceptance complete',
 );
 
+$noEvidenceRejected = false;
+try {
+    TaskPlanWorkflow::applyProgressPatch($normalized, [
+        'acceptance_updates' => [['id' => 'ut-plan-required', 'status' => 'passed']],
+    ]);
+} catch (ToolException $e) {
+    $noEvidenceRejected = $e->errorCode === TaskPlanGate::ERROR_PLAN_INVALID
+        && str_contains($e->getMessage(), 'evidence');
+}
+gateCheck($noEvidenceRejected, 'applyProgressPatch rejects passed without evidence');
+
+$passedNoEvidencePlan = $normalized;
+$passedNoEvidencePlan['dev_tasks'][0]['status'] = 'done';
+$passedNoEvidencePlan['acceptance'][0]['status'] = 'passed';
+unset($passedNoEvidencePlan['acceptance'][0]['evidence']);
+$reviewNoEvidence = TaskPlanWorkflow::reviewCompleteness($passedNoEvidencePlan);
+$hasEvidenceGap = false;
+foreach (is_array($reviewNoEvidence['gaps'] ?? null) ? $reviewNoEvidence['gaps'] : [] as $gap) {
+    if (is_array($gap) && ($gap['code'] ?? '') === 'acceptance_evidence_missing') {
+        $hasEvidenceGap = true;
+        break;
+    }
+}
+gateCheck(
+    ($reviewNoEvidence['closeout_allowed'] ?? true) === false && $hasEvidenceGap,
+    'reviewCompleteness blocks closeout when passed lacks evidence',
+);
+
 $rules = \LearningMcp\HardConstraintsCatalog::package()['rules'] ?? [];
 $hasTaskPlanRule = false;
 $hasFullWorkflowRule = false;
+$rejectedNoUnit = false;
+try {
+    TaskPlanGate::normalizeSubmission(array_merge($validPlan, [
+        'acceptance' => [[
+            'id' => 'doc-only',
+            'type' => 'doc',
+            'description' => 'docs only',
+            'status' => 'pending',
+        ]],
+    ]));
+} catch (ToolException $e) {
+    $rejectedNoUnit = $e->errorCode === TaskPlanGate::ERROR_PLAN_INVALID
+        && str_contains($e->getMessage(), 'type=unit');
+}
+gateCheck($rejectedNoUnit, 'rejects plan without type=unit acceptance');
+
+$softEvidenceRejected = false;
+try {
+    TaskPlanWorkflow::applyProgressPatch($normalized, [
+        'acceptance_updates' => [[
+            'id' => 'ut-plan-required',
+            'status' => 'passed',
+            'evidence' => 'looks good in code review',
+        ]],
+    ]);
+} catch (ToolException $e) {
+    $softEvidenceRejected = $e->errorCode === TaskPlanGate::ERROR_PLAN_INVALID
+        && str_contains($e->getMessage(), 'real test run');
+}
+gateCheck($softEvidenceRejected, 'applyProgressPatch rejects unit passed without real test-run evidence');
+
+$hasSelfVerifyRule = false;
+$hasTddRule = false;
 foreach (is_array($rules) ? $rules : [] as $rule) {
     if (!is_array($rule)) {
         continue;
@@ -217,9 +279,17 @@ foreach (is_array($rules) ? $rules : [] as $rule) {
     if (($rule['id'] ?? '') === 'user_requirement_full_workflow') {
         $hasFullWorkflowRule = true;
     }
+    if (($rule['id'] ?? '') === 'agent_self_verify_before_done') {
+        $hasSelfVerifyRule = true;
+    }
+    if (($rule['id'] ?? '') === 'plan_then_tdd_required') {
+        $hasTddRule = true;
+    }
 }
 gateCheck($hasTaskPlanRule, 'hard-constraints.v1 includes task_plan_before_edit');
 gateCheck($hasFullWorkflowRule, 'hard-constraints.v1 includes user_requirement_full_workflow');
+gateCheck($hasSelfVerifyRule, 'hard-constraints.v1 includes agent_self_verify_before_done');
+gateCheck($hasTddRule, 'hard-constraints.v1 includes plan_then_tdd_required');
 
 $contract = \LearningMcp\GuidanceWorkflowCatalog::contract();
 gateCheck(

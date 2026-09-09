@@ -757,12 +757,19 @@ class DetectWebsite implements
             if (\is_array($cached)) {
                 return $cached;
             }
+            if ($cached === false) {
+                return null;
+            }
             RequestContext::remove($requestKey);
         }
 
         $processKey = self::CACHE_KEY_MATCHED_SITE_PREFIX . sha1($cacheIdentity);
         $processCached = $this->getProcessValueCache($processKey);
         if ($processCached !== null || $this->hasProcessValueCache($processKey)) {
+            if ($processCached === false) {
+                RequestContext::set($requestKey, false);
+                return null;
+            }
             if (\is_array($processCached)
                 && $this->processCachedMatchStillValid($processCached, $matchContext['path'])
             ) {
@@ -792,6 +799,12 @@ class DetectWebsite implements
         RequestContext::set($requestKey, $cachedValue);
         if ($matchedSite !== null) {
             $this->setProcessValueCache($processKey, $matchedSite);
+        } else {
+            // Keep unmatched hosts/paths short-lived in the worker as well. The
+            // parser-site version is part of the key and clearProcessCache()
+            // runs on website/domain changes, so a newly added route can still
+            // become visible without making invalid probes rescan the catalog.
+            $this->setProcessValueCache($processKey, false);
         }
 
         return $matchedSite;

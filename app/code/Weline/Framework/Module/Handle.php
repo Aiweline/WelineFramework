@@ -160,10 +160,10 @@ class Handle implements HandleInterface, RegisterInterface
         $this->printer->note(__('3、卸载应用代码...'));
 
         $this->printer->note($module_path);
-        $this->system->exec("rm $module_path -rf");
+        $this->system->exec('rm -rf -- ' . escapeshellarg(rtrim($module_path, "/\\")));
         $back_path = dirname($module_path);
         if ($this->system->getDirectoryObject()->is_empty(dirname($back_path))) {
-            $this->system->exec("rm $back_path -rf");
+            $this->system->exec('rm -rf -- ' . escapeshellarg($back_path));
         }
         
         // 更新注册表（模块卸载后）

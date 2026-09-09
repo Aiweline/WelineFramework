@@ -13,6 +13,7 @@ namespace Weline\CustomerService\Controller\Backend;
 
 use Weline\Backend\Api\Auth\BackendUserDirectoryInterface;
 use Weline\CustomerService\Model\ServiceAgent;
+use Weline\CustomerService\Service\ChatService;
 use Weline\CustomerService\Service\StatisticsService;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Acl\Acl;
@@ -26,11 +27,14 @@ use Weline\Framework\Runtime\RuntimeProviderResolver;
 class Agent extends BackendController
 {
     private StatisticsService $statisticsService;
+    private ChatService $chatService;
 
     public function __construct(
-        StatisticsService $statisticsService
+        StatisticsService $statisticsService,
+        ChatService $chatService
     ) {
         $this->statisticsService = $statisticsService;
+        $this->chatService = $chatService;
     }
     /**
      * 客服人员列表
@@ -41,7 +45,7 @@ class Agent extends BackendController
         try {
             /** @var ServiceAgent $agent */
             $agent = ObjectManager::getInstance(ServiceAgent::class);
-            
+
             $agents = $agent->reset()
                 ->select()
                 ->fetch()
@@ -53,33 +57,78 @@ class Agent extends BackendController
             if (!$userDirectory instanceof BackendUserDirectoryInterface) {
                 throw new \RuntimeException('Weline_Backend user directory provider is unavailable.');
             }
-            foreach ($agents as &$agentData) {
-                if ($agentData['user_id']) {
-                    $user = $userDirectory->find((int)$agentData['user_id']);
+            $agentRows = [];
+            foreach ($agents as $agentData) {
+                $supportedLocales = $agentData['supported_locales'] ?? [];
+                if (is_string($supportedLocales)) {
+                    $decoded = json_decode($supportedLocales, true);
+                    $supportedLocales = is_array($decoded) ? $decoded : [];
+                } elseif (!is_array($supportedLocales)) {
+                    $supportedLocales = [];
+                }
+
+                $row = [
+                    'agent_id' => (int)($agentData['agent_id'] ?? 0),
+                    'user_id' => (int)($agentData['user_id'] ?? 0),
+                    'name' => (string)($agentData['name'] ?? ''),
+                    'email' => (string)($agentData['email'] ?? ''),
+                    'locale' => (string)($agentData['locale'] ?? ''),
+                    'supported_locales' => $supportedLocales,
+                    'is_active' => (int)($agentData['is_active'] ?? 0),
+                    'max_sessions' => (int)($agentData['max_sessions'] ?? 0),
+                    'user_name' => '-',
+                    'statistics' => [
+                        'total_sessions' => 0,
+                        'total_messages' => 0,
+                        'avg_response_time' => 0,
+                    ],
+                ];
+
+                if ($row['user_id'] > 0) {
+                    $user = $userDirectory->find($row['user_id']);
                     if ($user !== null) {
-                        $agentData['user_name'] = $user->getUsername();
+                        $row['user_name'] = $user->getUsername();
                     }
                 }
-                
-                // 获取统计数据（全部时间）
-                $agentId = (int)$agentData['agent_id'];
-                if ($agentId > 0) {
-                    $statistics = $this->statisticsService->getAgentStatistics($agentId, 'all');
-                    $agentData['statistics'] = [
+
+                if ($row['agent_id'] > 0) {
+                    $statistics = $this->statisticsService->getAgentStatistics($row['agent_id'], 'all');
+                    $row['statistics'] = [
                         'total_sessions' => $statistics['sessions']['total'],
                         'total_messages' => $statistics['messages']['total'],
                         'avg_response_time' => $statistics['response_time']['average'],
                     ];
+                    $row['open_session_count'] = $this->chatService->countOpenSessionsForAgent($row['agent_id']);
+                } else {
+                    $row['open_session_count'] = 0;
                 }
+
+                $agentRows[] = $row;
+            }
+            unset($agentData);
+
+            $backendUsers = [];
+            foreach ($userDirectory->all() as $user) {
+                if (!$user->getIsEnabled()) {
+                    continue;
+                }
+                $backendUsers[] = [
+                    'user_id' => $user->getId(),
+                    'username' => $user->getUsername(),
+                    'realname' => '',
+                    'email' => $user->getEmail(),
+                ];
             }
 
-            $this->assign('agents', $agents);
+            $this->assign('agents', $agentRows);
+            $this->assign('backend_users', $backendUsers);
             $this->assign('page_title', __('客服人员管理'));
-            
+
             return $this->fetch();
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $this->getMessageManager()->addError(__('加载客服人员失败：%{1}', $e->getMessage()));
             $this->assign('agents', []);
+            $this->assign('backend_users', []);
             return $this->fetch();
         }
     }
@@ -156,12 +205,16 @@ class Agent extends BackendController
     /**
      * 删除客服人员
      * POST /customerservice/backend/agent/remove
+     *
+     * 若有未关闭会话：须传 transfer_to_agent_id（转让）或 release_sessions=1（放回等待池）。
      */
     #[Acl('Weline_CustomerService::agent_delete', '删除客服人员', 'trash', '删除客服人员')]
     public function postRemove(): string
     {
         try {
             $agentId = (int)$this->request->getPost('agent_id', 0);
+            $transferToAgentId = (int)$this->request->getPost('transfer_to_agent_id', 0);
+            $releaseSessions = (int)$this->request->getPost('release_sessions', 0) === 1;
 
             if ($agentId <= 0) {
                 return $this->jsonResponse(false, __('无效的客服ID'));
@@ -175,11 +228,73 @@ class Agent extends BackendController
                 return $this->jsonResponse(false, __('客服人员不存在'));
             }
 
+            $openCount = $this->chatService->countOpenSessionsForAgent($agentId);
+            $transferResult = null;
+            $released = 0;
+
+            if ($openCount > 0) {
+                if ($transferToAgentId > 0) {
+                    $transferResult = $this->chatService->transferAgentSessions($agentId, $transferToAgentId);
+                } elseif ($releaseSessions) {
+                    $released = $this->chatService->releaseAgentSessions($agentId);
+                } else {
+                    return $this->jsonResponse(false, __('该客服仍有 %{1} 个未关闭会话，请先转让给其他客服或释放回等待池后再删除', (string)$openCount), [
+                        'open_session_count' => $openCount,
+                        'requires_transfer_or_release' => true,
+                    ]);
+                }
+            }
+
             $agent->delete();
 
-            return $this->jsonResponse(true, __('删除成功'));
+            $message = __('删除成功');
+            if (is_array($transferResult) && ($transferResult['transferred'] ?? 0) > 0) {
+                $message = __('删除成功，已转让 %{1} 个会话给 %{2}', [(string)$transferResult['transferred'], (string)$transferResult['to_agent_name']]);
+            } elseif ($released > 0) {
+                $message = __('删除成功，已将 %{1} 个会话释放回等待池', (string)$released);
+            }
+
+            return $this->jsonResponse(true, $message, [
+                'transferred' => (int)($transferResult['transferred'] ?? 0),
+                'released' => $released,
+            ]);
+        } catch (\InvalidArgumentException $e) {
+            return $this->jsonResponse(false, $e->getMessage());
         } catch (\Exception $e) {
             return $this->jsonResponse(false, __('删除失败：%{1}', $e->getMessage()));
+        }
+    }
+
+    /**
+     * 转让客服名下未关闭会话给其他客服
+     * POST /customerservice/backend/agent/transfer-sessions
+     */
+    #[Acl('Weline_CustomerService::agent_transfer', '转让客服会话', 'share', '将会话转让给其他客服', 'Weline_CustomerService::agent')]
+    public function postTransferSessions(): string
+    {
+        try {
+            $fromAgentId = (int)$this->request->getPost('agent_id', 0);
+            $toAgentId = (int)$this->request->getPost('transfer_to_agent_id', 0);
+
+            if ($fromAgentId <= 0 || $toAgentId <= 0) {
+                return $this->jsonResponse(false, __('请选择源客服与目标客服'));
+            }
+
+            $result = $this->chatService->transferAgentSessions($fromAgentId, $toAgentId);
+            $count = (int)($result['transferred'] ?? 0);
+            if ($count <= 0) {
+                return $this->jsonResponse(true, __('没有可转让的未关闭会话'), $result);
+            }
+
+            return $this->jsonResponse(
+                true,
+                __('已转让 %{1} 个会话给 %{2}', [(string)$count, (string)$result['to_agent_name']]),
+                $result
+            );
+        } catch (\InvalidArgumentException $e) {
+            return $this->jsonResponse(false, $e->getMessage());
+        } catch (\Exception $e) {
+            return $this->jsonResponse(false, __('转让失败：%{1}', $e->getMessage()));
         }
     }
 

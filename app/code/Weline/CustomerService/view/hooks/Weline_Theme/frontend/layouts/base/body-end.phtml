@@ -6,6 +6,7 @@
  */
 
 use Weline\CustomerService\Service\BindCaptchaGuard;
+use Weline\CustomerService\Service\CustomerServiceSettings;
 use Weline\CustomerService\Service\WidgetTranslationService;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\State;
@@ -25,6 +26,12 @@ if ($isAccountRoute || $isWorkspacePreview) {
     return;
 }
 
+/** @var CustomerServiceSettings $customerServiceSettings */
+$customerServiceSettings = ObjectManager::getInstance(CustomerServiceSettings::class);
+if (!$customerServiceSettings->isServiceEnabled()) {
+    return;
+}
+
 $session = SessionFactory::getInstance()->createFrontendSession();
 $isLoggedIn = $session->isLoggedIn();
 $customerId = $isLoggedIn ? $session->getUserId() : null;
@@ -33,15 +40,18 @@ $showGuestBindPrompt = !$isLoggedIn;
 
 /** @var BindCaptchaGuard $bindCaptchaGuard */
 $bindCaptchaGuard = ObjectManager::getInstance(BindCaptchaGuard::class);
-$bindCaptchaHtml = $bindCaptchaGuard->renderChallenge();
-$bindCaptchaEnabled = $bindCaptchaGuard->isEnabled() && trim($bindCaptchaHtml) !== '';
+// 一次性人机验证禁止 SSR 进页面/FPC；弹窗打开时再拉 captcha-challenge。
+$bindCaptchaEnabled = $bindCaptchaGuard->isEnabled();
+$bindCaptchaHtml = '';
 
 /** @var WidgetTranslationService $widgetTranslationService */
 $widgetTranslationService = ObjectManager::getInstance(WidgetTranslationService::class);
 $supportedLocales = $widgetTranslationService->getSupportedLocales();
-$currentLocale = State::getLangLocal() ?: 'zh_Hans_CN';
+$defaultCustomerLocale = $customerServiceSettings->defaultCustomerLocale();
+$currentLocale = State::getLangLocal() ?: $defaultCustomerLocale;
 $widgetLocaleCodes = array_column($supportedLocales, 'code');
 $widgetLocaleCodes[] = $currentLocale;
+$widgetLocaleCodes[] = $defaultCustomerLocale;
 $widgetLocaleCodes[] = 'zh_Hans_CN';
 $widgetTranslations = $widgetTranslationService->getWidgetTranslationsForLocales(
     array_values(array_unique($widgetLocaleCodes))
@@ -69,7 +79,6 @@ $customerServiceCssHref = htmlspecialchars(
             <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
             <path d="M7 9h10v2H7zm0-3h10v2H7zm0 6h7v2H7z"/>
         </svg>
-        <span id="cs-status-dot" class="cs-status-dot cs-status-offline"></span>
         <span class="cs-badge" id="cs-unread-badge" style="display: none;">0</span>
     </div>
 
@@ -135,6 +144,12 @@ $customerServiceCssHref = htmlspecialchars(
         </div>
 
         <div class="cs-chat-footer w-panel-footer">
+            <div id="cs-guest-send-gate" class="cs-guest-send-gate" hidden>
+                <p class="cs-guest-send-gate__text" id="cs-guest-send-gate-text"></p>
+                <button type="button" class="w-button cs-guest-send-gate__action" data-tone="primary" data-size="sm" data-cs-open-bind-email>
+                    <?= __('验证邮箱') ?>
+                </button>
+            </div>
             <div class="cs-input-area">
                 <textarea
                     id="cs-message-input"
@@ -212,6 +227,7 @@ var customerServiceConfig = {
     customerId: <?= $customerId ? (int)$customerId : 'null' ?>,
     isLoggedIn: <?= $isLoggedIn ? 'true' : 'false' ?>,
     showGuestBindPrompt: <?= $showGuestBindPrompt ? 'true' : 'false' ?>,
+    defaultCustomerLocale: <?= json_encode($defaultCustomerLocale, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
     supportedLocales: <?= json_encode($supportedLocales, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
     widgetTranslations: <?= json_encode($widgetTranslations, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>
 };

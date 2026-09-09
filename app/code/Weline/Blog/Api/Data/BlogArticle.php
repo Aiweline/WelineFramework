@@ -16,6 +16,7 @@ final class BlogArticle
      * @param list<string> $categories
      * @param array<string, mixed> $sourceRef
      * @param array<string, mixed>|null $cmsPayload
+     * @param list<string>|null $authorSameAs
      */
     public function __construct(
         public readonly string $contentKind,
@@ -35,6 +36,10 @@ final class BlogArticle
         public readonly array $sourceRef,
         public readonly ?string $keywords = null,
         public readonly ?array $cmsPayload = null,
+        public readonly ?string $authorUrl = null,
+        public readonly ?string $authorBio = null,
+        public readonly ?string $authorJobTitle = null,
+        public readonly ?array $authorSameAs = null,
     ) {
     }
 
@@ -46,6 +51,7 @@ final class BlogArticle
         $sourceRef = is_array($row['source_ref'] ?? null) ? $row['source_ref'] : [];
         $categories = is_array($row['categories'] ?? null) ? array_values(array_map('strval', $row['categories'])) : [];
         $cmsPayload = is_array($row['cms_payload'] ?? null) ? $row['cms_payload'] : null;
+        $sameAs = self::normalizeSameAs($row['author_same_as'] ?? null);
 
         return new self(
             contentKind: (string)($row['content_kind'] ?? self::KIND_POST),
@@ -65,6 +71,10 @@ final class BlogArticle
             sourceRef: $sourceRef,
             keywords: isset($row['keywords']) ? (string)$row['keywords'] : null,
             cmsPayload: $cmsPayload,
+            authorUrl: isset($row['author_url']) ? (string)$row['author_url'] : null,
+            authorBio: isset($row['author_bio']) ? (string)$row['author_bio'] : null,
+            authorJobTitle: isset($row['author_job_title']) ? (string)$row['author_job_title'] : null,
+            authorSameAs: $sameAs,
         );
     }
 
@@ -84,6 +94,10 @@ final class BlogArticle
             'published_at' => $this->publishedAt,
             'updated_at' => $this->updatedAt,
             'author' => $this->author,
+            'author_url' => $this->authorUrl,
+            'author_bio' => $this->authorBio,
+            'author_job_title' => $this->authorJobTitle,
+            'author_same_as' => $this->authorSameAs,
             'cover_image' => $this->coverImage,
             'categories' => $this->categories,
             'canonical_url' => $this->canonicalUrl,
@@ -101,5 +115,44 @@ final class BlogArticle
         }
 
         return (int)($this->sourceRef['cms_page_id'] ?? 0);
+    }
+
+    /**
+     * @return list<string>|null
+     */
+    public static function normalizeSameAs(mixed $raw): ?array
+    {
+        if ($raw === null || $raw === '') {
+            return null;
+        }
+        if (is_array($raw)) {
+            $urls = [];
+            foreach ($raw as $entry) {
+                if (!is_string($entry)) {
+                    continue;
+                }
+                $url = trim($entry);
+                if ($url !== '' && preg_match('#^https?://#i', $url)) {
+                    $urls[] = $url;
+                }
+            }
+            $urls = array_values(array_unique($urls));
+
+            return $urls === [] ? null : $urls;
+        }
+        if (!is_string($raw)) {
+            return null;
+        }
+        $parts = preg_split('/[\s,，;；|]+/u', $raw) ?: [];
+        $urls = [];
+        foreach ($parts as $part) {
+            $url = trim((string)$part);
+            if ($url !== '' && preg_match('#^https?://#i', $url)) {
+                $urls[] = $url;
+            }
+        }
+        $urls = array_values(array_unique($urls));
+
+        return $urls === [] ? null : $urls;
     }
 }

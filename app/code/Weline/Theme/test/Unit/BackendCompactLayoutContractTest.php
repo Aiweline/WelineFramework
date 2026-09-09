@@ -19,8 +19,9 @@ final class BackendCompactLayoutContractTest extends TestCase
         self::assertStringContainsString('@media (max-width: 63.99rem)', $theme);
         self::assertStringContainsString('grid-template-columns: minmax(0, 1fr)', $theme);
         self::assertStringContainsString('.w-backend-sidebar { position: fixed;', $theme);
-        self::assertStringContainsString('.w-backend-main { padding: var(--weline-space-4); }', $theme);
+        self::assertStringContainsString('--backend-layout-inline: var(--weline-space-4)', $theme);
+        self::assertStringContainsString('--backend-layout-block: var(--weline-space-4)', $theme);
         self::assertStringContainsString('@media (max-width: 47.99rem)', $theme);
-        self::assertStringContainsString('.w-backend-topbar { padding-inline: var(--weline-space-3); }', $theme);
+        self::assertStringContainsString('--backend-layout-inline: var(--weline-space-3)', $theme);
     }
 }

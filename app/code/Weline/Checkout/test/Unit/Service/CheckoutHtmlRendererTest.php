@@ -85,8 +85,8 @@ final class CheckoutHtmlRendererTest extends TestCase
         self::assertStringContainsString('weline-checkout__item-price-campaign', $html);
         // Price is floated before the title inside item-main.
         self::assertLessThan(
-            (int)strpos($html, 'weline-checkout__item-price'),
-            (int)strpos($html, 'weline-checkout__item-title')
+            (int)strpos($html, 'weline-checkout__item-title'),
+            (int)strpos($html, 'weline-checkout__item-price')
         );
         self::assertStringContainsString('CNY 80.10', $html);
         self::assertStringContainsString('CNY 89.00', $html);

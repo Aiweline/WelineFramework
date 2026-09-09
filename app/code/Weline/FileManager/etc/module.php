@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_FileManager',
-    "version" => '1.1.13',
+    "version" => '1.1.15',
     "requires" => [
         'Weline_Backend' => '*',
         'Weline_Eav' => '*',

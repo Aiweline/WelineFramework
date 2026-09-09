@@ -70,22 +70,16 @@ final class StorefrontProductWidgetCatalogRelatedCardsTest extends TestCase
             dirname(__DIR__, 3) . '/Service/StorefrontProductWidgetCatalog.php'
         );
 
-        self::assertStringContainsString('$this->catalog->publishedOffers($limit * 3, false)', $source);
+        self::assertStringContainsString('publishedOfferSummaries($fetchLimit)', $source);
         self::assertStringContainsString('shouldUseListingProjection', $source);
-        self::assertStringContainsString('$this->catalog->publishedOffers($limit * 3, true)', $source);
-        self::assertStringContainsString('$this->catalog->publishedOffers(max($limit * 3, 48), false)', $source);
-        self::assertStringContainsString(
-            '$this->catalog->publishedOffersForProductIds(' . "\n"
-                . '                \\array_keys($createdAtByProductId),' . "\n"
-                . '                \\max($limit * 3, 48),' . "\n"
-                . '                false,',
-            $source,
-        );
-        self::assertStringContainsString('$this->catalog->publishedOffers(max($limit * 4, 16), false)', $source);
+        self::assertStringContainsString('publishedOffers($fetchLimit, true)', $source);
+        self::assertStringContainsString('publishedOfferSummaries(max($limit * 3, 48))', $source);
+        self::assertStringContainsString('publishedOfferSummaries(max($limit * 4, 16))', $source);
         self::assertStringContainsString(
             '$this->catalog->publishedOffersForProductIds([$seedProductId], 4, false)',
             $source,
         );
+        self::assertStringNotContainsString('StorefrontProductRouteContext', $source);
     }
 
     public function testNewArrivalCardsMethodFiltersByCreatedAtInSource(): void
@@ -98,7 +92,7 @@ final class StorefrontProductWidgetCatalogRelatedCardsTest extends TestCase
             dirname(__DIR__, 3) . '/Service/StorefrontProductWidgetCatalog.php'
         );
         self::assertStringContainsString('function newArrivalCards(int $limit = 8, int $days = 30)', $source);
-        self::assertStringContainsString('Product::schema_fields_CREATED_AT', $source);
+        self::assertStringContainsString('listRecentPublishedCreatedAt', $source);
         self::assertStringContainsString('publishedOffersForProductIds', $source);
         self::assertStringContainsString('New-arrivals: prefer HF-* then fill non-HF published offers', $source);
         self::assertStringContainsString('$fallbackProductId', $source);
@@ -233,6 +227,11 @@ final class StorefrontProductWidgetCatalogRelatedCardsTest extends TestCase
 
         $catalogSrc = (string)file_get_contents(dirname(__DIR__, 3) . '/Service/StorefrontProductWidgetCatalog.php');
         self::assertStringContainsString("'/product/'", $catalogSrc);
+        self::assertStringContainsString('function withReviewAggregates(', $catalogSrc);
+        self::assertStringContainsString('aggregatesForExternalUuids', $catalogSrc);
+        self::assertStringContainsString("ReviewSeoFactsInterface::class", $catalogSrc);
+        self::assertStringNotContainsString('productId * 23', $catalogSrc);
+        self::assertStringNotContainsString('4.2 + (($productId % 5)', $catalogSrc);
 
         $notFoundInjection = null;
         foreach ($widget['default_injections'] as $row) {

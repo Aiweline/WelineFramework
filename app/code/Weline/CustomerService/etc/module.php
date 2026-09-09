@@ -2,13 +2,15 @@
 
 return [
     "name" => 'Weline_CustomerService',
-    "version" => '1.2.9',
+    "version" => '1.3.41',
     "requires" => [
         'Weline_Backend' => '*',
         'Weline_Customer' => '*',
         'Weline_Framework' => '*',
         'Weline_Smtp' => '*',
+        'Weline_SystemConfig' => '*',
         'Weline_Theme' => '*',
+        'Weline_Websites' => '*',
     ],
     "optional" => [
         'Weline_Ai' => '*',

@@ -106,6 +106,40 @@ $checks = [
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule) && ($rule['id'] ?? '') === 'weline_ui_theme_first'),
         false,
     ),
+    'hard_constraints include theme_base_components_token_only' => array_reduce(
+        is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule) && ($rule['id'] ?? '') === 'theme_base_components_token_only'),
+        false,
+    ),
+    'hard_constraints include ui_skill_requires_theme_skill' => array_reduce(
+        is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'ui_skill_requires_theme_skill'
+            && str_contains((string) ($rule['summary'] ?? ''), 'weline-theme-development')
+            && str_contains((string) ($rule['summary'] ?? ''), 'Forbid inventing')),
+        false,
+    ),
+    'hard_constraints include css_or_theme_requires_ui_prototype_theme_skills' => array_reduce(
+        is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'css_or_theme_requires_ui_prototype_theme_skills'
+            && str_contains((string) ($rule['summary'] ?? ''), 'frontend-design')
+            && str_contains((string) ($rule['summary'] ?? ''), 'prototype')
+            && str_contains((string) ($rule['summary'] ?? ''), 'weline-theme-development')),
+        false,
+    ),
+    'hard_constraints include user_image_attachment_triggers_shentu' => array_reduce(
+        is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'user_image_attachment_triggers_shentu'
+            && str_contains((string) ($rule['summary'] ?? ''), '审图')
+            && str_contains((string) ($rule['summary'] ?? ''), 'image')
+            && str_contains((string) ($rule['summary'] ?? ''), 'human factors')
+            && str_contains((string) ($rule['summary'] ?? ''), 'frontend-design')
+            && str_contains((string) ($rule['summary'] ?? ''), 'prototype')
+            && str_contains((string) ($rule['doc'] ?? ''), '审图.md')),
+        false,
+    ),
     'hard_constraints include theme_address_for_region_pickers' => array_reduce(
         is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
@@ -130,6 +164,19 @@ $checks = [
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule) && ($rule['id'] ?? '') === 'theme_js_module_declare_only'),
         false,
     ),
+    'hard_constraints include weline_js_loader_framework_only' => array_reduce(
+        is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'weline_js_loader_framework_only'
+            && str_contains((string) ($rule['summary'] ?? ''), 'MANDATORY')
+            && str_contains((string) ($rule['summary'] ?? ''), 'ModuleLoader core only')
+            && str_contains((string) ($rule['summary'] ?? ''), 'account')
+            && str_contains((string) ($rule['summary'] ?? ''), 'cart')
+            && str_contains((string) ($rule['summary'] ?? ''), 'maintenance')
+            && str_contains((string) ($rule['summary'] ?? ''), 'NOT account')
+            && !str_contains((string) ($rule['summary'] ?? ''), 'Core aliases allowed: api / account')),
+        false,
+    ),
     'hard_constraints include at_lang_no_unquoted_comma' => array_reduce(
         is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule) && ($rule['id'] ?? '') === 'at_lang_no_unquoted_comma'),
@@ -141,6 +188,19 @@ $checks = [
             && ($rule['id'] ?? '') === 'no_php_tags_in_comments'
             && str_contains((string) ($rule['summary'] ?? ''), 'inside comments')
             && str_contains((string) ($rule['summary'] ?? ''), 'not ordinary commented-out')),
+        false,
+    ),
+    'hard_constraints omit cancelled cache_lookup_tier_process_shared_db' => array_reduce(
+        is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule) && ($rule['id'] ?? '') === 'cache_lookup_tier_process_shared_db'),
+        false,
+    ) === false,
+    'hard_constraints include chinese_comments_friendly_style' => array_reduce(
+        is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'chinese_comments_friendly_style'
+            && str_contains((string) ($rule['summary'] ?? ''), 'Simplified Chinese')
+            && str_contains((string) ($rule['summary'] ?? ''), 'friendly')),
         false,
     ),
     'hard_constraints include browser_operator_self_test' => array_reduce(
@@ -162,6 +222,15 @@ $checks = [
             && ($rule['id'] ?? '') === 'browser_release_after_delivery'
             && str_contains((string) ($rule['summary'] ?? ''), 'close')
             && str_contains((string) ($rule['summary'] ?? ''), '交付地址')),
+        false,
+    ),
+    'hard_constraints include image_explicit_width_height_css' => array_reduce(
+        is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'image_explicit_width_height_css'
+            && str_contains((string) ($rule['summary'] ?? ''), 'width')
+            && str_contains((string) ($rule['summary'] ?? ''), 'CLS')
+            && str_contains((string) ($rule['summary'] ?? ''), 'file:image')),
         false,
     ),
     'hard_constraints feature_delivery_urls requires section' => array_reduce(
@@ -194,6 +263,22 @@ $checks = [
             && str_contains((string) ($rule['summary'] ?? ''), 'evidence')),
         false,
     ),
+    'hard_constraints include agent_self_verify_before_done' => array_reduce(
+        is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'agent_self_verify_before_done'
+            && str_contains((string) ($rule['summary'] ?? ''), 'self-verify')
+            && str_contains((string) ($rule['summary'] ?? ''), 'evidence')),
+        false,
+    ),
+    'hard_constraints include plan_then_tdd_required' => array_reduce(
+        is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'plan_then_tdd_required'
+            && str_contains((string) ($rule['summary'] ?? ''), 'TDD')
+            && str_contains((string) ($rule['summary'] ?? ''), 'unit')),
+        false,
+    ),
     'mandatory_before_code includes submit_task_plan_accepted' => in_array(
         'submit_task_plan_accepted',
         is_array($contract['mandatory_before_code'] ?? null) ? $contract['mandatory_before_code'] : [],
@@ -216,6 +301,21 @@ $checks = [
         is_array($contract['mandatory_before_closeout'] ?? null) ? $contract['mandatory_before_closeout'] : [],
         true,
     ),
+    'mandatory_before_closeout includes agent self verify evidence' => in_array(
+        'agent_self_verify_with_acceptance_evidence',
+        is_array($contract['mandatory_before_closeout'] ?? null) ? $contract['mandatory_before_closeout'] : [],
+        true,
+    ),
+    'mandatory_before_code includes tdd unit acceptance planned' => in_array(
+        'tdd_unit_acceptance_planned',
+        is_array($contract['mandatory_before_code'] ?? null) ? $contract['mandatory_before_code'] : [],
+        true,
+    ),
+    'mandatory_before_closeout includes tdd unit tests executed' => in_array(
+        'tdd_unit_tests_executed_and_passed',
+        is_array($contract['mandatory_before_closeout'] ?? null) ? $contract['mandatory_before_closeout'] : [],
+        true,
+    ),
     'mandatory_before_closeout includes browser release after delivery' => in_array(
         'webui_browser_released_after_delivery_or_na',
         is_array($contract['mandatory_before_closeout'] ?? null) ? $contract['mandatory_before_closeout'] : [],
@@ -223,6 +323,10 @@ $checks = [
     ),
     'closeout reminder requires browser self-test for web' => ($closeoutReminder['browser_self_test_required_for_web'] ?? false) === true
         && (($closeoutReminder['browser_tooling'] ?? '') === 'host_available_real_browser')
+        && ($closeoutReminder['agent_self_verify_required'] ?? false) === true
+        && ($closeoutReminder['agent_self_verify_rule'] ?? '') === 'agent_self_verify_before_done'
+        && ($closeoutReminder['plan_then_tdd_required'] ?? false) === true
+        && ($closeoutReminder['plan_then_tdd_rule'] ?? '') === 'plan_then_tdd_required'
         && str_contains((string) ($closeoutReminder['summary_zh'] ?? ''), '真实 Browser'),
     'closeout reminder requires browser release after delivery' => ($closeoutReminder['browser_release_after_delivery_required'] ?? false) === true
         && is_array($closeoutReminder['browser_release_order'] ?? null)
@@ -260,6 +364,32 @@ $checks = [
         static fn (bool $ok, mixed $norm): bool => $ok || (is_array($norm) && ($norm['id'] ?? '') === 'weline_ui_theme_first'),
         false,
     ),
+    'frontend norms include ui_skill_requires_theme_skill' => array_reduce(
+        $norms,
+        static fn (bool $ok, mixed $norm): bool => $ok || (is_array($norm)
+            && ($norm['id'] ?? '') === 'ui_skill_requires_theme_skill'
+            && str_contains((string) ($norm['summary'] ?? ''), 'weline-theme-development')
+            && (($norm['authoritative_skill'] ?? '') === 'weline-theme-development')),
+        false,
+    ),
+    'frontend norms include css_or_theme_requires_ui_prototype_theme_skills' => array_reduce(
+        $norms,
+        static fn (bool $ok, mixed $norm): bool => $ok || (is_array($norm)
+            && ($norm['id'] ?? '') === 'css_or_theme_requires_ui_prototype_theme_skills'
+            && is_array($norm['required_companion_skills'] ?? null)
+            && in_array('frontend-design', $norm['required_companion_skills'], true)
+            && in_array('prototype', $norm['required_companion_skills'], true)
+            && in_array('weline-theme-development', $norm['required_companion_skills'], true)),
+        false,
+    ),
+    'frontend surface requires companion skills trio' => is_array($frontend['required_companion_skills'] ?? null)
+        && in_array('frontend-design', $frontend['required_companion_skills'], true)
+        && in_array('prototype', $frontend['required_companion_skills'], true)
+        && in_array('weline-theme-development', $frontend['required_companion_skills'], true),
+    'frontend triggers include css' => in_array('css', $frontend['triggers'] ?? [], true)
+        || in_array('CSS', $frontend['triggers'] ?? [], true),
+    'frontend surface authoritative_skill is weline-theme-development' => (($frontend['authoritative_skill'] ?? '') === 'weline-theme-development'),
+    'forTask frontend surface keeps authoritative_skill' => ((GuidanceWorkflowCatalog::forTask('frontend-design 主题 UI 颜色间距')['surfaces']['frontend_development']['authoritative_skill'] ?? '') === 'weline-theme-development'),
     'frontend norms include theme_address_for_region_pickers' => array_reduce(
         $norms,
         static fn (bool $ok, mixed $norm): bool => $ok || (is_array($norm) && ($norm['id'] ?? '') === 'theme_address_for_region_pickers'),
@@ -349,7 +479,42 @@ $checks = [
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
             && ($rule['id'] ?? '') === 'preserve_dirty_workspace'
             && str_contains((string) ($rule['summary'] ?? ''), 'staged')
-            && str_contains((string) ($rule['summary'] ?? ''), 'untracked')),
+            && str_contains((string) ($rule['summary'] ?? ''), 'untracked')
+            && str_contains((string) ($rule['summary'] ?? ''), 'Agent Shell')
+            && str_contains((string) ($rule['summary'] ?? ''), 'git checkout')
+            && str_contains((string) ($rule['summary'] ?? ''), 'dirty-load')),
+        false,
+    ),
+    'mcp instructions ban git checkout before sealed dirty-load' => str_contains(ToolService::instructions(), 'DIRTY-LOAD ONLY')
+        && str_contains(ToolService::instructions(), 'never git checkout'),
+    'MCP hard constraints require host editor rules mcp-generated only' => array_reduce(
+        is_array($contract['hard_constraints']['mcp_operational'] ?? null) ? $contract['hard_constraints']['mcp_operational'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'host_editor_rules_mcp_generated_only'
+            && str_contains((string) ($rule['summary'] ?? ''), 'MANDATORY')
+            && str_contains((string) ($rule['summary'] ?? ''), 'MUST NOT be hand-authored')
+            && str_contains((string) ($rule['summary'] ?? ''), 'generated only by MCP')
+            && str_contains((string) ($rule['summary'] ?? ''), '.cursor/rules')),
+        false,
+    ),
+    'MCP hard constraints require skills fetch from MCP' => array_reduce(
+        is_array($contract['hard_constraints']['mcp_operational'] ?? null) ? $contract['hard_constraints']['mcp_operational'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'mcp_skills_fetch_from_mcp'
+            && str_contains((string) ($rule['summary'] ?? ''), 'resolve_skill')
+            && str_contains((string) ($rule['summary'] ?? ''), 'get_skill')),
+        false,
+    ),
+    'MCP hard constraints require greeting lists skills and commands' => array_reduce(
+        is_array($contract['hard_constraints']['mcp_operational'] ?? null) ? $contract['hard_constraints']['mcp_operational'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'greeting_lists_mcp_skills_and_commands'
+            && str_contains((string) ($rule['summary'] ?? ''), 'hi')),
+        false,
+    ),
+    'session_startup_notices mention mcp_skills' => array_reduce(
+        $contract['session_startup_notices'] ?? [],
+        static fn (bool $ok, mixed $notice): bool => $ok || (is_string($notice) && str_contains($notice, 'mcp_skills')),
         false,
     ),
     'mcp instructions include hard-constraints preamble' => str_contains(ToolService::instructions(), 'hard-constraints.v1')
@@ -549,6 +714,20 @@ $checks = [
     ),
     'authoritative_doc is Theme开发总指南' => ($frontend['authoritative_doc'] ?? '')
         === 'app/code/Weline/Theme/doc/开发/Theme开发总指南.md',
+    'frontend verification includes welineModules collect' => in_array(
+        'php bin/w resource:compile welineModules',
+        is_array($frontend['verification_commands'] ?? null) ? $frontend['verification_commands'] : [],
+        true,
+    ),
+    'theme_js_module_declare_only requires collect verify' => array_reduce(
+        $norms,
+        static fn (bool $ok, mixed $norm): bool => $ok || (
+            is_array($norm)
+            && ($norm['id'] ?? '') === 'theme_js_module_declare_only'
+            && ($norm['verify'] ?? '') === 'php bin/w resource:compile welineModules'
+        ),
+        false,
+    ),
     'chapter_delivery schema present' => ($chapterDelivery['schema'] ?? '') === 'chapter-delivery.v1',
     'chapter_delivery has four acceptance segments' => ($chapterDelivery['acceptance_segments'] ?? []) === [
         'unit_test',

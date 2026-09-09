@@ -18,6 +18,7 @@ use Weline\Backend\Api\Menu\MenuReaderInterface;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\State;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Phrase\Parser;
 use Weline\Framework\Http\Request;
 use Weline\Theme\Service\Ui\IconRegistry;
 
@@ -324,7 +325,10 @@ class MenuRenderService
 
         if (str_ends_with($menuUrl, '/index')) {
             $controllerUrl = substr($menuUrl, 0, -strlen('/index'));
-            if ($controllerUrl !== '' && strpos($currentUrl, $controllerUrl . '/') === 0) {
+            // 当前路由常为 …/controller（省略 /index），须与菜单 …/controller/index 对齐
+            if ($controllerUrl !== ''
+                && ($currentUrl === $controllerUrl || str_starts_with($currentUrl, $controllerUrl . '/'))
+            ) {
                 $this->menuUrlActiveCache[$menuUrl] = true;
                 return true;
             }
@@ -474,6 +478,8 @@ class MenuRenderService
         if (isset(self::$renderedMenuCache[$cacheKey]) && self::$renderedMenuCache[$cacheKey]['expires'] >= $now) {
             return self::$renderedMenuCache[$cacheKey]['html'];
         }
+
+        Parser::prefetchWords($this->collectMenuTitles($menus));
         
         foreach ($menus as $menu) {
             if (!$this->isMenuEnabled($menu)) {
@@ -502,6 +508,24 @@ class MenuRenderService
             $html .= $this->renderMenuNode($submenu, false);
         }
         return $html;
+    }
+
+    /** @return list<string> */
+    private function collectMenuTitles(array $menus): array
+    {
+        $titles = [];
+        foreach ($menus as $menu) {
+            if (!$this->isMenuEnabled($menu)) {
+                continue;
+            }
+            $titles[] = (string)($menu['source_name'] ?? '');
+            $nodes = \array_values(\array_filter(
+                \is_array($menu['nodes'] ?? null) ? $menu['nodes'] : [],
+                static fn(array $node): bool => ($node['type'] ?? '') === 'menus',
+            ));
+            $titles = \array_merge($titles, $this->collectMenuTitles($nodes));
+        }
+        return $titles;
     }
 
     private function renderMenuNode(array $menu, bool $topLevel): string

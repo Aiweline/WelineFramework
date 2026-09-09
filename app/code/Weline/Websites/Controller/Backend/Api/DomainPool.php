@@ -18,6 +18,7 @@ use Weline\Websites\Model\DomainPool as DomainPoolModel;
 use Weline\Websites\Model\DomainPoolFlowLog;
 use Weline\Websites\Model\WebsiteDomain;
 use Weline\Websites\Service\DomainPoolFlowLogService;
+use Weline\Websites\Service\WebsiteSubPathValidator;
 
 #[Acl('Weline_Websites::domain_pool_api', '域名池API', 'code', '域名池数据查询接口', 'Weline_Websites::domain_service')]
 class DomainPool extends BaseController
@@ -281,24 +282,13 @@ class DomainPool extends BaseController
             $pathInvalid = false;
             $pathInvalidReason = '';
             if ($subPath !== '') {
-                if (\preg_match(
-                    '#^/(?:[A-Za-z0-9][A-Za-z0-9_-]{0,62})(?:/(?:[A-Za-z0-9][A-Za-z0-9_-]{0,62})){0,4}$#D',
-                    $subPath
-                ) !== 1) {
+                $pathCheck = WebsiteSubPathValidator::fromLocalizationRegistry()->validate($subPath);
+                $subPath = $pathCheck['normalized'];
+                if (!$pathCheck['valid']) {
                     $pathInvalid = true;
-                    $pathInvalidReason = (string)__('子路径格式无效。');
-                } else {
-                    $first = \strtolower((string)\explode('/', \ltrim($subPath, '/'), 2)[0]);
-                    $reserved = [
-                        'static' => true, 'pub' => true, 'media' => true, 'api' => true,
-                        'admin' => true, 'favicon.ico' => true, 'robots.txt' => true, 'sitemap.xml' => true,
-                    ];
-                    if (isset($reserved[$first])
-                        || \preg_match('/^[a-z]{2}(?:[_-][a-z0-9]{2,8}){1,2}$/D', $first) === 1
-                    ) {
-                        $pathInvalid = true;
-                        $pathInvalidReason = (string)__('子路径首段为保留字，请更换。');
-                    }
+                    $pathInvalidReason = $pathCheck['message'] !== ''
+                        ? $pathCheck['message']
+                        : (string)__('网站子路径不允许使用语言编码或货币编码。');
                 }
             }
 

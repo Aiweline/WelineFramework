@@ -1,146 +1,30 @@
 <?php
 /**
- * 配送系统管理聚合页：6 个 Tab（Theme tabs + iframe embed）
+ * 配送总览入口：不再 iframe 嵌套分区。
+ * 按 ?tab= 跳转到真实后台页，便于侧栏菜单定位与主题整页渲染。
  *
- * 页头/面包屑由 Theme backend layout（BackendPageHeaderResolver）统一渲染，本模板不再重复输出。
- *
- * @var string $activeTab region|carrier|ratetemplate|freeshippingrule|shippingservice|tracking
+ * @var string $activeTab
+ * @var string $redirectUrl
  * @var \Weline\Framework\View\Template $this
  */
-$activeTab = $activeTab ?? 'region';
-$tabs = [
-    'region' => ['icon' => 'pin', 'label' => '地区管理', 'path' => 'shipping/backend/region'],
-    'carrier' => ['icon' => 'truck', 'label' => '快递公司', 'path' => 'shipping/backend/carrier'],
-    'ratetemplate' => ['icon' => 'circle', 'label' => '费用模板', 'path' => 'shipping/backend/ratetemplate'],
-    'freeshippingrule' => ['icon' => 'circle', 'label' => '免邮规则', 'path' => 'shipping/backend/freeshippingrule'],
-    'shippingservice' => ['icon' => 'truck', 'label' => '配送服务', 'path' => 'shipping/backend/shippingservice'],
-    'tracking' => ['icon' => 'search', 'label' => '物流跟踪', 'path' => 'shipping/backend/tracking'],
-];
-if (!isset($tabs[$activeTab])) {
-    $activeTab = 'region';
-}
-foreach ($tabs as $tabKey => $tabMeta) {
-    $tabs[$tabKey]['embed_url'] = $this->getBackendUrl((string)$tabMeta['path'], ['embed' => 1]);
-}
-$h = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+$activeTab = (string)($activeTab ?? 'region');
+$redirectUrl = (string)($redirectUrl ?? '');
+$h = static fn(string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8');
 ?>
-<style>
-.weline-shipping-manager {
-    min-height: calc(100vh - 220px);
-}
-.weline-shipping-manager .w-tabs__content {
-    background: var(--weline-theme-surface, var(--backend-color-card-bg, #fff));
-    border: 1px solid var(--weline-theme-border, var(--backend-color-border, #dee2e6));
-    border-top: 0;
-    border-radius: 0 0 var(--weline-radius-md, 8px) var(--weline-radius-md, 8px);
-    overflow: hidden;
-}
-.weline-shipping-manager .w-tabs__panel {
-    height: calc(100vh - 260px);
-    min-height: 480px;
-    padding: 0 !important;
-}
-.weline-shipping-manager .w-tabs__panel[hidden] {
-    display: none !important;
-}
-.weline-shipping-manager .w-tabs__panel iframe {
-    width: 100%;
-    height: 100%;
-    border: 0;
-    display: block;
-    background: transparent;
-}
-.weline-shipping-manager .w-tabs__list {
-    background: var(--weline-theme-surface, var(--backend-color-card-bg, #fff));
-    padding-inline: var(--weline-space-2, 0.5rem);
-    border-radius: var(--weline-radius-md, 8px) var(--weline-radius-md, 8px) 0 0;
-}
-</style>
-
-<div class="w-stack weline-shipping-manager" data-testid="shipping-overview-management">
-    <section class="w-card" data-w-component="tabs" data-shipping-manager-tabs>
-        <header class="w-card__header" style="--w-pb:0;">
-            <nav class="w-tabs__list weline-shipping-manager-tabs" role="tablist" aria-label="<?= $h((string)__('配送管理分区')) ?>" data-wrap="false" data-w-overflow="auto">
-                <?php foreach ($tabs as $tabKey => $tabMeta): ?>
-                    <?php $isActive = $tabKey === $activeTab; ?>
-                    <button
-                        type="button"
-                        class="w-tabs__tab<?= $isActive ? ' active' : '' ?>"
-                        id="shipping-manager-tab-<?= $h($tabKey) ?>-trigger"
-                        role="tab"
-                        aria-controls="shipping-manager-tab-<?= $h($tabKey) ?>"
-                        aria-selected="<?= $isActive ? 'true' : 'false' ?>"
-                        tabindex="<?= $isActive ? '0' : '-1' ?>"
-                        data-tab="<?= $h($tabKey) ?>"
-                        data-url="<?= $h((string)$tabMeta['embed_url']) ?>"
-                    >
-                        <w:icon name="<?= $h((string)$tabMeta['icon']) ?>" size="sm"></w:icon>
-                        <span><?= $h((string)__($tabMeta['label'])) ?></span>
-                    </button>
-                <?php endforeach; ?>
-            </nav>
-        </header>
-
-        <div class="w-card__body" style="--w-p:0;">
-            <div class="w-tabs__content">
-                <?php foreach ($tabs as $tabKey => $tabMeta): ?>
-                    <?php $isActive = $tabKey === $activeTab; ?>
-                    <div
-                        class="w-tabs__panel"
-                        id="shipping-manager-tab-<?= $h($tabKey) ?>"
-                        role="tabpanel"
-                        aria-labelledby="shipping-manager-tab-<?= $h($tabKey) ?>-trigger"
-                        data-tab="<?= $h($tabKey) ?>"
-                        <?php if (!$isActive): ?>hidden<?php endif; ?>
-                    >
-                        <iframe
-                            title="<?= $h((string)__($tabMeta['label'])) ?>"
-                            data-url="<?= $h((string)$tabMeta['embed_url']) ?>"
-                            <?php if ($isActive): ?>src="<?= $h((string)$tabMeta['embed_url']) ?>" data-loaded="1"<?php else: ?>src="about:blank"<?php endif; ?>
-                        ></iframe>
-                    </div>
-                <?php endforeach; ?>
-            </div>
+<div class="w-stack" data-gap="md" data-testid="shipping-overview-management">
+    <?= $this->fetch('Weline_Shipping::templates/Backend/partials/manager-tabs.phtml', ['activeTab' => $activeTab]) ?>
+    <div class="w-alert" data-tone="info">
+        <w:icon name="info" size="sm"></w:icon>
+        <div class="w-alert__content">
+            <strong class="w-alert__title"><lang>配送管理</lang></strong>
+            <p><lang>各分区已改为整页主题界面（不再使用 iframe）。请点击上方 Tab，或使用左侧菜单进入对应功能。</lang></p>
+            <?php if ($redirectUrl !== ''): ?>
+                <p>
+                    <a class="w-button" data-tone="primary" data-size="sm" href="<?= $h($redirectUrl) ?>">
+                        <lang>打开当前分区</lang>
+                    </a>
+                </p>
+            <?php endif; ?>
         </div>
-    </section>
+    </div>
 </div>
-
-<script>
-(function () {
-    'use strict';
-    var root = document.querySelector('[data-shipping-manager-tabs]');
-    if (!root) return;
-
-    function loadPanel(tabKey) {
-        var panel = root.querySelector('.w-tabs__panel[data-tab="' + tabKey + '"]');
-        if (!panel) return;
-        var iframe = panel.querySelector('iframe');
-        if (!iframe || iframe.dataset.loaded === '1') return;
-        var url = iframe.getAttribute('data-url');
-        if (!url) return;
-        iframe.src = url;
-        iframe.dataset.loaded = '1';
-    }
-
-    function syncUrl(tabKey) {
-        if (!history.replaceState) return;
-        var params = new URLSearchParams(window.location.search);
-        params.set('tab', tabKey);
-        history.replaceState(null, '', window.location.pathname + '?' + params.toString());
-    }
-
-    root.addEventListener('weline:ui:tabs:change', function (event) {
-        var tabEl = event.detail && event.detail.tab;
-        if (!tabEl) return;
-        var tabKey = tabEl.getAttribute('data-tab');
-        if (!tabKey) return;
-        loadPanel(tabKey);
-        syncUrl(tabKey);
-    });
-
-    var selected = root.querySelector('[role="tab"][aria-selected="true"]');
-    if (selected) {
-        loadPanel(selected.getAttribute('data-tab'));
-    }
-})();
-</script>

@@ -89,9 +89,17 @@
         if (count === undefined || count === null) {
             return;
         }
-        document.querySelectorAll('.wishlist-count, [data-wishlist-count]').forEach(function (node) {
-            node.textContent = String(count);
-            node.hidden = Number(count) <= 0;
+        var n = Number(count) || 0;
+        var label = n > 99 ? '99+' : String(n);
+        // Only badge nodes (.wishlist-count). Never [data-wishlist-count] alone —
+        // header root also used that attr and textContent would wipe the heart icon.
+        document.querySelectorAll('.wishlist-count').forEach(function (node) {
+            node.textContent = label;
+            node.hidden = n <= 0;
+        });
+        document.querySelectorAll('[data-w-wishlist-icon]').forEach(function (root) {
+            root.setAttribute('data-wishlist-total', String(n));
+            root.classList.toggle('is-empty', n <= 0);
         });
     }
 

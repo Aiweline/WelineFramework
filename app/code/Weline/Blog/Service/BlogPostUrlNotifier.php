@@ -49,6 +49,10 @@ final class BlogPostUrlNotifier
                 'kind' => BlogArticle::KIND_POST,
                 'post_id' => (int)($row[Post::schema_fields_ID] ?? 0),
             ],
+            authorUrl: (string)($row[Post::schema_fields_AUTHOR_URL] ?? '') ?: null,
+            authorBio: (string)($row[Post::schema_fields_AUTHOR_BIO] ?? '') ?: null,
+            authorJobTitle: (string)($row[Post::schema_fields_AUTHOR_JOB_TITLE] ?? '') ?: null,
+            authorSameAs: BlogArticle::normalizeSameAs($row[Post::schema_fields_AUTHOR_SAME_AS] ?? null),
         );
 
         try {
@@ -67,7 +71,10 @@ final class BlogPostUrlNotifier
                 'url' => $article->publicUrl,
                 'website_id' => $websiteId,
                 'source' => 'Weline_Blog::post_save',
+                'title' => (string)($row[Post::schema_fields_TITLE] ?? ''),
+                'content' => (string)($row[Post::schema_fields_EXCERPT] ?? ''),
             ]);
+            // GEO feed publish is cron-owned (FeedScheduleService); do not write feeds on save.
         } catch (\Throwable) {
         }
     }

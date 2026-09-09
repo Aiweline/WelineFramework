@@ -135,8 +135,9 @@ final class MaintenanceCheckObserverTest extends TestCase
 
         $policyKernelSource = (string) \file_get_contents(BP . 'app/code/Weline/Server/Security/WorkerPolicyKernel.php');
         $unavailablePageSource = (string) \file_get_contents(BP . 'app/code/Weline/Server/Http/ServiceUnavailablePage.php');
-        self::assertStringContainsString('isMaintenanceWaitGiftPath', $policyKernelSource);
+        self::assertStringContainsString('isMaintenanceFrontendApiPath', $policyKernelSource);
         self::assertStringContainsString('/maintenance/frontend/wait-gift', $policyKernelSource);
+        self::assertStringContainsString('/maintenance/frontend/recovery-check', $policyKernelSource);
         self::assertStringContainsString('isMaintenanceStaticAssetPath', $policyKernelSource);
         self::assertStringContainsString('PATH_SCAN_STATIC_EXTENSIONS', $policyKernelSource);
         self::assertStringContainsString("'/pub/errors/'", $policyKernelSource);

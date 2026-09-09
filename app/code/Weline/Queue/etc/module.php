@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Queue',
-    "version" => '1.2.5',
+    "version" => '1.2.13',
     "requires" => [
         'Weline_Backend' => '*',
         'Weline_Cron' => '*',

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Product\Helper;
 
-use Weline\Framework\Env\WelineEnv;
+use Weline\Framework\Context;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Template;
 use Weline\Product\Service\StorefrontCatalogViewService;
@@ -12,9 +12,29 @@ use Weline\Product\Service\StorefrontCatalogViewService;
 /**
  * Resolve the current PDP storefront offer for slot widgets that render outside
  * the Detail controller assign() context.
+ *
+ * Identity comes from request Context (`input.query.id` / `slug`) after Router/Detail
+ * resolve once — do not re-parse public URLs here.
  */
 final class StorefrontOfferResolver
 {
+    private const CONTEXT_OFFER_KEY = 'product.storefront.resolved_offer';
+
+    /** Carry the selected PDP projection to independent slot templates in this request. */
+    public static function rememberResolvedOffer(array $offer): void
+    {
+        if (Context::hasCurrent()) {
+            Context::current()->set(self::CONTEXT_OFFER_KEY, $offer);
+        }
+    }
+
+    /** @return array<string, mixed> */
+    public static function currentOffer(): array
+    {
+        $offer = Context::getCurrent()?->get(self::CONTEXT_OFFER_KEY);
+        return is_array($offer) ? $offer : [];
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -28,6 +48,16 @@ final class StorefrontOfferResolver
         }
 
         $cardProductId = max(0, (int)$template->getData('card_product_id'));
+        $contextOffer = self::currentOffer();
+        if ($contextOffer !== [] && ($cardProductId === 0 || (int)($contextOffer['product_id'] ?? 0) === $cardProductId)) {
+            return self::enrichOffer($contextOffer);
+        }
+
+        $bagProduct = self::seoBagProduct();
+        if ($bagProduct !== [] && ($cardProductId === 0 || (int)($bagProduct['product_id'] ?? 0) === $cardProductId)) {
+            return self::enrichOffer($bagProduct);
+        }
+
         if ($cardProductId > 0) {
             try {
                 /** @var StorefrontCatalogViewService $catalog */
@@ -39,6 +69,7 @@ final class StorefrontOfferResolver
             } catch (\Throwable) {
                 // Optional catalog dependency; keep empty when unavailable.
             }
+            return [];
         }
 
         if (!class_exists(StorefrontCatalogViewService::class)) {
@@ -56,6 +87,11 @@ final class StorefrontOfferResolver
                 $resolved = $catalog->publishedOffer($productId);
             }
             if (is_array($resolved) && $resolved !== []) {
+                self::carryIdentity(
+                    max(0, (int)($resolved['product_id'] ?? $productId)),
+                    strtolower(trim((string)($resolved['slug'] ?? $slug))),
+                );
+
                 return $resolved;
             }
         } catch (\Throwable $e) {
@@ -109,6 +145,23 @@ final class StorefrontOfferResolver
     }
 
     /**
+     * @return array<string, mixed>
+     */
+    private static function seoBagProduct(): array
+    {
+        if (!class_exists(\Weline\Seo\Service\Head\SeoPageProfileBag::class)) {
+            return [];
+        }
+        $profile = \Weline\Seo\Service\Head\SeoPageProfileBag::pull();
+        $product = is_array($profile['product'] ?? null) ? $profile['product'] : [];
+        unset($product['storefront_offers']);
+
+        return $product;
+    }
+
+    /**
+     * Prefer Context / request params. Never re-parse URLs.
+     *
      * @return array{0:string,1:int}
      */
     private static function resolveRouteIdentity(Template $template): array
@@ -117,51 +170,35 @@ final class StorefrontOfferResolver
         $productId = 0;
 
         try {
-            $request = $template->getRequest();
-            $slug = strtolower(trim((string)$request->getParam('slug', '')));
-            $productId = (int)$request->getParam('id', 0);
+            $ctx = Context::current();
+            $slug = strtolower(trim((string)($ctx->query('slug') ?? '')));
+            $productId = (int)($ctx->query('id') ?? 0);
         } catch (\Throwable) {
-            $slug = '';
-            $productId = 0;
-        }
-
-        $publicRoute = '';
-        try {
-            $request = ObjectManager::getInstance(\Weline\Framework\Http\Request::class);
-            $publicRoute = trim(str_replace('\\', '/', (string)$request->getParam('theme_public_route', '')), '/');
-        } catch (\Throwable) {
-            $publicRoute = '';
-        }
-        if ($publicRoute === '' && isset($_GET['theme_public_route'])) {
-            $publicRoute = trim(str_replace('\\', '/', (string)$_GET['theme_public_route']), '/');
-        }
-        if ($publicRoute !== '' && preg_match('#(?:^|/)product/([a-z0-9][a-z0-9-]*)(?:/|$)#i', strtolower($publicRoute), $routeMatch) === 1) {
-            $handle = strtolower((string)$routeMatch[1]);
-            if (ctype_digit($handle)) {
-                $productId = (int)$handle;
-            } else {
-                $slug = $handle;
-            }
         }
 
         if ($slug === '' && $productId <= 0) {
-            $requestUri = (string)(WelineEnv::server('REQUEST_URI', '') ?: ($_SERVER['REQUEST_URI'] ?? ''));
-            $requestPath = (string)(parse_url($requestUri, PHP_URL_PATH) ?: '');
-            $pathParts = array_values(array_filter(
-                explode('/', trim($requestPath, '/')),
-                static fn(string $part): bool => $part !== '',
-            ));
-            $productPartIndex = array_search('product', $pathParts, true);
-            if ($productPartIndex !== false && isset($pathParts[$productPartIndex + 1])) {
-                $handle = strtolower(rawurldecode((string)$pathParts[$productPartIndex + 1]));
-                if (ctype_digit($handle)) {
-                    $productId = (int)$handle;
-                } else {
-                    $slug = $handle;
-                }
+            try {
+                $request = $template->getRequest();
+                $slug = strtolower(trim((string)$request->getParam('slug', '')));
+                $productId = (int)$request->getParam('id', 0);
+            } catch (\Throwable) {
             }
         }
 
-        return [$slug, $productId];
+        return [$slug, max(0, $productId)];
+    }
+
+    private static function carryIdentity(int $productId, string $slug): void
+    {
+        try {
+            $ctx = Context::current();
+            if ($productId > 0) {
+                $ctx->set('input.query.id', $productId);
+            }
+            if ($slug !== '') {
+                $ctx->set('input.query.slug', $slug);
+            }
+        } catch (\Throwable) {
+        }
     }
 }

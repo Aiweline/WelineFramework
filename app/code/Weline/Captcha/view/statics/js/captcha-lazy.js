@@ -9,6 +9,11 @@
  * <details> quick-add). Parallel hidden fetches saturate the browser connection pool
  * and leave /weline_captcha/frontend/challenge stuck in Network "pending" even though
  * the same URL returns 200 when opened alone.
+ *
+ * MutationObserver: document-wide childList/attributes fire densely during deferred
+ * widget load (region.list / header modules). DEV weline.js trips delivery_storm at
+ * >40 deliveries / ~250ms. Always disconnect+coalesce scans; pause observer while we
+ * write DOM (replaceWith / stylesheet / Form.mount) so our own mutations never re-enter.
  */
 (function (w, d) {
     'use strict';
@@ -19,12 +24,81 @@
 
     var DEFAULT_ROUTE = 'weline_captcha/frontend/challenge';
     var STYLESHEET_ID = 'weline-captcha-local-styles';
-    var STYLESHEET_FALLBACK = '/Weline/Captcha/view/statics/css/captcha-local.css?v=20260907-pending1';
+    var STYLESHEET_FALLBACK = '/Weline/Captcha/view/statics/css/captcha-local.css?v=20260909-mo-guard1';
     var FETCH_TIMEOUT_MS = 8000;
+    var OBSERVE_OPTIONS = {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['hidden', 'open'],
+    };
     var booted = false;
     var visibilityState = typeof WeakMap === 'function' ? new WeakMap() : null;
     var inflightByUrl = Object.create(null);
     var ensurePromiseByHost = typeof WeakMap === 'function' ? new WeakMap() : null;
+    var mutationObserver = null;
+    var observerPaused = 0;
+    var scanScheduled = false;
+
+    function pauseObserver() {
+        observerPaused += 1;
+        if (mutationObserver && observerPaused === 1) {
+            try {
+                mutationObserver.disconnect();
+            } catch (_error) {
+            }
+        }
+    }
+
+    function resumeObserver() {
+        if (observerPaused > 0) {
+            observerPaused -= 1;
+        }
+        if (mutationObserver && observerPaused === 0 && !scanScheduled) {
+            try {
+                mutationObserver.observe(d.documentElement, OBSERVE_OPTIONS);
+            } catch (_error) {
+            }
+        }
+    }
+
+    function withObserverPaused(fn) {
+        pauseObserver();
+        try {
+            return fn();
+        } finally {
+            resumeObserver();
+        }
+    }
+
+    function runDomScan() {
+        ensureAll(d, false).catch(function () {});
+        trackNewCaptchas(d);
+        refreshWhenShown(d);
+    }
+
+    function scheduleDomScan() {
+        if (scanScheduled) {
+            return;
+        }
+        scanScheduled = true;
+        pauseObserver();
+        var flush = function () {
+            try {
+                runDomScan();
+            } finally {
+                scanScheduled = false;
+                resumeObserver();
+            }
+        };
+        if (typeof w.requestAnimationFrame === 'function') {
+            w.requestAnimationFrame(function () {
+                w.requestAnimationFrame(flush);
+            });
+        } else {
+            w.setTimeout(flush, 0);
+        }
+    }
 
     function resolveStylesheetUrl() {
         var scripts = d.querySelectorAll('script[src*="captcha-lazy"]');
@@ -45,11 +119,13 @@
         if (d.getElementById(STYLESHEET_ID)) {
             return;
         }
-        var link = d.createElement('link');
-        link.id = STYLESHEET_ID;
-        link.rel = 'stylesheet';
-        link.href = resolveStylesheetUrl();
-        d.head.appendChild(link);
+        withObserverPaused(function () {
+            var link = d.createElement('link');
+            link.id = STYLESHEET_ID;
+            link.rel = 'stylesheet';
+            link.href = resolveStylesheetUrl();
+            d.head.appendChild(link);
+        });
     }
 
     function hoistFragmentStyles(wrap) {
@@ -265,23 +341,25 @@
         if (!(anchor instanceof HTMLElement)) {
             throw new Error('captcha_anchor');
         }
-        var wrap = d.createElement('div');
-        wrap.innerHTML = String(html).trim();
-        hoistFragmentStyles(wrap);
-        var node = extractChallengeNode(wrap);
-        if (!(node instanceof HTMLElement)) {
-            throw new Error('captcha_markup');
-        }
-        if (anchor.getAttribute && anchor.getAttribute('data-weline-captcha-lazy') === '1') {
-            anchor.setAttribute('data-loaded', '1');
-        }
-        anchor.replaceWith(node);
-        trackNewCaptchas(node);
-        noteVisibility(node, isEffectivelyHidden(node));
-        if (form instanceof HTMLFormElement && w.Weline && w.Weline.Form && typeof w.Weline.Form.mount === 'function') {
-            w.Weline.Form.mount(form);
-        }
-        return node;
+        return withObserverPaused(function () {
+            var wrap = d.createElement('div');
+            wrap.innerHTML = String(html).trim();
+            hoistFragmentStyles(wrap);
+            var node = extractChallengeNode(wrap);
+            if (!(node instanceof HTMLElement)) {
+                throw new Error('captcha_markup');
+            }
+            if (anchor.getAttribute && anchor.getAttribute('data-weline-captcha-lazy') === '1') {
+                anchor.setAttribute('data-loaded', '1');
+            }
+            anchor.replaceWith(node);
+            trackNewCaptchas(node);
+            noteVisibility(node, isEffectivelyHidden(node));
+            if (form instanceof HTMLFormElement && w.Weline && w.Weline.Form && typeof w.Weline.Form.mount === 'function') {
+                w.Weline.Form.mount(form);
+            }
+            return node;
+        });
     }
 
     async function ensure(target, force, prefer) {
@@ -403,30 +481,12 @@
         d.addEventListener('weline:captcha:refresh-requested', onRefreshEvent);
         d.addEventListener('weline:captcha:degrade', onDegradeEvent);
         if (typeof MutationObserver === 'function') {
-            new MutationObserver(function (records) {
-                var needShownCheck = false;
-                records.forEach(function (record) {
-                    if (record.type === 'attributes'
-                        && (record.attributeName === 'hidden' || record.attributeName === 'open')) {
-                        needShownCheck = true;
-                        refreshWhenShown(record.target);
-                    }
-                    record.addedNodes.forEach(function (node) {
-                        if (node.nodeType === 1) {
-                            ensureAll(node, false);
-                            trackNewCaptchas(node);
-                        }
-                    });
-                });
-                if (needShownCheck) {
-                    refreshWhenShown(d);
-                }
-            }).observe(d.documentElement, {
-                childList: true,
-                subtree: true,
-                attributes: true,
-                attributeFilter: ['hidden', 'open'],
+            mutationObserver = new MutationObserver(function () {
+                // Dense page mutations (widgets / region.list) would otherwise exceed
+                // DEV delivery_storm; disconnect immediately and coalesce into one scan.
+                scheduleDomScan();
             });
+            mutationObserver.observe(d.documentElement, OBSERVE_OPTIONS);
         }
         return api;
     }
@@ -439,6 +499,8 @@
         degradeToLocal: degradeToLocal,
         ensureAll: ensureAll,
         refreshWhenShown: refreshWhenShown,
+        scheduleDomScan: scheduleDomScan,
+        withObserverPaused: withObserverPaused,
         boot: boot,
     };
     w.Weline.Captcha = api;

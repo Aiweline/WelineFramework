@@ -11,6 +11,7 @@ use Weline\SystemConfig\Api\Scope\ScopeContext;
 use Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface;
 use Weline\SystemConfig\Api\Scope\ScopeIdentityCatalogInterface;
 use Weline\Theme\Api\Scoped\ThemeEditorContext;
+use Weline\Theme\Api\Scoped\ThemePublishedSnapshotReaderInterface;
 use Weline\Theme\Api\Scoped\ThemeScopedWorkspaceInterface;
 use Weline\Theme\Model\WelineTheme;
 
@@ -62,11 +63,22 @@ final class ThemeBrandResolver
                 resourceType: ThemeEditorContext::RESOURCE_APPEARANCE,
                 themeId: $themeId,
             );
-            $state = $this->workspace->load($context, $includeDraft);
-            $payloadKey = $includeDraft ? 'draft_payload' : 'published_payload';
-            $payload = \is_array($state[$payloadKey] ?? null) ? $state[$payloadKey] : [];
-            if ($payload === [] && $includeDraft && \is_array($state['published_payload'] ?? null)) {
-                $payload = $state['published_payload'];
+            if (!$includeDraft && $this->workspace instanceof ThemePublishedSnapshotReaderInterface) {
+                // 整份品牌随公开快照在工作区 Context 复用，避免每个品牌键加载编辑器溯源信息。
+                $snapshot = $this->workspace->readPublishedSnapshot($context);
+                $payload = $snapshot['payload'];
+                $sourceScope = $snapshot['source_scope'];
+            } else {
+                // 旧 Provider 和预览保留原接口及草稿回退语义。
+                $state = $this->workspace->load($context, $includeDraft);
+                $payloadKey = $includeDraft ? 'draft_payload' : 'published_payload';
+                $payload = \is_array($state[$payloadKey] ?? null) ? $state[$payloadKey] : [];
+                if ($payload === [] && $includeDraft && \is_array($state['published_payload'] ?? null)) {
+                    $payload = $state['published_payload'];
+                }
+                $sourceScope = isset($state['published_source_scope'])
+                    ? (string)$state['published_source_scope']
+                    : (isset($state['parent_source_scope']) ? (string)$state['parent_source_scope'] : null);
             }
             $brand = \is_array($payload['brand'] ?? null) ? $payload['brand'] : [];
             $result = $empty;
@@ -76,9 +88,7 @@ final class ThemeBrandResolver
                     $result[$key] = $value;
                 }
             }
-            $result['source_scope'] = isset($state['published_source_scope'])
-                ? (string)$state['published_source_scope']
-                : (isset($state['parent_source_scope']) ? (string)$state['parent_source_scope'] : null);
+            $result['source_scope'] = $sourceScope;
 
             return $result;
         } catch (\Throwable) {
@@ -101,9 +111,11 @@ final class ThemeBrandResolver
     {
         try {
             $identity = RequestContext::scopeIdentity();
-            if (!$identity instanceof ScopeIdentity) {
-                $identity = ScopeIdentity::global();
+            if ($identity instanceof ScopeIdentity) {
+                // 安装入口已验证并冻结当前请求身份；这里只计算同一身份的范围回退链。
+                return $this->scopes->contextFromIdentity($identity);
             }
+            $identity = ScopeIdentity::global();
             $authoritative = $this->catalog->authoritativeIdentity($identity);
 
             return $this->scopes->contextFromIdentity($authoritative);

@@ -6,6 +6,8 @@ require_once __DIR__ . '/Support.php';
 require_once __DIR__ . '/ContextResponseBudget.php';
 require_once __DIR__ . '/HardConstraintsCatalog.php';
 require_once __DIR__ . '/GuidanceWorkflowCatalog.php';
+require_once __DIR__ . '/McpSkillCatalog.php';
+require_once __DIR__ . '/DocSkillCatalog.php';
 require_once __DIR__ . '/Config.php';
 require_once __DIR__ . '/RepositoryScope.php';
 require_once __DIR__ . '/SessionIdentity.php';

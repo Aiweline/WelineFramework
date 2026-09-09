@@ -16,6 +16,11 @@
       var resource=api.resource('developer_workspace');
       var payload={url:url, method:options.method||'GET', headers:options.headers||{}, body:body||''};
       var callOptions={keepBusinessResult:true,silent:true};
+      var timeoutMs=options.requestTimeoutMs||options.timeoutMs||options.timeout;
+      if(timeoutMs!==undefined&&timeoutMs!==null&&timeoutMs!==''){
+        callOptions.requestTimeoutMs=timeoutMs;
+        callOptions.timeoutMs=timeoutMs;
+      }
       return /\/dev\/tool\/rest\//i.test(urlStr)
         ?resource.panelRequest(payload,callOptions)
         :resource.adminRequest(payload,callOptions);
@@ -187,12 +192,15 @@
                 headers['Content-Type'] = headers['Content-Type'] || 'application/json';
                 body = JSON.stringify(body);
             }
+            var requestTimeoutMs = options.requestTimeoutMs || options.timeoutMs || options.timeout;
             return (window.Weline.developerWorkspaceRequest||function(u,o){return window.Weline.adminRequest('developer_workspace',u,o);})( apiUrl(path, options.params || {}), {
                 method: options.method || (body !== undefined && body !== null ? 'POST' : 'GET'),
                 credentials: 'same-origin',
                 cache: options.cache || 'no-store',
                 headers: headers,
-                body: body
+                body: body,
+                requestTimeoutMs: requestTimeoutMs,
+                timeoutMs: requestTimeoutMs
             }).then(function (response) {
                 return response.text().then(function (text) {
                     var payload = null;

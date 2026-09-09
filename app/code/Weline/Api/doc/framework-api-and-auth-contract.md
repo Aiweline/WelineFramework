@@ -68,6 +68,8 @@ REST 接口按 `Api/Rest/V1/*` 组织。这里更适合：
 
 ## 5. 令牌与限制
 
+前台 API 的显式凭据优先于浏览器前台 Session：沿既有 `getTokenFromRequest` 顺序读取 Bearer、`X-API-Token`、query/post `token`。存在凭据时执行正常 Token 验证及账号、IP/UA 检查，成功后绑定其可信身份；不因已有 Session 跳过验证。没有显式凭据时继续使用原 Session 路径。此顺序保证文档调试器的同源 Cookie 不会覆盖用户选用的 API 身份，后续路由 ACL 保持生效。
+
 模块内已有这些统一能力：
 
 - `TokenService`

@@ -298,13 +298,14 @@
   border: 0;
 }
 
-/* 默认收起：只保留已选地址卡；完整列表在 picking 时展示 */
+/* 默认收起：只保留已选地址卡；完整列表在 picking 时展示。
+ * 「使用新地址」须在 collapsed 仍可见（覆盖旧缓存里 display:none 误伤规则）。 */
 .w-shipping-checkout-address[data-mode="collapsed"] [data-address-card]:not(.is-selected) {
   display: none;
 }
 
 .w-shipping-checkout-address[data-mode="collapsed"] [data-add-address] {
-  display: none;
+  display: inline-block;
 }
 
 .w-shipping-checkout-address[data-mode="collapsed"] [data-address-radio] {

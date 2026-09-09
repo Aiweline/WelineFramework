@@ -26,6 +26,16 @@ final class Router implements RouterInterface
         }
 
         $normalizedPath = strtolower(trim(str_replace('\\', '/', $path), '/'));
+        if (in_array($normalizedPath, [
+            'new-arrivals/rss.xml',
+            'newarrivals/rss.xml',
+            'new_arrivals/rss.xml',
+        ], true)) {
+            $path = 'weline_product/frontend/new-arrivals-rss';
+            $rule['module'] = 'Weline_Product';
+
+            return;
+        }
         if (in_array($normalizedPath, ['new-arrivals', 'newarrivals', 'new_arrivals'], true)) {
             $path = self::NEW_ARRIVALS_ROUTE;
             $rule['module'] = 'Weline_Product';
@@ -91,17 +101,75 @@ final class Router implements RouterInterface
             return;
         }
 
-        if (preg_match('#^product/([a-z][a-z0-9]*(?:-[a-z0-9]+)*)$#D', $normalizedPath, $matches) !== 1) {
+        if (preg_match('#^product/([a-z][a-z0-9]*(?:-[a-z0-9]+)*)$#D', $normalizedPath, $matches) === 1) {
+            $slug = (string)$matches[1];
+            if ($slug === '') {
+                return;
+            }
+
+            $path = self::DETAIL_ROUTE;
+            $rule['module'] = 'Weline_Product';
+            \Weline\Framework\Context::current()->set('input.query.slug', $slug);
+
             return;
         }
 
-        $slug = (string)$matches[1];
-        if ($slug === '') {
-            return;
+        // /product?id=… or /product?slug=… — claim before Theme shell can steal bare "product".
+        if ($normalizedPath === 'product') {
+            [$querySlug, $queryProductId] = self::queryIdentity();
+            if ($queryProductId <= 0 && $querySlug === '') {
+                return;
+            }
+
+            $path = self::DETAIL_ROUTE;
+            $rule['module'] = 'Weline_Product';
+            if ($queryProductId > 0) {
+                \Weline\Framework\Context::current()->set('input.query.id', $queryProductId);
+            }
+            if ($querySlug !== '') {
+                \Weline\Framework\Context::current()->set('input.query.slug', $querySlug);
+            }
+        }
+    }
+
+    /**
+     * @return array{0:string,1:int}
+     */
+    private static function queryIdentity(): array
+    {
+        $slug = '';
+        $productId = 0;
+
+        try {
+            $ctx = \Weline\Framework\Context::current();
+            $slug = strtolower(trim((string)($ctx->query('slug') ?? '')));
+            $productId = (int)($ctx->query('id') ?? 0);
+        } catch (\Throwable) {
         }
 
-        $path = self::DETAIL_ROUTE;
-        $rule['module'] = 'Weline_Product';
-        \Weline\Framework\Context::current()->set('input.query.slug', $slug);
+        if ($slug === '' && isset($_GET['slug']) && is_scalar($_GET['slug'])) {
+            $slug = strtolower(trim((string)$_GET['slug']));
+        }
+        if ($productId <= 0 && isset($_GET['id']) && is_scalar($_GET['id'])) {
+            $productId = (int)$_GET['id'];
+        }
+
+        if ($slug === '' || $productId <= 0) {
+            try {
+                /** @var \Weline\Framework\Http\Request $request */
+                $request = \Weline\Framework\Manager\ObjectManager::getInstance(
+                    \Weline\Framework\Http\Request::class
+                );
+                if ($productId <= 0) {
+                    $productId = (int)$request->getParam('id', 0);
+                }
+                if ($slug === '') {
+                    $slug = strtolower(trim((string)$request->getParam('slug', '')));
+                }
+            } catch (\Throwable) {
+            }
+        }
+
+        return [$slug, max(0, $productId)];
     }
 }

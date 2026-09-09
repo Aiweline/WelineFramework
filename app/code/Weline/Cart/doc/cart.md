@@ -28,11 +28,11 @@
 ## 售卖类型 `cart_type`（ToC/ToB 一期合同）
 
 - **CommerceCartType SPI + Registry**：Cart 内置 `toc`；**不**依赖 `Weline_B2B`。B2B 启用后向本 Registry 注册 `tob`（须同时向 Order Registry 注册；单边禁止）。
-- **权威**：写入前 code ∈ Registry；会话/`selling_mode` 只是偏好，须经 `SellingTypeResolver`；禁止请求体直写未解析 `cart_type`；与行级 `business_code` 正交。
+- **权威**：写入前 code ∈ Registry；会话/`selling_mode` 只是偏好，须经 `SellingTypeResolver`；禁止请求体直写未解析 `cart_type`；与行级 `business_code` 正交。**未注册偏好**（含 Provider 已卸载的残留 `tob`）解析时 **fail-soft 到 `toc`**，不抛热路径 500。
 - **可选 membership**：`Api/CommerceTypeMembershipCheckerInterface` + `CommerceTypeMembershipGate`（RuntimeProviderResolver）；B2B provides 实现。未配置时非 toc fail closed；Cart **不** import B2B。
 - **分车键**：由 **Scope + owner** 升级为 **Scope + owner + registered_cart_type**。UI 切换类型只切换当前车视图，**不合并**异型车；同 Scope 可并存 toc 车与 tob 车。
 - **旧键迁移**：无 `cart_type` 的历史键视为 **`toc`**，读路径一次迁移写入新键；新 tob 车只用新键。
-- **mismatch fail closed**：加购/改删/合车时目标类型未注册、与车头类型不一致、或行类型混合 → 拒绝；跨类型 `mergeGuest` 禁止。
+- **mismatch fail closed**：加购/改删/合车时目标类型与车头类型不一致、或行类型混合 → 拒绝；跨类型 `mergeGuest` 禁止。未注册目标 code 在解析层已回落 toc。
 - **无游客 tob**：`cart_type=tob` 强制已登录客户；未登录切批发 → 登录回跳后再申请/进 tob 车。
 - **摘要**：`getCart` / Query 摘要始终含 `cart_type` + `type_payload`（由 Type Provider / B2B builder 填充；toc 可带 deal/券摘要，tob 标明 `discounts_applied=false` 等）。
 - **`presentLine` 必须携带 `cart_type`**：snapshot resolve / Assembler context 带当前车类型；tob 走 B2B 候选价（或跳过零售 deal 重算），禁止无类型重解析把批发价盖回零售价。
@@ -53,7 +53,11 @@
 
 ## 持久化与登录合车（TEST-P2E-02）
 
-- Store：`CartCacheStore`（`w_cache('cart')` Custom 全逃逸，跨 Worker）；单测用 `CartMemoryStore`
+- Store：`CartDbStore`（表 `weline_cart`，跨 Worker / 跨进程权威持久化）；单测用 `CartMemoryStore`；`CartCacheStore` 仅为遗留非默认
+- 过期策略（`CartPersistencePolicy`）：
+  - **游客**：`expires_at = now + 15 天`；Cookie `weline_cart_guest_token`、前端 `weline.cart.guest_session` 同 TTL；临近过期 `renewGuestSession` 再续 15 天；读路径过期行删除
+  - **登录客户**：`expires_at = NULL`（永久）；加购/改删/合车写路径刷新 `updated_at`
+- 写失败抛 `cart_persist_failed`（禁止假成功加购）
 - Cookie：`weline_cart_guest_token`（`issueGuestToken` 写入）
 - 只读 `getCart`/`getCart`：游客尚未持有 `guest_token`（无 Cookie/参数）时返回空车成功摘要，不抛 `cart_guest_token_required`；加购/改删/合车仍必须有 token
 - Observer：`Weline_Customer_Account_Login::login_after` → `LoginMergeGuestCart`
@@ -77,7 +81,7 @@
 | Public boundary | `Api/CartSelectionHash.php`、`Api/CartPriceSellabilityGate.php`、`Api/CartPriceSellabilityProviderInterface.php`、`Api/CheckoutCartSnapshotInterface.php`、`Api/CartScopeResolverInterface.php` |
 | Service | `Service/CartService.php` |
 | Scope / identity boundary | `Service/CartScopeResolver.php`、`CartCurrentCustomerResolver.php` |
-| Store | `Service/CartCacheStore.php` / `CartMemoryStore.php` |
+| Store | `Service/CartDbStore.php`（权威）/ `CartMemoryStore.php`（单测）/ `CartCacheStore.php`（遗留） |
 | Product Provider | `Product/extends/module/Weline_Cart/CartItemSnapshotProvider/ProductCartItemSnapshotProvider.php`、`ProductCatalogCartItemSnapshotResolver.php` |
 | Query | `w_query('cart','add'|'mergeGuest'|'getCart'|'clear'|'issueGuestToken'|…)` |
 

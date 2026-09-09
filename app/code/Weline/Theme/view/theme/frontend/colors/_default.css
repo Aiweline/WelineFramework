@@ -27,18 +27,25 @@
     --color-primary-text-emphasis: #115e59;
     --color-on-primary: #f8fafc;
 
-    /* ========== 文本色 ========== */
-    --color-text-primary: #111827;
+    /* ========== 文本色（默认可继承） ========== */
+    --color-text: #111827;
+    --color-text-rgb: 17, 24, 39;
+    --color-emphasis-rgb: 17, 24, 39;
+    --color-text-primary: var(--color-text);
     --color-text-secondary: #4b5563;
     --color-text-tertiary: #6b7280;
+    --color-text-subtle: #6b7280;
     --color-text-disabled: #c7c7c7;
     --color-text-dark: #111827;
     --color-text-muted: #4b5563;
     --color-text-placeholder: #9ca3af;
+    --color-text-inverse: #ffffff;
     --color-text-light: #f8fafc;
     --color-text-light-secondary: #e5e7eb;
+    --color-text-on-dark: #f8fafc;
+    --color-text-on-dark-muted: #cbd5e1;
 
-    /* ========== 背景色 ========== */
+    /* ========== 背景 / 表面（默认可继承） ========== */
     --color-bg-canvas: #ffffff;
     --color-bg-canvas-rgb: 255, 255, 255;
     --weline-chrome-body-bg: var(--color-bg-canvas);
@@ -50,10 +57,17 @@
     --color-bg-dark: #1f2937;
     --color-bg-dark-secondary: #111827;
     --color-bg-dark-tertiary: #374151;
+    --color-bg-overlay: rgb(15 23 42 / 0.42);
+    --color-surface: var(--color-bg-primary);
+    --color-surface-subtle: var(--color-bg-secondary);
+    --color-surface-muted: var(--color-bg-tertiary);
     --color-surface-hover: #f3f4f6;
+    --color-surface-disabled: #f3f4f6;
 
-    /* ========== 边框色 ========== */
+    /* ========== 边框色（默认可继承） ========== */
     --color-border-default: #e5e7eb;
+    --color-border-subtle: #f3f4f6;
+    --color-border-strong: #9ca3af;
     --color-border-emphasis: #9ca3af;
     --color-border-focus: #0f766e;
     --color-border-light: #f3f4f6;
@@ -65,13 +79,52 @@
     --color-accent-medium: rgba(15, 118, 110, 0.14);
     --color-accent-dark: rgba(15, 118, 110, 0.22);
 
-    /* ========== 功能色 ========== */
+    /* ========== 次色（secondary 全家 — 默认可继承） ========== */
+    --color-secondary: #475569;
+    --color-secondary-rgb: 71, 85, 105;
+    --color-secondary-hover: #334155;
+    --color-secondary-active: #1e293b;
+    --color-on-secondary: #ffffff;
+    --color-secondary-bg-subtle: #e2e8f0;
+    --color-secondary-border-subtle: #94a3b8;
+    --color-secondary-text-emphasis: #334155;
+
+    /* ========== 功能色（status 全家 — 默认可继承） ========== */
     --color-success: #15803d;
+    --color-success-rgb: 21, 128, 61;
+    --color-success-hover: #166534;
+    --color-success-active: #14532d;
+    --color-on-success: #ffffff;
+    --color-success-bg-subtle: #dcfce7;
+    --color-success-border-subtle: #86efac;
+    --color-success-text-emphasis: #166534;
     --color-warning: #d97706;
-    --color-error: #dc2626;
-    --color-error-hover: #b91c1c;
+    --color-warning-rgb: 217, 119, 6;
+    --color-warning-hover: #b45309;
+    --color-warning-active: #92400e;
+    --color-on-warning: #ffffff;
+    --color-warning-bg-subtle: #fef3c7;
+    --color-warning-border-subtle: #fcd34d;
+    --color-warning-text-emphasis: #92400e;
+    --color-danger: #dc2626;
+    --color-danger-rgb: 220, 38, 38;
+    --color-danger-hover: #b91c1c;
+    --color-danger-active: #991b1b;
+    --color-on-danger: #ffffff;
+    --color-danger-bg-subtle: #fee2e2;
+    --color-danger-border-subtle: #fca5a5;
+    --color-danger-text-emphasis: #991b1b;
+    --color-error: var(--color-danger);
+    --color-error-hover: var(--color-danger-hover);
     --color-error-light: rgba(220, 38, 38, 0.08);
     --color-info: #0369a1;
+    --color-info-rgb: 3, 105, 161;
+    --color-info-hover: #075985;
+    --color-info-active: #0c4a6e;
+    --color-on-info: #ffffff;
+    --color-info-bg-subtle: #e0f2fe;
+    --color-info-border-subtle: #7dd3fc;
+    --color-info-text-emphasis: #075985;
 
     /* ========== 链接色（与主色同族） ========== */
     --color-link: #0f766e;

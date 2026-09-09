@@ -19,7 +19,7 @@ final class FooterHelpLinksSlotContractTest extends TestCase
 
         self::assertStringContainsString('<w:slot id="footer-help-links"', $src);
         self::assertStringContainsString(
-            'accept="footer-my-account-link,footer-my-orders-link,footer-shipping-info-link,footer-returns-policy-link,footer-help-center-link,footer-contact-service-link,layout-footer-help-links"',
+            'accept="footer-my-account-link,footer-my-orders-link,footer-shipping-info-link,footer-returns-policy-link,footer-faq-link,footer-contact-service-link,layout-footer-help-links"',
             $src
         );
         self::assertStringContainsString("\$groupKey === 'help'", $src);

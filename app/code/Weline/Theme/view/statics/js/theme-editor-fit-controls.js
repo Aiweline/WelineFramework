@@ -1,15 +1,13 @@
 /**
- * Fit Theme Editor toolbar Scope / language (and sibling selects) to the
- * currently selected label width so leftover chrome does not reserve empty space.
+ * Fit Theme Editor toolbar Scope / language (and sibling selects) to available
+ * toolbar space. Long Scope labels ellipsize; secondary selects overflow to「更多」.
  */
 (function () {
     'use strict';
 
-    const MAX_SELECT_PX = 360;
-    const MAX_SCOPE_PX = 480;
+    const MAX_SELECT_PX = 240;
     const SELECT_EXTRA_FALLBACK_PX = 48;
-    const SCOPE_EXTRA_FALLBACK_PX = 64;
-    const FIT_SAFETY_PX = 20;
+    const FIT_SAFETY_PX = 12;
 
     let mirror = null;
     let scheduled = 0;
@@ -70,38 +68,66 @@
         select.style.setProperty('width', `${next}px`);
         select.style.setProperty('max-inline-size', `${MAX_SELECT_PX}px`);
         select.dataset.wFitWidth = '1';
+        if (label) {
+            select.title = label;
+        }
+    }
+
+    function clearInlineBoxSize(el) {
+        if (!(el instanceof HTMLElement)) return;
+        // Stale fit passes used to hardcode up to 480px on the trigger; wipe them
+        // so CSS (.toolbar-select-field-scope ~14rem) is the only width source.
+        [
+            'width',
+            'inline-size',
+            'max-width',
+            'max-inline-size',
+            'min-width',
+            'min-inline-size',
+            'flex',
+            'flex-basis',
+        ].forEach((prop) => {
+            el.style.removeProperty(prop);
+        });
     }
 
     function fitScopeField(field) {
         if (!(field instanceof HTMLElement)) return;
         const display = field.querySelector('.w-tree-select-display, .w-scope-select-display, [data-w-scope-display]');
         const trigger = field.querySelector('.w-tree-select-trigger, .w-scope-select-trigger, [data-w-scope-trigger]');
-        const target = trigger || field.querySelector('.w-tree-select, .w-scope-select') || field;
-        const source = display instanceof HTMLElement ? display : target;
-        const label = String(
-            source?.getAttribute?.('title')
-            || source?.getAttribute?.('aria-label')
-            || source?.textContent
+        const tree = field.querySelector('.w-tree-select, .w-scope-select');
+        const selected = tree?.querySelector?.('[data-w-scope-node].selected, [data-w-scope-node][aria-selected="true"]');
+        const tip = String(
+            selected?.getAttribute?.('data-title-label')
+            || display?.getAttribute?.('title')
+            || trigger?.getAttribute?.('title')
+            || display?.textContent
+            || trigger?.textContent
             || ''
         ).replace(/\s+/g, ' ').trim();
-        const textWidth = measureText(label || 'Scope', source);
-        const chrome = horizontalChrome(trigger instanceof HTMLElement ? trigger : target, SCOPE_EXTRA_FALLBACK_PX);
-        const next = clamp(textWidth + chrome + FIT_SAFETY_PX, 120, MAX_SCOPE_PX);
-        if (trigger instanceof HTMLElement) {
-            trigger.style.setProperty('inline-size', `${next}px`);
-            trigger.style.setProperty('width', `${next}px`);
-            trigger.style.setProperty('max-inline-size', `${MAX_SCOPE_PX}px`);
+        // Disabled <button> often suppresses native title tooltips — hang tip on wrappers too.
+        if (tip) {
+            if (display instanceof HTMLElement) {
+                display.setAttribute('title', tip);
+            }
+            if (trigger instanceof HTMLElement) {
+                trigger.setAttribute('title', tip);
+            }
+            if (tree instanceof HTMLElement) {
+                tree.setAttribute('title', tip);
+            }
+            field.setAttribute('title', tip);
         }
-        const tree = field.querySelector('.w-tree-select, .w-scope-select');
-        if (tree instanceof HTMLElement) {
-            tree.style.setProperty('inline-size', 'auto');
-            tree.style.setProperty('width', 'auto');
-            tree.style.setProperty('max-inline-size', `${MAX_SCOPE_PX}px`);
+
+        clearInlineBoxSize(field);
+        clearInlineBoxSize(tree);
+        clearInlineBoxSize(trigger);
+        if (display instanceof HTMLElement) {
+            ['max-inline-size', 'min-inline-size', 'width', 'inline-size'].forEach((prop) => {
+                display.style.removeProperty(prop);
+            });
         }
-        field.style.setProperty('inline-size', 'auto');
-        field.style.setProperty('width', 'auto');
-        field.style.setProperty('max-inline-size', `min(${MAX_SCOPE_PX}px, 48vw)`);
-        field.dataset.wFitWidth = '1';
+        delete field.dataset.wFitWidth;
     }
 
     function relayoutOverflow() {
@@ -171,6 +197,8 @@
             resizeObserver.observe(root);
             const toolbar = root.querySelector('.editor-toolbar');
             if (toolbar) resizeObserver.observe(toolbar);
+            const left = root.querySelector('.toolbar-left');
+            if (left) resizeObserver.observe(left);
         }
 
         window.addEventListener('resize', scheduleFit);

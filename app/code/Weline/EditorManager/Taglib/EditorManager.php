@@ -68,11 +68,17 @@ class EditorManager implements TaglibInterface
             # 检查是否有配置默认的编辑器管理器
             /** @var BackendUserConfigStore $backendUserConfig */
             $backendUserConfig = ObjectManager::getInstance(BackendUserConfigStore::class);
-            $userConfigEditorManager = $backendUserConfig->getConfig('editor-manager');
-            if (empty($userConfigEditorManager)) {
-                $userConfigEditorManager = $backendUserConfig->getDefaultConfig('editor-manager');
+            $userConfigEditorManager = trim((string)$backendUserConfig->getConfig(
+                'editor-manager',
+                'Weline_EditorManager',
+            ));
+            if ($userConfigEditorManager === '') {
+                $userConfigEditorManager = trim((string)$backendUserConfig->getDefaultConfigForKey(
+                    'editor-manager',
+                    'Weline_EditorManager',
+                ));
             }
-            if (empty($userConfigEditorManager)) {
+            if ($userConfigEditorManager === '') {
                 $userConfigEditorManager = 'local';
             }
             $cacheKey = json_encode(func_get_args()) . $userConfigEditorManager;
@@ -102,15 +108,23 @@ class EditorManager implements TaglibInterface
                         }
                     }
                 }
+                if ($userConfigEditorManager === 'local' && isset($editorManagers['ckeditor'])) {
+                    $userConfigEditorManager = 'ckeditor';
+                }
                 if (count($editorManagers) > 1 and $userConfigEditorManager === 'local') {
+                    unset($editorManagers['local']);
                     /**@var \Weline\EditorManager\EditorManager $editorManager */
                     $editorManager = array_pop($editorManagers);
                 } else {
                     if (!isset($editorManagers[$userConfigEditorManager])) {
                         ObjectManager::getInstance(MessageManager::class)->addWarning(__('配置的编辑器管理器不存在! 编辑器管理器名：%{1}', $userConfigEditorManager));
-                        # 使用第一个编辑器管理器作为默认的编辑器管理器
-                        /**@var \Weline\EditorManager\EditorManager $editorManager */
-                        $editorManager = array_shift($editorManagers);
+                        if (isset($editorManagers['ckeditor'])) {
+                            /**@var \Weline\EditorManager\EditorManager $editorManager */
+                            $editorManager = $editorManagers['ckeditor'];
+                        } else {
+                            /**@var \Weline\EditorManager\EditorManager $editorManager */
+                            $editorManager = array_shift($editorManagers);
+                        }
                     } else {
                         /**@var \Weline\EditorManager\EditorManager $editorManager */
                         $editorManager = $editorManagers[$userConfigEditorManager];

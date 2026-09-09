@@ -33,11 +33,22 @@ final class CheckoutHtmlRenderer
             $campaignLabel = trim((string)($item['campaign_label'] ?? ''));
             $campaignUrl = trim((string)($item['campaign_url'] ?? ''));
             $sku = trim((string)($item['sku'] ?? ''));
+            $found = !\array_key_exists('found', $item) || !empty($item['found']);
+            $sellable = !\array_key_exists('sellable', $item) || !empty($item['sellable']);
+            $lineMessage = trim((string)($item['message'] ?? ''));
             $metaHtml = '';
             if ($sku !== '') {
                 $metaHtml .= '<small class="weline-checkout__item-sku">SKU: ' . $this->e($sku) . '</small>';
             }
             $metaHtml .= $this->renderOptionsHtml($item);
+            if (!$found || !$sellable) {
+                if ($lineMessage === '') {
+                    $lineMessage = !$found
+                        ? (string)__('该商品已不存在或已下架，请从购物车移除')
+                        : (string)__('该商品暂不可售，请从购物车移除或稍后再试');
+                }
+                $metaHtml .= '<p class="weline-checkout__item-issue">' . $this->e($lineMessage) . '</p>';
+            }
             $image = $this->resolveItemImage($item);
             $thumbHtml = $image['src'] !== ''
                 ? '<img class="weline-checkout__item-thumb" src="' . $this->e($image['src']) . '" alt=""'
@@ -67,7 +78,9 @@ final class CheckoutHtmlRenderer
             // Price floats top-right inside main so the title can use the
             // full summary column width (wrapping around the price), instead
             // of being crushed by a competing flex/grid track.
-            $html .= '<div class="weline-checkout__item" data-checkout-item>'
+            $issueClass = (!$found || !$sellable) ? ' is-unavailable' : '';
+            $html .= '<div class="weline-checkout__item' . $issueClass . '" data-checkout-item'
+                . ((!$found || !$sellable) ? ' data-checkout-item-blocked="1"' : '') . '>'
                 . $thumbHtml
                 . '<div class="weline-checkout__item-main">'
                 . $priceHtml

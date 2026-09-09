@@ -136,6 +136,8 @@ return [
             'editor' => ['ttl' => 86400, 'permanent' => true],
             'api_doc' => ['ttl' => 3600],
             'fpc' => ['ttl' => 3600, 'taggable' => true],
+            // Worker SESSION payload: L1 process array + this pool (WLS hijacks file→wls_memory).
+            'frontend_worker_credential' => ['ttl' => 1800],
         ],
         'status' => [
             'config' => 1,
@@ -212,15 +214,20 @@ return [
     'wls' => [
         'host' => '0.0.0.0',
         'port' => 443,
-        // Browser Worker credential authority. local is single-host; redis is
-        // dev/test snapshot-CAS only; database is the per-record durable store.
-        'frontend_worker_session_store_driver' => 'local', // local | redis | database
+        // Browser Worker credential authority. Unset/default → cache (follows
+        // cache.pools.frontend_worker_credential → wls_memory/redis/file).
+        // Explicit: cache | local | redis | database.
+        'frontend_worker_session_store_driver' => 'cache', // cache | local | redis | database
         'frontend_worker_credential_store' => [
-            // Required only when the database driver is enabled. Provision a
-            // random 32-byte key outside the repository and encode base64url.
+            // Required when the database driver is enabled.
+            // Replace the sample key before any shared/prod deploy; 32-byte base64url.
             'version' => 1,
-            'active_key_id' => 'replace-me',
+            'active_key_id' => 'local-dev',
             'keys' => [
+                'local-dev' => [
+                    'status' => 'active',
+                    'key_base64url' => 'n6Wp3CTYn5gsO4u2go7EiBU6X-ZNU8ItqhBn_YYS50c',
+                ],
                 // '2026-q3' => ['status' => 'active', 'key_base64url' => 'replace-with-32-byte-base64url'],
                 // '2026-q2' => ['status' => 'decrypt_only', 'key_base64url' => 'retained-during-rotation'],
             ],
@@ -273,13 +280,19 @@ return [
             // 完整业务页在 READY 后异步预热，避免启动渲染占用 Worker 的 IPC READY 通道。
             // 需要严格启动门禁时再显式设为 true。
             'dynamic_ready_gate_enabled' => false,
+            // 首个匿名店面请求在 READY 前完成有限 FPC 构建，避免访客与冷构建竞争。
+            // 只取模块通过 FpcWarmupProviderInterface 发布的路径，失败默认放行 Worker。
+            'storefront_ready_gate_enabled' => true,
+            'storefront_ready_gate_paths' => [],
+            'storefront_ready_gate_max_paths' => 4,
+            'storefront_ready_gate_fail_open' => true,
             // 留空由各店面模块通过 FpcWarmupProviderInterface 发布真实公开路径。
             'dynamic_ready_gate_paths' => [],
             'dynamic_ready_gate_max_paths' => 1,
             // 选定业务 Worker READY 后仅在本地 listener 预热一个公开店面路径，
             // 通过统一 FPC 构建与命中探针填充共享/进程缓存；不会占用 READY 握手。
             'storefront_deferred_warmup_enabled' => true,
-            'storefront_deferred_warmup_max_paths' => 1,
+            'storefront_deferred_warmup_max_paths' => 6,
             'storefront_deferred_warmup_peer_wait_ms' => 5000,
             // 只有指定 Worker 执行冷构建，其余 Worker 复用共享 FPC；设为 0 可恢复全 Worker 预热。
             'storefront_deferred_warmup_owner_worker_id' => 1,
@@ -557,8 +570,8 @@ return [
             'worker_reload_min_ready' => 'auto',
             // drain_timeout_sec：滚动重启/单实例 DRAIN 时 Master 等待 draining_complete 的上限（秒）；下发给 Worker 作强制收尾上限。
             'drain_timeout_sec' => 5,
-            // stop_all_drain_wait_sec：实例主动停机的连接感知排空硬截止（秒）；默认 300，Master 额外保留 1 秒收取最终计数 ACK。
-            'stop_all_drain_wait_sec' => 300,
+            // stop_all_drain_wait_sec：实例主动停机的连接感知排空硬截止（秒）；默认 8（与 Worker stop 短超时对齐），Master 额外保留 1 秒收取最终计数 ACK。显式配置可提高到 7200。
+            'stop_all_drain_wait_sec' => 8,
             // reload_drain_timeout_sec：代码重载专用 DRAIN 上限。长连接会主动断开重连，不允许把滚动重载拖到分钟级。
             'reload_drain_timeout_sec' => 1,
             // maintenance_connection_drain_timeout_sec：启用维护时，Dispatcher 已切至维护 Worker 后，等待各业务 Worker 排空存量 TCP 再 ACK 的上限（秒）。

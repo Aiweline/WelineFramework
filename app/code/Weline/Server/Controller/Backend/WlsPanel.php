@@ -16,6 +16,9 @@ use Weline\Server\Service\WlsPanelPluginRefreshService;
 use Weline\Server\Service\WlsPanelProjectConfigCenterService;
 use Weline\Server\Service\WlsPanelProjectRegistryService;
 use Weline\Server\Service\WlsPanelSecurityDataService;
+use Weline\Server\Service\Security\SecurityProbeCatalog;
+use Weline\Server\Service\Security\SecurityProbeTokenService;
+use Weline\Server\Security\AttackDetector;
 
 #[Acl('Weline_Server::wls_panel', 'WLS 面板', 'grid', '访问 WLS 面板', 'Weline_Backend::system_service_group', accessMode: Acl::ACCESS_MODE_READ)]
 class WlsPanel extends BackendController
@@ -141,6 +144,61 @@ class WlsPanel extends BackendController
     public function getSecurityAudit(): string
     {
         return $this->renderPanel('security_audit', (string)__('WLS 安全策略审计'));
+    }
+
+    #[Acl('Weline_Server::wls_panel_security_probes', '运行 WLS 安全探针', 'shield', '运行 WLS 安全攻击用例探针', 'Weline_Server::wls_panel_security', accessMode: Acl::ACCESS_MODE_READ)]
+    public function getSecurityProbes(): string
+    {
+        return $this->renderPanel('security_probes', (string)__('WLS 安全探针'));
+    }
+
+    #[Acl('Weline_Server::wls_panel_security_probes_unlock', '解封探针测试 IP', 'unlock', '解封安全探针实战封禁产生的本机 IP', 'Weline_Server::wls_panel_security', accessMode: Acl::ACCESS_MODE_EDIT)]
+    public function postSecurityProbesUnlock(): string
+    {
+        $clientIp = \trim((string)$this->request->getClientIp());
+        if ($clientIp === '') {
+            $clientIp = \trim((string)($this->request->getServer('REMOTE_ADDR') ?? ''));
+        }
+        if ($clientIp === '' || $clientIp === '0.0.0.0') {
+            $this->request->getResponse()->setHeader('Content-Type', 'application/json; charset=utf-8');
+            echo \json_encode([
+                'success' => false,
+                'message' => (string)__('无法识别客户端 IP。'),
+                'client_ip' => $clientIp,
+                'banned' => false,
+            ], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES);
+            return '';
+        }
+
+        $result = (new \Weline\Server\Service\Control\IpcControlGateway())->securityUnblock('default', $clientIp, false);
+        $ipcOk = !empty($result['success']);
+        try {
+            /** @var AttackDetector $detector */
+            $detector = ObjectManager::getInstance(AttackDetector::class);
+            $detector->unblock($clientIp);
+        } catch (\Throwable) {
+        }
+        try {
+            \Weline\Server\Security\WorkerPolicyKernel::instance()->clearSecurityBans($clientIp, false);
+        } catch (\Throwable) {
+        }
+        $banned = false;
+        try {
+            $banned = \Weline\Server\Security\WorkerPolicyKernel::instance()->isSecurityBanned($clientIp);
+        } catch (\Throwable) {
+        }
+
+        $this->request->getResponse()->setHeader('Content-Type', 'application/json; charset=utf-8');
+        $this->request->getResponse()->setHeader('Cache-Control', 'no-store');
+        echo \json_encode([
+            'success' => $ipcOk || !$banned,
+            'message' => ($ipcOk || !$banned)
+                ? (string)__('已请求解封本机 IP。')
+                : (string)__('解封未确认成功。'),
+            'client_ip' => $clientIp,
+            'banned' => $banned,
+        ], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES);
+        return '';
     }
 
     #[Acl('Weline_Server::wls_panel_project_save', '保存 WLS 面板项目', 'save', '保存 WLS 面板托管项目', 'Weline_Server::wls_panel', accessMode: Acl::ACCESS_MODE_EDIT)]
@@ -285,6 +343,26 @@ class WlsPanel extends BackendController
                 'policy_audit_limit' => (int)$this->request->getGet('policy_audit_limit', 20),
             ])
         );
+        $panelSecurityProbe = null;
+        if ($activePage === 'security_probes') {
+            /** @var SecurityProbeTokenService $probeTokenService */
+            $probeTokenService = ObjectManager::getInstance(SecurityProbeTokenService::class);
+            $panelSecurityProbe = [
+                'token' => $probeTokenService->issue(),
+                'live_ban' => $probeTokenService->issueLiveBan(),
+                'cases' => SecurityProbeCatalog::cases(),
+                'origin' => $this->resolvePublicOriginForProbes(),
+                'client_ip' => \trim((string)$this->request->getClientIp()),
+                'unlock_url' => $this->request->getUrlBuilder()->getBackendUrl('*/backend/wls-panel/security-probes-unlock'),
+            ];
+            try {
+                $panelSecurityProbe['banned'] = \Weline\Server\Security\WorkerPolicyKernel::instance()
+                    ->isSecurityBanned((string)$panelSecurityProbe['client_ip']);
+            } catch (\Throwable) {
+                $panelSecurityProbe['banned'] = false;
+            }
+        }
+        $this->assign('panelSecurityProbe', $panelSecurityProbe);
         $this->assign('panelProjectFormData', $projectRegistry->getFormData((int)$this->request->getGet('edit_project_id', 0)));
         $this->assign('panelNotice', $this->resolvePanelNotice((string)$this->request->getGet('panel_notice', '')));
         $this->assign('panelError', \trim((string)$this->request->getGet('panel_error', '')));
@@ -735,6 +813,16 @@ class WlsPanel extends BackendController
     {
         $url = $this->request->getUrlBuilder()->getBackendUrl('*/backend/wls-panel/marketplace', $params);
         $this->request->getResponse()->redirect(\rtrim($url, '?&'));
+    }
+
+    private function resolvePublicOriginForProbes(): string
+    {
+        $scheme = $this->request->isSecure() ? 'https' : 'http';
+        $host = \trim((string)($this->request->getServer('HTTP_HOST') ?? ''));
+        if ($host === '') {
+            $host = 'localhost';
+        }
+        return $scheme . '://' . $host;
     }
 
     private function resolvePanelNotice(string $code): string

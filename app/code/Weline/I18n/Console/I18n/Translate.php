@@ -225,7 +225,9 @@ class Translate implements CommandInterface
                 $response = $this->translationAdapter->translateBatch(
                     $chunk,
                     $this->sourceLocale,
-                    $targetLocale
+                    $targetLocale,
+                    \Weline\I18n\Service\AiTranslationConfig::DEFAULT_STRATEGY,
+                    'dictionary',
                 );
                 if (empty($response['success'])) {
                     $errors = array_values(array_filter(array_map('strval', (array)($response['errors'] ?? []))));

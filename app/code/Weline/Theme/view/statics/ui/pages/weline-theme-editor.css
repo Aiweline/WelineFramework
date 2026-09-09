@@ -5635,13 +5635,15 @@ textarea.auto-resize { height: var(--w-theme-editor-textarea-height, auto); }
 /* Scope is the Theme Editor's primary context; keep it ahead of Theme and outside overflow. */
 .theme-editor-container .toolbar-select-field-scope {
     position: relative;
-    flex: 0 0 clamp(13rem, 22vw, 21rem);
-    inline-size: clamp(13rem, 22vw, 21rem);
-    min-inline-size: 0;
+    flex: 0 1 9rem;
+    inline-size: 9rem;
+    min-inline-size: 6.5rem;
+    max-inline-size: 9rem;
     padding: 0.18rem 0.28rem 0.18rem 0.42rem;
     border: 1px solid var(--w-theme-editor-border-light);
     border-radius: var(--w-theme-editor-radius-sm);
     background: var(--w-theme-editor-bg-hover);
+    overflow: hidden;
 }
 
 .theme-editor-container .theme-editor-scope-trigger {
@@ -6093,54 +6095,74 @@ body:has(.theme-editor-container) .w-scope-select-dropdown .w-tree-select-node-c
 }
 
 .theme-editor-container .toolbar-select-field-scope {
-    flex: 0 0 auto !important;
-    inline-size: auto !important;
-    width: auto !important;
-    max-inline-size: min(26.25rem, 48vw) !important;
+    /* Short friendly name should stay readable; ellipsis only after ~14rem. */
+    flex: 0 1 14rem !important;
+    inline-size: 14rem !important;
+    width: 14rem !important;
+    min-inline-size: 11rem !important;
+    max-inline-size: min(16rem, 36vw) !important;
+    overflow: hidden;
 }
 
 .theme-editor-container .toolbar-select-field-scope .w-tree-select,
 .theme-editor-container .toolbar-select-field-scope .w-scope-select {
-    inline-size: auto !important;
-    width: auto !important;
+    inline-size: 100% !important;
+    width: 100% !important;
     max-inline-size: 100%;
+    min-inline-size: 0;
 }
 
 .theme-editor-container .toolbar-select-field-scope .w-tree-select-trigger,
 .theme-editor-container .toolbar-select-field-scope .w-scope-select-trigger {
-    inline-size: auto;
-    width: auto;
-    max-inline-size: 100%;
+    /* Beat any leftover JS inline width (historically 480px) without !important. */
+    inline-size: 100% !important;
+    width: 100% !important;
+    max-inline-size: 100% !important;
+    min-inline-size: 0 !important;
     justify-content: flex-start;
+    overflow: hidden;
 }
 
-.theme-editor-container .toolbar-select-field-scope .w-tree-select-display {
-    overflow: visible;
-    text-overflow: clip;
+.theme-editor-container .toolbar-select-field-scope .w-scope-select[data-disabled="true"] .w-tree-select-trigger,
+.theme-editor-container .toolbar-select-field-scope .w-scope-select[data-disabled="true"] .w-scope-select-trigger {
+    /* Disabled buttons suppress title; route hover to titled field/shell. */
+    pointer-events: none !important;
+    cursor: help;
+}
+
+.theme-editor-container .toolbar-select-field-scope .w-tree-select-display,
+.theme-editor-container .toolbar-select-field-scope .w-scope-select-display {
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
+    min-inline-size: 0;
+    max-inline-size: 100%;
 }
 
 .theme-editor-container .toolbar-selects .toolbar-select-field-language .w-select,
 .theme-editor-container .toolbar-selects select.w-select[data-w-fit-width="1"] {
     width: auto;
-    max-width: min(20rem, 42vw);
+    max-width: min(16rem, 36vw);
     field-sizing: content;
 }
 
 @media (max-width: 1280px) {
     .theme-editor-container .toolbar-select-field-scope {
-        max-inline-size: min(22rem, 52vw) !important;
+        flex-basis: 12rem !important;
+        inline-size: 12rem !important;
+        width: 12rem !important;
+        min-inline-size: 10rem !important;
+        max-inline-size: min(14rem, 42vw) !important;
     }
 }
 
 @media (max-width: 760px) {
     .theme-editor-container .toolbar-select-field-scope {
-        max-inline-size: min(16rem, 78vw) !important;
-    }
-
-    .theme-editor-container .toolbar-select-field-scope .w-tree-select-display {
-        overflow: hidden;
-        text-overflow: ellipsis;
+        flex-basis: 10rem !important;
+        inline-size: 10rem !important;
+        width: 10rem !important;
+        min-inline-size: 8.5rem !important;
+        max-inline-size: min(12rem, 52vw) !important;
     }
 }
 

@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Cart',
-    "version" => '1.3.22',
+    "version" => '1.3.46',
     "requires" => [
         'Weline_Framework' => '*',
     ],
@@ -17,5 +17,7 @@ return [
             => \Weline\Cart\Service\CartScopeResolver::class,
         \Weline\Cart\Api\CheckoutCartSnapshotInterface::class
             => \Weline\Cart\Service\CheckoutCartSnapshotService::class,
+        \Weline\Cart\Api\CartStoreInterface::class
+            => \Weline\Cart\Service\CartDbStore::class,
     ],
 ];

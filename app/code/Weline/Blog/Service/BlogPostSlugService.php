@@ -46,7 +46,7 @@ final class BlogPostSlugService
         $sourceLocale = $this->isMostlyLatin($title)
             ? $slugLocale
             : $this->aiConfig->getSourceLocale();
-        $translation = $this->aiAdapter->translateBatch([$title], $sourceLocale, $slugLocale);
+        $translation = $this->aiAdapter->translateBatch([$title], $sourceLocale, $slugLocale, \Weline\I18n\Service\AiTranslationConfig::DEFAULT_STRATEGY, 'blog');
         $errors = array_values(array_map('strval', (array)($translation['errors'] ?? [])));
         $translated = trim((string)($translation['translations'][$title] ?? ''));
 

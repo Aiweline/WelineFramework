@@ -35,4 +35,45 @@ final readonly class SalesChannelSummary
             'effective_enabled' => $this->effectiveEnabled,
         ];
     }
+
+    /** @param array<string, mixed> $row */
+    public static function tryFromArray(array $row): ?self
+    {
+        if (!\array_key_exists('channel_id', $row)
+            || !\array_key_exists('website_id', $row)
+            || !\array_key_exists('store_id', $row)
+        ) {
+            return null;
+        }
+        $id = $row['channel_id'];
+        $websiteId = $row['website_id'];
+        $storeId = $row['store_id'];
+        if (!\is_int($id) && !(\is_string($id) && \preg_match('/^(?:0|[1-9][0-9]*)$/D', $id) === 1)) {
+            return null;
+        }
+        if (!\is_int($websiteId) && !(\is_string($websiteId) && \preg_match('/^(?:0|[1-9][0-9]*)$/D', $websiteId) === 1)) {
+            return null;
+        }
+        if (!\is_int($storeId) && !(\is_string($storeId) && \preg_match('/^(?:0|[1-9][0-9]*)$/D', $storeId) === 1)) {
+            return null;
+        }
+        $code = \trim((string)($row['code'] ?? ''));
+        $name = \trim((string)($row['name'] ?? ''));
+        $parentLifecycle = \trim((string)($row['parent_store_lifecycle_status'] ?? ''));
+        if ($code === '' || $name === '' || $parentLifecycle === '') {
+            return null;
+        }
+
+        return new self(
+            (int)$id,
+            (int)$websiteId,
+            (int)$storeId,
+            $code,
+            $name,
+            (bool)($row['is_default'] ?? false),
+            (bool)($row['enabled'] ?? false),
+            $parentLifecycle,
+            (bool)($row['effective_enabled'] ?? false),
+        );
+    }
 }

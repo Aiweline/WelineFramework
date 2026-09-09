@@ -360,10 +360,20 @@ var expose=function(){w.Weline=w.Weline||{};w.Weline.Form=api;};
 w.WelineFormRuntime=api;
 expose();
 mountAll(d);
-new MutationObserver(function(records){
-expose();
-records.forEach(function(record){record.addedNodes.forEach(function(node){if(node.nodeType===1){mountAll(node);}});});
-}).observe(d.documentElement,{childList:true,subtree:true});
+var mo=null,moBusy=0,moNeed=0;
+var flushMo=function(){
+moBusy=0;
+if(moNeed){moNeed=0;expose();mountAll(d);}
+if(mo){try{mo.observe(d.documentElement,{childList:true,subtree:true});}catch(e){}}
+};
+mo=new MutationObserver(function(){
+try{mo.disconnect();}catch(e){}
+moNeed=1;
+if(moBusy){return;}
+moBusy=1;
+if(w.requestAnimationFrame){w.requestAnimationFrame(function(){w.requestAnimationFrame(flushMo);});}else{w.setTimeout(flushMo,0);}
+});
+mo.observe(d.documentElement,{childList:true,subtree:true});
 d.addEventListener("DOMContentLoaded",expose);
 w.addEventListener("load",expose);
 }

@@ -15,7 +15,7 @@ final readonly class CachePolicy
     /** @var list<string> */
     public array $dependencies;
 
-    /** @param list<string> $vary @param list<string> $dependencies Domain paths relative to the selected scope. */
+    /** @param list<string> $vary @param list<string> $dependencies Relative scope domains or canonical global/... dependencies. */
     public function __construct(
         public string $resource,
         public string $pool,
@@ -52,6 +52,13 @@ final readonly class CachePolicy
         $path = new NamespacePath();
         $paths = [];
         foreach ($this->dependencies as $domain) {
+            // A scoped presentation may consume a global fact such as a
+            // dictionary. Keep its authority global instead of manufacturing
+            // a storefront/website copy of the dependency.
+            if (str_starts_with($domain, 'global/')) {
+                $paths[] = $path->canonicalize($domain);
+                continue;
+            }
             $segments = explode('/', $domain);
             // Scoped resources may inherit the same domain from global configuration.
             $paths[] = $path->global('storefront', $segments);

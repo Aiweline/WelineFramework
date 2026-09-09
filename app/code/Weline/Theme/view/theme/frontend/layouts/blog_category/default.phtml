@@ -125,12 +125,29 @@ $bodyClass = 'blog-category-layout__body' . ($showFilters ? ' blog-category-layo
             font-weight: 700;
             padding-left: calc(0.6rem - 3px);
         }
-        .amazon-blog-listing__header { margin-bottom: 1rem; }
+        .amazon-blog-listing__header {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: var(--weline-space-3, 0.75rem);
+            margin-bottom: 1rem;
+        }
+        .amazon-blog-listing__heading { min-width: 0; flex: 1 1 12rem; }
+        .amazon-blog-listing__actions { flex-shrink: 0; }
+        .amazon-blog-listing__rss { text-decoration: none; }
         .amazon-blog-listing__title {
             margin: 0 0 0.25rem;
             font-size: 1.5rem;
             font-weight: 700;
             line-height: 1.25;
+        }
+        .amazon-blog-listing__section-title {
+            margin: 0 0 0.75rem;
+            font-size: 1rem;
+            font-weight: 700;
+            line-height: 1.3;
+            color: #0f1111;
         }
         .amazon-blog-listing__subtitle,
         .amazon-blog-listing__meta {
@@ -184,7 +201,9 @@ $bodyClass = 'blog-category-layout__body' . ($showFilters ? ' blog-category-layo
             padding: 8px 10px 10px;
             flex: 1;
         }
-        .blog-storefront__body h2 {
+        .blog-storefront__body h2,
+        .blog-storefront__body h3,
+        .blog-storefront__card-title {
             margin: 0;
             font-size: 13px;
             font-weight: 600;
@@ -324,5 +343,6 @@ $bodyClass = 'blog-category-layout__body' . ($showFilters ? ' blog-category-layo
 
     <w:hook>Weline_Theme::frontend::layouts::blog_category::body-end</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+    <w:hook>seo::footer</w:hook>
 </body>
 </html>

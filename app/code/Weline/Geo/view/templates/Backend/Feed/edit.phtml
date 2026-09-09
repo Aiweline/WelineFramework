@@ -6,93 +6,74 @@
  * @var array $source_types
  * @var array $update_frequencies
  */
-$isEdit = $feed->getId() > 0;
+$escape = static fn(mixed $v): string => htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$feedType = (string)($feed->getData('feed_type') ?? '');
+$sourceType = (string)($feed->getData('source_type') ?? '');
+$frequency = (string)($feed->getData('update_frequency') ?? '');
+$feedTypeLabel = $feed_types[$feedType] ?? $feedType;
+$sourceTypeLabel = $source_types[$sourceType] ?? $sourceType;
+$frequencyLabel = $update_frequencies[$frequency] ?? $frequency;
+$autoPush = (int)($feed->getData('is_auto_push') ?? 0) === 1;
 ?>
-<div class="content-header">
-    <h1><?= $isEdit ? __('编辑Feed') : __('添加Feed') ?></h1>
-</div>
-
 <div class="content-body">
+    <p class="w-text" data-tone="muted" style="margin-bottom: var(--weline-theme-space-4, 1rem);">
+        <?= __('内容源由系统自动维护，元数据不可修改；此处仅可开关是否启用。') ?>
+    </p>
+
     <w:form id="feed-form" class="form-horizontal">
-        <input type="hidden" name="id" value="<?= $feed->getId() ?>">
-        
+        <input type="hidden" name="id" value="<?= (int)$feed->getId() ?>">
+
         <div class="w-field">
-            <label class="control-label"><?= __('Feed名称') ?> <span class="required">*</span></label>
-            <input type="text" name="feed_name" class="w-input" value="<?= htmlspecialchars($feed->getData('feed_name') ?? '') ?>" required>
+            <label class="control-label"><?= __('Feed名称') ?></label>
+            <div class="w-text"><?= $escape($feed->getData('feed_name') ?? '') ?></div>
         </div>
 
         <div class="w-field">
             <label class="control-label"><?= __('Feed类型') ?></label>
-            <select name="feed_type" class="w-input">
-                <?php foreach ($feed_types as $value => $label): ?>
-                    <option value="<?= $value ?>" 
-                            <?= ($feed->getData('feed_type') ?? 'content') === $value ? 'selected' : '' ?>>
-                        <?= htmlspecialchars($label) ?>
-                    </option>
-                <?php endforeach; ?>
-            </select>
+            <div class="w-text"><?= $escape($feedTypeLabel) ?></div>
         </div>
 
         <div class="w-field">
             <label class="control-label"><?= __('数据源类型') ?></label>
-            <select name="source_type" class="w-input">
-                <?php foreach ($source_types as $value => $label): ?>
-                    <option value="<?= $value ?>" 
-                            <?= ($feed->getData('source_type') ?? 'database') === $value ? 'selected' : '' ?>>
-                        <?= htmlspecialchars($label) ?>
-                    </option>
-                <?php endforeach; ?>
-            </select>
+            <div class="w-text"><?= $escape($sourceTypeLabel) ?></div>
         </div>
 
         <div class="w-field">
             <label class="control-label"><?= __('数据源配置（JSON）') ?></label>
-            <textarea name="source_config" class="w-textarea" rows="5"><?= htmlspecialchars($feed->getData('source_config') ?? '{}') ?></textarea>
+            <pre class="w-text" data-tone="muted" style="white-space:pre-wrap;margin:0;"><?= $escape($feed->getData('source_config') ?? '{}') ?></pre>
         </div>
 
         <div class="w-field">
             <label class="control-label"><?= __('Feed URL') ?></label>
-            <input type="text" name="feed_url" class="w-input" value="<?= htmlspecialchars($feed->getData('feed_url') ?? '') ?>" placeholder="https://example.com/feed.json">
+            <div class="w-text" data-truncate="true" title="<?= $escape($feed->getData('feed_url') ?? '') ?>"><?= $escape($feed->getData('feed_url') ?? '—') ?></div>
         </div>
 
         <div class="w-field">
             <label class="control-label"><?= __('更新频率') ?></label>
-            <select name="update_frequency" class="w-input">
-                <?php foreach ($update_frequencies as $value => $label): ?>
-                    <option value="<?= $value ?>" 
-                            <?= ($feed->getData('update_frequency') ?? 'daily') === $value ? 'selected' : '' ?>>
-                        <?= htmlspecialchars($label) ?>
-                    </option>
-                <?php endforeach; ?>
-            </select>
+            <div class="w-text"><?= $escape($frequencyLabel) ?></div>
         </div>
 
         <div class="w-field">
             <label class="control-label"><?= __('自动推送') ?></label>
-            <div class="checkbox">
-                <label>
-                    <input type="checkbox" name="is_auto_push" value="1" 
-                           <?= ($feed->getData('is_auto_push') !== 0 && $feed->getData('is_auto_push') !== null) || !$feed->getId() ? 'checked' : '' ?>>
-                    <?= __('启用自动推送') ?>
-                    <small class="w-text" data-tone="muted">（关闭后Cron任务将不再推送此Feed）</small>
-                </label>
-            </div>
-        </div>
-
-        <div class="w-field">
-            <label class="control-label"><?= __('是否启用') ?></label>
-            <div class="checkbox">
-                <label>
-                    <input type="checkbox" name="is_enabled" value="1" 
-                           <?= $feed->getData('is_enabled') !== 0 ? 'checked' : '' ?>>
-                    <?= __('启用') ?>
-                </label>
+            <div class="w-text"><?= $autoPush ? __('是') : __('否') ?>
+                <span class="w-text" data-tone="muted">（<?= __('由系统策略维护') ?>）</span>
             </div>
         </div>
 
         <div class="w-field">
             <label class="control-label"><?= __('配置（JSON）') ?></label>
-            <textarea name="config" class="w-textarea" rows="5"><?= htmlspecialchars($feed->getData('config') ?? '{}') ?></textarea>
+            <pre class="w-text" data-tone="muted" style="white-space:pre-wrap;margin:0;"><?= $escape($feed->getData('config') ?? '{}') ?></pre>
+        </div>
+
+        <div class="w-field">
+            <label class="control-label"><?= __('是否启用') ?> <span class="required">*</span></label>
+            <div class="checkbox">
+                <label>
+                    <input type="checkbox" name="is_enabled" value="1"
+                           <?= (int)($feed->getData('is_enabled') ?? 0) === 1 ? 'checked' : '' ?>>
+                    <?= __('启用') ?>
+                </label>
+            </div>
         </div>
 
         <div class="w-field">
@@ -106,24 +87,24 @@ $isEdit = $feed->getId() > 0;
     </w:form>
 </div>
 
-
-
 <script>
 document.getElementById('feed-form').addEventListener('submit', function(e) {
     e.preventDefault();
-    
+
     const formData = new FormData(this);
-    
+
     var feedUrl = '@url{'geo/backend/feed/save'}';
     var feedOpts = { method: 'POST', body: formData };
     Weline.adminRequest('geo', feedUrl, feedOpts)
     .then(function(res) {
-        var data = (res && res.data) !== undefined ? res.data : res;
+        var data = (window.Weline && Weline.ApiBusiness && typeof Weline.ApiBusiness.unwrapBusiness === 'function')
+            ? Weline.ApiBusiness.unwrapBusiness(res)
+            : res;
         if (data.success) {
             Weline.UI.dialog.request({
                 tone: 'success',
-                title: '<?= __('成功') ?>',
-                message: '<?= __('保存成功') ?>',
+                title: '<?= __('Success') ?>',
+                message: '<?= __('Saved successfully') ?>',
                 duration: 2000,
                 confirmable: false
             }).then(() => {
@@ -149,4 +130,3 @@ document.getElementById('feed-form').addEventListener('submit', function(e) {
     });
 });
 </script>
-

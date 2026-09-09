@@ -88,6 +88,7 @@ final class ProductDetailTemplateContractTest extends TestCase
         self::assertStringContainsString("\$this->assign('meta_keywords', \$seoKeywords)", $controller);
         self::assertStringContainsString('publishedOffersForProduct($productId)', $controller);
         self::assertStringContainsString('publishedOffersBySlug($slug)', $controller);
+        self::assertStringContainsString('carryResolvedIdentity', $controller);
         self::assertStringContainsString("\$this->getUrl('products')", $controller);
         self::assertStringContainsString('detail-shell.phtml', $controller);
         self::assertStringNotContainsString('product_detail', $controller);
@@ -103,6 +104,7 @@ final class ProductDetailTemplateContractTest extends TestCase
         );
 
         self::assertStringContainsString('$descriptionHtml', $template);
+        self::assertStringContainsString('ensureDescriptionImageAlts', $template);
         self::assertStringContainsString('data-testid="product-description-body"', $template);
         self::assertLessThan(
             strpos($template, 'data-testid="product-description"'),
@@ -236,6 +238,9 @@ final class ProductDetailTemplateContractTest extends TestCase
         self::assertStringContainsString('data-variant-live-url', $template);
         self::assertStringContainsString('refreshLiveAvailability', $template);
         self::assertStringContainsString('mergeLiveOffers', $template);
+        self::assertStringContainsString('Availability API returns raw catalog unit_price_minor', $template);
+        self::assertStringContainsString('liveHasDealFields', $template);
+        self::assertStringContainsString("node.hidden = !priced.hasDeal;", $template);
         self::assertStringContainsString("\$displayOffer['global_offer_uuid'] = '';", $controller);
         self::assertStringContainsString('publishedOffersForProduct', $service);
         self::assertStringContainsString('publishedOffersBySlug', $service);

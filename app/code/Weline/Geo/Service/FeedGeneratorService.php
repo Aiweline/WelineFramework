@@ -22,7 +22,7 @@ use Weline\Framework\Manager\ObjectManager;
  */
 class FeedGeneratorService
 {
-    public const FEED_DIR = BP . '/pub/geo-feeds';
+    public const FEED_DIR = \BP . '/pub/geo-feeds';
 
     public function __construct(
         private readonly ?SeoProfileGeoMetadataNormalizer $metadataNormalizer = null
@@ -38,10 +38,14 @@ class FeedGeneratorService
      */
     public function generateFeed(Feed $feed, string $format = 'json_feed'): string
     {
-        // 获取Feed条目
-        $items = $this->getFeedItems($feed);
-        
-        // 根据格式生成Feed
+        return $this->generateFeedFromItems($feed, $this->getFeedItems($feed), $format);
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $items
+     */
+    public function generateFeedFromItems(Feed $feed, array $items, string $format = 'json_feed'): string
+    {
         switch ($format) {
             case 'json_feed':
                 return $this->generateJsonFeed($feed, $items);
@@ -51,6 +55,14 @@ class FeedGeneratorService
             default:
                 return $this->generateJsonFeed($feed, $items);
         }
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function listPublishedItems(Feed $feed): array
+    {
+        return $this->getFeedItems($feed);
     }
 
     /**
@@ -190,6 +202,10 @@ class FeedGeneratorService
             $xml .= '      <pubDate>' . date('r', $item['published_at'] ?? $item['created_at'] ?? time()) . '</pubDate>' . "\n";
             $xml .= '      <description><![CDATA[' . ($item['content'] ?? '') . ']]></description>' . "\n";
             $xml .= '      <content:encoded><![CDATA[' . $this->getContentHtml($item) . ']]></content:encoded>' . "\n";
+            $authorName = $this->rssAuthorName($item);
+            if ($authorName !== '') {
+                $xml .= '      <author>' . htmlspecialchars($authorName, ENT_XML1 | ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</author>' . "\n";
+            }
             $xml .= '    </item>' . "\n";
         }
 
@@ -197,6 +213,27 @@ class FeedGeneratorService
         $xml .= '</rss>';
 
         return $xml;
+    }
+
+    /**
+     * @param array<string, mixed> $item
+     */
+    protected function rssAuthorName(array $item): string
+    {
+        $authors = $this->getAuthors($item);
+        foreach ($authors as $author) {
+            if (is_string($author) && trim($author) !== '') {
+                return trim($author);
+            }
+            if (is_array($author)) {
+                $name = trim((string)($author['name'] ?? $author['author_name'] ?? ''));
+                if ($name !== '') {
+                    return $name;
+                }
+            }
+        }
+        $metadata = $this->getMetadata($item);
+        return trim((string)($metadata['author'] ?? ''));
     }
 
     /**

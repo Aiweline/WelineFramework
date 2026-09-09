@@ -1,0 +1,22 @@
+<?php
+/**
+ * @hook-priority 50
+ * @hook-sort-order 20
+ * @hook-solo false
+ *
+ * 后台通用壳 body-end：挂建站助手悬浮（default / dashboard / fullscreen 等含 base::body-end 的布局）。
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
+
+$requestPathRaw = (string)($this->request->getPathInfo() ?: \w_env_request_uri());
+$requestPathParsed = parse_url($requestPathRaw, PHP_URL_PATH);
+$requestPath = strtolower((string)(is_string($requestPathParsed) && $requestPathParsed !== '' ? $requestPathParsed : $requestPathRaw));
+if (str_contains($requestPath, '/backend/login')
+    || str_contains($requestPath, '/user/login')
+    || str_contains($requestPath, '/auth/login')
+) {
+    return;
+}
+
+echo $this->fetch('Weline_SiteSetupAssistant::templates/backend/widgets/site-setup-assistant-float.phtml');

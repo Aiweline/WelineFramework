@@ -102,6 +102,7 @@ $listApiUrl = (string)w_url('/shipping/frontend/region/list', [], 'frontend');
                         </div>
                     </div>
                 </div>
+<?= $this->fetch('Weline_Shipping::templates/Backend/partials/manager-tabs.phtml', ['activeTab' => 'region']) ?>
 <?php endif; ?>
 
                 <div class="w-grid">

@@ -379,8 +379,8 @@ class Compiler implements \Weline\Framework\Event\ObserverInterface
             }
         }
         
-        // 只匹配已知的配置项
-        $knownKeys = ['globalVar', 'description'];
+        // 只匹配已知的配置项（业务 load 策略归各模块 weline.modules.js）
+        $knownKeys = ['globalVar', 'description', 'load', 'async'];
         $otherConfigPattern = '/(' . implode('|', $knownKeys) . '):\s*([^,\n}]+)/';
         if (preg_match_all($otherConfigPattern, $configWithoutPaths, $otherMatches, PREG_SET_ORDER)) {
             foreach ($otherMatches as $match) {
@@ -391,6 +391,8 @@ class Compiler implements \Weline\Framework\Event\ObserverInterface
                 $value = trim($value, ' "\'');
                 if ($value === 'null') {
                     $newConfig[] = $key . ': null';
+                } elseif ($value === 'true' || $value === 'false') {
+                    $newConfig[] = $key . ': ' . $value;
                 } else {
                     $newConfig[] = $key . ': "' . addslashes($value) . '"';
                 }

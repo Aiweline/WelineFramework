@@ -78,3 +78,74 @@
     text-transform: uppercase;
     font-weight: 650;
 }
+
+/* Google Enterprise invisible attribution / trust chip */
+.weline-captcha-google {
+    margin-block: var(--weline-space-3, 0.75rem);
+}
+
+.weline-captcha-google-trust {
+    display: inline-flex;
+    align-items: flex-start;
+    gap: var(--weline-space-2, 0.5rem);
+    max-width: 100%;
+    padding: var(--weline-space-2, 0.5rem) var(--weline-space-3, 0.75rem);
+    border: 1px solid var(--weline-theme-border, #e2e8f0);
+    border-radius: var(--weline-radius-md, 0.5rem);
+    background: var(--weline-theme-surface, #fff);
+    box-shadow: var(--weline-shadow-xs, 0 1px 2px color-mix(in srgb, #0f172a 6%, transparent));
+    color: var(--weline-theme-text-muted, #64748b);
+}
+
+.weline-captcha-google-trust__mark {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 999px;
+    background: var(--weline-theme-surface-raised, #f8fafc);
+    border: 1px solid var(--weline-theme-border, #e2e8f0);
+}
+
+.weline-captcha-google-trust__logo {
+    display: block;
+}
+
+.weline-captcha-google-trust__body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+    line-height: 1.35;
+}
+
+.weline-captcha-google-trust__brand {
+    font-size: 0.75rem;
+    font-weight: 650;
+    letter-spacing: 0.01em;
+    color: var(--weline-theme-text, #0f172a);
+}
+
+.weline-captcha-google-trust__notice {
+    font-size: 0.72rem;
+    color: inherit;
+}
+
+.weline-captcha-google-trust__links {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.68rem;
+}
+
+.weline-captcha-google-trust__links a {
+    color: var(--weline-theme-link, #2563eb);
+    text-decoration: none;
+}
+
+.weline-captcha-google-trust__links a:hover,
+.weline-captcha-google-trust__links a:focus-visible {
+    text-decoration: underline;
+}

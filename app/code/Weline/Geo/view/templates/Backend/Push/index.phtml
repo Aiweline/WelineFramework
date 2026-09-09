@@ -1,68 +1,212 @@
 <?php
 /**
  * @var \Weline\Framework\View\Template $this
- * @var \Weline\Framework\DataObject\DataObject $logs
- * @var \Weline\Framework\DataObject\DataObject $pagination
+ * @var array $logs
+ * @var array $scheduled_failures
+ * @var array $feed_names
+ * @var array $platform_names
+ * @var \Weline\Framework\DataObject\DataObject|null $pagination
  */
+$escape = static fn(mixed $v): string => htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$feedNames = is_array($feed_names ?? null) ? $feed_names : [];
+$platformNames = is_array($platform_names ?? null) ? $platform_names : [];
+$scheduledFailures = is_array($scheduled_failures ?? null) ? $scheduled_failures : [];
+$failureCount = count($scheduledFailures);
 ?>
+<style>
+/* 运营页不展示统一配置技术 key（data-config-key 仍保留在 DOM） */
+.geo-push-schedule-embed .w-config-embed__key { display: none; }
+.geo-push-fail-band {
+    border: 1px solid color-mix(in srgb, var(--color-warning, #c9a227) 45%, transparent);
+    border-radius: var(--weline-theme-radius-md, var(--weline-radius-md, 0.5rem));
+    background: color-mix(in srgb, var(--color-warning, #c9a227) 8%, var(--weline-theme-surface, #fff));
+    padding: var(--weline-theme-space-4, 1rem);
+    margin-bottom: var(--weline-theme-space-4, 1rem);
+}
+.geo-push-fail-band__error {
+    max-inline-size: 28rem;
+}
+</style>
 <div class="content-header">
-    <h1><?= __('推送历史') ?></h1>
-    <div class="action-bar">
-        <a href="@url{'geo/backend/push/push'}" class="w-button" data-tone="primary">
-            <w:icon name="arrow-right" size="sm"></w:icon> <?= __('一键推送') ?>
-        </a>
+    <div class="w-stack" data-gap="sm" style="margin-bottom: var(--weline-theme-space-4, 1rem);">
+        <p class="w-text" data-tone="muted" style="margin:0;">
+            <?= __('本页「一键推送」为人工立即推送。定时推送由下方统一配置开关控制，默认每天 02:00 执行一次。若定时推送失败，会优先列在下方便于处理。') ?>
+        </p>
+        <div class="w-cluster" data-align="center" data-justify="between" style="--w-gap:var(--weline-space-3);">
+            <div class="geo-push-schedule-embed w-stack" data-gap="xs" style="min-inline-size:min(100%,22rem);">
+                <w:config:embed
+                    module="Weline_Geo"
+                    area="backend"
+                    field="geo/push/scheduled_enabled"
+                    locale="default"
+                />
+            </div>
+            <a href="@url{'geo/backend/push/push'}" class="w-button" data-tone="primary" data-shrink="false">
+                <w:icon name="arrow-right" size="sm"></w:icon> <?= __('一键推送') ?>
+            </a>
+        </div>
     </div>
 </div>
 
 <div class="content-body">
-    <table class="w-table">
-        <thead>
-            <tr>
-                <th><?= __('ID') ?></th>
-                <th><?= __('Feed ID') ?></th>
-                <th><?= __('平台 ID') ?></th>
-                <th><?= __('推送类型') ?></th>
-                <th><?= __('状态') ?></th>
-                <th><?= __('条目数') ?></th>
-                <th><?= __('推送时间') ?></th>
-                <th><?= __('操作') ?></th>
-            </tr>
-        </thead>
-        <tbody>
-            <?php if (empty($logs)): ?>
+    <?php if ($failureCount > 0): ?>
+        <section class="geo-push-fail-band" data-testid="geo-scheduled-failures" aria-labelledby="geo-scheduled-failures-title">
+            <div class="w-stack" data-gap="sm">
+                <div class="w-cluster" data-align="center" data-justify="between" style="--w-gap:var(--weline-space-2);">
+                    <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);">
+                        <h2 id="geo-scheduled-failures-title" class="w-text" style="margin:0;font-size:1.05rem;font-weight:600;">
+                            <?= __('定时推送失败') ?>
+                        </h2>
+                        <span class="w-badge" data-tone="warning" data-shrink="false"><?= (int)$failureCount ?></span>
+                    </div>
+                    <a href="@url{'geo/backend/platform'}" class="w-button" data-tone="neutral" data-size="sm" data-variant="outline" data-shrink="false">
+                        <?= __('平台管理') ?>
+                    </a>
+                </div>
+                <p class="w-text" data-tone="muted" style="margin:0;">
+                    <?= __('以下为最近定时推送失败，请核对平台账户与内容源后重试；成功后仍会出现在下方全部历史中。') ?>
+                </p>
+                <div class="w-table-wrap">
+                    <table class="w-table">
+                        <thead>
+                            <tr>
+                                <th><?= __('内容源') ?></th>
+                                <th><?= __('平台') ?></th>
+                                <th><?= __('失败原因') ?></th>
+                                <th><?= __('时间') ?></th>
+                                <th><?= __('处理') ?></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($scheduledFailures as $fail): ?>
+                                <?php
+                                $failFeedId = (int)($fail['feed_id'] ?? 0);
+                                $failPlatformId = (int)($fail['platform_id'] ?? 0);
+                                $failFeedLabel = $feedNames[$failFeedId] ?? ('#' . $failFeedId);
+                                $failPlatformLabel = $platformNames[$failPlatformId] ?? ('#' . $failPlatformId);
+                                $failError = trim((string)($fail['error_message'] ?? ''));
+                                if ($failError === '') {
+                                    $failError = (string)__('未知错误');
+                                }
+                                $failLogId = (int)($fail['id'] ?? 0);
+                                $failTime = !empty($fail['pushed_at'])
+                                    ? date('Y-m-d H:i:s', (int)$fail['pushed_at'])
+                                    : (!empty($fail['created_at']) ? date('Y-m-d H:i:s', (int)$fail['created_at']) : '—');
+                                ?>
+                                <tr data-geo-fail-log="<?= $failLogId ?>">
+                                    <td>
+                                        <span class="w-text" data-truncate="true" title="<?= $escape($failFeedLabel) ?>"><?= $escape($failFeedLabel) ?></span>
+                                    </td>
+                                    <td>
+                                        <span class="w-text" data-truncate="true" title="<?= $escape($failPlatformLabel) ?>"><?= $escape($failPlatformLabel) ?></span>
+                                    </td>
+                                    <td>
+                                        <span class="w-text geo-push-fail-band__error" data-truncate="true" data-tone="danger" title="<?= $escape($failError) ?>"><?= $escape($failError) ?></span>
+                                    </td>
+                                    <td><?= $escape($failTime) ?></td>
+                                    <td>
+                                        <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);">
+                                            <button type="button" class="w-button" data-geo-error-message="<?= $escape($failError) ?>" data-tone="danger" data-size="sm" data-variant="outline" data-shrink="false">
+                                                <?= __('查看错误') ?>
+                                            </button>
+                                            <button type="button" class="w-button" data-geo-retry-log="<?= $failLogId ?>" data-tone="primary" data-size="sm" data-shrink="false">
+                                                <?= __('重试') ?>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    <?php endif; ?>
+
+    <div class="w-stack" data-gap="xs" style="margin-bottom: var(--weline-theme-space-2, 0.5rem);">
+        <h2 class="w-text" style="margin:0;font-size:1.05rem;font-weight:600;"><?= __('全部推送历史') ?></h2>
+    </div>
+
+    <div class="w-table-wrap">
+        <table class="w-table" data-w-sticky-end>
+            <thead>
                 <tr>
-                    <td colspan="8" class="w-text" data-align="center"><?= __('暂无数据') ?></td>
+                    <th><?= __('ID') ?></th>
+                    <th><?= __('内容源') ?></th>
+                    <th><?= __('平台') ?></th>
+                    <th><?= __('推送类型') ?></th>
+                    <th><?= __('状态') ?></th>
+                    <th><?= __('条目数') ?></th>
+                    <th><?= __('推送时间') ?></th>
+                    <th><?= __('操作') ?></th>
                 </tr>
-            <?php else: ?>
-                <?php foreach ($logs as $log): ?>
+            </thead>
+            <tbody>
+                <?php if (empty($logs)): ?>
                     <tr>
-                        <td><?= $log['id'] ?></td>
-                        <td><?= $log['feed_id'] ?></td>
-                        <td><?= $log['platform_id'] ?></td>
-                        <td><?= htmlspecialchars($log['push_type']) ?></td>
-                        <td>
-                            <?php if ($log['status'] === 'success'): ?>
-                                <span class="w-badge" data-tone="success"><?= __('成功') ?></span>
-                            <?php elseif ($log['status'] === 'failed'): ?>
-                                <span class="w-badge" data-tone="danger"><?= __('失败') ?></span>
-                            <?php else: ?>
-                                <span class="w-badge" data-tone="warning"><?= __('待处理') ?></span>
-                            <?php endif; ?>
-                        </td>
-                        <td><?= $log['items_count'] ?></td>
-                        <td><?= $log['pushed_at'] ? date('Y-m-d H:i:s', $log['pushed_at']) : '-' ?></td>
-                        <td>
-                            <?php if ($log['error_message']): ?>
-                                <button type="button" class="w-button" data-geo-error-message="<?= htmlspecialchars((string)$log['error_message'], ENT_QUOTES, 'UTF-8') ?>" data-tone="danger" data-size="sm">
-                                    <w:icon name="warning" size="sm"></w:icon> <?= __('查看错误') ?>
-                                </button>
-                            <?php endif; ?>
+                        <td colspan="8">
+                            <div class="w-stack" data-gap="sm" data-align="center" style="padding: var(--weline-theme-space-6, 1.5rem) 0;">
+                                <div class="w-text"><?= __('还没有推送记录。') ?></div>
+                                <div class="w-text" data-tone="muted">
+                                    <?= __('请先在「平台管理」配置账户密钥，确认「内容源」已启用，再点「一键推送」。推送成功或失败后都会出现在这里。') ?>
+                                </div>
+                                <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);">
+                                    <a href="@url{'geo/backend/push/push'}" class="w-button" data-tone="primary" data-size="sm">
+                                        <w:icon name="arrow-right" size="sm"></w:icon> <?= __('去一键推送') ?>
+                                    </a>
+                                    <a href="@url{'geo/backend/platform'}" class="w-button" data-tone="neutral" data-size="sm" data-variant="outline">
+                                        <?= __('平台管理') ?>
+                                    </a>
+                                    <a href="@url{'geo/backend/feed'}" class="w-button" data-tone="neutral" data-size="sm" data-variant="outline">
+                                        <?= __('内容源管理') ?>
+                                    </a>
+                                </div>
+                            </div>
                         </td>
                     </tr>
-                <?php endforeach; ?>
-            <?php endif; ?>
-        </tbody>
-    </table>
+                <?php else: ?>
+                    <?php foreach ($logs as $log): ?>
+                        <?php
+                        $feedId = (int)($log['feed_id'] ?? 0);
+                        $platformId = (int)($log['platform_id'] ?? 0);
+                        $feedLabel = $feedNames[$feedId] ?? ('#' . $feedId);
+                        $platformLabel = $platformNames[$platformId] ?? ('#' . $platformId);
+                        ?>
+                        <tr>
+                            <td><?= (int)($log['id'] ?? 0) ?></td>
+                            <td>
+                                <span class="w-text" data-truncate="true" title="<?= $escape($feedLabel) ?>"><?= $escape($feedLabel) ?></span>
+                            </td>
+                            <td>
+                                <span class="w-text" data-truncate="true" title="<?= $escape($platformLabel) ?>"><?= $escape($platformLabel) ?></span>
+                            </td>
+                            <td><?= $escape($log['push_type'] ?? '') ?></td>
+                            <td>
+                                <?php if (($log['status'] ?? '') === 'success'): ?>
+                                    <span class="w-badge" data-tone="success" data-shrink="false"><?= __('成功') ?></span>
+                                <?php elseif (($log['status'] ?? '') === 'failed'): ?>
+                                    <span class="w-badge" data-tone="danger" data-shrink="false"><?= __('失败') ?></span>
+                                <?php else: ?>
+                                    <span class="w-badge" data-tone="warning" data-shrink="false"><?= __('待处理') ?></span>
+                                <?php endif; ?>
+                            </td>
+                            <td><?= (int)($log['items_count'] ?? 0) ?></td>
+                            <td><?= !empty($log['pushed_at']) ? date('Y-m-d H:i:s', (int)$log['pushed_at']) : '—' ?></td>
+                            <td data-w-sticky="end">
+                                <?php if (!empty($log['error_message'])): ?>
+                                    <button type="button" class="w-button" data-geo-error-message="<?= $escape($log['error_message']) ?>" data-tone="danger" data-size="sm" data-shrink="false">
+                                        <w:icon name="warning" size="sm"></w:icon> <?= __('查看错误') ?>
+                                    </button>
+                                <?php else: ?>
+                                    <span class="w-text" data-tone="muted">—</span>
+                                <?php endif; ?>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </tbody>
+        </table>
+    </div>
 
     <?php if ($pagination && $pagination->getTotalPages() > 1): ?>
         <div class="w-pagination">
@@ -77,11 +221,70 @@
 
     const errorTitle = <?= json_encode((string)__('错误信息'), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
     const confirmText = <?= json_encode((string)__('确定'), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+    const retryOkTitle = <?= json_encode((string)__('重试结果'), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+    const retryFailTitle = <?= json_encode((string)__('重试失败'), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
 
     document.querySelectorAll('[data-geo-error-message]').forEach(function(button) {
         button.addEventListener('click', function() {
             const message = button.getAttribute('data-geo-error-message') || '';
             Weline.UI.dialog.request({tone: 'danger', title: errorTitle, message: message, confirmLabel: confirmText});
+        });
+    });
+
+    document.querySelectorAll('[data-geo-retry-log]').forEach(function(button) {
+        button.addEventListener('click', function() {
+            const logId = button.getAttribute('data-geo-retry-log') || '';
+            if (!logId) {
+                return;
+            }
+            button.disabled = true;
+            const body = new FormData();
+            body.set('log_id', logId);
+            Weline.adminRequest('geo', '@url{'geo/backend/push/execute'}', { method: 'POST', body: body })
+                .then(function(res) {
+                    var data = (window.Weline && Weline.ApiBusiness && typeof Weline.ApiBusiness.unwrapBusiness === 'function')
+                        ? Weline.ApiBusiness.unwrapBusiness(res)
+                        : res;
+                    var message = String((data && data.message) || '');
+                    if (data && data.success) {
+                        Weline.UI.dialog.request({
+                            tone: 'success',
+                            title: retryOkTitle,
+                            message: message,
+                            confirmLabel: confirmText
+                        });
+                        setTimeout(function() { window.location.reload(); }, 800);
+                        return;
+                    }
+                    Weline.UI.dialog.request({
+                        tone: 'danger',
+                        title: retryFailTitle,
+                        message: message || <?= json_encode((string)__('请检查平台账户后重试'), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>,
+                        confirmLabel: confirmText
+                    });
+                    button.disabled = false;
+                })
+                .catch(function(error) {
+                    var message = '';
+                    try {
+                        if (error && error.response && error.response.data) {
+                            var payload = error.response.data;
+                            if (typeof payload === 'object' && payload.message) {
+                                message = String(payload.message);
+                            }
+                        }
+                    } catch (e) {}
+                    if (!message && error && error.message) {
+                        message = String(error.message);
+                    }
+                    Weline.UI.dialog.request({
+                        tone: 'danger',
+                        title: retryFailTitle,
+                        message: message || <?= json_encode((string)__('请检查平台账户后重试'), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>,
+                        confirmLabel: confirmText
+                    });
+                    button.disabled = false;
+                });
         });
     });
 })();

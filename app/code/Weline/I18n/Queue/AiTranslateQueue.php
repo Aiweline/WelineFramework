@@ -8,9 +8,13 @@ use Weline\Framework\Async\TaskContextInterface;
 use Weline\I18n\Service\AiTranslationConfig;
 use Weline\I18n\Service\AiTranslationQueueService;
 use Weline\I18n\Service\AiTranslationService;
+use Weline\Queue\DeadWorkerRecoveryPatchQueueInterface;
+use Weline\Queue\Model\Queue;
 
-class AiTranslateQueue implements TaskConsumerInterface
+class AiTranslateQueue implements TaskConsumerInterface, DeadWorkerRecoveryPatchQueueInterface
 {
+    private const MAX_DEAD_WORKER_RECOVERIES = 5;
+
     public function __construct(
         private readonly AiTranslationConfig $config,
         private readonly AiTranslationService $translationService,
@@ -294,5 +298,55 @@ class AiTranslateQueue implements TaskConsumerInterface
         $message = (string)($result['message'] ?? '');
 
         return $message !== '' && str_contains($message, 'AI_TRANSLATION_BUSY');
+    }
+
+    public function shouldRecoverDeadWorker(Queue $queue, int $deadPid, string $workerOutput): bool
+    {
+        $content = $this->decodeQueueContent($queue);
+        $attempts = max(0, (int)($content['_dead_worker_retries'] ?? 0));
+
+        return $attempts < self::MAX_DEAD_WORKER_RECOVERIES;
+    }
+
+    public function deadWorkerRecoveryPatch(Queue $queue, int $deadPid, string $workerOutput): array
+    {
+        if (!$this->shouldRecoverDeadWorker($queue, $deadPid, $workerOutput)) {
+            return [];
+        }
+
+        $content = $this->decodeQueueContent($queue);
+        $content['_dead_worker_retries'] = max(0, (int)($content['_dead_worker_retries'] ?? 0)) + 1;
+        $encoded = json_encode($content, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if (!is_string($encoded) || $encoded === '') {
+            return [];
+        }
+
+        return [Queue::schema_fields_content => $encoded];
+    }
+
+    public function deadWorkerRecoveryMessage(Queue $queue, int $deadPid, string $workerOutput): string
+    {
+        $attempts = min(
+            self::MAX_DEAD_WORKER_RECOVERIES,
+            max(0, (int)($this->decodeQueueContent($queue)['_dead_worker_retries'] ?? 0)) + 1,
+        );
+
+        return (string)__('I18n AI 翻译进程异常退出，Scheduler 将自动恢复（第 %{1}/%{2} 次）。', [
+            $attempts,
+            self::MAX_DEAD_WORKER_RECOVERIES,
+        ]);
+    }
+
+    /** @return array<string, mixed> */
+    private function decodeQueueContent(Queue $queue): array
+    {
+        $content = $queue->getContent();
+        if (is_array($content)) {
+            return $content;
+        }
+
+        $decoded = json_decode((string)$content, true);
+
+        return is_array($decoded) ? $decoded : [];
     }
 }

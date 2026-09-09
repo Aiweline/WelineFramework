@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace Weline\Theme\Service;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Cache\CachePolicy;
+use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
+use Weline\Framework\Database\TransactionContext;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\ScopeIdentity;
@@ -26,6 +29,7 @@ class ThemeContextService implements ThemeContextProviderInterface
         private readonly ?ThemeScopedWorkspaceInterface $scopedWorkspace = null,
         private readonly ?ScopeHierarchyInterface $scopeHierarchy = null,
         private readonly ?ThemeLayoutScopeNormalizer $layoutScopeNormalizer = null,
+        private readonly ?StorefrontScopeHotCache $hotCache = null,
     ) {
     }
 
@@ -205,14 +209,17 @@ class ThemeContextService implements ThemeContextProviderInterface
 
     public function getDirectActiveTheme(?string $area = null): ?WelineTheme
     {
-        $theme = $this->newThemeModel();
+        $area = $this->normalizeActivationArea($area);
         try {
-            $theme->getActiveTheme($this->normalizeActivationArea($area));
+            $data = $this->rememberThemeForRequest('active:' . ($area ?? 'global'), function () use ($area): array {
+                $theme = $this->newThemeModel();
+                $theme->getActiveTheme($area);
+                return $theme->getId() ? $theme->getData() : [];
+            });
+            return $data !== [] ? $this->newThemeModel()->setData($data) : null;
         } catch (\Throwable) {
             return null;
         }
-
-        return $theme->getId() ? $theme : null;
     }
 
     public function resolveTheme(?string $area = null, ?object $theme = null, bool $allowPreview = true): ?WelineTheme
@@ -489,15 +496,48 @@ class ThemeContextService implements ThemeContextProviderInterface
             if (!$identity instanceof ScopeIdentity) {
                 return null;
             }
-            $scope = $this->getScopeHierarchy()->contextFromIdentity($identity);
-            $resolved = $this->getScopedWorkspace()->resolvePublishedTheme($scope, $area);
-            $themeId = (int)($resolved?->effectiveValue ?? 0);
+            $key = $identity->canonicalKey() . '|' . $area;
+            $builder = function () use ($identity, $area): array {
+                $scope = $this->getScopeHierarchy()->contextFromIdentity($identity);
+                $resolved = $this->getScopedWorkspace()->resolvePublishedTheme($scope, $area);
+                // Package defaults use mutable legacy activation, not a Release.
+                // Cache only absence here; resolve activation in each request.
+                return [
+                    'theme_id' => ($resolved?->sourceReleaseId ?? 0) > 0
+                        ? (int)$resolved->effectiveValue : 0,
+                    'release_id' => $resolved?->sourceReleaseId,
+                ];
+            };
+            // This catalog accepts explicit CLI/queue Scope identities too; its
+            // key owns the full Scope + area and never borrows request dimensions.
+            $binding = $this->canReuseTheme() ? $this->themeHotCache()->rememberPolicy(
+                new CachePolicy(
+                    resource: 'theme.published_binding.v1',
+                    pool: 'theme',
+                    scope: ScopeIdentity::KIND_GLOBAL,
+                    dependencies: ['theme'],
+                    freshTtlSeconds: 300,
+                    staleTtlSeconds: 300,
+                ),
+                $key,
+                $builder,
+            ) : $builder();
+            $themeId = (int)$binding['theme_id'];
             if ($themeId <= 0) {
                 return null;
             }
 
-            $theme = $this->newThemeModel();
-            $theme->load($themeId);
+            // Model rows are not public cache facts yet: legacy model writes
+            // lack changed events. Keep their data in Context, returning copies.
+            $data = $this->rememberThemeForRequest(
+                $key . '|' . $themeId . '|' . (int)$binding['release_id'],
+                function () use ($themeId): array {
+                    $theme = $this->newThemeModel();
+                    $theme->load($themeId);
+                    return $theme->getId() ? $theme->getData() : [];
+                },
+            );
+            $theme = $this->newThemeModel()->setData($data);
             if (!$theme->getId() || !$this->themeSupportsArea($theme, $area)) {
                 return null;
             }
@@ -525,6 +565,24 @@ class ThemeContextService implements ThemeContextProviderInterface
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    private function canReuseTheme(): bool
+    {
+        return RequestContext::isInitialized()
+            && TransactionContext::activeTransactionConnectionCount() === 0;
+    }
+
+    private function themeHotCache(): StorefrontScopeHotCache
+    {
+        return $this->hotCache ?? ObjectManager::getInstance(StorefrontScopeHotCache::class);
+    }
+
+    private function rememberThemeForRequest(string $key, callable $builder): array
+    {
+        return $this->canReuseTheme()
+            ? $this->themeHotCache()->rememberForRequest('theme.runtime_model', $key, $builder)
+            : $builder();
     }
 
     private function newThemeModel(): WelineTheme

@@ -9,8 +9,10 @@ use Weline\Blog\Api\Uri\BlogNamespace;
 use Weline\Blog\Model\Post as PostModel;
 use Weline\Blog\Service\BlogContentResolver;
 use Weline\Blog\Service\BlogScopeResolver;
+use Weline\Blog\Service\BlogSeoFactsBuilder;
 use Weline\Blog\Service\CmsBlogPageRenderBridge;
 use Weline\Framework\App\Controller\FrontendController;
+use Weline\Framework\Runtime\RequestContext;
 
 /** Blog detail: /blog/{slug} — Theme layout blog (Amazon-style article). */
 final class View extends FrontendController
@@ -19,6 +21,7 @@ final class View extends FrontendController
         private readonly BlogContentResolver $resolver,
         private readonly BlogScopeResolver $scope,
         private readonly CmsBlogPageRenderBridge $cmsRenderBridge,
+        private readonly BlogSeoFactsBuilder $seoFacts,
     ) {
     }
 
@@ -44,11 +47,17 @@ final class View extends FrontendController
         }
 
         $this->assign('blog_article', $article->toArray());
-        $this->request->setGet('page_type', 'blog');
+        $this->request->setGet('page_type', 'blog_post');
         $this->request->setGet('theme_public_route', 'blog/' . $slug);
         $this->request->setGet('theme_page_title', $article->title);
         $this->assign('page_title', $article->title);
         $this->assign('title', $article->title);
+        // Prefer request-aware getUrl so canonical/hreflang self keep /{currency}/{locale}/…
+        $canonical = (string)$this->getUrl('blog/' . $slug);
+        $this->assign('seo', $this->seoFacts->buildDetailProfile($article, $canonical));
+        RequestContext::set('blog.seo.canonical.v1', $canonical);
+        $this->assign('blog_rss_url', BlogNamespace::rssPublicPath());
+        $this->assign('blog_rss_label', (string)__('订阅博客 RSS'));
 
         if ($article->contentKind === BlogArticle::KIND_CMS) {
             return $this->cmsRenderBridge->render($this, $article);
@@ -79,6 +88,10 @@ final class View extends FrontendController
         $postId = (int)($article->sourceRef['post_id'] ?? 0);
         if ($postId <= 0) {
             return '';
+        }
+        $cached = RequestContext::get('blog.published_post.by_id.v1.' . $postId);
+        if (\is_array($cached)) {
+            return (string)($cached[PostModel::schema_fields_CONTENT] ?? '');
         }
         $model = \Weline\Framework\Manager\ObjectManager::getInstance(PostModel::class);
         $model->clearData()->reset()->load($postId);

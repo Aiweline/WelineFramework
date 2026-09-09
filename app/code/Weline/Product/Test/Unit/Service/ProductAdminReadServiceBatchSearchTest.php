@@ -225,7 +225,7 @@ final class ProductAdminReadServiceBatchSearchTest extends TestCase
         self::assertSame(range(1, 205), array_merge(...array_map(
             static fn(array $query): array => $query['entity_id'][0], $queries->reads['attribute_value'],
         )));
-        self::assertCount(205, $queries->reads['store_product'] ?? [], 'Store selection checks remain necessary.');
+        self::assertCount(2, $queries->reads['store_product'] ?? [], 'Store selection must use one overlay read per bounded product batch.');
         self::assertSame(['price' => 0, 'media' => 0, 'display_stores' => 0], [
             'price' => count($queries->reads['price'] ?? []),
             'media' => count($queries->reads['media'] ?? []),
@@ -266,7 +266,7 @@ final class ProductAdminReadServiceBatchSearchTest extends TestCase
                     'website_id' => 99, 'store_code' => 'request-store', 'channel_code' => 'request-channel',
                 ]));
             }
-            self::assertCount(14, $queries->reads['store_product'] ?? []);
+            self::assertCount(2, $queries->reads['store_product'] ?? []);
             foreach ($queries->reads['store_product'] as $query) {
                 self::assertSame([7, '='], $query['store_id'], 'The resolved store scope must reach the real reader.');
             }
@@ -337,7 +337,7 @@ final class ProductAdminReadServiceBatchSearchTest extends TestCase
     {
         $identityReads = 0;
         $identities = $this->identityReaderRecordingReads($identityReads);
-        [$service] = $this->fixture([
+        [$service, $queries] = $this->fixture([
             ['product_id' => 1, 'global_product_uuid' => '00000000-0000-4000-8000-000000000001',
                 'sku' => 'SKU-1', 'status' => 'published', 'updated_at' => '2026-09-06 12:00:00'],
         ], relatedRows: [
@@ -350,6 +350,83 @@ final class ProductAdminReadServiceBatchSearchTest extends TestCase
             $service->searchSelectionRows(1, ['status' => 'published']),
         );
         self::assertSame(0, $identityReads, 'Base-only selection rows do not need authoritative identity fields.');
+        self::assertSame([], $queries->reads['offer'] ?? [], 'A status-only selection does not inspect SKUs.');
+        self::assertSame([], $queries->reads['attribute_value'] ?? [], 'A status-only selection does not inspect names.');
+    }
+
+    public function testSelectionBatchesAuthoritativeIdentitiesAndStoreOverlaysWithoutChangingScope(): void
+    {
+        $path = sys_get_temp_dir() . '/weline_selection_identity_' . bin2hex(random_bytes(8)) . '.sqlite';
+        $connection = ConnectionFactory::getInstance(new \Weline\Framework\Database\DbManager\ConfigProvider([
+            'type' => 'sqlite', 'database' => '', 'path' => $path, 'persistent' => false,
+        ]));
+        try {
+            $pdo = $connection->getConnector()->getWrappedConnection()->getPdo();
+            $pdo->exec('CREATE TABLE weline_product_identity_v2 (registry_id INTEGER PRIMARY KEY, global_product_uuid TEXT, product_code TEXT, product_type TEXT, owner_website_id INTEGER)');
+            $pdo->exec('CREATE TABLE product_ws_1_store_product (store_product_id INTEGER PRIMARY KEY, product_id INTEGER, store_id INTEGER, selected INTEGER)');
+            $pdo->exec('INSERT INTO product_ws_1_store_product VALUES (1, 1, 7, 0), (2, 3, 8, 0)');
+            $pdo->exec('CREATE TABLE product_shard_registry (registry_id INTEGER PRIMARY KEY, website_id INTEGER, status TEXT)');
+            $pdo->exec("INSERT INTO product_shard_registry VALUES (1, 1, 'ready')");
+            $registry = new \Weline\Product\Model\ProductShardRegistry();
+            $registry->setConnection($connection);
+            $registry->__init();
+            $insert = $pdo->prepare('INSERT INTO weline_product_identity_v2 VALUES (?, ?, ?, ?, ?)');
+            $products = [];
+            foreach (range(1, 205) as $id) {
+                $uuid = sprintf('0000000A-0000-4000-8000-%012d', $id);
+                $products[] = ['product_id' => $id, 'global_product_uuid' => $uuid,
+                    'status' => 'published', 'product_type' => 'simple', 'product_code' => 'LOCAL-' . $id,
+                    'owner_website_id' => 1, 'updated_at' => '2026-09-06 12:00:00'];
+                if ($id < 205) {
+                    $insert->execute([$id, strtolower($uuid), 'GLOBAL-' . $id, $id % 2 === 1 ? 'simple' : 'virtual', 1]);
+                }
+            }
+            $identityReads = 0;
+            $identities = new \Weline\Product\Service\ProductIdentityV2Service(
+                $connection, $this->createStub(DatabaseTransactionRunnerInterface::class),
+                productRegistryFactory: static function () use ($connection, &$identityReads): \Weline\Product\Model\ProductIdentityRegistry {
+                    ++$identityReads;
+                    $model = new \Weline\Product\Model\ProductIdentityRegistry();
+                    $model->setConnection($connection);
+                    $model->__init();
+                    return $model;
+                },
+            );
+            $storeReads = 0;
+            $storeProducts = new StoreProductRepository(
+                new ProductShardProvisioner($registry, $this->createStub(\Weline\Framework\Database\Schema\Shard\ShardSchemaProvisionerInterface::class)),
+                modelFactory: static function (int $websiteId) use ($connection, &$storeReads): \Weline\Product\Model\Shard\StoreProduct {
+                    ++$storeReads;
+                    $model = new \Weline\Product\Model\Shard\StoreProduct();
+                    $model->setConnection($connection);
+                    $model->__init();
+                    return $model->forWebsite($websiteId);
+                },
+            );
+            [$service, $queries] = $this->fixture($products, [], $identities, $storeProducts);
+            $expected = array_values(array_filter(range(205, 1), static fn(int $id): bool => $id > 1 && $id % 2 === 1));
+            self::assertSame($expected, array_column($service->searchSelectionRows(1, [
+                'status' => 'published', 'type' => 'simple', 'store_id' => 7,
+            ]), 'product_id'));
+            self::assertSame(2, $identityReads, 'Authoritative identity reads must be bounded by product batches, not products.');
+            self::assertSame(2, $storeReads);
+            self::assertSame([], $queries->reads['offer'] ?? []);
+            self::assertSame([], $queries->reads['attribute_value'] ?? []);
+            self::assertSame([], $identities->resolveProductsByUuids(['invalid-uuid']), 'Existing bulk callers keep permissive input behavior.');
+            [$invalid] = $this->fixture([
+                ['product_id' => 1, 'global_product_uuid' => 'invalid-uuid', 'product_type' => 'simple'],
+            ], [], $identities);
+            try {
+                $invalid->searchSelectionRows(1, ['type' => 'simple']);
+                self::fail('Selection must preserve the single-reader invalid UUID exception.');
+            } catch (\InvalidArgumentException $error) {
+                self::assertSame('uuid_invalid', $error->getMessage());
+            }
+        } finally {
+            $connection->getConnector()->close();
+            $connection->close();
+            if (is_file($path)) { unlink($path); }
+        }
     }
 
     private function identityReaderRecordingReads(int &$identityReads): \Weline\Product\Service\ProductIdentityV2Service
@@ -366,7 +443,7 @@ final class ProductAdminReadServiceBatchSearchTest extends TestCase
     }
 
     /** @return array{ProductAdminReadService, BatchSearchReadLog} */
-    private function fixture(?array $products = null, array $relatedRows = [], ?\Weline\Product\Service\ProductIdentityV2Service $identities = null): array
+    private function fixture(?array $products = null, array $relatedRows = [], ?\Weline\Product\Service\ProductIdentityV2Service $identities = null, ?StoreProductRepository $storeProducts = null): array
     {
         $queries = new BatchSearchReadLog();
         $products ??= [
@@ -419,7 +496,7 @@ final class ProductAdminReadServiceBatchSearchTest extends TestCase
                 $this->createStub(DatabaseTransactionRunnerInterface::class),
                 modelFactory: $factory('media', $relatedRows['media'] ?? []),
             ),
-            'storeProducts' => new StoreProductRepository($provisioner, modelFactory: $factory('store_product', [])),
+            'storeProducts' => $storeProducts ?? new StoreProductRepository($provisioner, modelFactory: $factory('store_product', [])),
             'storeCatalog' => $stores,
             'mediaPresenter' => new ProductAdminMediaPresenter($this->createStub(FileAssetManagerInterface::class)),
         ];
@@ -455,6 +532,7 @@ final class BatchSearchQueryModel extends AbstractWebsiteShardModel
 {
     private array $conditions = [];
     private array $found = [];
+    private array $ordering = [];
 
     public function __construct(private string $entity, private array $fixtureRows, private BatchSearchReadLog $queries)
     {
@@ -469,6 +547,7 @@ final class BatchSearchQueryModel extends AbstractWebsiteShardModel
     {
         $this->conditions = [];
         $this->found = [];
+        $this->ordering = [];
         return $this;
     }
 
@@ -486,7 +565,7 @@ final class BatchSearchQueryModel extends AbstractWebsiteShardModel
 
     public function fetchArray(): array
     {
-        return array_values(array_filter($this->fixtureRows, function (array $row): bool {
+        $rows = array_values(array_filter($this->fixtureRows, function (array $row): bool {
             foreach ($this->conditions as $field => [$value, $operator]) {
                 $actual = $row[$field] ?? null;
                 if ($operator === 'IN' ? !in_array($actual, (array)$value, false) : $actual != $value) {
@@ -495,6 +574,20 @@ final class BatchSearchQueryModel extends AbstractWebsiteShardModel
             }
             return true;
         }));
+        usort($rows, function (array $left, array $right): int {
+            foreach ($this->ordering as [$field, $direction]) {
+                $compare = ($left[$field] ?? null) <=> ($right[$field] ?? null);
+                if ($compare !== 0) { return $direction === 'DESC' ? -$compare : $compare; }
+            }
+            return 0;
+        });
+        return $rows;
+    }
+
+    public function order($field, $direction = 'ASC'): static
+    {
+        $this->ordering[] = [(string)$field, strtoupper((string)$direction)];
+        return $this;
     }
 
     public function fetchIterator(): \Generator

@@ -158,7 +158,9 @@ class SystemConfig extends \Weline\Framework\Database\Model
         }
 
         $cacheEntry = $this->readCacheEnvelope($this->buildModuleRowsCacheKey($module, $area, $scope, $locale));
-        if ($cacheEntry['hit']) {
+        // Empty envelopes are not durable hits: a prior negative cache must not hide
+        // rows inserted after the empty snapshot was written.
+        if ($cacheEntry['hit'] && \is_array($cacheEntry['value']) && $cacheEntry['value'] !== []) {
             RequestContext::set($requestCacheKey, $cacheEntry['value']);
             return $cacheEntry['value'];
         }
@@ -166,7 +168,7 @@ class SystemConfig extends \Weline\Framework\Database\Model
         $rowsByKey = [];
         foreach ($this->getFallbackScopes($scope) as $fallbackScope) {
             foreach ($this->getFallbackLocales($locale) as $fallbackLocale) {
-                foreach ($this->loadConfigRowsByModuleIfAvailable($module, $area, $fallbackScope, $fallbackLocale) as $row) {
+                foreach ($this->getExactModuleRows($module, $area, $fallbackScope, $fallbackLocale) as $row) {
                     $rowKey = (string)($row[self::schema_fields_KEY] ?? '');
                     if ($rowKey === '' || isset($rowsByKey[$rowKey])) {
                         continue;
@@ -185,7 +187,9 @@ class SystemConfig extends \Weline\Framework\Database\Model
         $rows = array_values($rowsByKey);
         self::$configs[$area][$module] = $rows;
         RequestContext::set($requestCacheKey, $rows);
-        $this->writeCacheEnvelope($this->buildModuleRowsCacheKey($module, $area, $scope, $locale), $rows);
+        if ($rows !== []) {
+            $this->writeCacheEnvelope($this->buildModuleRowsCacheKey($module, $area, $scope, $locale), $rows);
+        }
 
         return $rows;
     }
@@ -355,7 +359,7 @@ class SystemConfig extends \Weline\Framework\Database\Model
         $records = [];
         foreach ($resolver->chainFromIdentity($identity) as $storageScope) {
             foreach ($this->getFallbackLocales($locale) as $fallbackLocale) {
-                $row = $this->loadExactConfigRow($key, $module, $area, $storageScope, $fallbackLocale);
+                $row = $this->findExactModuleRow($key, $module, $area, $storageScope, $fallbackLocale);
                 if ($row === null) {
                     continue;
                 }
@@ -912,18 +916,91 @@ class SystemConfig extends \Weline\Framework\Database\Model
      */
     private function loadResolvedConfigRow(string $key, string $module, string $area, string $scope, string $locale): ?array
     {
+        $rows = $this->getConfigByModule($module, $area, $scope, $locale) ?? [];
+        foreach ($rows as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            if ((string)($row[self::schema_fields_KEY] ?? '') === $key) {
+                return $row;
+            }
+        }
+
+        // Module snapshot can be empty/stale (negative cache or mid-request drift).
+        // Exact row reads bypass that snapshot — same authority as getScopedConfigRow.
         foreach ($this->getFallbackScopes($scope) as $fallbackScope) {
             foreach ($this->getFallbackLocales($locale) as $fallbackLocale) {
-                $row = $this->loadSingleConfigRowIfAvailable($key, $module, $area, $fallbackScope, $fallbackLocale);
-                if ($row !== null) {
-                    if (array_key_exists(self::schema_fields_IS_ACTIVE, $row) && (int)$row[self::schema_fields_IS_ACTIVE] === 0) {
-                        continue;
-                    }
-                    if (SystemConfigLockService::isRowSuppressed($row)) {
-                        continue;
-                    }
-                    return $this->normalizeRow($row, $fallbackScope, $fallbackLocale);
+                $row = $this->loadExactConfigRow($key, $module, $area, $fallbackScope, $fallbackLocale);
+                if (!\is_array($row)) {
+                    continue;
                 }
+                if (\array_key_exists(self::schema_fields_IS_ACTIVE, $row) && (int)$row[self::schema_fields_IS_ACTIVE] === 0) {
+                    continue;
+                }
+                if (SystemConfigLockService::isRowSuppressed($row)) {
+                    continue;
+                }
+
+                return $this->normalizeRow($row, $fallbackScope, $fallbackLocale);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Exact module rows for one storage scope + locale (no inheritance merge).
+     * Shared by map/resolved/typed readers so single-key paths do not re-query.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function getExactModuleRows(
+        string $module,
+        string $area,
+        string $scope,
+        string $locale,
+    ): array {
+        $scope = $this->normalizeScope($scope);
+        $locale = $this->normalizeLocale($locale);
+        $requestCacheKey = $this->buildRequestCacheKey('module_exact_rows', $module, $area, null, $scope, $locale);
+        if (RequestContext::has($requestCacheKey)) {
+            $cached = RequestContext::get($requestCacheKey);
+
+            return \is_array($cached) ? $cached : [];
+        }
+
+        $cacheEntry = $this->readCacheEnvelope($this->buildExactModuleRowsCacheKey($module, $area, $scope, $locale));
+        if ($cacheEntry['hit'] && \is_array($cacheEntry['value']) && $cacheEntry['value'] !== []) {
+            RequestContext::set($requestCacheKey, $cacheEntry['value']);
+
+            return $cacheEntry['value'];
+        }
+
+        $rows = $this->loadConfigRowsByModuleIfAvailable($module, $area, $scope, $locale);
+        RequestContext::set($requestCacheKey, $rows);
+        if ($rows !== []) {
+            $this->writeCacheEnvelope($this->buildExactModuleRowsCacheKey($module, $area, $scope, $locale), $rows);
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function findExactModuleRow(
+        string $key,
+        string $module,
+        string $area,
+        string $scope,
+        string $locale,
+    ): ?array {
+        foreach ($this->getExactModuleRows($module, $area, $scope, $locale) as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            if ((string)($row[self::schema_fields_KEY] ?? '') === $key) {
+                return $row;
             }
         }
 
@@ -971,6 +1048,8 @@ class SystemConfig extends \Weline\Framework\Database\Model
      */
     private function loadExactConfigRow(string $key, string $module, string $area, string $scope, string $locale): ?array
     {
+        // Writes and conflict/override checks require the authoritative row,
+        // independent of a read snapshot captured earlier in this request.
         return $this->loadSingleConfigRowIfAvailable($key, $module, $area, $scope, $locale);
     }
 
@@ -1439,6 +1518,17 @@ class SystemConfig extends \Weline\Framework\Database\Model
         $vector = ObjectManager::getInstance(ScopeConfigCacheInvalidator::class)->versionVectorFor($scope);
 
         return 'system_config_rows_' . sha1(implode('|', [$area, $module, $scope, $locale, $vector]));
+    }
+
+    private function buildExactModuleRowsCacheKey(
+        string $module,
+        string $area,
+        string $scope = self::SCOPE_GLOBAL,
+        string $locale = self::LOCALE_DEFAULT
+    ): string {
+        $vector = ObjectManager::getInstance(ScopeConfigCacheInvalidator::class)->versionVectorFor($scope);
+
+        return 'system_config_exact_rows_' . sha1(implode('|', [$area, $module, $scope, $locale, $vector]));
     }
 
     private function buildModuleMapCacheKey(

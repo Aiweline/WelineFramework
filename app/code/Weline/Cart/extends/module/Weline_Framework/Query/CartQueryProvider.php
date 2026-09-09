@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Weline\Cart\Extends\Module\Weline_Framework\Query;
 
 use Weline\Cart\Service\CartCurrentCustomerResolver;
+use Weline\Cart\Service\CartPersistencePolicy;
 use Weline\Cart\Service\CartScopeResolver;
 use Weline\Cart\Service\CartConflictException;
 use Weline\Cart\Service\CartService;
@@ -101,10 +102,11 @@ class CartQueryProvider implements QueryProviderInterface
         if ($token === '') {
             $token = $this->cartService->issueGuestToken();
         }
+        $guestTtl = CartPersistencePolicy::guestTtlSeconds();
         Cookie::set(
             CartService::GUEST_TOKEN_COOKIE,
             $token,
-            3600 * 24 * 7,
+            $guestTtl,
             [
                 'path' => '/',
                 'httponly' => true,
@@ -114,8 +116,8 @@ class CartQueryProvider implements QueryProviderInterface
         return $this->success('Guest token issued.', [
             'guest_token' => $token,
             'success' => true,
-            'ttl_seconds' => 3600 * 24 * 7,
-            'expires_at_ms' => (int)(\round(\microtime(true) * 1000) + (3600 * 24 * 7 * 1000)),
+            'ttl_seconds' => $guestTtl,
+            'expires_at_ms' => CartPersistencePolicy::guestExpiresAtMs(),
         ]);
     }
 
@@ -143,10 +145,11 @@ class CartQueryProvider implements QueryProviderInterface
             // Empty carts may not be persisted yet; cookie renew still proceeds.
         }
 
+        $guestTtl = CartPersistencePolicy::guestTtlSeconds();
         Cookie::set(
             CartService::GUEST_TOKEN_COOKIE,
             $guestToken,
-            3600 * 24 * 7,
+            $guestTtl,
             [
                 'path' => '/',
                 'httponly' => true,
@@ -157,8 +160,8 @@ class CartQueryProvider implements QueryProviderInterface
         return $this->success('Guest session renewed.', [
             'guest_token' => $guestToken,
             'success' => true,
-            'ttl_seconds' => 3600 * 24 * 7,
-            'expires_at_ms' => (int)(\round(\microtime(true) * 1000) + (3600 * 24 * 7 * 1000)),
+            'ttl_seconds' => $guestTtl,
+            'expires_at_ms' => CartPersistencePolicy::guestExpiresAtMs(),
         ]);
     }
 
@@ -230,14 +233,16 @@ class CartQueryProvider implements QueryProviderInterface
                 }
             }
             $itemId = trim((string)($params['item_id'] ?? ''));
+            $preference = $this->cartServicePreference($params);
             $summary = $remove
-                ? $this->cartService->removeItem($scope, $itemId, $guestToken, $customerId)
+                ? $this->cartService->removeItem($scope, $itemId, $guestToken, $customerId, $preference)
                 : $this->cartService->updateItem(
                     $scope,
                     $itemId,
                     max(1, min(999, (int)($params['qty'] ?? 1))),
                     $guestToken,
                     $customerId,
+                    $preference,
                 );
 
             $summary = $this->enrichSummaryWithDiscountPreview($summary, $params);
@@ -269,7 +274,12 @@ class CartQueryProvider implements QueryProviderInterface
                 : null;
 
             return $this->successFromSummary(
-                $this->cartService->clearCart($scope, $guestToken, $customerId),
+                $this->cartService->clearCart(
+                    $scope,
+                    $guestToken,
+                    $customerId,
+                    $this->cartServicePreference($params),
+                ),
             );
         } catch (\Throwable $e) {
             return [
@@ -387,7 +397,19 @@ class CartQueryProvider implements QueryProviderInterface
         }
 
         $couponSession = ObjectManager::getInstance(MarketingCheckoutCouponSession::class);
-        $couponCode = trim((string)($params['coupon_code'] ?? $couponSession->getCouponCode()));
+        $cartType = strtolower(trim((string)($summary['cart_type'] ?? $params['cart_type'] ?? $params['selling_mode'] ?? $params['sellingMode'] ?? 'toc')));
+        if ($cartType === '') {
+            $cartType = 'toc';
+        }
+        if (!$couponSession->couponsAllowedForCartType($cartType)) {
+            // Non-retail carts (e.g. tob) must not inherit retail coupon session / Marketing rules.
+            return null;
+        }
+
+        $couponCode = trim((string)($params['coupon_code'] ?? ''));
+        if ($couponCode === '') {
+            $couponCode = $couponSession->getCouponCode($cartType);
+        }
 
         $request = new DiscountQuoteRequest(
             scope: $this->scopeResolver->fromParams($params)->toArray(),
@@ -743,7 +765,7 @@ class CartQueryProvider implements QueryProviderInterface
                     'cost' => 1,
                     'params' => $this->guestTokenParam(),
                     'returns' => $commonReturns,
-                    'summary' => 'Renew guest cart cookie/cache TTL for another week',
+                    'summary' => 'Renew guest cart cookie/cache TTL for another 15 days',
                 ],
                 [
                     'name' => 'clear',
@@ -772,7 +794,7 @@ class CartQueryProvider implements QueryProviderInterface
                     'cost' => 2,
                     'params' => [
                         'coupon_code' => ['type' => 'string', 'max_length' => 64],
-                    ],
+                    ] + $this->guestTokenParam() + $this->sellingModeParams(),
                     'returns' => $commonReturns,
                     'summary' => 'Read-only estimated discount preview for cart summary',
                 ],
@@ -805,7 +827,7 @@ class CartQueryProvider implements QueryProviderInterface
             'channel_code' => ['type' => 'string', 'max_length' => 64],
             'store_mode' => ['type' => 'string', 'max_length' => 32],
             'scope' => ['type' => 'array', 'max_items' => 7],
-        ];
+        ] + $this->sellingModeParams();
         if ($includeQty) {
             $params['qty'] = ['type' => 'int', 'min' => 1, 'max' => 999];
         }

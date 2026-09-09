@@ -15,7 +15,8 @@
 }
 
 .weline-main-content {
-    flex: 1;
+    /* Keep the page shell's main area at its intrinsic content height. */
+    flex: 1 0 auto;
     width: 100%;
     min-height: 80vh;
     background-color: var(--weline-theme-body-bg, var(--weline-chrome-body-bg, var(--color-bg-canvas, var(--weline-theme-canvas, #ffffff))));
@@ -1745,7 +1746,7 @@ table.table tbody tr:hover {
     color: inherit;
 }
 
-[data-surface="inverse"] a:not([class*="w-button"]):not(.btn),
+[data-surface="inverse"] a:not([class*="w-button"]):not(.btn):not(.mini-cart-drawer__btn),
 [data-surface="inverse"] button:not(.w-button):not(.btn):not(.search-submit-btn):not(.search-category-facade):not(.search-type-facade):not(.search-type-trigger),
 [data-surface="inverse"] .w-icon,
 [data-surface="inverse"] svg {

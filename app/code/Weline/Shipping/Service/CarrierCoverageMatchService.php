@@ -54,14 +54,25 @@ final class CarrierCoverageMatchService
             return [];
         }
 
+        /** @var ShippingConfigScopeService $scopeSvc */
+        $scopeSvc = $this->objectManager->getInstance(ShippingConfigScopeService::class);
+        $layer = $scopeSvc->resolveNearestServiceLayer($context);
+
         /** @var ShippingService $serviceModel */
         $serviceModel = $this->objectManager->getInstance(ShippingService::class);
         $result = [];
         foreach ($carrierIds as $carrierId) {
             try {
-                $services = $serviceModel->reset()
+                $query = $serviceModel->reset()
                     ->where(ShippingService::schema_fields_CARRIER_ID, $carrierId)
-                    ->where(ShippingService::schema_fields_IS_ACTIVE, 1)
+                    ->where(ShippingService::schema_fields_IS_ACTIVE, 1);
+                $scopeSvc->applyScopeWhere(
+                    $query,
+                    $layer,
+                    ShippingService::schema_fields_SCOPE_TYPE,
+                    ShippingService::schema_fields_SCOPE_ID,
+                );
+                $services = $query
                     ->order(ShippingService::schema_fields_SORT_ORDER, 'ASC')
                     ->select()
                     ->fetch()
@@ -81,6 +92,8 @@ final class CarrierCoverageMatchService
                     'estimated_days_min' => $service->getData(ShippingService::schema_fields_ESTIMATED_DAYS_MIN),
                     'estimated_days_max' => $service->getData(ShippingService::schema_fields_ESTIMATED_DAYS_MAX),
                     'is_free_shipping' => $service->getData(ShippingService::schema_fields_IS_FREE_SHIPPING),
+                    'scope_type' => $service->getData(ShippingService::schema_fields_SCOPE_TYPE),
+                    'scope_id' => $service->getData(ShippingService::schema_fields_SCOPE_ID),
                 ];
             }
         }

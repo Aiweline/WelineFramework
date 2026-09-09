@@ -28,12 +28,28 @@ class PageSeoContextResolver
             $slot = 'head';
         }
         $meta = $this->pageMeta($template);
+        $published = SeoPageProfileBag::pull();
         $seo = $this->toArray($this->readTemplate($template, 'seo'));
+        if ($published !== []) {
+            // Controller/layout facts published before Theme unsetData() win over an empty head Template.
+            $seo = array_replace_recursive($seo, $published);
+        }
         $product = $this->firstNonEmpty([
             $this->readTemplate($template, 'product'),
             $this->read($seo, ['product']),
+            $published['product'] ?? null,
         ]);
-        $category = $this->readTemplate($template, 'category');
+        $category = $this->firstNonEmpty([
+            $this->readTemplate($template, 'category'),
+            $this->read($seo, ['category']),
+            $published['category'] ?? null,
+        ]);
+        // Product pages must not emit listing ItemList (variants belong in ProductGroup).
+        if (strtolower(str_replace(['-', ' '], '_', trim((string) ($seo['page_type'] ?? '')))) === 'product'
+            || is_array($product)
+        ) {
+            unset($seo['item_list'], $published['item_list']);
+        }
         $page = $this->readTemplate($template, 'page');
         $currentPost = $this->readTemplate($template, 'current_post');
         if (!$page && $currentPost) {
@@ -44,6 +60,7 @@ class PageSeoContextResolver
             $this->readTemplate($template, 'site_name'),
             $this->read($seo, ['site_name', 'siteName']),
             $this->read($meta, ['site_name', 'siteName']),
+            $published['site_name'] ?? null,
             'Weline Framework',
         ]);
 
@@ -52,7 +69,8 @@ class PageSeoContextResolver
             $this->read($meta, ['controller_title']),
             $this->meaningfulTemplateTitle($template),
         ]);
-        $layoutAwareTitle = $this->combineTitleAndLayoutName((string) $controllerTitle, (string) $layoutName);
+        // Layout @meta.name is a designer label (e.g.「搜索页默认布局」), never a public title.
+        $layoutAwareTitle = trim((string) $controllerTitle);
         $title = $this->firstNonEmpty([
             $this->read($seo, ['title', 'meta_title']),
             $this->readTemplate($template, 'meta_title'),
@@ -61,10 +79,11 @@ class PageSeoContextResolver
             $this->read($category, ['meta_title', 'name', 'title']),
             $this->read($page, ['meta_title', 'title', 'name']),
             $layoutAwareTitle,
-            $this->read($meta, ['title']),
             $this->routeTitle($template),
             $siteName,
         ]);
+        // Keep layout name only for diagnostics; do not leak into public <title>.
+        unset($layoutName);
 
         $description = $this->normalizeDescription($this->firstNonEmpty([
             $this->read($seo, ['description', 'meta_description']),
@@ -89,6 +108,9 @@ class PageSeoContextResolver
         ]);
 
         $url = $this->currentUrl($template);
+        if ($url === '' && trim((string) ($options['canonical_url'] ?? $options['url'] ?? '')) !== '') {
+            $url = trim((string) ($options['canonical_url'] ?? $options['url']));
+        }
         $canonical = $this->firstNonEmpty([
             $this->read($seo, ['canonical', 'canonical_url']),
             $this->readTemplate($template, 'canonical_url'),
@@ -96,6 +118,7 @@ class PageSeoContextResolver
             $this->read($product, ['canonical', 'url']),
             $this->read($category, ['canonical', 'url']),
             $this->read($page, ['canonical', 'url']),
+            $options['canonical_url'] ?? null,
             $this->canonicalizeUrl($url),
         ]);
 
@@ -143,15 +166,26 @@ class PageSeoContextResolver
             'image_alt' => $imageAlt,
             'locale' => (string) ($this->readTemplate($template, 'lang_local') ?: w_env('user.lang', 'en_US')),
             'alternates' => $this->normalizeAlternates($this->read($seo, ['alternates', 'hreflang'])),
+            'feeds' => $this->normalizeFeeds($this->firstNonEmpty([
+                $this->read($seo, ['feeds']),
+                $this->readTemplate($template, 'feeds'),
+            ])),
             'search_url_template' => (string) $this->firstNonEmpty([
                 $this->read($seo, ['search_url_template', 'site_search_url_template']),
                 $this->read($meta, ['search_url_template', 'site_search_url_template']),
             ]),
-            'site_search_enabled' => (bool) $this->firstNonEmpty([
-                $this->read($seo, ['site_search_enabled']),
-                $this->read($meta, ['site_search_enabled']),
-            ]),
+            // Default ON for Google sitelinks SearchAction. Only honor an explicit false.
+            // (bool) firstNonEmpty(...) was wrong: missing → '' → false, so list/home lost potentialAction.
+            'site_search_enabled' => $this->resolveSiteSearchEnabled(
+                is_array($seo) ? $seo : [],
+                is_array($meta) ? $meta : []
+            ),
             'breadcrumbs' => $breadcrumbs,
+            'breadcrumb_trails' => $this->normalizeBreadcrumbTrails($this->firstNonEmpty([
+                $this->readTemplate($template, 'storefront_product_breadcrumb_trails'),
+                $this->read($seo, ['breadcrumb_trails']),
+                $published['breadcrumb_trails'] ?? null,
+            ]), $template),
             'product' => $product,
             'category' => $category,
             'page' => $page,
@@ -168,6 +202,15 @@ class PageSeoContextResolver
                 $this->read($page, ['item_list', 'items']),
                 $this->read($category, ['item_list', 'seo_directory']),
             ]), $template),
+            'item_list_total' => (int) $this->firstNonEmpty([
+                $this->read($seo, ['item_list_total', 'listing_total']),
+                $this->readTemplate($template, 'storefront_listing_count'),
+                $this->readTemplate($template, 'storefront_listing_total'),
+            ]),
+            'item_list_page' => (int) $this->firstNonEmpty([
+                $this->read($seo, ['item_list_page', 'listing_page']),
+                $this->readTemplate($template, 'storefront_listing_page'),
+            ]),
             'schema_nodes' => $this->normalizeSchemaNodes($this->firstNonEmpty([
                 $this->readTemplate($template, 'schema_nodes'),
                 $this->read($seo, ['schema_nodes']),
@@ -212,6 +255,24 @@ class PageSeoContextResolver
         );
 
         $context = $this->applySeoProfileProviders($template, $context);
+        // Providers often publish path-only canonicals (/blog, /help). Absolutize after merge
+        // so head + JSON-LD never emit relative URLs to Google.
+        $context['canonical_url'] = $this->canonicalizeUrl(
+            $this->absoluteUrl($template, (string) ($context['canonical_url'] ?? ''))
+        );
+        $resolvedUrl = $this->absoluteUrl($template, (string) ($context['url'] ?? ''));
+        if ($resolvedUrl !== '') {
+            $context['url'] = $resolvedUrl;
+        }
+        if (!empty($context['image'])) {
+            $context['image'] = $this->absoluteUrl($template, $context['image']);
+        }
+        if (!empty($context['breadcrumbs']) && is_array($context['breadcrumbs'])) {
+            $context['breadcrumbs'] = $this->normalizeBreadcrumbs($context['breadcrumbs'], $template);
+        }
+        if (!empty($context['breadcrumb_trails']) && is_array($context['breadcrumb_trails'])) {
+            $context['breadcrumb_trails'] = $this->normalizeBreadcrumbTrails($context['breadcrumb_trails'], $template);
+        }
         $context['faqs'] = $this->normalizeFaqs($context['faqs'] ?? []);
         if (trim((string) ($context['robots'] ?? '')) === '') {
             $context['robots'] = $this->defaultRobots(
@@ -281,6 +342,36 @@ class PageSeoContextResolver
             }
         }
         return null;
+    }
+
+    /**
+     * @param array<string, mixed> $seo
+     * @param array<string, mixed> $meta
+     */
+    private function resolveSiteSearchEnabled(array $seo, array $meta): bool
+    {
+        foreach ([$seo, $meta] as $source) {
+            if (!array_key_exists('site_search_enabled', $source)) {
+                continue;
+            }
+            $raw = $source['site_search_enabled'];
+            if (is_bool($raw)) {
+                return $raw;
+            }
+            if ($raw === 0 || $raw === '0' || $raw === 'false' || $raw === 'False' || $raw === 'FALSE') {
+                return false;
+            }
+            if ($raw === 1 || $raw === '1' || $raw === 'true' || $raw === 'True' || $raw === 'TRUE') {
+                return true;
+            }
+            if ($raw === null || $raw === '') {
+                continue;
+            }
+
+            return filter_var($raw, FILTER_VALIDATE_BOOLEAN);
+        }
+
+        return true;
     }
 
     /**
@@ -657,8 +748,14 @@ class PageSeoContextResolver
             $this->read($seo, ['page_type', 'type']),
             $this->read($meta, ['page_type', 'type']),
             $this->read($page, ['page_type', 'type']),
+            $this->requestPageType(),
         ]);
         if ($explicit !== '') {
+            $normalized = strtolower(str_replace(['-', ' '], '_', trim($explicit)));
+            if ($normalized === 'homepage' || $normalized === 'index') {
+                return 'home';
+            }
+
             return $explicit;
         }
         if ($product) {
@@ -668,6 +765,19 @@ class PageSeoContextResolver
             return 'category';
         }
         return 'web_page';
+    }
+
+    private function requestPageType(): string
+    {
+        $request = $this->currentRequest();
+        if (is_object($request) && method_exists($request, 'getParam')) {
+            return trim((string) $request->getParam('page_type', ''));
+        }
+        if (is_object($request) && method_exists($request, 'getGet')) {
+            return trim((string) $request->getGet('page_type', ''));
+        }
+
+        return '';
     }
 
     private function defaultRobots(string $pageType, string $canonical, string $url): string
@@ -743,6 +853,25 @@ class PageSeoContextResolver
             }
             $normalized[] = ['name' => $name, 'url' => $url];
         }
+        return $normalized;
+    }
+
+    /**
+     * @return list<list<array{name:string,url:string}>>
+     */
+    private function normalizeBreadcrumbTrails(mixed $trails, $template): array
+    {
+        if (!is_array($trails) || $trails === []) {
+            return [];
+        }
+        $normalized = [];
+        foreach ($trails as $trail) {
+            $items = $this->normalizeBreadcrumbs($trail, $template);
+            if (count($items) >= 2) {
+                $normalized[] = $items;
+            }
+        }
+
         return $normalized;
     }
 
@@ -945,17 +1074,59 @@ class PageSeoContextResolver
      */
     private function mergeProviderContext(array $context, array $provided): array
     {
-        foreach (['schema_nodes', 'item_list', 'faqs', 'qa_list'] as $listKey) {
+        foreach (['schema_nodes', 'item_list', 'faqs', 'qa_list', 'feeds', 'breadcrumbs', 'breadcrumb_trails'] as $listKey) {
             if (isset($provided[$listKey]) && is_array($provided[$listKey]) && $this->isList($provided[$listKey])) {
-                $existing = isset($context[$listKey]) && is_array($context[$listKey]) && $this->isList($context[$listKey])
-                    ? $context[$listKey]
-                    : [];
-                $context[$listKey] = array_values(array_merge($existing, $provided[$listKey]));
+                if (in_array($listKey, ['breadcrumbs', 'breadcrumb_trails'], true)) {
+                    $context[$listKey] = array_values($provided[$listKey]);
+                } else {
+                    $existing = isset($context[$listKey]) && is_array($context[$listKey]) && $this->isList($context[$listKey])
+                        ? $context[$listKey]
+                        : [];
+                    $merged = array_values(array_merge($existing, $provided[$listKey]));
+                    $context[$listKey] = $listKey === 'feeds' ? $this->normalizeFeeds($merged) : $merged;
+                }
                 unset($provided[$listKey]);
             }
         }
 
         return array_replace_recursive($context, $provided);
+    }
+
+    /**
+     * @return list<array{type:string,title:string,href:string}>
+     */
+    private function normalizeFeeds(mixed $feeds): array
+    {
+        if (!is_array($feeds)) {
+            return [];
+        }
+        $normalized = [];
+        $seen = [];
+        foreach ($feeds as $feed) {
+            if (!is_array($feed)) {
+                continue;
+            }
+            $href = trim((string) ($feed['href'] ?? $feed['url'] ?? ''));
+            if ($href === '') {
+                continue;
+            }
+            $type = trim((string) ($feed['type'] ?? 'application/rss+xml'));
+            if ($type === '') {
+                $type = 'application/rss+xml';
+            }
+            $dedupeKey = strtolower($type) . "\0" . $href;
+            if (isset($seen[$dedupeKey])) {
+                continue;
+            }
+            $seen[$dedupeKey] = true;
+            $normalized[] = [
+                'type' => $type,
+                'title' => trim((string) ($feed['title'] ?? '')),
+                'href' => $href,
+            ];
+        }
+
+        return $normalized;
     }
 
     /**

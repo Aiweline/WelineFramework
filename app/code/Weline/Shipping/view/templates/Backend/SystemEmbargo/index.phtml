@@ -1,0 +1,388 @@
+<?php
+/**
+ * 系统默认禁运管理：列表为主；新增国家/省份进 w-dialog（对齐地区管理）。
+ * 同页快捷管理禁运原因字典（LocalModel）。
+ *
+ * @var list<array<string,mixed>> $rows
+ * @var list<array<string,mixed>> $reason_rows
+ * @var list<array<string,mixed>> $reason_options
+ * @var bool $embed
+ */
+$rows = is_array($rows ?? null) ? $rows : [];
+$reason_rows = is_array($reason_rows ?? null) ? $reason_rows : [];
+$reason_options = is_array($reason_options ?? null) ? $reason_options : [];
+$embed = !empty($embed);
+$h = static fn(string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8');
+$embedQ = $embed ? '?embed=1' : '';
+$jsonFlags = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP;
+?>
+<?php if (!$embed): ?>
+<div class="w-grid" data-testid="shipping-system-embargo-heading">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <h4 style="--w-mb-sm:0;"><lang>系统禁运</lang></h4>
+            <div class="w-cluster">
+                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                    <li class="w-breadcrumb__item">
+                        <a href="@backend-url('admin/index/index')"><lang>系统</lang></a>
+                    </li>
+                    <li class="w-breadcrumb__item" data-state="active"><lang>系统禁运</lang></li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+<?= $this->fetch('Weline_Shipping::templates/Backend/partials/manager-tabs.phtml', ['activeTab' => 'systemembargo']) ?>
+<?php endif; ?>
+<style>
+#system-embargo-add-dialog .w-dialog__surface,
+#system-embargo-add-dialog .w-dialog__body {
+    overflow: visible;
+}
+#system-embargo-add-dialog .w-dialog__body {
+    max-height: none;
+}
+[data-testid="system-embargo-country"] .w-address {
+    width: 100%;
+    max-width: 28rem;
+}
+[data-testid="shipping-system-embargo"] .w-card__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--weline-space-3, 0.75rem);
+}
+[data-testid="shipping-system-embargo"] .w-card__title {
+    margin: 0;
+}
+[data-testid="system-embargo-row-actions"],
+[data-testid="system-embargo-reason-actions"] {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--weline-space-2, 0.5rem);
+}
+[data-testid="system-embargo-reason-card"] .w-card__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--weline-space-3, 0.75rem);
+}
+[data-testid="system-embargo-reason-card"] .w-card__title {
+    margin: 0;
+}
+</style>
+<div class="w-stack" data-gap="md" data-testid="shipping-system-embargo">
+    <div class="w-alert" data-tone="warning">
+        <w:icon name="alert-triangle" size="sm"></w:icon>
+        <div class="w-alert__content">
+            <strong class="w-alert__title"><lang>系统默认禁运（最高优先）</lang></strong>
+            <p><lang>可新增、可解禁/再启用。系统种子条目标记为「系统」且不可删除；后台自建条目可删除。解禁后全站放行该地区。店铺附加禁运不能豁免仍生效的系统行。</lang></p>
+        </div>
+    </div>
+
+    <section class="w-card" data-testid="system-embargo-reason-card">
+        <header class="w-card__header">
+            <h2 class="w-card__title"><lang>禁运原因</lang></h2>
+            <button
+                type="button"
+                class="w-button"
+                data-variant="outline"
+                data-testid="system-embargo-reason-open-add"
+                data-w-target="#system-embargo-reason-dialog"
+                data-w-action="dialog.open"
+            ><lang>新增原因</lang></button>
+        </header>
+        <div class="w-card__body">
+            <p class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-3,0.75rem);">
+                <lang>原因名称支持多语言（LocalModel）。列表「原因」列与新增下拉均读取此处配置。</lang>
+            </p>
+            <table class="w-table" data-testid="system-embargo-reason-table">
+                <thead>
+                <tr>
+                    <th><lang>来源</lang></th>
+                    <th><lang>原因码</lang></th>
+                    <th><lang>名称</lang></th>
+                    <th><lang>操作</lang></th>
+                </tr>
+                </thead>
+                <tbody>
+                <?php if ($reason_rows === []): ?>
+                    <tr><td colspan="4"><lang>暂无原因（请运行模块升级种子）</lang></td></tr>
+                <?php endif; ?>
+                <?php foreach ($reason_rows as $reason): ?>
+                    <?php
+                    $embargo_reason_id = (int)($reason['reason_id'] ?? 0);
+                    $reasonCode = (string)($reason['reason_code'] ?? '');
+                    $reasonDisplay = (string)($reason['display_name'] ?? $reason['reason_name'] ?? $reasonCode);
+                    $reasonIsSeed = !empty($reason['is_seed']);
+                    $reasonCanDelete = !empty($reason['can_delete']);
+                    ?>
+                    <tr>
+                        <td>
+                            <?php if ($reasonIsSeed): ?>
+                                <span class="w-badge" data-tone="neutral"><lang>系统</lang></span>
+                            <?php else: ?>
+                                <span class="w-badge" data-tone="primary"><lang>自建</lang></span>
+                            <?php endif; ?>
+                        </td>
+                        <td><code><?= $h($reasonCode) ?></code></td>
+                        <td data-testid="system-embargo-reason-name">
+                            <local
+                                model="Weline\Shipping\Model\EmbargoReason\LocalDescription"
+                                field="reason_name"
+                                id="embargo_reason_id"
+                                name="embargo-reason-name"
+                            ><?= $h($reasonDisplay) ?></local>
+                        </td>
+                        <td>
+                            <div data-testid="system-embargo-reason-actions">
+                            <?php if ($reasonCanDelete): ?>
+                                <form method="post" action="<?= $h($this->getBackendUrl('shipping/backend/systemembargo/reasonRemove') . $embedQ) ?>" style="display:inline"
+                                      onsubmit="return confirm(<?= json_encode((string)__('确认删除该自建原因？'), $jsonFlags) ?>);">
+                                    <?php if (!empty($embed)): ?><input type="hidden" name="embed" value="1"><?php endif; ?>
+                                    <input type="hidden" name="reason_id" value="<?= $embargo_reason_id ?>">
+                                    <button type="submit" class="w-button" data-tone="danger" data-variant="outline" data-size="sm" data-testid="system-embargo-reason-delete"><lang>删除</lang></button>
+                                </form>
+                            <?php else: ?>
+                                <span class="w-field__help"><lang>系统种子不可删除</lang></span>
+                            <?php endif; ?>
+                            </div>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="w-card" data-testid="system-embargo-list-card">
+        <header class="w-card__header">
+            <h2 class="w-card__title"><lang>系统禁运列表</lang></h2>
+            <button
+                type="button"
+                class="w-button"
+                data-tone="primary"
+                data-testid="system-embargo-open-add"
+                data-w-target="#system-embargo-add-dialog"
+                data-w-action="dialog.open"
+            ><lang>新增禁运</lang></button>
+        </header>
+        <div class="w-card__body">
+            <table class="w-table" data-testid="system-embargo-table">
+                <thead>
+                <tr>
+                    <th><lang>来源</lang></th>
+                    <th><lang>级别</lang></th>
+                    <th><lang>地区</lang></th>
+                    <th><lang>原因</lang></th>
+                    <th><lang>状态</lang></th>
+                    <th><lang>操作</lang></th>
+                </tr>
+                </thead>
+                <tbody>
+                <?php if ($rows === []): ?>
+                    <tr><td colspan="6"><lang>暂无系统禁运条目（请运行模块升级种子）</lang></td></tr>
+                <?php endif; ?>
+                <?php foreach ($rows as $row): ?>
+                    <?php
+                    $id = (int)($row['embargo_id'] ?? 0);
+                    $active = !empty($row['is_active']);
+                    $type = (string)($row['region_type'] ?? 'country');
+                    $label = (string)($row['label'] ?? ($row['country_name'] ?? $row['country_code'] ?? ''));
+                    $reasonLabel = (string)($row['reason_label'] ?? '');
+                    if ($reasonLabel === '') {
+                        $reasonLabel = (string)($row['reason_code'] ?? '');
+                    }
+                    $typeLabel = $type === 'province' ? (string)__('省份') : (string)__('国家');
+                    $canDelete = !empty($row['can_delete']);
+                    $isSeed = !empty($row['is_seed']) || !$canDelete;
+                    ?>
+                    <tr>
+                        <td>
+                            <?php if ($isSeed): ?>
+                                <span class="w-badge" data-tone="neutral" data-testid="system-embargo-origin-seed"><lang>系统</lang></span>
+                            <?php else: ?>
+                                <span class="w-badge" data-tone="primary" data-testid="system-embargo-origin-manual"><lang>自建</lang></span>
+                            <?php endif; ?>
+                        </td>
+                        <td><?= $h($typeLabel) ?></td>
+                        <td data-testid="system-embargo-region-label"><?= $h($label) ?></td>
+                        <td data-testid="system-embargo-reason-label"><?= $h($reasonLabel) ?></td>
+                        <td><?= $active ? $h((string)__('禁运中')) : $h((string)__('已解禁')) ?></td>
+                        <td>
+                            <div data-testid="system-embargo-row-actions">
+                            <?php if ($active): ?>
+                                <form method="post" action="<?= $h($this->getBackendUrl('shipping/backend/systemembargo/deactivate') . $embedQ) ?>" style="display:inline"
+                                      onsubmit="return confirm(<?= json_encode((string)__('确认解禁？此操作全站生效，条目不会删除。'), $jsonFlags) ?>);">
+                                    <?php if (!empty($embed)): ?><input type="hidden" name="embed" value="1"><?php endif; ?>
+                                    <input type="hidden" name="embargo_id" value="<?= $id ?>">
+                                    <button type="submit" class="w-button" data-variant="secondary" data-size="sm"><lang>解禁</lang></button>
+                                </form>
+                            <?php else: ?>
+                                <form method="post" action="<?= $h($this->getBackendUrl('shipping/backend/systemembargo/activate') . $embedQ) ?>" style="display:inline"
+                                      onsubmit="return confirm(<?= json_encode((string)__('确认恢复系统禁运？此操作全站生效。'), $jsonFlags) ?>);">
+                                    <?php if (!empty($embed)): ?><input type="hidden" name="embed" value="1"><?php endif; ?>
+                                    <input type="hidden" name="embargo_id" value="<?= $id ?>">
+                                    <button type="submit" class="w-button" data-variant="primary" data-size="sm"><lang>再启用</lang></button>
+                                </form>
+                            <?php endif; ?>
+                            <?php if ($canDelete): ?>
+                                <form method="post" action="<?= $h($this->getBackendUrl('shipping/backend/systemembargo/remove') . $embedQ) ?>" style="display:inline"
+                                      onsubmit="return confirm(<?= json_encode((string)__('确认删除该自建禁运？删除后不可恢复。'), $jsonFlags) ?>);">
+                                    <?php if (!empty($embed)): ?><input type="hidden" name="embed" value="1"><?php endif; ?>
+                                    <input type="hidden" name="embargo_id" value="<?= $id ?>">
+                                    <button type="submit" class="w-button" data-tone="danger" data-variant="outline" data-size="sm" data-testid="system-embargo-delete"><lang>删除</lang></button>
+                                </form>
+                            <?php else: ?>
+                                <span class="w-field__help"><lang>系统种子不可删除</lang></span>
+                            <?php endif; ?>
+                            </div>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
+
+<div
+    class="w-dialog"
+    id="system-embargo-add-dialog"
+    tabindex="-1"
+    aria-hidden="true"
+    data-w-component="dialog"
+    data-state="closed"
+    hidden
+    data-testid="system-embargo-add-dialog"
+>
+    <div class="w-dialog__frame" data-size="md">
+        <div class="w-dialog__surface">
+            <form
+                class="w-form"
+                method="post"
+                action="<?= $h($this->getBackendUrl('shipping/backend/systemembargo/add') . $embedQ) ?>"
+                data-testid="system-embargo-add-form"
+            >
+                <?php if (!empty($embed)): ?><input type="hidden" name="embed" value="1"><?php endif; ?>
+                <input type="hidden" name="country_code" id="system-embargo-country-code" value="" data-testid="system-embargo-country-code">
+                <input type="hidden" name="province_code" id="system-embargo-province-code" value="" data-testid="system-embargo-province-code">
+                <input type="hidden" name="province_region_id" id="system-embargo-province-region-id" value="" data-testid="system-embargo-province-region-id">
+                <div class="w-dialog__header">
+                    <h5 class="w-dialog__title"><lang>新增禁运</lang></h5>
+                    <button type="button" class="w-button" aria-label="<?= $h((string)__('关闭')) ?>" data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
+                </div>
+                <div class="w-dialog__body">
+                    <div class="w-stack" data-gap="md">
+                        <p class="w-text" data-tone="muted" style="--w-mb:0;">
+                            <lang>搜索并选择国家，或继续选到省份；勿手填 ISO 码。只选国家=国家级禁运；选到省份=省级禁运。提交后全站生效。</lang>
+                        </p>
+                        <div data-testid="system-embargo-country">
+                            <w:theme:address
+                                selection="single"
+                                levels="country|province"
+                                catalog="global"
+                                searchable="true"
+                                cascade="true"
+                                district="false"
+                                street="false"
+                                code="system-embargo-country"
+                                country-name="address_country_pick"
+                                province-name="address_province_pick"
+                            />
+                        </div>
+                        <div class="w-field">
+                            <label class="w-field__label" for="system-embargo-reason"><lang>原因</lang></label>
+                            <select class="w-select" id="system-embargo-reason" name="reason_code" data-testid="system-embargo-reason">
+                                <?php if ($reason_options === []): ?>
+                                    <option value="no_commerce" selected><?= $h((string)__('无正常商业往来')) ?></option>
+                                <?php endif; ?>
+                                <?php foreach ($reason_options as $opt): ?>
+                                    <?php
+                                    $optCode = (string)($opt['reason_code'] ?? '');
+                                    $optLabel = (string)($opt['label'] ?? $optCode);
+                                    $selected = $optCode === 'no_commerce' ? ' selected' : '';
+                                    ?>
+                                    <option value="<?= $h($optCode) ?>"<?= $selected ?>><?= $h($optLabel) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="w-dialog__footer">
+                    <button type="button" class="w-button" data-w-action="dialog.close" data-tone="neutral" data-variant="outline"><lang>取消</lang></button>
+                    <button type="submit" class="w-button" data-tone="primary" data-testid="system-embargo-add-submit"><lang>新增或启用</lang></button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<div
+    class="w-dialog"
+    id="system-embargo-reason-dialog"
+    tabindex="-1"
+    aria-hidden="true"
+    data-w-component="dialog"
+    data-state="closed"
+    hidden
+    data-testid="system-embargo-reason-dialog"
+>
+    <div class="w-dialog__frame" data-size="sm">
+        <div class="w-dialog__surface">
+            <form
+                class="w-form"
+                method="post"
+                action="<?= $h($this->getBackendUrl('shipping/backend/systemembargo/reasonSave') . $embedQ) ?>"
+                data-testid="system-embargo-reason-form"
+            >
+                <?php if (!empty($embed)): ?><input type="hidden" name="embed" value="1"><?php endif; ?>
+                <div class="w-dialog__header">
+                    <h5 class="w-dialog__title"><lang>新增原因</lang></h5>
+                    <button type="button" class="w-button" aria-label="<?= $h((string)__('关闭')) ?>" data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
+                </div>
+                <div class="w-dialog__body">
+                    <div class="w-stack" data-gap="md">
+                        <div class="w-field">
+                            <label class="w-field__label" for="system-embargo-reason-code"><lang>原因码</lang></label>
+                            <input class="w-input" id="system-embargo-reason-code" name="reason_code" maxlength="32" required placeholder="e.g. weather" data-testid="system-embargo-reason-code-input">
+                            <p class="w-field__help"><lang>小写字母开头，仅 a-z、0-9、下划线；保存后可用多语言按钮翻译名称。</lang></p>
+                        </div>
+                        <div class="w-field">
+                            <label class="w-field__label" for="system-embargo-reason-name"><lang>名称</lang></label>
+                            <input class="w-input" id="system-embargo-reason-name" name="reason_name" maxlength="255" required data-testid="system-embargo-reason-name-input">
+                        </div>
+                    </div>
+                </div>
+                <div class="w-dialog__footer">
+                    <button type="button" class="w-button" data-w-action="dialog.close" data-tone="neutral" data-variant="outline"><lang>取消</lang></button>
+                    <button type="submit" class="w-button" data-tone="primary" data-testid="system-embargo-reason-submit"><lang>保存</lang></button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<script>
+(function () {
+    var form = document.querySelector('[data-testid="system-embargo-add-form"]');
+    if (!form || form.dataset.systemEmbargoBound === '1') {
+        return;
+    }
+    form.dataset.systemEmbargoBound = '1';
+    form.addEventListener('submit', function (event) {
+        var codeInput = form.querySelector('[name="country_code"]');
+        var code = String(codeInput && codeInput.value || '').trim().toUpperCase();
+        if (!/^[A-Z]{2}$/.test(code)) {
+            event.preventDefault();
+            window.alert(<?= json_encode((string)__('请先用地址选择器选择国家/地区'), $jsonFlags) ?>);
+            return;
+        }
+        var provinceId = String(form.querySelector('[name="province_region_id"]') && form.querySelector('[name="province_region_id"]').value || '').trim();
+        var provinceCode = String(form.querySelector('[name="province_code"]') && form.querySelector('[name="province_code"]').value || '').trim();
+        // 仅国家或国家+省份均可；校验由服务端二次确认。
+        if (provinceId === '' && provinceCode === '') {
+            return;
+        }
+    });
+})();
+</script>

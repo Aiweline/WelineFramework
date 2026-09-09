@@ -16,6 +16,7 @@ final class Inquiry extends BackendController
     #[Acl('Weline_Inquiry::list', '询盘表单列表', 'list', '查看询盘表单', 'Weline_Inquiry::root')]
     public function index(): string
     {
+        $this->assign('page_title', (string)__('询盘表单'));
         $this->form->reset()->order(Form::schema_fields_UPDATED_AT, 'DESC')->pagination()->select()->fetch();
         $this->assign('forms', $this->form->getItems()); $this->assign('pagination', $this->form->getPagination());
         return $this->fetch();
@@ -24,6 +25,7 @@ final class Inquiry extends BackendController
     public function getEdit(): string
     {
         $id = (int)$this->request->getGet('id', 0); $this->assign('form_id', $id);
+        $this->assign('page_title', (string)__('编辑询盘表单'));
         $this->assign('state', $id > 0 ? $this->versions->draft($id) : ['form' => ['default_locale' => 'en_US'], 'schema' => ['fields' => []], 'translations' => ['en_US' => []]]);
         return $this->fetch('edit');
     }

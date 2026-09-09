@@ -11,6 +11,8 @@ use Weline\Framework\App\Exception;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Phrase\DictionaryCompiler;
+use Weline\Framework\Phrase\DictionaryCacheNamespace;
+use Weline\Framework\Cache\Contract\NamespaceScopedCachePoolInterface;
 use Weline\Framework\Phrase\DictionaryWordValidator;
 use Weline\Framework\Registry\Service\RegistryProgress;
 use Weline\Framework\System\File\Data\File;
@@ -94,6 +96,20 @@ class I18n
     ) {
         $this->reader = $reader;
         $this->i18nCache = w_cache('i18n');
+    }
+
+    /** 公共 I18n 事实共享同一版本；事务内和早期引导阶段不发布共享结果。 */
+    private function namespaceCache(): ?CachePoolInterface
+    {
+        if (DictionaryCacheNamespace::fingerprint() === null) {
+            return null;
+        }
+        if (!$this->i18nCache instanceof NamespaceScopedCachePoolInterface
+            || !in_array(DictionaryCacheNamespace::NAMESPACE, $this->i18nCache->getNamespaces(), true)
+        ) {
+            $this->i18nCache = DictionaryCacheNamespace::scopedPool($this->i18nCache);
+        }
+        return $this->i18nCache;
     }
 
     public function getAvailableLocaleCodes(): array
@@ -210,24 +226,24 @@ class I18n
 
     public function getLocalByCode(string $locale_code): string
     {
-        $cacheKey = strtolower(trim($locale_code));
-        if (isset(self::$localByCodeCache[$cacheKey])
-            && self::$localByCodeCache[$cacheKey]['expires_at'] >= microtime(true)) {
-            return self::$localByCodeCache[$cacheKey]['value'];
+        $cacheKey = DictionaryCacheNamespace::cacheKey(strtolower(trim($locale_code)));
+        if (isset(DictionaryCacheNamespace::localCache(self::$localByCodeCache)[$cacheKey])
+            && DictionaryCacheNamespace::localCache(self::$localByCodeCache)[$cacheKey]['expires_at'] >= microtime(true)) {
+            return DictionaryCacheNamespace::localCache(self::$localByCodeCache)[$cacheKey]['value'];
         }
-        unset(self::$localByCodeCache[$cacheKey]);
+        unset(DictionaryCacheNamespace::localCache(self::$localByCodeCache)[$cacheKey]);
 
-        if ($data = $this->i18nCache->get($locale_code)) {
+        if ($data = $this->namespaceCache()?->get($locale_code)) {
             return $this->rememberLocalByCode($cacheKey, (string)$data);
         }
         $locales = $this->getAvailableLocaleCodes();
         foreach ($locales as $locale) {
             if (strtolower($locale_code) === strtolower($locale)) {
-                $this->i18nCache->set($locale_code, $locale);
+                $this->namespaceCache()?->set($locale_code, $locale);
                 return $this->rememberLocalByCode($cacheKey, $locale);
             }
         }
-        $this->i18nCache->set($locale_code, 'zh_Hans_CN');
+        $this->namespaceCache()?->set($locale_code, 'zh_Hans_CN');
         return $this->rememberLocalByCode($cacheKey, 'zh_Hans_CN');
     }
 
@@ -247,7 +263,7 @@ class I18n
 
     private function rememberLocalByCode(string $cacheKey, string $locale): string
     {
-        self::$localByCodeCache[$cacheKey] = [
+        DictionaryCacheNamespace::localCache(self::$localByCodeCache)[$cacheKey] = [
             'expires_at' => microtime(true) + $this->localeCacheTtl(),
             'value' => $locale,
         ];
@@ -271,11 +287,11 @@ class I18n
         // 未安装 intl 时 Symfony Polyfill 仅支持 en，传 zh_Hans_CN 会抛错，降级为 en
         $lang_code = $this->normalizeIntlDisplayLocale($lang_code);
         $cache_key = 'getLocals' . $lang_code;
-        if ($data = $this->i18nCache->get($cache_key)) {
+        if ($data = $this->namespaceCache()?->get($cache_key)) {
             return $data;
         }
         $locals = $this->getLocaleNames($lang_code);
-        $this->i18nCache->set($cache_key, $locals);
+        $this->namespaceCache()?->set($cache_key, $locals);
         return $locals;
     }
 
@@ -343,7 +359,7 @@ class I18n
     {
         $lang_code = $this->normalizeIntlDisplayLocale($lang_code);
         $cache_key = 'getLocalesWithFlags_img_v1_' . $lang_code . $width . $height . (string)$installed;
-        if ($data = $this->i18nCache->get($cache_key)) {
+        if ($data = $this->namespaceCache()?->get($cache_key)) {
             return $data;
         }
         
@@ -377,7 +393,7 @@ class I18n
             }
         }
         
-        $this->i18nCache->set($cache_key, $locals, 0);
+        $this->namespaceCache()?->set($cache_key, $locals, 0);
         return $locals;
     }
 
@@ -395,7 +411,7 @@ class I18n
         if ($height <= 0) $height = $default_height;
         
         $cache_key = 'getLocalesWithFlagsDisplaySelf_img_v1_' . $width . $height . (string)$installed . (string)$autoSize . $display_locale_code;
-        if ($data = $this->i18nCache->get($cache_key)) {
+        if ($data = $this->namespaceCache()?->get($cache_key)) {
             return $data;
         }
 
@@ -471,7 +487,7 @@ class I18n
                 ];
             }
         }
-        $this->i18nCache->set($cache_key, $locals, 0);
+        $this->namespaceCache()?->set($cache_key, $locals, 0);
         return $locals;
     }
 
@@ -483,7 +499,7 @@ class I18n
         }
 
         $cache_key = 'getCountryFlagWithLocal' . $localeCode . $width . $height;
-        if ($data = $this->i18nCache->get($cache_key)) {
+        if ($data = $this->namespaceCache()?->get($cache_key)) {
             if (is_array($data)) {
                 return $data;
             }
@@ -496,12 +512,12 @@ class I18n
             $svg = $this->getCountryFlag($countryCode, $width, $height);
             if ($svg) {
                 $local = ['name' => $lang_locals[$localeCode] ?? $localeCode, 'flag' => $svg];
-                $this->i18nCache->set($cache_key, $local, 0);
+                $this->namespaceCache()?->set($cache_key, $local, 0);
                 return $local;
             }
         }
 
-        $this->i18nCache->set($cache_key, [], 0);
+        $this->namespaceCache()?->set($cache_key, [], 0);
         return [];
     }
 
@@ -802,7 +818,7 @@ class I18n
         $uncached_codes = [];
         foreach ($country_codes as $code) {
             $cache_key = $cache_prefix . strtolower($code);
-            $cached = $this->i18nCache->get($cache_key);
+            $cached = $this->namespaceCache()?->get($cache_key);
             if ($cached !== false && $cached !== null) {
                 $results[$code] = $cached;
             } else {
@@ -817,7 +833,7 @@ class I18n
                 $results[$code] = $flag;
                 // 缓存结果
                 $cache_key = $cache_prefix . strtolower($code);
-                $this->i18nCache->set($cache_key, $flag, 3600);
+                $this->namespaceCache()?->set($cache_key, $flag, 3600);
             }
         }
         
@@ -837,7 +853,7 @@ class I18n
         $cache_key = 'flag_' . $country_code . '_' . $width . '_' . $height . '_' . ($autoSize ? 'auto' : 'fixed');
         
         // 检查缓存
-        if ($cached = $this->i18nCache->get($cache_key)) {
+        if ($cached = $this->namespaceCache()?->get($cache_key)) {
             return $cached;
         }
         
@@ -874,7 +890,7 @@ class I18n
             $styleAttr = 'style="width: auto; height: 1.2em; max-height: 20px; vertical-align: middle; display: inline-block;"';
             $svg = preg_replace('/(<svg)([^>]*)(>)/i', '$1$2 ' . $styleAttr . '$3', $svg, 1);
             // 缓存结果
-            $this->i18nCache->set($cache_key, $svg, 3600);
+            $this->namespaceCache()?->set($cache_key, $svg, 3600);
             return $svg;
         } else {
             // 固定尺寸模式：按照指定的宽高调整，移除style属性
@@ -929,7 +945,7 @@ class I18n
             }
             
             // 缓存结果
-            $this->i18nCache->set($cache_key, $svg, 3600);
+            $this->namespaceCache()?->set($cache_key, $svg, 3600);
             return $svg;
         }
     }
@@ -995,8 +1011,9 @@ class I18n
             ini_set('memory_limit', '512M');
         }
 
-        if (self::$local_words and $cache) {
-            return self::$local_words;
+        $wordsCacheKey = DictionaryCacheNamespace::cacheKey($moduleName ?? '*');
+        if ($cache && isset(DictionaryCacheNamespace::localCache(self::$local_words, 64)[$wordsCacheKey])) {
+            return DictionaryCacheNamespace::localCache(self::$local_words, 64)[$wordsCacheKey];
         }
         $all_locals_words_file = Env::path_TRANSLATE_ALL_COLLECTIONS_WORDS_FILE;
         $translate_mode = Env::get('translation.mode', 'default');
@@ -1007,12 +1024,16 @@ class I18n
                 $text = '<?php return ' . w_var_export([], true) . ';';
                 file_put_contents($all_locals_words_file, $text);
             }
+            // 新代次首次读取时仅失效实际语言文件，兼容关闭时间戳校验的 OPcache。
+            if (function_exists('opcache_invalidate')) {
+                @opcache_invalidate($all_locals_words_file, true);
+            }
             $all_locals_words = (array)(include $all_locals_words_file);
             if (!empty($all_locals_words)) {
                 if ($translate_mode === 'online') {
                     $locals_words = $all_locals_words;
                 } else {
-                    self::$local_words = $all_locals_words;
+                    DictionaryCacheNamespace::localCache(self::$local_words, 64)[$wordsCacheKey] = $all_locals_words;
                     return $all_locals_words;
                 }
             }
@@ -1026,7 +1047,9 @@ class I18n
         /** @var DictionaryCompiler $compiler */
         $compiler = ObjectManager::getInstance(DictionaryCompiler::class);
         $locals_words = $compiler->compile($moduleName, false);
-        self::$local_words = $cache ? $locals_words : [];
+        if ($cache) {
+            DictionaryCacheNamespace::localCache(self::$local_words, 64)[$wordsCacheKey] = $locals_words;
+        }
         @ini_set('memory_limit', $_prevMemLimit !== '' ? $_prevMemLimit : '128M');
         return $locals_words;
     }
@@ -1282,14 +1305,9 @@ class I18n
 
     public function getActiveLocalsModel(string $target_local = 'zh_Hans_CN'): Locals
     {
-        $cache_key = __FUNCTION__ . '_' . $target_local;
-        $cached = $this->i18nCache->get($cache_key);
-        if ($cached instanceof Locals) {
-            return $cached;
-        }
-        $LocalsModel = ObjectManager::getInstance(Locals::class)->where('target_code', $target_local);
-        $this->i18nCache->set($cache_key, $LocalsModel);
-        return $LocalsModel;
+        // 此处尚未查询，查询构造器不能成为跨请求/Worker 的公共缓存值。
+        $model = clone ObjectManager::getInstance(Locals::class);
+        return $model->clearData()->clearQuery()->where('target_code', $target_local);
     }
 
     public function ensureLocaleInstalled(string $localeCode): void

@@ -58,6 +58,12 @@
 - `app/code/Weline/Acl/doc/event/角色检查.md`
 - `app/code/Weline/Acl/doc/multi-resource-catalog.md`
 
+## 前台 API 用户授权
+
+- `Observer/RouteBefore::validateFrontendApiAccess()` 对 `api_authenticated_user` 中的公开只读 API 用户身份，执行已登记路由的角色授权；应用继续使用安装 scope。
+- 回归入口：`Test/Unit/Observer/FrontendApiRoleAuthorizationTest.php`，覆盖角色允许/拒绝、匿名、应用、公开路由与其他前台身份兼容。
+- 路由/角色统一语义见 `doc/multi-resource-catalog.md`，不得在产品等业务模块另设客户端身份参数放行规则。
+
 ## 开发前门禁
 
 - 先声明本次任务命中的模块、代码面和应读文档；没有命中文档时先补读源码，不要按通用经验猜。

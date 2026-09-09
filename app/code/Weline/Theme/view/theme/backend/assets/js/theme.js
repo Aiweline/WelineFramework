@@ -1603,14 +1603,6 @@
                 const ApiModule = await moduleLoader.loadModule('api');
                 return ApiModule.resource(provider, optionalMap);
             },
-            markCartActive: async () => {
-                const ApiModule = await moduleLoader.loadModule('api');
-                return ApiModule.markCartActive();
-            },
-            markCartEmpty: async () => {
-                const ApiModule = await moduleLoader.loadModule('api');
-                return ApiModule.markCartEmpty();
-            },
             enableAutoRequests: async () => {
                 const ApiModule = await moduleLoader.loadModule('api');
                 return ApiModule.enableAutoRequests();

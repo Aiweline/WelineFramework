@@ -5634,13 +5634,15 @@ textarea.auto-resize { height: var(--w-theme-editor-textarea-height, auto); }
 /* Scope is the Theme Editor's primary context; keep it ahead of Theme and outside overflow. */
 .theme-editor-container .toolbar-select-field-scope {
     position: relative;
-    flex: 0 0 clamp(13rem, 22vw, 21rem);
-    inline-size: clamp(13rem, 22vw, 21rem);
-    min-inline-size: 0;
+    flex: 0 1 9rem;
+    inline-size: 9rem;
+    min-inline-size: 6.5rem;
+    max-inline-size: 9rem;
     padding: 0.18rem 0.28rem 0.18rem 0.42rem;
     border: 1px solid var(--w-theme-editor-border-light);
     border-radius: var(--w-theme-editor-radius-sm);
     background: var(--w-theme-editor-bg-hover);
+    overflow: hidden;
 }
 
 .theme-editor-container .theme-editor-scope-trigger {

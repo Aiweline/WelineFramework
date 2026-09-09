@@ -1,0 +1,26 @@
+<?php
+/**
+ * @meta.title {default="GEO 推送",description="生成式搜索引擎优化：定时推送与人工推送相关配置"}
+ * @meta.description {default="控制是否开启定时向 AI 搜索平台推送。人工一键推送不受此开关影响。"}
+ * @config.area {backend}
+ * @config.sort {205}
+ * @config.acl {Weline_Geo::push_list}
+ */
+?>
+
+<w:config:group
+    code="geo_push_schedule"
+    label="定时推送"
+    description="每天自动将已启用的内容源推送到已启用平台；需已配置平台账户密钥。"
+    sort="10"
+>
+    <w:config:field
+        key="geo/push/scheduled_enabled"
+        label="启用定时推送"
+        description="开启后，系统每天执行一次定时推送（仍受各内容源「启用」与平台账户可用性约束）。关闭后仅可使用推送管理中的人工一键推送。"
+        type="switch"
+        value-type="bool"
+        default="0"
+        scope="global,website,store"
+    />
+</w:config:group>

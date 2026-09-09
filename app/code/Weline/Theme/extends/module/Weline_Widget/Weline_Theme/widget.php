@@ -378,17 +378,17 @@ return [
     // --- 页脚与订阅 (footer / newsletter / social) ---
     'Weline_Theme::theme/frontend/widgets/footer/footer-links/default.phtml',
     [
-        'template' => 'Weline_Theme::theme/frontend/widgets/footer/footer-help-center-link/default.phtml',
-        'name' => '页脚帮助中心链接',
-        'description' => '页脚帮助中心扩展槽：跳转 Theme /help 帮助中心布局；默认注入 footer-help-links。',
+        'template' => 'Weline_Theme::theme/frontend/widgets/footer/footer-faq-link/default.phtml',
+        'name' => '页脚 FAQ 链接',
+        'description' => '页脚帮助扩展槽：跳转 Theme /faq FAQ 布局；默认注入 footer-help-links。',
         'type' => 'footer',
-        'code' => 'footer-help-center-link',
+        'code' => 'footer-faq-link',
         'area' => 'frontend',
         'page_layouts' => ['*'],
         'position' => ['footer'],
         'slot' => 'footer-help-links',
         'supports' => [
-            'footer-help-center-link',
+            'footer-faq-link',
             'layout-footer-help-links',
         ],
         'default_injections' => [[
@@ -397,14 +397,14 @@ return [
             'area' => 'footer',
             'sort_order' => 40,
             'required' => true,
-            'reason' => '全局 chrome 载体默认展示 Theme /help 入口；非首页继承合并',
+            'reason' => '全局 chrome 载体默认展示 Theme /faq 入口；非首页继承合并',
             'config' => [
-                'label' => '帮助中心',
+                'label' => 'FAQ/常见问题',
             ],
         ]],
         'params' => [
             'label' => [
-                'default' => '帮助中心',
+                'default' => 'FAQ/常见问题',
                 'type' => 'string',
                 'label' => '链接文字',
             ],

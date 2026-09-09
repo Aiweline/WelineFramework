@@ -12,6 +12,7 @@ use Weline\Framework\Cache\StorefrontCacheKeyContext;
 use Weline\Framework\Cache\Namespace\NamespaceGenerationRepository;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Cache\KeyBuilder;
+use Weline\Framework\Cache\Pool\CachePool;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\PostResponseTaskQueue;
 use Weline\Framework\Runtime\RequestContext;
@@ -63,11 +64,16 @@ final class StorefrontScopeHotCache
     public function rememberPolicy(CachePolicy|string $policy, string $logicalKey, callable $builder): mixed
     {
         $policy = $this->resolvePolicy($policy);
-        $key = $this->policyKey($policy, $logicalKey);
+        $traceMeta = RequestLifecycleTrace::isEnabled() ? [
+            'resource' => $policy->resource,
+            'scope' => $policy->scope,
+            'logical_key_hash' => hash('sha256', $logicalKey),
+        ] : null;
+        $key = $this->policyKey($policy, $logicalKey, $traceMeta);
         if ($key === null) {
             return $builder();
         }
-        return $this->rememberKey($policy->pool, $key, $policy->freshTtlSeconds, $builder, $policy->staleTtlSeconds, true);
+        return $this->rememberKey($policy->pool, $key, $policy->freshTtlSeconds, $builder, $policy->staleTtlSeconds, true, $traceMeta);
     }
 
     public function forgetPolicy(CachePolicy|string $policy, string $logicalKey): void
@@ -90,18 +96,27 @@ final class StorefrontScopeHotCache
         return $policy instanceof CachePolicy ? $manager->registerPolicy($policy) : $manager->getPolicy($policy);
     }
 
-    private function policyKey(CachePolicy $policy, string $logicalKey): ?string
+    private function policyKey(CachePolicy $policy, string $logicalKey, ?array &$traceMeta = null): ?string
     {
         $context = StorefrontCacheKeyContext::currentOrRequestFence();
         $fingerprint = '';
-        if (($policy->scope === 'global' || $context->hasCompleteFrozenScope()) && $policy->dependencies !== []) {
+        $namespacePaths = [];
+        $canResolveDependencies = $context->hasCompleteFrozenScope()
+            || ($policy->scope === 'website' && $context->hasWebsiteScope());
+        if (($policy->scope === 'global' || $canResolveDependencies) && $policy->dependencies !== []) {
             try {
                 $this->generations ??= ObjectManager::getInstance(NamespaceGenerationRepository::class);
-                $fingerprint = $this->generations->fingerprint($policy->namespacePaths($context->scopeIdentity));
+                $namespacePaths = $policy->namespacePaths($context->scopeIdentity);
+                $fingerprint = $this->generations->fingerprint($namespacePaths);
             } catch (\Throwable) {
                 // A generation read failure must not publish an unversioned shared entry.
                 return null;
             }
+        }
+        if ($traceMeta !== null) {
+            // 只记录生成实际缓存键时已读取的依赖，不为诊断再读版本权威。
+            $traceMeta['dependency_fingerprint'] = $fingerprint;
+            $traceMeta['namespace_paths'] = $namespacePaths;
         }
         return KeyBuilder::policyKey($policy, $logicalKey, $fingerprint, $context);
     }
@@ -122,7 +137,8 @@ final class StorefrontScopeHotCache
             $freshTtlSeconds,
             $staleTtlSeconds ?? ($freshTtlSeconds * self::DEFAULT_STALE_MULTIPLIER),
         );
-        return $this->rememberKey($poolIdentity, $this->scopedKey($logicalKey, $dimensionFlags), $freshTtlSeconds, $builder, $staleTtlSeconds);
+        $traceMeta = RequestLifecycleTrace::isEnabled() ? ['logical_key_hash' => hash('sha256', $logicalKey)] : null;
+        return $this->rememberKey($poolIdentity, $this->scopedKey($logicalKey, $dimensionFlags), $freshTtlSeconds, $builder, $staleTtlSeconds, false, $traceMeta);
     }
 
     private function rememberKey(
@@ -132,12 +148,15 @@ final class StorefrontScopeHotCache
         callable $builder,
         int $staleTtlSeconds,
         bool $explicitDimensions = false,
+        ?array $traceMeta = null,
     ): mixed {
         $processKey = $poolIdentity . '|' . $scopedKey;
 
         $entry = self::$processCache[$processKey] ?? null;
+        $l1Status = 'absent';
         if (\is_array($entry)) {
             $status = $this->entryStatus($entry);
+            $l1Status = $status;
             if ($status === 'fresh' || $status === 'stale') {
                 if ($status === 'stale') {
                     $this->queueRefresh(
@@ -158,14 +177,34 @@ final class StorefrontScopeHotCache
         }
 
         $pool = $this->pool($poolIdentity);
+        $phaseMeta = ['pool' => $poolIdentity, 'custom_dimensions' => $explicitDimensions];
+        if ($traceMeta !== null) {
+            // 汇总只保留最后一次 meta；既有逐次 span 保留各资源的 miss 证据。
+            // 不记录原始业务 key，也不为观察创建或展开额外缓存池。
+            $phaseMeta += $traceMeta + [
+                'scoped_key_hash' => hash('sha256', $scopedKey),
+                'fresh_ttl_seconds' => $freshTtlSeconds,
+                'stale_ttl_seconds' => $staleTtlSeconds,
+                'pool_class' => $pool::class,
+            ] + $this->entryTraceMetadata($entry, $l1Status, 'l1');
+            if ($pool instanceof CachePool) {
+                $phaseMeta['adapter_class'] = $pool->getAdapter()::class;
+            }
+        }
         $cached = RequestLifecycleTrace::measurePhase(
             'storefront.cache.shared_read',
             fn(): mixed => $this->readShared($pool, $scopedKey, $explicitDimensions),
-            ['pool' => $poolIdentity, 'custom_dimensions' => $explicitDimensions],
+            $phaseMeta,
         );
+        if ($traceMeta !== null) {
+            $phaseMeta += $this->entryTraceMetadata(null, $cached === null ? 'absent' : 'invalid', 'l2');
+        }
         if (\is_array($cached) && \array_key_exists('payload', $cached)) {
             $entry = $this->normalizeEnvelope($cached, $freshTtlSeconds, $staleTtlSeconds);
             $status = $this->entryStatus($entry);
+            if ($traceMeta !== null) {
+                $phaseMeta = array_replace($phaseMeta, $this->entryTraceMetadata($entry, $status, 'l2'));
+            }
             if ($status === 'fresh' || $status === 'stale') {
                 $this->storeProcessEntry($processKey, $entry);
                 if ($status === 'stale') {
@@ -193,18 +232,28 @@ final class StorefrontScopeHotCache
         $token = RequestLifecycleTrace::measurePhase(
             'storefront.cache.singleflight_acquire',
             fn(): mixed => $flight->acquire($lockKey, 0, 30),
-            ['pool' => $poolIdentity],
+            $phaseMeta,
         );
+        if ($traceMeta !== null) {
+            $phaseMeta['singleflight_acquired'] = $token !== null;
+        }
         try {
             // Another worker may have populated the entry while this worker waited.
             $cached = RequestLifecycleTrace::measurePhase(
                 'storefront.cache.shared_recheck',
                 fn(): mixed => $this->readShared($pool, $scopedKey, $explicitDimensions),
-                ['pool' => $poolIdentity, 'custom_dimensions' => $explicitDimensions],
+                $phaseMeta,
             );
+            if ($traceMeta !== null) {
+                $phaseMeta += $this->entryTraceMetadata(null, $cached === null ? 'absent' : 'invalid', 'l2_recheck');
+            }
             if (is_array($cached) && array_key_exists('payload', $cached)) {
                 $entry = $this->normalizeEnvelope($cached, $freshTtlSeconds, $staleTtlSeconds);
-                if ($this->entryStatus($entry) !== 'miss') {
+                $status = $this->entryStatus($entry);
+                if ($traceMeta !== null) {
+                    $phaseMeta = array_replace($phaseMeta, $this->entryTraceMetadata($entry, $status, 'l2_recheck'));
+                }
+                if ($status !== 'miss') {
                     $this->storeProcessEntry($processKey, $entry);
                     return $entry['payload'];
                 }
@@ -212,15 +261,19 @@ final class StorefrontScopeHotCache
             $payload = RequestLifecycleTrace::measurePhase(
                 'storefront.cache.builder',
                 $builder,
-                ['pool' => $poolIdentity],
+                $phaseMeta,
             );
             $entry = $this->makeEnvelope($payload, $freshTtlSeconds, $staleTtlSeconds);
+            if ($traceMeta !== null) {
+                $phaseMeta['write_fresh_until'] = $entry['fresh_until'];
+                $phaseMeta['write_stale_until'] = $entry['stale_until'];
+            }
             RequestLifecycleTrace::measurePhase(
                 'storefront.cache.shared_write',
                 function () use ($pool, $scopedKey, $entry, $freshTtlSeconds, $staleTtlSeconds, $explicitDimensions): void {
                     $this->writeShared($pool, $scopedKey, $entry, $freshTtlSeconds + $staleTtlSeconds, $explicitDimensions);
                 },
-                ['pool' => $poolIdentity, 'custom_dimensions' => $explicitDimensions],
+                $phaseMeta,
             );
             $this->storeProcessEntry($processKey, $entry);
             return $payload;
@@ -229,6 +282,17 @@ final class StorefrontScopeHotCache
                 $flight->release($lockKey, $token);
             }
         }
+    }
+
+    /** 复用已完成的命中分类和原始截止时间，不重新判定过期或读取缓存。 */
+    private function entryTraceMetadata(?array $entry, string $status, string $layer): array
+    {
+        $meta = [$layer . '_status' => $status === 'miss' ? 'expired' : $status];
+        if ($entry !== null) {
+            $meta[$layer . '_fresh_until'] = $entry['fresh_until'] ?? null;
+            $meta[$layer . '_stale_until'] = $entry['stale_until'] ?? null;
+        }
+        return $meta;
     }
 
     /**

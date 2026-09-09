@@ -35,7 +35,7 @@ class ShippingAddressQueryProvider implements QueryProviderInterface
     private function save(array $params): array
     {
         if (!$this->isLoggedIn()) {
-            return $this->failure('Please log in to continue.');
+            return $this->failure((string)__('请先登录'));
         }
 
         $payload = $params['address'] ?? $params['form'] ?? $params;
@@ -51,33 +51,33 @@ class ShippingAddressQueryProvider implements QueryProviderInterface
         $data['id'] = (int)$address->getId();
         $data['shipping_address_id'] = (int)$address->getId();
 
-        return $this->success('Shipping address saved.', $data);
+        return $this->success((string)__('发货地址已保存'), $data);
     }
 
     private function delete(array $params): array
     {
         if (!$this->isLoggedIn()) {
-            return $this->failure('Please log in to continue.');
+            return $this->failure((string)__('请先登录'));
         }
 
         $id = $this->readAddressId($params);
         if ($id <= 0) {
-            return $this->failure('Shipping address ID is required.');
+            return $this->failure((string)__('发货地址ID不能为空'));
         }
 
         $this->shippingAddressService->delete($id);
-        return $this->success('Shipping address removed.');
+        return $this->success((string)__('发货地址已删除'));
     }
 
     private function setDefault(array $params): array
     {
         if (!$this->isLoggedIn()) {
-            return $this->failure('Please log in to continue.');
+            return $this->failure((string)__('请先登录'));
         }
 
         $id = $this->readAddressId($params);
         if ($id <= 0) {
-            return $this->failure('Shipping address ID is required.');
+            return $this->failure((string)__('发货地址ID不能为空'));
         }
 
         $address = $this->shippingAddressService->setDefault($id);
@@ -85,7 +85,7 @@ class ShippingAddressQueryProvider implements QueryProviderInterface
         $data['id'] = (int)$address->getId();
         $data['shipping_address_id'] = (int)$address->getId();
 
-        return $this->success('Shipping address default updated.', $data);
+        return $this->success((string)__('默认发货地址已更新'), $data);
     }
 
     private function readAddressId(array $params): int
@@ -138,6 +138,8 @@ class ShippingAddressQueryProvider implements QueryProviderInterface
             'district_code' => $string,
             'district_region_id' => ['type' => 'mixed'],
             'street' => ['type' => 'string', 'max_length' => 512],
+            'street_id' => ['type' => 'mixed'],
+            'street_code' => $string,
             'postal_code' => $string,
             'is_default' => ['type' => 'mixed'],
             'is_enabled' => ['type' => 'mixed'],

@@ -18,6 +18,8 @@
 
 ## 核心约定
 
+- 前台 API 用户登录沿用 `Auth::postLogin` / `TokenService`。认证通过后，当前请求的 `api_authenticated_user` 是公开只读 `Weline\Api\Api\AuthenticatedApiUser`，提供 `getUserId()`、`getRoleId()` 和 `getIdempotencyScope()`（`api_user:<id>`）；不含 token 或密码。业务模块只读这个对象，不从请求参数提取身份。
+- 带 ACL 的前台 REST 在该 API 用户身份下复用角色路由授权；缺少授权返回 403。应用仍按安装 scope 授权，普通前台 Session 和 WeShop Customer 的既有行为保持不变。
 - 浏览器业务请求不能绕过本模块自己写原生 Ajax/fetch/axios 直连后端业务控制器。浏览器业务协议统一走 `Weline.Api.*`。
 - `Controller/Framework/Query.php`、`Stream.php`、`QueryBin.php` 是框架请求入口的薄封装，真正协议语义在框架控制器里，不要在业务模块复制一份“私有 query 协议”。
 - REST 能力放在 `Api/Rest/V1/*`。新增 REST 时要明确它属于：
@@ -65,3 +67,9 @@
 - `app/code/Weline/Api/Service/TokenService.php`
 - `app/code/Weline/Api/Service/IpWhitelistService.php`
 - `app/code/Weline/Api/Service/UserAgentRestrictionService.php`
+
+## 前端 Auth 文档地址对齐（2026-09-08）
+
+`ApiDocService::extractRoute` 为 `Weline\Api\Api\Rest\V1\Auth` 提供包含当前 `rest_frontend` 区域的注册地址，文档与登录共用该记录。当前 `api` 区域的登录路径为 `/api/api/api/rest/v1/auth/login`；本轮正常账号 HTTP 对照中，旧双 `api` 路径返回 404 HTML，正确路径返回 HTTP 200 / code 200。元数据规则仅用于已验证的前端 Auth 类，其他接口和后台路径保持现有契约。
+
+这是 HTTP 与定向代码验证，文档页面登录仍待浏览器重验；不在文档中记录用户名、密码或 Token。

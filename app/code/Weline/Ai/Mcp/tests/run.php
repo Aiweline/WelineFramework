@@ -223,6 +223,7 @@ try {
     check($config->duration('privacy.raw_session_ttl') === 14 * 86_400, 'raw session TTL defaults to fourteen days');
     check($config->duration('privacy.tombstone_ttl') === 14 * 86_400, 'ordinary tombstones default to fourteen days');
     check($config->duration('privacy.execution_run_ttl') === 14 * 86_400, 'completed execution traces default to fourteen days');
+    check($config->duration('index.refresh_interval') === 10 * 60, 'interactive index refresh interval defaults to ten minutes');
     check($config->duration('index.gc.retention') === 14 * 86_400, 'derived index inactivity retention defaults to fourteen days');
     check($config->duration('index.gc.dry_run_period') === 86_400, 'index GC requires a full-day observation before quarantine');
     check($config->duration('index.gc.quarantine_period') === 86_400, 'index GC quarantine keeps a full-day recovery window');
@@ -2662,7 +2663,16 @@ SH);
         'stdio MCP survives socket idle longer than default_socket_timeout',
     );
 
-    foreach (['edit-context-integrity.php', 'context-response-budget.php', 'host-detection.php', 'readiness-incremental-scope.php', 'index-directory-scope.php'] as $regression) {
+    foreach ([
+        'edit-context-integrity.php',
+        'context-response-budget.php',
+        'host-detection.php',
+        'project-guidance-reload-policy.php',
+        'readiness-incremental-scope.php',
+        'index-directory-scope.php',
+        'relation-resolution-scope.php',
+        'session-start-background-refresh.php',
+    ] as $regression) {
         $result = $runner->run([PHP_BINARY, __DIR__ . '/' . $regression], $root, '', 30);
         check($result['exit_code'] === 0, 'targeted regression: ' . $regression);
         if ($result['exit_code'] !== 0) {

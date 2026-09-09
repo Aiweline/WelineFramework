@@ -9,7 +9,7 @@ declare(strict_types=1);
  * stdout JSON only.
  */
 
-use Weline\Cart\Service\CartCacheStore;
+use Weline\Cart\Api\CartStoreInterface;
 use Weline\Cart\Service\CartHarnessCatalog;
 use Weline\Cart\Service\CartService;
 use Weline\Customer\Service\CustomerAccountService;
@@ -180,8 +180,8 @@ function p2e02_cleanup(int $customerId, ?string $offerUuid, ?string $guestToken)
         ScopeIdentity::channel(0, 'default', 'store-b', 'app', ScopeIdentity::MODE_NORMAL),
     ];
     try {
-        /** @var CartCacheStore $store */
-        $store = ObjectManager::getInstance()->get(CartCacheStore::class);
+        /** @var CartStoreInterface $store */
+        $store = ObjectManager::getInstance()->get(CartStoreInterface::class);
         foreach ($scopes as $scope) {
             if ($customerId > 0) {
                 $store->delete($scope->canonicalKey() . '|customer:' . $customerId);
@@ -191,7 +191,7 @@ function p2e02_cleanup(int $customerId, ?string $offerUuid, ?string $guestToken)
             }
         }
     } catch (Throwable) {
-        // best-effort cache cleanup
+        // best-effort cart cleanup
     }
     if ($customerId <= 0) {
         return;

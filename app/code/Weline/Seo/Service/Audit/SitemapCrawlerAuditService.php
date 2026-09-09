@@ -16,8 +16,11 @@ class SitemapCrawlerAuditService implements SiteCrawlerAuditInterface
     private const DEFAULT_LIMIT = 100;
     private const MAX_LIMIT = 500;
     private const DEFAULT_TIMEOUT = 6;
+    private const DEFAULT_BATCH_SIZE = 2;
     private const MAX_SITEMAP_DEPTH = 2;
     private const RESOURCE_HEAD_BUDGET = 24;
+    /** Discover more sitemap locs than the audit limit so structure sampling can collapse families. */
+    private const DISCOVERY_LIMIT = 500;
 
     /** @var list<string> */
     private array $sitemapMessages = [];
@@ -35,38 +38,58 @@ class SitemapCrawlerAuditService implements SiteCrawlerAuditInterface
     }
 
     /**
+     * Full crawl for CLI/tests: begin + advance until completed.
+     *
      * @param array<string, mixed> $options
      * @return array<string, mixed>
      */
     public function crawl(array $options): array
+    {
+        $job = $this->begin($options);
+        while (($job['status'] ?? '') === 'running') {
+            $remaining = \max(1, \count($job['urls'] ?? []) - (int)($job['cursor'] ?? 0));
+            $job = $this->advance($job, $remaining);
+        }
+
+        return $this->toReport($job);
+    }
+
+    /**
+     * Discover sitemap URLs and return a JSON-serializable job.
+     *
+     * @param array<string, mixed> $options
+     * @return array<string, mixed>
+     */
+    public function begin(array $options): array
     {
         $this->sitemapMessages = [];
         $this->resourceHeadCache = [];
         $this->relaxedTlsHosts = [];
 
         $startedAt = \gmdate('c');
-        $limit = $this->limit($options['limit'] ?? self::DEFAULT_LIMIT);
+        $mode = \strtolower(\trim((string)($options['mode'] ?? 'sitemap')));
+        if ($mode !== 'page') {
+            $mode = 'sitemap';
+        }
         $timeout = $this->timeout($options['timeout'] ?? self::DEFAULT_TIMEOUT);
-        @\set_time_limit(\max(30, ($limit * $timeout) + 15));
-
         $baseUrl = $this->resolveBaseUrl($options);
         $origin = $this->origin($baseUrl);
-        $sitemapUrl = $this->resolveSitemapUrl($options, $baseUrl);
         $issues = [];
-        $pages = [];
-        $failed = [];
-        $factsByUrl = [];
-        $titleMap = [];
-        $descriptionMap = [];
-        $canonicalMap = [];
-        $resourceHeadBudget = self::RESOURCE_HEAD_BUDGET;
 
-        $sitemapResult = $this->collectSitemapUrls($sitemapUrl, $origin, $limit);
+        if ($mode === 'page') {
+            return $this->beginPageAudit($options, $origin, $baseUrl, $timeout, $startedAt);
+        }
+
+        $limit = $this->limit($options['limit'] ?? self::DEFAULT_LIMIT);
+        @\set_time_limit(\max(30, ($limit * $timeout) + 15));
+        $sitemapUrl = $this->resolveSitemapUrl($options, $baseUrl);
+
+        $sitemapResult = $this->collectSitemapUrls($sitemapUrl, $origin, self::DISCOVERY_LIMIT);
         $urls = $sitemapResult['urls'];
         $sitemapUrl = $sitemapResult['sitemapUrl'] ?: $sitemapUrl;
 
         if ($urls === []) {
-            $urls = $this->databaseSitemapUrls($origin, $limit);
+            $urls = $this->databaseSitemapUrls($origin, self::DISCOVERY_LIMIT);
             if ($urls !== []) {
                 $this->addIssue(
                     $issues,
@@ -92,14 +115,178 @@ class SitemapCrawlerAuditService implements SiteCrawlerAuditInterface
                     '',
                     ['sitemapUrl' => $sitemapUrl, 'messages' => $this->sitemapMessages],
                     '没有 sitemap 时，批量 SEO 审计无法覆盖站点 URL，搜索引擎也更难发现深层页面。',
-                    '在页面 head 提供 <link rel="sitemap">，或保证 /sitemap.xml 可访问，或在 SEO 模块中生成 sitemap URL 数据。',
+                    '在 robots.txt 声明 Sitemap:（Google/Bing 官方主路径），保证 /sitemap.xml 可访问，或在 SEO 模块中生成 sitemap URL 数据；HTML <link rel="sitemap"> 仅为可选便利。',
                     12
                 );
             }
         }
 
-        $urls = \array_slice($this->uniqueSameOriginUrls($urls, $origin), 0, $limit);
-        foreach ($urls as $url) {
+        $discovered = $this->uniqueSameOriginUrls($urls, $origin);
+        $sample = (new SitemapAuditUrlSampler())->sample($discovered);
+        $urls = \array_slice($sample['urls'], 0, $limit);
+        $job = [
+            'status' => 'running',
+            'mode' => 'sitemap',
+            'urls' => \array_values($urls),
+            'cursor' => 0,
+            'pages' => [],
+            'issues' => $issues,
+            'failed' => [],
+            'factsByUrl' => [],
+            'titleMap' => [],
+            'descriptionMap' => [],
+            'canonicalMap' => [],
+            'resourceHeadBudget' => self::RESOURCE_HEAD_BUDGET,
+            'sitemapMessages' => \array_values($this->sitemapMessages),
+            'relaxedTlsHosts' => $this->relaxedTlsHosts,
+            'resourceHeadCache' => $this->resourceHeadCache,
+            'sitemapUrl' => $sitemapUrl,
+            'origin' => $origin,
+            'limit' => $limit,
+            'timeout' => $timeout,
+            'startedAt' => $startedAt,
+            'contractVersion' => self::CONTRACT_VERSION,
+            'command' => self::COMMAND,
+            'sampling' => [
+                'discovered' => (int)$sample['discovered'],
+                'sampled' => (int)$sample['sampled'],
+                'collapsed' => (int)$sample['collapsed'],
+                'audited' => \count($urls),
+                'structures' => $sample['structures'],
+            ],
+        ];
+
+        if ($job['urls'] === []) {
+            return $this->finalizeJob($job);
+        }
+
+        return $job;
+    }
+
+    /**
+     * Audit a single page URL with the same HTML rules as sitemap crawl (no sitemap discovery).
+     *
+     * @param array<string, mixed> $options
+     * @return array<string, mixed>
+     */
+    private function beginPageAudit(array $options, string $origin, string $baseUrl, int $timeout, string $startedAt): array
+    {
+        @\set_time_limit(\max(30, $timeout + 15));
+        $issues = [];
+        $pageUrl = $this->normalizeUrl(
+            (string)($options['pageUrl'] ?? $options['url'] ?? $options['startUrl'] ?? $baseUrl),
+            $origin
+        );
+        if ($pageUrl === '' || !$this->sameOrigin($pageUrl, $origin)) {
+            $this->addIssue(
+                $issues,
+                'page_audit_url_invalid',
+                'error',
+                'P0',
+                'Indexability',
+                '当前 URL 无效或非同源，无法审计',
+                (string)($options['pageUrl'] ?? ''),
+                ['origin' => $origin, 'pageUrl' => $options['pageUrl'] ?? null],
+                '服务端审计只允许检测当前站点同源页面，避免变成任意 URL 抓取器。',
+                '在目标站点页面打开 Weline 面板后再点「检测当前 URL」。',
+                12
+            );
+            $pageUrl = '';
+        } elseif ($this->isNonHtmlAssetUrl($pageUrl)) {
+            $this->addIssue(
+                $issues,
+                'page_audit_non_html',
+                'error',
+                'P1',
+                'Indexability',
+                '当前 URL 是静态资源，不是可审计 HTML 页面',
+                $pageUrl,
+                [],
+                '图片/CSS/JS 等资源不应作为页面 SEO 审计目标。',
+                '打开商品/博客/分类等 HTML 页面后再检测。',
+                8
+            );
+            $pageUrl = '';
+        }
+
+        $urls = $pageUrl !== '' ? [$pageUrl] : [];
+        $job = [
+            'status' => 'running',
+            'mode' => 'page',
+            'urls' => $urls,
+            'cursor' => 0,
+            'pages' => [],
+            'issues' => $issues,
+            'failed' => [],
+            'factsByUrl' => [],
+            'titleMap' => [],
+            'descriptionMap' => [],
+            'canonicalMap' => [],
+            'resourceHeadBudget' => self::RESOURCE_HEAD_BUDGET,
+            'sitemapMessages' => [],
+            'relaxedTlsHosts' => $this->relaxedTlsHosts,
+            'resourceHeadCache' => $this->resourceHeadCache,
+            'sitemapUrl' => '',
+            'origin' => $origin,
+            'limit' => 1,
+            'timeout' => $timeout,
+            'startedAt' => $startedAt,
+            'contractVersion' => self::CONTRACT_VERSION,
+            'command' => 'weline-seo-page-audit-report',
+            'sampling' => [
+                'discovered' => \count($urls),
+                'sampled' => \count($urls),
+                'collapsed' => 0,
+                'audited' => \count($urls),
+                'structures' => [],
+                'mode' => 'page',
+                'pageUrl' => $pageUrl,
+            ],
+        ];
+
+        if ($job['urls'] === []) {
+            return $this->finalizeJob($job);
+        }
+
+        return $job;
+    }
+
+    /**
+     * Audit the next batch of URLs; finalize when the cursor is exhausted.
+     *
+     * @param array<string, mixed> $job
+     * @return array<string, mixed>
+     */
+    public function advance(array $job, int $batchSize = self::DEFAULT_BATCH_SIZE): array
+    {
+        if (($job['status'] ?? '') === 'completed') {
+            return $job;
+        }
+
+        $this->restoreCachesFromJob($job);
+        $batchSize = \max(1, $batchSize);
+        $urls = \array_values($job['urls'] ?? []);
+        $cursor = \max(0, (int)($job['cursor'] ?? 0));
+        $timeout = $this->timeout($job['timeout'] ?? self::DEFAULT_TIMEOUT);
+        $origin = (string)($job['origin'] ?? '');
+        @\set_time_limit(\max(30, ($batchSize * $timeout) + 15));
+
+        if ($cursor >= \count($urls)) {
+            return $this->finalizeJob($job);
+        }
+
+        $end = \min(\count($urls), $cursor + $batchSize);
+        $issues = \is_array($job['issues'] ?? null) ? $job['issues'] : [];
+        $pages = \is_array($job['pages'] ?? null) ? $job['pages'] : [];
+        $failed = \is_array($job['failed'] ?? null) ? $job['failed'] : [];
+        $factsByUrl = \is_array($job['factsByUrl'] ?? null) ? $job['factsByUrl'] : [];
+        $titleMap = \is_array($job['titleMap'] ?? null) ? $job['titleMap'] : [];
+        $descriptionMap = \is_array($job['descriptionMap'] ?? null) ? $job['descriptionMap'] : [];
+        $canonicalMap = \is_array($job['canonicalMap'] ?? null) ? $job['canonicalMap'] : [];
+        $resourceHeadBudget = (int)($job['resourceHeadBudget'] ?? self::RESOURCE_HEAD_BUDGET);
+
+        for ($i = $cursor; $i < $end; $i++) {
+            $url = (string)$urls[$i];
             $fetch = $this->fetchUrl($url, $timeout, 'GET');
             $pageIssueIds = [];
             $facts = $this->auditPage($url, $fetch, $origin, $issues, $pageIssueIds, $resourceHeadBudget);
@@ -127,8 +314,114 @@ class SitemapCrawlerAuditService implements SiteCrawlerAuditInterface
                 'seoType' => $facts['seoType'],
                 'score' => $this->pageScore($pageIssueIds, $issues),
                 'issueIds' => $pageIssueIds,
+                'jsonLd' => $this->jsonLdReportPayload(
+                    \is_array($facts['jsonLd'] ?? null) ? $facts['jsonLd'] : []
+                ),
             ];
         }
+
+        $job['cursor'] = $end;
+        $job['pages'] = $pages;
+        $job['issues'] = $issues;
+        $job['failed'] = $failed;
+        $job['factsByUrl'] = $factsByUrl;
+        $job['titleMap'] = $titleMap;
+        $job['descriptionMap'] = $descriptionMap;
+        $job['canonicalMap'] = $canonicalMap;
+        $job['resourceHeadBudget'] = $resourceHeadBudget;
+        $job['sitemapMessages'] = \array_values($this->sitemapMessages);
+        $job['relaxedTlsHosts'] = $this->relaxedTlsHosts;
+        $job['resourceHeadCache'] = $this->resourceHeadCache;
+        $job['timeout'] = $timeout;
+        $job['status'] = 'running';
+
+        if ($job['cursor'] >= \count($urls)) {
+            return $this->finalizeJob($job);
+        }
+
+        return $job;
+    }
+
+    /**
+     * Public progress/final report shape (matches historical crawl() return).
+     *
+     * @param array<string, mixed> $job
+     * @return array<string, mixed>
+     */
+    public function toReport(array $job): array
+    {
+        $status = (string)($job['status'] ?? 'running');
+        $urls = \array_values($job['urls'] ?? []);
+        $pages = \is_array($job['pages'] ?? null) ? $job['pages'] : [];
+        $failed = \is_array($job['failed'] ?? null) ? $job['failed'] : [];
+        $issues = \is_array($job['issues'] ?? null) ? $job['issues'] : [];
+        $startedAt = (string)($job['startedAt'] ?? \gmdate('c'));
+        $finishedAt = (string)($job['finishedAt'] ?? ($status === 'completed' ? \gmdate('c') : $startedAt));
+        $limit = (int)($job['limit'] ?? self::DEFAULT_LIMIT);
+        $timeout = (int)($job['timeout'] ?? self::DEFAULT_TIMEOUT);
+        $origin = (string)($job['origin'] ?? '');
+        $sitemapUrl = (string)($job['sitemapUrl'] ?? '');
+        $tlsRelaxedHosts = \array_keys(\is_array($job['relaxedTlsHosts'] ?? null) ? $job['relaxedTlsHosts'] : []);
+        $sampling = \is_array($job['sampling'] ?? null) ? $job['sampling'] : [];
+        $assumptions = \is_array($job['assumptions'] ?? null)
+            ? $job['assumptions']
+            : $this->defaultAssumptions($tlsRelaxedHosts, $sampling);
+        $health = \is_array($job['health'] ?? null)
+            ? $job['health']
+            : [
+                'score' => 0,
+                'errors' => 0,
+                'warnings' => 0,
+                'notices' => 0,
+                'status' => $status === 'completed' ? 'unknown' : 'running',
+            ];
+        $mode = \strtolower((string)($job['mode'] ?? ($sampling['mode'] ?? 'sitemap')));
+        if ($mode !== 'page') {
+            $mode = 'sitemap';
+        }
+
+        return [
+            'contractVersion' => (string)($job['contractVersion'] ?? self::CONTRACT_VERSION),
+            'command' => (string)($job['command'] ?? self::COMMAND),
+            'generatedAt' => $finishedAt,
+            'health' => $health,
+            'crawl' => [
+                'status' => $status,
+                'mode' => $mode,
+                'pageUrl' => (string)($sampling['pageUrl'] ?? (($mode === 'page' && $urls !== []) ? $urls[0] : '')),
+                'sitemapUrl' => $sitemapUrl,
+                'totalUrls' => \count($urls),
+                'scanned' => \count($pages),
+                'failed' => \count($failed),
+                'limit' => $limit,
+                'timeoutSeconds' => $timeout,
+                'sameOrigin' => $origin,
+                'tlsVerification' => $tlsRelaxedHosts === [] ? 'strict' : 'relaxed_for_local_development',
+                'tlsRelaxedHosts' => \array_values($tlsRelaxedHosts),
+                'sampling' => $sampling,
+                'startedAt' => $startedAt,
+                'finishedAt' => $status === 'completed' ? $finishedAt : null,
+            ],
+            'issues' => $issues,
+            'pages' => $pages,
+            'failedUrls' => $failed,
+            'assumptions' => $assumptions,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $job
+     * @return array<string, mixed>
+     */
+    private function finalizeJob(array $job): array
+    {
+        $this->restoreCachesFromJob($job);
+        $issues = \is_array($job['issues'] ?? null) ? $job['issues'] : [];
+        $titleMap = \is_array($job['titleMap'] ?? null) ? $job['titleMap'] : [];
+        $descriptionMap = \is_array($job['descriptionMap'] ?? null) ? $job['descriptionMap'] : [];
+        $canonicalMap = \is_array($job['canonicalMap'] ?? null) ? $job['canonicalMap'] : [];
+        $factsByUrl = \is_array($job['factsByUrl'] ?? null) ? $job['factsByUrl'] : [];
+        $sitemapUrl = (string)($job['sitemapUrl'] ?? '');
 
         $this->auditDuplicateMeta($titleMap, $issues, 'duplicate_title', 'Title 重复', 'Meta', 6);
         $this->auditDuplicateMeta($descriptionMap, $issues, 'duplicate_description', 'Description 重复', 'Meta', 5);
@@ -140,38 +433,75 @@ class SitemapCrawlerAuditService implements SiteCrawlerAuditInterface
         $health = $this->health($issues);
         $finishedAt = \gmdate('c');
         $tlsRelaxedHosts = \array_keys($this->relaxedTlsHosts);
+
+        $job['issues'] = $issues;
+        $job['health'] = $health;
+        $job['assumptions'] = $this->defaultAssumptions($tlsRelaxedHosts, \is_array($job['sampling'] ?? null) ? $job['sampling'] : []);
+        $job['finishedAt'] = $finishedAt;
+        $job['sitemapMessages'] = \array_values($this->sitemapMessages);
+        $job['relaxedTlsHosts'] = $this->relaxedTlsHosts;
+        $job['resourceHeadCache'] = $this->resourceHeadCache;
+        $job['status'] = 'completed';
+
+        return $job;
+    }
+
+    /**
+     * @param array<string, mixed> $job
+     */
+    private function restoreCachesFromJob(array $job): void
+    {
+        $messages = $job['sitemapMessages'] ?? [];
+        $this->sitemapMessages = \is_array($messages) ? \array_values(\array_map('strval', $messages)) : [];
+
+        $hosts = $job['relaxedTlsHosts'] ?? [];
+        $this->relaxedTlsHosts = [];
+        if (\is_array($hosts)) {
+            foreach ($hosts as $host => $flag) {
+                if (\is_string($host) && $host !== '' && $flag) {
+                    $this->relaxedTlsHosts[$host] = true;
+                }
+            }
+        }
+
+        $cache = $job['resourceHeadCache'] ?? [];
+        $this->resourceHeadCache = \is_array($cache) ? $cache : [];
+    }
+
+    /**
+     * @param list<string> $tlsRelaxedHosts
+     * @param array<string, mixed> $sampling
+     * @return list<string>
+     */
+    private function defaultAssumptions(array $tlsRelaxedHosts, array $sampling = []): array
+    {
         $assumptions = [
             'HTML 抓取型审计，不运行 Lighthouse、CrUX 或完整浏览器渲染。',
             '只扫描同源 URL，避免把面板变成任意 URL 抓取器。',
             '未压缩静态资源使用响应头和资源命名启发式判断。',
         ];
+        $mode = \strtolower((string)($sampling['mode'] ?? 'sitemap'));
+        if ($mode === 'page') {
+            $pageUrl = (string)($sampling['pageUrl'] ?? '');
+            $assumptions[] = '当前为单页审计模式：只检测指定 URL'
+                . ($pageUrl !== '' ? ('（' . $pageUrl . '）') : '')
+                . '，不读取 sitemap、不做结构抽样。';
+        } else {
+            $assumptions[] = '同结构 URL（product/blog/category/help/promotion/page）每种只抽 1 个代表；其余单例 URL 全部审查。';
+            $assumptions[] = 'sitemap 的 image:loc / 静态媒体 URL 不作为独立 HTML 页面抓取；图片问题挂在发现该问题的页面下。';
+        }
+        $collapsed = (int)($sampling['collapsed'] ?? 0);
+        $discovered = (int)($sampling['discovered'] ?? 0);
+        $sampled = (int)($sampling['sampled'] ?? 0);
+        if ($discovered > 0) {
+            $assumptions[] = 'Sitemap 发现 ' . $discovered . ' 个 URL，结构抽样后 ' . $sampled . ' 个进入审计'
+                . ($collapsed > 0 ? ('（合并跳过 ' . $collapsed . ' 个同结构地址）') : '') . '。';
+        }
         if ($tlsRelaxedHosts !== []) {
             $assumptions[] = '本地/开发 HTTPS 主机使用自签或本地 CA 证书时，服务端抓取会放宽 TLS 校验；生产证书有效性仍需使用严格 TLS 或外部工具验证。';
         }
 
-        return [
-            'contractVersion' => self::CONTRACT_VERSION,
-            'command' => self::COMMAND,
-            'generatedAt' => $finishedAt,
-            'health' => $health,
-            'crawl' => [
-                'sitemapUrl' => $sitemapUrl,
-                'totalUrls' => \count($urls),
-                'scanned' => \count($pages),
-                'failed' => \count($failed),
-                'limit' => $limit,
-                'timeoutSeconds' => $timeout,
-                'sameOrigin' => $origin,
-                'tlsVerification' => $tlsRelaxedHosts === [] ? 'strict' : 'relaxed_for_local_development',
-                'tlsRelaxedHosts' => $tlsRelaxedHosts,
-                'startedAt' => $startedAt,
-                'finishedAt' => $finishedAt,
-            ],
-            'issues' => $issues,
-            'pages' => $pages,
-            'failedUrls' => $failed,
-            'assumptions' => $assumptions,
-        ];
+        return $assumptions;
     }
 
     private function limit(mixed $value): int
@@ -284,13 +614,12 @@ class SitemapCrawlerAuditService implements SiteCrawlerAuditInterface
         }
 
         $rootName = \strtolower($xml->getName());
-        $locs = $this->xmlLocs($xml);
-        if ($locs === []) {
-            $this->sitemapMessages[] = 'sitemap 没有 loc 节点: ' . $sitemapUrl;
-            return;
-        }
-
         if ($rootName === 'sitemapindex') {
+            $locs = $this->xmlSitemapIndexLocs($xml);
+            if ($locs === []) {
+                $this->sitemapMessages[] = 'sitemap index 没有 sitemap/loc 节点: ' . $sitemapUrl;
+                return;
+            }
             foreach ($locs as $loc) {
                 $this->crawlSitemap($loc, $origin, $limit, $depth + 1, $visited, $urls);
                 if (\count($urls) >= $limit) {
@@ -300,10 +629,21 @@ class SitemapCrawlerAuditService implements SiteCrawlerAuditInterface
             return;
         }
 
+        $entries = $this->xmlUrlsetEntries($xml);
+        if ($entries === []) {
+            $this->sitemapMessages[] = 'sitemap 没有 url/loc 节点: ' . $sitemapUrl;
+            return;
+        }
+
         $seenInFile = [];
-        foreach ($locs as $loc) {
-            $url = $this->normalizeUrl($loc, $origin);
+        $skippedAssets = 0;
+        foreach ($entries as $entry) {
+            $url = $this->normalizeUrl((string)($entry['loc'] ?? ''), $origin);
             if ($url === '') {
+                continue;
+            }
+            if ($this->isNonHtmlAssetUrl($url)) {
+                $skippedAssets++;
                 continue;
             }
             if (isset($seenInFile[$url])) {
@@ -319,6 +659,9 @@ class SitemapCrawlerAuditService implements SiteCrawlerAuditInterface
             if (\count($urls) >= $limit) {
                 break;
             }
+        }
+        if ($skippedAssets > 0) {
+            $this->sitemapMessages[] = '已忽略 sitemap 中的 ' . $skippedAssets . ' 个非 HTML 资源 loc（如图片 image:loc），它们会挂在发现页面下审查，不作为独立页面抓取。';
         }
     }
 
@@ -336,9 +679,9 @@ class SitemapCrawlerAuditService implements SiteCrawlerAuditInterface
     /**
      * @return list<string>
      */
-    private function xmlLocs(\SimpleXMLElement $xml): array
+    private function xmlSitemapIndexLocs(\SimpleXMLElement $xml): array
     {
-        $locs = $xml->xpath('//*[local-name()="loc"]') ?: [];
+        $locs = $xml->xpath('/*[local-name()="sitemapindex"]/*[local-name()="sitemap"]/*[local-name()="loc"]') ?: [];
         $result = [];
         foreach ($locs as $loc) {
             $value = \trim((string)$loc);
@@ -348,6 +691,78 @@ class SitemapCrawlerAuditService implements SiteCrawlerAuditInterface
         }
 
         return $result;
+    }
+
+    /**
+     * Page entries only: url/loc. Nested image:loc are not crawl targets.
+     *
+     * @return list<array{loc: string, images: list<string>}>
+     */
+    private function xmlUrlsetEntries(\SimpleXMLElement $xml): array
+    {
+        $nodes = $xml->xpath('/*[local-name()="urlset"]/*[local-name()="url"]') ?: [];
+        $entries = [];
+        foreach ($nodes as $node) {
+            if (!$node instanceof \SimpleXMLElement) {
+                continue;
+            }
+            $locNodes = $node->xpath('./*[local-name()="loc"]') ?: [];
+            $loc = '';
+            foreach ($locNodes as $locNode) {
+                $candidate = \trim((string)$locNode);
+                if ($candidate !== '') {
+                    $loc = $candidate;
+                    break;
+                }
+            }
+            if ($loc === '') {
+                continue;
+            }
+            $images = [];
+            $imageLocs = $node->xpath('./*[local-name()="image"]/*[local-name()="loc"]') ?: [];
+            foreach ($imageLocs as $imageLoc) {
+                $imageUrl = \trim((string)$imageLoc);
+                if ($imageUrl !== '') {
+                    $images[] = $imageUrl;
+                }
+            }
+            $entries[] = [
+                'loc' => $loc,
+                'images' => \array_values(\array_unique($images)),
+            ];
+        }
+
+        return $entries;
+    }
+
+    private function isNonHtmlAssetUrl(string $url): bool
+    {
+        $path = \strtolower((string)(\parse_url($url, PHP_URL_PATH) ?: ''));
+        if ($path === '') {
+            return false;
+        }
+        if (\str_contains($path, '/pub/media/') || \str_contains($path, '/media/')) {
+            return true;
+        }
+
+        return (bool)\preg_match(
+            '/\.(?:webp|avif|jpe?g|png|gif|svg|ico|bmp|tiff?|css|js|mjs|map|woff2?|ttf|eot|otf|mp4|webm|mp3|wav|pdf|zip|gz|xml)$/D',
+            $path
+        );
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function xmlLocs(\SimpleXMLElement $xml): array
+    {
+        // Legacy helper: prefer page url/loc; fall back to any loc for unusual feeds.
+        $entries = $this->xmlUrlsetEntries($xml);
+        if ($entries !== []) {
+            return \array_values(\array_map(static fn(array $e): string => $e['loc'], $entries));
+        }
+
+        return $this->xmlSitemapIndexLocs($xml);
     }
 
     /**
@@ -372,7 +787,7 @@ class SitemapCrawlerAuditService implements SiteCrawlerAuditInterface
                 continue;
             }
             $url = $this->normalizeUrl((string)($row[SitemapUrl::schema_fields_URL] ?? $row['url'] ?? ''), $origin);
-            if ($url !== '' && $this->sameOrigin($url, $origin)) {
+            if ($url !== '' && $this->sameOrigin($url, $origin) && !$this->isNonHtmlAssetUrl($url)) {
                 $urls[] = $url;
             }
             if (\count($urls) >= $limit) {
@@ -394,6 +809,9 @@ class SitemapCrawlerAuditService implements SiteCrawlerAuditInterface
         foreach ($urls as $url) {
             $normalized = $this->normalizeUrl($url, $origin);
             if ($normalized === '' || !$this->sameOrigin($normalized, $origin) || isset($seen[$normalized])) {
+                continue;
+            }
+            if ($this->isNonHtmlAssetUrl($normalized)) {
                 continue;
             }
             $seen[$normalized] = true;
@@ -445,7 +863,7 @@ class SitemapCrawlerAuditService implements SiteCrawlerAuditInterface
                 $url,
                 $evidence,
                 $isTlsError ? '搜索引擎和服务端抓取器需要能验证 HTTPS 证书链，否则页面会被视为不可抓取。' : 'sitemap 中的 URL 必须稳定可访问。错误状态会浪费抓取预算，并阻止索引。',
-                $isTlsError ? '为站点配置受信任的 HTTPS 证书链；本地 .test/localhost 开发域名可继续使用 Weline 本地证书豁免。' : '修复页面路由、服务错误或从 sitemap 中移除不可访问 URL。',
+                $isTlsError ? '为站点配置受信任的 HTTPS 证书链；本地开发域名（*.test.weline.com / *.test / localhost）可继续使用 Weline 本地证书豁免。' : '修复页面路由、服务错误或从 sitemap 中移除不可访问 URL。',
                 $status >= 500 || $status === 0 ? 16 : 12,
                 $pageIssueIds
             );
@@ -585,9 +1003,51 @@ class SitemapCrawlerAuditService implements SiteCrawlerAuditInterface
             $this->addIssue($issues, 'title_length', 'warning', 'P2', 'Meta', 'title 长度不理想', $url, ['length' => $titleLength, 'title' => $title], '过短缺少上下文，过长可能在 SERP 截断。', '把 title 控制在 30-65 字符，并保持唯一。', 4, $pageIssueIds);
         }
         if ($description === '') {
-            $this->addIssue($issues, 'description_missing', 'warning', 'P1', 'Meta', '缺少 meta description', $url, [], 'Description 影响搜索摘要可读性和点击率。', '补充 90-170 字符的页面摘要和行动引导。', 7, $pageIssueIds);
-        } elseif ($descriptionLength < 90 || $descriptionLength > 170) {
-            $this->addIssue($issues, 'description_length', 'warning', 'P2', 'Meta', 'description 长度不理想', $url, ['length' => $descriptionLength], '摘要过短信息不足，过长可能截断。', '把 description 调整到 90-170 字符，并匹配页面真实内容。', 3, $pageIssueIds);
+            $this->addIssue(
+                $issues,
+                'description_missing',
+                'warning',
+                'P1',
+                'Meta',
+                '缺少 meta description',
+                $url,
+                [],
+                'Description 常被用作搜索摘要候选，影响可读性和点击率；Google 也可能改写摘要。',
+                '补充清晰、与页面内容匹配的摘要即可。Google 未规定强制字数；过短可酌情补充价值点，关键信息靠前写。',
+                7,
+                $pageIssueIds
+            );
+        } elseif ($descriptionLength < 50) {
+            // Google 无强制字数；仅对明显过短给 notice，且不扣分。
+            $this->addIssue(
+                $issues,
+                'description_length',
+                'notice',
+                'P3',
+                'Meta',
+                'description 偏短（可选优化）',
+                $url,
+                ['length' => $descriptionLength],
+                'Google 未规定 description 字数下限；极短摘要可能错失向用户说明页面价值的机会。',
+                '可酌情补充页面卖点或行动引导；不要求凑到固定区间。SERP 截断按像素宽度，而非固定字符数。',
+                0,
+                $pageIssueIds
+            );
+        } elseif ($descriptionLength > 320) {
+            $this->addIssue(
+                $issues,
+                'description_length',
+                'notice',
+                'P3',
+                'Meta',
+                'description 偏长（可选优化）',
+                $url,
+                ['length' => $descriptionLength],
+                'Google 无强制上限，但搜索结果摘要通常按设备宽度截断。',
+                '把最重要的信息写在前部即可；无需为工具分数硬裁到固定字数。',
+                0,
+                $pageIssueIds
+            );
         }
     }
 
@@ -680,7 +1140,9 @@ class SitemapCrawlerAuditService implements SiteCrawlerAuditInterface
         }
 
         $rules = $this->structuredDataRule((string)$facts['seoType'], (string)$facts['url']);
+        $jsonLdNodes = \is_array($jsonLd['nodes'] ?? null) ? $jsonLd['nodes'] : [];
         if ($rules === []) {
+            $this->auditEeatStrictStructuredSignals($facts, $jsonLd, [], $issues, $pageIssueIds);
             return;
         }
         $types = \array_map('strtolower', \is_array($jsonLd['types'] ?? null) ? $jsonLd['types'] : []);
@@ -688,17 +1150,167 @@ class SitemapCrawlerAuditService implements SiteCrawlerAuditInterface
         $hasType = \count(\array_intersect($types, $expectedTypes)) > 0;
         if (!$hasType) {
             $this->addIssue($issues, 'jsonld_page_type_missing', 'warning', 'P1', 'Structured Data', '页面类型缺少对应 JSON-LD', $url, ['expected' => $rules['types'], 'found' => $jsonLd['types'] ?? []], '页面类型和结构化数据不匹配会错失富结果和实体理解信号。', '按页面类型输出对应 schema，例如新闻用 NewsArticle，博客用 BlogPosting，产品用 Product。', 8, $pageIssueIds);
+            $this->auditEeatStrictStructuredSignals($facts, $jsonLd, [], $issues, $pageIssueIds);
             return;
         }
 
-        $primary = $this->firstJsonLdNodeOfTypes(\is_array($jsonLd['nodes'] ?? null) ? $jsonLd['nodes'] : [], (array)$rules['types']);
+        $primary = $this->firstJsonLdNodeOfTypes($jsonLdNodes, (array)$rules['types']);
         if ($primary === []) {
+            $this->auditEeatStrictStructuredSignals($facts, $jsonLd, [], $issues, $pageIssueIds);
             return;
         }
         foreach ((array)$rules['required'] as $field) {
             if (!$this->jsonLdHasField($primary, (string)$field)) {
                 $this->addIssue($issues, 'jsonld_missing_' . $this->slug((string)$field), 'warning', 'P1', 'Structured Data', 'JSON-LD 缺少必要字段 ' . $field, $url, ['type' => $primary['@type'] ?? '', 'field' => $field], '必要字段缺失会让页面不符合对应富结果结构。', '补充真实可靠的 ' . $field . ' 字段，不要编造不可验证数据。', 4, $pageIssueIds);
             }
+        }
+        // ProductGroup may expose offers via hasVariant; require either offers or hasVariant.
+        $primaryTypes = \array_map('strtolower', \array_map('strval', (array)($primary['@type'] ?? [])));
+        if (\in_array('productgroup', $primaryTypes, true)
+            && !$this->jsonLdHasField($primary, 'offers')
+            && !$this->jsonLdHasField($primary, 'hasVariant')
+        ) {
+            $this->addIssue($issues, 'jsonld_missing_offers_or_variants', 'warning', 'P1', 'Structured Data', 'JSON-LD ProductGroup 缺少 offers/hasVariant', $url, ['type' => $primary['@type'] ?? ''], '变体商品需要 offers 或 hasVariant，搜索引擎才能理解可售卖实体。', '为 ProductGroup 输出 hasVariant，或提供汇总 offers。', 4, $pageIssueIds);
+        } elseif (\in_array('product', $primaryTypes, true) && !$this->jsonLdHasField($primary, 'offers')) {
+            $this->addIssue($issues, 'jsonld_missing_offers', 'warning', 'P1', 'Structured Data', 'JSON-LD 缺少必要字段 offers', $url, ['type' => $primary['@type'] ?? '', 'field' => 'offers'], '必要字段缺失会让页面不符合对应富结果结构。', '补充真实可靠的 offers 字段，不要编造不可验证数据。', 4, $pageIssueIds);
+        }
+
+        $this->auditEeatStrictStructuredSignals($facts, $jsonLd, $primary, $issues, $pageIssueIds);
+    }
+
+    /**
+     * Soft Helpful Content Who/Trust signals aligned with inspector EEAT_STRICT_RULES (non-blocking).
+     *
+     * @param array<string, mixed> $facts
+     * @param array<string, mixed> $jsonLd
+     * @param array<string, mixed> $primary
+     * @param array<string, array<string, mixed>> $issues
+     * @param list<string> $pageIssueIds
+     */
+    private function auditEeatStrictStructuredSignals(array $facts, array $jsonLd, array $primary, array &$issues, array &$pageIssueIds): void
+    {
+        $url = (string)$facts['url'];
+        $seoType = strtolower((string)$facts['seoType']);
+        $nodes = \is_array($jsonLd['nodes'] ?? null) ? $jsonLd['nodes'] : [];
+        $org = $this->firstJsonLdNodeOfTypes($nodes, ['Organization', 'LocalBusiness', 'OnlineStore', 'OnlineBusiness']);
+
+        if ($org !== [] || $seoType === 'home') {
+            $sameAs = $org['sameAs'] ?? null;
+            $hasSameAs = false;
+            if (\is_string($sameAs) && str_starts_with(strtolower(trim($sameAs)), 'http')) {
+                $hasSameAs = true;
+            } elseif (\is_array($sameAs)) {
+                foreach ($sameAs as $entry) {
+                    if (\is_string($entry) && str_starts_with(strtolower(trim($entry)), 'http')) {
+                        $hasSameAs = true;
+                        break;
+                    }
+                }
+            }
+            if (!$hasSameAs) {
+                $this->addIssue(
+                    $issues,
+                    'eeat_org_sameas',
+                    'warning',
+                    'P2',
+                    'Helpful Content',
+                    'Organization 缺少 sameAs（Trust / 实体示例字段）',
+                    $url,
+                    ['rule' => 'eeat_org_sameas', 'who_id' => 'trust_org_sameas'],
+                    '对照 Google Helpful Content 自测：sameAs 帮助关联可核查实体；非排名门槛。',
+                    '在站点 Organization 配置中补充可验证的社交/档案 https URL。',
+                    2,
+                    $pageIssueIds
+                );
+            }
+        }
+
+        $articleTypes = ['Article', 'BlogPosting', 'NewsArticle'];
+        $isArticlePrimary = false;
+        foreach ((array)($primary['@type'] ?? []) as $type) {
+            if (\in_array((string)$type, $articleTypes, true)) {
+                $isArticlePrimary = true;
+                break;
+            }
+        }
+        if (!$isArticlePrimary && \in_array($seoType, ['blog', 'news', 'article'], true)) {
+            $isArticlePrimary = true;
+        }
+        if (!$isArticlePrimary) {
+            return;
+        }
+
+        $author = $primary['author'] ?? null;
+        $authors = \is_array($author) && \array_is_list($author) ? $author : ($author !== null ? [$author] : []);
+        $hasPerson = false;
+        $orgOnly = false;
+        $hasIdentityLink = false;
+        foreach ($authors as $entry) {
+            if (\is_string($entry) && trim($entry) !== '') {
+                $hasPerson = true;
+                continue;
+            }
+            if (!\is_array($entry)) {
+                continue;
+            }
+            $types = \array_map('strtolower', \array_map('strval', (array)($entry['@type'] ?? ['Person'])));
+            $name = trim((string)($entry['name'] ?? ''));
+            if (\in_array('person', $types, true) && $name !== '') {
+                $hasPerson = true;
+                $personUrl = trim((string)($entry['url'] ?? ''));
+                if ($personUrl !== '' && str_starts_with(strtolower($personUrl), 'http')) {
+                    $hasIdentityLink = true;
+                }
+                $sameAs = $entry['sameAs'] ?? null;
+                if (\is_string($sameAs) && str_starts_with(strtolower(trim($sameAs)), 'http')) {
+                    $hasIdentityLink = true;
+                } elseif (\is_array($sameAs)) {
+                    foreach ($sameAs as $sameAsUrl) {
+                        if (\is_string($sameAsUrl) && str_starts_with(strtolower(trim($sameAsUrl)), 'http')) {
+                            $hasIdentityLink = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            $id = (string)($entry['@id'] ?? '');
+            if ($id !== '' && $name === '' && !\in_array('person', $types, true)) {
+                $orgOnly = true;
+            }
+            if (\in_array('organization', $types, true) && $name === '') {
+                $orgOnly = true;
+            }
+        }
+        if (!$hasPerson) {
+            $this->addIssue(
+                $issues,
+                'eeat_article_author_missing',
+                'warning',
+                'P2',
+                'Helpful Content',
+                '文章作者仅为 Organization @id 回退或缺失 Person',
+                $url,
+                ['rule' => 'eeat_article_author_missing', 'who_id' => 'who_person_author', 'orgOnly' => $orgOnly],
+                '对照 Google Helpful Content Who：读者应能识别谁写了内容；非排名门槛。',
+                '为文章提供 Person.name，并补充 url 或 sameAs 以便延伸作者背景。',
+                2,
+                $pageIssueIds
+            );
+        } elseif (!$hasIdentityLink) {
+            $this->addIssue(
+                $issues,
+                'eeat_article_author_shallow',
+                'info',
+                'P3',
+                'Helpful Content',
+                'Person 作者缺 url 或 sameAs（Who 身份链）',
+                $url,
+                ['rule' => 'eeat_article_author_shallow', 'who_id' => 'who_person_url_or_sameas'],
+                    '官方鼓励署名可链到作者背景；jobTitle alone 不足以消歧。内部自测 · 非排名门槛。',
+                '为 Person 补充绝对 url 或 sameAs 档案链接。',
+                1,
+                $pageIssueIds
+            );
         }
     }
 
@@ -777,7 +1389,21 @@ class SitemapCrawlerAuditService implements SiteCrawlerAuditInterface
             }
         }
         if ($unminified !== []) {
-            $this->addIssue($issues, 'unminified_static_assets', 'warning', 'P2', 'Performance Static', '检测到未 minify 的 CSS/JS', $url, ['assets' => \array_slice(\array_values(\array_unique($unminified)), 0, 8)], '生产页面未压缩/minify 的静态资源会增加加载成本并拖累体验分。', '上线使用构建后的 .min 或 hashed bundle；开发面板资源可从审计页面排除。', 5, $pageIssueIds);
+            // DEV 原样静态属预期；生产 !DEV 下 deploy:upgrade / setup:upgrade 会 minify，故不扣分。
+            $this->addIssue(
+                $issues,
+                'unminified_static_assets',
+                'notice',
+                'P3',
+                'Performance Static',
+                '检测到未 minify 的 CSS/JS（开发环境常见）',
+                $url,
+                ['assets' => \array_slice(\array_values(\array_unique($unminified)), 0, 8)],
+                '本机/DEV 站通常不压缩静态资源以便调试；这不等于生产未压缩。',
+                '无需在开发环境强制 minify。生产（!DEV）执行 deploy:upgrade 或 setup:upgrade 时，Theme 会自动压缩写入 pub/static 的 css/js/mjs（见 Theme/doc/theme-static-minify.md）。',
+                0,
+                $pageIssueIds,
+            );
         }
     }
 
@@ -795,18 +1421,22 @@ class SitemapCrawlerAuditService implements SiteCrawlerAuditInterface
             if (!\is_array($image)) {
                 continue;
             }
+            $src = (string)($image['src'] ?? '');
+            if ($src === '' || $this->isIgnoredSeoAuditResource($src) || $this->isDecorativeOrUiImage($src)) {
+                continue;
+            }
             if (!(bool)($image['hasAlt'] ?? false)) {
-                $missingAlt[] = (string)($image['src'] ?? '');
+                $missingAlt[] = $src;
             }
             if (!(bool)($image['hasSize'] ?? false)) {
-                $missingSize[] = (string)($image['src'] ?? '');
+                $missingSize[] = $src;
             }
         }
         if ($missingAlt !== []) {
             $this->addIssue($issues, 'image_alt_missing', 'warning', 'P2', 'Media/Social', '图片缺少 alt', $url, ['images' => \array_slice($missingAlt, 0, 8)], 'alt 帮助图片搜索、可访问性和内容理解。', '为内容图片添加描述性 alt；纯装饰图可显式 alt=""。', 4, $pageIssueIds);
         }
         if ($missingSize !== []) {
-            $this->addIssue($issues, 'image_dimensions_missing', 'notice', 'P3', 'Performance Static', '图片缺少 width/height', $url, ['images' => \array_slice($missingSize, 0, 8)], '缺少尺寸会增加布局抖动风险。', '为图片输出 width 和 height，或使用稳定 aspect-ratio 容器。', 2, $pageIssueIds);
+            $this->addIssue($issues, 'image_dimensions_missing', 'notice', 'P3', 'Performance Static', '图片缺少 width/height', $url, ['images' => \array_slice($missingSize, 0, 8)], '缺少尺寸会增加布局抖动风险。', '为内容图片输出 width 和 height，或使用稳定 aspect-ratio 容器。', 2, $pageIssueIds);
         }
 
         $internal = 0;
@@ -921,7 +1551,7 @@ class SitemapCrawlerAuditService implements SiteCrawlerAuditInterface
             } elseif (\str_contains($message, 'XML 解析失败')) {
                 $this->addIssue($issues, 'sitemap_xml_invalid', 'error', 'P1', 'Sitemap Quality', 'sitemap XML 格式错误', '', ['message' => $message, 'sitemapUrl' => $sitemapUrl], 'XML 解析失败会让搜索引擎无法读取 sitemap。', '修复 XML 转义、命名空间和响应内容类型。', 10);
             } elseif ($this->isTlsVerificationError($message)) {
-                $this->addIssue($issues, 'sitemap_https_certificate_untrusted', 'error', 'P0', 'Crawlability', 'sitemap HTTPS 证书不被审计器信任', '', ['message' => $message, 'sitemapUrl' => $sitemapUrl], '搜索引擎和服务端抓取器需要能验证 sitemap 的 HTTPS 证书链，否则 sitemap 会被视为不可读取。', '为站点配置受信任的 HTTPS 证书链；本地 .test/localhost 开发域名可继续使用 Weline 本地证书豁免。', 16);
+                $this->addIssue($issues, 'sitemap_https_certificate_untrusted', 'error', 'P0', 'Crawlability', 'sitemap HTTPS 证书不被审计器信任', '', ['message' => $message, 'sitemapUrl' => $sitemapUrl], '搜索引擎和服务端抓取器需要能验证 sitemap 的 HTTPS 证书链，否则 sitemap 会被视为不可读取。', '为站点配置受信任的 HTTPS 证书链；本地开发域名（*.test.weline.com / *.test / localhost）可继续使用 Weline 本地证书豁免。', 16);
             }
         }
     }
@@ -959,13 +1589,20 @@ class SitemapCrawlerAuditService implements SiteCrawlerAuditInterface
                 'howToFix' => $howToFix,
                 'deduction' => $deduction,
                 '_affectedMap' => [],
+                '_imagesByPage' => [],
             ];
         }
         if ($url !== '' && !isset($issues[$id]['_affectedMap'][$url])) {
             $issues[$id]['_affectedMap'][$url] = true;
             $issues[$id]['affectedCount']++;
-            if (\count($issues[$id]['affectedUrls']) < 30) {
+            // Keep enough URLs for the panel to list every audited hit (discovery ≤ DISCOVERY_LIMIT).
+            if (\count($issues[$id]['affectedUrls']) < self::DISCOVERY_LIMIT) {
                 $issues[$id]['affectedUrls'][] = $url;
+            }
+        }
+        if ($url !== '') {
+            foreach ($this->extractEvidenceImages($evidence) as $imageUrl) {
+                $issues[$id]['_imagesByPage'][$url][$imageUrl] = true;
             }
         }
         if ($evidence !== [] && \count($issues[$id]['evidence']) < 12) {
@@ -977,6 +1614,43 @@ class SitemapCrawlerAuditService implements SiteCrawlerAuditInterface
     }
 
     /**
+     * @param array<string, mixed> $evidence
+     * @return list<string>
+     */
+    private function extractEvidenceImages(array $evidence): array
+    {
+        $images = [];
+        foreach (['images', 'assets'] as $key) {
+            if (!\is_array($evidence[$key] ?? null)) {
+                continue;
+            }
+            foreach ($evidence[$key] as $item) {
+                if (\is_string($item) && $item !== '' && $this->looksLikeImageUrl($item)) {
+                    $images[] = $item;
+                }
+            }
+        }
+        foreach (['resource', 'image', 'src'] as $key) {
+            $value = \trim((string)($evidence[$key] ?? ''));
+            if ($value !== '' && $this->looksLikeImageUrl($value)) {
+                $images[] = $value;
+            }
+        }
+
+        return \array_values(\array_unique($images));
+    }
+
+    private function looksLikeImageUrl(string $url): bool
+    {
+        $path = \strtolower((string)(\parse_url($url, PHP_URL_PATH) ?: $url));
+        if (\str_contains($path, '/pub/media/') || \str_contains($path, '/media/')) {
+            return true;
+        }
+
+        return (bool)\preg_match('/\.(?:webp|avif|jpe?g|png|gif|svg|ico|bmp|tiff?)$/D', $path);
+    }
+
+    /**
      * @param array<string, array<string, mixed>> $issues
      * @return list<array<string, mixed>>
      */
@@ -984,11 +1658,21 @@ class SitemapCrawlerAuditService implements SiteCrawlerAuditInterface
     {
         $list = \array_values($issues);
         foreach ($list as &$issue) {
-            unset($issue['_affectedMap']);
+            $imagesByPage = [];
+            if (\is_array($issue['_imagesByPage'] ?? null)) {
+                foreach ($issue['_imagesByPage'] as $pageUrl => $imageMap) {
+                    if (!\is_string($pageUrl) || $pageUrl === '' || !\is_array($imageMap)) {
+                        continue;
+                    }
+                    $imagesByPage[$pageUrl] = \array_keys($imageMap);
+                }
+            }
+            unset($issue['_affectedMap'], $issue['_imagesByPage']);
             $issue['affectedCount'] = (int)($issue['affectedCount'] ?? \count($issue['affectedUrls'] ?? []));
             if ($issue['affectedCount'] === 0 && ($issue['evidence'] ?? []) !== []) {
                 $issue['affectedCount'] = 1;
             }
+            $issue['affectedGroups'] = $this->buildDiscoveryGroups($issue, $imagesByPage);
         }
         unset($issue);
 
@@ -1008,6 +1692,78 @@ class SitemapCrawlerAuditService implements SiteCrawlerAuditInterface
         });
 
         return $list;
+    }
+
+    /**
+     * Group issue hits by the page URL where they were discovered; attach related images under that page.
+     *
+     * @param array<string, mixed> $issue
+     * @param array<string, list<string>> $imagesByPage
+     * @return list<array<string, mixed>>
+     */
+    private function buildDiscoveryGroups(array $issue, array $imagesByPage = []): array
+    {
+        $sampler = new SitemapAuditUrlSampler();
+        if ($imagesByPage === []) {
+            foreach (\is_array($issue['evidence'] ?? null) ? $issue['evidence'] : [] as $row) {
+                if (!\is_array($row)) {
+                    continue;
+                }
+                $pageUrl = \trim((string)($row['url'] ?? ''));
+                if ($pageUrl === '') {
+                    continue;
+                }
+                foreach ($this->extractEvidenceImages($row) as $image) {
+                    $imagesByPage[$pageUrl][] = $image;
+                }
+            }
+            foreach ($imagesByPage as $pageUrl => $images) {
+                $imagesByPage[$pageUrl] = \array_values(\array_unique($images));
+            }
+        }
+
+        $pageUrls = \array_values(\array_filter(
+            \is_array($issue['affectedUrls'] ?? null) ? $issue['affectedUrls'] : [],
+            static fn($u): bool => \is_string($u) && $u !== ''
+        ));
+        foreach (\array_keys($imagesByPage) as $pageUrl) {
+            if (!\in_array($pageUrl, $pageUrls, true)) {
+                $pageUrls[] = $pageUrl;
+            }
+        }
+
+        $groups = [];
+        foreach ($pageUrls as $pageUrl) {
+            if ($this->isNonHtmlAssetUrl($pageUrl)) {
+                continue;
+            }
+            $meta = $sampler->classify($pageUrl);
+            $images = \array_values($imagesByPage[$pageUrl] ?? []);
+            $path = (string)(\parse_url($pageUrl, PHP_URL_PATH) ?: '/');
+            $groups[] = [
+                'key' => 'page:' . $pageUrl,
+                'label' => (string)$meta['label'],
+                'parentPath' => $path,
+                'parentUrl' => $pageUrl,
+                'kind' => 'page',
+                'structure' => (string)($meta['kind'] === 'structure' ? $meta['parentPath'] . '/*' : $meta['parentPath']),
+                'count' => 1,
+                'imageCount' => \count($images),
+                'urls' => [$pageUrl],
+                'images' => $images,
+            ];
+        }
+
+        \usort($groups, static function (array $a, array $b): int {
+            $byImages = (int)($b['imageCount'] ?? 0) <=> (int)($a['imageCount'] ?? 0);
+            if ($byImages !== 0) {
+                return $byImages;
+            }
+
+            return \strcmp((string)($a['parentPath'] ?? ''), (string)($b['parentPath'] ?? ''));
+        });
+
+        return $groups;
     }
 
     /**
@@ -1033,12 +1789,21 @@ class SitemapCrawlerAuditService implements SiteCrawlerAuditInterface
             $points = \min(24, \max(0, (int)($issue['deduction'] ?? 0) + \max(0, (int)($issue['affectedCount'] ?? 1) - 1)));
             if ($points > 0) {
                 $totalDeduction += $points;
+                $affectedUrls = \array_values(\array_filter(
+                    \is_array($issue['affectedUrls'] ?? null) ? $issue['affectedUrls'] : [],
+                    static fn($u): bool => \is_string($u) && $u !== ''
+                ));
+                $affectedGroups = \is_array($issue['affectedGroups'] ?? null)
+                    ? $issue['affectedGroups']
+                    : $this->buildDiscoveryGroups($issue);
                 $deductions[] = [
                     'issueId' => $issue['id'],
                     'points' => $points,
                     'severity' => $severity,
                     'title' => $issue['title'],
                     'affectedCount' => $issue['affectedCount'],
+                    'affectedGroups' => $affectedGroups,
+                    'affectedUrls' => $affectedUrls,
                 ];
             }
         }
@@ -1204,22 +1969,7 @@ class SitemapCrawlerAuditService implements SiteCrawlerAuditInterface
 
     private function shouldRelaxTlsVerification(string $url): bool
     {
-        if (\strtolower((string)\parse_url($url, PHP_URL_SCHEME)) !== 'https') {
-            return false;
-        }
-
-        $host = \strtolower(\trim((string)\parse_url($url, PHP_URL_HOST), '[]'));
-        if ($host === '') {
-            return false;
-        }
-        if ($host === 'localhost' || $host === 'host.docker.internal' || \str_ends_with($host, '.localhost') || \str_ends_with($host, '.test') || \str_ends_with($host, '.local')) {
-            return true;
-        }
-        if (\filter_var($host, FILTER_VALIDATE_IP) === false) {
-            return false;
-        }
-
-        return \filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false;
+        return LocalDevelopmentHostPolicy::shouldRelaxHttpsTls($url);
     }
 
     private function rememberRelaxedTlsHost(string $url): void
@@ -1399,6 +2149,38 @@ class SitemapCrawlerAuditService implements SiteCrawlerAuditInterface
     }
 
     /**
+     * Compact JSON-LD payload for panel local rich-result testing (no full HTML).
+     *
+     * @param array<string, mixed> $jsonLd
+     * @return array{types: list<string>, errors: list<string>, nodes: list<array<string, mixed>>}
+     */
+    private function jsonLdReportPayload(array $jsonLd): array
+    {
+        $nodes = [];
+        foreach (\array_values(\is_array($jsonLd['nodes'] ?? null) ? $jsonLd['nodes'] : []) as $node) {
+            if (!\is_array($node)) {
+                continue;
+            }
+            $nodes[] = $node;
+            if (\count($nodes) >= 24) {
+                break;
+            }
+        }
+
+        return [
+            'types' => \array_values(\array_unique(\array_map(
+                static fn($type): string => \trim((string)$type),
+                \is_array($jsonLd['types'] ?? null) ? $jsonLd['types'] : []
+            ))),
+            'errors' => \array_values(\array_map(
+                static fn($error): string => (string)$error,
+                \array_slice(\is_array($jsonLd['errors'] ?? null) ? $jsonLd['errors'] : [], 0, 8)
+            )),
+            'nodes' => $nodes,
+        ];
+    }
+
+    /**
      * @return array{types: list<string>, nodes: list<array<string, mixed>>, errors: list<string>}
      */
     private function jsonLd(\DOMXPath $xpath): array
@@ -1539,7 +2321,7 @@ class SitemapCrawlerAuditService implements SiteCrawlerAuditInterface
             'news' => ['types' => ['NewsArticle'], 'required' => ['headline', 'datePublished', 'author', 'publisher', 'image', 'mainEntityOfPage']],
             'blog' => ['types' => ['BlogPosting'], 'required' => ['headline', 'datePublished', 'author', 'publisher', 'image', 'mainEntityOfPage']],
             'article' => ['types' => ['Article', 'BlogPosting', 'NewsArticle'], 'required' => ['headline', 'datePublished', 'author', 'publisher', 'mainEntityOfPage']],
-            'product' => ['types' => ['Product'], 'required' => ['name', 'image', 'description', 'offers']],
+            'product' => ['types' => ['Product', 'ProductGroup'], 'required' => ['name', 'image', 'description']],
             'faq' => ['types' => ['FAQPage'], 'required' => ['mainEntity']],
             'home' => ['types' => ['WebSite', 'Organization'], 'required' => ['name', 'url']],
         ];
@@ -1694,10 +2476,46 @@ class SitemapCrawlerAuditService implements SiteCrawlerAuditInterface
             'browser_pass=',
             'codex',
             'hot-update',
+            // Platform runtime assets (module statics) are not merchant page SEO debt.
+            '/weline/frontend/',
+            '/weline/framework/',
+            '/weline/theme/',
+            '/weline/seo/',
+            '/weline/developerworkspace/',
+            '/weline/i18n/',
+            '/assets/seo-inspector/',
         ] as $ignored) {
             if (\str_contains($value, $ignored)) {
                 return true;
             }
+        }
+
+        return false;
+    }
+
+    private function isDecorativeOrUiImage(string $url): bool
+    {
+        $path = \strtolower((string)(\parse_url($url, PHP_URL_PATH) ?: $url));
+        foreach ([
+            '/icon',
+            '/icons/',
+            '/sprite',
+            '/logo',
+            '/favicon',
+            '/emoji',
+            '/avatar',
+            '/badge',
+            'data:image/',
+            '.svg',
+        ] as $token) {
+            if (\str_contains($path, $token)) {
+                return true;
+            }
+        }
+
+        // Prefer flagging merchant media; skip generic theme/framework chrome images.
+        if (\str_contains($path, '/weline/') && !\str_contains($path, '/pub/media/')) {
+            return true;
         }
 
         return false;
@@ -1710,6 +2528,10 @@ class SitemapCrawlerAuditService implements SiteCrawlerAuditInterface
             return true;
         }
         if (\str_contains($path, '.min.') || \preg_match('/[-.][a-f0-9]{8,}\.(js|css)$/', $path) === 1) {
+            return true;
+        }
+        // Versioned module static URLs are shipped by the platform pipeline.
+        if (\str_contains($path, '?v=') || \preg_match('/[?&]v=\d/', $path) === 1) {
             return true;
         }
         if ($this->isIgnoredSeoAuditResource($path) || \str_contains($path, '/debug/')) {

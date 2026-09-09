@@ -1,0 +1,79 @@
+<?php
+/**
+ * 配送管理顶部 Tab：真链接导航（对齐 Ai Manager/tabs），禁止 iframe。
+ *
+ * @var string $activeTab region|carrier|ratetemplate|freeshippingrule|shippingservice|systemembargo|tracking
+ * @var \Weline\Framework\View\Template $this
+ */
+$activeTab = (string)($activeTab ?? 'region');
+$tabs = [
+    'region' => ['icon' => 'pin', 'label' => '地区管理', 'path' => 'shipping/backend/region'],
+    'carrier' => ['icon' => 'truck', 'label' => '快递公司', 'path' => 'shipping/backend/carrier'],
+    'ratetemplate' => ['icon' => 'circle', 'label' => '费用模板', 'path' => 'shipping/backend/ratetemplate'],
+    'freeshippingrule' => ['icon' => 'circle', 'label' => '免邮规则', 'path' => 'shipping/backend/freeshippingrule'],
+    'shippingservice' => ['icon' => 'truck', 'label' => '配送服务', 'path' => 'shipping/backend/shippingservice'],
+    'systemembargo' => ['icon' => 'alert-triangle', 'label' => '系统禁运', 'path' => 'shipping/backend/systemembargo'],
+    'tracking' => ['icon' => 'search', 'label' => '物流跟踪', 'path' => 'shipping/backend/tracking'],
+];
+if (!isset($tabs[$activeTab])) {
+    $activeTab = 'region';
+}
+$h = static fn(string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8');
+?>
+<style>
+.weline-shipping-manager-tabs.w-tabs__list {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: var(--weline-space-1, 0.25rem);
+    overflow-x: auto;
+    margin-block-end: var(--weline-space-5, 1.25rem);
+}
+.weline-shipping-manager-tabs .w-tabs__tab {
+    display: inline-flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    justify-content: center;
+    gap: var(--weline-space-2, 0.5rem);
+    white-space: nowrap;
+    text-decoration: none;
+}
+.weline-shipping-manager-tabs .w-tabs__tab > .w-icon,
+.weline-shipping-manager-tabs .w-tabs__tab > svg {
+    display: block;
+    flex: 0 0 auto;
+}
+.weline-shipping-manager-tabs .w-tabs__tab > span {
+    display: inline;
+    line-height: 1.2;
+}
+</style>
+<nav
+    class="w-tabs__list weline-shipping-manager-tabs"
+    data-variant="soft"
+    role="tablist"
+    aria-label="<?= $h((string)__('配送管理分区')) ?>"
+    data-testid="shipping-manager-tabs"
+>
+    <?php foreach ($tabs as $tabKey => $tabMeta): ?>
+        <?php
+        $isActive = $tabKey === $activeTab;
+        $href = $this->getBackendUrl((string)$tabMeta['path']);
+        ?>
+        <a
+            class="w-tabs__tab<?= $isActive ? ' active' : '' ?>"
+            href="<?= $h($href) ?>"
+            role="tab"
+            aria-selected="<?= $isActive ? 'true' : 'false' ?>"
+            aria-current="<?= $isActive ? 'page' : 'false' ?>"
+            tabindex="<?= $isActive ? '0' : '-1' ?>"
+            data-tab="<?= $h($tabKey) ?>"
+            data-testid="shipping-manager-tab-<?= $h($tabKey) ?>"
+        >
+            <w:icon name="<?= $h((string)$tabMeta['icon']) ?>" size="sm"></w:icon>
+            <span><?= $h((string)__($tabMeta['label'])) ?></span>
+        </a>
+    <?php endforeach; ?>
+</nav>

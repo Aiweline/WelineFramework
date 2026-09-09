@@ -50,6 +50,16 @@ final class Index extends FrontendController
         $this->request->setGet('theme_public_route', 'search');
         $this->request->setGet('theme_page_title', $title);
         $this->assign('page_title', $title);
+        $description = $q !== ''
+            ? (string)__('查看“%{1}”在本站汉服、文章与帮助中的相关结果。', [$q])
+            : (string)__('在汉服商城中搜索商品、搭配灵感与帮助指南。');
+        $this->assign('seo', [
+            'page_type' => 'search',
+            'title' => $title,
+            'description' => $description,
+            'robots' => 'noindex,follow',
+            'canonical_url' => $this->getUrl('search'),
+        ]);
         $searchTypes = $this->registry->listTypes(area: 'frontend');
         $this->assign('search_query', $q);
         $this->assign('search_type', $type);

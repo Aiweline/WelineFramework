@@ -28,11 +28,13 @@ use Weline\Product\Helper\StorefrontVariantContextResolver;
 use Weline\Product\Api\Data\StorefrontPriceContext;
 use Weline\Product\Api\StorefrontOfferPriceAssemblerInterface;
 use Weline\Product\Service\ProductQuoteRequestCaptchaGuard;
+use Weline\Product\Service\ProductStorefrontBreadcrumbBuilder;
 use Weline\Theme\Helper\WidgetUiScope;
 
 $scope = WidgetUiScope::forWidget('product-info');
 $showBrand = filter_var($this->getData('show_brand') ?? true, FILTER_VALIDATE_BOOLEAN);
 $showSupplier = filter_var($this->getData('show_supplier') ?? true, FILTER_VALIDATE_BOOLEAN);
+$quickAdd = filter_var($this->getData('quick_add') ?? false, FILTER_VALIDATE_BOOLEAN);
 $isPreviewMode = (bool)($this->getData('preview_mode') ?? false)
     || (bool)($this->getData('editor_mode') ?? false)
     || (string)($this->getData('editor_mode') ?? '') === '1';
@@ -167,8 +169,30 @@ $originalPriceMinor = $hasUnifiedPrice
     : $catalogPriceMinor;
 $campaignLabel = $hasUnifiedPrice ? trim((string)($offer['campaign_label'] ?? '')) : '';
 $campaignUrl = $hasUnifiedPrice ? trim((string)($offer['campaign_url'] ?? '')) : '';
+$eligibleCampaigns = [];
+if ($hasUnifiedPrice && is_array($offer['eligible_campaigns'] ?? null)) {
+    foreach ($offer['eligible_campaigns'] as $campaignRow) {
+        if (!is_array($campaignRow)) {
+            continue;
+        }
+        $campaignThemeId = (int)($campaignRow['theme_id'] ?? 0);
+        $campaignRowLabel = trim((string)($campaignRow['label'] ?? ''));
+        if ($campaignThemeId <= 0 || $campaignRowLabel === '') {
+            continue;
+        }
+        $eligibleCampaigns[] = [
+            'theme_id' => $campaignThemeId,
+            'label' => $campaignRowLabel,
+            'url' => trim((string)($campaignRow['url'] ?? '')),
+            'deal_discount_type' => (string)($campaignRow['deal_discount_type'] ?? ''),
+            'deal_discount_value' => (float)($campaignRow['deal_discount_value'] ?? 0),
+            'page_slug' => (string)($campaignRow['page_slug'] ?? ''),
+        ];
+    }
+}
 $dealDiscountType = $hasUnifiedPrice ? trim((string)($offer['deal_discount_type'] ?? '')) : '';
 $dealDiscountValue = $hasUnifiedPrice ? (float)($offer['deal_discount_value'] ?? 0) : 0.0;
+$selectedCampaignThemeId = 0;
 if (!$hasUnifiedPrice && $productId > 0 && $catalogPriceMinor > 0) {
     try {
         $priceAssembler = null;
@@ -198,10 +222,12 @@ if (!$hasUnifiedPrice && $productId > 0 && $catalogPriceMinor > 0) {
                 $originalPriceMinor = $priceView->compareAtMinor;
                 $campaignLabel = $priceView->campaignLabel();
                 $campaignUrl = $priceView->campaignUrl();
+                $eligibleCampaigns = $priceView->eligibleCampaigns;
                 $primary = $priceView->appliedAdjustments[0] ?? null;
                 if ($primary !== null) {
                     $dealDiscountType = $primary->type;
                     $dealDiscountValue = $primary->value;
+                    $selectedCampaignThemeId = (int)$primary->sourceId;
                 }
             }
         }
@@ -209,10 +235,34 @@ if (!$hasUnifiedPrice && $productId > 0 && $catalogPriceMinor > 0) {
         // Product remains usable when price providers are unavailable.
     }
 }
+if ($selectedCampaignThemeId <= 0 && $eligibleCampaigns !== []) {
+    $selectedCampaignThemeId = (int)($eligibleCampaigns[0]['theme_id'] ?? 0);
+}
+$canPickCampaign = count($eligibleCampaigns) > 1;
 $stock = max(0, (int)($offer['stock'] ?? 0));
 $sellable = !empty($offer['sellable']);
 $quoteOnly = !empty($offer['quote_only']);
 $offerUuid = trim((string)($offer['global_offer_uuid'] ?? ''));
+$shippingProfileCode = trim((string)($offer['shipping_profile_code']
+    ?? ($offer['fulfillment_metadata']['shipping_profile_code'] ?? '')));
+$requiresShipping = array_key_exists('requires_shipping', $offer)
+    ? (bool)$offer['requires_shipping']
+    : true;
+$shippingHint = null;
+try {
+    $shipReg = ObjectManager::getInstance(
+        \Weline\Product\Service\Storefront\StorefrontShippingProfileCatalogProviderRegistry::class,
+    );
+    $shipProvider = $shipReg->primary();
+    if ($shipProvider !== null) {
+        $shippingHint = $shipProvider->previewHint($shippingProfileCode, $requiresShipping);
+    }
+} catch (\Throwable) {
+    $shippingHint = null;
+}
+if (!is_array($shippingHint)) {
+    $shippingHint = null;
+}
 $name = trim((string)($offer['name'] ?? ''));
 $image = trim((string)($offer['image'] ?? ''));
 $images = array_values(array_filter(
@@ -281,6 +331,12 @@ if ($galleryItems === [] && $image !== '') {
 $shortDescription = trim((string)($offer['short_description'] ?? ''));
 $description = trim((string)($offer['description'] ?? ''));
 $descriptionHtml = trim((string)($offer['description_html'] ?? ''));
+if ($descriptionHtml !== '' && $name !== '') {
+    $descriptionHtml = \Weline\Product\Service\StorefrontProductMediaUrlResolver::ensureDescriptionImageAlts(
+        $descriptionHtml,
+        $name,
+    );
+}
 $specifications = array_values(array_filter(
     (array)($offer['specifications'] ?? []),
     static fn(mixed $specification): bool => is_array($specification)
@@ -398,7 +454,17 @@ $stockLabel = $quoteOnly
 $stockTone = !$quoteOnly && $stock > 0 && $sellable ? 'in-stock' : 'out-stock';
 $requiresShipping = !isset($offer['requires_shipping']) || !empty($offer['requires_shipping']);
 $showPrimeBadge = $sellable && $requiresShipping && !$quoteOnly;
-$maxQty = $quoteOnly ? 1 : max(1, min(10, $stock > 0 ? $stock : 10));
+$maxQty = $quoteOnly ? 1 : max(1, min(30, $stock > 0 ? $stock : 30));
+$tobMoq = 5;
+$tobStep = 5;
+try {
+    if (class_exists(\Weline\B2B\Service\SellingModePolicy::class)) {
+        $tobPolicy = ObjectManager::getInstance(\Weline\B2B\Service\SellingModePolicy::class);
+        $tobMoq = max(1, (int)$tobPolicy->defaultMoq());
+        $tobStep = max(1, (int)$tobPolicy->defaultQtyStep());
+    }
+} catch (\Throwable) {
+}
 $reviewRating = 0.0;
 $reviewCount = 0;
 if ($offerUuid !== '' && class_exists(\Weline\Review\Service\ReviewService::class)) {
@@ -419,17 +485,55 @@ try {
 } catch (\Throwable) {
     $quoteCaptchaHtml = '';
 }
+$productBreadcrumbs = $this->getData('storefront_product_breadcrumbs') ?? [];
+$productBreadcrumbs = is_array($productBreadcrumbs) ? $productBreadcrumbs : [];
+if ($productBreadcrumbs === []) {
+    $rememberedCrumbs = ProductStorefrontBreadcrumbBuilder::remembered();
+    if (is_array($rememberedCrumbs) && ($rememberedCrumbs['primary'] ?? []) !== []) {
+        $productBreadcrumbs = $rememberedCrumbs['primary'];
+    }
+}
 ?>
-<section class="product-native-detail product-native-detail--amazon<?= $isPreviewMode ? ' is-preview' : '' ?>"
+<section class="product-native-detail product-native-detail--amazon<?= $isPreviewMode ? ' is-preview' : '' ?><?= $quickAdd ? ' product-native-detail--quick-add' : '' ?>"
          data-product-id="<?= (int)$productId ?>"
          data-testid="storefront-product-detail"
+         data-deal-type="<?= $escape($dealDiscountType) ?>"
+         data-deal-value="<?= $escape((string)$dealDiscountValue) ?>"
+         data-promotion-theme-id="<?= (int)$selectedCampaignThemeId ?>"
+         data-catalog-price-minor="<?= (int)$catalogPriceMinor ?>"
+         data-quick-add="<?= $quickAdd ? '1' : '0' ?>"
          data-widget-module="Weline_Product"
          data-widget-code="product-info"
          data-uid="<?= $escape($scope->uid) ?>"
          weline-code="<?= $escape($scope->code) ?>">
+    <?php if (!$quickAdd && $productBreadcrumbs !== []): ?>
+    <nav class="product-native-detail__crumb" aria-label="<?= $escape(__('面包屑')) ?>" data-testid="product-breadcrumb">
+        <?php foreach ($productBreadcrumbs as $i => $crumb): ?>
+            <?php
+            if (!is_array($crumb)) {
+                continue;
+            }
+            $crumbLabel = trim((string)($crumb['name'] ?? $crumb['label'] ?? $crumb['text'] ?? ''));
+            $crumbUrl = trim((string)($crumb['url'] ?? ''));
+            $isLast = $i === array_key_last($productBreadcrumbs);
+            if ($crumbLabel === '') {
+                continue;
+            }
+            if ($i > 0): ?>
+                <span class="product-native-detail__crumb-sep" aria-hidden="true">›</span>
+            <?php endif; ?>
+            <?php if ($isLast || $crumbUrl === ''): ?>
+                <span aria-current="page"><?= $escape($crumbLabel) ?></span>
+            <?php else: ?>
+                <a href="<?= $escape($crumbUrl) ?>"><?= $escape($crumbLabel) ?></a>
+            <?php endif; ?>
+        <?php endforeach; ?>
+    </nav>
+    <?php elseif (!$quickAdd): ?>
     <a class="product-native-detail__back" href="@url{'products'}">
         <span aria-hidden="true">←</span> <?= __('返回商品目录') ?>
     </a>
+    <?php endif; ?>
 
     <div class="product-native-detail__hero-grid">
         <div class="product-native-detail__gallery" aria-label="<?= $escape(__('商品图片')) ?>" data-testid="product-gallery">
@@ -455,6 +559,8 @@ try {
                             <?php if ($thumbSrc !== ''): ?>
                                 <img src="<?= $escape($thumbSrc) ?>"
                                      alt=""
+                                     width="64"
+                                     height="64"
                                      data-storefront-img="1"
                                      data-fallback="<?= $escape(StorefrontImagePlaceholder::url($productId + $index)) ?>">
                             <?php else: ?>
@@ -479,6 +585,8 @@ try {
                     <img class="product-native-detail__primary-image"
                          src="<?= $escape($initialType === 'image' ? $initialSrc : ($initialPoster !== '' ? $initialPoster : $image)) ?>"
                          alt="<?= $escape($name) ?>"
+                         width="800"
+                         height="800"
                          data-storefront-img="1"
                          data-fallback="<?= $escape($imageFallback) ?>"
                          <?= $initialType === 'video' ? 'hidden' : '' ?>>
@@ -582,7 +690,37 @@ try {
                                 <span class="product-native-detail__price-original-fraction">.<?= $originalFraction ?></span>
                             </span>
                             <?php if ($campaignLabel !== ''): ?>
-                                <?php if ($campaignUrl !== ''): ?>
+                                <?php if ($canPickCampaign): ?>
+                                    <div class="product-native-detail__campaign-picker"
+                                         data-testid="product-campaign-picker">
+                                        <button type="button"
+                                                class="product-native-detail__price-campaign product-native-detail__campaign-trigger"
+                                                data-testid="product-price-campaign"
+                                                aria-expanded="false"
+                                                aria-haspopup="listbox"
+                                                aria-label="<?= $escape(__('选择优惠活动')) ?>">
+                                            <span data-campaign-label><?= $escape($campaignLabel) ?></span>
+                                            <span class="product-native-detail__campaign-chevron" aria-hidden="true"></span>
+                                        </button>
+                                        <ul class="product-native-detail__campaign-menu"
+                                            role="listbox"
+                                            hidden
+                                            data-testid="product-campaign-menu">
+                                            <?php foreach ($eligibleCampaigns as $campaignChoice): ?>
+                                                <li role="option"
+                                                    tabindex="-1"
+                                                    class="product-native-detail__campaign-option<?= ((int)$campaignChoice['theme_id'] === $selectedCampaignThemeId) ? ' is-selected' : '' ?>"
+                                                    data-theme-id="<?= (int)$campaignChoice['theme_id'] ?>"
+                                                    data-deal-type="<?= $escape((string)$campaignChoice['deal_discount_type']) ?>"
+                                                    data-deal-value="<?= $escape((string)$campaignChoice['deal_discount_value']) ?>"
+                                                    data-url="<?= $escape((string)$campaignChoice['url']) ?>"
+                                                    aria-selected="<?= ((int)$campaignChoice['theme_id'] === $selectedCampaignThemeId) ? 'true' : 'false' ?>">
+                                                    <?= $escape((string)$campaignChoice['label']) ?>
+                                                </li>
+                                            <?php endforeach; ?>
+                                        </ul>
+                                    </div>
+                                <?php elseif ($campaignUrl !== ''): ?>
                                     <a class="product-native-detail__price-campaign"
                                        data-testid="product-price-campaign"
                                        href="<?= $escape($campaignUrl) ?>"><?= $escape($campaignLabel) ?></a>
@@ -610,14 +748,32 @@ try {
                         weline-code="product.frontend.detail.selling_mode">
                     <?php
                     // Fail-soft: optional B2B module template. Prefer slot widget injection when registered.
+                    $b2bModules = \Weline\Framework\App\Env::getInstance()->getModuleList();
+                    $b2bInstalled = isset($b2bModules['Weline_B2B']);
                     $b2bSellingMode = BP . 'app/code/Weline/B2B/view/templates/frontend/widgets/selling-mode-switcher.phtml';
-                    if (is_file($b2bSellingMode)) {
-                        include $b2bSellingMode;
+                    if ($b2bInstalled && is_file($b2bSellingMode)) {
+                        // fetch so @static/<lang> process; raw include leaves tags unresolved
+                        echo $this->fetch('Weline_B2B::templates/frontend/widgets/selling-mode-switcher.phtml');
                     } else {
                         echo $this->getHook('Weline_Product::frontend::product::detail::after-price');
                     }
+                    $b2bTiers = BP . 'app/code/Weline/B2B/view/templates/frontend/partials/qty-tiers.phtml';
+                    if ($b2bInstalled && is_file($b2bTiers)) {
+                        echo $this->fetch('Weline_B2B::templates/frontend/partials/qty-tiers.phtml');
+                    }
                     ?>
                 </w:slot>
+
+                <?php if (is_array($shippingHint)): ?>
+                    <div class="product-native-detail__shipping-hint" data-testid="product-shipping-hint">
+                        <?php if (!empty($shippingHint['badge'])): ?>
+                            <span class="product-native-detail__shipping-badge"><?= $escape((string)$shippingHint['badge']) ?></span>
+                        <?php endif; ?>
+                        <?php if (!empty($shippingHint['note'])): ?>
+                            <span class="product-native-detail__shipping-note"><?= $escape((string)$shippingHint['note']) ?></span>
+                        <?php endif; ?>
+                    </div>
+                <?php endif; ?>
 
                 <?php if ($summaryBullets !== []): ?>
                     <ul class="product-native-detail__bullets">
@@ -687,7 +843,9 @@ try {
                                                     <?php if ($swatchImage !== ''): ?>
                                                         <img class="product-native-detail__variant-swatch-image"
                                                              src="<?= $escape($swatchImage) ?>"
-                                                             alt="<?= $escape($optionLabel) ?>"
+                                                             alt="<?= $escape(trim($name . ' · ' . $optionLabel)) ?>"
+                                                             width="48"
+                                                             height="48"
                                                              loading="lazy">
                                                         <span class="product-native-detail__variant-swatch-label"><?= $escape($optionLabel) ?></span>
                                                     <?php elseif ($swatchColor !== ''): ?>
@@ -788,7 +946,10 @@ try {
                                 <span class="product-native-detail__price-original-fraction">.<?= $originalFractionBuybox ?></span>
                             </span>
                             <?php if ($campaignLabel !== ''): ?>
-                                <?php if ($campaignUrl !== ''): ?>
+                                <?php if ($canPickCampaign): ?>
+                                    <span class="product-native-detail__price-campaign"
+                                          data-campaign-label><?= $escape($campaignLabel) ?></span>
+                                <?php elseif ($campaignUrl !== ''): ?>
                                     <a class="product-native-detail__price-campaign"
                                        href="<?= $escape($campaignUrl) ?>"><?= $escape($campaignLabel) ?></a>
                                 <?php else: ?>
@@ -841,8 +1002,8 @@ try {
                                 data-qty-min="1"
                                 data-qty-step="1"
                                 data-qty-max="<?= (int)$maxQty ?>"
-                                data-tob-moq="5"
-                                data-tob-qty-step="5"
+                                data-tob-moq="<?= (int)$tobMoq ?>"
+                                data-tob-qty-step="<?= (int)$tobStep ?>"
                                 aria-label="<?= $escape(__('购买数量')) ?>">
                             <?php for ($quantity = 1; $quantity <= $maxQty; $quantity++): ?>
                                 <option value="<?= $quantity ?>"><?= $quantity ?></option>
@@ -872,6 +1033,18 @@ try {
                                 <?= __('立即结账') ?>
                             </button>
                         <?php endif; ?>
+                    <?php elseif ($quickAdd): ?>
+                        <?php
+                        // Standalone panel has no layout slot injections — fetch purchase CTAs.
+                        $cartAddPath = BP . 'app/code/Weline/Cart/view/templates/frontend/widgets/product-add-to-cart.phtml';
+                        if (is_file($cartAddPath)) {
+                            echo $this->fetch('Weline_Cart::templates/frontend/widgets/product-add-to-cart.phtml');
+                        }
+                        $buyNowPath = BP . 'app/code/Weline/Checkout/view/templates/frontend/widgets/product-buy-now.phtml';
+                        if (is_file($buyNowPath)) {
+                            echo $this->fetch('Weline_Checkout::templates/frontend/widgets/product-buy-now.phtml');
+                        }
+                        ?>
                     <?php endif; ?>
                 </w:slot>
                 <?= $this->getHook('Weline_Product::frontend::product::detail::after-add-to-cart') ?>
@@ -897,7 +1070,7 @@ try {
         </div>
     </div>
 
-    <?php if ($descriptionHtml !== '' || $description !== '' || $specifications !== []): ?>
+    <?php if (!$quickAdd && ($descriptionHtml !== '' || $description !== '' || $specifications !== [])): ?>
         <div class="product-native-detail__detail-sections">
             <?php if ($specifications !== []): ?>
                 <section class="product-native-detail__specifications"
@@ -1042,6 +1215,30 @@ try {
         max-width: none;
         margin-inline: 0;
         padding-inline: 0;
+    }
+    .product-native-detail__crumb {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.35rem 0.45rem;
+        margin: 0 0 0.85rem;
+        font-size: 0.875rem;
+        color: var(--amz-text);
+        line-height: 1.4;
+    }
+    .product-native-detail__crumb a {
+        color: var(--amz-link);
+        text-decoration: none;
+    }
+    .product-native-detail__crumb a:hover {
+        text-decoration: underline;
+    }
+    .product-native-detail__crumb-sep {
+        color: color-mix(in srgb, var(--amz-text) 55%, transparent);
+        user-select: none;
+    }
+    .product-native-detail__crumb [aria-current="page"] {
+        color: color-mix(in srgb, var(--amz-text) 78%, transparent);
     }
     .product-native-detail__back {
         display: inline-flex;
@@ -1305,6 +1502,28 @@ try {
         gap: 8px;
         margin-bottom: 12px;
     }
+    .product-native-detail__shipping-hint {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        margin: 0 0 12px;
+        color: #565959;
+        font-size: 13px;
+    }
+    .product-native-detail__shipping-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 8px;
+        border-radius: 4px;
+        background: #067d62;
+        color: #fff;
+        font-size: 12px;
+        font-weight: 600;
+    }
+    .product-native-detail__shipping-note {
+        color: #565959;
+    }
     .product-native-detail__price-label { color: #565959; font-size: 13px; }
     .product-native-detail__price,
     .product-native-detail__buybox-price {
@@ -1337,6 +1556,73 @@ try {
     }
     a.product-native-detail__price-campaign:hover {
         text-decoration: underline;
+    }
+    .product-native-detail__campaign-picker {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        margin-inline-start: 4px;
+        vertical-align: baseline;
+    }
+    .product-native-detail__campaign-trigger {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        margin-inline-start: 0;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        cursor: pointer;
+        font: inherit;
+        color: var(--color-primary, #b84a3c);
+        font-size: 13px;
+        font-weight: 600;
+        line-height: 1.2;
+    }
+    .product-native-detail__campaign-trigger:focus-visible {
+        outline: 2px solid var(--color-primary, #b84a3c);
+        outline-offset: 2px;
+    }
+    .product-native-detail__campaign-chevron {
+        inline-size: 0;
+        block-size: 0;
+        border-inline: 4px solid transparent;
+        border-block-start: 5px solid currentColor;
+        opacity: 0.85;
+    }
+    .product-native-detail__campaign-trigger[aria-expanded="true"] .product-native-detail__campaign-chevron {
+        transform: rotate(180deg);
+    }
+    .product-native-detail__campaign-menu {
+        position: absolute;
+        inset-block-start: calc(100% + 6px);
+        inset-inline-start: 0;
+        z-index: 40;
+        min-inline-size: 10rem;
+        margin: 0;
+        padding: 4px 0;
+        list-style: none;
+        background: var(--color-surface, #fff);
+        border: 1px solid var(--color-border, #d5d9d9);
+        border-radius: var(--radius-sm, 8px);
+        box-shadow: var(--shadow-md, 0 4px 14px rgba(15, 17, 17, 0.12));
+    }
+    .product-native-detail__campaign-option {
+        padding: 8px 12px;
+        cursor: pointer;
+        color: var(--color-text, #0f1111);
+        font-size: 13px;
+        font-weight: 500;
+        white-space: nowrap;
+    }
+    .product-native-detail__campaign-option:hover,
+    .product-native-detail__campaign-option:focus-visible {
+        background: var(--color-surface-muted, #f0f2f2);
+        outline: none;
+    }
+    .product-native-detail__campaign-option.is-selected {
+        color: var(--color-primary, #b84a3c);
+        font-weight: 700;
     }
     .product-native-detail__quote-price { margin-bottom: 12px; font-size: 14px; font-weight: 500; color: #565959; }
     .product-native-detail__bullets {
@@ -2400,6 +2686,7 @@ try {
 
     let selection = Object.assign({}, catalog.selected || {});
     const basePath = window.location.pathname;
+    const isQuickAdd = String(root.getAttribute('data-quick-add') || '') === '1';
 
     function normalizeSelection(input) {
         const normalized = {};
@@ -2463,14 +2750,33 @@ try {
             if (!live) {
                 return;
             }
-            offers[index] = Object.assign({}, offer, {
+            // Availability API returns raw catalog unit_price_minor (no Assembler
+            // deal). Overwriting would wipe SSR deal price (e.g. 19620 → 21800).
+            const next = Object.assign({}, offer, {
                 stock: live.stock,
                 sellable: live.sellable,
                 quote_only: live.quote_only,
-                unit_price_minor: live.unit_price_minor,
-                currency: live.currency,
+                currency: live.currency || offer.currency,
                 message: live.message,
             });
+            const liveHasDealFields = live.catalog_price_minor != null
+                || live.compare_at_minor != null
+                || live.has_deal != null;
+            if (liveHasDealFields) {
+                if (live.unit_price_minor != null) {
+                    next.unit_price_minor = live.unit_price_minor;
+                }
+                if (live.catalog_price_minor != null) {
+                    next.catalog_price_minor = live.catalog_price_minor;
+                }
+                if (live.compare_at_minor != null) {
+                    next.compare_at_minor = live.compare_at_minor;
+                }
+                if (live.has_deal != null) {
+                    next.has_deal = live.has_deal;
+                }
+            }
+            offers[index] = next;
         });
     }
 
@@ -2707,7 +3013,108 @@ try {
                 fractionNode.textContent = '.' + originalFraction;
             });
         });
+        root.querySelectorAll('.product-native-detail__price-campaign').forEach(function (node) {
+            node.hidden = !priced.hasDeal;
+        });
     }
+
+    function syncPromotionThemeToPurchaseButtons(themeId) {
+        const id = String(Math.max(0, Number(themeId) || 0));
+        root.setAttribute('data-promotion-theme-id', id);
+        root.querySelectorAll('[data-testid="product-add-to-cart"], [data-testid="product-buy-now"]').forEach(function (button) {
+            button.dataset.promotionThemeId = id;
+        });
+    }
+
+    function setActiveCampaign(option) {
+        if (!option) {
+            return;
+        }
+        const themeId = String(option.getAttribute('data-theme-id') || '');
+        const type = String(option.getAttribute('data-deal-type') || '');
+        const value = String(option.getAttribute('data-deal-value') || '');
+        const label = String(option.textContent || '').trim();
+        root.setAttribute('data-deal-type', type);
+        root.setAttribute('data-deal-value', value);
+        const buybox = root.querySelector('.product-native-detail__buybox');
+        if (buybox) {
+            buybox.setAttribute('data-deal-type', type);
+            buybox.setAttribute('data-deal-value', value);
+        }
+        root.querySelectorAll('[data-campaign-label]').forEach(function (node) {
+            node.textContent = label;
+        });
+        root.querySelectorAll('.product-native-detail__campaign-option').forEach(function (row) {
+            const selected = row === option;
+            row.classList.toggle('is-selected', selected);
+            row.setAttribute('aria-selected', selected ? 'true' : 'false');
+        });
+        syncPromotionThemeToPurchaseButtons(themeId);
+        const catalogMinor = Math.max(0, Number(root.getAttribute('data-catalog-price-minor') || 0));
+        renderPrice({
+            unit_price_minor: applyDealToMinor(catalogMinor).minor,
+            catalog_price_minor: catalogMinor,
+            compare_at_minor: catalogMinor,
+            currency: root.getAttribute('data-currency') || '',
+        });
+        // Re-apply using current offer fields so variant unit stays deal-aware.
+        const currentOffer = findExactOffer(selection) || findBestOffer(selection);
+        if (currentOffer) {
+            const catalog = Math.max(0, Number(currentOffer.catalog_price_minor) || catalogMinor);
+            const priced = applyDealToMinor(catalog);
+            currentOffer.unit_price_minor = priced.minor;
+            currentOffer.compare_at_minor = priced.original;
+            currentOffer.has_deal = priced.hasDeal;
+            currentOffer.campaign_label = label;
+            renderPrice(currentOffer);
+        }
+    }
+
+    function bindCampaignPicker() {
+        const picker = root.querySelector('[data-testid="product-campaign-picker"]');
+        if (!picker) {
+            syncPromotionThemeToPurchaseButtons(root.getAttribute('data-promotion-theme-id') || '0');
+            return;
+        }
+        const trigger = picker.querySelector('.product-native-detail__campaign-trigger');
+        const menu = picker.querySelector('[data-testid="product-campaign-menu"]');
+        if (!trigger || !menu) {
+            return;
+        }
+        function closeMenu() {
+            menu.hidden = true;
+            trigger.setAttribute('aria-expanded', 'false');
+        }
+        function openMenu() {
+            menu.hidden = false;
+            trigger.setAttribute('aria-expanded', 'true');
+        }
+        trigger.addEventListener('click', function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+            if (menu.hidden) {
+                openMenu();
+            } else {
+                closeMenu();
+            }
+        });
+        menu.querySelectorAll('.product-native-detail__campaign-option').forEach(function (option) {
+            option.addEventListener('click', function (event) {
+                event.preventDefault();
+                event.stopPropagation();
+                setActiveCampaign(option);
+                closeMenu();
+            });
+        });
+        document.addEventListener('click', function (event) {
+            if (!picker.contains(event.target)) {
+                closeMenu();
+            }
+        });
+        syncPromotionThemeToPurchaseButtons(root.getAttribute('data-promotion-theme-id') || '0');
+    }
+
+    bindCampaignPicker();
 
     function renderStock(offer) {
         const stockNode = root.querySelector('.product-native-detail__stock');
@@ -2725,7 +3132,8 @@ try {
         }
         if (stock > 0 && sellable) {
             stockNode.textContent = stock <= 10
-                ? (<?= json_encode((string)__('仅剩 %{1} 件'), JSON_UNESCAPED_UNICODE) ?>).replace('%{1}', String(stock))
+                // __() defaults args='' and would strip %{1} to empty; keep sentinel for JS replace.
+                ? (<?= json_encode((string)__('仅剩 %{1} 件', ['%{1}']), JSON_UNESCAPED_UNICODE) ?>).replace('%{1}', String(stock))
                 : <?= json_encode((string)__('有货'), JSON_UNESCAPED_UNICODE) ?>;
             stockNode.classList.add('product-native-detail__stock--in-stock');
             return;
@@ -3086,6 +3494,10 @@ try {
                 const img = document.createElement('img');
                 img.src = thumbSrc;
                 img.alt = '';
+                img.width = 64;
+                img.height = 64;
+                img.setAttribute('width', '64');
+                img.setAttribute('height', '64');
                 button.appendChild(img);
             } else {
                 const label = document.createElement('span');
@@ -3269,7 +3681,8 @@ try {
             renderStock(offer);
         }
         renderPurchaseButtons(offer);
-        if (!options || options.syncUrl !== false) {
+        // Listing purchase panel must not rewrite the host page URL.
+        if (!isQuickAdd && (!options || options.syncUrl !== false)) {
             syncUrl(selection);
         }
     }

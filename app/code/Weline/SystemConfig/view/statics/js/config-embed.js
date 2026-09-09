@@ -120,14 +120,26 @@
         }
         root.dataset.embedBound = '1';
 
-        root.querySelectorAll('[data-w-config-embed-control]').forEach(function (control) {
+        var controlSelector = [
+            '[data-w-config-embed-control]',
+            '[data-testid="config-embed-field"] [data-w-language-field]',
+            '[data-testid="config-embed-field"] [data-ai-model-value]'
+        ].join(',');
+
+        root.querySelectorAll(controlSelector).forEach(function (control) {
             control.dataset.lastValue = readControlValue(control);
             var fieldEl = control.closest('[data-testid="config-embed-field"]');
-            var isSwitch = control.type === 'checkbox'
+            var isImmediate = control.type === 'checkbox'
                 || control.tagName === 'SELECT'
-                || !!(control.closest && control.closest('[data-w-search-select]'));
+                || control.hasAttribute('data-w-language-field')
+                || control.hasAttribute('data-ai-model-value')
+                || !!(control.closest && (
+                    control.closest('[data-w-search-select]')
+                    || control.closest('[data-w-component="language-select"]')
+                    || control.closest('[data-w-component="ai-model-select"]')
+                ));
 
-            if (isSwitch) {
+            if (isImmediate) {
                 control.addEventListener('change', function () {
                     saveField(root, fieldEl, control);
                 });

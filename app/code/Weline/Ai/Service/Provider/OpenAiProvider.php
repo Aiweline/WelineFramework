@@ -102,6 +102,7 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
         $messages = $this->buildMessages($prompt, $params);
         $timeout = ProviderTimeoutPolicy::resolveRequestTimeout($params, $config);
         $lowSpeedTime = ProviderTimeoutPolicy::resolveRequestLowSpeedTime($params, $timeout);
+        $connectTimeout = ProviderTimeoutPolicy::resolveConnectTimeout($params, $timeout);
         $this->applyExecutionTimeLimit($timeout);
         $requestData = [
             'model' => $config['model'] ?? $model->getModelCode(),
@@ -148,7 +149,8 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
             $requestData,
             $proxyInfo,
             $timeout,
-            $lowSpeedTime
+            $lowSpeedTime,
+            $connectTimeout
         );
 
         // 提取 tool_calls（智能体模式）
@@ -1280,6 +1282,7 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
         array $proxyInfo,
         int $timeout,
         int $lowSpeedTime,
+        int $connectTimeout = ProviderTimeoutPolicy::DEFAULT_CONNECT_TIMEOUT,
         int $retryCount = 0
     ): array
     {
@@ -1292,7 +1295,7 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
         $timeLimit = $maxExecutionTime > 0 ? $maxExecutionTime : null;
         
         try {
-            $ch = $this->initCurl($url, $apiKey, $data, $proxyInfo, $timeout, $lowSpeedTime);
+            $ch = $this->initCurl($url, $apiKey, $data, $proxyInfo, $timeout, $lowSpeedTime, $connectTimeout);
             
             // 在执行前检查剩余时间，如果时间不足，提前抛出错误
             if ($timeLimit !== null && $timeLimit > 0) {
@@ -1332,8 +1335,15 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
 
             if ($error !== '') {
                 // 检查是否是超时错误
-                if (stripos($error, 'timeout') !== false || stripos($error, 'timed out') !== false) {
+                if (stripos($error, 'timeout') !== false
+                    || stripos($error, 'timed out') !== false
+                    || stripos($error, 'Operation too slow') !== false
+                    || stripos($error, 'bytes/sec') !== false
+                ) {
                     throw new Exception($this->getTimeoutErrorMessage($timeout));
+                }
+                if ($this->isNonRetryableTransportError($error)) {
+                    throw new Exception("API请求失败: {$error}");
                 }
                 throw new Exception("API请求失败: {$error}");
             }
@@ -1350,6 +1360,7 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
                     $proxyInfo,
                     $timeout,
                     $lowSpeedTime,
+                    $connectTimeout,
                     $retryCount + 1
                 );
             }
@@ -1379,9 +1390,10 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
             return $result;
 
         } catch (\Exception $e) {
-            // 如果是超时错误，直接抛出，不重试
-            if (strpos($e->getMessage(), '请求超时') !== false || 
-                strpos($e->getMessage(), '执行时间') !== false) {
+            // 如果是超时错误 / 本机模型不可达，直接抛出，不重试
+            if (strpos($e->getMessage(), '请求超时') !== false ||
+                strpos($e->getMessage(), '执行时间') !== false ||
+                $this->isNonRetryableTransportError($e->getMessage())) {
                 throw $e;
             }
             
@@ -1394,11 +1406,36 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
                     $proxyInfo,
                     $timeout,
                     $lowSpeedTime,
+                    $connectTimeout,
                     $retryCount + 1
                 );
             }
             throw new Exception("API调用失败（已重试{$retryCount}次，URL: {$url}）: " . $e->getMessage());
         }
+    }
+
+    private function isNonRetryableTransportError(string $message): bool
+    {
+        $needles = [
+            "Couldn't connect",
+            'Could not connect',
+            'Failed to connect',
+            'Connection refused',
+            'Connection reset',
+            "Couldn't resolve host",
+            'Could not resolve host',
+            'Name or service not known',
+            'Network is unreachable',
+            'Operation too slow',
+            'bytes/sec',
+        ];
+        foreach ($needles as $needle) {
+            if (\stripos($message, $needle) !== false) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -1750,7 +1787,8 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
         array $data,
         array $proxyInfo,
         int $timeout,
-        ?int $lowSpeedTime = null
+        ?int $lowSpeedTime = null,
+        ?int $connectTimeout = null
     ): \CurlHandle|false
     {
         $payload = $this->encodeJsonRequestPayload($data);
@@ -1770,13 +1808,12 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
         $lowSpeedTime = $lowSpeedTime === null
             ? ProviderTimeoutPolicy::resolveLowSpeedTime($timeout)
             : \max(0, $lowSpeedTime);
+        $resolvedConnectTimeout = $connectTimeout === null
+            ? ProviderTimeoutPolicy::resolveConnectTimeout([], $timeout)
+            : \max(0, $connectTimeout);
         curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
-        // 连接超时单独设置，防止长时间卡在连接阶段（不超过60秒）
-        if ($timeout > 0) {
-            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, min($timeout, 60));
-        } else {
-            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 60);
-        }
+        // 连接超时单独设置，防止长时间卡在连接阶段（默认不超过60秒；翻译可传更短值）
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, $resolvedConnectTimeout);
         if ($lowSpeedTime > 0) {
             curl_setopt($ch, CURLOPT_LOW_SPEED_LIMIT, 1);
             curl_setopt($ch, CURLOPT_LOW_SPEED_TIME, $lowSpeedTime);

@@ -2248,8 +2248,6 @@
             return queryBinClient.warmup();
         },
         StreamHandle: StreamHandle,
-        markCartActive: function () {},
-        markCartEmpty: function () {},
         enableAutoRequests: function () {},
         disableAutoRequests: function () {},
         getClient: function () {

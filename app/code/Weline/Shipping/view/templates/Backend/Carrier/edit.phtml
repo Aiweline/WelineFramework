@@ -153,7 +153,15 @@ $id = $carrier ? $carrier->getId() : null;
                                                     <strong class="w-alert__title"><?= __('谨慎操作') ?></strong>
                                                     <span><?= __('支持范围决定该承运商结账时能否运到客户地址。缩减或删错地区后，对应目的地将不再出现该承运商配送方式，可能导致无法下单。请仅保留真实可运区域，保存前务必核对。') ?></span>
                                                 </div>
-                                            </div>                                            <p class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-3);">
+                                            </div>
+                                            <div class="w-alert" role="status" data-tone="info" data-testid="shipping-carrier-system-embargo-note" style="--w-mb:var(--weline-space-3);">
+                                                <w:icon name="info" size="sm"></w:icon>
+                                                <div class="w-alert__content">
+                                                    <strong class="w-alert__title"><?= __('系统禁运 · 不可选') ?></strong>
+                                                    <span><?= __('地址选择器中标为「不支持」的系统禁运国家/地区优先级最高，即使写入承运商覆盖也不会在结账放行。请勿把系统禁运区当作可运范围保存。') ?></span>
+                                                </div>
+                                            </div>
+                                            <p class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-3);">
                                                 <?= __('启用承运商前必须配置支持范围。可多选国家→州省→区县；默认保留当前选择，也可改用 Provider 默认区域。费用模板只算运费金额，不含到达地区。') ?>
                                             </p>
                                             <input type="hidden" name="coverage_json" id="carrier_coverage_json" value="<?= $coverageJson ?>" data-coverage-baseline="<?= $coverageJson ?>">

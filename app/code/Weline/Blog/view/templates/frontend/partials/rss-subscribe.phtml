@@ -1,0 +1,26 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+
+$rssUrl = trim((string)($this->getData('blog_rss_url') ?? ''));
+if ($rssUrl === '') {
+    return;
+}
+$escape = static fn(mixed $v): string => htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$href = preg_match('#^https?://#i', $rssUrl) === 1
+    ? $rssUrl
+    : (string)$this->getUrl(ltrim($rssUrl, '/'));
+$label = trim((string)($this->getData('blog_rss_label') ?? ''));
+if ($label === '') {
+    $label = (string)__('订阅 RSS');
+}
+?>
+<a class="amazon-blog-listing__rss w-button"
+   data-tone="neutral"
+   data-variant="outline"
+   data-size="sm"
+   href="<?= $escape($href) ?>"
+   type="application/rss+xml"
+   rel="alternate"
+   data-testid="blog-rss-subscribe">
+    <?= $escape($label) ?>
+</a>

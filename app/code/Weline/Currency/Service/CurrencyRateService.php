@@ -132,7 +132,11 @@ class CurrencyRateService
         return 1.0 / $rate;
     }
 
-    public function convert(float $amount, ?string $sourceCurrency = null, ?string $targetCurrency = null): float
+    /**
+     * Convert when rates exist; return null when FX is impossible.
+     * Prefer this over convert() when callers must not fake a successful conversion.
+     */
+    public function tryConvert(float $amount, ?string $sourceCurrency = null, ?string $targetCurrency = null): ?float
     {
         $sourceCurrency = $this->normalizeCurrencyCode($sourceCurrency ?: $this->getBaseCurrency());
         $targetCurrency = $this->normalizeCurrencyCode($targetCurrency ?: $this->getCurrentCurrency());
@@ -144,25 +148,48 @@ class CurrencyRateService
         $baseCurrency = $this->getBaseCurrency();
         $amountInBase = $this->convertToBase($amount, $sourceCurrency, $baseCurrency);
         if ($amountInBase === null) {
-            return round($amount, 4);
+            return null;
         }
 
         $convertedAmount = $this->convertFromBase($amountInBase, $targetCurrency, $baseCurrency);
         if ($convertedAmount === null) {
-            return round($amount, 4);
+            return null;
         }
 
         return round($convertedAmount, 4);
     }
 
+    public function convert(float $amount, ?string $sourceCurrency = null, ?string $targetCurrency = null): float
+    {
+        $sourceCurrency = $this->normalizeCurrencyCode($sourceCurrency ?: $this->getBaseCurrency());
+        $targetCurrency = $this->normalizeCurrencyCode($targetCurrency ?: $this->getCurrentCurrency());
+        $converted = $this->tryConvert($amount, $sourceCurrency, $targetCurrency);
+        if ($converted === null) {
+            throw new \RuntimeException(sprintf(
+                'Currency conversion unavailable from %s to %s (missing or zero rate).',
+                $sourceCurrency !== '' ? $sourceCurrency : '?',
+                $targetCurrency !== '' ? $targetCurrency : '?',
+            ));
+        }
+
+        return $converted;
+    }
+
     public function format(float $amount, ?string $sourceCurrency = null, ?string $targetCurrency = null): string
     {
+        $sourceCurrency = $this->normalizeCurrencyCode($sourceCurrency ?: $this->getBaseCurrency());
         $targetCurrency = $this->normalizeCurrencyCode($targetCurrency ?: $this->getCurrentCurrency());
         if ($targetCurrency === '') {
             $targetCurrency = $this->getBaseCurrency();
         }
 
-        $convertedAmount = $this->convert($amount, $sourceCurrency, $targetCurrency);
+        $convertedAmount = $this->tryConvert($amount, $sourceCurrency, $targetCurrency);
+        if ($convertedAmount === null) {
+            // Do not paint the target currency symbol on an unconverted amount.
+            $convertedAmount = $amount;
+            $targetCurrency = $sourceCurrency !== '' ? $sourceCurrency : $this->getBaseCurrency();
+        }
+
         $definition = $this->loadCurrencyDefinition($targetCurrency);
         if ($definition === null) {
             return $this->fallbackFormat($convertedAmount, $targetCurrency);

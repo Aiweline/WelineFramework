@@ -11,6 +11,8 @@ declare(strict_types=1);
 
 namespace Weline\Seo\Adapter;
 
+use Weline\Seo\Service\SeoAccountConfig;
+
 /**
  * Google Search Console Sitemap 适配器
  *
@@ -817,6 +819,69 @@ class GoogleSitemapAdapter extends AbstractSitemapPlatformAdapter
                 $statsData['search_queries'] = $queryAnalyticsResult['rows'];
                 $statsData['extra']['search_queries'] = $queryAnalyticsResult['rows'];
             }
+
+            $statsData['extra']['distribution_channels'] = $this->extractDistributionChannels($config);
+            $statsData['extra']['platform_property'] = [
+                'api_status' => 'manual_only',
+                'note' => (string)__('GSC Platform Property（社交/视频）暂无公开 API；渠道 URL 仅本地登记，请在 Search Console 手动添加平台属性。'),
+                'gsc_url' => 'https://search.google.com/search-console',
+            ];
+
+            if (!empty($config['enable_discover_stats'])) {
+                $discoverResult = $this->fetchSearchAnalytics(
+                    $encodedSiteUrl,
+                    $accessToken,
+                    $proxyConfig,
+                    $windowStart,
+                    $windowEnd,
+                    'discover'
+                );
+                if ($discoverResult['success'] && !empty($discoverResult['data'])) {
+                    $discover = $discoverResult['data'];
+                    $statsData['extra']['discover'] = [
+                        'clicks' => (int)($discover['clicks'] ?? 0),
+                        'impressions' => (int)($discover['impressions'] ?? 0),
+                        'ctr' => round(((float)($discover['ctr'] ?? 0)) * 100, 2),
+                        'window' => ['start' => $windowStart, 'end' => $windowEnd],
+                    ];
+                } else {
+                    $statsData['extra']['discover'] = [
+                        'clicks' => 0,
+                        'impressions' => 0,
+                        'ctr' => 0.0,
+                        'window' => ['start' => $windowStart, 'end' => $windowEnd],
+                        'error' => (string)($discoverResult['error'] ?? ''),
+                    ];
+                }
+            }
+
+            if (!empty($config['enable_google_news_stats'])) {
+                $newsResult = $this->fetchSearchAnalytics(
+                    $encodedSiteUrl,
+                    $accessToken,
+                    $proxyConfig,
+                    $windowStart,
+                    $windowEnd,
+                    'googleNews'
+                );
+                if ($newsResult['success'] && !empty($newsResult['data'])) {
+                    $news = $newsResult['data'];
+                    $statsData['extra']['google_news'] = [
+                        'clicks' => (int)($news['clicks'] ?? 0),
+                        'impressions' => (int)($news['impressions'] ?? 0),
+                        'ctr' => round(((float)($news['ctr'] ?? 0)) * 100, 2),
+                        'window' => ['start' => $windowStart, 'end' => $windowEnd],
+                    ];
+                } else {
+                    $statsData['extra']['google_news'] = [
+                        'clicks' => 0,
+                        'impressions' => 0,
+                        'ctr' => 0.0,
+                        'window' => ['start' => $windowStart, 'end' => $windowEnd],
+                        'error' => (string)($newsResult['error'] ?? ''),
+                    ];
+                }
+            }
             
             // 2. 获取 Sitemap 信息
             $sitemapsResult = $this->fetchSitemapsList($encodedSiteUrl, $accessToken, $proxyConfig);
@@ -860,6 +925,33 @@ class GoogleSitemapAdapter extends AbstractSitemapPlatformAdapter
     }
 
     /**
+     * @return list<array{platform:string,url:string}>
+     */
+    protected function extractDistributionChannels(array $config): array
+    {
+        $map = [
+            'youtube_channel_url' => 'youtube',
+            'x_profile_url' => 'x',
+            'instagram_profile_url' => 'instagram',
+            'tiktok_profile_url' => 'tiktok',
+            'linkedin_profile_url' => 'linkedin',
+        ];
+        $channels = [];
+        foreach ($map as $key => $platform) {
+            $url = trim((string)($config[$key] ?? ''));
+            if ($url === '') {
+                continue;
+            }
+            $channels[] = [
+                'platform' => $platform,
+                'url' => $url,
+            ];
+        }
+
+        return $channels;
+    }
+
+    /**
      * 获取搜索分析数据
      */
     protected function fetchSearchAnalytics(
@@ -868,15 +960,20 @@ class GoogleSitemapAdapter extends AbstractSitemapPlatformAdapter
         array $proxyConfig,
         ?string $startDate = null,
         ?string $endDate = null,
+        ?string $type = null,
     ): array {
         $startDate = $startDate ?: date('Y-m-d', strtotime('-28 days'));
         $endDate = $endDate ?: date('Y-m-d', strtotime('-1 day'));
-        $payload = $this->requestSearchAnalytics($encodedSiteUrl, $accessToken, $proxyConfig, [
+        $body = [
             'startDate' => $startDate,
             'endDate' => $endDate,
             'dimensions' => [],
             'rowLimit' => 1,
-        ]);
+        ];
+        if ($type !== null && $type !== '') {
+            $body['type'] = $type;
+        }
+        $payload = $this->requestSearchAnalytics($encodedSiteUrl, $accessToken, $proxyConfig, $body);
         if (!$payload['success']) {
             return ['success' => false, 'data' => [], 'error' => $payload['error'] ?? ''];
         }
@@ -1033,5 +1130,133 @@ class GoogleSitemapAdapter extends AbstractSitemapPlatformAdapter
             'success' => true,
             'data' => $data['sitemap'] ?? [],
         ];
+    }
+
+    /**
+     * Google URL Inspection API（面板 SEO Tab 按需调用，不进前台常态请求）。
+     *
+     * @param array<string, mixed> $accountConfig
+     * @return array{success:bool,message:string,data:array<string,mixed>}
+     */
+    public function inspectUrl(string $inspectionUrl, string $siteUrl, array $accountConfig): array
+    {
+        $inspectionUrl = trim($inspectionUrl);
+        $siteUrl = SeoAccountConfig::normalizeGoogleSiteProperty($siteUrl);
+        if ($inspectionUrl === '' || $siteUrl === '') {
+            return [
+                'success' => false,
+                'message' => (string)__('缺少 inspectionUrl 或 site_url'),
+                'data' => [],
+            ];
+        }
+
+        $config = $this->resolveGoogleConfig($accountConfig);
+        $proxyConfig = $this->extractProxyConfig($accountConfig);
+        if (empty($config['client_email']) || empty($config['private_key'])) {
+            return [
+                'success' => false,
+                'message' => (string)__('缺少 Service Account 配置'),
+                'data' => [],
+            ];
+        }
+
+        try {
+            $accessToken = $this->getAccessToken($config, $proxyConfig, self::WEBMASTER_READONLY_SCOPE);
+            if ($accessToken === null || $accessToken === '') {
+                return [
+                    'success' => false,
+                    'message' => (string)__('获取 Google Access Token 失败'),
+                    'data' => [],
+                ];
+            }
+
+            $payload = json_encode([
+                'inspectionUrl' => $inspectionUrl,
+                'siteUrl' => $siteUrl,
+                'languageCode' => 'zh-CN',
+            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            if (!is_string($payload) || $payload === '') {
+                return [
+                    'success' => false,
+                    'message' => (string)__('无法编码 URL Inspection 请求'),
+                    'data' => [],
+                ];
+            }
+
+            $ch = curl_init();
+            $curlOptions = [
+                CURLOPT_URL => 'https://searchconsole.googleapis.com/v1/urlInspection/index:inspect',
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT => 45,
+                CURLOPT_POST => true,
+                CURLOPT_POSTFIELDS => $payload,
+                CURLOPT_HTTPHEADER => [
+                    'Authorization: Bearer ' . $accessToken,
+                    'Content-Type: application/json',
+                ],
+                CURLOPT_SSL_VERIFYPEER => true,
+                CURLOPT_SSL_VERIFYHOST => 2,
+            ];
+            if (!empty($proxyConfig['proxy'])) {
+                $curlOptions[CURLOPT_PROXY] = $proxyConfig['proxy'];
+                if (($proxyConfig['proxy_type'] ?? 'http') === 'socks5') {
+                    $curlOptions[CURLOPT_PROXYTYPE] = CURLPROXY_SOCKS5_HOSTNAME;
+                }
+            }
+            curl_setopt_array($ch, $curlOptions);
+            $response = curl_exec($ch);
+            $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $error = (string)curl_error($ch);
+            curl_close($ch);
+
+            if ($error !== '' || $httpCode < 200 || $httpCode >= 300 || !is_string($response)) {
+                return [
+                    'success' => false,
+                    'message' => $error !== '' ? $error : (string)__('Google URL Inspection HTTP %{1}', [$httpCode]),
+                    'data' => [
+                        'http_code' => $httpCode,
+                    ],
+                ];
+            }
+
+            $decoded = json_decode($response, true);
+            if (!is_array($decoded)) {
+                return [
+                    'success' => false,
+                    'message' => (string)__('Google URL Inspection 响应无法解析'),
+                    'data' => [],
+                ];
+            }
+
+            $result = is_array($decoded['inspectionResult'] ?? null) ? $decoded['inspectionResult'] : $decoded;
+            $indexStatus = is_array($result['indexStatusResult'] ?? null) ? $result['indexStatusResult'] : [];
+            $richResults = is_array($result['richResultsResult'] ?? null) ? $result['richResultsResult'] : [];
+
+            return [
+                'success' => true,
+                'message' => (string)__('URL Inspection 完成'),
+                'data' => [
+                    'inspectionUrl' => $inspectionUrl,
+                    'siteUrl' => $siteUrl,
+                    'verdict' => (string)($indexStatus['verdict'] ?? ''),
+                    'coverageState' => (string)($indexStatus['coverageState'] ?? ''),
+                    'robotsTxtState' => (string)($indexStatus['robotsTxtState'] ?? ''),
+                    'indexingState' => (string)($indexStatus['indexingState'] ?? ''),
+                    'lastCrawlTime' => (string)($indexStatus['lastCrawlTime'] ?? ''),
+                    'pageFetchState' => (string)($indexStatus['pageFetchState'] ?? ''),
+                    'googleCanonical' => (string)($indexStatus['googleCanonical'] ?? ''),
+                    'userCanonical' => (string)($indexStatus['userCanonical'] ?? ''),
+                    'richResultsVerdict' => (string)($richResults['verdict'] ?? ''),
+                    'detectedItems' => is_array($richResults['detectedItems'] ?? null) ? $richResults['detectedItems'] : [],
+                    'raw' => $result,
+                ],
+            ];
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'message' => $e->getMessage(),
+                'data' => [],
+            ];
+        }
     }
 }

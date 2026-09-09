@@ -87,7 +87,18 @@ Website 候选同时来自 `Website.url` 和启用的 `WebsiteDomain` 绑定，�
 - `WebsiteData::getDefaultCurrency()`
 - `WebsiteData::getDefaultLanguage()`
 
-不要每个模块都重复跑一遍域名识别。`WebsiteData::setWebsite()` 会克隆已命中模型，并把站点快照及语言/货币缓存存入当前 `RequestContext`；请求或 Fiber 切换时与 Scope 字段一起清理，不使用进程级静态站点快照。
+`DetectWebsite::processSite` 命中后会调用 `WebsiteData::setWebsite()`：**一次粘贴**站字段与语/币关联进当前 `RequestContext`，并写入 `website_detect`（`global/websites-registry`）共享快照，供其它 WLS worker 先读缓存。
+
+`ScopeResolver` 随后解析 Store/Channel（路径最长匹配 + default Channel），写入 L2 `ScopePathMatchCache` 命中键，并 `ScopeData::install` 粘贴 L3 店/渠摘要。详见 [`store-saleschannel-scope.md`](store-saleschannel-scope.md) 的 L1/L2/L3 分层。
+
+普通路径：
+
+- `Website::load($id)` / `load('code', $code)`：有当前上下文或共享快照则直接灌入，不查库。
+- `Store::load` / `SalesChannel::load` / catalog `byId`：当前 Scope 或 L2 实体快照优先。
+- `w_query('websites', 'getWebsiteById'|'getWebsiteByCode')`：同样先上下文、再共享缓存。
+- 真要强制重载：`load($id, forceReload: true)` 或 query 参数 `force_reload => true`。
+
+不要每个模块都重复跑一遍域名识别。请求或 Fiber 切换时与 Scope 字段一起清理请求快照；跨请求共享快照由网站 `changed` / `WebsiteCacheInvalidationService` 推进 namespace 后失效。
 
 ## 5. QueryProvider 入口
 

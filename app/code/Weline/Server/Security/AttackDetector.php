@@ -34,6 +34,9 @@ class AttackDetector
         ['ip_whitelist', 'ips'],
         ['malicious_patterns', 'patterns'],
         ['bad_user_agents', 'patterns'],
+        ['crawler_block', 'disabled_builtin_ids'],
+        ['crawler_block', 'custom_entries'],
+        ['crawler_block', 'entries'],
         ['protected_paths', 'paths'],
         ['ban_on_path_match', 'paths'],
     ];
@@ -143,20 +146,24 @@ class AttackDetector
             'block_duration' => 600,
         ],
         
-        // 恶意特征检测
+        // 恶意特征检测（保守：优先高置信注入探针，避免误伤正常店面 query）
         'malicious_patterns' => [
             'enabled' => true,
             'patterns' => [
                 // SQL 注入
                 '/(\bunion\b.*\bselect\b|\bor\b\s+\d+=\d+|\band\b\s+\d+=\d+|\'.*--)/i',
-                // XSS
+                '/(\'|%27)\s*or\s*(\'|%27)\d+(\'|%27)\s*=\s*(\'|%27)\d+/i',
+                '/(\binformation_schema\b|\bsleep\s*\(|\bbenchmark\s*\(|\bload_file\s*\(|\binto\s+outfile\b|\binto\s+dumpfile\b)/i',
+                // XSS / 脚本注入
                 '/<script[^>]*>|javascript:|\bon\w+\s*=/i',
+                '/(<iframe\b|<svg\b[^>]*onload\b|vbscript:|expression\s*\()/i',
                 // 路径遍历
                 '/\.\.\/|\.\.\\\\/',
-                // 命令注入
-                '/;|\||`|\$\(|>\s*\//',
-                // PHP 文件包含
-                '/php:\/\/|data:\/\/|expect:\/\//i',
+                // 命令注入（限定常见探测形态，避免单独匹配 query 中的 | ）
+                '/(?:;|\||`|\$\()\s*(?:cat|ls|id|whoami|wget|curl|bash|sh|cmd|powershell)\b/i',
+                '/>\s*\/(?:etc|tmp|var|proc)\b/i',
+                // PHP 文件包含 / 伪协议
+                '/php:\/\/|data:\/\/|expect:\/\/|phar:\/\//i',
             ],
             'block_duration' => 3600,
         ],
@@ -171,6 +178,15 @@ class AttackDetector
                 '/masscan/i',                     // Masscan
             ],
             'block_duration' => 300,
+        ],
+
+        // 爬虫代理拦截：默认干掉只刮内容、不带来引荐流量的寄生爬虫
+        // （内置条目见 CrawlerBlockCatalog::builtins，升级自动生效）
+        'crawler_block' => [
+            'enabled' => true,
+            'block_duration' => 86400,
+            'disabled_builtin_ids' => [],
+            'custom_entries' => [],
         ],
         
         // 慢速攻击检测。连接先经过宽限窗口，只有仍未完成 TLS/HTTP
@@ -190,6 +206,7 @@ class AttackDetector
                 '/.git/',
                 '/.svn/',
                 '/.env',
+                '/.aws/',
                 '/wp-admin',
                 '/wp-login',
                 '/phpmyadmin',
@@ -197,6 +214,9 @@ class AttackDetector
                 '/config.php',
                 '/install.php',
                 '/setup.php',
+                '/actuator/',
+                '/server-status',
+                '/vendor/phpunit/',
             ],
             'block_duration' => 1800,
         ],
@@ -233,12 +253,17 @@ class AttackDetector
                 '/phpmyadmin',
                 '/.env',
                 '/.git/',
+                '/.svn/',
+                '/.aws/',
                 '/admin.php',
                 '/config.php',
                 '/install.php',
                 '/setup.php',
                 '/wp-admin/setup-config.php',
                 '/wp-admin/install.php',
+                '/actuator/',
+                '/server-status',
+                '/vendor/phpunit/',
             ],
         ],
 
@@ -325,6 +350,7 @@ class AttackDetector
         'path_scan_blocks' => 0,
         'malicious_blocks' => 0,
         'bad_ua_blocks' => 0,
+        'crawler_blocks' => 0,
         'protected_path_blocks' => 0,
         'ssl_failure_blocks' => 0,
         'ssl_failure_total' => 0,
@@ -752,6 +778,15 @@ class AttackDetector
             $this->persistAttackLog($uaResult, $requestInfo);
             $this->markAttackSignaled($clientIp);
             return $uaResult;
+        }
+
+        // 7.5 寄生爬虫拦截（默认生效；友好搜索引擎放行）
+        $crawlerResult = $this->checkCrawlerBlock($clientIp, $headers);
+        if ($crawlerResult['is_attack']) {
+            $this->stats['crawler_blocks'] = (int)($this->stats['crawler_blocks'] ?? 0) + 1;
+            $this->persistAttackLog($crawlerResult, $requestInfo);
+            $this->markAttackSignaled($clientIp);
+            return $crawlerResult;
         }
         
         return [
@@ -1345,6 +1380,58 @@ class AttackDetector
         
         return ['is_attack' => false, 'type' => 'none', 'reason' => '', 'should_block' => false];
     }
+
+    /**
+     * 寄生爬虫 / 白嫖爬虫拦截（默认生效）
+     *
+     * @param array<string, mixed> $headers
+     * @return array{is_attack:bool,type:string,reason:string,should_block:bool}
+     */
+    private function checkCrawlerBlock(string $ip, array $headers): array
+    {
+        if ($headers === []) {
+            return ['is_attack' => false, 'type' => 'none', 'reason' => '', 'should_block' => false];
+        }
+
+        $rule = \is_array($this->rules['crawler_block'] ?? null)
+            ? $this->rules['crawler_block']
+            : CrawlerBlockCatalog::defaultRule();
+        if (!($rule['enabled'] ?? true)) {
+            return ['is_attack' => false, 'type' => 'none', 'reason' => '', 'should_block' => false];
+        }
+
+        $ua = '';
+        $hasUaHeader = false;
+        foreach ($headers as $name => $value) {
+            if (\strtolower((string)$name) === 'user-agent') {
+                $ua = \is_array($value) ? (string)($value[0] ?? '') : (string)$value;
+                $hasUaHeader = true;
+                break;
+            }
+        }
+
+        // 无 UA 头：跳过（与 bad_user_agents 一致）；显式空 UA 由 empty_ua 条目处理
+        if (!$hasUaHeader) {
+            return ['is_attack' => false, 'type' => 'none', 'reason' => '', 'should_block' => false];
+        }
+
+        $hit = CrawlerBlockCatalog::match($ua, $rule);
+        if ($hit === null) {
+            return ['is_attack' => false, 'type' => 'none', 'reason' => '', 'should_block' => false];
+        }
+
+        $blockDuration = (int)($rule['block_duration'] ?? 0);
+        if ($blockDuration > 0) {
+            $this->blockIp($ip, $blockDuration);
+        }
+
+        return [
+            'is_attack' => true,
+            'type' => 'crawler_block',
+            'reason' => '寄生爬虫拦截: ' . $hit['name'] . ' — ' . $hit['reason'],
+            'should_block' => true,
+        ];
+    }
     
     /**
      * 记录攻击日志
@@ -1423,6 +1510,7 @@ class AttackDetector
             'path_scan_blocks' => $this->stats['path_scan_blocks'],
             'malicious_blocks' => $this->stats['malicious_blocks'],
             'bad_ua_blocks' => $this->stats['bad_ua_blocks'],
+            'crawler_blocks' => $this->stats['crawler_blocks'] ?? 0,
             'protected_path_blocks' => $this->stats['protected_path_blocks'],
             'ban_on_path_blocks' => $this->stats['ban_on_path_blocks'],
             'attack_signaled_follow_blocks' => $this->stats['attack_signaled_follow_blocks'],

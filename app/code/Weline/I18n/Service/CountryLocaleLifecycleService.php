@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace Weline\I18n\Service;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Database\Transaction\Exception\UnsupportedAsyncTransactionConnectionException;
+use Weline\Framework\Database\Transaction\TransactionCoordinatorInterface;
+use Weline\Framework\Database\TransactionContext;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
@@ -15,8 +18,6 @@ use Weline\I18n\Model\I18n;
 use Weline\I18n\Model\Locale;
 use Weline\I18n\Model\Locale\Name as LocaleName;
 use Weline\I18n\Model\Locals;
-use Weline\I18n\Taglib\LanguageSelect;
-use Weline\I18n\Taglib\LanguageSwitcher;
 
 class CountryLocaleLifecycleService
 {
@@ -45,6 +46,11 @@ class CountryLocaleLifecycleService
     }
 
     public function activateCountry(string $countryCode): array
+    {
+        return $this->runLifecycleMutation(fn(): array => $this->activateCountryRecord($countryCode));
+    }
+
+    private function activateCountryRecord(string $countryCode): array
     {
         $countryCode = $this->normalizeCountryCode($countryCode);
         $this->ensureCountryExists($countryCode);
@@ -87,6 +93,11 @@ class CountryLocaleLifecycleService
 
     public function deactivateCountry(string $countryCode): array
     {
+        return $this->runLifecycleMutation(fn(): array => $this->deactivateCountryRecord($countryCode));
+    }
+
+    private function deactivateCountryRecord(string $countryCode): array
+    {
         $countryCode = $this->normalizeCountryCode($countryCode);
         if ($this->isProtectedCountry($countryCode)) {
             throw new \RuntimeException((string)__('不允许停用中国（CN），这是系统默认国家'));
@@ -111,6 +122,11 @@ class CountryLocaleLifecycleService
     }
 
     public function uninstallCountry(string $countryCode): array
+    {
+        return $this->runLifecycleMutation(fn(): array => $this->uninstallCountryRecord($countryCode));
+    }
+
+    private function uninstallCountryRecord(string $countryCode): array
     {
         $countryCode = $this->normalizeCountryCode($countryCode);
         if ($this->isProtectedCountry($countryCode)) {
@@ -153,6 +169,11 @@ class CountryLocaleLifecycleService
 
     public function activateLocale(string $localeCode): array
     {
+        return $this->runLifecycleMutation(fn(): array => $this->activateLocaleRecord($localeCode));
+    }
+
+    private function activateLocaleRecord(string $localeCode): array
+    {
         $localeCode = $this->normalizeLocaleCode($localeCode);
         $locale = $this->ensureLocaleRecordExists($localeCode);
         $countryCode = (string)$locale->getData(Locale::schema_fields_COUNTRY_CODE);
@@ -175,6 +196,11 @@ class CountryLocaleLifecycleService
 
     public function deactivateLocale(string $localeCode): array
     {
+        return $this->runLifecycleMutation(fn(): array => $this->deactivateLocaleRecord($localeCode));
+    }
+
+    private function deactivateLocaleRecord(string $localeCode): array
+    {
         $localeCode = $this->normalizeLocaleCode($localeCode);
         if ($this->isProtectedLocale($localeCode)) {
             throw new \RuntimeException((string)__('不允许停用 zh_Hans_CN 区域，这是系统默认区域'));
@@ -195,6 +221,11 @@ class CountryLocaleLifecycleService
     }
 
     public function uninstallLocale(string $localeCode): array
+    {
+        return $this->runLifecycleMutation(fn(): array => $this->uninstallLocaleRecord($localeCode));
+    }
+
+    private function uninstallLocaleRecord(string $localeCode): array
     {
         $localeCode = $this->normalizeLocaleCode($localeCode);
         if ($this->isProtectedLocale($localeCode)) {
@@ -571,10 +602,16 @@ class CountryLocaleLifecycleService
     private function clearLanguagePacksForLocale(string $localeCode): void
     {
         $localeCode = $this->normalizeLocaleCode($localeCode);
-        $directories = glob(Env::path_LANGUAGE_PACK . '*' . DIRECTORY_SEPARATOR . $localeCode, GLOB_ONLYDIR) ?: [];
-        foreach ($directories as $directory) {
-            FileHelper::removeDirectory($directory, true);
-        }
+        ObjectManager::getInstance(TransactionCoordinatorInterface::class)->afterCommit(
+            $this->locales->getConnection(),
+            'i18n.remove-language-pack.' . $localeCode,
+            static function () use ($localeCode): void {
+                $directories = glob(Env::path_LANGUAGE_PACK . '*' . DIRECTORY_SEPARATOR . $localeCode, GLOB_ONLYDIR) ?: [];
+                foreach ($directories as $directory) {
+                    FileHelper::removeDirectory($directory, true);
+                }
+            },
+        );
     }
 
     /**
@@ -660,51 +697,47 @@ class CountryLocaleLifecycleService
         }
     }
 
-    /**
-     * Immediately drop locale-catalog / translation read caches after lifecycle mutations.
-     */
+    /** 生命周期的所有事实写入与资源变更共用现有事务。 */
+    private function runLifecycleMutation(callable $mutation): array
+    {
+        $connection = $this->locales->getConnection();
+        $logicalConnection = TransactionContext::logicalConnectionKey($connection->getConnector());
+        $publisher = ObjectManager::getInstance(I18nResourceChangePublisher::class);
+        $connections = [
+            $this->countries->getConnection(),
+            $this->countryLocaleNames->getConnection(),
+            $this->localeNames->getConnection(),
+            ObjectManager::getInstance(Locals::class)->getConnection(),
+            $publisher->connection(),
+        ];
+        foreach ($connections as $candidate) {
+            if (TransactionContext::logicalConnectionKey($candidate->getConnector()) !== $logicalConnection) {
+                throw new UnsupportedAsyncTransactionConnectionException(__('语言目录写入与资源变更必须使用同一逻辑数据库连接'));
+            }
+        }
+        return ObjectManager::getInstance(TransactionCoordinatorInterface::class)->run($connection, $mutation);
+    }
+
+    /** 发布定向资源变更，提交后再通知依赖语言目录的网站解析与旧事件消费者。 */
     private function invalidateLocaleCatalogCaches(): void
     {
-        try {
-            w_cache('i18n')->clear();
-        } catch (\Throwable) {
-        }
-
-        try {
-            w_cache('phrase')->clear();
-        } catch (\Throwable) {
-        }
-
-        \Weline\Framework\Phrase\Parser::clearWorkerCaches();
-        \Weline\I18n\Parser::clearWorkerCaches();
-
-        try {
-            ObjectManager::getInstance(ActiveLocaleCodeProvider::class)->reset();
-        } catch (\Throwable) {
-        }
-
-        try {
-            LanguageSwitcher::clearProcessCaches();
-        } catch (\Throwable) {
-        }
-
-        try {
-            LanguageSelect::clearProcessCaches();
-        } catch (\Throwable) {
-        }
-
-        try {
-            Url::bumpWebsiteParserSitesVersion();
-        } catch (\Throwable) {
-        }
-
-        ObjectManager::getInstance(RuntimeCacheBroadcaster::class)->broadcast();
-
-        try {
-            ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class)
-                ->dispatch('Weline_I18n::locale_catalog_changed');
-        } catch (\Throwable) {
-        }
+        $publisher = ObjectManager::getInstance(I18nResourceChangePublisher::class);
+        $publisher->publishAction('locale-catalog-changed', []);
+        ObjectManager::getInstance(TransactionCoordinatorInterface::class)->afterCommit(
+            $publisher->connection(),
+            'i18n.locale-catalog.compat',
+            static function (): void {
+                try {
+                    Url::bumpWebsiteParserSitesVersion();
+                } catch (\Throwable) {
+                }
+                try {
+                    ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class)
+                        ->dispatch('Weline_I18n::locale_catalog_changed');
+                } catch (\Throwable) {
+                }
+            },
+        );
     }
 
     /** @deprecated use invalidateLocaleCatalogCaches() */

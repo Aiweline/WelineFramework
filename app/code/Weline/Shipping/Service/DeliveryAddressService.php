@@ -382,6 +382,7 @@ class DeliveryAddressService
             DeliveryAddress::schema_fields_DISTRICT_CODE,
             DeliveryAddress::schema_fields_DISTRICT_REGION_ID,
             DeliveryAddress::schema_fields_STREET,
+            DeliveryAddress::schema_fields_STREET_ID,
             DeliveryAddress::schema_fields_POSTAL_CODE,
             DeliveryAddress::schema_fields_IS_DEFAULT,
             DeliveryAddress::schema_fields_IS_ENABLED,
@@ -435,6 +436,7 @@ class DeliveryAddressService
             DeliveryAddress::schema_fields_PROVINCE_REGION_ID => true,
             DeliveryAddress::schema_fields_CITY_REGION_ID => true,
             DeliveryAddress::schema_fields_DISTRICT_REGION_ID => true,
+            DeliveryAddress::schema_fields_STREET_ID => true,
             DeliveryAddress::schema_fields_IS_DEFAULT => true,
             DeliveryAddress::schema_fields_IS_ENABLED => true,
         ];

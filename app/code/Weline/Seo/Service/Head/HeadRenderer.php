@@ -12,6 +12,10 @@ class HeadRenderer
 {
     private const INSPECTOR_CSS_SOURCE = 'Weline_Seo::seo-inspector/inspector.css';
     private const INSPECTOR_JS_SOURCE = 'Weline_Seo::seo-inspector/inspector.js';
+    private const REQUEST_CLAIM_KEY = 'weline.seo.head.rendered';
+
+    /** @var string|null Request id that already claimed the head slot in this worker. */
+    private static ?string $claimedRequestId = null;
 
     public function __construct(
         private readonly PageSeoContextResolver $resolver,
@@ -43,6 +47,16 @@ class HeadRenderer
         if ($frontendTitle !== '') {
             $context['title'] = $frontendTitle;
             $context['_frontend_title_rendered'] = true;
+        } elseif (class_exists(\Weline\Frontend\Service\Head\TitleComposer::class)) {
+            try {
+                /** @var \Weline\Frontend\Service\Head\TitleComposer $composer */
+                $composer = ObjectManager::getInstance(\Weline\Frontend\Service\Head\TitleComposer::class);
+                $composed = trim($composer->compose($template, $context));
+                if ($composed !== '') {
+                    $context['title'] = $composed;
+                }
+            } catch (\Throwable) {
+            }
         }
         return match ($slot) {
             'meta' => $this->renderMeta($context),
@@ -64,12 +78,16 @@ class HeadRenderer
     {
         $requestId = \Weline\Framework\Runtime\RequestContext::getId();
         if ($requestId !== null && $requestId !== '') {
-            $key = 'weline.seo.head.rendered';
-            if (\Weline\Framework\Runtime\RequestContext::has($key)) {
+            if (self::$claimedRequestId === $requestId
+                || \Weline\Framework\Runtime\RequestContext::has(self::REQUEST_CLAIM_KEY)
+            ) {
+                self::$claimedRequestId = $requestId;
+                $this->claimTemplateRender($template, '__weline_seo_head_rendered');
                 return true;
             }
 
-            \Weline\Framework\Runtime\RequestContext::set($key, true);
+            self::$claimedRequestId = $requestId;
+            \Weline\Framework\Runtime\RequestContext::set(self::REQUEST_CLAIM_KEY, true);
             $this->claimTemplateRender($template, '__weline_seo_head_rendered');
             return false;
         }
@@ -171,6 +189,14 @@ class HeadRenderer
         if ($sitemapUrl === '' && !empty($context['sitemap']) && is_array($context['sitemap'])) {
             $sitemapUrl = trim((string) ($context['sitemap']['url'] ?? $context['sitemap']['href'] ?? ''));
         }
+        // Convenience discovery only — Google primarily uses robots.txt Sitemap: (already emitted by Weline_Seo).
+        if ($sitemapUrl === '') {
+            $canonical = trim((string) ($context['canonical_url'] ?? $context['url'] ?? ''));
+            $root = $canonical !== '' ? $this->siteRoot($canonical) : '';
+            if ($root !== '') {
+                $sitemapUrl = rtrim($root, '/') . '/sitemap.xml';
+            }
+        }
         if ($sitemapUrl !== '') {
             $html[] = '<link rel="sitemap" type="application/xml" href="' . $this->escape($sitemapUrl) . '">';
         }
@@ -183,6 +209,25 @@ class HeadRenderer
                 continue;
             }
             $html[] = '<link rel="alternate" hreflang="' . $this->escape($hreflang) . '" href="' . $this->escape($url) . '">';
+        }
+        foreach ((array) ($context['feeds'] ?? []) as $feed) {
+            if (!is_array($feed)) {
+                continue;
+            }
+            $href = trim((string) ($feed['href'] ?? $feed['url'] ?? ''));
+            if ($href === '') {
+                continue;
+            }
+            $type = trim((string) ($feed['type'] ?? 'application/rss+xml'));
+            if ($type === '') {
+                $type = 'application/rss+xml';
+            }
+            $title = trim((string) ($feed['title'] ?? ''));
+            $attrs = 'rel="alternate" type="' . $this->escape($type) . '"';
+            if ($title !== '') {
+                $attrs .= ' title="' . $this->escape($title) . '"';
+            }
+            $html[] = '<link ' . $attrs . ' href="' . $this->escape($href) . '">';
         }
         return implode("\n", $html);
     }
@@ -233,6 +278,33 @@ class HeadRenderer
         if (($context['page_type'] ?? '') === 'product') {
             foreach ($this->productSocialTags($context) as $property => $value) {
                 $html[] = '<meta property="' . $this->escape($property) . '" content="' . $this->escape($value) . '">';
+            }
+        }
+        if ($this->isArticlePageType((string) ($context['page_type'] ?? ''))) {
+            $section = $this->firstNonEmptyValue([
+                $this->read($context['article'] ?? null, ['articleSection', 'article_section', 'section', 'category']),
+                $this->read($context, ['article_section', 'section']),
+            ]);
+            if (is_string($section) && trim($section) !== '') {
+                $html[] = '<meta property="article:section" content="' . $this->escape(trim($section)) . '">';
+            }
+            $published = $this->firstNonEmptyValue([
+                $this->read($context['article'] ?? null, ['datePublished', 'date_published', 'published_at']),
+            ]);
+            if (is_string($published) && trim($published) !== '') {
+                $formatted = $this->formatDate($published);
+                if ($formatted !== '') {
+                    $html[] = '<meta property="article:published_time" content="' . $this->escape($formatted) . '">';
+                }
+            }
+            $modified = $this->firstNonEmptyValue([
+                $this->read($context['article'] ?? null, ['dateModified', 'date_modified', 'updated_at']),
+            ]);
+            if (is_string($modified) && trim($modified) !== '') {
+                $formatted = $this->formatDate($modified);
+                if ($formatted !== '') {
+                    $html[] = '<meta property="article:modified_time" content="' . $this->escape($formatted) . '">';
+                }
             }
         }
         foreach ($this->alternateOgLocales($context, $ogLocale) as $alternateLocale) {
@@ -596,7 +668,16 @@ HTML;
 
     private function withPanelAssetVersion(string $url): string
     {
-        return $url . (str_contains($url, '?') ? '&' : '?') . 'v=20260703-weline-panel-seo-audit-clean-1';
+        $version = '20260909-helpful-tip-clear-1';
+        $jsPath = dirname(__DIR__, 2) . '/view/statics/seo-inspector/inspector.js';
+        if (is_file($jsPath)) {
+            $mtime = (int)@filemtime($jsPath);
+            if ($mtime > 0) {
+                $version .= '-' . $mtime;
+            }
+        }
+
+        return $url . (str_contains($url, '?') ? '&' : '?') . 'v=' . $version;
     }
 
     private function jsonString(string $value): string
@@ -611,7 +692,7 @@ HTML;
      */
     private function renderSlotStructuredData(array $provided, array $context): string
     {
-        foreach (['schema_nodes', 'article', 'product', 'item_list', 'faqs', 'qa_list', 'breadcrumbs', 'organization'] as $key) {
+        foreach (['schema_nodes', 'article', 'product', 'item_list', 'faqs', 'qa_list', 'breadcrumbs', 'breadcrumb_trails', 'organization'] as $key) {
             if (!empty($provided[$key])) {
                 return $this->renderStructuredData($context);
             }
@@ -749,7 +830,8 @@ HTML;
         $orgId = rtrim($siteUrl, '/') . '/#organization';
         $graph = [
             [
-                '@type' => !empty($organization['address']) || !empty($organization['telephone']) ? 'LocalBusiness' : 'Organization',
+                // Google Organization guide: ecommerce sites should use OnlineStore.
+                '@type' => 'OnlineStore',
                 '@id' => $orgId,
                 'name' => (string) ($organization['name'] ?? $context['site_name'] ?? ''),
                 'url' => (string) ($organization['url'] ?? $siteUrl),
@@ -764,7 +846,10 @@ HTML;
         ];
 
         if (!empty($organization['logo'])) {
-            $graph[0]['logo'] = (string) $organization['logo'];
+            $logo = $this->absoluteUrl((string) $organization['logo'], $url !== '' ? $url : $siteUrl);
+            if ($logo !== '') {
+                $graph[0]['logo'] = $logo;
+            }
         }
         if (!empty($organization['sameAs']) && is_array($organization['sameAs'])) {
             $graph[0]['sameAs'] = array_values(array_filter($organization['sameAs']));
@@ -792,13 +877,15 @@ HTML;
         }
 
         $product = [];
-        if (($context['page_type'] ?? '') === 'product') {
+        if ($this->normalizePageType((string) ($context['page_type'] ?? '')) === 'product') {
             $product = $this->productNode($context, $url, $orgId);
         }
         $article = [];
         if ($this->isArticlePageType((string) ($context['page_type'] ?? ''))) {
             $article = $this->articleNode($context, $url, $orgId);
         }
+        // Ecommerce Product ItemList is not a Google product rich result.
+        // Blog list/category may emit Article/BlogPosting ItemList (Carousel documents Article).
         $itemList = $this->itemListNode($context, $url);
 
         $webPage = $this->webPageNode($context, $orgId);
@@ -813,8 +900,8 @@ HTML;
         }
         $graph[] = $webPage;
 
-        if (!empty($context['breadcrumbs'])) {
-            $graph[] = $this->breadcrumbNode((array) $context['breadcrumbs'], $url);
+        foreach ($this->breadcrumbNodes($context, $url) as $breadcrumbNode) {
+            $graph[] = $breadcrumbNode;
         }
         if ($product !== []) {
             $graph[] = $product;
@@ -834,7 +921,34 @@ HTML;
             }
         }
 
-        return array_values(array_filter($graph));
+        return $this->dedupeGraphNodes(array_values(array_filter($graph)));
+    }
+
+    /**
+     * Prefer the first node for a given @id so Provider schema_nodes cannot double Product.
+     *
+     * @param array<int, array<string, mixed>> $graph
+     * @return array<int, array<string, mixed>>
+     */
+    private function dedupeGraphNodes(array $graph): array
+    {
+        $seen = [];
+        $deduped = [];
+        foreach ($graph as $node) {
+            if (!is_array($node) || $node === []) {
+                continue;
+            }
+            $id = trim((string) ($node['@id'] ?? ''));
+            if ($id !== '') {
+                if (isset($seen[$id])) {
+                    continue;
+                }
+                $seen[$id] = true;
+            }
+            $deduped[] = $node;
+        }
+
+        return $deduped;
     }
 
     /**
@@ -860,62 +974,177 @@ HTML;
     }
 
     /**
-     * @param array<int, array{name:string,url:string}> $breadcrumbs
+     * Google allows multiple BreadcrumbList nodes for multi-path navigation.
+     *
+     * @param array<string, mixed> $context
+     * @return list<array<string, mixed>>
+     */
+    private function breadcrumbNodes(array $context, string $url): array
+    {
+        $trails = [];
+        $rawTrails = $context['breadcrumb_trails'] ?? null;
+        if (is_array($rawTrails) && $rawTrails !== []) {
+            foreach ($rawTrails as $trail) {
+                if (is_array($trail) && $trail !== []) {
+                    $trails[] = $trail;
+                }
+            }
+        }
+        if ($trails === [] && !empty($context['breadcrumbs']) && is_array($context['breadcrumbs'])) {
+            $trails[] = (array) $context['breadcrumbs'];
+        }
+
+        $nodes = [];
+        foreach ($trails as $trail) {
+            $node = $this->breadcrumbNode($trail, $url);
+            if ($node !== []) {
+                $nodes[] = $node;
+            }
+        }
+
+        return $nodes;
+    }
+
+    /**
+     * Google BreadcrumbList example shape:
+     * { "@type":"BreadcrumbList", "itemListElement":[ ListItem{position,name,item?}, ... ] }
+     * — no @id; last ListItem omits item; earlier item values are absolute URLs.
+     *
+     * @param array<int, array{name?:string,url?:string}> $breadcrumbs
      * @return array<string, mixed>
      */
     private function breadcrumbNode(array $breadcrumbs, string $url): array
     {
-        $items = [];
-        foreach ($breadcrumbs as $index => $breadcrumb) {
-            $items[] = [
-                '@type' => 'ListItem',
-                'position' => $index + 1,
-                'name' => (string) ($breadcrumb['name'] ?? ''),
-                'item' => (string) ($breadcrumb['url'] ?? $url),
+        $cleaned = [];
+        foreach ($breadcrumbs as $breadcrumb) {
+            if (!is_array($breadcrumb)) {
+                continue;
+            }
+            $name = $this->cleanText((string) ($breadcrumb['name'] ?? ''));
+            // Prefer the product/page leaf over "Title | Brand" site-suffix pollution.
+            if (str_contains($name, ' | ')) {
+                $name = trim((string) explode(' | ', $name, 2)[0]);
+            }
+            if ($name === '') {
+                continue;
+            }
+            $cleaned[] = [
+                'name' => $name,
+                'url' => trim((string) ($breadcrumb['url'] ?? '')),
             ];
         }
+        if (count($cleaned) < 2) {
+            return [];
+        }
+
+        $items = [];
+        $total = count($cleaned);
+        foreach ($cleaned as $index => $breadcrumb) {
+            $entry = [
+                '@type' => 'ListItem',
+                'position' => $index + 1,
+                'name' => $breadcrumb['name'],
+            ];
+            $isLast = $index === $total - 1;
+            if (!$isLast) {
+                $rawItem = $breadcrumb['url'];
+                if ($rawItem === '' || $rawItem === '#' ) {
+                    $rawItem = $this->siteRoot($url);
+                }
+                $absolute = $this->absoluteUrl($rawItem === '/' ? '/' : $rawItem, $url);
+                if ($absolute === '' && $rawItem !== '') {
+                    $absolute = $this->absoluteUrl('/' . ltrim($rawItem, '/'), $url);
+                }
+                if ($absolute !== '') {
+                    $entry['item'] = $absolute;
+                }
+            }
+            $items[] = $entry;
+        }
+
         return [
             '@type' => 'BreadcrumbList',
-            '@id' => $url . '#breadcrumb',
             'itemListElement' => $items,
         ];
     }
 
     /**
+     * Blog list/category: Article/BlogPosting ItemList for discovery.
+     * Ecommerce Product ItemList / CollectionPage.mainEntity is not a Google product rich result.
+     *
      * @param array<string, mixed> $context
      * @return array<string, mixed>
      */
     private function itemListNode(array $context, string $url): array
     {
-        $items = [];
-        foreach ((array) ($context['item_list'] ?? []) as $item) {
-            if (!is_array($item)) {
+        $pageType = $this->normalizePageType((string) ($context['page_type'] ?? ''));
+        if (!in_array($pageType, ['blog_list', 'blog_category'], true)) {
+            return [];
+        }
+
+        $rawItems = $context['item_list'] ?? null;
+        if (!is_array($rawItems) || $rawItems === []) {
+            return [];
+        }
+
+        $elements = [];
+        $position = 0;
+        foreach ($rawItems as $row) {
+            if (!is_array($row)) {
                 continue;
             }
-            $name = trim((string) ($item['name'] ?? $item['title'] ?? ''));
-            $itemUrl = trim((string) ($item['url'] ?? $item['href'] ?? ''));
+            $name = trim((string) ($row['name'] ?? $row['title'] ?? $row['headline'] ?? ''));
+            $itemUrl = trim((string) ($row['url'] ?? $row['canonical_url'] ?? $row['public_url'] ?? ''));
             if ($name === '' || $itemUrl === '') {
                 continue;
             }
-            $thing = [
-                '@type' => 'Thing',
-                'name' => $name,
-                'url' => $itemUrl,
+            $absolute = $this->absoluteUrl($itemUrl, $url);
+            if ($absolute === '') {
+                $absolute = $itemUrl;
+            }
+            $position++;
+            $articleNode = [
+                '@type' => 'BlogPosting',
+                'headline' => $name,
+                'url' => $absolute,
             ];
-            if (!empty($item['image'])) {
-                $thing['image'] = (string) $item['image'];
+            $description = trim((string) ($row['description'] ?? $row['excerpt'] ?? ''));
+            if ($description !== '') {
+                $articleNode['description'] = $description;
             }
-            if (!empty($item['description'])) {
-                $thing['description'] = (string) $item['description'];
+            $published = trim((string) ($row['datePublished'] ?? $row['date_published'] ?? $row['published_at'] ?? ''));
+            if ($published !== '') {
+                $articleNode['datePublished'] = $this->formatDate($published) ?: $published;
             }
-            $items[] = [
+            $image = $row['image'] ?? null;
+            if (is_string($image) && trim($image) !== '') {
+                $imageUrl = $this->absoluteUrl(trim($image), $url);
+                $articleNode['image'] = [$imageUrl !== '' ? $imageUrl : trim($image)];
+            } elseif (is_array($image) && $image !== []) {
+                $images = [];
+                foreach ($image as $img) {
+                    $raw = trim((string) $img);
+                    if ($raw === '') {
+                        continue;
+                    }
+                    $imageUrl = $this->absoluteUrl($raw, $url);
+                    $images[] = $imageUrl !== '' ? $imageUrl : $raw;
+                }
+                if ($images !== []) {
+                    $articleNode['image'] = $images;
+                }
+            }
+
+            $elements[] = [
                 '@type' => 'ListItem',
-                'position' => count($items) + 1,
-                'item' => $thing,
+                'position' => $position,
+                'name' => $name,
+                'url' => $absolute,
+                'item' => $articleNode,
             ];
         }
 
-        if ($items === []) {
+        if ($elements === []) {
             return [];
         }
 
@@ -923,8 +1152,8 @@ HTML;
             '@type' => 'ItemList',
             '@id' => $url . '#itemlist',
             'name' => (string) ($context['title'] ?? ''),
-            'url' => $url,
-            'itemListElement' => $items,
+            'numberOfItems' => count($elements),
+            'itemListElement' => $elements,
         ];
     }
 
@@ -935,7 +1164,7 @@ HTML;
     private function productNode(array $context, string $url, string $orgId): array
     {
         $product = $context['product'] ?? null;
-        $name = $this->readNonEmpty($product, ['name', 'title']);
+        $name = $this->readNonEmpty($product, ['name', 'title']) ?: $this->readNonEmpty($context, ['title']);
         if (!$name) {
             return [];
         }
@@ -1017,7 +1246,13 @@ HTML;
             $node['offers'] = $offers;
         }
 
-        $reviewNodes = $this->productReviewNodes($context, (string) $name, $url);
+        $reviewNodes = $this->productReviewNodes(
+            $context,
+            (string) $name,
+            $url,
+            $isProductGroup ? 'ProductGroup' : 'Product',
+            (string) ($node['@id'] ?? ($url . '#product')),
+        );
         if ($reviewNodes !== []) {
             $node['review'] = count($reviewNodes) === 1 ? $reviewNodes[0] : $reviewNodes;
             $aggregateRating = $this->buildProductAggregateRating($product, $reviewNodes);
@@ -1089,8 +1324,13 @@ HTML;
      * @param array<string, mixed> $context
      * @return array<int, array<string, mixed>>
      */
-    private function productReviewNodes(array $context, string $productName, string $productUrl): array
-    {
+    private function productReviewNodes(
+        array $context,
+        string $productName,
+        string $productUrl,
+        string $reviewedType = 'Product',
+        string $reviewedId = '',
+    ): array {
         $reviews = $this->readList($context['reviews'] ?? []);
         if ($reviews === []) {
             $reviews = $this->readList($this->read($context['product'] ?? null, ['reviews']));
@@ -1101,7 +1341,13 @@ HTML;
             if (!is_array($review)) {
                 continue;
             }
-            $node = $this->buildProductReviewNode($review, $productName, $productUrl);
+            $node = $this->buildProductReviewNode(
+                $review,
+                $productName,
+                $productUrl,
+                $reviewedType,
+                $reviewedId,
+            );
             if ($node !== []) {
                 $nodes[] = $node;
             }
@@ -1114,8 +1360,13 @@ HTML;
      * @param array<string, mixed> $review
      * @return array<string, mixed>
      */
-    private function buildProductReviewNode(array $review, string $productName, string $productUrl): array
-    {
+    private function buildProductReviewNode(
+        array $review,
+        string $productName,
+        string $productUrl,
+        string $reviewedType = 'Product',
+        string $reviewedId = '',
+    ): array {
         $body = $this->cleanText((string) ($this->readNonEmpty($review, [
             'reviewBody',
             'body',
@@ -1136,13 +1387,18 @@ HTML;
             return [];
         }
 
+        $itemReviewed = [
+            '@type' => $reviewedType === 'ProductGroup' ? 'ProductGroup' : 'Product',
+            'name' => $productName,
+            'url' => $productUrl,
+        ];
+        if ($reviewedId !== '') {
+            $itemReviewed['@id'] = $reviewedId;
+        }
+
         $node = [
             '@type' => 'Review',
-            'itemReviewed' => [
-                '@type' => 'Product',
-                'name' => $productName,
-                'url' => $productUrl,
-            ],
+            'itemReviewed' => $itemReviewed,
         ];
 
         if ($authorName !== '') {
@@ -1171,11 +1427,14 @@ HTML;
 
     private function webPageType(string $pageType): string
     {
+        // Google-documented page subtypes only where they match Search features.
+        // Ecommerce listing shells stay plain WebPage (no Product ItemList).
+        // Blog list/category use CollectionPage + Article ItemList.
+        // FAQPage is emitted once via structure registry, not as the shell.
         return match ($this->normalizePageType($pageType)) {
             'about', 'about_page' => 'AboutPage',
             'contact', 'contact_page' => 'ContactPage',
-            'faq', 'faq_page' => 'FAQPage',
-            'category', 'collection', 'collection_page', 'blog_list', 'blog_category', 'searchable_landing', 'tag_collection', 'tag_landing' => 'CollectionPage',
+            'blog_list', 'blog_category' => 'CollectionPage',
             default => 'WebPage',
         };
     }
@@ -1278,7 +1537,34 @@ HTML;
 
         $variants = $this->readList($this->read($product, ['variants', 'has_variant']));
         if ($variants !== []) {
-            return [];
+            $normalized = [];
+            foreach ($variants as $variant) {
+                if (!is_array($variant)) {
+                    continue;
+                }
+                $built = $this->buildOffer(
+                    $variant,
+                    (string) ($variant['url'] ?? $url),
+                    $orgId,
+                    $context,
+                    $product
+                );
+                if ($built !== []) {
+                    $sku = $this->readNonEmpty($variant, ['sku']);
+                    if ($sku !== null && !is_array($sku)) {
+                        $built['sku'] = (string) $sku;
+                    }
+                    $normalized[] = $built;
+                }
+            }
+            if ($normalized === []) {
+                return [];
+            }
+            if (count($normalized) === 1) {
+                return $normalized[0];
+            }
+
+            return $this->aggregateOffer($normalized, $this->productCurrency($product, $context), $url);
         }
 
         $offer = $this->buildOffer($product, $url, $orgId, $context);
@@ -1308,9 +1594,11 @@ HTML;
         }
 
         $condition = $this->schemaCondition($this->readNonEmpty($source, ['item_condition', 'condition']) ?: $this->readNonEmpty($fallbackProduct, ['item_condition', 'condition']));
-        if ($condition !== '') {
-            $offer['itemCondition'] = $condition;
+        if ($condition === '') {
+            // Google Product/Offer examples default to NewCondition for sellable catalog offers.
+            $condition = 'https://schema.org/NewCondition';
         }
+        $offer['itemCondition'] = $condition;
 
         foreach (['price_valid_until' => 'priceValidUntil', 'priceValidUntil' => 'priceValidUntil'] as $sourceKey => $targetKey) {
             $value = $this->readNonEmpty($source, [$sourceKey]);
@@ -1366,20 +1654,36 @@ HTML;
             return $normalized[0];
         }
 
-        return $normalized !== [] ? $this->aggregateOffer($normalized, $this->productCurrency($product, $context)) : [];
+        return $normalized !== [] ? $this->aggregateOffer($normalized, $this->productCurrency($product, $context), $url) : [];
     }
 
     /**
      * @param array<int, array<string, mixed>> $offers
      * @return array<string, mixed>
      */
-    private function aggregateOffer(array $offers, string $currency): array
+    private function aggregateOffer(array $offers, string $currency, string $url = ''): array
     {
         $prices = [];
+        $availability = '';
+        $hasInStock = false;
+        $hasOutOfStock = false;
         foreach ($offers as $offer) {
             if (isset($offer['price']) && is_numeric($offer['price'])) {
                 $prices[] = (float) $offer['price'];
             }
+            $offerAvailability = trim((string) ($offer['availability'] ?? ''));
+            if ($offerAvailability === 'https://schema.org/InStock'
+                || $offerAvailability === 'http://schema.org/InStock'
+            ) {
+                $hasInStock = true;
+            } elseif ($offerAvailability !== '') {
+                $hasOutOfStock = true;
+            }
+        }
+        if ($hasInStock) {
+            $availability = 'https://schema.org/InStock';
+        } elseif ($hasOutOfStock) {
+            $availability = 'https://schema.org/OutOfStock';
         }
 
         $aggregate = [
@@ -1388,9 +1692,17 @@ HTML;
             'priceCurrency' => $currency,
             'offers' => $offers,
         ];
+        // Google Offer examples always carry a product URL; AggregateOffer benefits from the same.
+        $absolute = $this->absoluteUrl($url, $url);
+        if ($absolute !== '') {
+            $aggregate['url'] = $absolute;
+        }
+        if ($availability !== '') {
+            $aggregate['availability'] = $availability;
+        }
         if ($prices !== []) {
-            $aggregate['lowPrice'] = (string) min($prices);
-            $aggregate['highPrice'] = (string) max($prices);
+            $aggregate['lowPrice'] = number_format(min($prices), 2, '.', '');
+            $aggregate['highPrice'] = number_format(max($prices), 2, '.', '');
         }
         return $aggregate;
     }
@@ -1420,12 +1732,20 @@ HTML;
                     $node[$field] = (string) $value;
                 }
             }
+            $variantProperties = $this->productAdditionalProperties($variant);
+            if ($variantProperties !== []) {
+                $node['additionalProperty'] = $variantProperties;
+            }
             $image = $this->absoluteUrl((string) ($this->readNonEmpty($variant, ['image', 'main_image']) ?? ''), $url);
             if ($image !== '') {
                 $node['image'] = [$image];
             }
             $offer = $this->buildOffer($variant, (string) ($variant['url'] ?? $url), $orgId, $context, $context['product'] ?? null);
             if ($offer !== []) {
+                $sku = $this->readNonEmpty($variant, ['sku']);
+                if ($sku !== null && !is_array($sku)) {
+                    $offer['sku'] = (string) $sku;
+                }
                 $node['offers'] = $offer;
             }
             $nodes[] = $node;
@@ -1440,26 +1760,30 @@ HTML;
     {
         $values = [];
         foreach ($this->readList($this->read($product, ['varies_by', 'variesBy'])) as $value) {
-            $value = trim((string) $value);
-            if ($value !== '') {
-                $values[$this->schemaPropertyUrl($value)] = true;
+            $mapped = $this->schemaPropertyUrl(trim((string) $value));
+            if ($mapped !== null) {
+                $values[$mapped] = true;
             }
         }
         return array_keys($values);
     }
 
-    private function schemaPropertyUrl(string $value): string
+    private function schemaPropertyUrl(string $value): ?string
     {
-        if (preg_match('/^https?:\/\//i', $value)) {
+        $value = trim($value);
+        if ($value === '') {
+            return null;
+        }
+        if (preg_match('/^https?:\/\/schema\.org\//i', $value)) {
             return $value;
         }
-        $normalized = strtolower(trim($value));
+        $normalized = strtolower($value);
         return match ($normalized) {
             'color', 'colour' => 'https://schema.org/color',
             'size' => 'https://schema.org/size',
             'material' => 'https://schema.org/material',
-            'pattern' => 'https://schema.org/pattern',
-            default => $value,
+            'pattern', 'style', 'style_type' => 'https://schema.org/pattern',
+            default => null,
         };
     }
 
@@ -1681,9 +2005,27 @@ HTML;
      */
     private function searchUrlTemplate(array $context, string $siteUrl): string
     {
+        // Only an explicit false disables SearchAction. Empty/null/missing must not
+        // trip filter_var(..., FILTER_VALIDATE_BOOLEAN) === false (PHP treats '' as false).
+        if (array_key_exists('site_search_enabled', $context)) {
+            $raw = $context['site_search_enabled'];
+            $explicitOff = $raw === false
+                || $raw === 0
+                || $raw === '0'
+                || $raw === 'false'
+                || $raw === 'False'
+                || $raw === 'FALSE'
+                || $raw === 'off'
+                || $raw === 'Off'
+                || $raw === 'OFF';
+            if ($explicitOff) {
+                return '';
+            }
+        }
+        $default = rtrim($siteUrl, '/') . '/search?q={search_term_string}';
         $template = trim((string) ($context['search_url_template'] ?? $context['site_search_url_template'] ?? ''));
-        if ($template === '' && !empty($context['site_search_enabled'])) {
-            $template = rtrim($siteUrl, '/') . '/search?q={search_term_string}';
+        if ($template === '' || !str_contains($template, '{search_term_string}')) {
+            $template = $default;
         }
         if ($template === '' || !str_contains($template, '{search_term_string}')) {
             return '';
@@ -1722,7 +2064,12 @@ HTML;
 
     private function normalizePageType(string $pageType): string
     {
-        return strtolower(str_replace([' ', '-'], '_', trim($pageType)));
+        $normalized = strtolower(str_replace([' ', '-'], '_', trim($pageType)));
+        if ($normalized === 'homepage' || $normalized === 'index') {
+            return 'home';
+        }
+
+        return $normalized;
     }
 
     private function firstNonEmptyValue(array $values): mixed
@@ -1741,27 +2088,37 @@ HTML;
     private function articleAuthors(mixed $article, mixed $currentPost, string $orgId): array
     {
         $authors = [];
-        foreach ([$this->read($article, ['authors']), $this->read($currentPost, ['authors'])] as $source) {
+        foreach ([
+            $this->read($article, ['authors', 'author']),
+            $this->read($currentPost, ['authors', 'author']),
+        ] as $source) {
+            if ($source === null || $source === '') {
+                continue;
+            }
+            // Single Person object, list of Persons, or plain string — never (string)array → "Array".
+            if (is_array($source) && (isset($source['name']) || isset($source['@type']) || isset($source['author_name']))) {
+                $source = [$source];
+            }
             foreach ($this->readList($source) as $author) {
                 if (is_array($author)) {
                     $name = trim((string) ($author['name'] ?? $author['author_name'] ?? ''));
-                    if ($name !== '') {
+                    if ($name !== '' && strcasecmp($name, 'Array') !== 0) {
                         $authors[] = array_replace(['@type' => 'Person'], $author, ['name' => $name]);
                     }
                     continue;
                 }
                 $name = trim((string) $author);
-                if ($name !== '') {
+                if ($name !== '' && strcasecmp($name, 'Array') !== 0) {
                     $authors[] = ['@type' => 'Person', 'name' => $name];
                 }
             }
         }
 
         if ($authors === []) {
-            $name = (string) ($this->readNonEmpty($article, ['author_name', 'author'])
-                ?: $this->readNonEmpty($currentPost, ['author_name', 'author'])
+            $name = (string) ($this->readNonEmpty($article, ['author_name'])
+                ?: $this->readNonEmpty($currentPost, ['author_name'])
                 ?: '');
-            if (trim($name) !== '') {
+            if (trim($name) !== '' && strcasecmp(trim($name), 'Array') !== 0) {
                 $authors[] = ['@type' => 'Person', 'name' => trim($name)];
             }
         }
@@ -1872,8 +2229,19 @@ HTML;
         if (preg_match('/^https?:\/\//i', $url)) {
             return $url;
         }
+        if (str_starts_with($url, '?') || str_starts_with($url, '#')) {
+            $parts = parse_url($pageUrl);
+            if (!is_array($parts) || empty($parts['host'])) {
+                return $url;
+            }
+            $port = isset($parts['port']) ? ':' . $parts['port'] : '';
+            $path = (string) ($parts['path'] ?? '/');
+
+            return (string) ($parts['scheme'] ?? 'https') . '://' . $parts['host'] . $port . $path . $url;
+        }
         if (!str_starts_with($url, '/')) {
-            return $url;
+            // Relative path without leading slash — resolve against site root of the page URL.
+            return $this->absoluteUrl('/' . ltrim($url, '/'), $pageUrl);
         }
 
         $parts = parse_url($pageUrl);

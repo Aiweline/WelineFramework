@@ -16,13 +16,22 @@ The target identity is fixed:
 
 - `target_type`: `cms_page`
 - `target_id`: CMS `page_id`
-- `layout_type`: `cms_page`
 
-Theme/Meta page-level identify data is therefore resolved under:
+`layout_type` is resolved from the page **PageKind** (default kind → `cms_page`). Modules may inject additional kinds via the `PageKind` extension point so a page with `path_group=help` binds Theme layout `help` without inventing a new Theme target type.
+
+Theme/Meta page-level identify data for default CMS pages:
 
 ```text
 theme.{area}.targets.cms_page.{page_id}.layouts.cms_page.{layout_option}
 ```
+
+Help-kind pages use `layouts.help.{layout_option}` under the same `cms_page` target id.
+
+## PageKind extension
+
+Declared in `extends.php` as `PageKind` (`CmsPageKindInterface`). Built-in `DefaultCmsPageKind` (`code=cms`) always applies when no matching `path_group` is registered. Cross-module kinds (e.g. Help) register under `extends/module/Weline_Cms/PageKind/`.
+
+Query: `w_query('cms', 'listPageKinds', [])`.
 
 ## Query Interface
 
@@ -31,6 +40,7 @@ Public reads are exposed through:
 - `w_query('cms', 'getPage', ['page_id'|'identifier'])`
 - `w_query('cms', 'listPages', ['status', 'scope', 'page', 'page_size'])`
 - `w_query('cms', 'listPathGroups', ['website_id', 'path_group', 'search'])`
+- `w_query('cms', 'listPageKinds', [])`
 - `w_query('cms', 'resolveThemeTarget', ['target_id'])`
 - `w_query('cms', 'renderPagePayload', ['identifier'|'page_id', 'scope', 'preview'])`
 

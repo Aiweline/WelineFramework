@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Shipping',
-    "version" => '2.4.52',
+    "version" => '2.4.73',
     "requires" => [
         'Weline_Backend' => '*',
         'Weline_Customer' => '*',
@@ -12,6 +12,7 @@ return [
     ],
     "optional" => [
         'Weline_Frontend' => '*',
+        'Weline_Product' => '*',
         'Weline_Theme' => '*',
     ],
     "provides" => [

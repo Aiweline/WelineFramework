@@ -5,6 +5,7 @@ namespace Weline\Server\Service;
 
 use Weline\Server\Model\AttackLog;
 use Weline\Server\Security\AttackDetector;
+use Weline\Server\Security\CrawlerBlockCatalog;
 
 class WlsPanelSecurityDataService
 {
@@ -17,6 +18,9 @@ class WlsPanelSecurityDataService
         ['path_rate_limits', 'rules'],
         ['ip_whitelist', 'ips'],
         ['protected_paths', 'paths'],
+        ['crawler_block', 'disabled_builtin_ids'],
+        ['crawler_block', 'custom_entries'],
+        ['crawler_block', 'entries'],
     ];
 
     public function __construct(
@@ -876,6 +880,72 @@ class WlsPanelSecurityDataService
                 'paths' => \implode("\n", $this->ruleList($rules, 'protected_paths', 'paths')),
                 'block_duration' => $this->ruleInt($rules, 'protected_paths', 'block_duration', 1800),
             ],
+            'crawler_block' => $this->buildCrawlerBlockEditor($rules),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $rules
+     * @return array<string, mixed>
+     */
+    private function buildCrawlerBlockEditor(array $rules): array
+    {
+        $rule = \is_array($rules['crawler_block'] ?? null)
+            ? $rules['crawler_block']
+            : CrawlerBlockCatalog::defaultRule();
+        $disabled = [];
+        foreach ((array)($rule['disabled_builtin_ids'] ?? []) as $id) {
+            $id = \strtolower(\trim((string)$id));
+            if ($id !== '') {
+                $disabled[$id] = true;
+            }
+        }
+
+        $builtins = [];
+        foreach (CrawlerBlockCatalog::builtins() as $item) {
+            $id = (string)$item['id'];
+            $builtins[] = [
+                'id' => $id,
+                'name' => (string)$item['name'],
+                'pattern' => (string)$item['pattern'],
+                'category' => (string)$item['category'],
+                'reason' => (string)$item['reason'],
+                'enabled' => !isset($disabled[$id]),
+                'builtin' => true,
+            ];
+        }
+
+        $customs = [];
+        foreach ((array)($rule['custom_entries'] ?? []) as $item) {
+            if (!\is_array($item)) {
+                continue;
+            }
+            $pattern = \trim((string)($item['pattern'] ?? ''));
+            if ($pattern === '') {
+                continue;
+            }
+            $id = \trim((string)($item['id'] ?? ''));
+            if ($id === '') {
+                $id = 'custom-' . \substr(\hash('sha256', $pattern), 0, 12);
+            }
+            $customs[] = [
+                'id' => $id,
+                'name' => \trim((string)($item['name'] ?? $id)),
+                'pattern' => $pattern,
+                'category' => \trim((string)($item['category'] ?? 'custom')),
+                'reason' => \trim((string)($item['reason'] ?? '')),
+                'enabled' => (bool)($item['enabled'] ?? true),
+                'builtin' => false,
+            ];
+        }
+
+        return [
+            'enabled' => (bool)($rule['enabled'] ?? true),
+            'block_duration' => $this->sanitizeInt($rule['block_duration'] ?? 86400, 0, 86400 * 30, 86400),
+            'builtins' => $builtins,
+            'custom_entries' => $customs,
+            'active_count' => \count(CrawlerBlockCatalog::resolveEntries($rule)),
+            'builtin_total' => \count($builtins),
         ];
     }
 
@@ -977,6 +1047,10 @@ class WlsPanelSecurityDataService
             ['protected_paths', 'enabled', (string)__('Protected Paths'), (string)__('Enabled')],
             ['protected_paths', 'paths', (string)__('Protected Paths'), (string)__('Paths')],
             ['protected_paths', 'block_duration', (string)__('Protected Paths'), (string)__('Block Seconds')],
+            ['crawler_block', 'enabled', (string)__('Crawler Block'), (string)__('Enabled')],
+            ['crawler_block', 'block_duration', (string)__('Crawler Block'), (string)__('Block Seconds')],
+            ['crawler_block', 'disabled_builtin_ids', (string)__('Crawler Block'), (string)__('Disabled Builtins')],
+            ['crawler_block', 'custom_entries', (string)__('Crawler Block'), (string)__('Custom Entries')],
         ];
 
         $rows = [];
@@ -1266,7 +1340,78 @@ class WlsPanelSecurityDataService
             1800
         );
 
+        $rules['crawler_block'] = $this->mergeCrawlerBlockRule($rules, $visualRules);
+
         return $rules;
+    }
+
+    /**
+     * @param array<string, mixed> $rules
+     * @param array<string, mixed> $visualRules
+     * @return array<string, mixed>
+     */
+    private function mergeCrawlerBlockRule(array $rules, array $visualRules): array
+    {
+        $rule = \is_array($rules['crawler_block'] ?? null)
+            ? $rules['crawler_block']
+            : CrawlerBlockCatalog::defaultRule();
+        if (!\is_array($visualRules['crawler_block'] ?? null)) {
+            return $rule;
+        }
+
+        $input = $visualRules['crawler_block'];
+        $rule['enabled'] = $this->sanitizeCheckbox($input['enabled'] ?? '0');
+        $rule['block_duration'] = $this->sanitizeInt(
+            $input['block_duration'] ?? ($rule['block_duration'] ?? 86400),
+            0,
+            86400 * 30,
+            86400
+        );
+
+        $disabled = [];
+        $builtinFlags = \is_array($input['builtin_enabled'] ?? null) ? $input['builtin_enabled'] : [];
+        foreach (CrawlerBlockCatalog::builtins() as $item) {
+            $id = (string)$item['id'];
+            $enabled = $this->sanitizeCheckbox($builtinFlags[$id] ?? '0');
+            if (!$enabled) {
+                $disabled[] = $id;
+            }
+        }
+        $rule['disabled_builtin_ids'] = $disabled;
+
+        $customRows = \is_array($input['custom_entries'] ?? null) ? $input['custom_entries'] : [];
+        $customs = [];
+        foreach ($customRows as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $pattern = \trim((string)($row['pattern'] ?? ''));
+            if ($pattern === '') {
+                continue;
+            }
+            if (@\preg_match($pattern, '') === false && @\preg_match($pattern, 'x') === false) {
+                // Invalid regex — skip rather than breaking policy publish.
+                continue;
+            }
+            $id = \trim((string)($row['id'] ?? ''));
+            if ($id === '') {
+                $id = 'custom-' . \substr(\hash('sha256', $pattern), 0, 12);
+            }
+            $customs[] = [
+                'id' => \preg_replace('/[^a-zA-Z0-9._-]/', '-', $id) ?: ('custom-' . \substr(\hash('sha256', $pattern), 0, 12)),
+                'name' => \trim((string)($row['name'] ?? $id)),
+                'pattern' => $pattern,
+                'category' => \trim((string)($row['category'] ?? 'custom')) ?: 'custom',
+                'reason' => \trim((string)($row['reason'] ?? '')),
+                'enabled' => $this->sanitizeCheckbox($row['enabled'] ?? '0'),
+            ];
+            if (\count($customs) >= 100) {
+                break;
+            }
+        }
+        $rule['custom_entries'] = $customs;
+
+        return $rule;
     }
 
     /**
@@ -1862,6 +2007,25 @@ class WlsPanelSecurityDataService
             $this->summarizeBooleanRule($rules, 'unknown_route_ban', (string)__('Unknown Route Ban')),
             $this->summarizeListRule($rules, 'ip_whitelist', 'ips', (string)__('IP Whitelist')),
             $this->summarizeListRule($rules, 'protected_paths', 'paths', (string)__('Protected Paths')),
+            $this->summarizeCrawlerBlockRule($rules),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $rules
+     * @return array<string, mixed>
+     */
+    private function summarizeCrawlerBlockRule(array $rules): array
+    {
+        $rule = \is_array($rules['crawler_block'] ?? null)
+            ? $rules['crawler_block']
+            : CrawlerBlockCatalog::defaultRule();
+        $active = \count(CrawlerBlockCatalog::resolveEntries($rule));
+
+        return [
+            'label' => (string)__('Crawler Block'),
+            'enabled' => (bool)($rule['enabled'] ?? false),
+            'meta' => (string)__('%{1} active crawlers', [(string)$active]),
         ];
     }
 

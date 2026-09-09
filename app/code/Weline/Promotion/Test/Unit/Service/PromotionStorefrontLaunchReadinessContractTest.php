@@ -21,7 +21,7 @@ final class PromotionStorefrontLaunchReadinessContractTest extends TestCase
         self::assertStringContainsString('$this->resolveCatalog()', $service);
         self::assertStringContainsString('class_exists(StorefrontCatalogViewService::class)', $service);
         self::assertStringContainsString('ObjectManager::getInstance(StorefrontCatalogViewService::class)', $service);
-        self::assertStringContainsString('$catalog->publishedOffers(', $service);
+        self::assertStringContainsString('$catalog->publishedOfferSummaries(', $service);
         self::assertStringContainsString("\$item['slug']", $service);
         self::assertStringContainsString("\$item['unit_price_minor']", $service);
         self::assertStringContainsString('StorefrontOfferDetailQuery::params', $service);
@@ -40,7 +40,7 @@ final class PromotionStorefrontLaunchReadinessContractTest extends TestCase
 
         self::assertStringContainsString('Cookie::getLangLocal() ?: Cookie::getLang()', $service);
         self::assertStringContainsString('private function isBuiltInThemeSlug(string $pageSlug): bool', $service);
-        self::assertStringContainsString("['deals', 'sale', 'weekend', 'gifts']", $service);
+        self::assertStringContainsString("['deals', 'sale', 'weekend', 'wedding']", $service);
         self::assertStringContainsString('private function isCopyCompatibleWithLocale(string $value, string $locale): bool', $service);
         self::assertStringContainsString("preg_match('/\\p{Han}/u'", $service);
         self::assertStringContainsString("preg_match('/\\p{Arabic}/u'", $service);
@@ -58,18 +58,20 @@ final class PromotionStorefrontLaunchReadinessContractTest extends TestCase
         $arabic = (string) file_get_contents($arabicPath);
         foreach ([
             '活动首页',
-            '今日精选',
-            '主题陈列',
-            '周末焕新',
-            '礼盒专场',
+            '今日特价',
+            '今日特价专场',
+            '看今日特价',
+            '节令主题',
+            '出游常服',
+            '婚嫁礼服',
             '浏览活动商品',
             '浏览活动商品，进入商品详情、购物车与结账路径。本页不展示虚假折扣，只承接真实可售商品。',
             '匹配商品',
             '活动入口',
             '活动商品',
             '查看商品',
-            '围绕周末出行、居家放松和轻运动场景，展示真实可售商品，不做虚假折扣。',
-            '围绕送礼场景做主题陈列，只展示真实成交价，不虚构划线价或折扣比例。',
+            '围绕踏青、市集与日常出游，陈列常服套装与轻便搭配，只展示真实可售商品，不虚构折扣。',
+            '围绕婚礼、订婚与敬酒仪式，陈列嫁衣与礼服套装，只展示真实成交价，不虚构折扣。',
         ] as $key) {
             self::assertMatchesRegularExpression('/^' . preg_quote($key, '/') . ',(?!' . preg_quote($key, '/') . '$).+/m', $english);
             self::assertMatchesRegularExpression('/^' . preg_quote($key, '/') . ',(?!' . preg_quote($key, '/') . '$).+/m', $arabic);

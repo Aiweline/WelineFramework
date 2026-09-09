@@ -1,12 +1,12 @@
 ﻿"Inquiry 查询器不支持：%{1}","Inquiry 查询器不支持：%{1}"
 询盘表单,"Inquiry forms"
 "已发布表单查询、公共提交和受 ACL 保护的后台编辑","Published form query, public submit, and ACL-protected backend editing"
+编辑询盘表单,"Edit inquiry form"
 circle,circle
 管理询盘表单,"Manage inquiry forms"
 询盘表单列表,"Inquiry form list"
 list,list
 查看询盘表单,"View inquiry form"
-编辑询盘表单,"Edit inquiry form"
 edit,edit
 编辑询盘字段与翻译,"Edit inquiry fields and translations"
 发布询盘表单,"Publish inquiry form"

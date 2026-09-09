@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Test\Unit\View;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\App\State;
 use Weline\Framework\Context;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Url;
@@ -194,6 +195,76 @@ final class TemplateRequestRefreshTest extends TestCase
 
         self::assertInstanceOf(TemplateEnvView::class, $envView);
         self::assertTrue(isset($envView['router']) || isset($envView['system']) || isset($envView['cache']));
+    }
+
+    public function testRepeatedInitReusesContextCarriersAndRefreshesTheRequest(): void
+    {
+        Context::enter(new Context(['meta' => ['type' => 'request', 'mode' => 'wls']]));
+        $firstRequest = $this->createRequestStub('http://first.test/one');
+        ObjectManager::setInstance(Request::class, $firstRequest);
+        $template = Template::getInstance();
+        $requestView = $template->getData('req');
+        $envView = $template->getData('env');
+        $template->setData('meta', ['controller_title' => 'Controller title']);
+
+        $nextRequest = $this->createRequestStub('http://second.test/two');
+        ObjectManager::setInstance(Request::class, $nextRequest);
+        $template->init();
+
+        self::assertSame($requestView, $template->getData('req'));
+        self::assertSame($envView, $template->getData('env'));
+        self::assertSame('http://second.test/two', $requestView['url']);
+        self::assertSame('http://second.test/two', $nextRequest->getData('url'));
+        self::assertSame('Controller title', $template->getData('title'));
+    }
+
+    public function testCarriersBelongToTheCurrentContext(): void
+    {
+        Context::enter(new Context(['meta' => ['type' => 'request', 'mode' => 'wls']]));
+        $firstRequest = $this->createRequestStub('http://first.test/one');
+        ObjectManager::setInstance(Request::class, $firstRequest);
+        $template = Template::getInstance();
+        $requestView = $template->getData('req');
+        $envView = $template->getData('env');
+
+        Context::enter(new Context(['meta' => ['type' => 'request', 'mode' => 'wls']]));
+        $nextRequest = $this->createRequestStub('http://second.test/two');
+        ObjectManager::setInstance(Request::class, $nextRequest);
+        $template->init();
+
+        self::assertNotSame($requestView, $template->getData('req'));
+        self::assertNotSame($envView, $template->getData('env'));
+        self::assertSame('http://second.test/two', $template->getData('req')['url']);
+    }
+
+    public function testRepeatedInitRefreshesLanguageOverrideAndRestoresItsCarriers(): void
+    {
+        Context::enter(new Context(['meta' => ['type' => 'request', 'mode' => 'wls']]));
+        $request = $this->createRequestStub('http://locale.test/products');
+        ObjectManager::setInstance(Request::class, $request);
+        State::setRequestLanguageOverride('en_US');
+        $template = Template::getInstance();
+        $requestView = $template->getData('req');
+        $envView = $template->getData('env');
+        self::assertSame('en-US', $template->getData('htmlLang'));
+
+        State::setRequestLanguageOverride('ar_SA');
+        $template->setData('req', ['temporary' => true]);
+        $template->setData('env', ['temporary' => true]);
+        $template->init();
+
+        self::assertSame($requestView, $template->getData('req'));
+        self::assertSame($envView, $template->getData('env'));
+        self::assertSame('ar_SA', $template->getData('lang'));
+        self::assertSame('ar-SA', $template->getData('htmlLang'));
+        self::assertSame('rtl', $template->getData('htmlDir'));
+        self::assertSame(['code' => State::getLangLocal(), 'lang' => 'ar_SA'], $template->getData('local'));
+
+        State::setRequestLanguageOverride('en_US');
+        $template->init();
+        self::assertSame('en-US', $template->getData('htmlLang'));
+        self::assertSame('ltr', $template->getData('htmlDir'));
+        self::assertSame(['code' => State::getLangLocal(), 'lang' => 'en_US'], $template->getData('local'));
     }
 
     private function createRequestStub(string $baseUrl): Request

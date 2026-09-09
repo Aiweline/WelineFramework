@@ -1,12 +1,22 @@
 /**
- * Weline Customer 前端 JS 模块注册（用户中心页 UI；API 能力仍用 api/account）
- * 注意：模块名必须是可解析的裸标识符（编译器不识别 "hyphen-keys"）。
+ * Weline Customer 前端 JS 模块注册
+ * - account：会话 / 顶栏账户 chrome（原 Frontend weline-api-account）
+ * - customerAccount / customerLogout / customerSocialQuick：用户中心页 UI
+ * 模块名必须是可解析的裸标识符（编译器不识别 "hyphen-keys"）。
  */
 window.WelineModulesConfig = window.WelineModulesConfig || {};
 window.WelineModulesConfig.modules = window.WelineModulesConfig.modules || {};
 window.WelineModulesConfig.moduleAliases = window.WelineModulesConfig.moduleAliases || {};
 
 Object.assign(window.WelineModulesConfig.modules, {
+    account: {
+        paths: [
+            "Weline_Customer::js/account-session.js"
+        ],
+        globalVar: "WelineAccountModule",
+        load: "defer",
+        description: "前台账户会话与顶栏账户 chrome"
+    },
     customerAccount: {
         paths: [
             "Weline_Customer::js/account-index.js?v=20260906-profile-header-sync-1"

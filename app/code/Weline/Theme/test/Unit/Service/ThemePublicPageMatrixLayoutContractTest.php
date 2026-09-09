@@ -28,7 +28,7 @@ final class ThemePublicPageMatrixLayoutContractTest extends TestCase
             ThemeLayout::PAGE_TYPE_BLOG,
             ThemeLayout::PAGE_TYPE_BLOG_CATEGORY,
             ThemeLayout::PAGE_TYPE_CMS,
-            ThemeLayout::PAGE_TYPE_HELP,
+            ThemeLayout::PAGE_TYPE_FAQ,
             ThemeLayout::PAGE_TYPE_PAYMENT_GUIDE,
             ThemeLayout::PAGE_TYPE_GUIDE,
             ThemeLayout::PAGE_TYPE_ABOUT,

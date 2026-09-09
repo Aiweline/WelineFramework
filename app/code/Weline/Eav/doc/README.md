@@ -21,6 +21,7 @@
 
 - 模块清单显式依赖 `Weline_Framework`、`Weline_Backend` 与 `Weline_I18n`；EAV 后台入口和本地化模型不能依靠未声明的隐式安装顺序。
 - 跨模块读取属性集、分组、类型和选项时，只能依赖 `Weline\Eav\Api\Metadata\AttributeMetadataCatalogInterface` 返回的不可变 DTO；ORM 模型和本地化回退仍由 Eav 内部拥有，消费模块不得直接查询 Eav 表。
+- 只解析共享规格身份时，可选 `AttributeOptionIdentityCatalogInterface::sharedOptionIdentities(entity, attributeCodes)` 按参与轴批量读取选项 ID/code/原始值，不加载本地化描述。目录排序、重复 code、placement、关闭属性的既有匹配行为不变；缺失轴和已读轴挂现有请求 Context，原始行复用统一 `eav.metadata` 请求缓存。完整展示与商品私有选项仍使用原 catalog 接口。选项/placement 尚无共享 generation 失效发布，因此本投影不增加跨请求缓存。
 - 列表投影可通过可选 `AttributeMetadataPrefetchInterface::prefetchForProducts()` 预取全部候选商品的私有选项与自由分组/属性。实现只在已有请求上下文内按最多 200 个商品批量迭代读取，按原逐商品 `rows` 键写入统一 `eav.metadata` 请求缓存（含空结果）；不增加跨请求或消费模块私有缓存。原 `AttributeMetadataCatalogInterface`、未预取提供方、共享/私有选项与本地化 DTO 返回语义不变，预取不代替筛选、排序或分页。
 - Eav 模块内的传统实体可继续继承 `Weline\Eav\EavModel`。其他模块的新实体不得继承或引用 Eav 内部模型：实现 `Weline\Eav\Api\Entity\EntityDefinitionInterface`，通过 `EntityAttributeStoreInterface` 进行属性声明、值读写和动态值表装配。
 - EAV 实体注册不是手动建表后就结束。`Observer/UpgradeDefaultAttribute.php` 会在升级流程里扫描激活模块 `Model/` 下实现旧 `EavInterface` 或公开 `EntityDefinitionInterface` 的类，写入 `eav_entity`，并为每个实体兜底创建 `default` 属性集与属性组。

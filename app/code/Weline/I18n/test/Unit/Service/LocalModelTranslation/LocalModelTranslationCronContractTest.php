@@ -22,6 +22,7 @@ final class LocalModelTranslationCronContractTest extends TestCase
 
         self::assertStringContainsString('LocalModelTranslationQueueService', $cron);
         self::assertStringContainsString('localModelQueueService->enqueue', $cron);
+        self::assertStringContainsString("*/5 * * * *", $cron);
         self::assertStringContainsString('collectWorkItems', $queue);
         self::assertStringContainsString('collectWorkItems($offset, $batchSize + 1)', $queue);
         self::assertStringContainsString('LocalModelTranslationCatalog', $service);
@@ -46,5 +47,6 @@ final class LocalModelTranslationCronContractTest extends TestCase
         );
         self::assertStringContainsString('findActiveFamilyQueueId', $queueService);
         self::assertStringContainsString('function enqueueContinuation', $queueService);
+        self::assertStringContainsString('collectWorkItems(0, 1)', $queueService);
     }
 }

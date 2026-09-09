@@ -130,7 +130,7 @@ final class ThemePageTypeResolverAuthRoutesTest extends TestCase
             '/CNY/zh_Hans_CN/checkout/success' => ThemeLayout::PAGE_TYPE_CHECKOUT_SUCCESS,
             '/CNY/zh_Hans_CN/checkout/failer' => ThemeLayout::PAGE_TYPE_CHECKOUT_FAILURE,
             '/en_US/USD/checkout/failure' => ThemeLayout::PAGE_TYPE_CHECKOUT_FAILURE,
-            '/en_US/help' => ThemeLayout::PAGE_TYPE_HELP,
+            '/en_US/faq' => ThemeLayout::PAGE_TYPE_FAQ,
             '/USD/en_US/guide/payment/alipay' => ThemeLayout::PAGE_TYPE_PAYMENT_GUIDE,
             '/en_US/USD/guide/shipping' => ThemeLayout::PAGE_TYPE_GUIDE,
             '/about' => ThemeLayout::PAGE_TYPE_ABOUT,

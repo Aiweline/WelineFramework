@@ -2,6 +2,13 @@
 <config xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
         xs:noNamespaceSchemaLocation="urn:Weline_Framework::Event/etc/xsd/event.xsd"
         xmlns="urn:Weline_Framework::Event/etc/xsd/event.xsd">
+    <event name="Weline_DeveloperWorkspace::api_doc_collect_after">
+        <observer name="Weline_Product::api_doc_demo"
+                  instance="Weline\Product\Observer\ApiDocDemoObserver"
+                  disabled="false"
+                  shared="true"
+                  sort="20"/>
+    </event>
     <event name="Weline_Theme::all_menu_category_candidates">
         <observer name="Weline_Product::all_menu_category_candidates"
                   instance="Weline\Product\Observer\AllMenuCategoryCandidates"
@@ -39,5 +46,14 @@
                   shared="true"
                   sort="10"
                   delivery="sync"/>
+    </event>
+    <event name="Weline_Framework::resource_changed"
+           delivery="sync"
+           failure="best_effort">
+        <observer name="Weline_Product::geo_feed_projection"
+                  instance="Weline\Product\Observer\GeoFeedProjectionObserver"
+                  disabled="true"
+                  shared="true"
+                  sort="45"/>
     </event>
 </config>

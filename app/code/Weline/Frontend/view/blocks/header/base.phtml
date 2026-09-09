@@ -30,6 +30,21 @@ $currentLang = (string)(State::getLang() ?: 'zh_Hans_CN');
 $currentCurrency = strtoupper(trim((string)(State::getCurrency() ?: 'CNY')));
 $defaultLang = (string)(\w_env('website.language', '') ?: Env::get('locale', Env::get('lang', 'zh_Hans_CN')) ?: 'zh_Hans_CN');
 $defaultCurrency = strtoupper(trim((string)(\w_env('website.currency', '') ?: Env::get('currency', 'CNY')))) ?: 'CNY';
+$availableCurrencies = [];
+try {
+    $availableCurrencies = \Weline\Framework\Manager\ObjectManager::getInstance(
+        \Weline\Framework\App\Localization\LocalizationProviderRegistry::class
+    )->preferredCurrencyCodes();
+} catch (\Throwable) {
+    $availableCurrencies = [];
+}
+$availableCurrencies = array_values(array_unique(array_filter(array_map(
+    static fn ($code): string => strtoupper(trim((string)$code)),
+    is_array($availableCurrencies) ? $availableCurrencies : []
+), static fn (string $code): bool => $code !== '' && preg_match('/^[A-Z]{3}$/', $code) === 1)));
+if ($availableCurrencies === []) {
+    $availableCurrencies = array_values(array_unique(array_filter([$currentCurrency, $defaultCurrency])));
+}
 $themePath = str_replace('\\', '/', (string)(Env::getInstance()->getTheme()['path'] ?? ''));
 $mediaTemplate = $host . '/' . (DEV
     ? '{module}/view/statics/{path}'
@@ -69,14 +84,23 @@ try {
 $workerUrl = DEV
     ? '/Weline/Frontend/view/statics/js/weline-api-worker.js'
     : '/static/Weline/Frontend/js/weline-api-worker.js';
-$workerUrl .= '?v=' . rawurlencode($deployVersion . '-' . $workerBuildId);
+$workerJsMtime = @filemtime(BP . 'app/code/Weline/Frontend/view/statics/js/weline-api-worker.js');
+$workerUrl .= '?v=' . rawurlencode($deployVersion . '-' . $workerBuildId . ($workerJsMtime ? ('-' . (string)$workerJsMtime) : ''));
 // Bust lazy-loaded Weline.Api / Account / Theme widgets when source changes
 // (local deploy_version is often sticky "dev" and would keep an old mini-cart.js).
 $apiJsMtime = @filemtime(BP . 'app/code/Weline/Frontend/view/statics/js/weline-api.js');
-$accountJsMtime = @filemtime(BP . 'app/code/Weline/Frontend/view/statics/js/weline-api-account.js');
+$accountJsMtime = @filemtime(BP . 'app/code/Weline/Customer/view/statics/js/account-session.js');
+$welineJsMtime = @filemtime(BP . 'app/code/Weline/Frontend/view/statics/js/weline.js');
 $miniCartJsMtime = @filemtime(BP . 'app/code/Weline/Theme/view/statics/js/widgets/mini-cart-icon.js');
 $miniCartCssMtime = @filemtime(BP . 'app/code/Weline/Theme/view/statics/css/widgets/mini-cart-drawer.css');
-$frontendJsMtime = max((int)$apiJsMtime, (int)$accountJsMtime, (int)$miniCartJsMtime, (int)$miniCartCssMtime);
+$frontendJsMtime = max(
+    (int)$apiJsMtime,
+    (int)$accountJsMtime,
+    (int)$welineJsMtime,
+    (int)$miniCartJsMtime,
+    (int)$miniCartCssMtime,
+    (int)$workerJsMtime
+);
 $frontendAssetVersion = $deployVersion . ($frontendJsMtime > 0 ? ('-' . (string)$frontendJsMtime) : '');
 $modulesJsMtime = @filemtime(BP . 'app/code/Weline/Frontend/view/statics/base/weline.modules.js');
 $modulesConfigUrl = DEV
@@ -103,6 +127,7 @@ $runtime = [
     'currentCurrency' => $currentCurrency,
     'defaultLang' => $defaultLang,
     'defaultCurrency' => $defaultCurrency,
+    'availableCurrencies' => $availableCurrencies,
     'debug' => DEV,
     'api' => [
         'workerUrl' => $workerUrl,
@@ -110,7 +135,8 @@ $runtime = [
         'queryBinUrl' => Env::getFrontendQueryBinPath(),
         'locale' => $currentLang,
         'currency' => $currentCurrency,
-        'cartCountCookieKey' => 'weline_cart_item_count',
+        'availableCurrencies' => $availableCurrencies,
+        'defaultCurrency' => $defaultCurrency,
     ],
     'url' => [
         'origin' => $host,
@@ -153,6 +179,13 @@ $runtimeJsonTailBody = substr($runtimeJson, 1); // drop leading "{"
 <script type="application/json" id="weline-frontend-runtime-config" data-weline-runtime-config>{"baseUrl":"@url{'/'}",<?= $runtimeJsonTailBody ?></script>
 <js>Weline_Frontend::js/runtime.js</js>
 <js>Weline_Frontend::js/weline-api-business.js</js>
-<js>Weline_Frontend::js/weline.js</js>
+<?php
+// Bust sticky theme_static_version so weline.js edits are not stuck in WLS static cache.
+$welineJsSrc = (defined('DEV') && DEV)
+    ? '/Weline/Frontend/view/statics/js/weline.js'
+    : '/static/Weline/Frontend/js/weline.js';
+$welineJsSrc .= '?v=' . rawurlencode((string)$frontendAssetVersion);
+?>
+<script src="<?= htmlspecialchars($welineJsSrc, ENT_QUOTES) ?>"></script>
 <js>Weline_Framework::js/url-frontend.js</js>
 <meta name="weline-worker-frontend-bootstrap-slot" content="">

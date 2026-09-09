@@ -148,6 +148,14 @@
                   shared="true" sort="20"/>
     </event>
 
+    <event name="Weline_Websites::website_save_after">
+        <observer name="Weline_Websites::website_crawler_policy_save_after"
+                  instance="Weline\Websites\Observer\WebsiteCrawlerPolicySaveAfter"
+                  disabled="false"
+                  shared="true"
+                  sort="30"/>
+    </event>
+
     <event name="Weline_Seo::integration::head_context_resolve">
         <observer name="Weline_Websites::seo_head_context_resolve"
                   instance="Weline\Websites\Observer\SeoHeadContextResolve"

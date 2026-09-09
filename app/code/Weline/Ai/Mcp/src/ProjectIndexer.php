@@ -186,6 +186,9 @@ final class ProjectIndexer
                 array_keys($removed),
                 static fn (string $path): bool => isset($existing[$path])
             ));
+            $relationTargetNames = $mode === 'full'
+                ? []
+                : $this->relationTargetNamesForPaths($deletePaths);
             if ($deletePaths !== []) {
                 $revision = $this->index->nextRevision();
             }
@@ -223,6 +226,11 @@ final class ProjectIndexer
                             if ($revision === 0) {
                                 $revision = $this->index->nextRevision();
                             }
+                            if ($mode !== 'full') {
+                                foreach ($this->relationTargetNamesForPaths([$file['path']]) as $targetName) {
+                                    $relationTargetNames[] = $targetName;
+                                }
+                            }
                             $this->deletePaths([$file['path']]);
                             ++$deleted;
                             $changedPaths[] = $file['path'];
@@ -258,6 +266,23 @@ final class ProjectIndexer
                             continue;
                         }
                         $errors[] = $file['path'] . ': ' . $exception->getMessage();
+                    }
+                }
+                if ($mode !== 'full') {
+                    if ($writes !== []) {
+                        // Replacing a definition clears external relation targets through ON DELETE SET NULL.
+                        // Read the old names before writeFile removes the previous symbols.
+                        foreach ($this->relationTargetNamesForPaths(array_map(
+                            static fn (array $write): string => (string) $write['path'],
+                            $writes,
+                        )) as $targetName) {
+                            $relationTargetNames[] = $targetName;
+                        }
+                    }
+                    foreach ($writes as $write) {
+                        foreach ($this->relationTargetNamesFromWrite($write) as $targetName) {
+                            $relationTargetNames[] = $targetName;
+                        }
                     }
                 }
                 if ($writes !== [] || $touches !== [] || $contentBackfills !== []) {
@@ -318,8 +343,23 @@ final class ProjectIndexer
             $changedPaths = array_values(array_unique($changedPaths));
             sort($changedPaths, SORT_STRING);
 
+            $relationTargetNames = array_values(array_unique(array_filter(
+                array_map(
+                    static fn (mixed $name): string => trim((string) $name, "\\ \t\r\n"),
+                    $relationTargetNames,
+                ),
+                static fn (string $name): bool => $name !== '',
+            )));
+            sort($relationTargetNames, SORT_STRING);
+            $relationResolution = [
+                'mode' => 'skipped',
+                'target_names' => 0,
+                'resolved' => 0,
+            ];
             if ($revision > 0) {
-                $this->resolveRelationTargets();
+                $relationResolution = $this->resolveRelationTargets(
+                    $mode === 'full' ? null : $relationTargetNames,
+                );
             }
             $completedAt = Clock::now();
             $durationMs = (int) round((microtime(true) - $started) * 1_000);
@@ -343,6 +383,7 @@ final class ProjectIndexer
                     'changed' => count($changedPaths),
                     'errors' => count($errors),
                     'duration_ms' => $durationMs,
+                    'relation_resolution' => $relationResolution,
                 ],
             ]);
 
@@ -366,6 +407,7 @@ final class ProjectIndexer
                 'errors' => $errors,
                 'warnings' => array_values(array_unique($warnings)),
                 'duration_ms' => $durationMs,
+                'relation_resolution' => $relationResolution,
             ];
         } catch (Throwable $exception) {
             $this->index->setState([
@@ -1637,40 +1679,186 @@ final class ProjectIndexer
         });
     }
 
-    private function resolveRelationTargets(): void
+    /** @param list<string>|null $targetNames
+     *  @return array{mode:string,target_names:int,resolved:int}
+     */
+    private function resolveRelationTargets(?array $targetNames = null): array
     {
-        $this->index->transaction(static function (PDO $database): void {
+        if ($targetNames !== null && $targetNames === []) {
+            return [
+                'mode' => 'scoped',
+                'target_names' => 0,
+                'resolved' => 0,
+            ];
+        }
+
+        return $this->index->transaction(static function (PDO $database) use ($targetNames): array {
             $database->exec('DROP TABLE IF EXISTS temp.symbol_lookup');
+            $database->exec('DROP TABLE IF EXISTS temp.target_names');
+            $database->exec('DROP TABLE IF EXISTS temp.relation_updates');
             $database->exec(
                 'CREATE TEMP TABLE symbol_lookup (
                     lookup_name TEXT COLLATE NOCASE PRIMARY KEY,
                     symbol_uid TEXT NOT NULL
                 ) WITHOUT ROWID'
             );
-            $database->exec(
-                "INSERT OR IGNORE INTO symbol_lookup(lookup_name, symbol_uid)
-                 SELECT fq_name, symbol_uid FROM symbols WHERE fq_name <> ''
-                 ORDER BY length(fq_name), fq_name, symbol_uid"
-            );
-            $database->exec(
-                "INSERT OR IGNORE INTO symbol_lookup(lookup_name, symbol_uid)
-                 SELECT name, symbol_uid FROM symbols WHERE name <> ''
-                 ORDER BY name, symbol_uid"
-            );
-            $database->exec(
-                "UPDATE relations
-                    SET target_symbol_uid = (
-                        SELECT lookup.symbol_uid FROM symbol_lookup AS lookup
-                         WHERE lookup.lookup_name = relations.target_name
-                    )
-                  WHERE target_symbol_uid IS NULL
-                    AND EXISTS (
-                        SELECT 1 FROM symbol_lookup AS lookup
-                         WHERE lookup.lookup_name = relations.target_name
-                    )"
-            );
+            if ($targetNames === null) {
+                $database->exec(
+                    "INSERT OR IGNORE INTO symbol_lookup(lookup_name, symbol_uid)
+                     SELECT fq_name, symbol_uid FROM symbols WHERE fq_name <> ''
+                     ORDER BY length(fq_name), fq_name, symbol_uid"
+                );
+                $database->exec(
+                    "INSERT OR IGNORE INTO symbol_lookup(lookup_name, symbol_uid)
+                     SELECT name, symbol_uid FROM symbols WHERE name <> ''
+                     ORDER BY name, symbol_uid"
+                );
+            } else {
+                $database->exec(
+                    'CREATE TEMP TABLE target_names (
+                        lookup_name TEXT COLLATE NOCASE PRIMARY KEY
+                    ) WITHOUT ROWID'
+                );
+                $targetInsert = $database->prepare(
+                    'INSERT OR IGNORE INTO target_names(lookup_name) VALUES(:name)'
+                );
+                foreach ($targetNames as $targetName) {
+                    $targetInsert->execute(['name' => $targetName]);
+                }
+                $database->exec(
+                    "INSERT OR IGNORE INTO symbol_lookup(lookup_name, symbol_uid)
+                     SELECT s.fq_name, s.symbol_uid
+                       FROM symbols AS s
+                      WHERE s.fq_name <> ''
+                        AND s.fq_name COLLATE NOCASE IN (
+                            SELECT lookup_name FROM target_names
+                        )
+                      ORDER BY length(s.fq_name), s.fq_name, s.symbol_uid"
+                );
+                $database->exec(
+                    "INSERT OR IGNORE INTO symbol_lookup(lookup_name, symbol_uid)
+                     SELECT s.name, s.symbol_uid
+                       FROM symbols AS s
+                      WHERE s.name <> ''
+                        AND s.name COLLATE NOCASE IN (
+                            SELECT lookup_name FROM target_names
+                        )
+                      ORDER BY s.name, s.symbol_uid"
+                );
+            }
+            $lookupCount = (int) $database->query(
+                'SELECT COUNT(*) FROM symbol_lookup'
+            )->fetchColumn();
+            $resolved = 0;
+            if ($targetNames === null) {
+                $resolved = (int) $database->exec(
+                    "UPDATE relations
+                        SET target_symbol_uid = (
+                            SELECT lookup.symbol_uid FROM symbol_lookup AS lookup
+                             WHERE lookup.lookup_name = relations.target_name
+                        )
+                      WHERE target_symbol_uid IS NULL
+                        AND EXISTS (
+                            SELECT 1 FROM symbol_lookup AS lookup
+                             WHERE lookup.lookup_name = relations.target_name
+                        )"
+                );
+            } else {
+                $database->exec(
+                    'CREATE TEMP TABLE relation_updates (
+                        relation_id INTEGER PRIMARY KEY,
+                        symbol_uid TEXT NOT NULL
+                    )'
+                );
+                $resolved = (int) $database->exec(
+                    "INSERT INTO relation_updates(relation_id, symbol_uid)
+                     SELECT relations.relation_id, symbol_lookup.symbol_uid
+                       FROM symbol_lookup
+                       CROSS JOIN relations INDEXED BY relations_target_idx
+                      WHERE relations.target_symbol_uid IS NULL
+                        AND relations.target_name = symbol_lookup.lookup_name COLLATE NOCASE"
+                );
+                $database->exec(
+                    'UPDATE relations
+                        SET target_symbol_uid = (
+                            SELECT symbol_uid FROM relation_updates
+                             WHERE relation_updates.relation_id = relations.relation_id
+                        )
+                      WHERE relation_id IN (SELECT relation_id FROM relation_updates)'
+                );
+            }
             $database->exec('DROP TABLE temp.symbol_lookup');
+            if ($targetNames !== null) {
+                $database->exec('DROP TABLE temp.target_names');
+                $database->exec('DROP TABLE temp.relation_updates');
+            }
+
+            return [
+                'mode' => $targetNames === null ? 'full' : 'scoped',
+                'target_names' => $targetNames === null ? $lookupCount : count($targetNames),
+                'resolved' => $resolved,
+            ];
         });
+    }
+
+    /** @param list<string> $paths
+     *  @return list<string>
+     */
+    private function relationTargetNamesForPaths(array $paths): array
+    {
+        $paths = array_values(array_unique(array_filter(
+            array_map(static fn (mixed $path): string => trim((string) $path), $paths),
+            static fn (string $path): bool => $path !== '',
+        )));
+        if ($paths === []) {
+            return [];
+        }
+
+        $names = [];
+        foreach (array_chunk($paths, 400) as $pathBatch) {
+            $placeholders = implode(',', array_fill(0, count($pathBatch), '?'));
+            $symbols = $this->index->pdo()->prepare(
+                'SELECT s.name, s.fq_name
+                   FROM symbols AS s
+                   JOIN indexed_files AS f ON f.id = s.file_id
+                  WHERE f.path IN (' . $placeholders . ')'
+            );
+            $symbols->execute($pathBatch);
+            while (($row = $symbols->fetch(PDO::FETCH_ASSOC)) !== false) {
+                foreach (['name', 'fq_name'] as $key) {
+                    $name = trim((string) ($row[$key] ?? ''), "\\ \t\r\n");
+                    if ($name !== '') {
+                        $names[] = $name;
+                    }
+                }
+            }
+        }
+
+        return $names;
+    }
+
+    /** @param array<string,mixed> $write
+     *  @return list<string>
+     */
+    private function relationTargetNamesFromWrite(array $write): array
+    {
+        $names = [];
+        foreach ((array) ($write['symbols'] ?? []) as $symbol) {
+            foreach (['name', 'fq_name'] as $key) {
+                $name = trim((string) ($symbol[$key] ?? ''), "\\ \t\r\n");
+                if ($name !== '') {
+                    $names[] = $name;
+                }
+            }
+        }
+        foreach ((array) ($write['relations'] ?? []) as $relation) {
+            $name = trim((string) ($relation['target_name'] ?? ''), "\\ \t\r\n");
+            if ($name !== '') {
+                $names[] = $name;
+            }
+        }
+
+        return $names;
     }
 
     private function writeKnowledgeState(int $revision, string $completedAt): void

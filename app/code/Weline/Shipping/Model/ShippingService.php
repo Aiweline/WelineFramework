@@ -12,17 +12,28 @@ use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
 #[Table(comment: '配送服务表')]
-#[Index(name: 'idx_service_code', columns: ['service_code'], type: 'UNIQUE')]
+#[Index(name: 'uk_service_scope_code', columns: ['scope_type', 'scope_id', 'service_code'], type: 'UNIQUE')]
+#[Index(name: 'idx_shipping_service_scope', columns: ['scope_type', 'scope_id', 'is_active'])]
 #[Index(name: 'idx_carrier_id', columns: ['carrier_id'])]
+#[Index(name: 'idx_origin_shipping_address', columns: ['origin_shipping_address_id'])]
 class ShippingService extends AbstractModel
 {
     public const schema_table = 'w_shipping_services';
     public const schema_primary_key = 'service_id';
+
+    public const SCOPE_WEBSITE = 'website';
+    public const SCOPE_STORE = 'store';
+    public const SCOPE_CHANNEL = 'channel';
+
     #[Col('int', null, nullable: false, primaryKey: true, autoIncrement: true, comment: '服务ID')]
     public const schema_fields_ID = 'service_id';
+    #[Col('varchar', 16, nullable: false, default: 'website', comment: '作用范围类型 website|store|channel')]
+    public const schema_fields_SCOPE_TYPE = 'scope_type';
+    #[Col('int', null, nullable: false, default: 0, comment: '作用范围ID')]
+    public const schema_fields_SCOPE_ID = 'scope_id';
     #[Col('varchar', 255, nullable: false, comment: '服务名称')]
     public const schema_fields_SERVICE_NAME = 'service_name';
-    #[Col('varchar', 50, nullable: false, unique: true, comment: '服务代码')]
+    #[Col('varchar', 50, nullable: false, comment: '服务代码（同范围内唯一）')]
     public const schema_fields_SERVICE_CODE = 'service_code';
     #[Col('int', null, nullable: false, comment: '快递公司ID')]
     public const schema_fields_CARRIER_ID = 'carrier_id';
@@ -30,6 +41,9 @@ class ShippingService extends AbstractModel
     public const schema_fields_RATE_TEMPLATE_ID = 'rate_template_id';
     #[Col('int', null, comment: '免邮规则ID')]
     public const schema_fields_FREE_SHIPPING_RULE_ID = 'free_shipping_rule_id';
+    /** 可空=不限仓；非空=仅匹配该发货地址（一期默认仓） */
+    #[Col('int', null, comment: '发货锚点 ShippingAddress ID')]
+    public const schema_fields_ORIGIN_SHIPPING_ADDRESS_ID = 'origin_shipping_address_id';
     #[Col('int', null, comment: '预计配送天数最小')]
     public const schema_fields_ESTIMATED_DAYS_MIN = 'estimated_days_min';
     #[Col('int', null, comment: '预计配送天数最大')]
@@ -51,7 +65,7 @@ class ShippingService extends AbstractModel
     /**
      * 索引排序键
      */
-    public array $_index_sort_keys = ['service_id', 'service_code', 'carrier_id'];
+    public array $_index_sort_keys = ['service_id', 'scope_type', 'scope_id', 'service_code', 'carrier_id', 'origin_shipping_address_id'];
     /**
      * 初始化模型
      */

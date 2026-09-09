@@ -61,17 +61,22 @@ $semanticTitle = $configuredTitle === $defaultBrandTitle ? $localizedBrandTitle 
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
     <style data-theme-inline="layout-homepage-default">
         .theme-layout-homepage .homepage-main {
-            overflow: hidden;
+            overflow-x: clip;
         }
 
         /*
          * Shell B：homepage 未包 .w-container；部件按契约 padding-inline:0。
          * 非全宽 Hero/Promo 区由布局提供版心 max-width + 左右 gutter，避免推荐/新品/分类顶边。
          * Hero/Promo 本身 padding-block:0，避免默认 Banner 顶部出现白缝。
+         * 区块竖向节奏用 lg→2xl，避免 soft 区连续叠加后出现「织绣↔推荐」大空白。
          */
         .theme-layout-homepage .homepage-section {
-            padding-block: clamp(var(--weline-layout-spacing-xl), 6vw, calc(var(--weline-layout-spacing-3xl) * 1.2));
+            padding-block: clamp(var(--weline-layout-spacing-lg), 3.5vw, var(--weline-layout-spacing-2xl));
             padding-inline: 0;
+        }
+
+        .theme-layout-homepage .homepage-section--soft + .homepage-section--soft {
+            padding-block-start: var(--weline-layout-spacing-lg);
         }
 
         .theme-layout-homepage .homepage-hero,
@@ -79,6 +84,14 @@ $semanticTitle = $configuredTitle === $defaultBrandTitle ? $localizedBrandTitle 
         .theme-layout-homepage .homepage-section:has([data-widget-code="hero-slider"]),
         .theme-layout-homepage .homepage-section:has([data-widget-code="promo-banner"]) {
             padding-block: 0;
+        }
+
+        .theme-layout-homepage .homepage-section:has([data-testid="textile-heritage"]) {
+            padding-block-end: 0;
+        }
+
+        .theme-layout-homepage .homepage-section:has([data-testid="textile-heritage"]) + .homepage-section {
+            padding-block-start: var(--weline-layout-spacing-md);
         }
 
         .theme-layout-homepage .homepage-section:not(.homepage-hero):not(.homepage-promo) > * {

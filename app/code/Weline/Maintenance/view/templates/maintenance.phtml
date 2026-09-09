@@ -235,11 +235,14 @@ if (str_starts_with($currentLang, 'zh_Hant')) {
             flex: 0 0 auto;
         }
 
-        .language-flag svg {
+        .language-flag svg,
+        .language-flag img,
+        .language-flag-img {
             display: block;
             inline-size: 1.35rem;
             block-size: auto;
             max-block-size: 1rem;
+            object-fit: cover;
         }
 
         .language-switcher__chevron {
@@ -628,7 +631,7 @@ if (str_starts_with($currentLang, 'zh_Hant')) {
             <h1><?= $escape($heading ?? '系统升级维护中') ?></h1>
             <p class="subtitle">
                 <?= $escape($message1 ?? '网站正在维护中...') ?><br>
-                <?= $escape($message2 ?? '请稍等片刻') ?>
+                <span data-w-mw-gift-copy="<?= !empty($waitGiftEnabled) ? '1' : '0' ?>"><?= $escape($message2 ?? '请稍等片刻') ?></span>
             </p>
             <?php if (!empty($waveIdShort)): ?>
                 <p class="wave-badge">
@@ -752,7 +755,16 @@ if (str_starts_with($currentLang, 'zh_Hant')) {
         var WAIT_STORAGE_KEY = 'weline_mw_wait_gift';
 
         function waitGiftEnabled() {
-            return document.documentElement.getAttribute('data-w-wait-gift') === '1';
+            if (document.documentElement.getAttribute('data-w-wait-gift') !== '1') {
+                return false;
+            }
+            try {
+                var raw = String(document.cookie || '');
+                if (/(?:^|; )\s*weline_selling_mode(?:_w\d+)?=tob(?:;|$)/i.test(raw)) {
+                    return false;
+                }
+            } catch (e) {}
+            return true;
         }
 
         function pageKey(href) {
@@ -817,6 +829,7 @@ if (str_starts_with($currentLang, 'zh_Hant')) {
             }
             var existing = readWaitGift();
             var body = existing && existing.url === pageKey() ? { token: existing.token } : {};
+            body.selling_mode = 'toc';
             postJson('/maintenance/frontend/wait-gift/issue', body)
                 .then(function (result) {
                     if (result.data && result.data.success && result.data.token) {
@@ -827,20 +840,8 @@ if (str_starts_with($currentLang, 'zh_Hant')) {
         }
 
         function probeUrl() {
-            var url = new URL(window.location.href);
-            if (/^\/pub\/errors\/maintenance\//.test(url.pathname)) {
-                url.pathname = '/';
-            }
-            url.hash = '';
-            // Never replay one-time OAuth callback credentials (code/state) during recovery probes.
-            if (/\/customer\/account\/social-login\/(callback|start)(\/|$)/i.test(url.pathname)) {
-                ['code', 'state', 'error', 'error_description', 'scope', 'authuser', 'prompt', 'iss', 'hd']
-                    .forEach(function (key) { url.searchParams.delete(key); });
-                if (/\/callback(\/|$)/i.test(url.pathname)) {
-                    url.pathname = '/';
-                    url.search = '';
-                }
-            }
+            // Never probe the document URL: full HTML/HEAD under load starves workers.
+            var url = new URL('/maintenance/frontend/recovery-check', window.location.origin);
             url.searchParams.set('_maintenance_recovery_probe', String(Date.now()));
             return url;
         }
@@ -872,7 +873,7 @@ if (str_starts_with($currentLang, 'zh_Hant')) {
                 credentials: 'same-origin',
                 redirect: 'manual',
                 headers: {
-                    Accept: 'text/html,application/xhtml+xml,*/*;q=0.8',
+                    Accept: 'text/plain,*/*;q=0.8',
                     'X-Maintenance-Recovery-Check': '1'
                 }
             });

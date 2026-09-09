@@ -99,9 +99,21 @@ final class CartQueryProviderSecurityTest extends TestCase
             self::assertArrayHasKey('store_code', $operations[$operationName]['params']);
             self::assertArrayHasKey('channel_code', $operations[$operationName]['params']);
             self::assertArrayHasKey('scope', $operations[$operationName]['params']);
+            self::assertArrayHasKey(
+                'cart_type',
+                $operations[$operationName]['params'],
+                $operationName . ' must accept cart_type for toc/tob cart routing',
+            );
+            self::assertArrayHasKey(
+                'selling_mode',
+                $operations[$operationName]['params'],
+                $operationName . ' must accept selling_mode alias for toc/tob cart routing',
+            );
         }
         self::assertSame('write', $operations['update']['mode']);
         self::assertSame('write', $operations['remove']['mode']);
+        self::assertArrayHasKey('cart_type', $operations['previewDiscount']['params']);
+        self::assertArrayHasKey('selling_mode', $operations['previewDiscount']['params']);
         foreach ($operations as $operationName => $operation) {
             self::assertTrue(
                 ($operation['external'] ?? false) === true,

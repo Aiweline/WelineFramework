@@ -48,11 +48,11 @@ class Translate implements CommandInterface
     {
         $this->printing->setup();
         
-        // 获取参数
-        $locale = $data['locale'] ?? $data['l'] ?? 'en_US';
-        $source = $data['source'] ?? $data['s'] ?? 'zh_Hans_CN';
-        $batch = isset($data['batch']) || isset($data['b']);
-        $limit = (int)($data['limit'] ?? 1000);
+        // CLI 参数在 $args（parseArgs）；$data 是命令注册元数据，不含 --limit/--locale。
+        $locale = (string)($args['locale'] ?? $args['l'] ?? $data['locale'] ?? $data['l'] ?? 'en_US');
+        $source = (string)($args['source'] ?? $args['s'] ?? $data['source'] ?? $data['s'] ?? 'zh_Hans_CN');
+        $batch = isset($args['batch']) || isset($args['b']) || isset($data['batch']) || isset($data['b']);
+        $limit = (int)($args['limit'] ?? $data['limit'] ?? 1000);
 
         $this->printing->note(__('开始AI翻译...'));
         $this->printing->note(__('目标语言: %{1}', [$locale]));

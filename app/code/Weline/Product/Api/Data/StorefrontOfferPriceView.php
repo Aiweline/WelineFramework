@@ -12,6 +12,7 @@ final readonly class StorefrontOfferPriceView
     /**
      * @param list<StorefrontPriceAdjustment> $appliedAdjustments
      * @param array{label:string,url:string,badge:string,code:string,source_module:string,source_type:string,source_id:string}|null $primaryCampaign
+     * @param list<array{theme_id:int,label:string,url:string,deal_discount_type:string,deal_discount_value:float,page_slug:string}> $eligibleCampaigns
      */
     public function __construct(
         public string $currency,
@@ -21,6 +22,7 @@ final readonly class StorefrontOfferPriceView
         public bool $hasDeal,
         public array $appliedAdjustments = [],
         public ?array $primaryCampaign = null,
+        public array $eligibleCampaigns = [],
     ) {
     }
 
@@ -80,6 +82,7 @@ final readonly class StorefrontOfferPriceView
             'campaign_url' => $this->campaignUrl(),
             'campaign_badge' => trim((string)($this->primaryCampaign['badge'] ?? '')),
             'primary_campaign' => $this->primaryCampaign,
+            'eligible_campaigns' => $this->eligibleCampaigns,
         ];
     }
 }

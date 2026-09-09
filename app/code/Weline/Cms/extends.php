@@ -13,5 +13,12 @@ return [
             'required' => false,
             'multiple' => true,
         ],
+        'PageKind' => [
+            'path' => 'extends/module/Weline_Cms/PageKind',
+            'interface' => 'Weline\Cms\Api\Kind\CmsPageKindInterface',
+            'description' => 'Inject CMS page kinds (path_group + Theme layout binding) for modules such as Help.',
+            'required' => false,
+            'multiple' => true,
+        ],
     ],
 ];

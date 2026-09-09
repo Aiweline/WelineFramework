@@ -95,7 +95,7 @@
 商品供应商关联创建后无法回读：%{1},"Product-supplier link could not be reloaded after create: %{1}"
 商品供应商关联更新后无法回读,"Product-supplier link could not be reloaded after update"
 "Global Scope 不支持商品加购","Global Scope does not support additional product purchases"
-"Offer 不存在","Offer does not exist"
+该商品已不存在或已下架，请从购物车移除,该商品已不存在或已下架，请从购物车移除
 "Offer 未发布","Offer not released"
 "Offer 对应商品不存在","The product corresponding to Offer does not exist"
 商品未发布,"Product not released"
@@ -170,6 +170,9 @@
 "参数 %{1} 须为规范整数","Parameter %{1} must be a canonical integer"
 "参数 %{1} 须为布尔值","Parameter %{1} must be a Boolean value"
 "参数 %{1} 须为数组","Parameter %{1} must be an array"
+"新品 RSS","新品 RSS"
+首页,Home
+商品分类,"Product classification"
 id属性不能为空,id属性不能为空
 "通过 product_admin 搜索已发布商品；全站活动（Website=全部）可跨站搜索，结果会标注所属网站。","通过 product_admin 搜索已发布商品；全站活动（Website=全部）可跨站搜索，结果会标注所属网站。"
 搜索商品,搜索商品
@@ -197,13 +200,20 @@ id属性不能为空,id属性不能为空
 价格从低到高,"Price: Low to High"
 价格从高到低,"Price: High to Low"
 "名称 A-Z","Name: A-Z"
+新品上架,"New Arrivals"
+最新上架商品,最新上架商品
 热销榜,"Best Sellers"
 提交失败，请稍后重试。,"Submission failed. Please try again later."
 商品未找到,商品未找到
-新品上架,"New Arrivals"
 商品不存在或当前不可用。,"The product does not exist or is currently unavailable."
 请选择规格后再加入购物车。,请选择规格后再加入购物车。
 商品详情,"Product details"
+汉服商品,汉服商品
+正品汉服：,正品汉服：
+。查看颜色与尺码、实拍图片、库存与发货说明，便于日常与礼仪场景选购。,。查看颜色与尺码、实拍图片、库存与发货说明，便于日常与礼仪场景选购。
+适合日常穿着、节日出行与礼仪场合选购参考。,适合日常穿着、节日出行与礼仪场合选购参考。
+支持颜色与尺码选择，提供实拍图、库存与发货信息，适合日常穿着与礼仪场合。,支持颜色与尺码选择，提供实拍图、库存与发货信息，适合日常穿着与礼仪场合。
+欢迎对比形制与面料后再下单。,欢迎对比形制与面料后再下单。
 商品目录读取失败：%{1},商品目录读取失败：%{1}
 品牌目录读取失败：%{1},"Failed to load brands: %{1}"
 品牌已保存：%{1},"Brand saved: %{1}"
@@ -235,7 +245,6 @@ tag,tag
 "SKU 身份高级维护","SKU 身份高级维护"
 code,code
 "查看 SKU 全局身份","View SKU global identity"
-商品分类,"Product classification"
 tree,tree
 查看商品分类,"View product categories"
 品牌管理,"Brand management"
@@ -326,6 +335,28 @@ check,check
 未找到属性集目录，请重新选择属性集。,未找到属性集目录，请重新选择属性集。
 "多选规格值后将按笛卡尔积生成子 SKU。","多选规格值后将按笛卡尔积生成子 SKU。"
 当前属性集没有可填写的商品属性（非规格组）。,当前属性集没有可填写的商品属性（非规格组）。
+请至少选择一个商品,请至少选择一个商品
+已添加,已添加
+已加入购物车,已加入购物车
+全部加入购物车,全部加入购物车
+正在加入购物车...,"Adding to cart..."
+加入购物车失败,"Failed to add to cart"
+"Buy these items together","Buy these items together"
+当前商品,当前商品
+总价,总价
+全部商品,全部商品
+浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。
+"第 %{1}–%{2} 件，共 %{3} 件商品","%{1}–%{2} of %{3} products"
+"0 件商品","0 products"
+"（筛选自 %{1} 件）","(filtered from %{1})"
+排序,Sort
+当前筛选条件下暂无商品，请调整筛选。,"No products match the current filters."
+当前网站暂无已发布商品。,"There are currently no products published on the website."
+分页,分页
+查看购物车,"View cart"
+精选好物，为你推荐,精选好物，为你推荐
+上一组,上一组
+下一组,下一组
 热销榜内容由控制器渲染,"Best-seller content is rendered by the controller"
 我的询价,"My quotes"
 查看询价进度与回复,"View quote status and replies"
@@ -339,26 +370,15 @@ SKU,SKU
 查看沟通,查看沟通
 "询价沟通 #%{1}","询价沟通 #%{1}"
 面包屑,Breadcrumb
-首页,Home
 "第 %{1}–%{2} 件，共 %{3} 件结果","%{1}–%{2} of %{3} results"
 "0 件结果","0 results"
 “%{1}”,“%{1}”
-"（筛选自 %{1} 件）","(filtered from %{1})"
-排序,Sort
-当前筛选条件下暂无商品，请调整筛选。,"No products match the current filters."
 该分类下暂无已发布商品。,该分类下暂无已发布商品。
-分页,分页
-全部商品,全部商品
-浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。
-"第 %{1}–%{2} 件，共 %{3} 件商品","%{1}–%{2} of %{3} products"
-"0 件商品","0 products"
-当前网站暂无已发布商品。,"There are currently no products published on the website."
-查看购物车,"View cart"
 新作入藏,"New to the Collection"
+"订阅 RSS","订阅 RSS"
 甄选近期上架的汉服、马面裙与传统配饰，循时序发现新的东方衣冠。,"Discover newly listed Hanfu, mamian skirts, and traditional accessories in arrival order."
 "共 %{1} 件新品","%{1} new arrivals"
 新品汉服,"New Hanfu Arrivals"
-汉服商品,汉服商品
 新品,New
 查看商品,"View product"
 新品正在整理,"New arrivals are being curated"
@@ -372,18 +392,6 @@ SKU,SKU
 "已售 %{1}","%{1} sold"
 联系询价,"Contact for quote"
 查看详情,查看详情
-请至少选择一个商品,请至少选择一个商品
-已添加,已添加
-已加入购物车,已加入购物车
-全部加入购物车,全部加入购物车
-正在加入购物车...,"Adding to cart..."
-加入购物车失败,"Failed to add to cart"
-"Buy these items together","Buy these items together"
-当前商品,当前商品
-总价,总价
-精选好物，为你推荐,精选好物，为你推荐
-上一组,上一组
-下一组,下一组
 商品信息暂不可用,"Product information is unavailable"
 商品类型,"Product type"
 属性集,"Attribute set"
@@ -445,6 +453,7 @@ DPI,DPI
 "%{1} 条评价","%{1} ratings"
 查看买家评价,"See customer reviews"
 价格,Price
+选择优惠活动,选择优惠活动
 仅询价商品：以上为参考活动价，不可直接加购,"Quote-only item: price above is a promotional reference and cannot be added to cart"
 售卖模式,售卖模式
 规格,Options
@@ -572,7 +581,7 @@ SPU,SPU
 交易与库存,交易与库存
 售价,售价
 成本,成本
-币种,币种
+币种,Currency
 初始库存,初始库存
 "售价写入默认 Offer；库存按已选 Store × Offer 写入现货量。","售价写入默认 Offer；库存按已选 Store × Offer 写入现货量。"
 物流尺寸,物流尺寸
@@ -580,6 +589,9 @@ SPU,SPU
 "长 (cm)","长 (cm)"
 "宽 (cm)","宽 (cm)"
 "高 (cm)","高 (cm)"
+配送方案,配送方案
+不限制（全部地址可达服务）,不限制（全部地址可达服务）
+绑定配送服务编码（非费用模板）。空=不限制。同车混绑不同方案时，结算可能无可选运力。,绑定配送服务编码（非费用模板）。空=不限制。同车混绑不同方案时，结算可能无可选运力。
 内容文案,内容文案
 短描述,短描述
 详情描述,详情描述
@@ -639,6 +651,7 @@ ID,ID
 编辑,edit
 未配置,未配置
 未命名草稿,未命名草稿
+包邮,包邮
 未选择属性集,未选择属性集
 创建并立即发布,"Create and publish now"
 "维护 Website 级品牌目录（名称、编码、Logo、状态）。创建商品时从启用品牌中选择。","Maintain the website brand catalog (name, code, logo, status). Pick an active brand when creating products."
@@ -784,6 +797,7 @@ ID,ID
 跟踪库存,跟踪库存
 需要配送,需要配送
 数字交付,数字交付
+"绑定配送服务编码（非费用模板）。空=不限制。保存后写入全部 Offer。","绑定配送服务编码（非费用模板）。空=不限制。保存后写入全部 Offer。"
 库存能力暂不可用,库存能力暂不可用
 可以继续编辑商品其他信息；库存不会被改写。,可以继续编辑商品其他信息；库存不会被改写。
 暂无可维护库存,暂无可维护库存
@@ -831,7 +845,7 @@ Store,Store
 确认接收归属,确认接收归属
 审计记录,审计记录
 身份、SKU、分享、转让和生命周期事件只追加、不覆盖。,身份、SKU、分享、转让和生命周期事件只追加、不覆盖。
-全局身份版本,全局身份版本
+全局身份版本,"Global identity version"
 本地投影版本,本地投影版本
 最近更新,最近更新
 当前商品还没有身份或治理审计事件。,当前商品还没有身份或治理审计事件。
@@ -889,6 +903,19 @@ Store,Store
 企业邮箱回复,企业邮箱回复
 当前账号邮箱不是本机企业邮箱，需外部发送,当前账号邮箱不是本机企业邮箱，需外部发送
 外部邮件客户端,外部邮件客户端
+应用产品管理,"Application product management"
+应用创建产品,"Create products through an application"
+允许应用创建产品草稿,"Allow applications to create product drafts"
+products,products
+应用编辑产品,"Edit products through an application"
+允许应用编辑产品,"Allow applications to edit products"
+发布产品,"Publish product"
+upload,upload
+允许发布校验通过的产品,允许发布校验通过的产品
+应用读取产品,"Read products through an application"
+eye,eye
+允许应用读取产品编辑快照,"Allow applications to read product editing snapshots"
+read,read
 "批量分类调整完成：成功 %{1}，失败 %{2}","批量分类调整完成：成功 %{1}，失败 %{2}"
 "至少选择一个活动 Store 才能发布","至少选择一个活动 Store 才能发布"
 库存模块当前不可用，商品其他信息仍可编辑,库存模块当前不可用，商品其他信息仍可编辑
@@ -1132,6 +1159,27 @@ SKU：%{1},SKU：%{1}
 询价单不存在,"Quote request not found"
 "询价单状态不能从 %{1} 转换到 %{2}","Cannot transition quote from %{1} to %{2}"
 询价单状态转换被阻止,"Quote status transition blocked"
+产品创建、发布与多语言编辑,"Create, publish and edit product translations"
+"使用当前登录身份调用真实产品 API。创建后自动回读版本并显式发布，随后返回真实店面链接；每一步响应可检查。","Call the product APIs as the signed-in user. Read current versions, publish explicitly, and return actual storefront links. Inspect every response."
+"Website ID","Website ID"
+SKU（每次新建使用唯一值）,"SKU (use a unique value for each new product)"
+当前语言的产品名称,"Product name in the selected language"
+当前编辑语言,"Editing language"
+"创建价格（最小货币单位，CNY 为分）","Creation price (minor currency units)"
+"各语言译文 JSON（同语言的显式字段优先）","Translations JSON (explicit fields take precedence)"
+"自动翻译目标 JSON（需已配置翻译服务）","Translation targets JSON (requires a configured service)"
+"产品 ID","Product ID"
+"产品 UUID","Product UUID"
+"Website 版本","Website version"
+创建并发布,"Create and publish"
+创建草稿,"Create draft"
+回读产品,"Read product"
+保存当前语言并回读,"Save selected language and read back"
+保存当前语言,"Save selected language"
+保存多语言译文并回读,"Save translations and read back"
+保存多语言译文,"Save translations"
+发布已保存的产品,"Publish saved product"
+查看店面产品,"View storefront product"
 "SKU claim 写入后无法回读：%{1}","SKU claim cannot be read back after writing: %{1}"
 "SKU 不存在：%{1}","SKU does not exist: %{1}"
 "SKU 已 tombstone：%{1}","SKU has tombstoned:%{1}"
@@ -1176,6 +1224,8 @@ SKU：%{1},SKU：%{1}
 "必须与当前 env 配置一致的 mig_clone_* 数据库","必须与当前 env 配置一致的 mig_clone_* 数据库"
 "cutover/rollback 必填的切换状态版本","cutover/rollback 必填的切换状态版本"
 "rollback 目标：dual_read（默认）或 legacy","rollback 目标：dual_read（默认）或 legacy"
+优惠主题,"Promotion theme"
+"Offer 不存在","Offer does not exist"
 已标记为已处理,"Marked as processed"
 仅询价,"Quote only"
 图款,Look
@@ -1319,7 +1369,6 @@ SKU：%{1},SKU：%{1}
 "FCDC 经销商车型","FCDC dealer model"
 商品详情暂不可用,"Product details are temporarily unavailable"
 "Product kernel read-only management view","Product kernel read-only management view"
-"Website ID","Website ID"
 "Switch website","Switch website"
 "Data read failed","Data read failed"
 "No data","No data"

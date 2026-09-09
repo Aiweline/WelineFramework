@@ -96,6 +96,82 @@ final class AttributeMetadataCatalogCacheTest extends TestCase
         self::assertSame(3, $this->db->readCount('option_local'));
     }
 
+    public function testScalarMemoDoesNotConstructTemporaryQueryModels(): void
+    {
+        $identities = $this->catalog->sharedOptionIdentities($this->entity, ['color']);
+        self::assertSame([100], array_column($identities['color'], 'id'));
+        self::assertSame('Common', $identities['color'][0]->value);
+        self::assertSame(0, $this->db->temporaryQueryModels, '标量缓存回源不应先构造随后立即丢弃的模型。');
+        $reads = count($this->db->reads);
+        self::assertEquals($identities, $this->catalog->sharedOptionIdentities($this->entity, ['color']));
+        self::assertCount($reads, $this->db->reads);
+    }
+
+    public function testSharedIdentityProjectionBoundsOptionsToAxesAndReusesIncrementalRequestReads(): void
+    {
+        $this->db->pdo->exec("INSERT INTO attribute VALUES (40,4,10,20,0,1,'size','Size'), (50,4,10,20,0,1,'unrelated','Unrelated')");
+        $this->db->pdo->exec("INSERT INTO attribute_option VALUES (300,4,40,0,'large','成人L'), (400,4,50,0,'unused','Unused')");
+        $first = $this->catalog->sharedOptionIdentities($this->entity, [' Color ', 'size', 'unknown', 'size']);
+        self::assertSame(['color', 'size', 'unknown'], array_keys($first));
+        self::assertSame([100], array_column($first['color'], 'id'));
+        self::assertSame([300], array_column($first['size'], 'id'));
+        self::assertSame('Common', $first['color'][0]->value);
+        self::assertSame([], $first['unknown']);
+        self::assertSame(1, $this->db->readCount('attribute_option'));
+        self::assertSame(0, $this->db->readCount('option_local'));
+        self::assertSame(0, $this->db->readCount('attribute_local'));
+        $options = array_values(array_filter($this->db->reads, static fn(array $read): bool => $read['table'] === 'attribute_option'));
+        self::assertSame([100, 300], array_column($options[0]['rows'], 'option_id'));
+        $reads = count($this->db->reads);
+        for ($i = 0; $i < 24; ++$i) {
+            self::assertEquals(['size' => $first['size'], 'unknown' => []], $this->catalog->sharedOptionIdentities($this->entity, ['size', 'unknown']));
+        }
+        self::assertCount($reads, $this->db->reads);
+        $next = $this->catalog->sharedOptionIdentities($this->entity, ['color', 'unrelated']);
+        self::assertSame([400], array_column($next['unrelated'], 'id'));
+        $options = array_values(array_filter($this->db->reads, static fn(array $read): bool => $read['table'] === 'attribute_option'));
+        self::assertCount(2, $options);
+        self::assertSame([400], array_column($options[1]['rows'], 'option_id'));
+        self::assertSame(1, $this->db->readCount('attribute'), 'The axis metadata is carried by the existing request context.');
+
+        $display = $this->catalog->catalog($this->entity);
+        self::assertSame('English common', $display[0]->groups[0]->attributes[0]->options[0]->label);
+        self::assertSame('English color', $display[0]->groups[0]->attributes[0]->name);
+        $this->db->pdo->exec("UPDATE attribute_option SET code = 'updated' WHERE option_id = 100");
+        $this->newRequest('en_US');
+        self::assertSame('updated', $this->catalog->sharedOptionIdentities($this->entity, ['color'])['color'][0]->code);
+    }
+
+    public function testIdentityProjectionPreservesDisabledAttributesAndCatalogOrderForDuplicateCodes(): void
+    {
+        $this->db->pdo->exec('ALTER TABLE attribute ADD COLUMN basic_is_enable INTEGER DEFAULT 0');
+        $this->db->pdo->exec("INSERT INTO attribute_set VALUES (12,4,'second','Second')");
+        $this->db->pdo->exec("INSERT INTO attribute_group VALUES (23,4,12,0,'second','Second')");
+        $this->db->pdo->exec("INSERT INTO attribute VALUES (40,4,12,23,0,1,'color','Other color',1)");
+        $this->db->pdo->exec("INSERT INTO attribute_option VALUES (90,4,40,0,'override','Common')");
+        $this->db->pdo->exec('INSERT INTO placement VALUES (4,12,23,30)');
+        $full = $this->catalog->catalog($this->entity);
+        self::assertFalse($full[0]->groups[0]->attributes[0]->enabled);
+        $expected = [];
+        foreach ($full as $set) {
+            foreach ($set->groups as $group) {
+                foreach ($group->attributes as $attribute) {
+                    if ($attribute->code === 'color') {
+                        foreach ($attribute->options as $option) {
+                            $expected[] = [$option->id, $option->code, $option->value];
+                        }
+                    }
+                }
+            }
+        }
+        $this->newRequest('en_US');
+        $this->db->reads = [];
+        $identities = $this->catalog->sharedOptionIdentities($this->entity, ['color']);
+        self::assertSame($expected, array_map(static fn($option): array => [$option->id, $option->code, $option->value], $identities['color']));
+        self::assertSame([100, 100, 90], array_column($identities['color'], 'id'), 'Placement and duplicate-code order stay identical to the display catalog.');
+        self::assertSame(1, $this->db->readCount('attribute'), 'Known placement metadata must reuse the attributes already loaded in this context.');
+    }
+
     public function testOptionScopeFilteringHappensInSqlBeforeRowsAreMaterialized(): void
     {
         $first = $this->catalog->catalogForProduct($this->entity, 101);
@@ -331,6 +407,7 @@ final class EavSqliteFixture
 {
     public PDO $pdo;
     public array $reads = [];
+    public int $temporaryQueryModels = 0;
 
     public function __construct()
     {
@@ -426,14 +503,18 @@ trait EavSqliteModelFixture
     // the production iterator consumer, SQL filters and row grouping, not the
     // ORM eager-read guard or streaming memory behavior.
     public function fetchIterator(): \Generator { yield from $this->fixtureItems; }
-    public function getItems(): array { return array_map(function ($data) { $row = clone $this; $row->_data = $data; return $row; }, $this->fixtureItems); }
-    public function load(int|string $field_or_pk_value, $value = null): AbstractModel { return $this->where((string)$field_or_pk_value, $value)->find(); }
+    public function getItems(): array { return array_map(function ($data) { ++$this->fixtureDb->temporaryQueryModels; $row = clone $this; $row->_data = $data; return $row; }, $this->fixtureItems); }
+    public function load(int|string $field_or_pk_value, $value = null, bool $forceReload = false): AbstractModel { return $this->where((string)$field_or_pk_value, $value)->find(); }
 }
 
 final class EavEntityFixture extends EavEntity { use EavSqliteModelFixture; }
 final class EavSetFixture extends Set { use EavSqliteModelFixture; }
 final class EavGroupFixture extends Group { use EavSqliteModelFixture; }
-final class EavAttributeFixture extends EavAttribute { use EavSqliteModelFixture; }
+final class EavAttributeFixture extends EavAttribute
+{
+    use EavSqliteModelFixture;
+    public function loadByAttributeId(int $attribute_id): AbstractModel { return $this->where('attribute_id', $attribute_id)->find(); }
+}
 final class EavTypeFixture extends Type { use EavSqliteModelFixture; }
 final class EavOptionFixture extends Option { use EavSqliteModelFixture; }
 final class EavPlacementFixture extends Placement { use EavSqliteModelFixture; }

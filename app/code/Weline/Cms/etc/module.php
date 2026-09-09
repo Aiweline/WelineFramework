@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Cms',
-    "version" => '1.1.1',
+    "version" => '1.1.6',
     "requires" => [
         'Weline_Backend' => '*',
         'Weline_BackendActivity' => '*',

@@ -111,6 +111,9 @@ final class AddressTaglibMultiSelectionContractTest extends TestCore
         self::assertStringContainsString('w-address-shell', $tag);
         self::assertStringContainsString('function bindPostalLookup(', $js);
         self::assertStringContainsString('bindPostalLookup(group, root);', $js);
+        self::assertStringContainsString('data-shipping-checkout-address', $js);
+        self::assertStringContainsString('findPostalFieldForRoot', $js);
+        self::assertStringContainsString("root.closest('form')", $js);
         $doc = html_entity_decode(\Weline\Theme\Taglib\Address::document(), ENT_QUOTES, 'UTF-8');
         self::assertStringContainsString('postal-lookup', $doc);
     }

@@ -22,6 +22,10 @@ class QueueDispatchService
     private const DISPATCH_CLAIM_SECONDS = 30;
     private const DEFAULT_WORKER_MEMORY_LIMIT = '512M';
     private const DEFAULT_WORKER_MEMORY_LIMIT_BY_CLASS = [];
+    /** Cap persisted queue.result to a short process trail (not full worker logs). */
+    private const RESULT_MAX_BYTES = 8192;
+    /** Cap process log reads used only for completion/error probing. */
+    private const PROCESS_OUTPUT_MAX_BYTES = 65536;
     private ?ProcessControlInterface $processControl = null;
 
     public function __construct(
@@ -253,8 +257,10 @@ class QueueDispatchService
                 }
                 // 保留 dispatch token 作为已启动 attempt 的终止证据；Delivery timeout
                 // 仍需用同一 fence 确认该 PID 已死亡，之后 Transport 再清理 token。
+                // finished=1 与 failQueueWorkerSafely 对齐，避免 error+finished=0 假终态占槽。
                 $updates += [
                     Queue::schema_fields_status => Queue::status_error,
+                    Queue::schema_fields_finished => 1,
                     Queue::schema_fields_result => $this->prependResultMessage($queue->getResult(), $output, $message),
                     Queue::schema_fields_process => $this->appendProcessMessage($queue->getProcess(), $message),
                 ];
@@ -506,7 +512,7 @@ class QueueDispatchService
 
                 return [
                     Queue::schema_fields_end_at => \gmdate('Y-m-d H:i:s'),
-                    Queue::schema_fields_result => \trim($queue->getResult() . PHP_EOL . $message),
+                    Queue::schema_fields_result => self::boundResultText(\trim($queue->getResult() . PHP_EOL . $message)),
                     Queue::schema_fields_process => \trim((string)$queue->getProcess() . PHP_EOL . $message),
                 ];
             },
@@ -549,7 +555,8 @@ class QueueDispatchService
 
     /**
      * Return a clean, non-active Queue to pending without probing or signalling
-     * any PID. reset/continue/retry all share this fence.
+     * any PID. reset/continue/retry all share this fence. Clean row updates
+     * may join an outer transaction; dispatch remains an after-commit operation.
      *
      * @return array<string,mixed>
      */
@@ -578,7 +585,7 @@ class QueueDispatchService
      * @param array<string,mixed> $updates
      * @return array<string,mixed>
      */
-    public function updatePendingQueueSafely(int $queueId, array $updates): array
+    public function updatePendingQueueSafely(int $queueId, array $updates, ?string $expectedContent = null): array
     {
         if ($queueId < 1) {
             return $this->queueControlFailure('queue_not_found', false);
@@ -595,6 +602,10 @@ class QueueDispatchService
         }
         if (!$this->isCleanPendingQueue($queue)) {
             return $this->queueControlFailure('queue_edit_active', true, (int)$queue->getPid());
+        }
+
+        if ($expectedContent !== null && $queue->getContent() !== $expectedContent) {
+            return $this->queueControlFailure('queue_content_changed', true, (int)$queue->getPid());
         }
 
         if ($updates === []) {
@@ -615,6 +626,11 @@ class QueueDispatchService
                 return $this->queueControlSuccess($fresh, (string)__('队列业务字段已更新。'));
             }
 
+            if ($expectedContent !== null && $this->isCleanPendingQueue($fresh)
+                && $fresh->getContent() !== $expectedContent
+            ) {
+                return $this->queueControlFailure('queue_content_changed', true, (int)$fresh->getPid());
+            }
             return $this->queueControlFailure('queue_state_changed', true, (int)$queue->getPid());
         }
 
@@ -726,9 +742,9 @@ class QueueDispatchService
             $dispatchToken,
             $pid,
             static fn(Queue $queue): array => [
-                Queue::schema_fields_result => \trim(
+                Queue::schema_fields_result => self::boundResultText(\trim(
                     $queue->getResult() . PHP_EOL . (string)__('正在执行...')
-                ),
+                )),
             ],
         );
     }
@@ -806,7 +822,9 @@ class QueueDispatchService
                     Queue::schema_fields_DISPATCH_TOKEN => null,
                     Queue::schema_fields_DISPATCH_UNTIL => null,
                     Queue::schema_fields_NOT_BEFORE => null,
-                    Queue::schema_fields_result => \trim($queue->getResult() . PHP_EOL . $result),
+                    Queue::schema_fields_result => self::boundResultText(
+                        \trim($queue->getResult() . PHP_EOL . $result)
+                    ),
                 ];
                 $preserve = !$queue->isFinished() && \in_array($queue->getStatus(), [
                     Queue::status_pending,
@@ -861,9 +879,9 @@ class QueueDispatchService
                     Queue::schema_fields_process => \trim(
                         $queue->getProcess() . PHP_EOL . $processMessage
                     ),
-                    Queue::schema_fields_result => \trim(
+                    Queue::schema_fields_result => self::boundResultText(\trim(
                         $queue->getResult() . PHP_EOL . $result
-                    ),
+                    )),
                 ];
             },
             true,
@@ -904,14 +922,15 @@ class QueueDispatchService
             static function (Queue $queue) use ($result, $prepend, $processMessage): array {
                 $updates = [
                     Queue::schema_fields_status => Queue::status_error,
+                    Queue::schema_fields_finished => 1,
                     Queue::schema_fields_pid => 0,
                     Queue::schema_fields_DISPATCH_TOKEN => null,
                     Queue::schema_fields_DISPATCH_UNTIL => null,
                     Queue::schema_fields_NOT_BEFORE => null,
                     Queue::schema_fields_end_at => \gmdate('Y-m-d H:i:s'),
-                    Queue::schema_fields_result => $prepend
+                    Queue::schema_fields_result => self::boundResultText($prepend
                         ? \trim($result . PHP_EOL . $queue->getResult())
-                        : \trim($queue->getResult() . PHP_EOL . $result),
+                        : \trim($queue->getResult() . PHP_EOL . $result)),
                 ];
                 $processMessage = \trim($processMessage);
                 if ($processMessage !== '') {
@@ -1148,7 +1167,9 @@ class QueueDispatchService
         bool $allowActiveRelease = true,
         bool $allowTokenOnlyRelease = false,
     ): array {
-        if ($this->hasActiveQueueTransaction()) {
+        // Only paths which may release an OS Worker must run outside a transaction.
+        // Clean requeue rejects every active/dirty attempt below and performs only CAS.
+        if ($allowActiveRelease && $this->hasActiveQueueTransaction()) {
             return $this->queueControlFailure('queue_transaction_active', true);
         }
         if ($queueId < 1) {
@@ -2349,14 +2370,14 @@ class QueueDispatchService
             if ($pid > 0) {
                 $output = Processer::outputByPid($pid);
                 if (\is_string($output) && $output !== '') {
-                    return $output;
+                    return self::boundResultText($output, self::PROCESS_OUTPUT_MAX_BYTES);
                 }
             }
 
             $path = Processer::getLogFile($processName);
             if (\is_file($path)) {
-                $output = \file_get_contents($path);
-                if (\is_string($output)) {
+                $output = self::readFileTail($path, self::PROCESS_OUTPUT_MAX_BYTES);
+                if ($output !== '') {
                     return $output;
                 }
             }
@@ -2369,12 +2390,55 @@ class QueueDispatchService
 
     private function appendProcessMessage(mixed $current, string $message): string
     {
-        return \trim((string)$current . PHP_EOL . $message);
+        return self::boundResultText(\trim((string)$current . PHP_EOL . $message));
     }
 
     private function prependResultMessage(string $current, string $output, string $message): string
     {
-        return \trim($output . PHP_EOL . $message . PHP_EOL . $current);
+        // $output is inspected by callers for QUEUE_DONE / recovery only — never persist
+        // full worker stdout into queue.result; keep a short process trail.
+        unset($output);
+
+        return self::boundResultText(\trim($message . PHP_EOL . $current));
+    }
+
+    private static function boundResultText(string $text, int $maxBytes = self::RESULT_MAX_BYTES): string
+    {
+        if ($maxBytes <= 0 || \strlen($text) <= $maxBytes) {
+            return $text;
+        }
+        $notice = '[truncated ' . \strlen($text) . ' bytes → last ' . $maxBytes . "]\n";
+        $budget = \max(0, $maxBytes - \strlen($notice));
+
+        return $notice . \substr($text, -$budget);
+    }
+
+    private static function readFileTail(string $path, int $maxBytes): string
+    {
+        $size = @\filesize($path);
+        if (!\is_int($size) || $size <= 0) {
+            return '';
+        }
+        if ($size <= $maxBytes) {
+            $full = @\file_get_contents($path);
+
+            return \is_string($full) ? $full : '';
+        }
+
+        $fh = @\fopen($path, 'rb');
+        if ($fh === false) {
+            return '';
+        }
+        try {
+            if (@\fseek($fh, -$maxBytes, SEEK_END) !== 0) {
+                return '';
+            }
+            $chunk = @\stream_get_contents($fh);
+
+            return \is_string($chunk) ? $chunk : '';
+        } finally {
+            @\fclose($fh);
+        }
     }
 
     private function hasQueueDoneMarker(string $output, Queue $queue): bool

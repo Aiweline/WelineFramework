@@ -25,6 +25,90 @@ class SeoUrlGenerateRewrite implements ObserverInterface
     {
     }
 
+    /**
+     * Prime the existing per-URL cache before ordinary rewrite events run.
+     * Values and TTL are identical to execute(); no final URL or Model is shared.
+     *
+     * @param array<array-key, string> $urls
+     */
+    public function prefetch(array $urls): void
+    {
+        if ($urls === [] || $this->isBackendRequest()) {
+            return;
+        }
+
+        $pending = [];
+        foreach ($urls as $url) {
+            if ($url === '' || !$this->isRewriteCandidate($url)) {
+                continue;
+            }
+            // Batch preparation must not parse an external URL. Url::parser()
+            // updates the active website/language context for its caller; doing
+            // that ahead of the ordinary per-link event could affect later links
+            // in the same batch. Leave external URLs to execute(), which keeps
+            // the original ordering and restoration semantics.
+            $context = $this->resolveCurrentSiteRewriteContext($url);
+            if ($context === null) {
+                continue;
+            }
+            $websiteId = (int)$context['website_id'];
+            $matchUri = strtolower((string)$context['uri']);
+            $realUri = strtolower((string)$context['real_uri']);
+            if ($realUri === '') {
+                continue;
+            }
+            $requestKey = $this->buildRequestCacheKey($websiteId, $matchUri, $realUri);
+            $local = RequestContext::get($requestKey);
+            if (is_array($local) || $local === 'not_found') {
+                continue;
+            }
+            $cacheKey = $this->buildPersistentCacheKey($websiteId, $matchUri, $realUri);
+            $pending[$cacheKey] = [$websiteId, $matchUri, $realUri, $requestKey];
+        }
+        if ($pending === []) {
+            return;
+        }
+
+        $hits = $this->traceSection('seo_url_generate_rewrite::batch_cache_read',
+            fn(): array => $this->getCache()->getMultiple(array_keys($pending)));
+        $groups = [];
+        foreach ($pending as $cacheKey => [$websiteId, $matchUri, $realUri, $requestKey]) {
+            $cached = $hits[$cacheKey] ?? null;
+            if (is_array($cached) || $cached === 'not_found') {
+                RequestContext::set($requestKey, $cached);
+                continue;
+            }
+            $groups[$websiteId]['paths'][$matchUri] = $matchUri;
+            $groups[$websiteId]['paths'][$realUri] = $realUri;
+            $groups[$websiteId]['entries'][$cacheKey] = [$matchUri, $realUri, $requestKey];
+        }
+
+        $writes = [];
+        foreach ($groups as $websiteId => $group) {
+            // Failed lookups propagate without publishing a negative cache result.
+            $rows = $this->traceSection('seo_url_generate_rewrite::batch_find_rewrite',
+                fn(): array => $this->urlRewrite->findLatestByWebsiteAndPaths((int)$websiteId, array_values($group['paths'])));
+            foreach ($group['entries'] as $cacheKey => [$matchUri, $realUri, $requestKey]) {
+                $matchedUri = $matchUri;
+                $row = $rows[$matchUri] ?? null;
+                if ($row === null && $matchUri !== $realUri) {
+                    $row = $rows[$realUri] ?? null;
+                    $matchedUri = $realUri;
+                }
+                $value = $row === null ? 'not_found' : [
+                    'rewrite' => (string)($row[UrlRewrite::schema_fields_REWRITE] ?? ''),
+                    'matched_uri' => $matchedUri,
+                ];
+                RequestContext::set($requestKey, $value);
+                $writes[$cacheKey] = $value;
+            }
+        }
+        if ($writes !== []) {
+            $this->traceSection('seo_url_generate_rewrite::batch_cache_write',
+                fn(): bool => $this->getCache()->setMultiple($writes, self::CACHE_TTL));
+        }
+    }
+
     public function execute(Event &$event): void
     {
         $url = (string)$event->getData('data');

@@ -80,12 +80,18 @@
 .weline-amz-card-widget .w-product-label {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    inline-size: fit-content;
+    max-inline-size: 100%;
     gap: var(--weline-space-1);
-    padding: var(--weline-space-1) var(--weline-space-2);
+    padding-block: var(--weline-space-1);
+    padding-inline: var(--weline-space-3);
     border-radius: var(--weline-theme-radius-full);
     font-size: var(--weline-font-size-xs, 0.75rem);
     font-weight: var(--weline-font-weight-semibold, 600);
-    line-height: 1.2;
+    line-height: 1.25;
+    letter-spacing: 0;
     white-space: nowrap;
 }
 

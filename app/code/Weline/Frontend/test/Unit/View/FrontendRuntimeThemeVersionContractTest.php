@@ -17,7 +17,11 @@ class FrontendRuntimeThemeVersionContractTest extends TestCore
         self::assertStringContainsString('deployVersion', $src);
         self::assertStringContainsString('ThemePublishedVersionRuntimeResolver', $src);
         self::assertStringContainsString('weline-api.js', $src);
-        self::assertStringContainsString('weline-api-account.js', $src);
+        self::assertStringContainsString('account-session.js', $src);
+        self::assertStringContainsString('Customer/view/statics/js/account-session.js', $src);
+        self::assertStringContainsString('weline.js', $src);
+        self::assertStringContainsString('welineJsMtime', $src);
+        self::assertStringContainsString('welineJsSrc', $src);
         self::assertStringContainsString('mini-cart-icon.js', $src);
         self::assertStringContainsString('mini-cart-drawer.css', $src);
         self::assertStringContainsString('frontendJsMtime', $src);

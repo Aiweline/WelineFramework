@@ -20,8 +20,9 @@ function loadModels() {
     return modelListPromise;
 }
 
-function register(UI) {
-    UI.define('ai-model-select', ({ element, listen, floating, emit }) => {
+export function register(UI) {
+    try {
+        UI.define('ai-model-select', ({ element, listen, floating, emit }) => {
         const trigger = element.querySelector('[data-w-ai-model-trigger]');
         const panel = element.querySelector('[data-w-ai-model-panel]');
         const search = element.querySelector('[data-w-ai-model-search]');
@@ -191,8 +192,10 @@ function register(UI) {
             },
         };
     });
-    UI.mount(document);
+        UI.mount(document);
+    } catch (error) {
+        if (!(error instanceof Error) || !/already (defined|registered)/i.test(error.message)) {
+            throw error;
+        }
+    }
 }
-
-if (window.Weline?.UI) register(window.Weline.UI);
-else document.addEventListener('weline:ui:ready', () => register(window.Weline.UI), { once: true });

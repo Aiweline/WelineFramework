@@ -239,6 +239,19 @@ class PublicApiAuthRouteMatcherTest extends TestCase
         )));
     }
 
+    public function testMatchesVisitorVersionCurrentAsGuestPathOnly(): void
+    {
+        $matcher = new PublicApiAuthRouteMatcher();
+
+        // path-only：店面像素加密版本号须可匿名；路由未带 FQCN 时不能依赖 controller 回退
+        $this->assertTrue($matcher->matchesGuestFrontendRoute($this->createRequestMock(
+            'visitor/rest/v1/version/current',
+            '',
+            '',
+            ''
+        )));
+    }
+
     public function testVisitorPixelPathIsNotGuestFrontendRoute(): void
     {
         $matcher = new PublicApiAuthRouteMatcher();

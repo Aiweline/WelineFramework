@@ -27,7 +27,8 @@ function loadEngine(engineSource, translationSource) {
 
             const engine = window.CKSource;
             delete window.CKSource;
-            delete window.CKEDITOR_TRANSLATIONS;
+            // Keep window.CKEDITOR_TRANSLATIONS: Editor.create(language) reads it via Object.keys.
+            // Deleting it before create crashes with "Cannot convert undefined or null to object".
 
             if (!engine?.Editor || !engine?.EditorWatchdog) {
                 throw new Error('CKEditor engine did not expose its expected entry points.');
@@ -58,12 +59,18 @@ function register() {
     }
     registered = true;
 
-    window.Weline.UI.define('ckeditor', (marker) => {
+    window.Weline.UI.define('ckeditor', (context) => {
         let watchdog = null;
         let editor = null;
         let destroyed = false;
+        const marker = context && context.element instanceof Element
+            ? context.element
+            : context;
 
         const ready = (async () => {
+            if (!(marker instanceof Element)) {
+                throw new Error('CKEditor marker element is missing.');
+            }
             const targetName = marker.dataset.wEditorTarget || '';
             const target = findTarget(targetName);
             if (!target) {

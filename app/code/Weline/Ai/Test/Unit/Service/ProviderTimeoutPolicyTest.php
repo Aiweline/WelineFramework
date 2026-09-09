@@ -53,6 +53,14 @@ class ProviderTimeoutPolicyTest extends TestCase
         $this->assertSame(0, ProviderTimeoutPolicy::resolveRequestLowSpeedTime(['low_speed_time' => 0], 600));
     }
 
+    public function testConnectTimeoutHonorsExplicitOverrideAndDefaults(): void
+    {
+        $this->assertSame(60, ProviderTimeoutPolicy::resolveConnectTimeout([], 900));
+        $this->assertSame(30, ProviderTimeoutPolicy::resolveConnectTimeout([], 30));
+        $this->assertSame(5, ProviderTimeoutPolicy::resolveConnectTimeout(['connect_timeout' => 5], 900));
+        $this->assertSame(0, ProviderTimeoutPolicy::resolveConnectTimeout(['connect_timeout' => 0], 900));
+    }
+
     public function testStreamLowSpeedOverrideIsExplicitAndBoundedByStreamTimeout(): void
     {
         $this->assertSame(120, ProviderTimeoutPolicy::resolveStreamLowSpeedTime([], 600));

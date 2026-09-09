@@ -65,6 +65,7 @@ class PageService
         private ?CmsPageVariantService $variantService = null,
         private ?LayoutWorkspaceInterface $layoutWorkspace = null,
         private ?StoreCatalogInterface $storeCatalog = null,
+        private ?CmsPageKindRegistry $pageKindRegistry = null,
     ) {
     }
 
@@ -419,6 +420,13 @@ class PageService
     public function createDraftPage(?string $scope = null, string $layoutOption = 'default', array $siteParams = []): Page
     {
         $scope = $this->normalizeScope($scope);
+        $kind = $this->resolvePageKindFromParams($siteParams);
+        if (trim((string)($siteParams['path_group'] ?? '')) === '' && trim($kind->getPathGroup()) !== '') {
+            $siteParams['path_group'] = $kind->getPathGroup();
+        }
+        if (trim((string)($siteParams['path_group_alias'] ?? '')) === '' && trim($kind->getLabel()) !== '') {
+            $siteParams['path_group_alias'] = $kind->getLabel();
+        }
         $group = $this->resolvePathGroupInput($siteParams);
         if ($group !== null) {
             $siteParams['website_id'] = $group->getWebsiteId();
@@ -435,8 +443,11 @@ class PageService
             $pathGroup
         );
         $group = $group ?: $this->ensurePathGroup($website, $pathGroup, $pathGroupAlias);
+        $draftTitle = $kind->getCode() === 'cms'
+            ? (string)__('新建 CMS 页面')
+            : (string)__('新建 %{1} 页面', $kind->getLabel());
         $page = $this->savePage([
-            'title' => (string)__('新建 CMS 页面'),
+            'title' => $draftTitle,
             'path_group_id' => $group->getGroupId(),
             'website_id' => $website['website_id'],
             'website_code' => $website['website_code'],
@@ -448,7 +459,15 @@ class PageService
             'status' => Page::STATUS_DRAFT,
         ]);
 
-        $this->saveLayoutSelection($page->getPageId(), $layoutOption, $scope);
+        $layoutOption = trim($layoutOption) !== '' ? $layoutOption : $kind->getDefaultLayoutOption();
+        $this->saveLayoutSelection(
+            $page->getPageId(),
+            $layoutOption,
+            $scope,
+            '',
+            null,
+            $kind->getDefaultLayoutType(),
+        );
 
         return $page;
     }
@@ -1000,10 +1019,13 @@ class PageService
             ];
         }
 
+        $layoutType = $this->resolveLayoutTypeForPage($page);
+
         return [
             'target_type' => Page::TARGET_TYPE,
             'target_id' => $page->getPageId(),
-            'layout_type' => Page::LAYOUT_TYPE,
+            'layout_type' => $layoutType,
+            'page_kind' => $this->pageKinds()->resolveByPathGroup($page->getPathGroup())->getCode(),
             'label' => $page->getTitle(),
             'status' => $page->isDeleted() ? 'deleted' : $page->getStatus(),
             'scope' => $page->getScope(),
@@ -1024,11 +1046,20 @@ class PageService
         ?string $scope = null,
         string $localeCode = '',
         ?int $storeId = null,
+        ?string $layoutType = null,
     ): array
     {
         $page = $this->getPageModel($pageId, true);
         if ($page === null) {
             throw new \InvalidArgumentException((string)__('CMS 页面不存在。'));
+        }
+
+        $resolvedLayoutType = trim((string)$layoutType);
+        if ($resolvedLayoutType === '') {
+            $resolvedLayoutType = $this->resolveLayoutTypeForPage($page);
+        }
+        if (!$this->pageKinds()->canUseLayoutTypeForPathGroup($page->getPathGroup(), $resolvedLayoutType)) {
+            throw new \InvalidArgumentException((string)__('当前页面类型不支持布局 %{1}。', $resolvedLayoutType));
         }
 
         $context = ($this->cmsContextResolver ??= ObjectManager::getInstance(CmsEditorContextResolver::class))
@@ -1037,7 +1068,7 @@ class PageService
             ->saveLayoutSelection(
                 Page::TARGET_TYPE,
                 $page->getPageId(),
-                Page::LAYOUT_TYPE,
+                $resolvedLayoutType,
                 $this->normalizeLayoutOption($layoutOption),
                 $context->canonicalScope,
                 $context->localeCode,
@@ -1048,11 +1079,41 @@ class PageService
                     'page_id' => $page->getPageId(),
                     'store_id' => $context->storeId,
                     'locale_code' => $context->localeCode,
+                    'layout_type' => $resolvedLayoutType,
+                    'page_kind' => $this->pageKinds()->resolveByPathGroup($page->getPathGroup())->getCode(),
                 ],
                 ],
             );
 
         return is_array($result) ? $result : ['success' => false, 'status' => 'invalid_theme_response'];
+    }
+
+    public function resolveLayoutTypeForPage(Page $page): string
+    {
+        return $this->pageKinds()->resolveByPathGroup($page->getPathGroup())->getDefaultLayoutType();
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     */
+    private function resolvePageKindFromParams(array $params): \Weline\Cms\Api\Kind\CmsPageKindInterface
+    {
+        $registry = $this->pageKinds();
+        $kindCode = strtolower(trim((string)($params['kind'] ?? $params['page_kind'] ?? '')));
+        if ($kindCode !== '') {
+            $kind = $registry->getByCode($kindCode);
+            if ($kind !== null) {
+                return $kind;
+            }
+        }
+        $pathGroup = trim((string)($params['path_group'] ?? $params['group'] ?? ''));
+
+        return $registry->resolveByPathGroup($pathGroup);
+    }
+
+    private function pageKinds(): CmsPageKindRegistry
+    {
+        return $this->pageKindRegistry ??= ObjectManager::getInstance(CmsPageKindRegistry::class);
     }
 
     /**

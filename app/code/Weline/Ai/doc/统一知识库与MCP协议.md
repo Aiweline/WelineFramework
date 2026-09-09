@@ -43,7 +43,13 @@ MCP 默认以 `structuredContent` 承载完整正文，`content` 只提供简短
 
 指定符号的编辑上下文从索引中的完整文件内容提取；预算允许时返回完整符号，`content_complete=true`。不足时明确 `truncated`、完整符号范围及所需预算，并返回上下文不足状态；不能根据截断片段重建整个函数。`expected_digest` 保护整个符号版本，不能替代完整内容或行为验收。
 
-`resolve_skill` 与 `get_skill` 是旧客户端的动态兼容别名，返回相同 Guidance Bundle，不读取或生成静态 Skill。
+`resolve_skill` 与 `get_skill` 提供 **`mcp-skills.v1`**：技能正文由 MCP 编译下发（`prepare_project.agent_guidance.mcp_skills`）。来源包括：
+
+1. workflow surfaces（`GuidanceWorkflowCatalog`）；
+2. 模块 `doc/ai/INDEX.json` / `doc/ai/skills/*/SKILL.md`（只读提取）；
+3. 无 file-backed skill 时由 `doc/AI-INDEX.md` 合成的 `doc-index:*` 定位技能（仅 MCP 内存）。
+
+Agent 用时先 `resolve_skill(task)` 发现，再 `get_skill(skill_id)` 取正文；`list_all=true` 或任务「提取技能」列出全部技能与 `dev/ai-command` 指令。**不读宿主 SKILL.md 当权威，不写仓库 Skill 投影**（`auto_generate_skills` 保持 false）。任务文档片段仍用 `resolve_task_context`。打招呼 `hi`/`你好` 须列出 MCP 技能与指令清单。
 
 ## 临时决定
 

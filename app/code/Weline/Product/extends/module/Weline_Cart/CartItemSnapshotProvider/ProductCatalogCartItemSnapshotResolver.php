@@ -18,6 +18,7 @@ use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Product\Api\Data\StorefrontPriceContext;
+use Weline\Product\Helper\StorefrontCampaignEntry;
 use Weline\Product\Api\ResolvedScopeValue;
 use Weline\Product\Api\StorefrontOfferPriceAssemblerInterface;
 use Weline\Product\Model\ProductCatalogAttributeEntity;
@@ -115,7 +116,7 @@ final class ProductCatalogCartItemSnapshotResolver
 
         $offer = $this->offers->findByGlobalUuid($websiteId, $identity->globalOfferUuid);
         if ($offer === null) {
-            return $this->notFound($identity, $selection, (string)__('Offer 不存在'));
+            return $this->notFound($identity, $selection, (string)__('该商品已不存在或已下架，请从购物车移除'));
         }
         if (strtolower(trim((string)$offer->getData(Offer::schema_fields_STATUS))) !== 'published') {
             return $this->unavailable($identity, $selection, (string)__('Offer 未发布'));
@@ -172,8 +173,8 @@ final class ProductCatalogCartItemSnapshotResolver
         }
 
         $currency = $this->currency();
-        $price = $this->prices->read($websiteId, $storeId, $offerId, $currency);
-        if ($price->isCleared()) {
+        $priced = $this->resolveDisplayUnitPriceMinor($websiteId, $storeId, $offerId, $currency);
+        if ($priced['cleared']) {
             return $this->unavailable(
                 $identity,
                 $selection,
@@ -183,7 +184,7 @@ final class ProductCatalogCartItemSnapshotResolver
                 $currency,
             );
         }
-        if ($price->isUnresolved()) {
+        if ($priced['unresolved']) {
             return $this->unavailable(
                 $identity,
                 $selection,
@@ -194,7 +195,7 @@ final class ProductCatalogCartItemSnapshotResolver
             );
         }
 
-        $unitPriceMinor = max(0, (int)$price->value);
+        $unitPriceMinor = max(0, (int)$priced['unit_price_minor']);
         if ($this->isQuoteOnly($websiteId, $storeId, $productId, $locale)) {
             return $this->unavailable(
                 $identity,
@@ -205,14 +206,19 @@ final class ProductCatalogCartItemSnapshotResolver
                 $currency,
             );
         }
-        $dealPrice = $this->resolveActiveDealPrice($productId, $unitPriceMinor);
+        $dealPrice = $this->resolveActiveDealPrice($productId, $unitPriceMinor, $selection);
         $unitPriceMinor = $dealPrice['unit_price_minor'];
         $compareAtMinor = $dealPrice['compare_at_minor'];
         $campaignLabel = $dealPrice['campaign_label'];
         $campaignUrl = $dealPrice['campaign_url'];
 
         $productType = $this->productType($websiteId, $storeId, $productId, $locale);
+        $requiresShipping = (bool)$offer->getData(Offer::schema_fields_REQUIRES_SHIPPING);
+        $shippingProfileCode = trim((string)$offer->getData(Offer::schema_fields_SHIPPING_PROFILE_CODE));
         $fulfillmentMetadata = [];
+        if ($shippingProfileCode !== '') {
+            $fulfillmentMetadata['shipping_profile_code'] = $shippingProfileCode;
+        }
         if ($productType === 'downloadable') {
             if ($this->currentCustomerId() <= 0) {
                 return $this->unavailable(
@@ -225,12 +231,13 @@ final class ProductCatalogCartItemSnapshotResolver
                 );
             }
             try {
-                $fulfillmentMetadata = $this->downloadFulfillmentMetadata(
+                $downloadMeta = $this->downloadFulfillmentMetadata(
                     $websiteId,
                     $productId,
                     $product,
                     $identity,
                 );
+                $fulfillmentMetadata = array_merge($fulfillmentMetadata, $downloadMeta);
             } catch (\Throwable) {
                 return $this->unavailable(
                     $identity,
@@ -263,8 +270,9 @@ final class ProductCatalogCartItemSnapshotResolver
                 sourceApp: 'Weline',
                 offerId: $offerId,
                 productId: $productId,
+                requiresShipping: $requiresShipping,
                 fulfillmentMetadata: $fulfillmentMetadata,
-                options: $this->buildOptions($websiteId, $productId, $selection, $scope, $locale),
+                options: $this->buildOptions($websiteId, $productId, $selection, $scope, $locale, $campaignLabel),
                 compareAtMinor: $compareAtMinor,
                 campaignLabel: $campaignLabel,
                 campaignUrl: $campaignUrl,
@@ -287,8 +295,9 @@ final class ProductCatalogCartItemSnapshotResolver
             sourceApp: 'Weline',
             offerId: $offerId,
             productId: $productId,
+            requiresShipping: $requiresShipping,
             fulfillmentMetadata: $fulfillmentMetadata,
-            options: $this->buildOptions($websiteId, $productId, $selection, $scope, $locale),
+            options: $this->buildOptions($websiteId, $productId, $selection, $scope, $locale, $campaignLabel),
             compareAtMinor: $compareAtMinor,
             campaignLabel: $campaignLabel,
             campaignUrl: $campaignUrl,
@@ -306,6 +315,8 @@ final class ProductCatalogCartItemSnapshotResolver
      * @param list<array<string,mixed>> $productRows
      * @param list<array<string,mixed>>|null $attributeRows
      * @param list<array<string,mixed>>|null $mediaRows
+     * @param bool $includeMedia Resolve product media URLs for catalog output.
+     * @param bool $includeOptions Resolve display option metadata for cart output.
      * @return list<CartItemSnapshot>
      */
     public function resolveCatalogOffers(
@@ -314,6 +325,8 @@ final class ProductCatalogCartItemSnapshotResolver
         array $productRows = [],
         ?array $attributeRows = null,
         ?array $mediaRows = null,
+        bool $includeMedia = true,
+        bool $includeOptions = true,
     ): array {
         $offerRows = array_values(array_filter($offerRows, 'is_array'));
         if ($offerRows === []) {
@@ -395,7 +408,7 @@ final class ProductCatalogCartItemSnapshotResolver
         foreach ($attributeRows as $attributeRow) {
             $productId = (int)($attributeRow['entity_id'] ?? 0);
             $code = strtolower(trim((string)($attributeRow['attribute_code'] ?? '')));
-            if ($productId > 0 && ($code === 'name' || $code === 'product_type')) {
+            if ($productId > 0 && in_array($code, ['name', 'product_type', 'quote_only'], true)) {
                 $attributeRowsByProductAndCode[$productId][$code][] = $attributeRow;
             }
         }
@@ -430,50 +443,88 @@ final class ProductCatalogCartItemSnapshotResolver
         }
 
         $priceRowsByOffer = [];
+        $basePriceRowsByOffer = [];
+        $baseCurrency = $this->baseCurrencyCode();
         foreach (\Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
             'product.catalog.snapshot.prices',
             fn() => $this->prices->listExplicitRows($websiteId, $offerIds, $storeIds),
         ) as $priceRow) {
-            if (strcasecmp(trim((string)($priceRow['currency'] ?? '')), $currency) !== 0) {
-                continue;
-            }
+            $rowCurrency = strtoupper(trim((string)($priceRow['currency'] ?? '')));
             $offerId = (int)($priceRow['offer_id'] ?? 0);
             if ($offerId <= 0) {
                 continue;
             }
-            $priceRowsByOffer[$offerId][] = [
+            $normalizedRow = [
                 'store_id' => (int)($priceRow['store_id'] ?? 0),
                 'cleared' => !empty($priceRow['cleared']),
                 'value' => $priceRow['amount_minor'] ?? null,
             ];
+            if ($rowCurrency === $currency) {
+                $priceRowsByOffer[$offerId][] = $normalizedRow;
+            }
+            if ($baseCurrency !== '' && $rowCurrency === $baseCurrency) {
+                $basePriceRowsByOffer[$offerId][] = $normalizedRow;
+            }
         }
         $pricesByOffer = [];
         foreach ($offerIds as $offerId) {
-            $pricesByOffer[$offerId] = $overlay->resolvePrice(
+            $displayPrice = $overlay->resolvePrice(
                 $priceRowsByOffer[$offerId] ?? [],
+                $storeId,
+            );
+            if (!$displayPrice->isCleared() && !$displayPrice->isUnresolved()) {
+                $pricesByOffer[$offerId] = $displayPrice;
+                continue;
+            }
+            if ($displayPrice->isCleared() || $baseCurrency === '' || $baseCurrency === $currency) {
+                $pricesByOffer[$offerId] = $displayPrice;
+                continue;
+            }
+            $basePrice = $overlay->resolvePrice(
+                $basePriceRowsByOffer[$offerId] ?? [],
+                $storeId,
+            );
+            if ($basePrice->isCleared() || $basePrice->isUnresolved()) {
+                $pricesByOffer[$offerId] = $displayPrice;
+                continue;
+            }
+            $convertedMajor = $this->convertMajorAmount(
+                max(0, (int)$basePrice->value) / 100,
+                $baseCurrency,
+                $currency,
+            );
+            if ($convertedMajor === null) {
+                $pricesByOffer[$offerId] = $displayPrice;
+                continue;
+            }
+            $pricesByOffer[$offerId] = ResolvedScopeValue::explicit(
+                max(0, (int)round($convertedMajor * 100)),
                 $storeId,
             );
         }
 
-        $firstMediaByProduct = [];
-        $mediaRows ??= \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
-            'product.catalog.snapshot.media_rows',
-            fn() => $this->media->listByProductIds($websiteId, $productIds),
-        );
-        foreach ($mediaRows as $mediaRow) {
-            $productId = (int)($mediaRow[Media::schema_fields_PRODUCT_ID] ?? 0);
-            if ($productId > 0 && !isset($firstMediaByProduct[$productId])) {
-                $firstMediaByProduct[$productId] = trim((string)($mediaRow[Media::schema_fields_PATH] ?? ''));
+        $imagesByProduct = [];
+        if ($includeMedia) {
+            $firstMediaByProduct = [];
+            $mediaRows ??= \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
+                'product.catalog.snapshot.media_rows',
+                fn() => $this->media->listByProductIds($websiteId, $productIds),
+            );
+            foreach ($mediaRows as $mediaRow) {
+                $productId = (int)($mediaRow[Media::schema_fields_PRODUCT_ID] ?? 0);
+                if ($productId > 0 && !isset($firstMediaByProduct[$productId])) {
+                    $firstMediaByProduct[$productId] = trim((string)($mediaRow[Media::schema_fields_PATH] ?? ''));
+                }
             }
+            $imageReferences = [];
+            foreach ($productIds as $productId) {
+                $imageReferences[$productId] = $firstMediaByProduct[$productId] ?? '';
+            }
+            $imagesByProduct = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
+                'product.catalog.snapshot.media_url',
+                fn() => $this->resolveImageReferences($imageReferences, $scope, $locale),
+            );
         }
-        $imageReferences = [];
-        foreach ($productIds as $productId) {
-            $imageReferences[$productId] = $firstMediaByProduct[$productId] ?? '';
-        }
-        $imagesByProduct = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
-            'product.catalog.snapshot.media_url',
-            fn() => $this->resolveImageReferences($imageReferences, $scope, $locale),
-        );
 
         $availabilityByOffer = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
             'product.catalog.snapshot.availability',
@@ -490,7 +541,7 @@ final class ProductCatalogCartItemSnapshotResolver
             $productId = (int)($offerRow[Offer::schema_fields_PRODUCT_ID] ?? 0);
             $facts = $productFacts[$productId] ?? null;
             if ($identity->globalOfferUuid === '' || $offerId <= 0 || $productId <= 0) {
-                $snapshots[] = $this->notFound($identity, [], (string)__('Offer 不存在'));
+                $snapshots[] = $this->notFound($identity, [], (string)__('该商品已不存在或已下架，请从购物车移除'));
                 continue;
             }
             if (strtolower(trim((string)($offerRow[Offer::schema_fields_STATUS] ?? ''))) !== 'published') {
@@ -571,6 +622,13 @@ final class ProductCatalogCartItemSnapshotResolver
                 'product.catalog.snapshot.deals',
                 fn() => max(0, (int)$price->value),
             );
+            $options = [];
+            if ($includeOptions) {
+                $options = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
+                    'product.catalog.snapshot.options',
+                    fn() => $this->buildOptions($websiteId, $productId, [], $scope, $this->locale()),
+                );
+            }
             $snapshots[] = new CartItemSnapshot(
                 offer: $identity,
                 name: (string)$facts['name'],
@@ -591,10 +649,7 @@ final class ProductCatalogCartItemSnapshotResolver
                 sourceApp: 'Weline',
                 offerId: $offerId,
                 productId: $productId,
-                options: \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
-                    'product.catalog.snapshot.options',
-                    fn() => $this->buildOptions($websiteId, $productId, [], $scope, $this->locale()),
-                ),
+                options: $options,
             );
         }
 
@@ -636,6 +691,94 @@ final class ProductCatalogCartItemSnapshotResolver
             : ($this->currencyResolver)();
         $currency = strtoupper(trim((string)$currency));
         return $currency !== '' ? $currency : 'CNY';
+    }
+
+    /**
+     * Resolve unit price in the storefront display currency.
+     *
+     * Catalog rows are often stored only in the website base currency (CNY).
+     * When the display currency has no explicit row, convert from base via
+     * CurrencyRateService (see Weline_Currency rate-mode-and-storefront-conversion).
+     * Cleared display-currency rows stay unavailable (no FX fallback).
+     *
+     * @return array{unit_price_minor:int,cleared:bool,unresolved:bool}
+     */
+    private function resolveDisplayUnitPriceMinor(
+        int $websiteId,
+        int $storeId,
+        int $offerId,
+        string $displayCurrency,
+    ): array {
+        $displayCurrency = strtoupper(trim($displayCurrency)) ?: 'CNY';
+        $price = $this->prices->read($websiteId, $storeId, $offerId, $displayCurrency);
+        if ($price->isCleared()) {
+            return ['unit_price_minor' => 0, 'cleared' => true, 'unresolved' => false];
+        }
+        if (!$price->isUnresolved()) {
+            return [
+                'unit_price_minor' => max(0, (int)$price->value),
+                'cleared' => false,
+                'unresolved' => false,
+            ];
+        }
+
+        $baseCurrency = $this->baseCurrencyCode();
+        if ($baseCurrency === '' || $baseCurrency === $displayCurrency) {
+            return ['unit_price_minor' => 0, 'cleared' => false, 'unresolved' => true];
+        }
+
+        $basePrice = $this->prices->read($websiteId, $storeId, $offerId, $baseCurrency);
+        if ($basePrice->isCleared() || $basePrice->isUnresolved()) {
+            return ['unit_price_minor' => 0, 'cleared' => false, 'unresolved' => true];
+        }
+
+        $baseMajor = max(0, (int)$basePrice->value) / 100;
+        $convertedMajor = $this->convertMajorAmount($baseMajor, $baseCurrency, $displayCurrency);
+        if ($convertedMajor === null) {
+            return ['unit_price_minor' => 0, 'cleared' => false, 'unresolved' => true];
+        }
+
+        return [
+            'unit_price_minor' => max(0, (int)round($convertedMajor * 100)),
+            'cleared' => false,
+            'unresolved' => false,
+        ];
+    }
+
+    private function baseCurrencyCode(): string
+    {
+        try {
+            if (!class_exists(\Weline\Currency\Service\CurrencyRateService::class)) {
+                return 'CNY';
+            }
+            /** @var \Weline\Currency\Service\CurrencyRateService $rates */
+            $rates = ObjectManager::getInstance(\Weline\Currency\Service\CurrencyRateService::class);
+            $base = strtoupper(trim($rates->getBaseCurrency()));
+
+            return $base !== '' ? $base : 'CNY';
+        } catch (\Throwable) {
+            return 'CNY';
+        }
+    }
+
+    private function convertMajorAmount(float $amount, string $sourceCurrency, string $targetCurrency): ?float
+    {
+        $sourceCurrency = strtoupper(trim($sourceCurrency));
+        $targetCurrency = strtoupper(trim($targetCurrency));
+        if ($sourceCurrency === '' || $targetCurrency === '' || $sourceCurrency === $targetCurrency) {
+            return $amount;
+        }
+        try {
+            if (!class_exists(\Weline\Currency\Service\CurrencyRateService::class)) {
+                return null;
+            }
+            /** @var \Weline\Currency\Service\CurrencyRateService $rates */
+            $rates = ObjectManager::getInstance(\Weline\Currency\Service\CurrencyRateService::class);
+
+            return $rates->tryConvert($amount, $sourceCurrency, $targetCurrency);
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     private function locale(): string
@@ -830,14 +973,15 @@ final class ProductCatalogCartItemSnapshotResolver
         return $value !== '' ? $value : 'simple';
     }
 
-    private function applyActiveDealMinor(int $productId, int $catalogMinor): int
+    private function applyActiveDealMinor(int $productId, int $catalogMinor, array $selection = []): int
     {
-        return $this->resolveActiveDealPrice($productId, $catalogMinor)['unit_price_minor'];
+        return $this->resolveActiveDealPrice($productId, $catalogMinor, $selection)['unit_price_minor'];
     }
 
     /**
      * Same Assembler path as PDP/cards so cart lines carry compare-at + campaign chrome.
      *
+     * @param array<string, scalar|null> $selection
      * @return array{
      *     unit_price_minor:int,
      *     compare_at_minor:int,
@@ -845,7 +989,7 @@ final class ProductCatalogCartItemSnapshotResolver
      *     campaign_url:string
      * }
      */
-    private function resolveActiveDealPrice(int $productId, int $catalogMinor): array
+    private function resolveActiveDealPrice(int $productId, int $catalogMinor, array $selection = []): array
     {
         $catalogMinor = max(0, $catalogMinor);
         $fallback = [
@@ -876,7 +1020,15 @@ final class ProductCatalogCartItemSnapshotResolver
             if (!$assembler instanceof StorefrontOfferPriceAssemblerInterface) {
                 return $fallback;
             }
-            $view = $assembler->assemble(StorefrontPriceContext::fromCatalogMinor($productId, $catalogMinor));
+            $preferredThemeId = (int)($selection['promotion_theme_id'] ?? 0);
+            $context = new StorefrontPriceContext(
+                productId: $productId,
+                catalogPriceMinor: $catalogMinor,
+                selection: $preferredThemeId > 0
+                    ? ['promotion_theme_id' => $preferredThemeId]
+                    : [],
+            );
+            $view = $assembler->assemble($context);
             $unit = max(0, $view->finalPriceMinor);
             $compareAt = max(0, $view->compareAtMinor);
             if (!$view->hasDeal || $compareAt <= $unit) {
@@ -1098,6 +1250,7 @@ final class ProductCatalogCartItemSnapshotResolver
         array $selection,
         ScopeIdentity $scope,
         string $locale,
+        string $campaignLabelHint = '',
     ): array {
         $selection = CartSelectionHash::normalizeSelection($selection);
         if ($selection === []) {
@@ -1127,6 +1280,13 @@ final class ProductCatalogCartItemSnapshotResolver
             $code = trim((string)$code);
             $value = trim((string)$value);
             if ($code === '' || $value === '') {
+                continue;
+            }
+            if (StorefrontCampaignEntry::isThemeSelectionCode($code)) {
+                $themeOption = StorefrontCampaignEntry::presentThemeOption($code, $value, $campaignLabelHint);
+                if ($themeOption !== null) {
+                    $options[] = $themeOption;
+                }
                 continue;
             }
             $axisLabel = $labels !== null ? trim($labels->attributeLabel($code)) : '';

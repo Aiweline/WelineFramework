@@ -114,13 +114,64 @@ $heroImage = static function (string $slug, string $alt, bool $priority = false)
     $desktop = '/pub/media/catalog/hanfu/r2/homepage/' . $slug . '.webp';
     $mobile = '/pub/media/catalog/hanfu/r2/homepage/' . $slug . '-mobile.webp';
     return '<picture>'
-        . '<source media="(max-width: 768px)" srcset="' . $esc($mobile) . '" />'
+        . '<source media="(max-width: 768px)" srcset="' . $esc($mobile) . '" width="900" height="1200" />'
         . '<img src="' . $esc($desktop) . '" alt="' . $esc($alt) . '" '
+        . 'width="1920" height="600" '
         . 'loading="' . ($priority ? 'eager' : 'lazy') . '" decoding="async"'
         . ($priority ? ' fetchpriority="high"' : '')
         . '>'
         . '</picture>';
 };
+
+// 运营配置里可能烘焙了旧版 image_file_html（缺 width/height）；渲染前补齐，避免 CLS / SEO 尺寸告警。
+$ensureHeroMediaDimensions = static function (string $html): string {
+    $html = trim($html);
+    if ($html === '') {
+        return $html;
+    }
+    $html = preg_replace_callback(
+        '/<source\b([^>]*)>/i',
+        static function (array $m): string {
+            $attrs = $m[1];
+            if (!preg_match('/\bwidth\s*=/i', $attrs)) {
+                $attrs .= ' width="900"';
+            }
+            if (!preg_match('/\bheight\s*=/i', $attrs)) {
+                $attrs .= ' height="1200"';
+            }
+
+            return '<source' . $attrs . '>';
+        },
+        $html
+    ) ?? $html;
+    $html = preg_replace_callback(
+        '/<img\b([^>]*)>/i',
+        static function (array $m): string {
+            $attrs = $m[1];
+            if (!preg_match('/\bwidth\s*=/i', $attrs)) {
+                $attrs .= ' width="1920"';
+            }
+            if (!preg_match('/\bheight\s*=/i', $attrs)) {
+                $attrs .= ' height="600"';
+            }
+
+            return '<img' . $attrs . '>';
+        },
+        $html
+    ) ?? $html;
+
+    return $html;
+};
+foreach ($slides as $slideIndex => $slide) {
+    if (!is_array($slide)) {
+        continue;
+    }
+    $mediaHtml = trim((string)($slide['image_file_html'] ?? ''));
+    if ($mediaHtml === '') {
+        continue;
+    }
+    $slides[$slideIndex]['image_file_html'] = $ensureHeroMediaDimensions($mediaHtml);
+}
 
 if (empty($slides)) {
     $defaults = [

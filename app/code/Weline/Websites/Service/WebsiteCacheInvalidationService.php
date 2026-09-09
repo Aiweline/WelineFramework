@@ -238,6 +238,12 @@ final class WebsiteCacheInvalidationService
         } catch (\Throwable) {
             $this->logFailure('detect_process_cache_failed');
         }
+        try {
+            \Weline\Websites\Data\WebsiteData::clearProcessCache();
+            ScopePathMatchCache::clearProcessCache();
+        } catch (\Throwable) {
+            $this->logFailure('scope_process_cache_failed');
+        }
 
         if (!$this->boolValue($config['publisher_enabled'] ?? false)) {
             return;

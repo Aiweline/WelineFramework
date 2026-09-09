@@ -3,60 +3,86 @@
  * @var \Weline\Framework\View\Template $this
  * @var array $platforms
  */
+$escape = static fn(mixed $v): string => htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 ?>
 <div class="content-header">
-    <h1><?= __('平台管理') ?></h1>
-    <div class="action-bar">
-        <a href="@url{'geo/backend/platform/edit'}" class="w-button" data-tone="primary">
+    <div class="w-cluster" data-align="start" data-justify="between" style="--w-gap:var(--weline-space-3);margin-bottom:var(--weline-theme-space-4,1rem);">
+        <p class="w-text" data-tone="muted" style="margin:0;max-inline-size:min(100%,36rem);">
+            <?= __('选择内置平台即可使用官方推送地址；密钥在各平台「账户」中配置（暂无一键 OAuth）。') ?>
+        </p>
+        <a href="@url{'geo/backend/platform/edit'}" class="w-button" data-tone="primary" data-shrink="false">
             <w:icon name="plus" size="sm"></w:icon> <?= __('添加平台') ?>
         </a>
     </div>
 </div>
 
 <div class="content-body">
-    <table class="w-table">
-        <thead>
-            <tr>
-                <th><?= __('ID') ?></th>
-                <th><?= __('平台代码') ?></th>
-                <th><?= __('平台名称') ?></th>
-                <th><?= __('API端点') ?></th>
-                <th><?= __('Feed格式') ?></th>
-                <th><?= __('状态') ?></th>
-                <th><?= __('操作') ?></th>
-            </tr>
-        </thead>
-        <tbody>
-            <?php if (empty($platforms)): ?>
+    <div class="w-table-wrap">
+        <table class="w-table">
+            <thead>
                 <tr>
-                    <td colspan="7" class="w-text" data-align="center"><?= __('暂无数据') ?></td>
+                    <th><?= __('平台') ?></th>
+                    <th><?= __('代码') ?></th>
+                    <th><?= __('格式') ?></th>
+                    <th><?= __('状态') ?></th>
+                    <th><?= __('操作') ?></th>
                 </tr>
-            <?php else: ?>
-                <?php foreach ($platforms as $platform): ?>
+            </thead>
+            <tbody>
+                <?php if (empty($platforms)): ?>
                     <tr>
-                        <td><?= $platform['id'] ?></td>
-                        <td><?= htmlspecialchars($platform['platform_code']) ?></td>
-                        <td><?= htmlspecialchars($platform['platform_name']) ?></td>
-                        <td><?= htmlspecialchars($platform['api_endpoint'] ?? '') ?></td>
-                        <td><?= htmlspecialchars($platform['feed_format'] ?? 'json_feed') ?></td>
-                        <td>
-                            <?php if ($platform['is_enabled']): ?>
-                                <span class="w-badge" data-tone="success"><?= __('启用') ?></span>
-                            <?php else: ?>
-                                <span class="w-badge" data-tone="muted"><?= __('禁用') ?></span>
-                            <?php endif; ?>
-                        </td>
-                        <td>
-                            <a href="@url{'geo/backend/platform/edit'|['id' => $platform['id']]}" class="w-button" data-tone="primary" data-size="sm">
-                                <w:icon name="edit" size="sm"></w:icon> <?= __('编辑') ?>
-                            </a>
-                            <a href="@url{'geo/backend/platform/account'|['platform_id' => $platform['id']]}" class="w-button" data-tone="info" data-size="sm">
-                                <w:icon name="user" size="sm"></w:icon> <?= __('账户') ?>
-                            </a>
+                        <td colspan="5">
+                            <div class="w-stack" data-gap="sm" style="padding:var(--weline-theme-space-6,1.5rem) 0;">
+                                <div class="w-text"><?= __('还没有平台。先添加一个平台并配置账户，才能主动推送。') ?></div>
+                                <div>
+                                    <a href="@url{'geo/backend/platform/edit'}" class="w-button" data-tone="primary" data-size="sm" data-shrink="false">
+                                        <w:icon name="plus" size="sm"></w:icon> <?= __('添加平台') ?>
+                                    </a>
+                                </div>
+                            </div>
                         </td>
                     </tr>
-                <?php endforeach; ?>
-            <?php endif; ?>
-        </tbody>
-    </table>
+                <?php else: ?>
+                    <?php foreach ($platforms as $platform): ?>
+                        <?php
+                        $id = (int)($platform['id'] ?? 0);
+                        $code = (string)($platform['platform_code'] ?? '');
+                        $name = (string)($platform['platform_name'] ?? '');
+                        $format = (string)($platform['feed_format'] ?? 'json_feed');
+                        $enabled = !empty($platform['is_enabled']);
+                        ?>
+                        <tr>
+                            <td>
+                                <span class="w-text" data-truncate="true" title="<?= $escape($name) ?>" style="font-weight:600;"><?= $escape($name !== '' ? $name : ('#' . $id)) ?></span>
+                            </td>
+                            <td><code class="w-text" data-truncate="true"><?= $escape($code) ?></code></td>
+                            <td><span class="w-text" data-truncate="true"><?= $escape($format) ?></span></td>
+                            <td>
+                                <?php if ($enabled): ?>
+                                    <span class="w-badge" data-tone="success" data-shrink="false"><?= __('启用') ?></span>
+                                <?php else: ?>
+                                    <span class="w-badge" data-tone="muted" data-shrink="false"><?= __('禁用') ?></span>
+                                <?php endif; ?>
+                            </td>
+                            <td>
+                                <div class="w-cluster" data-align="center" data-wrap="false" style="--w-gap:var(--weline-space-2);">
+                                    <a href="@url{'geo/backend/platform/edit'|['id' => $id]}" class="w-button" data-tone="primary" data-size="sm" data-shrink="false">
+                                        <w:icon name="edit" size="sm"></w:icon> <?= __('编辑') ?>
+                                    </a>
+                                    <a href="@url{'geo/backend/platform/account'|['platform_id' => $id]}" class="w-button" data-tone="neutral" data-variant="outline" data-size="sm" data-shrink="false">
+                                        <w:icon name="user" size="sm"></w:icon> <?= __('账户') ?>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </tbody>
+        </table>
+    </div>
+    <?php if (!empty($platforms)): ?>
+        <p class="w-text" data-tone="muted" data-size="sm" style="margin-top:var(--weline-theme-space-3,0.75rem);">
+            <?= __('推送 API 地址请在「编辑」中查看；本页用于开关与账户配置。') ?>
+        </p>
+    <?php endif; ?>
 </div>

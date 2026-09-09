@@ -140,6 +140,9 @@ final class SearchIndexIncrementalQueue implements
             $event['store_id'] = $store->id;
         }
 
+        if (isset($payload['covered_events'])) {
+            $event['covered_events'] = $payload['covered_events'];
+        }
         $result = $this->applier->apply($event);
 
         return 'QUEUE_DONE: search_incremental_'
@@ -173,7 +176,19 @@ final class SearchIndexIncrementalQueue implements
         if (!\is_array($content) || \array_is_list($content)) {
             throw new \InvalidArgumentException('search_incremental_content_invalid');
         }
-        $fields = \array_keys($content);
+        $required = $content;
+        if (array_key_exists('covered_events', $required)) {
+            if (!is_array($required['covered_events']) || !array_is_list($required['covered_events'])) {
+                throw new \InvalidArgumentException('search_incremental_coverage_invalid');
+            }
+            \Weline\Search\Service\SearchIncrementalEventCoverage::identities(
+                (int)($content['event_seq'] ?? 0),
+                'resource-change:' . (string)($content['event_id'] ?? ''),
+                $required['covered_events'],
+            );
+            unset($required['covered_events']);
+        }
+        $fields = \array_keys($required);
         \sort($fields);
         if ($fields !== self::CONTENT_FIELDS) {
             throw new \InvalidArgumentException('search_incremental_content_fields_invalid');

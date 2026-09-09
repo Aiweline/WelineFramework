@@ -43,11 +43,11 @@ if ($isPreviewMode && $wishlistCount <= 0) {
          data-uid="<?= $esc($scope->uid) ?>"
          data-js-ns="<?= $esc($scope->jsNs) ?>"
          data-w-wishlist-icon="1"
-         data-wishlist-count="<?= $wishlistCount ?>">
+         data-wishlist-total="<?= $wishlistCount ?>">
     <a href="@url{'customer/account/index'}#wishlist" class="wishlist-link" title="<?= $esc(WidgetI18n::label('我的收藏')) ?>">
         <span class="wishlist-icon-wrapper">
             <span class="header-wishlist-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="20" height="20" focusable="false" aria-hidden="true">
                     <path d="M12 20.5s-7.2-4.6-9.2-8.8C1.2 8.4 3.4 5 6.8 5c1.8 0 3.4.9 4.3 2.3C12 5.9 13.6 5 15.4 5 18.8 5 21 8.4 21.2 11.7 19.2 15.9 12 20.5 12 20.5z"
                           fill="none"
                           stroke="currentColor"
@@ -71,35 +71,57 @@ if ($isPreviewMode && $wishlistCount <= 0) {
 .<?= $wc ?> .wishlist-link {
     display: inline-flex;
     align-items: center;
-    gap: .375rem;
+    gap: var(--spacing-1_5, .375rem);
     color: inherit;
     text-decoration: none;
+    padding: var(--spacing-sm, 0.5rem);
+    border: var(--border-width-thin, 1px) solid transparent;
+    border-radius: var(--border-radius-sm, 0.25rem);
+}
+.<?= $wc ?> .wishlist-link:hover {
+    border-color: currentColor;
+    background: var(--color-on-dark-soft, rgba(255, 255, 255, 0.08));
 }
 .<?= $wc ?> .wishlist-icon-wrapper {
     position: relative;
     display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    inline-size: var(--weline-chrome-action-icon-size, 1.25rem);
+    block-size: var(--weline-chrome-action-icon-size, 1.25rem);
+    flex-shrink: 0;
+}
+.<?= $wc ?> .header-wishlist-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    inline-size: 100%;
+    block-size: 100%;
 }
 .<?= $wc ?> .header-wishlist-icon svg {
-    width: 1.25rem;
-    height: 1.25rem;
+    display: block;
+    width: 100%;
+    height: 100%;
+    stroke: currentColor;
+    fill: none;
 }
 .<?= $wc ?> .wishlist-count {
     position: absolute;
-    top: -.45rem;
-    right: -.55rem;
-    min-width: 1.1rem;
-    height: 1.1rem;
-    padding: 0 .25rem;
+    top: calc(var(--spacing-0_5, 0.125rem) * -1);
+    right: calc(var(--spacing-0_5, 0.125rem) * -1);
+    min-width: var(--spacing-4_5, 1.125rem);
+    height: var(--spacing-4_5, 1.125rem);
+    padding: 0 0.2rem;
     border-radius: 999px;
-    background: #e11d48;
-    color: #fff;
-    font-size: .6875rem;
-    line-height: 1.1rem;
+    background: var(--weline-theme-danger, var(--color-danger));
+    color: var(--color-on-danger, #fff);
+    font-size: var(--font-size-xs, 0.75rem);
+    line-height: var(--spacing-4_5, 1.125rem);
     text-align: center;
     font-weight: 700;
 }
 .<?= $wc ?> .wishlist-count[hidden] { display: none !important; }
-.<?= $wc ?> .wishlist-label { font-size: .8125rem; font-weight: 600; }
+.<?= $wc ?> .wishlist-label { font-size: var(--font-size-sm, .875rem); font-weight: 600; }
 @media (max-width: 767px) {
     .<?= $wc ?> .wishlist-info { display: none; }
 }

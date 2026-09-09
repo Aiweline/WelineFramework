@@ -104,6 +104,7 @@ final class MetaLocalTranslationService
                         $sourceLocale,
                         $targetLocale,
                         $this->translationConfig->getStrategy($targetLocale),
+                        'meta',
                     );
                     if (!$batch['success']) {
                         $itemErrors = array_map('strval', (array)($batch['errors'] ?? []));

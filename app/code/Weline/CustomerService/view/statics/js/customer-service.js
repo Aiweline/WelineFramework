@@ -192,21 +192,38 @@ const CustomerServiceWidget = (function() {
             return fallback;
         }
         if (typeof error === 'string' && error.trim() !== '') {
-            return error.trim();
+            return humanizeBindError(error.trim(), fallback);
         }
         const direct = String(error.message || error.error || '').trim();
         if (direct && direct.indexOf('Unknown frontend worker param') === -1) {
-            return direct;
+            return humanizeBindError(direct, fallback);
         }
         const nested = error.data && (error.data.message || error.data.error);
         if (nested) {
-            return String(nested).trim();
+            return humanizeBindError(String(nested).trim(), fallback);
         }
         const responseMessage = error.response && error.response.message;
         if (responseMessage) {
-            return String(responseMessage).trim();
+            return humanizeBindError(String(responseMessage).trim(), fallback);
         }
-        return direct || fallback;
+        return humanizeBindError(direct, fallback) || fallback;
+    }
+
+    function humanizeBindError(message, fallback) {
+        const text = String(message || '').trim();
+        if (!text) {
+            return fallback;
+        }
+        if (/exceeds max length:\s*captcha_response/i.test(text)) {
+            return __('人机验证凭证异常，请刷新页面后重试');
+        }
+        if (/Captcha verification failed or expired/i.test(text)) {
+            return __('人机验证失败或已过期，请重试');
+        }
+        if (/Param string exceeds max length/i.test(text)) {
+            return __('请求参数过长，请刷新页面后重试');
+        }
+        return text;
     }
 
     let config = {
@@ -238,38 +255,47 @@ const CustomerServiceWidget = (function() {
     let state = {
         sessionId: null,
         sessionToken: null,
+        lastMessageId: 0,
         isOpen: false,
         isPolling: false,
         isSending: false,
         pollInterval: null,
         statusPollInterval: null,
-        lastMessageId: 0,
         locale: 'zh_Hans_CN',
         displayMode: 'translated', // translated, both, original
         settingsOpen: false,
-        serviceStatus: 'offline' // online(缂?, ai(閽?, offline(閻?
+        serviceStatus: 'offline', // online, ai, offline
+        guestSend: {
+            gate_active: false,
+            email_bound: true,
+            awaiting_reply: false,
+            can_send: true,
+            message: ''
+        }
     };
     
     /**
-     * 閸掓繂顫愰崠?
+     * 初始化
      */
     function init(options) {
         config = Object.assign(config, options);
+        const defaultLocale = String(config.defaultCustomerLocale || 'zh_Hans_CN');
+        state.locale = defaultLocale;
         
-        // 娴犲窅ocalStorage閹垹顦查悩鑸碘偓?
+        // 从 localStorage 恢复状态
         const savedState = localStorage.getItem('cs_widget_state');
         if (savedState) {
             try {
                 const parsed = JSON.parse(savedState);
                 state.sessionToken = parsed.sessionToken || null;
-                state.locale = parsed.locale || 'zh_Hans_CN';
+                state.locale = parsed.locale || defaultLocale;
                 state.displayMode = parsed.displayMode || 'translated';
             } catch (e) {
                 console.error('Failed to load saved state:', e);
             }
         }
         
-        // 閸掓繂顫愰崠鏈閻樿埖鈧?
+        // 初始化 UI
         initUIState();
         bindWidgetControls();
         updateWidgetLocaleText();
@@ -344,6 +370,54 @@ const CustomerServiceWidget = (function() {
                 event.preventDefault();
                 sendMessage();
             });
+        }
+
+        document.querySelectorAll('[data-cs-open-bind-email]').forEach(button => {
+            button.addEventListener('click', event => {
+                event.preventDefault();
+                showBindPrompt({force: true});
+            });
+        });
+    }
+
+    function applyGuestSendGate(gate) {
+        if (!gate || typeof gate !== 'object') {
+            return;
+        }
+        state.guestSend = {
+            gate_active: Boolean(gate.gate_active),
+            email_bound: Boolean(gate.email_bound),
+            awaiting_reply: Boolean(gate.awaiting_reply),
+            can_send: gate.can_send !== false,
+            message: String(gate.message || '')
+        };
+        const locked = state.guestSend.gate_active && state.guestSend.awaiting_reply;
+        const banner = document.getElementById('cs-guest-send-gate');
+        const text = document.getElementById('cs-guest-send-gate-text');
+        const input = document.getElementById('cs-message-input');
+        const sendButton = document.querySelector('.cs-send-button, [data-cs-send-message]');
+        if (banner) {
+            if (locked) {
+                banner.hidden = false;
+                if (text) {
+                    text.textContent = state.guestSend.message
+                        || __('请等待客服回复后再发送。验证邮箱后可跳过等待、连续发送消息。');
+                }
+            } else {
+                banner.hidden = true;
+            }
+        }
+        if (input && !state.isSending) {
+            input.disabled = locked;
+            input.setAttribute('aria-disabled', locked ? 'true' : 'false');
+            if (locked) {
+                input.placeholder = __('等待客服回复…');
+            } else {
+                input.placeholder = __('输入消息...');
+            }
+        }
+        if (sendButton && !state.isSending) {
+            sendButton.disabled = locked;
         }
     }
 
@@ -491,6 +565,9 @@ const CustomerServiceWidget = (function() {
                 state.sessionId = data.data.session_id;
                 state.sessionToken = data.data.session_token;
                 state.locale = data.data.customer_locale;
+                if (data.data.guest_send) {
+                    applyGuestSendGate(data.data.guest_send);
+                }
                 
                 saveState();
                 initUIState();
@@ -587,6 +664,15 @@ const CustomerServiceWidget = (function() {
             return;
         }
 
+        if (state.guestSend && state.guestSend.gate_active && state.guestSend.awaiting_reply) {
+            applyGuestSendGate(state.guestSend);
+            notify('warning', state.guestSend.message
+                || __('请等待客服回复后再发送。验证邮箱后可跳过等待、连续发送消息。'), {
+                title: __('请注意')
+            });
+            return;
+        }
+
         state.isSending = true;
 
         const sessionReady = await ensureSessionReady();
@@ -596,10 +682,11 @@ const CustomerServiceWidget = (function() {
             return;
         }
         
-        // 缁備胶鏁ゆ潏鎾冲弳
         input.disabled = true;
-        const sendButton = document.querySelector('.cs-send-button');
-        sendButton.disabled = true;
+        const sendButton = document.querySelector('.cs-send-button, [data-cs-send-message]');
+        if (sendButton) {
+            sendButton.disabled = true;
+        }
         
         try {
             const data = await (await getCustomerServiceApi()).sendMessage({
@@ -607,11 +694,14 @@ const CustomerServiceWidget = (function() {
                 content: content,
                 locale: state.locale
             }, {silent: true});
+
+            if (data.guest_send) {
+                applyGuestSendGate(data.guest_send);
+            }
             
             if (data.success) {
                 input.value = '';
                 
-                // 濞ｈ濮炲☉鍫熶紖閸掓壆鏅棃?
                 addMessage({
                     message_id: data.data.message_id,
                     content: data.data.content,
@@ -623,7 +713,6 @@ const CustomerServiceWidget = (function() {
                     created_at: data.data.created_at
                 });
                 
-                // Scroll to bottom after the customer sends a message.
                 scrollToBottom();
                 maybeShowGuestBindPrompt();
             } else {
@@ -633,9 +722,8 @@ const CustomerServiceWidget = (function() {
             console.error('Failed to send message:', error);
             notify('error', __('发送失败，请稍后重试'));
         } finally {
-            input.disabled = false;
-            sendButton.disabled = false;
             state.isSending = false;
+            applyGuestSendGate(state.guestSend);
         }
     }
     
@@ -656,6 +744,9 @@ const CustomerServiceWidget = (function() {
             }, {silent: true});
             
             if (data.success) {
+                if (data.guest_send) {
+                    applyGuestSendGate(data.guest_send);
+                }
                 const messages = Array.isArray(data.data) ? data.data : null;
                 const messagesContainer = document.getElementById('cs-chat-messages');
                 if (!messagesContainer || messages === null) {
@@ -675,7 +766,6 @@ const CustomerServiceWidget = (function() {
                         addMessage(msg, false);
                     });
                     
-                    // 閺囧瓨鏌婇張鈧崥搴濈閺夆剝绉烽幁鐤楧
                     if (messages.length > 0) {
                         state.lastMessageId = messages[messages.length - 1].message_id;
                     }
@@ -738,14 +828,38 @@ const CustomerServiceWidget = (function() {
      */
     function renderMessageContent(bubble, message) {
         const original = message.content || '';
+        const attachment = message.attachment || parseCsAttachment(original);
+        bubble.innerHTML = '';
+        if (attachment && attachment.type === 'image' && attachment.url) {
+            const link = document.createElement('a');
+            link.href = attachment.url;
+            link.target = '_blank';
+            link.rel = 'noopener';
+            const img = document.createElement('img');
+            img.src = attachment.url;
+            img.alt = attachment.name || 'image';
+            img.loading = 'lazy';
+            img.style.maxWidth = '100%';
+            img.style.borderRadius = '8px';
+            link.appendChild(img);
+            bubble.appendChild(link);
+            return;
+        }
+        if (attachment && attachment.type === 'file' && attachment.url) {
+            const link = document.createElement('a');
+            link.href = attachment.url;
+            link.target = '_blank';
+            link.rel = 'noopener';
+            link.textContent = attachment.name || (message.display_content || 'file');
+            bubble.appendChild(link);
+            return;
+        }
         const translated = message.display_content || message.translated_content || original;
         const hasTranslation = translated && translated !== original;
         const sourceLocale = message.source_locale || '';
         const translatedLocale = message.display_content && translated !== original
             ? state.locale
             : (message.target_locale || state.locale);
-        
-        bubble.innerHTML = '';
         
         switch (state.displayMode) {
             case 'both':
@@ -782,6 +896,22 @@ const CustomerServiceWidget = (function() {
             default:
                 bubble.textContent = translated;
                 break;
+        }
+    }
+
+    function parseCsAttachment(content) {
+        const raw = String(content || '');
+        if (raw.indexOf('__CSJSON__') !== 0) {
+            return null;
+        }
+        try {
+            const data = JSON.parse(raw.slice('__CSJSON__'.length));
+            if (!data || (data.type !== 'image' && data.type !== 'file') || !data.url) {
+                return null;
+            }
+            return data;
+        } catch (e) {
+            return null;
         }
     }
 
@@ -880,6 +1010,10 @@ const CustomerServiceWidget = (function() {
                     offset: 0
                 }, {silent: true});
                 
+                if (data.success && data.guest_send) {
+                    applyGuestSendGate(data.guest_send);
+                }
+
                 if (data.success && Array.isArray(data.data) && data.data.length > 0) {
                     const messagesContainer = document.getElementById('cs-chat-messages');
                     if (!messagesContainer) {
@@ -890,14 +1024,14 @@ const CustomerServiceWidget = (function() {
                             .map(el => parseInt(el.dataset.messageId))
                     );
                     
-                    // 閸欘亝鍧婇崝鐘虫煀濞戝牊浼?
                     let hasNew = false;
                     data.data.forEach(msg => {
-                        if (!existingIds.has(msg.message_id) && msg.sender_type === 'agent') {
+                        const messageId = parseInt(msg.message_id, 10) || 0;
+                        if (messageId > 0 && !existingIds.has(messageId) && msg.sender_type === 'agent') {
                             addMessage(msg);
+                            existingIds.add(messageId);
                             hasNew = true;
                             
-                            // 閺囧瓨鏌婇張顏囶嚢閺佷即鍣?
                             if (!state.isOpen) {
                                 updateUnreadBadge();
                             }
@@ -953,43 +1087,32 @@ const CustomerServiceWidget = (function() {
     }
 
     /**
-     * 更新在线状态指示器 UI
+     * 更新在线状态指示器 UI（窗内文案；浮钮不再显示状态小圆点）
      * online=在线, ai=AI, offline=离线
      */
     function updateStatusIndicator() {
-        const dot = document.getElementById('cs-status-dot');
         const label = document.getElementById('cs-status-label');
-        if (!dot) return;
+        if (!label) {
+            return;
+        }
 
         const statusClasses = ['cs-status-online', 'cs-status-ai', 'cs-status-offline'];
-        dot.classList.remove(...statusClasses);
-        if (label) {
-            label.classList.remove(...statusClasses);
-            label.style.backgroundColor = '';
-            label.style.color = '';
-        }
+        label.classList.remove(...statusClasses);
+        label.style.backgroundColor = '';
+        label.style.color = '';
 
         switch (state.serviceStatus) {
             case 'online':
-                dot.classList.add('cs-status-online');
-                if (label) {
-                    label.classList.add('cs-status-online');
-                    label.textContent = __('在线客服');
-                }
+                label.classList.add('cs-status-online');
+                label.textContent = __('在线客服');
                 break;
             case 'ai':
-                dot.classList.add('cs-status-ai');
-                if (label) {
-                    label.classList.add('cs-status-ai');
-                    label.textContent = __('AI 智能客服');
-                }
+                label.classList.add('cs-status-ai');
+                label.textContent = __('AI 智能客服');
                 break;
             default:
-                dot.classList.add('cs-status-offline');
-                if (label) {
-                    label.classList.add('cs-status-offline');
-                    label.textContent = __('离线');
-                }
+                label.classList.add('cs-status-offline');
+                label.textContent = __('离线');
                 break;
         }
     }
@@ -1095,7 +1218,7 @@ const CustomerServiceWidget = (function() {
         delete form.dataset.welineCaptchaPending;
     }
 
-    async function refreshBindCaptcha(modal) {
+    async function refreshBindCaptcha(modal, prefer) {
         if (!modal || !config.bindCaptchaChallengeUrl) {
             return false;
         }
@@ -1106,10 +1229,20 @@ const CustomerServiceWidget = (function() {
         }
 
         try {
-            const response = await fetch(config.bindCaptchaChallengeUrl, {
+            let challengeUrl = String(config.bindCaptchaChallengeUrl);
+            const preferValue = String(prefer || '').trim();
+            if (preferValue === 'local_image') {
+                const url = new URL(challengeUrl, window.location.origin);
+                url.searchParams.set('prefer', 'local_image');
+                challengeUrl = url.toString();
+            }
+
+            const response = await fetch(challengeUrl, {
                 credentials: 'same-origin',
+                cache: 'no-store',
                 headers: {
-                    Accept: 'application/json'
+                    Accept: 'application/json',
+                    'Cache-Control': 'no-cache'
                 }
             });
             const data = await response.json();
@@ -1236,20 +1369,43 @@ const CustomerServiceWidget = (function() {
 
     /**
      * Show the bind-email prompt only for eligible guest sessions.
+     * Always fetch a fresh captcha challenge (never reuse SSR/cached HTML).
      */
-    function showBindPrompt() {
-        if (config.isLoggedIn || !config.showGuestBindPrompt) {
+    async function showBindPrompt(options) {
+        const opts = options && typeof options === 'object' ? options : {};
+        if (config.isLoggedIn) {
+            return;
+        }
+        if (!opts.force && !config.showGuestBindPrompt) {
             return;
         }
 
         const modal = ensureBindModal();
-        if (modal) {
-            if (config.bindCaptchaEnabled) {
-                refreshBindCaptcha(modal);
+        if (!modal) {
+            return;
+        }
+
+        const submitButton = modal.querySelector('[data-cs-bind-send]');
+        if (submitButton) {
+            submitButton.disabled = true;
+        }
+
+        modal.style.display = 'flex';
+        modal.classList.add('w-open', 'show');
+        setBindModalOpen(true);
+
+        if (config.bindCaptchaEnabled) {
+            const prefer = String(opts.prefer || '').trim() === 'local_image'
+                ? 'local_image'
+                : '';
+            const loaded = await refreshBindCaptcha(modal, prefer);
+            if (!loaded) {
+                notify('error', __('人机验证加载失败，请稍后重试'), {title: __('发送失败')});
             }
-            modal.style.display = 'flex';
-            modal.classList.add('w-open', 'show');
-            setBindModalOpen(true);
+        }
+
+        if (submitButton) {
+            submitButton.disabled = false;
         }
     }
 
@@ -1321,6 +1477,12 @@ const CustomerServiceWidget = (function() {
             captcha_action: String(formData.get('captcha_action') || '')
         };
 
+        if (config.bindCaptchaEnabled && payload.captcha_provider === '') {
+            notify('warning', __('人机验证尚未就绪，正在刷新，请稍后重试'), {title: __('请注意')});
+            await refreshBindCaptcha(modal);
+            return;
+        }
+
         const submitButton = form.querySelector('[data-cs-bind-send]');
         if (submitButton) {
             submitButton.disabled = true;
@@ -1336,21 +1498,34 @@ const CustomerServiceWidget = (function() {
                 closeBindModal();
             } else {
                 delete form.dataset.welineCaptchaVerified;
+                const degradeTo = String(data.captcha_degrade || '').trim();
+                const captchaFailed = Boolean(data.captcha_error);
                 notify('error', data.message || __('发送失败，请稍后重试'), {
                     title: __('发送失败')
                 });
-                if (data.captcha_error && payload.captcha_provider === 'local_image') {
-                    await refreshBindCaptcha(modal);
+                if (captchaFailed) {
+                    const prefer = degradeTo === 'local_image'
+                        || payload.captcha_provider === 'local_image'
+                        ? 'local_image'
+                        : '';
+                    await refreshBindCaptcha(modal, prefer);
                 }
             }
         } catch (error) {
             console.error('Failed to send bind email:', error);
             delete form.dataset.welineCaptchaVerified;
+            const errPayload = (error && error.data && error.data.data) || (error && error.data) || {};
+            const degradeTo = String(errPayload.captcha_degrade || '').trim();
             notify('error', extractErrorMessage(error, __('发送失败，请稍后重试')), {
                 title: __('发送失败')
             });
-            if (payload.captcha_provider === 'local_image') {
-                await refreshBindCaptcha(modal);
+            if (config.bindCaptchaEnabled) {
+                const prefer = degradeTo === 'local_image'
+                    || payload.captcha_provider === 'local_image'
+                    || payload.captcha_provider === ''
+                    ? 'local_image'
+                    : '';
+                await refreshBindCaptcha(modal, prefer);
             }
         } finally {
             if (submitButton) {

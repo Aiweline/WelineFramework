@@ -15,6 +15,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Http\Cookie;
 use Weline\Shipping\Model\Region;
 use Symfony\Component\Intl\Countries as IntlCountries;
+use Weline\Shipping\Service\EmbargoService;
 
 /**
  * 地区服务
@@ -251,7 +252,7 @@ class RegionService
     /**
      * Distinct countries that have catalog rows for a postal code (cross-country disambiguation).
      *
-     * @return list<array{country_code: string, country_name: string, supported: bool}>
+     * @return list<array{country_code: string, country_name: string, place_name: string, supported: bool, embargoed: bool}>
      */
     public function postalCountries(string $postalCode): array
     {
@@ -268,23 +269,40 @@ class RegionService
             ->fetch()
             ->getItems();
         $supported = $this->websiteSupportedCountryCodes();
+        /** @var EmbargoService $embargo */
+        $embargo = $this->objectManager->getInstance(EmbargoService::class);
         $seen = [];
         foreach ($rows as $row) {
             $cc = strtoupper(trim((string)$row->getData(\Weline\Shipping\Model\PostalPlace::schema_fields_COUNTRY_CODE)));
             if ($cc === '' || !preg_match('/^[A-Z]{2}$/', $cc) || isset($seen[$cc])) {
                 continue;
             }
+            $placeName = trim((string)$row->getData(\Weline\Shipping\Model\PostalPlace::schema_fields_PLACE_NAME));
+            $eval = $embargo->evaluateAddress([
+                'country_code' => $cc,
+                'province_code' => (string)$row->getData(\Weline\Shipping\Model\PostalPlace::schema_fields_PROVINCE_CODE),
+                'province_region_id' => (int)$row->getData(\Weline\Shipping\Model\PostalPlace::schema_fields_PROVINCE_REGION_ID),
+                'city_code' => (string)$row->getData(\Weline\Shipping\Model\PostalPlace::schema_fields_CITY_CODE),
+                'city_region_id' => (int)$row->getData(\Weline\Shipping\Model\PostalPlace::schema_fields_CITY_REGION_ID),
+                'district_code' => (string)$row->getData(\Weline\Shipping\Model\PostalPlace::schema_fields_DISTRICT_CODE),
+                'district_region_id' => (int)$row->getData(\Weline\Shipping\Model\PostalPlace::schema_fields_DISTRICT_REGION_ID),
+            ]);
+            $isEmbargoed = !empty($eval['blocked']);
             $seen[$cc] = [
                 'country_code' => $cc,
                 'country_name' => $this->localizedCountryName($cc, $cc),
+                'place_name' => $placeName,
                 'supported' => isset($supported[$cc]),
+                'embargoed' => $isEmbargoed,
             ];
         }
         $out = array_values($seen);
         usort($out, static function (array $a, array $b): int {
-            // 站点支持的国家排前，便于选择
-            if (($a['supported'] ?? false) !== ($b['supported'] ?? false)) {
-                return ($a['supported'] ?? false) ? -1 : 1;
+            // 可配送（支持且非禁运）排前；禁运国仍保留在列表末段
+            $aOk = !empty($a['supported']) && empty($a['embargoed']);
+            $bOk = !empty($b['supported']) && empty($b['embargoed']);
+            if ($aOk !== $bOk) {
+                return $aOk ? -1 : 1;
             }
 
             return strcmp($a['country_code'], $b['country_code']);
@@ -652,6 +670,17 @@ class RegionService
 
     private function toRegionList(array $regions): array
     {
+        $regionIds = [];
+        foreach ($regions as $region) {
+            if ($region instanceof Region && $region->getId()) {
+                $regionIds[] = (int)$region->getId();
+            }
+        }
+        // Localized names are requested with a fixed number of IN queries. Calling
+        // nameByRegionId() inside the row loop turns a 500-row list into
+        // hundreds of round trips to both the region and local tables.
+        $localizedNames = $this->localNames->namesByRegionIds($regionIds);
+
         $result = [];
         foreach ($regions as $region) {
             if (!$region instanceof Region || !$region->getId()) {
@@ -663,12 +692,21 @@ class RegionService
             $regionType = (string)$region->getData(Region::schema_fields_REGION_TYPE);
             $defaultName = (string)$region->getData(Region::schema_fields_REGION_NAME);
             $regionId = (int)$region->getId();
+            $displayName = trim((string)($localizedNames[$regionId] ?? ''));
+            if ($displayName === '') {
+                $displayName = $this->localizedRegionName(
+                    $countryCode,
+                    $regionCode,
+                    $defaultName,
+                    $regionType,
+                );
+            }
             $result[] = [
                 'region_id' => $regionId,
                 'parent_region_id' => (int)$region->getData(Region::schema_fields_PARENT_REGION_ID),
                 'country_code' => $countryCode,
                 'region_code' => $regionCode,
-                'region_name' => $this->localizedRegionName($countryCode, $regionCode, $defaultName, $regionType, $regionId),
+                'region_name' => $displayName,
                 'region_default_name' => $defaultName,
                 'region_locale' => $this->currentLocale(),
                 'region_type' => $regionType,

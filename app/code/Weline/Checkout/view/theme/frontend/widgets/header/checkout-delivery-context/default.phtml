@@ -399,7 +399,7 @@ $displayText = trim((string)($context['display_text'] ?? '')) ?: (string)__('选
                 if (typeof WelineLocation === 'undefined') {
                     if (window.Weline && typeof window.Weline.load === 'function') {
                         try {
-                            await window.Weline.load('geo');
+                            await window.Weline.load('location');
                         } catch (e) {
                             openQuickAdd();
                             showMsg('<?= addslashes((string)__('自动定位不可用，请手动选择国家并完善地址。')) ?>', 'error');

@@ -8,6 +8,8 @@
 - `frontend`：店面 `/search` + 热搜；`backend`：后台顶栏等，需管理员会话，建议 `navigate-hits="true"` 点击直达。
 - 示例：`Weline_SystemConfig` 注册 `system_config`（仅 `backend`）。
 
+`SearchProviderRegistry::all()` 保留完整 Provider 实例映射；带 `area` 的调用也复用该映射，并在每次读取时重新执行 `areas()` 过滤。前台读取不会覆盖后台 Provider，也不会把后台专属类型带到页头。`forceReload` 仍强制重新发现。搜索类型和分类选项继续由既有 `search.provider_types` 的 ScopeHotCache 策略（channel + lang + area，catalog/config 失效依赖）及页头请求 memo 统一缓存。
+
 ## S1 验收要点
 
 - 唯一前台入口：`GET /search?q=&type=`；页头 `<w:search />`
@@ -34,4 +36,3 @@
 php bin/w search:provider-index:rebuild          # 全量重建
 php bin/w search:provider-index:rebuild -i blog  # 仅 Blog
 ```
-

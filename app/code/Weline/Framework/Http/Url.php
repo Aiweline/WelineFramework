@@ -717,6 +717,35 @@ class Url implements UrlInterface
 
     public function getFrontendUrl(string $path = '', array $params = [], bool $merge_url_params = false)
     {
+        return $this->extractedUrl($params, $merge_url_params, $this->buildFrontendUrl($path));
+    }
+
+    /**
+     * Batch preparation is optional; each URL still passes through the ordinary
+     * rewrite event so extensions retain their per-link behavior.
+     *
+     * @param array<array-key, string> $paths
+     * @return array<array-key, string>
+     */
+    public function getFrontendUrls(array $paths, array $params = [], bool $merge_url_params = false): array
+    {
+        $urls = [];
+        foreach ($paths as $key => $path) {
+            $urls[$key] = $this->buildFrontendUrl($path);
+        }
+        if ($urls !== [] && Env::get('seo')) {
+            $prefetchUrls = array_map(self::removeExtraDoubleSlashes(...), $urls);
+            $eventManager = ObjectManager::getInstance(EventsManager::class);
+            $eventManager->dispatch('Weline_Framework_Url::url_generate_rewrite_prefetch', $prefetchUrls);
+        }
+        foreach ($urls as $key => $url) {
+            $urls[$key] = $this->extractedUrl($params, $merge_url_params, $url);
+        }
+        return $urls;
+    }
+
+    private function buildFrontendUrl(string $path): string
+    {
         if ($path) {
             if (!$this->isLink($path)) {
                 # URL自带星号处理
@@ -746,7 +775,7 @@ class Url implements UrlInterface
         } else {
             $url = $this->getRequest()->getBaseUrl();
         }
-        return $this->extractedUrl($params, $merge_url_params, $url);
+        return $url;
     }
 
     public function getUrl(string $path = '', array $params = [], bool $merge_url_params = false): string
@@ -1397,6 +1426,14 @@ class Url implements UrlInterface
             // 3) 重写路由解码（decode_url → seo_decode 事件，查找 UrlRewrite 并改写为真实 path）
             // 缺一会导致路由或网站上下文错误
         }
+        // Fail closed before website match / seo_decode SQL: invalid UTF-8 must not reach PG.
+        if (!self::isValidUtf8Text((string)$uri)) {
+            throw new NoRouterException(400, 'Invalid request URI encoding');
+        }
+        // FPM / 非 WLS 入口也做保守注入探针拒绝（WLS 侧由 WorkerPolicyKernel 权威拦截）。
+        if (self::looksLikeInjectionProbe((string)$uri)) {
+            throw new NoRouterException(403, 'Suspicious request URI rejected');
+        }
         // Lock visitor-facing origin + path locale BEFORE strip/rewrite/cache.
         // detectLanguage and SEO rewrite both mutate the working URI; without an
         // early lock, PageBuilder intermittently sees only the controller path.
@@ -2034,6 +2071,60 @@ class Url implements UrlInterface
     static private array $decode_urls = [];
     static private array $processDecodeUrls = [];
     static private array $processDecodeUrlExpiresAt = [];
+
+    /**
+     * 判定字符串是否为合法 UTF-8（空串视为合法）。
+     * 用于请求 URI / 重写路径在落库查询前的 fail-closed 校验。
+     */
+    public static function isValidUtf8Text(string $value): bool
+    {
+        return $value === '' || \preg_match('//u', $value) === 1;
+    }
+
+    /**
+     * 保守注入探针检测（高置信模式）。
+     * 与 Server AttackDetector 默认规则对齐的子集，供 FPM/Url::parser 使用；
+     * 不包含单独匹配 `|`/`;` 等易误伤店面 query 的规则。
+     */
+    public static function looksLikeInjectionProbe(string $value): bool
+    {
+        if ($value === '') {
+            return false;
+        }
+        // 对 wire 与至多两次百分号解码后的文本都检查，堵住双重编码。
+        $candidates = [$value];
+        $once = \rawurldecode($value);
+        if ($once !== $value) {
+            $candidates[] = $once;
+        }
+        $twice = \rawurldecode($once);
+        if ($twice !== $once) {
+            $candidates[] = $twice;
+        }
+
+        $patterns = [
+            '/(\bunion\b.*\bselect\b|\bor\b\s+\d+=\d+|\band\b\s+\d+=\d+|\'.*--)/i',
+            '/(\'|%27)\s*or\s*(\'|%27)\d+(\'|%27)\s*=\s*(\'|%27)\d+/i',
+            '/(\binformation_schema\b|\bsleep\s*\(|\bbenchmark\s*\(|\bload_file\s*\(|\binto\s+outfile\b|\binto\s+dumpfile\b)/i',
+            '/<script[^>]*>|javascript:|\bon\w+\s*=/i',
+            '/(<iframe\b|<svg\b[^>]*onload\b|vbscript:|expression\s*\()/i',
+            '/\.\.\/|\.\.\\\\/',
+            '/(?:;|\||`|\$\()\s*(?:cat|ls|id|whoami|wget|curl|bash|sh|cmd|powershell)\b/i',
+            '/php:\/\/|data:\/\/|expect:\/\/|phar:\/\//i',
+        ];
+        foreach ($candidates as $candidate) {
+            if ($candidate === '' || !self::isValidUtf8Text($candidate)) {
+                continue;
+            }
+            foreach ($patterns as $pattern) {
+                if (@\preg_match($pattern, $candidate) === 1) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
 
     public static function decode_url(string $url): string
     {

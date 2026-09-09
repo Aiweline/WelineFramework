@@ -40,5 +40,21 @@ final class PromotionStorefrontScopeContractTest extends TestCase
         self::assertStringContainsString('PromotionActivityThemeScopeMatcher::matches', $content);
         self::assertStringContainsString('PromotionActivityThemeScopeMatcher::dedupeByPageSlug', $content);
         self::assertStringContainsString('$this->scopeResolver->resolve()', $content);
+        self::assertStringContainsString("'nav_label' => '今日特价'", $content);
+        self::assertStringNotContainsString("'nav_label' => '今日精选'", $content);
+        self::assertStringContainsString('migrateLegacyDealsFeaturedBranding', $content);
+        self::assertStringContainsString("__('今日特价')", $content);
+        self::assertStringContainsString('findActiveDealOverlaps', (string)file_get_contents(
+            dirname(__DIR__, 3) . '/Service/PromotionThemeProductService.php',
+        ));
+        self::assertStringContainsString('listEligibleDealsForProduct', (string)file_get_contents(
+            dirname(__DIR__, 3) . '/Service/PromotionStorefrontActiveDealResolver.php',
+        ));
+        self::assertStringContainsString('force_overlap', (string)file_get_contents(
+            dirname(__DIR__, 3) . '/Service/PromotionActivityThemeService.php',
+        ));
+        self::assertStringContainsString('needs_overlap_confirm', (string)file_get_contents(
+            dirname(__DIR__, 3) . '/view/templates/backend/promotion/theme/form.phtml',
+        ));
     }
 }

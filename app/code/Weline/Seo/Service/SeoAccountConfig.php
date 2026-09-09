@@ -96,11 +96,15 @@ final class SeoAccountConfig
         $errors = [];
         foreach ($fields as $field) {
             $key = (string)($field['key'] ?? '');
+            $type = (string)($field['type'] ?? 'text');
+            if ($type === 'section' || $key === '') {
+                continue;
+            }
             $value = $config[$key] ?? null;
             if (!empty($field['required']) && ($value === null || $value === '' || $value === [])) {
                 $errors[] = __('请填写：%{1}', (string)($field['label'] ?? $key));
             }
-            if (in_array($field['type'] ?? '', ['url', 'website_url'], true) && $value !== null && $value !== ''
+            if (in_array($type, ['url', 'website_url'], true) && $value !== null && $value !== ''
                 && (!is_string($value) || !SubmissionResult::validUrl($value))) {
                 $errors[] = __('URL 格式无效：%{1}', (string)($field['label'] ?? $key));
             }

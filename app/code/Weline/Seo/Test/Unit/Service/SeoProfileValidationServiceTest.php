@@ -76,4 +76,97 @@ class SeoProfileValidationServiceTest extends TestCase
         self::assertTrue($result['valid']);
         self::assertContains('qa pages should expose qa_list, faqs, or a QAPage schema node.', $result['warnings']);
     }
+
+    public function testShallowArticleAuthorProducesEeatWarning(): void
+    {
+        $result = (new SeoProfileValidationService())->validate([
+            'page_type' => 'blog_post',
+            'title' => 'Post',
+            'description' => 'Body.',
+            'canonical_url' => 'https://shop.test/blog/a',
+            'robots' => 'index,follow',
+            'article' => [
+                'headline' => 'Post',
+                'datePublished' => '2026-05-25 10:00:00',
+                'authors' => [['@type' => 'Person', 'name' => 'Editor']],
+            ],
+        ]);
+
+        self::assertTrue($result['valid']);
+        self::assertContains(
+            'article authors should expose Person url or sameAs (Helpful Content Who); name-only without identity link is incomplete for internal self-check.',
+            $result['warnings']
+        );
+    }
+
+    public function testJobTitleOnlyAuthorStillWarnsForWhoIdentity(): void
+    {
+        $result = (new SeoProfileValidationService())->validate([
+            'page_type' => 'blog_post',
+            'title' => 'Post',
+            'description' => 'Body.',
+            'canonical_url' => 'https://shop.test/blog/a',
+            'robots' => 'index,follow',
+            'article' => [
+                'headline' => 'Post',
+                'datePublished' => '2026-05-25 10:00:00',
+                'authors' => [[
+                    '@type' => 'Person',
+                    'name' => 'Editor',
+                    'jobTitle' => 'Hanfu researcher',
+                ]],
+            ],
+        ]);
+
+        self::assertTrue($result['valid']);
+        self::assertContains(
+            'article authors should expose Person url or sameAs (Helpful Content Who); name-only without identity link is incomplete for internal self-check.',
+            $result['warnings']
+        );
+    }
+
+    public function testDeepArticleAuthorSkipsShallowWarning(): void
+    {
+        $result = (new SeoProfileValidationService())->validate([
+            'page_type' => 'blog_post',
+            'title' => 'Post',
+            'description' => 'Body.',
+            'canonical_url' => 'https://shop.test/blog/a',
+            'robots' => 'index,follow',
+            'article' => [
+                'headline' => 'Post',
+                'datePublished' => '2026-05-25 10:00:00',
+                'authors' => [[
+                    '@type' => 'Person',
+                    'name' => 'Editor',
+                    'jobTitle' => 'Hanfu researcher',
+                    'url' => 'https://shop.test/about/editor',
+                ]],
+            ],
+        ]);
+
+        self::assertTrue($result['valid']);
+        self::assertNotContains(
+            'article authors should expose Person url or sameAs (Helpful Content Who); name-only without identity link is incomplete for internal self-check.',
+            $result['warnings']
+        );
+    }
+
+    public function testOrganizationWithoutSameAsProducesWarning(): void
+    {
+        $result = (new SeoProfileValidationService())->validate([
+            'page_type' => 'home',
+            'title' => 'Home',
+            'description' => 'Home.',
+            'canonical_url' => 'https://shop.test/',
+            'robots' => 'index,follow',
+            'organization' => ['name' => 'Shop', 'url' => 'https://shop.test/'],
+        ]);
+
+        self::assertTrue($result['valid']);
+        self::assertContains(
+            'organization should expose sameAs profile URLs (Helpful Content Trust / entity example); not a ranking gate.',
+            $result['warnings']
+        );
+    }
 }

@@ -66,8 +66,16 @@ class TranslationService
      * Avoids infinite curl waits when the local runner is saturated.
      * Keep below TranslationConcurrencyGate::STALE_HOLD_SECONDS so a hung
      * holder is disconnected before the next cron idle-spins on a dead lock.
+     * Non-stream Ollama replies send no body until done — low_speed must cover
+     * full generation (SSH tunnel + 12B can exceed several minutes per batch).
      */
-    private const REQUEST_TIMEOUT_SECONDS = 180;
+    private const REQUEST_TIMEOUT_SECONDS = 900;
+
+    /** Low-speed abort (must be <= REQUEST_TIMEOUT_SECONDS); align with full timeout for non-stream. */
+    private const REQUEST_LOW_SPEED_SECONDS = 900;
+
+    /** Connect abort when local runner is down (127.0.0.1:11434 refused). */
+    private const REQUEST_CONNECT_TIMEOUT_SECONDS = 5;
 
     /**
      * 构造函数
@@ -106,13 +114,19 @@ class TranslationService
         string $text, 
         string $targetLocale, 
         string $sourceLocale = 'auto', 
-        string $strategy = self::STRATEGY_LIGHT
+        string $strategy = self::STRATEGY_LIGHT,
+        string $concurrencyLane = TranslationConcurrencyGate::LANE_DICTIONARY,
     ): string {
         // 保存原始语言代码用于适配器参数
         $originalTargetLocale = $targetLocale;
         
         // 验证目标语言（会标准化格式，如 ja_JP -> ja-JP）
         $targetLocale = $this->i18nIntegration->validateAndGetLocale($targetLocale);
+
+        // Never acquire a lane for blank text (avoids starving other work on shared mistakes).
+        if (trim($text) === '') {
+            return '';
+        }
         
         // 生成缓存键
         $cacheKey = $this->generateCacheKey($text, $targetLocale, $sourceLocale, $strategy);
@@ -124,7 +138,7 @@ class TranslationService
         }
 
         // 执行翻译
-        $translation = $this->performTranslation($text, $targetLocale, $sourceLocale, $strategy);
+        $translation = $this->performTranslation($text, $targetLocale, $sourceLocale, $strategy, $concurrencyLane);
         
         // 缓存翻译结果
         $this->cache->set($cacheKey, $translation, 3600 * 24); // 缓存24小时
@@ -148,11 +162,29 @@ class TranslationService
         array $texts, 
         string $targetLocale, 
         string $sourceLocale = 'auto', 
-        string $strategy = self::STRATEGY_LIGHT
+        string $strategy = self::STRATEGY_LIGHT,
+        string $concurrencyLane = TranslationConcurrencyGate::LANE_DICTIONARY,
     ): array {
         if (empty($texts)) {
             return [];
         }
+
+        // Drop blank strings before locking — empty work must never occupy a lane.
+        $filtered = [];
+        foreach ($texts as $key => $text) {
+            if (trim((string)$text) === '') {
+                continue;
+            }
+            $filtered[$key] = $text;
+        }
+        if ($filtered === []) {
+            return [];
+        }
+        $texts = $filtered;
+
+        $concurrencyLane = $concurrencyLane !== ''
+            ? $concurrencyLane
+            : TranslationConcurrencyGate::LANE_DICTIONARY;
         
         // 保存原始键值对应关系
         $textsWithKeys = [];
@@ -187,9 +219,8 @@ class TranslationService
         $batchPrompt = $this->buildBatchTranslationPrompt($textsWithKeys, $targetLanguage, $sourceLanguage, $adapterStrategy);
         
         try {
-            // Single-flight: only one process hits the model at a time; others
-            // sleep(1) briefly then fail busy instead of stacking curl waits.
-            $this->concurrencyGate->acquire();
+            // Per-lane single-flight (dictionary vs LocalModel can run in parallel).
+            $this->concurrencyGate->acquire(TranslationConcurrencyGate::DEFAULT_WAIT_SECONDS, $concurrencyLane);
             try {
                 // 一次性调用AI服务进行批量翻译
                 $response = $this->aiService->generate(
@@ -202,10 +233,16 @@ class TranslationService
                         'source_language' => $sourceLanguage,
                         'strategy' => $adapterStrategy,
                         'timeout_seconds' => self::REQUEST_TIMEOUT_SECONDS,
+                        'low_speed_time' => self::REQUEST_LOW_SPEED_SECONDS,
+                        'connect_timeout' => self::REQUEST_CONNECT_TIMEOUT_SECONDS,
+                        // Batch JSON replies need headroom; default 2000 is usually enough
+                        // but long LocalModel fields can truncate mid-array and force parse failure.
+                        'max_tokens' => max(512, min(4096, 64 + (count($textsWithKeys) * 96))),
+                        'temperature' => 0.2,
                     ]
                 );
             } finally {
-                $this->concurrencyGate->release();
+                $this->concurrencyGate->release($concurrencyLane);
             }
             
             // 解析批量翻译结果
@@ -218,19 +255,28 @@ class TranslationService
                 $result[$key] = $translation;
             }
             
-            // 如果解析失败，回退到单个翻译
+            // Multi-item batches must not silently fall back to N serial model calls
+            // (that re-acquires the concurrency gate and destroys LocalModel throughput).
             if (count($result) !== count($texts)) {
-                // 解析失败，回退到循环翻译
+                if (count($texts) > 1) {
+                    throw new Exception(__(
+                        '批量翻译结果解析失败：期望 %{expected} 条，实际 %{actual} 条',
+                        [
+                            'expected' => (string)count($texts),
+                            'actual' => (string)count($result),
+                        ],
+                    ));
+                }
+                // Single-item only: fall back to the one-shot path.
                 $result = [];
                 foreach ($texts as $key => $text) {
                     try {
-                        $translation = $this->translate($text, $originalTargetLocale, $sourceLocale, $strategy);
+                        $translation = $this->translate($text, $originalTargetLocale, $sourceLocale, $strategy, $concurrencyLane);
                         $result[$key] = $translation;
                     } catch (\Exception $e) {
                         if ($this->concurrencyGate->isBusyMarker($e->getMessage())) {
                             throw $e;
                         }
-                        // 翻译失败时返回原文
                         $result[$key] = $text;
                     }
                 }
@@ -242,17 +288,20 @@ class TranslationService
             if ($this->concurrencyGate->isBusyMarker($e->getMessage())) {
                 throw $e;
             }
-            // 批量翻译失败，回退到循环翻译
+            // Multi-item: surface the failure so callers (LocalModel) can abort/retry.
+            if (count($texts) > 1) {
+                throw $e;
+            }
+            // 单条失败时回退到循环翻译
             $result = [];
             foreach ($texts as $key => $text) {
                 try {
-                    $translation = $this->translate($text, $originalTargetLocale, $sourceLocale, $strategy);
+                    $translation = $this->translate($text, $originalTargetLocale, $sourceLocale, $strategy, $concurrencyLane);
                     $result[$key] = $translation;
                 } catch (\Exception $ex) {
                     if ($this->concurrencyGate->isBusyMarker($ex->getMessage())) {
                         throw $ex;
                     }
-                    // 翻译失败时返回原文
                     $result[$key] = $text;
                 }
             }
@@ -276,10 +325,23 @@ class TranslationService
         string $strategy
     ): string {
         $payload = json_encode(array_values($texts), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $quality = $strategy === 'professional'
+            ? 'Use polished, publication-ready ecommerce / admin UI wording.'
+            : 'Prefer concise, natural UI labels suitable for menus, buttons, settings, and help text.';
 
-        return "Translate this JSON array from {$sourceLanguage} to {$targetLanguage}.\n"
-            . "Return only a valid JSON array of translated strings in the same order and with the same item count.\n"
-            . "Preserve placeholders such as %{1}, %{name}, HTML tags, and template tokens exactly.\n"
+        return "You are a professional translator for a multi-website ecommerce admin and storefront (Weline).\n"
+            . "Translate each string from {$sourceLanguage} to {$targetLanguage}.\n"
+            . "Return ONLY a valid JSON array of translated strings in the same order and with the same item count.\n"
+            . "Do not wrap the array in markdown fences, and do not add explanations.\n"
+            . "Rules:\n"
+            . "- {$quality}\n"
+            . "- Keep established product terms natural in the target language "
+            . "(SKU, OAuth, webhook, cron, API, CSV may stay as conventional loanwords when that is normal UI copy).\n"
+            . "- Prefer \"advanced maintenance\" over marketing words like \"premium\" for admin labels such as 高级维护.\n"
+            . "- Prefer \"identity\" for 身份 when it means a system identity, not a human ID card.\n"
+            . "- Preserve placeholders such as %{1}, %{name}, HTML tags, and template tokens exactly.\n"
+            . "- Do not transliterate Chinese into pinyin; produce real {$targetLanguage}.\n"
+            . "- Never return the source text unchanged when the languages differ.\n"
             . "Strategy: {$strategy}.\n"
             . "Input JSON:\n{$payload}";
     }
@@ -301,6 +363,15 @@ class TranslationService
         }
 
         $decoded = json_decode($json, true);
+        if (!(is_array($decoded) && array_is_list($decoded) && count($decoded) === $expectedCount)) {
+            // Model often wraps JSON with prose; extract the outermost array.
+            $start = strpos($json, '[');
+            $end = strrpos($json, ']');
+            if ($start !== false && $end !== false && $end > $start) {
+                $decoded = json_decode(substr($json, $start, $end - $start + 1), true);
+            }
+        }
+
         if (is_array($decoded) && array_is_list($decoded) && count($decoded) === $expectedCount) {
             return array_map(static fn($item): string => trim((string)$item), $decoded);
         }
@@ -310,7 +381,7 @@ class TranslationService
         
         foreach ($lines as $line) {
             $line = trim($line);
-            if (empty($line)) {
+            if ($line === '' || str_starts_with($line, '```')) {
                 continue;
             }
             
@@ -319,9 +390,6 @@ class TranslationService
                 $translations[] = trim($matches[1]);
             } elseif (preg_match('/^\d+\.(.+)$/', $line, $matches)) {
                 $translations[] = trim($matches[1]);
-            } else {
-                // 如果没有编号，直接作为翻译内容
-                $translations[] = $line;
             }
         }
         
@@ -329,7 +397,9 @@ class TranslationService
         if (count($translations) !== $expectedCount) {
             // 尝试按行分割，每行一个翻译
             $translations = array_filter(array_map('trim', $lines), function($line) {
-                return !empty($line) && !preg_match('/^(原文|翻译|Translation|Result)/i', $line);
+                return $line !== ''
+                    && !str_starts_with($line, '```')
+                    && !preg_match('/^(原文|翻译|Translation|Result|Input JSON)/i', $line);
             });
             $translations = array_values($translations);
         }
@@ -355,7 +425,8 @@ class TranslationService
         string $text, 
         string $targetLocale, 
         string $sourceLocale, 
-        string $strategy
+        string $strategy,
+        string $concurrencyLane = TranslationConcurrencyGate::LANE_DICTIONARY,
     ): string {
         // 获取翻译模型
         $defaultModel = $this->defaultModelManager->getDefaultModel('translation');
@@ -383,7 +454,7 @@ class TranslationService
         
         // 调用AI服务，传递适配器所需的参数
         // TranslationAdapter 会自动处理提示词构建和响应处理
-        $this->concurrencyGate->acquire();
+        $this->concurrencyGate->acquire(TranslationConcurrencyGate::DEFAULT_WAIT_SECONDS, $concurrencyLane);
         try {
             $response = $this->aiService->generate(
                 $text,  // 原始文本，让适配器处理
@@ -395,10 +466,12 @@ class TranslationService
                     'source_language' => $sourceLanguage,
                     'strategy' => $adapterStrategy,
                     'timeout_seconds' => self::REQUEST_TIMEOUT_SECONDS,
+                    'low_speed_time' => self::REQUEST_LOW_SPEED_SECONDS,
+                    'connect_timeout' => self::REQUEST_CONNECT_TIMEOUT_SECONDS,
                 ]
             );
         } finally {
-            $this->concurrencyGate->release();
+            $this->concurrencyGate->release($concurrencyLane);
         }
         
         // 响应已经被 TranslationAdapter 处理过了，直接返回
@@ -424,15 +497,17 @@ class TranslationService
         $sourceLanguage = $sourceLocale === 'auto' ? 'auto-detected language' : $this->getLanguageName($sourceLocale);
         
         if ($strategy === self::STRATEGY_HIGH_FIDELITY) {
-            return "请将以下文本从{$sourceLanguage}翻译成{$targetLanguage}，要求：\n" .
-                   "1. 保持原文的语气和风格\n" .
-                   "2. 准确传达原文含义\n" .
-                   "3. 符合目标语言的表达习惯\n" .
-                   "4. 只返回翻译结果，不要包含其他内容\n\n" .
-                   "原文：{$text}\n\n翻译：";
-        } else {
-            return "请将以下文本翻译成{$targetLanguage}，只返回翻译结果：\n\n{$text}";
+            return "You are a professional translator for ecommerce admin/storefront UI.\n"
+                . "Translate from {$sourceLanguage} to {$targetLanguage}.\n"
+                . "Keep tone natural and precise; preserve placeholders/HTML/tokens exactly.\n"
+                . "Prefer conventional admin wording (advanced maintenance, SKU identity).\n"
+                . "Return only the translation text.\n\n"
+                . "Source:\n{$text}";
         }
+
+        return "Translate this ecommerce/admin UI string from {$sourceLanguage} to {$targetLanguage}.\n"
+            . "Return only the translation. Preserve placeholders and HTML. Do not echo the source.\n\n"
+            . $text;
     }
 
     /**

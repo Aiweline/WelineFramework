@@ -265,11 +265,15 @@ class TranslationAdapter implements ScenarioAdapterInterface
      */
     private function buildStandardPrompt(string $text, string $targetLanguage, string $sourceLanguage): string
     {
-        if ($sourceLanguage === '自动检测') {
-            return "请将以下文本翻译成{$targetLanguage}，只返回翻译结果：\n\n{$text}";
-        } else {
-            return "请将以下{$sourceLanguage}文本翻译成{$targetLanguage}，只返回翻译结果：\n\n{$text}";
-        }
+        $from = $sourceLanguage === '自动检测' ? 'the detected source language' : $sourceLanguage;
+
+        return "You are a professional translator for ecommerce admin and storefront UI (Weline).\n"
+            . "Translate from {$from} to {$targetLanguage}.\n"
+            . "Return only the translation text — no quotes, labels, or explanations.\n"
+            . "Use concise natural UI wording; preserve placeholders (%{1}, %{name}), HTML, and template tokens.\n"
+            . "Prefer \"advanced maintenance\" for 高级维护 and \"identity\" for system 身份.\n"
+            . "Do not return the source unchanged when languages differ.\n\n"
+            . $text;
     }
 
     /**
@@ -283,14 +287,16 @@ class TranslationAdapter implements ScenarioAdapterInterface
      */
     private function buildProfessionalPrompt(string $text, string $targetLanguage, string $sourceLanguage, string $context): string
     {
-        $contextInfo = $context ? "，这是{$context}相关内容" : '';
-        
-        return "请将以下文本从{$sourceLanguage}翻译成{$targetLanguage}{$contextInfo}，要求：\n" .
-               "1. 保持原文的专业性和准确性\n" .
-               "2. 使用标准的专业术语\n" .
-               "3. 保持原文的结构和格式\n" .
-               "4. 只返回翻译结果，不要包含其他内容\n\n" .
-               "原文：{$text}\n\n翻译：";
+        $contextInfo = $context !== '' ? " Context: {$context}." : '';
+
+        return "You are a professional translator for ecommerce/admin documentation and UI.{$contextInfo}\n"
+            . "Translate from {$sourceLanguage} to {$targetLanguage}.\n"
+            . "Requirements:\n"
+            . "1. Accurate, domain-appropriate terminology\n"
+            . "2. Preserve structure, placeholders, and HTML exactly\n"
+            . "3. Prefer conventional admin wording over marketing tone\n"
+            . "4. Return only the translation\n\n"
+            . $text;
     }
 
     /**
@@ -303,12 +309,9 @@ class TranslationAdapter implements ScenarioAdapterInterface
      */
     private function buildCasualPrompt(string $text, string $targetLanguage, string $sourceLanguage): string
     {
-        return "请将以下{$sourceLanguage}文本翻译成{$targetLanguage}，要求：\n" .
-               "1. 使用自然、口语化的表达\n" .
-               "2. 符合日常交流习惯\n" .
-               "3. 保持原文的语气和情感\n" .
-               "4. 只返回翻译结果\n\n" .
-               "原文：{$text}\n\n翻译：";
+        return "Translate this storefront-facing copy from {$sourceLanguage} to {$targetLanguage}.\n"
+            . "Use natural everyday wording; return only the translation; preserve placeholders/HTML.\n\n"
+            . $text;
     }
 
     /**
@@ -322,15 +325,12 @@ class TranslationAdapter implements ScenarioAdapterInterface
      */
     private function buildTechnicalPrompt(string $text, string $targetLanguage, string $sourceLanguage, string $context): string
     {
-        $contextInfo = $context ? "，这是{$context}" : '';
-        
-        return "请将以下技术文本从{$sourceLanguage}翻译成{$targetLanguage}{$contextInfo}，要求：\n" .
-               "1. 保持技术术语的准确性\n" .
-               "2. 代码和命令保持原样不翻译\n" .
-               "3. 保持原文的技术逻辑\n" .
-               "4. 使用标准的技术文档表达方式\n" .
-               "5. 只返回翻译结果\n\n" .
-               "原文：{$text}\n\n翻译：";
+        $contextInfo = $context !== '' ? " Context: {$context}." : '';
+
+        return "Translate this technical/admin text from {$sourceLanguage} to {$targetLanguage}.{$contextInfo}\n"
+            . "Keep code, commands, and API identifiers unchanged when they are literal tokens.\n"
+            . "Preserve placeholders and HTML. Return only the translation.\n\n"
+            . $text;
     }
 
     /**

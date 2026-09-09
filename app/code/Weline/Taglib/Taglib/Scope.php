@@ -176,6 +176,7 @@ if (\is_string($__wscope_options_raw) && \trim($__wscope_options_raw) !== '') {
     $__wscope_options = $__wscope_options_raw;
 }
 $__wscope_display = '';
+$__wscope_title = '';
 if ($__wscope_options === []) {
     $__wscope_payload = \Weline\Framework\Manager\ObjectManager::getInstance(
         \Weline\SystemConfig\Api\Scope\ScopeSelectorCatalogInterface::class
@@ -183,6 +184,7 @@ if ($__wscope_options === []) {
     $__wscope_options = (array)($__wscope_payload['tree_options'] ?? []);
     $__wscope_value = (string)($__wscope_payload['selected_scope'] ?? $__wscope_value);
     $__wscope_display = (string)($__wscope_payload['selected_label'] ?? '');
+    $__wscope_title = (string)($__wscope_payload['selected_title'] ?? $__wscope_display);
 }
 $__wscope_normalize = static function (array $nodes) use (&$__wscope_normalize): array {
     $normalized = [];
@@ -195,10 +197,13 @@ $__wscope_normalize = static function (array $nodes) use (&$__wscope_normalize):
             continue;
         }
         $label = \trim((string)($node['label'] ?? $node['name'] ?? $value)) ?: $value;
+        $display = \trim((string)($node['display_label'] ?? $node['displayLabel'] ?? $label)) ?: $label;
+        $title = \trim((string)($node['title_label'] ?? $node['titleLabel'] ?? $node['title'] ?? $display)) ?: $display;
         $normalized[] = [
             'value' => $value,
             'label' => $label,
-            'display_label' => \trim((string)($node['display_label'] ?? $node['displayLabel'] ?? $label)) ?: $label,
+            'display_label' => $display,
+            'title_label' => $title,
             'kind' => \trim((string)($node['kind'] ?? '')),
             'children' => $__wscope_normalize((array)($node['children'] ?? [])),
         ];
@@ -220,8 +225,27 @@ $__wscope_find_label = static function (array $nodes, string $value) use (&$__ws
 
     return '';
 };
+$__wscope_find_title = static function (array $nodes, string $value) use (&$__wscope_find_title): string {
+    foreach ($nodes as $node) {
+        if (\hash_equals((string)$node['value'], $value)) {
+            return (string)($node['title_label'] ?? $node['display_label'] ?? '');
+        }
+        $child = $__wscope_find_title((array)$node['children'], $value);
+        if ($child !== '') {
+            return $child;
+        }
+    }
+
+    return '';
+};
 if ($__wscope_display === '') {
     $__wscope_display = $__wscope_find_label($__wscope_options, $__wscope_value);
+}
+if ($__wscope_title === '') {
+    $__wscope_title = $__wscope_find_title($__wscope_options, $__wscope_value);
+}
+if ($__wscope_title === '') {
+    $__wscope_title = $__wscope_display;
 }
 if ($__wscope_display === '') {
     $__wscope_display = $__wscope_placeholder;
@@ -238,6 +262,7 @@ $__wscope_render_nodes = static function (array $nodes, int $level = 1) use (
         $value = (string)$node['value'];
         $label = (string)$node['label'];
         $display = (string)$node['display_label'];
+        $title = (string)($node['title_label'] ?? $display);
         $kind = (string)$node['kind'];
         $children = (array)$node['children'];
         $hasChildren = $children !== [];
@@ -252,9 +277,10 @@ $__wscope_render_nodes = static function (array $nodes, int $level = 1) use (
             . ' data-w-scope-node data-value="' . $__wscope_escape($value) . '"'
             . ' data-label="' . $__wscope_escape($label) . '"'
             . ' data-display-label="' . $__wscope_escape($display) . '"'
+            . ' data-title-label="' . $__wscope_escape($title) . '"'
             . ' data-kind="' . $__wscope_escape($kind) . '"'
             . ' data-has-children="' . ($hasChildren ? 'true' : 'false') . '">';
-        $out .= '<div class="w-tree-select-node-content" data-w-scope-option title="' . $__wscope_escape($display) . '">';
+        $out .= '<div class="w-tree-select-node-content" data-w-scope-option title="' . $__wscope_escape($title) . '">';
         if ($hasChildren) {
             $out .= '<button type="button" class="w-tree-select-node-expand" data-w-scope-expand tabindex="-1"'
                 . ' aria-expanded="' . ($expanded ? 'true' : 'false') . '"'
@@ -296,15 +322,17 @@ PHP;
 .w-scope-select-dropdown .w-tree-select-node-children{display:none;margin-inline-start:.6rem;padding-inline-start:.65rem;border-inline-start:1px solid var(--weline-theme-border,var(--backend-color-border-default,#475569))}
 .w-scope-select-dropdown .w-tree-select-node.expanded>.w-tree-select-node-children{display:block}
 .w-scope-select-dropdown .w-tree-select-empty{padding:1rem;text-align:center;color:var(--weline-theme-text-muted,var(--backend-color-text-secondary,#64748b))}
-.w-scope-select[data-disabled="true"]{opacity:.62}
-.w-scope-select[data-disabled="true"] .w-tree-select-trigger{cursor:not-allowed}
+.w-scope-select[data-disabled="true"]{opacity:.62;cursor:help}
+/* Disabled <button> drops pointer events; route hover to the titled shell. */
+.w-scope-select[data-disabled="true"] .w-tree-select-trigger{cursor:help;pointer-events:none}
 </style>
 <div class="<?= $__wscope_escape(\trim('w-scope-select w-tree-select ' . $__wscope_class)) ?>"
      id="<?= $__wscope_escape($__wscope_id) ?>_container"
      style="<?= $__wscope_escape($__wscope_style) ?>"
      data-component="scope-select"
      data-disabled="<?= $__wscope_disabled ? 'true' : 'false' ?>"
-     data-value="<?= $__wscope_escape($__wscope_value) ?>">
+     data-value="<?= $__wscope_escape($__wscope_value) ?>"
+     title="<?= $__wscope_escape($__wscope_title !== '' ? $__wscope_title : $__wscope_display) ?>">
     <input type="hidden"
            id="<?= $__wscope_escape($__wscope_id) ?>"
            name="<?= $__wscope_escape($__wscope_name) ?>"
@@ -320,9 +348,10 @@ PHP;
             aria-expanded="false"
             aria-controls="<?= $__wscope_escape($__wscope_id) ?>_dropdown"
             aria-label="<?= $__wscope_escape($__wscope_aria_label) ?>"
+            title="<?= $__wscope_escape($__wscope_title !== '' ? $__wscope_title : $__wscope_display) ?>"
             aria-required="<?= $__wscope_required ? 'true' : 'false' ?>"
             <?= $__wscope_disabled ? 'disabled' : '' ?>>
-        <span class="w-tree-select-display" id="<?= $__wscope_escape($__wscope_id) ?>_display"><?= $__wscope_escape($__wscope_display) ?></span>
+        <span class="w-tree-select-display" id="<?= $__wscope_escape($__wscope_id) ?>_display" title="<?= $__wscope_escape($__wscope_title !== '' ? $__wscope_title : $__wscope_display) ?>"><?= $__wscope_escape($__wscope_display) ?></span>
         <span class="w-tree-select-arrow" aria-hidden="true">&#9662;</span>
     </button>
     <div class="w-tree-select-dropdown w-scope-select-dropdown"
@@ -403,7 +432,12 @@ function syncSelection(value){
     node.setAttribute('aria-selected', String(selected));
   });
   var current = selectedNode();
-  display.textContent = current ? (current.dataset.displayLabel || current.dataset.label || value) : value;
+  var shortLabel = current ? (current.dataset.displayLabel || current.dataset.label || value) : value;
+  var fullTitle = current ? (current.dataset.titleLabel || current.dataset.displayLabel || current.dataset.label || value) : value;
+  display.textContent = shortLabel;
+  display.setAttribute('title', fullTitle);
+  trigger.setAttribute('title', fullTitle);
+  root.setAttribute('title', fullTitle);
   hidden.value = value;
   root.dataset.value = value;
 }

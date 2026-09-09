@@ -443,9 +443,13 @@ final class OfferEavMapper
     {
         $normalized = strtolower($name);
         return match (true) {
+            // 「货源类型」含「类型」字样，不得并入可购规格轴 style_type。
+            preg_match('/货源类型|货源类别/u', $name) === 1 => 'hanfu_huo_yuan_lei_bie',
             preg_match('/颜色|色系|colour|color/u', $normalized) === 1 => 'color',
             preg_match('/尺码|尺寸|身高|size/u', $normalized) === 1 => 'size',
             preg_match('/款式|类型|组合|style|type/u', $normalized) === 1 => 'style_type',
+            // 「主面料成分含量」等含「面料」+「含量」，优先独立属性，避免把百分比并入 material。
+            preg_match('/含量/u', $name) === 1 => 'hanfu_' . str_replace('-', '_', $this->slug($name, 50)),
             preg_match('/材质|面料|material|fabric/u', $normalized) === 1 => 'material',
             default => 'hanfu_' . str_replace('-', '_', $this->slug($name, 50)),
         };
@@ -467,6 +471,10 @@ final class OfferEavMapper
 
     private function isVariantAxis(string $name): bool
     {
+        if (preg_match('/货源类型|货源类别/u', $name) === 1) {
+            return false;
+        }
+
         return preg_match('/颜色|色系|colour|color|尺码|尺寸|身高|size|款式|类型|组合|style|type|角色|人物|图款|配件|道具|character|look|prop/iu', $name) === 1;
     }
 

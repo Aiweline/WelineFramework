@@ -63,11 +63,26 @@ final class BlogNamespace
         return '/' . self::PREFIX . '/category/' . $slug;
     }
 
+    public static function rssPublicPath(): string
+    {
+        return '/' . self::PREFIX . '/rss.xml';
+    }
+
+    public static function categoryRssPublicPath(string $slug): string
+    {
+        $slug = trim(strtolower($slug), '/ ');
+        if ($slug === '') {
+            return self::rssPublicPath();
+        }
+
+        return self::categoryPublicPath($slug) . '/rss.xml';
+    }
+
     public static function isReservedSlug(string $slug): bool
     {
         $slug = trim(strtolower($slug), '/ ');
 
-        return $slug === 'category';
+        return $slug === 'category' || $slug === 'rss.xml';
     }
 
     /**

@@ -38,6 +38,12 @@
 } .account-address-form__grid { display: grid; gap: 1rem; grid-template-columns: repeat(2, minmax(0, 1fr));
 } .account-address-form__field { display: grid; gap: 0.45rem;
 } .account-address-form__field--wide { grid-column: 1 / -1;
+} .account-address-form__grid [data-account-address-cascade],
+.account-address-form__grid [data-w-address-shell],
+.account-address-form__grid .w-address-shell { grid-column: 1 / -1; display: grid; gap: var(--weline-theme-space-3, 0.75rem);
+} .account-address-form__grid .w-address__postal,
+.account-address-form__grid .w-address__detail { display: grid; gap: 0.45rem;
+} .account-address-form__grid .w-address__label { color: var(--color-text-primary); font-size: 0.85rem; font-weight: 800;
 } .account-address-form__field span { color: var(--color-text-primary); font-size: 0.85rem; font-weight: 800;
 } .account-address-form__field input,
 .account-address-form__field textarea { background-color: var(--color-bg-primary); border: 1px solid var(--color-border-default); border-radius: var(--border-radius-lg, 0.75rem); color: var(--color-text-primary); min-height: 2.75rem; outline: none; padding: 0.7rem 0.9rem; width: 100%;

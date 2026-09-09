@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace Weline\Promotion\Service;
 
 /**
- * Resolves the strongest active activity-theme deal for a storefront product.
+ * Resolves active activity-theme deals for a storefront product.
  *
- * Used so PDP / cart-facing display can match /promotion/{slug} shelf pricing
- * while the theme remains active (until cancelled / deactivated).
+ * Default: earliest theme sort_order (admin activity order). Optional preferred
+ * theme_id when the shopper picks among overlapping eligible campaigns.
  */
 final class PromotionStorefrontActiveDealResolver
 {
@@ -27,21 +27,71 @@ final class PromotionStorefrontActiveDealResolver
      *     theme_id:int,
      *     page_slug:string,
      *     marketing_rule_id:int,
-     *     page_title?:string
+     *     campaign_label:string,
+     *     campaign_url:string,
+     *     sort_order:int
      * }|null
      */
-    public function resolveForProduct(int $productId, ?float $catalogPrice = null): ?array
+    public function resolveForProduct(
+        int $productId,
+        ?float $catalogPrice = null,
+        ?int $preferredThemeId = null,
+    ): ?array {
+        $eligible = $this->listEligibleDealsForProduct($productId, $catalogPrice);
+        if ($eligible === []) {
+            return null;
+        }
+
+        $preferredThemeId = $preferredThemeId !== null ? max(0, $preferredThemeId) : 0;
+        $picked = null;
+        if ($preferredThemeId > 0) {
+            foreach ($eligible as $deal) {
+                if ((int)($deal['theme_id'] ?? 0) === $preferredThemeId) {
+                    $picked = $deal;
+                    break;
+                }
+            }
+        }
+        $picked ??= $eligible[0];
+
+        return [
+            'deal_discount_type' => (string)($picked['deal_discount_type'] ?? ''),
+            'deal_discount_value' => (float)($picked['deal_discount_value'] ?? 0),
+            'theme_id' => (int)($picked['theme_id'] ?? 0),
+            'page_slug' => (string)($picked['page_slug'] ?? ''),
+            'marketing_rule_id' => (int)($picked['marketing_rule_id'] ?? 0),
+            'campaign_label' => (string)($picked['campaign_label'] ?? ''),
+            'campaign_url' => (string)($picked['campaign_url'] ?? ''),
+            'sort_order' => (int)($picked['sort_order'] ?? 0),
+        ];
+    }
+
+    /**
+     * All real-discount themes that include this product, admin sort_order first.
+     *
+     * @return list<array{
+     *     deal_discount_type:string,
+     *     deal_discount_value:float,
+     *     theme_id:int,
+     *     page_slug:string,
+     *     marketing_rule_id:int,
+     *     campaign_label:string,
+     *     campaign_url:string,
+     *     sort_order:int,
+     *     score:float
+     * }>
+     */
+    public function listEligibleDealsForProduct(int $productId, ?float $catalogPrice = null): array
     {
         if ($productId <= 0) {
-            return null;
+            return [];
         }
 
         $scope = $this->scopeResolver->resolve();
         $cache = \Weline\Framework\Manager\ObjectManager::getInstance(
             \Weline\Framework\Cache\Service\StorefrontScopeHotCache::class,
         );
-        $best = null;
-        $bestScore = -1.0;
+        $eligible = [];
 
         foreach ($cache->rememberForRequest(
             'promotion.active_themes',
@@ -62,36 +112,83 @@ final class PromotionStorefrontActiveDealResolver
                     fn(): array => $this->themeProductService->resolveStorefrontProductIds($theme, $scope),
                 )
                 : [];
-            $eligible = in_array($productId, $productIds, true);
-            if (!$eligible && $productIds === [] && $catalogPrice !== null
+            $isEligible = in_array($productId, $productIds, true);
+            if (!$isEligible && $productIds === [] && $catalogPrice !== null
                 && ($theme['product_pick_mode'] ?? PromotionThemeProductService::PICK_MODE_MANUAL)
                     === PromotionThemeProductService::PICK_MODE_MANUAL
             ) {
                 // Manual themes with empty bindings still shelf by price_band — keep deal eligibility aligned.
-                $eligible = $this->matchesPriceBand($catalogPrice, (string)($theme['price_band'] ?? ''));
+                $isEligible = $this->matchesPriceBand($catalogPrice, (string)($theme['price_band'] ?? ''));
             }
-            if (!$eligible) {
+            if (!$isEligible) {
                 continue;
             }
 
-            // Prefer stronger percent / larger fixed amount when multiple themes match.
+            $pageSlug = strtolower(trim((string)($theme['page_slug'] ?? '')));
+            $sortOrder = (int)($theme['sort_order'] ?? 0);
+            $meta = [
+                'campaign_label' => '',
+                'campaign_url' => $pageSlug !== '' ? $this->themeService->storefrontUrl($pageSlug) : '',
+                'page_title' => '',
+            ];
+            if ($themeId > 0) {
+                try {
+                    $meta = $cache->rememberForRequest(
+                        'promotion.storefront_campaign_meta',
+                        serialize([$themeId, $pageSlug]),
+                        fn(): array => $this->themeService->resolveStorefrontCampaignMeta($themeId, [
+                            'page_slug' => $pageSlug,
+                            'id' => $themeId,
+                        ]),
+                    );
+                } catch (\Throwable) {
+                    // Unit stubs / degraded LocalModel: fall back below.
+                }
+            }
+            $label = trim((string)($meta['campaign_label'] ?? ''));
+            if ($label === '') {
+                $label = trim((string)($meta['page_title'] ?? ''));
+            }
+            $label = $this->themeService->resolveCampaignDisplayLabel(
+                $pageSlug,
+                $label,
+                trim((string)($meta['page_title'] ?? '')),
+            );
+            $url = trim((string)($meta['campaign_url'] ?? ''));
+            if ($url === '' && $pageSlug !== '') {
+                $url = $this->themeService->storefrontUrl($pageSlug);
+            }
+
             $score = $type === PromotionThemeDealDiscountSyncService::DISCOUNT_PERCENTAGE
                 ? min(100.0, $value)
                 : $value;
-            if ($score <= $bestScore) {
-                continue;
-            }
-            $bestScore = $score;
-            $best = [
+
+            $eligible[] = [
                 'deal_discount_type' => $type,
                 'deal_discount_value' => $value,
                 'theme_id' => $themeId,
-                'page_slug' => (string)($theme['page_slug'] ?? ''),
+                'page_slug' => $pageSlug,
                 'marketing_rule_id' => (int)($theme['marketing_rule_id'] ?? 0),
+                'campaign_label' => $label,
+                'campaign_url' => $url,
+                'sort_order' => $sortOrder,
+                'score' => $score,
             ];
         }
 
-        return $best;
+        usort(
+            $eligible,
+            static function (array $left, array $right): int {
+                $byOrder = ((int)$left['sort_order']) <=> ((int)$right['sort_order']);
+                if ($byOrder !== 0) {
+                    return $byOrder;
+                }
+
+                return ((int)$left['theme_id']) <=> ((int)$right['theme_id']);
+            },
+        );
+
+        return array_values($eligible);
     }
 
     private function matchesPriceBand(float $price, string $priceBand): bool

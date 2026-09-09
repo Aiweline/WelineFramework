@@ -10,11 +10,16 @@ declare(strict_types=1);
  */
 namespace Weline\I18n\Model\Locale;
 use Weline\Framework\Database\Model;
+use Weline\Framework\Database\Transaction\Exception\UnsupportedAsyncTransactionConnectionException;
+use Weline\Framework\Database\Transaction\TransactionCoordinatorInterface;
+use Weline\Framework\Database\TransactionContext;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
 use Weline\I18n\Api\Translation\DictionaryEntry;
 use Weline\I18n\Api\Translation\DictionaryRepositoryInterface;
+use Weline\I18n\Service\I18nResourceChangePublisher;
 #[Table(comment: '地区词典')]
 #[Index(name: 'idx_code', columns: ['locale_code'], comment: '区码索引')]
 class Dictionary extends Model implements DictionaryRepositoryInterface
@@ -130,26 +135,48 @@ class Dictionary extends Model implements DictionaryRepositoryInterface
 
     public function upsert(string $word, string $localeCode, string $translation): bool
     {
-        $model = clone $this;
-        return (bool)$model->clearData()->clearQuery()
-            ->insert([
-                self::schema_fields_MD5 => self::generateMd5($word, $localeCode),
-                self::schema_fields_WORD => $word,
-                self::schema_fields_LOCALE_CODE => $localeCode,
-                self::schema_fields_TRANSLATE => $translation,
-            ], self::schema_fields_MD5)
-            ->fetch();
+        return $this->mutateWithChange('dictionary-upsert', $word, $localeCode, function () use ($word, $localeCode, $translation): bool {
+            $model = clone $this;
+            return (bool)$model->clearData()->clearQuery()
+                ->insert([
+                    self::schema_fields_MD5 => self::generateMd5($word, $localeCode),
+                    self::schema_fields_WORD => $word,
+                    self::schema_fields_LOCALE_CODE => $localeCode,
+                    self::schema_fields_TRANSLATE => $translation,
+                ], self::schema_fields_MD5)
+                ->fetch();
+        });
     }
 
     public function deleteEntry(string $word, string $localeCode): bool
     {
-        $model = clone $this;
-        $model->clearData()->clearQuery()->load(self::schema_fields_MD5, self::generateMd5($word, $localeCode));
-        if (!$model->getId()) {
-            return false;
+        return $this->mutateWithChange('dictionary-delete', $word, $localeCode, function () use ($word, $localeCode): bool {
+            $model = clone $this;
+            $model->clearData()->clearQuery()->load(self::schema_fields_MD5, self::generateMd5($word, $localeCode), true);
+            if (!$model->getId()) {
+                return false;
+            }
+            return (bool)$model->delete()->fetch();
+        });
+    }
+
+    /** 词典事实与资源变更共用同一连接，外层事务回滚时一并撤销。 */
+    private function mutateWithChange(string $action, string $word, string $localeCode, callable $mutation): bool
+    {
+        $connection = $this->getConnection();
+        $publisher = ObjectManager::getInstance(I18nResourceChangePublisher::class);
+        if (TransactionContext::logicalConnectionKey($connection->getConnector())
+            !== TransactionContext::logicalConnectionKey($publisher->connection()->getConnector())) {
+            throw new UnsupportedAsyncTransactionConnectionException(__('词典写入与资源变更必须使用同一逻辑数据库连接'));
         }
-        $model->delete()->fetch();
-        return true;
+        $transactions = ObjectManager::getInstance(TransactionCoordinatorInterface::class);
+        return $transactions->run($connection, static function () use ($mutation, $publisher, $action, $word, $localeCode): bool {
+            $changed = $mutation();
+            if ($changed) {
+                $publisher->publishAction($action, ['word' => $word, 'locale_code' => $localeCode]);
+            }
+            return $changed;
+        });
     }
 
     /** @param array<string, mixed> $row */

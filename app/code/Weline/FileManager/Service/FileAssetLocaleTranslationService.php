@@ -361,6 +361,7 @@ class FileAssetLocaleTranslationService implements FileAssetLocaleTranslationInt
             'target_locale' => $targetLocale,
             'source_locale' => $sourceLocale,
             'strategy' => 'light',
+            'concurrency_lane' => 'file-asset',
             'translations' => [],
             'errors' => [],
             'success' => false,
