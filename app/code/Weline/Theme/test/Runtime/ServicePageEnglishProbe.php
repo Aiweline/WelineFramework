@@ -6,7 +6,7 @@ declare(strict_types=1);
 // This does not replace browser interaction, visual QA, or policy-content review.
 $page = $argv[1] ?? '';
 $pages = [
-    'help', 'payment', 'shipping', 'returns',
+    'faq', 'payment', 'shipping', 'returns',
     'deals', 'suppliers', 'currency', 'terms', 'privacy', 'cookies',
 ];
 if (!in_array($page, $pages, true)) {
@@ -30,7 +30,7 @@ $results = [
     ['case' => 'html_language', 'observed' => $language, 'passed' => $language === 'en-US'],
     ['case' => 'english_title', 'observed' => $title, 'passed' => $title !== '' && preg_match('/\p{sc=Han}/u', $title) !== 1],
 ];
-if ($page === 'help') {
+if ($page === 'faq') {
     $heading = trim($xpath->evaluate('string(//*[@id="help-topics-title"])'));
     $results[] = [
         'case' => 'help_topics_heading',
