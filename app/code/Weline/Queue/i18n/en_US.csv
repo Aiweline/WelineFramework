@@ -148,12 +148,12 @@ user,user
 查看已注册队列消费者,"View registered queue consumers"
 重试诊断,"Retry diagnostics"
 查看失败与待重试队列,"View failure and retry queues"
-Inbox,Inbox
+收件箱,收件箱
 arrow-down,arrow-down
 查看队列任务收件状态,"View queue task receipt status"
-Outbox,Outbox
+发件箱,发件箱
 arrow-up,arrow-up
-"查看可靠异步事件 Outbox","View reliable asynchronous events Outbox"
+查看可靠异步事件发件箱,查看可靠异步事件发件箱
 "幂等键不能超过 %{1} 字节","Idempotent keys cannot exceed %{1} bytes"
 "请填写 %{1}","Fill in %{1}."
 队列状态筛选值无效。,"Queue status filter value is invalid."
@@ -190,15 +190,47 @@ ID,ID
 执行注意事项,"Execution notes"
 是,yes
 否,no
-此工作台仅显示脱敏运行事实，不执行消费、重试、删除或投递。,"This workbench only displays the desensitized running facts and does not perform consumption, retry, deletion or delivery."
-当前没有记录。,"There are currently no records."
-关键词,keywords
-全部状态,"All status"
-等待中,Waiting
 运行中,Running
 已完成,Completed
+已投递,已投递
 出错,Error
 已暂停,Suspended
+等待中,Waiting
+暂无发件箱记录,暂无发件箱记录
+当前没有可展示的异步事件发件事实。尚未产生可靠异步事件时会出现此状态。本页只读，不会投递或重试。,当前没有可展示的异步事件发件事实。尚未产生可靠异步事件时会出现此状态。本页只读，不会投递或重试。
+暂无收件箱记录,暂无收件箱记录
+当前没有可展示的队列收件事实。没有任务入队或数据暂时不可见时会出现此状态。本页只读，不会消费或删除。,当前没有可展示的队列收件事实。没有任务入队或数据暂时不可见时会出现此状态。本页只读，不会消费或删除。
+暂无待重试失败队列,暂无待重试失败队列
+当前没有状态为失败的队列任务。业务运行正常时此页为空是预期结果。本页只读，不会触发重试。,当前没有状态为失败的队列任务。业务运行正常时此页为空是预期结果。本页只读，不会触发重试。
+暂无消费者注册,暂无消费者注册
+当前没有可展示的队列类型/消费者注册。请确认相关模块已安装且队列类型已启用。,当前没有可展示的队列类型/消费者注册。请确认相关模块已安装且队列类型已启用。
+暂无诊断记录,暂无诊断记录
+此只读工作台暂无可展示的脱敏运行事实。,此只读工作台暂无可展示的脱敏运行事实。
+队列列表,"Queue list"
+已结束,Ended
+未结束,"Not ended"
+自动,automatic
+截止,截止
+店,店
+渠,渠
+任务,任务
+类型,type
+时间,time
+作用域,作用域
+可投递,可投递
+发生,发生
+创建,创建
+更新,更新
+事件,事件
+载荷,载荷
+尝试,尝试
+错误,Error
+已停用,已停用
+类,类
+此工作台仅显示脱敏运行事实，不执行消费、重试、删除或投递。,"This workbench only displays the desensitized running facts and does not perform consumption, retry, deletion or delivery."
+"最近 %{1} 条只读记录","最近 %{1} 条只读记录"
+关键词,keywords
+全部状态,"All status"
 筛选,filter
 批量删除,"Batch delete"
 批量暂停,"Batch pause"
@@ -257,7 +289,6 @@ ID,ID
 提交队列,"Submission queue"
 内容已复制到剪贴板,"Content copied to clipboard"
 复制内容,"Copy content"
-错误,Error
 已停止,Stopped
 未知,unknown
 "队列 ID","Queue ID"
@@ -265,7 +296,6 @@ ID,ID
 开始时间,"Start time"
 结束时间,"end time"
 未命名队列,"unnamed queue"
-类型,type
 是否完成,"Is it done?"
 自动执行,"Automatic execution"
 消费者信息,"consumer information"
@@ -278,9 +308,6 @@ ID,ID
 暂无执行结果,"No execution result yet"
 队列信息,"Queue information"
 进度/结果,Progress/Result
-时间,time
-自动,automatic
-已结束,Ended
 等待执行…,"Waiting for execution…"
 正在执行…,Executing…
 查看全部,"View all"
@@ -437,6 +464,10 @@ ID,ID
 队列执行详情（失败）,"Queue execution detail (failed)"
 运行队列.,"Run queue."
 说明：,illustrate:
+Inbox,Inbox
+Outbox,Outbox
+"查看可靠异步事件 Outbox","View reliable asynchronous events Outbox"
+当前没有记录。,"There are currently no records."
 "队列结果过大:%{1} Mb。 请<a href=""%{2}"">下载队列结果</a>查看。","Queue result too large: %{1} Mb. Please <a href=""%{2}"">download the queue result</a> to view."
 管理系统中注册的队列类型，可以启用或禁用特定类型的队列处理器,"Manage the registered queue types in the system, enabling or disabling specific types of queue processors."
 队列类型详细信息,"Queue type details"
@@ -475,7 +506,6 @@ dir：,dir：
 正在更新依赖属性...,"Updating dependency properties..."
 更新队列属性依赖失败，请重试。,"Failed to update queue attribute dependencies, please try again."
 是否结束,End
-未结束,"Not ended"
 自动运行,Auto-run
 类型信息,"Type information"
 运行结果,"Run result"
@@ -531,4 +561,26 @@ biz_key,biz_key
 "强制模式：检测到队列 #%{1} 正在运行（pid=%{2}），将先终止旧任务再继续。","Force mode: detected queue #%{1} is running (pid=%{2}), will terminate old task before continuing."
 "检测到历史运行进程不存在，已自动回收为 pending。","Detected that no historical running process exists, automatically recycled to pending."
 验证结果：,"Verification result:"
-队列列表,"Queue list"
+类型ID,"Type ID"
+名称,Name
+模块,Module
+说明,Tip
+类名,Class
+调度截止,"Dispatch until"
+作用域类型,"Scope kind"
+站点ID,"Website ID"
+站点编码,"Website code"
+门店编码,"Store code"
+渠道编码,"Channel code"
+"Outbox ID","Outbox ID"
+事件ID,"Event ID"
+事件名,"Event name"
+载荷版本,"Payload schema version"
+尝试次数,"Attempt count"
+锁版本,"Lock version"
+可用时间,"Available at"
+租约到期,"Lease expires at"
+展开时间,"Expanded at"
+错误码,"Error code"
+最近错误,"Last error"
+发生时间,"Occurred at"

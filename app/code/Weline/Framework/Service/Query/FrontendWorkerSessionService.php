@@ -6,7 +6,10 @@ namespace Weline\Framework\Service\Query;
 use Weline\Framework\App\Env;
 use Weline\Framework\Cache\Adapter\RedisAdapter;
 use Weline\Framework\Cache\AdapterFactory;
+use Weline\Framework\Cache\CacheManager;
 use Weline\Framework\Cache\Contract\AtomicCacheAdapterInterface;
+use Weline\Framework\Cache\Contract\CacheAdapterInterface;
+use Weline\Framework\Cache\Pool\CachePool;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\Service\Query\Store\ArrayFrontendWorkerCredentialTransaction;
@@ -15,7 +18,9 @@ use Weline\Framework\Service\Query\Store\DatabaseFrontendWorkerCredentialStore;
 use Weline\Framework\Service\Query\Store\FrontendWorkerCredentialStoreInterface;
 use Weline\Framework\Service\Query\Store\FrontendWorkerCredentialTransactionInterface;
 use Weline\Framework\Service\Query\Store\FrontendWorkerCredentialType;
+use Weline\Framework\Service\Query\Store\FrontendWorkerSessionPayloadCache;
 use Weline\Framework\Service\Query\Store\FrontendWorkerStateStoreInterface;
+use Weline\Framework\Service\Query\Store\LockedCacheFrontendWorkerStateStore;
 use Weline\Framework\Service\Query\Value\FrontendWorkerBackendBinding;
 use Weline\Framework\Service\Query\Value\FrontendWorkerExecutionContext;
 use Weline\Framework\Service\Query\Value\FrontendWorkerScopeBinding;
@@ -27,10 +32,15 @@ final class FrontendWorkerSessionService
     private const STREAM_TICKET_KEY = 'weline_frontend_worker_stream_tickets';
     private const SCOPE_BOOTSTRAP_KEY = 'weline_frontend_worker_scope_bootstraps';
     private const BACKEND_BOOTSTRAP_KEY = 'weline_frontend_worker_backend_bootstraps';
+    // Unbound storefront handshakes are short-lived; raising this to the
+    // backend SSE window previously filled MAX_ACTIVE_SESSIONS and blocked
+    // admin QueryBin (e.g. SystemConfig toggles) with capacity exhaustion.
+    private const UNBOUND_SESSION_TTL = 600;
     // Backend pages (AI workbench SSE) stay open far longer than unbound
     // storefront handshakes. Keep this aligned with Backend BINDING_TTL so
     // runtime_rotate ticket refresh does not strand a live detached task.
     private const SESSION_TTL = 7200;
+    private const SESSION_CAPACITY_EXHAUSTED_MESSAGE = '工作会话已达上限，请刷新页面后重试。';
     private const NONCE_TTL = 180;
     private const STREAM_TICKET_TTL = 60;
     private const SCOPE_BOOTSTRAP_TTL = 120;
@@ -71,6 +81,35 @@ final class FrontendWorkerSessionService
         return isset($this->stateStore) && $this->stateStore !== null
             ? $this->stateStore->driver()
             : 'local';
+    }
+
+    /**
+     * Explicit env wins. When unset, default to the unified cache pool so
+     * wls_memory / redis / file follow CacheManager driver resolution.
+     */
+    public static function resolveConfiguredSessionStoreDriver(): string
+    {
+        try {
+            $configured = Env::get('wls.frontend_worker_session_store_driver', null);
+        } catch (\Throwable $exception) {
+            throw new FrontendQueryException(
+                'worker_store_unavailable',
+                'Worker session store configuration is unavailable.',
+                503,
+                $exception,
+            );
+        }
+        if (\is_string($configured) && \trim($configured) !== '') {
+            return \strtolower(\trim($configured));
+        }
+
+        return self::defaultSessionStoreDriver();
+    }
+
+    /** @internal Default product path is the shared cache pool. */
+    public static function defaultSessionStoreDriver(): string
+    {
+        return 'cache';
     }
 
     public function usesSharedStateStore(): bool
@@ -121,15 +160,7 @@ final class FrontendWorkerSessionService
             $secret,
         ): array {
             $now = $store->now();
-            $this->assertCredentialCapacity(
-                $store,
-                FrontendWorkerCredentialType::SESSION,
-                null,
-                $now,
-                self::MAX_ACTIVE_SESSIONS,
-                'Worker session capacity is exhausted.',
-            );
-            $store->deleteExpired($now, FrontendWorkerCredentialType::SESSION);
+            $this->assertSessionCapacityAvailable($store, $now);
             $session = $this->buildSession(
                 $token,
                 $secret,
@@ -252,12 +283,6 @@ final class FrontendWorkerSessionService
             $secret,
         ): array {
             $now = $store->now();
-            $retainedSessions = $store->countRetained(
-                FrontendWorkerCredentialType::SESSION,
-                null,
-                $now,
-            );
-            $store->deleteExpired($now, FrontendWorkerCredentialType::SESSION);
             $binding = $this->assertScopeBootstrap(
                 $store->find(FrontendWorkerCredentialType::SCOPE_BOOTSTRAP, $bootstrapId, null, $now),
                 self::scopeBootstrapCookieName($bootstrapId),
@@ -265,11 +290,7 @@ final class FrontendWorkerSessionService
                 $expectedBindingDigest,
                 $now,
             );
-            $this->assertCapacityCount(
-                $retainedSessions,
-                self::MAX_ACTIVE_SESSIONS,
-                'Worker session capacity is exhausted.',
-            );
+            $this->assertSessionCapacityAvailable($store, $now);
             $session = $this->buildSession(
                 $token,
                 $secret,
@@ -413,15 +434,7 @@ final class FrontendWorkerSessionService
         ): array {
             $now = $store->now();
             $this->assertBackendBindingUsable($binding, $now);
-            $this->assertCredentialCapacity(
-                $store,
-                FrontendWorkerCredentialType::SESSION,
-                null,
-                $now,
-                self::MAX_ACTIVE_SESSIONS,
-                'Worker session capacity is exhausted.',
-            );
-            $store->deleteExpired($now, FrontendWorkerCredentialType::SESSION);
+            $this->assertSessionCapacityAvailable($store, $now);
             $session = $this->buildSession(
                 $token,
                 $secret,
@@ -471,12 +484,6 @@ final class FrontendWorkerSessionService
             $secret,
         ): array {
             $now = $store->now();
-            $retainedSessions = $store->countRetained(
-                FrontendWorkerCredentialType::SESSION,
-                null,
-                $now,
-            );
-            $store->deleteExpired($now, FrontendWorkerCredentialType::SESSION);
             $binding = $this->assertBackendBootstrap(
                 $store->find(FrontendWorkerCredentialType::BACKEND_BOOTSTRAP, $bootstrapId, null, $now),
                 self::backendBootstrapCookieName($bootstrapId, $secureCookie),
@@ -484,11 +491,7 @@ final class FrontendWorkerSessionService
                 $expectedBindingDigest,
                 $now,
             );
-            $this->assertCapacityCount(
-                $retainedSessions,
-                self::MAX_ACTIVE_SESSIONS,
-                'Worker session capacity is exhausted.',
-            );
+            $this->assertSessionCapacityAvailable($store, $now);
             $session = $this->buildSession(
                 $token,
                 $secret,
@@ -919,7 +922,8 @@ final class FrontendWorkerSessionService
         $attestedArea = $backendBinding === null
             ? FrontendWorkerExecutionContext::AREA_FRONTEND
             : FrontendWorkerExecutionContext::AREA_BACKEND;
-        $expiresAt = $now + self::SESSION_TTL;
+        // Default unbound storefront handshake: ten-minute TTL.
+        $expiresAt = $now + self::UNBOUND_SESSION_TTL;
         if ($scopeBinding !== null) {
             $this->assertBindingUsable($scopeBinding, $now);
             // The one-time bootstrap is already consumed at this point. A
@@ -930,7 +934,7 @@ final class FrontendWorkerSessionService
         }
         if ($backendBinding !== null) {
             $this->assertBackendBindingUsable($backendBinding, $now);
-            $expiresAt = \min($expiresAt, $backendBinding->expiresAt);
+            $expiresAt = \min($now + self::SESSION_TTL, $backendBinding->expiresAt);
         }
 
         $storedSession = [
@@ -1171,7 +1175,8 @@ final class FrontendWorkerSessionService
         if (!\is_array($session)) {
             throw new FrontendQueryException('auth_error', 'Invalid worker session token.', 401);
         }
-        if ((int)($session['expires_at'] ?? 0) <= $now) {
+        $expiresAt = self::effectiveSessionExpiresAt($session, $now);
+        if ($expiresAt <= $now) {
             throw new FrontendQueryException('auth_error', 'Expired worker session token.', 401);
         }
         if ((string)($session['deploy_version'] ?? '') !== $deployVersion) {
@@ -1195,7 +1200,7 @@ final class FrontendWorkerSessionService
             'worker_build_id' => (string)($session['worker_build_id'] ?? ''),
             'attested_area' => $attestedArea,
             'created_at' => (int)($session['created_at'] ?? 0),
-            'expires_at' => (int)($session['expires_at'] ?? 0),
+            'expires_at' => $expiresAt,
         ];
         if (array_key_exists('scope_binding', $session)) {
             if ($attestedArea !== FrontendWorkerExecutionContext::AREA_FRONTEND) {
@@ -1312,6 +1317,42 @@ final class FrontendWorkerSessionService
         $this->assertCapacityCount($store->countRetained($type, $scope, $now), $limit, $message);
     }
 
+    private function assertSessionCapacityAvailable(
+        FrontendWorkerCredentialTransactionInterface $store,
+        int $now,
+    ): void {
+        $store->deleteExpired($now, FrontendWorkerCredentialType::SESSION);
+        $this->assertCredentialCapacity(
+            $store,
+            FrontendWorkerCredentialType::SESSION,
+            null,
+            $now,
+            self::MAX_ACTIVE_SESSIONS,
+            (string)__(self::SESSION_CAPACITY_EXHAUSTED_MESSAGE),
+        );
+    }
+
+    /**
+     * Unbound sessions must not inherit the backend SSE window. Legacy rows
+     * written under SESSION_TTL=7200 are treated as expired once created_at +
+     * UNBOUND_SESSION_TTL elapses so capacity reclaim works without a wipe.
+     *
+     * @param array<string, mixed> $session
+     */
+    public static function effectiveSessionExpiresAt(array $session, int $now): int
+    {
+        $expiresAt = (int)($session['expires_at'] ?? 0);
+        if (\array_key_exists('scope_binding', $session)
+            || \array_key_exists('backend_binding', $session)) {
+            return $expiresAt;
+        }
+        $createdAt = (int)($session['created_at'] ?? 0);
+        if ($createdAt < 1) {
+            return $expiresAt;
+        }
+        return \min($expiresAt, $createdAt + self::UNBOUND_SESSION_TTL);
+    }
+
     private function assertCapacityCount(int $count, int $limit, string $message): void
     {
         if ($count >= $limit) {
@@ -1394,22 +1435,13 @@ final class FrontendWorkerSessionService
 
     private function createConfiguredStateStore(): FrontendWorkerStateStoreInterface|FrontendWorkerCredentialStoreInterface|null
     {
-        try {
-            $driver = \strtolower(\trim((string)Env::get(
-                'wls.frontend_worker_session_store_driver',
-                'local',
-            )));
-        } catch (\Throwable $exception) {
-            throw new FrontendQueryException(
-                'worker_store_unavailable',
-                'Worker session store configuration is unavailable.',
-                503,
-                $exception,
-            );
-        }
+        $driver = self::resolveConfiguredSessionStoreDriver();
 
         if ($driver === 'local') {
             return null;
+        }
+        if ($driver === 'cache') {
+            return $this->createCacheStateStore();
         }
         if ($driver === 'database') {
             try {
@@ -1466,6 +1498,76 @@ final class FrontendWorkerSessionService
             throw new FrontendQueryException(
                 'worker_store_unavailable',
                 'Shared worker session store is unavailable.',
+                503,
+                $exception,
+            );
+        }
+    }
+
+    private function createCacheStateStore(): FrontendWorkerStateStoreInterface
+    {
+        try {
+            $manager = ObjectManager::getInstance(CacheManager::class);
+            if (!$manager instanceof CacheManager) {
+                throw new \RuntimeException('Cache manager is unavailable.');
+            }
+            $pool = $manager->pool(FrontendWorkerSessionPayloadCache::POOL_IDENTITY);
+            $adapter = null;
+            if ($pool instanceof CachePool) {
+                $adapter = $pool->getAdapter();
+            } elseif (\method_exists($pool, 'getAdapter')) {
+                $adapter = $pool->getAdapter();
+            }
+            if (!$adapter instanceof CacheAdapterInterface) {
+                throw new \RuntimeException('Worker credential cache pool adapter is unavailable.');
+            }
+
+            $ttl = (int)Env::get('wls.frontend_worker_session_shared_store_ttl_seconds', 86400);
+            $adapterClass = $adapter::class;
+            $backend = 'file';
+            if (\str_contains($adapterClass, 'WlsMemory')) {
+                $backend = 'wls_memory';
+            } elseif (\str_contains($adapterClass, 'Redis')) {
+                $backend = 'redis';
+            } elseif (\str_contains($adapterClass, 'Memcached')) {
+                $backend = 'memcached';
+            }
+
+            if ($backend === 'redis') {
+                $adapterFactory = new AdapterFactory();
+                $redisConfig = $adapterFactory->getDriverConfig('redis');
+                if (!isset($redisConfig['host']) && isset($redisConfig['server'])) {
+                    $redisConfig['host'] = $redisConfig['server'];
+                }
+                $sharedTopology = $this->assertSharedRedisConfiguration($redisConfig);
+            } else {
+                $sharedTopology = $backend === 'wls_memory';
+            }
+
+            $driverName = 'cache:' . $backend;
+            if ($adapter instanceof AtomicCacheAdapterInterface) {
+                return new AtomicCacheFrontendWorkerStateStore(
+                    $adapter,
+                    $driverName,
+                    $ttl,
+                    $sharedTopology,
+                );
+            }
+
+            return new LockedCacheFrontendWorkerStateStore(
+                $adapter,
+                self::STORE_DIRECTORY . 'cache_store.lock',
+                $driverName,
+                $ttl,
+                self::DEFAULT_LOCK_TIMEOUT_MS,
+                $sharedTopology,
+            );
+        } catch (FrontendQueryException $exception) {
+            throw $exception;
+        } catch (\Throwable $exception) {
+            throw new FrontendQueryException(
+                'worker_store_unavailable',
+                'Worker session cache store is unavailable.',
                 503,
                 $exception,
             );

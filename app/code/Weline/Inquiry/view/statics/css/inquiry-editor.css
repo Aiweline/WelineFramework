@@ -7,15 +7,17 @@
   --iq-country: color-mix(in srgb, var(--iq-accent) 55%, #0f766e);
   display: grid;
   gap: var(--weline-space-4, 1rem);
+  min-width: 0;
+  max-width: 100%;
 }
 
 .w-inquiry-editor__chrome {
   position: sticky;
   top: 0;
   z-index: 2;
-  padding: var(--weline-space-3, 0.75rem) 0;
-  margin-block-end: var(--weline-space-1, 0.25rem);
-  background: color-mix(in srgb, var(--weline-color-surface, #fff) 92%, transparent);
+  padding-block: var(--weline-space-2, 0.5rem);
+  margin-block-end: 0;
+  background: color-mix(in srgb, var(--backend-theme-canvas, var(--weline-color-surface, #fff)) 88%, transparent);
   backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--iq-rail);
   flex-wrap: wrap;

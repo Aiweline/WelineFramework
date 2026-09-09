@@ -28,6 +28,7 @@ class Parser
 {
 
     private const TRANSLATION_RESOLUTION_DEPTH_CONTEXT_KEY = 'phrase.translation_resolution_depth';
+    private const REQUEST_PREFETCHED_GLOBAL_WORDS_CONTEXT_KEY = 'phrase.prefetched_global_words';
 
     public static bool $loaded = false;
     public const PARSER_WORDS_CACHE_KEY = 'PARSER_WORDS_CACHE_KEY';
@@ -59,6 +60,9 @@ class Parser
     protected static ?string $currentRequestWordsKey = null;
     protected static ?string $currentRequestLayeredWordsId = null;
     protected static ?string $currentRequestLayeredWordsKey = null;
+    /** @var array<string, mixed>|null */
+    protected static ?array $currentRequestLayeredWords = null;
+    private static ?string $currentRequestLayeredWordsSignature = null;
     protected static array $currentRequestTranslatedWords = [];
     
     /**
@@ -100,6 +104,8 @@ class Parser
             self::$currentRequestWordsKey = null;
             self::$currentRequestLayeredWordsId = null;
             self::$currentRequestLayeredWordsKey = null;
+            self::$currentRequestLayeredWords = null;
+            self::$currentRequestLayeredWordsSignature = null;
             self::$currentRequestTranslatedWords = [];
         });
     }
@@ -197,11 +203,11 @@ class Parser
                     static fn(): array => self::getCurrentLayeredWords(),
                 );
                 $translationCacheKey = (string)($layers['cache_key'] ?? '') . '|' . $words;
-                if (isset(self::$currentRequestTranslatedWords[$translationCacheKey])) {
-                    return self::$currentRequestTranslatedWords[$translationCacheKey];
+                if (isset(DictionaryCacheNamespace::localCache(self::$currentRequestTranslatedWords)[$translationCacheKey])) {
+                    return DictionaryCacheNamespace::localCache(self::$currentRequestTranslatedWords)[$translationCacheKey];
                 }
 
-                return self::$currentRequestTranslatedWords[$translationCacheKey]
+                return DictionaryCacheNamespace::localCache(self::$currentRequestTranslatedWords)[$translationCacheKey]
                     = RequestLifecycleTrace::measurePhase(
                         'i18n.phrase.resolve',
                         static fn(): string => self::translateWordFromLayers($words, $layers),
@@ -262,12 +268,12 @@ class Parser
             if (Runtime::isPersistent()) {
                 $translationCacheKey = $layerCacheKey . '|' . $word;
                 if (!\array_key_exists($translationCacheKey, self::$currentRequestTranslatedWords)) {
-                    self::$currentRequestTranslatedWords[$translationCacheKey] = self::translateWordFromLayers(
+                    DictionaryCacheNamespace::localCache(self::$currentRequestTranslatedWords)[$translationCacheKey] = self::translateWordFromLayers(
                         $word,
                         $layers,
                     );
                 }
-                $result[$word] = self::$currentRequestTranslatedWords[$translationCacheKey];
+                $result[$word] = DictionaryCacheNamespace::localCache(self::$currentRequestTranslatedWords)[$translationCacheKey];
             } elseif (isset(self::$words[$word])) {
                 $result[$word] = self::$words[$word];
             } else {
@@ -304,10 +310,14 @@ class Parser
             self::ensureStateRegistered();
             $layers = self::getCurrentLayeredWords();
             $cacheKey = (string)($layers['cache_key'] ?? self::buildWordsCacheKey((string)($layers['lang'] ?? State::getLangLocal()), (array)($layers['modules'] ?? [])));
-            if (!isset(self::$workerMaterializedWordsCache[$cacheKey])) {
-                self::$workerMaterializedWordsCache[$cacheKey] = self::materializeLayeredWords($layers);
+            if (!isset(DictionaryCacheNamespace::localCache(self::$workerLayeredWordsCache, 1024)[$cacheKey])) {
+                // 未确认完整的全局词典不能经物化入口变成进程级空快照。
+                return self::$words = self::materializeLayeredWords($layers);
             }
-            self::$words = self::$workerMaterializedWordsCache[$cacheKey];
+            if (!isset(DictionaryCacheNamespace::localCache(self::$workerMaterializedWordsCache, 1024)[$cacheKey])) {
+                DictionaryCacheNamespace::localCache(self::$workerMaterializedWordsCache, 1024)[$cacheKey] = self::materializeLayeredWords($layers);
+            }
+            self::$words = DictionaryCacheNamespace::localCache(self::$workerMaterializedWordsCache, 1024)[$cacheKey];
             return self::$words;
         }
         // 确保 WLS 状态管理已注册
@@ -321,14 +331,14 @@ class Parser
         if ($requestId !== null
             && self::$currentRequestWordsId === $requestId
             && self::$currentRequestWordsKey === $requestCacheKey
-            && isset(self::$workerWordsCache[$requestCacheKey])
+            && isset(DictionaryCacheNamespace::localCache(self::$workerWordsCache, 1024)[$requestCacheKey])
         ) {
-            self::$words = self::$workerWordsCache[$requestCacheKey];
+            self::$words = DictionaryCacheNamespace::localCache(self::$workerWordsCache, 1024)[$requestCacheKey];
             return self::$words;
         }
 
-        if (isset(self::$workerWordsCache[$requestCacheKey])) {
-            self::$words = self::$workerWordsCache[$requestCacheKey];
+        if (isset(DictionaryCacheNamespace::localCache(self::$workerWordsCache, 1024)[$requestCacheKey])) {
+            self::$words = DictionaryCacheNamespace::localCache(self::$workerWordsCache, 1024)[$requestCacheKey];
             self::$loaded = true;
             self::$loadedLang = $currentLang;
             self::$currentRequestWordsId = $requestId;
@@ -343,7 +353,7 @@ class Parser
         }
         
         // 仅加载一次翻译到对象self::$words
-        if (!isset(self::$workerWordsCache[$requestCacheKey])) {
+        if (!isset(DictionaryCacheNamespace::localCache(self::$workerWordsCache, 1024)[$requestCacheKey])) {
             // 设置加载标志，防止循环调用
             self::$isLoadingWords = true;
             
@@ -351,7 +361,7 @@ class Parser
                 // 先访问缓存
                 if (Runtime::isPersistent()) {
                     self::$words = self::buildWordsFromWorkerCache($currentLang, $requestModules);
-                    self::$workerWordsCache[$requestCacheKey] = self::$words;
+                    DictionaryCacheNamespace::localCache(self::$workerWordsCache, 1024)[$requestCacheKey] = self::$words;
                     self::$loaded = true;
                     self::$loadedLang = $currentLang;
                     self::$currentRequestWordsId = $requestId;
@@ -360,7 +370,7 @@ class Parser
                 }
 
                 /**@var \Weline\Framework\Cache\CacheInterface $phraseCache */
-                $phraseCache = w_cache('phrase');
+                $phraseCache = self::getSharedPhraseCachePool();
                 // 获取翻译模式（支持 translation.mode 和 i18n.translate_mode）
                 $translate_mode = Env::get('translation.mode','default');
 
@@ -383,7 +393,7 @@ class Parser
                 // 缓存键包含所有模块名，用于区分不同模块组合
                 $cache_key = self::buildWordsCacheKey($lang, $modules);
                 # 非实时翻译
-                if ($translate_mode !== 'online' && $phrase_words = $phraseCache->get($cache_key)) {
+                if ($translate_mode !== 'online' && $phrase_words = $phraseCache?->get($cache_key)) {
                     self::$words = $phrase_words;
                 } else {
                     // 从所有关联模块的词典读取（支持多模块）
@@ -398,9 +408,9 @@ class Parser
                     // 合并：模块词典优先，总词典作为补充（模块词典覆盖总词典）
                     // 先加载总词典，再加载模块词典，这样模块词典会覆盖总词典
                     self::$words = array_merge($all_words, $module_words);
-                    $phraseCache->set($cache_key, self::$words);
+                    $phraseCache?->set($cache_key, self::$words);
                 }
-                self::$workerWordsCache[$requestCacheKey] = self::$words;
+                DictionaryCacheNamespace::localCache(self::$workerWordsCache, 1024)[$requestCacheKey] = self::$words;
                 self::$currentRequestWordsId = $requestId;
                 self::$currentRequestWordsKey = $requestCacheKey;
             } finally {
@@ -503,6 +513,8 @@ class Parser
         self::$currentRequestWordsKey = null;
         self::$currentRequestLayeredWordsId = null;
         self::$currentRequestLayeredWordsKey = null;
+        self::$currentRequestLayeredWords = null;
+        self::$currentRequestLayeredWordsSignature = null;
         self::$currentRequestTranslatedWords = [];
         self::$loaded = false;
         self::$loadedLang = null;
@@ -524,20 +536,31 @@ class Parser
     {
         $lang = State::getLangLocal();
         $modules = self::resolveRequestModules();
-        $layeredCacheKey = self::buildLayeredWordsCacheKey($lang, $modules);
+        // Modules can be appended by widget hooks during the same request, and
+        // the locale can be switched by a nested template context. Compare
+        // those small request-local inputs before rebuilding the persistent
+        // cache key (which may stat() every locale/module dictionary file).
+        $normalizedModules = \array_values(\array_unique(\array_map(
+            [self::class, 'getFullModuleName'],
+            \array_filter($modules),
+        )));
+        \sort($normalizedModules);
+        $requestSignature = $lang . '|' . \implode(',', $normalizedModules);
         $requestId = Runtime::isPersistent() ? RequestContext::getId() : null;
         if (
             $requestId !== null
             && self::$currentRequestLayeredWordsId === $requestId
-            && self::$currentRequestLayeredWordsKey === $layeredCacheKey
-            && isset(self::$workerLayeredWordsCache[self::$currentRequestLayeredWordsKey])
+            && self::$currentRequestLayeredWordsSignature === $requestSignature
+            && self::$currentRequestLayeredWords !== null
         ) {
-            return self::$workerLayeredWordsCache[self::$currentRequestLayeredWordsKey];
+            return self::$currentRequestLayeredWords;
         }
 
         $layers = self::getLayeredWords($lang, $modules);
         self::$currentRequestLayeredWordsId = $requestId;
-        self::$currentRequestLayeredWordsKey = $layeredCacheKey;
+        self::$currentRequestLayeredWordsKey = (string)($layers['cache_key'] ?? '');
+        self::$currentRequestLayeredWordsSignature = $requestSignature;
+        self::$currentRequestLayeredWords = $layers;
 
         return $layers;
     }
@@ -551,8 +574,8 @@ class Parser
             // A running Worker owns this immutable scope until cache epoch
             // invalidation. Keep the first lookup entirely in process memory;
             // file versions are only needed when the module L1 itself misses.
-            return 'phrase_worker_scope|' . $lang . '|' . \implode(',', $modules)
-                . '|' . ($includeGlobalDictionary ? 'db' : 'file');
+            return DictionaryCacheNamespace::cacheKey('phrase_worker_scope|' . $lang . '|' . \implode(',', $modules)
+                . '|' . ($includeGlobalDictionary ? 'db' : 'file'));
         }
 
         return self::buildWordsCacheKey($lang, $modules) . '|' . ($includeGlobalDictionary ? 'db' : 'file');
@@ -575,16 +598,17 @@ class Parser
             ];
         }
 
-        if (isset(self::$workerLayeredWordsCache[$cacheKey])) {
-            return self::$workerLayeredWordsCache[$cacheKey];
+        if (isset(DictionaryCacheNamespace::localCache(self::$workerLayeredWordsCache, 1024)[$cacheKey])) {
+            return DictionaryCacheNamespace::localCache(self::$workerLayeredWordsCache, 1024)[$cacheKey];
         }
 
+        $sharedModuleWords = self::prefetchSharedModuleWords($lang, $modules);
         $moduleLayers = [];
         foreach ($modules as $moduleName) {
-            $moduleLayers[$moduleName] = self::loadModuleWordsForLocaleChain($moduleName, $lang);
+            $moduleLayers[$moduleName] = self::loadModuleWordsForLocaleChain($moduleName, $lang, $sharedModuleWords);
         }
 
-        return self::$workerLayeredWordsCache[$cacheKey] = [
+        $layers = [
             'cache_key' => $cacheKey,
             'lang' => $lang,
             'modules' => $modules,
@@ -596,6 +620,11 @@ class Parser
             ),
             'global_words' => [],
         ];
+        if ($includeGlobalDictionary && !self::globalDictionaryLayersLoaded($lang, $modules)) {
+            // 全局批量读取失败时不冻结外层快照，下一次相同组合仍能重试。
+            return $layers;
+        }
+        return DictionaryCacheNamespace::localCache(self::$workerLayeredWordsCache, 1024)[$cacheKey] = $layers;
     }
 
     private static function translateWordFromLayers(string $word, array $layers): string
@@ -615,7 +644,7 @@ class Parser
         // Only public dictionary results may be shared across request scopes.
         $workerCacheKey = (string)($layers['cache_key'] ?? '') . '|' . $word;
         if (\array_key_exists($workerCacheKey, self::$workerTranslatedWordsCache)) {
-            return self::$workerTranslatedWordsCache[$workerCacheKey];
+            return DictionaryCacheNamespace::localCache(self::$workerTranslatedWordsCache)[$workerCacheKey];
         }
 
         $modules = (array)($layers['modules'] ?? []);
@@ -661,6 +690,10 @@ class Parser
             EventDictionary::reportMissing($word, null, $lang);
         }
 
+        if ($lang !== '' && !self::globalDictionaryLayersLoaded($lang, $modules)) {
+            // 批量回源未完成时的原词只是当前请求回退，不能冻结为进程级译文。
+            return $word;
+        }
         return self::rememberWorkerTranslatedWord($workerCacheKey, $word);
     }
 
@@ -680,6 +713,9 @@ class Parser
 
     private static function rememberWorkerTranslatedWord(string $cacheKey, string $translation): string
     {
+        if (DictionaryCacheNamespace::fingerprint() === null) {
+            return $translation;
+        }
         if (\count(self::$workerTranslatedWordsCache) >= self::WORKER_TRANSLATED_WORD_CACHE_MAX_ITEMS) {
             self::$workerTranslatedWordsCache = \array_slice(
                 self::$workerTranslatedWordsCache,
@@ -688,7 +724,7 @@ class Parser
                 true,
             );
         }
-        self::$workerTranslatedWordsCache[$cacheKey] = $translation;
+        DictionaryCacheNamespace::localCache(self::$workerTranslatedWordsCache)[$cacheKey] = $translation;
 
         return $translation;
     }
@@ -725,8 +761,8 @@ class Parser
         $modules = \array_values(\array_unique(\array_map([self::class, 'getFullModuleName'], $modules)));
         \sort($modules);
 
-        return 'phrase_locale_words_' . $lang . '_' . self::getWordsCacheVersion($lang, $modules)
-            . (!empty($modules) ? '_' . \implode('_', $modules) : '');
+        return DictionaryCacheNamespace::cacheKey('phrase_locale_words_' . $lang . '_' . self::getWordsCacheVersion($lang, $modules)
+            . (!empty($modules) ? '_' . \implode('_', $modules) : ''));
     }
 
     private static function getWordsCacheVersion(string $lang, array $modules): string
@@ -844,14 +880,14 @@ class Parser
      *
      * @return array<string, string>
      */
-    private static function loadModuleWordsForLocaleChain(string $moduleName, string $lang): array
+    private static function loadModuleWordsForLocaleChain(string $moduleName, string $lang, array $sharedModuleWords = []): array
     {
         $words = [];
         $locales = LocaleFallbackChain::candidates($lang, self::websiteDefaultLocale());
         foreach (\array_reverse($locales) as $candidateLocale) {
             $words = self::mergePreferTranslatedWords(
                 $words,
-                self::loadModuleWords($moduleName, $candidateLocale),
+                self::loadModuleWordsWithSharedCache($moduleName, $candidateLocale, $sharedModuleWords),
             );
         }
 
@@ -897,50 +933,97 @@ class Parser
         return LocaleFallbackChain::normalize(Env::default_LANGUAGE_CODE);
     }
 
-    /**
-     * 从模块的i18n目录加载翻译词
-     *
-     * @param string $module_name 模块名
-     * @param string $lang 语言代码
-     * @return array<string, string>
-     */
+    /** 将本层尚未命中 L1 的模块词典快照合并为一次共享缓存读取。 */
+    private static function prefetchSharedModuleWords(string $lang, array $modules): array
+    {
+        if (!Runtime::isPersistent()) {
+            return [];
+        }
+
+        $keys = [];
+        $locales = LocaleFallbackChain::candidates($lang, self::websiteDefaultLocale());
+        foreach ($modules as $moduleName) {
+            foreach ($locales as $locale) {
+                if (isset(DictionaryCacheNamespace::localCache(self::$workerModuleWordsCache, 2048)[DictionaryCacheNamespace::cacheKey('worker|' . $locale . '|' . $moduleName)])) {
+                    continue;
+                }
+                try {
+                    $module = Env::getInstance()->getModuleInfo($moduleName);
+                    $file = ($module['base_path'] ?? '') . '/i18n/' . $locale . '.csv';
+                    if (!$module || !isset($module['base_path']) || !is_file($file)) {
+                        continue;
+                    }
+                    $versionedKey = $locale . '|' . $moduleName . '|' . self::getFileVersion($file);
+                    $keys['module_dictionary|v1|' . \sha1($versionedKey)] = null;
+                } catch (\Throwable) {
+                    // 仍由原模块加载流程负责本地文件回退。
+                }
+            }
+        }
+        if ($keys === []) {
+            return [];
+        }
+
+        try {
+            $cached = RequestLifecycleTrace::measurePhase(
+                'i18n.phrase.module_cache_get',
+                static fn(): array => self::getSharedPhraseCachePool()?->getMultiple(\array_keys($keys)) ?? [],
+                ['batch' => true, 'keys' => \count($keys)],
+            );
+            return \array_replace($keys, \array_intersect_key($cached, $keys));
+        } catch (\Throwable) {
+            // null 仅表示已尝试共享读取，不代表已缓存空词典。
+            // 未取得快照的模块仍回退到权威 CSV 文件。
+            return $keys;
+        }
+    }
+
+    /** @return array<string, string> */
     protected static function loadModuleWords(string $module_name, string $lang): array
     {
+        return self::loadModuleWordsWithSharedCache($module_name, $lang);
+    }
+
+    /** @return array<string, string> */
+    private static function loadModuleWordsWithSharedCache(string $module_name, string $lang, array $sharedModuleWords = []): array
+    {
         $module_name = self::getFullModuleName($module_name);
-        $worker_scope_key = 'worker|' . $lang . '|' . $module_name;
-        if (Runtime::isPersistent() && isset(self::$workerModuleWordsCache[$worker_scope_key])) {
-            return self::$workerModuleWordsCache[$worker_scope_key];
+        $worker_scope_key = DictionaryCacheNamespace::cacheKey('worker|' . $lang . '|' . $module_name);
+        if (Runtime::isPersistent() && isset(DictionaryCacheNamespace::localCache(self::$workerModuleWordsCache, 2048)[$worker_scope_key])) {
+            return DictionaryCacheNamespace::localCache(self::$workerModuleWordsCache, 2048)[$worker_scope_key];
         }
 
         $cache_key = $lang . '|' . $module_name . '|unresolved';
-        $worker_cache_key = Runtime::isPersistent() ? $worker_scope_key : $cache_key;
+        $worker_cache_key = Runtime::isPersistent() ? $worker_scope_key : DictionaryCacheNamespace::cacheKey($cache_key);
         try {
             // 获取模块信息
             $module_info = Env::getInstance()->getModuleInfo($module_name);
             $module_i18n_file = ($module_info['base_path'] ?? '') . '/i18n/' . $lang . '.csv';
             $cache_key = $lang . '|' . $module_name . '|' . self::getFileVersion($module_i18n_file);
-            $worker_cache_key = Runtime::isPersistent() ? $worker_scope_key : $cache_key;
-            if (isset(self::$workerModuleWordsCache[$worker_cache_key])) {
-                return self::$workerModuleWordsCache[$worker_cache_key];
+            $worker_cache_key = Runtime::isPersistent() ? $worker_scope_key : DictionaryCacheNamespace::cacheKey($cache_key);
+            if (isset(DictionaryCacheNamespace::localCache(self::$workerModuleWordsCache, 2048)[$worker_cache_key])) {
+                return DictionaryCacheNamespace::localCache(self::$workerModuleWordsCache, 2048)[$worker_cache_key];
             }
 
             if (!$module_info || !isset($module_info['base_path'])) {
-                return self::$workerModuleWordsCache[$worker_cache_key] = [];
+                return DictionaryCacheNamespace::localCache(self::$workerModuleWordsCache, 2048)[$worker_cache_key] = [];
             }
 
             if (!is_file($module_i18n_file)) {
-                return self::$workerModuleWordsCache[$worker_cache_key] = [];
+                return DictionaryCacheNamespace::localCache(self::$workerModuleWordsCache, 2048)[$worker_cache_key] = [];
             }
 
             $sharedCacheKey = 'module_dictionary|v1|' . \sha1($cache_key);
             if (Runtime::isPersistent()) {
                 try {
-                    $cached = RequestLifecycleTrace::measurePhase(
-                        'i18n.phrase.module_cache_get',
-                        static fn(): mixed => self::getSharedPhraseCachePool()?->get($sharedCacheKey),
-                    );
+                    $cached = \array_key_exists($sharedCacheKey, $sharedModuleWords)
+                        ? $sharedModuleWords[$sharedCacheKey]
+                        : RequestLifecycleTrace::measurePhase(
+                            'i18n.phrase.module_cache_get',
+                            static fn(): mixed => self::getSharedPhraseCachePool()?->get($sharedCacheKey),
+                        );
                     if (\is_array($cached)) {
-                        return self::$workerModuleWordsCache[$worker_cache_key] = $cached;
+                        return DictionaryCacheNamespace::localCache(self::$workerModuleWordsCache, 2048)[$worker_cache_key] = $cached;
                     }
                 } catch (\Throwable) {
                     // Shared cache is an optimization only; local CSV is authoritative.
@@ -950,7 +1033,7 @@ class Parser
             $words = [];
             $handle = @fopen($module_i18n_file, 'r');
             if ($handle === false) {
-                return self::$workerModuleWordsCache[$worker_cache_key] = [];
+                return DictionaryCacheNamespace::localCache(self::$workerModuleWordsCache, 2048)[$worker_cache_key] = [];
             }
 
             try {
@@ -997,12 +1080,12 @@ class Parser
                 }
             }
 
-            return self::$workerModuleWordsCache[$worker_cache_key] = $words;
+            return DictionaryCacheNamespace::localCache(self::$workerModuleWordsCache, 2048)[$worker_cache_key] = $words;
         } catch (\Throwable) {
             // 静默处理错误
         }
 
-        return self::$workerModuleWordsCache[$worker_cache_key] = [];
+        return DictionaryCacheNamespace::localCache(self::$workerModuleWordsCache, 2048)[$worker_cache_key] = [];
     }
     
     /**
@@ -1050,10 +1133,10 @@ class Parser
         \sort($modules);
 
         if (Runtime::isPersistent()) {
-            $cache_key = 'worker|' . $lang . '|' . \implode(',', $modules)
-                . '|' . ($includeGlobalDictionary ? 'db' : 'file');
-            if (isset(self::$workerLocaleWordsCache[$cache_key])) {
-                return self::$workerLocaleWordsCache[$cache_key];
+            $cache_key = DictionaryCacheNamespace::cacheKey('worker|' . $lang . '|' . \implode(',', $modules)
+                . '|' . ($includeGlobalDictionary ? 'db' : 'file'));
+            if (isset(DictionaryCacheNamespace::localCache(self::$workerLocaleWordsCache, 1024)[$cache_key])) {
+                return DictionaryCacheNamespace::localCache(self::$workerLocaleWordsCache, 1024)[$cache_key];
             }
 
             // WLS workers keep a bounded, module-scoped global snapshot when
@@ -1068,14 +1151,19 @@ class Parser
                     static fn(): array => self::loadGlobalDictionaryScopeWords($lang, $modules),
                     ['locale' => $lang, 'modules' => \count($modules)],
                 );
+                if (self::globalDictionaryProvider() !== null
+                    && !self::globalDictionaryModulesLoaded($lang, $modules)
+                ) {
+                    return $global_dictionary_words;
+                }
             }
 
-            return self::$workerLocaleWordsCache[$cache_key] = $global_dictionary_words;
+            return DictionaryCacheNamespace::localCache(self::$workerLocaleWordsCache, 1024)[$cache_key] = $global_dictionary_words;
         }
 
-        $cache_key = $lang . '|' . self::getWordsCacheVersion($lang, $modules) . '|' . \implode(',', $modules) . '|' . ($includeGlobalDictionary ? 'db' : 'file');
-        if (isset(self::$workerLocaleWordsCache[$cache_key])) {
-            return self::$workerLocaleWordsCache[$cache_key];
+        $cache_key = DictionaryCacheNamespace::cacheKey($lang . '|' . self::getWordsCacheVersion($lang, $modules) . '|' . \implode(',', $modules) . '|' . ($includeGlobalDictionary ? 'db' : 'file'));
+        if (isset(DictionaryCacheNamespace::localCache(self::$workerLocaleWordsCache, 1024)[$cache_key])) {
+            return DictionaryCacheNamespace::localCache(self::$workerLocaleWordsCache, 1024)[$cache_key];
         }
 
         $global_dictionary_words = $includeGlobalDictionary ? self::loadGlobalDictionaryWords($lang, $modules) : [];
@@ -1087,8 +1175,12 @@ class Parser
         $words_file = Env::path_TRANSLATE_FILES_PATH . $lang . '.php';
         if (is_file($words_file)) {
             try {
+                // 同代次 L1 已命中时不会到这里；只失效本次将读取的语言文件。
+                if (\function_exists('opcache_invalidate')) {
+                    @opcache_invalidate($words_file, true);
+                }
                 $lang_words = (array)include $words_file;
-                return self::$workerLocaleWordsCache[$cache_key] = self::mergePreferTranslatedWords(
+                return DictionaryCacheNamespace::localCache(self::$workerLocaleWordsCache, 1024)[$cache_key] = self::mergePreferTranslatedWords(
                     $global_dictionary_words,
                     self::extractModuleWords($lang_words, $modules)
                 );
@@ -1099,10 +1191,13 @@ class Parser
 
         $all_words_file = Env::path_TRANSLATE_ALL_COLLECTIONS_WORDS_FILE;
         if (!is_file($all_words_file)) {
-            return self::$workerLocaleWordsCache[$cache_key] = $global_dictionary_words;
+            return DictionaryCacheNamespace::localCache(self::$workerLocaleWordsCache, 1024)[$cache_key] = $global_dictionary_words;
         }
 
         try {
+            if (\function_exists('opcache_invalidate')) {
+                @opcache_invalidate($all_words_file, true);
+            }
             $all_words_data = (array)include $all_words_file;
             $all_words = [];
 
@@ -1114,9 +1209,9 @@ class Parser
                 $all_words = array_merge($all_words, self::extractModuleWords($all_words_data[$lang], $modules));
             }
 
-            return self::$workerLocaleWordsCache[$cache_key] = self::mergePreferTranslatedWords($global_dictionary_words, $all_words);
+            return DictionaryCacheNamespace::localCache(self::$workerLocaleWordsCache, 1024)[$cache_key] = self::mergePreferTranslatedWords($global_dictionary_words, $all_words);
         } catch (\Throwable) {
-            return self::$workerLocaleWordsCache[$cache_key] = $global_dictionary_words;
+            return DictionaryCacheNamespace::localCache(self::$workerLocaleWordsCache, 1024)[$cache_key] = $global_dictionary_words;
         }
     }
 
@@ -1232,6 +1327,10 @@ class Parser
     private static function loadGlobalDictionaryScopeWords(string $lang, array $modules): array
     {
         $scope = $modules === [] ? 'all' : \implode(',', $modules);
+        $localeKey = DictionaryCacheNamespace::cacheKey($lang);
+        if (DictionaryCacheNamespace::fingerprint() === null) {
+            return self::loadGlobalDictionaryWordsFromDatabase($lang, $modules) ?? [];
+        }
 
         // Request module membership grows while a persistent Worker renders
         // hooks and slots. Keep the global dictionary language-scoped, but only
@@ -1240,9 +1339,16 @@ class Parser
         // long-lived process. An empty module list remains the explicit
         // maintenance/CLI "load all" path.
         if (Runtime::isPersistent()) {
-            $snapshot = self::$workerGlobalDictionaryLocaleWords[$lang] ?? [];
-            $loadedModules = self::$workerGlobalDictionaryLoadedModules[$lang] ?? [];
-            $allLoaded = self::$workerGlobalDictionaryAllLocales[$lang] ?? false;
+            $hasSnapshot = \array_key_exists($localeKey, DictionaryCacheNamespace::localCache(self::$workerGlobalDictionaryLocaleWords, 128));
+            if (!$hasSnapshot) {
+                unset(
+                    DictionaryCacheNamespace::localCache(self::$workerGlobalDictionaryLoadedModules, 128)[$localeKey],
+                    DictionaryCacheNamespace::localCache(self::$workerGlobalDictionaryAllLocales, 128)[$localeKey],
+                );
+            }
+            $snapshot = DictionaryCacheNamespace::localCache(self::$workerGlobalDictionaryLocaleWords, 128)[$localeKey] ?? [];
+            $loadedModules = $hasSnapshot ? (DictionaryCacheNamespace::localCache(self::$workerGlobalDictionaryLoadedModules, 128)[$localeKey] ?? []) : [];
+            $allLoaded = $hasSnapshot && (DictionaryCacheNamespace::localCache(self::$workerGlobalDictionaryAllLocales, 128)[$localeKey] ?? false);
 
             if ($allLoaded) {
                 return $snapshot;
@@ -1263,34 +1369,40 @@ class Parser
             $queryScope = $scope;
         }
 
-        $workerCacheKey = $lang . '|' . $scope;
-        if (!Runtime::isPersistent() && isset(self::$workerGlobalDictionaryWordsCache[$workerCacheKey])) {
-            return self::$workerGlobalDictionaryWordsCache[$workerCacheKey];
+        $workerCacheKey = DictionaryCacheNamespace::cacheKey($lang . '|' . $scope);
+        if (!Runtime::isPersistent() && isset(DictionaryCacheNamespace::localCache(self::$workerGlobalDictionaryWordsCache, 128)[$workerCacheKey])) {
+            return DictionaryCacheNamespace::localCache(self::$workerGlobalDictionaryWordsCache, 128)[$workerCacheKey];
         }
 
         if (self::globalDictionaryProvider() === null) {
             return Runtime::isPersistent()
                 ? $snapshot
-                : self::$workerGlobalDictionaryWordsCache[$workerCacheKey] = [];
+                : DictionaryCacheNamespace::localCache(self::$workerGlobalDictionaryWordsCache, 128)[$workerCacheKey] = [];
         }
 
         $cachePool = self::getSharedPhraseCachePool();
         $cacheKey = 'global_dictionary_words|' . $lang . '|v2|' . \sha1($queryScope);
         if ($cachePool !== null) {
             try {
-                $words = $cachePool->remember(
-                    $cacheKey,
-                    3600,
-                    static fn(): ?array => self::loadGlobalDictionaryWordsFromDatabase($lang, $queryModules),
-                    new RememberOptions(
-                        nullTtl: 5,
-                        jitter: true,
-                        jitterRatio: 0.10,
-                        singleFlight: true,
-                        singleFlightTimeoutMs: self::globalDictionarySingleFlightTimeoutMs(),
-                        computeOnSingleFlightTimeout: !Runtime::isPersistent(),
-                    )
-                );
+                $provider = self::globalDictionaryProvider();
+                if ($queryModules !== [] && $provider instanceof ModuleGlobalDictionaryProviderInterface) {
+                    $words = self::loadGlobalDictionaryModuleWords($cachePool, $provider, $lang, $queryModules);
+                } else {
+                    // 旧 Provider 与显式全词典入口保持原组合快照路径。
+                    $words = $cachePool->remember(
+                        $cacheKey,
+                        3600,
+                        static fn(): ?array => self::loadGlobalDictionaryWordsFromDatabase($lang, $queryModules),
+                        new RememberOptions(
+                            nullTtl: 5,
+                            jitter: true,
+                            jitterRatio: 0.10,
+                            singleFlight: true,
+                            singleFlightTimeoutMs: self::globalDictionarySingleFlightTimeoutMs(),
+                            computeOnSingleFlightTimeout: !Runtime::isPersistent(),
+                        )
+                    );
+                }
 
                 if (Runtime::isPersistent()) {
                     // A null result means a transient shared/DB failure. Do
@@ -1300,21 +1412,29 @@ class Parser
                         return $snapshot;
                     }
 
-                    $snapshot = self::mergePreferTranslatedWords($snapshot, $words);
-                    self::$workerGlobalDictionaryLocaleWords[$lang] = $snapshot;
+                    // 共享/数据库读取可能让出执行权；以发布时的最新快照合并其他 Fiber 的增量。
+                    $latestSnapshot = DictionaryCacheNamespace::localCache(self::$workerGlobalDictionaryLocaleWords, 128)[$localeKey] ?? null;
+                    $loadedModules = \is_array($latestSnapshot)
+                        ? (DictionaryCacheNamespace::localCache(self::$workerGlobalDictionaryLoadedModules, 128)[$localeKey] ?? [])
+                        : [];
+                    if (!\is_array($latestSnapshot)) {
+                        unset(DictionaryCacheNamespace::localCache(self::$workerGlobalDictionaryAllLocales, 128)[$localeKey]);
+                    }
+                    $snapshot = self::mergePreferTranslatedWords($latestSnapshot ?? [], $words);
+                    DictionaryCacheNamespace::localCache(self::$workerGlobalDictionaryLocaleWords, 128)[$localeKey] = $snapshot;
                     if ($queryModules === []) {
-                        self::$workerGlobalDictionaryAllLocales[$lang] = true;
+                        DictionaryCacheNamespace::localCache(self::$workerGlobalDictionaryAllLocales, 128)[$localeKey] = true;
                     } else {
-                        self::$workerGlobalDictionaryLoadedModules[$lang] = \array_values(
+                        DictionaryCacheNamespace::localCache(self::$workerGlobalDictionaryLoadedModules, 128)[$localeKey] = \array_values(
                             \array_unique(\array_merge($loadedModules, $queryModules)),
                         );
-                        \sort(self::$workerGlobalDictionaryLoadedModules[$lang]);
+                        \sort(DictionaryCacheNamespace::localCache(self::$workerGlobalDictionaryLoadedModules, 128)[$localeKey]);
                     }
 
                     return $snapshot;
                 }
 
-                return self::$workerGlobalDictionaryWordsCache[$workerCacheKey] =
+                return DictionaryCacheNamespace::localCache(self::$workerGlobalDictionaryWordsCache, 128)[$workerCacheKey] =
                     \is_array($words) ? $words : [];
             } catch (\Throwable) {
                 if (Runtime::isPersistent()) {
@@ -1328,12 +1448,128 @@ class Parser
             return $snapshot;
         }
 
-        return self::$workerGlobalDictionaryWordsCache[$workerCacheKey] =
+        return DictionaryCacheNamespace::localCache(self::$workerGlobalDictionaryWordsCache, 128)[$workerCacheKey] =
             self::loadGlobalDictionaryWordsFromDatabase($lang, $queryModules) ?? [];
+    }
+
+    /** 已加载标记同时区分确认空模块与读取失败，不再增加失败状态袋。 */
+    private static function globalDictionaryModulesLoaded(string $lang, array $modules): bool
+    {
+        if (DictionaryCacheNamespace::fingerprint() === null) {
+            return true;
+        }
+        $localeKey = DictionaryCacheNamespace::cacheKey($lang);
+        if (!\array_key_exists($localeKey, DictionaryCacheNamespace::localCache(self::$workerGlobalDictionaryLocaleWords, 128))) {
+            return false;
+        }
+        return (DictionaryCacheNamespace::localCache(self::$workerGlobalDictionaryAllLocales, 128)[$localeKey] ?? false)
+            || ($modules !== [] && \array_diff($modules, DictionaryCacheNamespace::localCache(self::$workerGlobalDictionaryLoadedModules, 128)[$localeKey] ?? []) === []);
+    }
+
+    private static function globalDictionaryLayersLoaded(string $lang, array $modules): bool
+    {
+        if (!Runtime::isPersistent() || self::shouldSkipHeavyLocaleDictionaryLoad()
+            || self::globalDictionaryProvider() === null
+        ) {
+            return true;
+        }
+        foreach (LocaleFallbackChain::candidates($lang, self::websiteDefaultLocale()) as $candidateLocale) {
+            if (!self::globalDictionaryModulesLoaded($candidateLocale, $modules)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * 共享键固定到语言/模块，Worker 的模块发现顺序不会产生新的组合键。
+     * @param list<string> $modules
+     * @return array<string, string>|null 协调等待超时且尚未发布完整结果时返回 null。
+     */
+    private static function loadGlobalDictionaryModuleWords(
+        CachePoolInterface $pool,
+        ModuleGlobalDictionaryProviderInterface $provider,
+        string $lang,
+        array $modules,
+    ): ?array {
+        $keys = [];
+        foreach ($modules as $module) {
+            $keys[$module] = 'global_dictionary_module_words|' . $lang . '|v1|' . \sha1($module);
+        }
+        $shared = $pool->getMultiple(\array_values($keys));
+        $maps = [];
+        $missing = [];
+        foreach ($keys as $module => $key) {
+            if (\is_array($shared[$key] ?? null)) {
+                $maps[$module] = $shared[$key];
+            } else {
+                $missing[] = $module;
+            }
+        }
+        if ($missing !== []) {
+            // 使用真实的首个缺失模块键复用缓存池 single-flight；不创建组合缓存或私锁。
+            $leader = $missing[0];
+            $leaderMap = $pool->remember(
+                $keys[$leader],
+                self::GLOBAL_DICTIONARY_WORD_SHARED_TTL_SECONDS,
+                static function () use ($pool, $provider, $lang, $missing, $keys, $leader, &$maps): array {
+                    // 等待执行权期间其他 Worker 可能已发布，获得锁后必须再次读取。
+                    $recheck = $pool->getMultiple(\array_values(\array_intersect_key($keys, \array_fill_keys($missing, true))));
+                    $unresolved = [];
+                    foreach ($missing as $module) {
+                        if (\is_array($recheck[$keys[$module]] ?? null)) {
+                            $maps[$module] = $recheck[$keys[$module]];
+                        } else {
+                            $unresolved[] = $module;
+                        }
+                    }
+                    if ($unresolved !== []) {
+                        // 一次 SQL 返回各缺失模块的独立词表；异常不发布空数组。
+                        $loaded = $provider->wordsByModule($lang, $unresolved);
+                        $values = [];
+                        foreach ($unresolved as $module) {
+                            $maps[$module] = $loaded[$module] ?? [];
+                            $values[$keys[$module]] = $maps[$module];
+                        }
+                        $pool->setMultiple($values, self::GLOBAL_DICTIONARY_WORD_SHARED_TTL_SECONDS);
+                    }
+                    return $maps[$leader];
+                },
+                new RememberOptions(
+                    nullTtl: 5,
+                    jitter: true,
+                    jitterRatio: 0.10,
+                    singleFlight: true,
+                    singleFlightTimeoutMs: self::globalDictionarySingleFlightTimeoutMs(),
+                    computeOnSingleFlightTimeout: !Runtime::isPersistent(),
+                ),
+            );
+            if (\is_array($leaderMap)) {
+                $maps[$leader] = $leaderMap;
+            }
+            $remaining = \array_diff_key($keys, $maps);
+            if ($remaining !== []) {
+                $published = $pool->getMultiple(\array_values($remaining));
+                foreach ($remaining as $module => $key) {
+                    if (!\is_array($published[$key] ?? null)) {
+                        return null;
+                    }
+                    $maps[$module] = $published[$key];
+                }
+            }
+        }
+        $words = [];
+        foreach ($modules as $module) {
+            $words = self::mergePreferTranslatedWords($words, $maps[$module]);
+        }
+        return $words;
     }
 
     private static function getSharedPhraseCachePool(): ?\Weline\Framework\Cache\Contract\CachePoolInterface
     {
+        if (DictionaryCacheNamespace::fingerprint() === null) {
+            return null;
+        }
         if (self::$sharedPhraseCachePool instanceof CachePoolInterface) {
             return self::$sharedPhraseCachePool;
         }
@@ -1341,7 +1577,7 @@ class Parser
         try {
             /** @var CacheManager $cacheManager */
             $cacheManager = ObjectManager::getInstance(CacheManager::class);
-            $pool = $cacheManager->pool('phrase');
+            $pool = DictionaryCacheNamespace::scopedPool($cacheManager->pool('phrase'));
             if ($pool instanceof CachePoolInterface) {
                 self::$sharedPhraseCachePool = $pool;
             }
@@ -1352,24 +1588,133 @@ class Parser
     }
 
     /**
+     * 为已知词列表预取公共词典回退项，不解析或覆盖请求/模块词典。
+     * 命中和确认不存在的词复用普通逐词路径的 Worker 缓存及失效周期。
+     *
+     * @param list<string> $words
+     */
+    public static function prefetchWords(array $words, ?string $locale = null): void
+    {
+        $words = \array_values(\array_unique(\array_filter($words,
+            static fn(mixed $word): bool => \is_string($word) && \trim($word) !== '',
+        )));
+        $locale = $locale ?? State::getLangLocal();
+        if ($words === [] || $locale === '') {
+            return;
+        }
+        // 与普通解析一致：独占词典请求不加载任何公共词典。
+        if (EventDictionary::isExclusive($locale)) {
+            return;
+        }
+        $provider = self::globalDictionaryProvider();
+        if (!$provider instanceof BatchGlobalDictionaryProviderInterface) {
+            return;
+        }
+        \sort($words, SORT_STRING);
+
+        self::enterTranslationResolution();
+        try {
+            $cachePool = self::getSharedPhraseCachePool();
+            $versionPrefix = DictionaryCacheNamespace::cacheKey('');
+            foreach (LocaleFallbackChain::candidates($locale, self::websiteDefaultLocale()) as $candidateLocale) {
+                $missing = [];
+                foreach ($words as $word) {
+                    $workerKey = $versionPrefix . $candidateLocale . '|' . $word;
+                    $requestTranslation = null;
+                    if (!\array_key_exists($workerKey, self::$workerGlobalDictionaryWordCache)
+                        && !self::readRequestPrefetchedWord($candidateLocale, $word, $requestTranslation)
+                    ) {
+                        $missing[] = $word;
+                    }
+                }
+                foreach (\array_chunk($missing, 200) as $chunk) {
+                    $keys = [];
+                    foreach ($chunk as $word) {
+                        $keys[$word] = self::globalDictionaryWordCacheKey($candidateLocale, $word);
+                    }
+                    $records = [];
+                    if ($cachePool !== null) {
+                        try {
+                            $records = $cachePool->getMultiple(\array_values($keys));
+                        } catch (\Throwable) {
+                            // 共享缓存失败时仍可执行有限批量数据库查询。
+                        }
+                    }
+                    $unresolved = [];
+                    foreach ($chunk as $word) {
+                        $record = $records[$keys[$word]] ?? null;
+                        if (\is_array($record) && \array_key_exists('found', $record)) {
+                            $translation = (bool)$record['found']
+                                ? (string)($record['translation'] ?? '') : null;
+                            DictionaryCacheNamespace::localCache(self::$workerGlobalDictionaryWordCache)[$versionPrefix . $candidateLocale . '|' . $word] = $translation;
+                            self::rememberRequestPrefetchedWord($candidateLocale, $word, $translation);
+                        } else {
+                            $unresolved[] = $word;
+                        }
+                    }
+                    if ($unresolved === []) {
+                        continue;
+                    }
+                    try {
+                        // 与普通解析复用同一词条键，由统一缓存池执行 WLS 批量传输。
+                        $translations = RequestLifecycleTrace::measurePhase(
+                            'i18n.phrase.exact_dictionary_batch',
+                            static fn(): array => $provider->exactWords($candidateLocale, $unresolved),
+                            ['locale' => $candidateLocale, 'words' => \count($unresolved)],
+                        );
+                    } catch (\Throwable) {
+                        // 查询未完成不能记为缺词，普通逐词回退仍可重试。
+                        continue;
+                    }
+                    if (!\is_array($translations)) {
+                        continue;
+                    }
+                    $writeRecords = [];
+                    foreach ($unresolved as $word) {
+                        $translation = $translations[$word] ?? null;
+                        $translation = \is_string($translation) && $translation !== '' && $translation !== $word
+                            ? $translation : null;
+                        DictionaryCacheNamespace::localCache(self::$workerGlobalDictionaryWordCache)[$versionPrefix . $candidateLocale . '|' . $word] = $translation;
+                        self::rememberRequestPrefetchedWord($candidateLocale, $word, $translation);
+                        $writeRecords[$keys[$word]] = ['found' => $translation !== null, 'translation' => $translation ?? ''];
+                    }
+                    if ($cachePool !== null) {
+                        try {
+                            $cachePool->setMultiple($writeRecords, self::GLOBAL_DICTIONARY_WORD_SHARED_TTL_SECONDS);
+                        } catch (\Throwable) {
+                            // 已查明的数据库结果仍保留在本 Worker 的既有 L1 中。
+                        }
+                    }
+                }
+            }
+        } finally {
+            self::leaveTranslationResolution();
+        }
+    }
+
+    /**
      * Resolve a single legacy/global dictionary entry.
      *
      * @return string|null|false Translation, known miss, or transient failure.
      */
     private static function loadGlobalDictionaryWord(string $lang, string $word): string|null|false
     {
-        $workerCacheKey = $lang . '|' . $word;
+        $workerCacheKey = DictionaryCacheNamespace::cacheKey($lang . '|' . $word);
         if (\array_key_exists($workerCacheKey, self::$workerGlobalDictionaryWordCache)) {
-            return self::$workerGlobalDictionaryWordCache[$workerCacheKey];
+            return DictionaryCacheNamespace::localCache(self::$workerGlobalDictionaryWordCache)[$workerCacheKey];
+        }
+        $requestWord = null;
+        if (self::readRequestPrefetchedWord($lang, $word, $requestWord)) {
+            return $requestWord;
         }
 
         if (self::globalDictionaryProvider() === null) {
-            self::$workerGlobalDictionaryWordCache[$workerCacheKey] = null;
+            DictionaryCacheNamespace::localCache(self::$workerGlobalDictionaryWordCache)[$workerCacheKey] = null;
             return null;
         }
 
         $cachePool = self::getSharedPhraseCachePool();
-        $cacheKey = 'global_dictionary_word|v1|' . \sha1($workerCacheKey);
+        $cacheKey = self::globalDictionaryWordCacheKey($lang, $word);
         if ($cachePool !== null) {
             try {
                 // CachePool::remember() performs the initial read itself. Do
@@ -1393,7 +1738,7 @@ class Parser
                     $translation = (bool)$record['found']
                         ? (string)($record['translation'] ?? '')
                         : null;
-                    self::$workerGlobalDictionaryWordCache[$workerCacheKey] = $translation;
+                    DictionaryCacheNamespace::localCache(self::$workerGlobalDictionaryWordCache)[$workerCacheKey] = $translation;
                     return $translation;
                 }
 
@@ -1412,9 +1757,37 @@ class Parser
         $translation = (bool)($record['found'] ?? false)
             ? (string)($record['translation'] ?? '')
             : null;
-        self::$workerGlobalDictionaryWordCache[$workerCacheKey] = $translation;
+        DictionaryCacheNamespace::localCache(self::$workerGlobalDictionaryWordCache)[$workerCacheKey] = $translation;
 
         return $translation;
+    }
+
+    private static function rememberRequestPrefetchedWord(string $locale, string $word, ?string $translation): void
+    {
+        if (!Context::hasCurrent()) {
+            return;
+        }
+        $cache = RequestContext::get(self::REQUEST_PREFETCHED_GLOBAL_WORDS_CONTEXT_KEY, []);
+        if (!is_array($cache)) {
+            $cache = [];
+        }
+        $cache[$locale . '|' . $word] = $translation;
+        RequestContext::set(self::REQUEST_PREFETCHED_GLOBAL_WORDS_CONTEXT_KEY, $cache);
+    }
+
+    private static function readRequestPrefetchedWord(string $locale, string $word, mixed &$translation): bool
+    {
+        if (!Context::hasCurrent()) {
+            return false;
+        }
+        $cache = RequestContext::get(self::REQUEST_PREFETCHED_GLOBAL_WORDS_CONTEXT_KEY, []);
+        $key = $locale . '|' . $word;
+        if (!is_array($cache) || !array_key_exists($key, $cache)) {
+            return false;
+        }
+        $translation = $cache[$key];
+
+        return true;
     }
 
     private static function globalDictionarySingleFlightTimeoutMs(): int
@@ -1424,6 +1797,11 @@ class Parser
         // the shared recheck inside CachePool::remember still reuses a result
         // that was published before this call.
         return Runtime::isPersistent() ? 0 : self::GLOBAL_DICTIONARY_SINGLE_FLIGHT_TIMEOUT_MS;
+    }
+
+    private static function globalDictionaryWordCacheKey(string $locale, string $word): string
+    {
+        return 'global_dictionary_word|v1|' . \sha1($locale . '|' . $word);
     }
 
     /**

@@ -68,16 +68,35 @@ final class WebsiteLanguageAssignment implements WebsiteLanguageAssignmentInterf
         $transactions = ObjectManager::getInstance(TransactionCoordinatorInterface::class);
         if ($transactions->isActive($connection)) {
             $websiteLanguage = $this->websiteLanguage;
+            $localeCodes = \array_keys($rows);
             $transactions->afterCommit(
                 $connection,
                 'website_language_assignment_' . $websiteId,
-                static function () use ($websiteLanguage, $websiteId): void {
+                static function () use ($websiteLanguage, $websiteId, $localeCodes): void {
                     $websiteLanguage->clearWebsiteLanguageCaches($websiteId);
+                    self::syncI18nTranslationTargets($localeCodes);
                 },
             );
 
             return;
         }
         $this->websiteLanguage->clearWebsiteLanguageCaches($websiteId);
+        self::syncI18nTranslationTargets(\array_keys($rows));
+    }
+
+    /**
+     * @param list<string> $localeCodes
+     */
+    private static function syncI18nTranslationTargets(array $localeCodes): void
+    {
+        if (!\class_exists(\Weline\I18n\Service\WebsiteLocaleTranslationSync::class)) {
+            return;
+        }
+        try {
+            ObjectManager::getInstance(\Weline\I18n\Service\WebsiteLocaleTranslationSync::class)
+                ->onWebsiteLocalesChanged($localeCodes, 'website_language_assignment');
+        } catch (\Throwable) {
+            // Translation sync must not roll back language assignment.
+        }
     }
 }

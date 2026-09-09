@@ -9,6 +9,7 @@ use Weline\Eav\Api\Entity\EntityDefinitionInterface;
 use Weline\Eav\Api\Metadata\AttributeGroupMetadata;
 use Weline\Eav\Api\Metadata\AttributeMetadata;
 use Weline\Eav\Api\Metadata\AttributeMetadataCatalogInterface;
+use Weline\Eav\Api\Metadata\AttributeOptionIdentityCatalogInterface;
 use Weline\Eav\Api\Metadata\AttributeOptionMetadata;
 use Weline\Eav\Api\Metadata\AttributeSetMetadata;
 use Weline\Eav\Api\Attribute\Option\AttributeOptionStoreInterface;
@@ -19,6 +20,95 @@ use Weline\Product\Service\StorefrontVariantAxisResolver;
 
 final class StorefrontEavLabelResolverTest extends TestCase
 {
+    public function testPublicQueryBatchesOnlyParticipatingAxesWithoutReadingDisplayCatalog(): void
+    {
+        $metadata = $this->createMockForIntersectionOfInterfaces([
+            AttributeMetadataCatalogInterface::class,
+            AttributeOptionIdentityCatalogInterface::class,
+        ]);
+        $entity = (new \ReflectionClass(ProductCatalogAttributeEntity::class))->newInstanceWithoutConstructor();
+        $metadata->expects(self::never())->method('catalog');
+        $calls = [];
+        $metadata->expects(self::exactly(4))->method('sharedOptionIdentities')
+            ->with($entity, self::anything())
+            ->willReturnCallback(static function ($entity, array $attributeCodes) use (&$calls): array {
+                $calls[] = $attributeCodes;
+                return [
+                    'color' => [new AttributeOptionMetadata(48, '白色', 'white', '白色', 48)],
+                    'size' => [new AttributeOptionMetadata(60, '成人L', 'adult-l', '成人L', 60)],
+                ];
+            });
+        $resolver = new StorefrontEavLabelResolver($metadata, $entity);
+        self::assertSame(['color' => 'white', 'size' => 'adult-l'], $resolver->toPublicQuery([
+            ' Color ' => 48, 'size' => '成人L', 'ignored' => [],
+        ]));
+        self::assertSame('48', $resolver->canonicalOptionId('color', 'WHITE'));
+        self::assertSame('unknown', $resolver->publicOptionCode('size', 'unknown'));
+        self::assertSame(['color' => '48', 'page' => '2'], $resolver->canonicalizeAxisQuery(
+            ['color' => 'white', 'page' => '2'], ['color', 'absent'],
+        ));
+        self::assertSame([['color', 'size'], ['color'], ['size'], ['color']], $calls);
+    }
+
+    public function testFailedIdentityBatchCanRetryAndDoesNotBecomeAnEmptyAxis(): void
+    {
+        $metadata = $this->createMockForIntersectionOfInterfaces([
+            AttributeMetadataCatalogInterface::class,
+            AttributeOptionIdentityCatalogInterface::class,
+        ]);
+        $entity = (new \ReflectionClass(ProductCatalogAttributeEntity::class))->newInstanceWithoutConstructor();
+        $attempt = 0;
+        $metadata->expects(self::exactly(2))->method('sharedOptionIdentities')
+            ->willReturnCallback(static function () use (&$attempt): array {
+                if (++$attempt === 1) {
+                    throw new \RuntimeException('temporary identity read failure');
+                }
+                return ['color' => [new AttributeOptionMetadata(48, '白色', 'white', '白色', 48)]];
+            });
+        $resolver = new StorefrontEavLabelResolver($metadata, $entity);
+        self::assertSame('48', $resolver->publicOptionCode('color', '48'));
+        self::assertSame('white', $resolver->publicOptionCode('color', '48'));
+    }
+
+    public function testIdentityProjectionDoesNotReplaceDisplayOrPrivateScopeAndExpiresWithRequest(): void
+    {
+        $original = \Weline\Framework\Context::getCurrent();
+        if ($original !== null) {
+            \Weline\Framework\Context::leave();
+        }
+        \Weline\Framework\Context::enter(new \Weline\Framework\Context());
+        RequestContext::setId('identity-first');
+        try {
+            $metadata = $this->createMockForIntersectionOfInterfaces([
+                AttributeMetadataCatalogInterface::class,
+                AttributeOptionIdentityCatalogInterface::class,
+            ]);
+            $entity = (new \ReflectionClass(ProductCatalogAttributeEntity::class))->newInstanceWithoutConstructor();
+            $metadata->expects(self::exactly(2))->method('sharedOptionIdentities')->willReturn(
+                ['style_type' => [new AttributeOptionMetadata(48, '粉色仅上衣2307', 'look', '粉色仅上衣2307', 48)]],
+                ['style_type' => [new AttributeOptionMetadata(48, '粉色仅上衣2307', 'updated', '粉色仅上衣2307', 48)]],
+            );
+            $metadata->expects(self::once())->method('catalog')->willReturn([$this->privateOptionSet(48, 'Translated shared')]);
+            $metadata->expects(self::once())->method('catalogForProduct')->with($entity, 101)
+                ->willReturn([$this->privateOptionSet(77, 'Translated private')]);
+            $resolver = new StorefrontEavLabelResolver($metadata, $entity);
+            self::assertSame('look', $resolver->publicOptionCode('style_type', '48'));
+            self::assertSame('Translated shared', $resolver->resolve('style_type', '48'));
+            $private = $resolver->forProduct(101);
+            self::assertSame('77', $private->canonicalOptionId('style_type', 'look'));
+            self::assertSame('Translated private', $private->resolve('style_type', '77'));
+            \Weline\Framework\Context::leave();
+            \Weline\Framework\Context::enter(new \Weline\Framework\Context());
+            RequestContext::setId('identity-second');
+            self::assertSame('updated', $resolver->publicOptionCode('style_type', '48'));
+        } finally {
+            \Weline\Framework\Context::leave();
+            if ($original !== null) {
+                \Weline\Framework\Context::enter($original);
+            }
+        }
+    }
+
     public function testCanonicalIdCodeAndStoredValueResolveToTheSameLabel(): void
     {
         [$metadata, $entity] = $this->metadata();
@@ -526,5 +616,28 @@ final class StorefrontEavLabelResolverTest extends TestCase
             ->newInstanceWithoutConstructor();
 
         return [$metadata, $entity];
+    }
+
+    public function testOptionLookupTokensDecodePercentEncodedValues(): void
+    {
+        $encoded = rawurlencode('【花间令】白色全套');
+        $tokens = StorefrontEavLabelResolver::optionLookupTokens($encoded);
+        self::assertContains($encoded, $tokens);
+        self::assertContains('【花间令】白色全套', $tokens);
+        self::assertSame('【花间令】白色全套', StorefrontEavLabelResolver::displayOptionToken($encoded));
+    }
+
+    public function testUsableOptionLabelRejectsPercentEncodedLocal(): void
+    {
+        $encoded = '[%E5%85%A5%E5%9F%8E%E8%A5%90]%E6%A1%B6%E8%8E%9C';
+        self::assertSame(
+            '【满庭芳】樱花粉套装',
+            StorefrontEavLabelResolver::usableOptionLabel($encoded, '【满庭芳】樱花粉套装'),
+        );
+        self::assertSame(
+            '【Mantingfang】Mint Green Set',
+            StorefrontEavLabelResolver::usableOptionLabel('【Mantingfang】Mint Green Set', '【满庭芳】薄荷绿套装'),
+        );
+        self::assertSame('', StorefrontEavLabelResolver::usableOptionLabel($encoded, ''));
     }
 }

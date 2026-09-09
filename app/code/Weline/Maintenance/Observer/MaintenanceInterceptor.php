@@ -64,6 +64,8 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
         '/pub/errors/',
         // 维护等待礼金 API（无库文件账本）
         '/maintenance/frontend/wait-gift',
+        // 维护恢复轻量探测（禁止打完整业务页）
+        '/maintenance/frontend/recovery-check',
     ];
 
     /**
@@ -93,14 +95,21 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
      */
     public function execute(Event &$event): void
     {
-        $parseEarly = $this->applyParsedRequestUri();
-        $pureEarly = (string)($parseEarly['uri'] ?? '/');
-        if ($this->tryHandleWaitGiftApi($pureEarly)) {
+        $rawUri = (string)\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '/');
+        $pureGuess = (string)(\parse_url($rawUri, \PHP_URL_PATH) ?: '/');
+
+        // Special endpoints inspect REQUEST_URI themselves; avoid full UrlParser
+        // when maintenance is off and these are not involved.
+        if ($this->tryHandleRecoveryCheck($pureGuess)) {
+            return;
+        }
+        if ($this->tryHandleWaitGiftApi($pureGuess)) {
             return;
         }
 
         if (\defined('WLS_MAINTENANCE_WORKER') && WLS_MAINTENANCE_WORKER) {
-            $pure_uri = $pureEarly;
+            $parseEarly = $this->applyParsedRequestUri();
+            $pure_uri = (string)($parseEarly['uri'] ?? $pureGuess);
             if (!$this->shouldServeMaintenanceResponse($pure_uri)) {
                 return;
             }
@@ -120,10 +129,12 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
             return;
         }
 
-        // 检查维护模式配置
+        // 检查维护模式配置 — 关闭时尽早返回，不做完整 URI 解析
         if (!Env::system('maintenance')) {
             return;
         }
+
+        $parseEarly = $this->applyParsedRequestUri();
 
         // 给Request对象设置当前模块名
         $request = ObjectManager::getInstance(Request::class);
@@ -144,6 +155,67 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
 
         // 返回维护页面响应
         $this->sendMaintenanceResponse();
+    }
+
+    /**
+     * Lightweight recovery probe: never render business HTML for maintenance
+     * recovery HEAD/GET (header, dedicated path, or _maintenance_recovery_probe).
+     */
+    private function tryHandleRecoveryCheck(string $uri): bool
+    {
+        if (!$this->isRecoveryCheckRequest($uri)) {
+            return false;
+        }
+
+        $inMaintenance = (\defined('WLS_MAINTENANCE_WORKER') && WLS_MAINTENANCE_WORKER)
+            || (bool)Env::system('maintenance');
+        $status = $inMaintenance ? 503 : 200;
+
+        throw new ResponseTerminateException(
+            $status,
+            '',
+            [
+                'Content-Type' => 'text/plain; charset=utf-8',
+                'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
+                'X-Weline-Maintenance-Recovery' => $inMaintenance ? '1' : '0',
+            ],
+        );
+    }
+
+    private function isRecoveryCheckRequest(string $uri): bool
+    {
+        $rawUri = (string)\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '');
+        $originUri = (string)\Weline\Framework\Env\WelineEnv::server('ORIGIN_REQUEST_URI', '');
+        $haystack = $uri . "\n" . $rawUri . "\n" . $originUri;
+        if (\str_contains($haystack, '/maintenance/frontend/recovery-check')) {
+            return true;
+        }
+
+        $header = \trim((string)\Weline\Framework\Env\WelineEnv::server('HTTP_X_MAINTENANCE_RECOVERY_CHECK', ''));
+        if ($header === '1' || \strcasecmp($header, 'true') === 0) {
+            return true;
+        }
+
+        foreach ([$uri, $rawUri, $originUri] as $candidate) {
+            $query = \parse_url((string)$candidate, \PHP_URL_QUERY);
+            if (!\is_string($query) || $query === '') {
+                continue;
+            }
+            \parse_str($query, $params);
+            if (isset($params['_maintenance_recovery_probe']) && (string)$params['_maintenance_recovery_probe'] !== '') {
+                return true;
+            }
+        }
+
+        $qs = (string)\Weline\Framework\Env\WelineEnv::server('QUERY_STRING', '');
+        if ($qs !== '') {
+            \parse_str($qs, $params);
+            if (isset($params['_maintenance_recovery_probe']) && (string)$params['_maintenance_recovery_probe'] !== '') {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -180,12 +252,20 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
                 'browser_key' => $this->readWaitGiftCookie(WaitGiftService::COOKIE_BROWSER, (string)($body['browser_key'] ?? '')),
                 'guest_token' => (string)($body['guest_token'] ?? ''),
                 'customer_id' => (string)($body['customer_id'] ?? ''),
+                'selling_mode' => (string)($body['selling_mode'] ?? $body['cart_type'] ?? ''),
+                'cookies' => $_COOKIE ?? [],
                 'ip' => (string)\Weline\Framework\Env\WelineEnv::server('REMOTE_ADDR', ''),
                 'user_agent' => (string)\Weline\Framework\Env\WelineEnv::server('HTTP_USER_AGENT', ''),
             ]),
             'heartbeat' => $service->heartbeat($this->readWaitGiftCookie(WaitGiftService::COOKIE_WAIT, (string)($body['token'] ?? ''))),
             'abandon' => $service->abandon($this->readWaitGiftCookie(WaitGiftService::COOKIE_WAIT, (string)($body['token'] ?? ''))),
-            'redeem' => $service->redeem($this->readWaitGiftCookie(WaitGiftService::COOKIE_WAIT, (string)($body['token'] ?? ''))),
+            'redeem' => $service->redeem(
+                $this->readWaitGiftCookie(WaitGiftService::COOKIE_WAIT, (string)($body['token'] ?? '')),
+                [
+                    'selling_mode' => (string)($body['selling_mode'] ?? $body['cart_type'] ?? ''),
+                    'cookies' => $_COOKIE ?? [],
+                ]
+            ),
             default => [
                 'success' => false,
                 'error' => 'unknown_action',
@@ -234,13 +314,20 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
     {
         $waves = new UpgradeWaveService();
         $wave = $waves->readWave();
+        $service = new WaitGiftService($waves);
         $maint = (\defined('WLS_MAINTENANCE_WORKER') && WLS_MAINTENANCE_WORKER)
             || (bool)Env::system('maintenance');
+        $enabled = (bool)($wave['wait_gift_enabled'] ?? false);
+        $sellingMode = $service->resolveSellingMode(['cookies' => $_COOKIE ?? []]);
+        $toc = $sellingMode !== 'tob';
 
         return [
             'success' => true,
             'maintenance' => $maint,
-            'wait_gift_enabled' => (bool)($wave['wait_gift_enabled'] ?? false),
+            'wait_gift_enabled' => $enabled,
+            'wait_gift_eligible' => $enabled && $toc,
+            'selling_mode' => $sellingMode,
+            'audience' => $toc ? 'toc' : 'tob',
             'wave_id' => (string)($wave['wave_id'] ?? ''),
             'system_version' => (string)($wave['system_version_to'] ?? ''),
             'theme_version' => (string)($wave['theme_version_to'] ?? ''),

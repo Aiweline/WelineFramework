@@ -45,8 +45,9 @@
             if (!name.startsWith('--')) return;
             if (panel === 'color') {
                 const role = String(token.role || token.palette_role || '').toLowerCase();
-                const lateSafe = role === 'brand' || role === 'functional'
-                    || /primary|accent|secondary|success|warning|danger|info|link/.test(name);
+                // 默认可继承语义合同：brand/status + neutral 字/面/边，编辑后须能驱动前台基础组件
+                const lateSafe = role === 'brand' || role === 'functional' || role === 'neutral'
+                    || /primary|accent|secondary|success|warning|danger|error|info|link|text|surface|border|canvas|overlay|on-|bg-/.test(name);
                 if (!lateSafe) return;
             }
             tokens[name] = String(token.default_value ?? token.value ?? '');

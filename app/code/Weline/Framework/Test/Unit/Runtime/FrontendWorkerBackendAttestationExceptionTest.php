@@ -20,7 +20,7 @@ final class FrontendWorkerBackendAttestationExceptionTest extends TestCase
 
         if (\defined('DEV') && DEV) {
             self::assertSame(
-                'backend_attestation_unavailable: Worker session store lock is unavailable.',
+                "backend_attestation_unavailable: Worker session store lock is unavailable.\n后台安全凭证暂不可用，请稍后刷新页面。",
                 $exception->responseBody(),
             );
             return;
@@ -35,6 +35,13 @@ final class FrontendWorkerBackendAttestationExceptionTest extends TestCase
             \dirname(__DIR__, 4) . '/Backend/Observer/BackendWorkerAttestationResponse.php'
         );
         self::assertStringContainsString('$exception->responseBody()', $source);
+        self::assertStringContainsString("setHeader('Content-Type', 'text/html; charset=utf-8')", $source);
+        self::assertStringContainsString("setHeader('Refresh', '1')", $source);
+        self::assertStringContainsString('http-equiv="refresh"', $source);
+        self::assertStringNotContainsString(
+            "setHeader('Content-Type', 'text/plain; charset=utf-8')",
+            $source,
+        );
         self::assertStringNotContainsString(
             "setBody((string)__('后台安全凭证暂不可用，请稍后刷新页面。'))",
             $source,

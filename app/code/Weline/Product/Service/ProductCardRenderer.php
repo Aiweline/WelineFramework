@@ -19,7 +19,9 @@ use Weline\Theme\Helper\StorefrontImagePlaceholder;
 final class ProductCardRenderer
 {
     private const CSS_FLAG = 'product.product_card_css_emitted';
-    private const CSS_VERSION = '20260906-product-card1';
+    private const CSS_VERSION = '20260908-product-card-rhythm2';
+    /** Keep the first two desktop rows available without flooding the network. */
+    private const INITIAL_VIEWPORT_IMAGE_COUNT = 8;
 
     /**
      * @param array<string, mixed> $product
@@ -137,11 +139,40 @@ final class ProductCardRenderer
         $product['is_demo'] = !empty($product['is_demo']);
         $product['sellable'] = !empty($product['sellable']);
         $product['quote_only'] = !empty($product['quote_only']);
+        $product['needs_selection'] = !empty($product['needs_selection']);
         $product['global_offer_uuid'] = trim((string)($product['global_offer_uuid'] ?? ''));
         $product['campaign_label'] = trim((string)($product['campaign_label'] ?? ''));
         $product['campaign_url'] = trim((string)($product['campaign_url'] ?? ''));
+        if (array_key_exists('card_index', $product)) {
+            $product['card_index'] = max(0, (int)$product['card_index']);
+        }
 
         return $product;
+    }
+
+    /**
+     * Return the native image loading hints for a card's position in its list.
+     *
+     * Cards are server-rendered regardless of this policy. Only the image fetch
+     * is changed: the initial viewport gets an eager, high-priority request and
+     * all later cards keep the browser's native lazy loading behaviour.
+     *
+     * @param array<string, mixed> $product
+     * @return array{loading:'eager'|'lazy', fetchpriority?:'high'}
+     */
+    public static function imageLoadingAttributes(array $product): array
+    {
+        $index = array_key_exists('card_index', $product)
+            ? max(0, (int)$product['card_index'])
+            : null;
+        if ($index !== null && $index < self::INITIAL_VIEWPORT_IMAGE_COUNT) {
+            return [
+                'loading' => 'eager',
+                'fetchpriority' => 'high',
+            ];
+        }
+
+        return ['loading' => 'lazy'];
     }
 
     /**
@@ -207,9 +238,18 @@ final class ProductCardRenderer
             }
         }
 
+        $combination = $offer['combination'] ?? [];
+        $variantAxes = $offer['variant_axes'] ?? [];
+        $needsSelection = !empty($offer['selection_required'])
+            || !empty($offer['needs_selection'])
+            || ((int)($offer['variant_offer_count'] ?? $offer['offer_count'] ?? 0) > 1)
+            || (\is_array($combination) && $combination !== [])
+            || (\is_array($variantAxes) && $variantAxes !== []);
+
         return self::normalizeProduct([
             'id' => $productId,
             'product_id' => $productId,
+            'card_index' => max(0, $index),
             'name' => $name !== '' ? $name : $sku,
             'slug' => $slug,
             'sku' => $sku,
@@ -231,6 +271,7 @@ final class ProductCardRenderer
             'provider_code' => trim((string)($offer['provider_code'] ?? 'product')) ?: 'product',
             'message' => trim((string)($offer['message'] ?? '')),
             'stock' => (int)($offer['stock'] ?? 0),
+            'needs_selection' => $needsSelection,
         ]);
     }
 

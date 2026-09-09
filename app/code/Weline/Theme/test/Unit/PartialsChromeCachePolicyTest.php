@@ -52,11 +52,21 @@ final class PartialsChromeCachePolicyTest extends TestCase
         $cache = $parsed['meta']['cache'] ?? [];
 
         self::assertIsArray($cache);
-        self::assertSame('chrome', (string)($cache['mode']['default'] ?? ''));
+        // 侧栏菜单高亮依赖当前路由，禁止 chrome 跨页复用
+        self::assertSame('off', (string)($cache['mode']['default'] ?? ''));
         self::assertSame('user', (string)($cache['auth']['default'] ?? ''));
     }
 
-    public function testFrontendHeadUsesGuestChromeCaching(): void
+    public function testBackendNavPathMatchScoreAlignsIndexSuffix(): void
+    {
+        $js = (string)\file_get_contents(BP . 'app/code/Weline/Theme/view/statics/ui/weline-ui.js');
+        self::assertStringContainsString('菜单常带 …/index，当前路由常省略 /index', $js);
+        self::assertStringContainsString("menuSegments.length === currentSegments.length + 1", $js);
+        $jsUi = (string)\file_get_contents(BP . 'app/code/Weline/Theme/view/ui/js/weline-ui.js');
+        self::assertStringContainsString('菜单常带 …/index，当前路由常省略 /index', $jsUi);
+    }
+
+    public function testFrontendHeadDeclaresCacheOffNotChrome(): void
     {
         $file = BP . 'app/code/Weline/Theme/view/theme/frontend/partials/head/default.phtml';
         self::assertFileExists($file);
@@ -65,8 +75,8 @@ final class PartialsChromeCachePolicyTest extends TestCase
         $cache = $parsed['meta']['cache'] ?? [];
 
         self::assertIsArray($cache);
-        self::assertSame('chrome', (string)($cache['mode']['default'] ?? ''));
-        self::assertSame('guest', (string)($cache['auth']['default'] ?? ''));
+        // Head embeds page SEO/JSON-LD — must never be chrome-shared across URLs.
+        self::assertSame('off', (string)($cache['mode']['default'] ?? ''));
     }
 
     public function testTopbarChromeAuthDefaultsToUser(): void
@@ -147,16 +157,25 @@ final class PartialsChromeCachePolicyTest extends TestCase
         self::assertStringNotContainsString("['website' => true, 'lang' => true]", $source);
     }
 
-    public function testFrontendHeadUsesTheSharedStorefrontChromeCache(): void
+    public function testFrontendHeadIsExcludedFromSharedStorefrontChromeCache(): void
     {
         $partials = (new ReflectionClass(Partials::class))->newInstanceWithoutConstructor();
         $method = new ReflectionMethod(Partials::class, 'shouldUseSharedStorefrontChromeCache');
         $method->setAccessible(true);
 
-        self::assertTrue($method->invoke($partials, 'frontend', 'head'));
+        // Head embeds page SEO/JSON-LD — never share chrome cache across URLs.
+        self::assertFalse($method->invoke($partials, 'frontend', 'head'));
         self::assertTrue($method->invoke($partials, 'frontend', 'header'));
         self::assertTrue($method->invoke($partials, 'frontend', 'footer'));
         self::assertFalse($method->invoke($partials, 'backend', 'head'));
+    }
+
+    public function testFrontendHeadBypassesPartialOutputCachePath(): void
+    {
+        $source = (string)\file_get_contents(BP . 'app/code/Weline/Theme/Block/Partials.php');
+        self::assertStringContainsString("strtolower(\$type) === 'head'", $source);
+        self::assertStringContainsString('Product head can never be replayed', $source);
+        self::assertStringContainsString("['header', 'footer']", $source);
     }
 
     public function testChromePartialCacheSchemaPinsStateLangOverStorefrontCookie(): void

@@ -5,6 +5,36 @@
  */
 $items = $this->getData('meta.items') ?? $this->getData('items') ?? [];
 $items = is_array($items) ? $items : [];
+
+// Storefront controllers may publish name/url trails (PDP / PLP) when meta.items is empty.
+if ($items === []) {
+    $raw = $this->getData('storefront_product_breadcrumbs')
+        ?? $this->getData('storefront_category_breadcrumbs')
+        ?? $this->getData('breadcrumbs')
+        ?? [];
+    if (is_array($raw) && $raw !== []) {
+        $normalized = [];
+        $total = count($raw);
+        $i = 0;
+        foreach ($raw as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $text = trim((string)($row['text'] ?? $row['name'] ?? $row['label'] ?? ''));
+            if ($text === '') {
+                continue;
+            }
+            $isLast = $i === $total - 1;
+            $url = trim((string)($row['url'] ?? $row['href'] ?? ''));
+            $normalized[] = [
+                'text' => $text,
+                'url' => $isLast ? '' : $url,
+            ];
+            $i++;
+        }
+        $items = $normalized;
+    }
+}
 ?>
 <w:hook>Weline_Theme::frontend::partials::breadcrumb::before</w:hook>
 <?php if ($items !== []): ?>

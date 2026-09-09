@@ -11,6 +11,9 @@ use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
 use Weline\Framework\Database\Transaction\WriteIntentTransactionCoordinatorInterface;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Websites\Api\Catalog\Data\StoreSummary;
+use Weline\Websites\Data\ScopeData;
+use Weline\Websites\Service\ScopePathMatchCache;
 use Weline\Websites\Service\StoreLifecycleService;
 use Weline\Websites\Service\WebsiteCacheInvalidationService;
 use Weline\Websites\Service\Value\CanonicalStorefrontUrl;
@@ -362,6 +365,75 @@ class Store extends Model
     public function getStoreId(): int
     {
         return (int)$this->getData(self::schema_fields_ID);
+    }
+
+    /**
+     * Prefer L3 ScopeData / L2 shared store snapshot. Pass forceReload: true to hit DB.
+     */
+    public function load(int|string $field_or_pk_value, $value = null, bool $forceReload = false): AbstractModel
+    {
+        if (!$forceReload) {
+            $row = $this->resolveRowWithoutQuery($field_or_pk_value, $value);
+            if ($row !== null) {
+                $identityKey = static::class . '::' . (\is_null($value)
+                    ? (string)$field_or_pk_value
+                    : $field_or_pk_value . '::' . $value);
+                $this->hydrateFromLoadedRow($row, $identityKey);
+                return $this;
+            }
+        }
+
+        return parent::load($field_or_pk_value, $value, $forceReload);
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function resolveRowWithoutQuery(int|string $field_or_pk_value, mixed $value): ?array
+    {
+        $summary = null;
+        if ($value === null) {
+            if (!\is_int($field_or_pk_value)
+                && !(\is_string($field_or_pk_value) && \preg_match('/^(?:0|[1-9][0-9]*)$/D', $field_or_pk_value) === 1)) {
+                return null;
+            }
+            $storeId = (int)$field_or_pk_value;
+            if (ScopeData::matchesStoreId($storeId)) {
+                $summary = ScopeData::getStore();
+            } else {
+                $summary = ObjectManager::getInstance(ScopePathMatchCache::class)->readStoreSnapshot($storeId);
+            }
+        } elseif ((string)$field_or_pk_value === self::schema_fields_ID) {
+            if (!\is_int($value)
+                && !(\is_string($value) && \preg_match('/^(?:0|[1-9][0-9]*)$/D', (string)$value) === 1)) {
+                return null;
+            }
+            $storeId = (int)$value;
+            if (ScopeData::matchesStoreId($storeId)) {
+                $summary = ScopeData::getStore();
+            } else {
+                $summary = ObjectManager::getInstance(ScopePathMatchCache::class)->readStoreSnapshot($storeId);
+            }
+        }
+
+        return $summary instanceof StoreSummary ? $this->rowFromSummary($summary) : null;
+    }
+
+    /** @return array<string, mixed> */
+    private function rowFromSummary(StoreSummary $summary): array
+    {
+        return [
+            self::schema_fields_ID => $summary->id,
+            self::schema_fields_WEBSITE_ID => $summary->websiteId,
+            self::schema_fields_CODE => $summary->code,
+            self::schema_fields_NAME => $summary->name,
+            self::schema_fields_STORE_MODE => $summary->storeMode,
+            self::schema_fields_IS_DEFAULT => $summary->isDefault ? 1 : 0,
+            self::schema_fields_STATUS => $summary->enabled ? 1 : 0,
+            self::schema_fields_URL => $summary->url,
+            self::schema_fields_LIFECYCLE_STATUS => $summary->lifecycleStatus,
+            self::schema_fields_TOMBSTONED_AT => $summary->tombstonedAt,
+        ];
     }
 
     public function setWebsiteId(int $websiteId): static

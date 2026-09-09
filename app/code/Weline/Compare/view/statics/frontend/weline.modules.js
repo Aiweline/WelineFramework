@@ -18,6 +18,7 @@ Object.assign(window.WelineModulesConfig.modules, {
             "Weline_Compare::js/product-card-actions.js"
         ],
         globalVar: "WelineCompareShopper",
+        load: "defer",
         description: "商品卡对比/快速查看/对比栏"
     }
 });

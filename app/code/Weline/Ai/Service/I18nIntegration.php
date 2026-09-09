@@ -216,8 +216,13 @@ class I18nIntegration
             return $normalizedLocale;
         }
 
-        // Prefer keeping the caller's language family over a silent Chinese
-        // fallback — otherwise en_US/bn_IN machine-translate into 中文.
+        // Catalog empty/incomplete (e.g. m_i18n_locale_name not seeded): keep the
+        // caller's normalized code. Falling back to Chinese here made prompts
+        // become Chinese→Chinese and machine-translate echo the source text.
+        if ($normalizedLocale !== '' && preg_match('/^[A-Za-z]{2,3}([_-][A-Za-z0-9]+)+$/', $normalizedLocale) === 1) {
+            return $normalizedLocale;
+        }
+
         $fallbackNormalized = $this->normalizeLocaleCode($fallback);
         if ($this->isLocaleSupported($fallbackNormalized)) {
             return $fallbackNormalized;

@@ -6,6 +6,8 @@ namespace Weline\Frontend\Service\Head;
 
 class TitleComposer
 {
+    public const SOFT_SERP_TITLE_MAX = 65;
+
     public function __construct(
         private readonly ?HeadProviderRegistry $providerRegistry = null
     ) {
@@ -26,13 +28,15 @@ class TitleComposer
             $context['page_title'] ?? null,
             $siteName,
         ]));
+        $maxLength = (int)($policy['max_length'] ?? self::SOFT_SERP_TITLE_MAX);
+        $separator = (string)($policy['separator'] ?? ' | ');
 
         if (!empty($context['is_homepage'])) {
             $homeTitle = $this->normalizeText($policy['home_title'] ?? '');
             $title = ($policy['home_title_mode'] ?? 'site_only') === 'custom' && $homeTitle !== ''
                 ? $homeTitle
                 : ($siteName !== '' ? $siteName : $pageTitle);
-            return $this->limitTitle($title, (int)($policy['max_length'] ?? 0));
+            return $this->fitSingleTitle($title, $maxLength);
         }
 
         $parts = [];
@@ -46,21 +50,30 @@ class TitleComposer
         }
 
         $appendSiteName = (bool)($policy['append_site_name'] ?? true);
+        $siteNamePosition = (string)($policy['site_name_position'] ?? 'suffix');
+        $siteAttached = false;
         if ($appendSiteName && $siteName !== '' && !$this->titleContainsSiteName($parts, $siteName, (bool)($policy['deduplicate_site_name'] ?? true))) {
-            if (($policy['site_name_position'] ?? 'suffix') === 'prefix') {
+            if ($siteNamePosition === 'prefix') {
                 array_unshift($parts, $siteName);
             } else {
                 $parts[] = $siteName;
             }
+            $siteAttached = true;
         }
 
         $parts = array_values(array_filter($parts, static fn($part) => trim((string)$part) !== ''));
         if ($parts === [] && $siteName !== '') {
             $parts[] = $siteName;
+            $siteAttached = true;
         }
 
-        $title = implode((string)($policy['separator'] ?? ' | '), $parts);
-        return $this->limitTitle($title, (int)($policy['max_length'] ?? 0));
+        return $this->fitComposedParts(
+            $parts,
+            $separator,
+            $siteAttached ? $siteName : '',
+            $siteNamePosition,
+            $maxLength
+        );
     }
 
     /**
@@ -76,7 +89,8 @@ class TitleComposer
             'home_title_mode' => 'site_only',
             'home_title' => '',
             'pagination_label' => 'Page %{page}',
-            'max_length' => 0,
+            // Soft SERP budget aligned with Seo inspector / crawler (30-65).
+            'max_length' => self::SOFT_SERP_TITLE_MAX,
         ];
     }
 
@@ -146,12 +160,105 @@ class TitleComposer
         return $label !== '' ? $label : 'Page ' . $currentPage;
     }
 
-    private function limitTitle(string $title, int $maxLength): string
+    /**
+     * Prefer shortening the brand suffix (segment before ·/-) before trimming the page leaf.
+     *
+     * @param list<string> $parts
+     */
+    private function fitComposedParts(
+        array $parts,
+        string $separator,
+        string $siteName,
+        string $siteNamePosition,
+        int $maxLength
+    ): string {
+        $title = implode($separator, $parts);
+        if ($maxLength <= 0 || mb_strlen($title) <= $maxLength) {
+            return $title;
+        }
+
+        if ($siteName !== '') {
+            $shortSite = $this->shortSiteName($siteName);
+            if ($shortSite !== '' && $shortSite !== $siteName) {
+                $parts = $this->replaceSitePart($parts, $siteName, $shortSite, $siteNamePosition);
+                $title = implode($separator, $parts);
+                if (mb_strlen($title) <= $maxLength) {
+                    return $title;
+                }
+                $siteName = $shortSite;
+            }
+        }
+
+        if ($siteName !== '' && count($parts) >= 2) {
+            $siteBudget = mb_strlen($siteName) + mb_strlen($separator);
+            $leafBudget = max(12, $maxLength - $siteBudget);
+            $leafIndex = $siteNamePosition === 'prefix' ? count($parts) - 1 : 0;
+            if (isset($parts[$leafIndex]) && $parts[$leafIndex] !== $siteName) {
+                $parts[$leafIndex] = $this->truncateAtWord((string)$parts[$leafIndex], $leafBudget);
+                $title = implode($separator, array_values(array_filter($parts, static fn($p) => trim((string)$p) !== '')));
+                if (mb_strlen($title) <= $maxLength) {
+                    return $title;
+                }
+            }
+        }
+
+        return $this->fitSingleTitle($title, $maxLength);
+    }
+
+    /**
+     * @param list<string> $parts
+     * @return list<string>
+     */
+    private function replaceSitePart(array $parts, string $siteName, string $shortSite, string $siteNamePosition): array
+    {
+        if ($siteNamePosition === 'prefix' && isset($parts[0]) && $parts[0] === $siteName) {
+            $parts[0] = $shortSite;
+            return $parts;
+        }
+        $last = count($parts) - 1;
+        if ($last >= 0 && $parts[$last] === $siteName) {
+            $parts[$last] = $shortSite;
+        }
+        return $parts;
+    }
+
+    private function shortSiteName(string $siteName): string
+    {
+        $normalized = trim(preg_replace('/\s+/u', ' ', $siteName) ?? $siteName);
+        foreach ([' · ', ' • ', ' - ', ' – ', ' — ', ' | '] as $delimiter) {
+            $pos = mb_strpos($normalized, $delimiter);
+            if ($pos !== false && $pos >= 2) {
+                $short = trim(mb_substr($normalized, 0, $pos));
+                if ($short !== '') {
+                    return $short;
+                }
+            }
+        }
+
+        return $normalized;
+    }
+
+    private function fitSingleTitle(string $title, int $maxLength): string
     {
         if ($maxLength <= 0 || mb_strlen($title) <= $maxLength) {
             return $title;
         }
 
-        return rtrim(mb_substr($title, 0, max(0, $maxLength - 3))) . '...';
+        return $this->truncateAtWord($title, $maxLength);
+    }
+
+    private function truncateAtWord(string $text, int $maxLength): string
+    {
+        if ($maxLength <= 0 || mb_strlen($text) <= $maxLength) {
+            return $text;
+        }
+
+        $cut = mb_substr($text, 0, $maxLength);
+        $space = mb_strrpos($cut, ' ');
+        if ($space !== false && $space >= (int)floor($maxLength * 0.55)) {
+            $cut = mb_substr($cut, 0, $space);
+        }
+
+        return rtrim($cut, " \t-,:;|/·");
     }
 }

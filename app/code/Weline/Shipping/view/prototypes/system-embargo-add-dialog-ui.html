@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="utf-8">
+  <title>PROTOTYPE — 系统禁运「新增国家」弹窗 UI</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root {
+      --bg: #f4f6f8;
+      --surface: #fff;
+      --text: #101828;
+      --muted: #667085;
+      --border: #e4e7ec;
+      --primary: #2563eb;
+      --warn-bg: #fff7ed;
+      --warn-border: #fdba74;
+      --radius: 10px;
+      --space: 12px;
+      --font: "Segoe UI", "PingFang SC", "Noto Sans SC", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 14px/1.5 var(--font); color: var(--text); background: var(--bg); }
+    .bar {
+      position: sticky; top: 0; z-index: 20; display: flex; gap: 8px; flex-wrap: wrap;
+      padding: 10px 14px; background: #0f172a; color: #e2e8f0;
+    }
+    .bar a { color: #93c5fd; text-decoration: none; padding: 4px 10px; border-radius: 999px; background: #1e293b; }
+    .bar a[aria-current="true"] { background: var(--primary); color: #fff; }
+    .wrap { max-width: 920px; margin: 20px auto; padding: 0 16px 48px; }
+    .note { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+    .alert {
+      display: flex; gap: 10px; padding: 12px 14px; border-radius: var(--radius);
+      background: var(--warn-bg); border: 1px solid var(--warn-border); margin-bottom: 14px;
+    }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+    .card__h { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+    .card__h h2 { margin: 0; font-size: 16px; }
+    .card__b { padding: 14px 16px; }
+    .btn {
+      appearance: none; border: 0; border-radius: 8px; padding: 8px 14px; cursor: pointer;
+      background: var(--primary); color: #fff; font: inherit;
+    }
+    .btn.ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
+    .btn.block { width: 100%; }
+    .field { margin-bottom: 12px; }
+    .field label { display: block; margin-bottom: 6px; font-weight: 600; }
+    .field input, .fake-select {
+      width: 100%; max-width: 28rem; padding: 8px 10px; border: 1px solid var(--border);
+      border-radius: 8px; background: #fff;
+    }
+    .help { margin: 6px 0 0; color: var(--muted); font-size: 12px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--border); font-size: 13px; }
+    th { color: var(--muted); font-weight: 600; }
+    /* inline variant (rejected) */
+    .inline-form { padding: 16px; border: 1px dashed #f59e0b; background: #fffbeb; }
+    /* dialog */
+    .dialog[hidden] { display: none !important; }
+    .dialog {
+      position: fixed; inset: 0; z-index: 40; display: grid; place-items: center;
+      background: rgba(15, 23, 42, 0.45);
+    }
+    .dialog__surface {
+      width: min(520px, calc(100vw - 32px)); background: var(--surface); border-radius: 12px;
+      border: 1px solid var(--border); box-shadow: 0 20px 40px rgba(15,23,42,.18);
+    }
+    .dialog__h, .dialog__f { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 16px; }
+    .dialog__h { border-bottom: 1px solid var(--border); }
+    .dialog__f { border-top: 1px solid var(--border); justify-content: flex-end; }
+    .dialog__b { padding: 16px; }
+    .verdict {
+      margin-top: 18px; padding: 12px 14px; border-radius: var(--radius);
+      background: #ecfdf5; border: 1px solid #6ee7b7; color: #065f46; font-size: 13px;
+    }
+    [data-variant="inline"] .dialog-only { display: none; }
+    [data-variant="dialog"] .inline-only { display: none; }
+  </style>
+</head>
+<body data-variant="dialog">
+  <div class="bar">
+    PROTOTYPE（抛出，非生产）
+    <a href="?v=inline" data-v="inline">A · 页内大表单（丑）</a>
+    <a href="?v=dialog" data-v="dialog">B · 列表 + 弹窗（选型）</a>
+  </div>
+  <div class="wrap">
+    <p class="note">问题：系统禁运「新增国家」是否应占满首屏？结论：否。对齐地区管理——列表为主，新增进 <code>w-dialog</code>。</p>
+
+    <div class="alert">
+      <strong>系统默认禁运（最高优先）</strong>
+      <span>可新增 / 解禁 / 再启用；不可删除。解禁后全站放行。</span>
+    </div>
+
+    <div class="inline-only inline-form">
+      <h2>新增国家（页内）</h2>
+      <div class="field"><label>国家/地区</label><div class="fake-select">请选择国家/地区</div></div>
+      <div class="field"><label>原因码</label><input value="no_commerce"></div>
+      <button class="btn block">新增或启用</button>
+      <p class="help">Fail：与列表抢视觉，首屏像半截设置页。</p>
+    </div>
+
+    <div class="card">
+      <div class="card__h">
+        <h2>系统禁运列表</h2>
+        <button class="btn dialog-only" type="button" id="open">新增国家</button>
+      </div>
+      <div class="card__b">
+        <table>
+          <thead><tr><th>国家</th><th>原因</th><th>状态</th><th>操作</th></tr></thead>
+          <tbody>
+            <tr><td>AQ</td><td>territory</td><td>禁运中</td><td>解禁 · 不可删除</td></tr>
+            <tr><td>BV</td><td>territory</td><td>禁运中</td><td>解禁 · 不可删除</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="verdict dialog-only"><strong>Verdict B：</strong>一屏一主任务（列表）；新增为国家选择 + 原因码，用中等弹窗即可，不另造色板。</div>
+    <div class="verdict inline-only" style="background:#fff1f2;border-color:#fda4af;color:#9f1239;"><strong>Verdict A 拒绝：</strong>页内整卡表单喧宾夺主。</div>
+  </div>
+
+  <div class="dialog" id="dlg" hidden>
+    <div class="dialog__surface" role="dialog" aria-modal="true" aria-labelledby="dlg-title">
+      <div class="dialog__h">
+        <strong id="dlg-title">新增国家</strong>
+        <button class="btn ghost" type="button" data-close>关闭</button>
+      </div>
+      <div class="dialog__b">
+        <p class="help" style="margin-top:0">搜索并选择国家；勿手填 ISO。提交写入系统禁运国家码。</p>
+        <div class="field"><label>国家/地区</label><div class="fake-select">请选择国家/地区（theme:address）</div></div>
+        <div class="field"><label>原因码</label><input value="no_commerce"></div>
+      </div>
+      <div class="dialog__f">
+        <button class="btn ghost" type="button" data-close>取消</button>
+        <button class="btn" type="button">新增或启用</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var v = new URLSearchParams(location.search).get('v') || 'dialog';
+      if (v !== 'inline' && v !== 'dialog') v = 'dialog';
+      document.body.setAttribute('data-variant', v);
+      document.querySelectorAll('.bar a').forEach(function (a) {
+        a.setAttribute('aria-current', a.getAttribute('data-v') === v ? 'true' : 'false');
+      });
+      var dlg = document.getElementById('dlg');
+      var open = document.getElementById('open');
+      if (open) open.addEventListener('click', function () { dlg.hidden = false; });
+      dlg.querySelectorAll('[data-close]').forEach(function (b) {
+        b.addEventListener('click', function () { dlg.hidden = true; });
+      });
+      dlg.addEventListener('click', function (e) { if (e.target === dlg) dlg.hidden = true; });
+    })();
+  </script>
+</body>
+</html>

@@ -76,14 +76,18 @@ Product transaction
     → DatabaseSearchIndexStore atomic apply
 ```
 
-Queue content 只允许 `contract`、`event_id`、`event_seq`、`target_type`
-和 `target_id` 五个字段。Website/Store 维度仅从持久 `scope_envelope`
-读取；content 携带额外 Scope 字段会 fail-closed。
+Queue content 必需字段为 `contract`、`event_id`、`event_seq`、`target_type`
+和 `target_id`，兼容既有五字段任务。同一 pending 槽合并事件时可额外携带
+`covered_events`（每项仅 `event_id`、`event_seq`），保留被最终投影覆盖的
+显式事件身份。Website/Store 维度仍仅从持久 `scope_envelope` 读取。
 
 入队幂等槽位键为 `slot:{target_type}:{target_id}:{scope…}`（scope=
-`search_product_projection_slot`）。同一槽位上的新事件只刷新 pending
-content 的最新 `event_seq`；槽位已 done/error/stop 时 reopen 后再派发；
+`search_product_projection_slot`）。同一槽位保留最高 `event_seq` 及被其覆盖的事件身份；乱序到达的较旧事件也
+会保留在覆盖列表。更新使用 Queue 的可选 `expected_content` 对读取快照做 CAS，
+冲突后重新读取并合并，不能覆盖另一个写入者已保存的事件。槽位已 done/error/stop 时 reopen 后再派发；
 主槽 running 时写入唯一 `:followup` 槽。一万次同商品变更不会建一万条队列。
+clean 终态槽的重新排队和 payload 更新可加入 Product 保存事务；通过公开 Queue `dispatch`
+在物理提交后才启动 Worker，外层回滚同时撤销槽位更新和派发，保留商品与搜索任务的一致性。
 
 `SearchIndexIncrementalQueue` 实现 `BatchDrainingQueueConsumerInterface`：
 调度侧对该消费者类保持单飞行（最多 1 个 active Worker，claim+spawn
@@ -92,8 +96,11 @@ content 的最新 `event_seq`；槽位已 done/error/stop 时 reopen 后再派�
 CLI 冷启动」把本机 CPU 打满。索引动作仍是异步增量，不进入商品保存请求。
 
 增量应用在一个事务内完成 applied-event 幂等、document version/hash CAS、
-scope delete/upsert 和连续 watermark 推进。低版本不能覆盖高版本；同版本
-不同 payload hash 是硬冲突；重复事件返回 replay，不产生第二条 Queue。
+scope delete/upsert 和连续 watermark 推进。最终投影成功后才在同一事务记录
+主事件与每个覆盖事件；失败会回滚文档和事件证据。只按连续已应用序号推进，
+不得以最大序号跳过其他商品的失败事件。既有 `SearchIndexStorageInterface`
+签名不变；内置存储另实现 `SearchIndexEventCoverageStorageInterface` 原子覆盖能力。
+低版本不能覆盖高版本；同版本不同 payload hash 是硬冲突；重复事件返回 replay。
 
 ## Scope 与回滚
 

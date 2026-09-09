@@ -127,6 +127,7 @@ final class StreamTest extends TestCase
         $runtimeProvider = (string)\file_get_contents(
             BP . 'app/code/Weline/Framework/Extends/module/Weline_Framework/Query/ResumableTaskQueryProvider.php'
         );
+        self::assertMatchesRegularExpression('/private const UNBOUND_SESSION_TTL = 600;/', $session);
         self::assertMatchesRegularExpression('/private const SESSION_TTL = 7200;/', $session);
         self::assertMatchesRegularExpression('/private const BINDING_TTL = 7200;/', $provider);
         self::assertStringContainsString('slideBackendSession', $session);

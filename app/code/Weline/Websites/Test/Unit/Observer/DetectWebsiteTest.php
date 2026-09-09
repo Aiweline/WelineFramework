@@ -140,6 +140,40 @@ final class DetectWebsiteTest extends TestCase
         $this->assertSame(2, $cache->getCalls, 'Expected matched-site resolution to reuse process cache across observer lifecycles.');
     }
 
+    public function testUnmatchedUrlUsesProcessNegativeCacheAcrossRequests(): void
+    {
+        $instances = $this->objectManagerInstancesBackup;
+        $instances[Website::class] = new DetectWebsiteRowsStub([[
+            'website_id' => 2,
+            'code' => 'shop',
+            'url' => 'https://example.com/shop',
+            'default_currency' => 'USD',
+            'default_language' => 'en_US',
+            'default_timezone' => 'UTC',
+        ]]);
+        $instances[WebsiteDomain::class] = new DetectWebsiteDomainRowsStub([]);
+        $this->setObjectManagerInstances($instances);
+
+        $cache = new DetectWebsiteCachePoolSpy();
+        $firstObserver = new DetectWebsite();
+        $this->setObserverCache($firstObserver, $cache);
+
+        self::assertNull($firstObserver->resolveWebsiteContext('https://unknown.example.test/missing'));
+        $cacheGetsAfterFirstLookup = $cache->getCalls;
+        self::assertGreaterThan(0, $cacheGetsAfterFirstLookup);
+
+        RequestContext::init();
+        $secondObserver = new DetectWebsite();
+        $this->setObserverCache($secondObserver, $cache);
+
+        self::assertNull($secondObserver->resolveWebsiteContext('https://unknown.example.test/missing'));
+        self::assertSame(
+            $cacheGetsAfterFirstLookup,
+            $cache->getCalls,
+            'An unmatched URL should be served from the worker negative cache on the next request.',
+        );
+    }
+
     public function testStandardProjectHostIsReservedForSystemHomepage(): void
     {
         $websiteRows = [[

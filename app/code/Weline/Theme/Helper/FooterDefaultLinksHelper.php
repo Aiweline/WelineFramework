@@ -173,7 +173,7 @@ final class FooterDefaultLinksHelper
             'help' => [
                 'id' => self::SLOT_HELP,
                 'name' => '帮助中心扩展',
-                'accept' => 'footer-my-account-link,footer-my-orders-link,footer-shipping-info-link,footer-returns-policy-link,footer-help-center-link,footer-contact-service-link,layout-footer-help-links',
+                'accept' => 'footer-my-account-link,footer-my-orders-link,footer-shipping-info-link,footer-returns-policy-link,footer-faq-link,footer-contact-service-link,layout-footer-help-links',
                 'section_class' => 'footer-section--help',
             ],
         ];

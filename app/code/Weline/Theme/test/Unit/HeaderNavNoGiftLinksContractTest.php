@@ -17,7 +17,7 @@ final class HeaderNavNoGiftLinksContractTest extends TestCase
         $src = (string)file_get_contents($path);
 
         self::assertStringContainsString("@url{'promotion/deals'}", $src);
-        self::assertStringContainsString("@url{'help'}", $src);
+        self::assertStringContainsString("@url{'faq'}", $src);
         self::assertStringNotContainsString("@url{'registry'}", $src);
         self::assertStringNotContainsString("@url{'gift-cards'}", $src);
         self::assertStringNotContainsString('礼品心愿单', $src);
@@ -30,9 +30,9 @@ final class HeaderNavNoGiftLinksContractTest extends TestCase
         $src = (string)file_get_contents($path);
 
         self::assertStringContainsString("getFrontendUrl('promotion/deals')", $src);
-        self::assertStringContainsString("getFrontendUrl('help')", $src);
+        self::assertStringContainsString("getFrontendUrl('faq')", $src);
         self::assertStringNotContainsString("'/promotion/deals'", $src);
-        self::assertStringNotContainsString("'/help'", $src);
+        self::assertStringNotContainsString("'/faq'", $src);
         self::assertStringNotContainsString("'/registry'", $src);
         self::assertStringNotContainsString("'/gift-cards'", $src);
         self::assertStringNotContainsString('礼品心愿单', $src);

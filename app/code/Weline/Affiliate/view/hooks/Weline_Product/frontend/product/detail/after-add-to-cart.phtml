@@ -7,7 +7,25 @@
  * @hook-solo false
  */
 $product = (array) ($this->getData('product') ?? []);
-$productId = (int) ($product['product_id'] ?? $this->getData('product_id') ?? 0);
+$offer = (array) ($this->getData('storefront_offer') ?? []);
+// PDP Theme widgets unsetData('product'); listing quick-add often has request product_id.
+// Prefer storefront_offer / request-scoped resolver so detail and modal stay in sync.
+if ($offer === [] && class_exists(\Weline\Product\Helper\StorefrontOfferResolver::class)) {
+    $offer = \Weline\Product\Helper\StorefrontOfferResolver::currentOffer();
+}
+if ($offer === [] && class_exists(\Weline\Product\Helper\StorefrontOfferResolver::class)) {
+    try {
+        $offer = \Weline\Product\Helper\StorefrontOfferResolver::resolve($this);
+    } catch (\Throwable) {
+        $offer = [];
+    }
+}
+$productId = (int) (
+    $product['product_id']
+    ?? $offer['product_id']
+    ?? $this->getData('product_id')
+    ?? 0
+);
 if ($productId <= 0) {
     return;
 }
@@ -65,20 +83,27 @@ $rootId = 'affiliate-share-' . $productId . '-' . substr(sha1((string) $productI
     margin-bottom: .65rem;
 }
 .affiliate-share-title {
+    flex: 0 0 auto;
     color: var(--affiliate-share-text);
     font-size: .95rem;
     font-weight: 700;
     line-height: 1.25;
+    writing-mode: horizontal-tb;
+    white-space: nowrap;
 }
 .affiliate-share-status {
+    flex: 1 1 auto;
+    min-width: 0;
     min-height: 1.15rem;
     padding: .1rem .45rem;
-    border-radius: 999px;
+    border-radius: var(--weline-theme-radius-md, 6px);
     color: var(--affiliate-share-muted);
     font-size: .78rem;
-    line-height: 1.2;
+    line-height: 1.35;
     text-align: right;
-    white-space: nowrap;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    writing-mode: horizontal-tb;
 }
 .affiliate-share-status.is-loading {
     background: var(--affiliate-share-surface-subtle);
@@ -231,7 +256,7 @@ $rootId = 'affiliate-share-' . $productId . '-' . substr(sha1((string) $productI
             return api.recordOutboundShare({
                 share_code: shareData.share_code,
                 platform: platform || 'copy'
-            });
+            }, { silent: true });
         }).catch(function() {
             return null;
         });
@@ -331,7 +356,7 @@ $rootId = 'affiliate-share-' . $productId . '-' . substr(sha1((string) $productI
             if (!api || typeof api.getProductShareLinks !== 'function') {
                 throw new Error(<?= json_encode((string) __('分销 API 不支持分享链接操作'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>);
             }
-            return api.getProductShareLinks({ product_id: productId, channel: 'product_detail' });
+            return api.getProductShareLinks({ product_id: productId, channel: 'product_detail' }, { silent: true });
         })
         .then(normalizeResponse)
         .then(function(data) {

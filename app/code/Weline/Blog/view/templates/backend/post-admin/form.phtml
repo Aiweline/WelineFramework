@@ -240,6 +240,22 @@ if ($coverImageValue !== '') {
                             <label class="w-field__label" for="blog-post-author"><lang>作者</lang></label>
                             <input class="w-input" id="blog-post-author" type="text" name="author" value="<?= $escape($postRow['author'] ?? '') ?>">
                         </div>
+                        <div class="blog-post-field blog-post-field-author-job">
+                            <label class="w-field__label" for="blog-post-author-job-title"><lang>作者职称</lang></label>
+                            <input class="w-input" id="blog-post-author-job-title" type="text" name="author_job_title" value="<?= $escape($postRow['author_job_title'] ?? '') ?>" placeholder="<?= $escape(__('如：汉服研究员')) ?>">
+                        </div>
+                        <div class="blog-post-field blog-post-field-author-url">
+                            <label class="w-field__label" for="blog-post-author-url"><lang>作者主页 URL</lang></label>
+                            <input class="w-input" id="blog-post-author-url" type="url" name="author_url" value="<?= $escape($postRow['author_url'] ?? '') ?>" placeholder="https://">
+                        </div>
+                        <div class="blog-post-field blog-post-field-author-same-as">
+                            <label class="w-field__label" for="blog-post-author-same-as"><lang>作者 sameAs</lang></label>
+                            <input class="w-input" id="blog-post-author-same-as" type="text" name="author_same_as" value="<?= $escape($postRow['author_same_as'] ?? '') ?>" placeholder="<?= $escape(__('https 档案链接，逗号分隔')) ?>">
+                        </div>
+                        <div class="blog-post-field blog-post-field-author-bio" style="grid-column: 1 / -1;">
+                            <label class="w-field__label" for="blog-post-author-bio"><lang>作者简介</lang></label>
+                            <textarea class="w-textarea" id="blog-post-author-bio" name="author_bio" rows="2"><?= $escape($postRow['author_bio'] ?? '') ?></textarea>
+                        </div>
                         <div class="blog-post-field blog-post-field-keywords">
                             <label class="w-field__label" for="blog-post-keywords"><lang>关键词</lang></label>
                             <input

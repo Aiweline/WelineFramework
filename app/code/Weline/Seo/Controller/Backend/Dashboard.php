@@ -64,9 +64,14 @@ class Dashboard extends BackendPageController
                 ->limit(5)
                 ->select()
                 ->fetchArray();
-            
+
+            $keywordCount = (int)$keywordModel->reset()
+                ->where(SeoKeyword::schema_fields_SUBJECT_ID, $subject['subject_id'])
+                ->where(SeoKeyword::schema_fields_STATUS, SeoKeyword::STATUS_ENABLED)
+                ->count();
+
             $subject['keywords'] = $keywords;
-            $subject['keyword_count'] = count($keywords);
+            $subject['keyword_count'] = $keywordCount;
         }
         
         $this->assign('seo_page_title', __('SEO总览'));

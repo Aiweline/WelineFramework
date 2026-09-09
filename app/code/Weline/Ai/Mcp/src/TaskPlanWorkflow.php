@@ -34,7 +34,7 @@ final class TaskPlanWorkflow
             'trigger' => 'every_coding_user_requirement',
             'immediate_action' => 'submit_task_plan',
             'host_catalog_stale_action' => 'Start a new Agent turn after ensure-project-guidance; never call mcp_auth. If submit_task_plan still missing, compose plan in chat then native edit with HOST_MCP_NOT_ATTACHED.',
-            'notes' => '用户每提出一条可执行编码/工程需求，须立即理解需求并 submit_task_plan，覆盖需求分析→架构→任务→验收→实现→验证→审查→收口；不得等到写码前才补计划，也不得把 PLAN_REQUIRED 当完成。闲聊/概念问答等非编码任务禁止调用 MCP。',
+            'notes' => '用户每提出一条可执行编码/工程需求，须立即理解需求并 submit_task_plan（强制规划），再按 TDD（红→绿→重构）实现；实际测试命令跑通并写入 evidence 才算完。不得等到写码前才补计划，也不得把 PLAN_REQUIRED 当完成。闲聊/概念问答等非编码任务禁止调用 MCP。',
             'steps' => [
                 [
                     'order' => 1,
@@ -58,7 +58,7 @@ final class TaskPlanWorkflow
                     'label' => '开发任务拆解',
                     'field' => 'dev_tasks',
                     'tool' => 'submit_task_plan',
-                    'notes' => '可勾选任务 {id,title,status}；实现阶段用 update_task_plan_progress 更新。',
+                    'notes' => '可勾选任务 {id,title,status}；须含 TDD 步骤（先测后码）；实现阶段用 update_task_plan_progress 更新。',
                 ],
                 [
                     'order' => 4,
@@ -66,24 +66,24 @@ final class TaskPlanWorkflow
                     'label' => '测试与验收用例',
                     'field' => 'acceptance',
                     'tool' => 'submit_task_plan',
-                    'notes' => '≥1 条 {id,type,description}；type=unit|probe|browser|doc；含浏览器实际验收 URL。',
+                    'notes' => '≥1 条且至少 1 条 type=unit（TDD 自动化测试）；另可有 probe|browser|doc；含浏览器实际验收 URL。',
                 ],
                 [
                     'order' => 5,
-                    'id' => 'implement',
-                    'label' => '实现',
+                    'id' => 'tdd_red_green',
+                    'label' => 'TDD 红→绿',
                     'field' => 'workflow_phase',
                     'tool' => 'get_edit_bundle → apply_compact_edit',
                     'gate' => 'submit_task_plan_accepted',
-                    'notes' => '密封编辑前 plan 必须 accepted；进度用 update_task_plan_progress。',
+                    'notes' => '先写/改失败测试（red），再最小实现至同一测试通过（green），再重构保绿。禁止先堆业务代码后补测。',
                 ],
                 [
                     'order' => 6,
                     'id' => 'verify',
-                    'label' => '分层测试与浏览器验收',
+                    'label' => '实际跑测与分层验收',
                     'field' => 'acceptance[].status',
                     'tool' => 'update_task_plan_progress',
-                    'notes' => '逐条标记 acceptance passed/failed；browser 类型须 probe 或真机证据。',
+                    'notes' => '亲自执行测试命令；unit passed 的 evidence 须含真实跑测输出（如 PHPUnit PASS）；browser 另须 WB-OP。未跑通不得宣称完成。',
                 ],
                 [
                     'order' => 7,
@@ -155,6 +155,7 @@ final class TaskPlanWorkflow
 
         $acceptance = is_array($plan['acceptance'] ?? null) ? $plan['acceptance'] : [];
         $openAcceptance = [];
+        $missingEvidence = [];
         foreach ($acceptance as $item) {
             if (!is_array($item)) {
                 continue;
@@ -171,6 +172,12 @@ final class TaskPlanWorkflow
                     'acceptance_id' => $id,
                 ];
             }
+            // 宣称通过/跳过/不适用却无证据 → 视为未自验，禁止收口。
+            if (in_array($status, ['passed', 'skipped', 'na'], true)
+                && trim((string) ($item['evidence'] ?? '')) === ''
+            ) {
+                $missingEvidence[] = $id . '(' . $status . ')';
+            }
         }
         if ($openAcceptance !== []) {
             $gaps[] = [
@@ -179,9 +186,44 @@ final class TaskPlanWorkflow
                 'open_acceptance_ids' => $openAcceptance,
             ];
         }
+        if ($missingEvidence !== []) {
+            $gaps[] = [
+                'code' => 'acceptance_evidence_missing',
+                'message' => '验收项 passed/skipped/na 缺少 evidence（agent_self_verify_before_done）：'
+                    . implode(', ', $missingEvidence),
+                'acceptance_ids' => $missingEvidence,
+            ];
+        }
+
+        $badUnitEvidence = [];
+        foreach ($acceptance as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            if ((string) ($item['type'] ?? '') !== 'unit') {
+                continue;
+            }
+            if ((string) ($item['status'] ?? '') !== 'passed') {
+                continue;
+            }
+            $evidence = trim((string) ($item['evidence'] ?? ''));
+            if (!self::evidenceLooksLikeExecutedTest($evidence)) {
+                $badUnitEvidence[] = (string) ($item['id'] ?? '?');
+            }
+        }
+        if ($badUnitEvidence !== []) {
+            $gaps[] = [
+                'code' => 'tdd_unit_evidence_not_executable',
+                'message' => 'unit 验收 passed 但 evidence 不像真实跑测输出（plan_then_tdd_required）：'
+                    . implode(', ', $badUnitEvidence),
+                'acceptance_ids' => $badUnitEvidence,
+            ];
+        }
 
         $phase = (string) ($plan['workflow_phase'] ?? $plan['phase'] ?? 'plan');
-        if ($openTasks === [] && $openAcceptance === [] && !in_array($phase, ['review', 'closeout'], true)) {
+        if ($openTasks === [] && $openAcceptance === [] && $missingEvidence === [] && $badUnitEvidence === []
+            && !in_array($phase, ['review', 'closeout'], true)
+        ) {
             $gaps[] = [
                 'code' => 'phase_not_closeout',
                 'message' => '任务与验收已齐，请将 workflow_phase 设为 review 或 closeout 并跑文档对齐。',
@@ -193,7 +235,13 @@ final class TaskPlanWorkflow
             $gaps,
             static fn (array $gap): bool => in_array(
                 (string) ($gap['code'] ?? ''),
-                ['acceptance_failed', 'dev_tasks_incomplete', 'acceptance_incomplete'],
+                [
+                    'acceptance_failed',
+                    'dev_tasks_incomplete',
+                    'acceptance_incomplete',
+                    'acceptance_evidence_missing',
+                    'tdd_unit_evidence_not_executable',
+                ],
                 true,
             ),
         ));
@@ -203,7 +251,17 @@ final class TaskPlanWorkflow
             count($devTasks) + count($acceptance) + ($architecture !== '' ? 1 : 0) + ($requirements !== [] ? 1 : 0),
         );
         $doneChecks = count(array_filter($devTasks, static fn ($t): bool => is_array($t) && in_array((string) ($t['status'] ?? ''), ['done', 'cancelled'], true)))
-            + count(array_filter($acceptance, static fn ($a): bool => is_array($a) && in_array((string) ($a['status'] ?? ''), ['passed', 'skipped', 'na'], true)))
+            + count(array_filter(
+                $acceptance,
+                static fn ($a): bool => is_array($a)
+                    && in_array((string) ($a['status'] ?? ''), ['passed', 'skipped', 'na'], true)
+                    && trim((string) ($a['evidence'] ?? '')) !== ''
+                    && (
+                        (string) ($a['type'] ?? '') !== 'unit'
+                        || (string) ($a['status'] ?? '') !== 'passed'
+                        || self::evidenceLooksLikeExecutedTest(trim((string) ($a['evidence'] ?? '')))
+                    ),
+            ))
             + ($architecture !== '' ? 1 : 0)
             + ($requirements !== [] ? 1 : 0);
 
@@ -211,7 +269,8 @@ final class TaskPlanWorkflow
             'schema_version' => 'task-plan-review.v1',
             'workflow_phase' => $phase,
             'completeness_ratio' => round($doneChecks / $totalChecks, 3),
-            'closeout_allowed' => $blocking === [] && $openTasks === [] && $openAcceptance === [] && $requirements !== [],
+            'closeout_allowed' => $blocking === [] && $openTasks === [] && $openAcceptance === []
+                && $missingEvidence === [] && $badUnitEvidence === [] && $requirements !== [],
             'gaps' => $gaps,
             'summary' => [
                 'requirement_count' => count($requirements),
@@ -219,11 +278,30 @@ final class TaskPlanWorkflow
                 'dev_task_open' => count($openTasks),
                 'acceptance_total' => count($acceptance),
                 'acceptance_open' => count($openAcceptance),
+                'acceptance_missing_evidence' => count($missingEvidence),
+                'tdd_unit_bad_evidence' => count($badUnitEvidence),
             ],
-            'next_tools' => $blocking === [] && $openTasks === [] && $openAcceptance === [] && $requirements !== []
+            'next_tools' => $blocking === [] && $openTasks === [] && $openAcceptance === []
+                && $missingEvidence === [] && $badUnitEvidence === [] && $requirements !== []
                 ? ['review_task_plan', 'module doc reconcile', 'feature_delivery_urls']
                 : ['update_task_plan_progress', 'submit_task_plan', 'review_task_plan'],
         ];
+    }
+
+    /**
+     * unit 验收 evidence 是否像「真实跑过测试命令」。
+     */
+    public static function evidenceLooksLikeExecutedTest(string $evidence): bool
+    {
+        $evidence = trim($evidence);
+        if ($evidence === '') {
+            return false;
+        }
+
+        return preg_match(
+            '/phpunit|php\s+\S*test|\[PASS\]|OK\s*\(|tests?,\s*\d+\s*assertions|Assertions?:\s*\d+|exit:\s*0|NO_FAIL|PASS\b/i',
+            $evidence,
+        ) === 1;
     }
 
     /**
@@ -447,7 +525,22 @@ final class TaskPlanWorkflow
                     throw new ToolException(TaskPlanGate::ERROR_PLAN_INVALID, 'Invalid acceptance status for ' . $id);
                 }
                 $byId[$id]['status'] = $status;
-                $evidence = trim((string) ($update['evidence'] ?? ''));
+                $evidence = trim((string) ($update['evidence'] ?? ($byId[$id]['evidence'] ?? '')));
+                if (in_array($status, ['passed', 'skipped', 'na'], true) && $evidence === '') {
+                    throw new ToolException(
+                        TaskPlanGate::ERROR_PLAN_INVALID,
+                        'acceptance ' . $id . ' status=' . $status
+                        . ' requires non-empty evidence (agent_self_verify_before_done).',
+                    );
+                }
+                $type = (string) ($byId[$id]['type'] ?? '');
+                if ($status === 'passed' && $type === 'unit' && !self::evidenceLooksLikeExecutedTest($evidence)) {
+                    throw new ToolException(
+                        TaskPlanGate::ERROR_PLAN_INVALID,
+                        'acceptance ' . $id
+                        . ' type=unit status=passed requires evidence of a real test run (phpunit/PASS/OK).',
+                    );
+                }
                 if ($evidence !== '') {
                     if (mb_strlen($evidence, 'UTF-8') > 500) {
                         throw new ToolException(TaskPlanGate::ERROR_PLAN_INVALID, 'acceptance evidence too long for ' . $id);

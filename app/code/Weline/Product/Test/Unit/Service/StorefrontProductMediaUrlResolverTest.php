@@ -153,6 +153,57 @@ final class StorefrontProductMediaUrlResolverTest extends TestCase
         self::assertSame(['ar_SA', 'en_US'], $attemptedLocales);
     }
 
+    public function testEnglishRequestFallsBackToChineseMetadataWhenDefaultLanguageMissing(): void
+    {
+        $assetId = '12345678-1234-4123-8123-1234567890ab';
+        $attemptedLocales = [];
+        $localeMetadata = $this->getMockBuilder(FileAssetLocale::class)
+            ->disableOriginalConstructor()
+            ->getMock();
+        $assets = $this->createMock(FileAssetManagerInterface::class);
+        $assets->expects(self::exactly(2))
+            ->method('locale')
+            ->willReturnCallback(
+                static function (string $candidateAssetId, string $candidateLocale) use (
+                    $assetId,
+                    &$attemptedLocales,
+                    $localeMetadata,
+                ): FileAssetLocale {
+                    self::assertSame($assetId, $candidateAssetId);
+                    $attemptedLocales[] = $candidateLocale;
+                    if ($candidateLocale === 'en_US') {
+                        throw new \RuntimeException('missing target locale metadata');
+                    }
+
+                    return $localeMetadata;
+                },
+            );
+        $assets->expects(self::once())
+            ->method('resolveUrl')
+            ->with(
+                $assetId,
+                self::callback(
+                    static fn(FileAccessContext $context): bool => $context->localeCode === 'zh_Hans_CN'
+                        && $context->purpose === FileAccessContext::PURPOSE_PUBLIC_PUBLISH,
+                ),
+            )
+            ->willReturn(new ResolvedStorageUrl(
+                '/pub/media/catalog/hanfu/from-zh.jpg',
+                StorageUrlOptions::KIND_PUBLIC,
+                true,
+            ));
+
+        $resolver = new StorefrontProductMediaUrlResolver($assets);
+        $url = $resolver->resolveReference(
+            'asset://' . $assetId,
+            ScopeIdentity::website(0, 'default'),
+            'en_US',
+        );
+
+        self::assertSame('/pub/media/catalog/hanfu/from-zh.jpg', $url);
+        self::assertSame(['en_US', 'zh_Hans_CN'], $attemptedLocales);
+    }
+
     public function testLegacyPublicPathRemainsLocaleNeutral(): void
     {
         $assets = $this->createMock(FileAssetManagerInterface::class);
@@ -315,6 +366,12 @@ final class StorefrontProductMediaUrlResolverTest extends TestCase
             self::assertSame($scope, $context->scope);
             self::assertSame(FileAccessContext::PURPOSE_PUBLIC_PUBLISH, $context->purpose);
         }
+        self::assertSame(
+            ['same' => '/batch/1/' . $assetId . '.jpg'],
+            $this->resolveReferenceBatch($resolver, ['same' => 'asset://' . $assetId], $scope, 'fr_FR'),
+            'A bulk result must backfill the same-scope resolver memo.',
+        );
+        self::assertCount(1, $batches);
         $other = $this->resolveReferenceBatch($resolver, ['same' => 'asset://' . $assetId], $otherChannel, 'fr_FR');
         self::assertSame(['same' => '/batch/2/' . $assetId . '.jpg'], $other);
         self::assertCount(2, $batches, 'A later scope must resolve its own URL.');
@@ -352,10 +409,49 @@ final class StorefrontProductMediaUrlResolverTest extends TestCase
 
         self::assertStringContainsString('关于绣花颜色款式和面料', $rendered);
         self::assertStringContainsString('/pub/media/catalog/hanfu/detail-real.jpg', $rendered);
+        self::assertMatchesRegularExpression(
+            '/<img[^>]+src="\/pub\/media\/catalog\/hanfu\/detail-real\.jpg"[^>]+width="800"[^>]+height="800"/',
+            $rendered,
+        );
         self::assertStringNotContainsString('火爆大促销', $rendered);
         self::assertStringNotContainsString('WUYIKUANHUANGOU', $rendered);
         self::assertStringNotContainsString('国潮风少女旗袍', $rendered);
         self::assertStringNotContainsString('￥55', $rendered);
         self::assertStringNotContainsString('promo-other.jpg', $rendered);
+    }
+
+    public function testRenderDescriptionHtmlPreservesExplicitImageDimensions(): void
+    {
+        $detailAsset = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+        $html = '<div data-weline-product-description="1688">'
+            . '<p><img src="asset://' . $detailAsset . '" width="790" height="1185" alt="尺码示意"></p>'
+            . '</div>';
+
+        $rendered = StorefrontProductMediaUrlResolver::renderDescriptionHtml(
+            $html,
+            static fn(string $reference): string => $reference === 'asset://' . $detailAsset
+                ? '/pub/media/catalog/hanfu/size-chart.jpg'
+                : '',
+        );
+
+        self::assertMatchesRegularExpression(
+            '/<img[^>]+src="\/pub\/media\/catalog\/hanfu\/size-chart\.jpg"[^>]+width="790"[^>]+height="1185"/',
+            $rendered,
+        );
+        self::assertStringContainsString('alt="尺码示意"', $rendered);
+    }
+
+    public function testEnsureDescriptionImageAltsFillsEmptyAltWithProductName(): void
+    {
+        $html = '<p><img src="/media/a.jpg" alt="" width="800" height="800"></p>'
+            . '<p><img src="/media/b.jpg" width="800" height="800"></p>'
+            . '<p><img src="/media/c.jpg" alt="已有说明文案" width="800" height="800"></p>';
+
+        $out = StorefrontProductMediaUrlResolver::ensureDescriptionImageAlts($html, '悦雅霓裳长安忆襦裙');
+
+        self::assertStringContainsString('alt="悦雅霓裳长安忆襦裙 · 1"', $out);
+        self::assertStringContainsString('alt="悦雅霓裳长安忆襦裙 · 2"', $out);
+        self::assertStringContainsString('alt="已有说明文案"', $out);
+        self::assertStringNotContainsString('alt=""', $out);
     }
 }

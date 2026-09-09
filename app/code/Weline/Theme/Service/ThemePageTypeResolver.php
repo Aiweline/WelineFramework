@@ -38,7 +38,7 @@ final class ThemePageTypeResolver
         ThemeLayout::PAGE_TYPE_CHECKOUT_SUCCESS => ThemeLayout::PAGE_TYPE_CHECKOUT_SUCCESS,
         ThemeLayout::PAGE_TYPE_CHECKOUT_FAILURE => ThemeLayout::PAGE_TYPE_CHECKOUT_FAILURE,
         'checkout_failer' => ThemeLayout::PAGE_TYPE_CHECKOUT_FAILURE,
-        ThemeLayout::PAGE_TYPE_HELP => ThemeLayout::PAGE_TYPE_HELP,
+        ThemeLayout::PAGE_TYPE_FAQ => ThemeLayout::PAGE_TYPE_FAQ,
         ThemeLayout::PAGE_TYPE_PAYMENT_GUIDE => ThemeLayout::PAGE_TYPE_PAYMENT_GUIDE,
         ThemeLayout::PAGE_TYPE_GUIDE => ThemeLayout::PAGE_TYPE_GUIDE,
         ThemeLayout::PAGE_TYPE_ABOUT => ThemeLayout::PAGE_TYPE_ABOUT,
@@ -69,7 +69,7 @@ final class ThemePageTypeResolver
         ThemeLayout::PAGE_TYPE_ACTIVITY => 'activity',
         ThemeLayout::PAGE_TYPE_CHECKOUT_SUCCESS => 'checkout/success',
         ThemeLayout::PAGE_TYPE_CHECKOUT_FAILURE => 'theme/frontend/theme-preview/content',
-        ThemeLayout::PAGE_TYPE_HELP => 'help',
+        ThemeLayout::PAGE_TYPE_FAQ => 'faq',
         ThemeLayout::PAGE_TYPE_PAYMENT_GUIDE => 'guide/payment',
         ThemeLayout::PAGE_TYPE_GUIDE => 'guide/shipping',
         ThemeLayout::PAGE_TYPE_ABOUT => 'about',
@@ -277,8 +277,8 @@ final class ThemePageTypeResolver
         if ($contains('guide')) {
             return ThemeLayout::PAGE_TYPE_GUIDE;
         }
-        if ($contains('help') || $contains('faq')) {
-            return ThemeLayout::PAGE_TYPE_HELP;
+        if ($contains('faq')) {
+            return ThemeLayout::PAGE_TYPE_FAQ;
         }
         if ($contains('contact')) {
             return ThemeLayout::PAGE_TYPE_CONTACT;
@@ -393,8 +393,8 @@ final class ThemePageTypeResolver
             // Legacy public track URLs redirect into account orders.
             return 'account_orders';
         }
-        if ($this->pathMatchesRoute($path, 'help') || $this->pathMatchesRoute($path, 'faq')) {
-            return ThemeLayout::PAGE_TYPE_HELP;
+        if ($this->pathMatchesRoute($path, 'faq')) {
+            return ThemeLayout::PAGE_TYPE_FAQ;
         }
         if ($this->pathMatchesRoute($path, 'customer/service') || $this->pathMatchesRoute($path, 'customer-service')) {
             return 'customer_service';

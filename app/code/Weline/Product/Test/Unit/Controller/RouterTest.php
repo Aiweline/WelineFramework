@@ -47,6 +47,42 @@ final class RouterTest extends TestCase
         self::assertSame('Weline_Product', $rule['module'] ?? null);
     }
 
+    public function testNewArrivalsRssPathRoutesToNewArrivalsRssController(): void
+    {
+        $path = 'new-arrivals/rss.xml';
+        $rule = [];
+
+        Router::process($path, $rule);
+
+        self::assertSame('weline_product/frontend/new-arrivals-rss', $path);
+        self::assertSame('Weline_Product', $rule['module'] ?? null);
+    }
+
+    /**
+     * @dataProvider newArrivalsPathProvider
+     */
+    public function testNewArrivalsPathRoutesToNewArrivalsController(string $publicPath): void
+    {
+        $rule = [];
+
+        Router::process($publicPath, $rule);
+
+        self::assertSame('weline_product/frontend/new-arrivals', $publicPath);
+        self::assertSame('Weline_Product', $rule['module'] ?? null);
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function newArrivalsPathProvider(): array
+    {
+        return [
+            'new-arrivals' => ['new-arrivals'],
+            'newarrivals alias' => ['/newarrivals/'],
+            'new_arrivals alias' => ['new_arrivals'],
+        ];
+    }
+
     /**
      * @return array<string, array{string}>
      */

@@ -41,6 +41,12 @@ final class FrontendWorkerBackendAttestationException extends \RuntimeException
             }
         }
 
-        return \implode(': ', $parts);
+        $body = \implode(': ', $parts);
+        $hint = \trim($this->getMessage());
+        if ($hint !== '' && !\str_contains($body, $hint)) {
+            $body .= "\n" . $hint;
+        }
+
+        return $body;
     }
 }

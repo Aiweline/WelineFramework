@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Promotion\Service;
 
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Product\Api\ProductAdminReadInterface;
 use Weline\Promotion\Model\PromotionActivityTheme;
 use Weline\Promotion\Model\PromotionActivityThemeProduct;
@@ -840,5 +841,108 @@ final class PromotionThemeProductService
         }
 
         return $websiteId === 0 ? (string)__('默认网站') : ('W#' . $websiteId);
+    }
+
+    /**
+     * Detect product IDs that already sit in other active themes with a real discount.
+     *
+     * @param list<int> $productIds
+     * @param array{website_id:int,store_code:string,channel_code:string} $scope
+     * @return list<array{
+     *     product_id:int,
+     *     sku:string,
+     *     name:string,
+     *     themes:list<array{theme_id:int,page_slug:string,label:string}>
+     * }>
+     */
+    public function findActiveDealOverlaps(array $productIds, array $scope, int $excludeThemeId = 0): array
+    {
+        $productIds = array_values(array_unique(array_filter(array_map('intval', $productIds), static fn (int $id): bool => $id > 0)));
+        if ($productIds === []) {
+            return [];
+        }
+
+        $excludeThemeId = max(0, $excludeThemeId);
+        $websiteId = max(0, (int)($scope['website_id'] ?? 0));
+        $theme = ObjectManager::getInstance(PromotionActivityTheme::class);
+        $collection = clone $theme;
+        $collection->clear()
+            ->where(PromotionActivityTheme::schema_fields_STATUS, PromotionActivityTheme::STATUS_ACTIVE)
+            ->where(PromotionActivityTheme::schema_fields_WEBSITE_ID, $websiteId)
+            ->select()
+            ->fetch();
+
+        /** @var array<int, list<array{theme_id:int,page_slug:string,label:string}>> $byProduct */
+        $byProduct = [];
+        foreach ($collection->getItems() as $item) {
+            $themeId = (int)$item->getId();
+            if ($themeId <= 0 || $themeId === $excludeThemeId) {
+                continue;
+            }
+            $type = strtolower(trim((string)$item->getData(PromotionActivityTheme::schema_fields_DEAL_DISCOUNT_TYPE)));
+            $value = (float)$item->getData(PromotionActivityTheme::schema_fields_DEAL_DISCOUNT_VALUE);
+            if ($type === '' || $type === 'none' || $value <= 0) {
+                continue;
+            }
+            $row = is_array($item->getData()) ? $item->getData() : [];
+            $row['id'] = $themeId;
+            $ids = $this->resolveStorefrontProductIds($row, $scope);
+            if ($ids === []) {
+                continue;
+            }
+            $label = trim((string)($row['page_slug'] ?? ''));
+            $pageSlug = strtolower($label);
+            foreach ($ids as $productId) {
+                if (!in_array($productId, $productIds, true)) {
+                    continue;
+                }
+                $byProduct[$productId][] = [
+                    'theme_id' => $themeId,
+                    'page_slug' => $pageSlug,
+                    'label' => $pageSlug !== '' ? $pageSlug : ('#' . $themeId),
+                ];
+            }
+        }
+
+        if ($byProduct === []) {
+            return [];
+        }
+
+        $metaById = [];
+        try {
+            $reader = ObjectManager::getInstance(ProductAdminReadInterface::class);
+            $found = $reader->search($websiteId, [
+                'product_ids' => array_keys($byProduct),
+                'status' => 'published',
+                'limit' => max(12, count($byProduct)),
+            ]);
+            foreach (is_array($found) ? $found : [] as $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+                $pid = (int)($row['product_id'] ?? $row['id'] ?? 0);
+                if ($pid <= 0) {
+                    continue;
+                }
+                $metaById[$pid] = [
+                    'sku' => trim((string)($row['sku'] ?? '')),
+                    'name' => trim((string)($row['name'] ?? $row['product_name'] ?? '')),
+                ];
+            }
+        } catch (\Throwable) {
+            $metaById = [];
+        }
+
+        $overlaps = [];
+        foreach ($byProduct as $productId => $themes) {
+            $overlaps[] = [
+                'product_id' => (int)$productId,
+                'sku' => (string)($metaById[$productId]['sku'] ?? ''),
+                'name' => (string)($metaById[$productId]['name'] ?? ''),
+                'themes' => array_values($themes),
+            ];
+        }
+
+        return $overlaps;
     }
 }

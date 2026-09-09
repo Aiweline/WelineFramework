@@ -13,6 +13,7 @@ use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\Runtime\RuntimeInterface;
 use Weline\Server\Session\Server\SessionProtocol;
+use Weline\Server\Service\MemoryStateFacade;
 use Weline\Server\Shared\Client\SharedStateClient;
 use Weline\Server\Shared\Contract\ConnectionPoolInterface;
 use Weline\Server\Shared\Contract\PooledConnectionInterface;
@@ -90,6 +91,97 @@ final class SharedStateClientTest extends TestCase
         });
 
         self::assertNull($out);
+    }
+
+    public function testStrictTransportRejectsAcquireMissWithoutDisposingAnUnownedConnection(): void
+    {
+        $pool = $this->createMock(ConnectionPoolInterface::class);
+        $pool->expects(self::once())->method('acquire')->willReturn(null);
+        $pool->expects(self::never())->method('release');
+        $pool->expects(self::never())->method('invalidate');
+
+        $client = $this->createStrictClientWithPool($pool);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('shared_state_transport_acquire_failed');
+        $client->request(SessionProtocol::CMD_GET, ['ns' => 'cache:fixture', 'key' => 'key']);
+    }
+
+    public function testStrictTransportDisposesFailedSendAndReadBeforeThrowing(): void
+    {
+        foreach (['send_false', 'read_null', 'read_throw'] as $failureMode) {
+            $disposed = false;
+            $failure = new \RuntimeException('fixture read failure');
+            $conn = $this->createMock(PooledConnectionInterface::class);
+            $pool = $this->createMock(ConnectionPoolInterface::class);
+            $pool->expects(self::once())->method('acquire')->willReturn($conn);
+            $pool->expects(self::never())->method('release');
+            $pool->expects(self::once())->method('invalidate')->with($conn)->willReturnCallback(static function () use (&$disposed): void {
+                $disposed = true;
+            });
+            $conn->expects(self::once())->method('send')->willReturn($failureMode !== 'send_false');
+            if ($failureMode === 'send_false') {
+                $conn->expects(self::never())->method('read');
+            } elseif ($failureMode === 'read_null') {
+                $conn->expects(self::once())->method('read')->willReturn(null);
+            } else {
+                $conn->expects(self::once())->method('read')->willThrowException($failure);
+            }
+
+            try {
+                $this->createStrictClientWithPool($pool)->request(SessionProtocol::CMD_GET, ['ns' => 'cache:fixture', 'key' => 'key']);
+                self::fail('真实传输失败必须通知内部缓存适配器。');
+            } catch (\RuntimeException $actual) {
+                self::assertTrue($disposed, '异常必须在连接完成回收后抛出。');
+                if ($failureMode === 'read_throw') {
+                    self::assertSame($failure, $actual);
+                } else {
+                    self::assertSame('shared_state_transport_failed', $actual->getMessage());
+                }
+            }
+        }
+    }
+
+    public function testStrictTransportPreservesAllArrayProtocolResponses(): void
+    {
+        foreach ([['ok' => true, 'data' => null], ['ok' => true, 'data' => false], ['ok' => true, 'data' => []], ['ok' => false, 'data' => false]] as $response) {
+            $conn = $this->createMock(PooledConnectionInterface::class);
+            $pool = $this->createMock(ConnectionPoolInterface::class);
+            $pool->expects(self::once())->method('acquire')->willReturn($conn);
+            $pool->expects(self::once())->method('release')->with($conn);
+            $pool->expects(self::never())->method('invalidate');
+            $conn->expects(self::once())->method('send')->willReturn(true);
+            $conn->expects(self::once())->method('read')->willReturn($response);
+
+            self::assertSame($response, $this->createStrictClientWithPool($pool)->request(SessionProtocol::CMD_GET));
+        }
+    }
+
+    public function testFacadeForwardsExplicitTransportFailureOptionAndDefaultsToNullable(): void
+    {
+        $reflection = new ReflectionClass(MemoryStateFacade::class);
+        $facade = $reflection->newInstanceWithoutConstructor();
+        $reflection->getProperty('runtime')->setValue($facade, []);
+        $reflection->getProperty('released')->setValue($facade, true);
+        $method = $reflection->getMethod('buildServiceOptions');
+        $config = ['token_file_name' => 'unit-strict-memory.token'];
+
+        self::assertFalse($method->invoke($facade, $config)['throw_on_transport_failure'] ?? null);
+        self::assertTrue($method->invoke($facade, $config + ['throw_on_transport_failure' => true])['throw_on_transport_failure'] ?? null);
+    }
+
+    private function createStrictClientWithPool(ConnectionPoolInterface $pool): SharedStateClient
+    {
+        // 真实构造器校验选项接线；空闲连接数为零，不连接任何服务。
+        $client = new SharedStateClient('127.0.0.1', 1, [
+            'pool_min_idle' => 0,
+            'pool_profile' => 'unit-strict-transport',
+            'token_file_name' => 'unit-strict-memory.token',
+            'token_authority_instance' => 'unit-strict',
+            'log_pool_lifecycle' => false,
+            'throw_on_transport_failure' => true,
+        ]);
+        (new ReflectionClass(SharedStateClient::class))->getProperty('pool')->setValue($client, $pool);
+        return $client;
     }
 
     public function testRequestTraceMeasuresTheSentPayloadWithoutChangingTheResponse(): void

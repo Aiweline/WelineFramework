@@ -70,7 +70,7 @@ final class StorefrontCatalogFilteredOffersContractTest extends TestCase
         self::assertSame('product.catalog_offers_targeted', $policy->resource);
         self::assertSame('channel', $policy->scope);
         self::assertSame(['currency', 'lang'], $policy->vary);
-        self::assertSame(['catalog', 'config', 'price'], $policy->dependencies);
+        self::assertSame(['catalog', 'config', 'global/i18n', 'price'], $policy->dependencies);
 
         $service = (new \ReflectionClass(StorefrontCatalogCacheCoordinator::class))
             ->newInstanceWithoutConstructor();

@@ -45,6 +45,10 @@ ResumableTask 无 compile 产物：upgrade 直接扫描各模块 `etc/resumable_
 
 禁止把 Query 并进路由白名单语义。
 
+前台 REST 的 API 用户由 `Weline_Api` 认证后绑定只读 `AuthenticatedApiUser` 请求身份。已登记 ACL 的路由通过 `AclService::isRouteAllowed(roleId, route, method)` 判断其角色权限，保留角色权限来源和超管 bypass 的现有扩展点。应用安装仍按 scope 条目及读写模式授权；其他前台会话与 WeShop Customer 不因这次 API 用户接入改变行为。
+
+该角色授权不把 API 用户 ID 当作后台用户 ID，也不替业务命令隐式选择 Website/Store。业务的对象作用域约定仍由对应公开命令契约决定。
+
 ## 标签整包赋权
 
 - 取消标签 = 删除该标签路径前缀下全部叶子 `role_access`

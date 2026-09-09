@@ -217,6 +217,8 @@ class Address implements TaglibInterface
             'loading' => $translate('加载中…', 'Loading…'),
             'selectPostalCountry' => $translate('该邮编匹配多个国家，请选择', 'This postal matches multiple countries — please choose'),
             'unsupportedCountry' => $translate('本站不支持', 'Not supported by this store'),
+            'embargoedRegion' => $translate('不支持配送', 'Delivery not supported'),
+            'postalCountryGroup' => $translate('邮编匹配', 'Postal matches'),
             'multiHint' => $translate('尚未选择，请搜索后添加', 'Nothing selected yet — search to add'),
             'searchCountry' => $translate('搜索并添加国家/地区', 'Search and add country/region'),
             'searchProvince' => $translate('搜索并添加省份', 'Search and add province'),

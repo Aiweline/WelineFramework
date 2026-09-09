@@ -60,12 +60,29 @@ class CustomerServiceConfig extends Model
     }
 
     /**
-     * 按键名获取配置值
-     * @param string $key 配置键
-     * @param string $default 默认值
-     * @return string
+     * @deprecated Use CustomerServiceSettings (SystemConfig scoped). Kept for legacy callers.
      */
     public function getConfigValue(string $key, string $default = ''): string
+    {
+        try {
+            /** @var \Weline\CustomerService\Service\CustomerServiceSettings $settings */
+            $settings = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\CustomerService\Service\CustomerServiceSettings::class
+            );
+            return match ($key) {
+                'enabled' => $settings->isServiceEnabled() ? '1' : '0',
+                'ai_enabled' => $settings->isAiEnabled() ? '1' : '0',
+                'ai_model' => $settings->aiModel(),
+                'default_agent_locale' => $settings->defaultAgentLocale(),
+                'default_customer_locale' => $settings->defaultCustomerLocale(),
+                default => $this->readLegacyValue($key, $default),
+            };
+        } catch (\Throwable) {
+            return $this->readLegacyValue($key, $default);
+        }
+    }
+
+    private function readLegacyValue(string $key, string $default = ''): string
     {
         $this->reset()
             ->where(self::schema_fields_key, $key)

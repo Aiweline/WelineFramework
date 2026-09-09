@@ -28,6 +28,7 @@ final class TranslationRequestObserver implements ObserverInterface
             $targetLocale = (string)($event->getData('target_locale') ?? '');
             $sourceLocale = (string)($event->getData('source_locale') ?? 'auto');
             $strategy = (string)($event->getData('strategy') ?? 'light');
+            $concurrencyLane = (string)($event->getData('concurrency_lane') ?? '');
 
             if (!is_array($words) || $words === []) {
                 $this->setEventError($event, (string)__('参数错误：words 必须是非空数组'));
@@ -43,6 +44,7 @@ final class TranslationRequestObserver implements ObserverInterface
                 $targetLocale,
                 $sourceLocale,
                 $strategy,
+                $concurrencyLane !== '' ? $concurrencyLane : \Weline\Ai\Service\TranslationConcurrencyGate::LANE_DICTIONARY,
             );
             $event->setData('translations', $translations);
             $event->setData('success', true);

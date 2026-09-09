@@ -72,7 +72,7 @@ final class SharedChromeInheritContractTest extends TestCase
         $path = dirname(__DIR__, 2) . '/Setup/Upgrade.php';
         $src = (string)file_get_contents($path);
 
-        self::assertStringContainsString("VERSION = '2.2.189'", $src);
+        self::assertStringContainsString("VERSION = '2.2.190'", $src);
         self::assertStringContainsString('ScopeIdentity::global()', $src);
         self::assertStringContainsString('ScopeHierarchyInterface', $src);
         self::assertStringContainsString('new ThemeEditorContext(', $src);
@@ -124,7 +124,7 @@ final class SharedChromeInheritContractTest extends TestCase
     {
         $footer = (string)file_get_contents(dirname(__DIR__, 2) . '/view/theme/frontend/widgets/container/footer/default.phtml');
         $category = (string)file_get_contents(dirname(__DIR__, 2) . '/view/theme/frontend/widgets/navigation/category-menu/default.phtml');
-        $help = (string)file_get_contents(dirname(__DIR__, 2) . '/view/theme/frontend/widgets/footer/footer-help-center-link/default.phtml');
+        $help = (string)file_get_contents(dirname(__DIR__, 2) . '/view/theme/frontend/widgets/footer/footer-faq-link/default.phtml');
         $integrity = (string)file_get_contents(dirname(__DIR__, 2) . '/Service/WidgetDefaultInjectionService.php');
 
         self::assertStringContainsString('"layout_type":"homepage"', $footer);

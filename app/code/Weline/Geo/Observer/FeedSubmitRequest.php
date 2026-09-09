@@ -77,8 +77,9 @@ class FeedSubmitRequest implements ObserverInterface
      */
     private function itemType(string $scope, array $data): string
     {
-        $type = (string)($data['item_type'] ?? $data['subject_type'] ?? $scope);
-        return trim($type) !== '' ? trim($type) : 'content';
+        $type = trim((string)($data['item_type'] ?? $data['subject_type'] ?? $scope));
+        $normalized = $this->normalizeType($type !== '' ? $type : $scope);
+        return $normalized !== '' ? $normalized : 'content';
     }
 
     /**
@@ -98,11 +99,28 @@ class FeedSubmitRequest implements ObserverInterface
      */
     private function matchesFeed(array $feed, string $scope, string $itemType): bool
     {
-        $feedType = (string)($feed[Feed::schema_fields_FEED_TYPE] ?? '');
+        $feedType = trim((string)($feed[Feed::schema_fields_FEED_TYPE] ?? ''));
         if ($feedType === '' || $feedType === Feed::TYPE_CONTENT || $feedType === Feed::TYPE_CUSTOM) {
             return true;
         }
-        return $feedType === $scope || $feedType === $itemType;
+        $scopeType = $this->normalizeType($scope);
+        $itemNormalized = $this->normalizeType($itemType);
+
+        return $feedType === $scope
+            || $feedType === $itemType
+            || $feedType === $scopeType
+            || $feedType === $itemNormalized;
+    }
+
+    private function normalizeType(string $type): string
+    {
+        $type = strtolower(trim($type));
+        return match ($type) {
+            'blog_article', 'blog_post', 'blog.post', 'article', 'post' => Feed::TYPE_ARTICLE,
+            'product_search_projection', 'product', 'offer' => Feed::TYPE_PRODUCT,
+            'blog.category', 'blog_category' => 'category',
+            default => $type,
+        };
     }
 
     private function timestamp(mixed $value): int

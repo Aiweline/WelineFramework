@@ -20,6 +20,8 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 #[Index(name: 'idx_website_path_fingerprint_latest', columns: ['website_id', 'path_fingerprint', 'rewrite_id'])]
 class UrlRewrite extends Model
 {
+    private const PATH_LOOKUP_BATCH_SIZE = 256;
+
     public const schema_table = 'url_rewrite';
     public const schema_primary_key = 'rewrite_id';
     #[Col('int', primaryKey: true, autoIncrement: true, nullable: false, comment: '重写ID')]
@@ -95,6 +97,64 @@ class UrlRewrite extends Model
         return $this->findExactPathRow($rows, $path, $fingerprint)
             ?? $this->findExactPathRow($rows, $path, null)
             ?? $this->findExactPathRow($rows, $path, '');
+    }
+
+    /**
+     * 批量读取原始路径；各路径仍按匹配指纹、NULL 旧记录、空指纹旧记录选择最新项。
+     *
+     * @param list<string> $paths
+     * @return array<string, array<string, mixed>|null>
+     */
+    public function findLatestByWebsiteAndPaths(int $websiteId, array $paths): array
+    {
+        $requested = [];
+        $result = [];
+        foreach ($paths as $path) {
+            $requested[$path] = ['path' => $path, 'fingerprint' => self::pathFingerprint($path)];
+            $result[$path] = null;
+        }
+
+        foreach (array_chunk($requested, self::PATH_LOOKUP_BATCH_SIZE, true) as $batch) {
+            $fingerprints = array_values(array_unique(array_column($batch, 'fingerprint')));
+            $fingerprints[] = '';
+            $query = $this->newQuery();
+            // 每个 OR 分支独立限定网站，避免条件重排将旧记录扩到其他网站。
+            $query->_index_sort_keys = [];
+            $rows = $query
+                ->where(self::schema_fields_WEBSITE_ID, $websiteId, '=', 'AND')
+                ->where(self::schema_fields_PATH_FINGERPRINT, $fingerprints, 'IN', 'OR')
+                ->where(self::schema_fields_WEBSITE_ID, $websiteId, '=', 'AND')
+                ->where(self::schema_fields_PATH_FINGERPRINT, null, 'IS NULL')
+                ->order(self::schema_fields_ID, 'DESC')
+                ->select()
+                ->fetchArray();
+
+            // 保留单条读取对关联数组形式的兼容，缺失结果仍按空列表处理。
+            if (!is_array($rows)) {
+                $rows = [];
+            } elseif (array_key_exists(self::schema_fields_ID, $rows)) {
+                $rows = [$rows];
+            }
+            // 先按原始路径分组，避免每个请求路径重复遍历网站的全部旧记录。
+            $rowsByPath = [];
+            foreach ($rows as $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+                $path = $row[self::schema_fields_PATH] ?? null;
+                if (is_string($path) && array_key_exists($path, $batch)) {
+                    $rowsByPath[$path][] = $row;
+                }
+            }
+            foreach ($batch as $key => $request) {
+                $candidates = $rowsByPath[$key] ?? [];
+                $result[$key] = $this->findExactPathRow($candidates, $request['path'], $request['fingerprint'])
+                    ?? $this->findExactPathRow($candidates, $request['path'], null)
+                    ?? $this->findExactPathRow($candidates, $request['path'], '');
+            }
+        }
+
+        return $result;
     }
 
     /**

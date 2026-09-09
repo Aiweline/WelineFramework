@@ -55,6 +55,15 @@ class SeoProfileValidationService
             }
             if ($this->firstString($article, ['author', 'author_name']) === '' && $this->toArray($article['authors'] ?? []) === []) {
                 $warnings[] = 'article pages should expose author facts.';
+            } elseif ($this->authorsLackIdentityLink($article)) {
+                $warnings[] = 'article authors should expose Person url or sameAs (Helpful Content Who); name-only without identity link is incomplete for internal self-check.';
+            }
+        }
+
+        $organization = $this->toArray($profile['organization'] ?? []);
+        if ($organization !== [] || in_array($pageType, ['home', 'homepage', 'index', 'web_page'], true)) {
+            if ($organization !== [] && !$this->organizationHasSameAs($organization)) {
+                $warnings[] = 'organization should expose sameAs profile URLs (Helpful Content Trust / entity example); not a ranking gate.';
             }
         }
 
@@ -197,6 +206,68 @@ class SeoProfileValidationService
             }
         }
 
+        return false;
+    }
+
+    /**
+     * Person without url|sameAs is incomplete for Helpful Content Who self-check.
+     * jobTitle/description alone do not count as identity links.
+     *
+     * @param array<string, mixed> $article
+     */
+    private function authorsLackIdentityLink(array $article): bool
+    {
+        $authors = $this->toList($article['authors'] ?? []);
+        if ($authors === []) {
+            $single = $article['author'] ?? null;
+            if (is_string($single) && trim($single) !== '') {
+                return true;
+            }
+            if (is_array($single)) {
+                $authors = $this->toList($single);
+            }
+        }
+        if ($authors === []) {
+            return false;
+        }
+        foreach ($authors as $author) {
+            if (!is_array($author)) {
+                if (is_string($author) && trim($author) !== '') {
+                    continue;
+                }
+                return true;
+            }
+            $name = $this->firstString($author, ['name', 'author_name']);
+            if ($name === '') {
+                return true;
+            }
+            $hasUrl = $this->stringValue($author['url'] ?? '') !== '' && str_starts_with(strtolower($this->stringValue($author['url'] ?? '')), 'http');
+            $sameAs = $this->toList($author['sameAs'] ?? []);
+            $hasSameAs = false;
+            foreach ($sameAs as $url) {
+                if (is_string($url) && str_starts_with(strtolower(trim($url)), 'http')) {
+                    $hasSameAs = true;
+                    break;
+                }
+            }
+            if ($hasUrl || $hasSameAs) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * @param array<string, mixed> $organization
+     */
+    private function organizationHasSameAs(array $organization): bool
+    {
+        $sameAs = $this->toList($organization['sameAs'] ?? []);
+        foreach ($sameAs as $url) {
+            if (is_string($url) && str_starts_with(strtolower(trim($url)), 'http')) {
+                return true;
+            }
+        }
         return false;
     }
 }

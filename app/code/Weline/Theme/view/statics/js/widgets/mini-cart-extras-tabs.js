@@ -150,7 +150,7 @@
     }
 
     function boot() {
-        document.querySelectorAll('.mini-cart-drawer__extras').forEach(initExtras);
+        document.querySelectorAll('.mini-cart-drawer__extras, [data-cart-summary-extras="1"]').forEach(initExtras);
     }
 
     if (document.readyState === 'loading') {
@@ -160,6 +160,7 @@
     }
 
     window.addEventListener('weshop:mini-cart:open', boot);
+    window.addEventListener('weshop:cart-summary:extras-ready', boot);
 
     window.WelineMiniCartExtras = {
         boot: boot,

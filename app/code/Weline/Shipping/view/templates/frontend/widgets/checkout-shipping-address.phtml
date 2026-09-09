@@ -98,7 +98,7 @@ $ui = [
     'edit' => (string)__('编辑'),
     'add_new' => (string)__('使用新地址'),
     'cancel' => (string)__('取消'),
-    'save_use' => (string)__('使用此地址'),
+    'save_use' => (string)__('保存此地址'),
     'billing_same' => (string)__('账单地址与收货地址相同'),
     'billing_title' => (string)__('账单地址'),
     'shipping_title' => (string)__('收货地址'),
@@ -238,6 +238,7 @@ $ui = [
                         searchable="true"
                         cascade="true"
                         district="true"
+                        postal="false"
                         postal-lookup="true" />
                 </div>
                 <label class="w-shipping-checkout-address__field w-shipping-checkout-address__field--wide">
@@ -246,7 +247,7 @@ $ui = [
                     <span class="w-shipping-checkout-address__field-error" data-field-error-for="address1" role="alert" hidden></span>
                 </label>
             </div>
-            <?php if ($hasSaved || !$isLoggedIn): ?>
+            <?php /* 始终渲染：登录无已存地址时也可点「保存此地址」收起为卡片；不点仍可用表单下单 */ ?>
             <div class="w-shipping-checkout-address__editor-actions">
                 <?php if (!$isLoggedIn): ?>
                 <div class="w-shipping-checkout-address__captcha"
@@ -268,7 +269,6 @@ $ui = [
                     </div>
                 </div>
             </div>
-            <?php endif; ?>
         </div>
     </div>
 
@@ -321,5 +321,5 @@ $ui = [
         </div>
     </div>
 </section>
-<link rel="stylesheet" href="@static(Weline_Shipping::css/widgets/checkout-shipping-address.css)?v=20260905-csa11">
+<link rel="stylesheet" href="@static(Weline_Shipping::css/widgets/checkout-shipping-address.css)?v=20260909-csa-add2">
 <?php // shippingCheckoutAddress：由部件根 data-weline-load 声明，禁止 @static 直引 ?>

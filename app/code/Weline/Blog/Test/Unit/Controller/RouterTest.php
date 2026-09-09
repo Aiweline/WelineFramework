@@ -42,6 +42,30 @@ final class RouterTest extends TestCase
         self::assertSame('Weline_Blog', $rule['module'] ?? null);
     }
 
+    public function testPublicBlogRssPathRoutesToRssController(): void
+    {
+        $path = 'blog/rss.xml';
+        $rule = [];
+
+        Router::process($path, $rule);
+
+        self::assertSame('blog/frontend/rss', $path);
+        self::assertSame('Weline_Blog', $rule['module'] ?? null);
+    }
+
+    public function testPublicBlogCategoryRssPathRoutesToRssController(): void
+    {
+        \Weline\Framework\Context::enter(new \Weline\Framework\Context());
+        $path = 'blog/category/tech/rss.xml';
+        $rule = [];
+
+        Router::process($path, $rule);
+
+        self::assertSame('blog/frontend/rss', $path);
+        self::assertSame('Weline_Blog', $rule['module'] ?? null);
+        self::assertSame('tech', \Weline\Framework\Context::current()->query('category_slug'));
+    }
+
     public function testReservedCategorySlugDoesNotRouteToView(): void
     {
         $path = 'blog/category';

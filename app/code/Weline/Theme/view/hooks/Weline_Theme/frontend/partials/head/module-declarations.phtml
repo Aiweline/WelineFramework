@@ -1,0 +1,19 @@
+<?php
+/**
+ * Theme head：声明框架核心国际化模组（Weline_Framework 登记，禁止写进 weline.js）。
+ * 外置 Weline_I18n 仅增强，不提供本核心。
+ *
+ * @hook-priority 150
+ * @hook-sort-order 0
+ * @hook-solo false
+ */
+?>
+<script data-no-extract="true">
+(function () {
+    if (!window.Weline || typeof window.Weline.declare !== 'function') {
+        return;
+    }
+    // defer via Framework modules load: "defer" + declare(false) idle schedule
+    window.Weline.declare('i18n', false);
+})();
+</script>

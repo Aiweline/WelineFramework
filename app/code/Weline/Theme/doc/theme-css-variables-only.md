@@ -27,19 +27,20 @@
 
 把业务硬编码改成 `var(--…)` **不是终点**。同一次改动必须完成：
 
-1. **选型**：优先复用已有语义 Token（`--color-*` / `--weline-theme-*` / spacing·radius·shadow 刻度）。
+1. **选型**：优先复用已有语义 Token（`--color-*` / `--weline-theme-*` / spacing·radius·shadow 刻度）。**基础组件**（`w-button` / `w-input` / `w-alert` 等）**禁止**私写 `#hex`/`rgb()`，必须走主题规范变量（MCP `theme_base_components_token_only`；见 `theme-semantic-color-matrix.md`）。
 2. **落盘**：确需新 Token 时，**叶子默认值**写入对应盘文件：
-   - 颜色 → `variables/_colors.css`，并在 `colors/_light.css` / `colors/_dark.css`（若有模式差异）给出可解析默认；
+   - 颜色 → `variables/_colors.css`，并在 `colors/_default.css`（默认可继承合同）与 `colors/_light.css` / `colors/_dark.css`（若有模式差异）给出可解析默认；
    - 间距/字号/边框/阴影 → 对应 `variables/_*.css`。
 3. **面板归属**：颜色 Token 的 `@meta.panel` 必须是 `color`（或挂在 `_colors.css` / `colors/**`），**禁止**把颜色丢进 `_auto-literals.css`（spacing 杂项堆）导致 Theme Editor 色盘空白/未设置。
 4. **禁止空壳**：业务侧不得只写 `var(--new-token)` 却不在盘内定义叶子；桥接层 `theme.css` 的 `var(--x, fallback)` 不能替代色盘登记。
-5. **验收**：对新增 Token 做「引用 → 盘内定义 → 亮/暗可解析」三连检查；Theme Editor 外观盘应能看到非空默认。
+5. **继承**：前台 `_light` → `_default` → 品牌盘（如 `_ink`）→ `_dark`；后台 `_light` → `_default` → `_dark`。品牌盘只叠加品牌叶子，不拆除 secondary/status 全家。
+6. **验收**：对新增 Token 做「引用 → 盘内定义 → 亮/暗可解析」三连检查；Theme Editor 外观盘应能看到非空默认。
 
-6. **@media 断点例外**：`@media` 条件里**禁止** `var(--breakpoint-*)` / `var(--token-bp-*)`（浏览器会忽略整条规则，布局全乱）。断点须写 `768px` 等字面量；变量盘里的 `--breakpoint-md` 等只供 JS/文档，不进 `@media`。
+7. **@media 断点例外**：`@media` 条件里**禁止** `var(--breakpoint-*)` / `var(--token-bp-*)`（浏览器会忽略整条规则，布局全乱）。断点须写 `768px` 等字面量；变量盘里的 `--breakpoint-md` 等只供 JS/文档，不进 `@media`。
 
-7. **内容区宽度（layout content width）**：与 `theme-layout-content-width.md` 配套——宽度/gutter **无局部例外**；已包 `.w-container` 的业务页 `padding-inline: 0`；未包容器页用 `--weline-layout-content-max-width` + `--weline-layout-content-padding-inline`，禁止 `1440px` 等 fallback。颜色/特质 Hero 可模块内 scope 自定义。
+8. **内容区宽度（layout content width）**：与 `theme-layout-content-width.md` 配套——宽度/gutter **无局部例外**；已包 `.w-container` 的业务页 `padding-inline: 0`；未包容器页用 `--weline-layout-content-max-width` + `--weline-layout-content-padding-inline`，禁止 `1440px` 等 fallback。颜色/特质 Hero 可模块内 scope 自定义。
 
-8. **提取必须绑定组件（写回 + 接线）**：把 `35px` 提成 `--control-height-sm` 时须三步同批完成：
+9. **提取必须绑定组件（写回 + 接线）**：把 `35px` 提成 `--control-height-sm` 时须三步同批完成：
    - **叶子默认**：`variables/_spacing.css` 写 `--control-height-sm: 35px`（与提取前一致）；
    - **桥接**：`theme.css` 的 `--weline-theme-control-height-sm` → `var(--control-height-sm)`；
    - **组件消费**：`.w-button` / `.btn` / `input` 等用 `min-height: var(--weline-component-control-height-sm)`，禁止在组件 CSS 再留 `35px` 或空变量。

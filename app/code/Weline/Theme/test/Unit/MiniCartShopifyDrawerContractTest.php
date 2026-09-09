@@ -49,6 +49,17 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
         self::assertStringContainsString('rememberSummaryCache', $source);
         self::assertStringContainsString('forceNetwork', $source);
         self::assertStringContainsString('weline.cart.summary_cache', $source);
+        self::assertStringContainsString('summaryCacheStorageKey', $source);
+        self::assertStringContainsString('localStorage.getItem(summaryCacheStorageKey', $source);
+        self::assertStringContainsString('cacheMatchesStorefront', $source);
+        self::assertStringContainsString('currentStorefrontCurrency', $source);
+        self::assertStringContainsString('forceNetwork === true', $source);
+        // Coupon widget emits { refresh: true }; must forceNetwork and not paint stale cache.
+        self::assertStringContainsString('summary.refresh === true', $source);
+        self::assertStringContainsString('forceRefresh', $source);
+        self::assertStringContainsString('!forceRefresh && applyCachedSummaryToRoots()', $source);
+        self::assertStringContainsString('preview.amount_minor', $source);
+        self::assertStringContainsString("getCachedSummary({ cartType: mode })", $source);
         self::assertStringContainsString('waitForCartApi', $source);
         self::assertStringContainsString('getCart', $source);
         self::assertStringContainsString('isDemoChromeOnly', $source);
@@ -109,6 +120,7 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
         self::assertStringContainsString('bindSwipe', $source);
         self::assertStringContainsString('weshop:mini-cart:open', $source);
         self::assertStringContainsString('weshop:mini-cart:extras-ready', $source);
+        self::assertStringContainsString('data-cart-summary-extras', $source);
         self::assertStringNotContainsString("'Tab'", $source);
         self::assertStringContainsString('data-widget-name', $source);
     }

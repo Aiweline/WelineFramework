@@ -24,6 +24,7 @@ use Weline\Theme\Helper\ProductCardAddToCartParams;
 use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Interface\ThemePlaceableRegistryInterface;
 use Weline\Theme\Model\ThemeLayout;
+use Weline\Theme\Model\ThemeVirtualLayout;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Taglib\Slot;
 use Weline\Widget\Api\WidgetRegistryInterface;
@@ -167,6 +168,32 @@ class SlotRendererService
                 }
 
                 $slotWidgets = $this->organizeWidgetsBySlot($layoutData);
+                $pageType = trim((string)($layoutData['page_type'] ?? $layoutData['layout_type'] ?? ''));
+                $status = trim((string)($layoutData['status'] ?? ''));
+                if ($status !== ThemeLayout::STATUS_PUBLISHED && $status !== ThemeLayout::STATUS_DRAFT) {
+                    $status = ThemeLayout::STATUS_DRAFT;
+                }
+
+                // Align with doProcessSlots: scoped/cms/product layouts omit chrome widgets;
+                // fill empty header/footer from the per-scope homepage chrome carrier.
+                if ($themeId > 0 && $pageType !== '') {
+                    $slotWidgets = $this->mergeLayoutScopedSlotWidgets(
+                        $slotWidgets,
+                        $html,
+                        $themeId,
+                        $pageType,
+                        $status,
+                        $area
+                    );
+                    $slotWidgets = $this->mergeSharedChromeSlotWidgets(
+                        $slotWidgets,
+                        $themeId,
+                        $pageType,
+                        $status,
+                        $area
+                    );
+                }
+
                 if ($filterToHtmlSlots) {
                     $slotWidgets = $this->filterWidgetsForHtmlSlots($slotWidgets, $html);
                 }
@@ -174,8 +201,6 @@ class SlotRendererService
                 if (empty($slotWidgets)) {
                     return $html;
                 }
-
-                $pageType = trim((string)($layoutData['page_type'] ?? $layoutData['layout_type'] ?? ''));
 
                 $this->filledSlotIdsThisRun = [];
                 $this->capturePageRenderContext();
@@ -703,8 +728,16 @@ class SlotRendererService
             return $slotWidgets;
         }
 
-        // 读取全局 chrome 持久化载体（homepage workspace），非「homepage 专属布局」。
-        $globalChromeLayout = $this->getLayoutData($themeId, ThemeLayout::PAGE_TYPE_HOME, $status, $area);
+        // 全局 chrome 持久化在「当前作用范围」的 homepage 载体上（website/store 各有一套），
+        // 但 target 必须是 global——不得带着 cms_page/product 等业务 target 去读，否则会读到空布局。
+        $chromeIdentity = $this->sharedChromeCarrierIdentity($this->currentLayoutIdentity($area));
+        $globalChromeLayout = $this->getLayoutData(
+            $themeId,
+            ThemeLayout::PAGE_TYPE_HOME,
+            $status,
+            $area,
+            $chromeIdentity
+        );
         $globalChromeSlotWidgets = $this->organizeWidgetsBySlot($globalChromeLayout);
         foreach ($globalChromeSlotWidgets as $slotId => $widgets) {
             if ($widgets === [] || !$this->slotWidgetsBelongToSharedChrome((string)$slotId, $widgets)) {
@@ -716,6 +749,25 @@ class SlotRendererService
         }
 
         return $slotWidgets;
+    }
+
+    /**
+     * Shared chrome carrier identity: same store/website scope + locale, global target only.
+     *
+     * @param array{layout_option?:string,scope?:string,target_type?:string,target_id?:int,locale_code?:string} $identity
+     * @return array{layout_option:string,scope:string,target_type:string,target_id:int,locale_code:string}
+     */
+    private function sharedChromeCarrierIdentity(array $identity): array
+    {
+        return [
+            'layout_option' => trim((string)($identity['layout_option'] ?? 'default')) !== ''
+                ? trim((string)$identity['layout_option'])
+                : 'default',
+            'scope' => (string)($identity['scope'] ?? 'default'),
+            'target_type' => ThemeVirtualLayout::TARGET_GLOBAL,
+            'target_id' => 0,
+            'locale_code' => (string)($identity['locale_code'] ?? ''),
+        ];
     }
 
     /**
@@ -848,15 +900,27 @@ class SlotRendererService
         $existingSlotIds = [];
         $maxIterations = 50;
         for ($iteration = 0; $iteration < $maxIterations; $iteration++) {
+            $pendingSlotIds = [];
+            foreach ($slotWidgets as $slotId => $widgets) {
+                if ($widgets !== [] && !isset($this->filledSlotIdsThisRun[$slotId])) {
+                    $pendingSlotIds[$slotId] = true;
+                }
+            }
+            if ($pendingSlotIds === []) {
+                break;
+            }
             $regions = RequestLifecycleTrace::measurePhase(
                 'theme.slots.boundary_scan',
-                static fn() => $scanner->enumerateRegions($html),
-                ['iteration' => $iteration],
+                static fn() => $scanner->enumerateRegions($html, null, $pendingSlotIds),
+                ['iteration' => $iteration, 'targets' => \count($pendingSlotIds)],
             );
             if ($regions === []) {
                 break;
             }
 
+            // Orphan detection only inspects configured slots. Retain each
+            // valid target across iterations, including children later removed
+            // by a parent replacement; never infer validity from bare markers.
             foreach ($regions as $region) {
                 $existingSlotIds[$region['id']] = true;
             }
@@ -1541,16 +1605,31 @@ class SlotRendererService
             return $html;
         }
 
-        return (string) preg_replace_callback(
-            '/<(script|style)\b([^>]*)>(.*?)<\/\1>/is',
-            function (array $match): string {
-                $token = '<!--WELINE_DOM_OPAQUE_' . count($this->domOpaqueTokens) . '_' . bin2hex(random_bytes(4)) . '-->';
-                $this->domOpaqueTokens[$token] = '<' . $match[1] . $match[2] . '>' . $match[3] . '</' . $match[1] . '>';
+        $offset = 0;
+        $length = strlen($html);
+        $out = '';
+        while ($offset < $length) {
+            if (preg_match('/<(script|style)\b[^>]*>/i', $html, $match, PREG_OFFSET_CAPTURE, $offset) !== 1) {
+                $out .= substr($html, $offset);
+                break;
+            }
+            $openStart = (int)$match[0][1];
+            $openEnd = $openStart + strlen($match[0][0]);
+            $closingTag = '</' . $match[1][0] . '>';
+            $closeStart = stripos($html, $closingTag, $openEnd);
+            if ($closeStart === false) {
+                $out .= substr($html, $offset);
+                break;
+            }
 
-                return $token;
-            },
-            $html,
-        );
+            $end = $closeStart + strlen($closingTag);
+            $token = '<!--WELINE_DOM_OPAQUE_' . count($this->domOpaqueTokens) . '_' . bin2hex(random_bytes(4)) . '-->';
+            $this->domOpaqueTokens[$token] = substr($html, $openStart, $end - $openStart);
+            $out .= substr($html, $offset, $openStart - $offset) . $token;
+            $offset = $end;
+        }
+
+        return $out;
     }
 
     private function restoreDomOpaqueBlocks(string $html): string
@@ -2362,6 +2441,19 @@ class SlotRendererService
         $config = $widget['config'] ?? [];
         $config = \is_array($config) ? $config : [];
         $renderArea = $this->renderArea === 'backend' ? 'backend' : 'frontend';
+
+        // Uninstalled modules must not abort slot/layout seeding: DEV tip in place, PROD empty.
+        $widgetModule = \is_string($widgetModule) ? $widgetModule : '';
+        $widgetCode = \is_string($widgetCode) ? $widgetCode : '';
+        if ($widgetModule !== '' && !$this->isModuleRegistered($widgetModule)) {
+            $codePart = $widgetCode !== '' ? $widgetCode : 'widget';
+            $templateRef = str_contains($codePart, '::')
+                ? $codePart
+                : ($widgetModule . '::templates/frontend/widgets/' . $codePart . '.phtml');
+
+            return $this->renderMissingModuleWidgetTip($widgetModule, $templateRef);
+        }
+
         $definition = $this->placeableRegistry->find($widgetModule, $widgetType, $widgetCode, $this->renderTheme, $renderArea);
         $config = $this->mergeTranslatedWidgetConfig($widget, $config, $definition);
         $config = $this->hydrateTypedLayoutValues($config, $renderArea, $widget);
@@ -2421,12 +2513,7 @@ class SlotRendererService
 
                 return $this->rememberWidgetOutput($widgetOutputCacheKey, $html);
             } catch (\Throwable $throwable) {
-                if (defined('DEV') && DEV) {
-                    return sprintf(
-                        '<div class="widget-render-error" style="color:red;padding:10px;border:1px solid red;">%s</div>',
-                        htmlspecialchars((string)$throwable->getMessage())
-                    );
-                }
+                return $this->renderWidgetThrowableTip((string)$throwable->getMessage());
             }
         }
 
@@ -2463,13 +2550,7 @@ class SlotRendererService
 
                 return $this->rememberWidgetOutput($widgetOutputCacheKey, $html);
             } catch (\Throwable $throwable) {
-                if (defined('DEV') && DEV) {
-                    return sprintf(
-                        '<div class="widget-render-error" style="color:red;padding:10px;border:1px solid red;">%s</div>',
-                        htmlspecialchars((string)$throwable->getMessage())
-                    );
-                }
-                return '';
+                return $this->renderWidgetThrowableTip((string)$throwable->getMessage());
             }
         }
 
@@ -2491,17 +2572,47 @@ class SlotRendererService
             );
 
             return $this->rememberWidgetOutput($widgetOutputCacheKey, $html);
-        } catch (\Exception $e) {
-            // 渲染失败，返回错误提示（仅开发模式）
-            if (defined('DEV') && DEV) {
-                return sprintf(
-                    '<div class="widget-render-error" style="color:red;padding:10px;border:1px solid red;">部件渲染失败: %s - %s</div>',
-                    htmlspecialchars((string)$widgetCode),
-                    htmlspecialchars((string)$e->getMessage())
-                );
-            }
+        } catch (\Throwable $e) {
+            // 渲染失败，返回错误提示（仅开发模式）；不得中断其余槽位/布局播种
+            return $this->renderWidgetThrowableTip(
+                __('部件渲染失败: %{1} - %{2}', [(string)$widgetCode, (string)$e->getMessage()])
+            );
+        }
+    }
+
+    private function isModuleRegistered(string $moduleName): bool
+    {
+        $moduleName = \trim($moduleName);
+        if ($moduleName === '') {
+            return false;
+        }
+
+        return isset(Env::getInstance()->getModuleList()[$moduleName]);
+    }
+
+    /**
+     * DEV：与 TraitTemplate 缺模块文案同构的槽位提示；PROD：空串（布局播种继续）。
+     */
+    private function renderMissingModuleWidgetTip(string $moduleName, string $templateRef): string
+    {
+        $message = (string)__(
+            '异常：你指定的模板文件所在的模块不存在！模块：%{1}，所使用的模板：%{2}',
+            [$moduleName, $templateRef]
+        );
+
+        return $this->renderWidgetThrowableTip($message);
+    }
+
+    private function renderWidgetThrowableTip(string $message): string
+    {
+        if (!(defined('DEV') && DEV)) {
             return '';
         }
+
+        return sprintf(
+            '<div class="widget-render-error" style="color:red;padding:10px;border:1px solid red;">%s</div>',
+            htmlspecialchars($message, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
+        );
     }
 
     /**
@@ -3332,10 +3443,11 @@ HTML;
         int $themeId,
         string $pageType,
         string $status = ThemeLayout::STATUS_PUBLISHED,
-        string $area = 'frontend'
+        string $area = 'frontend',
+        ?array $identityOverride = null,
     ): array
     {
-        $identity = $this->currentLayoutIdentity($area);
+        $identity = $identityOverride ?? $this->currentLayoutIdentity($area);
         $hasTargetIdentity = $this->hasTargetIdentity($identity);
         $cacheKey = "{$themeId}:{$pageType}:{$status}:"
             . $identity['layout_option'] . ':'

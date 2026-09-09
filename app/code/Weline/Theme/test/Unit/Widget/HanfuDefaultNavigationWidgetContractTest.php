@@ -43,7 +43,7 @@ final class HanfuDefaultNavigationWidgetContractTest extends TestCase
         }
         self::assertStringNotContainsString('/category/electronics', $source);
         self::assertStringContainsString("getFrontendUrl('promotion/deals')", $source);
-        self::assertStringContainsString("getFrontendUrl('help')", $source);
+        self::assertStringContainsString("getFrontendUrl('faq')", $source);
         self::assertStringNotContainsString("'/promotion/deals'", $source);
     }
 

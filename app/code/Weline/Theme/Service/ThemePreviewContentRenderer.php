@@ -51,7 +51,7 @@ class ThemePreviewContentRenderer
         'checkout_success' => ['content'],
         'promotion' => ['promotion-main', 'content'],
         'customer_service' => ['customer-service-main', 'content'],
-        'help' => ['help-topics', 'help-faq', 'help-extras', 'help-sidebar', 'content'],
+        'faq' => ['faq-topics', 'faq-faq', 'faq-extras', 'faq-sidebar', 'content'],
         'review' => ['review-main', 'content'],
         'qa' => ['qa-main', 'content'],
         'rma' => ['rma-main', 'content'],

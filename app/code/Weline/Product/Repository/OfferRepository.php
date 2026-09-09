@@ -138,6 +138,37 @@ final class OfferRepository extends AbstractWebsiteShardRepository
     }
 
     /**
+     * Page first-published representatives in the same offer-id order as listings.
+     * HAVING applies to the first offer, so later variants never reappear on the next page.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function listPublishedRepresentativePage(int $websiteId, int $limit, int $afterOfferId = 0): array
+    {
+        $this->assertWebsite($websiteId);
+        $limit = max(1, min(500, $limit));
+        $representatives = $this->newModel($websiteId)->clear()
+            ->fields([Offer::schema_fields_PRODUCT_ID, 'representative_offer_id' => 'MIN(' . Offer::schema_fields_ID . ')'])
+            ->where(Offer::schema_fields_STATUS, Offer::STATUS_PUBLISHED)
+            ->group(Offer::schema_fields_PRODUCT_ID)
+            ->having('MIN(' . Offer::schema_fields_ID . ') > ' . max(0, $afterOfferId))
+            ->order('representative_offer_id', 'ASC')
+            ->limit($limit)
+            ->select()->fetchArray();
+        $ids = array_values(array_filter(array_map(
+            static fn(array $row): int => (int)($row['representative_offer_id'] ?? 0),
+            $representatives,
+        ), static fn(int $id): bool => $id > 0));
+        if ($ids === []) {
+            return [];
+        }
+        return $this->newModel($websiteId)->clear()
+            ->where(Offer::schema_fields_ID, $ids, 'IN')
+            ->order(Offer::schema_fields_ID, 'ASC')
+            ->select()->fetchArray();
+    }
+
+    /**
      * @param list<int> $productIds
      * @return list<array<string, mixed>>
      */
@@ -338,6 +369,7 @@ final class OfferRepository extends AbstractWebsiteShardRepository
             'combination_key',
             'is_default',
             'requires_shipping',
+            'shipping_profile_code',
             'type_config_json',
         ];
         foreach (array_keys($fields) as $field) {

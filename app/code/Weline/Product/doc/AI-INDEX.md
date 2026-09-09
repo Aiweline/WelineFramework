@@ -10,7 +10,7 @@
 - Registry：`Model/ProductShardRegistry`
 - Provisioner：`Service/ProductShardProvisioner`
 - Schema provider：`extends/module/Weline_Framework/Schema/ProductShardSchemaProvider.php`
-- Catalog DDL：`Service/ProductShardSchemaCatalog`（SCHEMA_VERSION=4.6.0；九实体白名单；`category_link` 唯一索引 `uk_store_category_product`）
+- Catalog DDL：`Service/ProductShardSchemaCatalog`（SCHEMA_VERSION=4.7.0；九实体白名单；Offer 含可空 `shipping_profile_code`；`category_link` 唯一索引 `uk_store_category_product`）
 - P2A-002 正式验收：PostgreSQL 双 Website 九表、幂等、数据保留、单站
   drift 隔离 + 编译后 `product.website` provider discovery；SQLite 用例只作
   一次性隔离开发/可移植性回归

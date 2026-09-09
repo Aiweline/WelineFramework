@@ -10,6 +10,7 @@ use Weline\Framework\Runtime\Policy\RuntimePolicyBundle;
 use Weline\Framework\Runtime\Policy\RuntimePolicyDescriptor;
 use Weline\Framework\Runtime\Policy\RuntimePolicyProviderCompiler;
 use Weline\Server\Security\AttackDetector;
+use Weline\Server\Security\CrawlerBlockCatalog;
 use Weline\Server\Service\LocalDomainPolicy;
 use Weline\Server\Service\Security\SecurityPolicyStateStore;
 
@@ -250,6 +251,9 @@ final class RuntimePolicyCompiler
                     'type' => 'attack_rules',
                     'malicious_patterns' => (array)($rules['malicious_patterns'] ?? []),
                     'bad_user_agents' => (array)($rules['bad_user_agents'] ?? []),
+                    'crawler_block' => (array)($rules['crawler_block'] ?? CrawlerBlockCatalog::defaultRule()),
+                    // Website-owned crawler policies land in domain_overrides[host].rules.crawler_block.
+                    'domain_overrides' => (array)($rules['domain_overrides'] ?? []),
                     'protected_paths' => (array)($rules['protected_paths'] ?? []),
                     'ban_on_path_match' => (array)($rules['ban_on_path_match'] ?? []),
                     'path_scan' => (array)($rules['path_scan'] ?? []),

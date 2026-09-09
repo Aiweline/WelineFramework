@@ -334,19 +334,6 @@ REGISTER_CONTENT;
 
     private function clearRuntimeTranslationCaches(): void
     {
-        try {
-            w_cache('i18n')->clear();
-        } catch (\Throwable) {
-        }
-
-        try {
-            w_cache('phrase')->clear();
-        } catch (\Throwable) {
-        }
-
-        \Weline\Framework\Phrase\Parser::clearWorkerCaches();
-        \Weline\I18n\Parser::clearWorkerCaches();
-
         ObjectManager::getInstance(RuntimeCacheBroadcaster::class)->broadcast();
     }
 

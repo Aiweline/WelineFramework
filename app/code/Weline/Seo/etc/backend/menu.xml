@@ -43,4 +43,12 @@
           parent="Weline_Backend::seo_group"
           icon="tree"
           order="50"/>
+
+    <menu source="Weline_Seo::seo_duplicate"
+          name="seo_duplicate"
+          title="内容重复检测"
+          action="seo/backend/duplicate"
+          parent="Weline_Backend::seo_group"
+          icon="copy"
+          order="55"/>
 </menus>

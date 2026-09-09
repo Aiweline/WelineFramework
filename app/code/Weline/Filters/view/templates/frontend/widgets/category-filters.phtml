@@ -17,16 +17,20 @@ use Weline\Filters\Service\StorefrontFilterPanelService;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\StorefrontPageContext;
 
 /** @var \Weline\Framework\View\Template $this */
 
 $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 
-$offers = $this->getData('storefront_offers_unfiltered');
-if (!is_array($offers) || $offers === []) {
-    $offers = $this->getData('storefront_offers');
+$offers = StorefrontPageContext::listingOffers();
+if ($offers === null) {
+    $offers = $this->getData('storefront_offers_unfiltered');
+    if (!is_array($offers) || $offers === []) {
+        $offers = $this->getData('storefront_offers');
+    }
+    $offers = is_array($offers) ? $offers : [];
 }
-$offers = is_array($offers) ? $offers : [];
 
 /** @var Request $request */
 $request = ObjectManager::getInstance(Request::class);
@@ -40,7 +44,7 @@ $requestPath = strtolower(trim(str_replace('\\', '/', (string)(parse_url($reques
 
 /** @var StorefrontFilterPanelService $panelService */
 $panelService = ObjectManager::getInstance(StorefrontFilterPanelService::class);
-if ($offers === []) {
+if ($offers === [] && StorefrontPageContext::listingOffers() === null) {
     $offers = $panelService->resolveListingOffers($requestPath);
 }
 

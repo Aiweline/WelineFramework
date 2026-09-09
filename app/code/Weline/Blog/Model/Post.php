@@ -14,6 +14,9 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 #[Index(name: 'idx_blog_post_website_status_published', columns: ['website_id', 'status', 'published_at'])]
 class Post extends Model
 {
+    use \Weline\Blog\Model\PublishesContentChanges;
+    public const CONTENT_RESOURCE_TYPE = 'blog.post';
+
     public const schema_table = 'weline_blog_post';
     public const schema_primary_key = 'post_id';
 
@@ -39,6 +42,14 @@ class Post extends Model
     public const schema_fields_COVER_IMAGE = 'cover_image';
     #[Col('varchar', 120, nullable: true, comment: '作者')]
     public const schema_fields_AUTHOR = 'author';
+    #[Col('varchar', 500, nullable: true, comment: '作者主页 URL')]
+    public const schema_fields_AUTHOR_URL = 'author_url';
+    #[Col('text', nullable: true, comment: '作者简介')]
+    public const schema_fields_AUTHOR_BIO = 'author_bio';
+    #[Col('varchar', 160, nullable: true, comment: '作者职称')]
+    public const schema_fields_AUTHOR_JOB_TITLE = 'author_job_title';
+    #[Col('text', nullable: true, comment: '作者 sameAs URL（逗号/换行分隔）')]
+    public const schema_fields_AUTHOR_SAME_AS = 'author_same_as';
     #[Col('varchar', 500, nullable: true, comment: '关键词')]
     public const schema_fields_KEYWORDS = 'keywords';
     #[Col('int', nullable: true, comment: '分类 ID')]
@@ -63,6 +74,20 @@ class Post extends Model
     public function getPostId(): int
     {
         return (int)($this->getData(self::schema_fields_ID) ?: 0);
+    }
+
+    /**
+     * Paste an already-fetched published row into the request identity map.
+     *
+     * @param array<string, mixed> $row
+     */
+    public function hydrateLoadedRow(array $row): self
+    {
+        $postId = (int)($row[self::schema_fields_ID] ?? 0);
+        $identityKey = $postId > 0 ? static::class . '::' . $postId : null;
+        $this->hydrateFromLoadedRow($row, $identityKey);
+
+        return $this;
     }
 
     public function isPublished(): bool

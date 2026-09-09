@@ -151,4 +151,124 @@ final class FrameCodec
             \pack('NN', $lastStreamId & 0x7fffffff, $errorCode & 0xffffffff) . $debug
         );
     }
+
+    /**
+     * Remove complete frames for the given stream ids from a write queue.
+     *
+     * Used after peer RST_STREAM so already-queued DATA/HEADERS for dead streams
+     * do not block a subsequent Document response on the same connection.
+     *
+     * @param list<int>|array<int,bool|int> $streamIds
+     * @return array{0:string,1:int} [remainingBuffer, removedDataPayloadBytes]
+     */
+    public static function stripStreamFrames(string $buffer, array $streamIds): array
+    {
+        if ($buffer === '' || $streamIds === []) {
+            return [$buffer, 0];
+        }
+
+        $drop = [];
+        foreach ($streamIds as $key => $value) {
+            $streamId = \is_int($key) && !\is_bool($value) ? (int)$value : (int)$key;
+            if ($streamId > 0) {
+                $drop[$streamId] = true;
+            }
+        }
+        if ($drop === []) {
+            return [$buffer, 0];
+        }
+
+        return self::filterFrames($buffer, static fn (int $streamId): bool => !isset($drop[$streamId]));
+    }
+
+    /**
+     * Keep connection-level frames (stream 0) and the listed stream ids only.
+     *
+     * @param list<int>|array<int,bool|int> $keepStreamIds
+     * @return array{0:string,1:int} [remainingBuffer, removedDataPayloadBytes]
+     */
+    public static function retainStreamFrames(string $buffer, array $keepStreamIds): array
+    {
+        if ($buffer === '') {
+            return [$buffer, 0];
+        }
+
+        $keep = [0 => true];
+        foreach ($keepStreamIds as $key => $value) {
+            $streamId = \is_int($key) && !\is_bool($value) ? (int)$value : (int)$key;
+            if ($streamId >= 0) {
+                $keep[$streamId] = true;
+            }
+        }
+
+        return self::filterFrames($buffer, static fn (int $streamId): bool => isset($keep[$streamId]));
+    }
+
+    /**
+     * Byte length of the leading run of complete HTTP/2 frames.
+     *
+     * Worker writes must prefer this prefix so RST scrubbing and stream filters
+     * never see a mid-frame buffer head.
+     */
+    public static function completeFramesPrefixLength(string $buffer): int
+    {
+        $offset = 0;
+        $length = \strlen($buffer);
+        while ($offset + 9 <= $length) {
+            $frameLength = (\ord($buffer[$offset]) << 16)
+                | (\ord($buffer[$offset + 1]) << 8)
+                | \ord($buffer[$offset + 2]);
+            $total = 9 + $frameLength;
+            if ($frameLength < 0 || $offset + $total > $length) {
+                break;
+            }
+            $offset += $total;
+        }
+
+        return $offset;
+    }
+
+    /**
+     * @param callable(int):bool $keepStream
+     * @return array{0:string,1:int}
+     */
+    private static function filterFrames(string $buffer, callable $keepStream): array
+    {
+        $kept = '';
+        $removedDataBytes = 0;
+        $offset = 0;
+        $length = \strlen($buffer);
+        while ($offset + 9 <= $length) {
+            $frameLength = (\ord($buffer[$offset]) << 16)
+                | (\ord($buffer[$offset + 1]) << 8)
+                | \ord($buffer[$offset + 2]);
+            $total = 9 + $frameLength;
+            if ($frameLength < 0 || $offset + $total > $length) {
+                break;
+            }
+            $type = \ord($buffer[$offset + 3]);
+            $streamId = ((\ord($buffer[$offset + 5]) << 24)
+                | (\ord($buffer[$offset + 6]) << 16)
+                | (\ord($buffer[$offset + 7]) << 8)
+                | \ord($buffer[$offset + 8])) & 0x7fffffff;
+            $frame = \substr($buffer, $offset, $total);
+            $offset += $total;
+            if (!$keepStream($streamId)) {
+                if ($type === self::TYPE_DATA) {
+                    $removedDataBytes += $frameLength;
+                }
+                continue;
+            }
+            $kept .= $frame;
+        }
+        if ($offset < $length) {
+            // Keep an unparsed trailing partial frame only when this filter did not
+            // drop anything. After a scrub the tail is no longer frame-aligned safely.
+            if ($removedDataBytes === 0) {
+                $kept .= \substr($buffer, $offset);
+            }
+        }
+
+        return [$kept, $removedDataBytes];
+    }
 }

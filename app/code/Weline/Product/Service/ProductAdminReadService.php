@@ -88,7 +88,7 @@ final class ProductAdminReadService implements ProductAdminReadInterface, \Welin
         $products = [];
         foreach ($this->products->listAll($websiteId) as $product) {
             $productId = (int)($product['product_id'] ?? 0);
-            if ($productId <= 0 || ($storeId !== null
+            if ($productId <= 0 || ($includeDetails && $storeId !== null
                 && !$this->storeProducts->isSelected($websiteId, $storeId, $productId))
             ) {
                 continue;
@@ -104,16 +104,32 @@ final class ProductAdminReadService implements ProductAdminReadInterface, \Welin
                 static fn(array $product): int => (int)$product['product_id'],
                 $productBatch,
             )));
+            if (!$includeDetails && $storeId !== null) {
+                $selected = $this->storeProducts->selectionMap($websiteId, $storeId, $productIds);
+                $productBatch = array_values(array_filter(
+                    $productBatch,
+                    static fn(array $product): bool => $selected[(int)$product['product_id']] ?? true,
+                ));
+                $productIds = array_column($productBatch, 'product_id');
+            }
+            if ($productBatch === []) {
+                continue;
+            }
             $offersByProduct = [];
-            foreach ($this->offers->listByProductIds($websiteId, $productIds) as $offer) {
+            $offerRows = $includeDetails || $skuFilter !== ''
+                ? $this->offers->listByProductIds($websiteId, $productIds) : [];
+            foreach ($offerRows as $offer) {
                 $offersByProduct[(int)($offer['product_id'] ?? 0)][] = $offer;
             }
             $attributesByProduct = [];
-            foreach ($this->attributes->listExplicitRows($websiteId, 'product', $productIds, [0]) as $attribute) {
+            $attributeRows = $includeDetails || $nameFilter !== ''
+                ? $this->attributes->listExplicitRows($websiteId, 'product', $productIds, [0]) : [];
+            foreach ($attributeRows as $attribute) {
                 $attributesByProduct[(int)($attribute['entity_id'] ?? 0)][] = $attribute;
             }
 
             $matchedProducts = [];
+            $baseMatches = [];
             foreach ($productBatch as $product) {
                 $productId = (int)$product['product_id'];
                 $offers = $offersByProduct[$productId] ?? [];
@@ -155,8 +171,27 @@ final class ProductAdminReadService implements ProductAdminReadInterface, \Welin
                     continue;
                 }
 
+                $baseMatches[] = compact('product', 'offers', 'offerIds', 'name', 'skus', 'status');
+            }
+
+            // Selection filters use authoritative identity fields without a query per product.
+            // Base-filter rejections still never reach the identity reader.
+            $identities = [];
+            if (!$includeDetails && $baseMatches !== []) {
+                $uuids = array_values(array_filter(array_map(
+                    static fn(array $match): string => trim((string)($match['product']['global_product_uuid'] ?? '')),
+                    $baseMatches,
+                )));
+                if ($uuids !== []) {
+                    $identities = $this->identities->resolveProductsByUuids($uuids, strict: true);
+                }
+            }
+            foreach ($baseMatches as ['product' => $product, 'offers' => $offers, 'offerIds' => $offerIds,
+                'name' => $name, 'skus' => $skus, 'status' => $status]) {
                 $uuid = trim((string)($product['global_product_uuid'] ?? ''));
-                $identity = $uuid === '' ? null : $this->identities->resolveProductByUuid($uuid);
+                $identity = $uuid === '' ? null : ($includeDetails
+                    ? $this->identities->resolveProductByUuid($uuid)
+                    : ($identities[strtolower($uuid)] ?? null));
                 $productCode = $identity?->productCode ?? (string)($product['product_code'] ?? '');
                 $productType = $identity?->productType ?? (string)($product['product_type'] ?? 'simple');
                 $ownerWebsiteId = $identity?->ownerWebsiteId
@@ -320,11 +355,48 @@ final class ProductAdminReadService implements ProductAdminReadInterface, \Welin
             'categories' => $this->categoryCatalog($websiteId, ''),
             'brands' => $this->brandAdmin->catalogOptions($websiteId),
             'suppliers' => $this->supplierAdmin->catalogOptions($websiteId),
+            'shipping_profiles' => $this->shippingProfileOptions(),
             'default_store_ids' => array_values(array_map(
                 static fn(array $store): int => (int)$store['store_id'],
                 $stores,
             )),
         ];
+    }
+
+    /**
+     * @return list<array{code:string,label:string,is_free_shipping:bool}>
+     */
+    private function shippingProfileOptions(): array
+    {
+        try {
+            /** @var \Weline\Product\Service\Storefront\StorefrontShippingProfileCatalogProviderRegistry $registry */
+            $registry = ObjectManager::getInstance(
+                \Weline\Product\Service\Storefront\StorefrontShippingProfileCatalogProviderRegistry::class,
+            );
+            $provider = $registry->primary();
+            if ($provider === null) {
+                return [];
+            }
+            $out = [];
+            foreach ($provider->listActiveProfiles() as $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+                $code = trim((string)($row['code'] ?? ''));
+                if ($code === '') {
+                    continue;
+                }
+                $out[] = [
+                    'code' => $code,
+                    'label' => (string)($row['label'] ?? $code),
+                    'is_free_shipping' => !empty($row['is_free_shipping']),
+                ];
+            }
+
+            return $out;
+        } catch (Throwable) {
+            return [];
+        }
     }
 
     public function snapshot(

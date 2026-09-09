@@ -20,12 +20,52 @@
     let workerScopeBootstrapId = '';
     let workerBackendBootstrapId = '';
     let handshakePromise = null;
+    let handshakeCooldownUntil = 0;
+    let handshakeBackoffMs = 0;
     let signedRequestChain = Promise.resolve();
+
+    // Browser-side QueryBin response cache (TTL + in-flight dedupe).
+    // HTTP fetch stays cache:'no-store'; this layer skips the signed POST when fresh.
+    const responseCacheMemory = new Map();
+    const responseCacheInflight = new Map();
+    let responseCacheDbPromise = null;
+    const RESPONSE_CACHE_DB = 'weline-querybin-response-cache';
+    const RESPONSE_CACHE_STORE = 'entries';
+    const RESPONSE_CACHE_DB_VERSION = 1;
+    const RESPONSE_CACHE_MAX_BYTES = 750000;
+    const RESPONSE_CACHE_TTL_MS = Object.freeze({
+        'region.list': 4 * 60 * 60 * 1000,
+        'region.country_profile': 12 * 60 * 60 * 1000,
+        'region.children': 4 * 60 * 60 * 1000,
+        'region.format_suggestion': 4 * 60 * 60 * 1000,
+        'region.has_streets': 4 * 60 * 60 * 1000,
+        'region.streets': 4 * 60 * 60 * 1000,
+        'consent.status': 60 * 60 * 1000,
+        'order.getCheckoutRemark': 30 * 60 * 1000,
+        'compare.list': 15 * 60 * 1000,
+        'compare.pageView': 15 * 60 * 1000,
+    });
+    const RESPONSE_CACHE_INVALIDATE = Object.freeze({
+        'consent.accept': ['consent.status'],
+        'consent.withdraw': ['consent.status'],
+        'order.saveCheckoutRemark': ['order.getCheckoutRemark'],
+        'order.clearCheckoutRemark': ['order.getCheckoutRemark'],
+        'compare.add': ['compare.list', 'compare.pageView'],
+        'compare.remove': ['compare.list', 'compare.pageView'],
+        'compare.clear': ['compare.list', 'compare.pageView'],
+    });
 
     self.addEventListener('message', async (event) => {
         const message = event.data || {};
         const id = message.id;
         if (!id) return;
+        const workerStartedAt = (typeof performance !== 'undefined' && performance.now)
+            ? performance.now()
+            : Date.now();
+
+        const workerElapsedMs = () => Math.max(0, Math.round(
+            ((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - workerStartedAt
+        ));
 
         try {
             const config = normalizeConfig(message.config || {});
@@ -37,6 +77,7 @@
                     status: 200,
                     statusText: 'OK',
                     headers: {},
+                    workerElapsedMs: workerElapsedMs(),
                     body: {
                         ok: true,
                         data: {
@@ -53,15 +94,16 @@
             }
             const packetPayload = buildPayload(message, config);
             const capability = resolveCapability(packetPayload);
-            let result = await executeSignedRequest(config, packetPayload, capability);
+            let result = await dispatchCachedOrNetwork(message, config, packetPayload, capability);
             self.postMessage({
                 id,
                 ok: result.responseOk && result.body && result.body.ok === true,
                 status: result.status,
                 statusText: result.statusText,
                 headers: result.headers,
+                workerElapsedMs: workerElapsedMs(),
                 body: result.body,
-                maintenance: detectMaintenance(result.status, result.body),
+                maintenance: detectMaintenance(result.status, result.body, result.headers),
             });
         } catch (error) {
             self.postMessage({
@@ -70,6 +112,7 @@
                 status: error && error.status ? error.status : 0,
                 statusText: '',
                 headers: {},
+                workerElapsedMs: workerElapsedMs(),
                 body: {
                     ok: false,
                     data: null,
@@ -189,8 +232,15 @@
         if (!isCurrencyCodeShape(code)) {
             return false;
         }
+        // Explicit allow-list only — defaultCurrency alone must not reject path/SSR USD.
+        const explicit = normalizeCurrencyList(
+            config && (config.availableCurrencies || config.supportedCurrencies || config.currencyCodes || config.currencies) || []
+        );
+        if (explicit.length === 0) {
+            return true;
+        }
         const supported = {};
-        normalizeCurrencyList(config && config.availableCurrencies).forEach((entry) => {
+        explicit.forEach((entry) => {
             supported[entry] = true;
         });
         if (config && config.defaultCurrency) {
@@ -256,6 +306,298 @@
         throw Object.assign(new Error('Unsupported Weline worker capability.'), { code: 'protocol_error' });
     }
 
+    function wantsBypassResponseCache(message) {
+        const options = message && message.options && typeof message.options === 'object'
+            ? message.options
+            : {};
+        return options.bypassCache === true
+            || options.noCache === true
+            || options.cache === false
+            || options.refresh === true;
+    }
+
+    function responseCacheTtlMs(capability) {
+        const ttl = RESPONSE_CACHE_TTL_MS[String(capability || '')];
+        return typeof ttl === 'number' && ttl > 0 ? ttl : 0;
+    }
+
+    function stableStringify(value) {
+        if (value === null || typeof value !== 'object') {
+            return JSON.stringify(value);
+        }
+        if (Array.isArray(value)) {
+            return '[' + value.map(stableStringify).join(',') + ']';
+        }
+        const keys = Object.keys(value).sort();
+        return '{' + keys.map((key) => JSON.stringify(key) + ':' + stableStringify(value[key])).join(',') + '}';
+    }
+
+    function canonicalizeResponseCacheParams(capability, params) {
+        const source = params && typeof params === 'object' && !Array.isArray(params) ? params : {};
+        const out = {};
+        Object.keys(source).forEach((key) => {
+            const value = source[key];
+            if (value === undefined || value === null || value === '') {
+                return;
+            }
+            out[key] = value;
+        });
+        if (String(capability || '') === 'region.list') {
+            const catalog = String(out.catalog || 'installed').toLowerCase();
+            out.catalog = catalog === 'global' ? 'global' : 'installed';
+            if (typeof out.country_code === 'string') {
+                out.country_code = out.country_code.trim().toUpperCase();
+                if (out.country_code === '') {
+                    delete out.country_code;
+                }
+            }
+        }
+        return out;
+    }
+
+    function buildResponseCacheKey(config, payload, capability) {
+        return [
+            'wqrc1',
+            String(config.deployVersion || ''),
+            String(config.locale || ''),
+            String(config.currency || ''),
+            String(capability || ''),
+            stableStringify(canonicalizeResponseCacheParams(capability, payload && payload.params)),
+        ].join('|');
+    }
+
+    function withCacheHeader(result, state) {
+        const headers = Object.assign({}, (result && result.headers) || {});
+        headers['X-Weline-Worker-Response-Cache'] = String(state || 'miss');
+        return Object.assign({}, result, { headers });
+    }
+
+    function cloneCacheResult(entry) {
+        return {
+            responseOk: entry.responseOk === true,
+            status: Number(entry.status) || 200,
+            statusText: String(entry.statusText || 'OK'),
+            headers: Object.assign({}, entry.headers || {}),
+            body: entry.body,
+        };
+    }
+
+    function openResponseCacheDb() {
+        if (responseCacheDbPromise) {
+            return responseCacheDbPromise;
+        }
+        if (typeof indexedDB === 'undefined') {
+            responseCacheDbPromise = Promise.resolve(null);
+            return responseCacheDbPromise;
+        }
+        responseCacheDbPromise = new Promise((resolve) => {
+            let request;
+            try {
+                request = indexedDB.open(RESPONSE_CACHE_DB, RESPONSE_CACHE_DB_VERSION);
+            } catch (_error) {
+                resolve(null);
+                return;
+            }
+            request.onerror = () => resolve(null);
+            request.onupgradeneeded = () => {
+                const db = request.result;
+                if (!db.objectStoreNames.contains(RESPONSE_CACHE_STORE)) {
+                    db.createObjectStore(RESPONSE_CACHE_STORE, { keyPath: 'key' });
+                }
+            };
+            request.onsuccess = () => resolve(request.result || null);
+        });
+        return responseCacheDbPromise;
+    }
+
+    async function readPersistedResponseCache(key) {
+        const db = await openResponseCacheDb();
+        if (!db) {
+            return null;
+        }
+        return new Promise((resolve) => {
+            try {
+                const tx = db.transaction(RESPONSE_CACHE_STORE, 'readonly');
+                const req = tx.objectStore(RESPONSE_CACHE_STORE).get(key);
+                req.onsuccess = () => resolve(req.result || null);
+                req.onerror = () => resolve(null);
+            } catch (_error) {
+                resolve(null);
+            }
+        });
+    }
+
+    async function writePersistedResponseCache(entry) {
+        const db = await openResponseCacheDb();
+        if (!db || !entry || !entry.key) {
+            return;
+        }
+        return new Promise((resolve) => {
+            try {
+                const tx = db.transaction(RESPONSE_CACHE_STORE, 'readwrite');
+                tx.objectStore(RESPONSE_CACHE_STORE).put(entry);
+                tx.oncomplete = () => resolve();
+                tx.onerror = () => resolve();
+                tx.onabort = () => resolve();
+            } catch (_error) {
+                resolve();
+            }
+        });
+    }
+
+    async function deletePersistedResponseCacheByPrefix(prefix) {
+        const db = await openResponseCacheDb();
+        if (!db) {
+            return;
+        }
+        return new Promise((resolve) => {
+            try {
+                const tx = db.transaction(RESPONSE_CACHE_STORE, 'readwrite');
+                const store = tx.objectStore(RESPONSE_CACHE_STORE);
+                const req = store.openCursor();
+                req.onsuccess = () => {
+                    const cursor = req.result;
+                    if (!cursor) {
+                        return;
+                    }
+                    const value = cursor.value;
+                    if (value && typeof value.key === 'string' && value.key.indexOf(prefix) !== -1) {
+                        cursor.delete();
+                    }
+                    cursor.continue();
+                };
+                tx.oncomplete = () => resolve();
+                tx.onerror = () => resolve();
+                tx.onabort = () => resolve();
+            } catch (_error) {
+                resolve();
+            }
+        });
+    }
+
+    function memoryGetFresh(key) {
+        const entry = responseCacheMemory.get(key);
+        if (!entry) {
+            return null;
+        }
+        if (Number(entry.expiresAt) <= Date.now()) {
+            responseCacheMemory.delete(key);
+            return null;
+        }
+        return entry;
+    }
+
+    async function loadFreshResponseCache(key) {
+        const memory = memoryGetFresh(key);
+        if (memory) {
+            return memory;
+        }
+        const persisted = await readPersistedResponseCache(key);
+        if (!persisted || Number(persisted.expiresAt) <= Date.now()) {
+            return null;
+        }
+        responseCacheMemory.set(key, persisted);
+        return persisted;
+    }
+
+    async function storeResponseCache(key, ttlMs, config, result) {
+        if (!key || !(ttlMs > 0) || !result || result.responseOk !== true || !result.body || result.body.ok !== true) {
+            return;
+        }
+        let encodedBytes = 0;
+        try {
+            encodedBytes = encoder.encode(JSON.stringify(result.body)).length;
+        } catch (_error) {
+            return;
+        }
+        if (encodedBytes <= 0 || encodedBytes > RESPONSE_CACHE_MAX_BYTES) {
+            return;
+        }
+        const entry = {
+            key,
+            expiresAt: Date.now() + ttlMs,
+            deployVersion: String(config.deployVersion || ''),
+            responseOk: true,
+            status: Number(result.status) || 200,
+            statusText: String(result.statusText || 'OK'),
+            headers: Object.assign({}, result.headers || {}),
+            body: result.body,
+        };
+        responseCacheMemory.set(key, entry);
+        await writePersistedResponseCache(entry);
+    }
+
+    async function invalidateResponseCacheCapabilities(capabilities, config) {
+        const list = Array.isArray(capabilities) ? capabilities : [];
+        if (list.length === 0) {
+            return;
+        }
+        const deploy = String(config.deployVersion || '');
+        const locale = String(config.locale || '');
+        const currency = String(config.currency || '');
+        for (const capability of list) {
+            const needle = '|' + String(capability) + '|';
+            for (const key of Array.from(responseCacheMemory.keys())) {
+                if (String(key).indexOf(needle) !== -1
+                    && String(key).indexOf('|' + deploy + '|') !== -1
+                    && String(key).indexOf('|' + locale + '|') !== -1
+                    && String(key).indexOf('|' + currency + '|') !== -1) {
+                    responseCacheMemory.delete(key);
+                }
+            }
+            await deletePersistedResponseCacheByPrefix(needle);
+        }
+    }
+
+    async function maybeInvalidateAfterWrite(payload, capability, config, result) {
+        if (!result || result.responseOk !== true || !result.body || result.body.ok !== true) {
+            return;
+        }
+        const targets = RESPONSE_CACHE_INVALIDATE[String(capability || '')];
+        if (!targets || targets.length === 0) {
+            return;
+        }
+        await invalidateResponseCacheCapabilities(targets, config);
+    }
+
+    async function dispatchCachedOrNetwork(message, config, packetPayload, capability) {
+        const ttlMs = packetPayload && packetPayload.type === 'call' ? responseCacheTtlMs(capability) : 0;
+        if (!(ttlMs > 0) || wantsBypassResponseCache(message)) {
+            const result = await executeSignedRequest(config, packetPayload, capability);
+            await maybeInvalidateAfterWrite(packetPayload, capability, config, result);
+            return withCacheHeader(result, ttlMs > 0 ? 'bypass' : 'live');
+        }
+
+        const key = buildResponseCacheKey(config, packetPayload, capability);
+        const cached = await loadFreshResponseCache(key);
+        if (cached) {
+            return withCacheHeader(cloneCacheResult(cached), 'hit');
+        }
+
+        const inflight = responseCacheInflight.get(key);
+        if (inflight) {
+            const shared = await inflight;
+            return withCacheHeader(shared, 'inflight');
+        }
+
+        const promise = (async () => {
+            const networkResult = await executeSignedRequest(config, packetPayload, capability);
+            if (networkResult.responseOk && networkResult.body && networkResult.body.ok === true) {
+                await storeResponseCache(key, ttlMs, config, networkResult);
+            }
+            return networkResult;
+        })();
+        responseCacheInflight.set(key, promise);
+        try {
+            const networkResult = await promise;
+            return withCacheHeader(networkResult, 'miss');
+        } finally {
+            if (responseCacheInflight.get(key) === promise) {
+                responseCacheInflight.delete(key);
+            }
+        }
+    }
+
     function normalizeMap(value) {
         if (!value || typeof value !== 'object' || Array.isArray(value)) {
             return {};
@@ -313,6 +655,15 @@
     }
 
     async function handshake(config) {
+        const nowMs = Date.now();
+        if (handshakeCooldownUntil > nowMs) {
+            const waitMs = handshakeCooldownUntil - nowMs;
+            throw Object.assign(new Error('Weline worker handshake is cooling down after capacity/auth pressure.'), {
+                code: 'worker_capacity_exhausted',
+                status: 503,
+                retry_after_ms: waitMs,
+            });
+        }
         const handshakePayload = {
             type: 'handshake',
             deploy_version: config.deployVersion,
@@ -326,18 +677,24 @@
         }
         const rawBody = encodePacket(handshakePayload);
 
-        const response = await fetch(config.endpoint, {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: {
-                'Content-Type': CONTENT_TYPE,
-                'X-Weline-Protocol': PROTOCOL,
-                'X-Weline-Worker-Protocol': WORKER_PROTOCOL,
-                'X-Weline-Deploy-Version': config.deployVersion,
-                'X-Weline-Worker-Build-Id': config.workerBuildId,
-            },
-            body: rawBody,
-        });
+        let response;
+        try {
+            response = await fetch(config.endpoint, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'Content-Type': CONTENT_TYPE,
+                    'X-Weline-Protocol': PROTOCOL,
+                    'X-Weline-Worker-Protocol': WORKER_PROTOCOL,
+                    'X-Weline-Deploy-Version': config.deployVersion,
+                    'X-Weline-Worker-Build-Id': config.workerBuildId,
+                },
+                body: rawBody,
+            });
+        } catch (error) {
+            noteHandshakePressure();
+            throw error;
+        }
 
         const body = decodeResponsePacket(response, new Uint8Array(await response.arrayBuffer()));
         if (!response.ok || !body || body.ok !== true || !body.data) {
@@ -345,6 +702,13 @@
             const code = body && body.error && body.error.code
                 ? String(body.error.code)
                 : 'auth_error';
+            if (
+                response.status === 503
+                || code === 'worker_capacity_exhausted'
+                || /capacity|上限|exhausted/i.test(String(message || ''))
+            ) {
+                noteHandshakePressure();
+            }
             throw Object.assign(new Error(message), { code, status: response.status });
         }
 
@@ -358,8 +722,15 @@
             });
         }
         body.data.attested_area = attestedArea;
+        handshakeBackoffMs = 0;
+        handshakeCooldownUntil = 0;
 
         return body.data;
+    }
+
+    function noteHandshakePressure() {
+        handshakeBackoffMs = Math.min(30000, Math.max(1000, (handshakeBackoffMs || 500) * 2));
+        handshakeCooldownUntil = Date.now() + handshakeBackoffMs;
     }
 
     function enqueueSignedRequest(task) {
@@ -450,7 +821,20 @@
             });
 
             const responseBytes = new Uint8Array(await response.arrayBuffer());
-            const body = responseBytes.length > 0 ? decodeResponsePacket(response, responseBytes) : null;
+            const headers = collectHeaders(response.headers);
+            let body = null;
+            if (responseBytes.length > 0) {
+                try {
+                    body = decodeResponsePacket(response, responseBytes);
+                } catch (error) {
+                    // Maintenance/startup gates return JSON/HTML, not WQB1 — keep headers for detection.
+                    if (response.status === 503) {
+                        body = tryParseJsonBytes(responseBytes);
+                    } else {
+                        throw error;
+                    }
+                }
+            }
             if (shouldInvalidateWorkerSession(response.status, body)) {
                 workerSession = null;
             }
@@ -458,16 +842,57 @@
                 responseOk: response.ok,
                 status: response.status,
                 statusText: response.statusText || '',
-                headers: collectHeaders(response.headers),
+                headers,
                 body,
             };
         });
     }
 
-    function detectMaintenance(status, body) {
-        if (status === 503) return true;
-        const code = body && body.error && typeof body.error.code === 'string' ? body.error.code : '';
-        return code.toLowerCase() === 'maintenance';
+    function headerValue(headers, name) {
+        if (!headers || typeof headers !== 'object') {
+            return '';
+        }
+        const needle = String(name || '').toLowerCase();
+        for (const key of Object.keys(headers)) {
+            if (String(key).toLowerCase() === needle) {
+                return String(headers[key] || '');
+            }
+        }
+        return '';
+    }
+
+    function tryParseJsonBytes(responseBytes) {
+        try {
+            const text = decoder.decode(responseBytes);
+            const parsed = JSON.parse(text);
+            return parsed && typeof parsed === 'object' ? parsed : null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    /**
+     * True only for explicit site-maintenance signals.
+     * Bare HTTP 503 / startup (wls_starting) must NOT open the wait-gift modal.
+     */
+    function detectMaintenance(status, body, headers) {
+        const mw = headerValue(headers, 'x-weline-maintenance').toLowerCase();
+        if (mw === '1' || mw === 'true') {
+            return true;
+        }
+        const code = String(
+            (body && body.code)
+            || (body && body.error && typeof body.error === 'object' ? body.error.code : '')
+            || (body && typeof body.error === 'string' ? body.error : '')
+            || ''
+        ).toLowerCase();
+        if (code === 'maintenance') {
+            return true;
+        }
+        const variant = body && body.data && typeof body.data === 'object'
+            ? String(body.data.variant || '').toLowerCase()
+            : '';
+        return variant === 'maintenance';
     }
 
     function decodeResponsePacket(response, responseBytes) {

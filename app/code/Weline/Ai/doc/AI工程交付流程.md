@@ -67,7 +67,7 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 ### 3. 计划拆解
 
 - 模块级：`doc/开发/plan.md`（阶段、范围、完成标准）+ `doc/开发/task.md`（可勾选任务）。
-- **MCP 会话计划（硬门槛）**：用户每提出可执行需求即须 `submit_task_plan` 提交 `task-plan.v1`（**`requirements`≥1**、`goal`、`extension_point`、`architecture`、`dev_tasks`、≥1 条 `acceptance`；可选 `scope_paths` / `forbidden` / `risk` / `workflow_phase`）。未提交则 `get_edit_bundle` / `apply_compact_edit` 返回 **`PLAN_REQUIRED`**（硬约束 `user_requirement_full_workflow` / `task_plan_before_edit`），响应内带 **`plan_workflow`** 八步蓝图（需求分析→架构→任务→验收→实现→验证→审查→收口）——代理须**立即**补计划并 `submit_task_plan`，不得当作完成。实现/验收阶段用 `update_task_plan_progress` 记录开发任务与验收项进度（含 browser 证据）；收口前 `review_task_plan`，仅当 `closeout_allowed=true` 才可声称完成。`risk=trivial` 仍须计划与 `requirements`，且 `scope_paths` ≤3。计划仅存当前 MCP 进程会话，不写仓库。
+- **MCP 会话计划（硬门槛）**：用户每提出可执行需求即须 `submit_task_plan` 提交 `task-plan.v1`（**`requirements`≥1**、`goal`、`extension_point`、`architecture`、`dev_tasks`、≥1 条 `acceptance` 且**至少 1 条 `type=unit`**；可选 `scope_paths` / `forbidden` / `risk` / `workflow_phase`）。未提交则 `get_edit_bundle` / `apply_compact_edit` 返回 **`PLAN_REQUIRED`**（硬约束 `user_requirement_full_workflow` / `task_plan_before_edit` / `plan_then_tdd_required`），响应内带 **`plan_workflow`**（需求分析→…→**TDD 红绿**→实际跑测→审查→收口）——代理须**立即**补计划并 `submit_task_plan`，不得当作完成。实现须 **TDD**：先失败测试再最小实现至绿，再亲自执行测试命令；`unit` 的 `passed` evidence 须像真实跑测输出（含 phpunit/PASS 等），否则 `closeout_allowed=false`。`risk=trivial` 仍须计划与 `requirements` 与 unit，且 `scope_paths` ≤3。计划仅存当前 MCP 进程会话，不写仓库。
 - MCP 写码：`get_edit_bundle` 携带完整 **TaskContract**（goal、requirements、known_paths、known_symbols）。
 - 原子任务：单次变更宜 2–4 小时可验收；过大则拆 child_requests。
 
@@ -83,6 +83,8 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 - 安全：凭据、ACL、输入校验、跨站边界。
 
 ### 6. 分层测试与验收
+
+**自行验证（硬门槛，`agent_self_verify_before_done` + `plan_then_tdd_required`）**：需求须先 `submit_task_plan`；实现按 **TDD**（红→绿→重构）；结束后 Agent **必须亲自执行**测试命令并按验收层级验证，再标 acceptance / 向用户宣称完成。禁止「只改代码就收口」。`unit` 的 `passed` evidence 须含可识别的真实跑测输出；否则 `review_task_plan.closeout_allowed=false`。未完成只能报告「代码已改，TDD/测试未跑通」。
 
 | 变更表面 | 最低证据 |
 |----------|----------|
@@ -110,11 +112,17 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 
 **【高压线 · 自研主题 UI】** 所有前台/后台可视化界面**必须**使用 Weline 自研主题体系（**Weline UI 2.0**）：组件类名（`w-field` / `w-input` / `w-button` / `w-select` 等）+ 主题 CSS 变量 Token（`--color-*` / `--weline-theme-*` / spacing·radius·shadow）。**禁止** Bootstrap / Element / Ant Design 等第三方 UI；**禁止**硬编码 `#hex` / `rgb()` / 随意 `px` 间距；地址/地区级联**必须**用 `<w:theme:address>`，禁止手写国家/省/市 input。权威：`Theme开发总指南.md`、`theme-css-variables-only.md`、`Taglib/场景映射表.md`。本条由 MCP `hard-constraints.v1`（`weline_ui_theme_first`）与 `frontend_development` surface 强制下发，不在宿主引导中复述。
 
+**【高压线 · 基础组件只用主题规范变量】** 开发/改主题时，基础组件（`w-button` / `w-input` / `w-select` / `w-textarea` / `w-field` / `w-badge` / `w-alert` / `w-text` / `w-menu` / `w-dialog` / `w-toast` / `w-table` 及 `foundation.css` 同级）**必须**只消费 `--weline-theme-*` / `--color-*` / `--backend-color-*`（及 spacing·radius·shadow）。**禁止**为基础组件私写 hex/rgb 或平行色变量。品牌主题只改 `colors/_*.css` 色盘叶子；默认语义合同继承自 `variables/_colors.css` + `colors/_default.css`。MCP 规则 id：`theme_base_components_token_only`。权威：`theme-semantic-color-matrix.md`。
+
+**【高压线 · CSS/主题必须三技能齐读】** 凡任务/需求提到 **CSS** 或 **主题/theme**，写样式或改主题前**必须**先加载并服从：（1）UI 技能 `frontend-design`；（2）原型技能 `prototype`；（3）主题技能 `weline-theme-development`（MCP `get_skill`）。主题 Token 仍优先；禁止只读其一就动手。MCP 规则 id：`css_or_theme_requires_ui_prototype_theme_skills`。
+
+**【高压线 · UI 技能必须叠加主题技能】** 凡启用宿主 `frontend-design` / 通用 UI / 审美类技能写本仓前台或后台界面，**必须同时**用 MCP `get_skill(weline-theme-development)`（或 surface `frontend_development`）加载主题技能，并服从主题 Token 文档。主题 CSS Token 与 Weline UI 2.0 **优先于**通用 UI 技能的自造色板；**禁止**按 UI 技能另发明 hex/rgb、px 间距阶梯、圆角阴影套件或平行 design token。UI 技能仅可指导构图、层次与文案。宿主 `SKILL.md` 仅为可选薄壳。MCP 规则 id：`ui_skill_requires_theme_skill` / `mcp_skills_fetch_from_mcp`。
+
 权威总览：`app/code/Weline/Theme/doc/开发/Theme开发总指南.md`。机器可读摘要见 `workflow_contract.v1.frontend_development`（`template_surface_rules` 仅为兼容别名）。
 
 强制要点：
 
-0. **自研主题 UI 优先（高压线）**：Weline UI 2.0 组件 + 主题 CSS 变量；禁止第三方 UI / 硬编码视觉字面量 / 手写地址级联。
+0. **自研主题 UI 优先（高压线）**：Weline UI 2.0 组件 + 主题 CSS 变量；禁止第三方 UI / 硬编码视觉字面量 / 手写地址级联。提到 CSS/主题时必须齐读 `frontend-design` + `prototype` + MCP `get_skill(weline-theme-development)`，不得自造色距。
 1. 先判定改动层：layout / partial / component / widget；禁止直接改 `generated/`、`view/tpl`。
 2. **禁止**在 `w:*` / Taglib **标签属性**里写 `<?=`、`<?php`；动态文案用 `@lang`、Hook，或在 PHP 块赋值后再写到 **HTML 元素**属性（须 `htmlspecialchars`）。
 3. **禁止**在会经 `data-wslot` 注入的 **部件模板**里写含 `<?=` 的内联 `<script>`；脚本放 `view/statics/js/widgets/{code}.js`，模板用 `@static(...)` + `defer` + `data-no-extract="true"`。
@@ -130,6 +138,8 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 
 ### 7. 收口
 
+- **规划 + TDD（硬门槛，`plan_then_tdd_required`）**：先 `submit_task_plan`（含 ≥1 `unit`）；红→绿→实际跑测 PASS evidence 才算完。
+- **自行验证（硬门槛，`agent_self_verify_before_done`）**：实现后须亲自跑 UT/RT/WB（按表面）；acceptance 无 evidence 不得标 passed，亦不得宣称完成。
 - **计划 / todo 诚实收口（硬门槛，`plan_todo_evidence_closeout`）**：多 todo 计划不得在未逐项举证时宣称「已完成 / done / 主链路完成」。每个 todo 须有可复核证据（代码路径、DB 行数/表状态、命令输出、Browser）。部分完成必须明确报告「部分完成」并附**未完成清单**；同步写入归属模块 `doc/开发日志.md`（禁止把 Cursor todo 无证据标为 completed）。虚报完成属硬违规。
 - **Browser 自测（硬门槛，含 Web 时）**：按约定用例用**当前宿主可用的真实 Browser**跑完操作员路径；**每次打开/导航前禁用 HTTP 缓存**（`browser_cache_disabled_on_open`）；未跑或宿主无 Browser 只能报「代码已改，WebUI 验收未完成」，禁止宣称完成。见 [WebUI浏览器验收与交付地址门禁.md](../Framework/doc/3-开发/WebUI浏览器验收与交付地址门禁.md)。
 - **交付后关闭 Browser（硬门槛，`browser_release_after_delivery`）**：面向用户写出「交付地址」小节之后，**立即关闭**本回合打开的全部验收 Browser 标签/webview（Cursor：`unlock` 后 `browser_tabs` close；其它宿主结束操作员会话）。禁止留下空转 Renderer。仅当用户明确要求保留时可例外并注明。从未打开过 Browser 记 `N/A`。

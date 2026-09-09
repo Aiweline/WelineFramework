@@ -430,6 +430,12 @@ class ApiDocService implements ApiDocumentationProviderInterface
             $path = "{$moduleRouter}/rest/{$version}/{$controllerPath}/{$methodPath}";
         }
         
+        // 前端 Auth 的已注册地址包含区域及模块前缀，文档和登录共享该路径。
+        if (!$isBackendApi && $reflection->getName() === \Weline\Api\Api\Rest\V1\Auth::class) {
+            $apiArea = trim((string)\Weline\Framework\App\Env::getAreaRoutePrefix('rest_frontend'), '/') ?: 'api';
+            $path = "{$apiArea}/{$moduleRouter}/{$path}";
+        }
+
         return [
             'method' => $httpMethod,
             'path' => '/' . ltrim($path, '/'),

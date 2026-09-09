@@ -1,0 +1,146 @@
+<?php
+/**
+ * @var \Weline\Framework\View\Template $this
+ * @var array|null $run
+ * @var array $pairs
+ * @var string $error
+ * @var string $report_path
+ * @var string $report_url
+ * @var string $grade_filter
+ */
+$run = is_array($run ?? null) ? $run : null;
+$pairs = is_array($pairs ?? null) ? $pairs : [];
+$error = (string)($error ?? '');
+$report_path = (string)($report_path ?? '');
+$report_url = (string)($report_url ?? '');
+$grade_filter = (string)($grade_filter ?? '');
+$stats = is_array($run['stats'] ?? null) ? $run['stats'] : [];
+$scope = is_array($run['scope'] ?? null) ? $run['scope'] : [];
+$displayUrl = $report_url !== '' ? $report_url : $report_path;
+$runId = (int)($run['run_id'] ?? 0);
+?>
+<link rel="stylesheet" href="@static(Weline_Seo::css/seo-admin.css)?v=20260909-dup-ui-2">
+<main class="seo-admin" data-seo-admin-page="duplicate-report" data-testid="seo-duplicate-report" data-seo-dup-ui-variant="A">
+    <header class="seo-admin__header">
+        <div>
+            <p class="seo-admin__eyebrow"><lang>SEO 运维</lang></p>
+            <h1 class="seo-admin__title"><w:icon name="file" size="sm"></w:icon> <lang>重复内容报告</lang></h1>
+            <p class="seo-admin__description">
+                <lang>报告地址</lang>：
+                <code class="seo-dup-report-code" data-testid="seo-dup-report-url"><?= htmlspecialchars($displayUrl, ENT_QUOTES, 'UTF-8') ?></code>
+            </p>
+        </div>
+        <div class="seo-admin__actions">
+            <?php if ($displayUrl !== ''): ?>
+                <button type="button" class="w-button" data-variant="outline" data-copy="<?= htmlspecialchars($displayUrl, ENT_QUOTES, 'UTF-8') ?>" onclick="navigator.clipboard&&navigator.clipboard.writeText(this.getAttribute('data-copy'))">
+                    <w:icon name="copy" size="sm"></w:icon> <lang>复制链接</lang>
+                </button>
+            <?php endif; ?>
+            <a class="w-button" data-variant="outline" href="<?= htmlspecialchars((string)($panel_path ?? '/seo/backend/duplicate'), ENT_QUOTES, 'UTF-8') ?>"><lang>返回面板</lang></a>
+        </div>
+    </header>
+
+    <?php if ($error !== ''): ?>
+        <div class="w-alert w-alert--danger" role="alert"><?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?></div>
+    <?php elseif ($run === null): ?>
+        <div class="w-alert w-alert--warning" role="status"><lang>报告不存在</lang></div>
+    <?php else: ?>
+        <section class="seo-kpi-grid" aria-label="<?= htmlspecialchars((string)__('报告统计'), ENT_QUOTES, 'UTF-8') ?>">
+            <?php
+            $kpis = [
+                ['label' => __('扫描数'), 'value' => (int)($stats['scanned'] ?? 0), 'icon' => 'search'],
+                ['label' => __('可比对'), 'value' => (int)($stats['compared'] ?? 0), 'icon' => 'file'],
+                ['label' => __('重复'), 'value' => (int)($stats['duplicate'] ?? 0), 'icon' => 'copy'],
+                ['label' => __('疑似'), 'value' => (int)($stats['suspect'] ?? 0), 'icon' => 'filter'],
+                ['label' => __('抓取失败'), 'value' => (int)($stats['fetch_error'] ?? 0), 'icon' => 'file'],
+            ];
+            foreach ($kpis as $kpi):
+                ?>
+                <article class="seo-kpi">
+                    <w:icon name="<?= htmlspecialchars((string)$kpi['icon'], ENT_QUOTES, 'UTF-8') ?>" size="sm"></w:icon>
+                    <div><strong><?= number_format($kpi['value']) ?></strong><span><?= htmlspecialchars((string)$kpi['label'], ENT_QUOTES, 'UTF-8') ?></span></div>
+                </article>
+            <?php endforeach; ?>
+        </section>
+
+        <section class="seo-admin__panel">
+            <div class="seo-form-section">
+                <div class="seo-form-section__title">
+                    <w:icon name="filter" size="sm"></w:icon>
+                    <div>
+                        <h2><lang>范围与过滤</lang></h2>
+                        <p><lang>本次跑批的站点、模式与路径前缀。</lang></p>
+                    </div>
+                </div>
+                <dl class="seo-dup-meta">
+                    <div><dt><lang>站点</lang></dt><dd>#<?= (int)($run['website_id'] ?? 0) ?></dd></div>
+                    <div><dt><lang>模式</lang></dt><dd><?= htmlspecialchars((string)($scope['mode'] ?? '') ?: '—', ENT_QUOTES, 'UTF-8') ?></dd></div>
+                    <div><dt><lang>路径前缀</lang></dt><dd><?= htmlspecialchars((string)($scope['path_prefix'] ?? '') ?: '—', ENT_QUOTES, 'UTF-8') ?></dd></div>
+                    <div><dt><lang>状态</lang></dt><dd><span class="seo-status is-info"><?= htmlspecialchars((string)($run['status'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span></dd></div>
+                    <div class="seo-dup-meta__wide">
+                        <dt><lang>时间</lang></dt>
+                        <dd><?= htmlspecialchars((string)($run['started_at'] ?? ''), ENT_QUOTES, 'UTF-8') ?>
+                            → <?= htmlspecialchars((string)($run['finished_at'] ?? ''), ENT_QUOTES, 'UTF-8') ?></dd>
+                    </div>
+                </dl>
+                <div class="seo-chip-row seo-dup-grade-filter" role="group" aria-label="<?= htmlspecialchars((string)__('分级过滤'), ENT_QUOTES, 'UTF-8') ?>">
+                    <a class="seo-chip<?= $grade_filter === '' ? ' is-active' : '' ?>" href="<?= htmlspecialchars((string)($report_path_all ?? $report_path), ENT_QUOTES, 'UTF-8') ?>"><lang>全部</lang></a>
+                    <a class="seo-chip<?= $grade_filter === 'duplicate' ? ' is-active' : '' ?>" href="<?= htmlspecialchars((string)($report_path_duplicate ?? ''), ENT_QUOTES, 'UTF-8') ?>"><lang>仅重复</lang></a>
+                    <a class="seo-chip<?= $grade_filter === 'suspect' ? ' is-active' : '' ?>" href="<?= htmlspecialchars((string)($report_path_suspect ?? ''), ENT_QUOTES, 'UTF-8') ?>"><lang>仅疑似</lang></a>
+                </div>
+            </div>
+        </section>
+
+        <section class="seo-admin__panel">
+            <div class="seo-form-section" style="border-bottom:0;">
+                <div class="seo-form-section__title">
+                    <w:icon name="file" size="sm"></w:icon>
+                    <div>
+                        <h2><lang>问题对</lang></h2>
+                        <p><lang>近重复 URL 对与 Jaccard 分数。</lang></p>
+                    </div>
+                </div>
+                <?php if ($pairs === []): ?>
+                    <div class="seo-empty-state" data-testid="seo-dup-pairs-empty">
+                        <w:icon name="file" size="lg"></w:icon>
+                        <p><lang>本报告无近重复问题对（或已按分级过滤为空）。</lang></p>
+                    </div>
+                <?php else: ?>
+                    <div class="seo-admin__table-wrap">
+                        <table class="seo-admin__table seo-account-table" data-testid="seo-dup-pairs-table">
+                            <thead>
+                            <tr>
+                                <th><lang>分级</lang></th>
+                                <th>Jaccard</th>
+                                <th>URL A</th>
+                                <th>URL B</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <?php foreach ($pairs as $pair):
+                                $grade = (string)($pair['grade'] ?? '');
+                                $gradeClass = $grade === 'duplicate' ? 'is-warning' : 'is-info';
+                                ?>
+                                <tr>
+                                    <td><span class="seo-status <?= $gradeClass ?>"><?= htmlspecialchars($grade, ENT_QUOTES, 'UTF-8') ?></span></td>
+                                    <td><?= htmlspecialchars((string)($pair['jaccard'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
+                                    <td class="seo-dup-url-cell">
+                                        <a href="<?= htmlspecialchars((string)($pair['url_a'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener">
+                                            <?= htmlspecialchars((string)($pair['url_a'] ?? ''), ENT_QUOTES, 'UTF-8') ?>
+                                        </a>
+                                    </td>
+                                    <td class="seo-dup-url-cell">
+                                        <a href="<?= htmlspecialchars((string)($pair['url_b'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener">
+                                            <?= htmlspecialchars((string)($pair['url_b'] ?? ''), ENT_QUOTES, 'UTF-8') ?>
+                                        </a>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </section>
+    <?php endif; ?>
+</main>

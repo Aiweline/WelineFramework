@@ -17,6 +17,12 @@ final class BlogFrontendTemplateContractTest extends TestCase
         self::assertStringContainsString('StorefrontImagePlaceholder', $template);
         self::assertStringContainsString("\$this->getUrl(ltrim(\$url, '/')", $template);
         self::assertStringContainsString("\$this->getUrl(ltrim(\$categoryUrl, '/')", $template);
+        self::assertStringContainsString('amazon-blog-listing__section-title', $template);
+        self::assertStringContainsString('<h1 class="amazon-blog-listing__title">', $template);
+        self::assertStringContainsString('blog-storefront__card-title', $template);
+        self::assertStringNotContainsString('<header class="amazon-blog-listing__header">', $template);
+        self::assertStringNotContainsString('<h3><?= $escape($cardTitle) ?></h3>', $template);
+        self::assertStringNotContainsString('<h2><?= $escape($title', $template);
     }
 
     public function testCategoryFilterTemplateUsesFrameworkUrl(): void
@@ -27,6 +33,8 @@ final class BlogFrontendTemplateContractTest extends TestCase
         self::assertStringContainsString('data-testid="blog-category-filter"', $template);
         self::assertStringContainsString("\$template->getUrl(ltrim(\$path, '/')", $template);
         self::assertStringContainsString("\$buildUrl", $template);
+        self::assertStringContainsString('<p class="amazon-blog-filter__title">', $template);
+        self::assertStringNotContainsString('<h2 class="amazon-blog-filter__title">', $template);
     }
 
     public function testDetailTemplateRendersAmazonArticle(): void

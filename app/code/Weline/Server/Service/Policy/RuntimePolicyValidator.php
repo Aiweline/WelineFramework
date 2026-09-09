@@ -189,7 +189,7 @@ final class RuntimePolicyValidator
     {
         $matcherType = (string)($descriptor->matcher['type'] ?? '');
         $groups = match ($matcherType) {
-            'attack_rules' => ['malicious_patterns', 'bad_user_agents'],
+            'attack_rules' => ['malicious_patterns', 'bad_user_agents', 'crawler_block'],
             'body_attack_rules' => ['malicious_patterns'],
             default => [],
         };

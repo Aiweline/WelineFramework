@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace Weline\Trash\Service;
 
+use Weline\Framework\Database\Transaction\WriteIntentTransactionCoordinatorInterface;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Trash\Model\TrashItem;
 
 class TrashService
@@ -28,61 +30,84 @@ class TrashService
     public function delete(string $code, array $data, array $context = []): array
     {
         $definition = $this->requireDefinition($code);
+        /** @var class-string<\Weline\Trash\Api\TrashProviderInterface> $provider */
         $provider = $definition['class'];
-        $this->trashItemModel->beginTransaction();
-        try {
-            $result = $provider::trash($data, $context);
-            if (empty($result['success'])) {
-                $this->trashItemModel->rollBack();
-                return [
-                    'success' => false,
-                    'message' => (string)($result['message'] ?? __('业务删除失败，未写入回收站。')),
-                    'result' => $result,
-                ];
-            }
 
-            $entityKey = trim((string)($result['entity_key'] ?? ''));
-            $entityId = trim((string)($result['entity_id'] ?? ''));
-            if ($entityKey === '') {
-                $entityKey = $entityId !== '' ? $entityId : md5($this->encodeJson($result['raw_data'] ?? $data));
-            }
-            $existing = $this->findOpenItem($definition['code'], $entityKey);
-            if ($existing !== null) {
-                $this->trashItemModel->rollBack();
-                return [
-                    'success' => true,
-                    'status' => 'already_in_trash',
-                    'message' => (string)__('该数据已经在回收站中。'),
-                    'item' => $existing->toApiArray(),
-                ];
-            }
+        // Provider 业务删除必须自管写意图事务，不可包在 TrashItem::beginTransaction 内：
+        // CMS Page 与 TrashItem 常租到同 DSN 的第二 PDO，协调器会抛「同配置第二个 PDO」并仅回滚。
+        $result = $provider::trash($data, $context);
+        if (empty($result['success'])) {
+            return [
+                'success' => false,
+                'message' => (string)($result['message'] ?? __('业务删除失败，未写入回收站。')),
+                'result' => $result,
+            ];
+        }
 
-            $now = date('Y-m-d H:i:s');
-            $item = clone $this->trashItemModel;
-            $item->setData(TrashItem::schema_fields_TRASH_CODE, $definition['code']);
-            $item->setData(TrashItem::schema_fields_PROVIDER_LABEL, $definition['label']);
-            $item->setData(TrashItem::schema_fields_ENTITY_ID, $entityId);
-            $item->setData(TrashItem::schema_fields_ENTITY_KEY, $entityKey);
-            $item->setData(TrashItem::schema_fields_LABEL, (string)($result['label'] ?? $entityKey));
-            $item->setData(TrashItem::schema_fields_STATUS, TrashItem::STATUS_ACTIVE);
-            $item->setData(TrashItem::schema_fields_SUMMARY_JSON, $this->encodeJson($result['summary'] ?? []));
-            $item->setData(TrashItem::schema_fields_RAW_DATA_JSON, $this->encodeJson($result['raw_data'] ?? $data));
-            $item->setData(TrashItem::schema_fields_SCOPE_JSON, $this->encodeJson($result['scope'] ?? []));
-            $item->setData(TrashItem::schema_fields_CONTEXT_JSON, $this->encodeJson($context));
-            $item->setData(TrashItem::schema_fields_PROVIDER_VERSION, (string)($result['provider_version'] ?? '1'));
-            $item->setData(TrashItem::schema_fields_DELETED_BY, (string)($context['operator'] ?? $context['deleted_by'] ?? ''));
-            $item->setData(TrashItem::schema_fields_DELETED_AT, (string)($result['deleted_at'] ?? $now));
-            $item->save();
-            $this->trashItemModel->commit();
-
+        $entityKey = trim((string)($result['entity_key'] ?? ''));
+        $entityId = trim((string)($result['entity_id'] ?? ''));
+        if ($entityKey === '') {
+            $entityKey = $entityId !== '' ? $entityId : md5($this->encodeJson($result['raw_data'] ?? $data));
+        }
+        $existing = $this->findOpenItem($definition['code'], $entityKey);
+        if ($existing !== null) {
             return [
                 'success' => true,
-                'message' => (string)($result['message'] ?? __('已移入回收站。')),
-                'item' => $item->toApiArray(),
+                'status' => 'already_in_trash',
+                'message' => (string)__('该数据已经在回收站中。'),
+                'item' => $existing->toApiArray(),
             ];
+        }
+
+        $transactions = ObjectManager::getInstance(WriteIntentTransactionCoordinatorInterface::class);
+        $connection = $this->trashItemModel->getConnection();
+
+        try {
+            return $transactions->runWrite(
+                $connection,
+                function () use ($definition, $result, $entityKey, $entityId, $context): array {
+                    $existing = $this->findOpenItem($definition['code'], $entityKey);
+                    if ($existing !== null) {
+                        return [
+                            'success' => true,
+                            'status' => 'already_in_trash',
+                            'message' => (string)__('该数据已经在回收站中。'),
+                            'item' => $existing->toApiArray(),
+                        ];
+                    }
+
+                    $now = date('Y-m-d H:i:s');
+                    $item = clone $this->trashItemModel;
+                    $item->setData(TrashItem::schema_fields_TRASH_CODE, $definition['code']);
+                    $item->setData(TrashItem::schema_fields_PROVIDER_LABEL, $definition['label']);
+                    $item->setData(TrashItem::schema_fields_ENTITY_ID, $entityId);
+                    $item->setData(TrashItem::schema_fields_ENTITY_KEY, $entityKey);
+                    $item->setData(TrashItem::schema_fields_LABEL, (string)($result['label'] ?? $entityKey));
+                    $item->setData(TrashItem::schema_fields_STATUS, TrashItem::STATUS_ACTIVE);
+                    $item->setData(TrashItem::schema_fields_SUMMARY_JSON, $this->encodeJson($result['summary'] ?? []));
+                    $item->setData(TrashItem::schema_fields_RAW_DATA_JSON, $this->encodeJson($result['raw_data'] ?? []));
+                    $item->setData(TrashItem::schema_fields_SCOPE_JSON, $this->encodeJson($result['scope'] ?? []));
+                    $item->setData(TrashItem::schema_fields_CONTEXT_JSON, $this->encodeJson($context));
+                    $item->setData(TrashItem::schema_fields_PROVIDER_VERSION, (string)($result['provider_version'] ?? '1'));
+                    $item->setData(TrashItem::schema_fields_DELETED_BY, (string)($context['operator'] ?? $context['deleted_by'] ?? ''));
+                    $item->setData(TrashItem::schema_fields_DELETED_AT, (string)($result['deleted_at'] ?? $now));
+                    $item->save();
+
+                    return [
+                        'success' => true,
+                        'message' => (string)($result['message'] ?? __('已移入回收站。')),
+                        'item' => $item->toApiArray(),
+                    ];
+                }
+            );
         } catch (\Throwable $e) {
-            $this->trashItemModel->rollBack();
-            throw $e;
+            return [
+                'success' => false,
+                'message' => (string)__('业务已删除，但写入回收站失败：%{1}', [$e->getMessage()]),
+                'code' => 'trash_persist_failed',
+                'result' => $result,
+                'exception' => $e::class,
+            ];
         }
     }
 

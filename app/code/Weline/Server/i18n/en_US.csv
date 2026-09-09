@@ -221,6 +221,10 @@ store,store
 "WLS 安全规则","WLS security rules"
 "WLS 项目安全策略","WLS project security policy"
 "WLS 安全策略审计","WLS Security Policy Audit"
+"WLS 安全探针","WLS 安全探针"
+"无法识别客户端 IP。","无法识别客户端 IP。"
+"已请求解封本机 IP。","已请求解封本机 IP。"
+解封未确认成功。,解封未确认成功。
 托管项目保存失败。,"Failed to save managed project."
 托管项目删除失败。,"Managed project deletion failed."
 规则版本已缺失，请刷新页面后重试。,"The rule version is missing, please refresh the page and try again."
@@ -262,6 +266,11 @@ settings,settings
 "查看 WLS 项目安全策略","View WLS project security policy"
 "查看 WLS 安全策略审计","View WLS Security Policy Audit"
 clock,clock
+"运行 WLS 安全探针","运行 WLS 安全探针"
+"运行 WLS 安全攻击用例探针","运行 WLS 安全攻击用例探针"
+"解封探针测试 IP","解封探针测试 IP"
+unlock,unlock
+"解封安全探针实战封禁产生的本机 IP","解封安全探针实战封禁产生的本机 IP"
 "保存 WLS 面板项目","Save WLS Panel Project"
 save,save
 "保存 WLS 面板托管项目","Save WLS Panel Hosting Project"
@@ -635,6 +644,7 @@ LiteSSL,LiteSSL
 安全,Safety
 项目安全策略,"Project security policy"
 策略审计,"Policy audit"
+安全探针,安全探针
 项目,project
 仪表盘,Dashboard
 暗色,"dark color"
@@ -642,6 +652,7 @@ LiteSSL,LiteSSL
 概览,Overview
 规则,rule
 项目策略,"project strategy"
+探针,探针
 商城,Mall
 "公网入口固定为项目隔离 Nginx；WLS 仅提供 127.0.0.1 明文 HTTP/1.1 回源","The public endpoint is fixed to project-isolated Nginx; WLS provides only a plaintext HTTP/1.1 upstream on 127.0.0.1"
 "公网协议所有者：Nginx；WLS 仅提供内部 HTTP/1.1 回源。","Public protocol owner: Nginx; WLS provides only an internal HTTP/1.1 upstream."
@@ -844,6 +855,35 @@ IP,IP
 上一页,"Previous page"
 "第 %{1} 页，共 %{2} 页","Page %{1} of %{2}"
 下一页,"Next page"
+安全攻击用例探针,安全攻击用例探针
+攻击用例快速测试,攻击用例快速测试
+"默认带探针豁免 token：返回 403/400 但不 ban。验收真实封禁请打开下方「实战封禁」。","默认带探针豁免 token：返回 403/400 但不 ban。验收真实封禁请打开下方「实战封禁」。"
+全部运行,全部运行
+重跑失败,重跑失败
+实战封禁（危险）,实战封禁（危险）
+"开启后请求不带探针豁免，命中规则会锁定当前 IP。可用「解封本机」解除后再访问店面查看锁定表现。","开启后请求不带探针豁免，命中规则会锁定当前 IP。可用「解封本机」解除后再访问店面查看锁定表现。"
+"不带豁免 token（真实封禁）","不带豁免 token（真实封禁）"
+本机已锁定,本机已锁定
+本机未锁定,本机未锁定
+"解封本机 IP","解封本机 IP"
+探针会话,探针会话
+"Token 头","Token 头"
+过期时间,过期时间
+用例数,用例数
+本轮结果,本轮结果
+"探针 token 警告","探针 token 警告"
+"未能签发探针 token，请刷新本页重试。","未能签发探针 token，请刷新本页重试。"
+条,条
+期望状态码：%{1},期望状态码：%{1}
+尚未运行,尚未运行
+通过,Passed
+运行中…,运行中…
+未通过,Failed
+请求失败,"Request failed"
+缺少实战封禁凭证，请刷新本页。,缺少实战封禁凭证，请刷新本页。
+解封地址不可用。,解封地址不可用。
+"已解封本机 IP。","已解封本机 IP。"
+解封失败。,解封失败。
 面板摘要,"Panel summary"
 托管项目,"Hosted projects"
 安全事件,"security incident"
@@ -975,7 +1015,6 @@ PHP,PHP
 "确定要应用配置到 Gateway 吗？","Are you sure you want to apply the configuration to the Gateway?"
 确定要删除此规则吗？,"Are you sure you want to delete this rule?"
 应用失败,"Application Failed"
-请求失败,"Request failed"
 连接失败,"Connection Failed"
 确认组件不可用，请刷新页面后重试,"Confirm that the component is unavailable, please refresh the page and try again"
 编辑代理规则,"Edit proxy rule"
@@ -1324,6 +1363,15 @@ URI,URI
 分,minute(s)
 小时,hour(s)
 天,day(s)
+编码,编码
+"SQL 注入","SQL 注入"
+跨站脚本,跨站脚本
+伪协议,伪协议
+命令注入,命令注入
+扫描器指纹,扫描器指纹
+爆破,爆破
+对照,对照
+信息,信息
 "Master 初始化开始 (Orchestrator 模式)","Master initialization starts (Orchestrator mode)"
 "实例名称: %{1}","Instance name: %{1}"
 "运行拓扑: %{1}","Running topology: %{1}"
@@ -2108,8 +2156,6 @@ pending,pending
 不匹配,"Does not match"
 "Nginx 公网协议：配置顺序=%{1}，配置首选=%{2}，实测首选=%{3}，整体运行验证=%{4}","Nginx public protocols: configured order=%{1}, configured preference=%{2}, live preference=%{3}, overall runtime verification=%{4}"
 未配置,"Not configured"
-通过,Passed
-未通过,Failed
 "Nginx HTTP/2：模块能力=%{1}，已配置=%{2}，owner-bound 真实请求=%{3}","Nginx HTTP/2: module capability=%{1}, configured=%{2}, owner-bound live request=%{3}"
 "Nginx HTTP/1.1 回退：已配置=%{1}，真实请求=%{2}","Nginx HTTP/1.1 fallback: configured=%{1}, live request=%{2}"
 "Nginx HTTP/3：二进制能力=%{1}，已配置=%{2}，Alt-Svc=%{3}，真实 QUIC=%{4}","Nginx HTTP/3: binary capability=%{1}, configured=%{2}, Alt-Svc=%{3}, live QUIC=%{4}"
@@ -2805,6 +2851,8 @@ Previous：%{1},Previous：%{1}
 无法证明受管代次时拒绝发送任何终止信号,"Refuse to send any termination signal when the managed generation cannot be proven"
 "已退役：console:server:start 不再启动 PHP 内置 Web Server。","Retired: console:server:start no longer starts the PHP built-in web server."
 "已退役：PHP 内置 Web Server 启动入口","Retired: PHP built-in Web Server startup entry"
+"打开本页会自动签发一次性探针 token。带 token 的请求仍返回 403/400，但不会 ban IP；无 token 的真实攻击会按正常模式封禁。","打开本页会自动签发一次性探针 token。带 token 的请求仍返回 403/400，但不会 ban IP；无 token 的真实攻击会按正常模式封禁。"
+"状态 %{1} · %{2}","状态 %{1} · %{2}"
 "向本机 hosts 添加需要显式解析的本地域名（当前仅 *.test.weline.com → 127.0.0.1）","Add local domains requiring explicit resolution to the local hosts file (currently only *.test.weline.com → 127.0.0.1)"
 "Session Server %{1}","Session Server %{1}"
 "Memory Service %{1}","Memory Service %{1}"
@@ -3018,6 +3066,7 @@ proc_open不可用，使用传统方式启动后台进程,"proc_open is not avai
 "全部 READY Worker 已完成维护门禁与请求排水，开始切换...","All READY Workers have completed maintaining access control and requesting drainage, and started switching..."
 "Worker基础端口: %{1}","Worker base port: %{1}"
 "共享状态运行时: %{1}","Shared State Runtime: %{1}"
+"共享状态运行时详情: %{1}","Shared State Runtime Detail: %{1}"
 "共享状态运行时解析失败: %{1}","Shared State Runtime Parse Failed: %{1}"
 "强制重启后主端口 %{1} 仍被占用，已中止启动，避免同名实例切换到新端口。","Main port %{1} is still occupied after force restart, startup aborted to prevent same-name instance from switching to a new port."
 请先确认旧实例已完全停止，再重新执行启动命令。,"Please confirm the old instance has fully stopped before re-executing the start command."

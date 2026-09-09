@@ -15,6 +15,7 @@ final class Offer extends AbstractWebsiteShardModel
     public const schema_fields_COMBINATION_KEY = 'combination_key';
     public const schema_fields_IS_DEFAULT = 'is_default';
     public const schema_fields_REQUIRES_SHIPPING = 'requires_shipping';
+    public const schema_fields_SHIPPING_PROFILE_CODE = 'shipping_profile_code';
     public const schema_fields_TYPE_CONFIG_JSON = 'type_config_json';
     public const schema_fields_STATUS = 'status';
     public const schema_fields_PUBLISH_VERSION = 'publish_version';

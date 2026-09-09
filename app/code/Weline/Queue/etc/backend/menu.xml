@@ -24,11 +24,11 @@
              action="queue/backend/diagnostics/retries"
              icon="refresh" order="40"/>
 
-        <menu source="Weline_Queue::inbox_diagnostics" name="queue_inbox" title="Inbox"
+        <menu source="Weline_Queue::inbox_diagnostics" name="queue_inbox" title="收件箱"
              action="queue/backend/diagnostics/inbox"
              icon="arrow-down" order="50"/>
 
-        <menu source="Weline_Queue::outbox_diagnostics" name="queue_outbox" title="Outbox"
+        <menu source="Weline_Queue::outbox_diagnostics" name="queue_outbox" title="发件箱"
              action="queue/backend/diagnostics/outbox"
              icon="arrow-up" order="60"/>
     </menu>

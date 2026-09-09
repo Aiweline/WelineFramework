@@ -1,4 +1,23 @@
-﻿自动定位地址,"Auto Locate Address"
+﻿运费以结算页为准,运费以结算页为准
+包邮,包邮
+本配送方案为服务级免邮，具体以结算页为准,本配送方案为服务级免邮，具体以结算页为准
+请先登录,"Please log in first"
+发货地址已保存,"Shipping address saved."
+发货地址ID不能为空,"Shipping address ID is required."
+发货地址已删除,"Shipping address removed."
+默认发货地址已更新,"Default shipping address updated."
+收货地址已保存,"Delivery address saved."
+收货地址ID不能为空,"Delivery address ID is required."
+收货地址已删除,"Delivery address removed."
+默认收货地址已更新,"Default delivery address updated."
+%{1}不能为空,"%{1} cannot be empty"
+收货地址已更新,"Delivery address updated."
+收货地址已加载,"Delivery address loaded."
+地址数据不能为空,"Address data cannot be empty."
+收货地址已同步,"Delivery address synced."
+国家代码不能为空,"Country code cannot be empty"
+配送信息已加载,"Shipping info loaded."
+自动定位地址,"Auto Locate Address"
 地址不存在,"Address does not exist"
 更新成功,"Updated successfully"
 创建成功,"Created successfully"
@@ -7,7 +26,6 @@
 设置成功,"Set successfully"
 退换政策,"Returns & Exchanges"
 配送说明,"Shipping Information"
-国家代码不能为空,"Country code cannot be empty"
 配送服务ID不能为空,"Shipping service ID cannot be empty"
 "Suggest regions success","Suggest regions success"
 "Get country profile success","Get country profile success"
@@ -20,18 +38,15 @@
 "Has streets success","Has streets success"
 "List streets success","List streets success"
 "Get regions success","Get regions success"
-请先登录,"Please log in first"
 获取配送信息成功,"Successfully fetched shipping information"
 物流单号不能为空,"Tracking number cannot be empty"
 快递公司ID不能为空,"Carrier ID cannot be empty"
 订单ID不能为空,"Order ID cannot be empty"
 功能待实现,"Feature not yet implemented"
-%{1}不能为空,"%{1} cannot be empty"
 配送地址更新成功,"Shipping address updated successfully"
 暂无配送地址,"No shipping address"
 获取成功,"Successfully got"
 用户未登录,"User not logged in"
-地址数据不能为空,"Address data cannot be empty."
 同步成功,"Sync succeeded"
 启用成功,"Enabled successfully"
 禁用成功,"Disabled successfully"
@@ -52,8 +67,31 @@ star,star
 check,check
 禁用发货地址,"Disable shipping address"
 close,close
+请先用地址选择器选择国家/地区,请先用地址选择器选择国家/地区
+该地区已在系统禁运中，无需重复新增：%{1},该地区已在系统禁运中，无需重复新增：%{1}
+已重新启用系统禁运：%{1},已重新启用系统禁运：%{1}
+已新增系统禁运：%{1},已新增系统禁运：%{1}
+已解禁（全站生效），条目仍保留,已解禁（全站生效），条目仍保留
+已恢复系统禁运（全站生效）,已恢复系统禁运（全站生效）
+已删除自建禁运条目,已删除自建禁运条目
+系统禁运,系统禁运
+alert-triangle,alert-triangle
+系统默认禁运管理,系统默认禁运管理
+查看系统禁运,查看系统禁运
+查看系统默认禁运列表,查看系统默认禁运列表
+新增系统禁运,新增系统禁运
+plus,plus
+新增系统禁运国家或省份,新增系统禁运国家或省份
+解禁系统禁运,解禁系统禁运
+unlock,unlock
+解禁系统禁运（全站生效）,解禁系统禁运（全站生效）
+恢复系统禁运,恢复系统禁运
+lock,lock
+再启用系统禁运,再启用系统禁运
+删除自建系统禁运,删除自建系统禁运
+删除后台自建的系统禁运行（种子不可删）,删除后台自建的系统禁运行（种子不可删）
 "仅允许 POST 请求。","Only POST requests are allowed."
-配送服务创建成功。,"Delivery service created successfully."
+配送航线创建成功。,配送航线创建成功。
 配送服务管理,"Delivery service management"
 truck,truck
 查看配送服务,"View delivery services"
@@ -123,28 +161,123 @@ grid,grid
 取件,Pickup
 到达,Arrival
 派送,Delivery
+快速添加地址,"Quick add address"
+收货人,Recipient
+电话,Phone
+详细地址,"Detailed address"
+保存并使用,"Save and use"
 收货地址,"Delivery Address"
 发货地址,"Shipping Address"
+费用模板,"Rate Template"
+系统,System
+"设计说明 · 计费 vs 可达性","设计说明 · 计费 vs 可达性"
+"费用模板（本页）只定义「怎么算钱」（固定 / 重量 / 体积 / 件数 / 混合），不是「配送方案」。区域相对当前位置差价请在「配送服务 / 航线」配置目的地覆盖与发货锚点，勿在模板里配地区矩阵。","费用模板（本页）只定义「怎么算钱」（固定 / 重量 / 体积 / 件数 / 混合），不是「配送方案」。区域相对当前位置差价请在「配送服务 / 航线」配置目的地覆盖与发货锚点，勿在模板里配地区矩阵。"
+新增费用模板,"Add expense template"
+模板名称,"Template name"
+模板代码,"Template code"
+计算类型,"Calculation type"
+固定费用,"fixed fee"
+按重量,"by weight"
+按体积,"by volume"
+按件数,"By number of pieces"
+基础费用,"Basic fee"
+货币,currency
+重量单价,重量单价
+体积单价,体积单价
+件数单价,件数单价
+创建,create
+费用模板列表,"Fee template list"
+当前暂无费用模板配置。,当前暂无费用模板配置。
+状态,Status
+启用,Enable
+禁用,Disable
+省份,Province
+国家,Country
+禁运中,禁运中
+已解禁,已解禁
+确认解禁？此操作全站生效，条目不会删除。,确认解禁？此操作全站生效，条目不会删除。
+确认恢复系统禁运？此操作全站生效。,确认恢复系统禁运？此操作全站生效。
+确认删除该自建禁运？删除后不可恢复。,确认删除该自建禁运？删除后不可恢复。
+关闭,Close
+"配送服务 / 航线","配送服务 / 航线"
+配送服务,"Shipping Service"
+"航线报价 · 相对发货地","航线报价 · 相对发货地"
+当前位置=收货地址。发货锚点选默认发货仓；目的地区域决定本航线可达范围。费用模板只算钱；不同目的地不同价请拆多条航线（各绑不同模板）。,当前位置=收货地址。发货锚点选默认发货仓；目的地区域决定本航线可达范围。费用模板只算钱；不同目的地不同价请拆多条航线（各绑不同模板）。
+新增配送航线,新增配送航线
+服务名称,"Service name"
+服务代码,"Service code"
+快递公司,Carrier
+请选择,"Please select"
+暂不绑定,暂不绑定
+免邮规则,"Free Shipping Rule"
+无,无
+发货锚点（默认仓）,发货锚点（默认仓）
+不限仓,不限仓
+默认,Default
+最少天,最少天
+最多天,最多天
+目的地区域覆盖,目的地区域覆盖
+创建航线,创建航线
+航线列表,航线列表
+当前暂无配送航线。请配置发货仓、目的地区域与费用模板。,当前暂无配送航线。请配置发货仓、目的地区域与费用模板。
+服务,服务
+代码,Code
+承运商,承运商
+模板,模板
+发货锚点,发货锚点
+目的地,目的地
+不限,不限
+通配（未配覆盖）,通配（未配覆盖）
+免邮条件,免邮条件
+支持订单金额、目的地区域，或二者组合（mixed）。区域相对收货当前位置祖先命中；会员/券二期。,支持订单金额、目的地区域，或二者组合（mixed）。区域相对收货当前位置祖先命中；会员/券二期。
+新增免邮规则,"Add free shipping rules"
+规则名称,"Rule Name"
+规则代码,"Rule Code"
+条件类型,"Condition type"
+订单金额,"Order amount"
+目的地区域,目的地区域
+"金额 + 地区","金额 + 地区"
+最低金额,"Minimum amount"
+优先级,Priority
+适用目的地区域,适用目的地区域
+免邮规则列表,"Free Shipping Rule List"
+当前暂无免邮规则。,当前暂无免邮规则。
+配送管理分区,配送管理分区
+China,China
+编辑,Edit
+使用新地址,"Use a new address"
+取消,Cancel
+保存此地址,"Save this address"
+账单地址与收货地址相同,"Billing address same as shipping address"
+账单地址,"Billing address"
+选择收货地址,"Select a shipping address"
+更换地址,"Change address"
+收起地址列表,"Hide address list"
+地址列表加载失败，请稍后重试。,"Failed to load addresses. Please try again."
+请填写收货人。,"Please enter the recipient name."
+请填写电话。,"Please enter a phone number."
+请填写详细地址。,"Please enter the street address."
+邮箱,Email
+"门牌号 / 楼栋单元等","Building / unit number, etc."
+国家/地区,Country/Region
+城市,City
+区县,District
+邮编,"Postal Code"
 请先保存网站，再配置禁运区域。,请先保存网站，再配置禁运区域。
 请先保存网站，再配置可售目的地。,"Save the website first, then configure sellable destinations."
 请先保存渠道，再配置禁运区域。,请先保存渠道，再配置禁运区域。
 请先保存渠道，再配置可售目的地。,"Save the channel first, then configure sellable destinations."
 请先保存商店，再配置禁运区域。,请先保存商店，再配置禁运区域。
 请先保存商店，再配置可售目的地。,"Save the store first, then configure sellable destinations."
-默认,Default
 邮编：,"Postal code:"
-编辑,Edit
 设为默认,"Set as Default"
 删除,Delete
 新增,Add
-保存后当前页面会自动刷新地址卡片，不会跳转页面。,"After saving, the current page will automatically refresh the address card without navigating away."
+可先填写邮编自动定位省市区；保存后当前页面会刷新地址卡片，不会跳转。,可先填写邮编自动定位省市区；保存后当前页面会刷新地址卡片，不会跳转。
 地址名称,"Address Name"
 联系电话,"Contact Phone"
-邮政编码,"Postal Code"
-详细地址,"Detailed address"
 设为默认地址,"Set as Default Address"
 保存地址,"Save Address"
-取消,Cancel
 管理顶部「配送至」与订单收货时使用的地址。,"Manage addresses used by the header Deliver-to picker and for order receiving."
 新增收货地址,"Add Delivery Address"
 还没有收货地址,"No delivery address yet"
@@ -157,21 +290,11 @@ grid,grid
 发货地址加载失败，请稍后重试,"Failed to load shipping addresses. Please try again later."
 收货地址加载失败，请稍后重试,"Failed to load delivery addresses. Please try again later."
 中国,China
-国家/地区,Country/Region
 省/州,State/Province
-城市,City
-区县,District
-关闭,Close
 "例如：华东仓 / 家","e.g., East China Warehouse / Home"
 请输入联系人,"Please enter the contact person"
 请输入联系电话,"Please enter contact phone"
-可选,Optional
-街道、门牌号、仓库或收件说明,"Street, House Number, Warehouse, or Delivery Instructions"
-收货人,Recipient
 联系人,Contact
-快速添加地址,"Quick add address"
-电话,Phone
-保存并使用,"Save and use"
 管理配送收货地址,"Manage delivery addresses"
 管理发货地址,"Manage shipping addresses"
 帮助中心,"Help Center"
@@ -260,13 +383,11 @@ grid,grid
 新增地址,"Add Address"
 暂无地址，请添加发货地址,"No address. Please add a shipping address."
 地址,Address
-邮编,"Postal Code"
 发货地址详情,"Shipping address details"
 返回列表,"Return to List"
 默认地址,"Default Address"
-国家,Country
-省份,Province
 街道地址,"Street Address"
+邮政编码,"Postal Code"
 完整地址,"Full Address"
 创建时间,"Created At"
 更新时间,"Update time"
@@ -279,22 +400,7 @@ grid,grid
 编辑收货地址,"Edit shipping address"
 例如：家、公司、学校等,"e.g., Home, Company, School, etc."
 收货人姓名,"Recipient Name"
-China,China
-使用新地址,"Use a new address"
-使用此地址,"Use this address"
-账单地址与收货地址相同,"Billing address same as shipping address"
-账单地址,"Billing address"
-选择收货地址,"Select a shipping address"
-更换地址,"Change address"
-收起地址列表,"Hide address list"
-地址列表加载失败，请稍后重试。,"Failed to load addresses. Please try again."
-请填写收货人。,"Please enter the recipient name."
-请填写电话。,"Please enter a phone number."
-请填写详细地址。,"Please enter the street address."
-邮箱,Email
-"门牌号 / 楼栋单元等","Building / unit number, etc."
 确定要删除这个地址吗？,"Are you sure you want to delete this address?"
-系统,System
 运送地址列表,"Shipping address list"
 全部客户,"All Customers"
 搜索地址名称、联系人、电话或街道,"Search address name, contact, phone or street"
@@ -302,13 +408,10 @@ China,China
 重置,Reset
 ID,ID
 客户ID,"Customer ID"
-状态,Status
 操作,Actions
 暂无数据,"No data available"
 是,Yes
 否,No
-启用,Enable
-禁用,Disable
 上一页,"Previous Page"
 下一页,"Next Page"
 新增运送地址,"Add Delivery Address"
@@ -324,23 +427,9 @@ ID,ID
 请输入邮政编码,"Please enter postal code"
 选项,Options
 返回,Back
-费用模板,"Rate Template"
-设计说明,"Design note"
-"费用模板只定义「怎么算钱」（固定 / 重量 / 体积 / 件数 / 混合），挂到配送服务上使用。它不按到达国家/州省设费率；能否运到某地由承运商「支持范围」与网站可售/禁运决定。若要对不同目的地不同价，请拆多条配送服务（各绑不同模板与承运商），而非在模板里配地区矩阵。","A rate template only defines how to price (fixed / weight / volume / quantity / mixed) and is attached to a shipping service. It is not a per-destination rate matrix. Reachability comes from carrier coverage plus site sellable/embargo rules. For different prices by destination, use multiple shipping services (each with its own template and carrier), not a region matrix inside the template."
-新增费用模板,"Add expense template"
-模板名称,"Template name"
-模板代码,"Template code"
-计算类型,"Calculation type"
-固定费用,"fixed fee"
-按重量,"by weight"
-按体积,"by volume"
-按件数,"By number of pieces"
-基础费用,"Basic fee"
-货币,currency
-创建,create
-费用模板列表,"Fee template list"
-当前暂无费用模板配置，请后续在此页面完善配置。,"There are currently no fee templates configured. Please complete the configuration on this page later."
-配送管理分区,配送管理分区
+配送管理,"Shipping Management"
+"各分区已改为整页主题界面（不再使用 iframe）。请点击上方 Tab，或使用左侧菜单进入对应功能。","各分区已改为整页主题界面（不再使用 iframe）。请点击上方 Tab，或使用左侧菜单进入对应功能。"
+打开当前分区,打开当前分区
 地区列表,"Region List"
 新增地区,"Add new area"
 列表仅展示省份（浅层）。市/区请用上方筛选按需加载，避免整国地址树一次渲染过大。,列表仅展示省份（浅层）。市/区请用上方筛选按需加载，避免整国地址树一次渲染过大。
@@ -368,6 +457,22 @@ ID,ID
 请填写要新增的区县代码。,"Please enter the new district code."
 请填写要新增的区县名称。,"Please enter the new district name."
 该地区代码已存在，不能重复添加。,"This region code already exists and cannot be added again."
+系统默认禁运（最高优先）,系统默认禁运（最高优先）
+可新增、可解禁/再启用。系统种子条目标记为「系统」且不可删除；后台自建条目可删除。解禁后全站放行该地区。店铺附加禁运不能豁免仍生效的系统行。,可新增、可解禁/再启用。系统种子条目标记为「系统」且不可删除；后台自建条目可删除。解禁后全站放行该地区。店铺附加禁运不能豁免仍生效的系统行。
+系统禁运列表,系统禁运列表
+新增禁运,新增禁运
+来源,来源
+级别,级别
+地区,地区
+原因,原因
+暂无系统禁运条目（请运行模块升级种子）,暂无系统禁运条目（请运行模块升级种子）
+自建,自建
+解禁,解禁
+再启用,再启用
+系统种子不可删除,系统种子不可删除
+"搜索并选择国家，或继续选到省份；勿手填 ISO 码。只选国家=国家级禁运；选到省份=省级禁运。提交后全站生效。","搜索并选择国家，或继续选到省份；勿手填 ISO 码。只选国家=国家级禁运；选到省份=省级禁运。提交后全站生效。"
+原因码,原因码
+新增或启用,新增或启用
 物流跟踪,Tracking
 物流跟踪记录列表,"Tracking Record List"
 物流跟踪记录由发货与承运商查询流程生成，此工作台仅用于审计查看。,"Logistics tracking records are generated by the shipment and carrier inquiry process. This workbench is only used for audit viewing."
@@ -376,29 +481,9 @@ ID,ID
 快递公司ID,"Courier Company ID"
 当前位置,"Current location"
 最后查询时间,"Last query time"
-配送服务,"Shipping Service"
-新增配送服务,"New delivery service"
-服务名称,"Service name"
-服务代码,"Service code"
-快递公司,Carrier
-请选择,"Please select"
-最少天数,"Minimum number of days"
-最多天数,"Maximum number of days"
-配送服务列表,"Shipping service list"
-当前暂无配送服务配置，请后续在此页面完善配置。,"There are currently no delivery service configurations. Please complete the configuration on this page later."
 发货地址列表,"Shipping Address List"
 全部状态,"All Status"
 请输入联系人姓名,"Please enter contact name"
-免邮规则,"Free Shipping Rule"
-新增免邮规则,"Add free shipping rules"
-规则名称,"Rule Name"
-规则代码,"Rule Code"
-条件类型,"Condition type"
-订单金额,"Order amount"
-最低金额,"Minimum amount"
-优先级,Priority
-免邮规则列表,"Free Shipping Rule List"
-当前暂无免邮规则配置，请后续在此页面完善配置。,"There are currently no free shipping rules configured. Please complete the configuration on this page later."
 确定要禁用这个快递公司吗？,"Are you sure you want to disable this carrier?"
 确定要启用这个快递公司吗？,"Are you sure you want to enable this carrier?"
 确定要删除这个快递公司吗？,"Are you sure you want to delete this carrier?"
@@ -406,7 +491,6 @@ ID,ID
 新增快递公司,"Add Carrier"
 搜索快递公司代码或名称,"Search carrier code or name"
 当前暂无快递公司配置，请后续在此页面完善配置。,"There are currently no courier companies configured. Please complete the configuration on this page later."
-代码,Code
 名称,Name
 追踪支持,"Tracking Support"
 API,API
@@ -434,6 +518,8 @@ API配置信息，JSON格式,"API configuration information, JSON format"
 支持范围,Coverage
 谨慎操作,Caution
 支持范围决定该承运商结账时能否运到客户地址。缩减或删错地区后，对应目的地将不再出现该承运商配送方式，可能导致无法下单。请仅保留真实可运区域，保存前务必核对。,"Coverage decides whether this carrier can reach the customer address at checkout. Shrinking or deleting regions removes that carrier’s shipping methods for those destinations and may block orders. Keep only truly shippable areas and double-check before saving."
+"系统禁运 · 不可选","系统禁运 · 不可选"
+地址选择器中标为「不支持」的系统禁运国家/地区优先级最高，即使写入承运商覆盖也不会在结账放行。请勿把系统禁运区当作可运范围保存。,地址选择器中标为「不支持」的系统禁运国家/地区优先级最高，即使写入承运商覆盖也不会在结账放行。请勿把系统禁运区当作可运范围保存。
 "启用承运商前必须配置支持范围。可多选国家→州省→区县；默认保留当前选择，也可改用 Provider 默认区域。费用模板只算运费金额，不含到达地区。","Coverage is required to enable a carrier. Multi-select country → province → district. Current selection is kept by default; uncheck to use provider defaults. Rate templates only price the shipment; they do not define destinations."
 "保存时用当前选择覆盖 Provider 默认区域","Keep current selection on save (overrides provider defaults)"
 "默认勾选：保存页面上已选范围。取消勾选则改用下方 Provider 默认区域覆盖。","Checked by default: save the ranges selected on this page. Uncheck to replace with provider defaults below."
@@ -520,6 +606,20 @@ API配置信息，JSON格式,"API configuration information, JSON format"
 配送金额加法溢出,"Delivery amount addition overflows"
 配送金额乘法溢出,"Shipping amount multiplication overflows"
 请检查收货地址信息。,"Please check the shipping address."
+配送服务创建成功。,"Delivery service created successfully."
+设计说明,"Design note"
+"费用模板只定义「怎么算钱」（固定 / 重量 / 体积 / 件数 / 混合），挂到配送服务上使用。它不按到达国家/州省设费率；能否运到某地由承运商「支持范围」与网站可售/禁运决定。若要对不同目的地不同价，请拆多条配送服务（各绑不同模板与承运商），而非在模板里配地区矩阵。","A rate template only defines how to price (fixed / weight / volume / quantity / mixed) and is attached to a shipping service. It is not a per-destination rate matrix. Reachability comes from carrier coverage plus site sellable/embargo rules. For different prices by destination, use multiple shipping services (each with its own template and carrier), not a region matrix inside the template."
+当前暂无费用模板配置，请后续在此页面完善配置。,"There are currently no fee templates configured. Please complete the configuration on this page later."
+新增配送服务,"New delivery service"
+最少天数,"Minimum number of days"
+最多天数,"Maximum number of days"
+配送服务列表,"Shipping service list"
+当前暂无配送服务配置，请后续在此页面完善配置。,"There are currently no delivery service configurations. Please complete the configuration on this page later."
+当前暂无免邮规则配置，请后续在此页面完善配置。,"There are currently no free shipping rules configured. Please complete the configuration on this page later."
+保存后当前页面会自动刷新地址卡片，不会跳转页面。,"After saving, the current page will automatically refresh the address card without navigating away."
+可选,Optional
+街道、门牌号、仓库或收件说明,"Street, House Number, Warehouse, or Delivery Instructions"
+使用此地址,"Use this address"
 暂无国家，请先导入地址库,"No countries yet. Import the address catalog first."
 国家代码,"country code"
 同步完成，新增国家数量：%{1},"Sync completed, number of new countries: %{1}"
@@ -528,7 +628,6 @@ API配置信息，JSON格式,"API configuration information, JSON format"
 globe,globe
 从i18n同步国家数据,"Sync country data from i18n"
 配送总览,"Shipping overview"
-配送管理,"Shipping Management"
 确定要从i18n同步国家数据吗？,"Are you sure you want to sync country data from i18n?"
 从i18n同步国家,"Sync countries from i18n"
 "启用承运商前必须配置支持范围。可多选国家→州省→区县；也可一键应用 Provider 默认区域后修改。","Coverage is required to enable a carrier. Multi-select country → province → district. Current selection is kept by default; uncheck to use provider defaults."
@@ -582,3 +681,7 @@ globe,globe
 新增省份代码,"New province code"
 新增区县名称（可选）,"New district name (optional)"
 新增区县代码（可选）,"New district code (optional)"
+"特殊领土（无常驻人口或特殊辖区）","Special territory (uninhabited / special jurisdiction)"
+"无正常商业往来","No normal commercial trade"
+"制裁或贸易限制","Sanctions or trade restrictions"
+"未说明","Unspecified"

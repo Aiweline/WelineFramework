@@ -53,11 +53,22 @@ Common keys:
     'schema_nodes' => [],
     'sitemap' => [],
     'geo' => [],
+    'feeds' => [
+        [
+            'type' => 'application/rss+xml',
+            'title' => 'Optional feed title',
+            'href' => 'https://example.com/feed/rss.xml',
+        ],
+    ],
 ]
 ```
 
-List-style keys `schema_nodes`, `item_list`, `faqs`, and `qa_list` are appended to existing
+List-style keys `schema_nodes`, `item_list`, `faqs`, `qa_list`, and `feeds` are appended to existing
 context. Other keys override or enrich existing context recursively.
+
+`feeds` is for typed discovery links such as RSS (`application/rss+xml`). Do **not** put feed URLs
+into `alternates` — that map is rendered only as `hreflang`. HeadRenderer emits
+`<link rel="alternate" type="..." title="..." href="...">` for each feed entry.
 
 When Head is rendered with an isolated template instance, publish the product projection under
 `seo.product`. `PageSeoContextResolver` prefers a template-local `product` and falls back to

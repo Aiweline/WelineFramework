@@ -1089,10 +1089,16 @@
             icon.replaceWith(getEditorUi().icon.create(active ? 'fullscreen-exit' : 'fullscreen', { size: 'sm' }));
         }
 
-        Array.from(elements.btnFullscreenPreview.childNodes)
-            .filter(node => node.nodeType === Node.TEXT_NODE)
-            .forEach(node => node.remove());
-        elements.btnFullscreenPreview.appendChild(document.createTextNode(' ' + (active ? translateUiText('退出全屏') : translateUiText('全屏'))));
+        const label = active ? translateUiText('退出全屏') : translateUiText('全屏');
+        const text = elements.btnFullscreenPreview.querySelector('.w-theme-editor-preview-action-text');
+        if (text) {
+            text.textContent = label;
+        } else {
+            Array.from(elements.btnFullscreenPreview.childNodes)
+                .filter(node => node.nodeType === Node.TEXT_NODE)
+                .forEach(node => node.remove());
+            elements.btnFullscreenPreview.appendChild(document.createTextNode(' ' + label));
+        }
     }
 
     function enterEditorFullscreenUi(fallback = false) {
@@ -7961,10 +7967,10 @@
     }
 
     function getRecommendationAcceptCodes(acceptCodes) {
-        const normalizedAccept = expandAcceptCodesForLayout(acceptCodes);
-        const specificAccept = normalizedAccept.filter(code => code !== '*' && !isGenericSlotAcceptCode(code));
-
-        return specificAccept.length > 0 ? specificAccept : normalizedAccept;
+        // Filtering must keep the full accept contract, including generics
+        // (content/product/banner/…). Preferring only layout-* codes would hide
+        // nearly all placeable widgets on content-area slots.
+        return expandAcceptCodesForLayout(acceptCodes);
     }
 
     function removeWidgetRecommendationEmptyState() {
@@ -9167,6 +9173,13 @@
             url.searchParams.set('limit', String(Math.max(1, Number(lib.limit) || 50)));
             url.searchParams.set('slot_id', lib.slot);
             if (lib.slotArea) url.searchParams.set('area', lib.slotArea);
+            const selected = state.selectedSlot;
+            normalizeCodeList(selected?.accept || []).forEach((code) => {
+                url.searchParams.append('accept[]', code);
+            });
+            normalizeCodeList(selected?.reject || []).forEach((code) => {
+                url.searchParams.append('reject[]', code);
+            });
         } else {
             url.searchParams.set('offset', String(lib.offset));
             url.searchParams.set('limit', String(lib.limit));
@@ -10109,6 +10122,13 @@
             }
             renderWidgetLoadMoreHint();
             applyWidgetLibraryTabVisibility();
+            // Slot recommend used to run before this async reload finished, leaving a stale
+            // 「暂无匹配」empty state on top of the freshly loaded list.
+            if (lib.slot && state.selectedSlot && items.length > 0) {
+                applySlotWidgetRecommendations(state.selectedSlot);
+            } else if (lib.slot) {
+                removeWidgetRecommendationEmptyState();
+            }
         } catch (err) {
             console.warn('[ThemeEditor] loadWidgetLibrary failed:', err);
             if (options.reset) {

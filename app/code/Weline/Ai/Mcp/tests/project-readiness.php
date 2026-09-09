@@ -184,10 +184,19 @@ try {
         'repository' => $repository,
         'client_session_id' => 'tool-session',
         'readiness_id' => $toolReady['readiness_id'],
-        'task' => 'Acme_Demo 开发规范',
-        'module' => 'Acme_Demo',
+        'task' => 'Theme 部件 phtml 前端',
     ]);
-    readinessCheck(($alias['compatibility_alias'] ?? '') === 'resolve_skill' && $alias['static_skill_files'] === false, 'resolve_skill is a dynamic document-query alias');
+    readinessCheck(($alias['schema_version'] ?? '') === 'mcp-skills.v1' && ($alias['static_skill_files'] ?? true) === false, 'resolve_skill returns mcp-skills.v1 catalog');
+    readinessCheck(($alias['provider'] ?? '') === 'mcp' && is_array($alias['skills'] ?? null), 'resolve_skill provider is mcp with skills list');
+    $loaded = $tools->call('get_skill', [
+        'repository' => $repository,
+        'client_session_id' => 'tool-session',
+        'readiness_id' => $toolReady['readiness_id'],
+        'skill_id' => 'weline-theme-development',
+    ]);
+    readinessCheck(($loaded['schema_version'] ?? '') === 'mcp-skills.v1' && is_array($loaded['skill'] ?? null), 'get_skill returns mcp skill body');
+    readinessCheck(str_contains((string) ($loaded['skill']['content'] ?? ''), 'get_skill'), 'get_skill content includes fetch instructions');
+    readinessCheck(is_array($toolReady['agent_guidance']['mcp_skills'] ?? null), 'prepare_project exposes agent_guidance.mcp_skills');
     unset($tools);
     gc_collect_cycles();
     $store->close();

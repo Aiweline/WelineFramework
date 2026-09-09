@@ -749,6 +749,7 @@ class Page extends BackendController
     }
 
     /** @param array<string,mixed> $editorContext */
+    /** @param array<string,mixed> $editorContext */
     private function buildThemeEditorUrl(
         CmsPage $page,
         string $layoutOption,
@@ -758,6 +759,13 @@ class Page extends BackendController
     {
         $layoutOption = trim($layoutOption) !== '' ? trim($layoutOption) : 'default';
         $locale = trim($locale);
+        $scopeIdentity = \is_array($editorContext['scope_identity'] ?? null)
+            ? (array)$editorContext['scope_identity']
+            : [];
+        $websiteId = (int)($editorContext['website_id'] ?? $page->getWebsiteId());
+        $websiteCode = (string)($editorContext['website_code'] ?? $page->getWebsiteCode());
+        $storeCode = (string)($editorContext['store_code'] ?? $scopeIdentity['store_code'] ?? '');
+        $storeMode = (string)($editorContext['store_mode'] ?? $scopeIdentity['store_mode'] ?? 'normal');
 
         return $this->_url->getBackendUrl('theme/backend/theme-editor', [
             'page_type' => CmsPage::LAYOUT_TYPE,
@@ -774,13 +782,16 @@ class Page extends BackendController
             'theme_layout_source_target_type' => CmsPage::TARGET_TYPE,
             'theme_layout_source_target_id' => $page->getPageId(),
             'scope' => (string)($editorContext['scope'] ?? $page->getScope()),
-            'store_mode' => (string)($editorContext['store_mode'] ?? 'normal'),
+            // Typed claims for the new Theme visual editor ScopeSelectorCatalog.
+            'scope_kind' => (string)($scopeIdentity['scope_kind'] ?? 'store'),
+            'context_version' => (string)($scopeIdentity['context_version'] ?? 'v1'),
+            'store_mode' => $storeMode,
             'locale' => $locale,
             'locale_code' => $locale,
-            'website_id' => $page->getWebsiteId(),
-            'website_code' => $page->getWebsiteCode(),
+            'website_id' => $websiteId,
+            'website_code' => $websiteCode,
             'store_id' => (int)($editorContext['store_id'] ?? 0),
-            'store_code' => (string)($editorContext['store_code'] ?? ''),
+            'store_code' => $storeCode,
             'cms_page_id' => $page->getPageId(),
             'editor_area' => 'frontend',
             'preview_area' => 'frontend',
@@ -788,6 +799,7 @@ class Page extends BackendController
             'lock_source' => 'cms',
         ]);
     }
+
 
     /**
      * @param array<string,mixed> $data

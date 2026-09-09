@@ -154,8 +154,9 @@ Weline UI 的原生 `input`、`select`、`textarea` 必须以包含块宽度为�
 
 前台主题/部件/布局 **禁止** 用 `<script src="@static(...js)">`、裸 `<js>` 或自造 loader 拉取模块级脚本。必须：
 
-1. 在模块 `view/statics/frontend/weline.modules.js` 注册；
-2. 部件根节点 `data-weline-load` / `data-weline-declare`，或 head hook `module-declarations` 内 `Weline.declare(...)`。
+1. 在模块 `view/statics/frontend/weline.modules.js`（或 `backend/`）注册；
+2. 部件根节点 `data-weline-load` / `data-weline-declare`，或 head hook `module-declarations` 内 `Weline.declare(...)`；
+3. **改完登记 / 新增 / 迁移模块后必须收集**：`php bin/w resource:compile welineModules`（或全量 `resource:compile`）。只改源 `weline.modules.js`、不 compile → 运行时 `Frontend|Backend/.../statics/base/weline.modules.js` 不会更新，店面仍读旧配置。
 
 完整规范见 [前端JS模块加载规范.md](../前端JS模块加载规范.md)、[Theme.js使用指南.md](../Theme.js使用指南.md)。MCP 规则 id：`theme_js_module_declare_only`。
 
@@ -200,8 +201,9 @@ Weline UI 的原生 `input`、`select`、`textarea` 必须以包含块宽度为�
 - 共享默认主题组件类使用 `w-` 前缀
 - 典型类包括：`w-btn`、`w-card`、`w-form-control`、`w-table`、`w-badge`、`w-alert`、`w-modal`
 - 主题 token 使用：
-  - 前端：`--weline-theme-*`
-  - 后端：`--backend-theme-*`
+  - 前端：`--weline-theme-*`（色盘叶子 `--color-*`；默认可继承合同见 `theme-semantic-color-matrix.md`）
+  - 后端：`--backend-theme-*` / `--backend-color-*`
+- **基础组件禁止私写色**：`w-button` / `w-input` / `w-alert` 等只消费上述语义 Token；品牌主题只改 `colors/_*.css` 叶子（MCP `theme_base_components_token_only`）
 - **跨区组件必须按区域切换 token**：同一套 UI 若同时出现在前台与后台，须用明确 area 属性切换，并在组件根上强制标题/正文颜色；禁止在后台页面误用 `--weline-theme-*`（未注入时会回退成浅色底，再叠加 `bootstrap-dark` 的浅色 `h1–h6`，出现白底白字）
 - 后台模块页优先复用 Admin 壳：`page-title-box` + `card`/`card-body`
 - 组件变量应引用主题 token，不要重新发明第二套不兼容变量体系
@@ -354,6 +356,11 @@ component 负责：
 - 确认最终代码走 `Weline.Api.*`
 - 不得保留 raw ajax/fetch fallback
 
+### 改了 JS 模块登记 / `weline.modules.js` / 模块级 `.js` 归属路径
+
+- **必须**跑 `php bin/w resource:compile welineModules`（或全量 `resource:compile`）收集进 `view/statics/base/weline.modules.js`
+- 抽查编译产物里该模块 `paths` / `globalVar` / `load` 已更新；勿手改 `base/` 产物当源
+
 ### 需要运行 WLS
 
 - 只能起独立测试实例
@@ -372,6 +379,7 @@ component 负责：
 - 直接在浏览器侧拼 query-bin URL
 - 把 `app/design` 覆盖与模块 `view/theme` 追加混为一谈
 - 在 `.phtml` 的 HTML 正文或属性里写 `<?= __('...') ?>`（应优先 `<lang>` / `@lang()` 编译期静态译文）
+- 改了 `weline.modules.js` 或模块级 JS 归属却不跑 `resource:compile welineModules`（店面仍读旧 base 配置）
 
 ## 10. 推荐给 AI / 开发者的最短路径
 
@@ -383,7 +391,8 @@ component 负责：
 4. 有没有浏览器业务请求？如果有，是否走了 `Weline.Api.*`？
 5. 新增/改动的前台 section 是否已配非空语义 `weline-code`？
 6. 用户可见文案是否已用 `<lang>` / `@lang()`，而非 HTML 里的 `<?= __() ?>`？
-7. 最终验证入口是什么？
+7. 若改了 JS 模块登记 / 归属，是否已 `php bin/w resource:compile welineModules`？
+8. 最终验证入口是什么？
 
 然后对应去读：
 

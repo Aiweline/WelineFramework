@@ -16,7 +16,7 @@
  * @widget.exclusive {false}
  *
  * @param label {default="帮助中心",type="string",label="链接文字"}
- * @param url {default="/help",type="string",label="链接地址"}
+ * @param url {default="/faq",type="string",label="链接地址"}
  */
 
 use Weline\Theme\Helper\LegacyMediaUrl;
@@ -30,7 +30,7 @@ $esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES,
 $isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
 $label = WidgetI18n::label(trim((string)($this->getData('label') ?? '')), '帮助中心');
 $url = LegacyMediaUrl::sanitize((string)($this->getData('url') ?? ''));
-$urlPath = 'help';
+$urlPath = 'faq';
 if ($url !== '' && (str_starts_with($url, 'http://') || str_starts_with($url, 'https://') || str_starts_with($url, '#'))) {
     $urlPath = '';
 } elseif ($url !== '') {

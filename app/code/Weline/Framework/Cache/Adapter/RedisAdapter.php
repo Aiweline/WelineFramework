@@ -13,10 +13,11 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Cache\Adapter;
 
+use Weline\Framework\Cache\Contract\AtomicCacheAdapterInterface;
 use Weline\Framework\Cache\Contract\CacheAdapterInterface;
 use Weline\Framework\Cache\Contract\StatsInterface;
 
-class RedisAdapter implements CacheAdapterInterface, StatsInterface
+class RedisAdapter implements AtomicCacheAdapterInterface, CacheAdapterInterface, StatsInterface
 {
     private ?\Redis $redis = null;
     private string $identity;
@@ -119,6 +120,46 @@ class RedisAdapter implements CacheAdapterInterface, StatsInterface
         } catch (\Throwable $e) {
             return false;
         }
+    }
+
+    public function compareAndSet(string $key, mixed $expected, mixed $value, int $ttl = 0): bool
+    {
+        if (!$this->connect() || $this->redis === null) {
+            return false;
+        }
+
+        $fullKey = $this->prefix . $key;
+        try {
+            $this->redis->watch($fullKey);
+            $current = $this->redis->get($fullKey);
+            $currentValue = $current === false ? null : \unserialize($current);
+            if (!$this->valuesEqual($currentValue, $expected)) {
+                $this->redis->unwatch();
+                return false;
+            }
+
+            $this->redis->multi();
+            $serialized = \serialize($value);
+            if ($ttl > 0) {
+                $this->redis->setex($fullKey, $ttl, $serialized);
+            } else {
+                $this->redis->set($fullKey, $serialized);
+            }
+            $result = $this->redis->exec();
+            return \is_array($result);
+        } catch (\Throwable) {
+            try {
+                $this->redis?->unwatch();
+            } catch (\Throwable) {
+                // ignore
+            }
+            return false;
+        }
+    }
+
+    private function valuesEqual(mixed $left, mixed $right): bool
+    {
+        return \serialize($left) === \serialize($right);
     }
 
     public function getHits(): int

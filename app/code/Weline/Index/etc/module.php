@@ -2,11 +2,14 @@
 
 return [
     "name" => 'Weline_Index',
-    "version" => '1.0.0',
+    "version" => '1.0.1',
     "requires" => [
     ],
     "optional" => [
         'Weline_Seo' => '*',
     ],
-    "provides" => [],
+    "provides" => [
+        'view_warmup_contribution.Weline_Index'
+            => \Weline\Index\Api\View\ViewWarmupContributionProvider::class,
+    ],
 ];

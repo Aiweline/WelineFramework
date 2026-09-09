@@ -863,10 +863,11 @@ class Docs extends FrontendController
             $this->assign('apiArea', $apiArea);
             $this->assign('apiAdminArea', $apiAdminArea);
             
-            // 获取API文档数据
+            // 获取API文档数据（默认走缓存，避免每次强制重生导致内存打爆/503 空白页）
             /** @var ApiDocCollector $apiDocCollector */
             $apiDocCollector = ObjectManager::getInstance(ApiDocCollector::class);
-            $allApis = $apiDocCollector->generateAll(true); // 强制重新生成，忽略缓存
+            $forceRefresh = (string)$this->request->getParam('refresh', '') === '1';
+            $allApis = $apiDocCollector->generateAll($forceRefresh);
             
             // 提取displayName的辅助函数
             $extractDisplayName = function(string $name): string {
@@ -908,7 +909,9 @@ class Docs extends FrontendController
                         // 生成API唯一ID
                         $apiId = 'api_' . $moduleName . '_' . $version . '_' . $className . '_' . $methodName;
                         $api['id'] = $apiId;
-                        $api = $this->localizeApiDocument($api, $currentLanguage, true);
+                        // 列表只本地化摘要；正文仅给当前选中接口，避免 500+ 接口整页内嵌打爆内存
+                        $includeContent = $selectedApiId !== '' && $apiId === $selectedApiId;
+                        $api = $this->localizeApiDocument($api, $currentLanguage, $includeContent);
                         
                         if (!isset($organizedApis[$moduleName])) {
                             $organizedApis[$moduleName] = [];

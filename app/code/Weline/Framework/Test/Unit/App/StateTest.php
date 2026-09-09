@@ -12,12 +12,48 @@ namespace Weline\Framework\App\test;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\State;
 use Weline\Framework\Context;
+use Weline\Framework\Cache\StorefrontCacheKeyContext;
+use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Test\TestCore;
 
 class StateTest extends TestCore
 {
+    public function testResolvedScopeLocalizationIsReusedAfterRouting(): void
+    {
+        $previous = Context::getCurrent();
+        Context::enter(new Context());
+        try {
+            State::resetRequestPathLocalizationCache();
+            WelineEnv::getInstance()->initFromSnapshot([], [], [], [], [
+                'REQUEST_METHOD' => 'GET',
+                'REQUEST_URI' => '/products',
+                'HTTP_HOST' => 'example.test',
+            ]);
+            StorefrontCacheKeyContext::install(new StorefrontCacheKeyContext(
+                ScopeIdentity::channel(0, 'default', 'default', 'default', ScopeIdentity::MODE_NORMAL),
+                'en_US', 'USD', str_repeat('a', 64), str_repeat('b', 64), true,
+            ));
+
+            self::assertSame('en_US', State::getLang());
+            self::assertSame('USD', State::getCurrency());
+            self::assertSame('en_US', State::getLangLocal());
+
+            State::setRequestLanguageOverride('ja_JP');
+            self::assertSame('ja_JP', State::getLangLocal());
+            State::setRequestLanguageOverride('');
+            self::assertSame('en_US', State::getLangLocal());
+        } finally {
+            State::resetLangLocalCache();
+            State::resetRequestPathLocalizationCache();
+            Context::leave();
+            if ($previous !== null) {
+                Context::enter($previous);
+            }
+        }
+    }
+
     public function testGetStateCode()
     {
         /**@var $ob State */

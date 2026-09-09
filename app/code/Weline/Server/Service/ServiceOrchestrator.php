@@ -7832,7 +7832,7 @@ class ServiceOrchestrator
             $stopDrainWait = $this->resolveStopAllDrainTimeout();
             $dispatcherDrainTargets = $this->broadcastDrainToServingFrontsForStop($stopDrainWait);
 
-            // ========== 阶段 2：确认内部路由排水（默认 300s，可配 wls.orchestrator.stop_all_drain_wait_sec）==========
+            // ========== 阶段 2：确认内部路由排水（默认 8s，可配 wls.orchestrator.stop_all_drain_wait_sec）==========
             $this->setStopStage(self::STOP_STAGE_WAIT_DRAIN);
             WlsLogger::info_('[Orchestrator] 阶段2: 确认内部路由排水');
             $this->sendStopProgress('阶段2/5: 确认内部路由排水');
@@ -8632,8 +8632,8 @@ class ServiceOrchestrator
     {
         $configured = (float)($this->context?->getConfig(
             'wls.orchestrator.stop_all_drain_wait_sec',
-            300.0,
-        ) ?? 300.0);
+            8.0,
+        ) ?? 8.0);
 
         return \max(1.0, \min(7200.0, $configured));
     }
@@ -8761,6 +8761,15 @@ class ServiceOrchestrator
                 $key = "{$instance->role}#{$instance->instanceId}";
                 
                 $trackingPid = $this->getInstanceTrackingPid($instance);
+                if ($trackingPid > 0 && !$this->isProcessRunning($trackingPid)) {
+                    if ($reportProgress && !isset($drainedInstances[$key])) {
+                        $drainedInstances[$key] = true;
+                        $provider = $this->registry->getProvider($instance->role);
+                        $displayName = $provider?->getDisplayName() ?? $instance->role;
+                        $this->sendStopProgress("  ✓ {$displayName}(PID:{$trackingPid}) 排水完成");
+                    }
+                    continue;
+                }
                 if ($instance->state === ServiceInstance::STATE_DRAINING) {
                     $drainingCount++;
                 } elseif ($instance->state !== ServiceInstance::STATE_DRAINING 
@@ -13616,7 +13625,9 @@ class ServiceOrchestrator
                 break;
             }
             if (!$this->running) {
-                continue;
+                $this->cancelMainLoopTasksForMasterExit();
+                $this->mainLoopTasks = [];
+                break;
             }
 
             // 故障统一策略：整组重启。仅在没有活跃控制操作时推进，避免与命令流叠加。

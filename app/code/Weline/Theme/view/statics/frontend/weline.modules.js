@@ -15,14 +15,14 @@ Object.assign(window.WelineModulesConfig.modules, {
     },
     miniCartExtras: {
         paths: [
-            "Weline_Theme::js/widgets/mini-cart-extras-tabs.js"
+            "Weline_Theme::js/widgets/mini-cart-extras-tabs.js?v=20260909-cart-summary-tabs1"
         ],
         globalVar: "WelineMiniCartExtras",
         description: "迷你购物车 extras 页签交互"
     },
     miniCartIcon: {
         paths: [
-            "Weline_Theme::js/widgets/mini-cart-icon.js"
+            "Weline_Theme::js/widgets/mini-cart-icon.js?v=20260909-coupon-breakdown1"
         ],
         globalVar: "WelineMiniCartIcon",
         description: "迷你购物车图标与抽屉"
@@ -39,6 +39,7 @@ Object.assign(window.WelineModulesConfig.modules, {
             "Weline_Theme::js/storefront-image-fallback.js"
         ],
         globalVar: null,
+        load: "defer",
         description: "店面图片占位回退"
     },
     storefrontShopperToast: {
@@ -46,6 +47,7 @@ Object.assign(window.WelineModulesConfig.modules, {
             "Weline_Theme::js/storefront-shopper-toast.js"
         ],
         globalVar: null,
+        load: "defer",
         description: "店面购物者 Toast 区域"
     }
 });

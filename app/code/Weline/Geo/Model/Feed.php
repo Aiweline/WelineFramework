@@ -75,6 +75,8 @@ class Feed extends Model
      * Update frequencies
      */
     public const FREQUENCY_REALTIME = 'realtime';
+    /** Preferred schedule: cron checks about every 10 minutes and generates only when content changed. */
+    public const FREQUENCY_EVERY_10_MIN = 'every_10_min';
     public const FREQUENCY_HOURLY = 'hourly';
     public const FREQUENCY_DAILY = 'daily';
     public const FREQUENCY_WEEKLY = 'weekly';

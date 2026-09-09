@@ -20,17 +20,20 @@
 加入购物车失败：%{1},"Failed to add to cart: %{1}"
 "Direct browser cart API is deprecated. Use the frontend worker API.","Direct browser cart API is deprecated. Use the frontend worker API."
 购物车,"Shopping cart"
+查看已选汉服商品、调整规格数量并进入结算。,查看已选汉服商品、调整规格数量并进入结算。
 您的购物车是空的,"Your cart is empty"
 购物车检查,"Cart inspection"
 购物车工作台,"Cart workspace"
 search,search
 "按 Scope 检查真实 Cart 持久缓存","Check the real Cart persistent cache by scope"
-迷你购物车,"Mini cart"
-商品行由购物车实时数据渲染，此处仅编辑底部扩展区。,商品行由购物车实时数据渲染，此处仅编辑底部扩展区。
-小计,Subtotal
-税费与运费将在结算时计算,"Tax and shipping calculated at checkout"
-去结算,"Proceed to checkout"
-查看购物车,"Go to Cart"
+仅询价,"Quote only"
+加入购物车,"Add to Cart"
+暂不可售,"Currently unavailable"
+正在加入购物车...,"Adding to cart..."
+已加入购物车,"Added to cart"
+加入购物车失败,"Failed to add to cart"
+已加入,"Added to cart"
+前往购物车,"Go to Cart"
 正在加载购物车...,"Loading cart..."
 购物车是空的,"Your cart is empty"
 浏览商品，把喜欢的加入购物车吧。,"Browse products and add your favorites to the cart."
@@ -38,12 +41,14 @@ search,search
 商品,Product
 价格,Price
 数量,Quantity
+小计,Subtotal
 更新,Update
 删除,Delete
 减少数量,"Decrease quantity"
 增加数量,"Increase quantity"
 购物车更新失败，请重试。,"Failed to update cart. Please try again."
 无法创建游客购物车会话,"Unable to create a guest cart session"
+税费与运费将在结算时计算,"Tax and shipping calculated at checkout"
 "小计（%1 件商品）","Subtotal (%1 items)"
 单价,"Unit price"
 浏览商品,"Browse products"
@@ -53,18 +58,15 @@ search,search
 优惠券,Coupon
 自动优惠,"Automatic discount"
 叠加优惠,"Stacked discounts"
+优惠券与订单留言,优惠券与订单留言
 购物车优惠券,"Cart coupon"
 购物车订单留言,"Cart order note"
 商品小计,"Items subtotal"
+去结算,"Proceed to checkout"
 继续购物,"Continue shopping"
-仅询价,"Quote only"
-加入购物车,"Add to Cart"
-暂不可售,"Currently unavailable"
-正在加入购物车...,"Adding to cart..."
-已加入购物车,"Added to cart"
-加入购物车失败,"Failed to add to cart"
-已加入,"Added to cart"
-前往购物车,"Go to Cart"
+迷你购物车,"Mini cart"
+商品行由购物车实时数据渲染，此处仅编辑底部扩展区。,商品行由购物车实时数据渲染，此处仅编辑底部扩展区。
+查看购物车,"Go to Cart"
 "Inspection 按 scope_key 查询该 Scope 下真实持久缓存结果，不是全局购物车列表；不支持跨 Scope 枚举。","Inspection queries real persistent cache results for one scope_key; it is not a global cart list and cannot enumerate across scopes."
 "输入完整 scope key","输入完整 scope key"
 全部类型,"All types"
@@ -81,7 +83,6 @@ Scope,Scope
 "provider_code 不能为空","provider_code 不能为空"
 "global_offer_uuid 不能为空","global_offer_uuid 不能为空"
 "legacy_product_id 须 >=0","legacy_product_id 须 >=0"
-未注册的售卖类型：%{1},未注册的售卖类型：%{1}
 该售卖类型需要登录,该售卖类型需要登录
 请先完成批发身份审核,请先完成批发身份审核
 "Cart Provider code 不能为空","Cart Provider code 不能为空"
@@ -124,6 +125,7 @@ Scope,Scope
 购物车包含跨币种商品，禁止合并,购物车包含跨币种商品，禁止合并
 请选择要更新的购物车商品。,请选择要更新的购物车商品。
 未找到要更新的购物车商品。,未找到要更新的购物车商品。
+该商品已不存在或已下架，请从购物车移除,该商品已不存在或已下架，请从购物车移除
 购物车已更新。,购物车已更新。
 「%{1}」库存不足，已按当前可售数量更新购物车。,"%{1} is out of stock; the cart was updated to the maximum available quantity."
 请选择要移除的购物车商品。,请选择要移除的购物车商品。
@@ -133,8 +135,11 @@ Scope,Scope
 "游客加购需要 guest_token","游客加购需要 guest_token"
 购物车售卖类型不匹配,购物车售卖类型不匹配
 购物车数量不符合规则,购物车数量不符合规则
+购物车中有不可结算的商品，请移除后重试,购物车中有不可结算的商品，请移除后重试
+该商品暂不可售，请从购物车移除或稍后再试,该商品暂不可售，请从购物车移除或稍后再试
 "channel_code 必须与 store_code 同时提供","channel_code 必须与 store_code 同时提供"
 "购物车 Scope 与当前可信 Website/Store/Channel 请求不一致","购物车 Scope 与当前可信 Website/Store/Channel 请求不一致"
+未注册的售卖类型：%{1},未注册的售卖类型：%{1}
 "Cart 按 Scope 隔离；请输入完整 scope key 查询真实持久缓存，不支持全局枚举。","Cart 按 Scope 隔离；请输入完整 scope key 查询真实持久缓存，不支持全局枚举。"
 "迷你购物车 footer-extras 默认部件迁移失败：%{1}","迷你购物车 footer-extras 默认部件迁移失败：%{1}"
 "Cart 未启用","Cart 未启用"

@@ -5,23 +5,34 @@
 
 ## 1. 原则
 
-1. **主题 head 提供加载器底座**（`theme.js` / 前台等价入口 `Weline`）：提供 `Weline.declare` / `Weline.load` / `data-weline-load`。
-2. **业务模块用 `weline.modules.js` 注册** JS 模块与别名，禁止在部件/布局里手写 `<script src>` / `@static(...js)` / 裸 `<js>` 去拉「模块级」脚本。
-3. **部件只声明依赖**：在部件根节点挂 `data-weline-load="cart"`（立即）或 `data-weline-declare="account"`（按需）；加载器扫描属性后自动加载。
-4. **布局有 slot 就用 slot**：模块提供部件注入已有 slot；不要为同一能力再造平行挂载点。
-5. **PHP 可扫描**：声明必须可被 `Weline\I18n\Helper\JsModuleParser` 识别（`Weline.declare(...)` / `data-weline-load`）。
+1. **`weline.js` 只做框架加载引擎（强制，MCP `weline_js_loader_framework_only`）**：仅提供 `Weline.declare` / `Weline.load` / `data-weline-load|declare` 扫描与并发/延后策略，以及**维护场景下懒加载** Maintenance 模块 JS（如 `maintenanceAsyncWait`）——**禁止**路径启发式 URL 预载；**禁止**在 `weline.js` 内嵌维护 UI 或任何业务逻辑。**禁止**在默认配置、`nameMap` 或 `Weline.*` 业务代理里写死业务模块名（`cart` / `account` / `compareShopper` / `wishlist` / `miniCart*` / `storefront*` / `customer*` / `currency` 等）或业务能力。业务一律由归属模块 `weline.modules.js` + 部件 `data-weline-load` / `declare` 完成。允许的非业务传输别名仅 `api` / `dom`（及 `welineApi` / `welineDom`）——**明确禁止 `account`**。**核心国际化**由 `Weline_Framework` 登记模组 `i18n`（`Weline_Framework::js/i18n.js`，与 `Phrase` 同属框架能力面；**不**重命名 Phrase，以免与小写 `i18n/` CSV 目录冲突）；主题 head / 语言部件 `declare`/`data-weline-load="i18n"` 加载。外置 `Weline_I18n` 只做增强（语言切换器 UI、国旗、AI 翻译等）。
+2. **主题 head 提供加载器底座**（`theme.js` / 前台等价入口 `Weline`）：提供 `Weline.declare` / `Weline.load` / `data-weline-load`。
+3. **业务模块用 `weline.modules.js` 注册** JS 模块与别名（含 `paths` / `globalVar`），禁止在部件/布局里手写 `<script src>` / `@static(...js)` / 裸 `<js>` 去拉「模块级」脚本。
+4. **部件只声明依赖**：在部件根节点挂 `data-weline-load="cart"` 或 `data-weline-declare="account"`；加载器扫描属性后自动加载。延后策略由 `runtimeConfig.modulesLoad.deferByDefault`（默认 `true` → 空闲延后）控制；需要立刻加载的模块由**站点运行时** `eagerModules` 覆盖，或部件侧显式 `Weline.declare(name, { load: 'eager' })`——**不要**把业务名单写回 `weline.js` 默认值。
+5. **布局有 slot 就用 slot**：模块提供部件注入已有 slot；不要为同一能力再造平行挂载点。
+6. **PHP 可扫描**：声明必须可被 `Weline\I18n\Helper\JsModuleParser` 识别（`Weline.declare(...)` / `data-weline-load`）。
 
-### 1.1 两套加载通道（勿混淆）
+### 1.1 两套加载通道（仅此两种）
 
 | 通道 | 触发条件 | 典型日志 |
 |------|----------|----------|
-| **路径启发式预加载**（优先） | URL 含 `/account`、`/cart`、`/checkout` 等 | `路径启发式预加载` / `路径启发式：本页无匹配路由…` |
-| **部件属性加载** | DOM 上 `data-weline-load` / `data-weline-declare` | `部件属性模块加载`（列出 cart、miniCartIcon 等） |
+| **申明加载** | `Weline.declare(...)` / head `module-declarations` | 声明延后 / 立即加载 |
+| **属性申明加载** | DOM 上 `data-weline-load` / `data-weline-declare` | `部件属性模块加载` |
 
-**优先级**：路径启发式先认领模块；属性通道对「已认领 / 已加载 / 加载中」的模块**跳过**，开发日志会写「已跳过（路径启发式/已加载）」。同一模块不会双插 script。
+**禁止路径启发式**：不再按 URL 路径自动预载模块（易与模板声明重复插 script）。需要模块时在模板 / 部件 / head 自行声明。
 
-首页 `/` **通常不会**走路径启发式（故可能看到「本页无匹配路由」），但加购钮 / 迷你购物车等仍会通过 `data-weline-load` 加载。灰字「路径启发式」≠「本页没有模块」。
+属性通道对「已加载 / 加载中」的模块跳过；开发日志写「已跳过（已加载/加载中）」。同一模块不会双插 script。
 
+默认 `modulesLoad.deferByDefault=true`：部件 `data-weline-load` 走空闲延后；`data-weline-declare` 在 `loadDeclaredDeferred=true` 时同样调度延后加载。
+
+### 1.2 开发环境：MutationObserver 反馈环防护
+
+`weline.js` 在 **DEV / `runtimeConfig.debug` / `?debug=1`** 下包装原生 `MutationObserver`：
+
+- **同步重入**：回调内改 DOM 导致同一观察者嵌套投递 → `disconnect` + `console.error`
+- **短窗风暴**：约 250ms 内同一观察者投递 > 40 次 → 同上（覆盖微任务连发）
+
+控制台关键字：`[Weline:DEV] MutationObserver 反馈环`；事件：`weline:dev:mutation-loop`；详情含 `observeStack`。生产不包装。业务侧正确做法：回调加重入/`__painting` 守卫，或只发现新节点、禁止每次全量重绘。
 ## 2. 注册模块（收集门槛）
 
 收集**不是**扫任意 `.js`，只扫各启用模块里**固定文件名、固定目录层级**的登记源文件，再编译合并。实现：`Theme\Config\Reader\WelineModules` + `resource:compile welineModules`。
@@ -44,6 +55,14 @@
 4. 页面 head 加载该 base 配置后，部件再用 `data-weline-load` / `declare` 才会真正拉脚本。
 
 **只放业务 `.js`、不写本登记表 → 不会被收集。** 只写登记表、不 compile → 运行时 base 不会更新。
+
+**Agent / 主题开发硬门槛（与 Theme开发总指南一致）**：凡新增、修改、迁移、删除 `weline.modules.js` 条目或改动其 `paths` 指向的模块级 JS，**本回合收口前必须**执行：
+
+```bash
+php bin/w resource:compile welineModules
+```
+
+禁止假设「保存源文件就会进店面」；禁止手改 `statics/base/weline.modules.js` 冒充收集。
 
 ### 2.2 源文件怎么写
 
@@ -72,6 +91,7 @@ Object.assign(window.WelineModulesConfig.moduleAliases, {
 
 - `paths`：`Vendor_Module::相对 view/statics 的路径`（如 `js/widgets/foo.js` → 真实文件在 `view/statics/js/widgets/foo.js`）。
 - `globalVar`：脚本加载后必须存在的全局名（与 Theme `ModuleLoader` 校验一致；Worker 等可 `null`）。
+- `load`（可选）：`"defer"` 空闲延后 / `"eager"` 立即；由加载器 `shouldDeferAttributeModule` 读取。**写在归属模块登记里**，禁止写进 `weline.js` 默认名单。
 - **模块名必须是裸 JS 标识符**（如 `customerAccount`），禁止 `"customer-account"` 这类引号+连字符键——`Frontend\Observer\Compiler` 合并时只识别裸标识符。
 - 编译：`php bin/w resource:compile welineModules`（或全量 resource:compile）。
 
@@ -88,10 +108,11 @@ Object.assign(window.WelineModulesConfig.moduleAliases, {
 
 | 属性 | 行为 |
 |------|------|
-| `data-weline-load="a,b"` | DOM 就绪后**立即**加载模块 |
-| `data-weline-declare="a,b"` | 仅声明，**按需**再 `Weline.use` / 首次调用时加载 |
+| `data-weline-load="a,b"` | DOM 就绪后按 `modulesLoad` / 模块 `load` 策略加载（默认空闲延后） |
+| `data-weline-declare="a,b"` | 声明并在 `loadDeclaredDeferred` 下调度延后加载；也可按需 `Weline.use` |
+| 模块登记 `load: "defer"\|"eager"` | 写在归属模块的 `weline.modules.js`（如 Cart `cart`、Compare `compareShopper`）；**禁止**写进 `weline.js` 默认名单 |
 | `Weline.declare('cart', true)` | 脚本内声明并立即加载（优先放 head `module-declarations` hook） |
-| `Weline.declare('cart', true, path, null, { loadOrder: 'last' })` | 延后到 DOMContentLoaded 后再拉脚本 |
+| `Weline.declare('cart', { load: 'eager' })` | 显式立即；`{ load: 'defer' }` 空闲延后 |
 
 多部件同页声明同一模块：加载器去重，只拉一次。
 
@@ -108,6 +129,9 @@ Hook：`Weline_Theme::frontend::partials::head::module-declarations`
 - 用裸 `<js>Module::js/....js</js>` 替代 `data-weline-load` / `declare`（模块级能力）
 - 在部件模板内写带 `<?=` 的内联业务 `<script>`（布局提取会泄漏文本）
 - 业务请求绕过 `Weline.Api.*`（仍遵守 Frontend Api 规范）
+- 在 `Weline_Frontend::js/weline.js` 默认配置 / `getGlobalVarName` 回退表 / **路径启发式** / `Weline.Account` 等业务代理中**写死业务模块名或业务逻辑**（路径启发式已移除；含 `account`/`cart` 必须放归属模块的 `weline.modules.js` + 部件声明）
+- 在 `weline.js` **内嵌**维护弹层/兑礼 UI（只允许懒加载 Maintenance 模块 JS）
+- 依赖 URL 路径自动预载模块（必须模板内 `declare` / `data-weline-load`）
 
 ## 6. 与「部件 UI 脚本」的边界
 
@@ -124,7 +148,7 @@ Hook：`Weline_Theme::frontend::partials::head::module-declarations`
 | Compare 对比 | `comparePage` / `compareShopper` | 对比页 / body-end 对比栏 |
 | Theme 迷你购物车 | `miniCartExtras` / `miniCartIcon` | 布局/body-end `data-weline-load` |
 | Theme 页头搜索 / 店面兜底 | `headerSearch` / `storefrontImageFallback` / `storefrontShopperToast` | 搜索部件或 base body-end |
-| Theme 页头账户 | `api` + `account` | **账户部件根** `widgets/header/account`：`data-weline-load="api,account"`（禁止写到 header 布局壳） |
+| Theme 页头账户 | `api` + `account` | **账户部件根** `widgets/header/account`：`data-weline-load="api,account"`（`account` 由 **Customer** 登记 `account-session.js`；禁止写到 header 布局壳） |
 | Customer 用户中心 | `api` + `account`（API）；页 UI：`customerAccount` / `customerLogout` | 认证表单 `data-weline-load="api,account"`；账户页加 `customerAccount` |
 | Shipping | `shippingCheckoutAddress` / `shippingAccountAddress` | 结账地址部件 / 账户地址区 |
 | Review / Blog 评论 | `productReviews` | 商品/博客评论部件根 |

@@ -11,6 +11,9 @@ use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
 use Weline\Framework\Database\Transaction\WriteIntentTransactionCoordinatorInterface;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Websites\Api\Catalog\Data\SalesChannelSummary;
+use Weline\Websites\Data\ScopeData;
+use Weline\Websites\Service\ScopePathMatchCache;
 use Weline\Websites\Service\WebsiteCacheInvalidationService;
 
 /**
@@ -380,6 +383,72 @@ class SalesChannel extends Model
     public function getChannelId(): int
     {
         return (int)$this->getData(self::schema_fields_ID);
+    }
+
+    /**
+     * Prefer L3 ScopeData / L2 shared channel snapshot. Pass forceReload: true to hit DB.
+     */
+    public function load(int|string $field_or_pk_value, $value = null, bool $forceReload = false): AbstractModel
+    {
+        if (!$forceReload) {
+            $row = $this->resolveRowWithoutQuery($field_or_pk_value, $value);
+            if ($row !== null) {
+                $identityKey = static::class . '::' . (\is_null($value)
+                    ? (string)$field_or_pk_value
+                    : $field_or_pk_value . '::' . $value);
+                $this->hydrateFromLoadedRow($row, $identityKey);
+                return $this;
+            }
+        }
+
+        return parent::load($field_or_pk_value, $value, $forceReload);
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function resolveRowWithoutQuery(int|string $field_or_pk_value, mixed $value): ?array
+    {
+        $summary = null;
+        if ($value === null) {
+            if (!\is_int($field_or_pk_value)
+                && !(\is_string($field_or_pk_value) && \preg_match('/^(?:0|[1-9][0-9]*)$/D', $field_or_pk_value) === 1)) {
+                return null;
+            }
+            $channelId = (int)$field_or_pk_value;
+            if (ScopeData::matchesChannelId($channelId)) {
+                $summary = ScopeData::getChannel();
+            } else {
+                $summary = ObjectManager::getInstance(ScopePathMatchCache::class)->readChannelSnapshot($channelId);
+            }
+        } elseif ((string)$field_or_pk_value === self::schema_fields_ID) {
+            if (!\is_int($value)
+                && !(\is_string($value) && \preg_match('/^(?:0|[1-9][0-9]*)$/D', (string)$value) === 1)) {
+                return null;
+            }
+            $channelId = (int)$value;
+            if (ScopeData::matchesChannelId($channelId)) {
+                $summary = ScopeData::getChannel();
+            } else {
+                $summary = ObjectManager::getInstance(ScopePathMatchCache::class)->readChannelSnapshot($channelId);
+            }
+        }
+
+        return $summary instanceof SalesChannelSummary ? $this->rowFromSummary($summary) : null;
+    }
+
+    /** @return array<string, mixed> */
+    private function rowFromSummary(SalesChannelSummary $summary): array
+    {
+        return [
+            self::schema_fields_ID => $summary->id,
+            self::schema_fields_WEBSITE_ID => $summary->websiteId,
+            self::schema_fields_STORE_ID => $summary->storeId,
+            self::schema_fields_CODE => $summary->code,
+            self::schema_fields_NAME => $summary->name,
+            self::schema_fields_IS_DEFAULT => $summary->isDefault ? 1 : 0,
+            self::schema_fields_STATUS => $summary->enabled ? 1 : 0,
+        ];
     }
 
     public function setWebsiteId(int $websiteId): static

@@ -51,5 +51,6 @@ $flat = $view->toArray(); // price / original_price / has_deal / campaign_label 
 
 1. 目录投影可写出 `catalog_price_minor`（原价）+ `unit_price_minor`（Assembler 成交价）。
 2. 变体交互 JSON **必须**透传 `catalog_price_minor`（及 `compare_at_minor`/`has_deal`）；禁止只给已折 `unit_price_minor`。
-3. PDP JS **禁止**把 `unit_price_minor` 当 catalog 再 `applyDealToMinor`（会叠折）。优先直接展示服务端 `unit` + 划线 `catalog/compare_at`。
-4. Cart 加购 bake + 摘要 `presentLine` 重解析 + Checkout freeze 均走同一 Assembler 快照；Marketing 对 `promotion_activity_theme` 跳过防双扣。
+3. `variant-availability` live 刷新默认只更新库存/可售；**禁止**用裸 `unit_price_minor` 覆盖 SSR Assembler 成交价（除非 live 行自带 deal 字段）。
+4. PDP JS **禁止**把 `unit_price_minor` 当 catalog 再 `applyDealToMinor`（会叠折）。优先直接展示服务端 `unit` + 划线 `catalog/compare_at`。
+5. Cart 加购 bake + 摘要 `presentLine` 重解析 + Checkout freeze 均走同一 Assembler 快照；Marketing 对 `promotion_activity_theme` 跳过防双扣。

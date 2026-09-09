@@ -244,6 +244,11 @@ return [
         'description' => __('在渲染基础布局的 <body> 标签结束处触发，允许其他模块在 body 结束处注入内容。此 hook 适用于所有使用基础布局的页面。'),
         'doc' => 'frontend/layouts/base/body-end.md',
     ],
+    'Weline_Theme::backend::layouts::base::body-end' => [
+        'name' => __('后台基础布局 Body 结束'),
+        'description' => __('在后台通用壳布局 </body> 前触发，允许其他模块注入全局悬浮层或脚本。适用于 default / dashboard / fullscreen 等引用该 hook 的后台布局。'),
+        'doc' => 'backend/layouts/base/body-end.md',
+    ],
     'Weline_Theme::frontend::layouts::base::header-before' => [
         'name' => __('基础布局页头之前'),
         'description' => __('在渲染基础布局的页头之前触发，允许其他模块在页头开始处注入内容。此 hook 适用于所有使用基础布局的页面。'),
@@ -1019,11 +1024,11 @@ return [
         'doc' => 'frontend/account/sidebar-content.md',
     ],
 
-    // ==================== Help layouts ====================
-    'Weline_Theme::frontend::layouts::help::extras' => [
-        'name' => __('帮助中心扩展区'),
-        'description' => __('在帮助中心主内容扩展槽注入额外说明、活动或业务模块内容。'),
-        'doc' => 'frontend/layouts/help/extras.md',
+    // ==================== FAQ layouts ====================
+    'Weline_Theme::frontend::layouts::faq::extras' => [
+        'name' => __('FAQ 扩展区'),
+        'description' => __('在 FAQ 主内容扩展槽注入额外说明、活动或业务模块内容。'),
+        'doc' => 'frontend/layouts/faq/extras.md',
     ],
 
     // ==================== Theme Backend Partials - Topbar ====================

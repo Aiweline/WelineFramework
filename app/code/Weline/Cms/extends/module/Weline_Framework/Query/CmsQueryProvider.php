@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Weline\Cms\Extends\Module\Weline_Framework\Query;
 
 use Weline\Cms\Service\PageService;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 
 class CmsQueryProvider implements QueryProviderInterface
@@ -20,10 +21,11 @@ class CmsQueryProvider implements QueryProviderInterface
 
     public function execute(string $operation, array $params = []): mixed
     {
-        return match ($operation) {
+            return match ($operation) {
             'getPage' => $this->pageService->getPage($params),
             'listPages' => $this->pageService->listPages($params),
             'listPathGroups' => $this->pageService->listPathGroups($params),
+            'listPageKinds' => ObjectManager::getInstance(\Weline\Cms\Service\CmsPageKindRegistry::class)->listDescriptors(),
             'resolveThemeTarget' => $this->pageService->resolveThemeTarget((int)($params['target_id'] ?? $params['page_id'] ?? 0)),
             'renderPagePayload' => $this->pageService->renderPagePayload($params),
             default => throw new \InvalidArgumentException(

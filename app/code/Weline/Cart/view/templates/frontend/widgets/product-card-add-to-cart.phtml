@@ -39,7 +39,17 @@ if ($quoteOnly && $productId > 0) {
 }
 $buttonEnabled = $quoteOnly
     ? ($quoteHrefPath !== '' && !$isPreviewMode)
-    : ($isPreviewMode || ($sellable && $offerUuid !== ''));
+    : ($isPreviewMode || ($sellable && ($offerUuid !== '' || $productId > 0)));
+
+$needsSelection = !empty($offer['needs_selection'])
+    || !empty($offer['selection_required'])
+    || ((\is_array($offer['combination'] ?? null) && ($offer['combination'] ?? []) !== []))
+    || ((int)($offer['variant_offer_count'] ?? $offer['offer_count'] ?? 0) > 1);
+// Listing cards: always open purchase panel so multi-spec / tob MOQ / ladder prices are explicit.
+$openPurchasePanel = !$quoteOnly && $productId > 0 && (
+    $needsSelection
+    || filter_var($this->getData('card_open_purchase_panel') ?? true, FILTER_VALIDATE_BOOLEAN)
+);
 
 $variant = trim((string)($this->getData('card_add_to_cart_variant') ?? 'cta'));
 $extraClass = trim((string)($this->getData('card_add_to_cart_button_class') ?? ''));
@@ -120,6 +130,9 @@ if ($quoteOnly) {
                 data-global-offer-uuid="<?= $escape($offerUuid) ?>"
                 data-qty="1"
                 data-quote-only="0"
+                data-needs-selection="<?= $needsSelection ? '1' : '0' ?>"
+                data-open-purchase-panel="<?= $openPurchasePanel ? '1' : '0' ?>"
+                data-purchase-panel-url="@url{'weline_product/frontend/api/purchase-panel'}"
                 <?= $buttonEnabled ? '' : 'disabled' ?>>
             <?php if ($variant === 'icon'): ?>
                 <w:icon name="cart" size="sm"></w:icon>

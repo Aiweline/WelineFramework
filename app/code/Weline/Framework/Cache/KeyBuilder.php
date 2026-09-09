@@ -210,12 +210,18 @@ class KeyBuilder
     {
         $context ??= StorefrontCacheKeyContext::currentOrRequestFence();
         $dimensions = ['schema' => 'cache-policy-v1', 'scope' => $policy->scope];
-        if ($policy->scope !== 'global' && !$context->hasCompleteFrozenScope()) {
+        $websiteScopeAvailable = $policy->scope === 'website' && $context->hasWebsiteScope();
+        if ($policy->scope !== 'global'
+            && !$context->hasCompleteFrozenScope()
+            && !$websiteScopeAvailable
+        ) {
             // Preserve request isolation; an incomplete scope is never a default tenant.
             $dimensions['scope_state'] = 'request-fence';
             $dimensions['request_fence'] = $context->cacheKeyFingerprint;
         } else {
-            $dimensions['scope_state'] = $policy->scope === 'global' ? 'global' : 'frozen';
+            $dimensions['scope_state'] = $policy->scope === 'global'
+                ? 'global'
+                : ($websiteScopeAvailable ? 'website' : 'frozen');
             $identity = $context->scopeIdentity;
             if ($policy->scope !== 'global') {
                 $dimensions['website'] = (string)$identity->websiteCode;

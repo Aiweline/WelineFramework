@@ -1,21 +1,152 @@
 /**
  * Weline Cart frontend core (万能购物车):
  * - pending browser coupon (7d) + apply via event
- * - guest cart session (7d) with near-expiry auto renew
+ * - guest cart session (15d / half month) with near-expiry auto renew
  */
 (function (global) {
     'use strict';
 
-    var WEEK_MS = 7 * 24 * 3600 * 1000;
+    var WEEK_MS = 7 * 24 * 3600 * 1000; // pending coupon only
+    var GUEST_SESSION_MS = 15 * 24 * 3600 * 1000; // half month
     var RENEW_WITHIN_MS = 24 * 3600 * 1000; // last day
     var PENDING_COUPON_KEY = 'weline.cart.pending_coupon';
     var GUEST_TOKEN_KEY = 'weline.cart.guest_token';
     var GUEST_SESSION_KEY = 'weline.cart.guest_session';
     var SUMMARY_CACHE_KEY = 'weline.cart.summary_cache';
+    var CART_FLAG_KEY = 'weline_cart_has_items';
+    var CART_COUNT_COOKIE = 'weline_cart_item_count';
+    var CART_TRIGGER_SELECTOR = '[data-weline-cart-trigger]';
     var APPLY_EVENT = 'weline:cart:apply-coupon';
     var APPLIED_EVENT = 'weline:cart:coupon-applied';
+    var WAIT_GIFT_REDEEMED_EVENT = 'weline:maintenance:wait-gift-redeemed';
     var renewTimer = 0;
     var applyInFlight = null;
+    var cartStatusBound = false;
+
+    function callApiAuto(method) {
+        try {
+            var api = global.Weline && global.Weline.Api;
+            if (api && typeof api[method] === 'function') {
+                api[method]();
+            }
+        } catch (e) {
+            // Api may not be loaded yet
+        }
+    }
+
+    function hasCartCookieToken() {
+        if (!global.document || !global.document.cookie) {
+            return false;
+        }
+        return global.document.cookie.split('; ').some(function (row) {
+            return row.indexOf(CART_COUNT_COOKIE + '=') === 0;
+        });
+    }
+
+    function readCartCookieFlag() {
+        if (!global.document || !global.document.cookie) {
+            return null;
+        }
+        var match = global.document.cookie.split('; ').find(function (row) {
+            return row.indexOf(CART_COUNT_COOKIE + '=') === 0;
+        });
+        if (!match) {
+            return null;
+        }
+        var value = parseInt(match.split('=')[1] || '0', 10);
+        if (Number.isNaN(value)) {
+            return null;
+        }
+        return value > 0 ? true : value === 0 ? false : null;
+    }
+
+    function markCartActive() {
+        try {
+            global.localStorage.setItem(CART_FLAG_KEY, 'true');
+        } catch (e) {
+            // privacy modes
+        }
+        callApiAuto('enableAutoRequests');
+    }
+
+    function markCartEmpty() {
+        try {
+            global.localStorage.removeItem(CART_FLAG_KEY);
+        } catch (e) {
+            // privacy modes
+        }
+        callApiAuto('disableAutoRequests');
+    }
+
+    function restoreCartState() {
+        try {
+            var cookieFlag = readCartCookieFlag();
+            if (cookieFlag === true) {
+                markCartActive();
+            } else if (cookieFlag === false) {
+                markCartEmpty();
+            } else {
+                var storedFlag = global.localStorage.getItem(CART_FLAG_KEY);
+                if (storedFlag === 'true' && hasCartCookieToken()) {
+                    callApiAuto('enableAutoRequests');
+                }
+            }
+        } catch (e) {
+            // storage may be unavailable
+        }
+    }
+
+    function bindCartStatusListeners() {
+        if (cartStatusBound || !global.document) {
+            return;
+        }
+        cartStatusBound = true;
+        global.document.addEventListener('click', function (event) {
+            var target = event && event.target;
+            if (!target || typeof target.closest !== 'function') {
+                return;
+            }
+            if (target.closest(CART_TRIGGER_SELECTOR)) {
+                markCartActive();
+            }
+        }, { passive: true });
+
+        var onCount = function (event) {
+            var detail = (event && event.detail) || {};
+            var count = typeof detail.count === 'number'
+                ? detail.count
+                : (typeof detail.cart_count === 'number' ? detail.cart_count : null);
+            if (count === null) {
+                return;
+            }
+            if (count > 0) {
+                markCartActive();
+            } else {
+                markCartEmpty();
+            }
+        };
+        global.addEventListener('weline:cart:update', onCount);
+        global.addEventListener('weshop:cart:updated', onCount);
+    }
+
+    function installCartStatus() {
+        // Cart owns status keys + auto-request signals — never bake into weline-api / weline.js.
+        restoreCartState();
+        bindCartStatusListeners();
+    }
+
+    function onWaitGiftRedeemed(event) {
+        var detail = (event && event.detail) || {};
+        var code = String(detail.coupon_code || detail.code || '').trim();
+        if (!code) {
+            return;
+        }
+        storePendingCoupon(code, {
+            source: detail.source || 'maintenance_wait_gift',
+            expires_at: detail.expires_at || weekFrom(nowMs()),
+        });
+        applyPendingCoupon('wait-gift');
+    }
 
     function nowMs() {
         return Date.now();
@@ -70,6 +201,10 @@
         return Number(ts || nowMs()) + WEEK_MS;
     }
 
+    function guestSessionFrom(ts) {
+        return Number(ts || nowMs()) + GUEST_SESSION_MS;
+    }
+
     function getPendingCoupon() {
         var data = readJson(PENDING_COUPON_KEY);
         if (!data || !data.coupon_code) {
@@ -121,44 +256,201 @@
         return !!(summary && typeof summary === 'object' && summary.success !== false);
     }
 
+    /** Opaque cart_type SPI code; default toc. Keeps toc/tob local caches separate. */
+    function normalizeSummaryCartType(value) {
+        var mode = String(value || '').trim().toLowerCase();
+        return mode || 'toc';
+    }
+
+    function summaryCacheKeyFor(cartType) {
+        return SUMMARY_CACHE_KEY + '.' + normalizeSummaryCartType(cartType);
+    }
+
+    /** Active storefront display currency: path → query → runtime config → preference. */
+    function currentDisplayCurrency() {
+        try {
+            var parts = String((global.location && global.location.pathname) || '').split('/').filter(Boolean);
+            for (var i = 0; i < parts.length; i++) {
+                var pathCode = String(parts[i] || '').trim().toUpperCase();
+                if (/^[A-Z]{3}$/.test(pathCode)) {
+                    return pathCode;
+                }
+            }
+        } catch (ePath) {}
+        try {
+            var q = String(new URLSearchParams((global.location && global.location.search) || '').get('currency') || '')
+                .trim().toUpperCase();
+            if (/^[A-Z]{3}$/.test(q)) {
+                return q;
+            }
+        } catch (eQuery) {}
+        try {
+            var cfgNode = global.document && global.document.getElementById('weline-frontend-runtime-config');
+            if (cfgNode && cfgNode.textContent) {
+                var cfg = JSON.parse(cfgNode.textContent);
+                var fromCfg = String(
+                    (cfg && (cfg.currentCurrency || cfg.currency
+                        || (cfg.api && cfg.api.currency)
+                        || (cfg.site && (cfg.site.currency || cfg.site.currentCurrency)))) || ''
+                ).trim().toUpperCase();
+                if (/^[A-Z]{3}$/.test(fromCfg)) {
+                    return fromCfg;
+                }
+            }
+        } catch (e0) {}
+        try {
+            var fromLs = String(global.localStorage.getItem('weline_user_currency') || '').trim().toUpperCase();
+            if (/^[A-Z]{3}$/.test(fromLs)) {
+                return fromLs;
+            }
+        } catch (e1) {}
+        return 'CNY';
+    }
+
+    /** Active storefront locale (html lang / path). */
+    function currentDisplayLocale() {
+        try {
+            var htmlLang = String(
+                (global.document && global.document.documentElement && global.document.documentElement.getAttribute('lang')) || ''
+            ).trim().replace(/-/g, '_');
+            if (htmlLang) {
+                return htmlLang;
+            }
+        } catch (e0) {}
+        try {
+            var parts = String((global.location && global.location.pathname) || '').split('/').filter(Boolean);
+            for (var i = 0; i < parts.length; i++) {
+                if (/^[a-z]{2}(_[A-Za-z0-9]+)?$/i.test(parts[i]) && parts[i].indexOf('_') !== -1) {
+                    return parts[i];
+                }
+            }
+        } catch (e1) {}
+        return '';
+    }
+
+    function summaryLocaleCurrencyMatches(data, options) {
+        options = options || {};
+        if (!data) {
+            return false;
+        }
+        var wantCurrency = String(options.currency || currentDisplayCurrency()).trim().toUpperCase() || 'CNY';
+        var cachedCurrency = String(
+            data.currency || (data.summary && data.summary.currency) || ''
+        ).trim().toUpperCase();
+        // Missing stamp = pre-vary cache; treat as miss so currency switch re-fetches.
+        if (!cachedCurrency || cachedCurrency !== wantCurrency) {
+            return false;
+        }
+        var wantLocale = String(options.locale || currentDisplayLocale() || '').trim().replace(/-/g, '_');
+        var cachedLocale = String(data.locale || '').trim().replace(/-/g, '_');
+        if (wantLocale && cachedLocale && wantLocale.toLowerCase() !== cachedLocale.toLowerCase()) {
+            return false;
+        }
+        return true;
+    }
+
+    function summaryTokenMatches(data, options) {
+        options = options || {};
+        if (!data || !isUsableSummary(data.summary)) {
+            return false;
+        }
+        if (!summaryLocaleCurrencyMatches(data, options)) {
+            return false;
+        }
+        var token = currentGuestToken();
+        var cachedToken = String(data.guest_token || '').trim();
+        if (token && cachedToken && token !== cachedToken) {
+            return false;
+        }
+        if (token && !cachedToken && options.requireTokenMatch) {
+            return false;
+        }
+        if (!token && cachedToken && options.requireTokenMatch) {
+            return false;
+        }
+        return true;
+    }
+
     function rememberSummary(summary, meta) {
         if (!isUsableSummary(summary)) {
             return null;
         }
+        meta = meta || {};
+        var mode = normalizeSummaryCartType(
+            summary.cart_type || summary.selling_mode || meta.cart_type || meta.cartType || 'toc'
+        );
+        summary.cart_type = mode;
+        summary.selling_mode = mode;
+        var currency = String(summary.currency || meta.currency || currentDisplayCurrency()).trim().toUpperCase() || 'CNY';
+        summary.currency = currency;
+        var locale = String(meta.locale || currentDisplayLocale() || '').trim().replace(/-/g, '_');
         var token = currentGuestToken();
         var payload = {
             guest_token: token,
-            scope_key: String((summary && summary.scope_key) || (meta && meta.scope_key) || ''),
+            scope_key: String((summary && summary.scope_key) || meta.scope_key || ''),
+            cart_type: mode,
+            currency: currency,
+            locale: locale,
             saved_at: nowMs(),
             summary: summary,
         };
-        writeJson(SUMMARY_CACHE_KEY, payload);
+        // Typed buckets: toc and tob each keep a browser-local copy; never clobber the other.
+        writeJson(summaryCacheKeyFor(mode), payload);
+        // Legacy untyped key: only mirror toc so old readers stay retail-safe.
+        if (mode === 'toc') {
+            writeJson(SUMMARY_CACHE_KEY, payload);
+        }
         return payload;
     }
 
     function getCachedSummary(options) {
         options = options || {};
-        var data = readJson(SUMMARY_CACHE_KEY);
-        if (!data || !isUsableSummary(data.summary)) {
-            return null;
+        var modeHint = options.cartType || options.cart_type || options.selling_mode || '';
+        if (!modeHint) {
+            try {
+                if (global.WelineB2BSellingMode && typeof global.WelineB2BSellingMode.preferredMode === 'function') {
+                    modeHint = global.WelineB2BSellingMode.preferredMode() || '';
+                }
+            } catch (e) {}
         }
-        var token = currentGuestToken();
-        var cachedToken = String(data.guest_token || '').trim();
-        // Bound cache to the active guest token when either side has one.
-        if (token && cachedToken && token !== cachedToken) {
-            return null;
+        var mode = normalizeSummaryCartType(modeHint);
+        var data = readJson(summaryCacheKeyFor(mode));
+        if (summaryTokenMatches(data, options)) {
+            var typed = Object.assign({}, data.summary);
+            typed.cart_type = mode;
+            typed.selling_mode = mode;
+            return typed;
         }
-        if (token && !cachedToken && options.requireTokenMatch) {
-            return null;
+        // Legacy untyped key only for toc (pre-typed-cache installs).
+        if (mode === 'toc') {
+            data = readJson(SUMMARY_CACHE_KEY);
+            if (!summaryTokenMatches(data, options)) {
+                return null;
+            }
+            var legacyType = normalizeSummaryCartType(
+                data.cart_type || (data.summary && (data.summary.cart_type || data.summary.selling_mode)) || 'toc'
+            );
+            if (legacyType !== 'toc') {
+                return null;
+            }
+            return Object.assign({}, data.summary, { cart_type: 'toc', selling_mode: 'toc' });
         }
-        if (!token && cachedToken && options.requireTokenMatch) {
-            return null;
-        }
-        return data.summary;
+        return null;
     }
 
-    function clearCachedSummary() {
+    function clearCachedSummary(options) {
+        options = options || {};
+        if (options.cartType || options.cart_type) {
+            var mode = normalizeSummaryCartType(options.cartType || options.cart_type);
+            writeJson(summaryCacheKeyFor(mode), null);
+            if (mode === 'toc') {
+                writeJson(SUMMARY_CACHE_KEY, null);
+            }
+            return;
+        }
         writeJson(SUMMARY_CACHE_KEY, null);
+        writeJson(summaryCacheKeyFor('toc'), null);
+        writeJson(summaryCacheKeyFor('tob'), null);
     }
 
     function getGuestSession() {
@@ -171,7 +463,7 @@
             }
             data = {
                 token: token,
-                expires_at: weekFrom(),
+                expires_at: guestSessionFrom(),
                 renewed_at: nowMs(),
             };
             writeJson(GUEST_SESSION_KEY, data);
@@ -197,7 +489,7 @@
         }
         var payload = {
             token: normalized,
-            expires_at: Number(expiresAt || weekFrom()),
+            expires_at: Number(expiresAt || guestSessionFrom()),
             renewed_at: nowMs(),
         };
         writeJson(GUEST_SESSION_KEY, payload);
@@ -290,17 +582,17 @@
             return api.resource('cart').then(function (client) {
                 if (!client || typeof client.renewGuestSession !== 'function') {
                     // Fallback: extend browser window only when API missing.
-                    return rememberGuestSession(session.token, weekFrom());
+                    return rememberGuestSession(session.token, guestSessionFrom());
                 }
                 return client.renewGuestSession({ guest_token: session.token }, { silent: true }).then(function (response) {
                     var payload = response && response.data && typeof response.data === 'object' ? response.data : response;
                     var token = String((payload && payload.guest_token) || session.token).trim();
-                    var expiresAt = Number((payload && payload.expires_at_ms) || weekFrom());
+                    var expiresAt = Number((payload && payload.expires_at_ms) || guestSessionFrom());
                     return rememberGuestSession(token, expiresAt);
                 });
             });
         }).catch(function () {
-            return rememberGuestSession(session.token, weekFrom());
+            return rememberGuestSession(session.token, guestSessionFrom());
         });
     }
 
@@ -315,6 +607,7 @@
     }
 
     function boot() {
+        installCartStatus();
         getPendingCoupon(); // purge expired
         getGuestSession();
         applyPendingCoupon('boot');
@@ -323,6 +616,7 @@
     }
 
     global.addEventListener(APPLY_EVENT, onApplyCouponEvent);
+    global.addEventListener(WAIT_GIFT_REDEEMED_EVENT, onWaitGiftRedeemed);
     global.addEventListener('weline:cart-updated', function () {
         applyPendingCoupon('cart-updated');
     });
@@ -341,11 +635,18 @@
 
     var api = {
         WEEK_MS: WEEK_MS,
+        GUEST_SESSION_MS: GUEST_SESSION_MS,
         PENDING_COUPON_KEY: PENDING_COUPON_KEY,
         GUEST_SESSION_KEY: GUEST_SESSION_KEY,
         SUMMARY_CACHE_KEY: SUMMARY_CACHE_KEY,
+        CART_FLAG_KEY: CART_FLAG_KEY,
+        CART_COUNT_COOKIE: CART_COUNT_COOKIE,
         APPLY_EVENT: APPLY_EVENT,
         APPLIED_EVENT: APPLIED_EVENT,
+        WAIT_GIFT_REDEEMED_EVENT: WAIT_GIFT_REDEEMED_EVENT,
+        markCartActive: markCartActive,
+        markCartEmpty: markCartEmpty,
+        restoreCartState: restoreCartState,
         storePendingCoupon: storePendingCoupon,
         getPendingCoupon: getPendingCoupon,
         clearPendingCoupon: clearPendingCoupon,
@@ -356,6 +657,8 @@
         rememberSummary: rememberSummary,
         getCachedSummary: getCachedSummary,
         clearCachedSummary: clearCachedSummary,
+        currentDisplayCurrency: currentDisplayCurrency,
+        currentDisplayLocale: currentDisplayLocale,
         dispatchApplyCoupon: function (code, meta) {
             var payload = storePendingCoupon(code, meta || {});
             global.dispatchEvent(new CustomEvent(APPLY_EVENT, {

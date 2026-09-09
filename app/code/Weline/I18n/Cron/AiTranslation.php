@@ -7,6 +7,7 @@ use Weline\Cron\CronTaskInterface;
 use Weline\I18n\Service\AiTranslationConfig;
 use Weline\I18n\Service\AiTranslationQueueService;
 use Weline\I18n\Service\LocalModelTranslation\LocalModelTranslationQueueService;
+use Weline\I18n\Service\WebsiteLocaleTranslationSync;
 
 /**
  * AI 批量翻译定时任务：仅入队，不直接调用翻译，避免与队列 worker 并发重复选词。
@@ -17,6 +18,7 @@ class AiTranslation implements CronTaskInterface
         private readonly AiTranslationConfig $config,
         private readonly AiTranslationQueueService $queueService,
         private readonly LocalModelTranslationQueueService $localModelQueueService,
+        private readonly WebsiteLocaleTranslationSync $websiteLocaleTranslationSync,
     ) {
     }
 
@@ -32,12 +34,14 @@ class AiTranslation implements CronTaskInterface
 
     public function tip(): string
     {
-        return '每小时为已启用语言入队 AI 翻译（词典 + LocalModel 业务多语言）；实际执行由队列 worker 串行处理';
+        return '每 5 分钟同步多网站语言并集并入队 AI 翻译：并集新增则翻译，并从并集移除则跳过；含词典 + LocalModel。BUSY 后由下次 cron 续跑。';
     }
 
     public function cron_time(): string
     {
-        return '0 * * * *';
+        // Was hourly: after AI_TRANSLATION_BUSY the backlog sat idle until the next :00.
+        // */5 keeps feeding the queue while the model is free; idempotent enqueue skips duplicates.
+        return '*/5 * * * *';
     }
 
     public function execute(): string
@@ -49,9 +53,12 @@ class AiTranslation implements CronTaskInterface
                 return (string)__('I18n AI 自动翻译未启用，cron 已跳过');
             }
 
+            // Heal gaps: install website-union locales and force-enable them before enqueue.
+            $this->websiteLocaleTranslationSync->ensureWebsiteUnionReady();
+
             $enabledLocales = $this->config->getEnabledLocaleCodes();
             if ($enabledLocales === []) {
-                return (string)__('没有启用的 AI 翻译语言');
+                return (string)__('没有启用的 AI 翻译语言（含多网站语言并集）');
             }
 
             $queueIds = $this->queueService->enqueueEnabledLocales('cron', false);

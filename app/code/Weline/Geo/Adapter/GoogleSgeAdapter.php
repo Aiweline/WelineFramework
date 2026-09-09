@@ -177,7 +177,7 @@ class GoogleSgeAdapter extends BaseAdapter
 
             return new PushResult(
                 false,
-                "推送失败: HTTP {$response['http_code']}",
+                $this->formatHttpFailureMessage((int)($response['http_code'] ?? 0), (string)($response['body'] ?? '')),
                 ['response' => $response['body'], 'url' => $feedUrl]
             );
         } catch (\Exception $e) {

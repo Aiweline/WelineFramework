@@ -25,23 +25,31 @@ class ResourceTreeService implements ResourceTreeServiceInterface
 {
     private const BACKEND_MENU_TREE_CACHE_TTL = 120.0;
     private const MENU_TREE_GENERATION_KEY = 'backend_menu_tree_generation';
+    private const MENU_SOURCES_CONTEXT_KEY = 'acl.enabled_menu_sources.v1';
 
     /**
      * @var array<string, array{expires: float, data: array}>
      */
     private static array $backendMenuTreeCache = [];
 
+    /** @var array{expires: float, data: list<array<string, mixed>>}|null */
+    private static ?array $enabledMenuSourcesCache = null;
+
     private static ?string $localMenuTreeGeneration = null;
 
     public static function clearProcessCache(): void
     {
+        RequestContext::remove(self::MENU_SOURCES_CONTEXT_KEY);
         self::$backendMenuTreeCache = [];
+        self::$enabledMenuSourcesCache = null;
         self::$localMenuTreeGeneration = null;
     }
 
     public static function invalidateBackendMenuTreeCache(): void
     {
+        RequestContext::remove(self::MENU_SOURCES_CONTEXT_KEY);
         self::$backendMenuTreeCache = [];
+        self::$enabledMenuSourcesCache = null;
         self::$localMenuTreeGeneration = null;
         try {
             w_cache('acl')->set(self::MENU_TREE_GENERATION_KEY, (string)\microtime(true));
@@ -61,9 +69,78 @@ class ResourceTreeService implements ResourceTreeServiceInterface
             $generation = '0';
         }
         if (self::$localMenuTreeGeneration !== $generation) {
+            RequestContext::remove(self::MENU_SOURCES_CONTEXT_KEY);
             self::$backendMenuTreeCache = [];
+            self::$enabledMenuSourcesCache = null;
             self::$localMenuTreeGeneration = $generation;
         }
+    }
+
+    /**
+     * Global enabled menu definitions (shared across roles/workers via process + Context).
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function loadEnabledMenuSources(): array
+    {
+        $contextKey = self::MENU_SOURCES_CONTEXT_KEY;
+        if (RequestContext::has($contextKey)) {
+            $cached = RequestContext::get($contextKey);
+            // Another Fiber may already have advanced the process generation.
+            // Its invalidation cannot remove this request's Context snapshot.
+            if (\is_array($cached)
+                && ($cached['generation'] ?? null) === self::$localMenuTreeGeneration
+                && \is_array($cached['data'] ?? null)
+            ) {
+                return $cached['data'];
+            }
+        }
+
+        self::syncMenuTreeGeneration();
+        $now = \microtime(true);
+        if (self::$enabledMenuSourcesCache !== null
+            && self::$enabledMenuSourcesCache['expires'] >= $now
+        ) {
+            $rows = self::$enabledMenuSourcesCache['data'];
+            RequestContext::set($contextKey, ['generation' => self::$localMenuTreeGeneration, 'data' => $rows]);
+
+            return $rows;
+        }
+
+        $sharedKey = 'acl.enabled_menu_sources.' . (string)(self::$localMenuTreeGeneration ?? '0');
+        try {
+            $shared = w_cache('acl')->get($sharedKey);
+            if (\is_array($shared)) {
+                self::$enabledMenuSourcesCache = [
+                    'expires' => $now + self::BACKEND_MENU_TREE_CACHE_TTL,
+                    'data' => $shared,
+                ];
+                RequestContext::set($contextKey, ['generation' => self::$localMenuTreeGeneration, 'data' => $shared]);
+
+                return $shared;
+            }
+        } catch (\Throwable) {
+        }
+
+        $aclModel = $this->newAclModel();
+        $menuSources = $aclModel->reset()
+            ->where(Acl::schema_fields_TYPE, Acl::type_MENUS)
+            ->where(Acl::schema_fields_IS_ENABLE, 1)
+            ->order(Acl::schema_fields_ORDER, 'ASC')
+            ->select()
+            ->fetchArray();
+        $rows = \is_array($menuSources) ? \array_values($menuSources) : [];
+        self::$enabledMenuSourcesCache = [
+            'expires' => $now + self::BACKEND_MENU_TREE_CACHE_TTL,
+            'data' => $rows,
+        ];
+        try {
+            w_cache('acl')->set($sharedKey, $rows, (int)self::BACKEND_MENU_TREE_CACHE_TTL);
+        } catch (\Throwable) {
+        }
+        RequestContext::set($contextKey, ['generation' => self::$localMenuTreeGeneration, 'data' => $rows]);
+
+        return $rows;
     }
 
     protected function newAclModel(): Acl
@@ -102,15 +179,7 @@ class ResourceTreeService implements ResourceTreeServiceInterface
             return self::$backendMenuTreeCache[$cacheKey]['data'];
         }
 
-        $aclModel = $this->newAclModel();
-        
-        // 获取所有启用的菜单类型资源
-        $menuSources = $aclModel->reset()
-            ->where(Acl::schema_fields_TYPE, Acl::type_MENUS)
-            ->where(Acl::schema_fields_IS_ENABLE, 1)
-            ->order(Acl::schema_fields_ORDER, 'ASC')
-            ->select()
-            ->fetchArray();
+        $menuSources = $this->loadEnabledMenuSources();
         
         if (empty($menuSources)) {
             self::$backendMenuTreeCache[$cacheKey] = ['expires' => $now + self::BACKEND_MENU_TREE_CACHE_TTL, 'data' => []];

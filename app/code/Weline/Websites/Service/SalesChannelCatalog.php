@@ -11,6 +11,7 @@ use Weline\Websites\Api\Catalog\Data\SalesChannelSummary;
 use Weline\Websites\Api\Catalog\Data\StoreSummary;
 use Weline\Websites\Api\Catalog\SalesChannelCatalogInterface;
 use Weline\Websites\Api\Catalog\StoreCatalogInterface;
+use Weline\Websites\Data\ScopeData;
 use Weline\Websites\Model\SalesChannel;
 use Weline\Websites\Model\Store;
 
@@ -75,6 +76,13 @@ final class SalesChannelCatalog implements SalesChannelCatalogInterface
             return null;
         }
         $this->assertCatalogIdMaximum($channelId, __('销售渠道 ID'));
+        if (ScopeData::matchesChannelId($channelId)) {
+            return ScopeData::getChannel();
+        }
+        $shared = ObjectManager::getInstance(ScopePathMatchCache::class)->readChannelSnapshot($channelId);
+        if ($shared instanceof SalesChannelSummary) {
+            return $shared;
+        }
         $key = 'id:' . $channelId;
         return $this->remember($key, function () use ($channelId): ?SalesChannelSummary {
             $rows = $this->newChannel()
@@ -93,24 +101,69 @@ final class SalesChannelCatalog implements SalesChannelCatalogInterface
             return null;
         }
         $this->assertCatalogIdMaximum($storeId, __('店铺 ID'));
+
+        return $this->defaultChannelWithStore(
+            $storeId,
+            fn(): StoreSummary => $this->requireStore($storeId),
+        );
+    }
+
+    public function defaultChannelForStore(StoreSummary $store): ?SalesChannelSummary
+    {
+        $storeId = $store->id;
+        if ($storeId < 0) {
+            return null;
+        }
+        $this->assertCatalogIdMaximum($storeId, __('店铺 ID'));
+
+        return $this->defaultChannelWithStore($storeId, static fn(): StoreSummary => $store);
+    }
+
+    /**
+     * Keep parent-store loading inside the cache builder for the legacy ID API.
+     * A shared/L1 default-channel hit must remain free of a Store lookup.
+     *
+     * @param callable():StoreSummary $storeProvider
+     */
+    private function defaultChannelWithStore(int $storeId, callable $storeProvider): ?SalesChannelSummary
+    {
         $key = 'default:' . $storeId;
-        return $this->remember($key, function () use ($storeId): ?SalesChannelSummary {
-            $parentStore = $this->requireStore($storeId);
+        return $this->remember($key, function () use ($storeProvider, $storeId): ?SalesChannelSummary {
+            $store = $storeProvider();
             $rows = $this->newChannel()
                 ->where(SalesChannel::schema_fields_STORE_ID, $storeId)
                 ->where(SalesChannel::schema_fields_IS_DEFAULT, 1)
                 ->select()
                 ->fetchArray();
-            $mapped = $this->mapRows($rows, $storeId, $parentStore);
+            $mapped = $this->mapRows($rows, $storeId, $store);
             $default = $this->singleOrNull($mapped, __('同一店铺存在多个默认渠道'));
             if ($default !== null) {
                 return $default;
             }
-            $byCode = $this->byCode($storeId, SalesChannel::CODE_DEFAULT);
+            // Keep the already resolved parent Store on the fallback path too.
+            // A missing default flag should not trigger another Store lookup.
+            $byCode = $this->byCodeForStore($store, SalesChannel::CODE_DEFAULT);
             if ($byCode !== null && !$byCode->isDefault) {
                 throw new \RuntimeException(__('code=default 的渠道缺少默认标记'));
             }
             return $byCode;
+        }, StorefrontScopeCatalogCacheCoordinator::channelPolicy());
+    }
+
+    private function byCodeForStore(StoreSummary $store, string $channelCode): ?SalesChannelSummary
+    {
+        $storeId = $store->id;
+        $key = 'code:' . $storeId . ':' . $channelCode;
+
+        return $this->remember($key, function () use ($store, $storeId, $channelCode): ?SalesChannelSummary {
+            $rows = $this->newChannel()
+                ->where(SalesChannel::schema_fields_STORE_ID, $storeId)
+                ->where(SalesChannel::schema_fields_CODE, $channelCode)
+                ->select()
+                ->fetchArray();
+            $mapped = $this->mapRows($rows, $storeId, $store);
+
+            return $this->singleOrNull($mapped, __('渠道代码在同一店铺下不唯一'));
         }, StorefrontScopeCatalogCacheCoordinator::channelPolicy());
     }
 

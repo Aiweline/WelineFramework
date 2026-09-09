@@ -132,8 +132,9 @@
     pointer-events: none;
 }
 
+/* 吸底交给宿主 .wpc-cta；此处禁止再 margin-top:auto，避免与价区撕出第二种间距 */
 .product-card-purchase-actions--storefront {
-    margin-top: auto;
+    margin-top: 0;
 }
 
 .product-storefront__sku {

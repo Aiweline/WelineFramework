@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace Weline\Server\Service;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Context;
+use Weline\Framework\Database\TransactionContext;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Router\FullPageCacheCoordinator;
 use Weline\Framework\Runtime\WlsRuntime;
 use Weline\Server\Security\WorkerPolicyDecision;
@@ -101,6 +104,15 @@ final class WorkerFullPageCacheFastPath
         }
         $fullUri = $scheme . '://' . $host . $requestUri;
 
+        if (TransactionContext::activeTransactionConnectionCount() > 0) {
+            return null;
+        }
+        // 早期 Worker 尚无请求 Context。独立短生命周期只冻结本次权威版本，
+        // 不继承上一次预热请求状态，也不安装网站、会话或 Router。
+        $previousContext = Context::getCurrent();
+        $probeContext = new Context(['meta' => ['type' => 'fpc_probe', 'mode' => 'wls']]);
+        Context::enter($probeContext);
+        RequestContext::setId('fpc-probe-' . spl_object_id($probeContext));
         try {
             // Prefer READY's exact identity, then the receipt captured by a
             // natural anonymous homepage hit when startup skipped priming.
@@ -153,6 +165,15 @@ final class WorkerFullPageCacheFastPath
             }
         } catch (\Throwable) {
             return null;
+        } finally {
+            try {
+                RequestContext::cleanup();
+            } finally {
+                Context::leave();
+                if ($previousContext !== null) {
+                    Context::enter($previousContext);
+                }
+            }
         }
 
         if (!\is_array($cached) || !\is_string($cached['response'] ?? null) || $cached['response'] === '') {

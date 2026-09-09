@@ -4,22 +4,30 @@ declare(strict_types=1);
 
 namespace Weline\Eav\Setup\Db\Migration;
 
+use Weline\Eav\Model\EavAttribute\Group\LocalDescription as GroupLocalDescription;
+use Weline\Eav\Model\EavAttribute\Set\LocalDescription as SetLocalDescription;
+use Weline\Eav\Model\EavAttribute\Type\LocalDescription as TypeLocalDescription;
+use Weline\Eav\Model\EavEntity\LocalDescription as EntityLocalDescription;
 use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Database\Migration\AbstractMigration;
 use Weline\Framework\Manager\ObjectManager;
 
+/**
+ * Prod symptom: LocalModel AI could translate but Model::save() hit 25P02 because
+ * ON CONFLICT (id, local_code) had no matching unique/PK (tables only PK'd on id + serial).
+ */
 class FixEavLocalDescriptionCompositePk20260827V123 extends AbstractMigration
 {
     /**
-     * @return list<string>
+     * @return list<class-string>
      */
-    private function tables(): array
+    private function modelClasses(): array
     {
         return [
-            'eav_attribute_set_local_description',
-            'eav_attribute_group_local_description',
-            'eav_entity_local_description',
-            'eav_attribute_type_local_description',
+            SetLocalDescription::class,
+            GroupLocalDescription::class,
+            EntityLocalDescription::class,
+            TypeLocalDescription::class,
         ];
     }
 
@@ -43,7 +51,12 @@ class FixEavLocalDescriptionCompositePk20260827V123 extends AbstractMigration
      */
     public function getAffectedTables(): array
     {
-        return $this->tables();
+        $tables = [];
+        foreach ($this->modelClasses() as $class) {
+            $tables[] = ObjectManager::getInstance($class)->getTable();
+        }
+
+        return $tables;
     }
 
     public function install(): bool
@@ -51,17 +64,25 @@ class FixEavLocalDescriptionCompositePk20260827V123 extends AbstractMigration
         $connection = ObjectManager::getInstance(ConnectionFactory::class)->getConnection();
         $pdo = $connection->getLink();
 
-        foreach ($this->tables() as $table) {
-            if (!$this->tableExists($connection, $table)) {
+        foreach ($this->modelClasses() as $class) {
+            $model = ObjectManager::getInstance($class);
+            $qualified = $model->getTable();
+            $bare = $this->bareTableName($qualified);
+            if ($bare === '' || !$this->tableExists($pdo, $bare)) {
+                continue;
+            }
+            if ($this->hasCompositePrimaryKey($pdo, $bare)) {
+                $this->dropSerialDefault($pdo, $qualified);
                 continue;
             }
 
-            $indexName = $table . '_pkey';
-            $pdo->exec(sprintf('ALTER TABLE %s DROP CONSTRAINT IF EXISTS %s', $table, $indexName));
+            $constraint = $bare . '_pkey';
+            $pdo->exec(sprintf('ALTER TABLE %s DROP CONSTRAINT IF EXISTS %s', $qualified, $constraint));
+            $this->dropSerialDefault($pdo, $qualified);
             $pdo->exec(sprintf(
                 'ALTER TABLE %s ADD CONSTRAINT %s PRIMARY KEY (id, local_code)',
-                $table,
-                $indexName,
+                $qualified,
+                $constraint,
             ));
         }
 
@@ -73,14 +94,55 @@ class FixEavLocalDescriptionCompositePk20260827V123 extends AbstractMigration
         return true;
     }
 
-    private function tableExists(object $connection, string $table): bool
+    private function bareTableName(string $qualified): string
     {
-        $pdo = $connection->getLink();
+        $qualified = trim($qualified);
+        if (preg_match('/"([^"]+)"\s*$/', $qualified, $m)) {
+            return $m[1];
+        }
+
+        if (str_contains($qualified, '.')) {
+            return (string)substr($qualified, (int)strrpos($qualified, '.') + 1);
+        }
+
+        return $qualified;
+    }
+
+    private function tableExists(\PDO $pdo, string $bareTable): bool
+    {
         $statement = $pdo->prepare(
             'SELECT 1 FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = :table LIMIT 1',
         );
-        $statement->execute(['table' => $table]);
+        $statement->execute(['table' => $bareTable]);
 
         return (bool)$statement->fetchColumn();
+    }
+
+    private function hasCompositePrimaryKey(\PDO $pdo, string $bareTable): bool
+    {
+        $statement = $pdo->prepare(
+            <<<'SQL'
+SELECT COUNT(*) FROM information_schema.table_constraints tc
+JOIN information_schema.key_column_usage kcu
+  ON tc.constraint_name = kcu.constraint_name
+ AND tc.table_schema = kcu.table_schema
+WHERE tc.table_schema = current_schema()
+  AND tc.table_name = :table
+  AND tc.constraint_type = 'PRIMARY KEY'
+  AND kcu.column_name IN ('id', 'local_code')
+SQL
+        );
+        $statement->execute(['table' => $bareTable]);
+
+        return (int)$statement->fetchColumn() >= 2;
+    }
+
+    private function dropSerialDefault(\PDO $pdo, string $qualifiedTable): void
+    {
+        try {
+            $pdo->exec(sprintf('ALTER TABLE %s ALTER COLUMN id DROP DEFAULT', $qualifiedTable));
+        } catch (\Throwable) {
+            // Column may already lack a serial default.
+        }
     }
 }

@@ -1,7 +1,19 @@
 # 语义色重要程度矩阵
 
 > 归属 `Weline_Theme`。色盘 → Foundation `--weline-theme-*` → `w-button` / `w-badge` / `w-alert` / `w-text` 统一消费。  
-> 关联：[`theme-css-variables-only.md`](./theme-css-variables-only.md)、`REQ-THEME-0007`。
+> 关联：[`theme-css-variables-only.md`](./theme-css-variables-only.md)、`REQ-THEME-0007`。  
+> MCP 硬规则：`theme_base_components_token_only`（基础组件禁止私写色）。
+
+## 默认可继承合同（硬）
+
+任意主题开发**默认继承**下列语义叶子，不得另起平行色板：
+
+1. **变量盘兜底**：`view/theme/{frontend|backend}/variables/_colors.css`（盘加载前可解析）。
+2. **默认品牌盘**：`colors/_default.css`（完整 primary/secondary/status/neutral 全家）。
+3. **前台加载链**：`_light`（模式）→ `_default`（默认可继承合同）→ 品牌叠加（如 `_ink`）→ `_dark`。
+4. **后台加载链**：`_light` → `_default` → `_dark`。
+
+品牌盘只允许覆盖品牌相关叶子（primary/accent/chrome/link 等）；**不得**删掉 secondary/status 强度矩阵。基础组件（`w-button`/`w-input`/`w-alert`/…）**禁止** `#hex`/`rgb()` 私写色，只消费 `--weline-theme-*` / `--color-*` / `--backend-color-*`。
 
 ## 角色 × 强度
 
@@ -18,6 +30,7 @@
 |---|---|---|
 | solid | （本体） | 实心按钮、强标签 |
 | hover | `-hover` | 悬停加深 |
+| active | `-active` | 按下 |
 | surface | `-bg-subtle` → `--weline-theme-*-surface` | Alert / Badge / soft 按钮底 |
 | border | `-border-subtle` | 描边 |
 | emphasis | `-text-emphasis` | 状态强调字 |
@@ -25,14 +38,14 @@
 
 中性额外三级：
 
-- 字：`text` > `text-muted` > `text-subtle` > `disabled`
-- 面：`canvas` > `surface` > `surface-muted` > `hover`
-- 边：`border`（默认浅分隔，如 `#e2e8f0`）< `border-strong` / `border-emphasis`  
+- 字：`text` > `text-secondary` > `text-muted`/`text-subtle` > `disabled`；另 `inverse` / `on-dark`
+- 面：`canvas` > `surface` > `surface-subtle`/`muted` > `hover`；另 `surface-disabled`
+- 边：`border` / `border-subtle` < `border-strong` / `border-emphasis`；另 `border-focus`  
   **禁止**把 `#64748b` 当作默认边框。
 
 ## 桥接路径
 
-1. 色盘：`view/theme/{frontend|backend}/colors/_light.css` / `_dark.css`
+1. 色盘：`view/theme/{frontend|backend}/colors/_default.css` + `_light.css` / `_dark.css`（及可选品牌盘）
 2. Foundation：`view/ui/css/foundation.css`
    - `:root`：`--weline-theme-*` ← `var(--color-*)`
    - `[data-w-area="backend"]`：← `var(--backend-color-*)`
@@ -69,3 +82,4 @@ Theme Editor「全局外观」分组规则（注释优先，前缀兜底）：
 - 业务页再造 `--token-color-*` 按色值命名的叶子；新色必须落入上表语义名。
 - 只写 `var(--new-token)` 却不在色盘登记叶子。
 - 前后台各维护一套互不桥接的 status 字面量（`error` 仅允许作 `danger` 别名）。
+- **基础组件**（`foundation.css` / Weline UI 2.0 基础类）私写颜色或平行色板；只允许改色盘叶子再经 `--weline-theme-*` 桥接。

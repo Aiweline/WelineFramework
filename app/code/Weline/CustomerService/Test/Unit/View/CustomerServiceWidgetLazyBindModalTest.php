@@ -27,6 +27,8 @@ final class CustomerServiceWidgetLazyBindModalTest extends TestCase
         $this->assertStringContainsString('json_encode($bindModalHtml', $content);
         $this->assertStringContainsString('接收客服回复与优惠通知', $content);
         $this->assertStringContainsString('仅用于本次客服咨询相关通知，不是简报订阅。', $content);
+        $this->assertStringContainsString('一次性人机验证禁止 SSR', $content);
+        $this->assertStringNotContainsString('renderChallenge()', $content);
     }
 
     public function testCustomerServiceScriptCreatesBindModalLazily(): void
@@ -50,6 +52,8 @@ final class CustomerServiceWidgetLazyBindModalTest extends TestCase
         $this->assertStringContainsString('captcha_provider', $content);
         $this->assertStringContainsString('refreshBindCaptcha', $content);
         $this->assertStringContainsString('bindCaptchaChallengeUrl', $content);
+        $this->assertStringContainsString("cache: 'no-store'", $content);
+        $this->assertStringContainsString('async function showBindPrompt', $content);
         $this->assertStringContainsString('function notifyAlert(', $content);
         $this->assertStringContainsString('cs-notice-alert', $content);
         $this->assertStringContainsString("notify('error'", $content);

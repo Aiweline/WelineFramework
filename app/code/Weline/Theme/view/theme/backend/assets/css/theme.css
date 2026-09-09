@@ -367,10 +367,15 @@ body {
     background: transparent;
 }
 
+:root {
+    --backend-layout-inline: var(--weline-space-5, 1.25rem);
+    --backend-layout-block: var(--weline-space-6, 1.5rem);
+}
+
 .page-content {
-    /* 顶栏改为 sticky 后不再预留 fixed 顶栏高度；上下内边距保持对称 */
-    padding-top: 1.25rem;
-    padding-bottom: 1.25rem;
+    /* 顶栏改为 sticky 后不再预留 fixed 顶栏高度；左右与顶栏共用 gutter token */
+    padding-block: 1.25rem;
+    padding-inline: var(--backend-layout-inline);
 }
 
 /* 必须高于 .rightbar-overlay，否则右侧设置打开时遮罩会挡住顶栏全部交互（语言/用户下拉等） */
@@ -391,7 +396,8 @@ body {
 
 #page-topbar .navbar-header {
     min-height: 72px;
-    padding: 0 1rem;
+    padding-block: 0;
+    padding-inline: var(--backend-layout-inline);
     background: var(--backend-theme-header-bg);
     border-bottom: var(--backend-theme-border-width) var(--backend-theme-border-style) var(--backend-theme-header-border);
     box-shadow: var(--backend-component-topbar-shadow);
@@ -1572,6 +1578,10 @@ a.btn {
 }
 
 @media (max-width: 991.98px) {
+    :root {
+        --backend-layout-inline: var(--weline-space-4, 1rem);
+    }
+
     #page-topbar .navbar-brand-box {
         border-right: 0;
     }
@@ -1593,15 +1603,12 @@ a.btn {
     }
 
     .page-content {
-        padding-top: 1rem;
-        padding-bottom: 1rem;
-        padding-left: 0.5rem;
-        padding-right: 0.5rem;
+        padding-block: 1rem;
+        padding-inline: var(--backend-layout-inline, var(--weline-space-4, 1rem));
     }
 
     #page-topbar .navbar-header {
-        padding-left: 0.5rem;
-        padding-right: 0.5rem;
+        padding-inline: var(--backend-layout-inline, var(--weline-space-4, 1rem));
     }
 
     #sidebar-menu {
@@ -1611,15 +1618,17 @@ a.btn {
 }
 
 @media (max-width: 575.98px) {
+    :root {
+        --backend-layout-inline: var(--weline-space-3, 0.75rem);
+    }
+
     .page-content {
-        padding-left: 0.25rem;
-        padding-right: 0.25rem;
-        padding-bottom: 1rem;
+        padding-block: 1rem;
+        padding-inline: var(--backend-layout-inline);
     }
 
     #page-topbar .navbar-header {
-        padding-left: 0.35rem;
-        padding-right: 0.35rem;
+        padding-inline: var(--backend-layout-inline);
     }
 }
 

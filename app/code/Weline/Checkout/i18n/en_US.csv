@@ -1,4 +1,4 @@
-﻿结账数据验证前,"Before Checkout Validation"
+结账数据验证前,"Before Checkout Validation"
 在验证结账数据之前触发，允许其他模块修改验证数据或执行预处理操作。,"Triggered before validating checkout data, allowing other modules to modify validation data or perform preprocessing operations."
 结账数据验证后,"After Checkout Validation"
 在验证结账数据之后触发，允许其他模块根据验证结果执行后续操作。,"Triggered after validating checkout data, allowing other modules to perform follow-up operations based on validation results."
@@ -63,9 +63,10 @@
 无法恢复该支付，请从订单列表重试。,"This payment cannot be resumed. Please retry from your order list."
 订单已创建，但支付未完成。请重试支付。,"Your order was created, but payment was not completed. Please retry payment."
 订单已创建，但暂时无法恢复支付，请联系支持。,"Your order was created, but payment recovery is temporarily unavailable. Please contact support."
+购物车中有不可结算的商品，请移除后重试,购物车中有不可结算的商品，请移除后重试
 结账信息已加载,"Checkout data loaded"
 购物车为空，请先加入商品。,"The shopping cart is empty, please add products first."
-暂无可用配送方式。,"There are currently no shipping methods available."
+当前地址下所选配送方案不可用，请调整收货地址或商品后再试。,"No shipping options are available for the selected address and shipping profile. Please change the address or contact support."
 暂无可用支付方式。,"No payment methods available yet."
 配送信息已加载,"Delivery information loaded"
 配送信息加载失败，请稍后重试或手动填写地址。,"Failed to load delivery information. Please try again later or enter the address manually."
@@ -79,7 +80,7 @@
 请补全收货信息并选择配送和支付方式。,"Please complete the delivery information and select the delivery and payment method."
 该商品暂不可售。,"This product is currently unavailable for sale."
 订单创建成功,"Order created successfully"
-"预计 %{1}-%{2} 天","Estimated %{1}-%{2} days"
+免邮,免邮
 前台结账,"Storefront checkout"
 结账页面头部之前,"Before Checkout Page Head"
 "在渲染结账页面的 <head> 标签之前触发，允许其他模块在头部开始处注入内容（如CSS、JavaScript等）。","Triggered before rendering the <head> tag of the checkout page, allowing other modules to inject content at the beginning of the head (such as CSS, JavaScript, etc.)."
@@ -292,18 +293,8 @@ SKU,SKU
 结账优惠券,"Checkout coupon"
 结账订单留言,"Checkout order note"
 应付合计,"Total payable"
+购物车中有不可结算的商品，请返回购物车移除后重试,购物车中有不可结算的商品，请返回购物车移除后重试
 请确认收货信息、配送方式和支付方式。,"Please confirm the delivery information, delivery method and payment method."
-全部,All
-请输入订单号,"Please enter order number"
-搜索,Search
-客户ID,"Customer ID"
-操作,Actions
-查看,View
-配送状态,"Shipping Status"
-订单项,"Order Items"
-总价,"Total Price"
-折扣,Discount
-返回列表,"Back to List"
 China,China
 国家/地区,Country/Region
 搜索国家/地区,"Search country/region"
@@ -325,6 +316,17 @@ China,China
 定位完成，但当前未启用地址添加模块。,"Location completed"
 定位完成，已自动选择国家/省市区，请补全收货人信息并保存。,"Location applied. Country/region cascade selected. Please complete recipient details and save."
 自动定位失败，请手动选择国家并完善地址。,"Auto-detect failed. Please select a country and complete the address."
+全部,All
+请输入订单号,"Please enter order number"
+搜索,Search
+客户ID,"Customer ID"
+操作,Actions
+查看,View
+配送状态,"Shipping Status"
+订单项,"Order Items"
+总价,"Total Price"
+折扣,Discount
+返回列表,"Back to List"
 正在前往结账...,"Proceeding to checkout..."
 结账准备失败,"Checkout preparation failed"
 立即结账,"Proceed to checkout"
@@ -345,6 +347,8 @@ China,China
 统计来自当前结账会话样本，不执行迁移或写操作。,"Statistics are from a sample of the current checkout session, no migration or write operations were performed."
 最近会话,"recent conversations"
 暂无可诊断会话,"No diagnostic sessions available yet"
+该商品已不存在或已下架，请从购物车移除,该商品已不存在或已下架，请从购物车移除
+该商品暂不可售，请从购物车移除或稍后再试,该商品暂不可售，请从购物车移除或稍后再试
 展开简介,"Show more"
 收起,"Show less"
 订单无法取消,"Order cannot be cancelled"
@@ -385,6 +389,8 @@ China,China
 请选择国家/地区,"Please select a country/region"
 请选择配送地址,"Please select a shipping address"
 地址不存在,"Address not found"
+暂无可用配送方式。,"There are currently no shipping methods available."
+"预计 %{1}-%{2} 天","Estimated %{1}-%{2} days"
 立即购买,"Buy Now"
 感谢您的购买！您的订单已成功创建。,"Thank you for your purchase! Your order has been created successfully."
 收货人,consignee

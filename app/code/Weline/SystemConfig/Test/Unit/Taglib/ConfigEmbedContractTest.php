@@ -62,6 +62,8 @@ final class ConfigEmbedContractTest extends TestCase
         self::assertStringContainsString('data-w-config-embed', $shell);
         self::assertStringContainsString('data-grant-version', $shell);
         self::assertStringContainsString('data-locale', $shell);
+        self::assertStringContainsString('embedFieldSource', $shell);
+        self::assertStringContainsString('fetchHtml', $shell);
 
         $field = (string)file_get_contents($root . '/view/templates/taglib/config-embed-field.phtml');
         self::assertStringContainsString('data-testid="config-embed-field"', $field);
@@ -69,6 +71,10 @@ final class ConfigEmbedContractTest extends TestCase
         self::assertStringContainsString('config-embed-sensitive-link', $field);
         self::assertStringContainsString('data-w-config-embed-control', $field);
         self::assertStringContainsString('w:theme:search-select', $field);
+        self::assertStringContainsString('w:i18n:language:select', $field);
+        self::assertStringContainsString('w:ai:model:select', $field);
+        self::assertStringContainsString("in_array(\$type, ['locale', 'language'], true)", $field);
+        self::assertStringContainsString("in_array(\$type, ['ai_model', 'model', 'ai-model'], true)", $field);
         self::assertStringContainsString('data-value-type', $field);
 
         $js = (string)file_get_contents($root . '/view/statics/js/config-embed.js');
@@ -76,6 +82,8 @@ final class ConfigEmbedContractTest extends TestCase
         self::assertStringContainsString('Weline.UI.toast', $js);
         self::assertStringContainsString("locale: root.dataset.locale || 'default'", $js);
         self::assertStringContainsString('payload.value_type = fieldEl.dataset.valueType', $js);
+        self::assertStringContainsString('data-w-language-field', $js);
+        self::assertStringContainsString('data-ai-model-value', $js);
 
         $css = (string)file_get_contents($root . '/view/statics/css/config-embed.css');
         self::assertStringContainsString('--weline-theme-surface', $css);
@@ -84,13 +92,17 @@ final class ConfigEmbedContractTest extends TestCase
         self::assertStringContainsString('layout-inline', $css);
         self::assertStringNotContainsString('background: var(--weline-surface-raised, #fff)', $css);
         self::assertStringNotContainsString('background:#fff', $css);
+
+        $renderer = (string)file_get_contents($root . '/Service/ConfigEmbedRenderer.php');
+        self::assertStringContainsString('resolveFetchSource', $renderer);
+        self::assertStringContainsString('fetchHtml($fetchSource', $renderer);
     }
 
-    public function testModuleVersionIs133(): void
+    public function testModuleVersionIs1339(): void
     {
         $module = include dirname(__DIR__, 3) . '/etc/module.php';
         self::assertIsArray($module);
-        self::assertSame('1.3.3', $module['version'] ?? null);
+        self::assertSame('1.3.39', $module['version'] ?? null);
     }
 
     public function testSetScopedConfigDescriptorDeclaresValueType(): void

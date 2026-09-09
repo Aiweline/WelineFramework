@@ -1,219 +1,405 @@
 <?php
 /**
  * @var \Weline\Framework\View\Template $this
- * @var \Weline\Geo\Model\Platform $platform
+ * @var object $platform
  * @var array $accounts
+ * @var array $account_guide
  */
+$escape = static fn(mixed $v): string => htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$platformId = (int)$platform->getId();
+$platformName = (string)$platform->getData('platform_name');
+$guide = is_array($account_guide ?? null) ? $account_guide : [];
+$guideTitle = (string)($guide['title'] ?? __('账户配置指南'));
+$guideSummary = (string)($guide['summary'] ?? '');
+$guideSteps = is_array($guide['steps'] ?? null) ? $guide['steps'] : [];
+$apiKeyLabel = (string)($guide['api_key_label'] ?? __('API Key'));
+$apiKeyHint = (string)($guide['api_key_hint'] ?? '');
+$apiKeyInput = (string)($guide['api_key_input'] ?? 'secret');
+$isJsonFileKey = $apiKeyInput === 'json_file';
+$apiSecretLabel = (string)($guide['api_secret_label'] ?? __('API Secret'));
+$apiSecretRequired = !empty($guide['api_secret_required']);
+$apiSecretHint = (string)($guide['api_secret_hint'] ?? '');
+$docsUrl = trim((string)($guide['docs_url'] ?? ''));
+$docsLabel = (string)($guide['docs_label'] ?? __('官方文档'));
 ?>
 <div class="content-header">
-    <h1><?= __('平台账户管理') ?> - <?= htmlspecialchars($platform->getData('platform_name')) ?></h1>
-    <div class="action-bar">
-        <button type="button" class="w-button" data-geo-account-action="show" data-tone="primary">
-            <w:icon name="plus" size="sm"></w:icon> <?= __('添加账户') ?>
-        </button>
-        <a href="@url{'geo/backend/platform'}" class="w-button" data-tone="neutral">
-            <?= __('返回') ?>
-        </a>
+    <div class="w-cluster" data-align="center" data-justify="between" style="--w-gap:var(--weline-space-3);margin-bottom:var(--weline-theme-space-4,1rem);">
+        <p class="w-text" data-tone="muted" style="margin:0;"><?= $escape($platformName) ?></p>
+        <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);">
+            <button
+                type="button"
+                class="w-button"
+                data-tone="primary"
+                data-shrink="false"
+                data-w-action="dialog.open"
+                data-w-target="#geo-add-account-dialog"
+            >
+                <w:icon name="plus" size="sm"></w:icon> <?= __('添加账户') ?>
+            </button>
+            <a href="@url{'geo/backend/platform'}" class="w-button" data-tone="neutral" data-variant="outline" data-shrink="false">
+                <?= __('返回') ?>
+            </a>
+        </div>
     </div>
 </div>
 
 <div class="content-body">
-    <table class="w-table">
-        <thead>
-            <tr>
-                <th><?= __('ID') ?></th>
-                <th><?= __('账户名称') ?></th>
-                <th><?= __('默认账户') ?></th>
-                <th><?= __('激活状态') ?></th>
-                <th><?= __('连接状态') ?></th>
-                <th><?= __('最后测试') ?></th>
-                <th><?= __('操作') ?></th>
-            </tr>
-        </thead>
-        <tbody>
-            <?php if (empty($accounts)): ?>
+    <div class="w-table-wrap">
+        <table class="w-table">
+            <thead>
                 <tr>
-                    <td colspan="7" class="w-text" data-align="center"><?= __('暂无数据') ?></td>
+                    <th><?= __('ID') ?></th>
+                    <th><?= __('账户名称') ?></th>
+                    <th><?= __('默认') ?></th>
+                    <th><?= __('激活') ?></th>
+                    <th><?= __('连接') ?></th>
+                    <th><?= __('最后测试') ?></th>
+                    <th><?= __('操作') ?></th>
                 </tr>
-            <?php else: ?>
-                <?php foreach ($accounts as $account): ?>
+            </thead>
+            <tbody>
+                <?php if (empty($accounts)): ?>
                     <tr>
-                        <td><?= $account['id'] ?></td>
-                        <td><?= htmlspecialchars($account['account_name']) ?></td>
-                        <td>
-                            <?php if ($account['is_default']): ?>
-                                <span class="w-badge" data-tone="primary"><?= __('是') ?></span>
-                            <?php else: ?>
-                                <span class="w-badge" data-tone="muted"><?= __('否') ?></span>
-                            <?php endif; ?>
-                        </td>
-                        <td>
-                            <?php if ($account['is_active']): ?>
-                                <span class="w-badge" data-tone="success"><?= __('激活') ?></span>
-                            <?php else: ?>
-                                <span class="w-badge" data-tone="muted"><?= __('未激活') ?></span>
-                            <?php endif; ?>
-                        </td>
-                        <td>
-                            <?php if ($account['status'] === 'active'): ?>
-                                <span class="w-badge" data-tone="success"><?= __('成功') ?></span>
-                            <?php elseif ($account['status'] === 'failed'): ?>
-                                <span class="w-badge" data-tone="danger"><?= __('失败') ?></span>
-                            <?php else: ?>
-                                <span class="w-badge" data-tone="warning"><?= __('待测试') ?></span>
-                            <?php endif; ?>
-                        </td>
-                        <td><?= $account['last_test_time'] ? date('Y-m-d H:i:s', $account['last_test_time']) : '-' ?></td>
-                        <td>
-                            <button type="button" class="w-button" data-geo-account-test="<?= (int)$account['id'] ?>" data-tone="info" data-size="sm">
-                                <w:icon name="link" size="sm"></w:icon> <?= __('测试连接') ?>
-                            </button>
+                        <td colspan="7">
+                            <div class="w-stack" data-gap="sm" style="padding:var(--weline-theme-space-6,1.5rem) 0;">
+                                <div class="w-text"><?= __('还没有账户。添加密钥后才能推送。') ?></div>
+                                <div>
+                                    <button
+                                        type="button"
+                                        class="w-button"
+                                        data-tone="primary"
+                                        data-size="sm"
+                                        data-shrink="false"
+                                        data-w-action="dialog.open"
+                                        data-w-target="#geo-add-account-dialog"
+                                    >
+                                        <w:icon name="plus" size="sm"></w:icon> <?= __('添加账户') ?>
+                                    </button>
+                                </div>
+                            </div>
                         </td>
                     </tr>
-                <?php endforeach; ?>
-            <?php endif; ?>
-        </tbody>
-    </table>
-</div>
-
-<!-- 添加账户模态框 -->
-<div id="addAccountModal" style="display: none;">
-    <div class="w-dialog__surface">
-        <h3><?= __('添加账户') ?></h3>
-        <w:form id="account-form">
-            <input type="hidden" name="platform_id" value="<?= $platform->getId() ?>">
-            
-            <div class="w-field">
-                <label><?= __('账户名称') ?> <span class="required">*</span></label>
-                <input type="text" name="account_name" class="w-input" required>
-            </div>
-
-            <div class="w-field">
-                <label><?= __('API密钥') ?> <span class="required">*</span></label>
-                <input type="text" name="api_key" class="w-input" required>
-            </div>
-
-            <div class="w-field">
-                <label><?= __('API密钥（可选）') ?></label>
-                <input type="text" name="api_secret" class="w-input">
-            </div>
-
-            <div class="w-field">
-                <label>
-                    <input type="checkbox" name="is_default" value="1">
-                    <?= __('设为默认账户') ?>
-                </label>
-            </div>
-
-            <div class="w-field">
-                <label>
-                    <input type="checkbox" name="is_active" value="1" checked>
-                    <?= __('激活') ?>
-                </label>
-            </div>
-
-            <div class="w-field">
-                <button type="submit" class="w-button" data-tone="primary"><?= __('保存') ?></button>
-                <button type="button" class="w-button" data-geo-account-action="hide" data-tone="neutral"><?= __('取消') ?></button>
-            </div>
-        </w:form>
+                <?php else: ?>
+                    <?php foreach ($accounts as $account): ?>
+                        <tr>
+                            <td><?= (int)$account['id'] ?></td>
+                            <td>
+                                <span class="w-text" data-truncate="true"><?= $escape($account['account_name'] ?? '') ?></span>
+                            </td>
+                            <td>
+                                <?php if (!empty($account['is_default'])): ?>
+                                    <span class="w-badge" data-tone="primary" data-shrink="false"><?= __('默认') ?></span>
+                                <?php else: ?>
+                                    <span class="w-text" data-tone="muted">—</span>
+                                <?php endif; ?>
+                            </td>
+                            <td>
+                                <?php if (!empty($account['is_active'])): ?>
+                                    <span class="w-badge" data-tone="success" data-shrink="false"><?= __('已激活') ?></span>
+                                <?php else: ?>
+                                    <span class="w-badge" data-tone="muted" data-shrink="false"><?= __('未激活') ?></span>
+                                <?php endif; ?>
+                            </td>
+                            <td>
+                                <?php if (($account['status'] ?? '') === 'active'): ?>
+                                    <span class="w-badge" data-tone="success" data-shrink="false"><?= __('正常') ?></span>
+                                <?php elseif (($account['status'] ?? '') === 'failed'): ?>
+                                    <span class="w-badge" data-tone="danger" data-shrink="false"><?= __('失败') ?></span>
+                                <?php else: ?>
+                                    <span class="w-badge" data-tone="warning" data-shrink="false"><?= __('待测试') ?></span>
+                                <?php endif; ?>
+                            </td>
+                            <td><?= !empty($account['last_test_time']) ? date('Y-m-d H:i:s', (int)$account['last_test_time']) : '—' ?></td>
+                            <td>
+                                <button type="button" class="w-button" data-geo-account-test="<?= (int)$account['id'] ?>" data-tone="neutral" data-variant="outline" data-size="sm" data-shrink="false">
+                                    <w:icon name="link" size="sm"></w:icon> <?= __('测试连接') ?>
+                                </button>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </tbody>
+        </table>
     </div>
 </div>
 
-
+<div
+    class="w-dialog"
+    id="geo-add-account-dialog"
+    tabindex="-1"
+    aria-hidden="true"
+    data-w-component="dialog"
+    data-state="closed"
+    hidden
+    data-testid="geo-add-account-dialog"
+>
+    <div class="w-dialog__frame" data-size="lg">
+        <div class="w-dialog__surface">
+            <w:form id="geo-account-form" class="w-form">
+                <input type="hidden" name="platform_id" value="<?= $platformId ?>">
+                <div class="w-dialog__header">
+                    <h5 class="w-dialog__title"><?= __('添加账户') ?> · <?= $escape($platformName) ?></h5>
+                    <button type="button" class="w-button" aria-label="<?= $escape(__('关闭')) ?>" data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
+                </div>
+                <div class="w-dialog__body">
+                    <div class="w-stack" data-gap="md">
+                        <section class="w-alert" data-tone="info" data-testid="geo-account-guide" aria-labelledby="geo-account-guide-title">
+                            <div class="w-stack" data-gap="sm">
+                                <div class="w-cluster" data-align="center" data-justify="between" style="--w-gap:var(--weline-space-2);">
+                                    <strong id="geo-account-guide-title" class="w-text"><?= $escape($guideTitle) ?></strong>
+                                    <?php if ($docsUrl !== ''): ?>
+                                        <a
+                                            class="w-button"
+                                            data-tone="neutral"
+                                            data-variant="outline"
+                                            data-size="sm"
+                                            data-shrink="false"
+                                            href="<?= $escape($docsUrl) ?>"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                        >
+                                            <w:icon name="external-link" size="sm"></w:icon> <?= $escape($docsLabel) ?>
+                                        </a>
+                                    <?php endif; ?>
+                                </div>
+                                <?php if ($guideSummary !== ''): ?>
+                                    <p class="w-text" data-tone="muted" style="margin:0;"><?= $escape($guideSummary) ?></p>
+                                <?php endif; ?>
+                                <?php if ($guideSteps !== []): ?>
+                                    <ol class="w-text" style="margin:0;padding-left:1.25rem;">
+                                        <?php foreach ($guideSteps as $step): ?>
+                                            <li style="margin-bottom:0.35rem;"><?= $escape((string)$step) ?></li>
+                                        <?php endforeach; ?>
+                                    </ol>
+                                <?php endif; ?>
+                                <p class="w-text" data-tone="muted" data-size="sm" style="margin:0;">
+                                    <?= __('填写下方凭证后保存；密钥会加密存储。') ?>
+                                </p>
+                            </div>
+                        </section>
+                        <div class="w-field">
+                            <label class="w-field__label" for="geo-account-name"><?= __('账户名称') ?> <span class="w-text" data-tone="danger">*</span></label>
+                            <input id="geo-account-name" type="text" name="account_name" class="w-input" required autocomplete="off" placeholder="<?= $escape(__('例如：生产主账户')) ?>">
+                        </div>
+                        <div class="w-field" data-geo-api-key-mode="<?= $escape($apiKeyInput) ?>">
+                            <label class="w-field__label" for="<?= $isJsonFileKey ? 'geo-account-api-key-file' : 'geo-account-api-key' ?>">
+                                <?= $escape($apiKeyLabel) ?> <span class="w-text" data-tone="danger">*</span>
+                            </label>
+                            <?php if ($isJsonFileKey): ?>
+                                <input type="hidden" id="geo-account-api-key" name="api_key" value="">
+                                <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);">
+                                    <input
+                                        id="geo-account-api-key-file"
+                                        type="file"
+                                        class="w-input"
+                                        accept=".json,application/json"
+                                        required
+                                        data-testid="geo-account-json-upload"
+                                        aria-describedby="geo-account-api-key-hint geo-account-json-status"
+                                    >
+                                </div>
+                                <div id="geo-account-json-status" class="w-text" data-tone="muted" data-size="sm" style="margin-top:var(--weline-space-1);" data-geo-json-status>
+                                    <?= __('尚未选择文件') ?>
+                                </div>
+                            <?php else: ?>
+                                <input id="geo-account-api-key" type="password" name="api_key" class="w-input" required autocomplete="new-password" placeholder="<?= $escape(__('必填')) ?>">
+                            <?php endif; ?>
+                            <?php if ($apiKeyHint !== ''): ?>
+                                <div id="geo-account-api-key-hint" class="w-field__hint w-text" data-tone="muted" data-size="sm"><?= $escape($apiKeyHint) ?></div>
+                            <?php endif; ?>
+                        </div>
+                        <div class="w-field">
+                            <label class="w-field__label" for="geo-account-api-secret">
+                                <?= $escape($apiSecretLabel) ?>
+                                <?php if ($apiSecretRequired): ?>
+                                    <span class="w-text" data-tone="danger">*</span>
+                                <?php else: ?>
+                                    <span class="w-text" data-tone="muted">(<?= __('可选') ?>)</span>
+                                <?php endif; ?>
+                            </label>
+                            <input
+                                id="geo-account-api-secret"
+                                type="password"
+                                name="api_secret"
+                                class="w-input"
+                                autocomplete="new-password"
+                                <?= $apiSecretRequired ? 'required' : '' ?>
+                                placeholder="<?= $escape($apiSecretRequired ? __('必填') : __('平台未要求时可留空')) ?>"
+                            >
+                            <?php if ($apiSecretHint !== ''): ?>
+                                <div class="w-field__hint w-text" data-tone="muted" data-size="sm"><?= $escape($apiSecretHint) ?></div>
+                            <?php endif; ?>
+                        </div>
+                        <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-5);">
+                            <label class="w-switch">
+                                <input type="checkbox" name="is_default" value="1">
+                                <span><?= __('设为默认账户') ?></span>
+                            </label>
+                            <label class="w-switch">
+                                <input type="checkbox" name="is_active" value="1" checked>
+                                <span><?= __('启用') ?></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="w-dialog__footer">
+                    <button type="button" class="w-button" data-w-action="dialog.close" data-tone="neutral" data-variant="outline"><?= __('取消') ?></button>
+                    <button type="submit" class="w-button" data-tone="primary"><?= __('保存') ?></button>
+                </div>
+            </w:form>
+        </div>
+    </div>
+</div>
 
 <script>
-function showAddAccountModal() {
-    document.getElementById('addAccountModal').style.display = 'block';
-}
+(function () {
+    'use strict';
 
-function hideAddAccountModal() {
-    document.getElementById('addAccountModal').style.display = 'none';
-}
+    var form = document.getElementById('geo-account-form');
+    if (!form || form.dataset.geoBound === '1') {
+        return;
+    }
+    form.dataset.geoBound = '1';
 
-function testConnection(accountId) {
-    const formData = new FormData();
-    formData.append('account_id', accountId);
-    
-    var testUrl = '@url{'geo/backend/platform/testConnection'}';
-    var testOpts = { method: 'POST', body: formData };
-    Weline.adminRequest('geo', testUrl, testOpts)
-    .then(function(res) {
-        var data = (res && res.data) !== undefined ? res.data : res;
-        Weline.UI.dialog.request({
-            tone: data.success ? 'success' : 'error',
-            title: data.success ? '<?= __('测试成功') ?>' : '<?= __('测试失败') ?>',
-            message: data.message,
-            duration: data.success ? 2000 : 0,
-            confirmable: !data.success
-        });
-        if (data.success) {
-            location.reload();
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        Weline.UI.dialog.request({
-            tone: 'danger',
-            title: '<?= __('测试失败') ?>',
-            message: '<?= __('请重试') ?>',
-            confirmLabel: '<?= __('确定') ?>'
-        });
-    });
-}
+    var okTitle = <?= json_encode((string)__('保存成功'), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+    var failTitle = <?= json_encode((string)__('保存失败'), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+    var testOk = <?= json_encode((string)__('测试成功'), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+    var testFail = <?= json_encode((string)__('测试失败'), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+    var confirmText = <?= json_encode((string)__('确定'), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+    var retryText = <?= json_encode((string)__('请重试'), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+    var jsonNeedFile = <?= json_encode((string)__('请先上传服务账号 JSON 文件'), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+    var jsonInvalid = <?= json_encode((string)__('不是有效的服务账号 JSON（需含 private_key 与 client_email）'), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+    var jsonReadyPrefix = <?= json_encode((string)__('已载入'), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+    var jsonEmpty = <?= json_encode((string)__('尚未选择文件'), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
 
-document.getElementById('account-form').addEventListener('submit', function(e) {
-    e.preventDefault();
-    
-    const formData = new FormData(this);
-    
-    var saveUrl = '@url{'geo/backend/platform/saveAccount'}';
-    var saveOpts = { method: 'POST', body: formData };
-    Weline.adminRequest('geo', saveUrl, saveOpts)
-    .then(function(res) {
-        var data = (res && res.data) !== undefined ? res.data : res;
-        if (data.success) {
-            Weline.UI.dialog.request({
-                tone: 'success',
-                title: '<?= __('成功') ?>',
-                message: '<?= __('保存成功') ?>',
-                duration: 2000,
-                confirmable: false
-            }).then(() => location.reload());
-        } else {
-            Weline.UI.dialog.request({
-                tone: 'danger',
-                title: '<?= __('保存失败') ?>',
-                message: data.message || '<?= __('保存失败') ?>',
-                confirmLabel: '<?= __('确定') ?>'
-            });
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        Weline.UI.dialog.request({
-            tone: 'danger',
-            title: '<?= __('保存失败') ?>',
-            message: '<?= __('请重试') ?>',
-            confirmLabel: '<?= __('确定') ?>'
-        });
-    });
-});
+    var apiKeyInput = document.getElementById('geo-account-api-key');
+    var jsonFileInput = document.getElementById('geo-account-api-key-file');
+    var jsonStatus = form.querySelector('[data-geo-json-status]');
 
-document.querySelectorAll('[data-geo-account-action]').forEach(function(button) {
-    button.addEventListener('click', function() {
-        if (button.getAttribute('data-geo-account-action') === 'show') {
-            showAddAccountModal();
+    function setJsonStatus(text, tone) {
+        if (!jsonStatus) {
             return;
         }
+        jsonStatus.textContent = text;
+        if (tone) {
+            jsonStatus.setAttribute('data-tone', tone);
+        }
+    }
 
-        hideAddAccountModal();
-    });
-});
+    if (jsonFileInput && apiKeyInput) {
+        jsonFileInput.addEventListener('change', function () {
+            var file = jsonFileInput.files && jsonFileInput.files[0];
+            apiKeyInput.value = '';
+            if (!file) {
+                setJsonStatus(jsonEmpty, 'muted');
+                return;
+            }
+            var reader = new FileReader();
+            reader.onload = function () {
+                var raw = String(reader.result || '');
+                var parsed;
+                try {
+                    parsed = JSON.parse(raw);
+                } catch (err) {
+                    setJsonStatus(jsonInvalid, 'danger');
+                    return;
+                }
+                if (!parsed || typeof parsed !== 'object' || !parsed.private_key || !parsed.client_email) {
+                    setJsonStatus(jsonInvalid, 'danger');
+                    return;
+                }
+                apiKeyInput.value = raw;
+                var label = file.name + (parsed.client_email ? ' · ' + parsed.client_email : '');
+                setJsonStatus(jsonReadyPrefix + '：' + label, 'success');
+            };
+            reader.onerror = function () {
+                setJsonStatus(jsonInvalid, 'danger');
+            };
+            reader.readAsText(file);
+        });
+    }
 
-document.querySelectorAll('[data-geo-account-test]').forEach(function(button) {
-    button.addEventListener('click', function() {
-        testConnection(parseInt(button.getAttribute('data-geo-account-test') || '0', 10));
+    form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        if (jsonFileInput && apiKeyInput && !String(apiKeyInput.value || '').trim()) {
+            Weline.UI.dialog.request({
+                tone: 'danger',
+                title: failTitle,
+                message: jsonNeedFile,
+                confirmLabel: confirmText
+            });
+            return;
+        }
+        var body = new FormData(form);
+        // file input 不入库，凭证已写入 api_key
+        body.delete('api_key_file');
+        Weline.adminRequest('geo', '@url{'geo/backend/platform/saveAccount'}', { method: 'POST', body: body })
+            .then(function (res) {
+                var data = (window.Weline && Weline.ApiBusiness && typeof Weline.ApiBusiness.unwrapBusiness === 'function')
+                    ? Weline.ApiBusiness.unwrapBusiness(res)
+                    : res;
+                if (data && data.success) {
+                    Weline.UI.dialog.request({
+                        tone: 'success',
+                        title: okTitle,
+                        message: String(data.message || okTitle),
+                        duration: 1600,
+                        confirmable: false
+                    }).then(function () { location.reload(); });
+                    return;
+                }
+                Weline.UI.dialog.request({
+                    tone: 'danger',
+                    title: failTitle,
+                    message: String((data && data.message) || failTitle),
+                    confirmLabel: confirmText
+                });
+            })
+            .catch(function () {
+                Weline.UI.dialog.request({
+                    tone: 'danger',
+                    title: failTitle,
+                    message: retryText,
+                    confirmLabel: confirmText
+                });
+            });
     });
-});
+
+    document.querySelectorAll('[data-geo-account-test]').forEach(function (button) {
+        button.addEventListener('click', function () {
+            var accountId = parseInt(button.getAttribute('data-geo-account-test') || '0', 10);
+            if (!accountId) {
+                return;
+            }
+            var body = new FormData();
+            body.append('account_id', String(accountId));
+            Weline.adminRequest('geo', '@url{'geo/backend/platform/testConnection'}', { method: 'POST', body: body })
+                .then(function (res) {
+                    var data = (window.Weline && Weline.ApiBusiness && typeof Weline.ApiBusiness.unwrapBusiness === 'function')
+                        ? Weline.ApiBusiness.unwrapBusiness(res)
+                        : res;
+                    var ok = !!(data && data.success);
+                    Weline.UI.dialog.request({
+                        tone: ok ? 'success' : 'danger',
+                        title: ok ? testOk : testFail,
+                        message: String((data && data.message) || (ok ? testOk : retryText)),
+                        duration: ok ? 1600 : 0,
+                        confirmable: !ok,
+                        confirmLabel: confirmText
+                    });
+                    if (ok) {
+                        setTimeout(function () { location.reload(); }, 900);
+                    }
+                })
+                .catch(function () {
+                    Weline.UI.dialog.request({
+                        tone: 'danger',
+                        title: testFail,
+                        message: retryText,
+                        confirmLabel: confirmText
+                    });
+                });
+        });
+    });
+})();
 </script>

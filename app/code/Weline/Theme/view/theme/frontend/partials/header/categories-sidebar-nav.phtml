@@ -134,7 +134,7 @@ foreach ($items as $index => $item) {
         <li class="sidebar-category-item">
             <a class="sidebar-category-card sidebar-category-card--row" href="<?= $escAttr($url) ?>">
                 <span class="sidebar-category-card__media">
-                    <img src="<?= $escAttr($image) ?>" alt="" loading="lazy" width="48" height="48">
+                    <img src="<?= $escAttr($image) ?>" alt="<?= $escAttr($labelForFallback) ?>" loading="lazy" width="48" height="48">
                 </span>
                 <span class="sidebar-category-card__body">
                     <span class="sidebar-category-card__title"><?= $textHtml ?></span>
@@ -161,7 +161,7 @@ foreach ($items as $index => $item) {
              aria-expanded="false">
             <a class="sidebar-category-card__link" href="<?= $escAttr($url) ?>">
                 <span class="sidebar-category-card__media">
-                    <img src="<?= $escAttr($image) ?>" alt="" loading="lazy" width="48" height="48">
+                    <img src="<?= $escAttr($image) ?>" alt="<?= $escAttr($labelForFallback) ?>" loading="lazy" width="48" height="48">
                 </span>
                 <span class="sidebar-category-card__body">
                     <span class="sidebar-category-card__title"><?= $textHtml ?></span>

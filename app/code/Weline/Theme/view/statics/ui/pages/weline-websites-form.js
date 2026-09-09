@@ -313,11 +313,140 @@ function defineWebsiteForm(UI) {
         });
         queueMicrotask(syncCurrencies);
 
+        const subPathInput = element.querySelector('[data-w-sub-path-input], #sub_path');
+        const subPathError = element.querySelector('[data-w-sub-path-error], #sub_path_error');
+        const form = element.querySelector('form.w-form') || element.closest('form') || element.querySelector('form');
+        let subPathTimer = 0;
+        let subPathValid = true;
+
+        const parseCodeList = (raw) => {
+            try {
+                const parsed = JSON.parse(String(raw || '[]'));
+                return Array.isArray(parsed) ? parsed.map((value) => String(value || '').trim()).filter(Boolean) : [];
+            } catch (_error) {
+                return [];
+            }
+        };
+
+        const languageBan = new Set(
+            parseCodeList(element.dataset.subPathBanLanguages).flatMap((code) => {
+                const lower = code.toLowerCase();
+                return [lower, lower.replace(/-/g, '_'), lower.replace(/_/g, '-')];
+            }),
+        );
+        const currencyBan = new Set(
+            parseCodeList(element.dataset.subPathBanCurrencies).map((code) => code.toUpperCase()),
+        );
+        const reservedSegments = new Set([
+            'static', 'pub', 'media', 'api', 'admin',
+            'favicon.ico', 'robots.txt', 'sitemap.xml',
+        ]);
+        const msgLanguagePrefix = element.dataset.subPathBanMsgLanguagePrefix || '网站子路径不允许使用语言编码';
+        const msgCurrencyPrefix = element.dataset.subPathBanMsgCurrencyPrefix || '网站子路径不允许使用货币编码';
+        const msgReserved = element.dataset.subPathBanMsgReserved || '子路径首段为保留字，请更换。';
+        const msgFormat = element.dataset.subPathBanMsgFormat || '子路径格式无效。';
+
+        const formatBanMessage = (prefix, code) => `${String(prefix || '')}「${String(code || '')}」。`;
+        const normalizeSubPathValue = (value) => {
+            let raw = String(value || '').trim();
+            if (!raw || raw === '/') {
+                return '';
+            }
+            if (raw.indexOf('://') !== -1) {
+                try {
+                    raw = new URL(raw).pathname || '';
+                } catch (_error) {
+                    raw = '';
+                }
+            }
+            const hostPath = raw.match(/^[a-z0-9.-]+\.[a-z]{2,}(\/.*)$/i);
+            if (hostPath) {
+                raw = hostPath[1] || '';
+            }
+            raw = raw.replace(/^\/+/, '').replace(/\/+$/, '');
+            return raw ? `/${raw}` : '';
+        };
+
+        const validateSubPathValue = (value) => {
+            const normalized = normalizeSubPathValue(value);
+            if (normalized === '') {
+                return { valid: true, message: '' };
+            }
+            if (!/^(?:\/(?:[A-Za-z0-9][A-Za-z0-9_-]{0,62})){1,5}$/.test(normalized)) {
+                return { valid: false, message: msgFormat };
+            }
+            const segments = normalized.replace(/^\/+/, '').split('/').filter(Boolean);
+            for (const segment of segments) {
+                const lower = segment.toLowerCase();
+                const upper = segment.toUpperCase();
+                if (reservedSegments.has(lower)) {
+                    return { valid: false, message: msgReserved };
+                }
+                if (currencyBan.has(upper)) {
+                    return { valid: false, message: formatBanMessage(msgCurrencyPrefix, upper) };
+                }
+                if (languageBan.has(lower) || /^[a-z]{2}(?:[_-][a-z0-9]{2,8}){1,2}$/.test(lower)) {
+                    return { valid: false, message: formatBanMessage(msgLanguagePrefix, segment) };
+                }
+            }
+            return { valid: true, message: '' };
+        };
+
+        const setSubPathError = (message) => {
+            subPathValid = !message;
+            if (subPathInput instanceof HTMLInputElement) {
+                subPathInput.setAttribute('aria-invalid', message ? 'true' : 'false');
+                subPathInput.classList.toggle('is-invalid', Boolean(message));
+            }
+            if (subPathError instanceof HTMLElement) {
+                if (message) {
+                    subPathError.hidden = false;
+                    subPathError.textContent = message;
+                } else {
+                    subPathError.hidden = true;
+                    subPathError.textContent = '';
+                }
+            }
+        };
+
+        const runSubPathValidation = () => {
+            if (!(subPathInput instanceof HTMLInputElement)) {
+                subPathValid = true;
+                return true;
+            }
+            const result = validateSubPathValue(subPathInput.value);
+            setSubPathError(result.valid ? '' : result.message);
+            return result.valid;
+        };
+
+        if (subPathInput instanceof HTMLInputElement) {
+            const scheduleSubPathValidation = () => {
+                window.clearTimeout(subPathTimer);
+                subPathTimer = window.setTimeout(runSubPathValidation, 300);
+            };
+            listen(subPathInput, 'input', scheduleSubPathValidation);
+            listen(subPathInput, 'change', scheduleSubPathValidation);
+            listen(subPathInput, 'blur', runSubPathValidation);
+            queueMicrotask(runSubPathValidation);
+        }
+
+        if (form instanceof HTMLFormElement) {
+            listen(form, 'submit', (event) => {
+                if (!runSubPathValidation()) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    subPathInput?.focus({ preventScroll: true });
+                }
+            });
+        }
+
         return {
             syncLanguages,
             syncCurrencies,
+            validateSubPath: runSubPathValidation,
             destroy() {
                 window.clearTimeout(filterTimer);
+                window.clearTimeout(subPathTimer);
                 if (timezonePopover instanceof HTMLElement) {
                     timezonePopover.hidden = true;
                 }

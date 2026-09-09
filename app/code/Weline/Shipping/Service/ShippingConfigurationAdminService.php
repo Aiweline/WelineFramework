@@ -9,6 +9,7 @@ use Weline\Shipping\Model\Carrier;
 use Weline\Shipping\Model\FreeShippingRule;
 use Weline\Shipping\Model\RateTemplate;
 use Weline\Shipping\Model\Region;
+use Weline\Shipping\Model\ShippingAddress;
 use Weline\Shipping\Model\ShippingService;
 
 /**
@@ -405,14 +406,23 @@ final class ShippingConfigurationAdminService
         $type = strtolower(trim((string)($data['calculation_type'] ?? RateTemplate::CALC_TYPE_FIXED)));
         $this->assertNameAndCode($name, $code, '费用模板');
         if (!in_array($type, [RateTemplate::CALC_TYPE_WEIGHT, RateTemplate::CALC_TYPE_VOLUME, RateTemplate::CALC_TYPE_QUANTITY, RateTemplate::CALC_TYPE_FIXED, RateTemplate::CALC_TYPE_MIXED], true)) throw new \InvalidArgumentException((string)__('费用计算类型无效。'));
-        $this->assertUnique(RateTemplate::class, RateTemplate::schema_fields_TEMPLATE_CODE, $code);
+        $scope = $this->normalizeScopePayload($data);
+        $this->assertUnique(RateTemplate::class, RateTemplate::schema_fields_TEMPLATE_CODE, $code, [
+            RateTemplate::schema_fields_SCOPE_TYPE => $scope['scope_type'],
+            RateTemplate::schema_fields_SCOPE_ID => $scope['scope_id'],
+        ]);
         /** @var RateTemplate $model */
         $model = $this->fresh(RateTemplate::class);
         $model->setData([
+            RateTemplate::schema_fields_SCOPE_TYPE => $scope['scope_type'],
+            RateTemplate::schema_fields_SCOPE_ID => $scope['scope_id'],
             RateTemplate::schema_fields_TEMPLATE_NAME => $name,
             RateTemplate::schema_fields_TEMPLATE_CODE => $code,
             RateTemplate::schema_fields_CALCULATION_TYPE => $type,
             RateTemplate::schema_fields_BASE_FEE => max(0, (float)($data['base_fee'] ?? 0)),
+            RateTemplate::schema_fields_WEIGHT_RATE => isset($data['weight_rate']) ? max(0, (float)$data['weight_rate']) : null,
+            RateTemplate::schema_fields_VOLUME_RATE => isset($data['volume_rate']) ? max(0, (float)$data['volume_rate']) : null,
+            RateTemplate::schema_fields_QUANTITY_RATE => isset($data['quantity_rate']) ? max(0, (float)$data['quantity_rate']) : null,
             RateTemplate::schema_fields_CURRENCY_CODE => strtoupper(trim((string)($data['currency_code'] ?? 'CNY'))),
             RateTemplate::schema_fields_IS_ACTIVE => !empty($data['is_active']) ? 1 : 0,
         ])->save();
@@ -427,17 +437,26 @@ final class ShippingConfigurationAdminService
         $type = strtolower(trim((string)($data['condition_type'] ?? FreeShippingRule::CONDITION_ORDER_AMOUNT)));
         $this->assertNameAndCode($name, $code, '免邮规则');
         if (!in_array($type, [FreeShippingRule::CONDITION_ORDER_AMOUNT, FreeShippingRule::CONDITION_MEMBER_LEVEL, FreeShippingRule::CONDITION_REGION, FreeShippingRule::CONDITION_COUPON, FreeShippingRule::CONDITION_MIXED], true)) throw new \InvalidArgumentException((string)__('免邮条件类型无效。'));
-        $this->assertUnique(FreeShippingRule::class, FreeShippingRule::schema_fields_RULE_CODE, $code);
+        $scope = $this->normalizeScopePayload($data);
+        $this->assertUnique(FreeShippingRule::class, FreeShippingRule::schema_fields_RULE_CODE, $code, [
+            FreeShippingRule::schema_fields_SCOPE_TYPE => $scope['scope_type'],
+            FreeShippingRule::schema_fields_SCOPE_ID => $scope['scope_id'],
+        ]);
+        $regionIds = $this->parseRegionIdsPayload($data['region_ids'] ?? $data['free_region_selection'] ?? null);
         /** @var FreeShippingRule $model */
         $model = $this->fresh(FreeShippingRule::class);
         $model->setData([
+            FreeShippingRule::schema_fields_SCOPE_TYPE => $scope['scope_type'],
+            FreeShippingRule::schema_fields_SCOPE_ID => $scope['scope_id'],
             FreeShippingRule::schema_fields_RULE_NAME => $name,
             FreeShippingRule::schema_fields_RULE_CODE => $code,
             FreeShippingRule::schema_fields_CONDITION_TYPE => $type,
             FreeShippingRule::schema_fields_MIN_ORDER_AMOUNT => max(0, (float)($data['min_order_amount'] ?? 0)),
             FreeShippingRule::schema_fields_IS_ACTIVE => !empty($data['is_active']) ? 1 : 0,
             FreeShippingRule::schema_fields_PRIORITY => max(0, (int)($data['priority'] ?? 0)),
-        ])->save();
+        ]);
+        $model->setRegionIds($regionIds);
+        $model->save();
         return $model;
     }
 
@@ -449,30 +468,162 @@ final class ShippingConfigurationAdminService
         $carrierId = (int)($data['carrier_id'] ?? 0);
         $this->assertNameAndCode($name, $code, '配送服务');
         $this->assertReference(Carrier::class, $carrierId, '快递公司');
-        $this->assertUnique(ShippingService::class, ShippingService::schema_fields_SERVICE_CODE, $code);
+        $scope = $this->normalizeScopePayload($data);
+        $this->assertUnique(ShippingService::class, ShippingService::schema_fields_SERVICE_CODE, $code, [
+            ShippingService::schema_fields_SCOPE_TYPE => $scope['scope_type'],
+            ShippingService::schema_fields_SCOPE_ID => $scope['scope_id'],
+        ]);
         $minDays = max(0, (int)($data['estimated_days_min'] ?? 0));
         $maxDays = max($minDays, (int)($data['estimated_days_max'] ?? $minDays));
+        $templateId = (int)($data['rate_template_id'] ?? 0);
+        $freeRuleId = (int)($data['free_shipping_rule_id'] ?? 0);
+        $originId = (int)($data['origin_shipping_address_id'] ?? 0);
+        if ($templateId > 0) {
+            $this->assertReference(RateTemplate::class, $templateId, '费用模板');
+            $this->assertSameScope(RateTemplate::class, $templateId, $scope, '费用模板');
+        }
+        if ($freeRuleId > 0) {
+            $this->assertReference(FreeShippingRule::class, $freeRuleId, '免邮规则');
+            $this->assertSameScope(FreeShippingRule::class, $freeRuleId, $scope, '免邮规则');
+        }
+        if ($originId > 0) {
+            $this->assertReference(ShippingAddress::class, $originId, '发货地址');
+        }
         /** @var ShippingService $model */
         $model = $this->fresh(ShippingService::class);
         $model->setData([
+            ShippingService::schema_fields_SCOPE_TYPE => $scope['scope_type'],
+            ShippingService::schema_fields_SCOPE_ID => $scope['scope_id'],
             ShippingService::schema_fields_SERVICE_NAME => $name,
             ShippingService::schema_fields_SERVICE_CODE => $code,
             ShippingService::schema_fields_CARRIER_ID => $carrierId,
-            ShippingService::schema_fields_RATE_TEMPLATE_ID => null,
-            ShippingService::schema_fields_FREE_SHIPPING_RULE_ID => null,
+            ShippingService::schema_fields_RATE_TEMPLATE_ID => $templateId > 0 ? $templateId : null,
+            ShippingService::schema_fields_FREE_SHIPPING_RULE_ID => $freeRuleId > 0 ? $freeRuleId : null,
+            ShippingService::schema_fields_ORIGIN_SHIPPING_ADDRESS_ID => $originId > 0 ? $originId : null,
             ShippingService::schema_fields_ESTIMATED_DAYS_MIN => $minDays,
             ShippingService::schema_fields_ESTIMATED_DAYS_MAX => $maxDays,
-            ShippingService::schema_fields_IS_FREE_SHIPPING => 0,
+            ShippingService::schema_fields_IS_FREE_SHIPPING => !empty($data['is_free_shipping']) ? 1 : 0,
             ShippingService::schema_fields_IS_ACTIVE => !empty($data['is_active']) ? 1 : 0,
             ShippingService::schema_fields_SORT_ORDER => max(0, (int)($data['sort_order'] ?? 0)),
         ])->save();
+
+        $laneRows = [];
+        if (!empty($data['lane_dest_selection'])) {
+            /** @var ServiceLaneAdminService $laneAdmin */
+            $laneAdmin = $this->objectManager->getInstance(ServiceLaneAdminService::class);
+            $laneRows = $laneAdmin->rowsFromAddressSelection($data['lane_dest_selection']);
+        } elseif (!empty($data['lane_dest_rows']) && is_array($data['lane_dest_rows'])) {
+            /** @var ServiceLaneAdminService $laneAdmin */
+            $laneAdmin = $this->objectManager->getInstance(ServiceLaneAdminService::class);
+            $laneRows = $laneAdmin->normalizeRows($data['lane_dest_rows']);
+        }
+        if ($laneRows !== []) {
+            /** @var ServiceLaneAdminService $laneAdmin */
+            $laneAdmin = $this->objectManager->getInstance(ServiceLaneAdminService::class);
+            $laneAdmin->replaceForService((int)$model->getId(), $laneRows);
+        }
+
         return $model;
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function parseRegionIdsPayload(mixed $raw): array
+    {
+        if (is_string($raw) && $raw !== '') {
+            $decoded = json_decode($raw, true);
+            if (is_array($decoded)) {
+                $raw = $decoded;
+            } else {
+                $raw = preg_split('/\s*,\s*/', $raw) ?: [];
+            }
+        }
+        if (!is_array($raw)) {
+            return [];
+        }
+        // address multi selection → ensure regions then collect ids
+        if ($raw !== [] && isset($raw[0]) && is_array($raw[0]) && isset($raw[0]['region_type'])) {
+            try {
+                $created = $this->createRegionsFromAddressSelection($raw);
+                $ids = [];
+                foreach ($created['regions'] as $region) {
+                    $id = (int)$region->getId();
+                    if ($id > 0) {
+                        $ids[] = $id;
+                    }
+                }
+
+                return array_values(array_unique($ids));
+            } catch (\Throwable) {
+                return [];
+            }
+        }
+        $ids = [];
+        foreach ($raw as $item) {
+            if (is_array($item)) {
+                $id = (int)($item['region_id'] ?? $item['id'] ?? 0);
+            } else {
+                $id = (int)$item;
+            }
+            if ($id > 0) {
+                $ids[] = $id;
+            }
+        }
+
+        return array_values(array_unique($ids));
     }
 
     private function assertNameAndCode(string $name, string $code, string $label): void
     {
         if ($name === '' || mb_strlen($name) > 255) throw new \InvalidArgumentException((string)__('%{1}名称不能为空且不能超过 255 个字符。', [$label]));
         if ($code === '' || strlen($code) > 50 || preg_match('/^[A-Z0-9_-]+$/D', $code) !== 1) throw new \InvalidArgumentException((string)__('%{1}代码格式无效。', [$label]));
+    }
+
+    /**
+     * @param array<string,mixed> $data
+     * @return array{scope_type:string,scope_id:int}
+     */
+    private function normalizeScopePayload(array $data): array
+    {
+        $type = strtolower(trim((string)($data['scope_type'] ?? ShippingService::SCOPE_WEBSITE)));
+        if (!in_array($type, [ShippingService::SCOPE_WEBSITE, ShippingService::SCOPE_STORE, ShippingService::SCOPE_CHANNEL], true)) {
+            $type = ShippingService::SCOPE_WEBSITE;
+        }
+        $id = max(0, (int)($data['scope_id'] ?? 0));
+        if (
+            ($type === ShippingService::SCOPE_STORE || $type === ShippingService::SCOPE_CHANNEL)
+            && $id <= 0
+            && trim((string)($data['target_scope'] ?? '')) !== ''
+        ) {
+            /** @var ShippingConfigScopeService $scopeSvc */
+            $scopeSvc = $this->objectManager->getInstance(ShippingConfigScopeService::class);
+            $resolved = $scopeSvc->resolveAdminTarget($data, false);
+
+            return [
+                'scope_type' => $resolved['scope_type'],
+                'scope_id' => $resolved['scope_id'],
+            ];
+        }
+
+        return ['scope_type' => $type, 'scope_id' => $id];
+    }
+
+    /**
+     * @param class-string $class
+     * @param array{scope_type:string,scope_id:int} $scope
+     */
+    private function assertSameScope(string $class, int $id, array $scope, string $label): void
+    {
+        $row = $this->fresh($class)->load($id);
+        if (!$row->getId()) {
+            throw new \InvalidArgumentException((string)__('%{1}不存在。', [$label]));
+        }
+        $type = (string)$row->getData('scope_type');
+        $sid = (int)$row->getData('scope_id');
+        if ($type !== $scope['scope_type'] || $sid !== $scope['scope_id']) {
+            throw new \InvalidArgumentException((string)__('%{1}必须与当前作用范围一致。', [$label]));
+        }
     }
 
     /** @param class-string $class @param array<string,mixed> $extra */

@@ -2198,12 +2198,22 @@
                 return ApiModule.resource(provider, optionalMap);
             },
             markCartActive: async () => {
-                const ApiModule = await moduleLoader.loadModule('api');
-                return ApiModule.markCartActive();
+                if (window.WelineCart && typeof window.WelineCart.markCartActive === 'function') {
+                    return window.WelineCart.markCartActive();
+                }
+                const Cart = await moduleLoader.loadModule('cart');
+                if (Cart && typeof Cart.markCartActive === 'function') {
+                    return Cart.markCartActive();
+                }
             },
             markCartEmpty: async () => {
-                const ApiModule = await moduleLoader.loadModule('api');
-                return ApiModule.markCartEmpty();
+                if (window.WelineCart && typeof window.WelineCart.markCartEmpty === 'function') {
+                    return window.WelineCart.markCartEmpty();
+                }
+                const Cart = await moduleLoader.loadModule('cart');
+                if (Cart && typeof Cart.markCartEmpty === 'function') {
+                    return Cart.markCartEmpty();
+                }
             },
             enableAutoRequests: async () => {
                 const ApiModule = await moduleLoader.loadModule('api');
@@ -2272,7 +2282,32 @@
                     const area = window.location.pathname?.indexOf('/admin') === 0 || window.location.pathname?.indexOf('/backend') === 0 ? 'backend' : 'frontend';
                     return runtimeConfig.i18n?.apiUrl || `/i18n/${area}/word/get-translations`;
                 },
+                switchLang: async (lang, authoritativeHref = '') => {
+                    // Ensure owning I18n module is loaded (Theme declares; do not bake into weline.js).
+                    if (!(window.WelineI18n && typeof window.WelineI18n.switchLang === 'function')
+                        && window.Weline
+                        && typeof window.Weline.load === 'function') {
+                        try {
+                            await window.Weline.load('i18n');
+                        } catch (error) {
+                            console.warn('[Weline.i18n] load i18n module failed:', error);
+                        }
+                    }
+                    if (window.WelineI18n && typeof window.WelineI18n.switchLang === 'function') {
+                        return window.WelineI18n.switchLang(lang, authoritativeHref);
+                    }
+                    console.warn('[Weline.i18n] switchLang unavailable: i18n module not loaded');
+                },
                 setDictionary: async (dict) => {
+                    if (!(window.WelineI18n && typeof window.WelineI18n.setDictionary === 'function')
+                        && window.Weline
+                        && typeof window.Weline.load === 'function') {
+                        try {
+                            await window.Weline.load('i18n');
+                        } catch (error) {
+                            // fall through to config cache
+                        }
+                    }
                     // 优先使用 i18n 模块的方法
                     if (window.WelineI18n && typeof window.WelineI18n.setDictionary === 'function') {
                         return window.WelineI18n.setDictionary(dict);
@@ -2284,6 +2319,15 @@
                     runtimeConfig.i18n.dictionary = dict || {};
                 },
                 translate: async (key, params = {}) => {
+                    if (!(window.WelineI18n && typeof window.WelineI18n.translate === 'function')
+                        && window.Weline
+                        && typeof window.Weline.load === 'function') {
+                        try {
+                            await window.Weline.load('i18n');
+                        } catch (error) {
+                            // fall through
+                        }
+                    }
                     // 优先使用 i18n 模块的方法
                     if (window.WelineI18n && typeof window.WelineI18n.translate === 'function') {
                         return window.WelineI18n.translate(key, params);
@@ -2295,17 +2339,6 @@
                         text = text.replace(new RegExp(`%{${paramKey}}`, 'g'), params[paramKey]);
                     });
                     return text;
-                },
-                switchLang: async (lang) => {
-                    // 优先使用 i18n 模块的方法
-                    if (window.WelineI18n && typeof window.WelineI18n.switchLang === 'function') {
-                        return window.WelineI18n.switchLang(lang);
-                    }
-                    // 降级：使用基本 URL 参数切换
-                    writeLanguagePreference(lang);
-                    const url = new URL(window.location.href);
-                    url.searchParams.set('lang', lang);
-                    window.location.href = url.toString();
                 },
                 loadDictionary: async function () {
                     // 优先使用 i18n 模块的方法

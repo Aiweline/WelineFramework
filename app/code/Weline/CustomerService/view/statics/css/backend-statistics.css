@@ -1,205 +1,194 @@
 /**
- * 客服统计样式
+ * 客服统计：仅消费主题 Token（禁止私造色板 / 彩虹渐变）。
  */
-
-/* 统计区域 */
+.cs-console .statistics-section,
 .statistics-section {
-    background: #fff;
-    padding: 20px;
-    margin-bottom: 20px;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    background: var(--weline-theme-surface, var(--color-surface, #fff));
+    border: 1px solid var(--weline-theme-border, var(--color-border));
+    border-radius: var(--weline-radius-lg, 12px);
+    box-shadow: var(--weline-theme-shadow-sm, var(--weline-shadow-sm, none));
+    overflow: hidden;
 }
 
+.statistics-section > .w-card__header,
 .statistics-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 20px;
-    padding-bottom: 15px;
-    border-bottom: 1px solid #e0e0e0;
+    flex-wrap: wrap;
+    gap: var(--weline-space-3, 0.75rem);
+    padding: var(--weline-space-4, 1rem) var(--weline-space-5, 1.25rem);
+    border-bottom: 1px solid var(--weline-theme-border, var(--color-border));
+    background: var(--weline-theme-surface-muted, var(--color-surface-muted));
 }
 
-.statistics-header h2 {
+.statistics-header h2,
+.statistics-section .w-card__title {
     margin: 0;
-    font-size: 18px;
-    font-weight: 600;
-    color: #333;
+    font-size: 1rem;
+    font-weight: 650;
+    color: var(--weline-theme-text, var(--color-text));
 }
 
-/* 时间段选择器 */
 .period-selector {
-    display: flex;
-    gap: 10px;
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: var(--weline-space-2, 0.5rem);
 }
 
+.period-btn.w-button,
 .period-btn {
-    padding: 6px 16px;
-    border: 1px solid #e0e0e0;
-    background: #fff;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 14px;
-    color: #666;
-    transition: all 0.2s;
-}
-
-.period-btn:hover {
-    border-color: #1976d2;
-    color: #1976d2;
+    min-height: var(--weline-control-height-sm, 2rem);
 }
 
 .period-btn.active {
-    background: #1976d2;
-    border-color: #1976d2;
-    color: #fff;
+    /* w-button primary 由 data-tone 驱动；兜底 */
 }
 
-/* 统计卡片 */
+.statistics-section > .w-card__body {
+    padding: 0;
+}
+
 .statistics-cards {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 20px;
+    grid-template-columns: repeat(auto-fit, minmax(12.5rem, 1fr));
+    gap: var(--weline-space-3, 0.75rem);
+    padding: var(--weline-space-4, 1rem) var(--weline-space-5, 1.25rem);
 }
 
 .stat-card {
-    background: #f9f9f9;
-    border-radius: 8px;
-    padding: 20px;
+    background: var(--weline-theme-surface, var(--color-surface, #fff));
+    border-radius: var(--weline-radius-md, 8px);
+    padding: var(--weline-space-4, 1rem);
     display: flex;
-    align-items: center;
-    gap: 15px;
-    transition: transform 0.2s, box-shadow 0.2s;
-    border: 1px solid #e0e0e0;
-}
-
-.stat-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    align-items: flex-start;
+    gap: var(--weline-space-3, 0.75rem);
+    border: 1px solid var(--weline-theme-border, var(--color-border));
 }
 
 .stat-icon {
-    width: 60px;
-    height: 60px;
-    border-radius: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 28px;
-    color: #fff;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: var(--weline-radius-md, 8px);
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    color: var(--weline-theme-primary, var(--color-primary));
+    background: color-mix(in srgb, var(--weline-theme-primary, var(--color-primary)) 12%, transparent);
 }
 
 .stat-icon.sessions {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: var(--weline-theme-primary, var(--color-primary));
+    background: color-mix(in srgb, var(--weline-theme-primary, var(--color-primary)) 12%, transparent);
 }
 
 .stat-icon.messages {
-    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    color: var(--weline-theme-info, var(--color-info, var(--weline-theme-primary)));
+    background: color-mix(in srgb, var(--weline-theme-info, var(--color-info, var(--weline-theme-primary))) 12%, transparent);
+}
+
+.stat-icon.response-rate {
+    color: var(--weline-theme-success, var(--color-success));
+    background: color-mix(in srgb, var(--weline-theme-success, var(--color-success)) 12%, transparent);
 }
 
 .stat-icon.response-time {
-    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    color: var(--weline-theme-warning, var(--color-warning));
+    background: color-mix(in srgb, var(--weline-theme-warning, var(--color-warning)) 12%, transparent);
 }
 
 .stat-icon.duration {
-    background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+    color: var(--weline-theme-text-muted, var(--color-text-muted));
+    background: var(--weline-theme-surface-muted, var(--color-surface-muted));
 }
 
-.stat-content {
-    flex: 1;
-}
+.stat-content { flex: 1; min-width: 0; }
 
 .stat-value {
-    font-size: 28px;
+    font-size: 1.5rem;
     font-weight: 700;
-    color: #333;
-    margin-bottom: 5px;
+    line-height: 1.2;
+    color: var(--weline-theme-text, var(--color-text));
+    margin-bottom: var(--weline-space-1, 0.25rem);
 }
 
 .stat-label {
-    font-size: 14px;
-    color: #666;
-    margin-bottom: 8px;
+    font-size: 0.8125rem;
+    color: var(--weline-theme-text-muted, var(--color-text-muted));
+    margin-bottom: var(--weline-space-2, 0.5rem);
 }
 
 .stat-detail {
     display: flex;
-    gap: 15px;
-    font-size: 12px;
-    color: #999;
+    flex-wrap: wrap;
+    gap: var(--weline-space-2, 0.5rem) var(--weline-space-3, 0.75rem);
+    font-size: 0.75rem;
+    color: var(--weline-theme-text-subtle, var(--color-text-subtle, var(--weline-theme-text-muted)));
 }
 
-.stat-detail span {
-    display: flex;
-    align-items: center;
-}
-
-/* 统计详情弹窗 */
 .statistics-modal {
     position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
+    inset: 0;
+    background: color-mix(in srgb, var(--weline-theme-text, #000) 45%, transparent);
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 10000;
+    padding: var(--weline-space-4, 1rem);
 }
 
 .statistics-modal .modal-content {
-    background: #fff;
-    border-radius: 8px;
-    width: 90%;
-    max-width: 600px;
+    background: var(--weline-theme-surface, var(--color-surface, #fff));
+    border-radius: var(--weline-radius-lg, 12px);
+    width: min(37.5rem, 100%);
     max-height: 80vh;
     overflow-y: auto;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--weline-theme-border, var(--color-border));
+    box-shadow: var(--weline-theme-shadow-md, var(--weline-shadow-md, none));
 }
 
 .statistics-modal .modal-header {
-    padding: 20px;
-    border-bottom: 1px solid #e0e0e0;
+    padding: var(--weline-space-4, 1rem) var(--weline-space-5, 1.25rem);
+    border-bottom: 1px solid var(--weline-theme-border, var(--color-border));
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: var(--weline-space-3, 0.75rem);
 }
 
 .statistics-modal .modal-header h3 {
     margin: 0;
-    font-size: 18px;
-    font-weight: 600;
+    font-size: 1.05rem;
+    font-weight: 650;
 }
 
 .statistics-modal .close-btn {
-    background: none;
+    background: transparent;
     border: none;
-    font-size: 24px;
+    font-size: 1.25rem;
     cursor: pointer;
-    color: #666;
+    color: var(--weline-theme-text-muted, var(--color-text-muted));
     padding: 0;
-    width: 30px;
-    height: 30px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 4px;
-    transition: background 0.2s;
+    width: 2rem;
+    height: 2rem;
+    display: grid;
+    place-items: center;
+    border-radius: var(--weline-radius-md, 8px);
 }
 
 .statistics-modal .close-btn:hover {
-    background: #f0f0f0;
+    background: var(--weline-theme-surface-muted, var(--color-surface-muted));
+    color: var(--weline-theme-text, var(--color-text));
 }
 
 .statistics-modal .modal-body {
-    padding: 20px;
+    padding: var(--weline-space-5, 1.25rem);
 }
 
 .stat-detail-section {
-    margin-bottom: 25px;
-    padding-bottom: 20px;
-    border-bottom: 1px solid #f0f0f0;
+    margin-bottom: var(--weline-space-5, 1.25rem);
+    padding-bottom: var(--weline-space-4, 1rem);
+    border-bottom: 1px solid var(--weline-theme-border, var(--color-border));
 }
 
 .stat-detail-section:last-child {
@@ -209,38 +198,27 @@
 }
 
 .stat-detail-section h4 {
-    margin: 0 0 15px 0;
-    font-size: 16px;
-    font-weight: 600;
-    color: #333;
+    margin: 0 0 var(--weline-space-3, 0.75rem);
+    font-size: 0.95rem;
+    font-weight: 650;
+    color: var(--weline-theme-text, var(--color-text));
 }
 
 .stat-detail-section p {
-    margin: 8px 0;
-    font-size: 14px;
-    color: #666;
+    margin: var(--weline-space-2, 0.5rem) 0;
+    font-size: 0.875rem;
+    color: var(--weline-theme-text-muted, var(--color-text-muted));
 }
 
-/* 响应式设计 */
 @media (max-width: 768px) {
     .statistics-cards {
         grid-template-columns: 1fr;
     }
-    
     .statistics-header {
         flex-direction: column;
         align-items: flex-start;
-        gap: 15px;
     }
-    
     .period-selector {
         width: 100%;
-        flex-wrap: wrap;
-    }
-    
-    .period-btn {
-        flex: 1;
-        min-width: 80px;
     }
 }
-

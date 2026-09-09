@@ -6,6 +6,8 @@ namespace Weline\Theme\Test\Unit;
 
 use PHPUnit\Framework\TestCase;
 
+\defined('BP') || \define('BP', \dirname(__DIR__, 6) . \DIRECTORY_SEPARATOR);
+
 /**
  * Semantic color matrix: palette → Foundation → component tone bridge.
  */
@@ -72,6 +74,58 @@ class ThemeSemanticColorBridgeContractTest extends TestCase
         self::assertStringContainsString('--color-border-default: #e2e8f0;', $frontendLight);
         self::assertStringNotContainsString('--color-border-default: #64748b;', $frontendLight);
         self::assertStringContainsString('--color-border-strong: #94a3b8;', $frontendLight);
+    }
+
+    public function testDefaultPalettesExposeInheritableSemanticMatrix(): void
+    {
+        $frontendDefault = $this->read('app/code/Weline/Theme/view/theme/frontend/colors/_default.css');
+        $frontendColors = $this->read('app/code/Weline/Theme/view/theme/frontend/variables/_colors.css');
+        $backendDefault = $this->read('app/code/Weline/Theme/view/theme/backend/colors/_default.css');
+
+        foreach ([
+            '--color-secondary:',
+            '--color-secondary-hover:',
+            '--color-secondary-bg-subtle:',
+            '--color-on-secondary:',
+            '--color-success-hover:',
+            '--color-success-bg-subtle:',
+            '--color-danger:',
+            '--color-danger-bg-subtle:',
+            '--color-warning-border-subtle:',
+            '--color-info-text-emphasis:',
+            '--color-text:',
+            '--color-text-subtle:',
+            '--color-surface:',
+            '--color-surface-subtle:',
+            '--color-border-subtle:',
+            '--color-border-strong:',
+        ] as $needle) {
+            self::assertStringContainsString($needle, $frontendDefault, 'frontend _default: ' . $needle);
+            self::assertStringContainsString($needle, $frontendColors, 'frontend _colors: ' . $needle);
+        }
+
+        foreach ([
+            '--backend-color-secondary:',
+            '--backend-color-secondary-bg-subtle:',
+            '--backend-color-on-secondary:',
+            '--backend-color-success-active:',
+            '--backend-color-danger-border-subtle:',
+            '--backend-color-warning-text-emphasis:',
+            '--backend-color-info-bg-subtle:',
+            '--backend-color-on-primary:',
+            '--backend-color-surface:',
+            '--backend-color-border-subtle:',
+            '--backend-color-border-strong:',
+        ] as $needle) {
+            self::assertStringContainsString($needle, $backendDefault, 'backend _default: ' . $needle);
+        }
+    }
+
+    public function testHardConstraintsForbidPrivateColorsOnBaseComponents(): void
+    {
+        $catalog = $this->read('app/code/Weline/Ai/Mcp/src/HardConstraintsCatalog.php');
+        self::assertStringContainsString("'id' => 'theme_base_components_token_only'", $catalog);
+        self::assertStringContainsString('basic/foundation components', $catalog);
     }
 
     private function extractBackendAreaBlock(string $foundation): string

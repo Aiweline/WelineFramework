@@ -48,7 +48,7 @@ class DeliveryAddressQueryProvider implements QueryProviderInterface
     {
         $customerId = $this->getCustomerId();
         if ($customerId <= 0) {
-            return $this->failure('Please log in to continue.');
+            return $this->failure((string)__('请先登录'));
         }
 
         $payload = $params['address'] ?? $params['form'] ?? $params;
@@ -64,35 +64,35 @@ class DeliveryAddressQueryProvider implements QueryProviderInterface
         $data['id'] = (int)$address->getId();
         $data['delivery_address_id'] = (int)$address->getId();
 
-        return $this->success('Delivery address saved.', $data);
+        return $this->success((string)__('收货地址已保存'), $data);
     }
 
     private function delete(array $params): array
     {
         $customerId = $this->getCustomerId();
         if ($customerId <= 0) {
-            return $this->failure('Please log in to continue.');
+            return $this->failure((string)__('请先登录'));
         }
 
         $id = $this->readAddressId($params);
         if ($id <= 0) {
-            return $this->failure('Delivery address ID is required.');
+            return $this->failure((string)__('收货地址ID不能为空'));
         }
 
         $this->deliveryAddressService->delete($id, $customerId);
-        return $this->success('Delivery address removed.');
+        return $this->success((string)__('收货地址已删除'));
     }
 
     private function setDefault(array $params): array
     {
         $customerId = $this->getCustomerId();
         if ($customerId <= 0) {
-            return $this->failure('Please log in to continue.');
+            return $this->failure((string)__('请先登录'));
         }
 
         $id = $this->readAddressId($params);
         if ($id <= 0) {
-            return $this->failure('Delivery address ID is required.');
+            return $this->failure((string)__('收货地址ID不能为空'));
         }
 
         $address = $this->deliveryAddressService->setDefault($id, $customerId);
@@ -100,7 +100,7 @@ class DeliveryAddressQueryProvider implements QueryProviderInterface
         $data['id'] = (int)$address->getId();
         $data['delivery_address_id'] = (int)$address->getId();
 
-        return $this->success('Delivery address default updated.', $data);
+        return $this->success((string)__('默认收货地址已更新'), $data);
     }
 
     private function readAddressId(array $params): int
@@ -118,7 +118,7 @@ class DeliveryAddressQueryProvider implements QueryProviderInterface
         $body = is_array($params) ? $params : [];
         foreach (['country', 'province', 'city'] as $field) {
             if (trim((string)($body[$field] ?? '')) === '') {
-                return $this->failure($field . ' is required.');
+                return $this->failure((string)__('%{1}不能为空', [$field]));
             }
         }
 
@@ -132,24 +132,24 @@ class DeliveryAddressQueryProvider implements QueryProviderInterface
             $this->syncToDatabase($customerId, $deliveryAddress);
         }
 
-        return $this->success('Delivery address updated.', $deliveryAddress);
+        return $this->success((string)__('收货地址已更新'), $deliveryAddress);
     }
 
     private function getSessionAddress(): array
     {
         $address = $this->sessionFactory->createSession()->get('shipping_delivery_address');
-        return $this->success('Delivery address loaded.', is_array($address) ? $address : []);
+        return $this->success((string)__('收货地址已加载'), is_array($address) ? $address : []);
     }
 
     private function syncFromBrowser(mixed $params): array
     {
         $customerId = $this->getCustomerId();
         if ($customerId <= 0) {
-            return $this->failure('Please log in to continue.');
+            return $this->failure((string)__('请先登录'));
         }
         $address = is_array($params) ? $params : [];
         if ($address === []) {
-            return $this->failure('Address data is required.');
+            return $this->failure((string)__('地址数据不能为空'));
         }
 
         $session = $this->sessionFactory->createSession();
@@ -157,7 +157,7 @@ class DeliveryAddressQueryProvider implements QueryProviderInterface
         $session->save();
         $this->syncToDatabase($customerId, $address);
 
-        return $this->success('Delivery address synced.', $address);
+        return $this->success((string)__('收货地址已同步'), $address);
     }
 
     private function shippingInfoByLocation(mixed $params): array
@@ -165,7 +165,7 @@ class DeliveryAddressQueryProvider implements QueryProviderInterface
         $body = is_array($params) ? $params : [];
         $countryCode = trim((string)($body['country_code'] ?? $body['countryCode'] ?? 'CN'));
         if ($countryCode === '') {
-            return $this->failure('Country code is required.');
+            return $this->failure((string)__('国家代码不能为空'));
         }
         $province = (string)($body['province'] ?? '');
         $city = (string)($body['city'] ?? '');
@@ -210,7 +210,7 @@ class DeliveryAddressQueryProvider implements QueryProviderInterface
             }
         }
 
-        return $this->success('Shipping info loaded.', $shippingInfo);
+        return $this->success((string)__('配送信息已加载'), $shippingInfo);
     }
 
     private function normalizeDeliveryAddress(array $body): array
@@ -228,6 +228,8 @@ class DeliveryAddressQueryProvider implements QueryProviderInterface
             'district_code' => (string)($body['district_code'] ?? ''),
             'district_region_id' => $body['district_region_id'] ?? null,
             'street' => (string)($body['street'] ?? ''),
+            'street_id' => isset($body['street_id']) && $body['street_id'] !== '' ? (int)$body['street_id'] : null,
+            'street_code' => (string)($body['street_code'] ?? ''),
             'postal_code' => (string)($body['postal_code'] ?? ''),
             'latitude' => $body['latitude'] ?? null,
             'longitude' => $body['longitude'] ?? null,
@@ -265,6 +267,7 @@ class DeliveryAddressQueryProvider implements QueryProviderInterface
                 'district_code' => (string)($addressData['district_code'] ?? ''),
                 'district_region_id' => $addressData['district_region_id'] ?? null,
                 'street' => (string)($addressData['street'] ?? ''),
+                'street_id' => $addressData['street_id'] ?? null,
                 'postal_code' => (string)($addressData['postal_code'] ?? ''),
             ];
 
@@ -282,6 +285,7 @@ class DeliveryAddressQueryProvider implements QueryProviderInterface
                 'city' => $data['city'],
                 'district' => $data['district'],
                 'street' => $data['street'],
+                'street_id' => $data['street_id'],
                 'postal_code' => $data['postal_code'],
                 'is_default' => 1,
                 'is_enabled' => 1,
@@ -457,6 +461,8 @@ class DeliveryAddressQueryProvider implements QueryProviderInterface
             'district_code' => $string,
             'district_region_id' => ['type' => 'mixed'],
             'street' => ['type' => 'string', 'max_length' => 512],
+            'street_id' => ['type' => 'mixed'],
+            'street_code' => $string,
             'postal_code' => $string,
             'latitude' => ['type' => 'mixed'],
             'longitude' => ['type' => 'mixed'],
@@ -484,6 +490,8 @@ class DeliveryAddressQueryProvider implements QueryProviderInterface
             'district_code' => $string,
             'district_region_id' => ['type' => 'mixed'],
             'street' => ['type' => 'string', 'max_length' => 512],
+            'street_id' => ['type' => 'mixed'],
+            'street_code' => $string,
             'postal_code' => $string,
             'is_default' => ['type' => 'mixed'],
             'is_enabled' => ['type' => 'mixed'],

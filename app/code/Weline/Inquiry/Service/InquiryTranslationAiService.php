@@ -86,6 +86,7 @@ final class InquiryTranslationAiService
                 $defaultLocale,
                 $targetLocale,
                 $this->aiConfig->getStrategy($targetLocale),
+                'inquiry',
             );
             if (!$batch['success']) {
                 $errors = array_merge($errors, $batch['errors']);

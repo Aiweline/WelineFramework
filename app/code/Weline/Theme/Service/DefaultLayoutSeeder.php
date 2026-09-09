@@ -62,24 +62,34 @@ class DefaultLayoutSeeder
         }
 
         foreach ($defaultConfig as $widgetData) {
-            $context = $this->runtimeLayoutResolver->buildContext($themeId, $pageType, 'frontend', [
-                'layout_option' => 'default',
-                'scope' => 'default.default.default',
-                'target_type' => 'global',
-                'target_id' => 0,
-                'locale_code' => '',
-            ]);
-            $this->layoutWriter->addWidget(
-                $context,
-                \array_merge($widgetData, [
-                    'theme_id' => $themeId,
-                    'page_type' => $pageType,
-                    'status' => ThemeLayout::STATUS_DRAFT,
-                    'is_active' => true,
-                ]),
-                'system:default-layout-seeder',
-                'DefaultLayoutSeeder',
-            );
+            try {
+                $context = $this->runtimeLayoutResolver->buildContext($themeId, $pageType, 'frontend', [
+                    'layout_option' => 'default',
+                    'scope' => 'default.default.default',
+                    'target_type' => 'global',
+                    'target_id' => 0,
+                    'locale_code' => '',
+                ]);
+                $this->layoutWriter->addWidget(
+                    $context,
+                    \array_merge($widgetData, [
+                        'theme_id' => $themeId,
+                        'page_type' => $pageType,
+                        'status' => ThemeLayout::STATUS_DRAFT,
+                        'is_active' => true,
+                    ]),
+                    'system:default-layout-seeder',
+                    'DefaultLayoutSeeder',
+                );
+            } catch (\Throwable $e) {
+                // 单部件失败不得中断整页/全站布局播种（例：依赖已卸载模块）
+                w_log_warning(
+                    '[DefaultLayoutSeeder] skip widget on seed: ' . ($widgetData['widget_module'] ?? '')
+                    . '::' . ($widgetData['widget_code'] ?? '') . ' — ' . $e->getMessage(),
+                    [],
+                    'theme_layout_seed.log'
+                );
+            }
         }
 
         return true;
@@ -97,8 +107,16 @@ class DefaultLayoutSeeder
         $seededPageTypes = [];
 
         foreach (ThemeLayout::getPageTypes() as $pageType => $label) {
-            if ($this->seedDefaultLayout($themeId, $pageType, $forceReseed)) {
-                $seededPageTypes[] = $pageType;
+            try {
+                if ($this->seedDefaultLayout($themeId, $pageType, $forceReseed)) {
+                    $seededPageTypes[] = $pageType;
+                }
+            } catch (\Throwable $e) {
+                w_log_warning(
+                    '[DefaultLayoutSeeder] skip pageType on seed: ' . $pageType . ' — ' . $e->getMessage(),
+                    [],
+                    'theme_layout_seed.log'
+                );
             }
         }
 

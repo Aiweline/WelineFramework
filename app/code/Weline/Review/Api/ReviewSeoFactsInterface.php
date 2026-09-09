@@ -18,4 +18,12 @@ interface ReviewSeoFactsInterface
      * }
      */
     public function seoFacts(string $typeCode, string $externalEntityUuid, int $sampleSize = 10): array;
+
+    /**
+     * Batch aggregates for product cards / shelves (offer or product UUID).
+     *
+     * @param list<string> $externalEntityUuids
+     * @return array<string, array{review_count:int, average_rating:float}>
+     */
+    public function aggregatesForExternalUuids(string $typeCode, array $externalEntityUuids): array;
 }

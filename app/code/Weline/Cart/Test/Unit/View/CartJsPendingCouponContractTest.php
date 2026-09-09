@@ -17,10 +17,23 @@ final class CartJsPendingCouponContractTest extends TestCase
 
         self::assertStringContainsString('weline.cart.pending_coupon', $cartJs);
         self::assertStringContainsString('weline.cart.summary_cache', $cartJs);
+        self::assertStringContainsString('summaryCacheKeyFor', $cartJs);
+        self::assertStringContainsString("SUMMARY_CACHE_KEY + '.'", $cartJs);
+        self::assertStringContainsString('currentDisplayCurrency', $cartJs);
+        self::assertStringContainsString('summaryLocaleCurrencyMatches', $cartJs);
         self::assertStringContainsString('rememberSummary', $cartJs);
         self::assertStringContainsString('getCachedSummary', $cartJs);
         self::assertStringContainsString('clearCachedSummary', $cartJs);
+        self::assertStringContainsString('cartType', $cartJs);
         self::assertStringContainsString('weline:cart:apply-coupon', $cartJs);
+        self::assertStringContainsString('weline:maintenance:wait-gift-redeemed', $cartJs);
+        self::assertStringContainsString('installCartStatus', $cartJs);
+        self::assertStringContainsString('markCartActive', $cartJs);
+        self::assertStringContainsString('CART_FLAG_KEY', $cartJs);
+        self::assertStringContainsString('weline_cart_has_items', $cartJs);
+        self::assertStringNotContainsString('installApiCartConfig', $cartJs);
+        self::assertStringNotContainsString('cartFlagStorageKey', $cartJs);
+        self::assertStringContainsString('load: "defer"', $modules);
         self::assertStringContainsString('renewGuestSession', $cartJs);
         self::assertStringContainsString('Weline_Cart::js/cart.js', $modules);
         self::assertStringContainsString("'renewGuestSession'", $provider);

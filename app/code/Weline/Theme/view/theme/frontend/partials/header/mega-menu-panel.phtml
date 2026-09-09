@@ -177,6 +177,7 @@ $resolveName = static function (array $node) use ($resolveLocale, $esc): string 
                 if ($childTextHtml === '') {
                     continue;
                 }
+                $childTextPlain = trim((string)($child['text'] ?? $child['name'] ?? ''));
                 $tabId = $panelId . '-tab-' . $index;
                 $panelTarget = $panelId . '-panel-' . $index;
                 $isActive = $index === 0;
@@ -192,6 +193,7 @@ $resolveName = static function (array $node) use ($resolveLocale, $esc): string 
                        aria-selected="<?= $isActive ? 'true' : 'false' ?>"
                        aria-controls="<?= $escAttr($panelTarget) ?>">
                         <span class="mega-menu-sidebar-item__media">
+                            <?php /* Decorative thumb beside visible label text — empty alt avoids SEO short-alt noise. */ ?>
                             <img src="<?= $escAttr($childImage) ?>"
                                  alt=""
                                  loading="lazy"
@@ -237,9 +239,15 @@ $resolveName = static function (array $node) use ($resolveLocale, $esc): string 
                     <?php if ($showIntro): ?>
                         <div class="mega-menu-panel__intro" data-testid="mega-menu-category-intro">
                             <?php if ($childBanner !== ''): ?>
+                                <?php
+                                $bannerAltBase = $childTextPlain !== '' ? $childTextPlain : strip_tags($childTextHtml);
+                                $bannerAlt = trim($bannerAltBase . ' — ' . (string)__('汉服分类展示图'));
+                                ?>
                                 <div class="mega-menu-panel__banner">
                                     <img src="<?= $escAttr($childBanner) ?>"
-                                         alt=""
+                                         alt="<?= $escAttr($bannerAlt) ?>"
+                                         width="1500"
+                                         height="300"
                                          loading="lazy"
                                          decoding="async">
                                 </div>

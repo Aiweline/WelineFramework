@@ -52,4 +52,29 @@ class SeoProfileGeoMetadataNormalizerTest extends TestCase
 
         self::assertSame(0, $item['is_published']);
     }
+
+    public function testArticleAuthorsBackfillScalarAuthorAndDepth(): void
+    {
+        $item = (new SeoProfileGeoMetadataNormalizer())->toFeedItemData([
+            'page_type' => 'blog_post',
+            'title' => 'Post',
+            'description' => 'Body',
+            'canonical_url' => 'https://shop.test/blog/a',
+            'robots' => 'index,follow',
+            'article' => [
+                'headline' => 'Post',
+                'authors' => [[
+                    '@type' => 'Person',
+                    'name' => 'Editor',
+                    'url' => 'https://shop.test/about/editor',
+                    'jobTitle' => 'Researcher',
+                ]],
+            ],
+        ]);
+
+        self::assertSame('Editor', $item['metadata']['author'] ?? null);
+        self::assertSame('Editor', $item['metadata']['authors'][0]['name'] ?? null);
+        self::assertSame('https://shop.test/about/editor', $item['metadata']['authors'][0]['url'] ?? null);
+        self::assertSame('Researcher', $item['metadata']['authors'][0]['jobTitle'] ?? null);
+    }
 }

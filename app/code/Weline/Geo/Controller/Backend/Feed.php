@@ -59,19 +59,19 @@ class Feed extends BackendController
     {
         try {
             $id = (int)$this->request->getParam('id', 0);
-            
+            if ($id <= 0) {
+                Message::warning(__('内容源由系统维护，不可手工新建；请从列表进入启用设置。'));
+                $this->redirect('geo/backend/feed');
+                return '';
+            }
+
             /** @var FeedModel $feedModel */
             $feedModel = ObjectManager::getInstance(FeedModel::class);
-            
-            if ($id > 0) {
-                $feed = $feedModel->load($id);
-                if (!$feed->getId()) {
-                    Message::error(__('Feed不存在'));
-                    $this->redirect('geo/backend/feed');
-                    return '';
-                }
-            } else {
-                $feed = $feedModel;
+            $feed = $feedModel->load($id);
+            if (!$feed->getId()) {
+                Message::error(__('Feed不存在'));
+                $this->redirect('geo/backend/feed');
+                return '';
             }
 
             $this->assign('feed', $feed);
@@ -87,10 +87,11 @@ class Feed extends BackendController
                 FeedModel::SOURCE_CUSTOM => __('自定义'),
             ]);
             $this->assign('update_frequencies', [
-                FeedModel::FREQUENCY_REALTIME => __('实时'),
+                FeedModel::FREQUENCY_EVERY_10_MIN => __('每10分钟（有变更才生成）'),
                 FeedModel::FREQUENCY_HOURLY => __('每小时'),
                 FeedModel::FREQUENCY_DAILY => __('每天'),
                 FeedModel::FREQUENCY_WEEKLY => __('每周'),
+                FeedModel::FREQUENCY_REALTIME => __('实时（已停用，等同定时）'),
             ]);
             
             return $this->fetch();
@@ -115,59 +116,24 @@ class Feed extends BackendController
 
         try {
             $id = (int)$this->request->getPost('id', 0);
-            $feedName = $this->request->getPost('feed_name', '');
-            $feedType = $this->request->getPost('feed_type', FeedModel::TYPE_CONTENT);
-            $sourceType = $this->request->getPost('source_type', FeedModel::SOURCE_DATABASE);
-            $sourceConfig = $this->request->getPost('source_config', '{}');
-            $feedUrl = $this->request->getPost('feed_url', '');
-            $updateFrequency = $this->request->getPost('update_frequency', FeedModel::FREQUENCY_DAILY);
-            // 默认启用自动推送（新建时默认为1，编辑时如果未提交则保持原值）
-            $isAutoPushPost = $this->request->getPost('is_auto_push');
-            if ($isAutoPushPost === null) {
-                // 表单未提交该字段，新建时默认为1，编辑时保持原值
-                if ($id > 0) {
-                    $existingFeed = $feedModel->load($id);
-                    $isAutoPush = (int)($existingFeed->getData(FeedModel::schema_fields_IS_AUTO_PUSH) ?? 1);
-                } else {
-                    $isAutoPush = 1; // 新建时默认启用
-                }
-            } else {
-                $isAutoPush = (int)$isAutoPushPost;
-            }
-            $isEnabled = (int)$this->request->getPost('is_enabled', 1);
-            $config = $this->request->getPost('config', '{}');
-
-            if (empty($feedName)) {
-                return $this->jsonResponse(false, __('请填写Feed名称'));
+            if ($id <= 0) {
+                return $this->jsonResponse(false, __('内容源由系统维护，不可手工新建'));
             }
 
             /** @var FeedModel $feedModel */
             $feedModel = ObjectManager::getInstance(FeedModel::class);
-            
-            if ($id > 0) {
-                $feed = $feedModel->load($id);
-                if (!$feed->getId()) {
-                    return $this->jsonResponse(false, __('Feed不存在'));
-                }
-            } else {
-                $feed = $feedModel;
+            $feed = $feedModel->load($id);
+            if (!$feed->getId()) {
+                return $this->jsonResponse(false, __('Feed不存在'));
             }
 
-            $feed->setData([
-                FeedModel::schema_fields_FEED_NAME => $feedName,
-                FeedModel::schema_fields_FEED_TYPE => $feedType,
-                FeedModel::schema_fields_SOURCE_TYPE => $sourceType,
-                FeedModel::schema_fields_SOURCE_CONFIG => $sourceConfig,
-                FeedModel::schema_fields_FEED_URL => $feedUrl,
-                FeedModel::schema_fields_UPDATE_FREQUENCY => $updateFrequency,
-                FeedModel::schema_fields_IS_AUTO_PUSH => $isAutoPush,
-                FeedModel::schema_fields_IS_ENABLED => $isEnabled,
-                FeedModel::schema_fields_CONFIG => $config,
-            ]);
-
+            // Checkbox omitted when unchecked → treat as disabled.
+            $isEnabled = $this->request->getPost('is_enabled') !== null ? 1 : 0;
+            $feed->setData(FeedModel::schema_fields_IS_ENABLED, $isEnabled);
+            $feed->setData(FeedModel::schema_fields_UPDATED_AT, time());
             $feed->save();
 
-            return $this->jsonResponse(true, __('保存成功'));
+            return $this->jsonResponse(true, __('Saved successfully'));
         } catch (\Exception $e) {
             return $this->jsonResponse(false, __('保存失败：%{1}', $e->getMessage()));
         }
@@ -213,5 +179,19 @@ class Feed extends BackendController
         } catch (\Exception $e) {
             return $this->jsonResponse(false, __('生成失败：%{1}', $e->getMessage()));
         }
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    private function jsonResponse(bool $success, string $message, array $data = []): string
+    {
+        $this->request->getResponse()->setHeader('Content-Type', 'application/json');
+
+        return \json_encode([
+            'success' => $success,
+            'message' => $message,
+            'data' => $data,
+        ], JSON_UNESCAPED_UNICODE);
     }
 }

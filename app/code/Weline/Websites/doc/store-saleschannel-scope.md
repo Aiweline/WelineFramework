@@ -33,6 +33,16 @@
 
 `Weline\Websites\Service\ScopeResolver`（由 `DetectWebsite::processSite` 在 Website 命中后调用，一次解析并冻结）：
 
+### L1 / L2 / L3 缓存分层
+
+| 层 | 作用 | 实现 |
+|---|---|---|
+| L1 候选目录 | 给最长匹配提供 Website/Store/Channel 候选集 | DetectWebsite rows、`StoreCatalog` / `SalesChannelCatalog` HotCache |
+| L2 路径命中 | `scheme+host+port+path` → 完整 Scope 身份；跨 worker 共享 | `ScopePathMatchCache`（`website_detect` / `global/websites-registry`） |
+| L3 请求快照 | 本请求已冻结的 Website/Store/Channel 摘要 | `WebsiteData` + `ScopeData`（RequestContext） |
+
+安装前若 L2 命中且 website 一致、店/渠仍可用，则跳过 Store 最长扫描与 default Channel 查询，直接冻结并回写 L3。变更仍走 `WebsiteCacheInvalidationService`（registry version / pool clear）。
+
 1. Website 阶段先按“精确 Host > 单层 `www.` 别名”和最长完整路径段边界选站；`Website.url` 与 `WebsiteDomain` 同 rank 命中不同站点时直接 409。
 2. 以 Website 入口为基准，先由 Framework 统一解析可选 area 与货币/语言前缀，Store 选择不依赖本地化段的顺序。
 3. 使用服务端构造的可信请求 URL 做规范 Origin 匹配；该 Origin 要求 scheme、端口一致，Host 只允许单层 `www.` 等价。
@@ -41,6 +51,7 @@
 6. 可信 URL 无 Store 命中时，才选择站点的 `default/normal` Store，此时保留已移除本地化前缀的站点相对路由；
 7. 只选择该 Store 的 `default` Channel，并复核 Store/Channel 的 enabled、归属和有效生命周期；
 8. `__store` / `__channel` 仅作一致性断言，不能改变可信解析结果。
+9. 成功后 `ScopeData::install` 粘贴 Store/Channel 摘要；`Store::load` / `SalesChannel::load` / catalog `byId` 对当前 Scope 优先读 L3，其次 L2 实体快照；`forceReload` 才打库。
 
 未知、跨站、停用、墓碑、无效配置、路径歧义或显式断言冲突全部 fail-closed；只有“可信 URL 没有匹配 Store”这一种情况才允许使用 default，不会回落到其他站点的店铺。普通页面 Scope 冻结后不可改写；`rest_frontend` QueryBin 因 API 路径不携带 storefront Store 段，允许在 Host、Token、Catalog、rollout 复核完成且 execution binding digest 完全一致时，把 Host 默认 Store 细化为同 Website 的受信 Store/Channel。该受控例外只替换 Scope 投影并清空 storefront route remainder，不改变 authority、method、URI、locale、currency 或 timezone；跨 Website、非 frontend、非权威或 binding 不一致均在改写前返回 409。冻结位置：
 

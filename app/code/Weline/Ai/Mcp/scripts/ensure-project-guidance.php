@@ -765,10 +765,14 @@ function welineGuidanceEnsureCodexPlugin(
         ? (string) ($generationPayload['source_generation'] ?? '')
         : '';
     $manifestMtime = is_file($manifest) ? (int) (@filemtime($manifest) ?: 0) : 0;
-    $declaresDuplicateServer = is_array($payload) && array_key_exists('mcpServers', $payload);
-    // Hook and MCP commands point at the source tree. Editing a PHP file does
-    // not require reinstalling the plugin or removing its live registration.
-    $needsRefresh = !is_array($payload) || $declaresDuplicateServer;
+    // Codex caches the installed plugin artifact. Keep the single shared
+    // registration, but refresh that cache when its source-generation marker
+    // is stale; otherwise a new task can retain a dead MCP transport.
+    $needsRefresh = welineGuidanceCodexPluginNeedsRefresh(
+        $payload,
+        $artifactGeneration,
+        (string) ($sourceState['generation'] ?? ''),
+    );
     if (!$needsRefresh) {
         return [
             'ready' => true,

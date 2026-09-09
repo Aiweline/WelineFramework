@@ -220,6 +220,18 @@
         if (!isCurrencyCodeShape(code)) {
             return false;
         }
+        // Explicit allow-list only — ignore defaultCurrency-only maps so path/SSR
+        // currentCurrency (e.g. USD) is not stripped when availableCurrencies is unset.
+        const explicit = normalizeCurrencyList(
+            config.availableCurrencies
+            || config.supportedCurrencies
+            || config.currencyCodes
+            || config.currencies
+            || []
+        );
+        if (explicit.length === 0) {
+            return true;
+        }
         return collectSupportedCurrencyCodes(config)[code] === true;
     };
 
@@ -369,6 +381,116 @@
         }
     };
 
+    const readHeaderValue = (headers, name) => {
+        if (!headers || typeof headers !== 'object') {
+            return '';
+        }
+        const needle = String(name || '').toLowerCase();
+        for (const key of Object.keys(headers)) {
+            if (String(key).toLowerCase() === needle) {
+                return String(headers[key] || '').trim();
+            }
+        }
+        return '';
+    };
+
+    const resolveWorkerResponseCacheState = (responseMeta) => {
+        if (!responseMeta || typeof responseMeta !== 'object') {
+            return 'unknown';
+        }
+        const direct = String(responseMeta.localCache || responseMeta.workerResponseCache || '').trim();
+        if (direct) {
+            return direct.toLowerCase() === 'skip' ? 'live' : direct.toLowerCase();
+        }
+        const fromHeaders = readHeaderValue(responseMeta.headers, 'X-Weline-Worker-Response-Cache');
+        if (!fromHeaders) {
+            return 'unknown';
+        }
+        return fromHeaders.toLowerCase() === 'skip' ? 'live' : fromHeaders.toLowerCase();
+    };
+
+    // Main-thread L1 mirrors Worker TTL whitelist — avoids postMessage wall-clock under page load.
+    const CLIENT_RESPONSE_CACHE_TTL_MS = Object.freeze({
+        'region.list': 4 * 60 * 60 * 1000,
+        'region.country_profile': 12 * 60 * 60 * 1000,
+        'region.children': 4 * 60 * 60 * 1000,
+        'region.format_suggestion': 4 * 60 * 60 * 1000,
+        'region.has_streets': 4 * 60 * 60 * 1000,
+        'region.streets': 4 * 60 * 60 * 1000,
+        'consent.status': 60 * 60 * 1000,
+        'order.getCheckoutRemark': 30 * 60 * 1000,
+        'compare.list': 15 * 60 * 1000,
+        'compare.pageView': 15 * 60 * 1000,
+    });
+    const CLIENT_RESPONSE_CACHE_INVALIDATE = Object.freeze({
+        'consent.accept': ['consent.status'],
+        'consent.withdraw': ['consent.status'],
+        'order.saveCheckoutRemark': ['order.getCheckoutRemark'],
+        'order.clearCheckoutRemark': ['order.getCheckoutRemark'],
+        'compare.add': ['compare.list', 'compare.pageView'],
+        'compare.remove': ['compare.list', 'compare.pageView'],
+        'compare.clear': ['compare.list', 'compare.pageView'],
+    });
+
+    const clientResponseCacheTtlMs = (capability) => {
+        const ttl = CLIENT_RESPONSE_CACHE_TTL_MS[String(capability || '')];
+        return typeof ttl === 'number' && ttl > 0 ? ttl : 0;
+    };
+
+    const stableClientCacheStringify = (value) => {
+        if (value === null || typeof value !== 'object') {
+            return JSON.stringify(value);
+        }
+        if (Array.isArray(value)) {
+            return '[' + value.map(stableClientCacheStringify).join(',') + ']';
+        }
+        const keys = Object.keys(value).sort();
+        return '{' + keys.map((key) => JSON.stringify(key) + ':' + stableClientCacheStringify(value[key])).join(',') + '}';
+    };
+
+    const canonicalizeClientCacheParams = (capability, params) => {
+        const source = params && typeof params === 'object' && !Array.isArray(params) ? params : {};
+        const out = {};
+        Object.keys(source).forEach((key) => {
+            const value = source[key];
+            if (value === undefined || value === null || value === '') {
+                return;
+            }
+            out[key] = value;
+        });
+        if (String(capability || '') === 'region.list') {
+            const catalog = String(out.catalog || 'installed').toLowerCase();
+            out.catalog = catalog === 'global' ? 'global' : 'installed';
+            if (typeof out.country_code === 'string') {
+                out.country_code = out.country_code.trim().toUpperCase();
+                if (out.country_code === '') {
+                    delete out.country_code;
+                }
+            }
+        }
+        return out;
+    };
+
+    const buildClientResponseCacheKey = (config, provider, operation, params) => {
+        const capability = String(provider || '') + '.' + String(operation || '');
+        return [
+            'wqrc1',
+            String((config && config.deployVersion) || ''),
+            String((config && config.locale) || ''),
+            String((config && config.currency) || ''),
+            capability,
+            stableClientCacheStringify(canonicalizeClientCacheParams(capability, params)),
+        ].join('|');
+    };
+
+    const wantsClientCacheBypass = (options) => {
+        const opts = options && typeof options === 'object' ? options : {};
+        return opts.bypassCache === true
+            || opts.noCache === true
+            || opts.cache === false
+            || opts.refresh === true;
+    };
+
     const isBusinessFailure = (data) => {
         return !!(data && typeof data === 'object' && !Array.isArray(data) && data.success === false);
     };
@@ -412,7 +534,7 @@
      * (Chrome Dedicated Worker destination) while fetch() of the same URL succeeds.
      * Bootstrap the classic Worker from a same-origin Blob URL instead.
      */
-    const createDedicatedWorkerFromScriptUrl = (workerUrl) => {
+    const createDedicatedWorkerFromScriptUrl = (workerUrl, options = {}) => {
         if (!window.Worker) {
             return Promise.reject(new Error(
                 '[Weline.Api] Worker is unavailable; direct frontend API fallback is disabled.'
@@ -422,10 +544,30 @@
         if (!scriptUrl) {
             return Promise.reject(new Error('[Weline.Api] workerUrl is not configured.'));
         }
-        return fetch(scriptUrl, {
+        const fetchInit = {
             credentials: 'same-origin',
             cache: isDevMode() ? 'no-store' : 'force-cache',
-        }).then((response) => {
+        };
+        const timeoutMs = typeof options.timeoutMs === 'number' ? options.timeoutMs : 8000;
+        let timeoutId = 0;
+        let localAbort = null;
+        if (options && options.signal) {
+            fetchInit.signal = options.signal;
+        } else if (typeof AbortController === 'function' && timeoutMs > 0) {
+            localAbort = new AbortController();
+            fetchInit.signal = localAbort.signal;
+            timeoutId = window.setTimeout(() => {
+                try {
+                    localAbort.abort();
+                } catch (_error) {
+                    /* ignore */
+                }
+            }, timeoutMs);
+        }
+        return fetch(scriptUrl, fetchInit).then((response) => {
+            if (timeoutId) {
+                window.clearTimeout(timeoutId);
+            }
             if (!response.ok) {
                 throw new Error('[Weline.Api] worker script HTTP ' + response.status);
             }
@@ -454,6 +596,11 @@
                 }
                 throw error;
             }
+        }).catch((error) => {
+            if (timeoutId) {
+                window.clearTimeout(timeoutId);
+            }
+            throw error;
         });
     };
 
@@ -556,10 +703,6 @@
             endpoint: '/api/framework/query-bin',
             deployVersion: 'dev',
             workerBuildId: 'dev',
-            cartFlagStorageKey: 'weline_cart_has_items',
-            cartProbeSessionKey: 'weline_cart_probe_done',
-            cartCountCookieKey: 'weline_cart_item_count',
-            autoEnableOnCartClickSelector: '[data-weline-cart-trigger]',
             area: '',
             locale: '',
             currency: '',
@@ -1244,31 +1387,102 @@
             this.config = clientConfig;
             this.worker = null;
             this.workerStartPromise = null;
+            this.workerRecoverPromise = null;
+            this.workerFetchAbort = null;
             this.requestId = 0;
             this.pending = new Map();
             this.devTraces = new Map();
+            this.responseCacheL1 = new Map();
             this.autoRequestsEnabled = false;
             this.scopeWarmupPromise = null;
             this.scopeWarmupComplete = false;
 
             this.handleWorkerMessage = this.handleWorkerMessage.bind(this);
             this.handleWorkerError = this.handleWorkerError.bind(this);
-
-            this.restoreCartState();
-            this.listenCartTriggers();
-            this.listenCartUpdateEvent();
         }
 
         call(provider, operation, params = {}, options = {}) {
             if (!provider || !operation) {
                 return Promise.reject(new Error('[Weline.Api] provider and operation are required.'));
             }
+            const normalizedParams = normalizeCallParams(params);
+            const capability = String(provider) + '.' + String(operation);
+            const ttlMs = clientResponseCacheTtlMs(capability);
+            if (ttlMs > 0 && !wantsClientCacheBypass(options)) {
+                const cacheKey = buildClientResponseCacheKey(this.config, provider, operation, normalizedParams);
+                const cached = this.responseCacheL1.get(cacheKey);
+                if (cached && Number(cached.expiresAt) > Date.now()) {
+                    const startedAt = performance.now();
+                    const requestPayload = {
+                        type: 'call',
+                        provider,
+                        operation,
+                        params: normalizedParams,
+                        options,
+                    };
+                    this.finishDevTrace(null, {
+                        ok: true,
+                        status: 200,
+                        statusText: 'OK',
+                        data: cached.data,
+                        localCache: 'l1',
+                        workerElapsedMs: 0,
+                        headers: { 'X-Weline-Worker-Response-Cache': 'l1' },
+                    }, requestPayload, startedAt);
+                    return Promise.resolve(cached.data);
+                }
+            }
             return this.send({
                 type: 'call',
                 provider,
                 operation,
-                params: normalizeCallParams(params),
+                params: normalizedParams,
                 options,
+            }).then((data) => {
+                this.rememberClientResponseCache(provider, operation, normalizedParams, options, data);
+                this.invalidateClientResponseCacheAfterWrite(provider, operation, data);
+                return data;
+            });
+        }
+
+        rememberClientResponseCache(provider, operation, params, options, data) {
+            if (wantsClientCacheBypass(options) || isBusinessFailure(data)) {
+                return;
+            }
+            const capability = String(provider || '') + '.' + String(operation || '');
+            const ttlMs = clientResponseCacheTtlMs(capability);
+            if (!(ttlMs > 0)) {
+                return;
+            }
+            const cacheKey = buildClientResponseCacheKey(this.config, provider, operation, params);
+            this.responseCacheL1.set(cacheKey, {
+                expiresAt: Date.now() + ttlMs,
+                data,
+            });
+        }
+
+        invalidateClientResponseCacheAfterWrite(provider, operation, data) {
+            if (isBusinessFailure(data)) {
+                return;
+            }
+            const capability = String(provider || '') + '.' + String(operation || '');
+            const targets = CLIENT_RESPONSE_CACHE_INVALIDATE[capability];
+            if (!targets || targets.length === 0) {
+                return;
+            }
+            const deploy = String(this.config.deployVersion || '');
+            const locale = String(this.config.locale || '');
+            const currency = String(this.config.currency || '');
+            targets.forEach((target) => {
+                const needle = '|' + String(target) + '|';
+                Array.from(this.responseCacheL1.keys()).forEach((key) => {
+                    if (String(key).indexOf(needle) !== -1
+                        && String(key).indexOf('|' + deploy + '|') !== -1
+                        && String(key).indexOf('|' + locale + '|') !== -1
+                        && String(key).indexOf('|' + currency + '|') !== -1) {
+                        this.responseCacheL1.delete(key);
+                    }
+                });
             });
         }
 
@@ -1332,14 +1546,26 @@
             }, uploadRequestPayload, uploadTraceStartedAt);
             if (failed) {
                 const error = new Error((body && (body.message || body.msg)) || response.statusText || 'Weline upload failed.');
-                error.code = body?.error?.code || 'business_error';
+                const uploadCode = String(
+                    (body && body.code)
+                    || (body && body.error && typeof body.error === 'object' ? body.error.code : '')
+                    || ''
+                ).toLowerCase();
+                const uploadMwHeader = String(response.headers.get('x-weline-maintenance') || '').toLowerCase();
+                const uploadMaintenance = uploadMwHeader === '1'
+                    || uploadMwHeader === 'true'
+                    || uploadCode === 'maintenance'
+                    || !!(body && body.data && String(body.data.variant || '').toLowerCase() === 'maintenance');
+                error.code = uploadMaintenance
+                    ? 'maintenance'
+                    : (body?.error?.code || body?.code || 'business_error');
                 error.status = response.status || 0;
                 error.response = {
                     ok: false,
                     status: response.status || 0,
                     statusText: response.statusText || '',
                     data: body,
-                    maintenance: false,
+                    maintenance: uploadMaintenance,
                 };
                 this.reportDevError(error, { type: 'upload', provider, operation, options, skipConsole: true });
                 this.handleHttpError(error.status, error, options && options.silent, options, {
@@ -1421,9 +1647,12 @@
                 if (!error || error.code !== 'worker_timeout' || (payload && payload.__workerRetry)) {
                     throw error;
                 }
-                this.resetWorker();
-                const retryPayload = Object.assign({}, payload, { __workerRetry: true });
-                return this.dispatchToWorker(retryPayload);
+                // Concurrent cart/account/bootstrap timeouts must share one recreate;
+                // otherwise each retry fetch()s weline-api-worker.js and floods Network.
+                return this.recoverWorkerAfterTimeout().then(() => {
+                    const retryPayload = Object.assign({}, payload, { __workerRetry: true });
+                    return this.dispatchToWorker(retryPayload);
+                });
             });
         }
 
@@ -1434,7 +1663,30 @@
             return this.sendToWorker(payload);
         }
 
+        recoverWorkerAfterTimeout() {
+            if (this.workerRecoverPromise) {
+                return this.workerRecoverPromise;
+            }
+            this.workerRecoverPromise = Promise.resolve().then(() => {
+                this.resetWorker();
+                this.scopeWarmupComplete = false;
+                this.scopeWarmupPromise = null;
+                return this.ensureWorker();
+            }).finally(() => {
+                this.workerRecoverPromise = null;
+            });
+            return this.workerRecoverPromise;
+        }
+
         resetWorker() {
+            if (this.workerFetchAbort && typeof this.workerFetchAbort.abort === 'function') {
+                try {
+                    this.workerFetchAbort.abort();
+                } catch (_error) {
+                    /* ignore */
+                }
+            }
+            this.workerFetchAbort = null;
             if (this.worker && typeof this.worker.terminate === 'function') {
                 try {
                     this.worker.terminate();
@@ -1462,7 +1714,8 @@
                     this.pending.delete(messageId);
                     const error = new Error('[Weline.Api] worker request timed out.');
                     error.code = 'worker_timeout';
-                    this.resetWorker();
+                    // Do not resetWorker() here: send() coalesces a single recover+retry.
+                    // Resetting per concurrent timeout was re-fetching the worker script in a storm.
                     this.finishDevTrace(messageId, {
                         ok: false,
                         error: { code: error.code, message: error.message },
@@ -1502,7 +1755,11 @@
             if (this.workerStartPromise) {
                 return this.workerStartPromise;
             }
-            this.workerStartPromise = createDedicatedWorkerFromScriptUrl(this.config.workerUrl)
+            const abortController = typeof AbortController === 'function' ? new AbortController() : null;
+            this.workerFetchAbort = abortController;
+            this.workerStartPromise = createDedicatedWorkerFromScriptUrl(this.config.workerUrl, {
+                signal: abortController ? abortController.signal : undefined,
+            })
                 .then((worker) => {
                     this.worker = worker;
                     this.worker.addEventListener('message', this.handleWorkerMessage);
@@ -1513,6 +1770,11 @@
                 .catch((error) => {
                     this.workerStartPromise = null;
                     throw error;
+                })
+                .finally(() => {
+                    if (this.workerFetchAbort === abortController) {
+                        this.workerFetchAbort = null;
+                    }
                 });
             return this.workerStartPromise;
         }
@@ -1579,6 +1841,7 @@
                     data: wrapper.data,
                     request_id: wrapper.request_id || '',
                     headers: data.headers || {},
+                    workerElapsedMs: data.workerElapsedMs,
                     ...(businessFailed ? { error: { message: extractBusinessMessage(businessData, '请求失败') } } : {}),
                 });
                 pending.resolve(wrapper.data);
@@ -1659,8 +1922,8 @@
                 silent: !!silent,
                 request: requestPayload && typeof requestPayload === 'object' ? requestPayload : {},
             });
+            // Explicit maintenance only — bare HTTP 503 (overload/startup/misc) must not open wait modal.
             const isMaintenance = !!(error && error.response && error.response.maintenance)
-                || Number(status) === 503
                 || String((error && error.code) || '').toLowerCase() === 'maintenance';
             if (isMaintenance) {
                 const handler = (this.config && this.config.maintenanceHandler)
@@ -1809,6 +2072,10 @@
             const status = responseMeta && responseMeta.status ? responseMeta.status : '';
             const requestLog = cloneDevLogValue(sanitizePayloadForWorker(requestPayload));
             const responseLog = cloneDevLogValue(responseMeta || {});
+            const localCache = resolveWorkerResponseCacheState(responseMeta);
+            const workerElapsedMs = responseMeta && responseMeta.workerElapsedMs != null
+                ? Math.max(0, Number(responseMeta.workerElapsedMs) || 0)
+                : null;
 
             withDevConsole((devConsole) => {
                 devConsole.binQuery({
@@ -1816,6 +2083,8 @@
                     summary,
                     status,
                     durationMs,
+                    workerElapsedMs,
+                    localCache,
                     endpoint: this.config.endpoint,
                     request: requestLog,
                     response: responseLog,
@@ -1954,100 +2223,6 @@
             }, 3500);
         }
 
-        restoreCartState() {
-            try {
-                const cookieFlag = this.readCartCookie();
-                if (cookieFlag === true) {
-                    this.markCartActive();
-                } else if (cookieFlag === false) {
-                    this.markCartEmpty();
-                } else {
-                    const storedFlag = localStorage.getItem(this.config.cartFlagStorageKey);
-                    if (storedFlag === 'true' && this.hasCartCookieToken()) {
-                        this.enableAutoRequests();
-                    }
-                }
-            } catch (error) {
-                /* storage may be unavailable */
-            }
-        }
-
-        hasCartCookieToken() {
-            const key = this.config.cartCountCookieKey;
-            if (!key || !document.cookie) {
-                return false;
-            }
-            return document.cookie.split('; ').some((row) => row.startsWith(`${key}=`));
-        }
-
-        readCartCookie() {
-            const key = this.config.cartCountCookieKey;
-            if (!key || !document.cookie) {
-                return null;
-            }
-            const match = document.cookie.split('; ').find((row) => row.startsWith(`${key}=`));
-            if (!match) {
-                return null;
-            }
-            const value = parseInt(match.split('=')[1] || '0', 10);
-            if (Number.isNaN(value)) {
-                return null;
-            }
-            return value > 0 ? true : value === 0 ? false : null;
-        }
-
-        listenCartTriggers() {
-            document.addEventListener('click', (event) => {
-                const selector = this.config.autoEnableOnCartClickSelector;
-                if (!selector || !(event.target instanceof Element)) {
-                    return;
-                }
-                if (event.target.closest(selector)) {
-                    this.markCartActive();
-                }
-            }, { passive: true });
-        }
-
-        listenCartUpdateEvent() {
-            const handleCartCountUpdate = (event) => {
-                const detail = event.detail || {};
-                const count = typeof detail.count === 'number'
-                    ? detail.count
-                    : typeof detail.cart_count === 'number'
-                        ? detail.cart_count
-                        : null;
-                if (count === null) {
-                    return;
-                }
-                if (count > 0) {
-                    this.markCartActive();
-                } else {
-                    this.markCartEmpty();
-                }
-            };
-
-            window.addEventListener('weline:cart:update', handleCartCountUpdate);
-            window.addEventListener('weshop:cart:updated', handleCartCountUpdate);
-        }
-
-        markCartActive() {
-            try {
-                localStorage.setItem(this.config.cartFlagStorageKey, 'true');
-            } catch (error) {
-                /* storage may be unavailable */
-            }
-            this.enableAutoRequests();
-        }
-
-        markCartEmpty() {
-            try {
-                localStorage.removeItem(this.config.cartFlagStorageKey);
-            } catch (error) {
-                /* storage may be unavailable */
-            }
-            this.disableAutoRequests();
-        }
-
         enableAutoRequests() {
             if (this.autoRequestsEnabled) {
                 return;
@@ -2075,8 +2250,6 @@
         stream: (channel, params, options) => getOrCreateClient().stream(channel, params, options),
         upload: (provider, operation, formData, options) => getOrCreateClient().upload(provider, operation, formData, options),
         resource: (provider, optionalMap) => getOrCreateClient().resource(provider, optionalMap),
-        markCartActive: () => getOrCreateClient().markCartActive(),
-        markCartEmpty: () => getOrCreateClient().markCartEmpty(),
         enableAutoRequests: () => getOrCreateClient().enableAutoRequests(),
         disableAutoRequests: () => getOrCreateClient().disableAutoRequests(),
         bootstrapScope: () => getOrCreateClient().warmup(),

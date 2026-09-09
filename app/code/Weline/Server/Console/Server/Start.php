@@ -1993,7 +1993,6 @@ class Start extends CommandAbstract
                 ($sharedStateRuntime['session']['registered'] ?? false)
                 || ($sharedStateRuntime['memory']['registered'] ?? false)
             );
-            $this->printer->note(__('共享状态运行时: %{1}', [$sharedStateRuntime]));
             $this->traceStartupPhase($instanceName, 'shared-runtime:after', [
                 'session_port' => (int)($sharedStateRuntime['session']['port'] ?? 0),
                 'memory_port' => (int)($sharedStateRuntime['memory']['port'] ?? 0),
@@ -2046,7 +2045,11 @@ class Start extends CommandAbstract
             $this->rollbackRestartMaintenanceTransactionIfPending();
             return 1;
         }
-        $this->printSharedStateRuntimeSummary($instanceName, $sharedStateRuntime);
+        $this->printSharedStateRuntimeStartupNotes(
+            $instanceName,
+            $sharedStateRuntime,
+            LogConfig::isVerboseWlsLog(),
+        );
 
         // Worker 端口计算移至端口冲突检测之后，避免重复计算
         // Public TLS and HTTP redirects terminate at Nginx.
@@ -4946,6 +4949,55 @@ class Start extends CommandAbstract
                 'token_file_name' => $memoryToken,
             ],
         ];
+    }
+
+    /**
+     * 启动时输出共享状态要点：默认只打 Session/Memory 一行摘要。
+     * 完整数组 JSON dump 已移除；-log / 前台 verbose 仅追加紧凑诊断行。
+     *
+     * @param array{
+     *   session?: array<string, mixed>,
+     *   memory?: array<string, mixed>
+     * } $sharedStateRuntime
+     */
+    protected function printSharedStateRuntimeStartupNotes(
+        string $instanceName,
+        array $sharedStateRuntime,
+        bool $verboseDetail = false
+    ): void {
+        if ($verboseDetail) {
+            $this->printer->note(__('共享状态运行时详情: %{1}', [
+                $this->formatSharedStateRuntimeDebugSummary($sharedStateRuntime),
+            ]));
+        }
+        $this->printSharedStateRuntimeSummary($instanceName, $sharedStateRuntime);
+    }
+
+    /**
+     * @param array{
+     *   session?: array<string, mixed>,
+     *   memory?: array<string, mixed>
+     * } $sharedStateRuntime
+     */
+    protected function formatSharedStateRuntimeDebugSummary(array $sharedStateRuntime): string
+    {
+        $parts = [];
+        foreach (['session' => 'session', 'memory' => 'memory'] as $key => $label) {
+            $runtime = \is_array($sharedStateRuntime[$key] ?? null) ? $sharedStateRuntime[$key] : [];
+            if ($runtime === []) {
+                continue;
+            }
+            $parts[] = \sprintf(
+                '%s port=%d pid=%d reuse=%s created=%s',
+                $label,
+                (int) ($runtime['port'] ?? 0),
+                (int) ($runtime['pid'] ?? 0),
+                !empty($runtime['reuse_existing']) ? 'yes' : 'no',
+                !empty($runtime['created_now']) ? 'yes' : 'no'
+            );
+        }
+
+        return $parts === [] ? '(empty)' : \implode('; ', $parts);
     }
 
     /**

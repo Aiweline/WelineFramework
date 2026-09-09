@@ -82,6 +82,9 @@ if ($logoImage === '' && $logoImageFileHtml === '') {
             <img src="<?= $esc($logoImage) ?>"
                  alt="<?= $esc((string)$logoText) ?>"
                  class="logo-image"
+                 width="420"
+                 height="159"
+                 decoding="async"
                  style="height: var(--wc-logo-height); width: auto;"
                  onerror="this.style.display='none'; if(this.nextElementSibling){this.nextElementSibling.style.display='inline-block';}">
             <span class="logo-text" style="display: none;"><?= $esc((string)$logoText) ?></span>

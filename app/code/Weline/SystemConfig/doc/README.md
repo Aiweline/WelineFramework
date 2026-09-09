@@ -30,6 +30,13 @@ Weline SystemConfig 是系统的配置管理模块，提供了统一的配置存
 - CAS：`base_versions` / `expected_version` 冲突返回 `status=conflict`。
 - API：`SystemConfigLockService` / `SystemConfigCenterService::{previewLock,lockScope,unlockScope,previewRestoreSuppressed,restoreSuppressedRows,discardSuppressedRows}`。
 
+### 配置读快照与写后失效（1.3.35）
+
+- map、resolved、typed 读取共用 `getExactModuleRows` 的 `RequestContext` 与 `w_cache('system_config')` 快照；公共键按模块、区域、范围、语言和继承版本向量区分，不含 requestId。
+- `getScopedConfigRow` 和保存/回滚的 `loadExactConfigRow` 读取权威数据库行，不能用请求读快照判断 `base_versions` 冲突或上级覆盖状态。
+- 保持原有提交后失效入口 `ConfigCacheInvalidationService`：先删除旧版本的 `module_rows`、`module_map`、`module_exact_rows` 和单键缓存，再推进范围 generation；`bumpGeneration` 同时清除当前请求中包含该祖先的版本向量 memo。
+- locale fallback、显式 null/false/0、继承与 suppressed/lock 规则沿用原解析器。行为证据：`SystemConfigReadWriteCacheTest`、`ScopeConfigVersionVectorContextContractTest`；真实后台保存验收另行记录。
+
 ### 0.2 配置中心 TargetScope（TASK-P1C-004）
 
 - 后台工作 Scope 用 Website / Store / Channel 三段选择；`Global` = 空 website。

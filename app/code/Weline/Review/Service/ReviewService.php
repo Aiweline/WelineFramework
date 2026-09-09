@@ -216,6 +216,85 @@ final class ReviewService implements ReviewSeoFactsInterface
         ];
     }
 
+    /**
+     * @param list<string> $externalEntityUuids
+     * @return array<string, array{review_count:int, average_rating:float}>
+     */
+    public function aggregatesForExternalUuids(string $typeCode, array $externalEntityUuids): array
+    {
+        $type = $this->types->get($typeCode);
+        $inputToEntityUuid = [];
+        $entityUuidSet = [];
+        foreach ($externalEntityUuids as $raw) {
+            $raw = trim((string)$raw);
+            if ($raw === '' || isset($inputToEntityUuid[$raw])) {
+                continue;
+            }
+            $entity = $type->resolveEntity($raw);
+            if ($entity === null) {
+                $inputToEntityUuid[$raw] = null;
+                continue;
+            }
+            $entityUuid = trim((string)($entity['entity_uuid'] ?? ''));
+            if ($entityUuid === '') {
+                $inputToEntityUuid[$raw] = null;
+                continue;
+            }
+            $inputToEntityUuid[$raw] = $entityUuid;
+            $entityUuidSet[$entityUuid] = true;
+        }
+
+        $empty = ['review_count' => 0, 'average_rating' => 0.0];
+        $result = [];
+        foreach ($inputToEntityUuid as $input => $_) {
+            $result[$input] = $empty;
+        }
+        if ($entityUuidSet === []) {
+            return $result;
+        }
+
+        $entityUuids = array_keys($entityUuidSet);
+        /** @var ProductReview $review */
+        $review = ObjectManager::getInstance(ProductReview::class);
+        $aggregateRows = $review->clear()
+            ->fields([
+                ProductReview::schema_fields_ENTITY_UUID,
+                'COUNT(*) AS review_count',
+                'AVG(' . ProductReview::schema_fields_RATING . ') AS average_rating',
+            ])
+            ->where(ProductReview::schema_fields_ENTITY_UUID, $entityUuids, 'IN')
+            ->where(ProductReview::schema_fields_STATUS, ProductReview::STATUS_APPROVED)
+            ->group(ProductReview::schema_fields_ENTITY_UUID)
+            ->select()
+            ->fetchArray();
+
+        $byEntityUuid = [];
+        foreach ($aggregateRows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $entityUuid = trim((string)($row[ProductReview::schema_fields_ENTITY_UUID] ?? ''));
+            if ($entityUuid === '') {
+                continue;
+            }
+            $reviewCount = (int)($row['review_count'] ?? 0);
+            $byEntityUuid[$entityUuid] = [
+                'review_count' => max(0, $reviewCount),
+                'average_rating' => $reviewCount > 0
+                    ? round((float)($row['average_rating'] ?? 0), 1)
+                    : 0.0,
+            ];
+        }
+
+        foreach ($inputToEntityUuid as $input => $entityUuid) {
+            if ($entityUuid !== null && isset($byEntityUuid[$entityUuid])) {
+                $result[$input] = $byEntityUuid[$entityUuid];
+            }
+        }
+
+        return $result;
+    }
+
     /** @return array<string,mixed> */
     public function upload(string $typeCode, string $externalEntityUuid, string $mediaKind, array $upload): array
     {

@@ -327,7 +327,9 @@
     *, *::before, *::after { box-sizing: border-box; }
     html { min-height: 100%; -webkit-text-size-adjust: 100%; text-rendering: optimizeLegibility; }
     body { min-height: 100%; margin: 0; }
-    img, picture, svg, canvas, video { display: block; max-width: 100%; }
+    img, picture, svg, canvas, video { display: block; max-width: 100%; height: auto; }
+    /* file:image 输出的占位宽高 + 本规则 = Google CLS/响应式写法；封面场景可用更具体选择器覆盖 height */
+    .w-file-image { max-width: 100%; height: auto; }
     button, input, select, textarea { margin: 0; font: inherit; color: inherit; }
     :where(
         input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):not([type="range"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]):not([type="hidden"]),
@@ -1004,14 +1006,14 @@
         background: var(--weline-theme-surface-hover);
     }
 
-    .w-badge { display: inline-flex; align-items: center; gap: var(--weline-space-1); padding: 0.2rem 0.55rem; border-radius: var(--weline-radius-round); background: var(--weline-theme-surface-muted); color: var(--weline-theme-text); font-size: var(--weline-font-size-xs); font-weight: 700; }
+    .w-badge { display: inline-flex; align-items: center; gap: var(--weline-space-1); padding: 0.2rem 0.55rem; border-radius: var(--weline-radius-round); background: var(--weline-theme-surface-muted); color: var(--weline-theme-text); font-size: var(--weline-font-size-xs); font-weight: 700; white-space: nowrap; flex-shrink: 0; }
     .w-badge[data-tone="secondary"] { background: var(--weline-theme-secondary-surface); color: var(--weline-theme-secondary-emphasis, var(--weline-theme-secondary)); }
     .w-badge[data-tone="success"] { background: var(--weline-theme-success-surface); color: var(--weline-theme-success); }
     .w-badge[data-tone="warning"] { background: var(--weline-theme-warning-surface); color: var(--weline-theme-warning); }
     .w-badge[data-tone="danger"] { background: var(--weline-theme-danger-surface); color: var(--weline-theme-danger); }
     .w-badge[data-tone="info"] { background: var(--weline-theme-info-surface); color: var(--weline-theme-info); }
     .w-product-labels { position: absolute; inset-block-start: var(--weline-space-3); inset-inline-start: var(--weline-space-3); z-index: 2; display: flex; flex-direction: column; align-items: flex-start; gap: var(--weline-space-1); max-inline-size: calc(100% - var(--weline-space-6)); pointer-events: none; }
-    .w-product-label { display: inline-flex; align-items: center; justify-content: center; gap: var(--weline-space-1); padding: var(--weline-space-1) var(--weline-space-2); border-radius: var(--weline-radius-round); font-size: var(--weline-font-size-xs); font-weight: var(--weline-font-weight-semibold); line-height: 1.2; letter-spacing: 0.02em; white-space: nowrap; }
+    .w-product-label { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; inline-size: fit-content; max-inline-size: 100%; gap: var(--weline-space-1); padding-block: var(--weline-space-1); padding-inline: var(--weline-space-3); border-radius: var(--weline-radius-round); font-size: var(--weline-font-size-xs); font-weight: var(--weline-font-weight-semibold, 600); line-height: 1.25; letter-spacing: 0; white-space: nowrap; }
     .w-product-labels--bottom-start { inset-block-start: auto; inset-block-end: var(--weline-space-3); }
     .w-product-label[data-kind="new"] { background: var(--w-product-label-new-bg, var(--weline-product-label-new-bg, var(--color-product-label-new-bg))); color: var(--w-product-label-new-text, var(--weline-product-label-new-text, var(--color-product-label-new-text))); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--w-product-label-new-text, var(--weline-product-label-new-text, var(--color-product-label-new-text))) 12%, transparent); }
     .w-product-label[data-kind="sale"] { background: var(--w-product-label-sale-bg, var(--weline-product-label-sale-bg, var(--color-product-label-sale-bg))); color: var(--w-product-label-sale-text, var(--weline-product-label-sale-text, var(--color-product-label-sale-text))); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--w-product-label-sale-text, var(--weline-product-label-sale-text, var(--color-product-label-sale-text))) 12%, transparent); }
@@ -1097,8 +1099,29 @@
     .w-dialog__footer { justify-content: flex-end; border-top: 1px solid var(--weline-theme-border); }
     .w-dialog[data-size="sm"] { width: min(24rem, calc(100vw - 2rem)); }
     .w-dialog[data-size="lg"] { width: min(64rem, calc(100vw - 2rem)); }
-    .w-dialog:not(dialog) { position: fixed; inset: 0; z-index: var(--weline-z-overlay); width: 100%; max-height: none; border: 0; border-radius: 0; background: transparent; box-shadow: none; overflow: auto; }
-    .w-dialog:not(dialog) > .w-dialog__frame { display: grid; min-height: 100%; place-items: center; padding: var(--weline-space-4); }
+    .w-dialog:not(dialog) {
+        position: fixed;
+        inset: 0;
+        z-index: var(--weline-z-overlay);
+        width: 100%;
+        /* Reset card sizing from .w-dialog — otherwise inset:0 is trapped in ~42rem on the inline-start edge. */
+        inline-size: auto;
+        max-inline-size: none;
+        max-block-size: none;
+        max-height: none;
+        margin: 0;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+        overflow: auto;
+    }
+    /* Closed contract: without this, a missing [hidden] leaves a full-viewport white surface. */
+    .w-dialog:not(dialog)[hidden],
+    .w-dialog:not(dialog)[data-state="closed"] {
+        display: none !important;
+    }
+    .w-dialog:not(dialog) > .w-dialog__frame { display: grid; min-height: 100%; min-block-size: 100%; place-items: center; padding: var(--weline-space-4); }
     .w-dialog__surface { box-sizing: border-box; inline-size: min(42rem, calc(100dvw - 2rem)); min-inline-size: 0; max-inline-size: calc(100dvw - 2rem); max-block-size: min(86dvh, 52rem); overflow: auto; border: 1px solid var(--weline-theme-border); border-radius: var(--weline-radius-lg); background: var(--weline-theme-surface-raised); box-shadow: var(--weline-theme-shadow-lg); }
     .w-dialog[data-size="sm"] .w-dialog__surface { width: min(24rem, calc(100vw - 2rem)); }
     .w-dialog[data-size="lg"] .w-dialog__surface { width: min(64rem, calc(100vw - 2rem)); }
@@ -1267,14 +1290,29 @@
             )
         );
         transform-origin: var(--w-floating-transform-origin, top);
-        /* Portaled to body: keep an opaque panel surface (language switcher, menus, popovers). */
-        background-color: #ffffff;
-        background-color: var(--weline-theme-surface-raised, #ffffff);
-        background: var(--weline-theme-surface-raised, #ffffff);
         opacity: 1;
         isolation: isolate;
         -webkit-backdrop-filter: none;
         backdrop-filter: none;
+    }
+    /* 菜单/弹层：portal 到 body 后保持不透明浅色面。tooltip 除外（需反色字：深底浅字）。 */
+    .w-menu[data-w-floating-positioned],
+    .w-popover[data-w-floating-positioned],
+    .w-combobox__panel[data-w-floating-positioned],
+    .w-icon-picker__panel[data-w-floating-positioned],
+    .w-language-select__popover[data-w-floating-positioned],
+    .w-currency-select__popover[data-w-floating-positioned],
+    [data-w-component~="anchored-float"][data-w-floating-positioned],
+    [data-w-floating-portal][data-w-floating-positioned]:not(.w-tooltip),
+    .w-address__menu[data-w-floating-positioned] {
+        background-color: #ffffff;
+        background-color: var(--weline-theme-surface-raised, #ffffff);
+        background: var(--weline-theme-surface-raised, #ffffff);
+    }
+    .w-tooltip[data-w-floating-positioned] {
+        background-color: var(--weline-theme-text);
+        background: var(--weline-theme-text);
+        color: var(--weline-theme-surface);
     }
     [data-w-floating-positioned="pending"] { visibility: hidden; }
     .w-menu__item, .w-combobox__option { display: flex; width: 100%; min-width: 0; min-height: var(--weline-control-height-sm); align-items: center; gap: var(--weline-space-2); padding: var(--weline-space-2) var(--weline-space-3); border: 0; border-radius: var(--weline-radius-sm); background: transparent; color: inherit; text-align: start; text-decoration: none; cursor: pointer; }

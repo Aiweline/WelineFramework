@@ -86,3 +86,13 @@
 - 涉及模板、主题、slot、widget、taglib 或 `view/theme` 时，必须先读 `app/code/Weline/Theme/doc/AI-INDEX.md`。
 - 禁止直接修改 `generated/`、`view/tpl/`、`routes.xml` 或复制旧文档里的过时路径。
 - 如果本文件与源码冲突，以源码为准，并在同次任务中修正模块文档。
+
+## API 文档登录地址（2026-09-08）
+
+前端登录从已收集的 `Weline\Api\Api\Rest\V1\Auth::postLogin` 文档记录取得 `route.path`，经现有 `buildRestUrl` 与原生 `sendHttp` 提交，不另写一套前端登录地址。`ApiDocCollector` 继续委托公开 `ApiDocumentationProviderInterface`，保留当前 `apiArea` 配置、其他 REST 路由和后台登录行为。
+
+当前环境的双 `api` 登录路径实测 404 HTML；文档记录提供的 `/api/api/api/rest/v1/auth/login` 正常账号 HTTP 对照为 200 / code 200。页面已通过正常浏览器登录验收；产品 Demo 的权限与写入验收另行记录。回归命令：`node app/code/Weline/DeveloperWorkspace/Test/Unit/ApiDocsIdentityDemoRegression.cjs`，包含真实路径、可配置区域与登录响应保存；凭据只使用脚本内占位值。
+
+## API 文档登录弹窗尺寸（2026-09-08）
+
+真实截图与当前主题样式确认：页面私有外框宽度为 `32rem`，官方表单表面宽度为 `42rem`，外框裁切会隐藏右侧登录按钮。已移除 `api-docs.css` 中 `.w-api-dialog` 的两条宽度覆盖，外框与表面统一继承官方组件尺寸和窄屏约束；不修改官方 toast、浮层或溢出行为。预期桌面表单与按钮完整显示、窄屏不超出视口。源码更新后待统一编译，并在独立文档页只打开弹窗复验，不再次提交登录。

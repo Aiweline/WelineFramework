@@ -7,10 +7,13 @@ namespace Weline\DeveloperWorkspace\Test\Unit\View;
 use PHPUnit\Framework\TestCase;
 
 /**
- * /dev/tool/docs?search=… must auto-fill the search box and run search on boot.
+ * /dev/tool/docs?search=… must auto-fill the document search box and run search on boot.
  * Live page loads Theme `weline-developer-docs.js` (see Docs/index.phtml);
  * DeveloperWorkspace `docs-browser.js` keeps the same contract for parity.
  * Deep links from DevTool (e.g. ?search=WLS, ?module=Weline_Server) depend on this.
+ *
+ * Sidebar `data-docs-catalog-filter` only filters the category tree locally;
+ * main content `data-docs-search` runs document search — they must not share one box.
  */
 final class DocsBrowserSearchQueryContractTest extends TestCase
 {
@@ -63,11 +66,36 @@ final class DocsBrowserSearchQueryContractTest extends TestCase
         }
     }
 
-    public function testDocsIndexLoadsThemeDeveloperDocsScript(): void
+    public function testCatalogFilterIsLocalTreeOnly(): void
+    {
+        foreach ($this->docsScriptSources() as $path => $src) {
+            self::assertStringContainsString("document.querySelector('[data-docs-catalog-filter]')", $src, $path);
+            self::assertStringContainsString('function filterTreeNodes', $src, $path);
+            self::assertStringContainsString('function renderCatalogTree', $src, $path);
+            self::assertStringContainsString('state.catalogFilter', $src, $path);
+        }
+    }
+
+    public function testDocsIndexSplitsCatalogFilterAndDocumentSearch(): void
     {
         $path = dirname(__DIR__, 3) . '/view/templates/Docs/index.phtml';
         self::assertFileExists($path);
         $src = (string)file_get_contents($path);
         self::assertStringContainsString('Weline_Theme::ui/pages/weline-developer-docs.js', $src);
+        self::assertStringContainsString('data-docs-catalog-filter', $src);
+        self::assertStringContainsString('data-docs-search', $src);
+        self::assertStringContainsString('w-docs-browser__doc-search', $src);
+        // Sidebar owns catalog filter; content bar owns document search.
+        $sidebarPos = strpos($src, 'w-docs-browser__sidebar');
+        $contentPos = strpos($src, 'w-docs-browser__content');
+        $catalogFilterPos = strpos($src, 'data-docs-catalog-filter');
+        $docSearchPos = strpos($src, 'data-docs-search');
+        self::assertNotFalse($sidebarPos);
+        self::assertNotFalse($contentPos);
+        self::assertNotFalse($catalogFilterPos);
+        self::assertNotFalse($docSearchPos);
+        self::assertGreaterThan($sidebarPos, $catalogFilterPos);
+        self::assertLessThan($contentPos, $catalogFilterPos);
+        self::assertGreaterThan($contentPos, $docSearchPos);
     }
 }

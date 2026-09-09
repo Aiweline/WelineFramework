@@ -117,6 +117,12 @@ return [
         'hanfu_shang_shi_nian_fen_ji_jie' => 'Launch Season',
     ],
     'options' => [
+        // Mantingfang (满庭芳) style series — keep brand pinyin, translate color + set.
+        '【满庭芳】樱花粉套装' => '【Mantingfang】Cherry Blossom Pink Set',
+        '【满庭芳】晴山蓝套装' => '【Mantingfang】Clear Mountain Blue Set',
+        '【满庭芳】丁香紫套装' => '【Mantingfang】Lilac Purple Set',
+        '【满庭芳】黛蓝套装' => '【Mantingfang】Navy Blue Set',
+        '【满庭芳】薄荷绿套装' => '【Mantingfang】Mint Green Set',
         // Exact catalog labels: retain garment contents, style number and original weight range.
         '白色仅上衣2307' => 'White Top Only 2307',
         '蓝色仅上衣2307' => 'Blue Top Only 2307',

@@ -34,6 +34,14 @@
                   sort="10"/>
     </event>
 
+    <event name="Weline_Seo::integration::url_changed">
+        <observer name="Weline_Geo::seo_url_changed_feed_submit"
+                  instance="Weline\Geo\Observer\SeoUrlSubmitObserver"
+                  disabled="true"
+                  shared="true"
+                  sort="20"/>
+    </event>
+
     <event name="Weline_Websites::website_save_after">
         <observer name="Weline_Geo::website_save_after"
                   instance="Weline\Geo\Observer\WebsiteSaveAfter"

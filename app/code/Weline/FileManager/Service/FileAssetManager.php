@@ -303,11 +303,17 @@ final class FileAssetManager implements FileAssetManagerInterface, \Weline\FileM
             ));
             $attributes['sizes'] = $usage->sizes;
         }
-        $width = (int)$asset->getData(FileAsset::schema_fields_WIDTH);
-        $height = (int)$asset->getData(FileAsset::schema_fields_HEIGHT);
-        if ($width > 0) { $attributes['width'] = (string)$width; }
-        if ($height > 0) { $attributes['height'] = (string)$height; }
-        if (trim($class) !== '') { $attributes['class'] = trim($class); }
+        $width = $usage->layoutWidth;
+        $height = $usage->layoutHeight;
+        if ($width === null || $height === null) {
+            $width = (int)$asset->getData(FileAsset::schema_fields_WIDTH);
+            $height = (int)$asset->getData(FileAsset::schema_fields_HEIGHT);
+        }
+        if ($width > 0 && $height > 0) {
+            $attributes['width'] = (string)$width;
+            $attributes['height'] = (string)$height;
+        }
+        $attributes['class'] = self::mergeFileImageClass($class);
         if ($usage->decorative) { $attributes['aria-hidden'] = 'true'; }
 
         $html = '<img' . self::htmlAttributes($attributes) . '>';
@@ -335,6 +341,24 @@ final class FileAssetManager implements FileAssetManagerInterface, \Weline\FileM
     private static function escape(string $value): string
     {
         return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    }
+
+    /** 始终带上 w-file-image，便于主题 CSS 做 max-width/height:auto 响应式。 */
+    private static function mergeFileImageClass(string $class): string
+    {
+        $parts = preg_split('/\s+/', trim($class)) ?: [];
+        $classes = [];
+        foreach ($parts as $part) {
+            if ($part === '' || isset($classes[$part])) {
+                continue;
+            }
+            $classes[$part] = true;
+        }
+        if (!isset($classes['w-file-image'])) {
+            $classes = ['w-file-image' => true] + $classes;
+        }
+
+        return implode(' ', array_keys($classes));
     }
 
     private function assertImageMetadata(

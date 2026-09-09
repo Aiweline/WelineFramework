@@ -32,8 +32,8 @@ final class ConfigEmbedRenderer
     public function render(array $view): string
     {
         $custom = trim((string)($view['template'] ?? ''));
-        $templateFile = $this->resolveTemplateFile($custom);
-        if ($templateFile === null) {
+        $fetchSource = $this->resolveFetchSource($custom);
+        if ($fetchSource === null) {
             $message = $custom !== ''
                 ? (string)__('配置嵌入自定义模板不存在：%{1}', [$custom])
                 : (string)__('配置嵌入默认模板缺失。');
@@ -43,15 +43,15 @@ final class ConfigEmbedRenderer
                 . '</div>';
         }
 
-        $fieldPartial = $this->moduleViewPath('templates/taglib/config-embed-field.phtml');
-        $embedCssUrl = $this->resolveModuleStaticUrl('Weline_SystemConfig::css/config-embed.css');
-        $embedJsUrl = $this->resolveModuleStaticUrl('Weline_SystemConfig::js/config-embed.js');
-        ob_start();
-        $embed = $view;
-        $embedFieldPartial = $fieldPartial;
-        include $templateFile;
+        /** @var Template $template */
+        $template = ObjectManager::getInstance(Template::class);
 
-        return (string)ob_get_clean();
+        return (string)$template->fetchHtml($fetchSource, [
+            'embed' => $view,
+            'embedCssUrl' => $this->resolveModuleStaticUrl('Weline_SystemConfig::css/config-embed.css'),
+            'embedJsUrl' => $this->resolveModuleStaticUrl('Weline_SystemConfig::js/config-embed.js'),
+            'embedFieldSource' => 'Weline_SystemConfig::templates/taglib/config-embed-field.phtml',
+        ]);
     }
 
     private function resolveModuleStaticUrl(string $source): string
@@ -66,37 +66,43 @@ final class ConfigEmbedRenderer
         }
     }
 
-    private function resolveTemplateFile(string $custom): ?string
+    /**
+     * Resolve a Template::fetchHtml source so nested Taglibs compile.
+     */
+    private function resolveFetchSource(string $custom): ?string
     {
         if ($custom === '') {
             $default = $this->moduleViewPath('templates/taglib/config-embed.phtml');
 
-            return is_file($default) ? $default : null;
+            return is_file($default) ? 'Weline_SystemConfig::templates/taglib/config-embed.phtml' : null;
         }
 
-        $candidates = [];
         if (str_contains($custom, '::')) {
             [$module, $rel] = explode('::', $custom, 2);
             $module = trim($module);
             $rel = ltrim(str_replace('\\', '/', trim($rel)), '/');
-            if ($module !== '' && $rel !== '' && !str_contains($rel, '..')) {
-                $base = $this->moduleRoot($module);
-                if ($base !== null) {
-                    $candidates[] = $base . '/view/' . $rel;
-                }
+            if ($module === '' || $rel === '' || str_contains($rel, '..')) {
+                return null;
             }
-        } else {
-            $rel = ltrim(str_replace('\\', '/', $custom), '/');
-            if ($rel !== '' && !str_contains($rel, '..')) {
-                $candidates[] = $this->moduleViewPath($rel);
-                $candidates[] = BP . '/' . $rel;
+            $base = $this->moduleRoot($module);
+            if ($base === null || !is_file($base . '/view/' . $rel)) {
+                return null;
             }
+
+            return $module . '::' . $rel;
         }
 
-        foreach ($candidates as $path) {
-            if (is_file($path)) {
-                return $path;
-            }
+        $rel = ltrim(str_replace('\\', '/', $custom), '/');
+        if ($rel === '' || str_contains($rel, '..')) {
+            return null;
+        }
+        if (is_file($this->moduleViewPath($rel))) {
+            return 'Weline_SystemConfig::' . $rel;
+        }
+        if (is_file(BP . '/' . $rel)) {
+            // Absolute-repo relative files cannot go through module Taglib compile; keep null
+            // so callers get a clear missing-template error unless they use Vendor_Module::path.
+            return null;
         }
 
         return null;

@@ -15,7 +15,7 @@ use Weline\Search\Model\Shard\SearchWatermark;
 /**
  * Durable generation-aware Search index storage.
  */
-final class DatabaseSearchIndexStore implements SearchIndexStorageInterface
+final class DatabaseSearchIndexStore implements \Weline\Search\Api\SearchIndexEventCoverageStorageInterface
 {
     private const MAX_CONTIGUOUS_ADVANCE = 10000;
 
@@ -160,11 +160,24 @@ final class DatabaseSearchIndexStore implements SearchIndexStorageInterface
         array $documents,
         array $deleteKeys,
     ): array {
+        return $this->applyCoveredChange($websiteId, $eventSeq, $idempotencyKey, $documents, $deleteKeys, []);
+    }
+
+    /** @param list<array{event_id:string,event_seq:int}> $coveredEvents */
+    public function applyCoveredChange(
+        int $websiteId,
+        int $eventSeq,
+        string $idempotencyKey,
+        array $documents,
+        array $deleteKeys,
+        array $coveredEvents,
+    ): array {
         $idempotencyKey = \trim($idempotencyKey);
         if ($eventSeq < 1 || $idempotencyKey === '' || \strlen($idempotencyKey) > 191) {
             throw new \InvalidArgumentException('search_incremental_identity_invalid');
         }
         $payloadHash = $this->changeHash($documents, $deleteKeys);
+        $identities = SearchIncrementalEventCoverage::identities($eventSeq, $idempotencyKey, $coveredEvents);
 
         return $this->transaction($websiteId, function () use (
             $websiteId,
@@ -173,6 +186,7 @@ final class DatabaseSearchIndexStore implements SearchIndexStorageInterface
             $documents,
             $deleteKeys,
             $payloadHash,
+            $identities,
         ): array {
             $watermark = $this->requireWatermark($websiteId, true);
             $generation = (int)$watermark[SearchWatermark::schema_fields_ACTIVE_GENERATION];
@@ -180,35 +194,31 @@ final class DatabaseSearchIndexStore implements SearchIndexStorageInterface
                 throw new \RuntimeException('search_active_generation_missing');
             }
 
-            $existing = $this->findAppliedEvent(
-                $websiteId,
-                $generation,
-                $idempotencyKey,
-            );
-            if ($existing !== null) {
-                if (!\hash_equals(
-                    (string)$existing[SearchAppliedEvent::schema_fields_PAYLOAD_HASH],
-                    $payloadHash,
-                )) {
-                    throw new \RuntimeException('search_incremental_idempotency_payload_conflict');
+            $newEvents = [];
+            $replayed = false;
+            foreach ($identities as $identity) {
+                $key = $identity['idempotency_key'];
+                $existing = $this->findAppliedEvent($websiteId, $generation, $key);
+                if ($existing !== null) {
+                    if ((int)$existing[SearchAppliedEvent::schema_fields_EVENT_SEQ] !== $identity['event_seq']) {
+                        throw new \RuntimeException('search_incremental_sequence_identity_conflict');
+                    }
+                    if ($key === $idempotencyKey) {
+                        if (!hash_equals((string)$existing[SearchAppliedEvent::schema_fields_PAYLOAD_HASH], $payloadHash)) {
+                            throw new \RuntimeException('search_incremental_idempotency_payload_conflict');
+                        }
+                        $replayed = true;
+                    }
+                    continue;
                 }
-
-                return [
-                    'ok' => true,
-                    'replayed' => true,
-                    'applied' => false,
-                    'reason' => 'duplicate_idempotency_key',
-                    'watermark' => $watermark,
-                ];
+                if ($this->findAppliedSequence($websiteId, $generation, $identity['event_seq']) !== null) {
+                    throw new \RuntimeException('search_incremental_sequence_identity_conflict');
+                }
+                $newEvents[] = $identity;
             }
-            $sameSequence = $this->findAppliedSequence($websiteId, $generation, $eventSeq);
-            if ($sameSequence !== null) {
-                throw new \RuntimeException('search_incremental_sequence_identity_conflict');
-            }
-
             $coveredByFull = $eventSeq
                 <= (int)$watermark[SearchWatermark::schema_fields_INCREMENTAL_WATERMARK];
-            if (!$coveredByFull) {
+            if (!$coveredByFull && !$replayed) {
                 $incomingKeys = [];
                 foreach ($documents as $document) {
                     $incomingKeys[$this->documentKey(
@@ -230,13 +240,16 @@ final class DatabaseSearchIndexStore implements SearchIndexStorageInterface
                 }
             }
 
-            $this->newAppliedEvent($websiteId)->setData([
-                SearchAppliedEvent::schema_fields_GENERATION => $generation,
-                SearchAppliedEvent::schema_fields_EVENT_SEQ => $eventSeq,
-                SearchAppliedEvent::schema_fields_IDEMPOTENCY_KEY => $idempotencyKey,
-                SearchAppliedEvent::schema_fields_PAYLOAD_HASH => $payloadHash,
-                SearchAppliedEvent::schema_fields_APPLIED_AT => \gmdate('Y-m-d H:i:s'),
-            ])->save();
+            // 与文档更新共享事务；任一写入失败时，不留下部分覆盖证据。
+            foreach ($newEvents as $identity) {
+                $this->newAppliedEvent($websiteId)->setData([
+                    SearchAppliedEvent::schema_fields_GENERATION => $generation,
+                    SearchAppliedEvent::schema_fields_EVENT_SEQ => $identity['event_seq'],
+                    SearchAppliedEvent::schema_fields_IDEMPOTENCY_KEY => $identity['idempotency_key'],
+                    SearchAppliedEvent::schema_fields_PAYLOAD_HASH => $payloadHash,
+                    SearchAppliedEvent::schema_fields_APPLIED_AT => \gmdate('Y-m-d H:i:s'),
+                ])->save();
+            }
 
             $nextWatermark = $this->advanceContiguousWatermark(
                 $websiteId,
@@ -246,9 +259,9 @@ final class DatabaseSearchIndexStore implements SearchIndexStorageInterface
 
             return [
                 'ok' => true,
-                'replayed' => false,
-                'applied' => !$coveredByFull,
-                'reason' => $coveredByFull ? 'covered_by_full_build' : 'applied',
+                'replayed' => $replayed,
+                'applied' => !$coveredByFull && !$replayed,
+                'reason' => $replayed ? 'duplicate_idempotency_key' : ($coveredByFull ? 'covered_by_full_build' : 'applied'),
                 'watermark' => $nextWatermark,
             ];
         });

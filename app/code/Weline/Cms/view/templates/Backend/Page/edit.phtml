@@ -127,6 +127,59 @@ if ($websiteSelectDisplay === '' && $websiteSelectValue !== '') {
     $websiteSelectDisplay = '#' . $websiteSelectValue;
 }
 $websiteSelectOptionsJson = json_encode($websiteSelectOptions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]';
+$pathGroupValue = trim((string)($page['path_group'] ?? ''));
+$pathAliasValue = trim((string)($page['path_group_alias'] ?? ''));
+$pathDisplayLabel = $pathAliasValue !== '' ? $pathAliasValue : $pathGroupValue;
+$cmsShortenLabel = static function (string $text, int $max = 32): string {
+    $text = trim($text);
+    if ($text === '' || mb_strlen($text, 'UTF-8') <= $max) {
+        return $text;
+    }
+
+    return mb_substr($text, 0, max(1, $max - 1), 'UTF-8') . '…';
+};
+$cmsHumanizeVisibleLabel = static function (string $raw): string {
+    $raw = trim($raw);
+    if ($raw === '') {
+        return '';
+    }
+    // 仅取「友好名 / 技术码」的左侧友好名
+    if (str_contains($raw, '/')) {
+        $raw = trim(explode('/', $raw, 2)[0]);
+    }
+    // 去掉长蛇形/连字符技术码
+    $friendly = preg_replace('/\b[a-z][a-z0-9]*(?:[_-][a-z0-9]+){2,}\b/iu', '', $raw) ?? $raw;
+    $friendly = preg_replace('/\s{2,}/u', ' ', trim((string)$friendly)) ?? trim((string)$friendly);
+    $friendly = trim($friendly, " \t\n\r\0\x0B-_/|");
+
+    return $friendly !== '' ? $friendly : $raw;
+};
+$cmsHumanStoreLabel = static function (array $store) use ($cmsHumanizeVisibleLabel): array {
+    $storeId = (int)($store['store_id'] ?? 0);
+    $code = trim((string)($store['code'] ?? ''));
+    $raw = trim((string)($store['name'] ?? ''));
+    if ($raw === '') {
+        $raw = $code !== '' ? $code : ('#' . $storeId);
+    }
+    $friendly = $cmsHumanizeVisibleLabel($raw);
+    $title = $raw;
+    if ($code !== '' && !str_contains($title, $code)) {
+        $title .= ' (' . $code . ')';
+    }
+
+    return ['label' => $friendly, 'title' => $title];
+};
+$websiteChipRaw = $websiteSelectDisplay !== '' ? $websiteSelectDisplay : $currentWebsiteCode;
+$websiteChipLabel = $cmsHumanizeVisibleLabel($websiteChipRaw);
+if ($websiteChipLabel === '') {
+    $websiteChipLabel = $currentWebsiteCode;
+}
+$contextFullTitle = trim(
+    $websiteChipRaw
+    . ($currentWebsiteCode !== '' && $websiteChipRaw !== $currentWebsiteCode ? ' [' . $currentWebsiteCode . ']' : '')
+    . ($pathDisplayLabel !== '' ? ' · ' . $pathDisplayLabel : '')
+    . ($pathGroupValue !== '' && $pathGroupValue !== $pathDisplayLabel ? ' / ' . $pathGroupValue : '')
+);
 ?>
 <link rel="stylesheet" href="@static(Weline_Theme::ui/components/weline-language-select.css)">
 <div class="w-grid">
@@ -150,159 +203,182 @@ $websiteSelectOptionsJson = json_encode($websiteSelectOptions, JSON_UNESCAPED_UN
     <div style="--w-span:12;">
         <w:form class="cms-page-settings-bar" method="post" action="@backend-url{'cms/backend/page/save'}">
             <input type="hidden" name="page_id" value="<?= $pageId ?>">
-            <div class="cms-page-settings-grid <?= $hasPathGroupContext ? 'has-path-context' : 'needs-path-context' ?>">
-                <?php if ($hasPathGroupContext): ?>
-                    <div class="cms-field cms-field-context">
-                        <label class="w-field__label"><?= __('站点 / 一级 path') ?></label>
-                        <div class="w-input cms-context-display">
-                            <span><?= htmlspecialchars($currentWebsiteCode) ?></span>
-                            <code><?= htmlspecialchars((string)($page['path_group_alias'] ?? $page['path_group'] ?? '')) ?> / <?= htmlspecialchars((string)($page['path_group'] ?? '')) ?></code>
+            <?php /* 原型 verdict D：主任务优先（标题/链接），发布上下文顶栏次要（见 doc/prototype/cms-page-settings-bar.html） */ ?>
+            <div class="cms-page-settings-layout <?= $hasPathGroupContext ? 'has-path-context' : 'needs-path-context' ?>">
+                <div class="cms-settings-context" aria-label="<?= htmlspecialchars((string)__('发布上下文')) ?>">
+                    <?php if ($hasPathGroupContext): ?>
+                        <div class="cms-context-chip" title="<?= htmlspecialchars($contextFullTitle) ?>">
+                            <span class="cms-context-chip__k"><?= __('站点') ?></span>
+                            <span class="cms-context-chip__v"><?= htmlspecialchars($cmsShortenLabel($websiteChipLabel, 28)) ?></span>
+                            <?php if ($pathDisplayLabel !== ''): ?>
+                                <span class="cms-context-chip__sep" aria-hidden="true">/</span>
+                                <span class="cms-context-chip__v"><?= htmlspecialchars($cmsShortenLabel($pathDisplayLabel, 24)) ?></span>
+                            <?php endif; ?>
                         </div>
                         <?php if ($storeOptions !== []): ?>
-                            <label class="w-field__label cms-store-label" for="cms-page-store"><?= __('店铺') ?></label>
-                            <select class="w-select" id="cms-page-store" name="store_id" data-cms-store-selector>
-                                <?php foreach ($storeOptions as $store): ?>
-                                    <?php $storeId = (int)($store['store_id'] ?? 0); ?>
-                                    <option value="<?= $storeId ?>"
-                                            data-store-code="<?= htmlspecialchars((string)($store['code'] ?? '')) ?>"
-                                            data-store-mode="<?= htmlspecialchars((string)($store['store_mode'] ?? 'normal')) ?>"
-                                            data-canonical-scope="<?= htmlspecialchars((string)($store['canonical_scope'] ?? '')) ?>"
-                                            <?= $storeId === $currentStoreId ? 'selected' : '' ?>>
-                                        <?= htmlspecialchars((string)($store['name'] ?? $store['code'] ?? ('#' . $storeId))) ?>
-                                        (<?= htmlspecialchars((string)($store['code'] ?? '')) ?>)
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                            <input type="hidden" name="store_code" value="<?= htmlspecialchars($currentStoreCode) ?>" data-cms-store-code>
-                            <input type="hidden" name="store_mode" value="<?= htmlspecialchars($currentStoreMode) ?>" data-cms-store-mode>
+                            <div class="cms-context-control cms-context-control--store">
+                                <label class="w-field__label" for="cms-page-store"><?= __('店铺') ?></label>
+                                <select class="w-select" id="cms-page-store" name="store_id" data-cms-store-selector>
+                                    <?php foreach ($storeOptions as $store): ?>
+                                        <?php
+                                        $storeId = (int)($store['store_id'] ?? 0);
+                                        $storeLabel = $cmsHumanStoreLabel($store);
+                                        ?>
+                                        <option value="<?= $storeId ?>"
+                                                title="<?= htmlspecialchars((string)$storeLabel['title']) ?>"
+                                                data-store-code="<?= htmlspecialchars((string)($store['code'] ?? '')) ?>"
+                                                data-store-mode="<?= htmlspecialchars((string)($store['store_mode'] ?? 'normal')) ?>"
+                                                data-canonical-scope="<?= htmlspecialchars((string)($store['canonical_scope'] ?? '')) ?>"
+                                                <?= $storeId === $currentStoreId ? 'selected' : '' ?>>
+                                            <?= htmlspecialchars((string)$storeLabel['label']) ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <input type="hidden" name="store_code" value="<?= htmlspecialchars($currentStoreCode) ?>" data-cms-store-code>
+                                <input type="hidden" name="store_mode" value="<?= htmlspecialchars($currentStoreMode) ?>" data-cms-store-mode>
+                            </div>
                         <?php endif; ?>
                         <input type="hidden" name="website_id" value="<?= $currentWebsiteId ?>">
                         <input type="hidden" name="website_code" value="<?= htmlspecialchars($currentWebsiteCode) ?>" data-cms-website-code>
-                        <input type="hidden" name="path_group" value="<?= htmlspecialchars((string)($page['path_group'] ?? '')) ?>">
-                        <input type="hidden" name="path_group_alias" value="<?= htmlspecialchars((string)($page['path_group_alias'] ?? '')) ?>">
-                    </div>
-                <?php else: ?>
-                    <div class="cms-field cms-field-website">
-                        <label class="w-field__label" for="cms-page-website_trigger"><?= __('站点') ?></label>
-                        <w:websites:website:select
-                            id="cms-page-website"
-                            name="website_id"
-                            value="websiteSelectValue"
-                            display="websiteSelectDisplay"
-                            options="websiteSelectOptionsJson"
-                            multiple="false"
-                            allow-empty="false"
-                            empty-label="@lang(请选择站点)"
-                            placeholder="@lang(搜索站点名称或编码)"
-                            on-select="cmsPageWebsiteOnSelect"
-                        />
-                        <input type="hidden" name="website_code" value="<?= htmlspecialchars($currentWebsiteCode) ?>" data-cms-website-code>
-                    </div>
-                <?php endif; ?>
-                <div class="cms-field cms-field-title">
-                    <div class="cms-title-toolbar">
-                        <label class="w-field__label" style="--w-mb:0;"><?= __('标题') ?></label>
-                        <div class="cms-title-toolbar-actions">
-                            <?php if ($localeAllowedValues !== []): ?>
-                                <w:i18n:language:select
-                                    id="cms-page-locale-selector"
-                                    name="locale_code"
-                                    input-id="cms-page-locale"
-                                    value="currentLocale"
-                                    allowed-values="localeAllowedValues"
-                                    display-locale="currentLocale"
-                                    allow-empty="false"
-                                    required="true"
-                                    class="w-cms-page-locale-select"
-                                />
-                            <?php endif; ?>
-                            <button class="w-button cms-translation-action" type="button" data-cms-translate-missing aria-describedby="cms-page-translation-status" <?= (!$hasPage || $missingLocaleCount === 0) ? 'disabled' : '' ?> data-tone="primary" data-variant="outline" data-size="sm">
-                                <w:icon name="language" size="sm"></w:icon>
-                                <span data-cms-translation-label>
-                                    <?= __('一键翻译缺失语言') ?><?= $missingLocaleCount > 0 ? ' (' . $missingLocaleCount . ')' : '' ?>
-                                </span>
-                            </button>
+                        <input type="hidden" name="path_group" value="<?= htmlspecialchars($pathGroupValue) ?>">
+                        <input type="hidden" name="path_group_alias" value="<?= htmlspecialchars($pathAliasValue) ?>">
+                    <?php else: ?>
+                        <div class="cms-context-control cms-context-control--website">
+                            <label class="w-field__label" for="cms-page-website_trigger"><?= __('站点') ?></label>
+                            <w:websites:website:select
+                                id="cms-page-website"
+                                name="website_id"
+                                value="websiteSelectValue"
+                                display="websiteSelectDisplay"
+                                options="websiteSelectOptionsJson"
+                                multiple="false"
+                                allow-empty="false"
+                                empty-label="@lang(请选择站点)"
+                                placeholder="@lang(搜索站点名称或编码)"
+                                on-select="cmsPageWebsiteOnSelect"
+                            />
+                            <input type="hidden" name="website_code" value="<?= htmlspecialchars($currentWebsiteCode) ?>" data-cms-website-code>
                         </div>
+                        <div class="cms-context-control">
+                            <label class="w-field__label"><?= __('一级 path') ?></label>
+                            <input class="w-input" type="text" name="path_group" value="<?= htmlspecialchars($pathGroupValue) ?>" required>
+                        </div>
+                        <div class="cms-context-control">
+                            <label class="w-field__label"><?= __('path 别名') ?></label>
+                            <input class="w-input" type="text" name="path_group_alias" value="<?= htmlspecialchars($pathAliasValue) ?>">
+                        </div>
+                    <?php endif; ?>
+                    <div class="cms-context-control cms-context-control--layout">
+                        <label class="w-field__label"><?= __('主题布局') ?></label>
+                        <w:theme:search-select
+                            id="cms-layout-option"
+                            name="layout_option"
+                            options="layoutOptionsStr"
+                            value="currentLayoutOption"
+                            placeholder="layoutPlaceholder"
+                            required="true"
+                        />
                     </div>
-                    <input class="w-input" type="text" name="title" value="<?= htmlspecialchars($currentLocaleTitle) ?>" required>
-                    <div id="cms-page-translation-status"
-                         class="cms-translation-status"
-                         data-cms-translation-status
-                         role="status"
-                         aria-live="polite"
-                         aria-atomic="true">
-                        <?php if (!$hasPage): ?>
-                            <?= __('请先保存页面，再翻译缺失语言。') ?>
-                        <?php elseif ($missingLocaleCount === 0): ?>
-                            <?= __('网站支持的语言均已补全。') ?>
-                        <?php else: ?>
-                            <?= __('待补全语言：') ?> <?= htmlspecialchars(implode(', ', $missingLocaleValues)) ?>
+                    <div class="cms-context-control cms-context-control--status">
+                        <label class="w-field__label" for="cms-page-status"><?= __('状态') ?></label>
+                        <select class="w-select" id="cms-page-status" name="status">
+                            <?php foreach ($statuses as $value => $label): ?>
+                                <option value="<?= htmlspecialchars((string)$value) ?>" <?= $currentVariantStatus === (string)$value ? 'selected' : '' ?>><?= $label ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <details class="cms-context-more">
+                        <summary><?= __('技术范围') ?></summary>
+                        <div class="cms-context-more__body">
+                            <label class="w-field__label" for="cms-page-scope"><?= __('范围') ?></label>
+                            <input class="w-input" id="cms-page-scope" type="text" name="editor_scope" value="<?= htmlspecialchars($canonicalScope) ?>" readonly title="<?= htmlspecialchars($canonicalScope) ?>">
+                            <input type="hidden" name="scope" value="<?= htmlspecialchars((string)($page['scope'] ?? 'default')) ?>">
+                        </div>
+                    </details>
+                </div>
+
+                <div class="cms-settings-primary">
+                    <div class="cms-field cms-field-title">
+                        <div class="cms-title-row">
+                            <div class="cms-title-primary">
+                                <label class="w-field__label" for="cms-page-title"><?= __('标题') ?></label>
+                                <input class="w-input" id="cms-page-title" type="text" name="title" value="<?= htmlspecialchars($currentLocaleTitle) ?>" required>
+                            </div>
+                            <div class="cms-title-tools">
+                                <?php if ($localeAllowedValues !== []): ?>
+                                    <div class="cms-title-tool">
+                                        <label class="w-field__label" for="cms-page-locale"><?= __('语言') ?></label>
+                                        <w:i18n:language:select
+                                            id="cms-page-locale-selector"
+                                            name="locale_code"
+                                            input-id="cms-page-locale"
+                                            value="currentLocale"
+                                            allowed-values="localeAllowedValues"
+                                            display-locale="currentLocale"
+                                            allow-empty="false"
+                                            required="true"
+                                            class="w-cms-page-locale-select"
+                                        />
+                                    </div>
+                                <?php endif; ?>
+                                <div class="cms-title-tool cms-title-tool-action">
+                                    <label class="w-field__label cms-title-tool-spacer" aria-hidden="true">&nbsp;</label>
+                                    <button class="w-button cms-translation-action" type="button" data-cms-translate-missing aria-describedby="cms-page-translation-status" <?= (!$hasPage || $missingLocaleCount === 0) ? 'disabled' : '' ?> data-tone="primary" data-variant="outline" data-size="sm">
+                                        <w:icon name="language" size="sm"></w:icon>
+                                        <span data-cms-translation-label>
+                                            <?= __('一键翻译缺失语言') ?><?= $missingLocaleCount > 0 ? ' (' . $missingLocaleCount . ')' : '' ?>
+                                        </span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="cms-page-translation-status"
+                             class="cms-translation-status"
+                             data-cms-translation-status
+                             role="status"
+                             aria-live="polite"
+                             aria-atomic="true">
+                            <?php if (!$hasPage): ?>
+                                <?= __('请先保存页面，再翻译缺失语言。') ?>
+                            <?php elseif ($missingLocaleCount === 0): ?>
+                                <?= __('网站支持的语言均已补全。') ?>
+                            <?php else: ?>
+                                <?= __('待补全语言：') ?> <?= htmlspecialchars(implode(', ', $missingLocaleValues)) ?>
+                            <?php endif; ?>
+                        </div>
+                        <input type="hidden" name="source_locale" value="<?= htmlspecialchars($sourceLocale) ?>">
+                        <input type="hidden" name="locale_titles_json" value="<?= htmlspecialchars($localeTitlesJson, ENT_QUOTES, 'UTF-8') ?>">
+                        <?php if ($currentTranslationState !== 'reviewed'): ?>
+                            <label class="cms-translation-review">
+                                <input type="checkbox" name="translation_reviewed" value="1">
+                                <span><?= __('我已审核当前语言标题，可用于发布') ?></span>
+                            </label>
                         <?php endif; ?>
                     </div>
-                    <input type="hidden" name="source_locale" value="<?= htmlspecialchars($sourceLocale) ?>">
-                    <input type="hidden" name="locale_titles_json" value="<?= htmlspecialchars($localeTitlesJson, ENT_QUOTES, 'UTF-8') ?>">
-                    <?php if ($currentTranslationState !== 'reviewed'): ?>
-                        <label class="cms-translation-review">
-                            <input type="checkbox" name="translation_reviewed" value="1">
-                            <span><?= __('我已审核当前语言标题，可用于发布') ?></span>
-                        </label>
-                    <?php endif; ?>
-                </div>
-                <?php if (!$hasPathGroupContext): ?>
-                    <div class="cms-field cms-field-path">
-                        <label class="w-field__label"><?= __('一级 path') ?></label>
-                        <input class="w-input" type="text" name="path_group" value="<?= htmlspecialchars((string)($page['path_group'] ?? '')) ?>" required>
+
+                    <div class="cms-field cms-field-slug">
+                        <div class="cms-slug-toolbar">
+                            <label class="w-field__label" style="--w-mb:0;" for="cms-page-slug"><?= __('链接标识') ?></label>
+                            <button class="w-button" type="button" data-cms-slug-auto data-tone="quiet" data-size="sm" style="--w-pt:0;--w-pe:0;--w-pb:0;--w-ps:0;">
+                                <?= __('恢复标题自动联动') ?>
+                            </button>
+                        </div>
+                        <input class="w-input" id="cms-page-slug" type="text" name="slug" value="<?= htmlspecialchars((string)($page['slug'] ?? '')) ?>" placeholder="page-url-key">
+                        <input type="hidden" name="slug_mode" value="<?= htmlspecialchars((string)($page['slug_mode'] ?? '')) ?>">
                     </div>
-                    <div class="cms-field cms-field-path-alias">
-                        <label class="w-field__label"><?= __('path 别名') ?></label>
-                        <input class="w-input" type="text" name="path_group_alias" value="<?= htmlspecialchars((string)($page['path_group_alias'] ?? '')) ?>">
-                    </div>
-                <?php endif; ?>
-                <div class="cms-field cms-field-slug">
-                    <div class="cms-slug-toolbar">
-                        <label class="w-field__label" style="--w-mb:0;"><?= __('Slug') ?></label>
-                        <button class="w-button" type="button" data-cms-slug-auto data-tone="quiet" data-size="sm" style="--w-pt:0;--w-pe:0;--w-pb:0;--w-ps:0;">
-                            <?= __('恢复标题自动联动') ?>
+
+                    <div class="cms-form-actions">
+                        <button class="w-button cms-action-button" type="submit" data-tone="primary">
+                            <w:icon name="save" size="sm"></w:icon>
+                            <?= __('保存页面设置') ?>
                         </button>
+                        <?php if ($themeEditorUrl !== ''): ?>
+                            <a class="w-button cms-action-button" href="<?= htmlspecialchars($themeEditorUrl) ?>" target="_blank" rel="noopener" data-tone="primary" data-variant="outline">
+                                <w:icon name="circle" size="sm"></w:icon>
+                                <?= __('新窗口打开编辑器') ?>
+                            </a>
+                        <?php endif; ?>
                     </div>
-                    <input class="w-input" type="text" name="slug" value="<?= htmlspecialchars((string)($page['slug'] ?? '')) ?>">
-                    <input type="hidden" name="slug_mode" value="<?= htmlspecialchars((string)($page['slug_mode'] ?? '')) ?>">
-                </div>
-                <div class="cms-field cms-field-scope">
-                    <label class="w-field__label"><?= __('范围') ?></label>
-                    <input class="w-input" type="text" name="editor_scope" value="<?= htmlspecialchars($canonicalScope) ?>" readonly>
-                    <input type="hidden" name="scope" value="<?= htmlspecialchars((string)($page['scope'] ?? 'default')) ?>">
-                </div>
-                <div class="cms-field cms-field-status">
-                    <label class="w-field__label"><?= __('状态') ?></label>
-                    <select class="w-select" name="status">
-                        <?php foreach ($statuses as $value => $label): ?>
-                            <option value="<?= htmlspecialchars((string)$value) ?>" <?= $currentVariantStatus === (string)$value ? 'selected' : '' ?>><?= $label ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="cms-field cms-field-layout">
-                    <label class="w-field__label"><?= __('Theme 布局') ?></label>
-                    <w:theme:search-select
-                        id="cms-layout-option"
-                        name="layout_option"
-                        options="layoutOptionsStr"
-                        value="currentLayoutOption"
-                        placeholder="layoutPlaceholder"
-                        required="true"
-                    />
-                </div>
-                <div class="cms-form-actions">
-                    <button class="w-button cms-action-button" type="submit" data-tone="primary">
-                        <w:icon name="save" size="sm"></w:icon>
-                        <?= __('保存页面设置') ?>
-                    </button>
-                    <?php if ($themeEditorUrl !== ''): ?>
-                        <a class="w-button cms-action-button" href="<?= htmlspecialchars($themeEditorUrl) ?>" target="_blank" rel="noopener" data-tone="primary" data-variant="outline">
-                            <w:icon name="circle" size="sm"></w:icon>
-                            <?= __('新窗口打开编辑器') ?>
-                        </a>
-                    <?php endif; ?>
                 </div>
             </div>
         </w:form>
@@ -326,69 +402,199 @@ $websiteSelectOptionsJson = json_encode($websiteSelectOptions, JSON_UNESCAPED_UN
 
 <style>
 .cms-page-workbench {
-    --cms-edit-surface: #ffffff;
-    --cms-edit-surface-soft: #f8fafc;
-    --cms-edit-surface-raised: #ffffff;
-    --cms-edit-field: #ffffff;
-    --cms-edit-text: #172033;
-    --cms-edit-muted: #64748b;
-    --cms-edit-border: #d7deeb;
-    --cms-edit-border-strong: #c9d3e2;
-    --cms-edit-accent: #3b82f6;
+    --cms-edit-surface: var(--backend-color-card-bg, #ffffff);
+    --cms-edit-surface-soft: var(--backend-color-bg-subtle, #f8fafc);
+    --cms-edit-surface-raised: var(--backend-color-card-bg, #ffffff);
+    --cms-edit-field: var(--backend-color-input-bg, #ffffff);
+    --cms-edit-text: var(--backend-color-text-primary, #172033);
+    --cms-edit-muted: var(--backend-color-text-secondary, #64748b);
+    --cms-edit-border: var(--backend-color-border-default, #d7deeb);
+    --cms-edit-border-strong: var(--backend-color-border-strong, #c9d3e2);
+    --cms-edit-accent: var(--color-primary, #3b82f6);
     display: grid;
-    gap: 12px;
+    gap: var(--weline-space-3, 12px);
 }
 
 .cms-page-settings-bar {
     padding: 16px 18px;
     border: 1px solid var(--cms-edit-border);
-    border-radius: 8px;
+    border-radius: var(--weline-radius-md, 8px);
     background: var(--cms-edit-surface);
     color: var(--cms-edit-text);
 }
 
-.cms-page-settings-grid {
-    display: grid;
-    grid-template-columns: minmax(260px, 1.15fr) minmax(260px, 1.15fr) minmax(150px, .7fr) minmax(240px, 1fr) minmax(210px, .82fr);
-    grid-template-areas:
-        "context title title layout actions"
-        "slug scope status layout actions";
-    gap: 14px;
-    align-items: end;
+/* 原型 verdict D：主任务优先 — 顶栏上下文 + 主编辑区（阅读宽） */
+.cms-page-settings-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
 }
 
-.cms-page-settings-grid > [class*="col-"] {
-    width: auto;
-    max-width: none;
-    flex: initial;
+.cms-settings-context {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: 10px 14px;
+    padding: 10px 12px;
+    border: 1px solid var(--cms-edit-border);
+    border-radius: 6px;
+    background: var(--cms-edit-surface-soft);
+}
+
+.cms-context-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 40px;
+    max-width: min(420px, 100%);
+    padding: 0 12px;
+    border: 1px solid var(--cms-edit-border);
+    border-radius: 6px;
+    background: var(--cms-edit-surface);
+    color: var(--cms-edit-text);
+    overflow: hidden;
+}
+
+.cms-context-chip__k {
+    flex: 0 0 auto;
+    color: var(--cms-edit-muted);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.cms-context-chip__v {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13px;
+}
+
+.cms-context-chip__sep {
+    color: var(--cms-edit-muted);
+}
+
+.cms-context-control {
+    display: grid;
+    gap: 4px;
+    min-width: 140px;
+    max-width: 220px;
+}
+
+.cms-context-control--store {
+    min-width: 160px;
+    max-width: 240px;
+}
+
+.cms-context-control--layout {
+    min-width: 180px;
+    max-width: 260px;
+}
+
+.cms-context-control--status {
+    min-width: 112px;
+    max-width: 140px;
+}
+
+.cms-context-control--website {
+    min-width: 200px;
+    max-width: 280px;
+}
+
+.cms-context-more {
+    margin-left: auto;
+    min-width: 120px;
+}
+
+.cms-context-more > summary {
+    list-style: none;
+    cursor: pointer;
+    min-height: 40px;
+    display: inline-flex;
+    align-items: center;
+    padding: 0 10px;
+    border-radius: 6px;
+    color: var(--cms-edit-muted);
+    font-size: 12px;
+    font-weight: 700;
+    user-select: none;
+}
+
+.cms-context-more > summary::-webkit-details-marker {
+    display: none;
+}
+
+.cms-context-more > summary:hover {
+    color: var(--cms-edit-text);
+    background: color-mix(in srgb, var(--cms-edit-surface) 70%, transparent);
+}
+
+.cms-context-more__body {
+    margin-top: 8px;
+    min-width: min(360px, 70vw);
+}
+
+.cms-settings-primary {
+    display: grid;
+    gap: 12px;
+    max-width: 880px;
+    min-width: 0;
 }
 
 .cms-field {
     min-width: 0;
 }
 
-.cms-title-toolbar,
+.cms-title-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px 14px;
+    align-items: end;
+}
+
+.cms-title-primary {
+    min-width: 0;
+}
+
+.cms-title-primary .w-field__label {
+    font-size: 13px;
+    letter-spacing: 0.01em;
+}
+
+.cms-title-primary #cms-page-title {
+    min-height: 46px;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.cms-title-tools {
+    display: flex;
+    align-items: end;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.cms-title-tool {
+    min-width: 0;
+}
+
+.cms-title-tool-spacer {
+    visibility: hidden;
+    user-select: none;
+}
+
 .cms-slug-toolbar {
     display: flex;
-    min-height: 30px;
+    min-height: 24px;
     align-items: center;
     justify-content: space-between;
     gap: 10px;
     margin-bottom: 6px;
 }
 
-.cms-title-toolbar-actions {
-    display: flex;
-    min-width: 0;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 8px;
-    flex-wrap: wrap;
-}
-
 .w-cms-page-locale-select {
-    width: min(280px, 62%);
-    min-width: 190px;
+    width: min(220px, 100%);
+    min-width: 160px;
 }
 
 .cms-translation-action {
@@ -397,14 +603,10 @@ $websiteSelectOptionsJson = json_encode($websiteSelectOptions, JSON_UNESCAPED_UN
 
 .cms-translation-status {
     min-height: 18px;
-    margin-top: 5px;
+    margin-top: 6px;
     color: var(--cms-edit-muted);
     font-size: 12px;
     line-height: 1.4;
-}
-
-.cms-store-label {
-    margin-top: 10px;
 }
 
 .cms-translation-review {
@@ -429,45 +631,16 @@ $websiteSelectOptionsJson = json_encode($websiteSelectOptions, JSON_UNESCAPED_UN
     color: var(--bs-danger-text-emphasis, #b91c1c);
 }
 
-.cms-slug-toolbar .weline-btn-link {
-    font-size: 12px;
-    text-decoration: none;
-}
-
-.cms-field-context { grid-area: context; }
-.cms-field-website { grid-area: context; }
-.cms-field-title { grid-area: title; }
-.cms-field-path { grid-area: path; }
-.cms-field-path-alias { grid-area: alias; }
-.cms-field-slug { grid-area: slug; }
-.cms-field-scope { grid-area: scope; }
-.cms-field-status { grid-area: status; }
-.cms-field-layout { grid-area: layout; align-self: end; }
-
-.cms-page-settings-grid.has-path-context {
-    grid-template-areas:
-        "context title title layout actions"
-        "slug scope status layout actions";
-}
-
-.cms-page-settings-grid.needs-path-context {
-    grid-template-areas:
-        "context title title layout actions"
-        "path alias slug scope actions"
-        "status status status status actions";
-}
-
 .cms-form-actions {
-    grid-area: actions;
     display: flex;
-    flex-direction: column;
-    justify-content: end;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    align-items: center;
     gap: 10px;
-    align-self: stretch;
-    padding: 10px;
-    border: 1px solid color-mix(in srgb, var(--cms-edit-border) 80%, transparent);
-    border-radius: 8px;
-    background: var(--cms-edit-surface-soft);
+    margin-top: 2px;
+    padding: 12px 0 0;
+    border-top: 1px solid color-mix(in srgb, var(--cms-edit-border) 85%, transparent);
 }
 
 .cms-action-button {
@@ -475,7 +648,8 @@ $websiteSelectOptionsJson = json_encode($websiteSelectOptions, JSON_UNESCAPED_UN
     align-items: center;
     justify-content: center;
     min-height: 40px;
-    width: 100%;
+    width: auto;
+    min-width: 148px;
     gap: 8px;
     white-space: nowrap;
 }
@@ -496,19 +670,15 @@ $websiteSelectOptionsJson = json_encode($websiteSelectOptions, JSON_UNESCAPED_UN
     background-color: var(--cms-edit-field);
     color: var(--cms-edit-text);
     box-shadow: none;
-}
-
-.cms-page-settings-bar .w-input,
-.cms-page-settings-bar .w-select {
     padding: 7px 12px;
 }
 
 .cms-page-settings-bar .w-input:focus,
-.cms-page-settings-bar .w-select:focus,
-
-
-
-
+.cms-page-settings-bar .w-select:focus {
+    border-color: var(--cms-edit-accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--cms-edit-accent) 18%, transparent);
+    outline: none;
+}
 
 .cms-page-settings-bar .w-search-select {
     width: 100%;
@@ -577,35 +747,7 @@ $websiteSelectOptionsJson = json_encode($websiteSelectOptions, JSON_UNESCAPED_UN
 }
 
 .cms-context-display {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    min-height: 40px;
-    background: var(--cms-edit-surface-soft);
-    overflow: hidden;
-}
-
-.cms-context-display span {
-    flex: 0 0 auto;
-    padding: 2px 8px;
-    border: 1px solid var(--cms-edit-border);
-    border-radius: 999px;
-    background: var(--cms-edit-surface-raised);
-    color: var(--cms-edit-muted);
-    font-size: 12px;
-}
-
-.cms-context-display code {
-    min-width: 0;
-    overflow: hidden;
-    color: #e83e8c;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.cms-page-settings-grid.has-path-context .cms-field-slug,
-.cms-page-settings-grid.has-path-context .cms-field-layout {
-    grid-column: auto;
+    display: none;
 }
 
 .cms-theme-editor-workspace {
@@ -665,53 +807,22 @@ body[data-theme="dark"] .cms-page-settings-bar .w-input::placeholder,
 
 
 
-@media (max-width: 1399.98px) {
-    .cms-page-settings-grid.has-path-context {
-        grid-template-columns: repeat(6, minmax(0, 1fr));
-        grid-template-areas:
-            "context context context title title title"
-            "slug slug scope scope status status"
-            "layout layout layout actions actions actions";
+@media (max-width: 1199.98px) {
+    .cms-context-more {
+        margin-left: 0;
+        width: 100%;
     }
 
-    .cms-page-settings-grid.needs-path-context {
-        grid-template-columns: repeat(6, minmax(0, 1fr));
-        grid-template-areas:
-            "context context context title title title"
-            "path path alias alias slug slug"
-            "scope scope status status layout layout"
-            "actions actions actions actions actions actions";
+    .cms-title-row {
+        grid-template-columns: minmax(0, 1fr);
     }
 
-    .cms-form-actions {
-        flex-direction: row;
-        align-self: end;
+    .cms-title-tools {
+        justify-content: flex-start;
     }
 
     .cms-action-button {
-        width: auto;
-        flex: 1 1 0;
-    }
-}
-
-@media (max-width: 1199.98px) {
-    .cms-page-settings-grid.has-path-context {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        grid-template-areas:
-            "context title"
-            "slug scope"
-            "status layout"
-            "actions actions";
-    }
-
-    .cms-page-settings-grid.needs-path-context {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        grid-template-areas:
-            "context title"
-            "path alias"
-            "slug scope"
-            "status layout"
-            "actions actions";
+        flex: 1 1 auto;
     }
 
     .cms-theme-editor-workspace {
@@ -729,37 +840,21 @@ body[data-theme="dark"] .cms-page-settings-bar .w-input::placeholder,
         padding: 14px;
     }
 
-    .cms-page-settings-grid.has-path-context {
-        grid-template-columns: minmax(0, 1fr);
-        grid-template-areas:
-            "context"
-            "title"
-            "slug"
-            "scope"
-            "status"
-            "layout"
-            "actions";
-    }
-
-    .cms-page-settings-grid.needs-path-context {
-        grid-template-columns: minmax(0, 1fr);
-        grid-template-areas:
-            "context"
-            "title"
-            "path"
-            "alias"
-            "slug"
-            "scope"
-            "status"
-            "layout"
-            "actions";
+    .cms-context-control,
+    .cms-context-control--store,
+    .cms-context-control--layout,
+    .cms-context-control--status,
+    .cms-context-control--website {
+        max-width: none;
+        width: 100%;
     }
 
     .cms-form-actions {
         flex-direction: column;
     }
 
-    .cms-form-actions .btn {
+    .cms-form-actions .w-button,
+    .cms-action-button {
         width: 100%;
     }
 }

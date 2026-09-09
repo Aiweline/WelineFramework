@@ -90,7 +90,31 @@
     }
 
     function notice() {
-        return window.Theme && window.Theme.Notice ? window.Theme.Notice : null;
+        if (window.Theme && window.Theme.Notice) {
+            return window.Theme.Notice;
+        }
+        if (window.Weline && window.Weline.Theme && window.Weline.Theme.Notice) {
+            return window.Weline.Theme.Notice;
+        }
+        if (window.Weline && window.Weline.Notice) {
+            return window.Weline.Notice;
+        }
+        return null;
+    }
+
+    function uiDialogConfirm() {
+        if (window.Weline && window.Weline.UI && window.Weline.UI.dialog
+            && typeof window.Weline.UI.dialog.confirm === 'function') {
+            return window.Weline.UI.dialog.confirm.bind(window.Weline.UI.dialog);
+        }
+        return null;
+    }
+
+    function uiToast() {
+        if (window.Weline && window.Weline.UI && window.Weline.UI.toast) {
+            return window.Weline.UI.toast;
+        }
+        return null;
     }
 
     function showMessage(panel, message, type) {
@@ -100,6 +124,17 @@
                 themeNotice.success(message || '');
             } else {
                 themeNotice.error(message || '');
+            }
+        } else {
+            var toast = uiToast();
+            if (toast) {
+                if (type === 'success' && typeof toast.success === 'function') {
+                    toast.success(message || '');
+                } else if (typeof toast.error === 'function') {
+                    toast.error(message || '');
+                } else if (typeof toast.show === 'function') {
+                    toast.show(message || '', {tone: type === 'success' ? 'success' : 'danger'});
+                }
             }
         }
 
@@ -270,12 +305,24 @@
             ensureHiddenField(form, field);
         });
         form.querySelector('[name="' + panel.getAttribute('data-id-field') + '"]').value = data.id || '';
-        ['name', 'contact_name', 'contact_phone', 'country_code', 'province_code', 'province_region_id', 'city_code', 'city_region_id', 'district_code', 'district_region_id', 'street', 'postal_code'].forEach(function (field) {
+        ['name', 'contact_name', 'contact_phone', 'country_code', 'province_code', 'province_region_id', 'city_code', 'city_region_id', 'district_code', 'district_region_id', 'street', 'postal_code', 'address1'].forEach(function (field) {
             var input = form.querySelector('[name="' + field + '"]');
             if (input) {
-                input.value = data[field] || '';
+                if (field === 'address1' && !data.address1 && data.street) {
+                    input.value = data.street || '';
+                } else {
+                    input.value = data[field] || '';
+                }
             }
         });
+        var postalInput = form.querySelector('[data-w-address-postal], [data-postal-first], [name="postal_code"]');
+        if (postalInput && data.postal_code) {
+            postalInput.value = data.postal_code;
+        }
+        var detailInput = form.querySelector('[data-w-address-detail], [name="street"]');
+        if (detailInput && (data.street || data.address1)) {
+            detailInput.value = data.street || data.address1 || '';
+        }
         if (form.querySelector('[data-w-address]')) {
             ['country', 'province', 'city', 'district'].forEach(function (field) {
                 var input = form.querySelector('[name="' + field + '"]');
@@ -334,9 +381,10 @@
             if (!window.Weline || !window.Weline.Api) {
                 return Promise.reject(new Error('Weline.Api is unavailable.'));
             }
+            // resource() returns a Proxy; never treat it as a thenable (then is reserved).
             apiResources[provider] = window.Weline.Api.resource(provider);
         }
-        return apiResources[provider];
+        return Promise.resolve(apiResources[provider]);
     }
 
     function getRegionApi() {
@@ -344,7 +392,7 @@
             if (!window.Weline || !window.Weline.Api) {
                 return Promise.reject(new Error('Weline.Api is unavailable.'));
             }
-            regionApiPromise = window.Weline.Api.resource('region');
+            regionApiPromise = Promise.resolve(window.Weline.Api.resource('region'));
         }
         return regionApiPromise;
     }
@@ -574,7 +622,22 @@
                 cancelText: labels.cancel
             });
         }
-        return Promise.resolve(false);
+
+        var dialogConfirm = uiDialogConfirm();
+        if (dialogConfirm) {
+            return Promise.resolve(dialogConfirm(labels.confirmDeleteDesc, {
+                title: labels.confirmDeleteTitle,
+                confirmLabel: labels.confirmDelete,
+                cancelLabel: labels.cancel,
+                tone: 'danger',
+                dangerous: true
+            })).then(function (confirmed) {
+                return !!confirmed;
+            });
+        }
+
+        // Last resort: never silently no-op when confirm UI is unavailable.
+        return Promise.resolve(window.confirm(labels.confirmDeleteTitle + '\n' + labels.confirmDeleteDesc));
     }
 
     function deleteAddress(panel, button) {
@@ -583,28 +646,34 @@
                 return;
             }
 
-            var deleteData = new FormData();
-            deleteData.append('id', button.dataset.id || '');
-            button.disabled = true;
-            var originalText = button.textContent;
-            button.textContent = labels.deleting;
+            // Yield after dialog.confirm settles: calling Weline.Api inside the
+            // confirm resolution microtask can stall the frontend query worker.
+            return new Promise(function (resolve) {
+                setTimeout(resolve, 0);
+            }).then(function () {
+                var deleteData = new FormData();
+                deleteData.append('id', button.dataset.id || '');
+                button.disabled = true;
+                var originalText = button.textContent;
+                button.textContent = labels.deleting;
 
-            requestJson(panel, 'delete', deleteData).then(function (data) {
-                if (!data.success) {
-                    showMessage(panel, data.message || labels.deleteFailed, 'danger');
-                    return;
-                }
-                var card = button.closest('[data-address-card]');
-                if (card) {
-                    card.remove();
-                }
-                panel.querySelector('[data-address-empty]').hidden = !!panel.querySelector('[data-address-card]');
-                showMessage(panel, data.message || labels.deleteSuccess, 'success');
-            }).catch(function (error) {
-                showMessage(panel, error.message || labels.requestFailed, 'danger');
-            }).finally(function () {
-                button.disabled = false;
-                button.textContent = originalText;
+                return requestJson(panel, 'delete', deleteData).then(function (data) {
+                    if (!data.success) {
+                        showMessage(panel, data.message || labels.deleteFailed, 'danger');
+                        return;
+                    }
+                    var card = button.closest('[data-address-card]');
+                    if (card) {
+                        card.remove();
+                    }
+                    panel.querySelector('[data-address-empty]').hidden = !!panel.querySelector('[data-address-card]');
+                    showMessage(panel, data.message || labels.deleteSuccess, 'success');
+                }).catch(function (error) {
+                    showMessage(panel, error.message || labels.requestFailed, 'danger');
+                }).finally(function () {
+                    button.disabled = false;
+                    button.textContent = originalText;
+                });
             });
         });
     }

@@ -7,6 +7,7 @@ namespace Weline\I18n\Taglib;
 use Symfony\Component\Intl\Countries;
 use Symfony\Component\Intl\Locales;
 use Weline\Framework\App\State;
+use Weline\Framework\Phrase\DictionaryCacheNamespace;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Taglib\TaglibInterface;
 use Weline\I18n\Model\I18n;
@@ -92,224 +93,185 @@ class LanguageSelect implements TaglibInterface
             if (!\array_key_exists('multiple', $attributes)) {
                 $attributeCode .= "\n\$Taglib__multiple = false;";
             }
-            $html = ['<?php ' . $attributeCode . ' ?>'];
-            $html[] = <<<'PHP'
-<?php
-$__wls_bool = static function ($value, bool $default = false): bool {
-    if (\is_bool($value)) {
-        return $value;
-    }
-    if ($value === null || $value === '') {
-        return $default;
-    }
-    $value = \strtolower(\trim((string)$value));
-    if (\in_array($value, ['true', '1', 'yes', 'on'], true)) {
-        return true;
-    }
-    if (\in_array($value, ['false', '0', 'no', 'off'], true)) {
-        return false;
-    }
-    return $default;
-};
-$__wls_values = static function ($raw): array {
-    if (\is_array($raw)) {
-        $values = $raw;
-    } elseif ($raw === null || $raw === '') {
-        $values = [];
-    } else {
-        $raw = \trim((string)$raw);
-        $decoded = ($raw !== '' && ($raw[0] === '[' || $raw[0] === '{')) ? \json_decode($raw, true) : null;
-        $values = \is_array($decoded)
-            ? $decoded
-            : (\preg_split('/[\s,]+/', $raw, -1, PREG_SPLIT_NO_EMPTY) ?: []);
-    }
-    $result = [];
-    foreach ($values as $value) {
-        if (\is_array($value) && isset($value['code'])) {
-            $value = $value['code'];
-        }
-        if (!\is_scalar($value)) {
-            continue;
-        }
-        $value = \trim((string)$value);
-        if ($value !== '' && !\in_array($value, $result, true)) {
-            $result[] = $value;
-        }
-    }
-    return $result;
-};
-$__wls_text = static function ($value, string $default = ''): string {
-    $value = $value === null ? '' : \trim((string)$value);
-    $value = \trim($value, "\"'");
-    return $value !== '' ? $value : $default;
-};
-$__wls_id = static function ($value, string $default): string {
-    $value = \preg_replace('/[^A-Za-z0-9_:-]+/', '-', $value === null ? '' : \trim((string)$value));
-    $value = \trim((string)$value, '-');
-    return $value !== '' ? $value : $default;
-};
-$__wls_multiple = $__wls_bool($Taglib__multiple ?? false);
-$__wls_display_only = $__wls_bool($Taglib__display_only ?? false);
-$__wls_required = $__wls_bool($Taglib__required ?? false);
-$__wls_allow_empty = $__wls_bool($Taglib__allow_empty ?? !$__wls_required, !$__wls_required);
-$__wls_show_reference = $__wls_bool($Taglib__show_reference ?? true, true);
-$__wls_selected = $__wls_values($Taglib__value ?? []);
-$__wls_readonly = $__wls_values($Taglib__readonly_values ?? []);
-$__wls_disabled = $__wls_values($Taglib__disabled_values ?? []);
-$__wls_exclude_site = $__wls_bool($Taglib__exclude_site_languages ?? false);
-$__wls_site_codes = $__wls_exclude_site
-    ? \Weline\I18n\Taglib\LanguageSelect::resolveSiteLanguageCodes()
-    : [];
-foreach ($__wls_site_codes as $__wls_site_code) {
-    if (!\in_array($__wls_site_code, $__wls_disabled, true)) {
-        $__wls_disabled[] = $__wls_site_code;
-    }
-}
-$__wls_site_disabled = \array_fill_keys($__wls_site_codes, true);
-$__wls_allowed = $Taglib__allowed_values ?? ($Taglib__option_values ?? ($Taglib__options_values ?? ($Taglib__locales ?? [])));
-foreach ($__wls_readonly as $__wls_code) {
-    if (!\in_array($__wls_code, $__wls_selected, true)) {
-        $__wls_selected[] = $__wls_code;
-    }
-}
-if (!$__wls_multiple && \count($__wls_selected) > 1) {
-    $__wls_selected = [\reset($__wls_selected) ?: ''];
-}
-$__wls_component_id = $__wls_id($Taglib__id ?? null, 'language-select');
-$__wls_field_id = $__wls_id($Taglib__input_id ?? null, $__wls_component_id . '-field');
-$__wls_name = $__wls_text($Taglib__name ?? '');
-$__wls_display_locale = $__wls_text(
-    $Taglib__display_locale ?? '',
-    \Weline\Framework\App\State::getLang() ?: \Weline\Framework\App\State::getLangLocal() ?: 'zh_Hans_CN'
-);
-$__wls_catalog = \strtolower($__wls_text($Taglib__catalog ?? '', 'installed'));
-if (!\in_array($__wls_catalog, ['installed', 'global'], true)) {
-    $__wls_catalog = 'installed';
-}
-$__wls_items = \Weline\I18n\Taglib\LanguageSelect::resolveLanguageItems(
-    $__wls_display_locale,
-    $__wls_catalog,
-    $__wls_allowed
-);
-$__wls_empty = $__wls_text(
-    $Taglib__empty_text ?? '',
-    $__wls_multiple ? __('点击选择语言（可多选）') : __('点击选择语言')
-);
-$__wls_search = $__wls_text($Taglib__search_placeholder ?? '', __('搜索国家、语言或代码...'));
-$__wls_classes = [];
-foreach (\preg_split('/\s+/', $__wls_text($Taglib__class ?? '')) ?: [] as $__wls_class) {
-    if (\preg_match('/^w-[a-z0-9_-]+$/', $__wls_class) === 1) {
-        $__wls_classes[] = $__wls_class;
-    }
-}
-$__wls_width = $__wls_text($Taglib__data_w_width ?? '');
-$__wls_width = \in_array($__wls_width, ['auto', 'full'], true) ? $__wls_width : '';
-$__wls_auto_submit = $__wls_bool($Taglib__auto_submit ?? false);
-$__wls_readonly_json = \json_encode($__wls_readonly, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?: '[]';
-?>
-PHP;
-            $html[] = <<<'HTML'
-<div
-    class="w-language-select<?= $__wls_classes ? ' ' . htmlspecialchars(implode(' ', $__wls_classes), ENT_QUOTES, 'UTF-8') : '' ?>"
-    id="<?= htmlspecialchars($__wls_component_id, ENT_QUOTES, 'UTF-8') ?>_wrapper"
-    data-w-component="language-select"
-    data-w-component-id="<?= htmlspecialchars($__wls_component_id, ENT_QUOTES, 'UTF-8') ?>"
-    data-w-multiple="<?= $__wls_multiple ? 'true' : 'false' ?>"
-    data-w-display-only="<?= $__wls_display_only ? 'true' : 'false' ?>"
-    data-w-allow-empty="<?= $__wls_allow_empty ? 'true' : 'false' ?>"
-    data-w-show-reference="<?= $__wls_show_reference ? 'true' : 'false' ?>"
-    data-w-readonly-values="<?= htmlspecialchars($__wls_readonly_json, ENT_QUOTES, 'UTF-8') ?>"
-    data-w-exclude-site-languages="<?= $__wls_exclude_site ? 'true' : 'false' ?>"
-    data-w-excluded-label="<?= htmlspecialchars((string)__('已支持'), ENT_QUOTES, 'UTF-8') ?>"
-    data-w-empty-text="<?= htmlspecialchars($__wls_empty, ENT_QUOTES, 'UTF-8') ?>"
-    data-w-width="<?= htmlspecialchars($__wls_width, ENT_QUOTES, 'UTF-8') ?>"
-    data-w-auto-submit="<?= $__wls_auto_submit ? 'true' : 'false' ?>"
->
-    <button
-        class="w-language-select__trigger"
-        id="<?= htmlspecialchars($__wls_component_id, ENT_QUOTES, 'UTF-8') ?>_trigger"
-        type="button"
-        aria-haspopup="listbox"
-        aria-expanded="false"
-        aria-controls="<?= htmlspecialchars($__wls_component_id, ENT_QUOTES, 'UTF-8') ?>_list"
-        aria-label="<?= htmlspecialchars($__wls_empty, ENT_QUOTES, 'UTF-8') ?>"
-        <?= $__wls_display_only ? 'disabled aria-disabled="true"' : '' ?>
-    >
-        <span class="w-language-select__tags" data-w-language-tags>
-            <span class="w-language-select__placeholder"><?= htmlspecialchars($__wls_empty, ENT_QUOTES, 'UTF-8') ?></span>
-        </span>
-        <?php if (!$__wls_display_only): ?>
-            <w-icon name="chevron-down" size="sm"></w-icon>
-        <?php endif; ?>
-    </button>
 
-    <select
-        class="w-visually-hidden"
-        id="<?= htmlspecialchars($__wls_field_id, ENT_QUOTES, 'UTF-8') ?>"
-        name="<?= htmlspecialchars($__wls_name, ENT_QUOTES, 'UTF-8') ?>"
-        <?= $__wls_multiple ? 'multiple' : '' ?>
-        <?= $__wls_required ? 'required' : '' ?>
-        tabindex="-1"
-        aria-label="<?= htmlspecialchars($__wls_empty, ENT_QUOTES, 'UTF-8') ?>"
-        data-w-language-field
-    >
-        <?php if (!$__wls_multiple && $__wls_allow_empty): ?>
-            <option value="" <?= $__wls_selected === [] ? 'selected' : '' ?>><?= htmlspecialchars((string)__('清空选择'), ENT_QUOTES, 'UTF-8') ?></option>
-        <?php endif; ?>
-        <?php foreach ($__wls_items as $__wls_item): ?>
-            <?php
-            $__wls_code = trim((string)($__wls_item['code'] ?? ''));
-            if ($__wls_code === '') {
-                continue;
-            }
-            $__wls_label = $__wls_show_reference
-                ? (string)($__wls_item['display_name'] ?? $__wls_item['tag_label'] ?? $__wls_item['name'] ?? $__wls_code)
-                : (string)($__wls_item['name'] ?? $__wls_item['reference_name'] ?? $__wls_code);
-            ?>
-            <option
-                value="<?= htmlspecialchars($__wls_code, ENT_QUOTES, 'UTF-8') ?>"
-                data-w-label="<?= htmlspecialchars($__wls_label, ENT_QUOTES, 'UTF-8') ?>"
-                data-w-tag-label="<?= htmlspecialchars((string)($__wls_item['tag_label'] ?? $__wls_label), ENT_QUOTES, 'UTF-8') ?>"
-                data-w-country-code="<?= htmlspecialchars((string)($__wls_item['country_code'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
-                data-w-country-name="<?= htmlspecialchars((string)($__wls_item['country_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
-                data-w-meta="<?= htmlspecialchars(trim($__wls_code . ' · ' . (string)($__wls_item['self_name'] ?? $__wls_item['reference_name'] ?? '')), ENT_QUOTES, 'UTF-8') ?>"
-                data-w-search="<?= htmlspecialchars((string)($__wls_item['search'] ?? $__wls_label . ' ' . $__wls_code), ENT_QUOTES, 'UTF-8') ?>"
-                <?= isset($__wls_site_disabled[$__wls_code]) ? 'data-w-site-language="true"' : '' ?>
-                <?= \in_array($__wls_code, $__wls_selected, true) ? 'selected' : '' ?>
-                <?= \in_array($__wls_code, $__wls_disabled, true) ? 'disabled' : '' ?>
-            ><?= htmlspecialchars($__wls_label, ENT_QUOTES, 'UTF-8') ?></option>
-        <?php endforeach; ?>
-    </select>
-
-    <?php if (!$__wls_display_only): ?>
-        <div
-            class="w-language-select__popover"
-            id="<?= htmlspecialchars($__wls_component_id, ENT_QUOTES, 'UTF-8') ?>_popover"
-            data-w-placement="bottom-start"
-            hidden
-        >
-            <input
-                class="w-input w-language-select__search"
-                type="search"
-                placeholder="<?= htmlspecialchars($__wls_search, ENT_QUOTES, 'UTF-8') ?>"
-                autocomplete="off"
-                aria-controls="<?= htmlspecialchars($__wls_component_id, ENT_QUOTES, 'UTF-8') ?>_list"
-                data-w-language-search
-            >
-            <div
-                class="w-language-select__list"
-                id="<?= htmlspecialchars($__wls_component_id, ENT_QUOTES, 'UTF-8') ?>_list"
-                role="listbox"
-                aria-multiselectable="<?= $__wls_multiple ? 'true' : 'false' ?>"
-                data-w-language-list
-            ></div>
-        </div>
-    <?php endif; ?>
-</div>
-HTML;
-
-            return \implode("\n", $html);
+            // 静态属性：编译期吐出 buildMarkup；动态属性由 runtimeCallback 接管。
+            $phpOpen = '<' . '?php ';
+            $phpClose = '?' . '>';
+            $echoOpen = '<' . '?= ';
+            return $phpOpen . $attributeCode . ' ' . $phpClose . "\n"
+                . $echoOpen . '\\' . self::class . '::buildMarkup(['
+                . "'id' => (string)(\$Taglib__id ?? ''),"
+                . "'name' => (string)(\$Taglib__name ?? ''),"
+                . "'value' => \$Taglib__value ?? '',"
+                . "'multiple' => \$Taglib__multiple ?? false,"
+                . "'class' => (string)(\$Taglib__class ?? ''),"
+                . "'required' => \$Taglib__required ?? false,"
+                . "'allow-empty' => \$Taglib__allow_empty ?? '',"
+                . "'display-only' => \$Taglib__display_only ?? false,"
+                . "'readonly-values' => \$Taglib__readonly_values ?? [],"
+                . "'disabled-values' => \$Taglib__disabled_values ?? [],"
+                . "'exclude-site-languages' => \$Taglib__exclude_site_languages ?? false,"
+                . "'allowed-values' => \$Taglib__allowed_values ?? (\$Taglib__option_values ?? (\$Taglib__options_values ?? (\$Taglib__locales ?? []))),"
+                . "'option-values' => \$Taglib__option_values ?? [],"
+                . "'options-values' => \$Taglib__options_values ?? [],"
+                . "'locales' => \$Taglib__locales ?? [],"
+                . "'display-locale' => (string)(\$Taglib__display_locale ?? ''),"
+                . "'input-id' => (string)(\$Taglib__input_id ?? ''),"
+                . "'empty-text' => (string)(\$Taglib__empty_text ?? ''),"
+                . "'search-placeholder' => (string)(\$Taglib__search_placeholder ?? ''),"
+                . "'show-reference' => \$Taglib__show_reference ?? true,"
+                . "'catalog' => (string)(\$Taglib__catalog ?? 'installed'),"
+                . "'data-w-width' => (string)(\$Taglib__data_w_width ?? ''),"
+                . "'auto-submit' => \$Taglib__auto_submit ?? false,"
+                . ']) ' . $phpClose;
         };
+    }
+
+    /**
+     * 动态属性路径：renderRuntimeTag 必须直接返回 HTML，不可再吐 PHP 源码。
+     */
+    public static function runtimeCallback(): callable
+    {
+        return static function (
+            \Weline\Framework\View\Template $template,
+            string $tagKey,
+            array $attributes,
+            string $content,
+        ): string {
+            unset($template, $content);
+            if ($tagKey !== 'tag-self-close' && $tagKey !== 'tag-self-close-with-attrs') {
+                return '';
+            }
+
+            return self::buildMarkup(is_array($attributes) ? $attributes : []);
+        };
+    }
+
+    /**
+     * @param array<string, mixed> $attributes
+     */
+    public static function buildMarkup(array $attributes): string
+    {
+        $decode = static fn($value): string => html_entity_decode((string)$value, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $bool = static function (mixed $value, bool $default = false) use ($decode): bool {
+            if (\is_bool($value)) {
+                return $value;
+            }
+            if ($value === null || $value === '') {
+                return $default;
+            }
+            $value = \strtolower(\trim($decode($value)));
+            if (\in_array($value, ['true', '1', 'yes', 'on'], true)) {
+                return true;
+            }
+            if (\in_array($value, ['false', '0', 'no', 'off'], true)) {
+                return false;
+            }
+
+            return $default;
+        };
+        $values = static function (mixed $raw) use ($decode): array {
+            if (\is_array($raw)) {
+                $list = $raw;
+            } elseif ($raw === null || $raw === '') {
+                $list = [];
+            } else {
+                $raw = \trim($decode($raw));
+                $decoded = ($raw !== '' && ($raw[0] === '[' || $raw[0] === '{')) ? \json_decode($raw, true) : null;
+                $list = \is_array($decoded)
+                    ? $decoded
+                    : (\preg_split('/[\s,]+/', $raw, -1, PREG_SPLIT_NO_EMPTY) ?: []);
+            }
+            $result = [];
+            foreach ($list as $value) {
+                if (\is_array($value) && isset($value['code'])) {
+                    $value = $value['code'];
+                }
+                if (!\is_scalar($value)) {
+                    continue;
+                }
+                $value = \trim((string)$value);
+                if ($value !== '' && !\in_array($value, $result, true)) {
+                    $result[] = $value;
+                }
+            }
+
+            return $result;
+        };
+        $text = static function (mixed $value, string $default = '') use ($decode): string {
+            $value = $value === null ? '' : \trim($decode($value));
+            $value = \trim($value, "\"'");
+
+            return $value !== '' ? $value : $default;
+        };
+        $id = static function (mixed $value, string $default) use ($decode): string {
+            $value = \preg_replace('/[^A-Za-z0-9_:-]+/', '-', $value === null ? '' : \trim($decode($value)));
+            $value = \trim((string)$value, '-');
+
+            return $value !== '' ? $value : $default;
+        };
+
+        $__wls_multiple = $bool($attributes['multiple'] ?? false);
+        $__wls_display_only = $bool($attributes['display-only'] ?? false);
+        $__wls_required = $bool($attributes['required'] ?? false);
+        $allowEmptyRaw = $attributes['allow-empty'] ?? '';
+        $__wls_allow_empty = ($allowEmptyRaw === '' || $allowEmptyRaw === null)
+            ? !$__wls_required
+            : $bool($allowEmptyRaw, !$__wls_required);
+        $__wls_show_reference = $bool($attributes['show-reference'] ?? true, true);
+        $__wls_selected = $values($attributes['value'] ?? []);
+        $__wls_readonly = $values($attributes['readonly-values'] ?? []);
+        $__wls_disabled = $values($attributes['disabled-values'] ?? []);
+        $__wls_exclude_site = $bool($attributes['exclude-site-languages'] ?? false);
+        $__wls_site_codes = $__wls_exclude_site ? self::resolveSiteLanguageCodes() : [];
+        foreach ($__wls_site_codes as $__wls_site_code) {
+            if (!\in_array($__wls_site_code, $__wls_disabled, true)) {
+                $__wls_disabled[] = $__wls_site_code;
+            }
+        }
+        $__wls_site_disabled = \array_fill_keys($__wls_site_codes, true);
+        $__wls_allowed = $attributes['allowed-values']
+            ?? ($attributes['option-values'] ?? ($attributes['options-values'] ?? ($attributes['locales'] ?? [])));
+        foreach ($__wls_readonly as $__wls_code) {
+            if (!\in_array($__wls_code, $__wls_selected, true)) {
+                $__wls_selected[] = $__wls_code;
+            }
+        }
+        if (!$__wls_multiple && \count($__wls_selected) > 1) {
+            $__wls_selected = [\reset($__wls_selected) ?: ''];
+        }
+        $__wls_component_id = $id($attributes['id'] ?? null, 'language-select');
+        $__wls_field_id = $id($attributes['input-id'] ?? null, $__wls_component_id . '-field');
+        $__wls_name = $text($attributes['name'] ?? '');
+        $__wls_display_locale = $text(
+            $attributes['display-locale'] ?? '',
+            \Weline\Framework\App\State::getLang() ?: \Weline\Framework\App\State::getLangLocal() ?: 'zh_Hans_CN'
+        );
+        $__wls_catalog = \strtolower($text($attributes['catalog'] ?? '', 'installed'));
+        if (!\in_array($__wls_catalog, ['installed', 'global'], true)) {
+            $__wls_catalog = 'installed';
+        }
+        $__wls_items = self::resolveLanguageItems($__wls_display_locale, $__wls_catalog, $__wls_allowed);
+        $__wls_empty = $text(
+            $attributes['empty-text'] ?? '',
+            $__wls_multiple ? (string)__('点击选择语言（可多选）') : (string)__('点击选择语言')
+        );
+        $__wls_search = $text($attributes['search-placeholder'] ?? '', (string)__('搜索国家、语言或代码...'));
+        $__wls_classes = [];
+        foreach (\preg_split('/\s+/', $text($attributes['class'] ?? '')) ?: [] as $__wls_class) {
+            if (\preg_match('/^w-[a-z0-9_-]+$/', $__wls_class) === 1) {
+                $__wls_classes[] = $__wls_class;
+            }
+        }
+        $__wls_width = $text($attributes['data-w-width'] ?? '');
+        $__wls_width = \in_array($__wls_width, ['auto', 'full'], true) ? $__wls_width : '';
+        $__wls_auto_submit = $bool($attributes['auto-submit'] ?? false);
+        $__wls_readonly_json = \json_encode($__wls_readonly, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?: '[]';
+
+        ob_start();
+        include dirname(__DIR__) . '/view/templates/taglib/language-select-markup.phtml';
+
+        return (string)ob_get_clean();
     }
 
     public static function tag_self_close(): bool
@@ -382,12 +344,12 @@ DOC;
         if (!\in_array($catalog, ['installed', 'global'], true)) {
             $catalog = 'installed';
         }
-        $cacheKey = $catalog . '|' . $displayLocale;
-        if (isset(self::$itemsCache[$cacheKey])) {
-            return self::$itemsCache[$cacheKey];
+        $cacheKey = DictionaryCacheNamespace::cacheKey($catalog . '|' . $displayLocale);
+        if (isset(DictionaryCacheNamespace::localCache(self::$itemsCache, 128)[$cacheKey])) {
+            return DictionaryCacheNamespace::localCache(self::$itemsCache, 128)[$cacheKey];
         }
         if ($catalog === 'global') {
-            return self::$itemsCache[$cacheKey] = self::buildGlobalLanguageItems($displayLocale);
+            return DictionaryCacheNamespace::localCache(self::$itemsCache, 128)[$cacheKey] = self::buildGlobalLanguageItems($displayLocale);
         }
 
         /** @var I18n $i18n */
@@ -508,7 +470,7 @@ DOC;
             return $name !== 0 ? $name : \strnatcasecmp((string)($a['code'] ?? ''), (string)($b['code'] ?? ''));
         });
 
-        return self::$itemsCache[$cacheKey] = $items;
+        return DictionaryCacheNamespace::localCache(self::$itemsCache, 128)[$cacheKey] = $items;
     }
 
     public static function getLanguageItemsJson(

@@ -668,12 +668,29 @@ final class ProductAdminSurfaceContractTest extends TestCase
             'Weline\\Product\\Model\\Product\\LocalDescription',
             'id="product-edit-meta-name"',
             'id="product-edit-short-description"',
+            'id="product-edit-description"',
+            'data-testid="product-edit-description-local"',
+            'data-testid="product-edit-description-editor"',
+            'data-testid="product-edit-description-asset-map"',
+            'field="description"',
+            '<w:editor-manager container-id="product-edit-description"/>',
+            'w-product-local-label__trigger',
+            'presentDescriptionForEditor',
         ] as $contract) {
             self::assertStringContainsString($contract, $edit);
         }
+        self::assertStringNotContainsString(
+            '<local model="Weline\\Product\\Model\\Product\\LocalDescription" field="description" id="productEntityId" name="product-edit-description-local"><?= $escape($description) ?></local>',
+            $edit,
+        );
         self::assertStringContainsString('attributeAnyLocaleFallback', $context);
         self::assertStringContainsString('meta_name:', $script);
         self::assertStringContainsString('short_description:', $script);
+        self::assertStringContainsString('description:', $script);
+        self::assertStringContainsString('syncProductDescriptionEditorSource', $script);
+        self::assertStringContainsString('persistProductDescriptionAssets', $script);
+        self::assertStringContainsString('persistDescriptionHtml', $command);
+        self::assertStringContainsString("['short_description', 'description', 'meta_name', 'meta_description', 'meta_keywords']", $command);
         foreach ([
             'function renderDiagnosticGroup',
             'diagnostics.groups',

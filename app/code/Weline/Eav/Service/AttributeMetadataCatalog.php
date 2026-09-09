@@ -10,6 +10,7 @@ use Weline\Eav\Api\Metadata\AttributeGroupMetadata;
 use Weline\Eav\Api\Metadata\AttributeMetadata;
 use Weline\Eav\Api\Metadata\AttributeMetadataCatalogInterface;
 use Weline\Eav\Api\Metadata\AttributeMetadataPrefetchInterface;
+use Weline\Eav\Api\Metadata\AttributeOptionIdentityCatalogInterface;
 use Weline\Eav\Api\Metadata\AttributeOptionMetadata;
 use Weline\Eav\Api\Metadata\AttributeSetMetadata;
 use Weline\Eav\Api\Metadata\CompareMode;
@@ -31,7 +32,7 @@ use Weline\Framework\Runtime\RequestContext;
 /**
  * Eav-owned read model. Consumers receive DTOs and never Eav ORM objects.
  */
-final class AttributeMetadataCatalog implements AttributeMetadataCatalogInterface, AttributeMetadataPrefetchInterface
+final class AttributeMetadataCatalog implements AttributeMetadataCatalogInterface, AttributeMetadataPrefetchInterface, AttributeOptionIdentityCatalogInterface
 {
     public function __construct(
         private readonly EavEntity $entityModel,
@@ -64,6 +65,66 @@ final class AttributeMetadataCatalog implements AttributeMetadataCatalogInterfac
             $key,
             fn(): array => $this->catalogWithOptionScopes($entity, [Option::SCOPE_SHARED]),
         );
+    }
+
+    public function sharedOptionIdentities(EntityDefinitionInterface $entity, array $attributeCodes): array
+    {
+        $codes = [];
+        foreach ($attributeCodes as $code) {
+            $code = strtolower(trim((string)$code));
+            if ($code !== '') {
+                $codes[$code] = true;
+            }
+        }
+        if ($codes === []) {
+            return [];
+        }
+        $entityCode = strtolower(trim($entity->getEntityCode()));
+        // 选项与 placement 写入尚未发布共享版本，因此这里只挂请求内投影。
+        // 身份使用与语言无关的原始值，展示翻译仍由完整目录负责。
+        $contextKey = 'eav.metadata.shared-option-identities|' . $entityCode;
+        $index = (array)RequestContext::get($contextKey, []);
+        $missing = array_diff_key($codes, $index);
+        if ($missing !== []) {
+            $sets = $this->rememberRequest(
+                'shared-identity-attributes|' . $entityCode,
+                fn(): array => $this->catalogWithOptionScopes($entity, [Option::SCOPE_SHARED], true),
+            );
+            $attributeIds = [];
+            $orderedAttributes = [];
+            foreach ($sets as $set) {
+                foreach ($set->groups as $group) {
+                    foreach ($group->attributes as $attribute) {
+                        $code = strtolower(trim($attribute->code));
+                        if (isset($missing[$code])) {
+                            $attributeIds[$attribute->id] = true;
+                            $orderedAttributes[] = [$code, $attribute->id];
+                        }
+                    }
+                }
+            }
+            $options = $this->loadOptionsByAttribute(
+                $this->entityId($entityCode),
+                [Option::SCOPE_SHARED],
+                '',
+                array_keys($attributeIds),
+            );
+            $loaded = array_fill_keys(array_keys($missing), []);
+            foreach ($orderedAttributes as [$code, $attributeId]) {
+                $loaded[$code] = array_merge($loaded[$code], $options[$attributeId] ?? []);
+            }
+            $index += $loaded;
+            if (Context::hasCurrent()) {
+                // 全部读取成功后才回填，包含已确认不存在的轴；异常不记为缺失。
+                RequestContext::set($contextKey, $index);
+            }
+        }
+
+        $result = [];
+        foreach ($codes as $code => $_) {
+            $result[$code] = $index[$code];
+        }
+        return $result;
     }
 
     public function catalogForProduct(
@@ -178,6 +239,7 @@ final class AttributeMetadataCatalog implements AttributeMetadataCatalogInterfac
     private function catalogWithOptionScopes(
         EntityDefinitionInterface $entity,
         array $scopeInstanceIds,
+        bool $identityOnly = false,
     ): array {
         $entityCode = strtolower(trim($entity->getEntityCode()));
         if ($entityCode === '') {
@@ -199,8 +261,8 @@ final class AttributeMetadataCatalog implements AttributeMetadataCatalogInterfac
             }
         }
 
-        $locale = $this->resolveStorefrontLocale();
-        $optionsByAttribute = $this->loadOptionsByAttribute(
+        $locale = $identityOnly ? '' : $this->resolveStorefrontLocale();
+        $optionsByAttribute = $identityOnly ? [] : $this->loadOptionsByAttribute(
             $entityId,
             $scopeInstanceIds,
             $locale,
@@ -221,12 +283,14 @@ final class AttributeMetadataCatalog implements AttributeMetadataCatalogInterfac
             $entityId,
         );
         $attributeIds = [];
+        $sharedAttributesById = [];
         foreach ($sharedAttributes as $attribute) {
             if ($attribute instanceof EavAttribute
                 && $attribute->getAttributeId() > 0
                 && $this->isSharedScopeRow($attribute)
             ) {
                 $attributeIds[] = $attribute->getAttributeId();
+                $sharedAttributesById[$attribute->getAttributeId()] = $attribute;
             }
         }
         foreach ($placements as $placement) {
@@ -335,9 +399,12 @@ final class AttributeMetadataCatalog implements AttributeMetadataCatalogInterfac
                 continue;
             }
 
-            $attribute = clone $this->attributeModel;
-            $attribute->clearData();
-            $attribute->loadByAttributeId($attributeId);
+            $attribute = $identityOnly ? ($sharedAttributesById[$attributeId] ?? null) : null;
+            if (!$attribute instanceof EavAttribute) {
+                $attribute = clone $this->attributeModel;
+                $attribute->clearData();
+                $attribute->loadByAttributeId($attributeId);
+            }
             if ($attribute->getAttributeId() <= 0 || !$this->isSharedScopeRow($attribute)) {
                 continue;
             }
@@ -406,7 +473,15 @@ final class AttributeMetadataCatalog implements AttributeMetadataCatalogInterfac
         int $entityId,
         array $scopeInstanceIds,
         string $locale,
+        ?array $attributeIds = null,
     ): array {
+        if ($attributeIds !== null) {
+            $attributeIds = array_values(array_unique(array_filter(array_map('intval', $attributeIds), static fn(int $id): bool => $id > 0)));
+            if ($attributeIds === []) {
+                return [];
+            }
+            sort($attributeIds, SORT_NUMERIC);
+        }
         $allowed = [];
         foreach ($scopeInstanceIds as $scopeId) {
             $allowed[max(0, (int)$scopeId)] = true;
@@ -419,11 +494,15 @@ final class AttributeMetadataCatalog implements AttributeMetadataCatalogInterfac
         // own rows; unrelated private options never cross the SQL boundary.
         $scopedOptions = [];
         foreach (array_keys($allowed) as $scopeId) {
+            $filters = [Option::schema_fields_scope_instance_id => [(int)$scopeId]];
+            if ($attributeIds !== null) {
+                $filters[Option::schema_fields_attribute_id] = $attributeIds;
+            }
             $scopedOptions = array_merge($scopedOptions, $this->items(
                 $this->optionModel,
                 Option::schema_fields_eav_entity_id,
                 $entityId,
-                [Option::schema_fields_scope_instance_id => [(int)$scopeId]],
+                $filters,
             ));
         }
 
@@ -456,6 +535,10 @@ final class AttributeMetadataCatalog implements AttributeMetadataCatalogInterfac
             $code = trim($option->getCode());
             $sourceLabel = trim($option->getValue());
             $localized = trim((string)($optionLocals[$optionId] ?? ''));
+            // Percent-encoded locals are corrupt AI/import payloads — never surface as EN labels.
+            if ($localized !== '' && preg_match('/%[0-9A-Fa-f]{2}/', $localized) === 1) {
+                $localized = '';
+            }
             $label = $localized !== '' ? $localized : $sourceLabel;
             $optionsByAttribute[$attributeId][] = new AttributeOptionMetadata(
                 id: $optionId,
@@ -788,10 +871,9 @@ final class AttributeMetadataCatalog implements AttributeMetadataCatalogInterfac
             }
 
             $rows = [];
-            foreach ($query->select()->fetch()->getItems() as $item) {
-                if (is_object($item)) {
-                    $rows[] = (array)$item->getData();
-                }
+            // 直接读取标量行，避免先构造 ORM 再拆成数组、随后又克隆一轮。
+            foreach ($query->select()->fetchIterator() as $row) {
+                $rows[] = $row;
             }
             return $rows;
         });

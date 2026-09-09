@@ -60,18 +60,12 @@ final class NamespaceGenerationSnapshot
                     );
                 }
             } else {
-                $loaded = $batchLoader($ancestors);
-                $loadedVector = [];
-                foreach ($ancestors as $ancestor) {
-                    $loadedVector[$ancestor] = \max(0, (int)($loaded[$ancestor] ?? 0));
-                    $state['generations'][$ancestor] = $loadedVector[$ancestor];
-                }
-                \ksort($loadedVector, \SORT_STRING);
-                if ($authorityClock === $process['authority_clock']) {
-                    $loadedVector = \array_replace($process['generations'], $loadedVector);
-                    \ksort($loadedVector, \SORT_STRING);
-                }
-                $this->replaceProcessSnapshot($authorityClock, $loadedVector);
+                $this->fillMissingGenerations(
+                    $state,
+                    $ancestors,
+                    $authorityClock,
+                    $batchLoader,
+                );
             }
             $state['authority_clock'] = $authorityClock;
             $state['request_id'] = $requestId;
@@ -79,10 +73,12 @@ final class NamespaceGenerationSnapshot
                 $this->store($state);
             }
         } elseif ($missing !== []) {
-            $loaded = $batchLoader($missing);
-            foreach ($missing as $ancestor) {
-                $state['generations'][$ancestor] = max(0, (int)($loaded[$ancestor] ?? 0));
-            }
+            $this->fillMissingGenerations(
+                $state,
+                $missing,
+                \max(0, (int)($state['authority_clock'] ?? 0)),
+                $batchLoader,
+            );
             if ($requestId !== null) {
                 $this->store($state);
             }
@@ -222,5 +218,62 @@ final class NamespaceGenerationSnapshot
     private function store(array $state): void
     {
         RequestContext::set(self::STORAGE_KEY, $state);
+    }
+
+    /**
+     * 优先复用同代次进程快照，仅补查缺失成员。回填时保留等待期间的新代次和其他成员。
+     *
+     * @param array{request_id:?string,authority_clock:?int,generations:array<string,int>} $state
+     * @param list<string> $namespaces
+     * @param callable(list<string>):array<string,int> $batchLoader
+     */
+    private function fillMissingGenerations(
+        array &$state,
+        array $namespaces,
+        int $authorityClock,
+        callable $batchLoader,
+    ): void {
+        $process = $this->processSnapshot;
+        $stillMissing = $namespaces;
+        if ($authorityClock === $process['authority_clock']) {
+            $filled = [];
+            foreach ($namespaces as $namespace) {
+                if (!\array_key_exists($namespace, $process['generations'])) {
+                    continue;
+                }
+                $state['generations'][$namespace] = \max(0, (int)$process['generations'][$namespace]);
+                $filled[] = $namespace;
+            }
+            $stillMissing = \array_values(\array_diff($namespaces, $filled));
+        }
+
+        if ($stillMissing === []) {
+            return;
+        }
+
+        $loaded = $batchLoader($stillMissing);
+        $loadedVector = [];
+        foreach ($stillMissing as $namespace) {
+            $generation = \max(0, (int)($loaded[$namespace] ?? 0));
+            $state['generations'][$namespace] = $generation;
+            $loadedVector[$namespace] = $generation;
+        }
+
+        // 数据库读取可能让出 Fiber；旧请求不能覆盖期间收到的失效通知。
+        $process = $this->processSnapshot;
+        if ($process['authority_clock'] > $authorityClock) {
+            return;
+        }
+        if ($authorityClock === $process['authority_clock']) {
+            $merged = $process['generations'];
+            foreach ($loadedVector as $namespace => $generation) {
+                $merged[$namespace] = \max((int)($merged[$namespace] ?? 0), $generation);
+            }
+            \ksort($merged, \SORT_STRING);
+            $this->replaceProcessSnapshot($authorityClock, $merged);
+        } else {
+            \ksort($loadedVector, \SORT_STRING);
+            $this->replaceProcessSnapshot($authorityClock, $loadedVector);
+        }
     }
 }

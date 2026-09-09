@@ -233,7 +233,19 @@
       "type": "js",
       "output": "pages/weline-ai-default-model.js",
       "source_root": "app/code/Weline/Ai/view/statics",
-      "sources": ["js/ai-model-select.js", "js/default-model.js"]
+      "sources": ["js/default-model.js"]
+    },
+    "ai-model-select-css": {
+      "type": "css",
+      "output": "components/weline-ai-model-select.css",
+      "source_root": "app/code/Weline/Ai/view/statics",
+      "sources": ["css/ai-model-select.css"]
+    },
+    "ai-model-select-js": {
+      "type": "js",
+      "output": "components/weline-ai-model-select.js",
+      "source_root": "app/code/Weline/Ai/view/statics",
+      "sources": ["js/ai-model-select.js"]
     },
     "eav-manager-css": {
       "type": "css",
@@ -471,6 +483,7 @@
     "datatable-form-js": ["data-table-form"],
     "language-select-js": ["language-select"],
     "currency-select-js": ["currency-select"],
+    "ai-model-select-js": ["ai-model-select"],
     "language-switcher-js": ["language-switcher"],
     "mega-menu-js": ["mega-menu"],
     "online-translation-collector-js": ["online-translation-collector"],
@@ -499,6 +512,11 @@
       "owner": "Weline_I18n",
       "components": ["language-select"],
       "bundles": ["language-select-css", "language-select-js"]
+    },
+    "ai-model-select": {
+      "owner": "Weline_Ai",
+      "components": ["ai-model-select"],
+      "bundles": ["ai-model-select-css", "ai-model-select-js"]
     },
     "currency-select": {
       "owner": "Weline_Currency",
@@ -627,7 +645,7 @@
     "ai.default-model.index": {
       "area": "backend",
       "templates": ["app/code/Weline/Ai/view/templates/Backend/DefaultModel/index.phtml"],
-      "bundles": ["ai-default-model-css", "ai-default-model-js"],
+      "bundles": ["ai-model-select-css", "ai-model-select-js", "ai-default-model-css", "ai-default-model-js"],
       "engines": []
     },
     "eav.manager.index": {

@@ -149,6 +149,23 @@ final class DevToolPanelObserverTest extends TestCase
         self::assertStringContainsString('$themeVersionLabel', $template);
     }
 
+    public function testPanelQuickDocLinksDoNotExposeRawUrlTaglib(): void
+    {
+        $template = file_get_contents(dirname(__DIR__, 3) . '/view/hooks/dev-tool-panel.phtml');
+
+        self::assertIsString($template);
+        self::assertDoesNotMatchRegularExpression(
+            "/href=[\"'][^\"']*@url\{/",
+            $template,
+            'Quick-action href must not contain raw Taglib url syntax'
+        );
+        self::assertStringNotContainsString("@url{'dev/tool/docs'}", $template);
+        self::assertStringContainsString('$docsUrl = \'/dev/tool/docs\';', $template);
+        self::assertStringContainsString('$apiDocsUrl = \'/dev/tool/docs/api\';', $template);
+        self::assertStringContainsString('htmlspecialchars($docsUrl, ENT_QUOTES, \'UTF-8\')', $template);
+        self::assertStringContainsString('htmlspecialchars($apiDocsUrl, ENT_QUOTES, \'UTF-8\')', $template);
+    }
+
     public function testPerformancePanelRejectsTimingFromAnotherDocument(): void
     {
         $template = file_get_contents(dirname(__DIR__, 3) . '/view/hooks/dev-tool-panel.phtml');
