@@ -21,7 +21,7 @@ final class SlotRendererHeaderNarrowFragmentTest extends TestCase
     <div class="header-site-notice">
         <div class="header-site-notice-inner">
             <div data-wslot="top-bar-rights" class="header-site-notice-links">
-                <a href="/help">帮助中心</a>
+                <a href="/faq">帮助中心</a>
             </div>
         </div>
     </div>
