@@ -1,0 +1,114 @@
+<?php
+/**
+ * B2B qty ladder prices for PDP / quick-add buybox.
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
+
+use Weline\B2B\Api\B2BPriceCandidateInterface;
+use Weline\B2B\Service\SellingModePolicy;
+use Weline\Framework\Http\Cookie;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Session\SessionFactory;
+use Weline\Product\Helper\StorefrontOfferResolver;
+
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+$mode = strtolower(trim((string)Cookie::get('weline_selling_mode')));
+if ($mode !== 'tob') {
+    return;
+}
+
+$offer = StorefrontOfferResolver::resolve($this);
+$sku = trim((string)($offer['sku'] ?? ''));
+$currency = strtoupper(trim((string)($offer['currency'] ?? 'CNY'))) ?: 'CNY';
+$catalogMinor = max(0, (int)($offer['catalog_price_minor'] ?? $offer['unit_price_minor'] ?? 0));
+if ($sku === '') {
+    return;
+}
+
+$websiteId = max(0, (int)RequestContext::getWelineWebsiteId());
+$moq = SellingModePolicy::DEFAULT_MOQ;
+$step = SellingModePolicy::DEFAULT_QTY_STEP;
+try {
+    /** @var SellingModePolicy $policy */
+    $policy = ObjectManager::getInstance(SellingModePolicy::class);
+    $moq = max(1, (int)$policy->defaultMoq());
+    $step = max(1, (int)$policy->defaultQtyStep());
+} catch (\Throwable) {
+}
+
+$customerId = '';
+try {
+    $session = ObjectManager::getInstance(SessionFactory::class)->createFrontendSession();
+    if ($session->isLoggedIn()) {
+        $customerId = (string)(int)($session->getUserId() ?? 0);
+    }
+} catch (\Throwable) {
+}
+
+$qtyPoints = array_values(array_unique(array_filter([
+    $moq,
+    $moq + $step,
+    $moq + ($step * 2),
+    $moq + ($step * 5),
+], static fn(int $q): bool => $q >= $moq)));
+sort($qtyPoints, SORT_NUMERIC);
+
+$tiers = [];
+if ($customerId !== '' && $customerId !== '0') {
+    try {
+        /** @var B2BPriceCandidateInterface $engine */
+        $engine = ObjectManager::getInstance(B2BPriceCandidateInterface::class);
+        foreach ($qtyPoints as $qty) {
+            $result = $engine->resolve([
+                'customer_id' => $customerId,
+                'website_id' => $websiteId,
+                'sku' => $sku,
+                'qty' => $qty,
+                'retail_amount_minor' => $catalogMinor,
+            ]);
+            if (($result['ok'] ?? false) !== true) {
+                continue;
+            }
+            $amount = (int)($result['amount_minor'] ?? -1);
+            if ($amount < 0) {
+                continue;
+            }
+            $tiers[] = [
+                'qty' => $qty,
+                'amount_minor' => $amount,
+            ];
+        }
+    } catch (\Throwable) {
+        $tiers = [];
+    }
+}
+?>
+<div class="b2b-qty-tiers"
+     data-testid="b2b-qty-tiers"
+     data-b2b-qty-tiers="1"
+     role="region"
+     aria-label="<?= $escape(__('批发起订与阶梯价')) ?>">
+    <p class="b2b-qty-tiers__moq" data-testid="b2b-qty-tiers-moq">
+        <?= $escape(__('批发起订量为 %{1} 件，步进 %{2} 件', [$moq, $step])) ?>
+    </p>
+    <?php if ($tiers !== []): ?>
+        <ul class="b2b-qty-tiers__list" data-testid="b2b-qty-tiers-list">
+            <?php foreach ($tiers as $tier): ?>
+                <li>
+                    <?= $escape(__('%{1} 件起：%{2} %{3}/件', [
+                        (int)$tier['qty'],
+                        $currency,
+                        number_format(((int)$tier['amount_minor']) / 100, 2, '.', ''),
+                    ])) ?>
+                </li>
+            <?php endforeach; ?>
+        </ul>
+    <?php else: ?>
+        <p class="b2b-qty-tiers__hint">
+            <?= $escape(__('批发价按数量档计价；未开通批发身份或暂无档位时显示站内参考价。')) ?>
+        </p>
+    <?php endif; ?>
+</div>

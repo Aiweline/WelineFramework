@@ -1,0 +1,35 @@
+<?php
+/**
+ * @meta.title {default="批发售卖模式",description="按范围启用或关闭零售（ToC）与批发（ToB）售卖模式"}
+ * @meta.description {default="关闭批发后前台不再提供批发切换与批发加购；关闭零售后仅保留已启用的模式。未配置时默认均启用。"}
+ * @config.area {frontend}
+ * @config.sort {70}
+ * @config.acl {Weline_B2B::config}
+ */
+?>
+
+<w:config:group
+    code="b2b_selling_mode"
+    label="售卖模式开关"
+    description="控制当前作用范围内是否开放零售与批发。商品级关闭仍优先生效。"
+    sort="10"
+>
+    <w:config:field
+        key="selling_mode_toc_enabled"
+        label="启用零售（ToC）"
+        description="关闭后前台不再提供零售售卖模式（已启用的批发仍可独立使用）。"
+        type="switch"
+        value-type="bool"
+        default="1"
+        scope="global,website,store"
+    />
+    <w:config:field
+        key="selling_mode_tob_enabled"
+        label="启用批发（ToB）"
+        description="关闭后前台不再展示批发切换入口，也无法进入批发加购与结账。"
+        type="switch"
+        value-type="bool"
+        default="1"
+        scope="global,website,store"
+    />
+</w:config:group>

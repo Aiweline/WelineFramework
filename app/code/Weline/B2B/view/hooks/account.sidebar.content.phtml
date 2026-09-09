@@ -1,0 +1,232 @@
+<?php
+/**
+ * Account sidebar content: B2B wholesale identity profile + apply / switch.
+ *
+ * Hook: account.sidebar.content
+ *
+ * @hook-priority 165
+ * @hook-sort-order 11
+ * @hook-solo false
+ */
+use Weline\B2B\Model\CustomerGroup;
+use Weline\B2B\Model\MembershipApplicationRecord;
+use Weline\B2B\Service\CustomerGroupStore;
+use Weline\B2B\Service\MembershipApplicationService;
+use Weline\Customer\Api\View\AccountSidebarProjectionProviderInterface;
+use Weline\Customer\Model\Customer;
+use Weline\Customer\Service\AccountSidebarContentGate;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
+
+if (!AccountSidebarContentGate::accepts('b2b-identity')) {
+    return;
+}
+
+$renderKey = 'weline_b2b.account_sidebar_content.rendered';
+if (RequestContext::get($renderKey, false)) {
+    return;
+}
+RequestContext::set($renderKey, true);
+
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+$projectionProvider = ObjectManager::getInstance(RuntimeProviderResolver::class)
+    ->resolve(AccountSidebarProjectionProviderInterface::class);
+$projection = $projectionProvider instanceof AccountSidebarProjectionProviderInterface
+    ? $projectionProvider->forSections('b2b-identity')
+    : null;
+
+$websiteId = max(0, (int)($projection?->getWebsiteId() ?? RequestContext::getWelineWebsiteId()));
+$customerId = (int)($projection?->getCustomerId() ?? 0);
+if ($customerId <= 0) {
+    // Lazy sidebar may set template user before facade session is mirrored.
+    $user = $this->getData('user');
+    if ($user instanceof Customer && $user->getId()) {
+        $customerId = (int)$user->getId();
+    }
+}
+$loggedIn = $customerId > 0;
+
+$group = null;
+$application = null;
+if ($loggedIn) {
+    try {
+        /** @var CustomerGroupStore $groups */
+        $groups = ObjectManager::getInstance(CustomerGroupStore::class);
+        $group = $groups->groupForCustomer((string)$customerId, $websiteId);
+    } catch (\Throwable) {
+        $group = null;
+    }
+    try {
+        /** @var MembershipApplicationService $apps */
+        $apps = ObjectManager::getInstance(MembershipApplicationService::class);
+        $application = $apps->latestForCustomer((string)$customerId, $websiteId);
+    } catch (\Throwable) {
+        $application = null;
+    }
+}
+
+$hasMembership = $group instanceof CustomerGroup && $group->isActive();
+$appStatus = is_array($application) ? (string)($application['status'] ?? '') : '';
+$canApply = $loggedIn && !$hasMembership && $appStatus !== MembershipApplicationRecord::STATUS_PENDING;
+
+$statusLabel = static function (?array $application, bool $hasMembership): string {
+    if ($hasMembership) {
+        return (string)__('已开通');
+    }
+    $status = is_array($application) ? (string)($application['status'] ?? '') : '';
+    return match ($status) {
+        MembershipApplicationRecord::STATUS_PENDING => (string)__('审核中'),
+        MembershipApplicationRecord::STATUS_APPROVED => (string)__('已批准'),
+        MembershipApplicationRecord::STATUS_REJECTED => (string)__('已驳回'),
+        default => (string)__('未申请'),
+    };
+};
+
+$badgeTone = $hasMembership
+    ? 'success'
+    : ($appStatus === MembershipApplicationRecord::STATUS_PENDING
+        ? 'warning'
+        : ($appStatus === MembershipApplicationRecord::STATUS_REJECTED ? 'danger' : 'neutral'));
+
+$formId = 'b2b-account-identity-apply';
+// Storefront root — avoid Template::getUrl resolving to the account route.
+$homeUrl = '/';
+?>
+<section class="account-hook-section account-index__section motor-account-section"
+         id="b2b-identity-section"
+         data-account-section="b2b-identity"
+         data-testid="account-b2b-identity-section"
+         data-b2b-account-identity="1"
+         data-customer-logged-in="<?= $loggedIn ? '1' : '0' ?>"
+         data-customer-id="<?= $escape((string)$customerId) ?>"
+         data-website-id="<?= (int)$websiteId ?>"
+         data-has-membership="<?= $hasMembership ? '1' : '0' ?>"
+         data-application-status="<?= $escape($appStatus) ?>"
+         data-home-url="<?= $escape($homeUrl) ?>"
+         data-weline-load="b2bSellingMode"
+         data-i18n-submitting="<?= $escape(__('正在提交申请...')) ?>"
+         data-i18n-submitted="<?= $escape(__('申请已提交，请等待审核')) ?>"
+         data-i18n-submit-failed="<?= $escape(__('提交失败，请稍后重试')) ?>"
+         data-i18n-switch-done="<?= $escape(__('已切换为批发身份')) ?>"
+         hidden
+         weline-code="b2b.account.sidebar.identity">
+    <div class="account-card">
+        <header class="account-card__header">
+            <div>
+                <h2 class="account-card__title"><lang>批发身份</lang></h2>
+                <p class="account-card__description"><lang>查看当前站点的批发等级、申请状态与联系信息。</lang></p>
+            </div>
+            <span class="w-badge" data-tone="<?= $escape($badgeTone) ?>" data-testid="b2b-account-identity-badge">
+                <?= $escape($statusLabel($application, $hasMembership)) ?>
+            </span>
+        </header>
+        <div class="account-card__body">
+            <?php if (!$loggedIn): ?>
+                <p role="status"><lang>登录后可查看批发身份资料。</lang></p>
+            <?php else: ?>
+                <div class="b2b-account-identity" data-testid="b2b-account-identity-profile">
+                    <div>
+                        <span class="b2b-account-identity__label"><lang>批发等级</lang></span>
+                        <span class="b2b-account-identity__value"><?= $hasMembership
+                            ? $escape(__('标准批发'))
+                            : $escape(__('暂无')) ?></span>
+                    </div>
+                    <?php if (is_array($application)): ?>
+                        <div>
+                            <span class="b2b-account-identity__label"><lang>公司名称</lang></span>
+                            <span class="b2b-account-identity__value"><?= $escape((string)($application['company_name'] ?? '')) ?></span>
+                        </div>
+                        <div>
+                            <span class="b2b-account-identity__label"><lang>联系电话</lang></span>
+                            <span class="b2b-account-identity__value"><?= $escape((string)($application['contact_phone'] ?? '')) ?></span>
+                        </div>
+                        <?php if (!empty($application['notes'])): ?>
+                            <div>
+                                <span class="b2b-account-identity__label"><lang>备注</lang></span>
+                                <span class="b2b-account-identity__value"><?= $escape((string)$application['notes']) ?></span>
+                            </div>
+                        <?php endif; ?>
+                        <?php if (!$hasMembership): ?>
+                            <div>
+                                <span class="b2b-account-identity__label"><lang>最近更新</lang></span>
+                                <span class="b2b-account-identity__value"><?= $escape((string)($application['updated_at'] ?? '')) ?></span>
+                            </div>
+                        <?php endif; ?>
+                    <?php endif; ?>
+                </div>
+
+                <?php if ($hasMembership): ?>
+                    <div class="b2b-account-identity-actions" data-testid="b2b-account-identity-active">
+                        <p class="b2b-selling-mode__hint" role="status">
+                            <lang>批发身份已开通。切换后将以批发模式浏览首页商品与价格。</lang>
+                        </p>
+                        <button type="button"
+                                class="w-button"
+                                data-variant="primary"
+                                data-b2b-switch-tob
+                                data-testid="b2b-account-switch-tob">
+                            <lang>切换到批发身份并去首页</lang>
+                        </button>
+                    </div>
+                <?php elseif ($appStatus === MembershipApplicationRecord::STATUS_PENDING): ?>
+                    <p class="b2b-selling-mode__hint" role="status" data-testid="b2b-account-identity-pending">
+                        <lang>申请已提交，正在审核中。通过后可在此切换批发身份浏览商品。</lang>
+                    </p>
+                <?php elseif ($canApply): ?>
+                    <?php if ($appStatus === MembershipApplicationRecord::STATUS_REJECTED): ?>
+                        <p class="b2b-selling-mode__hint" role="status" data-testid="b2b-account-identity-rejected">
+                            <lang>上次申请已驳回，可修改资料后重新提交。</lang>
+                        </p>
+                    <?php else: ?>
+                        <p class="b2b-selling-mode__hint" role="status">
+                            <lang>尚未开通批发身份，请填写下方资料提交申请。</lang>
+                        </p>
+                    <?php endif; ?>
+                    <form class="b2b-membership-apply b2b-account-identity-apply"
+                          data-b2b-apply-form
+                          method="post"
+                          action="#"
+                          data-testid="b2b-account-membership-apply-form">
+                        <div class="w-field">
+                            <label class="w-label" for="<?= $escape($formId) ?>-company"><lang>公司名称</lang></label>
+                            <input class="w-input"
+                                   id="<?= $escape($formId) ?>-company"
+                                   name="company_name"
+                                   type="text"
+                                   required
+                                   maxlength="191"
+                                   autocomplete="organization"
+                                   value="<?= $escape((string)($application['company_name'] ?? '')) ?>">
+                        </div>
+                        <div class="w-field">
+                            <label class="w-label" for="<?= $escape($formId) ?>-phone"><lang>联系电话</lang></label>
+                            <input class="w-input"
+                                   id="<?= $escape($formId) ?>-phone"
+                                   name="contact_phone"
+                                   type="tel"
+                                   required
+                                   maxlength="64"
+                                   autocomplete="tel"
+                                   value="<?= $escape((string)($application['contact_phone'] ?? '')) ?>">
+                        </div>
+                        <div class="w-field">
+                            <label class="w-label" for="<?= $escape($formId) ?>-notes"><lang>备注</lang></label>
+                            <textarea class="w-textarea"
+                                      id="<?= $escape($formId) ?>-notes"
+                                      name="notes"
+                                      rows="3"
+                                      maxlength="2000"><?= $escape((string)($application['notes'] ?? '')) ?></textarea>
+                        </div>
+                        <p class="b2b-selling-mode__hint" data-b2b-apply-status aria-live="polite"></p>
+                        <button type="submit" class="w-button" data-variant="primary" data-testid="b2b-account-membership-submit">
+                            <lang>提交批发身份申请</lang>
+                        </button>
+                    </form>
+                <?php endif; ?>
+            <?php endif; ?>
+        </div>
+    </div>
+</section>
+<link rel="stylesheet" href="@static(Weline_B2B::css/b2b-storefront.css)?v=20260908-account-identity3" data-no-extract="true">
