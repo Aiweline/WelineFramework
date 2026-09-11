@@ -1,0 +1,49 @@
+<?php
+/**
+ * 新建平台模块草稿。
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
+$form = is_array($form ?? null) ? $form : [];
+$saveUrl = (string)($save_url ?? '');
+$listUrl = (string)($list_url ?? '');
+$escape = static fn($v): string => htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+?>
+<div class="w-container" style="--w-pt:var(--weline-space-4);--w-pb:var(--weline-space-4);">
+    <div class="w-toolbar" style="--w-mb:var(--weline-space-4);">
+        <div>
+            <h1 class="h4" style="--w-mb:var(--weline-space-1);"><?= __('新建模块') ?></h1>
+            <div class="w-text" data-tone="muted" data-size="sm"><?= __('创建草稿后可在列表中继续完善版本与定价。') ?></div>
+        </div>
+        <a class="w-button" href="<?= $escape($listUrl) ?>" data-tone="neutral" data-variant="outline" data-size="sm"><?= __('返回列表') ?></a>
+    </div>
+
+    <form method="post" action="<?= $escape($saveUrl) ?>" class="w-card">
+        <div class="w-card__body">
+            <div class="w-stack" style="--w-gap:var(--weline-space-4);">
+                <div class="w-field">
+                    <label class="w-field__label" for="pas-mod-name"><?= __('模块名') ?></label>
+                    <input id="pas-mod-name" class="w-input" name="name" required
+                           value="<?= $escape($form['name'] ?? '') ?>"
+                           placeholder="<?= $escape(__('例如 Weline_Demo')) ?>">
+                    <div class="w-text" data-tone="muted" data-size="sm"><?= __('须为 Vendor_Module 格式。') ?></div>
+                </div>
+                <div class="w-field">
+                    <label class="w-field__label" for="pas-mod-display"><?= __('显示名称') ?></label>
+                    <input id="pas-mod-display" class="w-input" name="display_name" required
+                           value="<?= $escape($form['display_name'] ?? '') ?>"
+                           placeholder="<?= $escape(__('用户可见标题')) ?>">
+                </div>
+                <div class="w-field">
+                    <label class="w-field__label" for="pas-mod-desc"><?= __('简介') ?></label>
+                    <textarea id="pas-mod-desc" class="w-textarea" name="description" rows="4"
+                              placeholder="<?= $escape(__('可选')) ?>"><?= $escape($form['description'] ?? '') ?></textarea>
+                </div>
+                <div class="w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-2);">
+                    <button class="w-button" type="submit" data-tone="primary"><?= __('保存草稿') ?></button>
+                    <a class="w-button" href="<?= $escape($listUrl) ?>" data-tone="neutral" data-variant="outline"><?= __('取消') ?></a>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
