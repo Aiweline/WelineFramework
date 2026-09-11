@@ -1,26 +1,89 @@
 <?php
 /**
- * Checkout ToB deposit note (30%).
+ * Checkout summary tab: wholesale credit apply only.
  *
  * @var \Weline\Framework\View\Template $this
  *
- * @widget.code {b2b-checkout-deposit-note}
- * @widget.name {批发定金说明}
- * @widget.description {结账摘要：批发车显示 30% 定金提示并隐藏优惠券区}
- * @widget.type {checkout}
+ * @widget.code {b2b-checkout-credit}
+ * @widget.name {批发信用}
+ * @widget.description {结账摘要页签：批发信用抵扣定金（资产类，非营销券）}
+ * @widget.type {content}
  * @widget.area {frontend}
- * @widget.position {["content"]}
+ * @widget.position {["summary","content"]}
  * @widget.page_layouts {["checkout"]}
- * @widget.supports {["checkout-summary","b2b-deposit-note"]}
+ * @widget.slot {checkout-summary-credit}
+ * @widget.supports {["checkout-summary-credit","b2b-checkout-credit","b2b-deposit-note","b2b"]}
+ * @widget.default_injections {[{"layout_type":"checkout","layout_option":"default","slot":"checkout-summary-credit","area":"content","sort_order":15,"required":true,"reason":"结账摘要默认展示批发信用页签（与优惠券/订单留言同构）","config":{"title":"批发信用"}}]}
  */
+$rawTitle = trim((string)($this->getData('title') ?? ''));
+$title = $rawTitle !== '' ? (string)__($rawTitle) : (string)__('批发信用');
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
 ?>
-<link rel="stylesheet" href="@static(Weline_B2B::css/b2b-storefront.css)?v=20260908-deposit-primary2" data-no-extract="true">
-<div class="b2b-checkout-deposit-note"
-     data-b2b-deposit-note
+<link rel="stylesheet" href="@static(Weline_B2B::css/b2b-storefront.css)?v=20260910-credit-reason5" data-no-extract="true">
+<div class="w-b2b-checkout-credit"
+     data-b2b-checkout-credit
      data-cart-type="tob"
-     hidden
-     data-testid="b2b-checkout-deposit-note"
-     data-weline-load="b2bCheckoutTob">
-    <span class="w-badge" data-tone="primary"><lang>批发订单</lang></span>
-    <p><lang>批发结账需支付含税商品小计 30% 定金；优惠券与折扣不可用，运费计入尾款。</lang></p>
+     data-testid-credit="b2b-checkout-credit"
+     data-weline-load="b2bCheckoutTob"
+     data-mini-cart-tab-label="<?= $esc($title) ?>"
+     data-i18n-toc-unavailable="<?= $esc((string)__('当前是零售结账，批发信用只能在「批发车」使用。请先到购物车切换到批发车，再回来结账。')) ?>"
+     data-i18n-quote-missing="<?= $esc((string)__('暂时无法获取批发信用报价，请刷新后重试')) ?>"
+     data-i18n-reason-disabled="<?= $esc((string)__('站点未开启批发信用额度')) ?>"
+     data-i18n-reason-no-balance="<?= $esc((string)__('额度不够：暂无可用批发信用余额')) ?>"
+     data-i18n-reason-fx="<?= $esc((string)__('暂无汇率，无法使用批发信用')) ?>"
+     data-i18n-reason-na="<?= $esc((string)__('当前订单无定金，无法用批发信用抵扣')) ?>"
+     data-i18n-reason-login="<?= $esc((string)__('请先登录后再使用批发信用')) ?>"
+     data-i18n-reason-zero="<?= $esc((string)__('额度不够：本单可抵扣额度为 0')) ?>"
+     data-i18n-reason-quote-failed="<?= $esc((string)__('暂时无法获取批发信用报价，请刷新后重试')) ?>">
+    <label class="w-b2b-checkout-credit__label" data-mini-cart-tab-label-source>
+        <?= $esc($title) ?>
+    </label>
+    <div class="w-b2b-checkout-credit__body">
+        <div class="b2b-checkout-credit"
+             data-b2b-credit-panel
+             data-testid="b2b-checkout-credit">
+            <div class="w-b2b-checkout-credit__row">
+                <label class="w-b2b-checkout-credit__toggle">
+                    <input type="checkbox"
+                           data-b2b-credit-toggle
+                           data-testid="b2b-credit-toggle">
+                    <span><lang>使用批发信用抵扣定金</lang></span>
+                </label>
+                <button type="button"
+                        class="w-b2b-checkout-credit__help"
+                        data-w-component="tooltip"
+                        data-b2b-credit-help
+                        data-testid="b2b-credit-help"
+                        aria-label="<?= $esc((string)__('批发信用说明')) ?>">?</button>
+            </div>
+            <?php /* 就地原因：勾选正下方；不可用时由 JS 写入，禁止藏到页签外 */ ?>
+            <p class="w-b2b-checkout-credit__reason"
+               role="status"
+               aria-live="polite"
+               data-b2b-credit-reason
+               data-b2b-credit-toc-msg
+               data-b2b-credit-unavailable
+               data-testid="b2b-credit-reason"
+               hidden></p>
+            <div class="w-b2b-checkout-credit__amount">
+                <label class="w-b2b-checkout-credit__amount-label" for="b2b-credit-apply-input"><lang>抵扣额度</lang></label>
+                <input id="b2b-credit-apply-input"
+                       type="number"
+                       min="0"
+                       step="0.01"
+                       inputmode="decimal"
+                       disabled
+                       data-b2b-credit-input
+                       data-testid="b2b-credit-input"
+                       class="w-input w-b2b-checkout-credit__amount-input">
+            </div>
+            <p class="w-text" data-tone="muted" data-b2b-credit-hint data-testid="b2b-credit-hint" hidden></p>
+            <p class="w-text" data-b2b-credit-cash data-testid="b2b-credit-cash" hidden></p>
+            <div class="w-b2b-checkout-credit__links">
+                <a class="w-text" data-tone="muted" href="/cart" data-b2b-credit-switch-cart data-testid="b2b-credit-switch-cart" hidden><lang>去购物车切换批发车</lang></a>
+                <a class="w-text" data-tone="muted" href="/faq/b2b-wholesale" data-b2b-credit-faq data-testid="b2b-credit-faq"><lang>了解更多</lang></a>
+            </div>
+            <template data-b2b-credit-tooltip-body></template>
+        </div>
+    </div>
 </div>

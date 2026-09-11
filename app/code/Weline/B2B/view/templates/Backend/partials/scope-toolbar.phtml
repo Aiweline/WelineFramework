@@ -1,0 +1,44 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+$selectedScope = (string)($this->getData('selected_scope') ?? $this->getData('target_scope') ?? 'default.default.default');
+$scopeKind = (string)($this->getData('scope_kind') ?? 'global');
+$scopeId = (int)($this->getData('work_scope_id') ?? 0);
+$storeCode = (string)($this->getData('scope_store_code') ?? '');
+$channelCode = (string)($this->getData('scope_channel_code') ?? '');
+$metaParts = [$scopeKind !== '' ? $scopeKind : 'global'];
+if ($storeCode !== '') {
+    $metaParts[] = 'store=' . $storeCode;
+}
+if ($channelCode !== '') {
+    $metaParts[] = 'channel=' . $channelCode;
+}
+if ($scopeKind !== 'global') {
+    $metaParts[] = 'website_id=' . $scopeId;
+}
+$globalHint = (string)__('Global 表示全部站点；选择具体网站 / 店铺 / 渠道后本页列表按范围过滤。');
+?>
+<div class="w-cluster" data-align="end" data-justify="between" style="--w-gap:var(--weline-space-3);--w-flex:1;" data-testid="b2b-work-scope-toolbar">
+    <div class="w-stack" style="--w-gap:var(--weline-space-1);--w-flex:1;">
+        <p class="w-text" data-tone="muted" data-size="xs" style="--w-m:0;" data-testid="b2b-work-scope-meta">
+            <?= __('当前：%{1}', [\implode(' · ', $metaParts)]) ?>
+        </p>
+    </div>
+    <div class="w-field" style="--w-min-inline-size:16rem;--w-max-inline-size:24rem;--w-mb:0;">
+        <label class="w-field__label" for="b2b-work-scope" style="--w-mb:0;"><?= __('作用范围') ?></label>
+        <div class="w-field__control">
+            <w:scope
+                id="b2b-work-scope"
+                name="target_scope"
+                value="selected_scope"
+                placeholder="@lang(选择网站、店铺或渠道)"
+                search-placeholder="@lang(搜索作用范围)"
+                aria-label="@lang(选择作用范围)"
+                searchable="true"
+                default-expand-all="true"
+                required="true"
+            />
+        </div>
+    </div>
+</div>
+<script type="application/json" id="b2b-work-scope-i18n"><?= htmlspecialchars(json_encode(['globalAlert' => $globalHint], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT), ENT_NOQUOTES, 'UTF-8') ?></script>
+<script src="/Weline/B2B/view/statics/js/backend/control-center-work-scope.js?v=20260910-scope1" data-no-extract="true"></script>

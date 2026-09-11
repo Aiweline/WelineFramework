@@ -101,9 +101,65 @@
         var type = String(cartType || readMode() || 'toc').toLowerCase() === 'tob' ? 'tob' : 'toc';
         root.setAttribute('data-cart-type', type);
         root.classList.toggle('is-cart-type-tob', type === 'tob');
+        // 顶栏批发订单说明：仅批发结账显示。
         var note = root.querySelector('[data-b2b-deposit-note]');
         if (note) {
             note.hidden = type !== 'tob';
+            if (type === 'tob') {
+                note.removeAttribute('hidden');
+            }
+            note.setAttribute('data-cart-type', type);
+        }
+        // 摘要页签「批发信用」：常显；零售灰化，批发可用。
+        var creditRoot = root.querySelector('[data-b2b-checkout-credit]');
+        if (creditRoot) {
+            creditRoot.hidden = false;
+            creditRoot.removeAttribute('hidden');
+            creditRoot.classList.toggle('is-toc-unavailable', type !== 'tob');
+            creditRoot.setAttribute('aria-disabled', type !== 'tob' ? 'true' : 'false');
+            creditRoot.setAttribute('data-cart-type', type);
+            var reasonEl = creditRoot.querySelector('[data-b2b-credit-reason]');
+            var switchCart = creditRoot.querySelector('[data-b2b-credit-switch-cart]');
+            if (reasonEl) {
+                if (type !== 'tob') {
+                    reasonEl.textContent = creditRoot.getAttribute('data-i18n-toc-unavailable')
+                        || '当前是零售结账，批发信用只能在「批发车」使用。请先到购物车切换到批发车，再回来结账。';
+                    reasonEl.hidden = false;
+                    reasonEl.removeAttribute('hidden');
+                }
+                // tob：原因留给 syncCreditUi 按报价写入；勿在此清空（可能尚未拉到 quote）。
+            }
+            if (switchCart) {
+                if (type !== 'tob') {
+                    switchCart.hidden = false;
+                    switchCart.removeAttribute('hidden');
+                } else {
+                    switchCart.hidden = true;
+                }
+            }
+        }
+        var credit = root.querySelector('[data-b2b-credit-panel]');
+        if (credit) {
+            credit.hidden = false;
+            credit.removeAttribute('hidden');
+            credit.querySelectorAll('[data-b2b-credit-toggle], [data-b2b-credit-input]').forEach(function (el) {
+                if ('disabled' in el) {
+                    el.disabled = type !== 'tob';
+                }
+            });
+            if (type === 'tob') {
+                bindCreditControls(root);
+            } else {
+                var toggleOff = credit.querySelector('[data-b2b-credit-toggle]');
+                if (toggleOff) {
+                    toggleOff.checked = false;
+                }
+            }
+        }
+        var creditSlot = root.querySelector('.weline-checkout__credit-slot');
+        if (creditSlot) {
+            creditSlot.hidden = false;
+            creditSlot.removeAttribute('hidden');
         }
         // 与迷你车同构：保留优惠券页签，灰化禁用并提示「批发不可用」，禁止整槽隐藏。
         var couponSlot = root.querySelector('.weline-checkout__coupon-slot');
@@ -121,6 +177,10 @@
             extras.classList.remove('is-tob-discounts-banned');
         }
         syncCheckoutCouponAvailability(root, type);
+        // toc 就地原因/切换链：apply 后立刻 sync，避免等 freeze 事件。
+        if (type !== 'tob') {
+            syncCreditUi(root);
+        }
     }
 
     function hangPurposeFromLocation() {
@@ -211,6 +271,260 @@
             }).format(major);
         } catch (e) {
             return major.toFixed(2) + ' ' + (currency || 'CNY');
+        }
+    }
+
+    var creditState = {
+        quote: null,
+        applyMinor: 0,
+        cashMinor: null,
+        currency: 'CNY'
+    };
+
+    function creditPanel(root) {
+        return root ? root.querySelector('[data-b2b-credit-panel]') : null;
+    }
+
+    function creditUnavailableMessage(root, quote) {
+        var creditRoot = root ? root.querySelector('[data-b2b-checkout-credit]') : null;
+        var attr = function (name, fallback) {
+            if (!creditRoot) {
+                return fallback;
+            }
+            return creditRoot.getAttribute(name) || fallback;
+        };
+        if (quote && quote.hint_short) {
+            return String(quote.hint_short);
+        }
+        var reason = quote && quote.reason ? String(quote.reason) : '';
+        if (reason === 'b2b_credit_disabled') {
+            return attr('data-i18n-reason-disabled', '站点未开启批发信用额度');
+        }
+        if (reason === 'no_balance') {
+            return attr('data-i18n-reason-no-balance', '额度不够：暂无可用批发信用余额');
+        }
+        if (reason === 'fx_unavailable') {
+            return attr('data-i18n-reason-fx', '暂无汇率，无法使用批发信用');
+        }
+        if (reason === 'not_logged_in') {
+            return attr('data-i18n-reason-login', '请先登录后再使用批发信用');
+        }
+        if (reason === 'not_applicable') {
+            return attr('data-i18n-reason-na', '当前订单无定金，无法用批发信用抵扣');
+        }
+        if (reason === 'zero_cap') {
+            return attr('data-i18n-reason-zero', '额度不够：本单可抵扣额度为 0');
+        }
+        if (reason === 'quote_failed') {
+            return attr('data-i18n-reason-quote-failed', '暂时无法获取批发信用报价，请刷新后重试');
+        }
+        if (!quote) {
+            return attr('data-i18n-quote-missing', '暂时无法获取批发信用报价，请刷新后重试');
+        }
+        // Never show hollow generic unavailable copy — always name a next step.
+        return attr('data-i18n-quote-missing', '暂时无法获取批发信用报价，请刷新后重试');
+    }
+
+    function showCreditReason(el, text) {
+        if (!el) {
+            return;
+        }
+        var msg = String(text || '').trim();
+        if (!msg) {
+            el.textContent = '';
+            el.hidden = true;
+            return;
+        }
+        el.textContent = msg;
+        el.hidden = false;
+        el.removeAttribute('hidden');
+    }
+
+    function syncCreditUi(root) {
+        var panel = creditPanel(root);
+        if (!panel) {
+            return;
+        }
+        var creditRoot = root ? root.querySelector('[data-b2b-checkout-credit]') : null;
+        var quote = creditState.quote;
+        var toggle = panel.querySelector('[data-b2b-credit-toggle]');
+        var input = panel.querySelector('[data-b2b-credit-input]');
+        var hint = panel.querySelector('[data-b2b-credit-hint]');
+        var help = panel.querySelector('[data-b2b-credit-help]');
+        var cashEl = panel.querySelector('[data-b2b-credit-cash]');
+        var reasonEl = (creditRoot || panel).querySelector('[data-b2b-credit-reason]');
+        // Prefer widget data-cart-type (set by applyCartType); fall back to cookie/mode.
+        var cartType = String(
+            (creditRoot && creditRoot.getAttribute('data-cart-type')) || readMode() || ''
+        ).toLowerCase();
+        var isToc = cartType !== 'tob';
+        if (isToc) {
+            if (creditRoot) {
+                creditRoot.classList.add('is-toc-unavailable');
+                creditRoot.setAttribute('data-cart-type', 'toc');
+                creditRoot.setAttribute('aria-disabled', 'true');
+            }
+            showCreditReason(
+                reasonEl,
+                (creditRoot && creditRoot.getAttribute('data-i18n-toc-unavailable'))
+                    || '当前是零售结账，批发信用只能在「批发车」使用。请先到购物车切换到批发车，再回来结账。'
+            );
+            var switchCart = (creditRoot || panel).querySelector('[data-b2b-credit-switch-cart]');
+            if (switchCart) {
+                switchCart.hidden = false;
+                switchCart.removeAttribute('hidden');
+            }
+            if (toggle) {
+                toggle.checked = false;
+                toggle.disabled = true;
+            }
+            if (input) {
+                input.disabled = true;
+            }
+            if (hint) {
+                hint.hidden = true;
+                hint.textContent = '';
+            }
+            if (cashEl) {
+                cashEl.hidden = true;
+                cashEl.textContent = '';
+            }
+            creditState.applyMinor = 0;
+            return;
+        }
+        if (!quote || !quote.enabled) {
+            panel.hidden = false;
+            showCreditReason(reasonEl, creditUnavailableMessage(root, quote));
+            if (toggle) {
+                toggle.checked = false;
+                toggle.disabled = true;
+            }
+            if (input) {
+                input.disabled = true;
+            }
+            if (hint) {
+                hint.hidden = true;
+                hint.textContent = '';
+            }
+            if (cashEl) {
+                cashEl.hidden = true;
+                cashEl.textContent = '';
+            }
+            if (help && quote) {
+                help.setAttribute('data-w-tooltip', String(quote.hint_detail || quote.hint_short || ''));
+                help.setAttribute('title', String(quote.hint_detail || quote.hint_short || ''));
+            }
+            creditState.applyMinor = 0;
+            creditState.cashMinor = quote && quote.deposit_amount_minor != null
+                ? Number(quote.deposit_amount_minor)
+                : null;
+            return;
+        }
+        panel.hidden = false;
+        showCreditReason(reasonEl, '');
+        if (hint) {
+            hint.hidden = false;
+            hint.removeAttribute('hidden');
+            hint.textContent = String(quote.hint_short || '');
+        }
+        if (help) {
+            help.setAttribute('data-w-tooltip', String(quote.hint_detail || quote.hint_short || ''));
+            help.setAttribute('title', String(quote.hint_detail || ''));
+        }
+        var maxApply = Math.max(0, Number(quote.max_apply_checkout_minor) || 0);
+        var deposit = Math.max(0, Number(quote.deposit_amount_minor) || 0);
+        creditState.currency = String(quote.checkout_currency || creditState.currency || 'CNY');
+        if (toggle) {
+            toggle.disabled = false;
+        }
+        if (input) {
+            input.disabled = !(toggle && toggle.checked);
+            input.max = (maxApply / 100).toFixed(2);
+            if (toggle && toggle.checked) {
+                var major = Number(input.value);
+                if (!isFinite(major) || major < 0) {
+                    major = maxApply / 100;
+                    input.value = major.toFixed(2);
+                }
+                var apply = Math.round(major * 100);
+                apply = Math.max(0, Math.min(apply, maxApply, deposit));
+                creditState.applyMinor = apply;
+                input.value = (apply / 100).toFixed(2);
+            } else {
+                creditState.applyMinor = 0;
+            }
+        } else {
+            creditState.applyMinor = (toggle && toggle.checked) ? maxApply : 0;
+        }
+        creditState.cashMinor = Math.max(0, deposit - creditState.applyMinor);
+        if (cashEl) {
+            cashEl.hidden = false;
+            cashEl.removeAttribute('hidden');
+            cashEl.textContent = '现金定金：' + formatMinor(creditState.cashMinor, creditState.currency)
+                + '（全额定金 ' + formatMinor(deposit, creditState.currency) + '）';
+        }
+        // Zero cash: soft-disable payment radios (still allow submit via fake_card).
+        root.querySelectorAll('input[name="payment_method"]').forEach(function (el) {
+            if (creditState.cashMinor === 0 && toggle && toggle.checked) {
+                el.setAttribute('data-b2b-zero-cash', '1');
+            } else {
+                el.removeAttribute('data-b2b-zero-cash');
+            }
+        });
+    }
+
+    function syncFromFrozen(frozen) {
+        var payload = frozen && frozen.data && typeof frozen.data === 'object' ? frozen.data : frozen;
+        var quote = payload && payload.b2b_credit && typeof payload.b2b_credit === 'object'
+            ? payload.b2b_credit
+            : null;
+        creditState.quote = quote;
+        // Do NOT include bare `form` — address quick-add forms appear earlier in DOM
+        // and would steal querySelector before .weline-checkout.
+        var root = document.querySelector('[data-weline-checkout], [data-checkout], .weline-checkout');
+        if (root) {
+            if (readMode() === 'tob') {
+                var panel = creditPanel(root);
+                if (panel) {
+                    panel.hidden = false;
+                }
+            }
+            // toc / tob 都同步：不可用原因必须就地出现在勾选下方。
+            syncCreditUi(root);
+        }
+    }
+
+    function readApplyMinor() {
+        return Math.max(0, Number(creditState.applyMinor) || 0);
+    }
+
+    function cashDepositMinor() {
+        if (creditState.cashMinor === null || creditState.cashMinor === undefined) {
+            return null;
+        }
+        return Math.max(0, Number(creditState.cashMinor) || 0);
+    }
+
+    function bindCreditControls(root) {
+        var panel = creditPanel(root);
+        if (!panel || panel.getAttribute('data-b2b-credit-bound') === '1') {
+            return;
+        }
+        panel.setAttribute('data-b2b-credit-bound', '1');
+        var toggle = panel.querySelector('[data-b2b-credit-toggle]');
+        var input = panel.querySelector('[data-b2b-credit-input]');
+        if (toggle) {
+            toggle.addEventListener('change', function () {
+                syncCreditUi(root);
+            });
+        }
+        if (input) {
+            input.addEventListener('input', function () {
+                syncCreditUi(root);
+            });
+            input.addEventListener('change', function () {
+                syncCreditUi(root);
+            });
         }
     }
 
@@ -418,7 +732,10 @@
             applyCartType: applyCartType,
             readMode: readMode,
             hangPurposeFromLocation: hangPurposeFromLocation,
-            hangLoginUrl: hangLoginUrl
+            hangLoginUrl: hangLoginUrl,
+            syncFromFrozen: syncFromFrozen,
+            readApplyMinor: readApplyMinor,
+            cashDepositMinor: cashDepositMinor
         };
     }
 

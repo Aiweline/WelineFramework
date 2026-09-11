@@ -4,9 +4,30 @@ $title = (string)($this->getData('workspace_title') ?? __('B2B 管理'));
 $status = (array)($this->getData('workspace_status') ?? []);
 $datasets = (array)($this->getData('workspace_datasets') ?? []);
 $form = (array)($this->getData('workspace_form') ?? []);
+$groupOptions = (array)($this->getData('group_options') ?? []);
 $kind = (string)($form['kind'] ?? '');
 $formActionPath = $form === [] ? '' : trim((string)($form['action'] ?? ''));
 $rejectActionPath = $form === [] ? '' : trim((string)($form['reject_action'] ?? ''));
+$revokeActionPath = $form === [] ? '' : trim((string)($form['revoke_action'] ?? ''));
+$reauthorizeActionPath = $form === [] ? '' : trim((string)($form['reauthorize_action'] ?? ''));
+$deleteApplicationActionPath = $form === [] ? '' : trim((string)($form['delete_application_action'] ?? ''));
+$renameActionPath = $form === [] ? '' : trim((string)($form['rename_action'] ?? ''));
+$deleteActionPath = $form === [] ? '' : trim((string)($form['delete_action'] ?? ''));
+$capabilitiesActionPath = $form === [] ? '' : trim((string)($form['capabilities_action'] ?? ''));
+$membersActionPath = $form === [] ? '' : trim((string)($form['members_action'] ?? ''));
+$assignMemberActionPath = $form === [] ? '' : trim((string)($form['assign_member_action'] ?? ''));
+$removeMemberActionPath = $form === [] ? '' : trim((string)($form['remove_member_action'] ?? ''));
+$reorderActionPath = $form === [] ? '' : trim((string)($form['reorder_action'] ?? ''));
+$baseCurrencyCode = strtoupper(trim((string)($this->getData('base_currency') ?? 'CNY'))) ?: 'CNY';
+$deleteApplicationAclSource = 'Weline_B2B::commerce:partner:applications:delete';
+$deleteApplicationConfirm = \json_encode(
+    (string)__('确认删除该身份申请记录？此操作不可恢复，不会自动撤销已生效的批发资格。'),
+    JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP
+);
+$adminGroups = (array)($this->getData('admin_groups') ?? []);
+$groupOptionsJson = \json_encode(\array_values($groupOptions), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]';
+$customerSelectValue = '';
+$customerSelectDisplay = '';
 $storefrontBase = rtrim(trim((string)($this->getData('storefront_base_url') ?? '')), '/');
 $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 $hangPayUrl = static function (string $purpose, string $orderRef) use ($storefrontBase): string {
@@ -32,6 +53,16 @@ try {
 } catch (\Throwable) {
     $websiteSelectOptions = [];
 }
+$filterWebsiteId = $this->getData('filter_website_id');
+$filterWebsiteId = $filterWebsiteId === null || $filterWebsiteId === '' ? null : (int)$filterWebsiteId;
+$filterWebsiteValue = $filterWebsiteId === null ? '' : (string)$filterWebsiteId;
+$filterChannelId = trim((string)($this->getData('filter_channel_id') ?? ''));
+if ($filterChannelId === '') {
+    $filterChannelId = null;
+}
+if ($filterWebsiteValue !== '') {
+    $websiteSelectValue = $filterWebsiteValue;
+}
 $websiteSelectDisplay = '';
 foreach ($websiteSelectOptions as $option) {
     if (!\is_array($option)) {
@@ -46,55 +77,68 @@ if ($websiteSelectDisplay === '' && $websiteSelectValue !== '') {
     $websiteSelectDisplay = '#' . $websiteSelectValue;
 }
 $websiteSelectOptionsJson = \json_encode($websiteSelectOptions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]';
+$quoteCustomerSelectValue = '';
+$quoteCustomerSelectDisplay = '';
+$filterWebsiteDisplay = '';
+if ($filterWebsiteValue !== '') {
+    foreach ($websiteSelectOptions as $option) {
+        if (!\is_array($option)) {
+            continue;
+        }
+        if ((string)($option['value'] ?? '') === $filterWebsiteValue) {
+            $filterWebsiteDisplay = \trim((string)($option['label'] ?? ''));
+            break;
+        }
+    }
+    if ($filterWebsiteDisplay === '') {
+        $filterWebsiteDisplay = '#' . $filterWebsiteValue;
+    }
+}
+$revokeWebsiteIdsValue = $filterWebsiteValue !== '' ? $filterWebsiteValue : $websiteSelectValue;
+$revokeWebsiteIdsDisplay = $filterWebsiteDisplay !== '' ? $filterWebsiteDisplay : $websiteSelectDisplay;
 ?>
 <section class="commerce-control-center" data-testid="b2b-<?= $escape($code) ?>-management" data-workspace="<?= $escape($code) ?>">
-    <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="end"><span class="w-badge <?= $form === [] ? 'bg-info text-dark' : 'bg-success' ?>"><?= $form === [] ? __('只读诊断') : __('可管理') ?></span></div>
+    <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between" style="--w-gap:var(--weline-space-3);">
+        <?= $this->fetch('Weline_B2B::templates/Backend/partials/scope-toolbar.phtml') ?>
+        <span class="w-badge <?= $form === [] ? 'bg-info text-dark' : 'bg-success' ?>"><?= $form === [] ? __('只读诊断') : __('可管理') ?></span>
+    </div>
     <div class="w-alert" role="status" data-tone="info"><?php
         if ($form === []) {
-            echo __('此页面显示不可变报价与订单价格快照；生产迁移仍由受控 CLI 完成。');
+            echo __('顶部切换作用范围过滤本页列表。此页显示不可变报价与订单价格快照；生产迁移仍由受控 CLI 完成。');
         } elseif ($kind === 'hang-order') {
-            echo __('审批挂单后，可复制前台尾款支付链接发给客户；客户也可在个人中心支付。后台不直接收款。');
+            echo __('顶部切换作用范围过滤本页列表。在下方列表直接批准或驳回挂单；可复制前台支付链接。后台不直接收款。');
+        } elseif ($kind === 'membership-application') {
+            echo __('顶部切换网站 / 店铺 / 渠道作用范围过滤整页列表。待批行可批准/驳回；生效中可撤销；撤销后可选组重新授权（申请审计仍保留 approved）。有权限时可删除申请记录。');
+            } elseif ($kind === 'group') {
+            echo __('顶部切换作用范围过滤本页列表。系统已预置 VIP 客户组（可改名称，不可删除）。列表可浏览；点「编辑」改名称、说明、达标折扣额度、消费门槛与启停；展开分组可搜索管理成员。达标折扣额度与消费门槛按站点默认基准货币配置：消费达标升入本档后，按折扣额度向批发信用钱包补差额（仅可抵扣批发订单）。其它客户组可自行新增。');
+        } elseif ($kind === 'price-list') {
+            echo __('顶部切换作用范围过滤本页列表。选择客户组并填写商品 SKU 与批发价即可；编号由系统自动生成。');
+        } elseif ($kind === 'quote') {
+            echo __('顶部切换作用范围过滤本页列表。搜索选择客户后填写 SKU 与零售价即可签发报价。');
         } else {
-            echo __('写操作受 B2B rollout 门禁保护，并复用候选解析、报价重检与不可变快照服务。');
+            echo __('顶部切换作用范围过滤本页列表。可在此维护 B2B 配置。保存前会检查业务开关，并按规则校验站点与相关数据。');
         }
     ?></div>
-    <?php if ($form !== []): ?>
+    <?php if ($form !== [] && $kind !== 'membership-application' && $kind !== 'hang-order'): ?>
         <div class="w-card" data-testid="b2b-<?= $escape($code) ?>-write-form" style="--w-mb:var(--weline-space-4);"><div class="w-card__header"><h5 style="--w-mb:0;"><?php
             if ($kind === 'quote') {
                 echo __('签发并审批报价');
             } elseif ($kind === 'hang-order') {
                 echo __('审批定金挂单');
+            } elseif ($kind === 'group') {
+                echo __('新增客户组');
+            } elseif ($kind === 'price-list') {
+                echo __('新增价目表');
             } else {
                 echo __('新增配置');
             }
         ?></h5></div><div class="w-card__body">
             <?php if ($kind === 'hang-order'): ?>
-                <div class="w-grid" style="--w-gap:var(--weline-space-4);">
-                    <div style="--w-span-md:4;">
-                        <w:form method="post" action="@backend-url{$formActionPath}">
-                            <label class="w-field__label"><?= __('挂单 ID 或订单引用') ?></label>
-                            <input class="w-input" name="hang_id" maxlength="64" required data-testid="b2b-hang-approve-key" placeholder="<?= $escape(__('hang_id 或 order_ref')) ?>">
-                            <div class="w-cluster" data-align="end" style="--w-mt:var(--weline-space-3);">
-                                <button class="w-button" type="submit" data-testid="b2b-hang-approve-submit" data-tone="primary"><?= __('批准进入尾款') ?></button>
-                            </div>
-                        </w:form>
-                    </div>
-                    <?php if ($rejectActionPath !== ''): ?>
-                    <div style="--w-span-md:4;">
-                        <w:form method="post" action="@backend-url{$rejectActionPath}">
-                            <label class="w-field__label"><?= __('驳回挂单') ?></label>
-                            <input class="w-input" name="hang_id" maxlength="64" required data-testid="b2b-hang-reject-key" placeholder="<?= $escape(__('hang_id 或 order_ref')) ?>">
-                            <div class="w-cluster" data-align="end" style="--w-mt:var(--weline-space-3);">
-                                <button class="w-button" type="submit" data-testid="b2b-hang-reject-submit" data-tone="danger"><?= __('驳回并退定金') ?></button>
-                            </div>
-                        </w:form>
-                    </div>
-                    <?php endif; ?>
-                </div>
+                <p class="w-text" data-tone="muted" data-testid="b2b-hang-row-hint"><?= __('请在下方挂单列表直接操作批准 / 驳回，无需填写编号。') ?></p>
             <?php else: ?>
             <w:form method="post" action="@backend-url{$formActionPath}"><div class="w-grid" style="--w-gap:var(--weline-space-4);">
                 <?php if ($kind === 'group'): ?>
-                    <div style="--w-span-md:3;"><label class="w-field__label"><?= __('客户组 ID') ?></label><input class="w-input" name="group_id" maxlength="64" required></div>
+                    <div style="--w-span-md:4;"><label class="w-field__label"><?= __('客户组名称') ?></label><input class="w-input" name="name" maxlength="128" required placeholder="<?= $escape(__('例如：金牌经销商')) ?>" data-testid="b2b-group-name"></div>
                     <div style="--w-span-md:3;"><label class="w-field__label"><?= __('网站') ?></label>
                         <w:websites:website:select
                             id="b2b-cc-group-website"
@@ -108,11 +152,21 @@ $websiteSelectOptionsJson = \json_encode($websiteSelectOptions, JSON_UNESCAPED_U
                             placeholder="@lang(搜索站点名称或编码)"
                         />
                     </div>
-                    <div style="--w-span-md:3;"><label class="w-field__label"><?= __('代码') ?></label><input class="w-input" name="code" maxlength="64" required></div>
-                    <div style="--w-span-md:2;"><label class="w-field__label"><?= __('状态') ?></label><select class="w-select" name="status"><option value="active">active</option><option value="disabled">disabled</option></select></div>
+                    <div style="--w-span-md:3;"><label class="w-field__label"><?= __('组代码（可选）') ?></label><input class="w-input" name="code" maxlength="64" placeholder="<?= $escape(__('留空则按名称生成')) ?>"></div>
+                    <div style="--w-span-md:2;"><label class="w-field__label"><?= __('状态') ?></label><select class="w-select" name="status"><option value="active"><?= __('启用') ?></option><option value="disabled"><?= __('停用') ?></option></select></div>
                 <?php elseif ($kind === 'price-list'): ?>
-                    <div style="--w-span-md:3;"><label class="w-field__label"><?= __('价目表 ID') ?></label><input class="w-input" name="list_id" maxlength="64" required></div>
-                    <div style="--w-span-md:3;"><label class="w-field__label"><?= __('客户组 ID') ?></label><input class="w-input" name="group_id" maxlength="64" required></div>
+                    <div style="--w-span-md:4;">
+                        <label class="w-field__label"><?= __('客户组') ?></label>
+                        <w:theme:search-select
+                            id="b2b-cc-price-list-group"
+                            name="group_id"
+                            options-json="<?= $escape($groupOptionsJson) ?>"
+                            placeholder="@lang(搜索客户组名称或代码)"
+                            required="true"
+                            clearable="true"
+                            min-chars="0"
+                        />
+                    </div>
                     <div style="--w-span-md:3;"><label class="w-field__label"><?= __('网站') ?></label>
                         <w:websites:website:select
                             id="b2b-cc-price-list-website"
@@ -127,11 +181,22 @@ $websiteSelectOptionsJson = \json_encode($websiteSelectOptions, JSON_UNESCAPED_U
                         />
                     </div>
                     <div style="--w-span-md:2;"><label class="w-field__label"><?= __('版本') ?></label><input class="w-input" type="number" min="1" name="version" value="1" required></div>
-                    <div style="--w-span-md:3;"><label class="w-field__label"><?= __('SKU') ?></label><input class="w-input" name="sku" maxlength="128" required></div>
-                    <div style="--w-span-md:3;"><label class="w-field__label"><?= __('金额（分）') ?></label><input class="w-input" type="number" min="0" name="amount_minor" required></div>
-                    <div style="--w-span-md:3;"><label class="w-field__label"><?= __('渠道 ID（可选）') ?></label><input class="w-input" name="channel_id" maxlength="64"></div>
+                    <div style="--w-span-md:3;"><label class="w-field__label"><?= __('商品 SKU') ?></label><input class="w-input" name="sku" maxlength="128" required placeholder="<?= $escape(__('输入商品 SKU')) ?>"></div>
+                    <div style="--w-span-md:3;"><label class="w-field__label"><?= __('批发价（分）') ?></label><input class="w-input" type="number" min="0" name="amount_minor" required></div>
+                    <div style="--w-span-md:3;"><label class="w-field__label"><?= __('渠道（可选）') ?></label><input class="w-input" name="channel_id" maxlength="64" placeholder="<?= $escape(__('可留空')) ?>"></div>
                 <?php else: ?>
-                    <div style="--w-span-md:3;"><label class="w-field__label"><?= __('客户 ID') ?></label><input class="w-input" name="customer_id" maxlength="64" required></div>
+                    <div style="--w-span-md:4;">
+                        <label class="w-field__label"><?= __('客户') ?></label>
+                        <w:customer:admin:select
+                            id="b2b-cc-quote-customer"
+                            name="customer_id"
+                            value="quoteCustomerSelectValue"
+                            display="quoteCustomerSelectDisplay"
+                            required="true"
+                            clearable="true"
+                            placeholder="@lang(搜索客户姓名或邮箱)"
+                        />
+                    </div>
                     <div style="--w-span-md:3;"><label class="w-field__label"><?= __('网站') ?></label>
                         <w:websites:website:select
                             id="b2b-cc-quote-website"
@@ -145,19 +210,356 @@ $websiteSelectOptionsJson = \json_encode($websiteSelectOptions, JSON_UNESCAPED_U
                             placeholder="@lang(搜索站点名称或编码)"
                         />
                     </div>
-                    <div style="--w-span-md:2;"><label class="w-field__label"><?= __('SKU') ?></label><input class="w-input" name="sku" maxlength="128" required></div>
+                    <div style="--w-span-md:2;"><label class="w-field__label"><?= __('商品 SKU') ?></label><input class="w-input" name="sku" maxlength="128" required></div>
                     <div style="--w-span-md:2;"><label class="w-field__label"><?= __('零售价（分）') ?></label><input class="w-input" type="number" min="0" name="retail_amount_minor" required></div>
-                    <div style="--w-span-md:3;"><label class="w-field__label"><?= __('订单引用') ?></label><input class="w-input" name="order_ref" maxlength="64" required></div>
-                    <div style="--w-span-md:3;"><label class="w-field__label"><?= __('渠道 ID（可选）') ?></label><input class="w-input" name="channel_id" maxlength="64"></div>
+                    <div style="--w-span-md:3;"><label class="w-field__label"><?= __('订单引用') ?></label><input class="w-input" name="order_ref" maxlength="64" required placeholder="<?= $escape(__('订单号或引用')) ?>"></div>
+                    <div style="--w-span-md:3;"><label class="w-field__label"><?= __('渠道（可选）') ?></label><input class="w-input" name="channel_id" maxlength="64"></div>
                 <?php endif; ?>
-                <div class="w-cluster" data-align="end" style="--w-span-md:2;"><button class="w-button" type="submit" data-testid="b2b-<?= $escape($code) ?>-submit" data-w-width="full" data-tone="primary"><?= $kind === 'quote' ? __('审批报价') : __('保存') ?></button></div>
+                <div class="w-cluster" data-align="end" data-justify="end" style="--w-span-md:12;" data-testid="b2b-<?= $escape($code) ?>-form-actions">
+                    <button class="w-button" type="submit" data-testid="b2b-<?= $escape($code) ?>-submit" data-tone="primary"><?= $kind === 'quote' ? __('审批报价') : __('保存') ?></button>
+                </div>
             </div></w:form>
             <?php endif; ?>
         </div></div>
     <?php endif; ?>
     <?php if ($status !== []): ?><div class="w-card" style="--w-mb:var(--weline-space-4);"><div class="w-card__body"><div class="w-grid" style="--w-gap:var(--weline-space-4);"><?php foreach ($status as $key => $value): ?><div style="--w-span-md:4;"><div class="w-text" data-tone="muted" data-size="sm"><?= $escape($key) ?></div><div class="w-text" data-weight="strong"><?= $display($value) ?></div></div><?php endforeach; ?></div></div></div><?php endif; ?>
+    <?php if ($code === 'groups'):
+        $websiteLabelById = [];
+        foreach ($websiteSelectOptions as $websiteOption) {
+            if (!\is_array($websiteOption)) {
+                continue;
+            }
+            $websiteLabelById[(string)($websiteOption['value'] ?? '')] = \trim((string)($websiteOption['label'] ?? ''));
+        }
+        $formatYuan = static function (int $minor): string {
+            return \number_format($minor / 100, 2, '.', '');
+        };
+        $truncateText = static function (string $text, int $max = 48): string {
+            $text = \trim($text);
+            if ($text === '') {
+                return '';
+            }
+            if (\function_exists('mb_strlen') && \function_exists('mb_substr')) {
+                return \mb_strlen($text) > $max ? (\mb_substr($text, 0, $max) . '…') : $text;
+            }
+            return \strlen($text) > $max ? (\substr($text, 0, $max) . '…') : $text;
+        };
+    ?>
+    <div class="w-card" style="--w-mb:var(--weline-space-4);" data-testid="b2b-groups-panel"
+         data-members-url="@backend-url{$membersActionPath}"
+         data-assign-url="@backend-url{$assignMemberActionPath}"
+         data-remove-url="@backend-url{$removeMemberActionPath}"
+         data-reorder-url="@backend-url{$reorderActionPath}"
+         data-base-currency="<?= $escape($baseCurrencyCode) ?>">
+        <div class="w-card__header"><h5 style="--w-mb:0;"><?= __('客户组') ?></h5></div>
+        <div class="w-card__body">
+        <div class="w-alert" data-tone="info" data-testid="b2b-groups-base-currency" style="--w-mb:var(--weline-space-4);">
+            <?= __('当前默认基准货币：%{1}。消费门槛与达标折扣额度按此货币设置；其他币种订单消费会按汇率换算后累计。拖动手柄可调整分组显示顺序（种子 VIP 默认按等级 0→12）。', [$baseCurrencyCode]) ?>
+        </div>
+        <?php if ($adminGroups === []): ?>
+            <div class="w-empty" data-testid="b2b-groups-empty"><div class="w-text" data-tone="muted"><?= __('暂无客户组。请在上方填写信息后保存。') ?></div></div>
+        <?php else: ?>
+        <div class="w-stack" style="--w-gap:var(--weline-space-3);" data-testid="b2b-groups-accordion">
+            <?php foreach ($adminGroups as $groupRow):
+                if (!\is_array($groupRow)) {
+                    continue;
+                }
+                $groupRowId = (int)($groupRow['group_row_id'] ?? 0);
+                $gid = trim((string)($groupRow['group_id'] ?? ''));
+                $isSystem = !empty($groupRow['is_system']);
+                $groupName = trim((string)($groupRow['name'] ?? ''));
+                $groupCode = trim((string)($groupRow['code'] ?? ''));
+                $groupDesc = trim((string)($groupRow['description'] ?? ''));
+                $groupStatus = trim((string)($groupRow['status'] ?? ''));
+                $creditMinor = (int)($groupRow['credit_limit_minor'] ?? 0);
+                $spendMinor = (int)($groupRow['spend_threshold_minor'] ?? 0);
+                $tierRank = (int)($groupRow['tier_rank'] ?? -1);
+                $websiteIdRaw = (string)($groupRow['website_id'] ?? '0');
+                $websiteLabel = $websiteLabelById[$websiteIdRaw] ?? '';
+                if ($websiteLabel === '') {
+                    $websiteLabel = $websiteIdRaw === '0' || $websiteIdRaw === ''
+                        ? (string)__('默认站')
+                        : ((string)__('站点') . ' #' . $websiteIdRaw);
+                }
+                $statusActive = $groupStatus === 'active';
+                $typeLabel = $isSystem ? (string)__('系统默认') : (string)__('自定义');
+                $descShort = $truncateText($groupDesc);
+                $amountMajor = $formatYuan;
+                ?>
+                <div class="w-card" data-testid="b2b-group-accordion" data-group-id="<?= $escape($gid) ?>" data-system="<?= $isSystem ? '1' : '0' ?>" data-tier-rank="<?= $escape((string)$tierRank) ?>" draggable="true" style="--w-mb:0;">
+                    <div class="w-cluster" data-align="center" data-justify="between" style="--w-gap:var(--weline-space-3); padding:var(--weline-space-3);">
+                        <span class="w-text" data-tone="muted" data-testid="b2b-group-drag-handle" title="<?= $escape(__('拖动调整分组顺序')) ?>" aria-hidden="true" style="cursor:grab; user-select:none; padding:var(--weline-space-1);">⋮⋮</span>
+                        <details style="flex:1 1 auto; min-inline-size:0;" data-testid="b2b-group-accordion-details">
+                            <summary style="list-style:none; cursor:pointer;">
+                                <div class="w-stack" style="--w-gap:0.2rem;">
+                                    <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);">
+                                        <span class="w-text" data-weight="strong"><?= $escape($groupName !== '' ? $groupName : $groupCode) ?></span>
+                                        <code><?= $escape($groupCode) ?></code>
+                                        <span class="w-badge" data-tone="secondary" data-testid="b2b-group-sort-badge"><?= __('排序') ?> <?= $escape((string)$tierRank) ?></span>
+                                        <?php if ($statusActive): ?>
+                                            <span class="w-badge" data-tone="success"><?= __('启用') ?></span>
+                                        <?php else: ?>
+                                            <span class="w-badge" data-tone="secondary"><?= __('停用') ?></span>
+                                        <?php endif; ?>
+                                        <?php if ($isSystem): ?>
+                                            <span class="w-badge" data-tone="info" title="<?= $escape(__('系统 VIP 不可删除')) ?>"><?= $escape($typeLabel) ?></span>
+                                        <?php else: ?>
+                                            <span class="w-badge" data-tone="secondary"><?= $escape($typeLabel) ?></span>
+                                        <?php endif; ?>
+                                    </div>
+                                    <?php if ($descShort !== ''): ?>
+                                        <div class="w-text" data-tone="muted" data-size="sm" title="<?= $escape($groupDesc) ?>"><?= $escape($descShort) ?></div>
+                                    <?php endif; ?>
+                                    <div class="w-text" data-size="sm" data-tone="muted">
+                                        <?= $escape($websiteLabel) ?>
+                                        · <?= __('消费门槛') ?> <?= $escape($baseCurrencyCode) ?> <?= $escape($amountMajor($spendMinor)) ?>
+                                        · <?= __('达标折扣额度') ?> <?= $escape($baseCurrencyCode) ?> <?= $escape($amountMajor($creditMinor)) ?>
+                                        · <span class="w-text" data-tone="muted"><?= __('点此展开成员') ?></span>
+                                    </div>
+                                </div>
+                            </summary>
+                            <div class="w-card__body" data-testid="b2b-group-members-panel" data-loaded="0" style="padding-inline:0; padding-block-start:var(--weline-space-3); border-top:1px solid var(--weline-theme-border, #e5e7eb); margin-block-start:var(--weline-space-3);">
+                                <div class="w-cluster" data-align="end" style="--w-gap:var(--weline-space-2); --w-mb:var(--weline-space-3);">
+                                    <div class="w-field" style="flex:1 1 12rem;">
+                                        <label class="w-field__label" for="b2b-group-members-q-<?= $escape($gid) ?>"><?= __('搜索成员') ?></label>
+                                        <input class="w-input" id="b2b-group-members-q-<?= $escape($gid) ?>" type="search" data-testid="b2b-group-members-q" placeholder="<?= $escape(__('搜索姓名、邮箱或编号')) ?>">
+                                    </div>
+                                    <?php if ($assignMemberActionPath !== '' && $gid !== ''): ?>
+                                    <button
+                                        type="button"
+                                        class="w-button"
+                                        data-tone="primary"
+                                        data-size="sm"
+                                        data-w-action="dialog.open"
+                                        data-w-target="#b2b-group-assign-dialog"
+                                        data-testid="b2b-group-members-assign-open"
+                                        data-group-id="<?= $escape($gid) ?>"
+                                        data-group-label="<?= $escape($groupName !== '' ? $groupName : $groupCode) ?>"
+                                    ><?= __('加入客户') ?></button>
+                                    <?php endif; ?>
+                                </div>
+                                <div data-testid="b2b-group-members-list" class="w-text" data-tone="muted"><?= __('展开后加载成员…') ?></div>
+                            </div>
+                        </details>
+                        <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2); flex:0 0 auto;">
+                            <?php if ($capabilitiesActionPath !== '' && $gid !== ''): ?>
+                            <button
+                                type="button"
+                                class="w-button"
+                                data-tone="secondary"
+                                data-size="sm"
+                                data-w-action="dialog.open"
+                                data-w-target="#b2b-group-edit-dialog"
+                                data-testid="b2b-group-row-edit"
+                                data-group-id="<?= $escape($gid) ?>"
+                                data-group-row-id="<?= $escape((string)$groupRowId) ?>"
+                                data-name="<?= $escape($groupName) ?>"
+                                data-code="<?= $escape($groupCode) ?>"
+                                data-description="<?= $escape($groupDesc) ?>"
+                                data-credit-minor="<?= $escape((string)$creditMinor) ?>"
+                                data-spend-minor="<?= $escape((string)$spendMinor) ?>"
+                                data-status="<?= $escape($groupStatus !== '' ? $groupStatus : 'active') ?>"
+                                data-tier-rank="<?= $escape((string)$tierRank) ?>"
+                                data-system="<?= $isSystem ? '1' : '0' ?>"
+                                data-type-label="<?= $escape($typeLabel) ?>"
+                            ><?= __('编辑') ?></button>
+                            <?php endif; ?>
+                            <?php if (!$isSystem && $deleteActionPath !== '' && $gid !== ''): ?>
+                            <w:form method="post" action="@backend-url{$deleteActionPath}" style="display:contents;">
+                                <input type="hidden" name="group_id" value="<?= $escape($gid) ?>">
+                                <button class="w-button" type="submit" data-tone="danger" data-size="sm" data-testid="b2b-group-row-delete"><?= __('删除') ?></button>
+                            </w:form>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        </div>
+        <div id="b2b-group-local-vault" hidden data-testid="b2b-group-local-vault">
+            <?php foreach ($adminGroups as $groupRow):
+                if (!\is_array($groupRow)) {
+                    continue;
+                }
+                $group_row_id = (int)($groupRow['group_row_id'] ?? 0);
+                if ($group_row_id <= 0) {
+                    continue;
+                }
+                $vaultGid = trim((string)($groupRow['group_id'] ?? ''));
+                $vaultName = trim((string)($groupRow['name'] ?? ''));
+                $vaultDesc = trim((string)($groupRow['description'] ?? ''));
+                $vaultCode = trim((string)($groupRow['code'] ?? ''));
+                if ($vaultName === '') {
+                    $vaultName = $vaultCode;
+                }
+                ?>
+                <div data-b2b-group-local-pack data-group-id="<?= $escape($vaultGid) ?>" data-group-row-id="<?= $escape((string)$group_row_id) ?>">
+                    <?php \Weline\I18n\Taglib\Local::bindRuntimeRecordId($group_row_id); ?>
+                    <div data-local-slot="name">
+                        <local
+                            model="Weline\B2B\Model\CustomerGroupRecord\LocalDescription"
+                            field="name"
+                            id="group_row_id"
+                            name="b2b-group-name-<?= (int)$group_row_id ?>"
+                        ><?= $escape((string)__('翻译')) ?></local>
+                    </div>
+                    <div data-local-slot="description">
+                        <local
+                            model="Weline\B2B\Model\CustomerGroupRecord\LocalDescription"
+                            field="description"
+                            id="group_row_id"
+                            name="b2b-group-desc-<?= (int)$group_row_id ?>"
+                        ><?= $escape((string)__('翻译')) ?></local>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        </div>
+        <?php if ($assignMemberActionPath !== ''): ?>
+        <div
+            class="w-dialog"
+            id="b2b-group-assign-dialog"
+            tabindex="-1"
+            aria-hidden="true"
+            data-w-component="dialog"
+            data-state="closed"
+            hidden
+            data-testid="b2b-group-assign-dialog"
+        >
+            <div class="w-dialog__frame" data-size="sm">
+                <div class="w-dialog__surface">
+                    <w:form method="post" action="@backend-url{$assignMemberActionPath}" id="b2b-group-assign-form" data-testid="b2b-group-assign-form">
+                        <input type="hidden" name="group_id" id="b2b-group-assign-group-id" value="">
+                        <div class="w-dialog__header">
+                            <h5 class="w-dialog__title"><?= __('加入客户') ?></h5>
+                            <button type="button" class="w-button" aria-label="<?= $escape(__('关闭')) ?>" data-w-action="dialog.close" data-w-close data-tone="quiet" data-size="sm"></button>
+                        </div>
+                        <div class="w-dialog__body">
+                            <div class="w-stack" style="--w-gap:var(--weline-space-4);">
+                                <p class="w-text" data-tone="muted" data-size="sm" style="--w-mb:0;" data-testid="b2b-group-assign-meta">
+                                    <span id="b2b-group-assign-label"></span>
+                                </p>
+                                <div class="w-field">
+                                    <label class="w-field__label"><?= __('客户') ?></label>
+                                    <w:customer:admin:select
+                                        id="b2b-group-assign-customer"
+                                        name="customer_id"
+                                        placeholder="@lang(搜索客户姓名或邮箱)"
+                                        required="true"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                        <div class="w-dialog__footer">
+                            <button type="button" class="w-button" data-w-action="dialog.close" data-tone="neutral" data-variant="outline"><?= __('取消') ?></button>
+                            <button type="submit" class="w-button" data-tone="primary" data-testid="b2b-group-members-assign"><?= __('加入') ?></button>
+                        </div>
+                    </w:form>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
+        <?php if ($capabilitiesActionPath !== ''): ?>
+        <div
+            class="w-dialog"
+            id="b2b-group-edit-dialog"
+            tabindex="-1"
+            aria-hidden="true"
+            data-w-component="dialog"
+            data-state="closed"
+            hidden
+            data-testid="b2b-group-edit-dialog"
+        >
+            <div class="w-dialog__frame" data-size="md">
+                <div class="w-dialog__surface">
+                    <w:form method="post" action="@backend-url{$capabilitiesActionPath}" id="b2b-group-edit-form" data-testid="b2b-group-edit-form">
+                        <input type="hidden" name="group_id" id="b2b-group-edit-group-id" value="">
+                        <input type="hidden" name="credit_limit_minor" id="b2b-group-edit-credit-minor" value="0">
+                        <input type="hidden" name="spend_threshold_minor" id="b2b-group-edit-spend-minor" value="0">
+                        <div class="w-dialog__header">
+                            <h5 class="w-dialog__title"><?= __('编辑客户组') ?></h5>
+                            <button type="button" class="w-button" aria-label="<?= $escape(__('关闭')) ?>" data-w-action="dialog.close" data-w-close data-tone="quiet" data-size="sm"></button>
+                        </div>
+                        <div class="w-dialog__body">
+                            <div class="w-stack" style="--w-gap:var(--weline-space-4);">
+                                <p class="w-text" data-tone="muted" data-size="sm" style="--w-mb:0;" data-testid="b2b-group-edit-meta">
+                                    <span id="b2b-group-edit-code-label"></span>
+                                    <span aria-hidden="true"> · </span>
+                                    <span id="b2b-group-edit-type-label"></span>
+                                </p>
+                                <div class="w-alert" data-tone="info" data-testid="b2b-group-edit-currency-hint" style="--w-mb:0;">
+                                    <?= __('当前默认基准货币：%{1}。消费门槛与达标折扣额度按此货币设置；其他币种消费按汇率换算后累计。', [$baseCurrencyCode]) ?>
+                                </div>
+                                <div class="w-field">
+                                    <div class="w-cluster" data-align="center" data-justify="between" style="--w-gap:var(--weline-space-2); --w-mb:var(--weline-space-1);">
+                                        <label class="w-field__label" for="b2b-group-edit-name" style="--w-mb:0;"><?= __('名称') ?></label>
+                                        <div id="b2b-group-edit-name-local-host" data-testid="b2b-group-edit-name-local" class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-1);"></div>
+                                    </div>
+                                    <input class="w-input" id="b2b-group-edit-name" name="name" type="text" maxlength="128" required data-testid="b2b-group-edit-name">
+                                    <p class="w-text" data-tone="muted" data-size="sm" style="--w-mb:0;"><?= __('源语言可在此直接改；旁侧「翻译」打开各语种（LocalModel）。') ?></p>
+                                </div>
+                                <div class="w-field">
+                                    <div class="w-cluster" data-align="center" data-justify="between" style="--w-gap:var(--weline-space-2); --w-mb:var(--weline-space-1);">
+                                        <label class="w-field__label" for="b2b-group-edit-description" style="--w-mb:0;"><?= __('等级说明') ?></label>
+                                        <div id="b2b-group-edit-description-local-host" data-testid="b2b-group-edit-description-local" class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-1);"></div>
+                                    </div>
+                                    <textarea class="w-input" id="b2b-group-edit-description" name="description" rows="3" maxlength="2000" data-testid="b2b-group-edit-description"></textarea>
+                                    <p class="w-text" data-tone="muted" data-size="sm" style="--w-mb:0;"><?= __('源语言可在此直接改；旁侧「翻译」打开各语种（LocalModel）。') ?></p>
+                                </div>
+                                <div class="w-grid" style="--w-gap:var(--weline-space-4);">
+                                    <div class="w-field" style="--w-span-md:6;">
+                                        <label class="w-field__label" for="b2b-group-edit-spend-yuan"><?= __('消费门槛（%{1}）', [$baseCurrencyCode]) ?></label>
+                                        <input class="w-input" id="b2b-group-edit-spend-yuan" type="number" min="0" step="0.01" inputmode="decimal" data-testid="b2b-group-edit-spend-yuan">
+                                    </div>
+                                    <div class="w-field" style="--w-span-md:6;">
+                                        <label class="w-field__label" for="b2b-group-edit-credit-yuan"><?= __('达标折扣额度（%{1}）', [$baseCurrencyCode]) ?></label>
+                                        <input class="w-input" id="b2b-group-edit-credit-yuan" type="number" min="0" step="0.01" inputmode="decimal" data-testid="b2b-group-edit-credit-yuan">
+                                    </div>
+                                </div>
+                                <p class="w-text" data-tone="muted" data-size="sm" style="--w-mb:0;"><?= __('消费达到本档门槛后升入本档，批发信用钱包补到此折扣额度，仅可抵扣批发订单（非营销券）。') ?></p>
+                                <div class="w-field">
+                                    <label class="w-field__label" for="b2b-group-edit-tier-rank"><?= __('排序数字') ?></label>
+                                    <input class="w-input" id="b2b-group-edit-tier-rank" name="tier_rank" type="number" step="1" data-testid="b2b-group-edit-tier-rank" placeholder="0">
+                                    <p class="w-text" data-tone="muted" data-size="sm" style="--w-mb:0;"><?= __('数字越小越靠前；也可在列表拖动手柄排序。系统升档仍按 VIP 组身份，不受显示序影响。') ?></p>
+                                </div>
+                                <div class="w-field">
+                                    <label class="w-field__label" for="b2b-group-edit-status"><?= __('状态') ?></label>
+                                    <select class="w-select" id="b2b-group-edit-status" name="status" data-testid="b2b-group-edit-status">
+                                        <option value="active"><?= __('启用') ?></option>
+                                        <option value="disabled"><?= __('停用') ?></option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="w-dialog__footer">
+                            <button type="button" class="w-button" data-w-action="dialog.close" data-tone="neutral" data-variant="outline"><?= __('取消') ?></button>
+                            <button type="submit" class="w-button" data-tone="primary" data-testid="b2b-group-edit-save"><?= __('保存') ?></button>
+                        </div>
+                    </w:form>
+                </div>
+            </div>
+        </div>
+        <script src="@static(Weline_B2B::js/backend/control-center-groups-edit.js)?v=20260910-groups-edit-local2" data-no-extract="true"></script>
+        <script src="@static(Weline_B2B::js/backend/control-center-groups-reorder.js)?v=20260910-groups-reorder1" data-no-extract="true"></script>
+        <?php endif; ?>
+        <?php if ($membersActionPath !== ''): ?>
+        <script src="@static(Weline_B2B::js/backend/control-center-groups-members.js)?v=20260910-groups-members4" data-no-extract="true"></script>
+        <?php endif; ?>
+        <?php endif; ?>
+    </div></div>
+    <?php endif; ?>
     <?php foreach ($datasets as $dataset): ?><div class="w-card" style="--w-mb:var(--weline-space-4);"><div class="w-card__header"><h5 style="--w-mb:0;"><?= $escape($dataset['label'] ?? '') ?></h5></div><div class="w-card__body">
-        <?php if (!empty($dataset['error'])): ?><div class="w-alert" data-tone="warning" style="--w-mb:0;"><?= $escape($dataset['error']) ?></div><?php elseif (empty($dataset['rows'])): ?><div class="w-text" data-tone="muted"><?= __('当前没有记录。') ?></div><?php else: ?>
+        <?php if (!empty($dataset['error'])): ?><div class="w-alert" data-tone="warning" style="--w-mb:0;"><?= $escape($dataset['error']) ?></div><?php elseif (empty($dataset['rows'])): ?>
+            <div class="w-empty" data-testid="b2b-<?= $escape($code) ?>-empty">
+                <div class="w-text" data-tone="muted"><?php
+                    if ($kind === 'group') {
+                        echo __('暂无客户组。请在上方填写信息后保存。');
+                    } elseif ($kind === 'membership-application') {
+                        echo __('暂无身份申请。');
+                    } else {
+                        echo __('当前没有记录。');
+                    }
+                ?></div>
+            </div>
+        <?php else: ?>
         <?php if ($code === 'hang-orders'): ?>
         <div class="w-table-wrap"><table class="w-table" data-w-vertical="middle" data-testid="b2b-hang-orders-table" style="--w-mb:0;">
             <thead><tr>
@@ -167,13 +569,16 @@ $websiteSelectOptionsJson = \json_encode($websiteSelectOptions, JSON_UNESCAPED_U
                 <th><?= __('定金(分)') ?></th>
                 <th><?= __('尾款(分)') ?></th>
                 <th><?= __('支付链接') ?></th>
+                <th><?= __('操作') ?></th>
             </tr></thead>
             <tbody>
             <?php foreach ($dataset['rows'] as $row):
                 $orderRef = trim((string)($row['order_ref'] ?? ''));
+                $hangId = trim((string)($row['hang_id'] ?? ''));
                 $hangStatus = strtolower(trim((string)($row['hang_status'] ?? '')));
                 $depositUrl = $hangPayUrl('deposit', $orderRef);
                 $balanceUrl = $hangPayUrl('balance', $orderRef);
+                $hangKey = $hangId !== '' ? $hangId : $orderRef;
                 ?>
                 <tr data-hang-status="<?= $escape($hangStatus) ?>" data-order-ref="<?= $escape($orderRef) ?>">
                     <td><?= $display($row['hang_id'] ?? '') ?></td>
@@ -199,6 +604,22 @@ $websiteSelectOptionsJson = \json_encode($websiteSelectOptions, JSON_UNESCAPED_U
                             <?php endif; ?>
                             <?php if (!in_array($hangStatus, ['awaiting_deposit', 'awaiting_balance'], true)): ?>
                                 <span class="w-text" data-tone="muted" data-size="sm"><?= __('—') ?></span>
+                            <?php endif; ?>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="w-cluster" data-align="end" style="--w-gap:var(--weline-space-2);">
+                            <?php if ($hangStatus === 'awaiting_merchant_approval' && $formActionPath !== '' && $hangKey !== ''): ?>
+                                <w:form method="post" action="@backend-url{$formActionPath}" style="display:contents;">
+                                    <input type="hidden" name="hang_id" value="<?= $escape($hangKey) ?>">
+                                    <button class="w-button" type="submit" data-tone="primary" data-testid="b2b-hang-row-approve"><?= __('批准') ?></button>
+                                </w:form>
+                            <?php endif; ?>
+                            <?php if (in_array($hangStatus, ['awaiting_merchant_approval', 'awaiting_deposit'], true) && $rejectActionPath !== '' && $hangKey !== ''): ?>
+                                <w:form method="post" action="@backend-url{$rejectActionPath}" style="display:contents;">
+                                    <input type="hidden" name="hang_id" value="<?= $escape($hangKey) ?>">
+                                    <button class="w-button" type="submit" data-tone="danger" data-testid="b2b-hang-row-reject"><?= __('驳回') ?></button>
+                                </w:form>
                             <?php endif; ?>
                         </div>
                     </td>
@@ -231,9 +652,242 @@ $websiteSelectOptionsJson = \json_encode($websiteSelectOptions, JSON_UNESCAPED_U
             });
         })();
         </script>
+        <?php elseif ($code === 'applications'): ?>
+        <?php if (!empty($this->getData('rollout_blocks_writes'))): ?>
+            <div class="w-alert" data-tone="danger" style="--w-mb:var(--weline-space-3);" data-testid="b2b-applications-rollout-blocked">
+                <?= __('当前 B2B 灰度未对该站点开启，批准会被拒绝。请先到「迁移状态」确认，或由运维开启白名单后再批。') ?>
+            </div>
+        <?php endif; ?>
+        <?php if ($groupOptions === []): ?>
+            <div class="w-alert" data-tone="warning" style="--w-mb:var(--weline-space-3);" data-testid="b2b-applications-no-groups">
+                <?= __('尚无可用客户组。请先到「客户组」页创建并启用，再回来批准申请。') ?>
+            </div>
+        <?php endif; ?>
+        <div class="w-table-wrap"><table class="w-table" data-w-vertical="middle" data-testid="b2b-applications-table" style="--w-mb:0;">
+            <thead><tr>
+                <th><?= __('公司') ?></th>
+                <th><?= __('联系电话') ?></th>
+                <th><?= __('客户') ?></th>
+                <th><?= __('站点') ?></th>
+                <th><?= __('状态') ?></th>
+                <th><?= __('申请时间') ?></th>
+                <th><?= __('操作') ?></th>
+            </tr></thead>
+            <tbody>
+            <?php
+            $visibleAppRows = 0;
+            foreach ($dataset['rows'] as $row):
+                $applicationId = trim((string)($row['application_id'] ?? ''));
+                $appStatus = strtolower(trim((string)($row['status'] ?? '')));
+                $rowWebsiteId = (int)($row['website_id'] ?? 0);
+                $rowCustomerId = trim((string)($row['customer_id'] ?? ''));
+                $entitlementActive = !empty($row['entitlement_active']);
+                if ($filterWebsiteId !== null && $rowWebsiteId !== $filterWebsiteId) {
+                    continue;
+                }
+                $visibleAppRows++;
+                $rowGroupOptions = [];
+                foreach ($groupOptions as $option) {
+                    if (!\is_array($option)) {
+                        continue;
+                    }
+                    $optWebsite = (int)($option['website_id'] ?? -1);
+                    if ($optWebsite === $rowWebsiteId || $optWebsite === 0 || $rowWebsiteId === 0) {
+                        $rowGroupOptions[] = $option;
+                    }
+                }
+                if ($rowGroupOptions === [] && $groupOptions !== []) {
+                    $rowGroupOptions = $groupOptions;
+                }
+                $statusBadgeClass = 'bg-secondary';
+                $statusLabel = $appStatus;
+                if ($appStatus === 'pending') {
+                    $statusBadgeClass = 'bg-warning text-dark';
+                } elseif ($appStatus === 'approved' && $entitlementActive) {
+                    $statusBadgeClass = 'bg-success';
+                } elseif ($appStatus === 'approved' && !$entitlementActive) {
+                    $statusBadgeClass = 'bg-secondary';
+                    $statusLabel = (string)__('资格已撤销');
+                }
+                ?>
+                <tr data-application-id="<?= $escape($applicationId) ?>" data-application-status="<?= $escape($appStatus) ?>" data-website-id="<?= $escape((string)$rowWebsiteId) ?>" data-entitlement-active="<?= $entitlementActive ? '1' : '0' ?>">
+                    <td><?= $display($row['company_name'] ?? '') ?></td>
+                    <td><?= $display($row['contact_phone'] ?? '') ?></td>
+                    <td><?= $display($rowCustomerId) ?></td>
+                    <td><?= $display($rowWebsiteId) ?></td>
+                    <td>
+                        <span class="w-badge <?= $escape($statusBadgeClass) ?>"<?php if ($appStatus === 'approved' && !$entitlementActive): ?> data-testid="b2b-membership-entitlement-revoked"<?php endif; ?>>
+                            <?= $display($statusLabel) ?>
+                        </span>
+                    </td>
+                    <td><?= $display($row['created_at'] ?? '') ?></td>
+                    <td>
+                        <div class="w-cluster" data-align="end" style="--w-gap:var(--weline-space-2);">
+                        <?php if ($appStatus === 'pending'):
+                            $rowGroupOptionsJson = \json_encode(\array_values($rowGroupOptions), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]';
+                            $defaultGroupValue = (string)(($rowGroupOptions[0]['value'] ?? ''));
+                            $groupSelectId = 'b2b-app-group-' . \preg_replace('/[^a-zA-Z0-9_-]/', '', $applicationId);
+                            ?>
+                            <div class="w-cluster" data-align="end" style="--w-gap:var(--weline-space-2); --w-min-width:18rem;">
+                                <w:form method="post" action="@backend-url{$formActionPath}" style="display:contents;">
+                                    <input type="hidden" name="application_id" value="<?= $escape($applicationId) ?>">
+                                    <input type="hidden" name="website_id" value="<?= $escape((string)$rowWebsiteId) ?>">
+                                    <div style="--w-min-width:14rem; flex:1 1 14rem;" data-testid="b2b-membership-row-group">
+                                        <w:theme:search-select
+                                            id="<?= $escape($groupSelectId) ?>"
+                                            name="group_id"
+                                            value="<?= $escape($defaultGroupValue) ?>"
+                                            options-json="<?= $escape($rowGroupOptionsJson) ?>"
+                                            placeholder="@lang(搜索客户组代码或 ID)"
+                                            required="<?= $rowGroupOptions === [] ? 'false' : 'true' ?>"
+                                            clearable="true"
+                                            disabled="<?= $rowGroupOptions === [] ? 'true' : 'false' ?>"
+                                            min-chars="0"
+                                        />
+                                    </div>
+                                    <button class="w-button"
+                                            type="submit"
+                                            data-tone="primary"
+                                            data-testid="b2b-membership-row-approve"
+                                            <?= $rowGroupOptions === [] ? 'disabled' : '' ?>><?= __('批准') ?></button>
+                                </w:form>
+                                <?php if ($rejectActionPath !== ''): ?>
+                                <w:form method="post" action="@backend-url{$rejectActionPath}" style="display:contents;">
+                                    <input type="hidden" name="application_id" value="<?= $escape($applicationId) ?>">
+                                    <button class="w-button" type="submit" data-tone="danger" data-testid="b2b-membership-row-reject"><?= __('驳回') ?></button>
+                                </w:form>
+                                <?php endif; ?>
+                            </div>
+                        <?php elseif ($appStatus === 'approved' && $entitlementActive && $revokeActionPath !== '' && $rowCustomerId !== ''): ?>
+                            <div class="w-cluster" data-align="center" data-justify="between" style="--w-gap:var(--weline-space-2);">
+                                <span class="w-text" data-size="sm"><?= $display($row['entitlement_group_id'] ?? $row['assigned_group_id'] ?? '—') ?></span>
+                                <w:form method="post" action="@backend-url{$revokeActionPath}" style="display:contents;">
+                                    <input type="hidden" name="customer_id" value="<?= $escape($rowCustomerId) ?>">
+                                    <input type="hidden" name="website_id" value="<?= $escape((string)$rowWebsiteId) ?>">
+                                    <button class="w-button"
+                                            type="submit"
+                                            data-tone="danger"
+                                            data-variant="outline"
+                                            data-testid="b2b-membership-row-revoke"
+                                            onclick="return window.confirm(<?= \json_encode((string)__('确认撤销该客户在此站点的批发资格？'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>);">
+                                        <?= __('撤销') ?>
+                                    </button>
+                                </w:form>
+                            </div>
+                        <?php elseif ($appStatus === 'approved' && !$entitlementActive && $reauthorizeActionPath !== ''):
+                            $rowGroupOptionsJson = \json_encode(\array_values($rowGroupOptions), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]';
+                            $defaultGroupValue = (string)(($rowGroupOptions[0]['value'] ?? ($row['assigned_group_id'] ?? '')));
+                            $reauthGroupSelectId = 'b2b-app-reauth-group-' . \preg_replace('/[^a-zA-Z0-9_-]/', '', $applicationId !== '' ? $applicationId : ($rowCustomerId . '-' . $rowWebsiteId));
+                            ?>
+                            <div class="w-cluster" data-align="end" style="--w-gap:var(--weline-space-2); --w-min-width:18rem;" data-testid="b2b-membership-row-reauth">
+                                <w:form method="post" action="@backend-url{$reauthorizeActionPath}" style="display:contents;">
+                                    <input type="hidden" name="application_id" value="<?= $escape($applicationId) ?>">
+                                    <input type="hidden" name="website_id" value="<?= $escape((string)$rowWebsiteId) ?>">
+                                    <div style="--w-min-width:14rem; flex:1 1 14rem;" data-testid="b2b-membership-row-reauth-group">
+                                        <w:theme:search-select
+                                            id="<?= $escape($reauthGroupSelectId) ?>"
+                                            name="group_id"
+                                            value="<?= $escape($defaultGroupValue) ?>"
+                                            options-json="<?= $escape($rowGroupOptionsJson) ?>"
+                                            placeholder="@lang(搜索客户组代码或 ID)"
+                                            required="<?= $rowGroupOptions === [] ? 'false' : 'true' ?>"
+                                            clearable="true"
+                                            disabled="<?= $rowGroupOptions === [] ? 'true' : 'false' ?>"
+                                            min-chars="0"
+                                        />
+                                    </div>
+                                    <button class="w-button"
+                                            type="submit"
+                                            data-tone="primary"
+                                            data-testid="b2b-membership-row-reauthorize"
+                                            <?= $rowGroupOptions === [] || $applicationId === '' ? 'disabled' : '' ?>><?= __('重新授权') ?></button>
+                                </w:form>
+                            </div>
+                        <?php elseif ($appStatus === 'approved' && !$entitlementActive): ?>
+                            <span class="w-text" data-tone="muted" data-size="sm" data-testid="b2b-membership-row-revoked-note">
+                                <?= __('资格已撤销') ?><?php
+                                    $histGroup = trim((string)($row['assigned_group_id'] ?? ''));
+                                    echo $histGroup !== '' ? (' · ' . $display($histGroup)) : '';
+                                ?>
+                            </span>
+                        <?php else: ?>
+                            <span class="w-text" data-tone="muted" data-size="sm"><?= $display($row['assigned_group_id'] ?? '—') ?></span>
+                        <?php endif; ?>
+                        <?php if ($deleteApplicationActionPath !== '' && $applicationId !== ''): ?>
+                            <acl source="<?= $escape($deleteApplicationAclSource) ?>">
+                                <w:form method="post" action="@backend-url{$deleteApplicationActionPath}" style="display:contents;" data-testid="b2b-membership-row-delete-form">
+                                    <input type="hidden" name="application_id" value="<?= $escape($applicationId) ?>">
+                                    <input type="hidden" name="website_id" value="<?= $escape((string)$rowWebsiteId) ?>">
+                                    <button class="w-button"
+                                            type="submit"
+                                            data-tone="danger"
+                                            data-variant="ghost"
+                                            data-testid="b2b-membership-row-delete"
+                                            onclick="return window.confirm(<?= $deleteApplicationConfirm ?>);">
+                                        <?= __('删除') ?>
+                                    </button>
+                                </w:form>
+                            </acl>
+                        <?php endif; ?>
+                        </div>
+                    </td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table></div>
+        <?php if ($visibleAppRows === 0): ?>
+            <div class="w-empty" data-testid="b2b-applications-scope-empty" style="--w-mt:var(--weline-space-3);">
+                <div class="w-text" data-tone="muted"><?= __('当前站点范围下暂无身份申请。') ?></div>
+            </div>
+        <?php endif; ?>
         <?php else: ?>
         <div class="w-table-wrap"><table class="w-table" data-w-vertical="middle" style="--w-mb:0;"><thead><tr><?php foreach (array_keys($dataset['rows'][0]) as $field): ?><th><?= $escape($field) ?></th><?php endforeach; ?></tr></thead><tbody><?php foreach ($dataset['rows'] as $row): ?><tr><?php foreach ($row as $value): ?><td><?= $display($value) ?></td><?php endforeach; ?></tr><?php endforeach; ?></tbody></table></div>
         <?php endif; ?>
         <?php endif; ?>
     </div></div><?php endforeach; ?>
+    <?php if ($kind === 'membership-application' && $revokeActionPath !== ''): ?>
+    <div class="w-card" data-testid="b2b-membership-revoke-panel" style="--w-mb:var(--weline-space-4);">
+        <div class="w-card__header"><h5 style="--w-mb:0;"><?= __('快速撤销（可多选站点）') ?></h5></div>
+        <div class="w-card__body">
+            <w:form method="post" action="@backend-url{$revokeActionPath}">
+                <div class="w-grid" style="--w-gap:var(--weline-space-4);">
+                    <div style="--w-span-md:4;">
+                        <label class="w-field__label"><?= __('客户') ?></label>
+                        <w:customer:admin:select
+                            id="b2b-cc-revoke-customer"
+                            name="customer_id"
+                            value="customerSelectValue"
+                            display="customerSelectDisplay"
+                            required="true"
+                            clearable="true"
+                            placeholder="@lang(搜索客户姓名或邮箱)"
+                        />
+                    </div>
+                    <div style="--w-span-md:5;">
+                        <label class="w-field__label"><?= __('网站（可多选）') ?></label>
+                        <w:websites:website:select
+                            id="b2b-cc-revoke-website"
+                            name="website_ids"
+                            value="revokeWebsiteIdsValue"
+                            display="revokeWebsiteIdsDisplay"
+                            options="websiteSelectOptionsJson"
+                            multiple="true"
+                            allow-empty="false"
+                            empty-label="@lang(请选择站点)"
+                            placeholder="@lang(搜索站点名称或编码)"
+                        />
+                    </div>
+                    <div style="--w-span-md:12;">
+                        <p class="w-text" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-3);">
+                            <?= __('撤销后新批发交易失败；已生成挂单按原状态机继续。不改写申请审计行。多选站点将一次性撤销所选范围。') ?>
+                        </p>
+                        <div class="w-cluster" data-align="end" data-testid="b2b-<?= $escape($code) ?>-form-actions">
+                            <button class="w-button" type="submit" data-testid="b2b-membership-revoke-submit" data-tone="danger"><?= __('撤销批发资格') ?></button>
+                        </div>
+                    </div>
+                </div>
+            </w:form>
+        </div>
+    </div>
+    <?php endif; ?>
 </section>
