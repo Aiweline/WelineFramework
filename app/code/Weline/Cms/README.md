@@ -17,7 +17,7 @@ The target identity is fixed:
 - `target_type`: `cms_page`
 - `target_id`: CMS `page_id`
 
-`layout_type` is resolved from the page **PageKind** (default kind → `cms_page`). Modules may inject additional kinds via the `PageKind` extension point so a page with `path_group=help` binds Theme layout `help` without inventing a new Theme target type.
+`layout_type` is resolved from the page **PageKind** (default kind → `cms_page`). Modules may inject additional kinds via the `PageKind` extension point so a page with `path_group=faq` binds Theme layout `faq` without inventing a new Theme target type.
 
 Theme/Meta page-level identify data for default CMS pages:
 
@@ -25,11 +25,11 @@ Theme/Meta page-level identify data for default CMS pages:
 theme.{area}.targets.cms_page.{page_id}.layouts.cms_page.{layout_option}
 ```
 
-Help-kind pages use `layouts.help.{layout_option}` under the same `cms_page` target id.
+Faq-kind pages use `layouts.faq.{layout_option}` under the same `cms_page` target id.
 
 ## PageKind extension
 
-Declared in `extends.php` as `PageKind` (`CmsPageKindInterface`). Built-in `DefaultCmsPageKind` (`code=cms`) always applies when no matching `path_group` is registered. Cross-module kinds (e.g. Help) register under `extends/module/Weline_Cms/PageKind/`.
+Declared in `extends.php` as `PageKind` (`CmsPageKindInterface`). Built-in `DefaultCmsPageKind` (`code=cms`) always applies when no matching `path_group` is registered. Cross-module kinds (e.g. Faq) register under `extends/module/Weline_Cms/PageKind/`.
 
 Query: `w_query('cms', 'listPageKinds', [])`.
 
