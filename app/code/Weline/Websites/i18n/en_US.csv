@@ -10,6 +10,12 @@
 "域名解析结果偏离本站（如 DNS 指向变更）时触发，用于发送通知提醒管理员。","Triggered when the domain resolution result deviates from this site (e.g., DNS pointing changes), used to send notifications to alert the administrator."
 "一站式配置 - 绑定 DNS","One-stop configuration - Bind DNS"
 "一站式配置执行 DNS 绑定步骤时触发，观察者可在此创建 Zone/记录。","Triggered when the one-stop configuration performs the DNS binding step, where observers can create zones/records."
+域名到期提醒邮件,域名到期提醒邮件
+"通知主题 domain_expiring 的邮件渠道","通知主题 domain_expiring 的邮件渠道"
+域名转移通知邮件,域名转移通知邮件
+"通知主题 domain_transfer 的邮件渠道","通知主题 domain_transfer 的邮件渠道"
+域名池解析偏离邮件,域名池解析偏离邮件
+"通知主题 domain_pool_resolve_off_local 的邮件渠道","通知主题 domain_pool_resolve_off_local 的邮件渠道"
 站点,Site
 本地域名就绪查询器不支持的操作：%{1},"Operation not supported by local domain ready query: %{1}"
 "AI 建站本地域名就绪检查","AI website building local domain name readiness check"
@@ -1430,6 +1436,22 @@ lock,lock
 停用,Disabled
 "SalesChannel 列表","SalesChannel list"
 点击选择时区,"Click to select timezone"
+"爬虫拦截 / 放行","爬虫拦截 / 放行"
+"由本网站自行管理爬虫策略。每条可选择拦截或放行；命中即拒绝本次请求，不额外封 IP。保存后同步到 WLS 对应域名。","由本网站自行管理爬虫策略。每条可选择拦截或放行；命中即拒绝本次请求，不额外封 IP。保存后同步到 WLS 对应域名。"
+启用本站爬虫策略,启用本站爬虫策略
+查找,查找
+上一页,上一页
+下一页,下一页
+添加条目,添加条目
+名称,名称
+"UA 正则","UA 正则"
+动作,动作
+说明,说明
+"名称 / UA / 说明","名称 / UA / 说明"
+放行,放行
+拦截,拦截
+无匹配条目,无匹配条目
+"第 {page}/{pages} 页 · 共 {total} 条","第 {page}/{pages} 页 · 共 {total} 条"
 "Store 商品复制向导","Store Product Copy Wizard"
 "目标 Website 的活动 Store 默认全部选中，可按需取消；提交前强制 preview。库存默认 0，需显式勾选才复制数量。","目标 Website 的活动 Store 默认全部选中，可按需取消；提交前强制 preview。库存默认 0，需显式勾选才复制数量。"
 持久化事务模式,"Persistence transaction model"

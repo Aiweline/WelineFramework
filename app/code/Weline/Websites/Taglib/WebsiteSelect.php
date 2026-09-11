@@ -113,7 +113,7 @@ if ($__wss_placeholder === '') {
 PHP;
             $html[] = '<style>';
             $html[] = '.weline-website-select{position:relative;width:100%;min-width:0;color:var(--weline-theme-text,var(--backend-color-text-primary,#162033))}';
-            $html[] = '.weline-website-trigger{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;box-sizing:border-box;min-height:var(--weline-control-height);height:var(--weline-control-height);padding:0 var(--weline-space-3);background:var(--weline-theme-surface,var(--backend-color-card-bg,#fff));border:1px solid var(--weline-theme-border-strong,var(--backend-color-border-default,#dbe3ef));border-radius:var(--weline-radius-md,6px);color:var(--weline-theme-text,var(--backend-color-text-primary,#162033));text-align:left;cursor:pointer}';
+            $html[] = '.weline-website-trigger{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;box-sizing:border-box;min-height:var(--weline-control-height);padding:0 var(--weline-space-3);background:var(--weline-theme-surface,var(--backend-color-card-bg,#fff));border:1px solid var(--weline-theme-border-strong,var(--backend-color-border-default,#dbe3ef));border-radius:var(--weline-radius-md,6px);color:var(--weline-theme-text,var(--backend-color-text-primary,#162033));text-align:left;cursor:pointer;line-height:1.2}';
             $html[] = '.weline-website-trigger:hover,.weline-website-select.is-open .weline-website-trigger{border-color:var(--weline-theme-primary,var(--backend-color-primary,#556ee6));box-shadow:var(--weline-theme-focus-ring,0 0 0 3px color-mix(in srgb,var(--weline-theme-primary,#556ee6) 26%,transparent));outline:0}';
             $html[] = '.weline-website-tags{display:flex;flex-wrap:wrap;gap:6px;align-items:center;flex:1;min-width:0;max-height:72px;overflow-x:auto;overflow-y:auto;-webkit-overflow-scrolling:touch}';
             $html[] = '.weline-website-empty{color:var(--weline-theme-text-subtle,var(--backend-color-text-secondary,#64748b));font-size:13px}';
@@ -123,10 +123,10 @@ PHP;
             $html[] = '.weline-website-tag-meta{color:var(--weline-theme-text-muted,var(--backend-color-text-secondary,#64748b));font-size:11px;padding:1px 6px;border:1px solid var(--weline-theme-border,var(--backend-color-border-default,#dbe3ef));border-radius:var(--weline-radius-round,999px);background:var(--weline-theme-surface-muted,var(--backend-color-bg-secondary,#f8fafc))}';
             $html[] = '.weline-website-tag-remove{margin-left:2px;cursor:pointer;opacity:.75;font-size:14px;line-height:1;color:inherit}';
             $html[] = '.weline-website-tag-remove:hover{opacity:1;color:var(--weline-theme-danger,#dc3545)}';
-            $html[] = '.weline-website-actions{display:inline-flex;align-items:center;gap:4px;flex:0 0 auto}';
-            $html[] = '.weline-website-clear{border:0;background:transparent;color:var(--weline-theme-text-subtle,#94a3b8);cursor:pointer;font-size:16px;line-height:1;padding:0}';
+            $html[] = '.weline-website-actions{display:inline-flex;align-items:center;justify-content:center;gap:4px;flex:0 0 auto;align-self:center;min-height:1.25rem}';
+            $html[] = '.weline-website-clear{display:inline-flex;align-items:center;justify-content:center;border:0;background:transparent;color:var(--weline-theme-text-subtle,#94a3b8);cursor:pointer;font-size:16px;line-height:1;padding:0;width:1.25rem;height:1.25rem}';
             $html[] = '.weline-website-clear:hover{color:var(--weline-theme-danger,#ef4444)}';
-            $html[] = '.weline-website-chevron{color:var(--weline-theme-text-muted,var(--backend-color-text-secondary,#64748b));font-size:18px;line-height:1;flex:0 0 auto}';
+            $html[] = '.weline-website-chevron{display:inline-flex;align-items:center;justify-content:center;color:var(--weline-theme-text-muted,var(--backend-color-text-secondary,#64748b));font-size:12px;line-height:1;flex:0 0 auto;width:1.25rem;height:1.25rem}';
             $html[] = '.weline-website-dropdown{display:none;padding:8px;background:var(--weline-theme-surface-raised,var(--weline-theme-surface,var(--backend-color-card-bg,#fff)));border:1px solid var(--weline-theme-border,var(--backend-color-border-default,#dbe3ef));border-radius:var(--weline-radius-lg,10px);box-shadow:var(--weline-theme-shadow-md,0 16px 36px rgba(15,23,42,.16));box-sizing:border-box;overflow:hidden;color:var(--weline-theme-text,var(--backend-color-text-primary,#162033))}';
             $html[] = '.weline-website-search{display:block;width:100%;min-height:36px;padding:6px 10px;margin:0 0 7px;border:1px solid var(--weline-theme-border,var(--backend-color-border-default,#dbe3ef));border-radius:var(--weline-radius-sm,6px);background:var(--weline-theme-surface-muted,var(--backend-color-bg-secondary,#f8fafc));color:var(--weline-theme-text,var(--backend-color-text-primary,#162033));box-sizing:border-box;flex:0 0 auto}';
             $html[] = '.weline-website-search::placeholder{color:var(--weline-theme-text-subtle,var(--backend-color-text-secondary,#64748b))}';
@@ -150,7 +150,7 @@ PHP;
             if ($clearable) {
                 $html[] = '        <span class="weline-website-clear" id="<?= htmlspecialchars($__wss_id, ENT_QUOTES, \'UTF-8\') ?>_clear" title="' . htmlspecialchars($clearTitle, ENT_QUOTES, 'UTF-8') . '" hidden>&times;</span>';
             }
-            $html[] = '        <span class="weline-website-chevron" aria-hidden="true">⌄</span>';
+            $html[] = '        <span class="weline-website-chevron" aria-hidden="true">▾</span>';
             $html[] = '      </span>';
             $html[] = '  </button>';
             $formAttrHtml = $formAttr !== ''
