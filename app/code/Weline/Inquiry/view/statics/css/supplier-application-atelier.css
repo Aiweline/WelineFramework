@@ -229,14 +229,14 @@
 
 .w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__field {
     display: grid;
-    gap: 0.35rem;
+    gap: 0;
     margin: 0;
+    --weline-theme-field-label-bg: #fff;
 }
 
-.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__field > label,
-.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__field--country .w-address__label {
-    font-size: 0.8125rem;
-    font-weight: 650;
+.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__field.w-field > .w-field__label,
+.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__field--country .w-field__label {
+    /* Theme Outlined notch owns label placement; keep atelier ink only. */
     color: var(--ink-soft);
 }
 
@@ -246,10 +246,10 @@
 .w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__field--country .w-address__control {
     box-sizing: border-box;
     width: 100%;
-    min-height: 2.5rem;
+    min-height: var(--weline-control-height, 2.5rem);
     padding: 0.55rem 0.7rem;
     border: 1px solid var(--line);
-    border-radius: 0;
+    border-radius: var(--weline-radius-md, 0.5rem);
     background: #fff;
     box-shadow: none;
     color: var(--ink);
