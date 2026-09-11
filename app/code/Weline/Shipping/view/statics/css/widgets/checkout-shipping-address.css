@@ -74,9 +74,26 @@
   background: #fffaf0;
 }
 
+/* 禁运：红框优先于选中橙框（主题 danger token） */
+.w-shipping-checkout-address__card.is-embargoed {
+  border-color: var(--color-danger, var(--color-error));
+  box-shadow: 0 0 0 1px var(--color-danger, var(--color-error));
+  background: var(--color-danger-bg-subtle, var(--color-error-light, rgba(166, 61, 61, 0.08)));
+}
+
+.w-shipping-checkout-address__card.is-embargoed.is-selected {
+  border-color: var(--color-danger, var(--color-error));
+  box-shadow: 0 0 0 1px var(--color-danger, var(--color-error));
+  background: var(--color-danger-bg-subtle, var(--color-error-light, rgba(166, 61, 61, 0.08)));
+}
+
 .w-shipping-checkout-address__radio {
   margin-top: 0.2rem;
   accent-color: #e77600;
+}
+
+.w-shipping-checkout-address__card.is-embargoed .w-shipping-checkout-address__radio {
+  accent-color: var(--color-danger, var(--color-error));
 }
 
 .w-shipping-checkout-address__card-body {
@@ -96,6 +113,17 @@
   color: var(--sca-muted);
   line-height: 1.4;
   word-break: break-word;
+}
+
+.w-shipping-checkout-address__card-embargo {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--color-danger-text-emphasis, var(--color-danger, var(--color-error)));
+}
+
+.w-shipping-checkout-address__card-embargo[hidden] {
+  display: none !important;
 }
 
 .w-shipping-checkout-address__card-edit,
@@ -143,18 +171,24 @@
 }
 
 .w-shipping-checkout-address__field {
-  display: grid;
-  gap: 0.35rem;
   min-width: 0;
+  --weline-theme-field-label-bg: #fff;
 }
 
-.w-shipping-checkout-address__field .w-form-label {
-  font-size: 0.8125rem;
+.w-shipping-checkout-address__field.w-field {
+  gap: 0;
+}
+
+.w-shipping-checkout-address__field .w-field__label {
+  /* notch 态加粗；resting 由 foundation floating 接管字重/色 */
   font-weight: 700;
-  color: var(--sca-text);
 }
 
-.w-shipping-checkout-address__field .w-form-control,
+.w-shipping-checkout-address__field:has(:is(.w-input, .w-textarea):placeholder-shown):not(:focus-within) > .w-field__label {
+  font-weight: 500;
+  color: var(--sca-muted);
+}
+
 .w-shipping-checkout-address__field .w-input {
   border: 1px solid var(--sca-border-strong);
   border-radius: 4px;
@@ -165,7 +199,6 @@
   box-shadow: 0 1px 2px rgba(15, 17, 17, 0.08) inset;
 }
 
-.w-shipping-checkout-address__field .w-form-control:focus,
 .w-shipping-checkout-address__field .w-input:focus {
   outline: 0;
   border-color: var(--sca-focus);
