@@ -8,7 +8,7 @@ window.WelineModulesConfig.moduleAliases = window.WelineModulesConfig.moduleAlia
 Object.assign(window.WelineModulesConfig.modules, {
     checkoutCoupon: {
         paths: [
-            "Weline_Marketing::js/widgets/checkout-coupon.js?v=20260908-coupon-restore1"
+            "Weline_Marketing::js/widgets/checkout-coupon.js?v=20260910-coupon-visible1"
         ],
         globalVar: null,
         description: "结账/迷你购物车优惠券部件"

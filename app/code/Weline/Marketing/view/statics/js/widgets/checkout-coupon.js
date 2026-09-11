@@ -305,9 +305,14 @@
                     syncAppliedState(code, discount);
                     return quoteResponse;
                 }
+                // restoreOnly: keep the server session coupon visible even when quote is 0,
+                // otherwise freezeQuote still applies discount_fixed_amount while the field looks empty.
+                if (restoreOnly) {
+                    syncAppliedState(code, null);
+                    return quoteResponse;
+                }
                 clearAppliedState();
-                // Hydrate/restore must never wipe the toc session coupon on a transient 0 quote.
-                if (!restoreOnly && resolveCartType(root, type) === 'toc') {
+                if (resolveCartType(root, type) === 'toc') {
                     return client.removeCoupon(withCartType(root, {}, type), { silent: true }).then(function () {
                         return quoteResponse;
                     }).catch(function () {
