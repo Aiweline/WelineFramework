@@ -12,5 +12,12 @@ Object.assign(window.WelineModulesConfig.modules, {
         ],
         globalVar: "WelineWishlistModule",
         description: "心愿单列表页交互"
+    },
+    wishlistHeader: {
+        paths: [
+            "Weline_Wishlist::js/wishlist-header.js"
+        ],
+        globalVar: "WelineWishlistHeaderModule",
+        description: "顶栏收藏角标水合（SSR 游客空角标）"
     }
 });

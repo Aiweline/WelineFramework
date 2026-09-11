@@ -17,10 +17,8 @@
  * @param show_count {default=true,type="bool",label="显示数量"}
  */
 
-use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Helper\WidgetI18n;
 use Weline\Theme\Helper\WidgetUiScope;
-use Weline\Wishlist\Service\WishlistService;
 
 $scope = WidgetUiScope::forWidget('wishlist-icon');
 $wc = $scope->cssClass;
@@ -29,12 +27,9 @@ $esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES,
 $showCount = (bool)($this->getData('show_count') ?? true);
 $isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
 
-/** @var WishlistService $wishlistService */
-$wishlistService = ObjectManager::getInstance(WishlistService::class);
-$wishlistCount = (int)($wishlistService->count()['wishlist_count'] ?? 0);
-if ($isPreviewMode && $wishlistCount <= 0) {
-    $wishlistCount = 2;
-}
+// Always SSR an empty badge. Session wishlist count is applied client-side by
+// wishlistHeader (wishlist.count) so FPC / guest chrome never paints shopper-specific totals.
+$wishlistCount = $isPreviewMode ? 2 : 0;
 
 ?>
 
@@ -42,7 +37,9 @@ if ($isPreviewMode && $wishlistCount <= 0) {
          weline-code="<?= $esc($scope->code) ?>"
          data-uid="<?= $esc($scope->uid) ?>"
          data-js-ns="<?= $esc($scope->jsNs) ?>"
+         data-weline-load="api,wishlistHeader"
          data-w-wishlist-icon="1"
+         data-header-wishlist-ssr="guest-v1"
          data-wishlist-total="<?= $wishlistCount ?>">
     <a href="@url{'customer/account/index'}#wishlist" class="wishlist-link" title="<?= $esc(WidgetI18n::label('我的收藏')) ?>">
         <span class="wishlist-icon-wrapper">
