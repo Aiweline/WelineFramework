@@ -52,4 +52,21 @@ interface CartStoreInterface
      * }>
      */
     public function listByScopeKey(string $scopeKey): array;
+
+    /**
+     * Lookup guest carts by full token or suffix (min 4 chars). Optional scope filter.
+     *
+     * @return list<array{
+     *   scope_key:string,
+     *   currency:string,
+     *   owner_kind:string,
+     *   owner_id:string,
+     *   guest_token:?string,
+     *   cart_type?:string,
+     *   expires_at?:?string,
+     *   updated_at?:?string,
+     *   items:list<array<string,mixed>>
+     * }>
+     */
+    public function listByGuestTokenHint(string $hint, ?string $scopeKey = null): array;
 }

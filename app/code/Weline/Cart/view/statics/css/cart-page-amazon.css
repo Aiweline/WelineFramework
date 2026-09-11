@@ -13,7 +13,8 @@
     --cart-cta-bg: var(--color-primary, #b84a3c);
     --cart-cta-bg-hover: var(--color-primary-hover, #963b30);
     --cart-cta-border: var(--color-primary-dark, #963b30);
-    --cart-cta-text: var(--color-on-primary, #f7f4ef);
+    /* Solid primary fills need max readable on-fill text (warm cream alone looks muddy on cinnabar). */
+    --cart-cta-text: var(--color-on-primary, var(--color-text-inverse, #ffffff));
     --cart-secondary-bg: linear-gradient(180deg, #f7f8f8 0%, #e3e6e6 100%);
     --cart-secondary-border: #adb1b8;
     --cart-secondary-text: #0f1111;
@@ -146,6 +147,69 @@
 .weline-cart-shell--amazon .weline-cart-shell__continue:hover,
 .weline-cart-shell--amazon .weline-cart-shell__retry:hover {
     background: linear-gradient(180deg, #e7e9e9 0%, #d5d9d9 100%);
+}
+
+/* Empty-state:「浏览商品」+ sibling twin secondary button（右置，无说明卡） */
+.weline-cart-shell--amazon .weline-cart-shell__empty-lead {
+    max-width: 22rem;
+    color: var(--cart-text-secondary);
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.weline-cart-shell--amazon .weline-cart-shell__empty-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: var(--weline-space-3, 0.75rem);
+    width: min(100%, 28rem);
+    margin-top: var(--weline-space-1, 0.25rem);
+}
+
+.weline-cart-shell--amazon .weline-cart-shell__siblings {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: inherit;
+}
+
+.weline-cart-shell--amazon .weline-cart-shell__siblings[hidden] {
+    display: none !important;
+}
+
+.weline-cart-shell--amazon .weline-cart-shell__sibling-gate {
+    color: var(--cart-text-secondary);
+    font-size: 13px;
+    font-weight: 400;
+}
+
+.weline-cart-shell--amazon .weline-cart-shell__sibling-cta {
+    box-sizing: border-box;
+    min-height: 31px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 14px;
+    border: 1px solid var(--cart-secondary-border);
+    border-radius: 8px;
+    background: var(--cart-secondary-bg);
+    color: var(--cart-secondary-text);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 400;
+    text-decoration: none;
+    cursor: pointer;
+    box-shadow: 0 2px 5px rgba(15, 17, 17, .15);
+}
+
+.weline-cart-shell--amazon .weline-cart-shell__sibling-cta:hover {
+    background: linear-gradient(180deg, #e7e9e9 0%, #d5d9d9 100%);
+}
+
+.weline-cart-shell--amazon .weline-cart-shell__sibling-cta:focus-visible {
+    outline: 2px solid var(--cart-link, var(--color-link, #007185));
+    outline-offset: 2px;
 }
 
 .weline-cart-shell--amazon .weline-cart-shell__grid {

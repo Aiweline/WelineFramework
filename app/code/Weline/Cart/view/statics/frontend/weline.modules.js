@@ -8,8 +8,8 @@ window.WelineModulesConfig.moduleAliases = window.WelineModulesConfig.moduleAlia
 Object.assign(window.WelineModulesConfig.modules, {
     cart: {
         paths: [
-            "Weline_Cart::js/cart.js",
-            "Weline_Cart::js/widgets/product-purchase-actions.js?v=20260909-purchase-panel8"
+            "Weline_Cart::js/cart.js?v=20260910-payment-lifecycle-listen3",
+            "Weline_Cart::js/widgets/product-purchase-actions.js?v=20260910-cart-type-pref"
         ],
         globalVar: "WelineCartPurchaseActions",
         load: "defer",

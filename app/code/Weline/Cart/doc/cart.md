@@ -28,7 +28,7 @@
 ## 售卖类型 `cart_type`（ToC/ToB 一期合同）
 
 - **CommerceCartType SPI + Registry**：Cart 内置 `toc`；**不**依赖 `Weline_B2B`。B2B 启用后向本 Registry 注册 `tob`（须同时向 Order Registry 注册；单边禁止）。
-- **权威**：写入前 code ∈ Registry；会话/`selling_mode` 只是偏好，须经 `SellingTypeResolver`；禁止请求体直写未解析 `cart_type`；与行级 `business_code` 正交。**未注册偏好**（含 Provider 已卸载的残留 `tob`）解析时 **fail-soft 到 `toc`**，不抛热路径 500。
+- **权威**：写入前 code ∈ Registry；会话/`selling_mode` 只是偏好，须经 `SellingTypeResolver`；禁止请求体直写未解析 `cart_type`；与行级 `business_code` 正交。**默认 `toc`（零售，无需登录）**。**未注册偏好**（含 Provider 已卸载的残留 `tob`）解析时 **fail-soft 到 `toc`**，不抛热路径 500。guest+tob **加购/读指定类型** fail-closed；**访客 HTML/购物车页** 对残留 tob 偏好静默 `toc`，不把「该售卖类型需要登录」贴到零售车体。
 - **可选 membership**：`Api/CommerceTypeMembershipCheckerInterface` + `CommerceTypeMembershipGate`（RuntimeProviderResolver）；B2B provides 实现。未配置时非 toc fail closed；Cart **不** import B2B。
 - **分车键**：由 **Scope + owner** 升级为 **Scope + owner + registered_cart_type**。UI 切换类型只切换当前车视图，**不合并**异型车；同 Scope 可并存 toc 车与 tob 车。
 - **旧键迁移**：无 `cart_type` 的历史键视为 **`toc`**，读路径一次迁移写入新键；新 tob 车只用新键。
@@ -53,13 +53,33 @@
 
 ## 持久化与登录合车（TEST-P2E-02）
 
+### 三平面（Identity / Persistence / Presentation）
+
+| 平面 | 权威 | 规则 |
+|---|---|---|
+| Identity | HttpOnly Cookie `weline_cart_guest_token` | JS `guest_session` 只镜像；`getCart` 参数与 Cookie 不一致时以 Cookie 为准；`issueGuestToken` 复用 Cookie，禁止无故轮转 |
+| Persistence | `CartDbStore` → `weline_cart` | 游客 15 天 TTL；客户永久；写失败 `cart_persist_failed`；toc/tob 分车键 |
+| Presentation | `summary_cache.{toc\|tob}` | 仅 soft paint；有货须 token 匹配 + 同 TTL；**空桶不得短路 return**（须回源）；paint 有货后可先画再回源；**禁止**无 token 冒充有货；sibling 有货时须失效对侧空桶 |
+
+### 空车交叉推荐 `sibling_carts`
+
+- 当前 `cart_type` 为空（或读路径闸门空壳）时，`getCart` / `storefrontSummary` 附带只读 `sibling_carts[]`：`cart_type` / `label` / `item_count` / `cart_count` / `switchable` / `gate`
+- 同 Scope + 同 owner，枚举 `CommerceCartTypeRegistry::codes()` 中其它类型；`item_count=0` 不返回
+- 访客读 `tob`：软空壳 + `gate_reason=login_required` + 可推荐有货 `toc`（突变仍 fail-closed）
+- 店面空态须渲染 sibling CTA；禁止 sibling 有货时只提示「空的」
+- 默认不自动跳转页签，只推荐 + 一键切换
+- 店面切换 Event（Cart 拥有，解耦 B2B）：`weline:cart-type-changed`；`WelineCart.requestCartType(type)`；可选 chrome `[data-cart-type-option]`。Theme/购物车页禁止直点 B2B `data-b2b-*`；B2B `setMode` 适配派发/监听该 Event
+- `requestCartType({ forceNetwork:true })` **必须**派 Event（跳过 chrome 软点）；B2B 适配 `setMode(..., { emit:false })`，避免无 FN 的二次 Event 被 `preferCache` 盖住有货 sibling
+- 切类型 `preferCache` **只**可短路有货摘要；空摘要必须 `getCart` 回源。渲染 `sibling_carts` 有货时清除对侧空桶，禁止「批发说零售有 N 件 / 零售页空车」串态
+
 - Store：`CartDbStore`（表 `weline_cart`，跨 Worker / 跨进程权威持久化）；单测用 `CartMemoryStore`；`CartCacheStore` 仅为遗留非默认
 - 过期策略（`CartPersistencePolicy`）：
   - **游客**：`expires_at = now + 15 天`；Cookie `weline_cart_guest_token`、前端 `weline.cart.guest_session` 同 TTL；临近过期 `renewGuestSession` 再续 15 天；读路径过期行删除
   - **登录客户**：`expires_at = NULL`（永久）；加购/改删/合车写路径刷新 `updated_at`
 - 写失败抛 `cart_persist_failed`（禁止假成功加购）
 - Cookie：`weline_cart_guest_token`（`issueGuestToken` 写入）
-- 只读 `getCart`/`getCart`：游客尚未持有 `guest_token`（无 Cookie/参数）时返回空车成功摘要，不抛 `cart_guest_token_required`；加购/改删/合车仍必须有 token
+- 只读 `getCart`：游客尚未持有 `guest_token`（无 Cookie/参数）时返回空车成功摘要，不抛 `cart_guest_token_required`；加购/改删/合车仍必须有 token
+- **后台 Inspection**：`scope_key` 与/或 `guest_token`（完整或末 4+ 位）追查；展示 `expires_at` / `cart_type`
 - Observer：`Weline_Customer_Account_Login::login_after` → `LoginMergeGuestCart`
 - Query：`w_query('cart','add'|'mergeGuest'|'getCart'|'issueGuestToken'|…)`
 - Query 的 `mergeGuest` 仅允许当前已登录客户；浏览器传入的

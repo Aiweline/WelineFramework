@@ -175,8 +175,17 @@ class CartQueryProvider implements QueryProviderInterface
             $scope = $this->scopeResolver->fromParams($params);
             $guestToken = isset($params['guest_token']) ? (string)$params['guest_token'] : null;
             $customerId = $this->currentCustomer->currentCustomerId();
-            if ($customerId === null && ($guestToken === null || trim($guestToken) === '')) {
-                $guestToken = (string)Cookie::get(CartService::GUEST_TOKEN_COOKIE);
+            if ($customerId === null) {
+                $cookieToken = trim((string)Cookie::get(CartService::GUEST_TOKEN_COOKIE));
+                $paramToken = trim((string)($guestToken ?? ''));
+                // Cookie is the server-owned guest cart authority when both are present.
+                if ($cookieToken !== '' && ($paramToken === '' || $paramToken !== $cookieToken)) {
+                    $guestToken = $cookieToken;
+                } elseif ($paramToken !== '') {
+                    $guestToken = $paramToken;
+                } elseif ($cookieToken !== '') {
+                    $guestToken = $cookieToken;
+                }
             }
             $summary = $this->cartService->getCart(
                 $scope,

@@ -115,6 +115,31 @@ final class CartCacheStore implements CartStoreInterface
         return $out;
     }
 
+    public function listByGuestTokenHint(string $hint, ?string $scopeKey = null): array
+    {
+        $hint = trim($hint);
+        if (strlen($hint) < 4) {
+            return [];
+        }
+        $scope = $scopeKey !== null ? trim($scopeKey) : '';
+        if ($scope === '') {
+            // Legacy cache has no global guest index; require scope_key.
+            return [];
+        }
+        $out = [];
+        foreach ($this->listByScopeKey($scope) as $cart) {
+            $token = trim((string)($cart['guest_token'] ?? $cart['owner_id'] ?? ''));
+            if ($token === '') {
+                continue;
+            }
+            if ($token === $hint || str_ends_with($token, $hint)) {
+                $out[] = $cart;
+            }
+        }
+
+        return $out;
+    }
+
     private function payloadKey(string $cartKey): string
     {
         return 'cart:' . $cartKey;

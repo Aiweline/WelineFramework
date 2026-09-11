@@ -153,13 +153,43 @@ final class CartService
                 'grand_total' => 0.0,
                 'subtotal_minor' => 0,
                 'grand_total_minor' => 0,
+                'sibling_carts' => [],
             ];
         }
 
         $scope = $scopeResolver instanceof CartScopeResolver
             ? $scopeResolver->fromParams([])
             : ScopeIdentity::channel(0, 'default', 'default', 'default', ScopeIdentity::MODE_NORMAL);
-        $summary = $this->getCart($scope, $guestToken, $customerId, $this->preferenceFromParams([]));
+        $preference = $this->preferenceFromParams([]);
+        // Guests have no tob cart. Leftover selling_mode=tob must not resolve tob
+        // (and must not paint 「该售卖类型需要登录」 onto the default retail cart).
+        if ($customerId === null
+            && \strtolower(\trim((string)$preference)) === 'tob'
+        ) {
+            $preference = CommerceCartTypeRegistry::CODE_TOC;
+        }
+        try {
+            $summary = $this->getCart($scope, $guestToken, $customerId, $preference);
+        } catch (CartConflictException $e) {
+            // HTML /cart and header SSR must not 500 when selling_mode cookie is tob
+            // while the shopper is still a guest. Mutations stay fail-closed via getCart/add.
+            $code = $e->errorCode();
+            if ($code !== SellingTypeResolver::ERROR_LOGIN_REQUIRED
+                && $code !== SellingTypeResolver::ERROR_MEMBERSHIP_REQUIRED
+            ) {
+                throw $e;
+            }
+            $summary = $this->getCart(
+                $scope,
+                $guestToken,
+                $customerId,
+                CommerceCartTypeRegistry::CODE_TOC,
+            );
+            $summary['gate_reason'] = $code;
+            $summary['preferred_cart_type'] = (string)$preference;
+            // Keep retail body quiet — wholesale gate copy is not a retail cart error.
+            $summary['message'] = '';
+        }
         $items = \is_array($summary['items'] ?? null) ? $summary['items'] : [];
         foreach ($items as &$item) {
             if (!\is_array($item)) {
@@ -522,20 +552,166 @@ final class CartService
     ): array {
         // Read-only: mini-cart / storefront may poll before issueGuestToken.
         if (($customerId === null || $customerId <= 0) && trim((string)$guestToken) === '') {
-            $resolved = $this->resolveCartType($cartTypePreference, null, $scope);
-            return $this->summary(
-                $this->newCart($scope, null, null, '', $resolved['code']),
+            $preferred = strtolower(trim((string)$cartTypePreference));
+            $cartType = $preferred !== '' && $this->typeRegistry->has($preferred)
+                ? $preferred
+                : CommerceCartTypeRegistry::CODE_TOC;
+            $summary = $this->summary(
+                $this->newCart($scope, null, null, '', $cartType),
                 true,
                 '',
                 [],
                 $scope,
             );
+            $summary['sibling_carts'] = [];
+
+            return $summary;
         }
-        $resolved = $this->resolveCartType($cartTypePreference, $customerId, $scope);
-        $cartType = $resolved['code'];
+
+        try {
+            $resolved = $this->resolveCartType($cartTypePreference, $customerId, $scope);
+            $cartType = $resolved['code'];
+        } catch (CartConflictException $e) {
+            // Read path: empty preferred-type shell + sibling hints (mutations stay fail-closed).
+            $code = $e->errorCode();
+            if ($code !== SellingTypeResolver::ERROR_LOGIN_REQUIRED
+                && $code !== SellingTypeResolver::ERROR_MEMBERSHIP_REQUIRED
+            ) {
+                throw $e;
+            }
+            $preferred = strtolower(trim((string)$cartTypePreference));
+            $shellType = $preferred !== '' && $this->typeRegistry->has($preferred)
+                ? $preferred
+                : CommerceCartTypeRegistry::CODE_TOC;
+            $summary = $this->summary(
+                $this->newCart($scope, $guestToken, $customerId, '', $shellType),
+                true,
+                '',
+                [],
+                $scope,
+            );
+            $summary['gate_reason'] = $code;
+            $summary['preferred_cart_type'] = $shellType;
+            $summary['message'] = '';
+            $summary['sibling_carts'] = $this->buildSiblingCarts(
+                $scope,
+                $guestToken,
+                $customerId,
+                $shellType,
+            );
+
+            return $summary;
+        }
+
         $cart = $this->loadCart($scope, $guestToken, $customerId, $cartType)
             ?? $this->newCart($scope, $guestToken, $customerId, '', $cartType);
-        return $this->summary($cart, true, '', [], $scope);
+        $summary = $this->summary($cart, true, '', [], $scope);
+
+        return $this->attachSiblingCartsIfEmpty($summary, $scope, $guestToken, $customerId, $cartType);
+    }
+
+    /**
+     * Empty cart responses must advertise other typed carts that still have lines.
+     *
+     * @param array<string, mixed> $summary
+     * @return array<string, mixed>
+     */
+    private function attachSiblingCartsIfEmpty(
+        array $summary,
+        ScopeIdentity $scope,
+        ?string $guestToken,
+        ?int $customerId,
+        string $cartType,
+    ): array {
+        $summary['sibling_carts'] = !empty($summary['is_empty'])
+            ? $this->buildSiblingCarts($scope, $guestToken, $customerId, $cartType)
+            : [];
+
+        return $summary;
+    }
+
+    /**
+     * Other registered cart_types under the same owner/scope that still have lines.
+     *
+     * @return list<array{
+     *   cart_type:string,
+     *   label:string,
+     *   item_count:int,
+     *   cart_count:int,
+     *   switchable:bool,
+     *   gate:?string
+     * }>
+     */
+    public function buildSiblingCarts(
+        ScopeIdentity $scope,
+        ?string $guestToken,
+        ?int $customerId,
+        string $currentType,
+    ): array {
+        $current = strtolower(trim($currentType)) ?: CommerceCartTypeRegistry::CODE_TOC;
+        $cid = $customerId !== null && $customerId > 0 ? $customerId : 0;
+        $out = [];
+        foreach ($this->typeRegistry->codes() as $code) {
+            $code = strtolower(trim((string)$code));
+            if ($code === '' || $code === $current) {
+                continue;
+            }
+            $switchable = true;
+            $gate = null;
+            try {
+                $this->sellingTypeResolver->resolve($code, $cid > 0, $cid, $scope->websiteId ?? 0);
+            } catch (CartConflictException $e) {
+                $switchable = false;
+                $gate = $e->errorCode();
+            }
+            $count = 0;
+            if ($switchable || $cid > 0) {
+                $sibling = $this->loadCart($scope, $guestToken, $customerId, $code, createIfMissing: false);
+                if (is_array($sibling)) {
+                    $count = $this->rawItemCount($sibling);
+                }
+            }
+            if ($count <= 0) {
+                continue;
+            }
+            $out[] = [
+                'cart_type' => $code,
+                'label' => $this->cartFacingLabel($code),
+                'item_count' => $count,
+                'cart_count' => $count,
+                'switchable' => $switchable,
+                'gate' => $gate,
+            ];
+        }
+
+        return $out;
+    }
+
+    /** @param array<string, mixed> $cart */
+    private function rawItemCount(array $cart): int
+    {
+        $count = 0;
+        foreach ($cart['items'] ?? [] as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $count += max(0, (int)($item['qty'] ?? 0));
+        }
+
+        return $count;
+    }
+
+    private function cartFacingLabel(string $code): string
+    {
+        $code = strtolower(trim($code));
+        if ($code === CommerceCartTypeRegistry::CODE_TOC) {
+            return (string)__('零售车');
+        }
+        if ($code === 'tob') {
+            return (string)__('批发车');
+        }
+
+        return $this->typeRegistry->resolveLabel($code);
     }
 
     /** @return array<string, mixed> */
@@ -638,18 +814,24 @@ final class CartService
                 break;
             }
         }
-        return $this->summary(
-            $cart,
-            true,
-            $adjustedQty === $requestedQty
-                ? (string)__('购物车已更新。')
-                : (string)__('「%{1}」库存不足，已按当前可售数量更新购物车。', [$updatedName !== '' ? $updatedName : (string)__('该商品')]),
-            [
-                'quantity_adjusted' => $adjustedQty !== $requestedQty,
-                'requested_quantity' => $requestedQty,
-                'adjusted_quantity' => $adjustedQty,
-            ],
+        return $this->attachSiblingCartsIfEmpty(
+            $this->summary(
+                $cart,
+                true,
+                $adjustedQty === $requestedQty
+                    ? (string)__('购物车已更新。')
+                    : (string)__('「%{1}」库存不足，已按当前可售数量更新购物车。', [$updatedName !== '' ? $updatedName : (string)__('该商品')]),
+                [
+                    'quantity_adjusted' => $adjustedQty !== $requestedQty,
+                    'requested_quantity' => $requestedQty,
+                    'adjusted_quantity' => $adjustedQty,
+                ],
+                $scope,
+            ),
             $scope,
+            $guestToken,
+            $customerId,
+            $cartType,
         );
     }
 
@@ -685,7 +867,13 @@ final class CartService
 
         $cart['cart_type'] = $cartType;
         $this->store->set($key, $cart);
-        return $this->summary($cart, true, (string)__('商品已从购物车移除。'), [], $scope);
+        return $this->attachSiblingCartsIfEmpty(
+            $this->summary($cart, true, (string)__('商品已从购物车移除。'), [], $scope),
+            $scope,
+            $guestToken,
+            $customerId,
+            $cartType,
+        );
     }
 
     /** @return array<string, mixed> */
@@ -713,6 +901,7 @@ final class CartService
             [],
             $scope,
         );
+        $summary = $this->attachSiblingCartsIfEmpty($summary, $scope, $guestToken, $customerId, $cartType);
         $this->dispatchTypedCartEvent('Weline_Cart::cart_cleared', $summary);
 
         return $summary;

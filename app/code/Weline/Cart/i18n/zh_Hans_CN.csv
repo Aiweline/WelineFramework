@@ -25,7 +25,7 @@
 购物车检查,购物车检查
 购物车工作台,购物车工作台
 search,search
-"按 Scope 检查真实 Cart 持久缓存","按 Scope 检查真实 Cart 持久缓存"
+"按 Scope / guest_token 检查真实 Cart 持久库","按 Scope / guest_token 检查真实 Cart 持久库"
 仅询价,仅询价
 加入购物车,加入购物车
 暂不可售,暂不可售
@@ -34,6 +34,12 @@ search,search
 加入购物车失败,加入购物车失败
 已加入,已加入
 前往购物车,前往购物车
+迷你购物车,迷你购物车
+商品行由购物车实时数据渲染，此处仅编辑底部扩展区。,商品行由购物车实时数据渲染，此处仅编辑底部扩展区。
+小计,小计
+税费与运费将在结算时计算,税费与运费将在结算时计算
+去结算,去结算
+查看购物车,查看购物车
 正在加载购物车...,正在加载购物车...
 购物车是空的,购物车是空的
 浏览商品，把喜欢的加入购物车吧。,浏览商品，把喜欢的加入购物车吧。
@@ -41,14 +47,12 @@ search,search
 商品,商品
 价格,价格
 数量,数量
-小计,小计
 更新,更新
 删除,删除
 减少数量,减少数量
 增加数量,增加数量
 购物车更新失败，请重试。,购物车更新失败，请重试。
 无法创建游客购物车会话,无法创建游客购物车会话
-税费与运费将在结算时计算,税费与运费将在结算时计算
 "小计（%1 件商品）","小计（%1 件商品）"
 单价,单价
 浏览商品,浏览商品
@@ -62,13 +66,10 @@ search,search
 购物车优惠券,购物车优惠券
 购物车订单留言,购物车订单留言
 商品小计,商品小计
-去结算,去结算
 继续购物,继续购物
-迷你购物车,迷你购物车
-商品行由购物车实时数据渲染，此处仅编辑底部扩展区。,商品行由购物车实时数据渲染，此处仅编辑底部扩展区。
-查看购物车,查看购物车
-"Inspection 按 scope_key 查询该 Scope 下真实持久缓存结果，不是全局购物车列表；不支持跨 Scope 枚举。","Inspection 按 scope_key 查询该 Scope 下真实持久缓存结果，不是全局购物车列表；不支持跨 Scope 枚举。"
-"输入完整 scope key","输入完整 scope key"
+"Inspection 按 scope_key 与/或 guest_token（完整或末 4+ 位）查询真实持久库；对照店面 Cookie weline_cart_guest_token。","Inspection 按 scope_key 与/或 guest_token（完整或末 4+ 位）查询真实持久库；对照店面 Cookie weline_cart_guest_token。"
+"完整 scope key（可选）","完整 scope key（可选）"
+"guest_token 完整或末 4+ 位","guest_token 完整或末 4+ 位"
 全部类型,全部类型
 检查,检查
 匹配购物车：%{1},匹配购物车：%{1}
@@ -78,7 +79,8 @@ Scope,Scope
 所有者,所有者
 货币,货币
 商品数,商品数
-"请输入 scope key","请输入 scope key"
+过期,过期
+"请输入 scope key 或 guest_token（至少 4 位）","请输入 scope key 或 guest_token（至少 4 位）"
 未找到购物车,未找到购物车
 "provider_code 不能为空","provider_code 不能为空"
 "global_offer_uuid 不能为空","global_offer_uuid 不能为空"
@@ -100,6 +102,7 @@ Scope,Scope
 "非法 selection 值类型：%{1}","非法 selection 值类型：%{1}"
 "selection JSON 编码失败","selection JSON 编码失败"
 "客户端 selection_hash 与服务端不一致（已忽略客户端，请使用服务端值）","客户端 selection_hash 与服务端不一致（已忽略客户端，请使用服务端值）"
+购物车保存失败，请重试,购物车保存失败，请重试
 "当前购物车与结账 Scope 不一致","当前购物车与结账 Scope 不一致"
 当前购物车身份与结账身份不一致,当前购物车身份与结账身份不一致
 购物车为空，无法结账,购物车为空，无法结账
@@ -123,6 +126,8 @@ Scope,Scope
 游客购物车已合并。,游客购物车已合并。
 游客购物车已合并；部分数量因可售上限被截断。,游客购物车已合并；部分数量因可售上限被截断。
 购物车包含跨币种商品，禁止合并,购物车包含跨币种商品，禁止合并
+零售车,零售车
+批发车,批发车
 请选择要更新的购物车商品。,请选择要更新的购物车商品。
 未找到要更新的购物车商品。,未找到要更新的购物车商品。
 该商品已不存在或已下架，请从购物车移除,该商品已不存在或已下架，请从购物车移除
@@ -139,6 +144,11 @@ Scope,Scope
 该商品暂不可售，请从购物车移除或稍后再试,该商品暂不可售，请从购物车移除或稍后再试
 "channel_code 必须与 store_code 同时提供","channel_code 必须与 store_code 同时提供"
 "购物车 Scope 与当前可信 Website/Store/Channel 请求不一致","购物车 Scope 与当前可信 Website/Store/Channel 请求不一致"
+"按 Scope 检查真实 Cart 持久库","按 Scope 检查真实 Cart 持久库"
+"Inspection 按 scope_key 查询该 Scope 下真实持久缓存结果，不是全局购物车列表；不支持跨 Scope 枚举。","Inspection 按 scope_key 查询该 Scope 下真实持久缓存结果，不是全局购物车列表；不支持跨 Scope 枚举。"
+"输入完整 scope key","输入完整 scope key"
+"请输入 scope key","请输入 scope key"
+"按 Scope 检查真实 Cart 持久缓存","按 Scope 检查真实 Cart 持久缓存"
 未注册的售卖类型：%{1},未注册的售卖类型：%{1}
 "Cart 按 Scope 隔离；请输入完整 scope key 查询真实持久缓存，不支持全局枚举。","Cart 按 Scope 隔离；请输入完整 scope key 查询真实持久缓存，不支持全局枚举。"
 "迷你购物车 footer-extras 默认部件迁移失败：%{1}","迷你购物车 footer-extras 默认部件迁移失败：%{1}"
