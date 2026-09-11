@@ -49,17 +49,19 @@ if ($isPreviewMode && !$hasPreassigned && $cardProductId <= 0) {
     $offer = StorefrontOfferResolver::resolve($this);
 }
 
-if ($offer === [] && !$isPreviewMode) {
+// Live PDP: never leave Theme purchase slot empty — emit unlockable CTA shell
+// even when offer resolve fails or current selection is unsellable.
+if ($offer === [] && $isPreviewMode && !$hasPreassigned && $cardProductId <= 0) {
     return;
 }
 
-$productId = max(0, (int)($offer['product_id'] ?? 0));
+$productId = max(0, (int)($offer['product_id'] ?? $cardProductId));
 $offerUuid = trim((string)($offer['global_offer_uuid'] ?? ''));
 $sellable = !empty($offer['sellable']);
 $quoteOnly = !empty($offer['quote_only']);
 // Quote-only is inquiry CTA only — never enable add-to-cart.
 $buttonEnabled = !$quoteOnly && ($isPreviewMode || ($sellable && $offerUuid !== ''));
-$buttonLabel = $sellable ? __('加入购物车') : __('暂不可售');
+$buttonLabel = ($sellable && $offerUuid !== '') ? __('加入购物车') : __('暂不可售');
 if ($quoteOnly) {
     // Product owns the quote CTA; Cart must not render a dead "仅询价" button.
     return;

@@ -47,4 +47,32 @@ final class CartMemoryStore implements CartStoreInterface
 
         return $out;
     }
+
+    public function listByGuestTokenHint(string $hint, ?string $scopeKey = null): array
+    {
+        $hint = trim($hint);
+        if (strlen($hint) < 4) {
+            return [];
+        }
+        $scope = $scopeKey !== null ? trim($scopeKey) : '';
+        $out = [];
+        foreach ($this->carts as $cart) {
+            if (!is_array($cart)) {
+                continue;
+            }
+            if ($scope !== '' && (string)($cart['scope_key'] ?? '') !== $scope) {
+                continue;
+            }
+            $token = trim((string)($cart['guest_token'] ?? $cart['owner_id'] ?? ''));
+            if ($token === '') {
+                continue;
+            }
+            if ($token !== $hint && !str_ends_with($token, $hint)) {
+                continue;
+            }
+            $out[] = $cart;
+        }
+
+        return $out;
+    }
 }

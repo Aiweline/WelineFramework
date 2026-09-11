@@ -23,4 +23,19 @@ final class CartPageDealChromeContractTest extends TestCase
         self::assertStringContainsString('compare_at_minor', $src);
         self::assertStringContainsString('campaign_label', $src);
     }
+
+    public function testCartPageLoadCartSoftFallsBackOnCommerceTypeGate(): void
+    {
+        $path = dirname(__DIR__, 3) . '/view/templates/frontend/cart/index.phtml';
+        self::assertFileExists($path);
+        $src = (string)file_get_contents($path);
+        self::assertStringContainsString('function isCommerceTypeGateFailure', $src);
+        self::assertStringContainsString('function isCustomerLoggedIn', $src);
+        self::assertStringContainsString('cart_commerce_type_login_required', $src);
+        self::assertStringContainsString('cart_commerce_type_membership_required', $src);
+        self::assertStringContainsString("await cart.getCart(await cartIdentity('toc'))", $src);
+        self::assertStringContainsString('preferred_cart_type', $src);
+        self::assertStringContainsString('Default / guest = retail', $src);
+        self::assertStringContainsString('Do not paint wholesale login-required copy', $src);
+    }
 }

@@ -69,4 +69,22 @@ final class ProductAddToCartWidgetContractTest extends TestCase
         self::assertStringContainsString("'[data-variant-option].is-selected'", $script);
         self::assertStringContainsString('selection: readEavSelection(button)', $script);
     }
+
+    public function testAddOfferResolvesCartTypeFromPreferredModeBeforeSsrHtml(): void
+    {
+        $script = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/view/statics/js/widgets/product-purchase-actions.js',
+        );
+
+        self::assertStringContainsString('function resolveAddCartType(button)', $script);
+        self::assertStringContainsString('WelineB2BSellingMode.preferredMode', $script);
+        self::assertStringContainsString('weline_cart_type_explicit', $script);
+        self::assertStringContainsString('cart_type: sellingMode', $script);
+        self::assertStringContainsString('var mode = preferred || fromButton || fromHtml || \'toc\'', $script);
+        // Old FPC-first chain must stay gone.
+        self::assertStringNotContainsString(
+            "button.dataset.sellingMode\n            || button.dataset.cartType\n            || (document.documentElement.getAttribute('data-selling-mode') || '')\n            || (window.WelineB2BSellingMode",
+            $script,
+        );
+    }
 }
