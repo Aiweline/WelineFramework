@@ -32,6 +32,8 @@ final class CheckoutCouponScriptContractTest extends TestCase
         self::assertStringContainsString('resolveCartType', $source);
         self::assertStringContainsString('hydrateForCurrentType', $source);
         self::assertStringContainsString('restoreOnly', $source);
+        self::assertStringContainsString('freezeQuote still applies discount_fixed_amount', $source);
+        self::assertStringContainsString('syncAppliedState(code, null)', $source);
         self::assertStringContainsString('forcedType', $source);
         self::assertStringContainsString('weline:selling-mode-changed', $source);
         self::assertStringContainsString("function i18n(attr, fallback)", $source);
