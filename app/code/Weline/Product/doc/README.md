@@ -151,6 +151,7 @@ Product REST 定向单测 11 tests / 58 assertions 已通过。多语言创建�
 - 首页/部件卡片走 `StorefrontCatalogViewService::publishedOffers()`（`StorefrontScopeHotCache`，约 300s fresh / 1800s stale）；PDP 走 `livePublishedOffersForProduct()` 旁路热缓存。
 - `Weline_Inventory::stock_projection_changed`（Product 观察者 `InventoryStockProjectionChangedObserver`）在库存投影真正变更后调用 `StorefrontCatalogCacheCoordinator::notifyCatalogChanged`，含默认站 `website_id=0`。
 - `StorefrontCatalogCacheInvalidator` 对 `website_id=0` 同样清理主题 chrome/片段缓存，不得把 0 当成空值跳过。
+- 后台商品信息保存经 `ProductSearchProjectionMutationCoordinator` 发 `w_changed(product_search_projection)`：`impact.namespaces` 含 `website/{code}/catalog`（Framework `cache_namespace` bump → 详情页 FPC 键代次 miss）；`impact.urls`/`previous_urls` 供 SEO/CDN。事务 `afterCommit` 再 `notifyCatalogChanged` + `ProductStorefrontCacheInvalidator` 清进程 FPC/router/WLS，使详情页 HTML 立即可见。禁止控制器手写 CDN purge。
 
 ## 目录快照细分计时
 

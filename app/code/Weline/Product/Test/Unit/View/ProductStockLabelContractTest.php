@@ -25,4 +25,17 @@ final class ProductStockLabelContractTest extends TestCase
             $src
         );
     }
+
+    public function testBuyboxFailsafeAndAvailabilitySync(): void
+    {
+        $path = dirname(__DIR__, 3) . '/view/templates/frontend/widgets/product-info.phtml';
+        $src = (string) file_get_contents($path);
+
+        self::assertStringContainsString('data-purchase-failsafe', $src);
+        self::assertStringContainsString("product-native-detail__qty-row\"<?= \$sellable ? '' : ' hidden' ?>", $src);
+        self::assertStringNotContainsString('if (!$quoteOnly && $sellable):', $src);
+        self::assertStringContainsString('ensurePurchaseActionsFromFailsafe', $src);
+        self::assertStringContainsString("__('当前规格暂不可售')", $src);
+        self::assertStringContainsString('deliveryNode.textContent', $src);
+    }
 }

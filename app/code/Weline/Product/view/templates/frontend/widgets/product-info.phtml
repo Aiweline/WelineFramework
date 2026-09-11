@@ -991,8 +991,8 @@ if ($productBreadcrumbs === []) {
                     <p class="product-native-detail__unavailable"><?= $escape($offerMessage) ?></p>
                 <?php endif; ?>
 
-                <?php if (!$quoteOnly && $sellable): ?>
-                    <div class="product-native-detail__qty-row">
+                <?php if (!$quoteOnly): ?>
+                    <div class="product-native-detail__qty-row"<?= $sellable ? '' : ' hidden' ?>>
                         <label class="product-native-detail__qty-label" for="<?= $escape($qtyFieldId) ?>">
                             <?= __('数量') ?>:
                         </label>
@@ -1047,6 +1047,59 @@ if ($productBreadcrumbs === []) {
                         ?>
                     <?php endif; ?>
                 </w:slot>
+                <?php if (!$isPreviewMode && !$quoteOnly): ?>
+                    <?php
+                    // Theme slot injections can early-return empty when widget data bag lacks offer.
+                    // Failsafe CTAs use the parent product-info offer; JS moves them into the slot if empty.
+                    $failsafeAddEnabled = $sellable && $offerUuid !== '';
+                    $failsafeAddLabel = $failsafeAddEnabled ? __('加入购物车') : __('暂不可售');
+                    ?>
+                    <div class="product-native-detail__purchase-failsafe" data-purchase-failsafe hidden>
+                        <div class="weline-cart-product-add-to-cart"
+                             data-weline-load="cart"
+                             data-widget-module="Weline_Cart"
+                             data-widget-code="product-add-to-cart"
+                             data-purchase-loading="<?= $escape(__('正在加入购物车...')) ?>"
+                             data-purchase-success="<?= $escape(__('已加入购物车')) ?>"
+                             data-purchase-error="<?= $escape(__('加入购物车失败')) ?>"
+                             data-cart-url="@url{'cart'}"
+                             data-cart-link-text="<?= $escape(__('前往购物车')) ?>">
+                            <button type="button"
+                                    class="product-native-detail__add weline-pixel::add_to_cart"
+                                    data-action="add"
+                                    data-testid="product-add-to-cart"
+                                    data-default-label="<?= $escape($failsafeAddLabel) ?>"
+                                    data-provider-code="<?= $escape($offer['provider_code'] ?? 'product') ?>"
+                                    data-product-id="<?= (int)$productId ?>"
+                                    data-global-offer-uuid="<?= $escape($offerUuid) ?>"
+                                    data-qty="1"
+                                    data-quote-only="0"
+                                    <?= $failsafeAddEnabled ? '' : 'disabled' ?>>
+                                <?= $escape($failsafeAddLabel) ?>
+                            </button>
+                        </div>
+                        <div class="weline-checkout-product-buy-now"
+                             data-weline-load="cart"
+                             data-widget-module="Weline_Checkout"
+                             data-widget-code="product-buy-now"
+                             data-purchase-loading="<?= $escape(__('正在前往结账...')) ?>"
+                             data-purchase-success="<?= $escape(__('正在前往结账...')) ?>"
+                             data-purchase-error="<?= $escape(__('结账准备失败')) ?>">
+                            <button type="button"
+                                    class="product-native-detail__buy-now weline-pixel::buy-now"
+                                    data-action="buy-now"
+                                    data-testid="product-buy-now"
+                                    data-provider-code="<?= $escape($offer['provider_code'] ?? 'product') ?>"
+                                    data-product-id="<?= (int)$productId ?>"
+                                    data-global-offer-uuid="<?= $escape($offerUuid) ?>"
+                                    data-checkout-url="@url{'checkout'}"
+                                    data-qty="1"
+                                    <?= $failsafeAddEnabled ? '' : 'disabled' ?>>
+                                <?= __('立即结账') ?>
+                            </button>
+                        </div>
+                    </div>
+                <?php endif; ?>
                 <?= $this->getHook('Weline_Product::frontend::product::detail::after-add-to-cart') ?>
                 <button type="button"
                         class="product-native-detail__quote"
@@ -2321,6 +2374,22 @@ if ($productBreadcrumbs === []) {
     'use strict';
     const root = document.querySelector('[data-testid="storefront-product-detail"]');
     if (!root) return;
+
+    (function ensurePurchaseActionsFromFailsafe() {
+        const slot = root.querySelector('.product-native-detail__actions');
+        const failsafe = root.querySelector('[data-purchase-failsafe]');
+        if (!failsafe) {
+            return;
+        }
+        if (slot && !slot.querySelector('[data-action="add"], [data-action="buy-now"]')) {
+            failsafe.hidden = false;
+            while (failsafe.firstChild) {
+                slot.appendChild(failsafe.firstChild);
+            }
+        }
+        failsafe.remove();
+    })();
+
     const primaryImage = root.querySelector('.product-native-detail__primary-image');
     const primaryVideo = root.querySelector('.product-native-detail__primary-video');
 
@@ -3523,6 +3592,36 @@ if ($productBreadcrumbs === []) {
         const exactOffer = offer && findExactOffer(selection);
         const quoteOnly = !!(exactOffer && exactOffer.quote_only);
         const purchasable = !!(exactOffer && isOfferPurchasable(exactOffer) && exactOffer.global_offer_uuid);
+        const deliveryNode = root.querySelector('.product-native-detail__delivery');
+        if (deliveryNode) {
+            deliveryNode.textContent = quoteOnly
+                ? <?= json_encode((string)__('按项目确认库存'), JSON_UNESCAPED_UNICODE) ?>
+                : (purchasable
+                    ? <?= json_encode((string)__('预计 2–5 个工作日送达'), JSON_UNESCAPED_UNICODE) ?>
+                    : <?= json_encode((string)__('当前规格暂不可售'), JSON_UNESCAPED_UNICODE) ?>);
+        }
+        const qtyRow = root.querySelector('.product-native-detail__qty-row');
+        if (qtyRow) {
+            qtyRow.hidden = quoteOnly || !purchasable;
+        }
+        if (qtySelect && exactOffer && purchasable) {
+            const stock = Math.max(0, Number(exactOffer.stock) || 0);
+            const maxQty = Math.max(1, Math.min(30, stock > 0 ? stock : 1));
+            const current = Math.max(1, Number(qtySelect.value) || 1);
+            qtySelect.setAttribute('data-qty-max', String(maxQty));
+            if (qtySelect.options.length !== maxQty) {
+                qtySelect.innerHTML = '';
+                for (let quantity = 1; quantity <= maxQty; quantity += 1) {
+                    const option = document.createElement('option');
+                    option.value = String(quantity);
+                    option.textContent = String(quantity);
+                    qtySelect.appendChild(option);
+                }
+            }
+            qtySelect.value = String(Math.min(current, maxQty));
+        }
+        const addLabel = <?= json_encode((string)__('加入购物车'), JSON_UNESCAPED_UNICODE) ?>;
+        const unavailableLabel = <?= json_encode((string)__('暂不可售'), JSON_UNESCAPED_UNICODE) ?>;
         root.querySelectorAll('[data-action="add"], [data-action="buy-now"]').forEach(function (button) {
             if (exactOffer) {
                 button.dataset.globalOfferUuid = exactOffer.global_offer_uuid || '';
@@ -3531,6 +3630,9 @@ if ($productBreadcrumbs === []) {
             }
             button.hidden = quoteOnly;
             button.disabled = quoteOnly || !purchasable;
+            if (button.getAttribute('data-action') === 'add') {
+                button.textContent = purchasable ? addLabel : unavailableLabel;
+            }
         });
         const quoteButton = root.querySelector('[data-action="open-product-quote"]');
         if (quoteButton) {

@@ -59,6 +59,17 @@ final class ProductPublicUrlChangeTest extends TestCase
         self::assertSame('product_search_projection', $captured[0]['resource']['type']);
         self::assertSame(['https://example.test/product/old-slug'], $captured[0]['impact']['previous_urls']);
         self::assertSame(['https://example.test/product/new-slug'], $captured[0]['impact']['urls']);
+        self::assertSame(['website/default/catalog'], $captured[0]['impact']['namespaces']);
         self::assertSame([0], $captured[0]['after']['store_ids']);
+    }
+
+    public function testCoordinatorRegistersAfterCommitStorefrontFpcClear(): void
+    {
+        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/Service/ProductSearchProjectionMutationCoordinator.php');
+        self::assertStringContainsString("'namespaces' => [\$catalogNamespace]", $src);
+        self::assertStringContainsString('afterCommit(', $src);
+        self::assertStringContainsString('ProductStorefrontCacheInvalidator', $src);
+        self::assertStringContainsString('notifyCatalogChanged', $src);
+        self::assertFileExists(dirname(__DIR__, 3) . '/Service/ProductStorefrontCacheInvalidator.php');
     }
 }
