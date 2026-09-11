@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Queue\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Queue\Service\QueueDispatchService;
 
 final class QueueDispatchServiceTest extends TestCase
 {
@@ -121,6 +122,46 @@ final class QueueDispatchServiceTest extends TestCase
             $this->extractPrivateMethodSource($source, 'getManagedProcessOutput'),
             'Unbounded file_get_contents of process logs must not remain in getManagedProcessOutput.'
         );
+        self::assertStringContainsString('alignUtf8Tail', $source);
+        self::assertStringContainsString('ensureValidUtf8', $source);
+        self::assertStringContainsString('reconcileOneRunningAutoQueue', $source);
+        self::assertStringContainsString('queue.reconcile_running_failed:', $source);
+        self::assertSame(
+            0,
+            \preg_match(
+                '/schema_fields_process\s*=>\s*\\\\trim\(\s*(?:\(string\))?\$queue->getProcess/',
+                $source
+            ),
+            'Direct process concatenations must go through boundResultText to keep UTF-8 safe for PG.'
+        );
+        self::assertStringContainsString(
+            'boundResultText',
+            $this->extractPrivateMethodSource($source, 'failQueueWorkerSafely')
+        );
+    }
+
+    public function testBoundResultTextKeepsValidUtf8AfterMidCodepointTailCut(): void
+    {
+        $method = new \ReflectionMethod(QueueDispatchService::class, 'boundResultText');
+        $method->setAccessible(true);
+
+        $text = "head\n" . \str_repeat('汉字', 4000) . '尾部';
+        $bounded = (string)$method->invoke(null, $text, 8192);
+
+        self::assertLessThanOrEqual(8192, \strlen($bounded));
+        self::assertTrue(\mb_check_encoding($bounded, 'UTF-8'));
+        self::assertStringContainsString('[truncated', $bounded);
+    }
+
+    public function testReconcileRunningIsolatesPerQueueFailures(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Service/QueueDispatchService.php');
+        $reconcileSource = $this->extractPrivateMethodSource($source, 'reconcileRunningQueues');
+
+        self::assertStringContainsString('reconcileOneRunningAutoQueue($queue)', $reconcileSource);
+        self::assertStringContainsString('catch (\\Throwable $throwable)', $reconcileSource);
+        self::assertStringContainsString('queue.reconcile_running_failed:', $reconcileSource);
+        self::assertStringContainsString('cleanupDeadQueuePidJsonOrphans()', $reconcileSource);
     }
 
     private function extractNamedIntConstant(string $source, string $name): int
