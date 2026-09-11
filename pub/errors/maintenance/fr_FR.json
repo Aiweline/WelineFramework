@@ -6,9 +6,9 @@
         "retry_after": 60,
         "lang": "fr_FR",
         "wait_gift_enabled": true,
-        "wave_id": "6207110e4ddb8b3d157f918f40c40d9bab2d9b725902150bf9bf82e096e6189d",
-        "system_version": "2.5.43",
-        "theme_version": "原始布局",
+        "wave_id": "f2e8f4e9b7fac124ea7cffc7485d298b89d1302fe4eea1879ab10ac8a9b68c59",
+        "system_version": "2.5.70",
+        "theme_version": "test21",
         "wait_gift_endpoints": {
             "issue": "\/maintenance\/frontend\/wait-gift\/issue",
             "heartbeat": "\/maintenance\/frontend\/wait-gift\/heartbeat",
