@@ -182,6 +182,13 @@ class SmtpSender extends \Weline\Framework\App\Helper implements MailSenderInter
     private function resolveSmtpSecure(mixed $smtpSecure, int $port): string
     {
         $value = strtolower(trim((string) $smtpSecure));
+        // 端口与加密常见误配纠偏：465=SMTPS，587=STARTTLS
+        if ($port === 465 && in_array($value, ['tls', 'starttls', '2'], true)) {
+            return PHPMailer::ENCRYPTION_SMTPS;
+        }
+        if ($port === 587 && in_array($value, ['ssl', 'smtps', '1', 'true', 'on', 'yes'], true)) {
+            return PHPMailer::ENCRYPTION_STARTTLS;
+        }
         return match (true) {
             in_array($value, ['ssl', 'smtps', '1', 'true', 'on', 'yes', '465'], true) => PHPMailer::ENCRYPTION_SMTPS,
             in_array($value, ['tls', 'starttls', '2', '587'], true) => PHPMailer::ENCRYPTION_STARTTLS,
@@ -296,6 +303,12 @@ class SmtpSender extends \Weline\Framework\App\Helper implements MailSenderInter
                 ->setData($sendLog::schema_fields_IS_HTML, 1)
                 ->setData($sendLog::schema_fields_PROXY, $config !== null ? ($config['smtp_username'] ?? '') : $this->data->get($this->data::smtp_username, $module))
                 ->setData($sendLog::schema_fields_MODULE, $module)
+                ->setData($sendLog::schema_fields_CHANNEL, trim((string)($config['__channel'] ?? $config['channel'] ?? '')))
+                ->setData($sendLog::schema_fields_SENDER_CODE, trim((string)($config['__sender_code'] ?? $config['code'] ?? $config['sender_code'] ?? '')))
+                ->setData(
+                    $sendLog::schema_fields_STORAGE_SCOPE,
+                    trim((string)($config['__storage_scope'] ?? $config['storage_scope'] ?? $config['scope'] ?? $this->data->resolveScope(null)))
+                )
                 ->save();
         } catch (\ReflectionException|Exception|ModelException $e) {
             if (DEV) {

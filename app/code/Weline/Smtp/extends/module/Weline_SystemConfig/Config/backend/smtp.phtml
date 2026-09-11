@@ -1,0 +1,113 @@
+<?php
+/**
+ * @meta.title {default="SMTP 邮件服务",description="按网站范围配置 SMTP 发件人账户与兼容单账户参数"}
+ * @meta.description {default="发件人列表与联系人按 Global/Website 存储；未在网站层覆盖时回退到 Global。复杂发件人账户请在「Smtp配置」页编辑。"}
+ * @config.area {backend}
+ * @config.sort {40}
+ * @config.acl {Weline_Smtp::system_smtp_config}
+ */
+?>
+
+<w:config:group
+    code="smtp_accounts"
+    label="SMTP 发件账户"
+    description="按当前作用范围保存多发件人 JSON 与默认联系人。密码字段敏感；推荐在 Smtp 配置页维护账户。"
+    sort="10"
+>
+    <w:config:field
+        key="smtp_senders"
+        label="发件人列表（JSON）"
+        description="多发件人配置数组。推荐在后台「Smtp配置」页可视化维护。"
+        type="json"
+        value-type="json"
+        default="[]"
+        scope="global,website"
+        is_sensitive="true"
+    />
+
+    <w:config:field
+        key="smtp_sender_contacts"
+        label="发件人默认联系人（JSON）"
+        description="发件人 code 到默认收件邮箱的映射。"
+        type="json"
+        value-type="json"
+        default="{}"
+        scope="global,website"
+    />
+
+    <w:config:field
+        key="smtp_channel_bindings"
+        label="发信渠道绑定（JSON）"
+        description="已注册渠道 code 到传输账户 id 的映射。渠道由各模块 Extends 注册，不可在此手造业务代号。"
+        type="json"
+        value-type="json"
+        default="{}"
+        scope="global,website"
+    />
+</w:config:group>
+
+<w:config:group
+    code="smtp_legacy"
+    label="兼容单账户 SMTP"
+    description="旧版单发件人字段；新部署请优先使用发件人列表。"
+    sort="20"
+>
+    <w:config:field
+        key="smtp_host"
+        label="SMTP 主机"
+        type="text"
+        value-type="string"
+        default=""
+        scope="global,website"
+    />
+    <w:config:field
+        key="smtp_port"
+        label="SMTP 端口"
+        type="number"
+        value-type="int"
+        default="465"
+        scope="global,website"
+    />
+    <w:config:field
+        key="smtp_username"
+        label="SMTP 用户名"
+        type="text"
+        value-type="string"
+        default=""
+        scope="global,website"
+    />
+    <w:config:field
+        key="smtp_password"
+        label="SMTP 密码"
+        type="password"
+        value-type="string"
+        default=""
+        scope="global,website"
+        is_sensitive="true"
+    />
+    <w:config:field
+        key="smtp_secure"
+        label="加密"
+        description="1/ssl、tls、none 等，兼容历史值。"
+        type="text"
+        value-type="string"
+        default="1"
+        scope="global,website"
+    />
+    <w:config:field
+        key="smtp_auth"
+        label="需要认证"
+        type="switch"
+        value-type="bool"
+        default="1"
+        scope="global,website"
+    />
+    <w:config:field
+        key="smtp_test_address"
+        label="测试收件邮箱"
+        type="text"
+        value-type="string"
+        default=""
+        scope="global,website"
+    />
+</w:config:group>

@@ -5,6 +5,7 @@
 已保存,Saved
 收件人不能为空,"Recipient cannot be empty"
 邮件主题不能为空,"Email subject cannot be empty"
+"发信渠道 %{1} 未绑定传输账户","发信渠道 %{1} 未绑定传输账户"
 "发件人 %{1} 未配置或配置不完整","Sender %{1} is not configured or is incomplete"
 系统,System
 发送成功,"Sent successfully"
@@ -23,6 +24,8 @@
 "HTML 正文","HTML body"
 发件人，空则用配置,"Sender, leave empty to use configuration"
 "使用哪一模块的 SMTP 配置","Which module's SMTP configuration to use"
+"SystemConfig storage_scope，如 website.default.default","SystemConfig storage_scope，如 website.default.default"
+"网站 code，可推导 website 级 scope","网站 code，可推导 website 级 scope"
 发送测试邮件,"Send test email"
 测试邮箱,"Test Email"
 模块,Module.
@@ -34,6 +37,11 @@
 设置发件人默认联系人/收件邮箱，供消息通知等调用,"Set the default sender contact/recipient email for message notifications, etc."
 默认收件邮箱,"Default Recipient Email"
 获取发件人默认联系人/收件邮箱,"Retrieved sender's default contact/receiving email"
+"尚未配置 SMTP 传输账户。请添加发件账户并发送测试邮件确认。","尚未配置 SMTP 传输账户。请添加发件账户并发送测试邮件确认。"
+"已确认可用（当前继承自 %{1}）。","已确认可用（当前继承自 %{1}）。"
+已确认可用（当前范围自有配置）。,已确认可用（当前范围自有配置）。
+"已检测到继承自 %{1} 的 SMTP 配置，请打开配置页发送测试邮件确认。","已检测到继承自 %{1} 的 SMTP 配置，请打开配置页发送测试邮件确认。"
+"已检测到当前范围的 SMTP 配置，请发送测试邮件确认后再上线。","已检测到当前范围的 SMTP 配置，请发送测试邮件确认后再上线。"
 Smtp配置成功！为了保证Smtp邮件服务正常工作，请测试确认。,"Smtp configuration successful! In order to ensure that the Smtp mail service works properly, please test and confirm."
 "[SMTP 测试] 发件人 %{1}","[SMTP Test] Sender %{1}"
 这是一封测试邮件。如果您收到此邮件，说明该发件人配置正确。,"This is a test email. If you receive this email, the sender configuration is correct."
@@ -41,8 +49,10 @@ Smtp配置成功！为了保证Smtp邮件服务正常工作，请测试确认。
 发送者,Sender
 "WelineFramework SMTP 测试","WelineFramework SMTP Testing"
 这是一封测试邮件。,"This is a test email."
+测试发送失败,测试发送失败
 无效的请求方法,"Invalid request method"
 缺少发件人配置数据,"Missing sender configuration data"
+"传输账户 ID 格式无效","传输账户 ID 格式无效"
 请选择自建邮箱账号,"Please select a self-hosted mailbox account"
 保存成功,"Saved successfully"
 "SMTP 配置","SMTP configuration"
@@ -57,29 +67,49 @@ save,save
 测试发送,"Test sending"
 arrow-right,arrow-right
 "测试 SMTP 发送","Test SMTP sending"
+未标注渠道,未标注渠道
+Global,Global
 删除成功！,"Deletion successful!"
 你要删除的记录已不存在！,"The record you want to delete no longer exists!"
 "SMTP 发件记录","SMTP sending records"
 check,check
 "查看 SMTP 发送日志","View SMTP send logs"
-添加发件人,"Add Sender"
+"发件人账户写入当前作用范围；切换网站范围后按新范围加载。未覆盖时继承 Global。","发件人账户写入当前作用范围；切换网站范围后按新范围加载。未覆盖时继承 Global。"
+在统一配置中心打开,在统一配置中心打开
+作用范围,作用范围
+传输账户管理,传输账户管理
+发信渠道绑定,发信渠道绑定
+"录入 SMTP 传输账户；可选在账户上直接绑定发信渠道（标签可搜索多选）。","录入 SMTP 传输账户；可选在账户上直接绑定发信渠道（标签可搜索多选）。"
+基本信息,基本信息
+"系统生成的传输账户 ID；不是业务代号，也不是邮箱","系统生成的传输账户 ID；不是业务代号，也不是邮箱"
+自建邮局账号,"Self-hosted mailbox account"
+选择自建邮箱账号,"Select self-hosted mailbox account"
+可搜索标签选择；选中后自动填充连接信息,可搜索标签选择；选中后自动填充连接信息
+连接与认证,连接与认证
+直接绑定发信渠道（可选）,直接绑定发信渠道（可选）
+选择要使用此账户的发信渠道,选择要使用此账户的发信渠道
+"可搜索多选标签；也可稍后在「发信渠道绑定」Tab 中调整","可搜索多选标签；也可稍后在「发信渠道绑定」Tab 中调整"
+按业务渠道选择传输账户；可搜索标签单选。,按业务渠道选择传输账户；可搜索标签单选。
+"暂无模块注册发信渠道。业务模块需 Extends 实现 MailChannelProviderInterface。","暂无模块注册发信渠道。业务模块需 Extends 实现 MailChannelProviderInterface。"
+绑定传输账户,绑定传输账户
 说明,Description
-"每个发件人用 <strong>code</strong> 标识，便于消息通知和 WeShop 等模块通过 w_query 指定发件人。","Each sender is identified by a <strong>code</strong>, so notification, WeShop, and other modules can choose it through w_query."
-"发件来源可选择外部 SMTP 或自建邮局账号；选择自建后会自动带出 SMTP 主机、端口、加密方式和发件邮箱。","The sender source can be an external SMTP service or a self-hosted mailbox account. Selecting a self-hosted account auto-fills the SMTP host, port, encryption, and sender email."
-"<strong>默认联系人</strong>：该发件人作为邮件渠道时的默认收件邮箱，可由系统管理员或 w_query 设置。","<strong>Default Contact</strong>: The sender's default receiving email address when used as an email channel, can be set by the system administrator or w_query."
+"<strong>传输账户管理</strong>：录入 SMTP 连接；可在账户上直接用标签绑定发信渠道。","<strong>传输账户管理</strong>：录入 SMTP 连接；可在账户上直接用标签绑定发信渠道。"
+<strong>发信渠道绑定</strong>：按渠道选择传输账户；也可稍后在此集中调整。,<strong>发信渠道绑定</strong>：按渠道选择传输账户；也可稍后在此集中调整。
+"上方用 Tab 切换两个分区，无需整页上下翻找。","上方用 Tab 切换两个分区，无需整页上下翻找。"
+账号/渠道选择使用系统可搜索标签（theme:search-select），支持搜索。,账号/渠道选择使用系统可搜索标签（theme:search-select），支持搜索。
+"SMTP 配置分区","SMTP 配置分区"
+添加账户,添加账户
 发件人,Sender
 测试,Test
 删除,Delete
-"标识 code","Identifier code"
+"传输账户 ID","传输账户 ID"
+系统生成，只读,系统生成，只读
 显示名称,"Display name"
 如：默认发件人,"e.g., Default Sender"
 发件来源,"Sender source"
 "外部 SMTP","External SMTP"
-自建邮局账号,"Self-hosted mailbox account"
 默认联系人（收件邮箱）,"Default Contact (Recipient Email)"
 "该发件人默认收件人，可被 w_query 设置","The sender's default recipient can be set by w_query"
-选择自建邮箱账号,"Select self-hosted mailbox account"
-搜索邮箱账号、域名或名称,"Search mailbox account, domain, or name"
 暂无可用自建邮箱账号，请先在企业邮箱模块创建并启用账号。,"No available self-hosted mailbox account. Create and activate one in the Mail module first."
 自动配置摘要,"Auto configuration summary"
 "外部 SMTP 需手动填写下方连接信息。","External SMTP requires the connection fields below to be filled manually."
@@ -101,6 +131,7 @@ check,check
 新发件人,"New Sender"
 默认发件人,"Default Sender"
 该发件人默认收件人,"Default recipient for this sender"
+关闭,关闭
 收件邮箱,"Recipient Email"
 取消,Cancel
 发送,Send
@@ -108,13 +139,48 @@ check,check
 保存失败,"Save Failed"
 请输入收件邮箱,"Please enter the recipient email address"
 请至少添加一个发件人,"Please add at least one sender"
+网站维护中，请稍后再试,网站维护中，请稍后再试
+正在处理，请稍候,正在处理，请稍候
+已提交测试发送,已提交测试发送
+测试邮件已发送,测试邮件已发送
+发送中…,发送中…
+登录已失效，请重新登录,登录已失效，请重新登录
+搜索并选择自建邮箱账号,搜索并选择自建邮箱账号
+搜索并多选发信渠道,搜索并多选发信渠道
+搜索并选择传输账户,搜索并选择传输账户
+搜索选择组件未加载，请刷新页面,搜索选择组件未加载，请刷新页面
 确定删除最后一个发件人吗？删除后仍可重新添加。,"Are you sure you want to delete the last sender? You can re-add it later."
+"请核对主机/端口：QQ 邮箱 465 须 SMTPS/SSL，587 须 STARTTLS/TLS","请核对主机/端口：QQ 邮箱 465 须 SMTPS/SSL，587 须 STARTTLS/TLS"
 配置项不齐全%{1},"Configuration item is incomplete %{1}"
 "发件人配置不完整：缺少 host 或 username","Sender configuration incomplete: missing host or username"
 "SMTP Host 未配置","SMTP Host is not configured"
 "SMTP 用户名未配置","SMTP username is not configured"
 接受者邮箱为空：请正确设置接收邮箱！,"Recipient email is empty: Please set the receiving email correctly!"
 发送者邮箱为空：请正确设置发件邮箱！,"Sender email is empty: please set the sending email correctly!"
+可搜索多选标签；也可稍后在下方「发信渠道绑定」中调整,可搜索多选标签；也可稍后在下方「发信渠道绑定」中调整
+自建邮局,自建邮局
+添加发件人,"Add Sender"
+"<strong>传输账户</strong>：只配置 SMTP 连接。账户 ID 由系统生成，不是业务代号，也不是发件邮箱。","<strong>传输账户</strong>：只配置 SMTP 连接。账户 ID 由系统生成，不是业务代号，也不是发件邮箱。"
+"<strong>发信渠道</strong>：由业务模块 Extends 注册；本页只做渠道到传输账户的绑定。","<strong>发信渠道</strong>：由业务模块 Extends 注册；本页只做渠道到传输账户的绑定。"
+"发件来源可选择外部 SMTP 或自建邮局账号。","发件来源可选择外部 SMTP 或自建邮局账号。"
+不绑定,不绑定
+搜索邮箱账号、域名或名称,"Search mailbox account, domain, or name"
+"配置代号，不是邮箱；调用方用 sender_code 引用，如 notification、order_mail","Config ID, not an email. Callers use sender_code, e.g. notification or order_mail"
+配置代号,"Config ID"
+仅英文字母与下划线,仅英文字母与下划线
+配置代号仅允许英文字母与下划线,"Config ID allows letters and underscores only"
+"标识 code 仅允许英文字母与下划线","标识 code 仅允许英文字母与下划线"
+选择作用范围,选择作用范围
+搜索作用范围,搜索作用范围
+折叠,折叠
+展开,展开
+未找到匹配作用范围,未找到匹配作用范围
+"<strong>code</strong> 是这份 SMTP 配置的稳定代号（仅英文字母与下划线），供消息通知、WeShop 等通过 w_query 的 <code>sender_code</code> 选用；它<strong>不是</strong>发件邮箱。发件邮箱在下方「发件邮箱 / 用户名」或自建账号中填写，更换邮箱不影响已写定的调用方。","<strong>code</strong> is a stable ID for this SMTP profile (letters and underscores only). Modules pick it via w_query <code>sender_code</code>; it is <strong>not</strong> the From address. Set the From email under Username or a Mail account—changing the email does not break callers."
+"发件来源可选择外部 SMTP 或自建邮局账号；选择自建后会自动带出 SMTP 主机、端口、加密方式和发件邮箱。","The sender source can be an external SMTP service or a self-hosted mailbox account. Selecting a self-hosted account auto-fills the SMTP host, port, encryption, and sender email."
+"<strong>默认联系人</strong>：该发件人作为邮件渠道时的默认收件邮箱，可由系统管理员或 w_query 设置。","<strong>Default Contact</strong>: The sender's default receiving email address when used as an email channel, can be set by the system administrator or w_query."
+"每个发件人用 <strong>code</strong> 标识（仅英文字母与下划线），便于消息通知和 WeShop 等模块通过 w_query 指定发件人。","<strong>code</strong> is a stable ID for this SMTP profile (letters and underscores only). Modules pick it via w_query <code>sender_code</code>; it is <strong>not</strong> the From address. Set the From email under Username or a Mail account—changing the email does not break callers."
+"标识 code","Identifier code"
+"每个发件人用 <strong>code</strong> 标识，便于消息通知和 WeShop 等模块通过 w_query 指定发件人。","Each sender is identified by a <strong>code</strong>, so notification, WeShop, and other modules can choose it through w_query."
 """Smtp 查询器不支持的操作：%{1}""","""Operation not supported by Smtp queryer: %{1}"""
 "SMTP 发件人配置","SMTP sender configuration"
 Smtp邮件服务,"Smtp mail service"
