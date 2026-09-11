@@ -13,10 +13,11 @@ use Weline\Framework\Manager\ObjectManager;
 #[Acl('Weline_Cart::cart_workspace', '购物车工作台', 'search', '购物车检查', 'Weline_Backend::order_group')]
 final class Inspection extends BackendController
 {
-    #[Acl('Weline_Cart::cart_inspection', '购物车检查', 'search', '按 Scope 检查真实 Cart 持久库')]
+    #[Acl('Weline_Cart::cart_inspection', '购物车检查', 'search', '按 Scope / guest_token 检查真实 Cart 持久库')]
     public function index(): string
     {
         $scopeKey = trim((string)$this->request->getParam('scope_key', ''));
+        $guestHint = trim((string)$this->request->getParam('guest_token', ''));
         /** @var CommerceCartTypeRegistry $typeRegistry */
         $typeRegistry = ObjectManager::getInstance(CommerceCartTypeRegistry::class);
         $typeRows = $typeRegistry->labelRows();
@@ -29,11 +30,17 @@ final class Inspection extends BackendController
         $carts = [];
         $loadError = '';
 
-        if ($scopeKey !== '') {
+        if ($scopeKey !== '' || strlen($guestHint) >= 4) {
             try {
                 /** @var CartStoreInterface $store */
                 $store = ObjectManager::getInstance(CartStoreInterface::class);
-                foreach ($store->listByScopeKey($scopeKey) as $cart) {
+                $raw = [];
+                if (strlen($guestHint) >= 4) {
+                    $raw = $store->listByGuestTokenHint($guestHint, $scopeKey !== '' ? $scopeKey : null);
+                } elseif ($scopeKey !== '') {
+                    $raw = $store->listByScopeKey($scopeKey);
+                }
+                foreach ($raw as $cart) {
                     $items = is_array($cart['items'] ?? null) ? $cart['items'] : [];
                     $cartType = strtolower(trim((string)($cart['cart_type'] ?? '')));
                     if ($cartType === '') {
@@ -51,6 +58,8 @@ final class Inspection extends BackendController
                         'cart_type' => $cartType,
                         'cart_type_label' => $typeRegistry->resolveLabel($cartType),
                         'cart_type_tone' => $typeRegistry->resolveBadgeTone($cartType),
+                        'expires_at' => (string)($cart['expires_at'] ?? ''),
+                        'updated_at' => (string)($cart['updated_at'] ?? ''),
                     ];
                 }
             } catch (\Throwable $exception) {
@@ -59,6 +68,7 @@ final class Inspection extends BackendController
         }
 
         $this->assign('scope_key', $scopeKey);
+        $this->assign('guest_token', $guestHint);
         $this->assign('cart_type', $cartTypeFilter);
         $this->assign('cart_type_rows', $typeRows);
         $this->assign('carts', $carts);

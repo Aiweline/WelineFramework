@@ -95,12 +95,18 @@ final class CartServiceCommerceTypeTest extends TestCase
         $guest = $svc->issueGuestToken();
         $offer = new OfferIdentity('product', $offerUuid, legacyProductId: 1);
 
-        try {
-            $svc->getCart($this->scope(), $guest, null, 'tob');
-            self::fail('guest tob getCart must fail closed');
-        } catch (CartConflictException $e) {
-            self::assertSame(SellingTypeResolver::ERROR_LOGIN_REQUIRED, $e->errorCode());
-        }
+        // Read path: soft empty tob shell + sibling hints (mutations stay fail-closed).
+        $tocAdd = $svc->add($this->scope(), $offer, [], 2, $guest, cartTypePreference: 'toc');
+        self::assertTrue($tocAdd['success'] ?? false);
+        $guestTob = $svc->getCart($this->scope(), $guest, null, 'tob');
+        self::assertTrue($guestTob['is_empty'] ?? false);
+        self::assertSame(SellingTypeResolver::ERROR_LOGIN_REQUIRED, $guestTob['gate_reason'] ?? null);
+        self::assertSame('tob', $guestTob['cart_type'] ?? null);
+        $siblings = $guestTob['sibling_carts'] ?? [];
+        self::assertNotEmpty($siblings);
+        self::assertSame('toc', $siblings[0]['cart_type'] ?? null);
+        self::assertGreaterThan(0, (int)($siblings[0]['item_count'] ?? 0));
+        self::assertTrue((bool)($siblings[0]['switchable'] ?? false));
 
         try {
             $svc->add(
@@ -115,6 +121,150 @@ final class CartServiceCommerceTypeTest extends TestCase
         } catch (CartConflictException $e) {
             self::assertSame(SellingTypeResolver::ERROR_LOGIN_REQUIRED, $e->errorCode());
         }
+    }
+
+    public function testEmptyTocHasNoSiblingsWhenTobEmpty(): void
+    {
+        $svc = $this->serviceWithTob([]);
+        $guest = $svc->issueGuestToken();
+        $empty = $svc->getCart($this->scope(), $guest, null, 'toc');
+        self::assertTrue($empty['is_empty'] ?? false);
+        self::assertSame([], $empty['sibling_carts'] ?? null);
+    }
+
+    public function testEmptyTocHasTobSiblingWhenTobHasLines(): void
+    {
+        $offerUuid = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
+        $svc = $this->serviceWithTob([
+            $offerUuid => [
+                'name' => 'Wholesale Sibling Offer',
+                'unit_price_minor' => 300,
+                'currency' => 'CNY',
+                'stock' => 40,
+                'sellable' => true,
+            ],
+        ]);
+        $scope = $this->scope();
+        $offer = new OfferIdentity('product', $offerUuid, legacyProductId: 8);
+        $customerId = 33;
+
+        $add = $svc->add(
+            $scope,
+            $offer,
+            [],
+            5,
+            null,
+            customerId: $customerId,
+            cartTypePreference: 'tob',
+        );
+        self::assertTrue($add['success'] ?? false);
+
+        $toc = $svc->getCart($scope, null, $customerId, 'toc');
+        self::assertTrue($toc['is_empty'] ?? false);
+        $siblings = $toc['sibling_carts'] ?? [];
+        self::assertNotEmpty($siblings, 'empty toc must advertise tob when tob has lines');
+        self::assertSame('tob', $siblings[0]['cart_type'] ?? null);
+        self::assertSame(5, (int)($siblings[0]['item_count'] ?? 0));
+        self::assertTrue((bool)($siblings[0]['switchable'] ?? false));
+    }
+
+    public function testClearTocAttachesTobSiblingWhenTobHasLines(): void
+    {
+        $offerUuid = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+        $svc = $this->serviceWithTob([
+            $offerUuid => [
+                'name' => 'Clear Sibling Offer',
+                'unit_price_minor' => 400,
+                'currency' => 'CNY',
+                'stock' => 40,
+                'sellable' => true,
+            ],
+        ]);
+        $scope = $this->scope();
+        $offer = new OfferIdentity('product', $offerUuid, legacyProductId: 11);
+        $customerId = 44;
+
+        self::assertTrue($svc->add(
+            $scope,
+            $offer,
+            [],
+            5,
+            null,
+            customerId: $customerId,
+            cartTypePreference: 'tob',
+        )['success'] ?? false);
+        self::assertTrue($svc->add(
+            $scope,
+            $offer,
+            [],
+            1,
+            null,
+            customerId: $customerId,
+            cartTypePreference: 'toc',
+        )['success'] ?? false);
+
+        $cleared = $svc->clearCart($scope, null, $customerId, 'toc');
+        self::assertTrue($cleared['is_empty'] ?? false);
+        $siblings = $cleared['sibling_carts'] ?? [];
+        self::assertNotEmpty($siblings, 'clearing toc must still advertise tob lines');
+        self::assertSame('tob', $siblings[0]['cart_type'] ?? null);
+        self::assertSame(5, (int)($siblings[0]['item_count'] ?? 0));
+    }
+
+    public function testRemoveTobItemFailsWhenPreferenceIsToc(): void
+    {
+        $offerUuid = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+        $svc = $this->serviceWithTob([
+            $offerUuid => [
+                'name' => 'Remove Isolation Offer',
+                'unit_price_minor' => 220,
+                'currency' => 'CNY',
+                'stock' => 40,
+                'sellable' => true,
+            ],
+        ]);
+        $scope = $this->scope();
+        $offer = new OfferIdentity('product', $offerUuid, legacyProductId: 12);
+        $customerId = 55;
+
+        $added = $svc->add(
+            $scope,
+            $offer,
+            [],
+            5,
+            null,
+            customerId: $customerId,
+            cartTypePreference: 'tob',
+        );
+        self::assertTrue($added['success'] ?? false);
+        $itemId = (string)($added['items'][0]['item_id'] ?? '');
+        self::assertNotSame('', $itemId);
+
+        try {
+            $svc->removeItem($scope, $itemId, null, $customerId, 'toc');
+            self::fail('removing a tob line against toc preference must fail');
+        } catch (CartConflictException $e) {
+            self::assertSame(CartService::ERROR_NOT_FOUND, $e->errorCode());
+        }
+
+        $removed = $svc->removeItem($scope, $itemId, null, $customerId, 'tob');
+        self::assertTrue($removed['success'] ?? false);
+        self::assertTrue($removed['is_empty'] ?? false);
+        self::assertSame('tob', $removed['cart_type'] ?? null);
+    }
+
+    public function testStorefrontSummarySoftFallsBackWhenGuestPrefersTob(): void
+    {
+        $src = (string)file_get_contents(dirname(__DIR__, 3) . '/Service/CartService.php');
+        self::assertStringContainsString('ERROR_LOGIN_REQUIRED', $src);
+        self::assertStringContainsString('ERROR_MEMBERSHIP_REQUIRED', $src);
+        self::assertStringContainsString("CommerceCartTypeRegistry::CODE_TOC", $src);
+        self::assertStringContainsString("HTML /cart and header SSR must not 500", $src);
+        self::assertStringContainsString("'gate_reason'", $src);
+        self::assertStringContainsString('Guests have no tob cart', $src);
+        self::assertStringContainsString("=== 'tob'", $src);
+        self::assertStringContainsString("Keep retail body quiet", $src);
+        self::assertStringContainsString("\$summary['message'] = ''", $src);
     }
 
     public function testMergeGuestOnlySameTocTypeAndSkipsTobGuest(): void
@@ -185,5 +335,47 @@ final class CartServiceCommerceTypeTest extends TestCase
         $tob = $svc->getCart($this->scope(), null, 7, 'tob');
         self::assertSame('tob', $tob['cart_type']);
         self::assertFalse($tob['type_payload']['discounts_applied']);
+    }
+
+    public function testTobCustomerAddDoesNotMutateTocCart(): void
+    {
+        $offerUuid = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+        $svc = $this->serviceWithTob([
+            $offerUuid => [
+                'name' => 'Isolation Offer',
+                'unit_price_minor' => 250,
+                'currency' => 'CNY',
+                'stock' => 50,
+                'sellable' => true,
+            ],
+        ]);
+        $scope = $this->scope();
+        $offer = new OfferIdentity('product', $offerUuid, legacyProductId: 4);
+        $customerId = 21;
+
+        $tocBefore = $svc->getCart($scope, null, $customerId, 'toc');
+        self::assertTrue((bool)($tocBefore['is_empty'] ?? false));
+
+        $tobAdd = $svc->add(
+            $scope,
+            $offer,
+            [],
+            5,
+            null,
+            customerId: $customerId,
+            cartTypePreference: 'tob',
+        );
+        self::assertTrue($tobAdd['success'] ?? false);
+        self::assertSame('tob', $tobAdd['cart_type'] ?? null);
+        self::assertSame(5, (int)($tobAdd['item_count'] ?? 0));
+
+        $tocAfter = $svc->getCart($scope, null, $customerId, 'toc');
+        self::assertTrue((bool)($tocAfter['is_empty'] ?? false), 'tob add must not write toc cart');
+        self::assertSame(0, (int)($tocAfter['item_count'] ?? 0));
+        self::assertSame([], $tocAfter['items'] ?? []);
+
+        $tobAfter = $svc->getCart($scope, null, $customerId, 'tob');
+        self::assertSame(5, (int)($tobAfter['item_count'] ?? 0));
+        self::assertSame('tob', $tobAfter['cart_type'] ?? null);
     }
 }

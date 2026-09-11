@@ -27,7 +27,7 @@ $copy = [
 ];
 ?>
 <link rel="stylesheet"
-      href="@static(Weline_Cart::css/cart-page-amazon.css)&v=20260909-tob-note-row1">
+      href="@static(Weline_Cart::css/cart-page-amazon.css)&v=20260910-tob-remove-1">
 
 <section class="weline-cart-shell weline-cart-shell--amazon"
          data-cart-content="1"
@@ -48,8 +48,11 @@ $copy = [
 
     <div class="weline-cart-shell__state" data-cart-state="empty" hidden>
         <h2><?= $escape($copy['emptyTitle']) ?></h2>
-        <p><?= $escape($copy['emptyMessage']) ?></p>
-        <a class="weline-cart-shell__continue" href="@url{'products'}"><?= __('浏览商品') ?></a>
+        <p class="weline-cart-shell__empty-lead" data-cart-empty-lead><?= $escape($copy['emptyMessage']) ?></p>
+        <div class="weline-cart-shell__empty-actions">
+            <a class="weline-cart-shell__continue" href="@url{'products'}"><?= __('浏览商品') ?></a>
+            <div class="weline-cart-shell__siblings" data-cart-siblings hidden></div>
+        </div>
     </div>
 
     <div class="weline-cart-shell__state weline-cart-shell__state--error" data-cart-state="error" role="alert" hidden>
@@ -137,6 +140,7 @@ $copy = [
     const retryButton = root.querySelector('[data-cart-retry]');
     const checkoutNode = root.querySelector('[data-cart-checkout]');
     const summaryRoot = root.querySelector('.weline-cart-shell__summary');
+    const siblingsNode = root.querySelector('[data-cart-siblings]');
     const guestTokenStorageKey = 'weline.cart.guest_token';
     let cartApi = null;
     let guestToken = '';
@@ -310,7 +314,25 @@ $copy = [
         return '';
     }
 
+    function isCustomerLoggedIn() {
+        try {
+            const site = window.site || {};
+            if (Number(site.user_id || site.userId || 0) > 0) {
+                return true;
+            }
+            const b2b = document.querySelector('[data-b2b-selling-mode="1"]');
+            if (b2b && String(b2b.getAttribute('data-customer-logged-in') || '0') === '1') {
+                return true;
+            }
+        } catch (error) {}
+        return false;
+    }
+
     function preferredCartType() {
+        // Default / guest = retail. tob cookie is only a post-login preference hint.
+        if (!isCustomerLoggedIn()) {
+            return 'toc';
+        }
         try {
             if (window.WelineB2BSellingMode && typeof window.WelineB2BSellingMode.preferredMode === 'function') {
                 const fromB2b = String(window.WelineB2BSellingMode.preferredMode() || '').trim().toLowerCase();
@@ -333,6 +355,16 @@ $copy = [
         root.classList.toggle('is-cart-type-tob', next === 'tob');
     }
 
+    // Mutations must target the cart currently painted on this page, not the
+    // global selling-mode preference (which can still be toc while chrome shows tob).
+    function activeCartType() {
+        const fromRoot = String(root.getAttribute('data-cart-type') || '').trim().toLowerCase();
+        if (fromRoot === 'tob' || fromRoot === 'toc') {
+            return fromRoot;
+        }
+        return preferredCartType();
+    }
+
     function isUsableLocalCartSummary(summary, mode) {
         if (!summary || typeof summary !== 'object' || summary.success === false) {
             return false;
@@ -345,6 +377,43 @@ $copy = [
             return false;
         }
         return true;
+    }
+
+    function localCartSummaryHasItems(summary) {
+        if (!summary || typeof summary !== 'object' || summary.is_empty === true) {
+            return false;
+        }
+        if (Number(summary.cart_count || summary.item_count || 0) > 0) {
+            return true;
+        }
+        return Array.isArray(summary.items) && summary.items.length > 0;
+    }
+
+    function clearLocalCartSummary(mode) {
+        const next = mode === 'tob' ? 'tob' : 'toc';
+        try {
+            window.localStorage.removeItem('weline.cart.summary_cache.' + next);
+        } catch (error) {}
+        if (window.WelineCart && typeof window.WelineCart.clearCachedSummary === 'function') {
+            try {
+                window.WelineCart.clearCachedSummary({ cartType: next });
+            } catch (clearError) {}
+        }
+    }
+
+    // Sibling Persistence counts win over a stale empty Presentation bucket.
+    function invalidateEmptyCachesClaimedBySiblings(summary) {
+        const rows = summary && Array.isArray(summary.sibling_carts) ? summary.sibling_carts : [];
+        rows.forEach(function (row) {
+            if (!row || Number(row.item_count || row.cart_count || 0) <= 0) {
+                return;
+            }
+            const type = String(row.cart_type || '').toLowerCase() === 'tob' ? 'tob' : 'toc';
+            const cached = readLocalCartSummary(type);
+            if (cached && !localCartSummaryHasItems(cached)) {
+                clearLocalCartSummary(type);
+            }
+        });
     }
 
     function rememberLocalCartSummary(summary) {
@@ -398,7 +467,12 @@ $copy = [
             : String(document.documentElement.getAttribute('lang') || '').replace(/-/g, '_');
         if (window.WelineCart && typeof window.WelineCart.getCachedSummary === 'function') {
             try {
-                const shared = window.WelineCart.getCachedSummary({ cartType: next, currency: wantCurrency, locale: wantLocale });
+                const shared = window.WelineCart.getCachedSummary({
+                    cartType: next,
+                    currency: wantCurrency,
+                    locale: wantLocale,
+                    requireTokenMatch: true,
+                });
                 if (isUsableLocalCartSummary(shared, next)) {
                     const sharedCurrency = String(shared.currency || '').toUpperCase();
                     if (!sharedCurrency || sharedCurrency === wantCurrency) {
@@ -414,6 +488,24 @@ $copy = [
             }
             const data = JSON.parse(raw);
             if (!data || !isUsableLocalCartSummary(data.summary, next)) {
+                return null;
+            }
+            let guestToken = '';
+            try {
+                if (window.WelineCart && typeof window.WelineCart.getGuestSession === 'function') {
+                    const session = window.WelineCart.getGuestSession();
+                    guestToken = session && session.token ? String(session.token).trim() : '';
+                }
+            } catch (tokenError) {
+                guestToken = '';
+            }
+            const cachedToken = String(data.guest_token || '').trim();
+            const summary = data.summary;
+            const hasItems = !!(summary && summary.is_empty !== true
+                && (Number(summary.cart_count || summary.item_count || 0) > 0
+                    || (Array.isArray(summary.items) && summary.items.length > 0)));
+            // Ghost-cart gate: non-empty local summary without matching guest_token is a miss.
+            if (hasItems && (!guestToken || !cachedToken || guestToken !== cachedToken)) {
                 return null;
             }
             const cachedCurrency = String(data.currency || (data.summary && data.summary.currency) || '').toUpperCase();
@@ -738,6 +830,67 @@ $copy = [
         return row;
     }
 
+    function renderSiblingCarts(summary) {
+        if (!siblingsNode) {
+            return;
+        }
+        const emptyLead = root.querySelector('[data-cart-empty-lead]');
+        siblingsNode.textContent = '';
+        const rows = summary && Array.isArray(summary.sibling_carts) ? summary.sibling_carts : [];
+        const usable = rows.filter(function (row) {
+            return row && Number(row.item_count || row.cart_count || 0) > 0;
+        });
+        if (!usable.length) {
+            siblingsNode.hidden = true;
+            if (emptyLead) {
+                emptyLead.hidden = false;
+            }
+            return;
+        }
+        siblingsNode.hidden = false;
+        if (emptyLead) {
+            emptyLead.hidden = true;
+        }
+        usable.forEach(function (row) {
+            const type = String(row.cart_type || '').toLowerCase() === 'tob' ? 'tob' : 'toc';
+            const label = String(row.label || (type === 'tob' ? '批发车' : '零售车')).trim();
+            const count = Number(row.item_count || row.cart_count || 0);
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'weline-cart-shell__sibling-cta';
+            btn.setAttribute('data-cart-sibling', type);
+            btn.setAttribute('data-cart-sibling-switch', type);
+            if (row.switchable === false && row.gate) {
+                btn.setAttribute('data-cart-sibling-gate', String(row.gate));
+            }
+            btn.textContent = '浏览' + label + ' ' + count + '件商品';
+            btn.addEventListener('click', function (event) {
+                event.preventDefault();
+                event.stopPropagation();
+                if (window.WelineCart && typeof window.WelineCart.requestCartType === 'function') {
+                    window.WelineCart.requestCartType(type, {
+                        source: 'sibling-cta',
+                        forceNetwork: true,
+                    });
+                } else {
+                    try {
+                        window.sessionStorage.setItem('weline_cart_type_explicit', type);
+                    } catch (e) {}
+                    window.dispatchEvent(new CustomEvent('weline:cart-type-changed', {
+                        detail: {
+                            cart_type: type,
+                            selling_mode: type,
+                            source: 'sibling-cta',
+                            forceNetwork: true,
+                        },
+                    }));
+                }
+                loadCart({ soft: false, cartType: type, forceNetwork: true });
+            });
+            siblingsNode.appendChild(btn);
+        });
+    }
+
     function render(summary) {
         const items = Array.isArray(summary && summary.items) ? summary.items : [];
         if (!items.length || Boolean(summary && summary.is_empty)) {
@@ -751,6 +904,7 @@ $copy = [
                     checkoutNode.setAttribute('href', checkoutNode.dataset.href);
                 }
             }
+            invalidateEmptyCachesClaimedBySiblings(summary);
             rememberLocalCartSummary(Object.assign({
                 success: true,
                 is_empty: true,
@@ -759,9 +913,12 @@ $copy = [
                 cart_type: preferredCartType(),
                 selling_mode: preferredCartType(),
             }, summary && typeof summary === 'object' ? summary : {}));
+            renderSiblingCarts(summary);
             showState('empty');
             return;
         }
+
+        renderSiblingCarts({ sibling_carts: [] });
 
         itemsNode.textContent = '';
         let currency = text(summary && summary.currency || items[0] && items[0].currency || '').trim().toUpperCase();
@@ -838,6 +995,74 @@ $copy = [
         return cartApi;
     }
 
+    function isCommerceTypeGateFailure(payload, error) {
+        const code = text(
+            (payload && (payload.error_code || payload.code))
+            || (error && error.response && error.response.data && error.response.data.data && error.response.data.data.error_code)
+            || (error && error.code)
+            || ''
+        ).toLowerCase();
+        if (code === 'cart_commerce_type_login_required'
+            || code === 'cart_commerce_type_membership_required'
+            || code === 'business_error'
+        ) {
+            const message = text(
+                (payload && payload.message)
+                || (error && error.message)
+                || (error && error.response && error.response.data && error.response.data.data && error.response.data.data.message)
+                || ''
+            );
+            if (code !== 'business_error') {
+                return true;
+            }
+            return /需要登录|批发身份|login_required|membership_required/i.test(message + ' ' + code);
+        }
+        return false;
+    }
+
+    async function enrichEmptySiblings(summary, requestedMode) {
+        if (!summary || typeof summary !== 'object') {
+            return summary;
+        }
+        const empty = Boolean(summary.is_empty) || !Array.isArray(summary.items) || !summary.items.length;
+        if (!empty) {
+            return summary;
+        }
+        const rows = Array.isArray(summary.sibling_carts) ? summary.sibling_carts : [];
+        if (rows.some(function (row) {
+            return row && Number(row.item_count || row.cart_count || 0) > 0;
+        })) {
+            return summary;
+        }
+        // Logged-in only: guest tob carts do not exist; probing would only return a gate shell.
+        if (!isCustomerLoggedIn()) {
+            return summary;
+        }
+        const other = requestedMode === 'tob' ? 'toc' : 'tob';
+        try {
+            const cart = await getCartApi();
+            const result = await cart.getCart(await cartIdentity(other));
+            const otherSummary = result && result.data && typeof result.data === 'object' ? result.data : result;
+            if (!otherSummary || otherSummary.success === false || otherSummary.is_empty) {
+                return summary;
+            }
+            const count = Number(otherSummary.cart_count || otherSummary.item_count || 0)
+                || (Array.isArray(otherSummary.items) ? otherSummary.items.length : 0);
+            if (count <= 0) {
+                return summary;
+            }
+            summary.sibling_carts = [{
+                cart_type: other,
+                label: other === 'tob' ? '批发车' : '零售车',
+                item_count: count,
+                cart_count: count,
+                switchable: true,
+                gate: null,
+            }];
+        } catch (error) {}
+        return summary;
+    }
+
     async function loadCart(options) {
         const soft = !!(options && options.soft);
         const preferCache = !!(options && options.preferCache);
@@ -845,9 +1070,11 @@ $copy = [
             ? options.cartType
             : preferredCartType();
         const seq = ++cartLoadSeq;
+        // Empty typed cache cannot short-circuit: sibling CTA may claim the other cart
+        // still has lines while a stale empty bucket would paint 「购物车是空的」.
         if (preferCache && !options.forceNetwork) {
             const cached = readLocalCartSummary(requestedMode);
-            if (cached) {
+            if (cached && localCartSummaryHasItems(cached)) {
                 applyCartTypeChrome(requestedMode);
                 render(cached);
                 return;
@@ -859,19 +1086,70 @@ $copy = [
         try {
             applyCartTypeChrome(requestedMode);
             const cart = await getCartApi();
-            const result = await cart.getCart(await cartIdentity(requestedMode));
+            let result;
+            try {
+                result = await cart.getCart(await cartIdentity(requestedMode));
+            } catch (requestError) {
+                if (requestedMode === 'tob' && isCommerceTypeGateFailure(null, requestError)) {
+                    // Guest/wholesale gate: keep page usable with retail cart (SSR already fail-soft).
+                    result = await cart.getCart(await cartIdentity('toc'));
+                    if (seq !== cartLoadSeq) {
+                        return;
+                    }
+                    const tocSummary = result && result.data && typeof result.data === 'object' ? result.data : result;
+                    if (!tocSummary || tocSummary.success === false) {
+                        throw requestError;
+                    }
+                    tocSummary.gate_reason = 'cart_commerce_type_login_required';
+                    tocSummary.preferred_cart_type = 'tob';
+                    applyCartTypeChrome('toc');
+                    render(tocSummary);
+                    // Do not paint wholesale login-required copy onto the retail cart body.
+                    return;
+                }
+                throw requestError;
+            }
             if (seq !== cartLoadSeq) {
                 return;
             }
             const summary = result && result.data && typeof result.data === 'object' ? result.data : result;
             if (!summary || summary.success === false) {
+                if (requestedMode === 'tob' && isCommerceTypeGateFailure(summary, null)) {
+                    // Prefer empty tob + sibling CTA when server already attached hints.
+                    if (summary && Array.isArray(summary.sibling_carts) && summary.sibling_carts.length) {
+                        applyCartTypeChrome('tob');
+                        render(Object.assign({}, summary, {
+                            is_empty: true,
+                            items: [],
+                            cart_type: 'tob',
+                            selling_mode: 'tob',
+                        }));
+                        return;
+                    }
+                    const tocResult = await cart.getCart(await cartIdentity('toc'));
+                    if (seq !== cartLoadSeq) {
+                        return;
+                    }
+                    const tocSummary = tocResult && tocResult.data && typeof tocResult.data === 'object'
+                        ? tocResult.data
+                        : tocResult;
+                    if (tocSummary && tocSummary.success !== false) {
+                        tocSummary.gate_reason = text(summary.error_code) || 'cart_commerce_type_login_required';
+                        tocSummary.preferred_cart_type = 'tob';
+                        applyCartTypeChrome('toc');
+                        render(tocSummary);
+                        return;
+                    }
+                }
                 throw new Error(text(summary && summary.message) || copy.loadFailed);
             }
             const reported = String(summary.cart_type || summary.selling_mode || '').toLowerCase();
-            // Keep the requested type chrome when server omits cart_type; never let a late
-            // toc response paint over an already-selected wholesale tab.
-            applyCartTypeChrome(reported === 'tob' || reported === 'toc' ? reported : requestedMode);
-            render(summary);
+            if (summary.is_empty && Array.isArray(summary.sibling_carts) && summary.sibling_carts.length) {
+                applyCartTypeChrome(requestedMode);
+            } else {
+                applyCartTypeChrome(reported === 'tob' || reported === 'toc' ? reported : requestedMode);
+            }
+            render(await enrichEmptySiblings(summary, requestedMode));
         } catch (error) {
             if (seq !== cartLoadSeq) {
                 return;
@@ -888,7 +1166,7 @@ $copy = [
         root.setAttribute('aria-busy', 'true');
         setText(messageNode, '');
         messageNode && messageNode.classList.remove('is-error');
-        const mode = preferredCartType();
+        const mode = activeCartType();
         try {
             const cart = await getCartApi();
             const params = Object.assign(await cartIdentity(mode), { item_id: itemId });
@@ -902,6 +1180,11 @@ $copy = [
             setText(messageNode, text(summary.message));
             const reported = String(summary.cart_type || summary.selling_mode || mode).toLowerCase();
             applyCartTypeChrome(reported === 'tob' ? 'tob' : 'toc');
+            if (summary.is_empty || !Array.isArray(summary.items) || !summary.items.length) {
+                // Mutation summaries historically omitted sibling_carts — refresh empty state.
+                await loadCart({ soft: true, cartType: reported === 'tob' ? 'tob' : 'toc', forceNetwork: true });
+                return;
+            }
             render(summary);
         } catch (error) {
             setText(messageNode, error && error.message ? error.message : copy.mutationFailed);
@@ -920,12 +1203,24 @@ $copy = [
         loadCart({ soft: true, cartType: preferredCartType() });
     });
 
-    window.addEventListener('weline:selling-mode-changed', function (event) {
+    window.addEventListener('weline:cart-type-changed', function (event) {
         const detail = event && event.detail && typeof event.detail === 'object' ? event.detail : {};
-        const mode = String(detail.selling_mode || detail.cart_type || preferredCartType()).toLowerCase();
+        const mode = String(detail.cart_type || detail.selling_mode || preferredCartType()).toLowerCase();
         const next = mode === 'tob' ? 'tob' : 'toc';
         applyCartTypeChrome(next);
         // Prefer typed local summary; only hit getCart when that type has no usable cache.
+        loadCart({ soft: false, cartType: next, preferCache: true, forceNetwork: detail.forceNetwork === true });
+    });
+    // Legacy B2B event → same chrome reload path (adapter until callers migrate).
+    window.addEventListener('weline:selling-mode-changed', function (event) {
+        const detail = event && event.detail && typeof event.detail === 'object' ? event.detail : {};
+        if (detail.source === 'b2b-setMode') {
+            // setMode already emits cart-type-changed; avoid double loadCart.
+            return;
+        }
+        const mode = String(detail.selling_mode || detail.cart_type || preferredCartType()).toLowerCase();
+        const next = mode === 'tob' ? 'tob' : 'toc';
+        applyCartTypeChrome(next);
         loadCart({ soft: false, cartType: next, preferCache: true, forceNetwork: detail.forceNetwork === true });
     });
 
