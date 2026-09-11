@@ -2230,23 +2230,24 @@ SQL);
             $hasIncludedColumns = (int)($row['indnatts'] ?? 0) !== (int)($row['indnkeyatts'] ?? 0);
             $method = strtoupper((string)($row['index_method'] ?? 'BTREE'));
             $type = $unique ? 'UNIQUE' : 'DEFAULT';
+            $keyDefinition = trim((string)($row['index_key_definition'] ?? ''));
+            // 不支持的表达式/谓词/INCLUDE 索引不得阻断 SchemaDiff：读回后由 Diff
+            // 对同名声明不一致执行 DROP+ADD，收敛到声明式普通列索引。
             if ($expression !== '') {
-                $column = $this->pgsqlFrameworkFulltextColumn(
-                    (string)($row['index_key_definition'] ?? ''),
-                ) ?? '';
-                if ($method !== 'GIN' || $predicate !== '' || $hasIncludedColumns || $column === '') {
-                    throw new \RuntimeException(__(
-                        'PostgreSQL 表 %{1} 的索引 %{2} 使用声明式 Schema 尚不支持的表达式、谓词或 INCLUDE 列',
-                        [$formattedTable, $keyName],
-                    ));
+                $fulltextColumn = $this->pgsqlFrameworkFulltextColumn($keyDefinition);
+                if ($method === 'GIN' && $predicate === '' && !$hasIncludedColumns && $fulltextColumn !== null) {
+                    $column = $fulltextColumn;
+                    $type = 'FULLTEXT';
+                } else {
+                    $column = $column !== ''
+                        ? $column
+                        : ($keyDefinition !== '' ? $keyDefinition : '__unsupported_index_expr__');
                 }
-                $type = 'FULLTEXT';
             } elseif ($predicate !== '' || $hasIncludedColumns
                 || (int)($row['attnum'] ?? 0) <= 0 || $column === '') {
-                throw new \RuntimeException(__(
-                    'PostgreSQL 表 %{1} 的索引 %{2} 使用声明式 Schema 尚不支持的表达式、谓词或 INCLUDE 列',
-                    [$formattedTable, $keyName],
-                ));
+                $column = $column !== ''
+                    ? $column
+                    : ($keyDefinition !== '' ? $keyDefinition : '__unsupported_index_expr__');
             }
             if (!$valid || !$ready) {
                 throw new \RuntimeException(__(
@@ -2264,10 +2265,9 @@ SQL);
             } elseif ($byName[$keyName]['unique'] !== $unique
                 || $byName[$keyName]['method'] !== $method
                 || $byName[$keyName]['type'] !== $type) {
-                throw new \RuntimeException(__(
-                    'PostgreSQL 表 %{1} 的索引 %{2} 使用声明式 Schema 尚不支持的表达式、谓词或 INCLUDE 列',
-                    [$formattedTable, $keyName],
-                ));
+                // 同名索引行元数据冲突时仍可读回，交给 SchemaDiff 替换。
+                $byName[$keyName]['unique'] = $byName[$keyName]['unique'] || $unique;
+                $byName[$keyName]['type'] = $byName[$keyName]['unique'] ? 'UNIQUE' : $byName[$keyName]['type'];
             }
             $byName[$keyName]['columns'][$seq] = $column;
         }

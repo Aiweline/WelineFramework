@@ -97,6 +97,29 @@ return [
                 ],
             ],
         ],
+        // CSP 应用默认扩展点（模块贡献域名，汇总为不可覆盖的系统默认）
+        'Security/Csp' => [
+            'path' => 'extends/module/Weline_Framework/Security/Csp',
+            'type' => ['module'],
+            'description' => 'CSP 应用默认扩展点：模块贡献 script/frame/connect 等 source，框架收集后并入系统默认并强制放行；SystemConfig Scope 不可删除这些 source',
+            'required' => false,
+            'multiple' => true,
+            'interface' => 'Weline\Framework\Http\Security\CspSourceContributionProviderInterface',
+            'details' => [
+                'file_location' => [
+                    'path' => 'extends/module/Weline_Framework/Security/Csp/{ProviderName}.php',
+                    'description' => 'CSP 应用默认贡献类位置',
+                    'example' => 'app/code/WeShop/Payment/extends/module/Weline_Framework/Security/Csp/StripeCsp.php',
+                ],
+                'interface' => [
+                    'interface' => 'Weline\Framework\Http\Security\CspSourceContributionProviderInterface',
+                    'description' => '必须实现 contribution(): CspSourceContribution，返回 directive=>sources',
+                    'required_methods' => [
+                        'contribution' => '返回本模块需要放行的 CSP 指令与 source 列表',
+                    ],
+                ],
+            ],
+        ],
         // Session 驱动扩展点
         'Session' => [
             'path' => 'extends/module/Weline_Framework/Session',

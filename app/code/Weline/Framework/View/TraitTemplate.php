@@ -848,6 +848,24 @@ trait TraitTemplate
             'scope' => $scope,
             'runtime_os' => PHP_OS_FAMILY,
             'runtime_root' => str_replace('\\', '/', rtrim($runtimeRoot, '/\\')),
+            // w:widget bakes nested <w:hook> HTML at parent compile time; when
+            // generated/hooks.php changes, fetch/tpl mappings must miss so chrome
+            // (e.g. header account dropdown) re-bakes instead of serving stale menus.
+            'hooks_registry' => self::hooksRegistryCompileDigest(),
         ]);
+    }
+
+    /**
+     * Stable digest of generated/hooks.php for template-compile cache keys.
+     * mtime+size is enough: hook:rebuild / setup:upgrade always rewrites the file.
+     */
+    protected static function hooksRegistryCompileDigest(): string
+    {
+        $file = BP . 'generated' . DIRECTORY_SEPARATOR . 'hooks.php';
+        if (!\is_file($file)) {
+            return 'missing';
+        }
+
+        return (string)((int)@\filemtime($file)) . ':' . (string)((int)@\filesize($file));
     }
 }

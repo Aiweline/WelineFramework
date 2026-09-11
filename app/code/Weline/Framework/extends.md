@@ -106,6 +106,19 @@ class YourSessionDriver extends File
 - **flush(): bool** - 清空当前 identity 的所有缓存
 - **clear(): bool** - 清理缓存
 
+### CSP 应用默认扩展点
+
+**路径**: `extends/module/Weline_Framework/Security/Csp`
+
+**接口**: `Weline\Framework\Http\Security\CspSourceContributionProviderInterface`
+
+**用途**: 模块贡献 CSP source，框架收集为**应用默认**：强制放行、SystemConfig Scope 不可删除。
+
+**要求**:
+- 实现 `contribution(): CspSourceContribution`
+- 零参构造；只返回 directive=>sources 标量
+- 新增后执行 `php bin/w setup:upgrade` 重建 Extends 注册表
+
 ### Session 驱动扩展点
 
 **路径**: `extends/module/Weline_Framework/Session`

@@ -1,36 +1,37 @@
 <?php
 /**
  * @meta.title {default="安全响应头",description="按 Scope 收紧 CSP 与 CORS；激活前必须登记同 Scope 的 verified LKG。"}
- * @meta.description {default="Scope 配置只能比 Env Global 基线更严格。LKG 缺失、不匹配或持久化不可用时保存失败。"}
+ * @meta.description {default="Scope 配置只能比 Env Global 基线更严格。Extends 贡献的应用默认 CSP 强制放行且不可覆盖。"}
  * @config.area {backend}
  * @config.sort {5}
  * @config.acl {Weline_SystemConfig::config_center}
  */
 ?>
 
-<w:config:group code="framework_security_headers" label="安全响应头" description="CSP/CORS Scope 覆盖只可收紧；保存前须通过 registerSecurityPolicyLkg 登记相同候选摘要。" sort="10">
+<w:config:group code="framework_security_headers" label="安全响应头" description="CSP/CORS Scope 覆盖只可收紧；Extends 应用默认强制放行且不可覆盖；保存前须 registerSecurityPolicyLkg。" sort="10">
+    <w:config:hint type="warning" description="应用默认 CSP（Extends：extends/module/Weline_Framework/Security/Csp）强制放行，配置保存不可删除这些 source（security_policy_app_defaults_immutable）。配置中心会列出当前已收集的应用默认。" />
     <w:config:field
         key="security.headers.csp"
         label="Content-Security-Policy"
-        description="留空继承；非空值必须是 Env Global CSP 的严格子集。后台至少含 script-src/style-src 的 'unsafe-inline'，并以 img-src 'self' data: 允许主题内嵌图标。"
+        description="留空继承 Env 安全默认；非空必须是 Global 基线子集，且必须保留 Extends 应用默认 source。后台需含 script-src/style-src 的 unsafe-inline。"
         type="textarea"
         value-type="string"
-        default=""
+        default="connect-src 'self' https://api.stripe.com https://api.tiktok.com https://api.twitter.com https://cdn.jsdelivr.net https://cdn.syndication.twimg.com https://cdnjs.cloudflare.com https://connect.facebook.net https://graph.facebook.com https://open.weixin.qq.com https://region1.google-analytics.com https://unpkg.com https://www.google-analytics.com https://www.google.com https://www.googletagmanager.com https://www.gstatic.com https://www.linkedin.com https://www.paypal.com; default-src 'self'; font-src 'self' data: https:; frame-src 'self' https://js.stripe.com https://open.weixin.qq.com https://platform.twitter.com https://player.bilibili.com https://twitter.com https://www.facebook.com https://www.google.com https://www.gstatic.com https://www.instagram.com https://www.linkedin.com https://www.paypal.com https://www.tiktok.com https://www.youtube-nocookie.com https://www.youtube.com https://x.com; img-src 'self' blob: data: https:; media-src 'self' blob: https:; script-src 'self' 'unsafe-inline' https://ajax.googleapis.com https://apis.google.com https://cdn.jsdelivr.net https://cdn.syndication.twimg.com https://cdnjs.cloudflare.com https://connect.facebook.net https://graph.facebook.com https://js.stripe.com https://open.weixin.qq.com https://platform.linkedin.com https://platform.twitter.com https://player.bilibili.com https://res.wx.qq.com https://unpkg.com https://www.google-analytics.com https://www.google.com https://www.googletagmanager.com https://www.gstatic.com https://www.instagram.com https://www.paypal.com https://www.paypalobjects.com https://www.tiktok.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; worker-src 'self' blob:"
         scope="global,website,store,channel"
         validation="max:8000" />
     <w:config:field
         key="security.headers.csp_report_only"
         label="CSP Report-Only"
-        description="观察策略；仍不得弱于基线 CSP。"
+        description="观察策略默认与强制 CSP 一致；仍不得弱于基线，且不可删除应用默认 source。"
         type="textarea"
         value-type="string"
-        default=""
+        default="connect-src 'self' https://api.stripe.com https://api.tiktok.com https://api.twitter.com https://cdn.jsdelivr.net https://cdn.syndication.twimg.com https://cdnjs.cloudflare.com https://connect.facebook.net https://graph.facebook.com https://open.weixin.qq.com https://region1.google-analytics.com https://unpkg.com https://www.google-analytics.com https://www.google.com https://www.googletagmanager.com https://www.gstatic.com https://www.linkedin.com https://www.paypal.com; default-src 'self'; font-src 'self' data: https:; frame-src 'self' https://js.stripe.com https://open.weixin.qq.com https://platform.twitter.com https://player.bilibili.com https://twitter.com https://www.facebook.com https://www.google.com https://www.gstatic.com https://www.instagram.com https://www.linkedin.com https://www.paypal.com https://www.tiktok.com https://www.youtube-nocookie.com https://www.youtube.com https://x.com; img-src 'self' blob: data: https:; media-src 'self' blob: https:; script-src 'self' 'unsafe-inline' https://ajax.googleapis.com https://apis.google.com https://cdn.jsdelivr.net https://cdn.syndication.twimg.com https://cdnjs.cloudflare.com https://connect.facebook.net https://graph.facebook.com https://js.stripe.com https://open.weixin.qq.com https://platform.linkedin.com https://platform.twitter.com https://player.bilibili.com https://res.wx.qq.com https://unpkg.com https://www.google-analytics.com https://www.google.com https://www.googletagmanager.com https://www.gstatic.com https://www.instagram.com https://www.paypal.com https://www.paypalobjects.com https://www.tiktok.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; worker-src 'self' blob:"
         scope="global,website,store,channel"
         validation="max:8000" />
     <w:config:field
         key="security.headers.cors_origins"
         label="CORS Origin 白名单"
-        description="空格分隔；Scope 只能缩小 Env Global 白名单。"
+        description="空格分隔；留空=禁止跨域回显（安全默认）。Scope 只能缩小 Env Global 白名单。"
         type="textarea"
         value-type="string"
         default=""

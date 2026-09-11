@@ -203,15 +203,20 @@ class Parser
                     static fn(): array => self::getCurrentLayeredWords(),
                 );
                 $translationCacheKey = (string)($layers['cache_key'] ?? '') . '|' . $words;
-                if (isset(DictionaryCacheNamespace::localCache(self::$currentRequestTranslatedWords)[$translationCacheKey])) {
-                    return DictionaryCacheNamespace::localCache(self::$currentRequestTranslatedWords)[$translationCacheKey];
+                $requestWords = &DictionaryCacheNamespace::localCache(self::$currentRequestTranslatedWords);
+                if (isset($requestWords[$translationCacheKey]) && \is_string($requestWords[$translationCacheKey])) {
+                    return $requestWords[$translationCacheKey];
                 }
 
-                return DictionaryCacheNamespace::localCache(self::$currentRequestTranslatedWords)[$translationCacheKey]
-                    = RequestLifecycleTrace::measurePhase(
-                        'i18n.phrase.resolve',
-                        static fn(): string => self::translateWordFromLayers($words, $layers),
-                    );
+                $resolved = RequestLifecycleTrace::measurePhase(
+                    'i18n.phrase.resolve',
+                    static fn(): string => self::translateWordFromLayers($words, $layers),
+                );
+                if (!\is_string($resolved) || $resolved === '') {
+                    $resolved = $words;
+                }
+
+                return $requestWords[$translationCacheKey] = $resolved;
             } finally {
                 self::leaveTranslationResolution();
             }
@@ -629,10 +634,19 @@ class Parser
 
     private static function translateWordFromLayers(string $word, array $layers): string
     {
+        try {
+            return self::doTranslateWordFromLayers($word, $layers);
+        } catch (\Throwable) {
+            return $word;
+        }
+    }
+
+    private static function doTranslateWordFromLayers(string $word, array $layers): string
+    {
         $lang = (string)($layers['lang'] ?? '');
         if ($lang !== '') {
             $eventTranslation = self::translateFromEventDictionary($word, $lang);
-            if ($eventTranslation !== null) {
+            if (\is_string($eventTranslation) && $eventTranslation !== '') {
                 return $eventTranslation;
             }
             if (EventDictionary::isExclusive($lang)) {
@@ -643,8 +657,16 @@ class Parser
 
         // Only public dictionary results may be shared across request scopes.
         $workerCacheKey = (string)($layers['cache_key'] ?? '') . '|' . $word;
-        if (\array_key_exists($workerCacheKey, self::$workerTranslatedWordsCache)) {
-            return DictionaryCacheNamespace::localCache(self::$workerTranslatedWordsCache)[$workerCacheKey];
+        // Must read via localCache: when fingerprint() is null, localCache returns an
+        // ephemeral empty array. Checking the raw process cache then indexing localCache
+        // yields null and violates :string (seen on theme-editor remove-widget JSON).
+        $workerWords = &DictionaryCacheNamespace::localCache(self::$workerTranslatedWordsCache);
+        if (\array_key_exists($workerCacheKey, $workerWords)) {
+            $cached = $workerWords[$workerCacheKey];
+            if (\is_string($cached)) {
+                return $cached;
+            }
+            unset($workerWords[$workerCacheKey]);
         }
 
         $modules = (array)($layers['modules'] ?? []);
@@ -1700,8 +1722,11 @@ class Parser
     private static function loadGlobalDictionaryWord(string $lang, string $word): string|null|false
     {
         $workerCacheKey = DictionaryCacheNamespace::cacheKey($lang . '|' . $word);
-        if (\array_key_exists($workerCacheKey, self::$workerGlobalDictionaryWordCache)) {
-            return DictionaryCacheNamespace::localCache(self::$workerGlobalDictionaryWordCache)[$workerCacheKey];
+        $localWords = &DictionaryCacheNamespace::localCache(self::$workerGlobalDictionaryWordCache);
+        if (\array_key_exists($workerCacheKey, $localWords)) {
+            $cached = $localWords[$workerCacheKey];
+            // Known miss is stored as null; transient miss must not leak via raw-cache vs localCache mismatch.
+            return \is_string($cached) || $cached === null ? $cached : null;
         }
         $requestWord = null;
         if (self::readRequestPrefetchedWord($lang, $word, $requestWord)) {
@@ -1709,7 +1734,7 @@ class Parser
         }
 
         if (self::globalDictionaryProvider() === null) {
-            DictionaryCacheNamespace::localCache(self::$workerGlobalDictionaryWordCache)[$workerCacheKey] = null;
+            $localWords[$workerCacheKey] = null;
             return null;
         }
 

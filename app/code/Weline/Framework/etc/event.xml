@@ -92,6 +92,13 @@
                   disabled="false"
                   shared="true"
                   sort="10"/>
+        <observer name="cache_impact"
+                  instance="Weline\Framework\Event\ResourceChange\Observer\CacheImpactObserver"
+                  delivery="sync"
+                  failure="critical"
+                  disabled="false"
+                  shared="true"
+                  sort="20"/>
     </event>
 
     <!-- 路由收集完成后收集 @Cdn/@Attack 中立注解规则 -->

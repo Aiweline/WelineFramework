@@ -304,11 +304,11 @@ final class AppRequestRuntimeContextTest extends TestCase
             Context::enter(new Context([
                 'meta' => ['type' => 'request', 'mode' => 'wls'],
                 'input' => [
-                    'uri' => '/USD/help',
-                    'origin_request_uri' => '/USD/help',
+                    'uri' => '/USD/faq',
+                    'origin_request_uri' => '/USD/faq',
                     'server' => [
-                        'REQUEST_URI' => '/USD/help',
-                        'WELINE_ORIGIN_REQUEST_URI' => '/USD/help',
+                        'REQUEST_URI' => '/USD/faq',
+                        'WELINE_ORIGIN_REQUEST_URI' => '/USD/faq',
                         'WELINE_WEBSITE_ID' => '0',
                         'WELINE_WEBSITE_CODE' => 'default',
                         'WELINE_WEBSITE_LANGUAGE' => 'zh_Hans_CN',
@@ -347,7 +347,7 @@ final class AppRequestRuntimeContextTest extends TestCase
                     'WELINE_WEBSITE_LANGUAGE' => 'zh_Hans_CN',
                 ],
             ];
-            $method->invokeArgs(new App(), [&$parse, '/USD/help']);
+            $method->invokeArgs(new App(), [&$parse, '/USD/faq']);
 
             self::assertSame('zh_Hans_CN', $parse['language']);
             self::assertSame('zh_Hans_CN', $parse['server']['WELINE_USER_LANG']);
