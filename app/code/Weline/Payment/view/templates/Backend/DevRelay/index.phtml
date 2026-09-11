@@ -38,9 +38,9 @@ $outboundMode = (string) ($config['outbound_mode'] ?? 'local_direct');
                     </label>
                 </div>
             <?php endif; ?>
-            <div class="mb-3">
-                <label class="form-label"><lang>出站模式（默认）</lang></label>
-                <select class="form-select" id="dev-relay-settings-outbound-mode">
+            <div class="w-field mb-3">
+                <label class="w-field__label"><lang>出站模式（默认）</lang></label>
+                <select class="w-select form-select" id="dev-relay-settings-outbound-mode">
                     <option value="local_direct" <?= $outboundMode === 'local_direct' ? 'selected' : '' ?>>
                         <lang>本地直连 Provider（默认）</lang>
                     </option>
@@ -50,9 +50,9 @@ $outboundMode = (string) ($config['outbound_mode'] ?? 'local_direct');
                 </select>
             </div>
             <?php if ($is_local): ?>
-                <div class="mb-3">
-                    <label class="form-label"><lang>预填线上站点地址（可选）</lang></label>
-                    <input type="text" class="form-control" id="dev-relay-settings-online-base-url"
+                <div class="w-field mb-3">
+                <label class="w-field__label"><lang>预填线上站点地址（可选）</lang></label>
+                    <input type="text" class="w-input form-control" id="dev-relay-settings-online-base-url"
                            value="<?= htmlspecialchars((string) ($config['online_base_url'] ?? ''), ENT_QUOTES) ?>"
                            placeholder="https://www.example.com" />
                 </div>
@@ -69,26 +69,26 @@ $outboundMode = (string) ($config['outbound_mode'] ?? 'local_direct');
         <?php if ($is_online_host): ?>
             <section class="mb-4" data-role="online-panel">
                 <h5><lang>线上 Relay 主机</lang></h5>
-                <div class="mb-3">
-                    <label class="form-label"><lang>站点地址（复制到本机）</lang></label>
+                <div class="w-field mb-3">
+                <label class="w-field__label"><lang>站点地址（复制到本机）</lang></label>
                     <div class="input-group">
-                        <input type="text" class="form-control" id="dev-relay-website-base-url" readonly
+                        <input type="text" class="w-input form-control" id="dev-relay-website-base-url" readonly
                                value="<?= htmlspecialchars($website_base_url, ENT_QUOTES) ?>" />
                         <button type="button" class="btn btn-outline-secondary" id="dev-relay-copy-base-url"><lang>复制</lang></button>
                     </div>
                     <div class="form-text"><lang>含多网站子路径的完整入口 URL。</lang></div>
                 </div>
-                <div class="mb-3">
-                    <label class="form-label"><lang>用户 API Token（复制到本机）</lang></label>
+                <div class="w-field mb-3">
+                <label class="w-field__label"><lang>用户 API Token（复制到本机）</lang></label>
                     <div class="input-group">
-                        <input type="text" class="form-control" id="dev-relay-user-api-token" readonly
+                        <input type="text" class="w-input form-control" id="dev-relay-user-api-token" readonly
                                value="<?= htmlspecialchars($user_api_token, ENT_QUOTES) ?>" />
                         <button type="button" class="btn btn-outline-secondary" id="dev-relay-copy-user-token"><lang>复制</lang></button>
                     </div>
                 </div>
-                <div class="mb-3">
-                    <label class="form-label"><lang>出站模式</lang></label>
-                    <select class="form-select" id="dev-relay-outbound-mode">
+                <div class="w-field mb-3">
+                <label class="w-field__label"><lang>出站模式</lang></label>
+                    <select class="w-select form-select" id="dev-relay-outbound-mode">
                         <option value="local_direct"><lang>本地直连 Provider（默认）</lang></option>
                         <option value="online_proxy"><lang>经线上代发 Provider API</lang></option>
                     </select>
@@ -108,15 +108,15 @@ $outboundMode = (string) ($config['outbound_mode'] ?? 'local_direct');
         <?php if ($is_local): ?>
             <section class="mb-4" data-role="local-panel">
                 <h5><lang>本机静默中继</lang></h5>
-                <div class="mb-3">
-                    <label class="form-label"><lang>线上站点地址</lang></label>
-                    <input type="text" class="form-control" id="dev-relay-online-base-url"
+                <div class="w-field mb-3">
+                <label class="w-field__label"><lang>线上站点地址</lang></label>
+                    <input type="text" class="w-input form-control" id="dev-relay-online-base-url"
                            placeholder="https://www.example.com 或 https://example.com/shop"
                            value="<?= htmlspecialchars((string) ($config['online_base_url'] ?? ''), ENT_QUOTES) ?>" />
                 </div>
-                <div class="mb-3">
-                    <label class="form-label"><lang>线上用户 API Token</lang></label>
-                    <input type="password" class="form-control" id="dev-relay-user-token" autocomplete="off" />
+                <div class="w-field mb-3">
+                <label class="w-field__label"><lang>线上用户 API Token</lang></label>
+                    <input type="password" class="w-input form-control" id="dev-relay-user-token" autocomplete="off" />
                 </div>
                 <button type="button" class="btn btn-primary" id="dev-relay-worker-start" <?= $feature_enabled ? '' : 'disabled' ?>>
                     <lang>开启中继</lang>
@@ -128,25 +128,25 @@ $outboundMode = (string) ($config['outbound_mode'] ?? 'local_direct');
                 </div>
                 <details class="mt-3">
                     <summary><lang>兼容：旧版手动绑定</lang></summary>
-                    <div class="mb-3 mt-2">
-                        <label class="form-label"><lang>本地 inbound 地址</lang></label>
+                    <div class="w-field mb-3 mt-2">
+                        <label class="w-field__label"><lang>本地 inbound 地址</lang></label>
                         <div class="input-group">
-                            <input type="text" class="form-control" id="dev-relay-local-copy-url" readonly
+                            <input type="text" class="w-input form-control" id="dev-relay-local-copy-url" readonly
                                    value="<?= htmlspecialchars((string) ($active_local['local_inbound_url'] ?? ''), ENT_QUOTES) ?>" />
                             <button type="button" class="btn btn-outline-secondary" id="dev-relay-copy-inbound"><lang>复制</lang></button>
                         </div>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label"><lang>线上 session_code</lang></label>
-                        <input type="text" class="form-control" id="dev-relay-session-code" />
+                    <div class="w-field mb-3">
+                <label class="w-field__label"><lang>线上 session_code</lang></label>
+                        <input type="text" class="w-input form-control" id="dev-relay-session-code" />
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label"><lang>线上 relay token</lang></label>
-                        <input type="password" class="form-control" id="dev-relay-token" autocomplete="off" />
+                    <div class="w-field mb-3">
+                <label class="w-field__label"><lang>线上 relay token</lang></label>
+                        <input type="password" class="w-input form-control" id="dev-relay-token" autocomplete="off" />
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label"><lang>线上 SSE Stream URL</lang></label>
-                        <input type="text" class="form-control" id="dev-relay-online-stream-url" />
+                    <div class="w-field mb-3">
+                <label class="w-field__label"><lang>线上 SSE Stream URL</lang></label>
+                        <input type="text" class="w-input form-control" id="dev-relay-online-stream-url" />
                     </div>
                     <button type="button" class="btn btn-secondary" id="dev-relay-bind-local" <?= $feature_enabled ? '' : 'disabled' ?>>
                         <lang>绑定本地会话</lang>

@@ -106,6 +106,7 @@ final class AssetPaymentService implements PaymentAssetFacadeInterface
                 'exchange_ratio' => '0',
                 'max_discount_ratio' => '1',
                 'allowed_payable_types' => [],
+                'required_order_types' => [],
                 'refund_strategy' => 'allocation',
             ];
         }
@@ -147,6 +148,9 @@ final class AssetPaymentService implements PaymentAssetFacadeInterface
                 'max_discount_ratio' => $maxDiscountRatio,
                 'allowed_payable_types' => $this->normalizeList(
                     $assetConfig['allowed_payable_types'] ?? [],
+                ),
+                'required_order_types' => $this->normalizeList(
+                    $assetConfig['required_order_types'] ?? [],
                 ),
                 'refund_strategy' => (string) ($assetConfig['refund_strategy'] ?? 'allocation'),
             ];
@@ -190,7 +194,51 @@ final class AssetPaymentService implements PaymentAssetFacadeInterface
                 $this->toBool($config[$assetCode]['enabled'] ?? false);
         }
 
+        foreach ($this->providerAssetPolicies($context + $scope) as $assetCode => $fragment) {
+            if (!is_array($fragment)) {
+                continue;
+            }
+            $config[$assetCode] = isset($config[$assetCode]) && is_array($config[$assetCode])
+                ? array_replace($config[$assetCode], $fragment)
+                : $fragment;
+        }
+
         return $this->buildAssetPolicy($config);
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     * @return array<string, array<string, mixed>>
+     */
+    private function providerAssetPolicies(array $context): array
+    {
+        $merged = [];
+        try {
+            $registry = ObjectManager::getInstance(
+                \Weline\Framework\Compilation\ServiceProviderRegistry::class,
+            );
+            if (!$registry instanceof \Weline\Framework\Compilation\ServiceProviderRegistry) {
+                return [];
+            }
+            foreach ($registry->implementationsWithPrefix(
+                \Weline\Payment\Api\PaymentAssetPolicyProviderInterface::CAPABILITY_PREFIX,
+            ) as $implementation) {
+                $provider = ObjectManager::getInstance((string)$implementation);
+                if (!$provider instanceof \Weline\Payment\Api\PaymentAssetPolicyProviderInterface) {
+                    continue;
+                }
+                foreach ($provider->getAssetPolicies($context) as $code => $policy) {
+                    if (!is_string($code) || !is_array($policy)) {
+                        continue;
+                    }
+                    $merged[$code] = $policy;
+                }
+            }
+        } catch (Throwable) {
+            return [];
+        }
+
+        return $merged;
     }
 
     public function startWithAssets(
@@ -636,14 +684,30 @@ final class AssetPaymentService implements PaymentAssetFacadeInterface
             throw new \LogicException('payment_asset_policy_missing:' . $assetCode);
         }
         $allowed = $this->normalizeList($assetPolicy['allowed_payable_types'] ?? []);
-        if ($allowed === []) {
-            return;
+        if ($allowed !== []) {
+            $payableType = strtolower(trim((string) ($payable['payable_type'] ?? '')));
+            if (!in_array($payableType, array_map('strtolower', $allowed), true)) {
+                throw new \LogicException(
+                    'payment_asset_payable_type_not_allowed:' . $assetCode . ':' . $payableType,
+                );
+            }
         }
-        $payableType = strtolower(trim((string) ($payable['payable_type'] ?? '')));
-        if (!in_array($payableType, array_map('strtolower', $allowed), true)) {
-            throw new \LogicException(
-                'payment_asset_payable_type_not_allowed:' . $assetCode . ':' . $payableType,
-            );
+
+        $requiredOrderTypes = $this->normalizeList($assetPolicy['required_order_types'] ?? []);
+        if ($requiredOrderTypes !== []) {
+            $orderType = strtolower(trim((string) (
+                $payable['order_type']
+                ?? $payable['commerce_type']
+                ?? ''
+            )));
+            if ($orderType === '' && is_array($payable['type_payload'] ?? null)) {
+                $orderType = strtolower(trim((string) ($payable['type_payload']['order_type'] ?? '')));
+            }
+            if ($orderType === '' || !in_array($orderType, array_map('strtolower', $requiredOrderTypes), true)) {
+                throw new \LogicException(
+                    'payment_asset_order_type_not_allowed:' . $assetCode . ':' . $orderType,
+                );
+            }
         }
     }
 
