@@ -1,0 +1,522 @@
+<?php
+/**
+ * PROTOTYPE ONLY — Three variants of pixel event-vendor admin.
+ * Question: list-first vs split vs detail-tabs for vendor + 搭接 + sandbox JS.
+ * Switch via ?variant=1|2|3 (floating bar). In-memory stub only.
+ *
+ * @var \Weline\Framework\View\Template $this
+ * @var string $variant
+ * @var array $vendors
+ * @var array $selected_vendor
+ * @var string $selected_code
+ * @var string $vendors_json
+ * @var bool $dev_no_report
+ * @var array $weline_events
+ */
+$variant = (string)($variant ?? '1');
+$vendors = $vendors ?? [];
+$selected = $selected_vendor ?? ($vendors[0] ?? []);
+$selectedCode = (string)($selected_code ?? ($selected['code'] ?? 'ga4'));
+$devNoReport = !empty($dev_no_report);
+$h = static fn($v): string => htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
+$cssUrl = $this->fetchTagSource('statics', 'Weline_Visitor::/statics/css/tracking-vendor-prototype.css');
+$selfBase = $this->getBackendUrlPath('visitor/backend/tracking-vendor-prototype/index');
+?>
+<link rel="stylesheet" href="<?= $h($cssUrl) ?>">
+<div class="tvp-root w-container"
+     data-testid="tracking-vendor-prototype"
+     data-variant="<?= $h($variant) ?>"
+     data-source-module="module"
+     data-source-custom="custom"
+     data-dev-no-report="<?= $devNoReport ? '1' : '0' ?>"
+     id="tvp-root">
+
+    <div class="w-cluster" data-justify="between" data-align="center" style="--w-mb:var(--weline-space-3);">
+        <div>
+            <h1 class="h4" style="--w-mb:var(--weline-space-1);"><lang>事件供应商</lang> <span class="tvp-chip" data-kind="custom">PROTOTYPE</span></h1>
+            <p class="w-text" data-tone="muted" data-size="sm" style="--w-mb:0;">
+                <lang>模块注册 + 自定义 · 默认沙盒</lang>
+            </p>
+        </div>
+        <div class="w-cluster" style="--w-gap:var(--weline-space-2);">
+            <button type="button" class="w-button" data-size="sm" data-tone="primary" id="tvp-sync-modules" data-testid="tvp-sync-modules">
+                <lang>同步模块供应商</lang>
+            </button>
+            <button type="button" class="w-button" data-size="sm" id="tvp-add-custom" data-testid="tvp-add-custom">
+                <lang>新建自定义</lang>
+            </button>
+        </div>
+    </div>
+
+    <div class="tvp-banner" data-tone="dev" data-testid="tvp-dev-banner" role="status">
+        <span class="tvp-chip" data-kind="danger"><lang>DEV：不上报</lang></span>
+        <details class="tvp-fold">
+            <summary class="w-text" data-size="sm"><lang>开发/本地外发硬拦 · 点击展开说明</lang></summary>
+            <p class="w-text" data-size="sm" style="--w-mb:0;margin-block-start:var(--weline-space-2);">
+                <lang>开发环境 / 本地排除命中时，所有供应商外发（含 inject）硬拦；Pixel 仍可入库；沙盒仅 dry_run 本地预览。sandbox ≠ Google 正反馈，inject 且非 DEV 才是直播训练路径。</lang>
+            </p>
+        </details>
+        <span class="tvp-chip" id="tvp-dual-inject-chip" data-kind="danger" hidden data-testid="tvp-dual-inject">
+            <lang>双 inject 硬拦</lang>
+        </span>
+    </div>
+
+    <div id="tvp-variant-1" class="tvp-variant" data-variant-panel="1" <?= $variant === '1' ? '' : 'hidden' ?>>
+        <div class="w-card">
+            <div class="w-card__header"><strong><lang>变体 1 · 列表主视觉</lang></strong></div>
+            <div class="w-card__body" style="--w-pt:0;--w-pe:0;--w-pb:0;--w-ps:0;">
+                <table class="w-table tvp-v1-table" data-testid="tvp-v1-table">
+                    <thead>
+                    <tr>
+                        <th><lang>名称</lang></th>
+                        <th><lang>代码</lang></th>
+                        <th><lang>来源</lang></th>
+                        <th><lang>启用</lang></th>
+                        <th><lang>模式</lang></th>
+                        <th><lang>凭证</lang></th>
+                        <th><lang>操作</lang></th>
+                    </tr>
+                    </thead>
+                    <tbody id="tvp-v1-tbody"></tbody>
+                </table>
+            </div>
+        </div>
+        <div class="tvp-v1-drawer w-card" id="tvp-v1-drawer" data-testid="tvp-v1-drawer">
+            <div class="w-card__body" id="tvp-v1-detail"></div>
+        </div>
+    </div>
+
+    <div id="tvp-variant-2" class="tvp-variant" data-variant-panel="2" <?= $variant === '2' ? '' : 'hidden' ?>>
+        <p class="w-text" data-tone="muted" data-size="sm"><lang>变体 2 · 左列表右详情</lang></p>
+        <div class="tvp-v2-split">
+            <aside class="tvp-v2-nav" id="tvp-v2-nav" data-testid="tvp-v2-nav"></aside>
+            <div class="w-card">
+                <div class="w-card__body" id="tvp-v2-detail" data-testid="tvp-v2-detail"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="tvp-variant-3" class="tvp-variant" data-variant-panel="3" <?= $variant === '3' ? '' : 'hidden' ?>>
+        <div class="tvp-v3-hero">
+            <div>
+                <p class="w-text" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-1);"><lang>变体 3 · 详情三 Tab 为主</lang></p>
+                <label class="w-text" data-size="sm">
+                    <lang>当前供应商</lang>
+                    <select id="tvp-v3-select" class="w-input" data-size="sm" data-testid="tvp-v3-select"></select>
+                </label>
+            </div>
+            <div class="w-cluster" id="tvp-v3-status-chips" style="--w-gap:var(--weline-space-2);"></div>
+        </div>
+        <div class="tvp-v3-tabs" role="tablist" data-testid="tvp-v3-tabs">
+            <button type="button" data-tab="config" data-active="1"><lang>基本配置</lang></button>
+            <button type="button" data-tab="map"><lang>事件搭接</lang></button>
+            <button type="button" data-tab="js"><lang>脚本</lang></button>
+        </div>
+        <div class="w-card">
+            <div class="w-card__body" id="tvp-v3-detail" data-testid="tvp-v3-detail"></div>
+        </div>
+    </div>
+
+    <details class="tvp-state-fold">
+        <summary class="w-text" data-size="sm" data-tone="muted"><lang>原型状态面（JSON）</lang></summary>
+        <div class="tvp-state" id="tvp-state" data-testid="tvp-state-panel" aria-live="polite"></div>
+    </details>
+</div>
+
+<div class="tvp-switcher" data-testid="tvp-variant-switcher">
+    <div class="tvp-switcher__inner">
+        <button type="button" id="tvp-prev" aria-label="previous variant">←</button>
+        <span id="tvp-switcher-label">1 · List</span>
+        <button type="button" id="tvp-next" aria-label="next variant">→</button>
+    </div>
+</div>
+
+<script>
+(function () {
+    var VARIANT_NAMES = {
+        '1': '1 · List',
+        '2': '2 · Split',
+        '3': '3 · Detail tabs'
+    };
+    var root = document.getElementById('tvp-root');
+    if (!root) return;
+
+    var vendors = <?= $vendors_json ?: '[]' ?>;
+    var selectedCode = <?= json_encode($selectedCode, JSON_UNESCAPED_UNICODE) ?>;
+    var variant = root.getAttribute('data-variant') || '1';
+    var detailTab = 'config';
+    var welineEvents = <?= json_encode($weline_events ?? [], JSON_UNESCAPED_UNICODE) ?>;
+    var flash = '';
+
+    function clone(v) {
+        return JSON.parse(JSON.stringify(v));
+    }
+
+    function findVendor(code) {
+        for (var i = 0; i < vendors.length; i++) {
+            if (vendors[i].code === code) return vendors[i];
+        }
+        return vendors[0];
+    }
+
+    function dualInjectConflict() {
+        var injects = vendors.filter(function (v) {
+            return v.enabled && v.mode === 'inject' && (v.code === 'ga4' || v.code === 'gtm');
+        });
+        return injects.length >= 2;
+    }
+
+    function enforceDualInject(changed) {
+        if (!dualInjectConflict()) return;
+        // hard block: revert changed vendor to sandbox
+        if (changed && changed.mode === 'inject') {
+            changed.mode = 'sandbox';
+            flash = '双 inject 硬拦：已将 ' + changed.code + ' 退回 sandbox';
+        }
+    }
+
+    function setMode(vendor, mode) {
+        vendor.mode = mode === 'inject' ? 'inject' : 'sandbox';
+        enforceDualInject(vendor);
+        renderAll();
+    }
+
+    function renderState() {
+        var dual = dualInjectConflict();
+        var chip = document.getElementById('tvp-dual-inject-chip');
+        if (chip) chip.hidden = !dual;
+        var sel = findVendor(selectedCode);
+        var payload = {
+            selected: selectedCode,
+            source: sel.source,
+            enabled: !!sel.enabled,
+            mode: sel.mode,
+            default_mode: sel.default_mode,
+            use_default_map: !!sel.use_default_map,
+            credentials: sel.credentials,
+            event_map: sel.event_map,
+            dual_inject_blocked: dual,
+            dev_no_report: true,
+            flash: flash,
+            note: 'DEV 不上报；sandbox=隔离试发；inject=非 DEV 正反馈'
+        };
+        var el = document.getElementById('tvp-state');
+        if (el) el.textContent = JSON.stringify(payload, null, 2);
+    }
+
+    function esc(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    function sourceLabel(src) {
+        return src === 'custom' ? '自定义' : '模块';
+    }
+
+    function renderDetailHtml(vendor, opts) {
+        opts = opts || {};
+        var tab = opts.tab || 'config';
+        var showTabs = !!opts.showInnerTabs;
+        var html = '';
+
+        if (showTabs) {
+            html += '<div class="tvp-v3-tabs" data-inner-tabs="1">';
+            ['config', 'map', 'js'].forEach(function (t) {
+                var label = t === 'config' ? '基本配置' : (t === 'map' ? '事件搭接' : '脚本');
+                html += '<button type="button" data-inner-tab="' + t + '" data-active="' + (tab === t ? '1' : '0') + '">' + label + '</button>';
+            });
+            html += '</div>';
+        }
+
+        if (tab === 'config') {
+            html += '<p class="tvp-mode-hint">sandbox=沙盒试发；inject=站内直播（非 DEV）。当前 DEV：不上报。</p>';
+            html += '<div class="tvp-field-grid">';
+            html += '<div class="tvp-field"><span class="tvp-field__label">状态</span>';
+            html += '<label class="tvp-check"><input type="checkbox" data-act="toggle-enabled" ' + (vendor.enabled ? 'checked' : '') + '> <span>启用此供应商</span></label></div>';
+            html += '<div class="tvp-field"><label>默认模式</label><select data-act="default-mode" class="w-input" data-size="sm">';
+            html += '<option value="sandbox"' + (vendor.default_mode === 'sandbox' ? ' selected' : '') + '>sandbox</option>';
+            html += '<option value="inject"' + (vendor.default_mode === 'inject' ? ' selected' : '') + '>inject</option></select></div>';
+            html += '<div class="tvp-field"><label>当前模式</label><select data-act="mode" class="w-input" data-size="sm">';
+            html += '<option value="sandbox"' + (vendor.mode === 'sandbox' ? ' selected' : '') + '>sandbox</option>';
+            html += '<option value="inject"' + (vendor.mode === 'inject' ? ' selected' : '') + '>inject</option></select></div>';
+            html += '<div class="tvp-field"><span class="tvp-field__label">搭接</span>';
+            html += '<label class="tvp-check"><input type="checkbox" data-act="use-default-map" ' + (vendor.use_default_map ? 'checked' : '') + '> <span>使用默认 map</span></label></div>';
+            html += '</div>';
+            html += '<div class="tvp-field-grid" style="margin-block-start:var(--weline-space-3);">';
+            Object.keys(vendor.credentials || {}).forEach(function (key) {
+                html += '<div class="tvp-field"><label>' + esc(key) + '</label>';
+                html += '<input class="w-input" data-size="sm" data-act="credential" data-key="' + esc(key) + '" value="' + esc(vendor.credentials[key]) + '"></div>';
+            });
+            if (vendor.source === 'custom') {
+                html += '<div class="tvp-field"><label>新增凭证键</label>';
+                html += '<div class="w-cluster"><input class="w-input" data-size="sm" id="tvp-cred-key" placeholder="key">';
+                html += '<input class="w-input" data-size="sm" id="tvp-cred-val" placeholder="value">';
+                html += '<button type="button" class="w-button" data-size="sm" data-act="add-credential">添加</button></div></div>';
+            }
+            html += '</div>';
+            html += '<p class="w-text" data-size="sm" data-tone="muted" style="margin-block-start:var(--weline-space-3);">';
+            html += '来源：<span class="tvp-chip" data-kind="' + esc(vendor.source) + '">' + sourceLabel(vendor.source) + '</span> ';
+            if (vendor.provider_module) html += ' · ' + esc(vendor.provider_module);
+            html += '</p>';
+        }
+
+        if (tab === 'map') {
+            html += '<div class="w-cluster" data-justify="between" style="--w-mb:var(--weline-space-2);">';
+            html += '<strong>事件搭接 map</strong>';
+            html += '<button type="button" class="w-button" data-size="sm" data-act="reset-map">恢复默认 map</button></div>';
+            html += '<table class="w-table tvp-map-table"><thead><tr><th>我方事件</th><th>三方事件</th><th></th></tr></thead><tbody>';
+            (vendor.event_map || []).forEach(function (row, idx) {
+                html += '<tr><td><select data-act="map-weline" data-idx="' + idx + '" class="w-input" data-size="sm">';
+                welineEvents.forEach(function (ev) {
+                    html += '<option value="' + esc(ev) + '"' + (row.weline_event === ev ? ' selected' : '') + '>' + esc(ev) + '</option>';
+                });
+                html += '</select></td>';
+                html += '<td><input class="w-input" data-size="sm" data-act="map-third" data-idx="' + idx + '" value="' + esc(row.third_party_event) + '"></td>';
+                html += '<td><button type="button" class="w-button" data-size="sm" data-act="map-remove" data-idx="' + idx + '">删</button></td></tr>';
+            });
+            html += '</tbody></table>';
+            html += '<button type="button" class="w-button" data-size="sm" data-act="map-add" style="margin-block-start:var(--weline-space-2);">添加一行</button>';
+            html += '<p class="w-text" data-size="sm" data-tone="muted">排除 skip_gtm_push（如 page_view）；搭接只改发出去的第三方名。</p>';
+        }
+
+        if (tab === 'js') {
+            html += '<div class="tvp-field"><label>沙盒 JS（sandbox 模式加载）</label>';
+            html += '<textarea class="w-input tvp-js-area" data-act="sandbox-js">' + esc(vendor.sandbox_js || '') + '</textarea></div>';
+            html += '<div class="tvp-field" style="margin-block-start:var(--weline-space-3);"><label>注入 JS（inject 模式，可选）</label>';
+            html += '<textarea class="w-input tvp-js-area" data-act="inject-js">' + esc(vendor.inject_js || '') + '</textarea></div>';
+            html += '<p class="w-text" data-size="sm" data-tone="muted">自定义供应商无 PHP 类时，靠壳加载上述 JS 接收信封并转发。</p>';
+        }
+
+        return html;
+    }
+
+    function bindDetail(container) {
+        if (!container) return;
+        container.querySelectorAll('[data-inner-tab]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                detailTab = btn.getAttribute('data-inner-tab') || 'config';
+                renderAll();
+            });
+        });
+        var vendor = findVendor(selectedCode);
+        container.querySelectorAll('[data-act]').forEach(function (el) {
+            var act = el.getAttribute('data-act');
+            var evName = (el.tagName === 'INPUT' && el.type === 'checkbox') || el.tagName === 'SELECT' || el.tagName === 'TEXTAREA' || (el.tagName === 'INPUT' && el.type !== 'button')
+                ? 'change' : 'click';
+            if (el.tagName === 'INPUT' && el.type === 'text' || el.tagName === 'TEXTAREA') {
+                evName = 'change';
+            }
+            el.addEventListener(evName === 'click' ? 'click' : 'change', function () {
+                flash = '';
+                if (act === 'toggle-enabled') {
+                    vendor.enabled = !!el.checked;
+                    enforceDualInject(vendor);
+                } else if (act === 'mode') {
+                    setMode(vendor, el.value);
+                    return;
+                } else if (act === 'default-mode') {
+                    vendor.default_mode = el.value === 'inject' ? 'inject' : 'sandbox';
+                } else if (act === 'use-default-map') {
+                    vendor.use_default_map = !!el.checked;
+                } else if (act === 'credential') {
+                    vendor.credentials[el.getAttribute('data-key')] = el.value;
+                    vendor.credential_summary = Object.values(vendor.credentials).join(' · ');
+                } else if (act === 'add-credential') {
+                    var k = (document.getElementById('tvp-cred-key') || {}).value || '';
+                    var v = (document.getElementById('tvp-cred-val') || {}).value || '';
+                    if (k) {
+                        vendor.credentials[k] = v;
+                        vendor.credential_summary = Object.values(vendor.credentials).join(' · ');
+                    }
+                } else if (act === 'reset-map') {
+                    vendor.event_map = clone(vendor.default_event_map || []);
+                    vendor.use_default_map = true;
+                } else if (act === 'map-weline') {
+                    vendor.event_map[+el.getAttribute('data-idx')].weline_event = el.value;
+                } else if (act === 'map-third') {
+                    vendor.event_map[+el.getAttribute('data-idx')].third_party_event = el.value;
+                } else if (act === 'map-remove') {
+                    vendor.event_map.splice(+el.getAttribute('data-idx'), 1);
+                } else if (act === 'map-add') {
+                    vendor.event_map.push({ weline_event: welineEvents[0] || 'cta_click', third_party_event: '' });
+                } else if (act === 'sandbox-js') {
+                    vendor.sandbox_js = el.value;
+                } else if (act === 'inject-js') {
+                    vendor.inject_js = el.value;
+                }
+                renderAll();
+            });
+        });
+    }
+
+    function renderV1() {
+        var tbody = document.getElementById('tvp-v1-tbody');
+        if (!tbody) return;
+        tbody.innerHTML = vendors.map(function (v) {
+            return '<tr data-code="' + esc(v.code) + '" data-active="' + (v.code === selectedCode ? '1' : '0') + '">' +
+                '<td>' + esc(v.name) + '</td>' +
+                '<td><code>' + esc(v.code) + '</code></td>' +
+                '<td><span class="tvp-chip" data-kind="' + esc(v.source) + '">' + sourceLabel(v.source) + '</span></td>' +
+                '<td>' + (v.enabled ? '是' : '否') + '</td>' +
+                '<td><span class="tvp-chip" data-kind="' + esc(v.mode) + '">' + esc(v.mode) + '</span></td>' +
+                '<td>' + esc(v.credential_summary || '') + '</td>' +
+                '<td><button type="button" class="w-button" data-size="sm" data-pick="' + esc(v.code) + '">配置</button></td>' +
+                '</tr>';
+        }).join('');
+        tbody.querySelectorAll('[data-pick]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                selectedCode = btn.getAttribute('data-pick');
+                detailTab = 'config';
+                renderAll();
+            });
+        });
+        var detail = document.getElementById('tvp-v1-detail');
+        if (detail) {
+            var v = findVendor(selectedCode);
+            detail.innerHTML = '<h3 class="h5">' + esc(v.name) + ' <code>' + esc(v.code) + '</code></h3>' +
+                renderDetailHtml(v, { tab: detailTab, showInnerTabs: true });
+            bindDetail(detail);
+        }
+    }
+
+    function renderV2() {
+        var nav = document.getElementById('tvp-v2-nav');
+        var detail = document.getElementById('tvp-v2-detail');
+        if (!nav || !detail) return;
+        nav.innerHTML = vendors.map(function (v) {
+            var meta = sourceLabel(v.source) + ' · ' + (v.enabled ? '启用' : '停用');
+            return '<button type="button" class="tvp-v2-item" data-pick="' + esc(v.code) + '" data-active="' + (v.code === selectedCode ? '1' : '0') + '">' +
+                '<span class="tvp-v2-item__name">' + esc(v.name) + '</span>' +
+                '<span class="tvp-v2-item__meta">' + esc(meta) + '</span></button>';
+        }).join('');
+        nav.querySelectorAll('[data-pick]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                selectedCode = btn.getAttribute('data-pick');
+                detailTab = 'config';
+                renderAll();
+            });
+        });
+        var v = findVendor(selectedCode);
+        detail.innerHTML = '<header class="tvp-detail-head">' +
+            '<h3 class="h5" style="--w-mb:0;">' + esc(v.name) + '</h3>' +
+            '<p class="tvp-detail-meta">' + esc(sourceLabel(v.source)) + ' · ' + esc(v.mode) +
+            (v.enabled ? ' · 启用' : ' · 停用') + '</p></header>' +
+            renderDetailHtml(v, { tab: detailTab, showInnerTabs: true });
+        bindDetail(detail);
+    }
+
+    function renderV3() {
+        var sel = document.getElementById('tvp-v3-select');
+        var chips = document.getElementById('tvp-v3-status-chips');
+        var detail = document.getElementById('tvp-v3-detail');
+        if (!sel || !detail) return;
+        sel.innerHTML = vendors.map(function (v) {
+            return '<option value="' + esc(v.code) + '"' + (v.code === selectedCode ? ' selected' : '') + '>' +
+                esc(v.name) + ' (' + sourceLabel(v.source) + ')</option>';
+        }).join('');
+        var v = findVendor(selectedCode);
+        if (chips) {
+            chips.innerHTML =
+                '<span class="tvp-chip" data-kind="' + esc(v.source) + '">' + sourceLabel(v.source) + '</span>' +
+                '<span class="tvp-chip" data-kind="' + esc(v.mode) + '">' + esc(v.mode) + '</span>' +
+                '<span class="tvp-chip">' + (v.enabled ? '启用' : '停用') + '</span>';
+        }
+        document.querySelectorAll('#tvp-v3-tabs [data-tab]').forEach(function (btn) {
+            btn.setAttribute('data-active', btn.getAttribute('data-tab') === detailTab ? '1' : '0');
+        });
+        detail.innerHTML = renderDetailHtml(v, { tab: detailTab, showInnerTabs: false });
+        bindDetail(detail);
+    }
+
+    function showVariant(v) {
+        variant = String(v);
+        root.setAttribute('data-variant', variant);
+        document.querySelectorAll('[data-variant-panel]').forEach(function (panel) {
+            panel.hidden = panel.getAttribute('data-variant-panel') !== variant;
+        });
+        var label = document.getElementById('tvp-switcher-label');
+        if (label) label.textContent = VARIANT_NAMES[variant] || variant;
+        var url = new URL(window.location.href);
+        url.searchParams.set('variant', variant);
+        url.searchParams.set('vendor', selectedCode);
+        window.history.replaceState({}, '', url.toString());
+    }
+
+    function renderAll() {
+        showVariant(variant);
+        renderV1();
+        renderV2();
+        renderV3();
+        renderState();
+    }
+
+    document.getElementById('tvp-prev').addEventListener('click', function () {
+        var n = ((+variant - 2 + 3) % 3) + 1;
+        variant = String(n);
+        renderAll();
+    });
+    document.getElementById('tvp-next').addEventListener('click', function () {
+        var n = (+variant % 3) + 1;
+        variant = String(n);
+        renderAll();
+    });
+    document.addEventListener('keydown', function (e) {
+        var t = e.target;
+        if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+        if (e.key === 'ArrowLeft') {
+            document.getElementById('tvp-prev').click();
+        } else if (e.key === 'ArrowRight') {
+            document.getElementById('tvp-next').click();
+        }
+    });
+
+    var v3sel = document.getElementById('tvp-v3-select');
+    if (v3sel) {
+        v3sel.addEventListener('change', function () {
+            selectedCode = v3sel.value;
+            detailTab = 'config';
+            renderAll();
+        });
+    }
+    document.querySelectorAll('#tvp-v3-tabs [data-tab]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            detailTab = btn.getAttribute('data-tab') || 'config';
+            renderAll();
+        });
+    });
+
+    document.getElementById('tvp-sync-modules').addEventListener('click', function () {
+        flash = '已同步模块供应商（原型 stub：ga4 / gtm 已在列表）';
+        renderState();
+    });
+    document.getElementById('tvp-add-custom').addEventListener('click', function () {
+        var code = 'custom_' + String(vendors.length + 1);
+        vendors.push({
+            code: code,
+            name: '自定义供应商 ' + (vendors.length + 1),
+            source: 'custom',
+            provider_module: '',
+            provider_class: '',
+            enabled: false,
+            mode: 'sandbox',
+            default_mode: 'sandbox',
+            use_default_map: true,
+            credentials: { api_key: '' },
+            event_map: [{ weline_event: 'cta_click', third_party_event: 'click' }],
+            default_event_map: [{ weline_event: 'cta_click', third_party_event: 'click' }],
+            sandbox_js: '// custom sandbox handler\n',
+            inject_js: '',
+            credential_summary: ''
+        });
+        selectedCode = code;
+        detailTab = 'config';
+        flash = '已添加自定义供应商 ' + code;
+        renderAll();
+    });
+
+    renderAll();
+})();
+</script>

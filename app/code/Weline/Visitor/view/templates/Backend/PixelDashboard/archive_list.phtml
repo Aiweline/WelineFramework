@@ -56,6 +56,7 @@ $selectedTrafficType = (string)($filters['traffic_type'] ?? '');
 $selectedUtmSource = (string)($filters['utm_source'] ?? '');
 $selectedUtmMedium = (string)($filters['utm_medium'] ?? '');
 $selectedUtmCampaign = (string)($filters['utm_campaign'] ?? '');
+$utmAdvancedOpen = ($selectedUtmSource !== '' || $selectedUtmMedium !== '' || $selectedUtmCampaign !== '');
 
 $queryBase = array_filter([
     'websiteId' => $selectedWebsite,
@@ -85,21 +86,116 @@ $nextUrl = ($pageCount > 0 && $page < $pageCount)
 ?>
 <style>
 .weline-pixel-archive-list-toolbar {
+    display: flex;
+    flex-direction: column;
+    gap: var(--weline-space-3, 0.75rem);
+}
+.weline-pixel-archive-list-toolbar .weline-pixel-list-toolbar__primary,
+.weline-pixel-archive-list-toolbar .weline-pixel-list-toolbar__secondary,
+.weline-pixel-archive-list-toolbar .weline-pixel-list-toolbar__advanced-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 0.75rem 1rem;
     align-items: end;
 }
-.weline-pixel-archive-list-toolbar .weline-pixel-website-filter {
-    min-width: 220px;
+.weline-pixel-archive-list-toolbar .weline-pixel-list-toolbar__primary {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--weline-space-4, 1rem);
 }
-.weline-pixel-archive-list-toolbar .weline-pixel-list-actions {
-    grid-column: 1 / -1;
+.weline-pixel-archive-list-toolbar .weline-pixel-list-toolbar__primary-meta {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 0.75rem 1rem;
+    align-items: end;
+}
+.weline-pixel-archive-list-toolbar .weline-pixel-list-toolbar__primary > *,
+.weline-pixel-archive-list-toolbar .weline-pixel-list-toolbar__primary-meta > *,
+.weline-pixel-archive-list-toolbar .weline-pixel-list-toolbar__secondary > *,
+.weline-pixel-archive-list-toolbar .weline-pixel-list-toolbar__advanced-grid > * {
+    min-width: 0;
 }
 @media (min-width: 992px) {
-    .weline-pixel-archive-list-toolbar .weline-pixel-list-actions {
-        grid-column: auto;
+    .weline-pixel-archive-list-toolbar .weline-pixel-list-toolbar__primary-meta {
+        grid-template-columns: minmax(0, 1.2fr) minmax(140px, 0.8fr);
     }
+}
+.weline-pixel-archive-list-toolbar .weline-pixel-website-filter {
+    max-width: 100%;
+    overflow: hidden;
+}
+.weline-pixel-archive-list-toolbar .weline-pixel-website-filter .weline-website-select,
+.weline-pixel-archive-list-toolbar .weline-pixel-website-filter .weline-website-trigger {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+.weline-pixel-archive-list-toolbar .weline-pixel-website-filter .weline-website-tags {
+    flex-wrap: nowrap;
+    max-height: none;
+    overflow: hidden;
+}
+.weline-pixel-archive-list-toolbar .weline-pixel-website-filter .weline-website-tag,
+.weline-pixel-archive-list-toolbar .weline-pixel-website-filter .weline-website-empty {
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.weline-pixel-archive-list-toolbar .weline-pixel-website-filter .weline-website-empty {
+    display: block;
+}
+.weline-pixel-archive-list-toolbar .weline-pixel-website-filter .weline-website-tag-label {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.weline-pixel-archive-list-toolbar .weline-pixel-list-field-hint {
+    margin-top: var(--weline-space-1, 0.25rem);
+    font-size: 12px;
+    line-height: 1.35;
+    color: var(--weline-theme-text-muted, var(--backend-color-text-secondary, #64748b));
+}
+.weline-pixel-archive-list-toolbar .weline-pixel-list-toolbar__advanced {
+    border-top: 1px solid var(--weline-theme-border, var(--backend-color-border-default, #dbe3ef));
+    padding-top: var(--weline-space-3, 0.75rem);
+}
+.weline-pixel-archive-list-toolbar .weline-pixel-list-toolbar__advanced > summary {
+    cursor: pointer;
+    list-style: none;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--weline-theme-text, var(--backend-color-text-primary, #162033));
+}
+.weline-pixel-archive-list-toolbar .weline-pixel-list-toolbar__advanced > summary::-webkit-details-marker {
+    display: none;
+}
+.weline-pixel-archive-list-toolbar .weline-pixel-list-toolbar__advanced-grid {
+    margin-top: var(--weline-space-3, 0.75rem);
+}
+.weline-pixel-archive-list-toolbar .weline-pixel-list-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+}
+/* 窄屏可横滚；URL 列限宽截断，避免长链撑表 */
+.weline-pixel-dashboard-archive-list .w-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+.weline-pixel-dashboard-archive-list .w-table-wrap > .w-table {
+    width: 100%;
+    min-width: 52rem;
+}
+.weline-pixel-dashboard-archive-list .w-table-wrap .w-table th,
+.weline-pixel-dashboard-archive-list .w-table-wrap .w-table td {
+    white-space: nowrap;
+}
+.weline-pixel-dashboard-archive-list .w-table td.weline-pixel-list-url {
+    max-width: 18rem;
 }
 </style>
 <div class="weline-pixel-dashboard-archive-list w-container" style="--w-pt:var(--weline-space-4);--w-pb:var(--weline-space-4);">
@@ -137,86 +233,98 @@ $nextUrl = ($pageCount > 0 && $page < $pageCount)
     <div class="w-card" style="--w-mb:var(--weline-space-4);">
         <div class="w-card__body">
             <w:form method="get" action="@var($formAction)" class="weline-pixel-archive-list-toolbar" id="pixel-archive-list-filter-form">
-                <div class="weline-pixel-website-filter">
-                    <label class="w-field__label" for="archive-filter-website_trigger"><lang>站点（必填）</lang></label>
-                    <w:websites:website:select
-                        id="archive-filter-website"
-                        name="websiteId"
-                        value="selectedWebsite"
-                        display="selectedWebsiteDisplay"
-                        options="websiteSelectOptionsJson"
-                        multiple="false"
-                        allow-empty="false"
-                        clearable="false"
-                        empty-label="@lang(请选择站点)"
-                        placeholder="@lang(搜索站点名称或编码)"
-                        class="weline-pixel-website-select"
-                    />
+                <div class="weline-pixel-list-toolbar__primary">
+                    <div class="weline-pixel-website-filter">
+                        <label class="w-field__label" for="archive-filter-website_trigger"><lang>站点（必填）</lang></label>
+                        <w:websites:website:select
+                            id="archive-filter-website"
+                            name="websiteId"
+                            value="selectedWebsite"
+                            display="selectedWebsiteDisplay"
+                            options="websiteSelectOptionsJson"
+                            multiple="false"
+                            allow-empty="false"
+                            clearable="false"
+                            empty-label="@lang(请选择站点)"
+                            placeholder="@lang(搜索站点名称或编码)"
+                            class="weline-pixel-website-select"
+                        />
+                    </div>
+                    <div class="weline-pixel-list-toolbar__primary-meta">
+                        <div>
+                            <label class="w-field__label" for="archive-filter-event"><lang>事件</lang></label>
+                            <input type="text" name="event" id="archive-filter-event" class="w-input" value="<?= $h($selectedEvent) ?>" placeholder="<?= $h(__('精确事件名，如 all_add_cart')) ?>">
+                            <div class="weline-pixel-list-field-hint"><lang>须与埋点/闭环事件名完全一致；单步加购多为 add_to_cart，闭环为 all_add_cart。</lang></div>
+                        </div>
+                        <div>
+                            <label class="w-field__label" for="archive-filter-range"><lang>时间范围</lang></label>
+                            <select name="range" id="archive-filter-range" class="w-select">
+                                <?php foreach ($rangeLabels as $rangeValue => $rangeLabel): ?>
+                                    <option value="<?= $h($rangeValue) ?>" <?= $selectedRange === $rangeValue ? 'selected' : '' ?>>
+                                        <?= $h($rangeLabel) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                    </div>
                 </div>
-                <div>
-                    <label class="w-field__label" for="archive-filter-event"><lang>事件</lang></label>
-                    <input type="text" name="event" id="archive-filter-event" class="w-input" value="<?= $h($selectedEvent) ?>" placeholder="<?= $h(__('全部事件')) ?>">
+                <div class="weline-pixel-list-toolbar__secondary">
+                    <div>
+                        <label class="w-field__label" for="archive-filter-start"><lang>开始日期</lang></label>
+                        <input type="date" name="startDate" id="archive-filter-start" class="w-input" value="<?= $h($startInput) ?>">
+                    </div>
+                    <div>
+                        <label class="w-field__label" for="archive-filter-end"><lang>结束日期</lang></label>
+                        <input type="date" name="endDate" id="archive-filter-end" class="w-input" value="<?= $h($endInput) ?>">
+                    </div>
+                    <div>
+                        <label class="w-field__label" for="archive-filter-channel"><lang>渠道码</lang></label>
+                        <input type="text" name="channel_code" id="archive-filter-channel" class="w-input" value="<?= $h($selectedChannel) ?>" placeholder="wch / channel_code">
+                    </div>
+                    <div>
+                        <label class="w-field__label" for="archive-filter-traffic"><lang>流量类型</lang></label>
+                        <select name="traffic_type" id="archive-filter-traffic" class="w-select">
+                            <option value="" <?= $selectedTrafficType === '' ? 'selected' : '' ?>><lang>全部类型</lang></option>
+                            <?php foreach ($trafficTypeOptions as $type): ?>
+                                <?php $type = (string)$type; ?>
+                                <option value="<?= $h($type) ?>" <?= $selectedTrafficType === $type ? 'selected' : '' ?>>
+                                    <?= $h($type) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="w-field__label" for="archive-filter-pagesize"><lang>每页条数</lang></label>
+                        <select name="pageSize" id="archive-filter-pagesize" class="w-select">
+                            <?php foreach ([20, 50, 100, 200] as $size): ?>
+                                <option value="<?= $size ?>" <?= $pageSize === $size ? 'selected' : '' ?>><?= $size ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="weline-pixel-list-actions w-cluster" style="--w-gap:var(--weline-space-2);">
+                        <button type="submit" class="w-button" data-tone="primary">
+                            <w:icon name="filter" size="sm"></w:icon> <lang>应用筛选</lang>
+                        </button>
+                        <a href="<?= $h($resetUrl) ?>" class="w-button" data-tone="neutral" data-variant="outline"><lang>重置</lang></a>
+                    </div>
                 </div>
-                <div>
-                    <label class="w-field__label" for="archive-filter-range"><lang>时间范围</lang></label>
-                    <select name="range" id="archive-filter-range" class="w-select">
-                        <?php foreach ($rangeLabels as $rangeValue => $rangeLabel): ?>
-                            <option value="<?= $h($rangeValue) ?>" <?= $selectedRange === $rangeValue ? 'selected' : '' ?>>
-                                <?= $h($rangeLabel) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div>
-                    <label class="w-field__label" for="archive-filter-start"><lang>开始日期</lang></label>
-                    <input type="date" name="startDate" id="archive-filter-start" class="w-input" value="<?= $h($startInput) ?>">
-                </div>
-                <div>
-                    <label class="w-field__label" for="archive-filter-end"><lang>结束日期</lang></label>
-                    <input type="date" name="endDate" id="archive-filter-end" class="w-input" value="<?= $h($endInput) ?>">
-                </div>
-                <div>
-                    <label class="w-field__label" for="archive-filter-channel"><lang>渠道码</lang></label>
-                    <input type="text" name="channel_code" id="archive-filter-channel" class="w-input" value="<?= $h($selectedChannel) ?>" placeholder="wch / channel_code">
-                </div>
-                <div>
-                    <label class="w-field__label" for="archive-filter-traffic"><lang>流量类型</lang></label>
-                    <select name="traffic_type" id="archive-filter-traffic" class="w-select">
-                        <option value="" <?= $selectedTrafficType === '' ? 'selected' : '' ?>><lang>全部类型</lang></option>
-                        <?php foreach ($trafficTypeOptions as $type): ?>
-                            <?php $type = (string)$type; ?>
-                            <option value="<?= $h($type) ?>" <?= $selectedTrafficType === $type ? 'selected' : '' ?>>
-                                <?= $h($type) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div>
-                    <label class="w-field__label" for="archive-filter-utm-source">utm_source</label>
-                    <input type="text" name="utm_source" id="archive-filter-utm-source" class="w-input" value="<?= $h($selectedUtmSource) ?>">
-                </div>
-                <div>
-                    <label class="w-field__label" for="archive-filter-utm-medium">utm_medium</label>
-                    <input type="text" name="utm_medium" id="archive-filter-utm-medium" class="w-input" value="<?= $h($selectedUtmMedium) ?>">
-                </div>
-                <div>
-                    <label class="w-field__label" for="archive-filter-utm-campaign">utm_campaign</label>
-                    <input type="text" name="utm_campaign" id="archive-filter-utm-campaign" class="w-input" value="<?= $h($selectedUtmCampaign) ?>">
-                </div>
-                <div>
-                    <label class="w-field__label" for="archive-filter-pagesize"><lang>每页条数</lang></label>
-                    <select name="pageSize" id="archive-filter-pagesize" class="w-select">
-                        <?php foreach ([20, 50, 100, 200] as $size): ?>
-                            <option value="<?= $size ?>" <?= $pageSize === $size ? 'selected' : '' ?>><?= $size ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="weline-pixel-list-actions w-cluster" style="--w-gap:var(--weline-space-2);">
-                    <button type="submit" class="w-button" data-tone="primary">
-                        <w:icon name="filter" size="sm"></w:icon> <lang>应用筛选</lang>
-                    </button>
-                    <a href="<?= $h($resetUrl) ?>" class="w-button" data-tone="neutral" data-variant="outline"><lang>重置</lang></a>
-                </div>
+                <details class="weline-pixel-list-toolbar__advanced"<?= $utmAdvancedOpen ? ' open' : '' ?>>
+                    <summary><lang>高级归因（utm）</lang></summary>
+                    <div class="weline-pixel-list-toolbar__advanced-grid">
+                        <div>
+                            <label class="w-field__label" for="archive-filter-utm-source">utm_source</label>
+                            <input type="text" name="utm_source" id="archive-filter-utm-source" class="w-input" value="<?= $h($selectedUtmSource) ?>">
+                        </div>
+                        <div>
+                            <label class="w-field__label" for="archive-filter-utm-medium">utm_medium</label>
+                            <input type="text" name="utm_medium" id="archive-filter-utm-medium" class="w-input" value="<?= $h($selectedUtmMedium) ?>">
+                        </div>
+                        <div>
+                            <label class="w-field__label" for="archive-filter-utm-campaign">utm_campaign</label>
+                            <input type="text" name="utm_campaign" id="archive-filter-utm-campaign" class="w-input" value="<?= $h($selectedUtmCampaign) ?>">
+                        </div>
+                    </div>
+                </details>
             </w:form>
         </div>
     </div>
@@ -272,7 +380,7 @@ $nextUrl = ($pageCount > 0 && $page < $pageCount)
                                 <td><code><?= $h($data['channel_code'] ?? '') ?></code></td>
                                 <td><?= $h($data['traffic_type'] ?? '') ?></td>
                                 <td><code><?= $h($data['session_id'] ?? '') ?></code></td>
-                                <td class="w-text" style="max-width:240px" title="<?= $h($data['url'] ?? '') ?>" data-truncate="true">
+                                <td class="w-text weline-pixel-list-url" title="<?= $h($data['url'] ?? '') ?>" data-truncate="true">
                                     <?= $h($data['url'] ?? '') ?>
                                 </td>
                                 <td data-wrap="false"><?= $h($data['archived_at'] ?? '') ?></td>

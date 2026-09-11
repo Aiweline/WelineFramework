@@ -56,5 +56,13 @@
               is_backend="1"
               icon="circle"
               order="40"/>
+
+        <menu source="Weline_Visitor::tracking_vendor"
+              name="visitor_tracking_vendor"
+              title="事件供应商"
+              action="visitor/backend/tracking-vendor/index"
+              is_backend="1"
+              icon="plug"
+              order="45"/>
     </menu>
 </menus>

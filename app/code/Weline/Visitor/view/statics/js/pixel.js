@@ -270,6 +270,13 @@
                     }
                 }
             });
+            try {
+                __fanoutPixelVendors(event);
+            } catch (vendorError) {
+                if (window.DEV) {
+                    console.debug('Weline Visitor vendor fanout failed:', vendorError && vendorError.message ? vendorError.message : vendorError);
+                }
+            }
         },
         getHandlers: function () {
             return Object.keys(__visitorForwarders);
@@ -3733,11 +3740,108 @@
         }
     }
 
+    // Pixel event vendors (万能壳): per-vendor sandbox/inject + event_map + scope.
+    // DEV / forwarding.allowed=false already blocks emit(); dual inject demotes ga4 at runtime config.
+    function __vendorScopeMatches(scope, path, area) {
+        scope = scope && typeof scope === 'object' ? scope : {};
+        var include = Array.isArray(scope.path_include) ? scope.path_include : ['*'];
+        var exclude = Array.isArray(scope.path_exclude) ? scope.path_exclude : [];
+        var areas = Array.isArray(scope.areas) ? scope.areas : ['frontend'];
+        area = String(area || 'frontend').toLowerCase();
+        if (areas.indexOf(area) === -1) {
+            return false;
+        }
+        path = String(path || '/').split('?')[0];
+        if (path.charAt(0) !== '/') {
+            path = '/' + path;
+        }
+        function matchOne(pattern, p) {
+            pattern = String(pattern || '').trim();
+            if (!pattern) return false;
+            if (pattern === '*' || pattern === '/*') return true;
+            if (pattern.charAt(pattern.length - 1) === '*') {
+                var prefix = pattern.slice(0, -1);
+                return !prefix || p.indexOf(prefix) === 0;
+            }
+            return p === pattern || p.indexOf(pattern.replace(/\/$/, '') + '/') === 0;
+        }
+        function anyMatch(list, p) {
+            for (var i = 0; i < list.length; i++) {
+                if (matchOne(list[i], p)) return true;
+            }
+            return false;
+        }
+        if (!include.length) include = ['*'];
+        if (!anyMatch(include, path)) return false;
+        if (exclude.length && anyMatch(exclude, path)) return false;
+        return true;
+    }
+
+    function __fanoutPixelVendors(event) {
+        var cfg = window.__WelineVisitorTrackingConfig || {};
+        var vendors = Array.isArray(cfg.vendors) ? cfg.vendors : [];
+        if (!vendors.length || !event) {
+            return;
+        }
+        var welineEvent = String((event.weline_event || event.name || '')).trim();
+        var path = (typeof location !== 'undefined' && location.pathname) ? location.pathname : '/';
+        var area = (cfg.area || (typeof document !== 'undefined' && document.body && document.body.getAttribute('data-area')) || 'frontend');
+        var injectSeen = {};
+        vendors.forEach(function (vendor) {
+            if (!vendor || !vendor.enabled) {
+                return;
+            }
+            if (!__vendorScopeMatches(vendor.scope, path, area)) {
+                return;
+            }
+            var code = String(vendor.code || '').trim();
+            var mode = String(vendor.mode || 'sandbox');
+            if (mode === 'inject' && (code === 'ga4' || code === 'gtm')) {
+                if (injectSeen.ga4 || injectSeen.gtm) {
+                    mode = 'sandbox';
+                }
+                injectSeen[code] = true;
+            }
+            var map = vendor.event_map && typeof vendor.event_map === 'object' ? vendor.event_map : {};
+            var mapped = map[welineEvent] || (event.platforms && event.platforms.gtm && event.platforms.gtm.eventName) || welineEvent;
+            if (!mapped) {
+                return;
+            }
+            var payload = Object.assign({}, event, {
+                vendor_code: code,
+                vendor_mode: mode,
+                third_party_event: mapped,
+                ga4_event: mapped
+            });
+            if (mode === 'sandbox') {
+                if (window.WelinePixelSandbox && typeof window.WelinePixelSandbox.publishVendor === 'function') {
+                    window.WelinePixelSandbox.publishVendor(code, payload, vendor);
+                } else if (window.WelinePixelSandbox && typeof window.WelinePixelSandbox.publish === 'function') {
+                    window.WelinePixelSandbox.publish(payload);
+                }
+                return;
+            }
+            // inject: built-in ga4/gtm already handled by registered forwarders when legacy flags on;
+            // custom vendors run inject_js in a Function scope (no eval string as global).
+            if (code !== 'ga4' && code !== 'gtm' && vendor.inject_js) {
+                try {
+                    var runner = new Function('event', 'vendor', String(vendor.inject_js));
+                    runner(payload, vendor);
+                } catch (err) {
+                    if (window.DEV) {
+                        console.debug('custom vendor inject_js failed', code, err);
+                    }
+                }
+            }
+        });
+    }
+
     // True sandbox bridge (Phase 6): postMessage envelopes only; no shared WelinePixel.
     window.WelinePixelSandbox = window.WelinePixelSandbox || {
         injectMode: (window.__WelineVisitorTrackingConfig && window.__WelineVisitorTrackingConfig.sandbox && window.__WelineVisitorTrackingConfig.sandbox.inject_mode) || (window.DEV ? 'dry_run' : 'live'),
         subscribers: [],
         iframe: null,
+        vendorFrames: {},
         ensureFrame: function () {
             if (this.iframe && this.iframe.isConnected) {
                 return this.iframe;
@@ -3750,6 +3854,48 @@
             document.body.appendChild(frame);
             this.iframe = frame;
             return frame;
+        },
+        ensureVendorFrame: function (code, vendor) {
+            code = String(code || 'default');
+            if (this.vendorFrames[code] && this.vendorFrames[code].isConnected) {
+                return this.vendorFrames[code];
+            }
+            var frame = document.createElement('iframe');
+            frame.id = 'weline-pixel-sandbox-' + code;
+            frame.setAttribute('sandbox', 'allow-scripts');
+            frame.setAttribute('data-weline-vendor', code);
+            frame.style.display = 'none';
+            frame.src = 'about:blank';
+            document.body.appendChild(frame);
+            this.vendorFrames[code] = frame;
+            try {
+                var doc = frame.contentDocument;
+                if (doc && vendor && vendor.sandbox_js) {
+                    var script = doc.createElement('script');
+                    script.type = 'text/javascript';
+                    script.textContent = String(vendor.sandbox_js);
+                    doc.documentElement.appendChild(script);
+                }
+            } catch (e) {
+                if (window.DEV) {
+                    console.debug('vendor sandbox bootstrap failed', code, e);
+                }
+            }
+            return frame;
+        },
+        publishVendor: function (code, envelope, vendor) {
+            var frame = this.ensureVendorFrame(code, vendor || {});
+            var win = frame.contentWindow;
+            if (!win) {
+                return;
+            }
+            win.postMessage({
+                channel: 'weline-pixel-sandbox/v1',
+                command: 'envelope',
+                vendor: code,
+                inject_mode: this.injectMode,
+                envelope: envelope
+            }, '*');
         },
         publish: function (envelope) {
             try {
