@@ -163,6 +163,26 @@ class QueueDispatchService
             if (!$queue instanceof Queue) {
                 continue;
             }
+            try {
+                $this->reconcileOneRunningAutoQueue($queue);
+            } catch (\Throwable $throwable) {
+                // One corrupt result/log must not abort healing of other running rows
+                // (seen: invalid UTF-8 from mid-codepoint tail truncation blocked AI lanes).
+                w_log_warning(
+                    'queue.reconcile_running_failed:' . (int)$queue->getId() . ':' . $throwable->getMessage(),
+                    ['queue_id' => (int)$queue->getId()],
+                    'queue',
+                );
+            }
+        }
+
+        // SIGKILL / historic Unicode lease misses leave dead queue-*-pid.json behind.
+        // Reconcile is the periodic owner of that sweep; keep it posix-fast.
+        $this->cleanupDeadQueuePidJsonOrphans();
+    }
+
+    private function reconcileOneRunningAutoQueue(Queue $queue): void
+    {
             $queueId = (int)$queue->getId();
             $queueName = $this->normalizeQueueTaskName($queue->getName(), $queueId);
             $processName = $this->buildQueueRunProcessName(
@@ -177,10 +197,10 @@ class QueueDispatchService
                 $dispatchUntil = $queue->getDispatchUntil();
                 if ($dispatchUntil !== '' && $dispatchUntil > \gmdate('Y-m-d H:i:s')) {
                     // Detached Worker 尚在启动窗口；running+pid=0 仍占用并发槽。
-                    continue;
+                    return;
                 }
                 $this->releaseExpiredDispatchClaim($queue);
-                continue;
+                return;
             }
             $processState = $queuePid > 0
                 ? $this->probeQueueProcessState($queuePid)
@@ -188,7 +208,7 @@ class QueueDispatchService
             if ($processState === Processer::PROCESS_STATE_UNKNOWN) {
                 // A transient OS inspection failure is not proof that the old
                 // generation exited. Leave the exact row untouched.
-                continue;
+                return;
             }
             $pidAlive = $processState === Processer::PROCESS_STATE_RUNNING;
             $running = $pidAlive && $this->isManagedQueueWorkerRunning(
@@ -203,7 +223,7 @@ class QueueDispatchService
                 $cmdLine = $this->getQueueProcessCommandLine($queuePid);
                 if ($cmdLine === '') {
                     // 命令行暂不可读：进程仍存活，跳过本轮判定，等待下一轮探测。
-                    continue;
+                    return;
                 }
                 if (\str_contains($cmdLine, 'queue:run')
                     && \preg_match('/--id[= ]' . $queueId . '(?:\s|$)/', $cmdLine) === 1) {
@@ -211,7 +231,7 @@ class QueueDispatchService
                 }
             }
             if ($running) {
-                continue;
+                return;
             }
 
             if ($queuePid > 0) {
@@ -232,7 +252,8 @@ class QueueDispatchService
                     ];
                     $this->updateQueueSnapshotIf($queue, $updates);
                     $this->releaseReconciledQueueLease($queue, $queueName);
-                    continue;
+
+                    return;
                 }
                 $message = $pidAlive
                     ? (string)__('队列记录的 PID %{1} 仍存在，但已不匹配当前队列执行进程，已标记为异常。', [$queuePid])
@@ -253,7 +274,8 @@ class QueueDispatchService
                     ], $recoveryPatch);
                     $this->updateQueueSnapshotIf($queue, $updates);
                     $this->releaseReconciledQueueLease($queue, $queueName);
-                    continue;
+
+                    return;
                 }
                 // 保留 dispatch token 作为已启动 attempt 的终止证据；Delivery timeout
                 // 仍需用同一 fence 确认该 PID 已死亡，之后 Transport 再清理 token。
@@ -266,7 +288,8 @@ class QueueDispatchService
                 ];
                 $this->updateQueueSnapshotIf($queue, $updates);
                 $this->releaseReconciledQueueLease($queue, $queueName);
-                continue;
+
+                return;
             }
 
             if ($queue->isFinished()) {
@@ -277,7 +300,8 @@ class QueueDispatchService
                     Queue::schema_fields_DISPATCH_UNTIL => null,
                     Queue::schema_fields_end_at => \date('Y-m-d H:i:s'),
                 ]);
-                continue;
+
+                return;
             }
 
             if ($this->resolveDeadWorkerRecoverableQueue($queue) instanceof DeadWorkerRecoverableQueueInterface) {
@@ -297,7 +321,8 @@ class QueueDispatchService
                         Queue::schema_fields_result => $message,
                         Queue::schema_fields_process => $this->appendProcessMessage($queue->getProcess(), $message),
                     ], $recoveryPatch));
-                    continue;
+
+                    return;
                 }
 
                 $message = (string)__('可恢复队列处于 running 但没有 PID，且恢复契约拒绝恢复；已标记为 error，避免重复派发。');
@@ -311,7 +336,8 @@ class QueueDispatchService
                     Queue::schema_fields_result => $this->appendProcessMessage($queue->getResult(), $message),
                     Queue::schema_fields_process => $this->appendProcessMessage($queue->getProcess(), $message),
                 ]);
-                continue;
+
+                return;
             }
 
             $message = (string)__('运行中队列没有记录 PID，已重置为 pending 等待重新调度。');
@@ -322,11 +348,6 @@ class QueueDispatchService
                 Queue::schema_fields_result => $this->appendProcessMessage($queue->getResult(), $message),
                 Queue::schema_fields_process => $this->appendProcessMessage($queue->getProcess(), $message),
             ]);
-        }
-
-        // SIGKILL / historic Unicode lease misses leave dead queue-*-pid.json behind.
-        // Reconcile is the periodic owner of that sweep; keep it posix-fast.
-        $this->cleanupDeadQueuePidJsonOrphans();
     }
 
     protected function cleanupDeadQueuePidJsonOrphans(): int
@@ -513,7 +534,7 @@ class QueueDispatchService
                 return [
                     Queue::schema_fields_end_at => \gmdate('Y-m-d H:i:s'),
                     Queue::schema_fields_result => self::boundResultText(\trim($queue->getResult() . PHP_EOL . $message)),
-                    Queue::schema_fields_process => \trim((string)$queue->getProcess() . PHP_EOL . $message),
+                    Queue::schema_fields_process => self::boundResultText(\trim((string)$queue->getProcess() . PHP_EOL . $message)),
                 ];
             },
             $dispatchToken,
@@ -876,9 +897,9 @@ class QueueDispatchService
                     Queue::schema_fields_start_at => null,
                     Queue::schema_fields_end_at => null,
                     Queue::schema_fields_content => $content,
-                    Queue::schema_fields_process => \trim(
+                    Queue::schema_fields_process => self::boundResultText(\trim(
                         $queue->getProcess() . PHP_EOL . $processMessage
-                    ),
+                    )),
                     Queue::schema_fields_result => self::boundResultText(\trim(
                         $queue->getResult() . PHP_EOL . $result
                     )),
@@ -934,9 +955,9 @@ class QueueDispatchService
                 ];
                 $processMessage = \trim($processMessage);
                 if ($processMessage !== '') {
-                    $updates[Queue::schema_fields_process] = \trim(
+                    $updates[Queue::schema_fields_process] = self::boundResultText(\trim(
                         $queue->getProcess() . PHP_EOL . $processMessage
-                    );
+                    ));
                 }
 
                 return $updates;
@@ -2404,13 +2425,15 @@ class QueueDispatchService
 
     private static function boundResultText(string $text, int $maxBytes = self::RESULT_MAX_BYTES): string
     {
+        $text = self::ensureValidUtf8($text);
         if ($maxBytes <= 0 || \strlen($text) <= $maxBytes) {
             return $text;
         }
         $notice = '[truncated ' . \strlen($text) . ' bytes → last ' . $maxBytes . "]\n";
         $budget = \max(0, $maxBytes - \strlen($notice));
+        $tail = self::alignUtf8Tail(\substr($text, -$budget));
 
-        return $notice . \substr($text, -$budget);
+        return self::ensureValidUtf8($notice . $tail);
     }
 
     private static function readFileTail(string $path, int $maxBytes): string
@@ -2422,7 +2445,7 @@ class QueueDispatchService
         if ($size <= $maxBytes) {
             $full = @\file_get_contents($path);
 
-            return \is_string($full) ? $full : '';
+            return self::ensureValidUtf8(\is_string($full) ? $full : '');
         }
 
         $fh = @\fopen($path, 'rb');
@@ -2435,10 +2458,38 @@ class QueueDispatchService
             }
             $chunk = @\stream_get_contents($fh);
 
-            return \is_string($chunk) ? $chunk : '';
+            return self::ensureValidUtf8(self::alignUtf8Tail(\is_string($chunk) ? $chunk : ''));
         } finally {
             @\fclose($fh);
         }
+    }
+
+    /** Drop leading UTF-8 continuation bytes so a byte tail never starts mid-codepoint. */
+    private static function alignUtf8Tail(string $tail): string
+    {
+        $len = \strlen($tail);
+        $offset = 0;
+        while ($offset < $len && ((\ord($tail[$offset]) & 0xC0) === 0x80)) {
+            $offset++;
+        }
+
+        return $offset > 0 ? \substr($tail, $offset) : $tail;
+    }
+
+    private static function ensureValidUtf8(string $text): string
+    {
+        if ($text === '' || \mb_check_encoding($text, 'UTF-8')) {
+            return $text;
+        }
+        if (\function_exists('iconv')) {
+            $converted = @\iconv('UTF-8', 'UTF-8//IGNORE', $text);
+            if (\is_string($converted)) {
+                return $converted;
+            }
+        }
+        $converted = @\mb_convert_encoding($text, 'UTF-8', 'UTF-8');
+
+        return \is_string($converted) ? $converted : '';
     }
 
     private function hasQueueDoneMarker(string $output, Queue $queue): bool
