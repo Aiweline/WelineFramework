@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PROTOTYPE · SEO 平台选择分组</title>
+  <!--
+    Throwaway UI prototype.
+    Question: How should 30+ SEO platforms be grouped so picking ONE required platform is not a wall of cards?
+    Variants via ?variant=A|B|C. Winner folds into Backend/Account/form.phtml.
+  -->
+  <style>
+    :root {
+      --weline-theme-primary: #1e40af;
+      --weline-theme-surface: #fff;
+      --weline-theme-surface-muted: #f8fafc;
+      --weline-theme-border: #dbe3ef;
+      --weline-theme-text: #172033;
+      --weline-theme-text-muted: #526074;
+      --weline-radius-md: 10px;
+      --weline-space-2: 8px;
+      --weline-space-3: 12px;
+      --weline-space-4: 16px;
+      --weline-control-height: 40px;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 14px/1.45 system-ui, sans-serif; color: var(--weline-theme-text); background: var(--weline-theme-surface-muted); }
+    .banner { padding: 10px 16px; background: color-mix(in srgb, #b45309 12%, #fff); color: #92400e; font-size: 12px; border-bottom: 1px solid color-mix(in srgb, #b45309 25%, #dbe3ef); }
+    .shell { max-width: 960px; margin: 20px auto 100px; padding: 0 16px; }
+    .host { border: 1px solid var(--weline-theme-border); border-radius: 12px; background: #fff; overflow: hidden; }
+    .host__h { padding: 14px 18px; border-bottom: 1px solid var(--weline-theme-border); background: var(--weline-theme-surface-muted); }
+    .host__h strong { font-size: 15px; }
+    .host__h p { margin: 4px 0 0; color: var(--weline-theme-text-muted); font-size: 12px; }
+    .note { margin: 0; padding: 10px 18px; font-size: 12px; color: var(--weline-theme-text-muted); border-bottom: 1px solid var(--weline-theme-border); }
+    .note b { color: var(--weline-theme-text); }
+    .body { padding: 16px 18px 20px; }
+    .state { margin-top: 12px; padding: 10px 12px; border-radius: 8px; background: var(--weline-theme-surface-muted); border: 1px dashed var(--weline-theme-border); font-family: ui-monospace, monospace; font-size: 11px; white-space: pre-wrap; }
+    .switcher { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 30; display: flex; gap: 10px; align-items: center; padding: 8px 12px; border-radius: 999px; background: #0f172a; color: #f8fafc; font-size: 12px; box-shadow: 0 10px 28px rgba(15,23,42,.28); }
+    .switcher button { width: 32px; height: 32px; border: 0; border-radius: 999px; background: #1e293b; color: inherit; cursor: pointer; }
+    [hidden] { display: none !important; }
+
+    .tabs { display: flex; gap: 4px; overflow-x: auto; border-bottom: 1px solid var(--weline-theme-border); margin-bottom: 12px; }
+    .tabs button { border: 0; background: transparent; min-height: var(--weline-control-height); padding: 0 14px; color: var(--weline-theme-text-muted); font-weight: 650; font-size: 13px; border-bottom: 2px solid transparent; cursor: pointer; white-space: nowrap; }
+    .tabs button[aria-selected="true"] { color: var(--weline-theme-primary); border-bottom-color: var(--weline-theme-primary); }
+    .hint { margin: 0 0 12px; color: var(--weline-theme-text-muted); font-size: 12px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: var(--weline-space-4, 16px); }
+    .card { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 16px; border: 1px solid var(--weline-theme-border); border-left: 4px solid var(--c, #64748b); border-radius: 8px; background: #fff; cursor: pointer; font-weight: 650; text-align: left; }
+    .card[aria-pressed="true"] { border-color: var(--c, var(--weline-theme-primary)); background: color-mix(in srgb, var(--c, var(--weline-theme-primary)) 8%, #fff); }
+    .mark {
+      width: 28px; height: 28px; border-radius: 7px; display: grid; place-items: center;
+      background: var(--weline-theme-surface); overflow: hidden;
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--weline-theme-border) 80%, transparent);
+      flex: 0 0 auto;
+    }
+    .mark img { width: 100%; height: 100%; object-fit: contain; display: block; }
+    .mark--fallback { background: color-mix(in srgb, var(--c, #64748b) 16%, #fff); color: var(--c, #64748b); font-size: 11px; font-weight: 800; }
+
+    /* B: left rail */
+    .vb { display: grid; grid-template-columns: 180px 1fr; gap: 0; min-height: 320px; border: 1px solid var(--weline-theme-border); border-radius: 10px; overflow: hidden; }
+    .vb__rail { background: var(--weline-theme-surface-muted); border-right: 1px solid var(--weline-theme-border); padding: 8px; }
+    .vb__rail button { display: block; width: 100%; text-align: left; border: 0; background: transparent; padding: 10px 12px; border-radius: 8px; color: var(--weline-theme-text-muted); font-weight: 650; cursor: pointer; }
+    .vb__rail button[aria-selected="true"] { background: #fff; color: var(--weline-theme-primary); box-shadow: 0 1px 0 var(--weline-theme-border); }
+    .vb__main { padding: 14px; }
+    .list { display: grid; gap: 6px; }
+    .row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--weline-theme-border); border-radius: 8px; cursor: pointer; background: #fff; }
+    .row[aria-pressed="true"] { border-color: var(--weline-theme-primary); background: color-mix(in srgb, var(--weline-theme-primary) 7%, #fff); }
+    .row small { margin-left: auto; color: var(--weline-theme-text-muted); font-size: 11px; }
+
+    /* C: wizard */
+    .steps { display: flex; gap: 8px; margin-bottom: 14px; }
+    .steps span { flex: 1; text-align: center; padding: 8px; border-radius: 8px; background: var(--weline-theme-surface-muted); color: var(--weline-theme-text-muted); font-size: 12px; font-weight: 650; }
+    .steps span.on { background: color-mix(in srgb, var(--weline-theme-primary) 12%, #fff); color: var(--weline-theme-primary); }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .chip { border: 1px solid var(--weline-theme-border); background: #fff; border-radius: 999px; padding: 8px 14px; cursor: pointer; font-weight: 650; }
+    .chip[aria-pressed="true"] { border-color: var(--weline-theme-primary); color: var(--weline-theme-primary); background: color-mix(in srgb, var(--weline-theme-primary) 8%, #fff); }
+    .picked { margin-top: 14px; padding: 12px; border-radius: 8px; border: 1px solid var(--weline-theme-border); background: var(--weline-theme-surface-muted); }
+    @media (max-width: 720px) { .vb { grid-template-columns: 1fr; } .vb__rail { border-right: 0; border-bottom: 1px solid var(--weline-theme-border); display: flex; overflow-x: auto; } }
+  </style>
+</head>
+<body>
+  <div class="banner">PROTOTYPE · 非生产。平台是「单选必填」不是全填。方向键切换变体。</div>
+  <div class="shell">
+    <div class="host">
+      <div class="host__h">
+        <strong>新增 SEO 账户 · 选择平台</strong>
+        <p id="variantLabel">A · 顶栏分组 Tab + 卡片</p>
+      </div>
+      <p class="note"><b>规则：</b>每个账户只绑定 <b>一个</b> 搜索平台（带 *）。下方列表是候选，不是要全部填写。选中后才展开该平台的凭证/配置区。</p>
+      <div class="body" id="root"></div>
+    </div>
+    <div class="state" id="stateDump"></div>
+  </div>
+  <div class="switcher">
+    <button type="button" id="prev" aria-label="prev">←</button>
+    <span id="swLabel">A</span>
+    <button type="button" id="next" aria-label="next">→</button>
+  </div>
+
+  <script>
+    var GROUPS = [
+      { id: 'recommended', label: '推荐接入', hint: '有官方 API / 最常绑定', items: [
+        { code: 'google', name: 'Google', c: '#4285F4', mark: 'G' },
+        { code: 'bing', name: 'Bing', c: '#00809D', mark: 'B' },
+        { code: 'baidu', name: '百度', c: '#2932E1', mark: 'BD' },
+        { code: 'indexnow', name: 'IndexNow', c: '#0EA5E9', mark: 'IN' }
+      ]},
+      { id: 'indexnow', label: 'IndexNow 生态', hint: '自动 URL 通知参与方', items: [
+        { code: 'yandex', name: 'Yandex', c: '#FC3F1D', mark: 'Y' },
+        { code: 'naver', name: 'Naver', c: '#03C75A', mark: 'N' },
+        { code: 'seznam', name: 'Seznam.cz', c: '#CC0000', mark: 'S' },
+        { code: 'yep', name: 'Yep', c: '#7C3AED', mark: 'YEP' },
+        { code: 'internetarchive', name: 'Internet Archive', c: '#000', mark: 'IA' },
+        { code: 'amazonbot', name: 'Amazonbot', c: '#FF9900', mark: 'AZ' }
+      ]},
+      { id: 'china', label: '中国站长', hint: '多数为 Sitemap 手动提交', items: [
+        { code: '360', name: '360搜索', c: '#00B388', mark: '360' },
+        { code: 'sogou', name: '搜狗', c: '#FB6022', mark: 'SG' },
+        { code: 'shenma', name: '神马', c: '#2B6DE5', mark: 'SM' },
+        { code: 'toutiao', name: '头条搜索', c: '#F04142', mark: 'TT' },
+        { code: 'quark', name: '夸克搜索', c: '#1A73E8', mark: 'QK' }
+      ]},
+      { id: 'privacy', label: '隐私 / 独立', hint: '通常仅生成 Sitemap', items: [
+        { code: 'duckduckgo', name: 'DuckDuckGo', c: '#DE5833', mark: 'DDG' },
+        { code: 'brave', name: 'Brave Search', c: '#FB542B', mark: 'BR' },
+        { code: 'qwant', name: 'Qwant', c: '#5C9CE0', mark: 'Q' },
+        { code: 'ecosia', name: 'Ecosia', c: '#008009', mark: 'E' },
+        { code: 'kagi', name: 'Kagi', c: '#FFB948', mark: 'K' }
+      ]},
+      { id: 'regional', label: '区域 / 其它', hint: '区域引擎', items: [
+        { code: 'yahoo', name: 'Yahoo', c: '#6001D2', mark: 'Y!' },
+        { code: 'daum', name: 'Daum', c: '#1A73E8', mark: 'D' },
+        { code: 'coccoc', name: 'Cốc Cốc', c: '#FF6600', mark: 'CC' }
+      ]}
+    ];
+    var state = { variant: 'A', group: 'recommended', platform: 'google', step: 1 };
+    var names = { A: '顶栏 Tab + 卡片', B: '左侧分组列表', C: '两步向导' };
+
+    function dump() {
+      document.getElementById('stateDump').textContent = JSON.stringify(state, null, 2);
+      document.getElementById('variantLabel').textContent = state.variant + ' · ' + names[state.variant];
+      document.getElementById('swLabel').textContent = state.variant + ' (' + names[state.variant] + ')';
+    }
+    function group() { return GROUPS.find(function(g){ return g.id === state.group; }) || GROUPS[0]; }
+    function setPlatform(code) { state.platform = code; render(); }
+    function logoMark(it) {
+      return '<span class="mark" style="--c:' + it.c + '"><img src="../platform-logos/' + it.code + '.svg" alt="" width="28" height="28" onerror="this.parentNode.classList.add(\'mark--fallback\');this.replaceWith(document.createTextNode(\'' + it.mark + '\'))"></span>';
+    }
+
+    function renderA() {
+      var g = group();
+      var html = '<div class="tabs" role="tablist">';
+      GROUPS.forEach(function(x) {
+        html += '<button type="button" role="tab" aria-selected="' + (x.id===state.group) + '" data-g="' + x.id + '">' + x.label + ' <small>(' + x.items.length + ')</small></button>';
+      });
+      html += '</div><p class="hint">' + g.hint + '</p><div class="grid">';
+      g.items.forEach(function(it) {
+        html += '<button type="button" class="card" style="--c:' + it.c + '" aria-pressed="' + (state.platform===it.code) + '" data-p="' + it.code + '">' + logoMark(it) + it.name + '</button>';
+      });
+      html += '</div>';
+      return html;
+    }
+    function renderB() {
+      var g = group();
+      var html = '<div class="vb"><div class="vb__rail" role="tablist">';
+      GROUPS.forEach(function(x) {
+        html += '<button type="button" aria-selected="' + (x.id===state.group) + '" data-g="' + x.id + '">' + x.label + '</button>';
+      });
+      html += '</div><div class="vb__main"><p class="hint">' + g.hint + '</p><div class="list">';
+      g.items.forEach(function(it) {
+        html += '<button type="button" class="row" aria-pressed="' + (state.platform===it.code) + '" data-p="' + it.code + '">' + logoMark(it) + '<span>' + it.name + '</span><small>' + it.code + '</small></button>';
+      });
+      html += '</div></div></div>';
+      return html;
+    }
+    function renderC() {
+      var html = '<div class="steps"><span class="' + (state.step===1?'on':'') + '">1 选分组</span><span class="' + (state.step===2?'on':'') + '">2 选平台</span></div>';
+      if (state.step === 1) {
+        html += '<p class="hint">先缩小范围，再选具体引擎。</p><div class="chips">';
+        GROUPS.forEach(function(x) {
+          html += '<button type="button" class="chip" aria-pressed="' + (x.id===state.group) + '" data-g="' + x.id + '">' + x.label + '</button>';
+        });
+        html += '</div><div class="picked"><button type="button" id="toStep2">下一步：选平台 →</button></div>';
+      } else {
+        var g = group();
+        html += '<p class="hint">' + g.label + ' · ' + g.hint + '</p><div class="chips">';
+        g.items.forEach(function(it) {
+          html += '<button type="button" class="chip" aria-pressed="' + (state.platform===it.code) + '" data-p="' + it.code + '">' + it.name + '</button>';
+        });
+        html += '</div><div class="picked"><button type="button" id="backStep">← 返回分组</button> 已选：<b>' + state.platform + '</b></div>';
+      }
+      return html;
+    }
+    function render() {
+      var root = document.getElementById('root');
+      root.innerHTML = state.variant === 'B' ? renderB() : (state.variant === 'C' ? renderC() : renderA());
+      root.querySelectorAll('[data-g]').forEach(function(el) {
+        el.addEventListener('click', function() {
+          state.group = el.getAttribute('data-g');
+          if (state.variant === 'C') state.step = 1;
+          render();
+        });
+      });
+      root.querySelectorAll('[data-p]').forEach(function(el) {
+        el.addEventListener('click', function() { setPlatform(el.getAttribute('data-p')); });
+      });
+      var n = document.getElementById('toStep2');
+      if (n) n.addEventListener('click', function() { state.step = 2; render(); });
+      var b = document.getElementById('backStep');
+      if (b) b.addEventListener('click', function() { state.step = 1; render(); });
+      dump();
+    }
+    function setVariant(v) {
+      state.variant = v;
+      var url = new URL(location.href); url.searchParams.set('variant', v); history.replaceState(null, '', url);
+      render();
+    }
+    function cycle(d) {
+      var order = ['A','B','C'];
+      var i = order.indexOf(state.variant);
+      setVariant(order[(i + d + 3) % 3]);
+    }
+    document.getElementById('prev').onclick = function(){ cycle(-1); };
+    document.getElementById('next').onclick = function(){ cycle(1); };
+    document.addEventListener('keydown', function(e) {
+      if (e.target && /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
+      if (e.key === 'ArrowLeft') cycle(-1);
+      if (e.key === 'ArrowRight') cycle(1);
+    });
+    state.variant = (new URLSearchParams(location.search).get('variant') || 'A');
+    if (['A','B','C'].indexOf(state.variant) < 0) state.variant = 'A';
+    render();
+  </script>
+</body>
+</html>

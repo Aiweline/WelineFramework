@@ -80,4 +80,9 @@ class ContentDuplicateScan implements CronTaskInterface
             $reports === [] ? '-' : \implode(' | ', \array_slice($reports, 0, 5))
         );
     }
+
+    public function unlock_timeout(int $minute = 30): int
+    {
+        return $minute;
+    }
 }

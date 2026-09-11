@@ -25,9 +25,9 @@ final class SitemapAuditUrlSamplerTest extends TestCase
             'https://shop.test/blog/category/news',
             'https://shop.test/category/women/mamian',
             'https://shop.test/category/men',
-            'https://shop.test/help',
-            'https://shop.test/help/shipping',
-            'https://shop.test/help/returns',
+            'https://shop.test/faq',
+            'https://shop.test/faq/shipping',
+            'https://shop.test/faq/returns',
             'https://shop.test/promotion',
             'https://shop.test/promotion/deals',
             'https://shop.test/promotion/sale',
@@ -41,7 +41,7 @@ final class SitemapAuditUrlSamplerTest extends TestCase
         self::assertContains('https://shop.test/', $sample['urls']);
         self::assertContains('https://shop.test/products', $sample['urls']);
         self::assertContains('https://shop.test/blog', $sample['urls']);
-        self::assertContains('https://shop.test/help', $sample['urls']);
+        self::assertContains('https://shop.test/faq', $sample['urls']);
         self::assertContains('https://shop.test/promotion', $sample['urls']);
         self::assertContains('https://shop.test/about', $sample['urls']);
         self::assertContains('https://shop.test/product/100', $sample['urls']);
@@ -52,15 +52,15 @@ final class SitemapAuditUrlSamplerTest extends TestCase
         self::assertNotContains('https://shop.test/blog/post-b', $sample['urls']);
         self::assertContains('https://shop.test/blog/category/tips', $sample['urls']);
         self::assertNotContains('https://shop.test/blog/category/news', $sample['urls']);
-        self::assertContains('https://shop.test/help/shipping', $sample['urls']);
-        self::assertNotContains('https://shop.test/help/returns', $sample['urls']);
+        self::assertContains('https://shop.test/faq/shipping', $sample['urls']);
+        self::assertNotContains('https://shop.test/faq/returns', $sample['urls']);
         self::assertContains('https://shop.test/promotion/deals', $sample['urls']);
         self::assertNotContains('https://shop.test/promotion/sale', $sample['urls']);
         self::assertSame(3, $sample['structures']['product/*']['skipped']);
         self::assertSame(1, $sample['structures']['blog/*']['skipped']);
         self::assertSame(1, $sample['structures']['blog/category/*']['skipped']);
         self::assertSame(1, $sample['structures']['category/*']['skipped']);
-        self::assertSame(1, $sample['structures']['help/*']['skipped']);
+        self::assertSame(1, $sample['structures']['faq/*']['skipped']);
         self::assertSame(1, $sample['structures']['promotion/*']['skipped']);
     }
 

@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PROTOTYPE · SEO 总览空态</title>
+  <!--
+    Throwaway. Question: How should empty SEO overview guide ops without looking like a sparse scaffold?
+    ?variant=A|B|C — fold A into Backend/Dashboard/index.phtml
+    Verdict: A — seo-admin header + KPI tiles + empty CTA + next-step cards (align Account index)
+  -->
+  <style>
+    :root {
+      --weline-theme-primary: #1e40af;
+      --weline-theme-surface: #fff;
+      --weline-theme-surface-muted: #f8fafc;
+      --weline-theme-border: #dbe3ef;
+      --weline-theme-text: #172033;
+      --weline-theme-text-muted: #526074;
+      --weline-space-3: 12px;
+      --weline-space-4: 16px;
+      --weline-radius-lg: 12px;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 14px/1.5 system-ui, sans-serif; color: var(--weline-theme-text); background: var(--weline-theme-surface-muted); }
+    .banner { padding: 10px 16px; background: #fff7ed; color: #9a3412; font-size: 12px; border-bottom: 1px solid #fed7aa; }
+    .shell { max-width: 1040px; margin: 24px auto 100px; padding: 0 16px; }
+    .eyebrow { margin: 0 0 6px; color: var(--weline-theme-primary); font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+    h1 { margin: 0; font-size: 24px; }
+    .desc { margin: 8px 0 18px; color: var(--weline-theme-text-muted); max-width: 40rem; }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+    .btn { display: inline-flex; align-items: center; gap: 6px; min-height: 38px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--weline-theme-border); background: #fff; color: var(--weline-theme-primary); font-weight: 650; text-decoration: none; }
+    .btn.primary { background: var(--weline-theme-primary); color: #fff; border-color: transparent; }
+    .kpis { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; margin-bottom: 16px; }
+    .kpi { display: flex; gap: 12px; align-items: center; padding: 14px; border: 1px solid var(--weline-theme-border); border-radius: 10px; background: #fff; }
+    .kpi strong { display: block; font-size: 22px; }
+    .kpi span { color: var(--weline-theme-text-muted); font-size: 12px; }
+    .panel { border: 1px solid var(--weline-theme-border); border-radius: var(--weline-radius-lg); background: #fff; overflow: hidden; margin-bottom: 16px; }
+    .empty { padding: 48px 20px; text-align: center; color: var(--weline-theme-text-muted); }
+    .empty h2 { margin: 8px 0 6px; color: var(--weline-theme-text); font-size: 18px; }
+    .steps { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; padding: 16px; }
+    .step { padding: 14px; border: 1px solid var(--weline-theme-border); border-radius: 10px; background: var(--weline-theme-surface-muted); }
+    .step strong { display: block; margin-bottom: 6px; }
+    .step p { margin: 0 0 10px; color: var(--weline-theme-text-muted); font-size: 12px; }
+    .split { display: grid; grid-template-columns: 1.1fr .9fr; gap: 16px; }
+    .wizard { display: grid; gap: 10px; padding: 16px; }
+    .wizard .row { padding: 12px 14px; border: 1px dashed var(--weline-theme-border); border-radius: 8px; background: #fff; }
+    .switcher { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); display: flex; gap: 10px; align-items: center; padding: 8px 12px; border-radius: 999px; background: #0f172a; color: #fff; }
+    .switcher button { width: 32px; height: 32px; border: 0; border-radius: 999px; background: #334155; color: #fff; cursor: pointer; }
+    .dump { margin-top: 12px; padding: 10px; border-radius: 8px; background: #fff; border: 1px dashed var(--weline-theme-border); font: 11px/1.4 ui-monospace, monospace; white-space: pre-wrap; }
+    @media (max-width: 860px) { .kpis, .steps, .split { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="banner">PROTOTYPE · SEO 总览空态 · 默认折入生产：A（对齐账户页 + 下一步卡片）</div>
+  <div class="shell" id="root"></div>
+  <div class="switcher"><button id="prev" type="button">←</button><span id="label">A</span><button id="next" type="button">→</button></div>
+  <script>
+    const names = { A: 'A · 头图+KPI+空态CTA+下一步', B: 'B · 左右：清单 / 空态', C: 'C · 纯向导' };
+    function kpis() {
+      return `<section class="kpis">${[
+        ['0','SEO 主体'],['0','关键词'],['0','已启用'],['0','平均关键词']
+      ].map(([v,l])=>`<article class="kpi"><div><strong>${v}</strong><span>${l}</span></div></article>`).join('')}</section>`;
+    }
+    function head() {
+      return `<p class="eyebrow">SEO 运维</p><h1>SEO 总览</h1>
+        <p class="desc">一眼看主体与关键词健康度；空站时从下方推荐步骤接入账户、绑定站点并创建主体。</p>
+        <div class="actions"><a class="btn primary" href="#">创建 SEO 主体</a><a class="btn" href="#">SEO 账户</a></div>`;
+    }
+    function steps() {
+      return `<div class="panel"><div class="steps">
+        <div class="step"><strong>1 · 接入搜索平台</strong><p>新增 Google / Bing / 百度等账户并验证。</p><a class="btn" href="#">去账户</a></div>
+        <div class="step"><strong>2 · 绑定站点</strong><p>把账户挂到要优化的网站。</p><a class="btn" href="#">去绑定</a></div>
+        <div class="step"><strong>3 · 创建主体</strong><p>为主体挂关键词，总览才会有数据。</p><a class="btn primary" href="#">创建主体</a></div>
+      </div></div>`;
+    }
+    function paint() {
+      const v = new URLSearchParams(location.search).get('variant') || 'A';
+      document.getElementById('label').textContent = names[v] || names.A;
+      let html = '';
+      if (v === 'B') {
+        html = `<div class="split"><div>${head()}${kpis()}<div class="panel"><div class="empty"><h2>暂无 SEO 主体</h2><p>左侧步骤做完后，这里会出现主体卡片。</p></div></div></div>
+          <div class="panel"><div class="wizard">
+            <div class="row">① 接入账户</div><div class="row">② 绑定站点</div><div class="row">③ 创建主体</div>
+          </div></div></div>`;
+      } else if (v === 'C') {
+        html = `<p class="eyebrow">SEO 运维</p><h1>先完成接入</h1><p class="desc">总览在有主体后才有意义。</p>
+          <div class="panel"><div class="wizard">
+            <div class="row"><strong>接入账户</strong> · Google Search Console 等</div>
+            <div class="row"><strong>绑定站点</strong> · 账户 ↔ 网站</div>
+            <div class="row"><strong>创建主体</strong> · 关键词与优化对象</div>
+            <a class="btn primary" href="#">开始：新增账户</a>
+          </div></div>`;
+      } else {
+        html = head() + kpis() + `<div class="panel"><div class="empty">
+          <h2>暂无 SEO 主体</h2><p>当前没有启用的主体。先创建主体，或按下方推荐步骤把平台账户接好。</p>
+          <a class="btn primary" href="#">创建 SEO 主体</a>
+        </div></div>` + steps();
+      }
+      document.getElementById('root').innerHTML = html + `<div class="dump">${JSON.stringify({variant:v,verdict:'A'},null,2)}</div>`;
+    }
+    const order = ['A','B','C'];
+    document.getElementById('prev').onclick = () => {
+      const u = new URL(location.href); const i = order.indexOf(u.searchParams.get('variant')||'A');
+      u.searchParams.set('variant', order[(i+2)%3]); history.replaceState({},'',u); paint();
+    };
+    document.getElementById('next').onclick = () => {
+      const u = new URL(location.href); const i = order.indexOf(u.searchParams.get('variant')||'A');
+      u.searchParams.set('variant', order[(i+1)%3]); history.replaceState({},'',u); paint();
+    };
+    paint();
+  </script>
+</body>
+</html>

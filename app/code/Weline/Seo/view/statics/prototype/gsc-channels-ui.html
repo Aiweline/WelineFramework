@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PROTOTYPE · GSC Discover / 渠道配置</title>
+  <!--
+    Throwaway UI prototype (NOT production).
+    Question: How should Google Discover + Platform Property channel config sit on the SEO account form?
+    Three variants via ?variant=A|B|C — fold winner into Backend/Account/form.phtml then discard.
+  -->
+  <style>
+    :root {
+      --weline-theme-primary: #1e40af;
+      --weline-theme-surface: #ffffff;
+      --weline-theme-surface-muted: #f8fafc;
+      --weline-theme-border: #dbe3ef;
+      --weline-theme-text: #172033;
+      --weline-theme-text-muted: #526074;
+      --weline-radius-md: 10px;
+      --weline-radius-lg: 12px;
+      --weline-space-2: 8px;
+      --weline-space-3: 12px;
+      --weline-space-4: 16px;
+      --weline-space-5: 20px;
+      --seo-primary: var(--weline-theme-primary);
+      --seo-primary-soft: color-mix(in srgb, var(--weline-theme-primary) 12%, var(--weline-theme-surface));
+      --seo-border: var(--weline-theme-border);
+      --seo-bg: var(--weline-theme-surface-muted);
+      --seo-text: var(--weline-theme-text);
+      --seo-muted: var(--weline-theme-text-muted);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+      color: var(--seo-text);
+      background: var(--seo-bg);
+    }
+    .proto-banner {
+      padding: var(--weline-space-3) var(--weline-space-5);
+      background: color-mix(in srgb, #b45309 14%, var(--weline-theme-surface));
+      border-bottom: 1px solid color-mix(in srgb, #b45309 28%, var(--seo-border));
+      color: #92400e;
+      font-size: 12px;
+    }
+    .shell { max-width: 920px; margin: 24px auto 96px; padding: 0 16px; }
+    .host {
+      border: 1px solid var(--seo-border);
+      border-radius: var(--weline-radius-lg);
+      background: var(--weline-theme-surface);
+      overflow: hidden;
+    }
+    .host__chrome {
+      display: flex; justify-content: space-between; gap: 12px; align-items: center;
+      padding: 14px 18px; border-bottom: 1px solid var(--seo-border); background: var(--seo-bg);
+    }
+    .host__chrome strong { font-size: 15px; }
+    .host__chrome span { color: var(--seo-muted); font-size: 12px; }
+    .cred {
+      padding: 18px 20px; border-bottom: 1px solid var(--seo-border);
+      display: grid; gap: 10px;
+    }
+    .cred label { display: grid; gap: 6px; font-weight: 650; font-size: 13px; }
+    .cred input, .cred textarea {
+      width: 100%; padding: 9px 11px; border: 1px solid var(--seo-border);
+      border-radius: 8px; background: #fff; font: inherit;
+    }
+    .cred textarea { min-height: 72px; font-family: ui-monospace, monospace; font-size: 12px; }
+    .state-dump {
+      margin-top: 14px; padding: 12px 14px; border-radius: 8px;
+      background: var(--seo-bg); border: 1px dashed var(--seo-border);
+      font-family: ui-monospace, monospace; font-size: 11px; white-space: pre-wrap;
+    }
+    .switcher {
+      position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
+      z-index: 40; display: flex; align-items: center; gap: 10px;
+      padding: 8px 12px; border-radius: 999px;
+      background: #0f172a; color: #f8fafc;
+      box-shadow: 0 10px 30px rgba(15, 23, 42, .28);
+      font-size: 12px;
+    }
+    .switcher button {
+      border: 0; background: #1e293b; color: inherit; width: 32px; height: 32px;
+      border-radius: 999px; cursor: pointer; font-size: 16px;
+    }
+    .switcher button:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
+    [hidden] { display: none !important; }
+
+    /* A — stacked sections (production-closest) */
+    .v-a .section { padding: 18px 20px; border-bottom: 1px solid var(--seo-border); }
+    .v-a .section:last-child { border-bottom: 0; }
+    .v-a .section__head { display: flex; gap: 11px; margin-bottom: 14px; }
+    .v-a .section__icon {
+      width: 36px; height: 36px; border-radius: 8px; display: grid; place-items: center;
+      background: var(--seo-primary-soft); color: var(--seo-primary); font-weight: 700;
+    }
+    .v-a .section__head h2 { margin: 0; font-size: 15px; }
+    .v-a .section__head p { margin: 4px 0 0; color: var(--seo-muted); font-size: 12px; }
+    .v-a .switch-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .v-a .switch-card {
+      display: flex; gap: 10px; align-items: flex-start; padding: 14px;
+      border: 1px solid var(--seo-border); border-radius: 9px; background: var(--seo-bg); cursor: pointer;
+    }
+    .v-a .switch-card strong, .v-a .switch-card small { display: block; }
+    .v-a .switch-card small { margin-top: 4px; color: var(--seo-muted); font-size: 11px; }
+    .v-a .channel-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .v-a .channel-grid label { display: grid; gap: 6px; font-size: 12px; font-weight: 650; }
+    .v-a .note {
+      margin-top: 12px; padding: 10px 12px; border-radius: 8px; font-size: 12px;
+      background: color-mix(in srgb, var(--seo-primary) 8%, var(--weline-theme-surface));
+      border: 1px solid color-mix(in srgb, var(--seo-primary) 22%, var(--seo-border));
+      color: var(--seo-text);
+    }
+    .v-a .note a { color: var(--seo-primary); }
+
+    /* B — split rail: Discover left, channels right */
+    .v-b { display: grid; grid-template-columns: minmax(220px, .9fr) 1.2fr; min-height: 320px; }
+    .v-b__rail {
+      padding: 18px 16px; border-right: 1px solid var(--seo-border); background: var(--seo-bg);
+    }
+    .v-b__rail h2 { margin: 0 0 8px; font-size: 14px; }
+    .v-b__rail p { margin: 0 0 14px; color: var(--seo-muted); font-size: 12px; }
+    .v-b__rail label {
+      display: flex; gap: 8px; align-items: flex-start; margin-bottom: 10px;
+      padding: 10px; border-radius: 8px; border: 1px solid var(--seo-border); background: #fff;
+      font-size: 12px; cursor: pointer;
+    }
+    .v-b__main { padding: 18px 18px 20px; }
+    .v-b__main h2 { margin: 0 0 6px; font-size: 14px; }
+    .v-b__main > p { margin: 0 0 14px; color: var(--seo-muted); font-size: 12px; }
+    .v-b .list { display: grid; gap: 10px; }
+    .v-b .row {
+      display: grid; grid-template-columns: 88px 1fr; gap: 10px; align-items: center;
+    }
+    .v-b .row span {
+      font-size: 12px; font-weight: 700; color: var(--seo-primary);
+    }
+    .v-b .row input {
+      width: 100%; padding: 8px 10px; border: 1px solid var(--seo-border); border-radius: 8px;
+    }
+    .v-b .foot {
+      margin-top: 14px; font-size: 12px; color: var(--seo-muted);
+    }
+
+    /* C — checklist timeline */
+    .v-c { padding: 8px 0 4px; }
+    .v-c ol { list-style: none; margin: 0; padding: 12px 20px 20px; }
+    .v-c li {
+      position: relative; padding: 0 0 18px 28px;
+      border-left: 2px solid color-mix(in srgb, var(--seo-primary) 35%, var(--seo-border));
+    }
+    .v-c li:last-child { border-left-color: transparent; padding-bottom: 0; }
+    .v-c li::before {
+      content: ""; position: absolute; left: -7px; top: 4px; width: 12px; height: 12px;
+      border-radius: 50%; background: var(--seo-primary);
+      box-shadow: 0 0 0 3px var(--seo-primary-soft);
+    }
+    .v-c h3 { margin: 0 0 4px; font-size: 14px; }
+    .v-c p { margin: 0 0 10px; color: var(--seo-muted); font-size: 12px; }
+    .v-c .checks { display: grid; gap: 8px; }
+    .v-c .checks label {
+      display: flex; gap: 8px; align-items: center; font-size: 13px; cursor: pointer;
+    }
+    .v-c .channels { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .v-c .channels input {
+      width: 100%; padding: 8px 10px; border: 1px solid var(--seo-border); border-radius: 8px; font-size: 12px;
+    }
+
+    @media (max-width: 720px) {
+      .v-a .switch-row, .v-a .channel-grid, .v-c .channels { grid-template-columns: 1fr; }
+      .v-b { grid-template-columns: 1fr; }
+      .v-b__rail { border-right: 0; border-bottom: 1px solid var(--seo-border); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      * { transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="proto-banner">
+    PROTOTYPE · 非生产。评估 Google Discover / Platform Property 后台配置布局。方向键或底部条切换变体。
+  </div>
+  <div class="shell">
+    <div class="host">
+      <div class="host__chrome">
+        <div>
+          <strong>编辑 SEO 账户 · Google</strong>
+          <div><span>既有凭证区保持不动；下方为新增配置的三种构图</span></div>
+        </div>
+        <span id="variantLabel">A · 分区堆叠</span>
+      </div>
+      <div class="cred" aria-hidden="true">
+        <label>Service Account JSON<textarea readonly>{"type":"service_account","client_email":"seo@project.iam.gserviceaccount.com"}</textarea></label>
+        <label>站点属性 URL<input readonly value="sc-domain:example.com" /></label>
+      </div>
+
+      <div id="variantRoot"></div>
+    </div>
+    <div class="state-dump" id="stateDump"></div>
+  </div>
+
+  <div class="switcher" role="toolbar" aria-label="Prototype variants">
+    <button type="button" id="prevBtn" aria-label="上一个变体">←</button>
+    <span id="switcherLabel">A (分区堆叠)</span>
+    <button type="button" id="nextBtn" aria-label="下一个变体">→</button>
+  </div>
+
+  <template id="tplA">
+    <div class="v-a" data-variant-name="分区堆叠">
+      <section class="section">
+        <div class="section__head">
+          <div class="section__icon">D</div>
+          <div>
+            <h2>Discover / News 监测</h2>
+            <p>用现有网站属性 + Search Analytics <code>type=discover</code> 拉取，不新增账户类型。</p>
+          </div>
+        </div>
+        <div class="switch-row">
+          <label class="switch-card"><input type="checkbox" data-k="enable_discover_stats" checked /><span><strong>启用 Discover 统计</strong><small>定时同步写入 extra.discover</small></span></label>
+          <label class="switch-card"><input type="checkbox" data-k="enable_google_news_stats" /><span><strong>启用 Google News 统计</strong><small>可选；新闻站再开</small></span></label>
+        </div>
+      </section>
+      <section class="section">
+        <div class="section__head">
+          <div class="section__icon">P</div>
+          <div>
+            <h2>分发渠道（Platform Property）</h2>
+            <p>为什么配置：便于在 GSC 登记品牌官方渠道并对照表现。本系统只存 URL，不自动分发、不加信任分。</p>
+          </div>
+        </div>
+        <div class="channel-grid">
+          <label>YouTube<input data-k="youtube_channel_url" placeholder="https://www.youtube.com/@brand" /></label>
+          <label>X / Twitter<input data-k="x_profile_url" placeholder="https://x.com/brand" /></label>
+          <label>Instagram<input data-k="instagram_profile_url" placeholder="https://www.instagram.com/brand" /></label>
+          <label>TikTok<input data-k="tiktok_profile_url" placeholder="https://www.tiktok.com/@brand" /></label>
+          <label>LinkedIn<input data-k="linkedin_profile_url" placeholder="https://www.linkedin.com/company/brand" /></label>
+        </div>
+        <div class="note">在 <a href="https://search.google.com/search-console" target="_blank" rel="noopener">Search Console</a> 添加平台属性后，把同一主页 URL 填回此处，方便站内对照。系统不会假装已 API 拉数。</div>
+      </section>
+    </div>
+  </template>
+
+  <template id="tplB">
+    <div class="v-b" data-variant-name="左右分栏">
+      <aside class="v-b__rail">
+        <h2>流量面</h2>
+        <p>网站属性可 API 拉取的面。</p>
+        <label><input type="checkbox" data-k="enable_discover_stats" checked /><span>Discover</span></label>
+        <label><input type="checkbox" data-k="enable_google_news_stats" /><span>Google News</span></label>
+      </aside>
+      <div class="v-b__main">
+        <h2>品牌渠道主页</h2>
+        <p>对应 GSC Platform Property；本侧只存 URL 与指引。</p>
+        <div class="list">
+          <label class="row"><span>YouTube</span><input data-k="youtube_channel_url" /></label>
+          <label class="row"><span>X</span><input data-k="x_profile_url" /></label>
+          <label class="row"><span>Instagram</span><input data-k="instagram_profile_url" /></label>
+          <label class="row"><span>TikTok</span><input data-k="tiktok_profile_url" /></label>
+          <label class="row"><span>LinkedIn</span><input data-k="linkedin_profile_url" /></label>
+        </div>
+        <p class="foot">生产落点：保留「渠道清单」信息密度，但改回与后台 seo-form-section 同栈，避免左右分栏挤占凭证区。</p>
+      </div>
+    </div>
+  </template>
+
+  <template id="tplC">
+    <div class="v-c" data-variant-name="清单时间线">
+      <ol>
+        <li>
+          <h3>打开网站属性的 Discover</h3>
+          <p>无需新建属性；勾选后随 StatsSync 拉 type=discover。</p>
+          <div class="checks">
+            <label><input type="checkbox" data-k="enable_discover_stats" checked />启用 Discover 统计</label>
+            <label><input type="checkbox" data-k="enable_google_news_stats" />同时拉 Google News</label>
+          </div>
+        </li>
+        <li>
+          <h3>在 GSC 添加 Platform Property</h3>
+          <p>Instagram / TikTok / X / YouTube（LinkedIn 作品牌登记，官方四平台以外仅本地存档）。</p>
+        </li>
+        <li>
+          <h3>把主页 URL 回填到本系统</h3>
+          <div class="channels">
+            <input data-k="youtube_channel_url" placeholder="YouTube" />
+            <input data-k="x_profile_url" placeholder="X" />
+            <input data-k="instagram_profile_url" placeholder="Instagram" />
+            <input data-k="tiktok_profile_url" placeholder="TikTok" />
+            <input data-k="linkedin_profile_url" placeholder="LinkedIn" />
+          </div>
+        </li>
+      </ol>
+    </div>
+  </template>
+
+  <script>
+    (function () {
+      var order = ['A', 'B', 'C'];
+      var names = { A: '分区堆叠', B: '左右分栏', C: '清单时间线' };
+      var state = {
+        enable_discover_stats: true,
+        enable_google_news_stats: false,
+        youtube_channel_url: '',
+        x_profile_url: '',
+        instagram_profile_url: '',
+        tiktok_profile_url: '',
+        linkedin_profile_url: ''
+      };
+
+      function currentVariant() {
+        var v = new URLSearchParams(location.search).get('variant') || 'A';
+        return order.indexOf(v) >= 0 ? v : 'A';
+      }
+
+      function setVariant(v) {
+        var url = new URL(location.href);
+        url.searchParams.set('variant', v);
+        history.replaceState(null, '', url);
+        render();
+      }
+
+      function dump() {
+        document.getElementById('stateDump').textContent =
+          'variant=' + currentVariant() + ' (' + names[currentVariant()] + ')\n' +
+          JSON.stringify(state, null, 2);
+      }
+
+      function bind(root) {
+        root.querySelectorAll('[data-k]').forEach(function (el) {
+          var k = el.getAttribute('data-k');
+          if (el.type === 'checkbox') {
+            el.checked = !!state[k];
+            el.addEventListener('change', function () {
+              state[k] = !!el.checked;
+              dump();
+            });
+          } else {
+            el.value = state[k] || '';
+            el.addEventListener('input', function () {
+              state[k] = el.value;
+              dump();
+            });
+          }
+        });
+      }
+
+      function render() {
+        var v = currentVariant();
+        var tpl = document.getElementById('tpl' + v);
+        var root = document.getElementById('variantRoot');
+        root.replaceChildren(tpl.content.cloneNode(true));
+        bind(root);
+        document.getElementById('variantLabel').textContent = v + ' · ' + names[v];
+        document.getElementById('switcherLabel').textContent = v + ' (' + names[v] + ')';
+        dump();
+      }
+
+      function cycle(delta) {
+        var i = order.indexOf(currentVariant());
+        setVariant(order[(i + delta + order.length) % order.length]);
+      }
+
+      document.getElementById('prevBtn').addEventListener('click', function () { cycle(-1); });
+      document.getElementById('nextBtn').addEventListener('click', function () { cycle(1); });
+      document.addEventListener('keydown', function (e) {
+        var t = e.target;
+        if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+        if (e.key === 'ArrowLeft') cycle(-1);
+        if (e.key === 'ArrowRight') cycle(1);
+      });
+
+      render();
+    })();
+  </script>
+</body>
+</html>
