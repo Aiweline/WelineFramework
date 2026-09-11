@@ -13,4 +13,11 @@ interface VerificationProviderInterface
 
     /** @param array<string, mixed> $submission */
     public function verify(array $submission, string $intent, string $hostname, ?string $ip = null): bool;
+
+    /**
+     * CSP sources this vendor needs (collected by Captcha Extends into app defaults).
+     *
+     * @return array<string, list<string>> directive => absolute https hosts / keywords
+     */
+    public function cspDirectives(): array;
 }

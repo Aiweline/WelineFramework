@@ -7,6 +7,7 @@ namespace Weline\Captcha\Provider;
 use Weline\Captcha\Interface\VerificationProviderInterface;
 use Weline\Captcha\Model\CaptchaResult;
 use Weline\Captcha\Service\CaptchaConfig;
+use Weline\Captcha\Service\CaptchaOutboundProxy;
 use Weline\Captcha\Service\GoogleOAuthService;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
@@ -26,15 +27,54 @@ final class GoogleRecaptchaEnterprise implements VerificationProviderInterface
         return 'google_enterprise';
     }
 
+    public function cspDirectives(): array
+    {
+        // Official FAQ hosts + recaptcha.net mirror (CN/fallback). Collected via Extends CaptchaVendorsCsp.
+        // https://cloud.google.com/recaptcha/docs/faq — CSP with reCAPTCHA
+        return [
+            'script-src' => [
+                'https://www.google.com',
+                'https://www.gstatic.com',
+                'https://www.recaptcha.net',
+            ],
+            'frame-src' => [
+                'https://www.google.com',
+                'https://www.gstatic.com',
+                'https://recaptcha.google.com',
+                'https://www.recaptcha.net',
+            ],
+            'connect-src' => [
+                'https://www.google.com',
+                'https://www.gstatic.com',
+                'https://www.recaptcha.net',
+                // Server-side CreateAssessment also needs this when browser tooling proxies; harmless for FE.
+                'https://recaptchaenterprise.googleapis.com',
+            ],
+            'img-src' => [
+                'https://www.gstatic.com',
+                'https://www.google.com',
+                'https://www.recaptcha.net',
+            ],
+        ];
+    }
+
     public function render(array $context): string
     {
-        $siteKey = $this->config->googleSiteKey();
+        $siteKey = \trim($this->config->googleSiteKey());
+        // Never emit enterprise.js?render= (Google shows「需要网站密钥」); router should not pick us empty.
+        if ($siteKey === '') {
+            return '';
+        }
         $intent = $this->normalizeAction((string)($context['intent'] ?? 'generic'));
         $formId = (string)($context['form_id'] ?? '');
         $siteKeyJson = $this->json($siteKey);
         $intentJson = $this->json($intent);
         $formIdJson = $this->json($formId);
-        $scriptUrl = 'https://www.google.com/recaptcha/enterprise.js?render=' . \rawurlencode($siteKey);
+        // Prefer google.com first (assessment affinity); fall back to recaptcha.net on hang/error.
+        $scriptUrlsJson = $this->json([
+            'https://www.google.com/recaptcha/enterprise.js?render=' . \rawurlencode($siteKey),
+            'https://www.recaptcha.net/recaptcha/enterprise.js?render=' . \rawurlencode($siteKey),
+        ]);
         $allowDegrade = $this->config->allowLocalDegrade();
         $allowDegradeJson = $this->json($allowDegrade);
 
@@ -50,12 +90,12 @@ final class GoogleRecaptchaEnterprise implements VerificationProviderInterface
             . '</svg>';
 
         return '<div class="weline-captcha weline-captcha-google" data-weline-captcha-provider="google_enterprise"'
-            . ' data-allow-local-degrade="' . ($allowDegrade ? '1' : '0') . '">'
+            . ' data-allow-local-degrade="' . ($allowDegrade ? '1' : '0') . '" data-sdk-ready="0">'
             . '<input type="hidden" name="captcha_provider" value="google_enterprise">'
             . '<input type="hidden" name="captcha_response" value="">'
             . '<input type="hidden" name="captcha_action" value="' . \htmlspecialchars($intent, ENT_QUOTES, 'UTF-8') . '">'
             . '<div class="weline-captcha-google-trust" data-testid="google-recaptcha-trust-badge" role="note"'
-            . ' aria-label="' . $notice . '">'
+            . ' aria-label="' . $notice . '" hidden data-sdk-ready="0">'
             . '<span class="weline-captcha-google-trust__mark">' . $googleMark . '</span>'
             . '<span class="weline-captcha-google-trust__body">'
             . '<span class="weline-captcha-google-trust__brand">' . $brand . '</span>'
@@ -68,23 +108,68 @@ final class GoogleRecaptchaEnterprise implements VerificationProviderInterface
             . '</span>'
             . '</div>'
             . '</div>'
-            . '<script src="' . \htmlspecialchars($scriptUrl, ENT_QUOTES, 'UTF-8') . '" async defer></script>'
             . '<script>(function(){var form=document.getElementById(' . $formIdJson . ');'
             . 'if(!form||form.dataset.welineCaptchaBound==="1"){return;}form.dataset.welineCaptchaBound="1";'
             . 'var allowDegrade=' . $allowDegradeJson . ';'
+            . 'var root=form.querySelector("[data-weline-captcha-provider=\\"google_enterprise\\"]");'
+            . 'var badge=root?root.querySelector("[data-testid=\\"google-recaptcha-trust-badge\\"]"):null;'
+            . 'var reveal=function(){if(badge){badge.hidden=false;badge.setAttribute("data-sdk-ready","1");}'
+            . 'if(root){root.setAttribute("data-sdk-ready","1");}};'
+            . 'var conceal=function(){if(badge){badge.hidden=true;badge.setAttribute("data-sdk-ready","0");}'
+            . 'if(root){root.setAttribute("data-sdk-ready","0");}};'
+            . 'var fail=function(error){delete form.dataset.welineCaptchaPending;conceal();'
+            . 'var failReason=String(error&&error.message||error||"recaptcha_unavailable");'
+            . 'form.dispatchEvent(new CustomEvent("weline:form:verification-error",{bubbles:true,detail:{form:form,error:error,degrade:allowDegrade?"local_image":"",provider:"google_enterprise"}}));'
+            . 'if(allowDegrade){form.dispatchEvent(new CustomEvent("weline:captcha:degrade",{bubbles:true,detail:{form:form,prefer:"local_image",reason:failReason}}));}};'
+            . 'var urls=' . $scriptUrlsJson . ';var hostIdx=0;var tries=0;'
+            // Hang without onerror must not block fallback. Never start host N+1 after host N onload —
+            // a short watch + second enterprise.js can race and mint BROWSER_ERROR empty_token_props.
+            . 'var loadNext=function(){if(window.grecaptcha&&grecaptcha.enterprise){return;}'
+            . 'if(hostIdx>=urls.length){fail(new Error("recaptcha_script_error"));return;}'
+            . 'var s=document.createElement("script");var idx=hostIdx;hostIdx+=1;s.src=urls[idx];s.async=true;s.defer=true;'
+            . 'var settled=false;var onloaded=false;'
+            . 'var finish=function(ok){if(settled){return;}settled=true;clearTimeout(watch);'
+            . 'if(ok){tries=0;return;}loadNext();};'
+            . 'var watch=setTimeout(function(){if(onloaded){return;}finish(!!(window.grecaptcha&&grecaptcha.enterprise));},5000);'
+            . 's.onload=function(){onloaded=true;clearTimeout(watch);'
+            . 'if(window.grecaptcha&&grecaptcha.enterprise){finish(true);return;}'
+            . 'var grace=0;var g=setInterval(function(){grace+=1;'
+            . 'if(window.grecaptcha&&grecaptcha.enterprise){clearInterval(g);finish(true);}'
+            . 'else if(grace>=50){clearInterval(g);finish(false);}},100);};'
+            . 's.onerror=function(){finish(false);};'
+            . 'document.head.appendChild(s);};'
+            . 'loadNext();'
+            . 'var timer=setInterval(function(){tries+=1;'
+            . 'if(window.grecaptcha&&grecaptcha.enterprise){clearInterval(timer);grecaptcha.enterprise.ready(function(){reveal();});}'
+            . 'else if(tries>=80){clearInterval(timer);fail(new Error("recaptcha_unavailable"));}},250);'
             . 'form.addEventListener("weline:form:prepare-submit",function(event){'
+            . 'var active=form.querySelector("[data-weline-captcha-provider]");'
+            . 'if(!active||active.getAttribute("data-weline-captcha-provider")!=="google_enterprise"){return;}'
             . 'if(form.dataset.welineCaptchaVerified==="1"){return;}event.preventDefault();'
             . 'if(form.dataset.welineCaptchaPending==="1"){return;}form.dataset.welineCaptchaPending="1";'
-            . 'var fail=function(error){delete form.dataset.welineCaptchaPending;'
-            . 'form.dispatchEvent(new CustomEvent("weline:form:verification-error",{bubbles:true,detail:{form:form,error:error,degrade:allowDegrade?"local_image":"",provider:"google_enterprise"}}));'
-            . 'if(allowDegrade){form.dispatchEvent(new CustomEvent("weline:captcha:degrade",{bubbles:true,detail:{form:form,prefer:"local_image",reason:String(error&&error.message||error||"recaptcha_unavailable")}}));}};'
             . 'if(!window.grecaptcha||!grecaptcha.enterprise){fail(new Error("recaptcha_unavailable"));return;}'
-            . 'grecaptcha.enterprise.ready(function(){grecaptcha.enterprise.execute(' . $siteKeyJson . ',{action:' . $intentJson . '}).then(function(token){'
-            . 'var input=form.querySelector("[name=captcha_response]");if(!input||!token){fail(new Error("recaptcha_empty_token"));return;}'
+            // BROWSER_ERROR often arrives as ultra-fast/short tokens; retry then degrade — do not submit weak tickets.
+            . 'var applyToken=function(token){'
+            . 'var live=form.querySelector("[data-weline-captcha-provider=\\"google_enterprise\\"]");'
+            . 'var input=live?live.querySelector("[name=captcha_response]"):null;'
+            . 'if(!input||!token){fail(new Error("recaptcha_empty_token"));return;}'
             . 'input.value=token;form.dataset.welineCaptchaVerified="1";delete form.dataset.welineCaptchaPending;'
             . 'form.dispatchEvent(new CustomEvent("weline:form:verified",{bubbles:true,detail:{form:form,provider:"google_enterprise"}}));'
-            . 'if(typeof form.requestSubmit==="function"){form.requestSubmit();}else{form.submit();}'
-            . '}).catch(fail);});});})();</script>';
+            . 'if(typeof form.requestSubmit==="function"){form.requestSubmit();}else{form.submit();}};'
+            . 'var tokenLooksWeak=function(token,ms){return !token||String(token).length<1000||ms<120||ms>=12000;};'
+            . 'var runExecute=function(left){'
+            . 'var started=Date.now();'
+            . 'grecaptcha.enterprise.execute(' . $siteKeyJson . ',{action:' . $intentJson . '}).then(function(token){'
+            . 'var ms=Date.now()-started;'
+            . 'if(tokenLooksWeak(token,ms)&&left>1){window.setTimeout(function(){runExecute(left-1);},450);return;}'
+            . 'if(tokenLooksWeak(token,ms)){fail(new Error("recaptcha_weak_token"));return;}'
+            . 'applyToken(token);'
+            . '}).catch(function(err){'
+            . 'if(left>1){window.setTimeout(function(){runExecute(left-1);},350);return;}'
+            . 'fail(err);'
+            . '});};'
+            . 'grecaptcha.enterprise.ready(function(){runExecute(3);});'
+            . '});})();</script>';
     }
 
     public function verify(array $submission, string $intent, string $hostname, ?string $ip = null): bool
@@ -92,8 +177,14 @@ final class GoogleRecaptchaEnterprise implements VerificationProviderInterface
         $token = \trim((string)($submission['captcha_response'] ?? ''));
         $action = $this->normalizeAction($intent);
         $hostname = \strtolower(\trim($hostname));
-        if ($token === '' || $action === '' || $hostname === '') {
-            return false;
+        if ($token === '') {
+            throw new \RuntimeException('google_empty_token');
+        }
+        if ($action === '') {
+            throw new \RuntimeException('google_invalid_action');
+        }
+        if ($hostname === '') {
+            throw new \RuntimeException('google_empty_hostname');
         }
 
         $digest = \hash('sha256', $token);
@@ -103,30 +194,41 @@ final class GoogleRecaptchaEnterprise implements VerificationProviderInterface
             ->find()
             ->fetch();
         if ($used->getId()) {
-            return false;
+            throw new \RuntimeException('google_token_reuse');
         }
 
         $assessment = $this->createAssessment($token, $action);
         $tokenProperties = \is_array($assessment['tokenProperties'] ?? null) ? $assessment['tokenProperties'] : [];
         $risk = \is_array($assessment['riskAnalysis'] ?? null) ? $assessment['riskAnalysis'] : [];
         if (($tokenProperties['valid'] ?? false) !== true) {
-            return false;
+            $reason = \strtolower(\trim((string)($tokenProperties['invalidReason'] ?? 'UNKNOWN')));
+            $remoteHost = \strtolower(\trim((string)($tokenProperties['hostname'] ?? '')));
+            $remoteAction = \strtolower(\trim((string)($tokenProperties['action'] ?? '')));
+            if ($reason === 'browser_error' && ($remoteHost === '' || $remoteAction === '')) {
+                // Empty props = key/domain challenge never bound (not a "bot score" reject).
+                $reason = 'browser_error:empty_token_props';
+            }
+            throw new \RuntimeException('google_token_invalid:' . ($reason !== '' ? $reason : 'UNKNOWN'));
         }
-        if ($this->normalizeAction((string)($tokenProperties['action'] ?? '')) !== $action) {
-            return false;
+        $remoteAction = $this->normalizeAction((string)($tokenProperties['action'] ?? ''));
+        if ($remoteAction !== $action) {
+            throw new \RuntimeException('google_action_mismatch:' . $remoteAction . '!=' . $action);
         }
 
         $remoteHost = \strtolower(\trim((string)($tokenProperties['hostname'] ?? '')));
         if ($remoteHost === '' || !$this->hostnameAllowed($remoteHost, $hostname)) {
-            return false;
+            throw new \RuntimeException(
+                'google_hostname_mismatch:token=' . $remoteHost . ';request=' . $hostname
+            );
         }
 
         $createTime = \strtotime((string)($tokenProperties['createTime'] ?? ''));
         if ($createTime <= 0 || $createTime < \time() - $this->config->tokenMaxAge() || $createTime > \time() + 30) {
-            return false;
+            throw new \RuntimeException('google_token_expired');
         }
-        if ((float)($risk['score'] ?? 0.0) < $this->config->scoreThreshold()) {
-            return false;
+        $score = (float)($risk['score'] ?? 0.0);
+        if ($score < $this->config->scoreThreshold()) {
+            throw new \RuntimeException('google_score_low:' . $score);
         }
 
         $record = clone $this->results;
@@ -145,6 +247,11 @@ final class GoogleRecaptchaEnterprise implements VerificationProviderInterface
     {
         $projectId = $this->config->googleProjectId();
         $apiKey = $this->config->googleApiKey();
+        if ($this->config->googleApiKeyLooksLikeSiteKey()) {
+            throw new \RuntimeException((string)__(
+                'Google Enterprise API Key 配置错误：当前值像 Site Key（6L…），服务端校验需要 Cloud「API 密钥」（通常 AIza… 开头）。请到系统配置 → Weline_Captcha 更换 API Key。'
+            ));
+        }
         $url = 'https://recaptchaenterprise.googleapis.com/v1/projects/'
             . \rawurlencode($projectId) . '/assessments';
         if ($apiKey !== '') {
@@ -169,7 +276,22 @@ final class GoogleRecaptchaEnterprise implements VerificationProviderInterface
             }
         }
         if (!\is_string($raw) || $status < 200 || $status >= 300) {
-            throw new \RuntimeException((string)__('Google reCAPTCHA Enterprise 验证失败：HTTP %{1} %{2}', [$status, $error]));
+            $bodySnippet = '';
+            if (\is_string($raw) && $raw !== '') {
+                $collapsed = \preg_replace('/\s+/u', ' ', $raw);
+                $bodySnippet = \mb_substr(\is_string($collapsed) ? $collapsed : $raw, 0, 800);
+            }
+            $detail = \trim($error . ($bodySnippet !== '' ? ' ' . $bodySnippet : ''));
+            if ($status === 400 && \stripos($detail, 'siteKey is invalid') !== false) {
+                throw new \RuntimeException((string)__(
+                    'Google Enterprise Site Key 无效：与项目 %{1} 不匹配或已删除。请到 Google Cloud → reCAPTCHA Enterprise 为该项目新建/复制 Site Key，并加入本地域名（如 *.test.weline.com），再写回系统配置 Weline_Captcha。',
+                    [$projectId]
+                ));
+            }
+            throw new \RuntimeException((string)__(
+                'Google reCAPTCHA Enterprise 验证失败：HTTP %{1} %{2}',
+                [$status, $detail]
+            ));
         }
         $decoded = \json_decode($raw, true);
         if (!\is_array($decoded)) {
@@ -203,6 +325,8 @@ final class GoogleRecaptchaEnterprise implements VerificationProviderInterface
                 ],
             ]),
         ]);
+        // Auto punch: reuse captcha/social-login/env outbound proxy (PHP curl ignores env alone).
+        CaptchaOutboundProxy::apply($ch);
         $raw = \curl_exec($ch);
         $status = (int)\curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $error = \curl_error($ch);
@@ -240,7 +364,11 @@ final class GoogleRecaptchaEnterprise implements VerificationProviderInterface
     private function normalizeAction(string $action): string
     {
         $action = \trim($action);
-        return \preg_match('/\A[A-Za-z0-9_\/.-]{1,100}\z/D', $action) === 1 ? $action : '';
+        // Google Enterprise: alphanumeric, slashes, underscores only — dots/dashes mint BROWSER_ERROR tokens.
+        $action = \preg_replace('/[^A-Za-z0-9_\/]+/', '_', $action) ?? '';
+        $action = \preg_replace('/_+/', '_', $action) ?? '';
+        $action = \trim($action, '_');
+        return \preg_match('/\A[A-Za-z0-9_\/]{1,100}\z/D', $action) === 1 ? $action : '';
     }
 
     private function json(mixed $value): string
