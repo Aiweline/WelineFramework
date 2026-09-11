@@ -478,6 +478,11 @@ final class GuidanceWorkflowCatalog
                     'detail_doc' => 'app/code/Weline/Taglib/doc/场景映射表.md',
                 ],
                 [
+                    'id' => 'taglib_before_hand_rolled_controls',
+                    'summary' => '【高压线】写任何选择性/领域控件前必须先读 Taglib 场景映射表与标签全量索引；架构上选择性选项优先官方标签（国家→theme:address、范围→w:scope、语言→i18n:switcher 等）；禁止未查库就手写 select/ISO text/自造 chips；无现成标签则在拥有模块新增 Taglib',
+                    'detail_doc' => 'app/code/Weline/Taglib/doc/场景映射表.md',
+                ],
+                [
                     'id' => 'weline_ui_floating_primitives',
                     'summary' => '【高压线】菜单/Popover/Tooltip/Combobox/地址多选下拉等浮层必须用 Weline.UI（menu/popover/tooltip/combobox/anchored-float 或 UI.floating.attach）；禁止手写 left/top、自研 flip/边界检测或私有 portal',
                     'detail_doc' => 'app/code/Weline/Theme/doc/widgets/anchored-float.md',
