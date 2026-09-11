@@ -314,8 +314,9 @@ class HookRegistry
             
             $moduleInfo = $modules[$moduleName];
             $basePath = $moduleInfo['base_path'] ?? '';
-            if (empty($basePath) || !($moduleInfo['status'] ?? false)) {
-                RegistryProgress::module('Hook file scan module', $moduleIndex, $totalModules, (string)$moduleName, 'skip inactive');
+            // 显式 -m 增量：允许扫描未激活但已在模块列表中的 view/hooks。
+            if (empty($basePath)) {
+                RegistryProgress::module('Hook file scan module', $moduleIndex, $totalModules, (string)$moduleName, 'skip missing base_path');
                 continue;
             }
             RegistryProgress::module('Hook file scan module', $moduleIndex, $totalModules, (string)$moduleName, 'check view/hooks');
