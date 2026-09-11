@@ -2,8 +2,9 @@
  * Weline Framework — core ModuleLoader only.
  *
  * Allowed: load/preLoad/declare, attribute scan (data-weline-load|declare),
+ * declarative UI mount orchestration (data-weline-mount + Weline.mount),
  * concurrency/defer policy, and lazy-trigger of Maintenance module on 503.
- * Forbidden: path-heuristic URL preloads; business UI/logic.
+ * Forbidden: path-heuristic URL preloads; business UI/logic / business mount surfaces.
  * Core i18n is Framework module `i18n` (Weline_Framework::js/i18n.js); Theme declares load.
  * Weline_I18n is enhancement only.
  *
@@ -793,7 +794,348 @@
             }
         },
 
+        /**
+         * Declarative UI mount (framework). Business modules only provide(surface, handler).
+         * Hosts declare data-weline-mount / -load / -after; never hard-code surfaces here.
+         */
+        mount: null,
+
     };
+
+    /**
+     * Framework UI mount orchestrator (lazy).
+     * - Hosts declare data-weline-mount="{providerKey}/{surface}"
+     * - Optional data-weline-mount-load / data-weline-mount-after
+     * - Providers call Weline.mount.provide(surface, handler)
+     * - Performance: no core boot / auto-scan unless page declares [data-weline-mount]
+     */
+    Weline.mount = (function createLazyMountFacade() {
+        function pageDeclaresMount(root) {
+            try {
+                const scope = root && root.querySelector ? root : document;
+                return !!scope.querySelector('[data-weline-mount]');
+            } catch (_e) {
+                return false;
+            }
+        }
+
+        let core = null;
+
+        function buildMountCore() {
+            /** @type {Map<string, Function>} */
+            const providers = new Map();
+            /** @type {Map<string, Array<{resolve: Function, reject: Function, timeoutId: *}> >} */
+            const waiters = new Map();
+            let scanTimer = null;
+            let scanChain = Promise.resolve();
+
+            function splitCsv(raw) {
+                return String(raw || '')
+                    .split(',')
+                    .map((part) => part.trim())
+                    .filter((part) => part);
+            }
+
+            function normalizeSurface(raw) {
+                return String(raw || '').trim();
+            }
+
+            function hostSurface(host) {
+                if (!host || typeof host.getAttribute !== 'function') {
+                    return '';
+                }
+                return normalizeSurface(host.getAttribute('data-weline-mount'));
+            }
+
+            function hostState(host) {
+                return String((host && host.getAttribute && host.getAttribute('data-weline-mount-state')) || '')
+                    .trim()
+                    .toLowerCase();
+            }
+
+            function isSettledState(state) {
+                return state === 'ready' || state === 'empty' || state === 'error';
+            }
+
+            function surfaceSettled(surface, root) {
+                const scope = root && root.querySelectorAll ? root : document;
+                const nodes = scope.querySelectorAll('[data-weline-mount="' + surface + '"]');
+                if (!nodes.length) {
+                    return false;
+                }
+                let settled = false;
+                nodes.forEach((node) => {
+                    if (isSettledState(hostState(node))) {
+                        settled = true;
+                    }
+                });
+                return settled;
+            }
+
+            function depsReady(host, root) {
+                const deps = splitCsv(host.getAttribute('data-weline-mount-after'));
+                if (!deps.length) {
+                    return true;
+                }
+                for (let i = 0; i < deps.length; i += 1) {
+                    if (!surfaceSettled(deps[i], root || document)) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+
+            function flushWaiters(surface) {
+                const key = normalizeSurface(surface);
+                const list = waiters.get(key);
+                if (!list || !list.length) {
+                    return;
+                }
+                waiters.delete(key);
+                list.forEach((entry) => {
+                    try {
+                        if (entry.timeoutId) {
+                            clearTimeout(entry.timeoutId);
+                        }
+                    } catch (_t) { /* ignore */ }
+                    try {
+                        entry.resolve({ surface: key, state: 'ready' });
+                    } catch (_r) { /* ignore */ }
+                });
+            }
+
+            function emitReady(host, surface, result) {
+                try {
+                    host.dispatchEvent(new CustomEvent('weline:mount:ready', {
+                        bubbles: true,
+                        detail: { surface: surface, host: host, result: result || null },
+                    }));
+                } catch (_e) { /* ignore */ }
+                try {
+                    document.dispatchEvent(new CustomEvent('weline:mount:ready', {
+                        detail: { surface: surface, host: host, result: result || null },
+                    }));
+                } catch (_d) { /* ignore */ }
+                if (isSettledState(hostState(host))) {
+                    flushWaiters(surface);
+                }
+            }
+
+            function loadHostModules(host) {
+                const names = splitCsv(host.getAttribute('data-weline-mount-load'));
+                if (!names.length) {
+                    return Promise.resolve([]);
+                }
+                return Promise.all(names.map((name) => Weline.load(name).catch(() => null)));
+            }
+
+            function processHost(host, options) {
+                const opts = options || {};
+                const force = !!opts.force;
+                const root = opts.root || document;
+                const surface = hostSurface(host);
+                if (!surface) {
+                    return Promise.resolve({ skipped: true, reason: 'no_surface' });
+                }
+                if (!force && isSettledState(hostState(host))) {
+                    return Promise.resolve({ skipped: true, reason: 'already_settled', surface: surface });
+                }
+                if (!depsReady(host, root)) {
+                    try {
+                        host.setAttribute('data-weline-mount-state', 'waiting');
+                    } catch (_w) { /* ignore */ }
+                    return Promise.resolve({ skipped: true, reason: 'waiting_deps', surface: surface });
+                }
+                return loadHostModules(host).then(() => {
+                    const runHandler = (handler) => Promise.resolve()
+                        .then(() => handler(host, { force: force, surface: surface, root: root }))
+                        .then((result) => {
+                            emitReady(host, surface, result);
+                            scheduleScan({ force: false, delayMs: 0 });
+                            return { ok: true, surface: surface, result: result };
+                        })
+                        .catch((error) => {
+                            try {
+                                host.setAttribute('data-weline-mount-state', 'error');
+                            } catch (_e) { /* ignore */ }
+                            emitReady(host, surface, { error: error });
+                            scheduleScan({ force: false, delayMs: 0 });
+                            return { ok: false, surface: surface, error: error };
+                        });
+                    let handler = providers.get(surface);
+                    if (typeof handler === 'function') {
+                        return runHandler(handler);
+                    }
+                    // mount-load scripts may defer provide via setTimeout(0); one macrotask retry.
+                    return new Promise((resolve) => {
+                        setTimeout(() => {
+                            handler = providers.get(surface);
+                            if (typeof handler !== 'function') {
+                                try {
+                                    if (hostState(host) !== 'waiting') {
+                                        host.setAttribute('data-weline-mount-state', 'pending');
+                                    }
+                                } catch (_p) { /* ignore */ }
+                                resolve({ skipped: true, reason: 'no_provider', surface: surface });
+                                return;
+                            }
+                            resolve(runHandler(handler));
+                        }, 0);
+                    });
+                });
+            }
+
+            function collectHosts(root) {
+                const scope = root && root.querySelectorAll ? root : document;
+                return Array.from(scope.querySelectorAll('[data-weline-mount]'));
+            }
+
+            function scan(options) {
+                const opts = options || {};
+                const root = opts.root || document;
+                if (!pageDeclaresMount(root)) {
+                    return Promise.resolve({ skipped: true, reason: 'no_hosts' });
+                }
+                const force = !!opts.force;
+                const hosts = collectHosts(root);
+                // Second pass must not force-remount settled hosts — that wiped nested
+                // social-quick slots created during the first pass (login-panel).
+                const runPass = (passForce) => Promise.all(
+                    hosts.map((host) => processHost(host, { force: !!passForce, root: root }))
+                );
+                scanChain = scanChain
+                    .catch(() => null)
+                    .then(() => runPass(force))
+                    .then((first) => runPass(false).then((second) => ({ first: first, second: second })));
+                return scanChain;
+            }
+
+            function scheduleScan(options) {
+                const opts = options || {};
+                if (!pageDeclaresMount(opts.root || document)) {
+                    return;
+                }
+                if (scanTimer) {
+                    clearTimeout(scanTimer);
+                }
+                scanTimer = setTimeout(() => {
+                    scanTimer = null;
+                    scan(opts);
+                }, opts.delayMs != null ? Number(opts.delayMs) || 0 : 0);
+            }
+
+            function provide(surface, handler) {
+                const key = normalizeSurface(surface);
+                if (!key || typeof handler !== 'function') {
+                    return false;
+                }
+                providers.set(key, handler);
+                // Only wake scan when this surface is declared on the page.
+                if (document.querySelector('[data-weline-mount="' + key + '"]')) {
+                    scheduleScan({ force: false, reason: 'provide' });
+                }
+                return true;
+            }
+
+            function waitFor(surface, options) {
+                const key = normalizeSurface(surface);
+                const opts = options || {};
+                const root = opts.root || document;
+                const timeoutMs = Math.max(0, Number(opts.timeoutMs) || 15000);
+                if (!key) {
+                    return Promise.reject(new Error('mount_surface_required'));
+                }
+                if (surfaceSettled(key, root)) {
+                    return Promise.resolve({ surface: key, state: 'ready' });
+                }
+                return new Promise((resolve, reject) => {
+                    const entry = { resolve: resolve, reject: reject, timeoutId: null };
+                    if (!waiters.has(key)) {
+                        waiters.set(key, []);
+                    }
+                    waiters.get(key).push(entry);
+                    if (timeoutMs > 0) {
+                        entry.timeoutId = setTimeout(() => {
+                            const list = waiters.get(key) || [];
+                            const next = list.filter((item) => item !== entry);
+                            if (next.length) {
+                                waiters.set(key, next);
+                            } else {
+                                waiters.delete(key);
+                            }
+                            reject(new Error('mount_wait_timeout:' + key));
+                        }, timeoutMs);
+                    }
+                    scheduleScan({ force: !!opts.force, root: root });
+                });
+            }
+
+            function hasProvider(surface) {
+                return providers.has(normalizeSurface(surface));
+            }
+
+            return {
+                provide: provide,
+                scan: scan,
+                waitFor: waitFor,
+                hasProvider: hasProvider,
+                scheduleScan: scheduleScan,
+            };
+        }
+
+        function ensureMountCore() {
+            if (!core) {
+                core = buildMountCore();
+            }
+            return core;
+        }
+
+        whenDomReady(() => {
+            if (!pageDeclaresMount(document)) {
+                return;
+            }
+            ensureMountCore().scheduleScan({ force: false, delayMs: 0 });
+        });
+
+        document.addEventListener('weline:mount:scan', (event) => {
+            const detail = (event && event.detail) || {};
+            const root = detail.root || document;
+            if (!pageDeclaresMount(root) && !pageDeclaresMount(document)) {
+                return;
+            }
+            ensureMountCore().scan({
+                force: !!detail.force,
+                root: root,
+            });
+        });
+
+        return {
+            provide: function provide(surface, handler) {
+                return ensureMountCore().provide(surface, handler);
+            },
+            scan: function scan(options) {
+                const opts = options || {};
+                const root = opts.root || document;
+                if (!pageDeclaresMount(root) && !pageDeclaresMount(document)) {
+                    return Promise.resolve({ skipped: true, reason: 'no_hosts' });
+                }
+                return ensureMountCore().scan(opts);
+            },
+            waitFor: function waitFor(surface, options) {
+                return ensureMountCore().waitFor(surface, options);
+            },
+            hasProvider: function hasProvider(surface) {
+                return !!(core && core.hasProvider(surface));
+            },
+            scheduleScan: function scheduleScan(options) {
+                const opts = options || {};
+                if (!pageDeclaresMount(opts.root || document) && !pageDeclaresMount(document)) {
+                    return;
+                }
+                return ensureMountCore().scheduleScan(opts);
+            },
+        };
+    })();
 
     /**
      * Run after DOM is interactive (DOMContentLoaded), or immediately if already past that.
