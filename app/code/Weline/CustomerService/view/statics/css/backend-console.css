@@ -533,6 +533,69 @@
     display: none !important;
 }
 
+#cs-phrase-panel.cs-composer-panel {
+    max-height: 18rem;
+}
+
+.cs-phrase-shell {
+    display: flex;
+    flex-direction: column;
+    gap: var(--weline-space-2, 0.5rem);
+}
+
+.cs-phrase-search-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.cs-phrase-search {
+    width: 100%;
+}
+
+.cs-phrase-tabs {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: var(--weline-space-1, 0.25rem);
+    overflow-x: auto;
+    padding-bottom: var(--weline-space-1, 0.25rem);
+}
+
+.cs-phrase-tab {
+    flex: 0 0 auto;
+    border: 1px solid var(--cs-border);
+    border-radius: var(--weline-radius-full, 999px);
+    background: var(--cs-surface);
+    color: var(--cs-text, inherit);
+    padding: 0.2rem 0.7rem;
+    font-size: 0.75rem;
+    line-height: 1.4;
+    cursor: pointer;
+}
+
+.cs-phrase-tab[data-active="1"],
+.cs-phrase-tab[aria-selected="true"] {
+    border-color: var(--color-primary, var(--weline-theme-color-primary, var(--weline-theme-primary)));
+    color: var(--color-primary, var(--weline-theme-color-primary, var(--weline-theme-primary)));
+    background: color-mix(in srgb, var(--color-primary, var(--weline-theme-primary)) 12%, var(--cs-surface));
+}
+
+.cs-phrase-tab-add {
+    min-width: 1.75rem;
+    font-weight: 600;
+}
+
+.cs-phrase-list {
+    max-height: 8.5rem;
+    overflow: auto;
+}
+
 .cs-emoji-item {
     border: 0;
     background: transparent;
@@ -545,8 +608,13 @@
 .cs-phrase-item {
     display: flex;
     gap: var(--weline-space-2, 0.5rem);
-    align-items: flex-start;
+    align-items: stretch;
     margin-bottom: var(--weline-space-2, 0.5rem);
+}
+
+.cs-phrase-item[data-phrase-hit="1"] .cs-phrase-use {
+    border-color: var(--color-primary, var(--weline-theme-color-primary, var(--weline-theme-primary)));
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-primary, var(--weline-theme-primary)) 35%, transparent);
 }
 
 .cs-phrase-use {
@@ -569,6 +637,31 @@
     margin-top: 0.15rem;
     color: var(--cs-text-muted);
     font-size: 0.75rem;
+}
+
+.cs-phrase-cat {
+    display: inline-block;
+    margin-top: 0.25rem;
+    font-style: normal;
+    font-size: 0.6875rem;
+    color: var(--cs-text-muted);
+    border: 1px solid var(--cs-border);
+    border-radius: var(--weline-radius-sm, 4px);
+    padding: 0 0.35rem;
+}
+
+.cs-phrase-del {
+    flex-shrink: 0;
+    align-self: center;
+    opacity: 0.72;
+}
+
+.cs-phrase-editor-toggle {
+    align-self: flex-start;
+}
+
+.cs-phrase-empty {
+    margin: 0;
 }
 
 .cs-msg-image img {

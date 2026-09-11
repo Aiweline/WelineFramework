@@ -23,11 +23,14 @@ final class EmailBindingServiceSendFlowTest extends TestCore
             'cs-test-session-' . \bin2hex(\random_bytes(8))
         );
 
-        self::assertTrue(
+        // DEV without SMTP must NOT auto-bind; caller surfaces verification_url for click-to-bind.
+        self::assertFalse(
             $ok,
-            'Expected DEV fallback success when SMTP is unavailable. Last error: '
-            . $service->getLastErrorMessage()
+            'Expected DEV fallback to withhold auto-bind when SMTP is unavailable'
         );
-        self::assertSame('', $service->getLastErrorMessage());
+        self::assertNotSame('', $service->getLastErrorMessage());
+        self::assertStringContainsString('未自动绑定', $service->getLastErrorMessage());
+        self::assertNotSame('', $service->getLastVerificationUrl());
+        self::assertStringContainsString('/customerservice/frontend/bind/verify', $service->getLastVerificationUrl());
     }
 }

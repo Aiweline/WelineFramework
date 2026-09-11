@@ -212,16 +212,92 @@ class ChatService
             return false;
         }
 
+        return $this->getGuestEmailBySessionToken($token) !== '';
+    }
+
+    public function getGuestEmailBySessionToken(string $sessionToken): string
+    {
+        $sessionToken = trim($sessionToken);
+        if ($sessionToken === '') {
+            return '';
+        }
+
         /** @var CustomerLanguage $language */
         $language = ObjectManager::getInstance(CustomerLanguage::class);
         $language->reset()
-            ->where(CustomerLanguage::schema_fields_session_id, $token)
+            ->where(CustomerLanguage::schema_fields_session_id, $sessionToken)
             ->find()
             ->fetch();
 
-        $email = trim((string)($language->getEmail() ?? ''));
+        $email = strtolower(trim((string)($language->getEmail() ?? '')));
+        /** @var EmailBindingService $emailBinding */
+        $emailBinding = ObjectManager::getInstance(EmailBindingService::class);
 
-        return $email !== '' && (bool)filter_var($email, FILTER_VALIDATE_EMAIL);
+        return $emailBinding->isValidEmail($email) ? $email : '';
+    }
+
+    /**
+     * @return array{
+     *   kind: string,
+     *   display_name: string,
+     *   email: string,
+     *   avatar_url: string,
+     *   can_change_email: bool
+     * }
+     */
+    public function buildSessionIdentity(ChatSession $session, bool $isLoggedIn, ?int $customerId = null): array
+    {
+        if ($isLoggedIn && $customerId !== null && $customerId > 0) {
+            try {
+                $accounts = ObjectManager::getInstance(RuntimeProviderResolver::class)
+                    ->resolve(\Weline\Customer\Api\Auth\CustomerAccountFacadeInterface::class);
+                if ($accounts instanceof \Weline\Customer\Api\Auth\CustomerAccountFacadeInterface) {
+                    $identity = $accounts->find($customerId);
+                    if ($identity !== null) {
+                        $name = trim($identity->getUsername());
+                        $email = trim($identity->getEmail());
+
+                        return [
+                            'kind' => 'customer',
+                            'display_name' => $name !== '' ? $name : ($email !== '' ? $email : (string)__('会员')),
+                            'email' => $email,
+                            'avatar_url' => trim($identity->getAvatar()),
+                            'can_change_email' => false,
+                        ];
+                    }
+                }
+            } catch (\Throwable) {
+                // Fall through to guest-shaped identity.
+            }
+
+            return [
+                'kind' => 'customer',
+                'display_name' => (string)__('会员'),
+                'email' => '',
+                'avatar_url' => '',
+                'can_change_email' => false,
+            ];
+        }
+
+        $email = $this->getGuestEmailBySessionToken((string)$session->getSessionToken());
+
+        return [
+            'kind' => 'guest',
+            'display_name' => $email !== '' ? $email : (string)__('访客'),
+            'email' => $email,
+            'avatar_url' => '',
+            'can_change_email' => true,
+        ];
+    }
+
+    public function postSystemMessage(int $sessionId, string $content): ChatMessage
+    {
+        $content = trim($content);
+        if ($sessionId <= 0 || $content === '') {
+            throw new \InvalidArgumentException('system message requires session and content');
+        }
+
+        return $this->sendMessage($sessionId, ChatMessage::SENDER_TYPE_SYSTEM, 0, $content);
     }
 
     public function isAwaitingAgentReply(int $sessionId): bool
@@ -236,7 +312,7 @@ class ChatService
             ->where(ChatMessage::schema_fields_session_id, $sessionId)
             ->order(ChatMessage::schema_fields_created_at, 'DESC')
             ->order(ChatMessage::schema_fields_ID, 'DESC')
-            ->limit(1)
+            ->limit(8)
             ->select()
             ->fetch()
             ->getItems();
@@ -245,12 +321,18 @@ class ChatService
             return false;
         }
 
-        $row = $items[0];
-        $senderType = is_array($row)
-            ? (string)($row[ChatMessage::schema_fields_sender_type] ?? '')
-            : (string)$row->getSenderType();
+        foreach ($items as $row) {
+            $senderType = is_array($row)
+                ? (string)($row[ChatMessage::schema_fields_sender_type] ?? '')
+                : (string)$row->getSenderType();
+            if ($senderType === ChatMessage::SENDER_TYPE_SYSTEM) {
+                continue;
+            }
 
-        return self::isAwaitingAgentReplyFromSenders([$senderType]);
+            return self::isAwaitingAgentReplyFromSenders([$senderType]);
+        }
+
+        return false;
     }
 
     /**
@@ -354,20 +436,26 @@ class ChatService
 
         $sourceLocale = $senderType === ChatMessage::SENDER_TYPE_CUSTOMER
             ? $session->getCustomerLocale()
-            : $session->getAgentLocale();
+            : ($senderType === ChatMessage::SENDER_TYPE_SYSTEM
+                ? $session->getCustomerLocale()
+                : $session->getAgentLocale());
         $targetLocale = $senderType === ChatMessage::SENDER_TYPE_CUSTOMER
             ? $session->getAgentLocale()
-            : $session->getCustomerLocale();
+            : ($senderType === ChatMessage::SENDER_TYPE_SYSTEM
+                ? $session->getCustomerLocale()
+                : $session->getCustomerLocale());
 
         $isAttachment = ChatAttachmentCodec::isStructured($content);
         $translatedContent = $isAttachment
             ? ChatAttachmentCodec::displayFallback($content)
-            : $this->translationService->translate(
-                $content,
-                $targetLocale,
-                $sourceLocale,
-                (string)$sessionId
-            );
+            : ($senderType === ChatMessage::SENDER_TYPE_SYSTEM
+                ? $content
+                : $this->translationService->translate(
+                    $content,
+                    $targetLocale,
+                    $sourceLocale,
+                    (string)$sessionId
+                ));
 
         /** @var ChatMessage $message */
         $message = ObjectManager::getInstance(ChatMessage::class);

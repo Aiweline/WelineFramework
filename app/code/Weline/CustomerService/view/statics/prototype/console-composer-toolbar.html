@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>PROTOTYPE — 客服输入区：表情/图片/文件/话术</title>
+  <style>
+    :root { --gap: 8px; --line: #ddd; --muted: #666; --primary: #2563eb; --bg: #f5f5f5; }
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 24px auto; padding: 0 16px; }
+    .note { background: #fff8e6; border: 1px solid #f0d78c; padding: 12px; border-radius: 8px; }
+    .chat { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; margin-top: 16px; }
+    .msgs { height: 180px; overflow: auto; background: var(--bg); padding: 12px; }
+    .composer { border-top: 1px solid var(--line); background: #fff; padding: 8px; }
+    .toolbar { display: flex; gap: var(--gap); margin-bottom: 8px; }
+    .toolbar button { border: 1px solid var(--line); background: #fff; border-radius: 8px; padding: 4px 10px; cursor: pointer; }
+    .row { display: flex; gap: var(--gap); align-items: flex-end; }
+    textarea { flex: 1; min-height: 44px; border-radius: 999px; border: 1px solid var(--line); padding: 10px 14px; resize: none; }
+    .send { background: var(--primary); color: #fff; border: 0; border-radius: 8px; padding: 10px 16px; }
+    .panel { border: 1px solid var(--line); border-radius: 8px; padding: 8px; margin-bottom: 8px; display: none; }
+    .panel.open { display: block; }
+    .emoji { cursor: pointer; font-size: 20px; margin: 2px; }
+    .state { font-family: ui-monospace, monospace; white-space: pre-wrap; background: #f6f6f6; padding: 8px; border-radius: 8px; margin-top: 12px; }
+  </style>
+</head>
+<body>
+  <h1>客服 Composer 工具条（UI 原型）</h1>
+  <div class="note">问题：输入区是否应把表情 / 图片 / 文件 / 话术放在输入框上方工具条？本原型选定「上工具条 + 面板」方案 A。</div>
+  <div class="chat">
+    <div class="msgs" id="msgs"></div>
+    <div class="composer">
+      <div class="toolbar">
+        <button type="button" data-open="emoji">表情</button>
+        <button type="button" data-open="image">图片</button>
+        <button type="button" data-open="file">文件</button>
+        <button type="button" data-open="phrase">话术库</button>
+      </div>
+      <div class="panel" id="panel-emoji"></div>
+      <div class="panel" id="panel-phrase"></div>
+      <div class="row">
+        <textarea id="input" placeholder="输入消息..."></textarea>
+        <button class="send" type="button" id="send">发送</button>
+      </div>
+    </div>
+  </div>
+  <div class="state" id="state"></div>
+  <script>
+    const emojis = ['😀','😁','😂','😊','😍','🤔','👍','👎','🙏','🎉','❤️','🔥','✅','❌','📎','📷'];
+    const phrases = [{t:'问候',c:'您好，请问有什么可以帮您？'},{t:'稍等',c:'请稍等，我帮您查一下。'}];
+    const state = { open: null, drafts: [] };
+    const panelEmoji = document.getElementById('panel-emoji');
+    const panelPhrase = document.getElementById('panel-phrase');
+    const input = document.getElementById('input');
+    panelEmoji.innerHTML = emojis.map(e => `<span class="emoji" data-e="${e}">${e}</span>`).join('');
+    panelPhrase.innerHTML = phrases.map((p,i)=>`<button type="button" data-p="${i}">${p.t}</button>`).join('');
+    function render() {
+      document.getElementById('state').textContent = JSON.stringify(state, null, 2);
+      panelEmoji.classList.toggle('open', state.open==='emoji');
+      panelPhrase.classList.toggle('open', state.open==='phrase');
+    }
+    document.querySelector('.toolbar').onclick = (e) => {
+      const k = e.target.getAttribute('data-open');
+      if (!k) return;
+      if (k==='image' || k==='file') { state.drafts.push({type:k, name: k==='image'?'demo.png':'demo.pdf'}); render(); return; }
+      state.open = state.open===k ? null : k; render();
+    };
+    panelEmoji.onclick = (e) => { const em=e.target.getAttribute('data-e'); if(em){ input.value += em; state.open=null; render(); } };
+    panelPhrase.onclick = (e) => { const i=e.target.getAttribute('data-p'); if(i!=null){ input.value = phrases[+i].c; state.open=null; render(); } };
+    document.getElementById('send').onclick = () => {
+      const text = input.value.trim();
+      if (!text && !state.drafts.length) return;
+      const box = document.getElementById('msgs');
+      if (text) box.insertAdjacentHTML('beforeend', `<div>${text}</div>`);
+      state.drafts.forEach(d => box.insertAdjacentHTML('beforeend', `<div>[${d.type}] ${d.name}</div>`));
+      input.value=''; state.drafts=[]; render();
+    };
+    render();
+  </script>
+</body>
+</html>

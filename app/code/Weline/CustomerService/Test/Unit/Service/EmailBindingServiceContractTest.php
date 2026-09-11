@@ -23,6 +23,7 @@ final class EmailBindingServiceContractTest extends TestCase
         $this->assertStringContainsString("'Weline_Smtp'", $service);
         $this->assertStringContainsString('getLastErrorMessage', $service);
         $this->assertStringContainsString('sendVerificationEmailDevFallback', $service);
+        $this->assertStringContainsString('isValidEmail', $service);
         $this->assertStringNotContainsString('noreply@example.com', $service);
 
         $provider = (string) file_get_contents($providerFile);

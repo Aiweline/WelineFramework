@@ -62,12 +62,17 @@ $customerServiceStaticDir = rtrim((string)($customerServiceModule['base_path'] ?
     . DIRECTORY_SEPARATOR . 'view' . DIRECTORY_SEPARATOR . 'statics';
 $customerServiceCssVersion = (string) ((int) (@filemtime($customerServiceStaticDir . DIRECTORY_SEPARATOR . 'css' . DIRECTORY_SEPARATOR . 'customer-service.css') ?: time()));
 $customerServiceJsVersion = (string) ((int) (@filemtime($customerServiceStaticDir . DIRECTORY_SEPARATOR . 'js' . DIRECTORY_SEPARATOR . 'customer-service.js') ?: time()));
+$html2canvasPath = $customerServiceStaticDir . DIRECTORY_SEPARATOR . 'js' . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . 'html2canvas.min.js';
+$html2canvasVersion = (string) ((int) (@filemtime($html2canvasPath) ?: time()));
+$modernScreenshotPath = $customerServiceStaticDir . DIRECTORY_SEPARATOR . 'js' . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . 'modern-screenshot.js';
+$modernScreenshotVersion = (string) ((int) (@filemtime($modernScreenshotPath) ?: time()));
 $customerServiceCssHref = htmlspecialchars(
     (string)$this->fetchTagSource('statics', 'Weline_CustomerService::css/customer-service.css'),
     ENT_QUOTES | ENT_SUBSTITUTE,
     'UTF-8',
 );
-
+$html2canvasHref = (string)$this->fetchTagSource('statics', 'Weline_CustomerService::js/vendor/html2canvas.min.js');
+$modernScreenshotHref = (string)$this->fetchTagSource('statics', 'Weline_CustomerService::js/vendor/modern-screenshot.js');
 ?>
 <link rel="stylesheet"
       href="<?= $customerServiceCssHref ?>?v=<?= htmlspecialchars($customerServiceCssVersion, ENT_QUOTES, 'UTF-8') ?>"
@@ -91,6 +96,10 @@ $customerServiceCssHref = htmlspecialchars(
                 <div class="cs-chat-title-copy">
                     <span id="cs-title-text"><?= __('客服服务') ?></span>
                     <span id="cs-status-label" class="cs-status-label cs-status-offline"><?= __('检测中...') ?></span>
+                    <button type="button" id="cs-identity-chip" class="cs-identity-chip" hidden data-cs-edit-identity title="<?= __('修改邮箱身份') ?>">
+                        <img id="cs-identity-avatar" class="cs-identity-avatar" alt="" hidden>
+                        <span id="cs-identity-label" class="cs-identity-label"></span>
+                    </button>
                 </div>
             </div>
             <div class="cs-chat-actions">
@@ -150,6 +159,15 @@ $customerServiceCssHref = htmlspecialchars(
                     <?= __('验证邮箱') ?>
                 </button>
             </div>
+            <div class="cs-composer-toolbar" role="toolbar" aria-label="<?= __('聊天工具') ?>">
+                <button type="button" class="w-button cs-composer-tool" data-tone="neutral" data-variant="ghost" data-size="sm" data-cs-tool="emoji" title="<?= __('表情') ?>"><?= __('表情') ?></button>
+                <button type="button" class="w-button cs-composer-tool" data-tone="neutral" data-variant="ghost" data-size="sm" data-cs-tool="image" title="<?= __('图片') ?>"><?= __('图片') ?></button>
+                <button type="button" class="w-button cs-composer-tool" data-tone="neutral" data-variant="ghost" data-size="sm" data-cs-tool="file" title="<?= __('文件') ?>"><?= __('文件') ?></button>
+                <button type="button" class="w-button cs-composer-tool" data-tone="neutral" data-variant="ghost" data-size="sm" data-cs-tool="screenshot" title="<?= __('截图') ?>"><?= __('截图') ?></button>
+                <input type="file" id="cs-frontend-image-input" accept="image/jpeg,image/png,image/gif,image/webp" hidden />
+                <input type="file" id="cs-frontend-file-input" accept=".pdf,.txt,.zip,.doc,.docx,.xls,.xlsx,application/pdf,text/plain,application/zip" hidden />
+            </div>
+            <div class="cs-composer-panel" id="cs-frontend-emoji-panel" hidden></div>
             <div class="cs-input-area">
                 <textarea
                     id="cs-message-input"
@@ -181,7 +199,7 @@ $bindModalHtml = <<<'BIND_MODAL_HTML'
                 </button>
             </div>
             <div class="cs-modal-body w-modal-body">
-                <form id="cs-bind-form" method="post" class="cs-bind-form w-form" data-weline-form="1" data-weline-form-intent="customerservice.bind_email" novalidate>
+                <form id="cs-bind-form" method="post" class="cs-bind-form w-form" data-weline-form="1" data-weline-form-intent="customerservice_bind_email">
                     <p class="cs-modal-copy">{{copy}}</p>
                     <p class="cs-modal-note">{{note}}</p>
                     <div class="cs-w-field">
@@ -224,6 +242,18 @@ var customerServiceConfig = {
     bindUrl: "@frontend-url{'customerservice/frontend/bind'}",
     bindCaptchaEnabled: <?= $bindCaptchaEnabled ? 'true' : 'false' ?>,
     bindCaptchaChallengeUrl: "@frontend-url{'customerservice/frontend/bind/captcha-challenge'}",
+    html2canvasUrl: <?= json_encode(
+        $html2canvasHref === ''
+            ? ''
+            : ($html2canvasHref . (str_contains($html2canvasHref, '?') ? '&' : '?') . 'v=' . rawurlencode($html2canvasVersion)),
+        JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+    ) ?>,
+    modernScreenshotUrl: <?= json_encode(
+        $modernScreenshotHref === ''
+            ? ''
+            : ($modernScreenshotHref . (str_contains($modernScreenshotHref, '?') ? '&' : '?') . 'v=' . rawurlencode($modernScreenshotVersion)),
+        JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+    ) ?>,
     customerId: <?= $customerId ? (int)$customerId : 'null' ?>,
     isLoggedIn: <?= $isLoggedIn ? 'true' : 'false' ?>,
     showGuestBindPrompt: <?= $showGuestBindPrompt ? 'true' : 'false' ?>,
@@ -253,6 +283,41 @@ function initCustomerServiceWidget() {
     var customerServiceScriptLoading = false;
     var customerServiceOpenAfterLoad = false;
 
+    function waitForWelineLoad(attemptsLeft) {
+        attemptsLeft = typeof attemptsLeft === 'number' ? attemptsLeft : 80;
+        if (window.Weline && typeof window.Weline.load === 'function') {
+            return Promise.resolve(window.Weline);
+        }
+        if (attemptsLeft <= 0) {
+            return Promise.reject(new Error('[CustomerService] Weline.load unavailable'));
+        }
+        return new Promise(function (resolve, reject) {
+            window.setTimeout(function () {
+                waitForWelineLoad(attemptsLeft - 1).then(resolve).catch(reject);
+            }, 50);
+        });
+    }
+
+    function loadCustomerServiceScriptFallback() {
+        return new Promise(function (resolve, reject) {
+            var existing = document.querySelector('script[data-weline-cs-fallback="1"]');
+            if (existing) {
+                resolve();
+                return;
+            }
+            var script = document.createElement('script');
+            script.async = true;
+            script.dataset.welineCsFallback = '1';
+            script.src = '/Weline/CustomerService/view/statics/js/customer-service.js?v='
+                + encodeURIComponent(customerServiceJsVersion);
+            script.onload = function () { resolve(); };
+            script.onerror = function () {
+                reject(new Error('[CustomerService] fallback script load failed'));
+            };
+            document.head.appendChild(script);
+        });
+    }
+
     function loadCustomerServiceWidget(openAfterLoad) {
         customerServiceOpenAfterLoad = customerServiceOpenAfterLoad || Boolean(openAfterLoad);
         if (typeof CustomerServiceWidget !== 'undefined' && window.CustomerServiceWidget) {
@@ -275,16 +340,21 @@ function initCustomerServiceWidget() {
                 CustomerServiceWidget.toggleChat();
             }
         };
-        var loader = (window.Weline && typeof window.Weline.load === 'function')
-            ? window.Weline.load(
-                'customerService',
-                'Weline_CustomerService::js/customer-service.js?v=' + encodeURIComponent(customerServiceJsVersion)
-            )
-            : Promise.reject(new Error('[CustomerService] Weline.load unavailable'));
-        Promise.resolve(loader).then(afterLoad).catch(function (error) {
-            customerServiceScriptLoading = false;
-            console.error('[CustomerService] 模块加载失败', error);
-        });
+        waitForWelineLoad()
+            .then(function (weline) {
+                return weline.load(
+                    'customerService',
+                    'Weline_CustomerService::js/customer-service.js?v=' + encodeURIComponent(customerServiceJsVersion)
+                );
+            })
+            .catch(function (error) {
+                return loadCustomerServiceScriptFallback();
+            })
+            .then(afterLoad)
+            .catch(function (error) {
+                customerServiceScriptLoading = false;
+                console.error('[CustomerService] 模块加载失败', error);
+            });
     }
 
     function scheduleCustomerServiceWidget() {
