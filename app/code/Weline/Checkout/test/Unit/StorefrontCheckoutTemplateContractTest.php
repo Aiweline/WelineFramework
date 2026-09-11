@@ -16,6 +16,8 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
         self::assertStringContainsString('const successPageUrl =', $template);
         self::assertStringNotContainsString("window.location.href = '/checkout/success", $template);
         self::assertStringContainsString("successUrl.searchParams.set('checkout_token', checkoutToken);", $template);
+        self::assertStringContainsString('invalidateAfterCheckout', $template);
+        self::assertStringContainsString('weline:checkout:success', $template);
         self::assertStringNotContainsString('checkout/success-page', $template);
         $controllerRoot = dirname(__DIR__, 6) . '/app/code/Weline/Checkout/Controller';
         self::assertFileExists($controllerRoot . '/Success.php');
@@ -120,19 +122,38 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
         $template = $this->read('app/code/Weline/Checkout/view/frontend/checkout/index.phtml');
         $ensureGuestToken = strpos($template, 'async function ensureGuestToken()');
         $loadCartModule = strpos($template, "await window.Weline.load('cart')", $ensureGuestToken ?: 0);
-        $rereadGuestToken = strpos($template, 'token = guestToken();', $loadCartModule ?: 0);
+        $rereadGuestToken = strpos($template, 'let token = guestToken();', $loadCartModule ?: 0);
         $issueGuestToken = strpos($template, '.issueGuestToken(', $rereadGuestToken ?: 0);
+        $rememberSession = strpos($template, 'rememberGuestSession', $issueGuestToken ?: 0);
         $loadCheckoutWithToken = strpos($template, 'guest_token: await ensureGuestToken()', $issueGuestToken ?: 0);
 
-        self::assertStringContainsString('data-weline-load="cart,b2bCheckoutTob"', $template);
+        self::assertStringContainsString('data-weline-load="cart,b2bCheckoutTob,checkoutLifecycle,paymentLifecycle"', $template);
         self::assertIsInt($ensureGuestToken);
         self::assertIsInt($loadCartModule, 'Checkout must load the shared Cart browser session first.');
         self::assertIsInt($rereadGuestToken, 'Checkout must re-read the token after Cart initializes.');
-        self::assertIsInt($issueGuestToken, 'Checkout may establish a session only after attempting adoption.');
+        self::assertIsInt($issueGuestToken, 'Checkout must always adopt the HttpOnly cookie via issueGuestToken.');
+        self::assertIsInt($rememberSession, 'Adopted cookie token must be written back to the shared Cart session.');
         self::assertIsInt($loadCheckoutWithToken, 'checkout.getData must receive the recovered guest token.');
         self::assertLessThan($rereadGuestToken, $loadCartModule);
         self::assertLessThan($issueGuestToken, $rereadGuestToken);
+        self::assertLessThan($rememberSession, $issueGuestToken);
         self::assertLessThan($loadCheckoutWithToken, $issueGuestToken);
+        // Must not short-circuit on a stale sessionStorage token before adopting the cookie.
+        self::assertStringContainsString('Cookie is the server-owned guest cart authority', $template);
+        self::assertStringNotContainsString(
+            "let token = guestToken();\n        if (token) {\n            return token;\n        }",
+            $template,
+        );
+    }
+
+    public function testLoadCartSummaryFallsBackToCookieWhenClientTokenIsEmpty(): void
+    {
+        $src = $this->read(
+            'app/code/Weline/Checkout/extends/module/Weline_Framework/Query/CheckoutQueryProvider.php'
+        );
+        self::assertStringContainsString('Cookie::get(CartService::GUEST_TOKEN_COOKIE)', $src);
+        self::assertStringContainsString('!hash_equals($cookieToken, $guestToken)', $src);
+        self::assertStringContainsString('orphan token while the HttpOnly cookie', $src);
     }
 
     public function testCheckoutShippingAddressUsesSlotInsteadOfNakedRegionInputs(): void
@@ -191,7 +212,9 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
         self::assertStringContainsString('class="weline-checkout__express-slot"', $template);
         self::assertStringContainsString('weline:checkout:express-pay', $template);
         self::assertStringContainsString('submitCheckoutPayment', $template);
-        self::assertStringContainsString('expressHost.hidden = cartIsEmpty || hangPurpose;', $template);
+        self::assertStringContainsString('expressHost.hidden = cartIsEmpty || hangPurpose || checkoutBlocked;', $template);
+        self::assertStringContainsString('function checkoutCartType()', $template);
+        self::assertStringContainsString('cart_type: checkoutCartType()', $template);
         self::assertStringNotContainsString('Weline_Payment::templates/frontend/widgets/checkout-express-payment.phtml', $template);
 
         $formPos = strpos($template, 'data-checkout-form');
@@ -341,8 +364,48 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
 
         self::assertStringContainsString("window.addEventListener('weline:cart-updated'", $template);
         self::assertStringContainsString('scheduleReload({ hardOnFailure: true })', $template);
+        self::assertStringContainsString("source === 'checkout-empty'", $template);
+        self::assertStringContainsString('emptyCartInvalidateDone', $template);
+        self::assertStringContainsString("reason: 'checkout-empty'", $template);
         self::assertStringContainsString('window.location.reload()', $template);
         self::assertStringNotContainsString("loadCheckout().catch(function () {\n            /* keep current totals if refresh fails */", $template);
+    }
+
+    public function testCheckoutAwaitsShippingValidationIncludingEmbargo(): void
+    {
+        $template = $this->read('app/code/Weline/Checkout/view/frontend/checkout/index.phtml');
+
+        self::assertStringContainsString('async function validateCheckoutShippingFields', $template);
+        self::assertStringContainsString('await widget.validateShippingFields', $template);
+        self::assertStringContainsString('skipRequired: !requireFormValidity', $template);
+        self::assertStringContainsString("await validateCheckoutShippingFields(address, {", $template);
+        self::assertStringContainsString("Prior bug: validateShippingFields is async", $template);
+        self::assertStringContainsString("result.reason !== 'shipping_fields'", $template);
+        self::assertStringContainsString('Validate shipping/embargo BEFORE flipping the button', $template);
+        self::assertStringContainsString('await validateCheckoutShippingFields(formAddress(), { skipRequired: false })', $template);
+    }
+
+    public function testCheckoutEmitsOrderCreatedAndPaymentBridgeOnRecovery(): void
+    {
+        $template = $this->read('app/code/Weline/Checkout/view/frontend/checkout/index.phtml');
+        $success = $this->read('app/code/Weline/Checkout/view/frontend/checkout/success.phtml');
+        $moduleRoot = dirname(__DIR__, 2);
+        $lifecycle = (string) file_get_contents($moduleRoot . '/view/statics/js/checkout-lifecycle.js');
+        $modules = (string) file_get_contents($moduleRoot . '/view/statics/frontend/weline.modules.js');
+
+        self::assertStringContainsString('announceCheckoutOrderCreated', $template);
+        self::assertStringContainsString('weline:checkout:order-created', $template);
+        self::assertStringContainsString('weline:payment:outcome', $template);
+        self::assertStringContainsString('checkoutLifecycle,paymentLifecycle', $template);
+        self::assertStringContainsString('emitPaymentBridge', $template);
+        self::assertStringContainsString('data-checkout-lifecycle', $success);
+        self::assertStringContainsString('data-weline-load="cart,checkoutLifecycle,paymentLifecycle"', $success);
+        self::assertStringContainsString('weline:checkout:order-created', $lifecycle);
+        self::assertStringContainsString('console.info', $lifecycle);
+        self::assertStringContainsString('[WelineCheckout]', $lifecycle);
+        self::assertStringContainsString('validatePayload', $lifecycle);
+        self::assertStringContainsString('weline:checkout:anomaly', $lifecycle);
+        self::assertStringContainsString('checkout-lifecycle.js', $modules);
     }
 
     private function read(string $relativePath): string

@@ -31,11 +31,13 @@ final class CheckoutStorefrontSlotsCatalogContractTest extends TestCase
         self::assertArrayHasKey('checkout-shipping-address', $slots);
         self::assertArrayHasKey('checkout-summary-discount', $slots);
         self::assertArrayHasKey('checkout-summary-note', $slots);
+        self::assertArrayHasKey('checkout-summary-credit', $slots);
         self::assertContains('checkout-express-payment', $slots['checkout-express-payment']['accepts'] ?? []);
         self::assertContains('express-checkout', $slots['checkout-express-payment']['accepts'] ?? []);
         self::assertContains('checkout-shipping-address', $slots['checkout-shipping-address']['accepts'] ?? []);
         self::assertContains('checkout-coupon', $slots['checkout-summary-discount']['accepts'] ?? []);
         self::assertContains('order-notice', $slots['checkout-summary-note']['accepts'] ?? []);
+        self::assertContains('b2b-checkout-credit', $slots['checkout-summary-credit']['accepts'] ?? []);
 
         $template = dirname(__DIR__, 3) . '/view/templates/frontend/widgets/checkout-storefront-slots.phtml';
         self::assertFileExists($template);
