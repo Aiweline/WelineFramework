@@ -9,6 +9,7 @@ use Weline\Cms\Service\PageService;
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Faq\Api\Uri\FaqNamespace;
+use Weline\Faq\Service\FaqPageProviderRegistry;
 use Weline\Seo\Api\Sitemap\AbstractSitemapUrlProvider;
 use Weline\Seo\Api\Sitemap\WebsiteDirectoryInterface;
 
@@ -18,6 +19,7 @@ final class FaqSitemapUrlProvider extends AbstractSitemapUrlProvider
         private readonly WebsiteDirectoryInterface $websiteDirectory,
         private readonly ?PageService $pageService = null,
         private readonly ?Page $pageModel = null,
+        private readonly ?FaqPageProviderRegistry $pageProviders = null,
     ) {
         parent::__construct();
     }
@@ -112,12 +114,39 @@ final class FaqSitemapUrlProvider extends AbstractSitemapUrlProvider
             // Hub URL alone is enough when CMS read fails.
         }
 
+        foreach ($this->pageProviders()->enabledPages() as $spi) {
+            $slug = trim($spi->slug());
+            if ($slug === '') {
+                continue;
+            }
+            $urls[] = [
+                'url_key' => 'faq-spi-' . $spi->pageCode(),
+                'loc' => $baseUrl . FaqNamespace::articlePublicPath($slug),
+                'lastmod' => date('Y-m-d'),
+                'changefreq' => 'monthly',
+                'priority' => '0.5',
+                'entity_type' => 'faq_article',
+                'entity_id' => 0,
+                'metadata' => [
+                    'page_type' => 'faq_article',
+                    'title' => $spi->title(),
+                    'source' => 'faq_page_provider',
+                    'page_code' => $spi->pageCode(),
+                ],
+            ];
+        }
+
         return $urls;
     }
 
     public function getDescription(): string
     {
         return (string)__('帮助中心 sitemap URL 提供器');
+    }
+
+    private function pageProviders(): FaqPageProviderRegistry
+    {
+        return $this->pageProviders ??= ObjectManager::getInstance(FaqPageProviderRegistry::class);
     }
 
     private function cmsAvailable(): bool

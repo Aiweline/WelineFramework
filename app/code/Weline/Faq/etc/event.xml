@@ -9,4 +9,11 @@
                   shared="true"
                   sort="-16"/>
     </event>
+    <event name="Weline_Faq::item_search_index_changed">
+        <observer name="Weline_Faq::item_search_index_sync"
+                  instance="Weline\Faq\Observer\FaqItemSearchIndexObserver"
+                  disabled="false"
+                  shared="true"
+                  sort="10"/>
+    </event>
 </config>
