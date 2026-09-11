@@ -33,9 +33,16 @@ Object.assign(window.WelineModulesConfig.modules, {
     },
     customerSocialQuick: {
         paths: [
-            "Weline_Customer::js/account-social-quick.js?v=20260907-chooser-ui-1"
+            "Weline_Customer::js/account-social-quick.js?v=20260910-mount-fw2"
         ],
         globalVar: "WelineSocialQuick",
         description: "未登录右下角社媒快捷登录条（由 account JS 动态拉起）"
+    },
+    customerLoginPanel: {
+        paths: [
+            "Weline_Customer::js/account-login-panel.js?v=20260910-mount-self-provide"
+        ],
+        globalVar: "WelineLoginPanel",
+        description: "可挂载完整登录面板（快捷+账密）"
     }
 });

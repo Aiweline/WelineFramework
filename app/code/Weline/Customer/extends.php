@@ -2,10 +2,16 @@
 
 declare(strict_types=1);
 
+use Weline\Customer\Extends\MailChannelProvider;
+use Weline\Smtp\Api\MailChannelProviderInterface;
+
 /**
  * Weline_Customer module extension points.
  */
 return [
+    MailChannelProviderInterface::class => [
+        MailChannelProvider::class,
+    ],
     'type' => 'module',
     'documentation' => 'doc/extends.md',
     'extends' => [

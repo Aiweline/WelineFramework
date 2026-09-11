@@ -47,28 +47,44 @@ $subheading = trim((string)($this->getData('login_widget_subtitle') ?? ''));
 <style>
 /* Critical login layout — keep in sync with account-login.css meta row (Theme UI pack may cache). */
 [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__meta{
+    display:block!important;width:100%;min-width:0;
+}
+[data-w-component="account-login"].w-auth-login--amazon .w-auth-login__meta-tools{
     display:flex!important;flex-direction:row!important;flex-wrap:nowrap!important;
-    align-items:center;justify-content:space-between;gap:.65rem;min-width:0;width:100%;
+    align-items:center;justify-content:space-between;gap:.75rem;min-width:0;width:100%;
 }
 [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__remember{
-    display:inline-flex!important;align-items:center;gap:.35rem;flex-wrap:nowrap;
-    flex:0 1 auto!important;min-width:0!important;max-width:calc(100% - 5.75rem)!important;width:max-content!important;
-    padding:0!important;border:0!important;border-radius:0!important;background:transparent!important;overflow:visible!important;
+    display:grid!important;flex:1 1 auto!important;min-width:0!important;max-width:12.5rem!important;width:auto!important;
+    gap:0!important;align-items:stretch!important;align-self:center!important;margin:0!important;
 }
-[data-w-component="account-login"].w-auth-login--amazon .w-auth-login__remember-label{
-    flex:0 0 auto!important;overflow:visible!important;color:#565959;font-size:.8125rem;font-weight:400;white-space:nowrap;
+[data-w-component="account-login"].w-auth-login--amazon .w-auth-login__remember .w-field__label{
+    display:inline-flex!important;align-items:center;gap:.25rem;
+}
+[data-w-component="account-login"].w-auth-login--amazon .w-auth-login__remember .w-field__label .w-icon{
+    width:1rem;height:1rem;min-width:1rem;min-height:1rem;flex:0 0 1rem;
 }
 [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__remember .w-select{
-    flex:0 0 auto!important;width:max-content!important;min-width:4.5rem!important;max-width:7rem!important;
-    min-height:1.5rem!important;padding:.05rem 1.1rem .05rem .15rem!important;
-    border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important;
-    font-size:.8125rem!important;color:#0f1111;
+    width:100%!important;min-width:0!important;max-width:none!important;
+    border:1px solid var(--color-border,var(--weline-theme-border-color,#d5d9d9))!important;
+    border-radius:var(--weline-radius-md,.5rem)!important;
+    background-color:var(--weline-theme-field-label-bg,var(--weline-theme-surface,#fff))!important;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1.5 1.75 6 6.25 10.5 1.75' stroke='%23565959' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")!important;
+    background-repeat:no-repeat!important;
+    background-position:right 1rem center!important;
+    background-size:.75rem .5rem!important;
+    box-shadow:none!important;min-height:var(--weline-control-height,2.5rem)!important;
+    padding-block:.5rem!important;padding-inline-start:.75rem!important;
+    padding-inline-end:calc(1rem + 1.15rem)!important;
+    font-size:var(--weline-font-size-sm,.875rem)!important;
+    appearance:none!important;-webkit-appearance:none!important;
 }
 [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__forgot{
-    display:flex!important;flex:0 0 auto!important;width:auto!important;margin:0!important;justify-content:flex-end;
+    display:flex!important;flex:0 0 auto!important;width:auto!important;margin:0!important;
+    align-items:center;justify-content:flex-end;align-self:center!important;padding-block-end:0!important;
 }
 [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__forgot-link{
-    color:var(--color-link);font-size:.8125rem;font-weight:650;text-decoration:none;white-space:nowrap;
+    color:var(--color-link);font-size:.8125rem;font-weight:650;line-height:1.2;text-decoration:none;white-space:nowrap;
+    display:inline-flex;align-items:center;min-height:var(--weline-control-height,2.5rem);
 }
 [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__forgot-link:hover{color:var(--color-link-hover);text-decoration:underline;}
 [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__password>.w-button{
@@ -82,7 +98,7 @@ $subheading = trim((string)($this->getData('login_widget_subtitle') ?? ''));
 }
 [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__social-divider{margin:.35rem 1.25rem .15rem;}
 @media (max-width:39.99rem){
-    [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__meta{flex-wrap:wrap!important;}
+    [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__meta-tools{flex-wrap:wrap!important;}
     [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__remember{max-width:none!important;}
 }
 </style>
@@ -181,28 +197,30 @@ $subheading = trim((string)($this->getData('login_widget_subtitle') ?? ''));
         </div>
 
         <div class="w-auth-login__meta">
-            <div class="w-auth-login__remember">
-                <label class="w-auth-login__remember-label" for="remember_duration">
-                    <lang>记住</lang>
-                </label>
-                <select class="w-select" id="remember_duration" name="remember_duration" aria-label="<?= $safe(__('记住登录状态')) ?>">
-                    <option value="0"><lang>本次会话</lang></option>
-                    <option value="21600"><lang>6小时</lang></option>
-                    <option value="86400"><lang>1天</lang></option>
-                    <option value="604800" selected><lang>1周</lang></option>
-                    <option value="2592000"><lang>1个月</lang></option>
-                </select>
-            </div>
-            <div class="w-auth-login__forgot">
-                <?php if ($redirectUrl !== ''): ?>
-                    <a href="@url{'customer/account/forgot-password'|['redirect_url' => $redirectUrl]}" class="w-auth-login__forgot-link">
-                        <lang>忘记密码？</lang>
-                    </a>
-                <?php else: ?>
-                    <a href="@url{'customer/account/forgot-password'}" class="w-auth-login__forgot-link">
-                        <lang>忘记密码？</lang>
-                    </a>
-                <?php endif; ?>
+            <div class="w-auth-login__meta-tools">
+                <div class="w-field w-auth-login__remember">
+                    <label class="w-field__label" for="remember_duration">
+                        <w:icon name="clock" size="md"></w:icon><lang>记住</lang>
+                    </label>
+                    <select class="w-select" id="remember_duration" name="remember_duration" aria-label="<?= $safe(__('记住登录状态')) ?>">
+                        <option value="0"><lang>本次会话</lang></option>
+                        <option value="21600"><lang>6小时</lang></option>
+                        <option value="86400"><lang>1天</lang></option>
+                        <option value="604800" selected><lang>1周</lang></option>
+                        <option value="2592000"><lang>1个月</lang></option>
+                    </select>
+                </div>
+                <div class="w-auth-login__forgot">
+                    <?php if ($redirectUrl !== ''): ?>
+                        <a href="@url{'customer/account/forgot-password'|['redirect_url' => $redirectUrl]}" class="w-auth-login__forgot-link">
+                            <lang>忘记密码？</lang>
+                        </a>
+                    <?php else: ?>
+                        <a href="@url{'customer/account/forgot-password'}" class="w-auth-login__forgot-link">
+                            <lang>忘记密码？</lang>
+                        </a>
+                    <?php endif; ?>
+                </div>
             </div>
         </div>
 

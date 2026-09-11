@@ -22,10 +22,10 @@ if ($suggestedEmail !== '' && str_ends_with(strtolower($suggestedEmail), '@socia
 .social-choose__title { margin: 0; font-size: 1.25rem; font-weight: 800; color: #0f172a; }
 .social-choose__desc { margin: 0; color: #64748b; font-size: 0.875rem; }
 .social-choose__meta { margin: 0; color: #334155; font-size: 0.875rem; }
-.social-choose__field { display: grid; gap: 0.35rem; }
-.social-choose__field label { font-size: 0.8125rem; font-weight: 700; color: #334155; }
-.social-choose__field input {
-    min-height: 2.5rem; border: 1px solid #cbd5e1; border-radius: 8px; padding: 0 0.75rem;
+.social-choose__field { gap: 0; }
+.social-choose__field.w-field { display: grid; }
+.social-choose__field .w-input {
+    min-height: 2.5rem;
 }
 .social-choose__actions { display: grid; gap: 0.75rem; }
 .social-choose__btn {
@@ -73,15 +73,15 @@ if ($suggestedEmail !== '' && str_ends_with(strtolower($suggestedEmail), '@socia
             <p class="social-choose__hint"><?= $safe($bindHint) ?></p>
         <?php endif; ?>
         <input type="hidden" name="token" value="<?= $safe($token) ?>">
-        <div class="social-choose__field">
-            <label for="social-choose-username"><lang>本站用户名或邮箱</lang></label>
-            <input id="social-choose-username" name="username" type="text" required autocomplete="username"
+        <div class="w-field social-choose__field">
+            <label class="w-field__label" for="social-choose-username"><lang>本站用户名或邮箱</lang></label>
+            <input class="w-input" id="social-choose-username" name="username" type="text" required autocomplete="username"
                    placeholder="<?= $safe((string) __('例如本站已注册邮箱')) ?>"
                    value="<?= $safe($suggestedEmail) ?>">
         </div>
-        <div class="social-choose__field">
-            <label for="social-choose-password"><lang>本站密码</lang></label>
-            <input id="social-choose-password" name="password" type="password" required autocomplete="current-password"
+        <div class="w-field social-choose__field">
+            <label class="w-field__label" for="social-choose-password"><lang>本站密码</lang></label>
+            <input class="w-input" id="social-choose-password" name="password" type="password" required autocomplete="current-password"
                    placeholder="<?= $safe((string) __('不是 Google 密码')) ?>">
         </div>
         <div class="social-choose__actions">
