@@ -6509,7 +6509,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             WelineEnv::setServer('WELINE_URL_PATH_LANG', $language, 'WlsRuntime parseUrlLangCurrency');
         } else {
             // Drop stale worker locale when the path omits a language segment so
-            // State::getLang() can honor Cookie/default on /USD/help.
+            // State::getLang() can honor Cookie/default on /USD/faq.
             try {
                 WelineEnv::remove('user.lang');
             } catch (\Throwable) {

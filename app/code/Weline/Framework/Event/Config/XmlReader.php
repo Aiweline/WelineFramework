@@ -28,6 +28,13 @@ class XmlReader extends \Weline\Framework\Config\Reader\XmlReader
 
     /** @var array<string,array> Module specs, including empty results, for the current read. */
     private array $moduleEventSpecs = [];
+
+    /**
+     * Event defining index for the current read.
+     *
+     * @var null|array{exact: array<string, string>, patterns: array<string, string>}
+     */
+    private ?array $eventDefiningIndex = null;
     
     /**
      * 静态变量：记录已经输出过的错误信息，避免重复输出
@@ -85,15 +92,79 @@ class XmlReader extends \Weline\Framework\Config\Reader\XmlReader
     }
 
     /**
+     * 仅定位指定模块的 event.xml：按模块 base_path 直达，不遍历全部激活模块。
+     *
+     * @param string[] $moduleNames
+     * @return array<string, string> 模块名 => 文件绝对路径
+     */
+    public function getFileListForModules(array $moduleNames): array
+    {
+        $result = [];
+        $env = Env::getInstance();
+        $names = array_values(array_unique(array_filter(array_map('strval', $moduleNames), static fn(string $name): bool => $name !== '')));
+        $totalModules = count($names);
+        $moduleIndex = 0;
+        $moduleList = $env->getModuleList();
+
+        foreach ($names as $name) {
+            $moduleIndex++;
+            RegistryProgress::module('Event XML locate module', $moduleIndex, $totalModules, $name, 'check etc/event.xml');
+            $moduleInfo = $env->getModuleInfo($name);
+            if ($moduleInfo === [] && isset($moduleList[$name]) && is_array($moduleList[$name])) {
+                $moduleInfo = $moduleList[$name];
+            }
+            $basePath = rtrim((string)($moduleInfo['base_path'] ?? ''), '/\\');
+            if ($basePath === '') {
+                RegistryProgress::module('Event XML locate module', $moduleIndex, $totalModules, $name, 'missing base_path');
+                continue;
+            }
+            $filePath = $this->moduleScanService->resolveFile($basePath, self::RELATIVE_PATH);
+            if ($filePath !== null) {
+                $result[$name] = $filePath;
+                RegistryProgress::module('Event XML locate module', $moduleIndex, $totalModules, $name, 'found');
+            } else {
+                RegistryProgress::module('Event XML locate module', $moduleIndex, $totalModules, $name, 'missing');
+            }
+        }
+
+        return $result;
+    }
+
+    /**
      * 读取事件配置：仅激活模块，base_path 直接定位文件，逐文件解析合并，降低内存占用。
      */
     public function read(): array
     {
+        $event_observers_list = $this->parseEventXmlFiles($this->getFileList(), 'Event XML parse');
+        $this->eventCache->setCustom('event', $event_observers_list);
+        return $event_observers_list;
+    }
+
+    /**
+     * 增量读取指定模块的 event.xml：只解析目标模块目录，不覆盖全量 event 观察者缓存。
+     *
+     * @param string[] $moduleNames
+     * @return array<string, array>
+     */
+    public function readForModules(array $moduleNames): array
+    {
+        return $this->parseEventXmlFiles(
+            $this->getFileListForModules($moduleNames),
+            'Event XML incremental parse'
+        );
+    }
+
+    /**
+     * @param array<string, string> $fileList
+     * @return array<string, array>
+     */
+    private function parseEventXmlFiles(array $fileList, string $progressScope): array
+    {
         $this->moduleEventSpecs = [];
+        $this->eventDefiningIndex = null;
         $event_observers_list = [];
-        $fileList = $this->getFileList();
         $parser = $this->parser;
-        RegistryProgress::count('Event XML parse', count($fileList), 'event.xml files');
+        RegistryProgress::count($progressScope, count($fileList), 'event.xml files');
         $fileIndex = 0;
         $totalFiles = count($fileList);
         foreach ($fileList as $moduleName => $filePath) {
@@ -120,7 +191,7 @@ class XmlReader extends \Weline\Framework\Config\Reader\XmlReader
             );
             unset($module_event_observers);
         }
-        $this->eventCache->setCustom('event', $event_observers_list);
+
         return $event_observers_list;
     }
 
@@ -287,9 +358,19 @@ class XmlReader extends \Weline\Framework\Config\Reader\XmlReader
         }
     }
 
+    /** @var array<string, string> 同进程内 observer instance 内容哈希缓存 */
+    private static array $observerInstanceHashCache = [];
+
     private function observerInstanceHash(string $instance): string
     {
         $instance = ltrim(trim($instance), '\\');
+        if ($instance === '') {
+            return hash('sha256', '');
+        }
+        if (isset(self::$observerInstanceHashCache[$instance])) {
+            return self::$observerInstanceHashCache[$instance];
+        }
+
         $material = $instance;
         try {
             if (class_exists($instance)) {
@@ -300,7 +381,8 @@ class XmlReader extends \Weline\Framework\Config\Reader\XmlReader
             }
         } catch (\Throwable) {
         }
-        return hash('sha256', $material);
+
+        return self::$observerInstanceHashCache[$instance] = hash('sha256', $material);
     }
 
     private function validateAsyncEventContract(
@@ -433,7 +515,10 @@ class XmlReader extends \Weline\Framework\Config\Reader\XmlReader
     }
 
     /**
-     * 查找定义事件的模块
+     * 查找定义事件的模块。
+     *
+     * 禁止对每个缺失事件全量 include 所有模块 event.php（其中常含 __() 等重逻辑，可达数十秒）。
+     * 顺序：本读周期索引（generated/events.php + 已加载 specs）→ 仅按事件名前缀猜测的 owner 模块。
      *
      * @param string $eventName 事件名
      * @return string|null 定义事件的模块名，如果找不到则返回null
@@ -441,34 +526,173 @@ class XmlReader extends \Weline\Framework\Config\Reader\XmlReader
     private function findEventDefiningModule(string $eventName): ?string
     {
         try {
-            $modules = Env::getInstance()->getActiveModules();
-            foreach ($modules as $module) {
-                $moduleName = $module['name'] ?? '';
-                if ($moduleName === '') {
+            $index = $this->getEventDefiningIndex();
+            if (isset($index['exact'][$eventName])) {
+                return $index['exact'][$eventName];
+            }
+            foreach ($index['patterns'] as $pattern => $module) {
+                if ($this->matchDynamicEventPattern($eventName, $pattern)) {
+                    return $module;
+                }
+            }
+
+            // Owner fallback: 先扫 event.php 源码键，避免对含 __() 的规约做全量 include。
+            foreach ($this->guessOwnerModulesForEvent($eventName) as $owner) {
+                $eventFile = $this->resolveModuleEventPhpPath($owner);
+                if ($eventFile === null) {
                     continue;
                 }
-                $eventSpecs = $this->loadModuleEventSpecs($moduleName);
-                if (empty($eventSpecs)) {
+                if (!$this->eventPhpSourceDeclaresEvent($eventFile, $eventName)) {
                     continue;
                 }
-                
-                // 精确匹配
-                if (isset($eventSpecs[$eventName])) {
-                    return $moduleName;
-                }
-                
-                // 动态事件模式匹配
-                foreach ($eventSpecs as $pattern => $spec) {
-                    if ($this->matchDynamicEventPattern($eventName, $pattern)) {
-                        return $moduleName;
-                    }
-                }
+                $this->rememberSpecsInDefiningIndex($owner, [$eventName => []]);
+                return $owner;
             }
         } catch (\Exception $e) {
             // 忽略异常，继续查找
         }
-        
+
         return null;
+    }
+
+    private function resolveModuleEventPhpPath(string $moduleName): ?string
+    {
+        try {
+            $basePath = (string)(Env::getInstance()->getModuleInfo($moduleName)['base_path'] ?? '');
+            if ($basePath === '') {
+                return null;
+            }
+
+            return $this->moduleScanService->resolveFile($basePath, 'event.php');
+        } catch (\Exception) {
+            return null;
+        }
+    }
+
+    /**
+     * 不执行 event.php：仅判断源码是否以数组键声明了事件（或可匹配的动态模式键）。
+     */
+    private function eventPhpSourceDeclaresEvent(string $eventFile, string $eventName): bool
+    {
+        $src = @file_get_contents($eventFile);
+        if (!is_string($src) || $src === '') {
+            return false;
+        }
+        $quoted = preg_quote($eventName, '/');
+        if (preg_match('/[\'"]' . $quoted . '[\'"]\s*=>/', $src) === 1) {
+            return true;
+        }
+        if (!str_contains($src, '{') || !str_contains($src, '}')) {
+            return false;
+        }
+        if (preg_match_all('/[\'"]([^\'"\n]*\{[^\'"\n]+\}[^\'"\n]*)[\'"]\s*=>/', $src, $matches) !== false) {
+            foreach ($matches[1] as $pattern) {
+                if (is_string($pattern) && $this->matchDynamicEventPattern($eventName, $pattern)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @return array{exact: array<string, string>, patterns: array<string, string>}
+     */
+    private function getEventDefiningIndex(): array
+    {
+        if ($this->eventDefiningIndex !== null) {
+            return $this->eventDefiningIndex;
+        }
+
+        $exact = [];
+        $patterns = [];
+        if (\defined('BP')) {
+            $registryFile = \BP . 'generated' . DIRECTORY_SEPARATOR . 'events.php';
+            if (is_file($registryFile)) {
+                $registry = include $registryFile;
+                if (is_array($registry)) {
+                    foreach ((array)($registry['event_to_module'] ?? []) as $name => $module) {
+                        if (is_string($name) && is_string($module) && $module !== '') {
+                            $exact[$name] = $module;
+                        }
+                    }
+                    foreach ((array)($registry['dynamic_patterns'] ?? []) as $pattern => $info) {
+                        if (!is_string($pattern) || $pattern === '') {
+                            continue;
+                        }
+                        $module = is_array($info) ? (string)($info['module'] ?? '') : '';
+                        if ($module !== '') {
+                            $patterns[$pattern] = $module;
+                        }
+                    }
+                }
+            }
+        }
+
+        foreach ($this->moduleEventSpecs as $moduleName => $specs) {
+            if (!is_string($moduleName) || !is_array($specs)) {
+                continue;
+            }
+            foreach ($specs as $name => $_spec) {
+                if (!is_string($name)) {
+                    continue;
+                }
+                if (str_contains($name, '{') && str_contains($name, '}')) {
+                    $patterns[$name] = $moduleName;
+                } else {
+                    $exact[$name] = $moduleName;
+                }
+            }
+        }
+
+        return $this->eventDefiningIndex = [
+            'exact' => $exact,
+            'patterns' => $patterns,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $specs
+     */
+    private function rememberSpecsInDefiningIndex(string $moduleName, array $specs): void
+    {
+        $this->getEventDefiningIndex();
+        foreach ($specs as $name => $_spec) {
+            if (!is_string($name)) {
+                continue;
+            }
+            if (str_contains($name, '{') && str_contains($name, '}')) {
+                $this->eventDefiningIndex['patterns'][$name] = $moduleName;
+            } else {
+                $this->eventDefiningIndex['exact'][$name] = $moduleName;
+            }
+        }
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function guessOwnerModulesForEvent(string $eventName): array
+    {
+        if (!str_contains($eventName, '::')) {
+            return [];
+        }
+        $prefix = explode('::', $eventName, 2)[0];
+        $candidates = [];
+        if (
+            $prefix === 'App'
+            || str_starts_with($prefix, 'App_')
+            || str_starts_with($prefix, 'Framework_')
+            || str_starts_with($prefix, 'Weline_Framework_')
+        ) {
+            $candidates[] = 'Weline_Framework';
+        }
+        if ($prefix !== '' && str_contains($prefix, '_')) {
+            $candidates[] = $prefix;
+        }
+
+        return array_values(array_unique($candidates));
     }
 
     /**

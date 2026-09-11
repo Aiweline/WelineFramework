@@ -90,6 +90,31 @@ final class TemplateCacheManagerEnvironmentKeyTest extends TestCore
         self::assertSame('<?php echo "zh-cny"; ?>', file_get_contents($zhCnyFile));
     }
 
+    public function testCompiledTemplateCacheVariesWhenHooksRegistryFileChanges(): void
+    {
+        $manager = TemplateCacheManager::getInstance();
+        $this->applyRequestContext('CNY', 'zh_Hans_CN');
+
+        $hooksFile = BP . 'generated' . DIRECTORY_SEPARATOR . 'hooks.php';
+        self::assertFileExists($hooksFile);
+
+        $beforeKey = $manager->getCacheKey($this->sourceFile);
+        $originalMtime = (int)@filemtime($hooksFile);
+        self::assertGreaterThan(0, $originalMtime);
+
+        // Touch hooks.php without changing template source — bake keys must move
+        // so header chrome with nested w:widget/<w:hook> recompiles.
+        $advanced = $originalMtime + 7;
+        self::assertTrue(@touch($hooksFile, $advanced));
+        clearstatcache(true, $hooksFile);
+
+        $afterKey = $manager->getCacheKey($this->sourceFile);
+        self::assertNotSame($beforeKey, $afterKey);
+
+        @touch($hooksFile, $originalMtime);
+        clearstatcache(true, $hooksFile);
+    }
+
     public function testRequestSnapshotDropsPreviousRuntimeAttributesAndStorefrontFence(): void
     {
         $this->applyRequestContext('USD', 'en_US');

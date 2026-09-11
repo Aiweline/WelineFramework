@@ -35,7 +35,10 @@ final class EventRegistryIncrementalObserverPreservationTest extends TestCase
             ->willReturn($this->ownerSpecs());
 
         $reader = $this->createMock(XmlReader::class);
-        $reader->expects(self::once())->method('read')->willReturn([]);
+        $reader->expects(self::once())
+            ->method('readForModules')
+            ->with(['Weline_Framework'])
+            ->willReturn([]);
 
         $registry = new EventRegistryIncrementalFixture($scanner, $reader, $this->initialRegistry());
 
@@ -57,7 +60,7 @@ final class EventRegistryIncrementalObserverPreservationTest extends TestCase
         $scanner->method('scanModules')->willReturn(['Weline_Framework' => []]);
 
         $reader = $this->createMock(XmlReader::class);
-        $reader->method('read')->willReturn([]);
+        $reader->method('readForModules')->willReturn([]);
 
         $registry = new EventRegistryIncrementalFixture($scanner, $reader, $this->initialRegistry());
 

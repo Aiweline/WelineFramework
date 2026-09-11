@@ -385,13 +385,13 @@ class MessageManager
         $mod = self::normalizeFlashModifier($html_class);
         $closeLabel = htmlspecialchars((string)__('关闭'), ENT_QUOTES, 'UTF-8');
         $safeTitle = htmlspecialchars($title, ENT_QUOTES, 'UTF-8');
-        $safeMsg = htmlspecialchars($msg, ENT_QUOTES, 'UTF-8');
+        $safeMsg = nl2br(htmlspecialchars($msg, ENT_QUOTES, 'UTF-8'), false);
 
         // Close button must stay empty: login/plain consumers strip_tags and would
         // otherwise leave a literal × glued to the message text.
         return '<div class="w-alert" data-tone="' . $mod . '" role="alert" data-w-removable>'
             . '<div class="w-alert__content"><strong class="w-alert__title">' . $safeTitle . '</strong> '
-            . '<span>' . $safeMsg . '</span></div>'
+            . '<span class="w-alert__message">' . $safeMsg . '</span></div>'
             . '<button type="button" class="w-button" data-tone="quiet" data-size="sm" data-w-close'
             . ' aria-label="' . $closeLabel . '" data-w-action="element.remove"></button>'
             . '</div>';
@@ -427,10 +427,16 @@ class MessageManager
     public static function htmlToPlainText(string $html): string
     {
         $withoutControls = preg_replace('/<button\b[^>]*>.*?<\/button>/is', '', $html) ?? $html;
-        $text = strip_tags($withoutControls);
+        // Keep intentional line breaks from toast/alert bodies.
+        $withBreaks = preg_replace('/<br\s*\/?>/i', "\n", $withoutControls) ?? $withoutControls;
+        $withBreaks = preg_replace('/<\/(p|div|li|tr|h[1-6])>/i', "</$1>\n", $withBreaks) ?? $withBreaks;
+        $text = strip_tags($withBreaks);
         $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
         $text = preg_replace('/[\x{00d7}\x{2715}\x{2716}x×]+$/u', '', $text) ?? $text;
+        // Collapse horizontal whitespace only; preserve newlines for multi-line toasts.
+        $text = preg_replace('/[^\S\n]+/u', ' ', $text) ?? $text;
+        $text = preg_replace('/\n{3,}/u', "\n\n", $text) ?? $text;
 
-        return trim(preg_replace('/\s+/u', ' ', $text) ?? '');
+        return trim($text);
     }
 }

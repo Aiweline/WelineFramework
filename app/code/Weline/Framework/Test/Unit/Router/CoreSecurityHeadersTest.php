@@ -8,6 +8,7 @@ use Weline\Framework\App\Env;
 use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Http\HeaderCollector;
 use Weline\Framework\Http\Security\EmptySecurityHeaderPolicyOverrideProvider;
+use Weline\Framework\Http\Security\SecurityHeaderDefaults;
 use Weline\Framework\Http\Security\SecurityHeaderPolicyOverrideProviderInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Router\Core;
@@ -47,7 +48,7 @@ final class CoreSecurityHeadersTest extends TestCase
         }
     }
 
-    public function testHeaderXssAddsDefaultSecurityHeadersWithoutCspByDefault(): void
+    public function testHeaderXssAddsSafeDefaultCspFromEnvBaseline(): void
     {
         Env::getInstance()->reload();
 
@@ -58,8 +59,11 @@ final class CoreSecurityHeadersTest extends TestCase
         self::assertSame('SAMEORIGIN', $collector->getHeader('X-Frame-Options'));
         self::assertSame('nosniff', $collector->getHeader('X-Content-Type-Options'));
         self::assertSame('1; mode=block', $collector->getHeader('X-XSS-Protection'));
-        self::assertNull($collector->getHeader('Content-Security-Policy'));
-        self::assertNull($collector->getHeader('Content-Security-Policy-Report-Only'));
+        self::assertSame(SecurityHeaderDefaults::CSP, $collector->getHeader('Content-Security-Policy'));
+        self::assertSame(
+            SecurityHeaderDefaults::CSP_REPORT_ONLY,
+            $collector->getHeader('Content-Security-Policy-Report-Only')
+        );
     }
 
     public function testHeaderXssAddsConfiguredCspHeaders(): void

@@ -140,11 +140,14 @@ final readonly class ResourceChange
         self::assertObjectKeys(
             $data['impact'],
             ['namespaces', 'previous_namespaces', 'urls', 'previous_urls'],
-            [],
+            ['cache_ops'],
             'impact',
         );
         foreach (['namespaces', 'previous_namespaces', 'urls', 'previous_urls'] as $key) {
             self::assertStringList($data['impact'][$key], 'impact.' . $key);
+        }
+        if (array_key_exists('cache_ops', $data['impact'])) {
+            self::assertCacheOps($data['impact']['cache_ops']);
         }
         self::assertStringList($data['changed_fields'], 'changed_fields');
         if (array_key_exists('coalesced_event_ids', $data)) {
@@ -244,6 +247,36 @@ final readonly class ResourceChange
         foreach ($value as $item) {
             if (!is_string($item) || trim($item) === '' || strlen($item) > 2048) {
                 throw new AsyncEventValidationException(__('%{1} 必须只包含非空字符串', [$label]));
+            }
+        }
+    }
+
+    public const CACHE_OPS_MAX_KEYS = 256;
+
+    private static function assertCacheOps(mixed $value): void
+    {
+        if (!is_array($value) || !array_is_list($value)) {
+            throw new AsyncEventValidationException(__('impact.cache_ops 必须是列表'));
+        }
+        $totalKeys = 0;
+        foreach ($value as $index => $op) {
+            $label = 'impact.cache_ops[' . $index . ']';
+            if (!is_array($op)) {
+                throw new AsyncEventValidationException(__('%{1} 必须是对象', [$label]));
+            }
+            self::assertObjectKeys($op, ['pool', 'keys'], [], $label);
+            $pool = $op['pool'];
+            if (!is_string($pool) || trim($pool) === '' || strlen($pool) > 64
+                || preg_match('/^[a-z][a-z0-9_-]{0,63}$/', $pool) !== 1) {
+                throw new AsyncEventValidationException(__('%{1}.pool 无效', [$label]));
+            }
+            self::assertStringList($op['keys'], $label . '.keys');
+            if ($op['keys'] === []) {
+                throw new AsyncEventValidationException(__('%{1}.keys 不能为空', [$label]));
+            }
+            $totalKeys += count($op['keys']);
+            if ($totalKeys > self::CACHE_OPS_MAX_KEYS) {
+                throw new AsyncEventValidationException(__('impact.cache_ops keys 总数不能超过 %{1}', [self::CACHE_OPS_MAX_KEYS]));
             }
         }
     }
