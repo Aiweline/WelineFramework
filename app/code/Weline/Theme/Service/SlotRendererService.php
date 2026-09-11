@@ -82,6 +82,22 @@ class SlotRendererService
     // 孤儿部件（找不到对应slot的部件）
     private array $orphanWidgets = [];
 
+    /**
+     * 失效部件：槽位仍在，但模块/定义/模板已缺失或渲染失败。
+     *
+     * @var list<array{
+     *   slot_id:string,
+     *   layout_id:int,
+     *   node_uid:string,
+     *   widget_code:string,
+     *   widget_module:string,
+     *   widget_name:string,
+     *   reason:string,
+     *   message:string
+     * }>
+     */
+    private array $unavailableWidgets = [];
+
     /** 当前渲染周期内已填充的 slot_id，同一 slot_id 只填充文档中第一处出现，避免容器部件内层同名插槽被重复填充导致泄露 */
     private array $filledSlotIdsThisRun = [];
 
@@ -203,6 +219,7 @@ class SlotRendererService
                 }
 
                 $this->filledSlotIdsThisRun = [];
+                $this->unavailableWidgets = [];
                 $this->capturePageRenderContext();
                 try {
                     $processed = $this->withRenderTheme(
@@ -301,6 +318,7 @@ class SlotRendererService
 
         // Boundaries-only slot fill (legacy DOM engine removed).
         $this->filledSlotIdsThisRun = [];
+        $this->unavailableWidgets = [];
         $this->capturePageRenderContext();
         try {
             $html = $this->traceCall(
@@ -1007,6 +1025,10 @@ class SlotRendererService
             },
             ['slots' => \count($slotWidgets)],
         );
+
+        // CoW / 二次 processSlots 可能保留已有 tip HTML 而不重跑 doRenderWidget；
+        // 从 DOM 回填 unavailableWidgets，保证编辑器诊断面板仍能注入。
+        $this->recoverUnavailableWidgetsFromHtml($html);
 
         return $html;
     }
@@ -2342,6 +2364,36 @@ class SlotRendererService
     }
 
     /**
+     * @return list<array{
+     *   slot_id:string,
+     *   layout_id:int,
+     *   node_uid:string,
+     *   widget_code:string,
+     *   widget_module:string,
+     *   widget_name:string,
+     *   reason:string,
+     *   message:string
+     * }>
+     */
+    public function getUnavailableWidgets(): array
+    {
+        return $this->unavailableWidgets;
+    }
+
+    public function hasUnavailableWidgets(): bool
+    {
+        return $this->unavailableWidgets !== [];
+    }
+
+    /**
+     * 编辑器诊断：从已渲染 HTML 回填失效部件列表（CoW 不重渲时用）。
+     */
+    public function syncUnavailableWidgetsFromHtml(string $html): void
+    {
+        $this->recoverUnavailableWidgetsFromHtml($html);
+    }
+
+    /**
      * 处理单个插槽元素
      * 同一 slot_id 在整棵 DOM 中只填充第一处出现，避免容器部件（如 content-container）
      * 放入 hero 后，其内部输出的同名 widget-hero 被再次填充导致布局泄露或重复。
@@ -2451,7 +2503,14 @@ class SlotRendererService
                 ? $codePart
                 : ($widgetModule . '::templates/frontend/widgets/' . $codePart . '.phtml');
 
-            return $this->renderMissingModuleWidgetTip($widgetModule, $templateRef);
+            return $this->renderUnavailableWidgetTip(
+                $widget,
+                'missing_module',
+                (string)__(
+                    '异常：你指定的模板文件所在的模块不存在！模块：%{1}，所使用的模板：%{2}',
+                    [$widgetModule, $templateRef]
+                ),
+            );
         }
 
         $definition = $this->placeableRegistry->find($widgetModule, $widgetType, $widgetCode, $this->renderTheme, $renderArea);
@@ -2513,7 +2572,11 @@ class SlotRendererService
 
                 return $this->rememberWidgetOutput($widgetOutputCacheKey, $html);
             } catch (\Throwable $throwable) {
-                return $this->renderWidgetThrowableTip((string)$throwable->getMessage());
+                return $this->renderUnavailableWidgetTip(
+                    $widget,
+                    $this->classifyUnavailableReason((string)$throwable->getMessage()),
+                    (string)$throwable->getMessage(),
+                );
             }
         }
 
@@ -2524,7 +2587,11 @@ class SlotRendererService
 
         $widgetMeta = $this->widgetCache[$cacheKey];
         if (!$widgetMeta) {
-            return '';
+            return $this->renderUnavailableWidgetTip(
+                $widget,
+                'missing_definition',
+                (string)__('部件已不可用（定义/模板缺失）：%{1}', [(string)$widgetCode]),
+            );
         }
 
         // 合并默认配置
@@ -2550,13 +2617,21 @@ class SlotRendererService
 
                 return $this->rememberWidgetOutput($widgetOutputCacheKey, $html);
             } catch (\Throwable $throwable) {
-                return $this->renderWidgetThrowableTip((string)$throwable->getMessage());
+                return $this->renderUnavailableWidgetTip(
+                    $widget,
+                    $this->classifyUnavailableReason((string)$throwable->getMessage()),
+                    (string)$throwable->getMessage(),
+                );
             }
         }
 
         $templatePath = $widgetMeta['template'] ?? '';
         if (!$templatePath) {
-            return '';
+            return $this->renderUnavailableWidgetTip(
+                $widget,
+                'missing_template',
+                (string)__('部件已不可用（定义/模板缺失）：%{1}', [(string)$widgetCode]),
+            );
         }
 
         try {
@@ -2574,8 +2649,10 @@ class SlotRendererService
             return $this->rememberWidgetOutput($widgetOutputCacheKey, $html);
         } catch (\Throwable $e) {
             // 渲染失败，返回错误提示（仅开发模式）；不得中断其余槽位/布局播种
-            return $this->renderWidgetThrowableTip(
-                __('部件渲染失败: %{1} - %{2}', [(string)$widgetCode, (string)$e->getMessage()])
+            return $this->renderUnavailableWidgetTip(
+                $widget,
+                $this->classifyUnavailableReason((string)$e->getMessage()),
+                (string)__('部件渲染失败: %{1} - %{2}', [(string)$widgetCode, (string)$e->getMessage()]),
             );
         }
     }
@@ -2590,8 +2667,220 @@ class SlotRendererService
         return isset(Env::getInstance()->getModuleList()[$moduleName]);
     }
 
+    private function classifyUnavailableReason(string $message): string
+    {
+        $normalized = \strtolower($message);
+        if (
+            \str_contains($normalized, '模板文件不存在')
+            || \str_contains($normalized, 'template file')
+            || (\str_contains($normalized, 'template') && \str_contains($normalized, 'not exist'))
+            || \str_contains($normalized, 'does not exist')
+        ) {
+            return 'missing_template';
+        }
+        if (\str_contains($normalized, '模块不存在') || \str_contains($normalized, 'module')) {
+            return 'missing_module';
+        }
+
+        return 'render_error';
+    }
+
     /**
-     * DEV：与 TraitTemplate 缺模块文案同构的槽位提示；PROD：空串（布局播种继续）。
+     * @param array<string, mixed> $widget
+     */
+    private function recordUnavailableWidget(array $widget, string $reason, string $message): void
+    {
+        $nodeUid = \strtolower(\trim((string)($widget['node_uid'] ?? '')));
+        if ($nodeUid !== '' && \preg_match('/^[a-f0-9]{32}$/D', $nodeUid) !== 1) {
+            $nodeUid = '';
+        }
+        $widgetCode = (string)($widget['widget_code'] ?? '');
+        $widgetName = (string)($widget['meta']['name'] ?? ($widgetCode !== '' ? $widgetCode : '未知部件'));
+        $slotId = (string)($widget['slot_id'] ?? '');
+
+        foreach ($this->unavailableWidgets as $existing) {
+            if (
+                ($nodeUid !== '' && ($existing['node_uid'] ?? '') === $nodeUid)
+                || (
+                    $nodeUid === ''
+                    && ($existing['slot_id'] ?? '') === $slotId
+                    && ($existing['widget_code'] ?? '') === $widgetCode
+                    && (int)($existing['layout_id'] ?? 0) === (int)($widget['layout_id'] ?? 0)
+                )
+            ) {
+                return;
+            }
+        }
+
+        $this->unavailableWidgets[] = [
+            'slot_id' => $slotId,
+            'layout_id' => (int)($widget['layout_id'] ?? 0),
+            'node_uid' => $nodeUid,
+            'widget_code' => $widgetCode,
+            'widget_module' => (string)($widget['widget_module'] ?? ''),
+            'widget_name' => $widgetName,
+            'reason' => $reason,
+            'message' => $message !== ''
+                ? $message
+                : (string)__('部件 "%{1}" 已不可用（定义/模板缺失）', [$widgetName]),
+        ];
+    }
+
+    /**
+     * 编辑器预览：可操作占位（带 wrapper + node_uid）；DEV 非预览：简化 tip；PROD：空串。
+     *
+     * @param array<string, mixed> $widget
+     */
+    private function renderUnavailableWidgetTip(array $widget, string $reason, string $message): string
+    {
+        $this->recordUnavailableWidget($widget, $reason, $message);
+
+        $isEditorPreview = $this->isEditorPreviewRequest();
+        $isDev = \defined('DEV') && DEV;
+        if (!$isEditorPreview && !$isDev) {
+            return '';
+        }
+
+        $widgetCode = \htmlspecialchars((string)($widget['widget_code'] ?? ''), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
+        $safeMessage = \htmlspecialchars(
+            $message !== '' ? $message : (string)__('部件已不可用（定义/模板缺失）'),
+            \ENT_QUOTES | \ENT_SUBSTITUTE,
+            'UTF-8'
+        );
+        $title = \htmlspecialchars((string)__('部件已不可用（定义/模板缺失）'), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
+        $removeLabel = \htmlspecialchars((string)__('从当前版本移除'), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
+
+        if ($isEditorPreview) {
+            $nodeUid = \strtolower(\trim((string)($widget['node_uid'] ?? '')));
+            if ($nodeUid !== '' && \preg_match('/^[a-f0-9]{32}$/D', $nodeUid) !== 1) {
+                $nodeUid = '';
+            }
+            $nodeUidAttr = \htmlspecialchars($nodeUid, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
+            $reasonAttr = \htmlspecialchars($reason, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
+            $inner = <<<HTML
+<div class="widget-unavailable-tip" data-editor-interactive data-unavailable-reason="{$reasonAttr}" style="
+    padding:12px 14px;
+    border:1px solid #f0ad4e;
+    border-radius:6px;
+    background:#fff8e6;
+    color:#856404;
+    font-size:13px;
+    line-height:1.45;
+    pointer-events:auto;
+    position:relative;
+    z-index:5;
+">
+    <div style="font-weight:600;margin-bottom:6px;">{$title}</div>
+    <div style="margin-bottom:8px;word-break:break-word;"><code>{$widgetCode}</code> — {$safeMessage}</div>
+    <button type="button" data-action="remove-unavailable-widget" data-editor-interactive data-node-uid="{$nodeUidAttr}" style="
+        background:#dc3545;
+        color:#fff;
+        border:none;
+        border-radius:4px;
+        padding:6px 12px;
+        cursor:pointer;
+        font-size:12px;
+        pointer-events:auto;
+        position:relative;
+        z-index:6;
+    ">{$removeLabel}</button>
+</div>
+HTML;
+            $config = \is_array($widget['config'] ?? null) ? $widget['config'] : [];
+            $config = $this->appendWidgetRenderContext($config, $widget);
+            $widgetName = (string)($widget['meta']['name'] ?? $widget['widget_code'] ?? 'unavailable');
+            $wrapped = $this->maybeWrapWidgetHtml($inner, $widget, $config, $widgetName);
+            if (!\str_contains($wrapped, 'class="widget-wrapper"') && !\str_contains($wrapped, "class='widget-wrapper'")) {
+                $attrs = $this->buildWidgetWrapperAttrs($widget, $config, null);
+                $wrapped = \sprintf(
+                    '<div class="widget-wrapper" %s data-widget-name="%s" data-unavailable="1" data-editor-interactive>%s</div>',
+                    $attrs,
+                    \htmlspecialchars($widgetName, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8'),
+                    $inner
+                );
+            } else {
+                $wrapped = $this->markUnavailableWidgetWrapper($wrapped);
+            }
+
+            return $wrapped;
+        }
+
+        return \sprintf(
+            '<div class="widget-render-error" style="color:red;padding:10px;border:1px solid red;word-wrap: break-word;">%s</div>',
+            $safeMessage
+        );
+    }
+
+    /**
+     * CoW 保留的失效 tip：从 HTML 回填 unavailableWidgets。
+     */
+    private function recoverUnavailableWidgetsFromHtml(string $html): void
+    {
+        if ($html === '' || !\str_contains($html, 'widget-unavailable-tip')) {
+            return;
+        }
+
+        if (\preg_match_all(
+            '/<div\b([^>]*\bwidget-wrapper\b[^>]*)>[\s\S]{0,4000}?widget-unavailable-tip/i',
+            $html,
+            $matches
+        )) {
+            foreach ($matches[1] as $attrChunk) {
+                $openTag = '<div ' . \trim((string)$attrChunk) . '>';
+                $nodeUid = \strtolower(\trim($this->attrFromTag($openTag, 'data-node-uid')));
+                if ($nodeUid !== '' && \preg_match('/^[a-f0-9]{32}$/D', $nodeUid) !== 1) {
+                    $nodeUid = '';
+                }
+                $this->recordUnavailableWidget([
+                    'node_uid' => $nodeUid,
+                    'layout_id' => (int)$this->attrFromTag($openTag, 'data-layout-id'),
+                    'slot_id' => $this->attrFromTag($openTag, 'data-slot-id'),
+                    'widget_code' => $this->attrFromTag($openTag, 'data-widget-code'),
+                    'widget_module' => $this->attrFromTag($openTag, 'data-widget-module'),
+                    'meta' => ['name' => $this->attrFromTag($openTag, 'data-widget-name')],
+                ], 'missing_template', (string)__('部件已不可用（定义/模板缺失）'));
+            }
+        }
+
+        if ($this->unavailableWidgets !== []) {
+            return;
+        }
+
+        if (\preg_match_all(
+            '/data-action="remove-unavailable-widget"[^>]*data-node-uid="([a-f0-9]{32})"/i',
+            $html,
+            $tips
+        )) {
+            foreach ($tips[1] as $uid) {
+                $this->recordUnavailableWidget([
+                    'node_uid' => \strtolower((string)$uid),
+                    'widget_code' => '',
+                    'slot_id' => '',
+                    'meta' => ['name' => 'unavailable'],
+                ], 'missing_template', (string)__('部件已不可用（定义/模板缺失）'));
+            }
+        }
+    }
+
+    private function markUnavailableWidgetWrapper(string $wrappedHtml): string
+    {
+        if ($wrappedHtml === '' || !\str_starts_with(\ltrim($wrappedHtml), '<')) {
+            return $wrappedHtml;
+        }
+        $gt = \strpos($wrappedHtml, '>');
+        if ($gt === false) {
+            return $wrappedHtml;
+        }
+        $openTag = \substr($wrappedHtml, 0, $gt + 1);
+        $rest = \substr($wrappedHtml, $gt + 1);
+        $openTag = $this->upsertHtmlAttribute($openTag, 'data-unavailable', '1');
+        $openTag = $this->upsertHtmlAttribute($openTag, 'data-editor-interactive', '1');
+
+        return $openTag . $rest;
+    }
+
+    /**
+     * @deprecated Use renderUnavailableWidgetTip for missing/broken widgets.
      */
     private function renderMissingModuleWidgetTip(string $moduleName, string $templateRef): string
     {
@@ -2610,7 +2899,7 @@ class SlotRendererService
         }
 
         return sprintf(
-            '<div class="widget-render-error" style="color:red;padding:10px;border:1px solid red;">%s</div>',
+            '<div class="widget-render-error" style="color:red;padding:10px;border:1px solid red;word-wrap: break-word;">%s</div>',
             htmlspecialchars($message, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
         );
     }
@@ -2643,18 +2932,197 @@ class SlotRendererService
         } catch (e) {}
         return null;
     }
-    function showToast(message, type) {
-        var text = String(message || '').trim();
-        if (!text) return;
+    function ensureLocateStyles() {
+        if (document.getElementById('w-widget-health-locate-style')) return;
+        var style = document.createElement('style');
+        style.id = 'w-widget-health-locate-style';
+        style.textContent = [
+            'html.w-widget-health-locate-open{overflow:hidden!important;}',
+            '.w-widget-health-locate-backdrop{position:fixed;inset:0;z-index:calc(var(--weline-z-toast,1100) + 20);border:0;padding:0;margin:0;cursor:pointer;background:color-mix(in srgb,var(--weline-theme-text,#111) 42%,transparent);}',
+            '.w-widget-health-locate-host{outline:3px solid var(--weline-theme-warning,#c9a227)!important;outline-offset:4px!important;position:relative!important;z-index:calc(var(--weline-z-toast,1100) + 19)!important;min-block-size:3rem!important;background:color-mix(in srgb,var(--weline-theme-warning,#c9a227) 8%,var(--weline-theme-surface,#fff))!important;}',
+            '.w-widget-health-locate-pop,.w-widget-health-locate-panel{position:fixed!important;inset-block-start:50%!important;inset-inline-start:50%!important;transform:translate(-50%,-50%)!important;z-index:calc(var(--weline-z-toast,1100) + 21)!important;width:min(40rem,calc(100dvw - 2rem))!important;max-block-size:min(80dvh,calc(100dvh - 2rem))!important;overflow:auto!important;margin:0!important;padding:var(--weline-space-4,1rem)!important;display:grid!important;gap:var(--weline-space-3,.75rem)!important;background:var(--weline-theme-surface-raised,#fff)!important;color:var(--weline-theme-text,#111)!important;border:2px solid var(--weline-theme-danger,#b42318)!important;border-radius:var(--weline-radius-md,8px)!important;box-shadow:var(--weline-theme-shadow-md,0 12px 32px rgba(0,0,0,.28))!important;}',
+            '.w-widget-health-locate-chrome{display:flex;justify-content:space-between;align-items:center;gap:var(--weline-space-2,.5rem);}',
+            '.w-widget-health-locate-title{font-weight:600;margin:0;}',
+            '.w-widget-health-locate-meta{font-size:var(--weline-font-size-sm,.875rem);color:var(--weline-theme-text-muted,#666);}',
+            '.w-widget-health-locate-issue{display:grid;gap:var(--weline-space-1,.25rem);padding:var(--weline-space-3,.75rem);border:1px solid var(--weline-theme-border,#ddd);border-radius:var(--weline-radius-sm,6px);background:var(--weline-theme-surface,#fff);}',
+            '.w-widget-health-locate-detail{margin:0;padding:var(--weline-space-2,.5rem);overflow:auto;white-space:pre-wrap;word-break:break-word;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--weline-font-size-sm,.875rem);background:color-mix(in srgb,var(--weline-theme-danger,#b42318) 8%,var(--weline-theme-surface,#fff));border-radius:var(--weline-radius-sm,6px);}'
+        ].join('');
+        (document.head || document.documentElement).appendChild(style);
+    }
+    function dismissLocate() {
+        document.querySelectorAll('[data-w-widget-health-locate-active="1"]').forEach(function (node) {
+            node.classList.remove('w-widget-health-locate-pop');
+            node.classList.remove('w-widget-health-locate-host');
+            node.removeAttribute('data-w-widget-health-locate-active');
+        });
+        document.querySelectorAll('[data-w-widget-health-locate-panel],[data-w-widget-health-locate-chrome],.w-widget-health-locate-backdrop').forEach(function (node) {
+            node.remove();
+        });
+        document.documentElement.classList.remove('w-widget-health-locate-open');
+        try { document.removeEventListener('keydown', onLocateKeydown, true); } catch (e) {}
+    }
+    function onLocateKeydown(event) {
+        if (event && event.key === 'Escape') dismissLocate();
+    }
+    function findHealthNode(item) {
+        var nodes = document.querySelectorAll('.widget-wrapper[data-w-widget-health]');
+        var slot = String((item && item.slot) || '');
+        var code = String((item && item.code) || '');
+        var matched = null;
+        nodes.forEach(function (node) {
+            if (!(node instanceof HTMLElement) || matched) return;
+            var nodeSlot = String(node.dataset.slotId || '');
+            var nodeCode = String(node.dataset.widgetCode || '');
+            if (slot && code && nodeSlot === slot && nodeCode === code) matched = node;
+            else if (!matched && slot && nodeSlot === slot) matched = node;
+            else if (!matched && code && nodeCode === code) matched = node;
+        });
+        if (!matched && item && item.el instanceof HTMLElement) matched = item.el;
+        return matched;
+    }
+    function resolveLocateHost(node, item) {
+        if (!(node instanceof HTMLElement)) return null;
+        var slot = String((item && item.slot) || node.dataset.slotId || '').trim();
+        if (slot) {
+            try {
+                var byAttr = document.querySelector('[data-wslot="' + slot.replace(/"/g, '') + '"]');
+                if (byAttr instanceof HTMLElement) return byAttr;
+            } catch (e) {}
+        }
+        var closest = node.closest('[data-wslot]');
+        if (closest instanceof HTMLElement) return closest;
+        if (node.parentElement instanceof HTMLElement) return node.parentElement;
+        return node;
+    }
+    function collectHealthIssues(item, node) {
+        var issues = [];
+        if (item && Array.isArray(item.issues)) issues = item.issues.slice();
+        if (!issues.length && node) {
+            try {
+                var parsed = JSON.parse(node.getAttribute('data-w-widget-health-issues') || '[]');
+                if (Array.isArray(parsed)) issues = parsed;
+            } catch (e) {}
+        }
+        return issues;
+    }
+    function forceExposeHealthPanel(item, node, host) {
+        var issues = collectHealthIssues(item, node);
+        var panel = document.createElement('section');
+        panel.className = 'w-widget-health-locate-pop w-widget-health-locate-panel';
+        panel.setAttribute('data-w-widget-health-locate-panel', '1');
+        panel.setAttribute('role', 'dialog');
+        panel.setAttribute('aria-modal', 'true');
+        var titleText = String((item && (item.name || item.code)) || (node && (node.getAttribute('data-widget-name') || node.dataset.widgetCode)) || 'widget');
+        var slotText = String((item && item.slot) || (node && node.dataset.slotId) || (host && host.getAttribute('data-wslot')) || '');
+        if (slotText) titleText += ' @' + slotText;
+        var chrome = document.createElement('div');
+        chrome.className = 'w-widget-health-locate-chrome';
+        chrome.setAttribute('data-w-widget-health-locate-chrome', '1');
+        var title = document.createElement('h2');
+        title.className = 'w-widget-health-locate-title';
+        title.textContent = '部件异常：' + titleText;
+        var closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.className = 'w-button';
+        closeBtn.dataset.size = 'sm';
+        closeBtn.dataset.tone = 'neutral';
+        closeBtn.textContent = '关闭定位';
+        closeBtn.addEventListener('click', function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+            dismissLocate();
+        });
+        chrome.appendChild(title);
+        chrome.appendChild(closeBtn);
+        panel.appendChild(chrome);
+        var meta = document.createElement('p');
+        meta.className = 'w-widget-health-locate-meta';
+        meta.textContent = '上层容器：' + (host && host.getAttribute('data-wslot')
+            ? ('[data-wslot="' + host.getAttribute('data-wslot') + '"]')
+            : (host && host.className ? ('.' + String(host.className).split(/\\s+/).filter(Boolean).join('.')) : 'parent'));
+        panel.appendChild(meta);
+        if (!issues.length) {
+            var empty = document.createElement('p');
+            empty.textContent = '未解析到错误明细，已高亮上层容器。';
+            panel.appendChild(empty);
+        } else {
+            issues.forEach(function (issue) {
+                var block = document.createElement('div');
+                block.className = 'w-widget-health-locate-issue';
+                var msg = document.createElement('strong');
+                msg.textContent = String((issue && (issue.message || issue.code)) || 'HTML 异常');
+                block.appendChild(msg);
+                var detail = String((issue && issue.detail) || '').trim();
+                if (detail) {
+                    var pre = document.createElement('pre');
+                    pre.className = 'w-widget-health-locate-detail';
+                    pre.textContent = detail;
+                    block.appendChild(pre);
+                }
+                panel.appendChild(block);
+            });
+        }
+        document.body.appendChild(panel);
+        return panel;
+    }
+    function locateHealthWidget(item) {
+        ensureLocateStyles();
+        dismissLocate();
+        var node = findHealthNode(item);
+        if (!node) {
+            showToast('无法定位异常部件' + ((item && item.slot) ? (' @' + item.slot) : ''), 'warning');
+            return;
+        }
+        var host = resolveLocateHost(node, item) || node;
+        var backdrop = document.createElement('button');
+        backdrop.type = 'button';
+        backdrop.className = 'w-widget-health-locate-backdrop';
+        backdrop.setAttribute('aria-label', '关闭部件定位');
+        backdrop.addEventListener('click', dismissLocate);
+        document.body.appendChild(backdrop);
+        host.classList.add('w-widget-health-locate-host');
+        host.setAttribute('data-w-widget-health-locate-active', '1');
+        forceExposeHealthPanel(item, node, host);
+        document.documentElement.classList.add('w-widget-health-locate-open');
+        document.addEventListener('keydown', onLocateKeydown, true);
+        try { host.scrollIntoView({ block: 'center', inline: 'nearest' }); } catch (e) {}
+    }
+    function buildHealthToastMessage(text, item) {
+        var wrap = document.createElement('div');
+        wrap.style.display = 'grid';
+        wrap.style.gap = '0.5rem';
+        var copy = document.createElement('span');
+        copy.textContent = text;
+        wrap.appendChild(copy);
+        if (item) {
+            var btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'w-button';
+            btn.dataset.size = 'sm';
+            btn.dataset.tone = 'primary';
+            btn.textContent = '定位';
+            btn.addEventListener('click', function (event) {
+                event.preventDefault();
+                event.stopPropagation();
+                locateHealthWidget(item);
+            });
+            wrap.appendChild(btn);
+        }
+        return wrap;
+    }
+    function showToast(message, type, item) {
         var tone = type === 'error' ? 'danger' : (['success', 'warning', 'info', 'danger'].indexOf(type) >= 0 ? type : 'info');
+        var payload = (item && typeof message === 'string') ? buildHealthToastMessage(message, item) : message;
+        var text = typeof message === 'string' ? String(message || '').trim() : '';
+        if (!payload || (typeof message === 'string' && !text)) return;
         try {
             var UI = resolveToastUi();
             if (UI && UI.toast && typeof UI.toast.show === 'function') {
-                UI.toast.show(text, { tone: tone, duration: type === 'error' ? 8000 : 5000 });
+                UI.toast.show(payload, { tone: tone, duration: item ? 0 : (type === 'error' ? 8000 : 5000) });
                 return;
             }
         } catch (e) {}
-        try { console.warn('[WidgetHtmlHealth]', text); } catch (e) {}
+        try { console.warn('[WidgetHtmlHealth]', text || message); } catch (e) {}
     }
     function report() {
         if (document.documentElement.dataset.wWidgetHealthReported === '1') return;
@@ -2678,7 +3146,8 @@ class SlotRendererService
                 code: String(node.dataset.widgetCode || ''),
                 slot: String(node.dataset.slotId || ''),
                 name: String(node.getAttribute('data-widget-name') || node.dataset.widgetCode || 'widget'),
-                issues: issues
+                issues: issues,
+                el: node
             });
         });
         if (!findings.length) return;
@@ -2689,13 +3158,15 @@ class SlotRendererService
             '部件 HTML 健康检测：' + findings.length + ' 个部件异常'
                 + (errorCount ? '（错误 ' + errorCount + '）' : '')
                 + (warningCount ? '（警告 ' + warningCount + '）' : ''),
-            summaryTone
+            summaryTone,
+            findings.length === 1 ? findings[0] : null
         );
         findings.slice(0, 8).forEach(function (item) {
             var first = item.issues[0] || {};
             showToast(
                 (item.name || item.code || 'widget') + (item.slot ? ' @' + item.slot : '') + '：' + String(first.message || first.code || 'HTML 异常'),
-                item.severity === 'error' ? 'error' : (item.severity === 'warning' ? 'warning' : 'info')
+                item.severity === 'error' ? 'error' : (item.severity === 'warning' ? 'warning' : 'info'),
+                item
             );
         });
         try {
@@ -2705,7 +3176,15 @@ class SlotRendererService
                     type: 'widget-health',
                     summary: '部件 HTML 健康检测：' + findings.length + ' 个部件异常',
                     severity: summaryTone,
-                    findings: findings
+                    findings: findings.map(function (item) {
+                        return {
+                            severity: item.severity,
+                            code: item.code,
+                            slot: item.slot,
+                            name: item.name,
+                            issues: item.issues
+                        };
+                    })
                 }, window.location.origin);
             }
         } catch (e) {}
@@ -3629,6 +4108,7 @@ HTML;
         $this->widgetCache = [];
         $this->layoutCache = [];
         $this->orphanWidgets = [];
+        $this->unavailableWidgets = [];
         self::$publishedLayoutDataCache = [];
         self::$widgetOutputCache = [];
         $this->purgeRuntimeCacheNamespace();

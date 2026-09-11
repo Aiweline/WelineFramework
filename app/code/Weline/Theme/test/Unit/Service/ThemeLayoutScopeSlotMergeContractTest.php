@@ -40,14 +40,32 @@ final class ThemeLayoutScopeSlotMergeContractTest extends TestCase
         self::assertStringContainsString('TemplateCacheManager::getInstance()->clearAll()', $source);
         self::assertStringContainsString("pool('taglib')->clear()", $source);
         self::assertStringContainsString('router_fpc_payload_files', $source);
+        self::assertStringContainsString('theme_namespace_generations_all', $source);
+        self::assertStringContainsString('bumpAllThemeNamespaces(', $source);
+        self::assertStringContainsString('fpc_cache_pools', $source);
+        self::assertStringContainsString('wls_shared_fpc_full', $source);
+        self::assertStringContainsString('wls_worker_broadcast_all', $source);
+        self::assertStringContainsString('cdn_full_page_purge', $source);
+        self::assertStringContainsString('purgeCdnFullPageCaches(', $source);
+        self::assertStringContainsString('cacheClear(null)', $source);
 
         $workspace = $this->read('app/code/Weline/Theme/Service/Scoped/ThemeScopedWorkspace.php');
         self::assertStringContainsString('dispatchScopedPublishResourceChange(', $workspace);
         self::assertStringContainsString('\\w_changed($change)', $workspace);
 
         $observer = $this->read('app/code/Weline/Theme/Observer/ResourceChanged.php');
-        self::assertStringContainsString('clearScopedCaches($scope', $observer);
-        self::assertStringContainsString('scopeFromChange(', $observer);
+        self::assertStringContainsString('clearAllThemeRelatedCaches(', $observer);
+        self::assertStringNotContainsString('clearScopedCaches($scope', $observer);
+        self::assertStringContainsString('affectsTheme(', $observer);
+
+        $cleaner = $this->read('app/code/Weline/Theme/Service/ThemeRuntimeCacheCleaner.php');
+        self::assertStringContainsString('function clearAllThemeRelatedCaches(', $cleaner);
+        self::assertStringContainsString('theme_namespace_generations_all', $cleaner);
+        self::assertStringContainsString('cdn_full_page_purge', $cleaner);
+        self::assertStringContainsString('wls_worker_broadcast_all', $cleaner);
+
+        $request = $this->read('app/code/Weline/Theme/Service/Scoped/ThemeScopedWorkspaceRequestService.php');
+        self::assertStringContainsString('clearAllThemeRelatedCaches(', $request);
     }
 
     private function read(string $relative): string

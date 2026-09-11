@@ -200,7 +200,7 @@ class Policy extends FrontendController
             'terms' => (string)__('阅读使用本站服务前需要了解的条款与条件。'),
             'guide' => (string)__('查看配送、退换与购物相关说明，帮助顺利完成汉服选购。'),
             'payment_guide' => (string)__('了解可用支付方式、账单与安全保障说明。'),
-            'help' => (string)__('查找订单、物流、退换与账户相关自助帮助。'),
+            'faq' => (string)__('查找订单、物流、退换与账户相关常见问题。'),
             'cart' => (string)__('查看已选汉服商品、调整数量并进入结算。'),
             'account_auth' => (string)__('登录或注册账户，管理订单与收藏。'),
         ];
@@ -233,7 +233,7 @@ class Policy extends FrontendController
             'cms_page' => ['default'],
             'contact' => ['default'],
             'about' => ['default'],
-            'help' => ['default'],
+            'faq' => ['default'],
             'guide' => ['default'],
             'payment_guide' => ['default'],
             'not_found' => ['default'],

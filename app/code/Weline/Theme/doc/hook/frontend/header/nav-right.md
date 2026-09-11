@@ -36,7 +36,7 @@
     <ul class="header-nav-right-list">
         <li><a href="/seller/join"><lang>商家入驻</lang></a></li>
         <li><a href="/app/download"><lang>下载 APP</lang></a></li>
-        <li><a href="/help"><lang>帮助中心</lang></a></li>
+        <li><a href="/faq"><lang>帮助中心</lang></a></li>
     </ul>
 </nav>
 ```

@@ -2409,35 +2409,42 @@
 
     async function publishScopedWorkspace(resourceType, options = {}) {
         const key = scopedWorkspaceKey(resourceType, options);
-        const workspace = state.scopedWorkspaces[key]
-            || await loadScopedWorkspace(resourceType, options);
-        if (!workspace || Number(workspace.revision || 0) <= 0) return null;
-        if (workspace.draft_revision_id
-            && Number(workspace.draft_revision_id) === Number(workspace.published_revision_id || 0)
-        ) {
-            return null;
-        }
-        const result = await apiJson(config.apiPublishScopedWorkspace, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                editor_context: buildTypedEditorContext(resourceType, options),
-                expected_revision: Number(workspace.revision || 0),
-                expected_parent_release_id: workspace.expected_parent_release_id ?? null,
-                reason: options.reason || 'theme_editor_publish',
-            }),
-        });
-        if (!result?.success) {
-            if (result?.message === 'theme_scope_structural_conflict') {
-                await loadScopedWorkspace(resourceType, options);
+        const attempt = async (allowRetry) => {
+            const workspace = await loadScopedWorkspace(resourceType, options)
+                || state.scopedWorkspaces[key];
+            if (!workspace || Number(workspace.revision || 0) <= 0) return null;
+            if (workspace.draft_revision_id
+                && Number(workspace.draft_revision_id) === Number(workspace.published_revision_id || 0)
+            ) {
+                return null;
             }
-            throw new Error(result?.message || 'Publish scoped workspace failed');
-        }
-        if (result?.data?.blocked) {
-            throw new Error('theme_scope_structural_conflict');
-        }
-        state.scopedWorkspaces[key] = await loadScopedWorkspace(resourceType, options);
-        return result.data || null;
+            const result = await apiJson(config.apiPublishScopedWorkspace, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    editor_context: buildTypedEditorContext(resourceType, options),
+                    expected_revision: Number(workspace.revision || 0),
+                    expected_parent_release_id: workspace.expected_parent_release_id ?? null,
+                    reason: options.reason || 'theme_editor_publish',
+                }),
+            });
+            if (!result?.success) {
+                const message = String(result?.message || 'Publish scoped workspace failed');
+                if (allowRetry && message.includes('theme_scope_revision_conflict')) {
+                    return attempt(false);
+                }
+                if (message === 'theme_scope_structural_conflict') {
+                    await loadScopedWorkspace(resourceType, options);
+                }
+                throw new Error(message);
+            }
+            if (result?.data?.blocked) {
+                throw new Error('theme_scope_structural_conflict');
+            }
+            state.scopedWorkspaces[key] = await loadScopedWorkspace(resourceType, options);
+            return result.data || null;
+        };
+        return attempt(true);
     }
 
     function renderScopedReleaseBatchStatus(receipt = state.lastScopedReleaseBatch) {
@@ -2519,63 +2526,67 @@
     async function publishLoadedScopedWorkspaces(reason = 'theme_editor_publish') {
         await flushPendingEditorMutations();
         const currentResources = ['theme_binding', 'layout', 'meta', 'appearance', 'i18n'];
-        for (const resourceType of currentResources) {
-            if (!getScopedWorkspaceState(resourceType)) {
-                await loadScopedWorkspace(resourceType);
-            }
-        }
-        const resources = {};
-        let hasPendingChanges = false;
-        for (const resourceType of currentResources) {
-            const workspace = getScopedWorkspaceState(resourceType);
-            if (!workspace?.context?.scope) {
-                throw new Error(`Scoped workspace is unavailable: ${resourceType}`);
-            }
-            resources[resourceType] = {
-                expected_revision: Number(workspace.revision || 0),
-                expected_parent_release_id: workspace.expected_parent_release_id ?? null,
-            };
-            if (Number(workspace.revision || 0) > 0
-                && Number(workspace.draft_revision_id || 0) > 0
-                && Number(workspace.draft_revision_id || 0) !== Number(workspace.published_revision_id || 0)
-            ) {
-                hasPendingChanges = true;
-            }
-        }
-        if (!hasPendingChanges) {
-            state.hasChanges = false;
-            return null;
-        }
-
-        const layoutWorkspace = getScopedWorkspaceState('layout');
-        const result = await apiJson(config.apiPublishScopedReleaseBatch, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                editor_context: layoutWorkspace.context,
-                resources: resources,
-                reason,
-            }),
-        });
-        if (!result?.success) {
+        // Always refresh before publish: iframe mutations (e.g. remove unavailable widgets)
+        // advance draft revision while the parent page may still hold a stale snapshot.
+        const attempt = async (allowRetry) => {
             await Promise.all(currentResources.map((resourceType) =>
                 loadScopedWorkspace(resourceType).catch(() => null)
             ));
-            throw new Error(result?.message || 'Publish scoped release batch failed');
-        }
-        state.lastScopedReleaseBatch = result.data || null;
-        renderScopedReleaseBatchStatus();
-        await Promise.all(currentResources.map((resourceType) => loadScopedWorkspace(resourceType)));
-        state.hasChanges = false;
-        renderThemeBindingOwnership();
-        renderScopedConflictPanel();
-        if (result?.data?.cache_retryable) {
-            showToast(
-                `${translateUiText('发布已提交，缓存刷新降级，可安全重试')} #${result.data.batch_id || ''}`.trim(),
-                'warning',
-            );
-        }
-        return result.data || null;
+            const resources = {};
+            let hasPendingChanges = false;
+            for (const resourceType of currentResources) {
+                const workspace = getScopedWorkspaceState(resourceType);
+                if (!workspace?.context?.scope) {
+                    throw new Error(`Scoped workspace is unavailable: ${resourceType}`);
+                }
+                resources[resourceType] = {
+                    expected_revision: Number(workspace.revision || 0),
+                    expected_parent_release_id: workspace.expected_parent_release_id ?? null,
+                };
+                if (Number(workspace.revision || 0) > 0
+                    && Number(workspace.draft_revision_id || 0) > 0
+                    && Number(workspace.draft_revision_id || 0) !== Number(workspace.published_revision_id || 0)
+                ) {
+                    hasPendingChanges = true;
+                }
+            }
+            if (!hasPendingChanges) {
+                state.hasChanges = false;
+                return null;
+            }
+
+            const layoutWorkspace = getScopedWorkspaceState('layout');
+            const result = await apiJson(config.apiPublishScopedReleaseBatch, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    editor_context: layoutWorkspace.context,
+                    resources: resources,
+                    reason,
+                }),
+            });
+            if (!result?.success) {
+                const message = String(result?.message || 'Publish scoped release batch failed');
+                if (allowRetry && message.includes('theme_scope_revision_conflict')) {
+                    return attempt(false);
+                }
+                throw new Error(message);
+            }
+            state.lastScopedReleaseBatch = result.data || null;
+            renderScopedReleaseBatchStatus();
+            await Promise.all(currentResources.map((resourceType) => loadScopedWorkspace(resourceType)));
+            state.hasChanges = false;
+            renderThemeBindingOwnership();
+            renderScopedConflictPanel();
+            if (result?.data?.cache_retryable) {
+                showToast(
+                    `${translateUiText('发布已提交，缓存刷新降级，可安全重试')} #${result.data.batch_id || ''}`.trim(),
+                    'warning',
+                );
+            }
+            return result.data || null;
+        };
+        return attempt(true);
     }
 
     function renderThemeBindingOwnership() {
@@ -5497,6 +5508,12 @@
             case 'widget-rejected':
                 clearPreviewDropCandidate(data.session_id || state.previewDragSessionId);
                 showToast(data.reason || '部件被拒绝', 'error');
+                break;
+            case 'layout-draft-mutated':
+                state.hasChanges = true;
+                void loadScopedWorkspace('layout', { skipReconcile: true }).catch((error) => {
+                    console.warn('[ThemeEditor] layout-draft-mutated sync failed:', error);
+                });
                 break;
             case 'locale-change': {
                 const nextLocale = String(data.locale || '').trim();
@@ -16674,7 +16691,12 @@
             }
         } catch (err) {
             console.error('[ThemeEditor] Publish error:', err);
-            showToast('发布主题失败', 'error');
+            const message = String(err?.message || err || '');
+            if (message.includes('theme_scope_revision_conflict')) {
+                showToast(translateUiText('草稿版本已更新，请再点一次发布'), 'warning');
+            } else {
+                showToast(translateUiText('发布主题失败'), 'error');
+            }
         }
     }
 

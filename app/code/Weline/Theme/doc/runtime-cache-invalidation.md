@@ -6,8 +6,16 @@
 ## 失效范围
 
 - **主题发布（编辑器 / Scoped Release）必须按当前发布主题所属 Scope 调用 `clearScopedCaches(scope, themeId)`**，使 storefront Theme 命名空间世代仅对该 Scope（及其后代向量）失效；禁止在已知 typed Scope 时用 `clearNonGlobalCaches(null)`（会跳过 `generated_theme_cache`）。
-- Scoped workspace `publish` 成功后由 `ThemeScopedWorkspaceRequestService` 执行 `clearScopedCaches`；`blocked`（结构冲突）不得清缓存，且 HTTP 必须 `success=false`。
-- Scoped `publish` / `publishBatch` / `rollbackReleaseBatch` 必须在主库写事务内 `w_changed(theme|theme_layout)`；`ResourceChanged` 对带 Scope 快照的变更优先 `clearScopedCaches`。
+- Scoped workspace `publish` 成功后由 `ThemeScopedWorkspaceRequestService` 执行 `clearAllThemeRelatedCaches`（全量主题相关缓存）；`blocked`（结构冲突）不得清缓存，且 HTTP 必须 `success=false`。
+- Scoped `publish` / `publishBatch` / `rollbackReleaseBatch` 必须在主库写事务内 `w_changed(theme|theme_layout)`；`ResourceChanged` 对 `theme` / `theme_layout`（及 Theme 模块 system_config）**必须** `clearAllThemeRelatedCaches`，不得仅 `clearScopedCaches`（否则 chrome/FPC/模板池残留旧 HTML）。
+- `clearAllThemeRelatedCaches`：在 `clearNonGlobalCaches` 之上再执行
+  1. `theme_namespace_generations_all` — bump 全部已记录的 `*/theme*` 命名空间 + `global/storefront/theme`
+  2. `fpc_cache_pools` — 清空 `fpc`/`router` 缓存池
+  3. `wls_shared_fpc_full` — 经 WLS adapter 清共享 FPC/router
+  4. `wls_worker_broadcast_all` — `cacheClear(null)` 广播全部 WLS 实例
+  5. `cdn_full_page_purge` — 若存在 `Weline_Cdn`，对启用域名 `everything`（失败则 `hosts`）全页 purge
+- `clearAllThemeRelatedCaches` 亦含 framework 非全局池、generated theme cache、ThemeData、Partials、storefront chrome、SlotRenderer、编译模板、`view/tpl`、taglib/view、进程 FPC、theme_runtime 与 router-fpc-payloads。
+- storefront chrome / header-nav CachePolicy 依赖必须含 `theme`，否则只 bump theme 代际不会让 chrome 信封失效。
 - `clearScopedCaches` / `clearNonGlobalCaches` 必须清理编译模板缓存（`TemplateCacheManager`）、模块本地 `view/tpl/**` 编译产物，以及 `taglib`/`view` 池：`@static`/`<css>`/`<js>` 会在编译期把带 `?v=` 的 URL 写进这些产物，仅 bump generation 或只清 `var/cache/template` 无法让前台立刻吃到新 `theme_static_version`。
 - `theme_static_version` 由 `Env::setConfig` 写盘后，WLS Worker 须在 `cache_clear` 中 `Env::reloadPersistentConfigFromDisk()`，否则其它 Worker 进程仍持有旧 Env，重编译会再次 bake 旧 `?v=`。
 - ThemeEditor 兼容发布路径（`postPublish` / `publish-version` / `publish-and-exit`）在重建 generated theme cache 前后，通过 `flushFullPageCache($context, $themeId)` 走同一 Scope 定向失效。

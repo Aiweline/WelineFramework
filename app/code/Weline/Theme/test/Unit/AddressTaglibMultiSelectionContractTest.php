@@ -114,6 +114,13 @@ final class AddressTaglibMultiSelectionContractTest extends TestCore
         self::assertStringContainsString('data-shipping-checkout-address', $js);
         self::assertStringContainsString('findPostalFieldForRoot', $js);
         self::assertStringContainsString("root.closest('form')", $js);
+        // Postal lookup: input-only + debounce; never change/blur (paste would double-query).
+        self::assertStringContainsString("scope.addEventListener('input', onPostalEvent);", $js);
+        self::assertStringNotContainsString("scope.addEventListener('change', onPostalEvent);", $js);
+        self::assertStringNotContainsString("postalField.addEventListener('change', schedule);", $js);
+        self::assertStringContainsString('lastEnqueuedPostal', $js);
+        self::assertStringContainsString('if (mine && t !== mine)', $js);
+        self::assertStringContainsString('address-notch', (string)file_get_contents(BP . 'app/code/Weline/Theme/view/statics/js/address-loader.js'));
         $doc = html_entity_decode(\Weline\Theme\Taglib\Address::document(), ENT_QUOTES, 'UTF-8');
         self::assertStringContainsString('postal-lookup', $doc);
     }

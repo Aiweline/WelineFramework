@@ -4,7 +4,7 @@
     var moduleName = 'themeAddress';
     var modulePath = 'Weline_Theme::js/address.js';
     // Keep an explicit bust token so country-only/global fixes are not stuck behind a sticky inherited query.
-    var fallbackUrl = '/Weline/Theme/view/statics/js/address.js?v=20260909-subnational-embargo-block4';
+    var fallbackUrl = '/Weline/Theme/view/statics/js/address.js?v=20260910-address-notch4';
 
     (function inheritLoaderVersion() {
         var cur = document.currentScript && document.currentScript.src;

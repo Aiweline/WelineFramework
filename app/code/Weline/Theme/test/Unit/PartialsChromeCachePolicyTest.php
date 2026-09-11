@@ -181,7 +181,9 @@ final class PartialsChromeCachePolicyTest extends TestCase
     public function testChromePartialCacheSchemaPinsStateLangOverStorefrontCookie(): void
     {
         $source = (string)\file_get_contents(BP . 'app/code/Weline/Theme/Block/Partials.php');
-        self::assertStringContainsString("'schema' => 'chrome-partial-v9'", $source);
+        self::assertStringContainsString("'schema' => 'chrome-partial-v11-guest-header'", $source);
+        self::assertStringContainsString("return 'frontend-auth:0';", $source);
+        self::assertStringContainsString('always guest-SSR', $source);
         self::assertStringContainsString("'i18n_switcher_markup'", $source);
         self::assertStringContainsString('SWITCHER_MARKUP_VERSION', $source);
         self::assertStringContainsString("'lang' => (string)State::getLang()", $source);

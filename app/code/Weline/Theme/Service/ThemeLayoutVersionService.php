@@ -8,7 +8,9 @@ use Weline\Framework\App\Env;
 use Weline\Framework\Database\Transaction\WriteIntentTransactionCoordinatorInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\I18n\Api\Translation\DictionaryRepositoryInterface;
+use Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface;
 use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Helper\LayoutScanner;
 use Weline\Theme\Model\ThemeLayout;
@@ -449,7 +451,92 @@ readonly class ThemeLayoutVersionService
         ThemeLayoutVersion $version,
     ): void {
         $this->unsetPublishedVersion($themeId, $pageType, $identity);
+        // Storefront resolves nearest published version on the Scope fallback chain.
+        // A stale published marker on a descendant Scope (e.g. store「原始布局」)
+        // would shadow a newly published ancestor (e.g. website「test」).
+        $this->unsetPublishedDescendantVersions($themeId, $pageType, $identity);
         $version->setIsPublished(true)->save();
+    }
+
+    /**
+     * Clear is_published on descendant Scopes of the published identity.
+     *
+     * @param array<string,mixed> $identity
+     */
+    private function unsetPublishedDescendantVersions(int $themeId, string $pageType, array $identity): void
+    {
+        $identity = $this->normalizeLayoutIdentity($identity);
+        $ancestorScope = (string)($identity['scope'] ?? '');
+        if ($ancestorScope === '') {
+            return;
+        }
+
+        try {
+            /** @var ScopeHierarchyInterface $scopes */
+            $scopes = ObjectManager::getInstance(ScopeHierarchyInterface::class);
+            $ancestorIdentity = $scopes->fromStorageScope($ancestorScope, true);
+            if (!$ancestorIdentity instanceof ScopeIdentity) {
+                return;
+            }
+
+            $rows = $this->versionModel->reset()
+                ->where(ThemeLayoutVersion::schema_fields_THEME_ID, $themeId)
+                ->where(ThemeLayoutVersion::schema_fields_PAGE_TYPE, $pageType)
+                ->where(ThemeLayoutVersion::schema_fields_IS_PUBLISHED, 1)
+                ->where(ThemeLayoutVersion::schema_fields_LAYOUT_OPTION, $identity['layout_option'])
+                ->where(ThemeLayoutVersion::schema_fields_LOCALE_CODE, $identity['locale_code'])
+                ->where(ThemeLayoutVersion::schema_fields_TARGET_TYPE, $identity['target_type'])
+                ->where(ThemeLayoutVersion::schema_fields_TARGET_ID, $identity['target_id'])
+                ->select()
+                ->fetchArray();
+
+                $publishedRows = \is_array($rows) ? $rows : [];
+            foreach ($publishedRows as $row) {
+                if (!\is_array($row)) {
+                    continue;
+                }
+                $candidateScope = \trim((string)($row[ThemeLayoutVersion::schema_fields_SCOPE] ?? ''));
+                if ($candidateScope === '' || $candidateScope === $ancestorScope) {
+                    continue;
+                }
+                if (!$this->isDescendantStorageScope($scopes, $ancestorIdentity, $candidateScope)) {
+                    continue;
+                }
+                $versionId = (int)($row[ThemeLayoutVersion::schema_fields_ID] ?? 0);
+                if ($versionId <= 0) {
+                    continue;
+                }
+                // Clone: $this->versionModel is often the same instance as the
+                // markPublishedVersion() target; reset/load must not clobber it.
+                $descendant = clone $this->versionModel;
+                $descendant->reset()->load($versionId);
+                if ($descendant->getVersionId() > 0) {
+                    $descendant->setIsPublished(false)->save();
+                }
+            }
+        } catch (\Throwable) {
+            // Best-effort: ancestor published marker still applies for exact Scope matches.
+        }
+    }
+
+    private function isDescendantStorageScope(
+        ScopeHierarchyInterface $scopes,
+        ScopeIdentity $ancestor,
+        string $candidateStorageScope,
+    ): bool {
+        $cursor = $scopes->fromStorageScope($candidateStorageScope, true);
+        if (!$cursor instanceof ScopeIdentity) {
+            return false;
+        }
+        $ancestorKey = $ancestor->canonicalKey();
+        while (($parent = $scopes->parentIdentity($cursor)) instanceof ScopeIdentity) {
+            if ($parent->canonicalKey() === $ancestorKey) {
+                return true;
+            }
+            $cursor = $parent;
+        }
+
+        return false;
     }
     
     /**

@@ -2084,21 +2084,19 @@ html[data-theme="dark"] .form-select, html[data-theme-mode="dark"] .form-select 
 .w-address__item {
     position: relative;
     min-width: 0;
+    --weline-theme-field-label-bg: var(--weline-theme-surface, #fff);
 }
-.w-address__label {
-    display: block;
-    margin: 0 0 var(--weline-layout-spacing-xs, 6px);
-    color: var(--weline-layout-text-primary, var(--weline-theme-text, inherit));
-    font-size: var(--weline-layout-font-size-sm, 13px);
-    font-weight: var(--weline-layout-font-weight-semibold, 600);
+.w-address__item.w-field {
+    gap: 0;
 }
+/* Legacy .w-address__label no longer used; cascade labels are .w-field__label. */
 .w-address__control {
     position: relative;
     display: flex;
     align-items: center;
-    min-height: var(--weline-theme-control-height, 40px);
-    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border-color, #d0d5dd);
-    border-radius: var(--weline-theme-radius-lg, 10px);
+    min-height: var(--weline-control-height, var(--weline-theme-control-height, 40px));
+    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border-strong, var(--weline-theme-border-color, #d0d5dd));
+    border-radius: var(--weline-radius-md, var(--weline-theme-radius-md, 8px));
     background: var(--weline-theme-surface, #fff);
     color: var(--weline-theme-text, inherit);
 }

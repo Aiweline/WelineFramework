@@ -2144,36 +2144,40 @@ function registerNavFilter() {
             }
         };
         const pathMatchScore = (currentSegments, menuSegments) => {
-            const exact = currentSegments.length === menuSegments.length
-                && menuSegments.every((segment, index) => segment === currentSegments[index]);
+            const canon = (segment) => String(segment || '').toLocaleLowerCase().replace(/-/g, '');
+            const current = currentSegments.map(canon);
+            const menu = menuSegments.map(canon);
+            const exact = current.length === menu.length
+                && menu.every((segment, index) => segment === current[index]);
             if (exact) return Number.MAX_SAFE_INTEGER;
 
             // 菜单常带 …/index，当前路由常省略 /index —— 与 MenuRenderService::isMenuActive 对齐
             if (
-                menuSegments.length === currentSegments.length + 1
-                && String(menuSegments.at(-1) || '').toLocaleLowerCase() === 'index'
-                && menuSegments.slice(0, -1).every((segment, index) => segment === currentSegments[index])
+                menu.length === current.length + 1
+                && String(menu.at(-1) || '') === 'index'
+                && menu.slice(0, -1).every((segment, index) => segment === current[index])
             ) {
                 return Number.MAX_SAFE_INTEGER;
             }
 
-            if (menuSegments.length === 0 || menuSegments.length > currentSegments.length) return -1;
+            // control-center ↔ controlcenter 等连字符别名
+            if (menu.length === 0 || menu.length > current.length) return -1;
 
             let matched = 0;
             while (
-                matched < menuSegments.length
-                && menuSegments[matched] === currentSegments[matched]
+                matched < menu.length
+                && menu[matched] === current[matched]
             ) {
                 matched++;
             }
-            if (matched === menuSegments.length) return matched;
+            if (matched === menu.length) return matched;
 
             if (
-                menuSegments.length === currentSegments.length
-                && matched === menuSegments.length - 1
+                menu.length === current.length
+                && matched === menu.length - 1
             ) {
-                const menuAction = String(menuSegments.at(-1) || '').toLocaleLowerCase();
-                const currentAction = String(currentSegments.at(-1) || '').toLocaleLowerCase();
+                const menuAction = String(menu.at(-1) || '');
+                const currentAction = String(current.at(-1) || '');
                 if (actionAliases.has(menuAction) && actionAliases.has(currentAction)) {
                     return matched;
                 }

@@ -47,8 +47,8 @@ $error = (string)($this->getData('error') ?? $this->getData('meta.error') ?? '')
 $icon = (string)($this->getData('icon') ?? $this->getData('meta.icon') ?? '');
 $autocomplete = (string)($this->getData('autocomplete') ?? $this->getData('meta.autocomplete') ?? 'off');
 
-$inputClass = trim('w-form-control w-input input-control' . ($error !== '' ? ' w-is-invalid' : '') . ($class !== '' ? ' ' . $class : ''));
-$rootClass = trim($wc . ' w-form-group' . ($error !== '' ? ' has-error' : ''));
+$inputClass = trim('w-input input-control' . ($error !== '' ? ' w-is-invalid' : '') . ($class !== '' ? ' ' . $class : ''));
+$rootClass = trim($wc . ' w-field' . ($error !== '' ? ' has-error' : ''));
 ?>
 
 <div class="<?= $esc($rootClass) ?>"
@@ -56,7 +56,7 @@ $rootClass = trim($wc . ' w-form-group' . ($error !== '' ? ' has-error' : ''));
      data-uid="<?= $esc($scope->uid) ?>"
      data-js-ns="<?= $esc($scope->jsNs) ?>">
     <?php if ($label !== ''): ?>
-        <label for="<?= $esc($id) ?>" class="w-form-label input-label">
+        <label for="<?= $esc($id) ?>" class="w-field__label">
             <?= $esc($label) ?>
             <?php if ($required): ?>
                 <span class="required-mark">*</span>
@@ -64,9 +64,9 @@ $rootClass = trim($wc . ' w-form-group' . ($error !== '' ? ' has-error' : ''));
         </label>
     <?php endif; ?>
 
-    <div class="input-wrapper">
+    <div class="w-field__control input-wrapper<?= $icon !== '' ? ' input-wrapper--icon' : '' ?>">
         <?php if ($icon !== ''): ?>
-            <i class="<?= $esc($icon) ?> input-icon"></i>
+            <i class="<?= $esc($icon) ?> input-icon" aria-hidden="true"></i>
         <?php endif; ?>
         <input type="<?= $esc($type) ?>"
                name="<?= $esc($name) ?>"
@@ -77,34 +77,27 @@ $rootClass = trim($wc . ' w-form-group' . ($error !== '' ? ' has-error' : ''));
                autocomplete="<?= $esc($autocomplete) ?>"
                <?= $required ? 'required' : '' ?>
                <?= $disabled ? 'disabled' : '' ?>
-               <?= $readonly ? 'readonly' : '' ?>>
+               <?= $readonly ? 'readonly' : '' ?>
+               <?= $error !== '' ? 'aria-invalid="true"' : '' ?>>
     </div>
 
     <?php if ($help !== '' && $error === ''): ?>
-        <small class="w-form-text input-help"><?= $esc($help) ?></small>
+        <small class="w-field__hint input-help"><?= $esc($help) ?></small>
     <?php endif; ?>
 
     <?php if ($error !== ''): ?>
-        <div class="w-invalid-feedback input-error"><?= $esc($error) ?></div>
+        <div class="w-field__error input-error"><?= $esc($error) ?></div>
     <?php endif; ?>
 </div>
 
 <style>
 .<?= $wc ?> {
-    display: grid;
-    gap: var(--weline-space-2);
     margin-bottom: var(--weline-space-4);
-}
-
-.<?= $wc ?> .input-label {
-    color: var(--weline-theme-text);
-    font-size: var(--weline-font-size-sm);
-    font-weight: var(--weline-font-weight-medium);
 }
 
 .<?= $wc ?> .required-mark {
     color: var(--weline-theme-danger);
-    margin-left: var(--weline-space-1);
+    margin-inline-start: var(--weline-space-1);
 }
 
 .<?= $wc ?> .input-wrapper {
@@ -113,48 +106,18 @@ $rootClass = trim($wc . ' w-form-group' . ($error !== '' ? ' has-error' : ''));
 
 .<?= $wc ?> .input-icon {
     position: absolute;
-    left: var(--weline-space-3);
+    inset-inline-start: var(--weline-space-3);
     top: 50%;
     transform: translateY(-50%);
     color: var(--weline-theme-text-muted);
+    pointer-events: none;
 }
 
-.<?= $wc ?> .input-wrapper:has(.input-icon) .input-control {
-    padding-left: calc(var(--weline-space-3) + var(--weline-space-5));
+.<?= $wc ?> .input-wrapper--icon .w-input {
+    padding-inline-start: calc(var(--weline-space-3) + var(--weline-space-5));
 }
 
-.<?= $wc ?> .input-control {
-    width: 100%;
-    padding: var(--weline-space-2) var(--weline-space-3);
-    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
-    border-radius: var(--weline-radius-md);
-    background: var(--weline-theme-surface);
-    color: var(--weline-theme-text);
-    font-size: var(--weline-font-size-base);
-}
-
-.<?= $wc ?> .input-control:focus {
-    outline: var(--spacing-0_5) solid color-mix(in srgb, var(--weline-theme-primary) 35%, transparent);
-    outline-offset: var(--spacing-px);
-}
-
-.<?= $wc ?> .input-control:disabled {
-    background: var(--weline-theme-surface-muted);
-    color: var(--weline-theme-text-muted);
-    cursor: not-allowed;
-}
-
-.<?= $wc ?> .input-help {
-    color: var(--weline-theme-text-muted);
-    font-size: var(--weline-font-size-xs);
-}
-
-.<?= $wc ?> .input-error {
-    color: var(--weline-theme-danger);
-    font-size: var(--weline-font-size-xs);
-}
-
-.<?= $wc ?>.has-error .input-control {
+.<?= $wc ?>.has-error .w-input {
     border-color: var(--weline-theme-danger);
 }
 </style>

@@ -57,7 +57,14 @@ $updatedAt = date('Y-m-d');
 $topics = $this->getData('faq_topics');
 $faqs = $this->getData('faq_faqs');
 $quickLinks = $this->getData('faq_quick_links');
-if ((!is_array($topics) || $topics === []) || (!is_array($faqs) || $faqs === []) || (!is_array($quickLinks) || $quickLinks === [])) {
+$faqArticle = is_array($this->getData('faq_article')) ? $this->getData('faq_article') : null;
+$faqSpiTemplate = trim((string)($this->getData('faq_spi_template') ?? ''));
+$isFaqArticle = is_array($faqArticle) && (
+    $faqSpiTemplate !== ''
+    || trim((string)($faqArticle['slug'] ?? '')) !== ''
+    || trim((string)($faqArticle['title'] ?? '')) !== ''
+);
+if (!$isFaqArticle && ((!is_array($topics) || $topics === []) || (!is_array($faqs) || $faqs === []) || (!is_array($quickLinks) || $quickLinks === []))) {
     try {
         /** @var \Weline\Faq\Service\FaqHubContent $hub */
         $hub = ObjectManager::getInstance(\Weline\Faq\Service\FaqHubContent::class);
@@ -388,6 +395,18 @@ $searchPlaceholder = (string)__('搜索常见问题，例如：退货、运费�
                         </div>
                     </header>
                     <div class="faq-layout__primary">
+                        <?php if ($isFaqArticle): ?>
+                            <section class="amazon-faq__panel" data-testid="faq-article-panel" weline-code="theme.faq.article">
+                                <?php
+                                $articleHtml = (string)($meta['content'] ?? $this->getData('content') ?? '');
+                                if (trim($articleHtml) !== '') {
+                                    echo $articleHtml;
+                                } else {
+                                    echo $this->fetch('Weline_Faq::templates/frontend/view.phtml');
+                                }
+                                ?>
+                            </section>
+                        <?php else: ?>
                         <section class="amazon-faq__panel" aria-labelledby="faq-topics-title" weline-code="theme.faq.topics">
                             <h2 class="amazon-faq__panel-title" id="faq-topics-title"><lang>热门 FAQ 主题</lang></h2>
                             <w:slot id="faq-topics"
@@ -436,6 +455,7 @@ $searchPlaceholder = (string)__('搜索常见问题，例如：退货、运费�
                                 </div>
                             </w:slot>
                         </section>
+                        <?php endif; ?>
 
                         <w:slot id="faq-extras"
                                 name="FAQ 扩展区"

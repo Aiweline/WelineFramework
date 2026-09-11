@@ -25,7 +25,7 @@
 <nav class="header-nav-links">
     <ul class="nav-links-list" id="nav-links-list">
         <li><a href="/promotion/deals"><lang>今日特价</lang></a></li>
-        <li><a href="/help"><lang>客户服务</lang></a></li>
+        <li><a href="/faq"><lang>客户服务</lang></a></li>
     </ul>
     <!-- “更多”：通用 Weline.UI menu（hover 展开），溢出项由 adjustNavLinks 写入 w-menu__item -->
     <div class="nav-more-wrapper"
@@ -67,7 +67,7 @@
         <li><a href="/promotion/deals"><lang>今日特价</lang></a></li>
         <li><a href="/new-arrival"><lang>新品上架</lang></a></li>
         <li><a href="/bestseller"><lang>畅销排行</lang></a></li>
-        <li><a href="/help"><lang>客户服务</lang></a></li>
+        <li><a href="/faq"><lang>客户服务</lang></a></li>
     </ul>
 </nav>
 ```

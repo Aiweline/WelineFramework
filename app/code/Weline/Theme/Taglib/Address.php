@@ -273,20 +273,20 @@ class Address implements TaglibInterface
                 . ($postalLookup ? ' data-postal-lookup="1"' : '')
                 . '>';
             if ($includePostal) {
-                $shell .= '<label class="w-address__postal">'
-                    . '<span class="w-address__label">' . $escape($postalLabel) . '</span>'
-                    . '<input class="w-form-control w-input w-address__postal-input" type="text" name="'
+                $shell .= '<div class="w-field w-address__postal">'
+                    . '<label class="w-field__label">' . $escape($postalLabel) . '</label>'
+                    . '<input class="w-input w-address__postal-input" type="text" name="'
                     . $escape($postalName) . '" autocomplete="postal-code" data-w-address-postal data-postal-first>'
-                    . '</label>';
+                    . '</div>';
             }
             $shell .= $cascadeHtml;
             if ($includeDetail) {
-                $shell .= '<label class="w-address__detail">'
-                    . '<span class="w-address__label">' . $escape($detailLabel) . '</span>'
-                    . '<input class="w-form-control w-input w-address__detail-input" type="text" name="'
+                $shell .= '<div class="w-field w-address__detail">'
+                    . '<label class="w-field__label">' . $escape($detailLabel) . '</label>'
+                    . '<input class="w-input w-address__detail-input" type="text" name="'
                     . $escape($detailName) . '" autocomplete="street-address" data-w-address-detail'
                     . ' placeholder="' . $escape($translate('门牌号 / 楼栋单元等', 'Building / unit number')) . '">'
-                    . '</label>';
+                    . '</div>';
             }
             $shell .= '</div>';
             $html[] = $shell;

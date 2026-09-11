@@ -173,6 +173,7 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
         string $actorId,
         string $actorName = '',
         string $summary = '',
+        bool $skipContentValidation = false,
     ): array {
         $this->flushRequestLoadCache();
         $this->assertActor($actorId, $actorName);
@@ -189,6 +190,7 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
                 $actorId,
                 $actorName,
                 $summary,
+                $skipContentValidation,
             ): array {
                 $workspace = $this->findWorkspace($context, true);
                 $actualRevision = $workspace?->getRevision() ?? 0;
@@ -228,7 +230,9 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
                 $this->insertPatches($workspace->getId(), $revision->getId(), $owned);
 
                 $draftPayload = $this->patchEngine->apply($parent['payload'], $owned);
-                $this->indexLayoutDraft($context, $draftPayload, $revision->getId(), $actorId);
+                if (!$skipContentValidation) {
+                    $this->indexLayoutDraft($context, $draftPayload, $revision->getId(), $actorId);
+                }
 
                 $workspace->setData([
                     ThemeScopeWorkspace::schema_fields_DRAFT_REVISION_ID => $revision->getId(),
