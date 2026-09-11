@@ -19,8 +19,10 @@
 已登录客户,"Signed-in customer"
 最新博客文章,"Latest blog posts"
 分类「%{1}」的最新文章,分类「%{1}」的最新文章
-浏览「%{1}」分类下的文章,"Browse posts in “%{1}”"
-按分类浏览博客文章,"Browse blog posts by category"
+"「%{1}」分类博客 · 穿搭与选购","「%{1}」分类博客 · 穿搭与选购"
+"汉服博客分类 · 穿搭灵感与选购指南","汉服博客分类 · 穿搭灵感与选购指南"
+浏览「%{1}」分类下的汉服穿搭、形制科普与选购避坑文章，帮助你更快做出合适选择。,浏览「%{1}」分类下的汉服穿搭、形制科普与选购避坑文章，帮助你更快做出合适选择。
+按分类浏览汉服穿搭灵感、形制科普与选购指南，快速找到适合日常与礼仪场合的内容。,按分类浏览汉服穿搭灵感、形制科普与选购指南，快速找到适合日常与礼仪场合的内容。
 阅读穿搭灵感、形制科普与选购避坑，帮助你更快做出合适选择。,阅读穿搭灵感、形制科普与选购避坑，帮助你更快做出合适选择。
 首页,Home
 "订阅本分类 RSS","订阅本分类 RSS"
@@ -47,11 +49,6 @@
 "AI 生成博客 Slug","AI 生成博客 Slug"
 "使用翻译 AI 生成博客 slug","使用翻译 AI 生成博客 slug"
 删除博客文章,"Delete Blog Post"
-展开/收起,展开/收起
-"共 %{1} 条","%{1} item(s) total"
-文章列表,"Article list"
-未命名文章,"Untitled Post"
-博客文章封面,博客文章封面
 作者,Author
 更新于,"Updated on"
 分钟阅读,"min read"
@@ -61,10 +58,15 @@
 文章,Article
 暂无文章,"No posts yet"
 返回博客,"Back to Blog"
+"共 %{1} 条","%{1} item(s) total"
+文章列表,"Article list"
+未命名文章,"Untitled Post"
+博客文章封面,博客文章封面
 页面,Page
 博客页面,"Blog Page"
 未命名页面,"Untitled Page"
 全部文章,"All Posts"
+展开/收起,展开/收起
 正在加载评论...,"Loading reviews..."
 评论列表,"Review list"
 评论分页,评论分页
@@ -131,6 +133,10 @@ Slug,Slug
 摘要,Excerpt
 点击选择封面,"Click to choose cover"
 "建议 1200×630，支持 jpg / png / webp，单张不超过 2 MB。","Recommended 1200×630; jpg / png / webp up to 2 MB."
+作者职称,作者职称
+"作者主页 URL","作者主页 URL"
+"作者 sameAs","作者 sameAs"
+作者简介,作者简介
 分类,Category
 无分类,"No Category"
 保存文章设置,"Save post settings"
@@ -147,6 +153,8 @@ Slug,Slug
 "例如 hello-world","e.g. hello-world"
 "一句话概括文章要点，用于列表与 SEO","One-line summary for listings and SEO"
 封面预览,"Cover preview"
+如：汉服研究员,如：汉服研究员
+"https 档案链接，逗号分隔","https 档案链接，逗号分隔"
 逗号分隔,"Comma separated"
 "Theme 可视化编辑","Theme visual editor"
 汉服博客,"Hanfu Blog"
@@ -170,6 +178,8 @@ Slug,Slug
 技术分享,"Tech Sharing"
 产品动态,"Product Updates"
 公司新闻,"Company News"
+浏览「%{1}」分类下的文章,"Browse posts in “%{1}”"
+按分类浏览博客文章,"Browse blog posts by category"
 正在加载更多评论...,"Loading more reviews..."
 继续下滑加载更多评论,"Scroll for more reviews"
 已显示全部评论,"All reviews loaded"
