@@ -23,7 +23,7 @@ final class DuplicateCheckScopeTest extends TestCase
             ['website_id' => 3, 'entity_type' => 'blog', 'module' => 'Weline_Blog', 'locale' => 'zh_Hans_CN', 'url' => 'https://x.test/blog/a', 'url_key' => '/blog/a'],
             ['website_id' => 3, 'entity_type' => 'product', 'module' => 'Weline_Product', 'locale' => 'zh_Hans_CN', 'url' => 'https://x.test/p/1', 'url_key' => '/p/1'],
             ['website_id' => 9, 'entity_type' => 'blog', 'module' => 'Weline_Blog', 'locale' => 'zh_Hans_CN', 'url' => 'https://x.test/blog/b', 'url_key' => '/blog/b'],
-            ['website_id' => 3, 'entity_type' => 'blog', 'module' => 'Weline_Blog', 'locale' => 'zh_Hans_CN', 'url' => 'https://x.test/help/c', 'url_key' => '/help/c'],
+            ['website_id' => 3, 'entity_type' => 'blog', 'module' => 'Weline_Blog', 'locale' => 'zh_Hans_CN', 'url' => 'https://x.test/faq/c', 'url_key' => '/faq/c'],
         ]);
 
         self::assertCount(1, $rows);

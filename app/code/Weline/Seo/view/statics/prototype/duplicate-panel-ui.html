@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PROTOTYPE · SEO 内容重复检测面板</title>
+  <!--
+    Throwaway UI prototype (NOT production).
+    Question: How should the duplicate-scan panel group scope / thresholds / notify / history?
+    Variants ?variant=A|B|C — fold winner into Backend/Duplicate/*.phtml then keep this file as evidence.
+    Verdict (agent default for fold-in): A — matches existing seo-admin Account form sections.
+  -->
+  <style>
+    :root {
+      --weline-theme-primary: #1e40af;
+      --weline-theme-surface: #ffffff;
+      --weline-theme-surface-muted: #f8fafc;
+      --weline-theme-border: #dbe3ef;
+      --weline-theme-text: #172033;
+      --weline-theme-text-muted: #526074;
+      --weline-radius-md: 10px;
+      --weline-radius-lg: 12px;
+      --weline-space-2: 8px;
+      --weline-space-3: 12px;
+      --weline-space-4: 16px;
+      --weline-space-5: 20px;
+      --seo-primary: var(--weline-theme-primary);
+      --seo-primary-soft: color-mix(in srgb, var(--weline-theme-primary) 12%, var(--weline-theme-surface));
+      --seo-border: var(--weline-theme-border);
+      --seo-bg: var(--weline-theme-surface-muted);
+      --seo-text: var(--weline-theme-text);
+      --seo-muted: var(--weline-theme-text-muted);
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 14px/1.5 system-ui, sans-serif; color: var(--seo-text); background: var(--seo-bg); }
+    .proto-banner {
+      padding: var(--weline-space-3) var(--weline-space-5);
+      background: color-mix(in srgb, #b45309 14%, #fff);
+      border-bottom: 1px solid color-mix(in srgb, #b45309 28%, var(--seo-border));
+      color: #92400e; font-size: 12px;
+    }
+    .shell { max-width: 1040px; margin: 24px auto 110px; padding: 0 16px; }
+    .eyebrow { margin: 0 0 6px; color: var(--seo-primary); font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+    h1 { margin: 0; font-size: 24px; }
+    .desc { margin: 8px 0 18px; color: var(--seo-muted); max-width: 720px; }
+    .panel {
+      border: 1px solid var(--seo-border); border-radius: var(--weline-radius-lg);
+      background: #fff; box-shadow: 0 5px 20px rgba(15,23,42,.045); overflow: hidden; margin-bottom: 16px;
+    }
+    .section { padding: 20px; border-bottom: 1px solid var(--seo-border); }
+    .section:last-child { border-bottom: 0; }
+    .section__title { display: flex; gap: 11px; align-items: flex-start; margin-bottom: 16px; }
+    .section__title i {
+      display: grid; place-items: center; width: 36px; height: 36px; border-radius: 8px;
+      background: var(--seo-primary-soft); color: var(--seo-primary); font-style: normal; font-weight: 700;
+    }
+    .section__title h2 { margin: 0; font-size: 16px; }
+    .section__title p { margin: 4px 0 0; color: var(--seo-muted); font-size: 12px; }
+    .grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 14px; }
+    .grid .wide { grid-column: 1 / -1; }
+    label { display: grid; gap: 6px; font-weight: 650; font-size: 13px; }
+    label span.hint { font-weight: 500; color: var(--seo-muted); font-size: 11px; }
+    input, select {
+      width: 100%; min-height: 40px; padding: 8px 11px; border: 1px solid var(--seo-border);
+      border-radius: 8px; background: #fff; font: inherit;
+    }
+    .switch-card {
+      display: flex; gap: 10px; align-items: flex-start; padding: 14px;
+      border: 1px solid var(--seo-border); border-radius: 9px; background: var(--seo-bg); cursor: pointer;
+    }
+    .switch-card small { display: block; margin-top: 4px; color: var(--seo-muted); font-size: 11px; }
+    .actions {
+      display: flex; justify-content: flex-end; gap: 9px; padding: 16px 20px; background: var(--seo-bg);
+    }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 16px;
+      border: 0; border-radius: 8px; background: var(--seo-primary); color: #fff; font-weight: 650; cursor: pointer;
+    }
+    .btn.outline { background: #fff; color: var(--seo-primary); border: 1px solid var(--seo-border); }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 12px 14px; border-top: 1px solid #edf1f6; text-align: left; font-size: 13px; }
+    th { background: var(--seo-bg); font-size: 11px; text-transform: uppercase; letter-spacing: .03em; color: #40506a; }
+    .empty { padding: 42px 20px; text-align: center; color: var(--seo-muted); }
+    .split { display: grid; grid-template-columns: 1.2fr .8fr; gap: 16px; }
+    .sticky { position: sticky; top: 16px; }
+    .steps { display: flex; gap: 8px; margin-bottom: 16px; }
+    .step {
+      flex: 1; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--seo-border);
+      background: #fff; font-size: 12px; color: var(--seo-muted);
+    }
+    .step.is-on { border-color: var(--seo-primary); background: var(--seo-primary-soft); color: var(--seo-primary); font-weight: 700; }
+    .switcher {
+      position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 40;
+      display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 999px;
+      background: #0f172a; color: #f8fafc; box-shadow: 0 10px 30px rgba(15,23,42,.28);
+    }
+    .switcher button {
+      width: 32px; height: 32px; border: 0; border-radius: 999px; background: #334155; color: #fff; cursor: pointer;
+    }
+    .state-dump {
+      margin-top: 12px; padding: 12px; border-radius: 8px; background: var(--seo-bg);
+      border: 1px dashed var(--seo-border); font: 11px/1.45 ui-monospace, monospace; white-space: pre-wrap;
+    }
+    @media (max-width: 860px) {
+      .grid, .split { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="proto-banner">
+    PROTOTYPE · 内容重复检测面板 · 问题：范围/阈值/通知/历史如何分层？ ·
+    默认折入生产：<strong>A（分区表单，对齐账户页）</strong>
+  </div>
+  <div class="shell">
+    <p class="eyebrow">SEO 运维</p>
+    <h1>内容重复检测</h1>
+    <p class="desc">按站点与范围扫描站内正文近重复；每次跑批生成可打开的报告地址，告警消息会附带该地址。</p>
+
+    <div id="variant-root"></div>
+    <div class="state-dump" id="state-dump"></div>
+  </div>
+
+  <div class="switcher" role="group" aria-label="Prototype variant switcher">
+    <button type="button" id="prev" aria-label="Previous">←</button>
+    <span id="label">A</span>
+    <button type="button" id="next" aria-label="Next">→</button>
+  </div>
+
+  <script>
+    const variants = ['A', 'B', 'C'];
+    const names = {
+      A: 'A · 分区表单（对齐账户页）',
+      B: 'B · 左右分栏（左扫右史）',
+      C: 'C · 三步向导'
+    };
+    const runs = [
+      { id: 12, site: '#0 default', status: 'completed', issues: 3, at: '2026-09-09 04:00' },
+      { id: 11, site: '#0 default', status: 'completed', issues: 0, at: '2026-09-08 04:00' }
+    ];
+
+    function field(label, control, hint) {
+      return `<label>${label}${hint ? `<span class="hint">${hint}</span>` : ''}${control}</label>`;
+    }
+    function formFields() {
+      return `
+        ${field('网站', `<select><option>请选择站点</option><option selected>default (#0)</option></select>`)}
+        ${field('实体类型', `<input value="blog,cms,product">`, '逗号分隔，空=全部')}
+        ${field('URL 路径前缀', `<input value="/blog/">`)}
+        ${field('抽样上限', `<input type="number" value="500">`)}
+        ${field('模式', `<select><option>抽样</option><option>全量</option></select>`)}
+        ${field('重复阈值', `<input type="number" step="0.01" value="0.85">`)}
+        ${field('疑似阈值', `<input type="number" step="0.01" value="0.70">`)}
+      `;
+    }
+    function historyTable() {
+      return `
+        <table>
+          <thead><tr><th>run</th><th>站点</th><th>状态</th><th>问题</th><th>开始</th><th></th></tr></thead>
+          <tbody>
+            ${runs.map(r => `<tr>
+              <td>#${r.id}</td><td>${r.site}</td><td>${r.status}</td><td>${r.issues}</td><td>${r.at}</td>
+              <td><a href="#">查看报告</a></td>
+            </tr>`).join('')}
+          </tbody>
+        </table>`;
+    }
+
+    function renderA() {
+      return `
+      <div class="panel">
+        <div class="section">
+          <div class="section__title"><i>1</i><div><h2>扫描范围</h2><p>先定站点与内容族，再决定抽多少。</p></div></div>
+          <div class="grid">
+            ${field('网站', `<select><option>请选择站点</option><option selected>default (#0)</option></select>`)}
+            ${field('实体类型', `<input value="blog,cms,product">`, '逗号分隔，空=全部')}
+            ${field('URL 路径前缀', `<input value="/blog/">`)}
+            ${field('模式', `<select><option>抽样</option><option>全量</option></select>`)}
+            ${field('抽样上限', `<input type="number" value="500">`)}
+          </div>
+        </div>
+        <div class="section">
+          <div class="section__title"><i>2</i><div><h2>判定阈值</h2><p>Jaccard：重复与疑似分界，默认 0.85 / 0.70。</p></div></div>
+          <div class="grid">
+            ${field('重复阈值', `<input type="number" step="0.01" value="0.85">`)}
+            ${field('疑似阈值', `<input type="number" step="0.01" value="0.70">`)}
+          </div>
+        </div>
+        <div class="section">
+          <div class="section__title"><i>3</i><div><h2>通知</h2><p>有问题时发消息，正文带报告地址。</p></div></div>
+          <label class="switch-card">
+            <input type="checkbox" checked>
+            <div><strong>发现问题后发送消息</strong><small>消息内含可打开的报告 URL，不是只丢摘要。</small></div>
+          </label>
+        </div>
+        <div class="actions">
+          <button type="button" class="btn outline">查看上次报告</button>
+          <button type="button" class="btn">开始扫描</button>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="section">
+          <div class="section__title"><i>H</i><div><h2>历史跑批 / 报告</h2><p>点「查看报告」打开稳定 run 地址。</p></div></div>
+          ${historyTable()}
+        </div>
+      </div>`;
+    }
+
+    function renderB() {
+      return `
+      <div class="split">
+        <div class="panel">
+          <div class="section">
+            <div class="section__title"><i>扫</i><div><h2>立即检查</h2><p>左侧配置，右侧看最近结果。</p></div></div>
+            <div class="grid" style="grid-template-columns:1fr 1fr">${formFields()}</div>
+            <div style="margin-top:14px">
+              <label class="switch-card"><input type="checkbox" checked><div><strong>发送消息（含报告地址）</strong></div></label>
+            </div>
+          </div>
+          <div class="actions"><button type="button" class="btn">开始扫描</button></div>
+        </div>
+        <div class="panel sticky">
+          <div class="section">
+            <div class="section__title"><i>史</i><div><h2>最近报告</h2><p>侧栏速览。</p></div></div>
+            ${historyTable()}
+          </div>
+        </div>
+      </div>`;
+    }
+
+    function renderC() {
+      return `
+      <div class="steps">
+        <div class="step is-on">1 · 范围</div>
+        <div class="step">2 · 阈值</div>
+        <div class="step">3 · 确认通知</div>
+      </div>
+      <div class="panel">
+        <div class="section">
+          <div class="section__title"><i>1</i><div><h2>先选扫描范围</h2><p>向导式，适合低频运营。</p></div></div>
+          <div class="grid">
+            ${field('网站', `<select><option selected>default (#0)</option></select>`)}
+            ${field('实体类型', `<input value="blog">`)}
+            ${field('路径前缀', `<input value="/blog/">`)}
+          </div>
+        </div>
+        <div class="actions">
+          <button type="button" class="btn outline">下一步</button>
+        </div>
+      </div>
+      <div class="panel"><div class="empty">完成向导后才会出现历史报告表</div></div>`;
+    }
+
+    function current() {
+      const v = new URLSearchParams(location.search).get('variant') || 'A';
+      return variants.includes(v) ? v : 'A';
+    }
+    function setVariant(v) {
+      const u = new URL(location.href);
+      u.searchParams.set('variant', v);
+      history.replaceState({}, '', u);
+      paint();
+    }
+    function paint() {
+      const v = current();
+      document.getElementById('label').textContent = names[v];
+      document.getElementById('variant-root').innerHTML =
+        v === 'B' ? renderB() : v === 'C' ? renderC() : renderA();
+      document.getElementById('state-dump').textContent =
+        JSON.stringify({ variant: v, verdict_default: 'A', reason: 'align seo-admin Account form sections + history table' }, null, 2);
+    }
+    document.getElementById('prev').onclick = () => {
+      const i = variants.indexOf(current());
+      setVariant(variants[(i + variants.length - 1) % variants.length]);
+    };
+    document.getElementById('next').onclick = () => {
+      const i = variants.indexOf(current());
+      setVariant(variants[(i + 1) % variants.length]);
+    };
+    window.addEventListener('keydown', (e) => {
+      const tag = (e.target && e.target.tagName) || '';
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(tag)) return;
+      if (e.key === 'ArrowLeft') document.getElementById('prev').click();
+      if (e.key === 'ArrowRight') document.getElementById('next').click();
+    });
+    paint();
+  </script>
+</body>
+</html>
