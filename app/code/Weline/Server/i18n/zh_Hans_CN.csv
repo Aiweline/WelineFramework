@@ -813,6 +813,22 @@ LiteSSL,精简版SSL
 AttackDetector,攻击检测器
 最大唯一路径数,最大唯一路径数
 受保护路径列表,受保护路径列表
+爬虫代理拦截,爬虫代理拦截
+"默认拦截只刮内容、不带来引荐流量的寄生爬虫（AI 训练 / SEO 刮取等）。Googlebot、Bingbot、百度等友好引擎始终放行。可关闭内置项或新增自定义正则。","默认拦截只刮内容、不带来引荐流量的寄生爬虫（AI 训练 / SEO 刮取等）。Googlebot、Bingbot、百度等友好引擎始终放行。可关闭内置项或新增自定义正则。"
+内置爬虫,内置爬虫
+分类,分类
+启用,启用
+名称,名称
+正则,正则
+原因,原因
+自定义拦截条目,自定义拦截条目
+末行留空可继续新增；保存时忽略空正则。,末行留空可继续新增；保存时忽略空正则。
+"UA 正则","UA 正则"
+说明,说明
+显示名,显示名
+拦截原因,拦截原因
+上一个变体,上一个变体
+下一个变体,下一个变体
 没有待保存的规则变更。,没有待保存的规则变更。
 "规则 JSON 无效，无法预览。","规则 JSON 无效，无法预览。"
 "%{1} 项待保存变更","%{1} 项待保存变更"
@@ -934,7 +950,6 @@ IP,知识产权
 项目路径,项目路径
 "PHP 档案","PHP 档案"
 数据库档案,数据库档案
-启用,启用
 停用,停用
 描述,描述
 保存项目,保存项目
@@ -1076,7 +1091,6 @@ Fiber,纤维
 完整文档,完整文档
 接口,接口
 方法,方法
-说明,说明
 攻击统计,攻击统计
 近7天,近7天
 暂无攻击记录,暂无攻击记录
@@ -1366,6 +1380,7 @@ URI,统一资源标识符
 编码,编码
 "SQL 注入","SQL 注入"
 跨站脚本,跨站脚本
+爬虫拦截,爬虫拦截
 伪协议,伪协议
 命令注入,命令注入
 扫描器指纹,扫描器指纹
@@ -1662,6 +1677,9 @@ Rules,规则
 "Whitelisted IPs","白名单 IP"
 "Protected Paths",受保护路径
 Paths,路径
+"Crawler Block","Crawler Block"
+"Disabled Builtins","Disabled Builtins"
+"Custom Entries","Custom Entries"
 "%{1} overrides / %{2} inherited","%{1} 项覆盖 / %{2} 项继承"
 "Project override",项目覆盖
 "Custom equals global",自定义与全局一致
@@ -1680,6 +1698,7 @@ Disabled,已禁用
 "Project policy editor",项目策略编辑器
 "Advanced JSON","高级 JSON"
 "WLS Panel",WLS面板
+"%{1} active crawlers","%{1} active crawlers"
 Configured,已配置
 "%{1} entries","%{1} 条"
 Local,本地
