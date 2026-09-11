@@ -128,6 +128,32 @@ if ($orderTypeTone === 'muted') {
                                 <th><?= __('折扣') ?>:</th>
                                 <td><?= htmlspecialchars($orderData[Order::schema_fields_CURRENCY] ?? 'CNY') ?> <?= number_format((float)($orderData[Order::schema_fields_DISCOUNT_AMOUNT] ?? 0), 2) ?></td>
                             </tr>
+                            <?php
+                            $typePayload = is_array($this->getData('type_payload') ?? null) ? $this->getData('type_payload') : [];
+                            if (($typePayload['discount_kind'] ?? '') === 'asset_b2b_credit'):
+                                $applyCheckout = (int)($typePayload['b2b_credit_apply_checkout_minor'] ?? 0);
+                                $applyBase = (int)($typePayload['b2b_credit_apply_base_minor'] ?? 0);
+                                $cashDeposit = (int)($typePayload['b2b_credit_cash_deposit_minor'] ?? 0);
+                                $fxLabel = (string)($typePayload['fx_rate_label'] ?? $typePayload['fx_rate'] ?? '');
+                                $fxBase = (string)($typePayload['fx_base_currency'] ?? '');
+                                $fxCheckout = (string)($typePayload['fx_checkout_currency'] ?? '');
+                            ?>
+                            <tr data-testid="order-b2b-credit-discount">
+                                <th><?= __('批发信用优惠') ?>:</th>
+                                <td>
+                                    <?= htmlspecialchars($fxCheckout !== '' ? $fxCheckout : (string)($orderData[Order::schema_fields_CURRENCY] ?? 'CNY')) ?>
+                                    <?= number_format($applyCheckout / 100, 2) ?>
+                                    <?php if ($fxBase !== '' && $fxBase !== $fxCheckout): ?>
+                                        （<?= htmlspecialchars($fxBase) ?> <?= number_format($applyBase / 100, 2) ?>）
+                                    <?php endif; ?>
+                                    <?php if ($fxLabel !== ''): ?>
+                                        <div class="w-text" data-tone="muted"><?= __('汇率快照') ?>: <?= htmlspecialchars($fxLabel) ?></div>
+                                    <?php endif; ?>
+                                    <div class="w-text" data-tone="muted"><?= __('现金定金') ?>: <?= number_format($cashDeposit / 100, 2) ?></div>
+                                    <div class="w-text" data-tone="muted"><?= __('状态') ?>: <?= htmlspecialchars((string)($typePayload['b2b_credit_status'] ?? '')) ?></div>
+                                </td>
+                            </tr>
+                            <?php endif; ?>
                             <tr>
                                 <th><?= __('创建时间') ?>:</th>
                                 <td><?= htmlspecialchars($createdAt) ?></td>

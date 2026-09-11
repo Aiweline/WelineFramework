@@ -113,6 +113,8 @@ class Order extends Model
     public const schema_fields_STATE_VERSION = 'state_version';
     #[Col('varchar', 16, nullable: false, default: 'toc', comment: '售卖类型 toc|tob')]
     public const schema_fields_ORDER_TYPE = 'order_type';
+    #[Col('text', nullable: true, comment: 'Commerce type payload JSON (tob hang/credit/FX)')]
+    public const schema_fields_TYPE_PAYLOAD_JSON = 'type_payload_json';
     
     // 订单状态常量
     public const STATUS_PENDING = 'pending';

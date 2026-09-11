@@ -192,6 +192,14 @@ class Order extends BackendController
             if ($orderTypeTone === 'muted') {
                 $orderTypeTone = 'secondary';
             }
+            $typePayloadRaw = (string)$order->getData(OrderModel::schema_fields_TYPE_PAYLOAD_JSON);
+            $typePayload = [];
+            if ($typePayloadRaw !== '') {
+                $decoded = json_decode($typePayloadRaw, true);
+                if (is_array($decoded)) {
+                    $typePayload = $decoded;
+                }
+            }
             
             $this->assign('order', $order);
             $this->assign('items', $items);
@@ -199,6 +207,7 @@ class Order extends BackendController
             $this->assign('order_type', $orderTypeCode);
             $this->assign('order_type_label', $orderTypeRegistry->resolveLabel($orderTypeCode));
             $this->assign('order_type_tone', $orderTypeTone);
+            $this->assign('type_payload', $typePayload);
             $this->assign('shipments', $shipments);
             $this->assign('refunds', $refunds);
             $this->assign('invoices', $invoices);
