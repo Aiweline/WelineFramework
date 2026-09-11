@@ -30,7 +30,7 @@ $error = (string)($this->getData('error') ?? $this->getData('meta.error') ?? '')
 $required = (bool)($this->getData('required') ?? $this->getData('meta.required') ?? false);
 $class = trim((string)($this->getData('class') ?? $this->getData('meta.class') ?? ''));
 
-$rootClass = trim($wc . ' w-form-group' . ($error !== '' ? ' has-error' : '') . ($class !== '' ? ' ' . $class : ''));
+$rootClass = trim($wc . ' w-field' . ($error !== '' ? ' has-error' : '') . ($class !== '' ? ' ' . $class : ''));
 ?>
 
 <div class="<?= $esc($rootClass) ?>"
@@ -38,7 +38,7 @@ $rootClass = trim($wc . ' w-form-group' . ($error !== '' ? ' has-error' : '') . 
      data-uid="<?= $esc($scope->uid) ?>"
      data-js-ns="<?= $esc($scope->jsNs) ?>">
     <?php if ($label !== ''): ?>
-        <label class="w-form-label form-group-label">
+        <label class="w-field__label">
             <?= $esc($label) ?>
             <?php if ($required): ?>
                 <span class="required-mark"><?= $esc('*') ?></span>
@@ -46,45 +46,27 @@ $rootClass = trim($wc . ' w-form-group' . ($error !== '' ? ' has-error' : '') . 
         </label>
     <?php endif; ?>
 
-    <div class="form-group-input">
+    <div class="w-field__control form-group-input">
         <?= $input !== '' ? $input : '{{input}}' ?>
     </div>
 
     <?php if ($help !== '' && $error === ''): ?>
-        <small class="w-form-text form-group-help"><?= $esc($help) ?></small>
+        <small class="w-field__hint form-group-help"><?= $esc($help) ?></small>
     <?php endif; ?>
 
     <?php if ($error !== ''): ?>
-        <div class="w-invalid-feedback form-group-error"><?= $esc($error) ?></div>
+        <div class="w-field__error form-group-error"><?= $esc($error) ?></div>
     <?php endif; ?>
 </div>
 
 <style>
 .<?= $wc ?> {
-    display: grid;
-    gap: var(--weline-space-2);
     margin-bottom: var(--weline-space-4);
-}
-
-.<?= $wc ?> .form-group-label {
-    color: var(--weline-theme-text);
-    font-size: var(--weline-font-size-sm);
-    font-weight: var(--weline-font-weight-medium);
 }
 
 .<?= $wc ?> .required-mark {
     color: var(--weline-theme-danger);
-    margin-left: var(--weline-space-1);
-}
-
-.<?= $wc ?> .form-group-help {
-    color: var(--weline-theme-text-muted);
-    font-size: var(--weline-font-size-xs);
-}
-
-.<?= $wc ?> .form-group-error {
-    color: var(--weline-theme-danger);
-    font-size: var(--weline-font-size-xs);
+    margin-inline-start: var(--weline-space-1);
 }
 
 .<?= $wc ?>.has-error .w-form-control,

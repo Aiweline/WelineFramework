@@ -76,14 +76,10 @@ $safe = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_
                         <header class="w-dashboard-region-head">
                             <div>
                                 <h2><?= $safe(__('指标区')) ?></h2>
-                                <p><?= $safe(__('关键数值、KPI 与状态概览。')) ?></p>
+                                <p><?= $safe(__('关键数值、KPI 与状态概览。若此处空白，请点上方「编辑布局」添加 KPI/统计部件并保存。')) ?></p>
                             </div>
                             <span><?= $safe(__('最多 4 个')) ?></span>
                         </header>
-                        <div class="w-dashboard-empty">
-                            <strong><?= $safe(__('指标区')) ?></strong>
-                            <span><?= $safe(__('选择 KPI 或统计数字部件')) ?></span>
-                        </div>
                     </w:slot>
 
                     <w:slot id="dashboard-analysis"
@@ -97,13 +93,9 @@ $safe = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_
                         <header class="w-dashboard-region-head">
                             <div>
                                 <h2><?= $safe(__('主分析区')) ?></h2>
-                                <p><?= $safe(__('趋势、图表与主要观察。')) ?></p>
+                                <p><?= $safe(__('趋势、图表与主要观察。若此处空白，请点上方「编辑布局」添加图表/趋势部件并保存。')) ?></p>
                             </div>
                         </header>
-                        <div class="w-dashboard-empty">
-                            <strong><?= $safe(__('主分析区')) ?></strong>
-                            <span><?= $safe(__('选择图表或趋势部件')) ?></span>
-                        </div>
                     </w:slot>
 
                     <w:slot id="dashboard-side"
@@ -117,13 +109,9 @@ $safe = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_
                         <header class="w-dashboard-region-head">
                             <div>
                                 <h2><?= $safe(__('侧栏洞察')) ?></h2>
-                                <p><?= $safe(__('状态、短列表与异常提醒。')) ?></p>
+                                <p><?= $safe(__('状态、短列表与异常提醒。若此处空白，请点上方「编辑布局」添加状态/列表部件并保存。')) ?></p>
                             </div>
                         </header>
-                        <div class="w-dashboard-empty">
-                            <strong><?= $safe(__('侧栏洞察')) ?></strong>
-                            <span><?= $safe(__('选择状态或列表部件')) ?></span>
-                        </div>
                     </w:slot>
 
                     <w:slot id="dashboard-detail"

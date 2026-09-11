@@ -67,7 +67,7 @@ final class StorefrontHeaderNavFragmentCacheTest extends TestCase
 
         self::assertSame('channel', $policy->scope);
         self::assertSame(['currency', 'lang'], $policy->vary);
-        self::assertSame(['catalog', 'config'], $policy->dependencies);
+        self::assertSame(['catalog', 'config', 'theme'], $policy->dependencies);
         self::assertSame(StorefrontHeaderNavFragmentCache::cachePool(), $policy->pool);
     }
 
@@ -79,7 +79,7 @@ final class StorefrontHeaderNavFragmentCacheTest extends TestCase
         self::assertSame(StorefrontThemeCacheCoordinator::STOREFRONT_CHROME_POOL, $policy->pool);
         self::assertSame('channel', $policy->scope);
         self::assertSame(['currency', 'lang'], $policy->vary);
-        self::assertSame(['catalog', 'config'], $policy->dependencies);
+        self::assertSame(['catalog', 'config', 'theme'], $policy->dependencies);
         self::assertSame(45, $policy->freshTtlSeconds);
         self::assertSame(600, $policy->staleTtlSeconds);
     }

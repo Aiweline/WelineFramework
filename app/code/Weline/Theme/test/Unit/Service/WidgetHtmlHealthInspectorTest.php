@@ -108,6 +108,19 @@ final class WidgetHtmlHealthInspectorTest extends TestCase
         self::assertSame('warning', $this->inspector->worstSeverity($warningIssues));
     }
 
+    public function testCssWarningCustomPropertyIsNotPhpWarning(): void
+    {
+        // Live PDP false positive: "--affiliate-share-warning: var(--color-warning,…)"
+        // matched as Warning + body "v" because "in … on line" was optional.
+        $html = '<section class="product-native-detail">'
+            . '<style>:root{--affiliate-share-warning: var(--color-warning, var(--weline-theme-warning, #7a3e00));}</style>'
+            . '<div>Warning: very important sale copy</div>'
+            . '</section>';
+        $issues = $this->inspector->inspect($html, ['code' => 'product-info', 'slot_id' => 'product-main']);
+        self::assertFalse($this->hasCode($issues, 'php_warning'), json_encode($issues, JSON_UNESCAPED_UNICODE));
+        self::assertFalse($this->hasCode($issues, 'php_fatal'), json_encode($issues, JSON_UNESCAPED_UNICODE));
+    }
+
     public function testComponentWelineCodeDoesNotTriggerMissingClosedRoot(): void
     {
         // Shredded bestsellers shell: only product_label component code remains.
@@ -137,6 +150,31 @@ final class WidgetHtmlHealthInspectorTest extends TestCase
         self::assertFalse($this->hasCode($issues, 'tag_mismatch'), json_encode($issues, JSON_UNESCAPED_UNICODE));
         self::assertFalse($this->hasCode($issues, 'unclosed_tag'), json_encode($issues, JSON_UNESCAPED_UNICODE));
         self::assertFalse($this->hasCode($issues, 'unexpected_close'), json_encode($issues, JSON_UNESCAPED_UNICODE));
+        self::assertSame('ok', $this->inspector->worstSeverity($issues));
+    }
+
+    public function testHtml5NonVoidXmlSelfCloseButtonWithSvgIsBalanced(): void
+    {
+        // HTML5: <button /> is still an open button (slash ignored). XML-style
+        // self-close on non-void tags used to desync the stack → false
+        // "expected </div>, actual </button>" on hero-slider arrows.
+        $html = '<section class="wc-theme_widget_hero_slider" weline-code="theme.widget.hero_slider">'
+            . '<div class="slider-container"><div class="slider-wrapper">'
+            . '<div class="slide active"><div class="slide-overlay"></div></div>'
+            . '</div>'
+            . '<button class="slider-arrow slider-prev" type="button" aria-label="prev"/>'
+            . '<svg class="w-icon" viewBox="0 0 24 24">'
+            . '<path d="M20 12H4M11 5l-7 7 7 7"/>'
+            . '</svg></button>'
+            . '<button class="slider-arrow slider-next" type="button" aria-label="next"/>'
+            . '<svg class="w-icon" viewBox="0 0 24 24"><path d="M4 12h16"/></svg></button>'
+            . '</div>'
+            . '<style>.wc-theme_widget_hero_slider .a > .b { transform: none; }</style>'
+            . '</section>';
+        $issues = $this->inspector->inspect($html, ['code' => 'hero-slider']);
+        self::assertFalse($this->hasCode($issues, 'tag_mismatch'), json_encode($issues, JSON_UNESCAPED_UNICODE));
+        self::assertFalse($this->hasCode($issues, 'unexpected_close'), json_encode($issues, JSON_UNESCAPED_UNICODE));
+        self::assertFalse($this->hasCode($issues, 'unclosed_tag'), json_encode($issues, JSON_UNESCAPED_UNICODE));
         self::assertSame('ok', $this->inspector->worstSeverity($issues));
     }
 

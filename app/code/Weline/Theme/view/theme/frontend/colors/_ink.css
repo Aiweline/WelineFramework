@@ -25,7 +25,8 @@
     --color-primary-bg-subtle: #f8ede9;
     --color-primary-border-subtle: #e8c4bc;
     --color-primary-text-emphasis: #7a3028;
-    --color-on-primary: #f7f4ef;
+    /* Solid 朱砂 fills need true white on-fill; warm paper cream reads muddy/low-contrast on primary CTAs. */
+    --color-on-primary: #ffffff;
 
     /* ========== 文本色（墨分五色：焦 / 浓 / 重 / 淡 / 清） ========== */
     --color-text: #1c1c1c;

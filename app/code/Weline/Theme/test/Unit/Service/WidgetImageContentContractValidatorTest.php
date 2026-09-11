@@ -80,4 +80,36 @@ final class WidgetImageContentContractValidatorTest extends TestCase
 
         self::assertTrue(true);
     }
+
+    public function testLegacyFooterHelpCenterLinkAliasResolvesFaqPlaceable(): void
+    {
+        $widgetConfig = $this->createMock(WidgetConfigService::class);
+        $widgetConfig->expects(self::once())
+            ->method('getParamDefinitions')
+            ->with('Weline_Theme', 'footer-faq-link', 'frontend')
+            ->willReturn([
+                'label' => ['type' => 'string', 'default' => 'FAQ'],
+            ]);
+
+        $placeables = $this->createMock(ThemePlaceableRegistry::class);
+        $placeables->expects(self::never())->method('find');
+
+        $validator = new WidgetImageContentContractValidator(
+            $widgetConfig,
+            $placeables,
+            new LayoutValueHydrationRegistry(),
+        );
+
+        $validator->validate([
+            'footer' => [[
+                'widget_module' => 'Weline_Theme',
+                'widget_type' => 'footer',
+                'widget_code' => 'footer-help-center-link',
+                'config' => ['label' => 'FAQ'],
+            ]],
+        ], [
+            'page_type' => 'homepage',
+            'layout_area' => 'footer',
+        ]);
+    }
 }

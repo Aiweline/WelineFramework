@@ -562,8 +562,8 @@
 "注入开发者相关入口。须带 data-account-nav-parent=""developer""；分组标题由 Customer 宿主输出。","注入开发者相关入口。须带 data-account-nav-parent=""developer""；分组标题由 Customer 宿主输出。"
 账户侧边栏内容,"Account sidebar content"
 在账户页面的侧边栏内容区域注入内容，允许其他模块添加自定义内容。,"Inject content into the sidebar content area of the account page, allowing other modules to add custom content."
-帮助中心扩展区,"Help Center Extension Area"
-在帮助中心主内容扩展槽注入额外说明、活动或业务模块内容。,"Inject additional explanations, activities, or business module content into the main content area of the help center."
+"FAQ 扩展区","FAQ 扩展区"
+"在 FAQ 主内容扩展槽注入额外说明、活动或业务模块内容。","在 FAQ 主内容扩展槽注入额外说明、活动或业务模块内容。"
 "后台 Topbar Logo","Background Topbar Logo"
 "覆盖后台顶部栏的 Logo 区域，可由 Weline_Backend 等模块实现，从自身配置读取 logo_dark/logo_light/logo_sm 等。未实现时使用 Admin 默认静态 Logo。","Override the Logo area in the backend top bar, which can be implemented by modules such as Weline_Backend to read logo_dark/logo_light/logo_sm from their own configuration. If not implemented, the Admin default static Logo will be used."
 "主题编辑器基础信息 · 身份槽","主题编辑器基础信息 · 身份槽"
@@ -632,7 +632,7 @@
 阅读使用本站服务前需要了解的条款与条件。,阅读使用本站服务前需要了解的条款与条件。
 查看配送、退换与购物相关说明，帮助顺利完成汉服选购。,查看配送、退换与购物相关说明，帮助顺利完成汉服选购。
 了解可用支付方式、账单与安全保障说明。,了解可用支付方式、账单与安全保障说明。
-查找订单、物流、退换与账户相关自助帮助。,查找订单、物流、退换与账户相关自助帮助。
+查找订单、物流、退换与账户相关常见问题。,查找订单、物流、退换与账户相关常见问题。
 查看已选汉服商品、调整数量并进入结算。,查看已选汉服商品、调整数量并进入结算。
 登录或注册账户，管理订单与收藏。,登录或注册账户，管理订单与收藏。
 浏览%{1}相关信息，了解汉服选购与服务说明。,浏览%{1}相关信息，了解汉服选购与服务说明。
@@ -668,7 +668,6 @@ Default,Default
 配置已保存,"Config saved"
 删除失败,"Deletion failed"
 删除成功,"Deletion successful"
-缺少布局ID,"Missing layout ID"
 缺少部件身份信息,"Missing Component Identity Information"
 "已删除 %{count} 个孤儿部件","Deleted %{count} orphan widget(s)"
 未找到需要删除的孤儿部件（可能已被删除）,"Orphan component to delete not found (may have already been deleted)"
@@ -973,7 +972,7 @@ Dashboard,Dashboard
 活动页,"Event Page"
 结算成功页,"Payment Success Page"
 结算失败页,"Payment failure page"
-帮助中心,"Help center"
+FAQ/常见问题,FAQ/常见问题
 支付指南,支付指南
 指南页,指南页
 评价页,评价页
@@ -1002,6 +1001,12 @@ Dashboard,Dashboard
 参数保存成功,"Parameters saved successfully"
 参数保存失败,"Failed to save parameters"
 面包屑,"bread crumbs"
+SALE,SALE
+DEMO,DEMO
+NEW,NEW
+加入收藏,"Add to Favorites"
+加入对比,"Add to Compare"
+快速查看,"Quick View"
 搜索汉服、形制与配饰...,"Search Hanfu, garment forms, and accessories..."
 分类,Classification
 查看全部,"View all"
@@ -1028,12 +1033,6 @@ Dashboard,Dashboard
 叠加优惠,"Stacked discount"
 自动优惠,"Automatic discount"
 关闭通知,"Close notification"
-SALE,SALE
-DEMO,DEMO
-NEW,NEW
-加入收藏,"Add to Favorites"
-加入对比,"Add to Compare"
-快速查看,"Quick View"
 件商品,"items of goods"
 安全支付,"Secure payment"
 SSL加密保护,"SSL encryption protection"
@@ -1056,6 +1055,13 @@ SSL安全,"SSL security"
 时,Hour
 分,Minute
 秒,Second
+抱歉，找不到您要的页面,"Sorry, we couldn't find that page"
+您访问的链接可能已失效，或该页面已被移除。,"The link may be broken or the page may have been removed."
+请检查网址是否输入正确，或返回首页继续购物。,"Check the web address, or continue shopping from the home page."
+SORRY,SORRY
+前往首页继续购物,"Continue shopping on the home page"
+返回上一页,返回上一页
+推荐产品,"Recommended product"
 "近 7 日访问量 +18%","Number of visits in the past 7 days +18%"
 卡片内容,"Card content"
 拖入表单、表格、文本或按钮,"Drag in a form, table, text or button"
@@ -1165,9 +1171,22 @@ Next,Next
 在这里展示活动的核心卖点，比如满减、折扣、限时抢购、会员专享等信息。,"Display the core selling points of the promotion here, such as spend-and-save, discounts, flash sales, member exclusives, etc."
 活动商品示例,"Event Product Example"
 在这里展示参与活动的商品列表或商品推荐组件，为用户提供快速选购入口。,"Display the product list or product recommendation component participating in the promotion here, providing users with a quick purchase entry."
+最后更新：,最后更新：
+配送说明,"Shipping Information"
+退换政策,"Returns Policy"
+搜索,search
+"热门 FAQ 主题","热门 FAQ 主题"
+官方商城常见问题与客户服务,官方商城常见问题与客户服务
+"周一至周五 9:00 - 18:00（法定节假日除外）","Monday to Friday 9:00 AM - 6:00 PM (excluding statutory holidays)"
+查找订单、配送、退换、支付与账户问题的自助指南。也可搜索关键词，或从下方主题快速进入。,查找订单、配送、退换、支付与账户问题的自助指南。也可搜索关键词，或从下方主题快速进入。
+"FAQ 支持","FAQ 支持"
+快捷入口,"Quick link"
+搜索常见问题,搜索常见问题
+搜索常见问题，例如：退货、运费、发票,搜索常见问题，例如：退货、运费、发票
+常见问题,"Frequently asked questions"
+前往联系我们页,"Go to the contact us page"
 目录,Contents
 为全球购物者提供可靠、便捷的在线购物体验。,"Providing a reliable and convenient online shopping experience for customers worldwide."
-"周一至周五 9:00 - 18:00（法定节假日除外）","Monday to Friday 9:00 AM - 6:00 PM (excluding statutory holidays)"
 欢迎使用本网站服务。在使用本网站提供的服务前，请您仔细阅读本服务条款。使用本网站即表示您已充分理解并同意接受本条款的全部内容。,"Welcome to use this website's services. Before using the services provided by this website, please read these terms of service carefully. Using this website indicates that you fully understand and agree to all the terms."
 一、服务说明,"1. Service description"
 二、用户账户,"2. User accounts"
@@ -1177,7 +1196,7 @@ Next,Next
 六、免责声明,"6. Disclaimer"
 七、争议解决,"7. Dispute Resolution"
 八、其他,"8. Miscellaneous"
-最后更新：,最后更新：
+帮助中心,"Help center"
 条款目录,"Terms contents"
 服务条款正文,"Terms of service body"
 本服务条款构成您与本网站之间关于使用网站服务的协议。请完整阅读各章节；如有疑问，可通过帮助中心或联系方式与我们沟通。,本服务条款构成您与本网站之间关于使用网站服务的协议。请完整阅读各章节；如有疑问，可通过帮助中心或联系方式与我们沟通。
@@ -1211,13 +1230,6 @@ Next,Next
 "8.2 如本条款的任何条款被认定为无效或不可执行，不影响其他条款的效力。","8.2 If any provision of these Terms is determined to be invalid or unenforceable, the validity of other provisions will not be affected."
 "8.3 我们保留对本条款的最终解释权，并有权根据法律法规和业务发展需要对本条款进行修订。","8.3 We reserve the right of final interpretation of these Terms and the right to revise these Terms in accordance with laws, regulations and business development needs."
 如对本条款有疑问，请先查阅帮助中心，或通过联系我们与支持团队沟通。,如对本条款有疑问，请先查阅帮助中心，或通过联系我们与支持团队沟通。
-抱歉，找不到您要的页面,"Sorry, we couldn't find that page"
-您访问的链接可能已失效，或该页面已被移除。,"The link may be broken or the page may have been removed."
-请检查网址是否输入正确，或返回首页继续购物。,"Check the web address, or continue shopping from the home page."
-SORRY,SORRY
-前往首页继续购物,"Continue shopping on the home page"
-返回上一页,返回上一页
-推荐产品,"Recommended product"
 "Weline 默认页面","Weline default page"
 该页面尚未提供内容。,"Content is not yet available for this page."
 返回首页,"Return to home page"
@@ -1265,7 +1277,6 @@ SORRY,SORRY
 为什么选择云裳,"Why Yunshang"
 好的汉服体验不靠运气：形制标注清楚、面料说明可信、尺码有据、物流可追踪。,"Great Hanfu shopping is not luck: clear silhouettes, honest fabrics, sized fits, trackable shipping."
 团队围绕「可穿的传统美学」打磨每一个关键路径——从首页发现到订单完成。,"Our team crafts every journey around wearable tradition—from discovery to order complete."
-快捷入口,"Quick link"
 订单跟踪,"Order Tracking"
 加入我们,"Join Us"
 我们的价值观,"Our values"
@@ -1483,7 +1494,6 @@ Product,Product
 免责声明目录,"Disclaimer contents"
 免责声明正文,"Disclaimer body"
 为保障您的购物权益，我们制定了退款、退货与换货规则。请仔细阅读条件、流程与到账说明，再提交申请。,为保障您的购物权益，我们制定了退款、退货与换货规则。请仔细阅读条件、流程与到账说明，再提交申请。
-退换政策,"Returns Policy"
 本退款政策说明可申请情形、不予退款情形、办理流程与退款到账规则。退换细节也可参考配送/退换指南。,本退款政策说明可申请情形、不予退款情形、办理流程与退款到账规则。退换细节也可参考配送/退换指南。
 一、退款条件,"1. Refund conditions"
 在符合以下条件的情况下，您可以申请退款：,"You can apply for a refund if the following conditions are met:"
@@ -1515,7 +1525,6 @@ Product,Product
 七、联系我们,七、联系我们
 如需协助办理退款或查询进度，请通过订单详情、帮助中心或「联系我们」入口提交工单，并提供订单号与问题说明。,如需协助办理退款或查询进度，请通过订单详情、帮助中心或「联系我们」入口提交工单，并提供订单号与问题说明。
 如对退款进度或条件有疑问，请通过帮助中心、订单详情或联系我们与客服沟通。,如对退款进度或条件有疑问，请通过帮助中心、订单详情或联系我们与客服沟通。
-配送说明,"Shipping Information"
 退款政策目录,"Refund policy contents"
 退款政策正文,"Refund policy body"
 "本页面向您说明我们如何在本网站中使用 Cookie 及相关技术，以及您对 Cookie 的管理选择。","This page explains how we use cookies and related technologies on this website, as well as your choices for managing cookies."
@@ -1554,14 +1563,6 @@ Product,Product
 "如对 Cookie 使用有疑问，请先查阅隐私政策，或通过帮助中心联系支持团队。","如对 Cookie 使用有疑问，请先查阅隐私政策，或通过帮助中心联系支持团队。"
 "Cookie 政策目录","Cookie policy contents"
 "Cookie 政策正文","Cookie 政策正文"
-搜索,search
-热门帮助主题,"Popular help topics"
-查找订单、配送、退换、支付与账户问题的自助指南。也可搜索关键词，或从下方主题快速进入。,查找订单、配送、退换、支付与账户问题的自助指南。也可搜索关键词，或从下方主题快速进入。
-帮助支持,帮助支持
-搜索帮助,"Search for help"
-搜索帮助主题，例如：退货、运费、发票,"Search for help topics, such as: returns, shipping costs, invoices"
-常见问题,"Frequently asked questions"
-前往联系我们页,"Go to the contact us page"
 立即重试,"Retry now"
 "将在 %{seconds} 秒后自动重试...","Will automatically retry in %{seconds} seconds..."
 服务器错误,"Server Error"
@@ -1730,15 +1731,12 @@ Logo,Logo
 打印,Print
 仪表盘部件区域,"Dashboard widget area"
 指标区,"indicator area"
-"关键数值、KPI 与状态概览。","Overview of key figures, KPIs and status."
+"关键数值、KPI 与状态概览。若此处空白，请点上方「编辑布局」添加 KPI/统计部件并保存。","关键数值、KPI 与状态概览。若此处空白，请点上方「编辑布局」添加 KPI/统计部件并保存。"
 "最多 4 个","up to 4"
-"选择 KPI 或统计数字部件","Select KPI or Statistics widget"
 主分析区,"Main analysis area"
-趋势、图表与主要观察。,"Trends, charts and key observations."
-选择图表或趋势部件,"Select a chart or trend widget"
+趋势、图表与主要观察。若此处空白，请点上方「编辑布局」添加图表/趋势部件并保存。,趋势、图表与主要观察。若此处空白，请点上方「编辑布局」添加图表/趋势部件并保存。
 侧栏洞察,"Sidebar Insights"
-状态、短列表与异常提醒。,"Status, short list and exception reminder."
-选择状态或列表部件,"Select status or list widget"
+状态、短列表与异常提醒。若此处空白，请点上方「编辑布局」添加状态/列表部件并保存。,状态、短列表与异常提醒。若此处空白，请点上方「编辑布局」添加状态/列表部件并保存。
 明细区,"Detail area"
 表格、排行与可展开列表。,"Tables, rankings and expandable lists."
 默认明细,"Default details"
@@ -2256,8 +2254,12 @@ AI目录加载失败,"AI directory loading failed"
 激活失败：%{1},"Activation failed: %{1}"
 "Theme Scope 无法解析为 ScopeIdentity。","Theme scope cannot be resolved to a ScopeIdentity."
 "Theme Store Mode 无效：%{1}","Invalid Theme Store Mode: %{1}"
-"部件渲染失败: %{1} - %{2}","部件渲染失败: %{1} - %{2}"
 异常：你指定的模板文件所在的模块不存在！模块：%{1}，所使用的模板：%{2},异常：你指定的模板文件所在的模块不存在！模块：%{1}，所使用的模板：%{2}
+部件已不可用（定义/模板缺失）：%{1},部件已不可用（定义/模板缺失）：%{1}
+"部件渲染失败: %{1} - %{2}","部件渲染失败: %{1} - %{2}"
+"部件 ""%{1}"" 已不可用（定义/模板缺失）","部件 ""%{1}"" 已不可用（定义/模板缺失）"
+部件已不可用（定义/模板缺失）,部件已不可用（定义/模板缺失）
+从当前版本移除,从当前版本移除
 "类型化布局值解析缺少冻结的 locale_code。","Typed layout value resolution requires a frozen locale_code."
 "类型化布局值解析缺少冻结的 ScopeIdentity。","Typed layout value resolution requires a frozen ScopeIdentity."
 "Theme 布局渲染缺少冻结的 ScopeIdentity。","Theme layout rendering requires a frozen ScopeIdentity."
@@ -2792,9 +2794,29 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 静态文件：weline.modules.js编译文件！,"Static Files: weline.modules.js compiled file!"
 "编译 Weline UI 2.0 静态资源包！","Compile Weline UI 2.0 static resource package!"
 编译主题资源（less、weline.modules.js等）,"Compile Theme Resources (less, weline.modules.js, etc.)"
+"关键数值、KPI 与状态概览。","Overview of key figures, KPIs and status."
+指标区暂无部件,指标区暂无部件
+"点击上方「编辑布局」添加 KPI/统计部件，保存后会出现在此。","点击上方「编辑布局」添加 KPI/统计部件，保存后会出现在此。"
+趋势、图表与主要观察。,"Trends, charts and key observations."
+主分析区暂无部件,主分析区暂无部件
+点击上方「编辑布局」添加图表/趋势部件，保存后会出现在此。,点击上方「编辑布局」添加图表/趋势部件，保存后会出现在此。
+状态、短列表与异常提醒。,"Status, short list and exception reminder."
+侧栏洞察暂无部件,侧栏洞察暂无部件
+点击上方「编辑布局」添加状态/列表部件，保存后会出现在此。,点击上方「编辑布局」添加状态/列表部件，保存后会出现在此。
 选择作用范围,"Select scope."
 搜索作用范围,"Search scope."
 未找到匹配作用范围,"No matching scope found."
+"选择 KPI 或统计数字部件","Select KPI or Statistics widget"
+选择图表或趋势部件,"Select a chart or trend widget"
+选择状态或列表部件,"Select status or list widget"
+缺少布局ID,"Missing layout ID"
+帮助中心扩展区,"Help Center Extension Area"
+在帮助中心主内容扩展槽注入额外说明、活动或业务模块内容。,"Inject additional explanations, activities, or business module content into the main content area of the help center."
+查找订单、物流、退换与账户相关自助帮助。,查找订单、物流、退换与账户相关自助帮助。
+热门帮助主题,"Popular help topics"
+帮助支持,帮助支持
+搜索帮助,"Search for help"
+搜索帮助主题，例如：退货、运费、发票,"Search for help topics, such as: returns, shipping costs, invoices"
 零售,零售
 批发,批发
 物流配送,"Logistics delivery"
@@ -3616,8 +3638,8 @@ Cart,Cart
 活动,Campaigns
 帮助中心扩展,"Help Center Extras"
 页脚帮助中心链接,"Footer Help Center Link"
-"页脚帮助中心扩展槽：跳转 Theme /help 帮助中心布局；默认注入 footer-help-links。","Footer help extras: Theme /help hub; default inject footer-help-links."
-"页脚帮助中心默认展示 Theme /help 入口","Footer help center defaults to Theme /help"
+"页脚帮助扩展槽：跳转 Theme /faq FAQ 布局；默认注入 footer-help-links。","Footer help extras: Theme /faq hub; default inject footer-help-links."
+"全局 chrome 载体默认展示 Theme /faq 入口；非首页继承合并","Global chrome defaults to Theme /faq entry; non-home inherits merge"
 无法放入当前位置，请拖到可接收的插槽,"Cannot drop here. Move to an accepting slot."
 一键安装默认项,"Install all default widgets"
 安装失败,"Install failed"

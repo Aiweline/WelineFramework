@@ -14,7 +14,7 @@
     --amz-drawer-cta-bg: var(--color-primary, #b84a3c);
     --amz-drawer-cta-bg-hover: var(--color-primary-hover, #963b30);
     --amz-drawer-cta-border: var(--color-primary-dark, #963b30);
-    --amz-drawer-cta-text: var(--color-on-primary, #f7f4ef);
+    --amz-drawer-cta-text: var(--color-on-primary, var(--color-text-inverse, #ffffff));
     --amz-drawer-secondary-bg: linear-gradient(180deg, #f7f8f8 0%, #e3e6e6 100%);
     --amz-drawer-secondary-border: #adb1b8;
     --amz-drawer-secondary-text: #0f1111;
@@ -173,6 +173,18 @@
     min-height: 12rem;
     text-align: center;
     color: var(--amz-drawer-muted, var(--weline-theme-text-muted, #6b7280));
+}
+
+.header-cart .mini-cart-drawer__sibling {
+    display: contents;
+}
+
+.header-cart .mini-cart-drawer__sibling > p {
+    display: none;
+}
+
+.header-cart .mini-cart-drawer__sibling .mini-cart-drawer__btn {
+    width: auto;
 }
 
 .header-cart .mini-cart-drawer__loading {

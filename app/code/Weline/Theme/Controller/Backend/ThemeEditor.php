@@ -175,8 +175,7 @@ class ThemeEditor extends BackendController
     }
 
     /**
-     * 可视化编辑发布主题后清理缓存：按当前发布主题所属 Scope 定向失效 Theme 命名空间。
-     * 无 Scope 上下文时回退 clearNonGlobalCaches，且必须带上 theme_id 以清理 generated theme cache。
+     * 可视化编辑发布主题后清理缓存：必须清理全部主题相关缓存（chrome/FPC/模板/generated）。
      * 发布后不调用会导致前台仍显示旧 HTML 或重复部件。
      */
     private function flushFullPageCache(?ThemeEditorContext $context = null, ?int $themeId = null): void
@@ -186,16 +185,7 @@ class ThemeEditor extends BackendController
             $resolvedThemeId = ($themeId !== null && $themeId > 0)
                 ? $themeId
                 : (($context instanceof ThemeEditorContext && $context->themeId > 0) ? $context->themeId : null);
-            if ($context instanceof ThemeEditorContext && $context->scope instanceof ScopeContext) {
-                $cleaner->clearScopedCaches(
-                    $context->scope,
-                    $resolvedThemeId,
-                    'theme_editor_publish',
-                );
-
-                return;
-            }
-            $cleaner->clearNonGlobalCaches($resolvedThemeId, 'theme_editor_publish');
+            $cleaner->clearAllThemeRelatedCaches($resolvedThemeId, 'theme_editor_publish');
         } catch (\Throwable $e) {
             // A successful publish must not be rolled back only because a
             // best-effort runtime cache invalidation step failed.
@@ -2055,7 +2045,7 @@ class ThemeEditor extends BackendController
                 if (!$removed) {
                     return $this->fetchJson([
                         'success' => false,
-                        'message' => __('删除失败'),
+                        'message' => $this->themeEditorPhrase('删除失败'),
                         'node_uid' => $nodeUidParam,
                     ]);
                 }
@@ -2067,7 +2057,7 @@ class ThemeEditor extends BackendController
 
                 return $this->fetchJson([
                     'success' => true,
-                    'message' => __('删除成功'),
+                    'message' => $this->themeEditorPhrase('删除成功'),
                     'node_uid' => $nodeUidParam,
                     'scoped_workspace' => $scopedDraft,
                 ]);
@@ -2076,7 +2066,7 @@ class ThemeEditor extends BackendController
             } catch (\Throwable $e) {
                 return $this->fetchJson([
                     'success' => false,
-                    'message' => $e->getMessage(),
+                    'message' => $e->getMessage() !== '' ? $e->getMessage() : $this->themeEditorPhrase('删除失败'),
                 ]);
             }
         }
@@ -2084,7 +2074,7 @@ class ThemeEditor extends BackendController
         if (!$layoutId) {
             return $this->fetchJson([
                 'success' => false,
-                'message' => __('缺少布局ID'),
+                'message' => $this->themeEditorPhrase('缺少布局ID'),
             ]);
         }
 
@@ -9453,6 +9443,19 @@ HTML;
         );
 
         return true;
+    }
+
+    /**
+     * remove-widget 等写路径：翻译层异常时不得阻断 JSON 成功/失败回包。
+     */
+    private function themeEditorPhrase(string $words): string
+    {
+        try {
+            $translated = (string)__($words);
+            return $translated !== '' ? $translated : $words;
+        } catch (\Throwable) {
+            return $words;
+        }
     }
 
     /** @param array<string,mixed> $input */

@@ -459,6 +459,8 @@
     .dashboard-widget-detail-snapshot .w-table td { text-align: start; }
     .dashboard-widget-detail-snapshot .w-table td .w-text { display: block; }
     .w-dashboard-empty { display: grid; min-block-size: 6rem; place-items: center; gap: var(--weline-space-2); border: 1px dashed var(--weline-theme-border); border-radius: var(--weline-radius-lg); color: var(--weline-theme-text-muted); text-align: center; }
+    .w-dashboard-region:has(.widget-wrapper) .w-dashboard-empty,
+    .w-dashboard-region:has([data-widget-code]) .w-dashboard-empty { display: none; }
 }
 
 @media (max-width: 61.25rem) {
