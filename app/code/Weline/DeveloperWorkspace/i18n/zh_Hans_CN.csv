@@ -133,8 +133,9 @@ WelineFramework开发文档,WelineFramework开发文档
 搜索关键词不能为空,搜索关键词不能为空
 API文档管理,API文档管理
 开发工作区,开发工作区
-系统与主题版本,系统与主题版本
+系统、部署与主题版本,系统、部署与主题版本
 系统版本（Weline_Framework）,系统版本（Weline_Framework）
+"部署版本（var/deploy/current.json → deploy_version，与 Weline.config.deployVersion 同源）","部署版本（var/deploy/current.json → deploy_version，与 Weline.config.deployVersion 同源）"
 前端主题发布版本,前端主题发布版本
 开发,开发
 Prompt,迅速的
@@ -370,6 +371,7 @@ AI运行时提供器不可用。,AI运行时提供器不可用。
 "API文档导入完成: 扫描 %{scanned}, 新增 %{new}, 更新 %{updated}","API文档导入完成: 扫描 %{scanned}, 新增 %{new}, 更新 %{updated}"
 "API文档导入失败: %{error}","API文档导入失败: %{error}"
 "Document AI translation skipped: %{1}","Document AI translation skipped: %{1}"
+系统与主题版本,系统与主题版本
 """API 文档收集后""","""API 文档收集后"""
 沙盒环境配置,沙盒环境配置
 开发文档分类管理,开发文档分类管理
