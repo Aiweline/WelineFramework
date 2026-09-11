@@ -49,4 +49,28 @@ final class WishlistHeaderWishlistIconHookTemplateTest extends TestCase
         self::assertStringContainsString("'code' => 'wishlist-icon'", $source);
         self::assertStringNotContainsString("'default_injections'", $source);
     }
+
+    public function testWishlistIconSsrsGuestEmptyBadgeAndHydratesViaJs(): void
+    {
+        $widget = dirname(__DIR__, 3) . '/view/theme/frontend/widgets/header/wishlist-icon/default.phtml';
+        $js = dirname(__DIR__, 3) . '/view/statics/js/wishlist-header.js';
+        $modules = dirname(__DIR__, 3) . '/view/statics/frontend/weline.modules.js';
+        self::assertFileExists($widget);
+        self::assertFileExists($js);
+        self::assertFileExists($modules);
+
+        $source = (string)file_get_contents($widget);
+        self::assertStringContainsString('data-header-wishlist-ssr="guest-v1"', $source);
+        self::assertStringContainsString('data-weline-load="api,wishlistHeader"', $source);
+        self::assertStringNotContainsString('WishlistService', $source);
+        self::assertStringContainsString('$wishlistCount = $isPreviewMode ? 2 : 0;', $source);
+
+        $jsSource = (string)file_get_contents($js);
+        self::assertStringContainsString("api.count()", $jsSource);
+        self::assertStringContainsString('wishlist_count', $jsSource);
+
+        $moduleSource = (string)file_get_contents($modules);
+        self::assertStringContainsString('wishlistHeader', $moduleSource);
+        self::assertStringContainsString('wishlist-header.js', $moduleSource);
+    }
 }
