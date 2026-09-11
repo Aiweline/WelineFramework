@@ -1,0 +1,525 @@
+<!doctype html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PROTOTYPE · CMS 设置条 · 抛出勿合入生产</title>
+  <style>
+    :root {
+      --bg: #f1f5f9;
+      --card: #fff;
+      --text: #172033;
+      --muted: #64748b;
+      --border: #d7deeb;
+      --border-strong: #c9d3e2;
+      --accent: #3b82f6;
+      --soft: #f8fafc;
+      --radius: 8px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font: 14px/1.45 system-ui, sans-serif;
+      color: var(--text);
+      background: var(--bg);
+      padding: 24px 24px 96px;
+    }
+    .note {
+      max-width: 1100px;
+      margin: 0 auto 16px;
+      padding: 10px 12px;
+      border: 1px dashed #f59e0b;
+      border-radius: var(--radius);
+      background: #fffbeb;
+      color: #92400e;
+      font-size: 13px;
+    }
+    .note code { font-size: 12px; }
+    .page { max-width: 1100px; margin: 0 auto; }
+    .bar {
+      padding: 16px 18px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--card);
+    }
+    label {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .ctrl, select, input[type=text] {
+      width: 100%;
+      min-height: 40px;
+      padding: 7px 12px;
+      border: 1px solid var(--border-strong);
+      border-radius: 6px;
+      background: #fff;
+      color: var(--text);
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 36px;
+      padding: 0 12px;
+      border: 1px solid var(--border-strong);
+      border-radius: 6px;
+      background: #fff;
+      color: var(--text);
+      font-size: 13px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .btn.quiet { border: 0; background: transparent; color: var(--accent); min-height: auto; padding: 0; }
+    .hint { margin-top: 6px; font-size: 12px; color: #047857; }
+    .actions {
+      display: flex;
+      justify-content: flex-start;
+      gap: 10px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border);
+      margin-top: 4px;
+    }
+    .field { min-width: 0; }
+    .hidden { display: none !important; }
+
+    /* A: 现网乱网格（对照） */
+    .a-grid {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 14px 16px;
+      grid-template-areas:
+        "ctx ctx ctx title title title title title title lay lay lay"
+        "slug slug slug slug scope scope scope scope st st st st";
+    }
+    .a-ctx { grid-area: ctx; }
+    .a-title { grid-area: title; }
+    .a-lay { grid-area: lay; }
+    .a-slug { grid-area: slug; }
+    .a-scope { grid-area: scope; }
+    .a-st { grid-area: st; }
+    .a-title-top { display: flex; justify-content: space-between; gap: 10px; align-items: center; margin-bottom: 6px; }
+    .a-slug-top { display: flex; justify-content: space-between; gap: 10px; align-items: center; margin-bottom: 6px; }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 40px;
+      padding: 0 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--soft);
+      overflow: hidden;
+      width: 100%;
+    }
+    .pill span {
+      flex: 0 0 auto;
+      padding: 2px 8px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      font-size: 12px;
+      color: var(--muted);
+      background: #fff;
+    }
+    .pill code {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--accent);
+      font-size: 12px;
+    }
+
+    /* B: 左元信息轨 + 右主内容（已否决：窄轨截断） */
+    .b-layout {
+      display: grid;
+      grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+      gap: 18px;
+      align-items: start;
+    }
+    .b-rail {
+      display: grid;
+      gap: 12px;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--soft);
+    }
+    .b-main { display: grid; gap: 12px; }
+    .b-title-head { display: flex; justify-content: space-between; gap: 10px; align-items: end; }
+    .b-title-head .field { flex: 1; }
+    .b-title-tools { display: flex; gap: 8px; align-items: end; flex-wrap: wrap; }
+
+    /* C: 分区条带 */
+    .c-bands { display: grid; gap: 14px; }
+    .c-band {
+      display: grid;
+      gap: 12px;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--soft);
+    }
+    .c-band h3 {
+      margin: 0;
+      font-size: 12px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .c-id { grid-template-columns: 1.2fr 1fr 0.8fr; }
+    .c-copy { grid-template-columns: 1.4fr auto auto; align-items: end; }
+    .c-copy .title-span { grid-column: 1 / -1; }
+    .c-pub { grid-template-columns: 1fr 1fr 1fr; }
+
+    /* D: 主任务优先（VERDICT）— 顶栏上下文 + 阅读宽主区 */
+    .d-layout { display: flex; flex-direction: column; gap: 16px; }
+    .d-context {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: end;
+      gap: 10px 14px;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--soft);
+    }
+    .d-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 40px;
+      max-width: min(420px, 100%);
+      padding: 0 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: #fff;
+      overflow: hidden;
+    }
+    .d-chip .k { color: var(--muted); font-size: 12px; font-weight: 700; flex: 0 0 auto; }
+    .d-chip .v {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 13px;
+    }
+    .d-ctrl { display: grid; gap: 4px; min-width: 140px; max-width: 220px; }
+    .d-ctrl.store { min-width: 160px; max-width: 240px; }
+    .d-ctrl.layout { min-width: 180px; max-width: 260px; }
+    .d-ctrl.status { min-width: 112px; max-width: 140px; }
+    .d-more { margin-left: auto; min-width: 120px; }
+    .d-more summary {
+      list-style: none;
+      cursor: pointer;
+      min-height: 40px;
+      display: inline-flex;
+      align-items: center;
+      padding: 0 10px;
+      border-radius: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .d-more summary::-webkit-details-marker { display: none; }
+    .d-more .body { margin-top: 8px; min-width: min(360px, 70vw); }
+    .d-primary { display: grid; gap: 12px; max-width: 880px; }
+    .d-title-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px 14px;
+      align-items: end;
+    }
+    .d-title-row input[type=text] {
+      min-height: 46px;
+      font-size: 16px;
+      font-weight: 600;
+    }
+    .d-tools { display: flex; gap: 8px; align-items: end; flex-wrap: wrap; }
+    .d-slug-top {
+      display: flex;
+      min-height: 24px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 6px;
+    }
+
+    .switcher {
+      position: fixed;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      z-index: 50;
+      display: flex;
+      gap: 8px;
+      padding: 8px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: rgba(255,255,255,.96);
+      box-shadow: 0 10px 30px rgba(15, 23, 42, .18);
+    }
+    .switcher a {
+      text-decoration: none;
+      padding: 8px 14px;
+      border-radius: 999px;
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .switcher a[aria-current="true"] {
+      background: var(--accent);
+      color: #fff;
+    }
+  </style>
+</head>
+<body>
+  <div class="note">
+    <strong>PROTOTYPE（抛出）</strong> · 问题：CMS 后台「页面设置条」怎样才符合「人在写标题」？
+    A=现网乱网格 · B=左轨（否决：长 ID 截断） · C=分区条带 · <strong>D=主任务优先（VERDICT）</strong>。
+    权威 token 仍走生产 Theme；本文件禁止合入运行时。Verdict 写入 <code>Cms/doc/开发日志.md</code>。
+  </div>
+
+  <div class="page">
+    <div class="bar" id="variant-root"></div>
+  </div>
+
+  <nav class="switcher" aria-label="prototype variants">
+    <a href="?variant=A" data-v="A">A 现网</a>
+    <a href="?variant=B" data-v="B">B 左轨</a>
+    <a href="?variant=C" data-v="C">C 条带</a>
+    <a href="?variant=D" data-v="D">D 主任务</a>
+  </nav>
+
+  <template id="tpl-A">
+    <div class="a-grid">
+      <div class="field a-ctx">
+        <label>站点 / 一级 path</label>
+        <div class="pill"><span>e2e-theme-default</span><code>e2e_default_injection_mso… / e2e_default_injection_mso…</code></div>
+        <label style="margin-top:10px">店铺</label>
+        <select><option>E2E Theme Default (e2e_default)</option></select>
+      </div>
+      <div class="field a-title">
+        <div class="a-title-top">
+          <label style="margin:0">标题</label>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <select style="width:180px"><option>中文 zh_Hans_CN</option></select>
+            <button class="btn" type="button">一键翻译缺失语言</button>
+          </div>
+        </div>
+        <input type="text" value="新建 CMS 页面">
+        <div class="hint">网站支持的语言均已补全。</div>
+      </div>
+      <div class="field a-lay">
+        <label>主题布局</label>
+        <select><option>CMS页面默认布局</option></select>
+      </div>
+      <div class="field a-slug">
+        <div class="a-slug-top">
+          <label style="margin:0">链接标识</label>
+          <button class="btn quiet" type="button">恢复标题自动联动</button>
+        </div>
+        <input type="text" value="cms">
+      </div>
+      <div class="field a-scope">
+        <label>范围</label>
+        <input type="text" value="e2e_default_injection_mso…" readonly>
+      </div>
+      <div class="field a-st">
+        <label>状态</label>
+        <select><option>草稿</option></select>
+      </div>
+    </div>
+    <div class="actions" style="justify-content:flex-end">
+      <button class="btn primary" type="button">保存页面设置</button>
+      <button class="btn" type="button">新窗口打开编辑器</button>
+    </div>
+  </template>
+
+  <template id="tpl-B">
+    <div class="b-layout">
+      <aside class="b-rail">
+        <div class="field">
+          <label>站点 / 一级 path</label>
+          <div class="pill"><span>e2e-theme-default</span><code>e2e_default… / e2e_default…</code></div>
+        </div>
+        <div class="field">
+          <label>店铺</label>
+          <select><option>E2E Theme Default e2e_defa…</option></select>
+        </div>
+        <div class="field">
+          <label>主题布局</label>
+          <select><option>CMS页面默认布局</option></select>
+        </div>
+        <div class="field">
+          <label>状态</label>
+          <select><option>草稿</option></select>
+        </div>
+        <div class="field">
+          <label>范围</label>
+          <input type="text" value="e2e-theme-default-e2e_defaul…" readonly>
+        </div>
+      </aside>
+      <div class="b-main">
+        <div class="b-title-head">
+          <div class="field">
+            <label>标题</label>
+            <input type="text" value="新建 CMS 页面">
+          </div>
+          <div class="b-title-tools">
+            <div class="field" style="min-width:180px">
+              <label>语言</label>
+              <select><option>中文 zh_Hans_CN</option></select>
+            </div>
+            <button class="btn" type="button" style="margin-bottom:1px">一键翻译缺失语言</button>
+          </div>
+        </div>
+        <div class="hint" style="margin-top:-4px">网站支持的语言均已补全。</div>
+        <div class="field">
+          <div class="d-slug-top">
+            <label style="margin:0">链接标识</label>
+            <button class="btn quiet" type="button">恢复标题自动联动</button>
+          </div>
+          <input type="text" value="cms">
+        </div>
+        <div class="actions" style="justify-content:flex-end">
+          <button class="btn primary" type="button">保存页面设置</button>
+          <button class="btn" type="button">新窗口打开编辑器</button>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <template id="tpl-C">
+    <div class="c-bands">
+      <section class="c-band c-id">
+        <h3 style="grid-column:1/-1">身份与发布面</h3>
+        <div class="field">
+          <label>站点 / 一级 path</label>
+          <div class="pill"><span>e2e-theme-default</span><code>e2e_default…</code></div>
+        </div>
+        <div class="field">
+          <label>店铺</label>
+          <select><option>E2E Theme Default</option></select>
+        </div>
+        <div class="field">
+          <label>主题布局</label>
+          <select><option>CMS页面默认布局</option></select>
+        </div>
+      </section>
+      <section class="c-band c-copy">
+        <h3 style="grid-column:1/-1">文案</h3>
+        <div class="field">
+          <label>标题</label>
+          <input type="text" value="新建 CMS 页面">
+        </div>
+        <div class="field">
+          <label>语言</label>
+          <select><option>中文 zh_Hans_CN</option></select>
+        </div>
+        <div class="field">
+          <label>&nbsp;</label>
+          <button class="btn" type="button" style="width:100%">一键翻译</button>
+        </div>
+        <div class="title-span hint">网站支持的语言均已补全。</div>
+        <div class="field" style="grid-column:1 / span 2">
+          <label>链接标识 <button class="btn quiet" type="button">恢复标题自动联动</button></label>
+          <input type="text" value="cms">
+        </div>
+      </section>
+      <section class="c-band c-pub">
+        <h3 style="grid-column:1/-1">范围与状态</h3>
+        <div class="field">
+          <label>范围</label>
+          <input type="text" value="e2e_default…" readonly>
+        </div>
+        <div class="field">
+          <label>状态</label>
+          <select><option>草稿</option></select>
+        </div>
+        <div class="field" style="display:flex;align-items:end;justify-content:flex-end;gap:8px">
+          <button class="btn primary" type="button">保存页面设置</button>
+          <button class="btn" type="button">打开编辑器</button>
+        </div>
+      </section>
+    </div>
+  </template>
+
+  <template id="tpl-D">
+    <div class="d-layout">
+      <div class="d-context" aria-label="发布上下文">
+        <div class="d-chip" title="e2e-theme-default · e2e_default_injection_mso / e2e_default_injection_mso">
+          <span class="k">站点</span>
+          <span class="v">e2e-theme-default</span>
+          <span class="k">/</span>
+          <span class="v">e2e_default_injection…</span>
+        </div>
+        <div class="d-ctrl store">
+          <label>店铺</label>
+          <select><option>E2E Theme Default</option></select>
+        </div>
+        <div class="d-ctrl layout">
+          <label>主题布局</label>
+          <select><option>CMS页面默认布局</option></select>
+        </div>
+        <div class="d-ctrl status">
+          <label>状态</label>
+          <select><option>草稿</option></select>
+        </div>
+        <details class="d-more">
+          <summary>技术范围</summary>
+          <div class="body">
+            <label>范围</label>
+            <input type="text" value="e2e-theme-default-e2e_default_injection_mso" readonly title="完整 scope">
+          </div>
+        </details>
+      </div>
+      <div class="d-primary">
+        <div class="field">
+          <div class="d-title-row">
+            <div class="field">
+              <label>标题</label>
+              <input type="text" value="新建 CMS 页面">
+            </div>
+            <div class="d-tools">
+              <div class="field" style="min-width:160px">
+                <label>语言</label>
+                <select><option>中文 zh_Hans_CN</option></select>
+              </div>
+              <button class="btn" type="button">一键翻译缺失语言</button>
+            </div>
+          </div>
+          <div class="hint">网站支持的语言均已补全。</div>
+        </div>
+        <div class="field">
+          <div class="d-slug-top">
+            <label style="margin:0">链接标识</label>
+            <button class="btn quiet" type="button">恢复标题自动联动</button>
+          </div>
+          <input type="text" value="cms">
+        </div>
+        <div class="actions">
+          <button class="btn primary" type="button">保存页面设置</button>
+          <button class="btn" type="button">新窗口打开编辑器</button>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <script>
+    const params = new URLSearchParams(location.search);
+    const variant = (params.get('variant') || 'D').toUpperCase();
+    const allowed = ['A', 'B', 'C', 'D'];
+    const root = document.getElementById('variant-root');
+    const key = allowed.includes(variant) ? variant : 'D';
+    const tpl = document.getElementById('tpl-' + key);
+    root.appendChild(tpl.content.cloneNode(true));
+    document.querySelectorAll('.switcher a').forEach((a) => {
+      a.setAttribute('aria-current', a.dataset.v === key ? 'true' : 'false');
+    });
+  </script>
+</body>
+</html>

@@ -15,7 +15,7 @@ final class CmsPageProviderBlogExcludeContractTest extends TestCase
         self::assertStringContainsString('shouldSkipOwnedPathGroup', $source);
         self::assertStringContainsString("=== 'blog'", $source);
         self::assertStringContainsString('Weline_Blog', $source);
-        self::assertStringContainsString("=== 'help'", $source);
-        self::assertStringContainsString('Weline_Help', $source);
+        self::assertStringContainsString("=== 'faq'", $source);
+        self::assertStringContainsString('Weline_Faq', $source);
     }
 }
