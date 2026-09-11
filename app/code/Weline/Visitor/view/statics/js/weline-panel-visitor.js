@@ -16,6 +16,8 @@
     var lastAuditReport = null;
     var lastChannelStatus = null;
     var activeSubtab = 'overview';
+    var ASSISTANT_STORAGE_KEY = 'weline_lifecycle_assistant_v1';
+    var assistantLoadPromise = null;
 
     var PANEL_OPERATION_ROUTES = {
         analyticsReport: { method: 'GET', path: 'analytics/report' },
@@ -88,6 +90,7 @@
             '#dev-tool-panel .wvp-btn:disabled{opacity:.55;cursor:wait}',
             '#dev-tool-panel .wvp-btn--primary{background:#172033;border-color:#172033;color:#fff}',
             '#dev-tool-panel .wvp-btn--primary:hover{background:#0f172a;color:#fff}',
+            '#dev-tool-panel .wvp-btn.is-on{background:#052e16;border-color:#166534;color:#bbf7d0}',
             '#dev-tool-panel .wvp-page{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;align-items:start;margin-bottom:14px;padding:14px 16px;border:1px solid #d8e1ec;border-radius:8px;background:#fff}',
             '#dev-tool-panel .wvp-page h3{margin:0 0 4px;font-size:17px;color:#101827}',
             '#dev-tool-panel .wvp-page p{margin:0;color:#5b6b83;word-break:break-all}',
@@ -922,6 +925,111 @@
         });
     }
 
+    function isLifecycleAssistantEnabled() {
+        try {
+            if (window.WelineLifecycleAssistant && typeof window.WelineLifecycleAssistant.isEnabled === 'function') {
+                return !!window.WelineLifecycleAssistant.isEnabled();
+            }
+            return sessionStorage.getItem(ASSISTANT_STORAGE_KEY) === '1';
+        } catch (error) {
+            return false;
+        }
+    }
+
+    function assistantScriptUrl() {
+        var node = document.querySelector('script[src*="weline-panel-visitor.js"]');
+        if (node && node.src) {
+            return String(node.src).replace('weline-panel-visitor.js', 'lifecycle-event-assistant.js');
+        }
+        return '/Weline/Visitor/view/statics/js/lifecycle-event-assistant.js?v=20260910-lifecycle-assistant1';
+    }
+
+    function loadLifecycleAssistant() {
+        if (window.WelineLifecycleAssistant && typeof window.WelineLifecycleAssistant.enable === 'function') {
+            return Promise.resolve(window.WelineLifecycleAssistant);
+        }
+        if (assistantLoadPromise) {
+            return assistantLoadPromise;
+        }
+        assistantLoadPromise = new Promise(function (resolve, reject) {
+            var existing = document.querySelector('script[data-weline-lifecycle-assistant-bundle="true"]');
+            if (existing) {
+                existing.addEventListener('load', function () {
+                    resolve(window.WelineLifecycleAssistant);
+                });
+                existing.addEventListener('error', function () {
+                    reject(new Error('lifecycle assistant script failed'));
+                });
+                return;
+            }
+            var script = document.createElement('script');
+            script.async = true;
+            script.src = assistantScriptUrl();
+            script.setAttribute('data-weline-lifecycle-assistant-bundle', 'true');
+            script.onload = function () {
+                if (!window.WelineLifecycleAssistant) {
+                    reject(new Error('lifecycle assistant API missing'));
+                    return;
+                }
+                resolve(window.WelineLifecycleAssistant);
+            };
+            script.onerror = function () {
+                reject(new Error('lifecycle assistant script failed'));
+            };
+            document.head.appendChild(script);
+        }).catch(function (error) {
+            assistantLoadPromise = null;
+            throw error;
+        });
+        return assistantLoadPromise;
+    }
+
+    function syncAssistantToggleButton(searchArea) {
+        var btn = (searchArea || document).querySelector('[data-wvp-action="lifecycle-assistant"]');
+        if (!btn) {
+            return;
+        }
+        var on = isLifecycleAssistantEnabled();
+        btn.classList.toggle('is-on', on);
+        btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+        btn.textContent = on ? '关闭生命周期小助手' : '开启生命周期小助手';
+    }
+
+    function toggleLifecycleAssistant(trigger) {
+        var wantOn = !isLifecycleAssistantEnabled();
+        if (!wantOn) {
+            if (window.WelineLifecycleAssistant && typeof window.WelineLifecycleAssistant.disable === 'function') {
+                window.WelineLifecycleAssistant.disable();
+            } else {
+                try { sessionStorage.removeItem(ASSISTANT_STORAGE_KEY); } catch (e) {}
+                var root = document.getElementById('weline-lifecycle-assistant');
+                if (root && root.parentNode) {
+                    root.parentNode.removeChild(root);
+                }
+            }
+            setToolbarStatus('已关闭生命周期小助手', 'ok');
+            syncAssistantToggleButton(document.getElementById('dev-tool-search-area-visitor'));
+            return Promise.resolve(false);
+        }
+        if (trigger) {
+            trigger.disabled = true;
+        }
+        setToolbarStatus('正在异步加载生命周期小助手…');
+        return loadLifecycleAssistant().then(function (api) {
+            api.enable();
+            setToolbarStatus('生命周期小助手已开启', 'ok');
+            syncAssistantToggleButton(document.getElementById('dev-tool-search-area-visitor'));
+            return true;
+        }).catch(function (error) {
+            setToolbarStatus((error && error.message) || '小助手加载失败', 'error');
+            return false;
+        }).finally(function () {
+            if (trigger) {
+                trigger.disabled = false;
+            }
+        });
+    }
+
     function renderToolbar(searchArea) {
         if (!searchArea) {
             return;
@@ -932,12 +1040,14 @@
             '<span class="wvp-toolbar__meta">Weline_Visitor Pixel 注入，外部平台仅做事件转发</span>',
             '<span class="wvp-toolbar__status" data-wvp-publish-status></span></div>',
             '<div class="wvp-toolbar__actions">',
+            '<button type="button" class="wvp-btn" data-wvp-action="lifecycle-assistant" aria-pressed="false">开启生命周期小助手</button>',
             '<button type="button" class="wvp-btn" data-wvp-action="refresh">刷新</button>',
             '<button type="button" class="wvp-btn wvp-btn--primary" data-wvp-action="publish">发布 AI 报告</button>',
             '</div>',
             '</div>'
         ].join('');
         bindToolbar(searchArea);
+        syncAssistantToggleButton(searchArea);
     }
 
     function setToolbarStatus(message, tone) {
@@ -963,6 +1073,10 @@
             var name = action.getAttribute('data-wvp-action');
             if (name === 'publish') {
                 publishReport(action);
+                return;
+            }
+            if (name === 'lifecycle-assistant') {
+                toggleLifecycleAssistant(action);
                 return;
             }
             if (name === 'refresh') {

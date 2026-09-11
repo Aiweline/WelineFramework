@@ -630,6 +630,21 @@ class PixelEventService
     {
         $prepared = $this->prepare($payload);
         $eventName = (string)($prepared['data']['event'] ?? '');
+        $websiteId = (int)($prepared['data']['website_id'] ?? 0);
+
+        // 闭环事件门禁：进度只在客户端；无链凑齐标记则不入库（禁止直接 track 冒充）
+        if ($this->shouldSkipUnsealedChainComplete($websiteId, $eventName, $prepared['post'])) {
+            return $this->successResponse([
+                'pixel_id' => null,
+                'pixel_additional_id' => null,
+                'buffered' => false,
+                'skipped' => true,
+                'reason' => 'chain_complete_required',
+                'event_id' => $prepared['event_id'],
+                'event' => $eventName,
+            ]);
+        }
+
         $buffer = $eventName === 'site_error' ? null : $this->hotBuffer()->buffer($prepared);
         if ($buffer) {
             $response = $this->successResponse([
@@ -656,6 +671,27 @@ class PixelEventService
         }
 
         return $response;
+    }
+
+    /**
+     * @param array<string, mixed> $post
+     */
+    private function shouldSkipUnsealedChainComplete(int $websiteId, string $eventName, array $post): bool
+    {
+        if ($eventName === '') {
+            return false;
+        }
+        try {
+            /** @var EventChainService $chains */
+            $chains = ObjectManager::getInstance(EventChainService::class);
+            if (!$chains->isRegisteredCompleteEvent($websiteId, $eventName)) {
+                return false;
+            }
+
+            return !$chains->payloadMarksChainComplete($post);
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     /**

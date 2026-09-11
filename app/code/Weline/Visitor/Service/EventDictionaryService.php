@@ -29,6 +29,37 @@ class EventDictionaryService
     }
 
     /**
+     * 可搭接「我方事件」列表（排除 skip_gtm_push），含中文标签。
+     *
+     * @return list<array{name: string, label_zh: string, event_family: string, ga4_event: string}>
+     */
+    public function listMappableEvents(): array
+    {
+        $out = [];
+        foreach ($this->getEvents() as $entry) {
+            if (!\is_array($entry) || !empty($entry['skip_gtm_push'])) {
+                continue;
+            }
+            $name = $this->normalizeEventName((string)($entry['weline_event'] ?? ''));
+            if ($name === '') {
+                continue;
+            }
+            $label = \trim((string)($entry['label_zh'] ?? ''));
+            if ($label === '') {
+                $label = $name;
+            }
+            $out[] = [
+                'name' => $name,
+                'label_zh' => $label,
+                'event_family' => (string)($entry['event_family'] ?? ''),
+                'ga4_event' => (string)($entry['ga4_event'] ?? $name),
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
      * @param array<string, mixed> $overrides e.g. ['cta_event_name' => 'generate_lead']
      * @return array<string, mixed>|null
      */
@@ -85,6 +116,14 @@ class EventDictionaryService
         return $this->listForPanel();
     }
 
+    public function normalizeEventName(string $name): string
+    {
+        $name = \strtolower(\trim($name));
+        $name = \str_replace('-', '_', $name);
+        $name = (string)\preg_replace('/[^a-z0-9_]/', '', $name);
+        return \substr($name, 0, 64);
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -104,13 +143,5 @@ class EventDictionaryService
         $decoded = \is_string($raw) ? \json_decode($raw, true) : null;
         $this->payload = \is_array($decoded) ? $decoded : ['version' => '0.0.0', 'events' => []];
         return $this->payload;
-    }
-
-    private function normalizeEventName(string $name): string
-    {
-        $name = \strtolower(\trim($name));
-        $name = \str_replace('-', '_', $name);
-        $name = (string)\preg_replace('/[^a-z0-9_]/', '', $name);
-        return \substr($name, 0, 64);
     }
 }
