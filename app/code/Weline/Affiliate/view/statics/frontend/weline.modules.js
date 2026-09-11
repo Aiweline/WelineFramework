@@ -12,5 +12,12 @@ Object.assign(window.WelineModulesConfig.modules, {
         ],
         globalVar: null,
         description: "账户中心分销工作台"
+    },
+    affiliateProductShare: {
+        paths: [
+            "Weline_Affiliate::js/affiliate-product-share.js?v=20260909-default-icons2"
+        ],
+        globalVar: "WelineAffiliateProductShare",
+        description: "商品详情/加购弹窗分销分享（等账户会话后异步水合）"
     }
 });
