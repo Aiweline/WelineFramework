@@ -39,4 +39,46 @@ final class HookReaderIsolationGuardTest extends TestCase
 
         self::assertSame([], $violations, "HookReader must not be shared as a singleton in render/request paths.\n" . \implode("\n", $violations));
     }
+
+    public function testMergeRegistryWithFilesystemSupplementsMissingModules(): void
+    {
+        $registry = [
+            'Weline_B2B' => [
+                'file' => 'header-account-links.phtml',
+                'priority' => 45,
+                'sort_order' => 8,
+                'solo' => false,
+            ],
+        ];
+        $filesystem = [
+            'Weline_B2B' => [
+                'file' => 'header-account-links.phtml',
+                'priority' => 99,
+                'sort_order' => 0,
+                'solo' => false,
+            ],
+            'Weline_Customer' => [
+                'file' => 'header-account-links.phtml',
+                'priority' => 50,
+                'sort_order' => 0,
+                'solo' => false,
+            ],
+        ];
+
+        $merged = \Weline\Framework\Hook\Config\HookReader::mergeRegistryWithFilesystem($registry, $filesystem);
+
+        self::assertSame(['Weline_B2B', 'Weline_Customer'], array_keys($merged));
+        self::assertSame(45, $merged['Weline_B2B']['priority'], 'Registry priority must win on overlap');
+        self::assertSame(50, $merged['Weline_Customer']['priority']);
+    }
+
+    public function testGetFileListMergesFilesystemWhenRegistryNonEmpty(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Hook/Config/HookReader.php');
+        self::assertStringContainsString('mergeRegistryWithFilesystem', $source);
+        self::assertMatchesRegularExpression(
+            '/getHookFilesFromRegistry\([^\)]*\);\s*if\s*\(!empty\(\$data\)\)\s*\{\s*\$data\s*=\s*self::mergeRegistryWithFilesystem\(/s',
+            $source
+        );
+    }
 }

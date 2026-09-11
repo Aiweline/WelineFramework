@@ -75,6 +75,45 @@ class PluginXmlReader extends \Weline\Framework\Config\Reader\XmlReader
     }
 
     /**
+     * 仅定位指定模块的 plugin.xml：按模块 base_path 直达，不遍历全部激活模块。
+     *
+     * @param string[] $moduleNames
+     * @return array<string, string> 模块名 => 文件绝对路径
+     */
+    public function getFileListForModules(array $moduleNames): array
+    {
+        $result = [];
+        $env = Env::getInstance();
+        $names = array_values(array_unique(array_filter(array_map('strval', $moduleNames), static fn(string $name): bool => $name !== '')));
+        $totalModules = count($names);
+        $moduleIndex = 0;
+        $moduleList = $env->getModuleList();
+
+        foreach ($names as $name) {
+            $moduleIndex++;
+            RegistryProgress::module('Plugin XML locate module', $moduleIndex, $totalModules, $name, 'check etc/plugin.xml');
+            $moduleInfo = $env->getModuleInfo($name);
+            if ($moduleInfo === [] && isset($moduleList[$name]) && is_array($moduleList[$name])) {
+                $moduleInfo = $moduleList[$name];
+            }
+            $basePath = rtrim((string)($moduleInfo['base_path'] ?? ''), '/\\');
+            if ($basePath === '') {
+                RegistryProgress::module('Plugin XML locate module', $moduleIndex, $totalModules, $name, 'missing base_path');
+                continue;
+            }
+            $filePath = $this->moduleScanService->resolveFile($basePath, self::RELATIVE_PATH);
+            if ($filePath !== null) {
+                $result[$name] = $filePath;
+                RegistryProgress::module('Plugin XML locate module', $moduleIndex, $totalModules, $name, 'found');
+            } else {
+                RegistryProgress::module('Plugin XML locate module', $moduleIndex, $totalModules, $name, 'missing');
+            }
+        }
+
+        return $result;
+    }
+
+    /**
      * 读取拦截器配置：仅激活模块，base_path 直接定位，逐文件解析合并，降低内存占用。
      *
      * @throws Core
@@ -193,7 +232,7 @@ class PluginXmlReader extends \Weline\Framework\Config\Reader\XmlReader
     }
     
     /**
-     * 读取指定模块的拦截器配置：仅从 getFileList 中取对应模块文件逐文件解析，不加载全部配置。
+     * 读取指定模块的拦截器配置：只定位/解析目标模块目录下的 plugin.xml。
      *
      * @param array $moduleNames 模块名列表
      * @return array
@@ -202,14 +241,13 @@ class PluginXmlReader extends \Weline\Framework\Config\Reader\XmlReader
     public function readForModules(array $moduleNames): array
     {
         $plugin_interceptors_list = [];
-        $env = \Weline\Framework\App\Env::getInstance();
-        $fileList = $this->getFileList();
-        RegistryProgress::count('Plugin XML incremental parse', count($fileList), 'known plugin.xml files');
+        $fileList = $this->getFileListForModules($moduleNames);
+        RegistryProgress::count('Plugin XML incremental parse', count($fileList), 'plugin.xml files');
         $fileIndex = 0;
         $totalFiles = count($fileList);
         foreach ($fileList as $moduleName => $filePath) {
             $fileIndex++;
-            if (!in_array($moduleName, $moduleNames, true) || empty($moduleName) || !$env->getModuleStatus($moduleName)) {
+            if ($moduleName === '') {
                 continue;
             }
             RegistryProgress::module('Plugin XML parse module', $fileIndex, $totalFiles, (string)$moduleName, 'start');

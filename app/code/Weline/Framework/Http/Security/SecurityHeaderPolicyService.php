@@ -22,6 +22,7 @@ final class SecurityHeaderPolicyService
         private readonly CorsOriginPolicyNormalizer $corsNormalizer = new CorsOriginPolicyNormalizer(),
         private readonly SecurityPolicyLkgGate $lkgGate = new SecurityPolicyLkgGate(),
         private readonly SecurityHeaderPolicyOverrideProviderInterface $overrideProvider = new EmptySecurityHeaderPolicyOverrideProvider(),
+        private readonly ?CspSourceContributionRegistry $cspContributions = null,
     ) {
     }
 
@@ -30,17 +31,78 @@ final class SecurityHeaderPolicyService
      */
     public function baselineFromEnv(): array
     {
+        $csp = \trim((string)Env::get('security.headers.csp', ''));
+        $cspReportOnly = \trim((string)Env::get('security.headers.csp_report_only', ''));
+        $corsOrigins = \trim((string)Env::get('security.headers.cors_origins', ''));
+
+        $cspBase = $this->cspNormalizer->canonicalize(
+            $csp !== '' ? $csp : SecurityHeaderDefaults::CSP
+        );
+        $reportBase = $this->cspNormalizer->canonicalize(
+            $cspReportOnly !== '' ? $cspReportOnly : SecurityHeaderDefaults::CSP_REPORT_ONLY
+        );
+        $moduleFragment = $this->moduleCspFragment();
+        if ($moduleFragment !== '') {
+            $cspBase = $this->cspNormalizer->union($cspBase, $moduleFragment);
+            $reportBase = $this->cspNormalizer->union($reportBase, $moduleFragment);
+        }
+
         return [
-            'csp' => $this->cspNormalizer->canonicalize(
-                \trim((string)Env::get('security.headers.csp', ''))
-            ),
-            'csp_report_only' => $this->cspNormalizer->canonicalize(
-                \trim((string)Env::get('security.headers.csp_report_only', ''))
-            ),
+            'csp' => $cspBase,
+            'csp_report_only' => $reportBase,
             'cors_origins' => $this->corsNormalizer->stringify(
-                $this->corsNormalizer->parse(\trim((string)Env::get('security.headers.cors_origins', '')))
+                $this->corsNormalizer->parse(
+                    $corsOrigins !== '' ? $corsOrigins : SecurityHeaderDefaults::CORS_ORIGINS
+                )
             ),
         ];
+    }
+
+    private function cspRegistry(): ?CspSourceContributionRegistry
+    {
+        $registry = $this->cspContributions;
+        if ($registry instanceof CspSourceContributionRegistry) {
+            return $registry;
+        }
+        try {
+            $resolved = ObjectManager::getInstance(CspSourceContributionRegistry::class);
+            if ($resolved instanceof CspSourceContributionRegistry) {
+                return $resolved;
+            }
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return null;
+    }
+
+    private function moduleCspFragment(): string
+    {
+        $registry = $this->cspRegistry();
+        if ($registry === null) {
+            return '';
+        }
+        try {
+            return \trim($registry->aggregatePolicy());
+        } catch (\Throwable) {
+            return '';
+        }
+    }
+
+    /**
+     * Application-default CSP floor from Extends (Scope cannot remove these sources).
+     */
+    public function appDefaultCsp(): string
+    {
+        $registry = $this->cspRegistry();
+        if ($registry === null) {
+            return '';
+        }
+        try {
+            return \trim($registry->appDefaultPolicy());
+        } catch (\Throwable) {
+            return '';
+        }
     }
 
     /**
@@ -50,20 +112,28 @@ final class SecurityHeaderPolicyService
     public function resolveEffective(array $override = []): array
     {
         $base = $this->baselineFromEnv();
+        $floor = $this->appDefaultCsp();
         $cspOverride = \trim((string)($override['csp'] ?? ''));
         $reportOverride = \trim((string)($override['csp_report_only'] ?? ''));
         $corsOverride = \trim((string)($override['cors_origins'] ?? ''));
 
+        $csp = $cspOverride === ''
+            ? $base['csp']
+            : $this->cspNormalizer->intersect($base['csp'], $this->cspNormalizer->canonicalize($cspOverride));
+        $report = $reportOverride === ''
+            ? $base['csp_report_only']
+            : $this->cspNormalizer->intersect(
+                $base['csp_report_only'],
+                $this->cspNormalizer->canonicalize($reportOverride)
+            );
+        if ($floor !== '') {
+            $csp = $this->cspNormalizer->union($csp, $floor);
+            $report = $this->cspNormalizer->union($report, $floor);
+        }
+
         return [
-            'csp' => $cspOverride === ''
-                ? $base['csp']
-                : $this->cspNormalizer->intersect($base['csp'], $this->cspNormalizer->canonicalize($cspOverride)),
-            'csp_report_only' => $reportOverride === ''
-                ? $base['csp_report_only']
-                : $this->cspNormalizer->intersect(
-                    $base['csp_report_only'],
-                    $this->cspNormalizer->canonicalize($reportOverride)
-                ),
+            'csp' => $csp,
+            'csp_report_only' => $report,
             'cors_origins' => $corsOverride === ''
                 ? $base['cors_origins']
                 : $this->corsNormalizer->intersect($base['cors_origins'], $corsOverride),
@@ -101,11 +171,18 @@ final class SecurityHeaderPolicyService
      * being persisted in FPC payloads: Scope policy and Origin may change
      * while the cached body remains valid.
      *
+     * DEV/DEBUG 时若 Env `security.headers.csp_developer_tooling` 非空，则 union 进当次响应；
+     * 不进入 baselineFromEnv / appDefaultCsp / LKG。
+     *
+     * @param bool|null $developerToolingEnabled null = 按 DEV||DEBUG 自动检测；单测可显式传入
      * @return array<string, string>
      */
-    public function resolveCurrentResponseHeaders(?string $requestOrigin = null): array
+    public function resolveCurrentResponseHeaders(?string $requestOrigin = null, ?bool $developerToolingEnabled = null): array
     {
-        $policy = $this->resolveCurrentEffective();
+        $policy = $this->withDeveloperToolingCsp(
+            $this->resolveCurrentEffective(),
+            $developerToolingEnabled ?? self::isDeveloperToolingEnabled(),
+        );
         $headers = [
             'X-Frame-Options' => 'SAMEORIGIN',
             'X-Content-Type-Options' => 'nosniff',
@@ -136,6 +213,38 @@ final class SecurityHeaderPolicyService
         return $headers;
     }
 
+    /**
+     * @param array{csp:string,csp_report_only:string,cors_origins:string} $policy
+     * @return array{csp:string,csp_report_only:string,cors_origins:string}
+     */
+    public function withDeveloperToolingCsp(array $policy, bool $enabled): array
+    {
+        if (!$enabled) {
+            return $policy;
+        }
+
+        $fragment = \trim((string)Env::get('security.headers.csp_developer_tooling', ''));
+        if ($fragment === '') {
+            return $policy;
+        }
+
+        $csp = \trim((string)($policy['csp'] ?? ''));
+        $report = \trim((string)($policy['csp_report_only'] ?? ''));
+        $policy['csp'] = $csp === ''
+            ? $this->cspNormalizer->canonicalize($fragment)
+            : $this->cspNormalizer->union($csp, $fragment);
+        if ($report !== '') {
+            $policy['csp_report_only'] = $this->cspNormalizer->union($report, $fragment);
+        }
+
+        return $policy;
+    }
+
+    public static function isDeveloperToolingEnabled(): bool
+    {
+        return (\defined('DEV') && DEV) || (\defined('DEBUG') && DEBUG);
+    }
+
     private function currentRequestOrigin(): string
     {
         $origin = \trim((string)WelineEnv::server('HTTP_ORIGIN', ''));
@@ -157,17 +266,19 @@ final class SecurityHeaderPolicyService
     public function assertOverrideNotWeaker(array $candidate): void
     {
         $base = $this->baselineFromEnv();
+        $floor = $this->appDefaultCsp();
         if (isset($candidate['csp']) && \trim((string)$candidate['csp']) !== '') {
-            $this->cspNormalizer->assertNotWeaker(
-                $this->cspNormalizer->canonicalize((string)$candidate['csp']),
-                $base['csp'],
-            );
+            $csp = $this->cspNormalizer->canonicalize((string)$candidate['csp']);
+            $this->cspNormalizer->assertNotWeaker($csp, $base['csp']);
+            $this->cspNormalizer->assertContainsAppDefaults($csp, $floor);
         }
         if (isset($candidate['csp_report_only']) && \trim((string)$candidate['csp_report_only']) !== '') {
+            $report = $this->cspNormalizer->canonicalize((string)$candidate['csp_report_only']);
             $this->cspNormalizer->assertNotWeaker(
-                $this->cspNormalizer->canonicalize((string)$candidate['csp_report_only']),
+                $report,
                 $base['csp_report_only'] !== '' ? $base['csp_report_only'] : $base['csp'],
             );
+            $this->cspNormalizer->assertContainsAppDefaults($report, $floor);
         }
         if (isset($candidate['cors_origins']) && \trim((string)$candidate['cors_origins']) !== '') {
             $this->corsNormalizer->assertNotWeaker((string)$candidate['cors_origins'], $base['cors_origins']);

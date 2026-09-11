@@ -89,6 +89,11 @@ class PreparedContentStore
 
     public static function resetRequestState(): void
     {
+        // Always clear process fallback; request-scoped buckets may also have
+        // spilled here when scopeId was briefly unavailable mid-request.
+        self::$fallbackContentByKey = [];
+        self::$fallbackCounter = 0;
+
         if (self::shouldUseRequestContextStorage()) {
             $scopeId = self::getCurrentScopeId();
             if ($scopeId !== null) {
@@ -115,11 +120,7 @@ class PreparedContentStore
                 RequestContext::remove(self::STORAGE_KEY);
                 RequestContext::remove(self::COUNTER_KEY);
             }
-            return;
         }
-
-        self::$fallbackContentByKey = [];
-        self::$fallbackCounter = 0;
     }
 
     private static function resolveKey(mixed $contentRenderKey, mixed $meta, mixed $childHtml): string
@@ -172,7 +173,9 @@ class PreparedContentStore
         if (self::shouldUseRequestContextStorage()) {
             $scopeId = self::getCurrentScopeId();
             if ($scopeId === null) {
-                return [];
+                // Scope not ready yet: keep using process fallback instead of
+                // pretending the put succeeded while storing nothing.
+                return self::$fallbackContentByKey;
             }
 
             $allItems = RequestContext::get(self::STORAGE_KEY, []);
@@ -195,6 +198,7 @@ class PreparedContentStore
         if (self::shouldUseRequestContextStorage()) {
             $scopeId = self::getCurrentScopeId();
             if ($scopeId === null) {
+                self::$fallbackContentByKey = $items;
                 return;
             }
 
@@ -215,7 +219,7 @@ class PreparedContentStore
         if (self::shouldUseRequestContextStorage()) {
             $scopeId = self::getCurrentScopeId();
             if ($scopeId === null) {
-                return 1;
+                return ++self::$fallbackCounter;
             }
 
             $allCounters = RequestContext::get(self::COUNTER_KEY, []);

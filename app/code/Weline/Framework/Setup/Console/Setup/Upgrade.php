@@ -163,6 +163,9 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
      */
     private bool $registryCollectedInThisRun = false;
 
+    /** @var string[] 本次升级 --module/-m 作用域；空表示全量 */
+    private array $scopedRegistryModules = [];
+
     /** Current non-hot command ID; passed explicitly to persistence consumers. */
     private string $setupOperationId = '';
 
@@ -805,6 +808,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         // 4. 最先聚合框架注册表（含 generated/extends.php）。须先于 composer 与后续收集，否则易退化为逐模块递归扫描。
         $this->printing->note(__('正在准备系统环境...'));
         $argsModule = $this->parseModuleArgs($args);
+        $this->scopedRegistryModules = $argsModule;
         $this->preRegisterDiscoveredModulesForRegistryBootstrap($argsModule);
         $this->compileAndInstallBootstrapProviderRegistry();
         $this->collectFrameworkRegistries(true, $argsModule);
@@ -1495,6 +1499,32 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
     
     
     /**
+     * Resolve -m scope against Env module list without falling back to full collect.
+     *
+     * @param list<string> $requested
+     * @param list<string> $knownModuleNames
+     * @return array{modules: list<string>, skip_bootstrap_collect: bool}
+     */
+    private function resolveRegistryCollectScope(array $requested, array $knownModuleNames): array
+    {
+        $requested = array_values(array_filter(array_map('strval', $requested), static fn(string $name): bool => $name !== ''));
+        if ($requested === []) {
+            return ['modules' => [], 'skip_bootstrap_collect' => false];
+        }
+        if ($knownModuleNames === []) {
+            // Env 尚未有模块表时保留请求列表，交给增量路径（或后续 step2）。
+            return ['modules' => $requested, 'skip_bootstrap_collect' => false];
+        }
+        $modules = array_values(array_intersect($requested, $knownModuleNames));
+        if ($modules === []) {
+            // -m 指向尚未写入 modules.php 的模块：禁止退回全量 Event/Hook 扫描。
+            return ['modules' => [], 'skip_bootstrap_collect' => true];
+        }
+
+        return ['modules' => $modules, 'skip_bootstrap_collect' => false];
+    }
+
+    /**
      * 收集所有框架自带的注册表信息
      * 顺序：Extends -> 插件 -> 事件 -> Hook -> Tag
      * 系统更新前必须运行，更新后如果有模块安装或升级也要再次运行
@@ -1508,9 +1538,15 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
      */
     private function collectFrameworkRegistries(bool $includeTag = true, array $moduleNames = []): void
     {
-        // 仅保留已注册的模块名，避免将 stage code（如 schema_diff）等误当作模块传入注册表/标签库收集
-        $validModuleNames = array_keys(Env::getInstance()->getActiveModules());
-        $moduleNames = array_values(array_intersect($moduleNames, $validModuleNames));
+        // 仅保留已注册模块名（含未激活），避免 stage code 误入；不要用 active-only。
+        // -m 求交为空时跳过 bootstrap 收集，留给 MODULE 注册后的 step2，禁止退回全量。
+        $knownModuleNames = array_keys(Env::getInstance()->getModuleList());
+        $scope = $this->resolveRegistryCollectScope($moduleNames, $knownModuleNames);
+        $moduleNames = $scope['modules'];
+        if ($scope['skip_bootstrap_collect']) {
+            $this->printing->note(__('目标模块尚未写入模块表，跳过 bootstrap 全量注册表收集（将于 MODULE 注册后增量刷新）'));
+            return;
+        }
 
         // 使用统一服务更新所有注册表
         try {
@@ -1628,10 +1664,14 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             return;
         }
         
-        // 重新收集所有注册表（包括框架注册表和 Tag 注册表）
-        // 优化：collectFrameworkRegistries 已统一管理所有注册表的收集
-        $this->printing->note(__('检测到模块安装或升级，正在重新收集所有注册表信息...'));
-        $this->collectFrameworkRegistries(true);
+        // 有 -m 作用域时保持增量，避免模块安装后再次全量 Event/Hook 扫描。
+        $moduleNames = $this->scopedRegistryModules;
+        $this->printing->note(
+            $moduleNames === []
+                ? __('检测到模块安装或升级，正在重新收集所有注册表信息...')
+                : __('检测到模块安装或升级，正在增量刷新模块注册表：%{1}', [implode(', ', $moduleNames)])
+        );
+        $this->collectFrameworkRegistries(true, $moduleNames);
         
         // 标记本次升级已经收集过注册表
         $this->registryCollectedInThisRun = true;
@@ -1933,7 +1973,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             // route-only 模式同样必须先刷新模块列表与注册表，否则 register_installer 事件仍可能缺少
             // Theme/I18n 等模块提供的 installer 映射，随后 pending registration 会回退到不存在的
             // Framework\\Theme\\Handle / Framework\\I18n\\Handle。
-            RegistryProgress::run(function (): void {
+            RegistryProgress::run(function () use ($argsModule): void {
                 RegistryProgress::section('setup:upgrade route-only module list refresh');
                 $activeModules = Env::getInstance()->getModuleList(true);
                 RegistryProgress::count('Route-only active module list refresh finished', count($activeModules), 'modules');
@@ -1942,7 +1982,13 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 /** @var RegistryUpdateService $registryService */
                 $registryService = ObjectManager::getInstance(RegistryUpdateService::class);
                 try {
-                    $registryService->updateAllRegistries(true, false, true);
+                    if ($argsModule !== []) {
+                        RegistryProgress::count('setup:upgrade route-only registry incremental', count($argsModule), 'modules');
+                        $registryService->updateModuleRegistriesIncremental($argsModule);
+                    } else {
+                        $registryService->updateAllRegistries(true, false, true);
+                    }
+                    $this->registryCollectedInThisRun = true;
                 } catch (\RuntimeException $exception) {
                     if (!str_contains($exception->getMessage(), 'Hook registry refresher provider is missing.')) {
                         throw $exception;
@@ -2024,15 +2070,8 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             $cacheManagerConsole->execute();
             $i += 1;
         } else {
-            // 指定模块升级时，使用增量更新方式处理命令、事件、插件等
-            $this->printing->note('指定模块升级，使用增量更新模式...');
-            /** @var RegistryUpdateService $registryService */
-            $registryService = ObjectManager::getInstance(RegistryUpdateService::class);
-            RegistryProgress::run(function () use ($registryService, $argsModule): void {
-                RegistryProgress::section('setup:upgrade module registry incremental refresh');
-                RegistryProgress::count('setup:upgrade module registry incremental refresh', count($argsModule), 'modules');
-                $registryService->updateModuleRegistriesIncremental($argsModule);
-            });
+            // prepareUpgrade() 已对 -m 做过增量收集；此处不再重复扫描 Event/Hook/Plugin。
+            $this->printing->note('指定模块升级，跳过重复的中段注册表增量（将于 MODULE 注册后的 step2 刷新）...');
             $i += 1;
         }
         
@@ -2125,6 +2164,8 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 $registryService->updateAllRegistries(true, false, true);
             });
         }
+        // step2 已刷新；后续 recollectRegistryAfterModuleChange 应跳过，避免再扫一遍。
+        $this->registryCollectedInThisRun = true;
         // 🔧 runPendingRegistrations 会触发 Theme Installer 等查询 m_weline_theme 等表，必须先提交 SchemaDiff 确保表结构完整（如 module_name 等缺失列已添加）
         /**
          * Reuse these already prepared/committed instances in the later stage

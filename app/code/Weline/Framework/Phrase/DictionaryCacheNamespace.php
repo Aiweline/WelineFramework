@@ -16,14 +16,22 @@ final class DictionaryCacheNamespace
 {
     public const NAMESPACE = 'global/i18n';
     private const CONTEXT_KEY = 'phrase.dictionary_namespace';
+    /** CLI / 无 HTTP RequestContext 时的进程级指纹桶前缀。 */
+    private const PROCESS_FINGERPRINT_PREFIX = 'process';
 
-    /** 未建立请求、事务未提交或权威版本不可用时，不允许发布公共词典缓存。 */
+    /** 活跃事务中不发布公共词典 L1；无 RequestContext 时仍返回进程级指纹。 */
     public static function fingerprint(): ?string
     {
-        $requestId = RequestContext::getId();
-        if ($requestId === null || TransactionContext::activeTransactionConnectionCount() > 0) {
+        // Dirty reads must not poison process/request L1.
+        if (TransactionContext::activeTransactionConnectionCount() > 0) {
             return null;
         }
+
+        $requestId = RequestContext::getId();
+        if ($requestId === null) {
+            return self::PROCESS_FINGERPRINT_PREFIX . '|' . self::resolveGenerationFingerprint();
+        }
+
         $state = RequestContext::get(self::CONTEXT_KEY, []);
         if (\is_array($state) && ($state['request_id'] ?? null) === $requestId) {
             return $state['fingerprint'] ?? null;
@@ -32,8 +40,7 @@ final class DictionaryCacheNamespace
         // 版本读取自身可能触发框架翻译；只在当前 Context 内阻止递归，不冻结失败到进程。
         RequestContext::set(self::CONTEXT_KEY, ['request_id' => $requestId, 'fingerprint' => null]);
         try {
-            $generations = ObjectManager::getInstance(NamespaceGenerationInterface::class);
-            $fingerprint = $generations->fingerprint([self::NAMESPACE]);
+            $fingerprint = self::resolveGenerationFingerprint();
             if ($fingerprint !== '') {
                 RequestContext::set(self::CONTEXT_KEY, ['request_id' => $requestId, 'fingerprint' => $fingerprint]);
                 return $fingerprint;
@@ -49,7 +56,10 @@ final class DictionaryCacheNamespace
         return (self::fingerprint() ?? 'uncached') . '|' . $key;
     }
 
-    /** 复用调用者已有 L1；不可共享时只返回本次调用的临时数组。 */
+    /**
+     * 复用调用者已有 L1。
+     * 仅活跃事务返回临时空数组；无 RequestContext 时按进程级指纹写入同一底层数组。
+     */
     public static function &localCache(array &$cache, int $maxEntries = 32768): array
     {
         if (self::fingerprint() === null) {
@@ -66,5 +76,19 @@ final class DictionaryCacheNamespace
     public static function scopedPool(CachePoolInterface $pool): CachePoolInterface
     {
         return NamespaceScopedCachePool::create($pool, [self::NAMESPACE]);
+    }
+
+    private static function resolveGenerationFingerprint(): string
+    {
+        try {
+            $generations = ObjectManager::getInstance(NamespaceGenerationInterface::class);
+            $fingerprint = $generations->fingerprint([self::NAMESPACE]);
+            if (\is_string($fingerprint) && $fingerprint !== '') {
+                return $fingerprint;
+            }
+        } catch (\Throwable) {
+        }
+
+        return 'nogeneration';
     }
 }

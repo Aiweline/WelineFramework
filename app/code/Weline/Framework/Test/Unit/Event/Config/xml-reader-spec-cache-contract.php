@@ -54,18 +54,20 @@ namespace {
         $reader=new \Weline\Framework\Event\Config\XmlReader(new \Weline\Framework\System\File\Scanner(),$parser,'etc/event.xml',new \Weline\Framework\Module\Service\ModuleScanService());
         $first=$reader->read();$firstCounts=$spec_includes;
         $failures=[];
-        foreach($modules as $module){if(($firstCounts[$module]??0)!==1)$failures[]='One read must include '.$module.' exactly once, including empty specs; got '.($firstCounts[$module]??0);}
+        // Host still includes its own event.php; foreign owners are proven by source scan without include.
+        if(($firstCounts['Fixture_Listener']??0)!==1)$failures[]='XML host module specs must load once; got '.($firstCounts['Fixture_Listener']??0);
+        if(($firstCounts['Fixture_Owner']??0)!==0)$failures[]='Declared owner must be proven by source scan without include; got '.($firstCounts['Fixture_Owner']??0);
+        if(($firstCounts['Fixture_Empty']??0)!==0)$failures[]='Unrelated empty module must not be included; got '.($firstCounts['Fixture_Empty']??0);
         if(count(reset($first))!==2 || $spec_warnings!==[])$failures[]='Valid event declarations and both observers must remain effective';
-        // A module with empty specs gains an event between reads: an explicit fresh read must discover it.
         $writeSpec('Fixture_Empty',['Fixture_Empty::new']);$parser->events[]='Fixture_Empty::new';
         $second=$reader->read();
-        if(count(reset($second))!==3 || $spec_warnings!==[])$failures[]='Next read must reload changed empty specs and discover the new observer';
-        foreach($modules as $module){if(($spec_includes[$module]??0)!==($firstCounts[$module]??0)+1)$failures[]='Next read must include '.$module.' once again';}
-        // Disabled modules still leave the next file list and event result.
+        if(count(reset($second))!==3 || $spec_warnings!==[])$failures[]='Next read must discover the new owner event via source scan';
+        if(($spec_includes['Fixture_Empty']??0)!==0)$failures[]='New owner must not require include when source declares the key';
+        if(($spec_includes['Fixture_Listener']??0)!==($firstCounts['Fixture_Listener']??0)+1)$failures[]='XML host must reload once on next read';
         unset($spec_cache_env->modules['Fixture_Listener']);
         if($reader->read()!==[])$failures[]='Next read must respect active module changes';
         if($failures){throw new RuntimeException(implode("\n",$failures));}
-        echo "Event spec read cache contract passed: one include per module, empty specs cached, next read refreshed, inactive module removed\n";
+        echo "Event spec read cache contract passed: host include only, owner source-scan, inactive module removed\n";
     } finally {
         foreach($modules as $module){foreach(['event.php','etc/event.xml']as$file){$path=$directory.'/'.$module.'/'.$file;if(is_file($path))unlink($path);}rmdir($directory.'/'.$module.'/etc');rmdir($directory.'/'.$module);}rmdir($directory);
     }

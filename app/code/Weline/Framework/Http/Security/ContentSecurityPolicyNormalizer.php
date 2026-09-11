@@ -14,6 +14,8 @@ final class ContentSecurityPolicyNormalizer
 {
     public const ERROR_WEAKER = 'security_policy_weaker_than_baseline';
 
+    public const ERROR_APP_DEFAULTS = 'security_policy_app_defaults_immutable';
+
     /**
      * @return array<string, list<string>> directive => sorted unique sources
      */
@@ -129,10 +131,74 @@ final class ContentSecurityPolicyNormalizer
         return $this->stringify($out);
     }
 
+    /**
+     * 合并策略 = left ∪ right（同名指令 source 并集；模块 Contribution 并入基线用）。
+     */
+    public function union(string $left, string $right): string
+    {
+        $a = $this->parse($left);
+        $b = $this->parse($right);
+        if ($a === []) {
+            return $this->stringify($b);
+        }
+        if ($b === []) {
+            return $this->stringify($a);
+        }
+        $out = $a;
+        foreach ($b as $directive => $sources) {
+            if (!\array_key_exists($directive, $out)) {
+                $out[$directive] = $sources;
+                continue;
+            }
+            $merged = \array_values(\array_unique(\array_merge($out[$directive], $sources)));
+            \sort($merged, \SORT_STRING);
+            $out[$directive] = $merged;
+        }
+
+        return $this->stringify($out);
+    }
+
     public function assertNotWeaker(string $candidate, string $baseline): void
     {
         if ($this->isWeaker($candidate, $baseline)) {
             throw new \InvalidArgumentException(self::ERROR_WEAKER);
+        }
+    }
+
+    /**
+     * required 的每个指令/source 是否都出现在 candidate 中（应用默认 floor 不可删）。
+     */
+    public function containsAll(string $candidate, string $required): bool
+    {
+        $need = $this->parse($required);
+        if ($need === []) {
+            return true;
+        }
+        $have = $this->parse($candidate);
+        foreach ($need as $directive => $sources) {
+            if (!\array_key_exists($directive, $have)) {
+                return false;
+            }
+            $set = \array_fill_keys($have[$directive], true);
+            foreach ($sources as $src) {
+                if (!isset($set[$src])) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    public function assertContainsAppDefaults(string $candidate, string $appDefaults): void
+    {
+        $candidate = \trim($candidate);
+        $appDefaults = \trim($appDefaults);
+        if ($candidate === '' || $appDefaults === '') {
+            return;
+        }
+        if (!$this->containsAll($this->canonicalize($candidate), $this->canonicalize($appDefaults))) {
+            throw new \InvalidArgumentException(self::ERROR_APP_DEFAULTS);
         }
     }
 

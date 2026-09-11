@@ -17,7 +17,13 @@ final class ResourceChangeFactory
      * @param array<string,mixed> $before
      * @param array<string,mixed>|null $after
      * @param list<string> $changedFields
-     * @param array{namespaces?:list<string>,previous_namespaces?:list<string>,urls?:list<string>,previous_urls?:list<string>} $impact
+     * @param array{
+     *   namespaces?:list<string>,
+     *   previous_namespaces?:list<string>,
+     *   urls?:list<string>,
+     *   previous_urls?:list<string>,
+     *   cache_ops?:list<array{pool:string,keys:list<string>}>
+     * } $impact
      * @param array<string,mixed> $origin
      */
     public function create(
@@ -58,6 +64,9 @@ final class ResourceChangeFactory
             $normalizedImpact[$key] = $this->stringList((array)($impact[$key] ?? []));
             sort($normalizedImpact[$key], SORT_STRING);
         }
+        if (array_key_exists('cache_ops', $impact)) {
+            $normalizedImpact['cache_ops'] = $this->normalizeCacheOps((array)$impact['cache_ops']);
+        }
 
         return ResourceChange::fromArray([
             'schema_version' => ResourceChange::SCHEMA_VERSION,
@@ -96,6 +105,37 @@ final class ResourceChangeFactory
             }
         }
         return array_values($result);
+    }
+
+    /**
+     * @param list<mixed> $ops
+     * @return list<array{pool:string,keys:list<string>}>
+     */
+    private function normalizeCacheOps(array $ops): array
+    {
+        $byPool = [];
+        foreach ($ops as $op) {
+            if (!is_array($op)) {
+                continue;
+            }
+            $pool = trim((string)($op['pool'] ?? ''));
+            if ($pool === '') {
+                continue;
+            }
+            $keys = $this->stringList((array)($op['keys'] ?? []));
+            if ($keys === []) {
+                continue;
+            }
+            $existing = $byPool[$pool] ?? [];
+            $byPool[$pool] = $this->stringList(array_merge($existing, $keys));
+        }
+        ksort($byPool, SORT_STRING);
+        $normalized = [];
+        foreach ($byPool as $pool => $keys) {
+            sort($keys, SORT_STRING);
+            $normalized[] = ['pool' => $pool, 'keys' => $keys];
+        }
+        return $normalized;
     }
 
     private function utcMicrotime(): string

@@ -447,7 +447,8 @@ class EventRegistry implements EventRegistryInterface
         
         try {
             RegistryProgress::log('Event observer XML read started');
-            $eventObserversList = $this->xmlReader->read();
+            // 真增量：只解析目标模块目录下的 event.xml，避免全量 read() 后再过滤。
+            $eventObserversList = $this->xmlReader->readForModules($moduleNames);
             RegistryProgress::count('Event observer XML read', count($eventObserversList), 'config files');
             $env = Env::getInstance();
             $configIndex = 0;
@@ -456,17 +457,11 @@ class EventRegistry implements EventRegistryInterface
             foreach ($eventObserversList as $module_and_file => $moduleEventObservers) {
                 $configIndex++;
                 $moduleName = explode('::', $module_and_file)[0] ?? '';
-                
-                // 只处理目标模块
-                if (!in_array($moduleName, $moduleNames, true)) {
+                if ($moduleName === '' || !in_array($moduleName, $moduleNames, true)) {
                     continue;
                 }
-                
-                // 检查模块状态
-                if (!RegistryModulePresence::isActivePresent($moduleName, $env)) {
-                    RegistryProgress::module('Event observer config', $configIndex, $totalConfigs, (string)$moduleName, 'skip inactive');
-                    continue;
-                }
+
+                // 显式 -m 增量允许扫描尚未激活、但已在模块列表中的目标模块。
                 RegistryProgress::module('Event observer config', $configIndex, $totalConfigs, (string)$moduleName, 'collect');
                 
                 foreach ($moduleEventObservers as $eventName => $eventObservers) {

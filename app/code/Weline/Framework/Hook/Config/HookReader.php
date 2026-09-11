@@ -63,8 +63,12 @@ class HookReader extends ModuleFileReader
         }
         
         // 优化2：从注册表读取实现文件信息（新方式）
+        // Incomplete non-empty registries (e.g. only one module after a partial
+        // incremental rebuild) must not hide on-disk contributors — merge FS
+        // supplements so header-account-links etc. keep Customer/Shipping/Wishlist.
         $data = $this->getHookFilesFromRegistry($hookName);
         if (!empty($data)) {
+            $data = self::mergeRegistryWithFilesystem($data, $this->getHookFilesFromFilesystem());
             // 更新静态缓存
             self::$staticFileListCache[$cache_key] = $data;
             // 过滤掉禁用的模块的Hook文件，并按顺序返回
@@ -90,6 +94,33 @@ class HookReader extends ModuleFileReader
         // 如果都没有，返回空数组
         self::$staticFileListCache[$cache_key] = [];
         return [];
+    }
+
+    /**
+     * Registry wins on overlap (keeps sealed priority/sort_order); filesystem
+     * only fills modules missing from a stale/partial generated/hooks.php.
+     *
+     * @param array<string, array{file: string, priority: int, sort_order: int, solo: bool}> $registry
+     * @param array<string, array{file: string, priority: int, sort_order: int, solo: bool}> $filesystem
+     * @return array<string, array{file: string, priority: int, sort_order: int, solo: bool}>
+     */
+    public static function mergeRegistryWithFilesystem(array $registry, array $filesystem): array
+    {
+        if ($filesystem === []) {
+            return $registry;
+        }
+
+        foreach ($filesystem as $module => $impl) {
+            if (!\is_string($module) || $module === '' || !\is_array($impl)) {
+                continue;
+            }
+            if (isset($registry[$module])) {
+                continue;
+            }
+            $registry[$module] = $impl;
+        }
+
+        return $registry;
     }
     
     /**
