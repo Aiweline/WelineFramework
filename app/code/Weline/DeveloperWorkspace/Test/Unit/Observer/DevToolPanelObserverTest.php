@@ -132,7 +132,7 @@ final class DevToolPanelObserverTest extends TestCase
         self::assertStringContainsString('renderLazyPanelLoader($requestId)', $source);
     }
 
-    public function testPanelHeaderExposesSystemAndThemePublishedVersions(): void
+    public function testPanelHeaderExposesSystemDeployAndThemePublishedVersions(): void
     {
         $observer = file_get_contents(dirname(__DIR__, 3) . '/Observer/DevToolPanelObserver.php');
         $template = file_get_contents(dirname(__DIR__, 3) . '/view/hooks/dev-tool-panel.phtml');
@@ -141,12 +141,21 @@ final class DevToolPanelObserverTest extends TestCase
         self::assertIsString($template);
         self::assertStringContainsString('function resolvePanelVersionMeta', $observer);
         self::assertStringContainsString('ThemePublishedVersionRuntimeResolver', $observer);
+        self::assertStringContainsString('DIRECTORY_SEPARATOR', $observer);
+        self::assertStringContainsString('current.json', $observer);
+        self::assertStringContainsString('deploy_version', $observer);
+        self::assertStringContainsString("'deployVersion'", $observer);
+        self::assertStringContainsString('deploy_file_mtime', $observer);
         self::assertStringContainsString('system_version', $observer);
         self::assertStringContainsString('theme_published_version', $observer);
         self::assertStringContainsString('dev-tool-version-badges', $template);
         self::assertStringContainsString('<strong>SYS</strong>', $template);
+        self::assertStringContainsString('<strong>Deploy</strong>', $template);
         self::assertStringContainsString('<strong>Theme</strong>', $template);
+        self::assertStringContainsString('data-version-kind="deploy"', $template);
+        self::assertStringContainsString('$deployVersion', $template);
         self::assertStringContainsString('$themeVersionLabel', $template);
+        self::assertStringContainsString('syncDeployVersionBadge', $template);
     }
 
     public function testPanelQuickDocLinksDoNotExposeRawUrlTaglib(): void
