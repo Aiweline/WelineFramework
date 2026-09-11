@@ -906,6 +906,34 @@ function initSystemConfigSaveLoading() {
             syncReauthVisibility(form);
         });
         form.addEventListener('submit', (event) => {
+            // Control binding: gather data-cache-namespaces from non-inherited fields.
+            form.querySelectorAll('input[name="cache_namespaces[]"][data-w-cache-ns-collected="1"]').forEach((node) => {
+                node.remove();
+            });
+            const nsSeen = {};
+            form.querySelectorAll('[data-testid="system-config-field"][data-cache-namespaces]').forEach((row) => {
+                if (!(row instanceof HTMLElement) || row.classList.contains('is-inherited')) {
+                    return;
+                }
+                const raw = String(row.getAttribute('data-cache-namespaces') || '').trim();
+                if (!raw) {
+                    return;
+                }
+                raw.split(/[\s,]+/).forEach((token) => {
+                    const ns = String(token || '').trim();
+                    if (!ns || nsSeen[ns]) {
+                        return;
+                    }
+                    nsSeen[ns] = true;
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = 'cache_namespaces[]';
+                    input.value = ns;
+                    input.setAttribute('data-w-cache-ns-collected', '1');
+                    form.appendChild(input);
+                });
+            });
+
             const button = form.querySelector('[data-w-system-config-save-submit="1"]');
             if (!(button instanceof HTMLButtonElement)) {
                 return;

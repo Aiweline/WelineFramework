@@ -134,6 +134,7 @@ Weline SystemConfig 是系统的配置管理模块，提供了统一的配置存
 | 选择 | `field`/`fields` → `group` → 整 `module`+`area` |
 | layout | `vertical`（默认）/ `horizontal` / `inline`（表格列藏 meta） |
 | 声明 vs 消费 | `group`/`field`/`adapter`/`hint` 声明契约；`embed` 只消费 |
+| 缓存命名空间 | 四类绑定：属性 `cache-namespaces` / 前缀 `cache-namespace-prefix`；控件 `data-cache-namespaces`→`cache_namespaces`；配置 key 前缀规则；命名空间前缀/`/*`。保存经 `w_changed` bump + 预 bump 指纹 `cache_ops` 双池删键；成功提示含清理摘要 |
 
 首个业务样例：支付方式列表「是否启用」列（`Weline_Payment` `Backend/Method/index.phtml`）。
 
