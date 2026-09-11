@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Product\Service;
 
+use Weline\Framework\Cache\Namespace\NamespacePath;
 use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Database\Transaction\TransactionCoordinatorInterface;
 use Weline\Framework\Event\ResourceChange\ResourceChangeFactory;
@@ -27,6 +28,7 @@ final class ProductSearchProjectionMutationCoordinator implements ProductSearchP
     /** @var array<string,list<?int>> Active owner mutations; nested repositories share their event. */
     private array $activeTargets = [];
     private readonly \Closure $urlSnapshot;
+    private readonly NamespacePath $namespacePath;
 
     public function __construct(
         private readonly TransactionCoordinatorInterface $transactions,
@@ -35,6 +37,7 @@ final class ProductSearchProjectionMutationCoordinator implements ProductSearchP
         private readonly WebsiteCatalogInterface $websites,
         private readonly StoreCatalogInterface $stores,
         ?callable $urlSnapshot = null,
+        ?NamespacePath $namespacePath = null,
     ) {
         // Resolve lazily: URL reads use repositories which themselves depend on this coordinator.
         $this->urlSnapshot = $urlSnapshot === null
@@ -42,6 +45,7 @@ final class ProductSearchProjectionMutationCoordinator implements ProductSearchP
                 ProductSitemapUrlService::class,
             )->getUrlsForProduct($websiteId, $productId, $storeId)
             : \Closure::fromCallable($urlSnapshot);
+        $this->namespacePath = $namespacePath ?? new NamespacePath();
     }
 
     public function execute(
@@ -66,6 +70,7 @@ final class ProductSearchProjectionMutationCoordinator implements ProductSearchP
             $targetId,
             $storeId,
             $targetKey,
+            $connection,
         ): mixed {
             $this->activeTargets[$targetKey][] = $storeId;
             try {
@@ -89,6 +94,7 @@ final class ProductSearchProjectionMutationCoordinator implements ProductSearchP
                 if ($store !== null) {
                     $after['store_id'] = $store->id;
                 }
+                $catalogNamespace = $this->namespacePath->website($website->code, ['catalog']);
                 $change = $this->changes->create(
                     resourceType: self::RESOURCE_TYPE,
                     resourceId: $websiteId . ':' . $eventSeq,
@@ -100,6 +106,7 @@ final class ProductSearchProjectionMutationCoordinator implements ProductSearchP
                     after: $after,
                     changedFields: \array_keys($after),
                     impact: [
+                        'namespaces' => [$catalogNamespace],
                         'urls' => array_column($currentUrls, 'loc'),
                         'previous_urls' => array_column($previousUrls, 'loc'),
                     ],
@@ -107,6 +114,21 @@ final class ProductSearchProjectionMutationCoordinator implements ProductSearchP
                     siteId: $websiteId,
                 );
                 \w_changed($change);
+                $this->transactions->afterCommit(
+                    $connection,
+                    'product_storefront_fpc_' . $websiteId . '_' . $targetId . '_' . $eventSeq,
+                    function () use ($websiteId, $targetId, $targetType, $currentUrls, $previousUrls): void {
+                        ObjectManager::getInstance(StorefrontCatalogCacheCoordinator::class)
+                            ->notifyCatalogChanged($websiteId, 'product_search_projection', [
+                                'product_id' => $targetId,
+                                'target_type' => $targetType,
+                                'urls' => array_column($currentUrls, 'loc'),
+                                'previous_urls' => array_column($previousUrls, 'loc'),
+                            ]);
+                        ObjectManager::getInstance(ProductStorefrontCacheInvalidator::class)
+                            ->clearForCatalogChange('product_search_projection:' . $websiteId . ':' . $targetId);
+                    },
+                );
 
                 return $result;
             } finally {

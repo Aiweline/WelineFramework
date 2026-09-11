@@ -23,12 +23,16 @@ Product 读取配置值，不从其他网站或后台请求推断地址。localh
 商品修改复用 `product_search_projection` ResourceChange，维持现有
 `product.search_projection_changed.v1`、`target_type`、`target_id` 与事件水位：
 
+- `impact.namespaces`：`website/{code}/catalog`，供 Framework `cache_namespace` bump，使店面详情页 FPC 键代次 miss。
 - `impact.urls`：修改完成后的公开绝对 URL；商品或店铺选品下架时可为空。
 - `impact.previous_urls`：修改开始前的公开绝对 URL，供旧 slug 清理/删除提交。
 - `after.store_ids`：公开 URL 快照对应的店铺 ID；Store mutation 继续保留
   `after.store_id` 与 `scope_kind=store`。Website/Store ID `0` 合法。
 - 后台保存由同一 coordinator 包住 EAV、选品与 Product 行更新，内层同商品
   Repository mutation 复用外层事件，旧 slug 在写属性之前捕获。
+- 事务 `afterCommit`：`StorefrontCatalogCacheCoordinator::notifyCatalogChanged` +
+  `ProductStorefrontCacheInvalidator` 清本地进程 FPC/router/WLS；CDN/SEO 仍由
+  `resource_changed` 接收方处理，禁止控制器手写 CDN purge。
 
 不新增跨模块直连或另一套商品通知。SEO/CDN 各自监听现有事件执行衍生动作。
 
