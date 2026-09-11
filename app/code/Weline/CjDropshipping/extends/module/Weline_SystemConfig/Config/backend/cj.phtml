@@ -1,0 +1,19 @@
+<?php
+/**
+ * @meta.title {default="CJ Dropshipping",description="CJ 货源供应商凭证"}
+ * @meta.description {default="全局一套 CJ 凭证；探活与拉品/推单共用。"}
+ * @config.area {backend}
+ * @config.sort {76}
+ * @config.acl {Weline_Dropship::config}
+ */
+?>
+<w:config:group code="dropship_channel_cj" label="CJ Dropshipping" sort="10">
+  <w:config:field key="dropship/channel/cj/email" label="CJ Email" type="text"
+                  value-type="string" default="" scope="global"/>
+  <w:config:field key="dropship/channel/cj/api_key" label="CJ API Key" type="text"
+                  value-type="string" default="" scope="global"
+                  description="CJ 开放平台 API Key，与 Email 配对使用。"/>
+  <w:config:field key="dropship/channel/cj/access_token" label="Access Token(缓存)" type="text"
+                  value-type="string" default="" scope="global"
+                  description="由探活/鉴权写入；一般无需手工填写。"/>
+</w:config:group>
