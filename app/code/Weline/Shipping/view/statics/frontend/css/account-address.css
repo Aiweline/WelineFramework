@@ -41,12 +41,17 @@
 } .account-address-form__grid [data-account-address-cascade],
 .account-address-form__grid [data-w-address-shell],
 .account-address-form__grid .w-address-shell { grid-column: 1 / -1; display: grid; gap: var(--weline-theme-space-3, 0.75rem);
-} .account-address-form__grid .w-address__postal,
-.account-address-form__grid .w-address__detail { display: grid; gap: 0.45rem;
-} .account-address-form__grid .w-address__label { color: var(--color-text-primary); font-size: 0.85rem; font-weight: 800;
-} .account-address-form__field span { color: var(--color-text-primary); font-size: 0.85rem; font-weight: 800;
-} .account-address-form__field input,
-.account-address-form__field textarea { background-color: var(--color-bg-primary); border: 1px solid var(--color-border-default); border-radius: var(--border-radius-lg, 0.75rem); color: var(--color-text-primary); min-height: 2.75rem; outline: none; padding: 0.7rem 0.9rem; width: 100%;
+} .account-address-form__grid .w-address__postal.w-field,
+.account-address-form__grid .w-address__detail.w-field,
+.account-address-form__grid .w-field.w-address__item {
+  gap: 0;
+  --weline-theme-field-label-bg: var(--color-bg-primary, #fff);
+} .account-address-form__field.w-field { gap: 0; --weline-theme-field-label-bg: var(--color-bg-primary, #fff);
+} .account-address-form__field span:not(.w-field__label) { color: var(--color-text-primary); font-size: 0.85rem; font-weight: 800;
+} .account-address-form__field .w-input,
+.account-address-form__field .w-textarea,
+.account-address-form__field input,
+.account-address-form__field textarea { background-color: var(--color-bg-primary); border: 1px solid var(--color-border-default); border-radius: var(--weline-radius-md, 0.5rem); color: var(--color-text-primary); min-height: var(--weline-control-height, 2.75rem); outline: none; padding: 0.7rem 0.9rem; width: 100%;
 } .account-address-form__field input:focus,
 .account-address-form__field textarea:focus { border-color: var(--color-border-focus); box-shadow: 0 0 0 3px var(--color-accent-light);
 } .account-address-form__field textarea { min-height: 5.5rem; resize: vertical;

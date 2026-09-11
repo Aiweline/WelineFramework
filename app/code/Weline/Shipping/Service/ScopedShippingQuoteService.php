@@ -19,6 +19,7 @@ final class ScopedShippingQuoteService implements ShippingQuoteServiceInterface
     public const ERROR_VERSION = 'shipping_quote_version_mismatch';
     public const ERROR_SERVICE = 'shipping_quote_service_unavailable';
     public const ERROR_EMPTY_SHIPPABLE = 'shipping_quote_no_shippable_lines';
+    public const ERROR_EMBARGO = 'shipping_destination_embargoed';
 
     /** @var array<string, array{amount_minor:int,label?:string,currencies?:list<string>}> */
     private readonly array $rates;
@@ -63,14 +64,16 @@ final class ScopedShippingQuoteService implements ShippingQuoteServiceInterface
         if ($this->shippableCount($request) === 0) {
             return [];
         }
+        $this->assertDestinationAllowed($request);
         $options = [];
-        if ($request->configVersion !== '' && $request->configVersion !== $this->activeConfigVersion()) {
+        $activeConfigVersion = $this->effectiveConfigVersion($request);
+        if ($request->configVersion !== '' && $request->configVersion !== $activeConfigVersion) {
             throw new ShippingQuoteConflictException(
                 self::ERROR_VERSION,
                 __('运费配置版本已变更，请重新报价'),
                 [
                     'request_config_version' => $request->configVersion,
-                    'active_config_version' => $this->activeConfigVersion(),
+                    'active_config_version' => $activeConfigVersion,
                 ],
             );
         }
@@ -99,7 +102,7 @@ final class ScopedShippingQuoteService implements ShippingQuoteServiceInterface
     public function quote(ShippingQuoteRequest $request, string $serviceCode): ShippingQuote
     {
         $this->assertRequestBasics($request);
-        $activeConfigVersion = $this->effectiveConfigVersion();
+        $activeConfigVersion = $this->effectiveConfigVersion($request);
         if ($request->configVersion !== $activeConfigVersion) {
             throw new ShippingQuoteConflictException(
                 self::ERROR_VERSION,
@@ -124,6 +127,7 @@ final class ScopedShippingQuoteService implements ShippingQuoteServiceInterface
                 expiresAt: gmdate('c', time() + 1800),
             );
         }
+        $this->assertDestinationAllowed($request);
         $serviceCode = trim($serviceCode);
         if ($serviceCode === '') {
             throw new ShippingQuoteConflictException(self::ERROR_SERVICE, __('service_code 不能为空'));
@@ -174,23 +178,76 @@ final class ScopedShippingQuoteService implements ShippingQuoteServiceInterface
                 $request->lines,
                 $request->currency,
                 $request->currencyPrecision,
+                $this->quoteContext($request->scope),
             );
         }
 
         return $this->rates;
     }
 
-    private function effectiveConfigVersion(): string
+    private function effectiveConfigVersion(?ShippingQuoteRequest $request = null): string
     {
         $harness = ShippingQuoteHarnessCatalog::load();
         if ($harness !== null) {
             return $harness['config_version'];
         }
         if (!$this->useMemory) {
-            return $this->manager()->activeQuoteConfigVersion();
+            $scope = $request instanceof ShippingQuoteRequest ? $request->scope : [];
+
+            return $this->manager()->activeQuoteConfigVersion($this->quoteContext($scope));
         }
 
         return $this->activeConfigVersion;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array{website_id:int,store_id:int,channel_id:int}|null
+     */
+    private function quoteContext(array $scope): ?array
+    {
+        $websiteId = (int)($scope['website_id'] ?? 0);
+        $storeId = (int)($scope['store_id'] ?? 0);
+        $channelId = (int)($scope['channel_id'] ?? 0);
+        if ($websiteId <= 0 && $storeId <= 0 && $channelId <= 0) {
+            return null;
+        }
+
+        return [
+            'website_id' => max(0, $websiteId),
+            'store_id' => max(0, $storeId),
+            'channel_id' => max(0, $channelId),
+        ];
+    }
+
+    private function assertDestinationAllowed(ShippingQuoteRequest $request): void
+    {
+        // Memory/harness fixtures exercise rate tables without Embargo DB.
+        if ($this->useMemory || ShippingQuoteHarnessCatalog::load() !== null) {
+            return;
+        }
+        try {
+            /** @var EmbargoService $embargo */
+            $embargo = \Weline\Framework\Manager\ObjectManager::getInstance(EmbargoService::class);
+            $embargo->assertAllowed($request->address, $this->quoteContext($request->scope));
+        } catch (ShippingQuoteConflictException $exception) {
+            throw $exception;
+        } catch (\RuntimeException $exception) {
+            throw new ShippingQuoteConflictException(
+                self::ERROR_EMBARGO,
+                $exception->getMessage() !== ''
+                    ? $exception->getMessage()
+                    : (string)__('当前收货地址暂不可配送，请更换地址后再下单。'),
+                ['address' => $request->address],
+                $exception,
+            );
+        } catch (\Throwable) {
+            throw new ShippingQuoteConflictException(
+                self::ERROR_EMBARGO,
+                (string)__('当前收货地址暂不可配送，请更换地址后再下单。'),
+                ['address' => $request->address],
+            );
+        }
     }
 
     private function manager(): ShippingServiceManager

@@ -12,8 +12,12 @@ declare(strict_types=1);
 namespace Weline\Shipping\Service;
 
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Shipping\Model\CarrierRegion;
+use Weline\Shipping\Model\DestinationRegion;
+use Weline\Shipping\Model\EmbargoRegion;
 use Weline\Shipping\Model\FreeShippingRule;
 use Weline\Shipping\Model\RateTemplate;
+use Weline\Shipping\Model\ServiceRegion;
 use Weline\Shipping\Model\ShippingService;
 
 /**
@@ -29,6 +33,9 @@ class ShippingServiceManager
 
     private ?CarrierCoverageMatchService $coverageMatch = null;
     private ?ServiceLaneMatchService $laneMatch = null;
+
+    /** @var array<string, string> request-local memo keyed by scope_type:scope_id */
+    private array $quoteConfigVersionMemo = [];
 
     public function __construct(
         ObjectManager $objectManager,
@@ -63,11 +70,17 @@ class ShippingServiceManager
      * @param string|null $district 区县
      * @return array 配送服务列表
      */
+    /**
+     * @param array{website_id?:int,store_id?:int,channel_id?:int}|null $context
+     * @return list<array<string, mixed>>
+     */
     public function getAvailableServices(
         string $countryCode,
         ?string $province = null,
         ?string $city = null,
-        ?string $district = null
+        ?string $district = null,
+        ?array $context = null,
+        ?array $addressMeta = null,
     ): array {
         // 唯一路径：承运商覆盖 ∩ 可售白名单（可空）∩ 非禁运，按承运商 sort_order。
         // 再按默认发货仓 + 航线目的地覆盖过滤（空覆盖=通配兼容旧配置）。
@@ -78,11 +91,16 @@ class ShippingServiceManager
                 'city' => trim((string)$city),
                 'district' => trim((string)$district),
             ];
+            if (\is_array($addressMeta)) {
+                $address = array_merge($address, $addressMeta);
+            }
             $services = $this->coverageMatch()->getAvailableServices(
                 $countryCode,
                 $province,
                 $city,
                 $district,
+                $context,
+                $address,
             );
 
             return $this->laneMatch()->filterByOriginAndDest($services, $address);
@@ -190,6 +208,7 @@ class ShippingServiceManager
      *
      * @param array<string,mixed> $address
      * @param list<array<string,mixed>> $lines
+     * @param array{website_id?:int,store_id?:int,channel_id?:int}|null $context
      * @return array<string,array{amount_minor:int,label:string,currencies:list<string>,free_reason?:string}>
      */
     public function quoteRates(
@@ -197,6 +216,7 @@ class ShippingServiceManager
         array $lines,
         string $currency,
         int $currencyPrecision = 2,
+        ?array $context = null,
     ): array {
         $currency = strtoupper(trim($currency));
         $destAddress = [
@@ -216,6 +236,8 @@ class ShippingServiceManager
             $destAddress['province'],
             $destAddress['city'],
             $destAddress['district'],
+            $context,
+            $destAddress,
         );
         $subtotalMinor = $this->subtotalMinor($lines);
         $preferred = $this->preferredShippingProfileCodes($lines);
@@ -302,19 +324,41 @@ class ShippingServiceManager
     }
 
     /**
-     * Hash all active service/template/rule facts that can affect a quote.
+     * Hash active service/template/rule + reachability facts for the nearest quote layer.
+     *
+     * @param array{website_id?:int,store_id?:int,channel_id?:int}|null $context
      */
-    public function activeQuoteConfigVersion(): string
+    public function activeQuoteConfigVersion(?array $context = null): string
     {
-        $services = $this->getModel()->reset()
+        /** @var ShippingConfigScopeService $scopeSvc */
+        $scopeSvc = $this->objectManager->getInstance(ShippingConfigScopeService::class);
+        $layer = $scopeSvc->resolveNearestServiceLayer($context);
+        $memoKey = (string)$layer['scope_type'] . ':' . (int)$layer['scope_id'];
+        if (isset($this->quoteConfigVersionMemo[$memoKey])) {
+            return $this->quoteConfigVersionMemo[$memoKey];
+        }
+
+        /** @var ShippingService $serviceModel */
+        $serviceModel = $this->objectManager->getInstance(ShippingService::class, [], false);
+        $query = $serviceModel->reset()
             ->where(ShippingService::schema_fields_IS_ACTIVE, 1)
-            ->order(ShippingService::schema_fields_ID, 'ASC')
-            ->select()
-            ->fetch();
+            ->order(ShippingService::schema_fields_ID, 'ASC');
+        $scopeSvc->applyScopeWhere(
+            $query,
+            $layer,
+            ShippingService::schema_fields_SCOPE_TYPE,
+            ShippingService::schema_fields_SCOPE_ID,
+        );
+        $services = $query->select()->fetch()->getItems();
         $facts = [];
-        foreach ($services->getItems() as $service) {
+        $serviceIds = [];
+        foreach ($services as $service) {
             if (!$service instanceof ShippingService) {
                 continue;
+            }
+            $serviceId = (int)$service->getId();
+            if ($serviceId > 0) {
+                $serviceIds[$serviceId] = true;
             }
             $templateId = (int)$service->getData(ShippingService::schema_fields_RATE_TEMPLATE_ID);
             $ruleId = (int)$service->getData(ShippingService::schema_fields_FREE_SHIPPING_RULE_ID);
@@ -325,29 +369,80 @@ class ShippingServiceManager
                 ? $this->objectManager->getInstance(FreeShippingRule::class, [], false)->load($ruleId)
                 : null;
             $facts[] = [
-                'service' => $this->canonical((array)$service->getData()),
+                'service' => $this->pickFactFields((array)$service->getData(), [
+                    ShippingService::schema_fields_ID,
+                    ShippingService::schema_fields_SCOPE_TYPE,
+                    ShippingService::schema_fields_SCOPE_ID,
+                    ShippingService::schema_fields_SERVICE_CODE,
+                    ShippingService::schema_fields_SERVICE_NAME,
+                    ShippingService::schema_fields_CARRIER_ID,
+                    ShippingService::schema_fields_RATE_TEMPLATE_ID,
+                    ShippingService::schema_fields_FREE_SHIPPING_RULE_ID,
+                    ShippingService::schema_fields_ORIGIN_SHIPPING_ADDRESS_ID,
+                    ShippingService::schema_fields_ESTIMATED_DAYS_MIN,
+                    ShippingService::schema_fields_ESTIMATED_DAYS_MAX,
+                    ShippingService::schema_fields_IS_FREE_SHIPPING,
+                    ShippingService::schema_fields_IS_ACTIVE,
+                    ShippingService::schema_fields_SORT_ORDER,
+                ]),
                 'template' => $template instanceof RateTemplate && $template->getId()
-                    ? $this->canonical((array)$template->getData())
+                    ? $this->pickFactFields((array)$template->getData(), [
+                        RateTemplate::schema_fields_ID,
+                        RateTemplate::schema_fields_SCOPE_TYPE,
+                        RateTemplate::schema_fields_SCOPE_ID,
+                        RateTemplate::schema_fields_TEMPLATE_CODE,
+                        RateTemplate::schema_fields_CALCULATION_TYPE,
+                        RateTemplate::schema_fields_BASE_FEE,
+                        RateTemplate::schema_fields_WEIGHT_UNIT,
+                        RateTemplate::schema_fields_WEIGHT_RATE,
+                        RateTemplate::schema_fields_VOLUME_UNIT,
+                        RateTemplate::schema_fields_VOLUME_RATE,
+                        RateTemplate::schema_fields_QUANTITY_RATE,
+                        RateTemplate::schema_fields_MIXED_CONFIG,
+                        RateTemplate::schema_fields_CURRENCY_CODE,
+                        RateTemplate::schema_fields_IS_ACTIVE,
+                    ])
                     : null,
                 'free_rule' => $rule instanceof FreeShippingRule && $rule->getId()
-                    ? $this->canonical((array)$rule->getData())
+                    ? $this->pickFactFields((array)$rule->getData(), [
+                        FreeShippingRule::schema_fields_ID,
+                        FreeShippingRule::schema_fields_SCOPE_TYPE,
+                        FreeShippingRule::schema_fields_SCOPE_ID,
+                        FreeShippingRule::schema_fields_RULE_CODE,
+                        FreeShippingRule::schema_fields_CONDITION_TYPE,
+                        FreeShippingRule::schema_fields_MIN_ORDER_AMOUNT,
+                        FreeShippingRule::schema_fields_MEMBER_LEVEL_IDS,
+                        FreeShippingRule::schema_fields_REGION_IDS,
+                        FreeShippingRule::schema_fields_COUPON_CODES,
+                        FreeShippingRule::schema_fields_MIXED_CONFIG,
+                        FreeShippingRule::schema_fields_IS_ACTIVE,
+                        FreeShippingRule::schema_fields_PRIORITY,
+                    ])
                     : null,
             ];
         }
 
-        return hash(
+        $version = hash(
             'sha256',
             json_encode([
+                'layer' => [
+                    'scope_type' => (string)$layer['scope_type'],
+                    'scope_id' => (int)$layer['scope_id'],
+                ],
                 'services' => $facts,
-                'reachability' => $this->reachabilityConfigFacts(),
+                'reachability' => $this->reachabilityConfigFacts($context, array_keys($serviceIds)),
             ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '',
         );
+
+        return $this->quoteConfigVersionMemo[$memoKey] = $version;
     }
 
     /**
+     * @param array{website_id?:int,store_id?:int,channel_id?:int}|null $context
+     * @param list<int> $serviceIds
      * @return array<string, mixed>
      */
-    private function reachabilityConfigFacts(): array
+    private function reachabilityConfigFacts(?array $context, array $serviceIds): array
     {
         $facts = [
             'embargo' => [],
@@ -355,70 +450,165 @@ class ShippingServiceManager
             'carrier_coverage' => [],
             'service_lanes' => [],
         ];
-        try {
-            /** @var \Weline\Shipping\Model\EmbargoRegion $embargo */
-            $embargo = $this->objectManager->getInstance(\Weline\Shipping\Model\EmbargoRegion::class);
-            $items = $embargo->reset()
-                ->where(\Weline\Shipping\Model\EmbargoRegion::schema_fields_IS_ACTIVE, 1)
-                ->order(\Weline\Shipping\Model\EmbargoRegion::schema_fields_ID, 'ASC')
-                ->select()
-                ->fetch()
-                ->getItems();
-            foreach ($items as $item) {
-                if (!$item instanceof \Weline\Shipping\Model\EmbargoRegion) {
-                    continue;
-                }
-                $facts['embargo'][] = $this->canonical((array)$item->getData());
-            }
-        } catch (\Throwable) {
+        /** @var ShippingConfigScopeService $scopeSvc */
+        $scopeSvc = $this->objectManager->getInstance(ShippingConfigScopeService::class);
+        $scopePairs = [
+            [EmbargoRegion::SCOPE_SYSTEM, 0],
+        ];
+        foreach ($scopeSvc->quoteLayerChain($context) as $layer) {
+            $scopePairs[] = [(string)$layer['scope_type'], (int)$layer['scope_id']];
         }
+
         try {
-            /** @var \Weline\Shipping\Model\DestinationRegion $dest */
-            $dest = $this->objectManager->getInstance(\Weline\Shipping\Model\DestinationRegion::class);
-            $items = $dest->reset()
-                ->order(\Weline\Shipping\Model\DestinationRegion::schema_fields_ID, 'ASC')
-                ->select()
-                ->fetch()
-                ->getItems();
-            foreach ($items as $item) {
-                if (is_object($item) && method_exists($item, 'getData')) {
-                    $facts['destination'][] = $this->canonical((array)$item->getData());
-                }
-            }
-        } catch (\Throwable) {
-        }
-        try {
-            /** @var \Weline\Shipping\Model\CarrierRegion $cover */
-            $cover = $this->objectManager->getInstance(\Weline\Shipping\Model\CarrierRegion::class);
-            $items = $cover->reset()
-                ->order(\Weline\Shipping\Model\CarrierRegion::schema_fields_ID, 'ASC')
-                ->select()
-                ->fetch()
-                ->getItems();
-            foreach ($items as $item) {
-                if (is_object($item) && method_exists($item, 'getData')) {
-                    $facts['carrier_coverage'][] = $this->canonical((array)$item->getData());
-                }
-            }
-        } catch (\Throwable) {
-        }
-        try {
-            /** @var \Weline\Shipping\Model\ServiceRegion $lane */
-            $lane = $this->objectManager->getInstance(\Weline\Shipping\Model\ServiceRegion::class);
-            $items = $lane->reset()
-                ->order(\Weline\Shipping\Model\ServiceRegion::schema_fields_ID, 'ASC')
-                ->select()
-                ->fetch()
-                ->getItems();
-            foreach ($items as $item) {
-                if (is_object($item) && method_exists($item, 'getData')) {
-                    $facts['service_lanes'][] = $this->canonical((array)$item->getData());
+            /** @var EmbargoRegion $embargo */
+            $embargo = $this->objectManager->getInstance(EmbargoRegion::class, [], false);
+            foreach ($scopePairs as [$type, $id]) {
+                $items = $embargo->reset()
+                    ->where(EmbargoRegion::schema_fields_SCOPE_TYPE, $type)
+                    ->where(EmbargoRegion::schema_fields_SCOPE_ID, $id)
+                    ->where(EmbargoRegion::schema_fields_IS_ACTIVE, 1)
+                    ->order(EmbargoRegion::schema_fields_ID, 'ASC')
+                    ->select()
+                    ->fetch()
+                    ->getItems();
+                foreach ($items as $item) {
+                    if (!$item instanceof EmbargoRegion) {
+                        continue;
+                    }
+                    $facts['embargo'][] = $this->pickFactFields((array)$item->getData(), [
+                        EmbargoRegion::schema_fields_ID,
+                        EmbargoRegion::schema_fields_SCOPE_TYPE,
+                        EmbargoRegion::schema_fields_SCOPE_ID,
+                        EmbargoRegion::schema_fields_REGION_TYPE,
+                        EmbargoRegion::schema_fields_COUNTRY_CODE,
+                        EmbargoRegion::schema_fields_REGION_ID,
+                        EmbargoRegion::schema_fields_REGION_CODE,
+                        EmbargoRegion::schema_fields_STREET_ID,
+                        EmbargoRegion::schema_fields_REASON_CODE,
+                        EmbargoRegion::schema_fields_ORIGIN,
+                        EmbargoRegion::schema_fields_IS_ACTIVE,
+                    ]);
                 }
             }
         } catch (\Throwable) {
         }
 
+        try {
+            /** @var DestinationRegion $dest */
+            $dest = $this->objectManager->getInstance(DestinationRegion::class, [], false);
+            foreach ($scopeSvc->quoteLayerChain($context) as $layer) {
+                $items = $dest->reset()
+                    ->where(DestinationRegion::schema_fields_SCOPE_TYPE, (string)$layer['scope_type'])
+                    ->where(DestinationRegion::schema_fields_SCOPE_ID, (int)$layer['scope_id'])
+                    ->where(DestinationRegion::schema_fields_IS_ACTIVE, 1)
+                    ->order(DestinationRegion::schema_fields_ID, 'ASC')
+                    ->select()
+                    ->fetch()
+                    ->getItems();
+                foreach ($items as $item) {
+                    if (!$item instanceof DestinationRegion) {
+                        continue;
+                    }
+                    $facts['destination'][] = $this->pickFactFields((array)$item->getData(), [
+                        DestinationRegion::schema_fields_ID,
+                        DestinationRegion::schema_fields_SCOPE_TYPE,
+                        DestinationRegion::schema_fields_SCOPE_ID,
+                        DestinationRegion::schema_fields_REGION_TYPE,
+                        DestinationRegion::schema_fields_COUNTRY_CODE,
+                        DestinationRegion::schema_fields_REGION_ID,
+                        DestinationRegion::schema_fields_REGION_CODE,
+                        DestinationRegion::schema_fields_STREET_ID,
+                        DestinationRegion::schema_fields_IS_ACTIVE,
+                    ]);
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        try {
+            /** @var CarrierRegion $cover */
+            $cover = $this->objectManager->getInstance(CarrierRegion::class, [], false);
+            $items = $cover->reset()
+                ->where(CarrierRegion::schema_fields_IS_ACTIVE, 1)
+                ->order(CarrierRegion::schema_fields_ID, 'ASC')
+                ->select()
+                ->fetch()
+                ->getItems();
+            foreach ($items as $item) {
+                if (!$item instanceof CarrierRegion) {
+                    continue;
+                }
+                $facts['carrier_coverage'][] = $this->pickFactFields((array)$item->getData(), [
+                    CarrierRegion::schema_fields_ID,
+                    CarrierRegion::schema_fields_CARRIER_ID,
+                    CarrierRegion::schema_fields_REGION_TYPE,
+                    CarrierRegion::schema_fields_COUNTRY_CODE,
+                    CarrierRegion::schema_fields_REGION_ID,
+                    CarrierRegion::schema_fields_REGION_CODE,
+                    CarrierRegion::schema_fields_STREET_ID,
+                    CarrierRegion::schema_fields_IS_ACTIVE,
+                ]);
+            }
+        } catch (\Throwable) {
+        }
+
+        if ($serviceIds !== []) {
+            try {
+                /** @var ServiceRegion $lane */
+                $lane = $this->objectManager->getInstance(ServiceRegion::class, [], false);
+                $wanted = [];
+                foreach ($serviceIds as $sid) {
+                    $sid = (int)$sid;
+                    if ($sid > 0) {
+                        $wanted[$sid] = true;
+                    }
+                }
+                $items = $lane->reset()
+                    ->where(ServiceRegion::schema_fields_IS_ACTIVE, 1)
+                    ->order(ServiceRegion::schema_fields_ID, 'ASC')
+                    ->select()
+                    ->fetch()
+                    ->getItems();
+                foreach ($items as $item) {
+                    if (!$item instanceof ServiceRegion) {
+                        continue;
+                    }
+                    $sid = (int)$item->getData(ServiceRegion::schema_fields_SERVICE_ID);
+                    if (!isset($wanted[$sid])) {
+                        continue;
+                    }
+                    $facts['service_lanes'][] = $this->pickFactFields((array)$item->getData(), [
+                        ServiceRegion::schema_fields_ID,
+                        ServiceRegion::schema_fields_SERVICE_ID,
+                        ServiceRegion::schema_fields_REGION_TYPE,
+                        ServiceRegion::schema_fields_COUNTRY_CODE,
+                        ServiceRegion::schema_fields_REGION_ID,
+                        ServiceRegion::schema_fields_REGION_CODE,
+                        ServiceRegion::schema_fields_IS_ACTIVE,
+                    ]);
+                }
+            } catch (\Throwable) {
+            }
+        }
+
         return $facts;
+    }
+
+    /**
+     * @param array<string|int, mixed> $data
+     * @param list<string> $keys
+     * @return array<string, mixed>
+     */
+    private function pickFactFields(array $data, array $keys): array
+    {
+        $out = [];
+        foreach ($keys as $key) {
+            if (array_key_exists($key, $data)) {
+                $out[$key] = $data[$key];
+            }
+        }
+
+        return $this->canonical($out);
     }
 
     /**
