@@ -107,7 +107,7 @@ class CmsPageProvider extends AbstractSitemapUrlProvider
         if ($pathGroup === 'blog' && $this->isModuleEnabled('Weline_Blog')) {
             return true;
         }
-        if ($pathGroup === 'help' && $this->isModuleEnabled('Weline_Help')) {
+        if ($pathGroup === 'faq' && $this->isModuleEnabled('Weline_Faq')) {
             return true;
         }
 
