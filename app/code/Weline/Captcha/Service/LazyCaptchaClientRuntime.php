@@ -18,7 +18,22 @@ final class LazyCaptchaClientRuntime
 
     public const SCRIPT_SOURCE = 'Weline_Captcha::js/captcha-lazy.js?v=20260909-mo-guard1';
 
-    public const STYLESHEET_SOURCE = 'Weline_Captcha::css/captcha-local.css?v=20260909-mo-guard1';
+    public const STYLESHEET_SOURCE = 'Weline_Captcha::css/captcha-local.css?v=20260910-google-ready1';
+
+    /**
+     * FPC-safe placeholder: page shells keep only the host; site keys load via Challenge.
+     */
+    public static function hostMarkup(string $formId, string $intent, string $mode = 'required'): string
+    {
+        return '<div class="weline-captcha-lazy-host"'
+            . ' data-weline-captcha-lazy="1"'
+            . ' data-challenge-route="weline_captcha/frontend/challenge"'
+            . ' data-form-id="' . \htmlspecialchars($formId, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"'
+            . ' data-intent="' . \htmlspecialchars($intent, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"'
+            . ' data-captcha-mode="' . \htmlspecialchars($mode, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"'
+            . '></div>'
+            . self::onceScriptHtml();
+    }
 
     public static function onceScriptHtml(): string
     {
@@ -65,6 +80,6 @@ final class LazyCaptchaClientRuntime
         } catch (\Throwable) {
         }
 
-        return '/Weline/Captcha/view/statics/css/captcha-local.css?v=20260909-mo-guard1';
+        return '/Weline/Captcha/view/statics/css/captcha-local.css?v=20260910-google-ready1';
     }
 }

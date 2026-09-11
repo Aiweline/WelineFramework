@@ -41,6 +41,24 @@ final class CaptchaConfig
         return $this->string('captcha/google/api_key');
     }
 
+    /**
+     * Google Cloud API keys usually start with "AIza". Site keys usually start with "6L".
+     * Merchants often paste Site Key into the API Key field; Google then returns
+     * "API key not valid".
+     */
+    public function googleApiKeyLooksLikeSiteKey(): bool
+    {
+        $apiKey = $this->googleApiKey();
+        if ($apiKey === '') {
+            return false;
+        }
+        if (\str_starts_with($apiKey, 'AIza')) {
+            return false;
+        }
+
+        return \str_starts_with($apiKey, '6L');
+    }
+
     public function googleAccessToken(): string
     {
         return $this->string('captcha/google/access_token');
@@ -98,9 +116,25 @@ final class CaptchaConfig
 
     public function isGoogleReady(): bool
     {
-        return $this->googleProjectId() !== ''
-            && $this->googleSiteKey() !== ''
-            && ($this->googleApiKey() !== '' || $this->googleAccessToken() !== '' || $this->googleRefreshToken() !== '');
+        if ($this->googleProjectId() === '' || $this->googleSiteKey() === '') {
+            return false;
+        }
+        // OAuth bearer/refresh can authenticate assessments without an API key.
+        if ($this->googleAccessToken() !== '' || $this->googleRefreshToken() !== '') {
+            return true;
+        }
+        $apiKey = $this->googleApiKey();
+        if ($apiKey === '') {
+            return false;
+        }
+        // Site-key-shaped values (6L…) are never valid Cloud API keys (AIza…).
+        // Always not-ready → Router falls back to local/Tencent (DEV and production).
+        // createAssessment still rejects 6L if Google is forced somehow.
+        if ($this->googleApiKeyLooksLikeSiteKey()) {
+            return false;
+        }
+
+        return true;
     }
 
     public function tencentEnabled(): bool

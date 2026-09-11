@@ -42,12 +42,13 @@ final class LocalImageCaptchaLayoutContractTest extends TestCase
         self::assertStringContainsString('ensureStylesheet', $lazyJs);
         self::assertStringContainsString('hoistFragmentStyles', $lazyJs);
         self::assertStringContainsString('refreshWhenShown', $lazyJs);
+        self::assertStringContainsString('#cs-bind-modal', $lazyJs);
         self::assertStringContainsString('scheduleDomScan', $lazyJs);
         self::assertStringContainsString('withObserverPaused', $lazyJs);
-        self::assertStringContainsString('20260909-mo-guard1', $lazyJs);
+        self::assertStringContainsString('20260910-google-ready1', $lazyJs);
 
         $runtime = (string) \file_get_contents(\dirname(__DIR__, 3) . '/Service/LazyCaptchaClientRuntime.php');
-        self::assertStringContainsString('20260909-mo-guard1', $runtime);
+        self::assertStringContainsString('20260910-google-ready1', $runtime);
         self::assertStringNotContainsString('20260908-google-trust1', $runtime);
         self::assertStringNotContainsString('20260905-input-fit1', $runtime);
         self::assertStringNotContainsString('20260907-pending1', $runtime);

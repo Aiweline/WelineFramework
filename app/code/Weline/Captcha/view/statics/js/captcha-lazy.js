@@ -24,7 +24,7 @@
 
     var DEFAULT_ROUTE = 'weline_captcha/frontend/challenge';
     var STYLESHEET_ID = 'weline-captcha-local-styles';
-    var STYLESHEET_FALLBACK = '/Weline/Captcha/view/statics/css/captcha-local.css?v=20260909-mo-guard1';
+    var STYLESHEET_FALLBACK = '/Weline/Captcha/view/statics/css/captcha-local.css?v=20260910-google-ready1';
     var FETCH_TIMEOUT_MS = 8000;
     var OBSERVE_OPTIONS = {
         childList: true,
@@ -240,6 +240,9 @@
 
     function refreshWhenShown(scope) {
         captchaRoots(scope).forEach(function (el) {
+            if (el.closest && el.closest('#cs-bind-modal')) {
+                return;
+            }
             var hidden = isEffectivelyHidden(el);
             var prev = visibilityState ? visibilityState.get(el) : undefined;
             noteVisibility(el, hidden);
@@ -420,6 +423,9 @@
             : [];
         var tasks = [];
         hosts.forEach(function (host) {
+            if (host.closest && host.closest('#cs-bind-modal')) {
+                return;
+            }
             if (!force && isEffectivelyHidden(host)) {
                 noteVisibility(host, true);
                 return;
@@ -454,6 +460,10 @@
             return;
         }
         var target = detail.form || detail.target || event.target;
+        // CustomerService bind modal owns its challenge URL + degrade_reason logging.
+        if (target instanceof Element && target.closest && target.closest('#cs-bind-modal')) {
+            return;
+        }
         degradeToLocal(target).catch(function () {});
     }
 

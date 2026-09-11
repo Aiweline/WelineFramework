@@ -7,6 +7,11 @@
 
 开发前必须先完成 `prepare_project`；进入 `ready` 后调用 `resolve_task_context`，由 MCP 按当前任务返回本模块的最小文档集合。全局门禁见 `app/code/Weline/Ai/doc/AI开发治理.md`。
 
+## CSP 应用默认（供应商 → Extends）
+
+各 `VerificationProviderInterface` 实现 `cspDirectives()` 自报 SDK 域名。  
+`extends/module/Weline_Framework/Security/Csp/CaptchaVendorsCsp.php` 从 `CaptchaProviderRegistry` 汇总全部供应商 CSP，贡献为 Framework **应用默认**（不可被 Scope 覆盖）。新增供应商时只需实现 `cspDirectives()`，无需改 Framework Defaults。
+
 ## 模块定位
 
 - 模块代码：`Weline_Captcha`
