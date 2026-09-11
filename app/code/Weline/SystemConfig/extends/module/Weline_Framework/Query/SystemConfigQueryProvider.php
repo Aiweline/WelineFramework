@@ -309,14 +309,14 @@ class SystemConfigQueryProvider implements QueryProviderInterface
         return $this->systemConfig->setConfig($key, $value, $module, $area);
     }
 
-    private function setScopedConfig(array $params): bool
+    private function setScopedConfig(array $params): array
     {
         $key = (string)($params['key'] ?? '');
         $module = (string)($params['module'] ?? '');
         $area = (string)($params['area'] ?? SystemConfig::area_BACKEND);
 
         if ($key === '' || $module === '') {
-            return false;
+            return ['success' => false, 'status' => 'invalid_params'];
         }
 
         $target = $this->resolveWriteTarget($params);
@@ -328,11 +328,10 @@ class SystemConfigQueryProvider implements QueryProviderInterface
             $this->expectedGrantVersion($params),
         );
 
-        return $this->systemConfig->setScopedConfig(
-            key: $key,
-            value: $params['value'] ?? null,
+        return $this->systemConfig->saveScopeConfig(
             module: $module,
             area: $area,
+            values: [$key => $params['value'] ?? null],
             scope: $target['storage_scope'],
             // Omit locale → default row (same as config center). Never fall through
             // to admin UI language via normalizeLocale(null), or reads with locale=default miss the write.
@@ -850,6 +849,7 @@ class SystemConfigQueryProvider implements QueryProviderInterface
             'is_sensitive',
             'operation',
             'parent_version_id',
+            'cache_namespaces',
         ];
         $options = [];
         foreach ($allowed as $key) {
@@ -999,7 +999,7 @@ class SystemConfigQueryProvider implements QueryProviderInterface
                 ],
                 [
                     'name' => 'setScopedConfig',
-                    'description' => __('Set one scoped config value and create a version batch.'),
+                    'description' => __('Set one scoped config value, invalidate related caches, and return the save message.'),
                     'frontend' => true,
                     'auth' => 'backend',
                     'backend' => true,

@@ -105,3 +105,9 @@
   color: var(--weline-theme-text, inherit);
   border-color: var(--weline-theme-border, transparent);
 }
+
+/* Text autosave in flight: subtle token outline, never steal focus via disable. */
+.w-config-embed__control [data-w-config-embed-control][data-saving="1"] {
+  outline: 1px dashed var(--weline-theme-border, var(--backend-color-border-default, currentColor));
+  outline-offset: 2px;
+}
