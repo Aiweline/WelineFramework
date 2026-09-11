@@ -110,7 +110,8 @@ class CheckoutQueryProvider implements QueryProviderInterface
                     $guestToken = trim((string)Cookie::get(CartService::GUEST_TOKEN_COOKIE));
                 }
             }
-            $cart = $this->cartSnapshots()->freeze($scopeIdentity, $guestToken, $customerId);
+            $cartType = $this->resolveCartTypePreference($params);
+            $cart = $this->cartSnapshots()->freeze($scopeIdentity, $guestToken, $customerId, $cartType);
             $currency = strtoupper(trim((string)($cart['currency'] ?? '')));
             $runtimeCurrency = strtoupper(trim(RequestContext::getWelineUserCurrency()));
             if ($runtimeCurrency !== '' && $currency !== $runtimeCurrency) {
@@ -134,10 +135,10 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 clientHints: $clientHints,
                 customerId: $customerId,
                 cartHash: (string)$cart['cart_hash'],
-                couponCode: $this->resolveFreezeCouponCode($params),
+                couponCode: $this->resolveFreezeCouponCode($params + ['cart_type' => $cartType]),
                 paymentMethod: trim((string)($params['payment_method'] ?? '')) ?: null,
                 billingAddress: \is_array($params['billing_address'] ?? null) ? $params['billing_address'] : null,
-                cartType: strtolower(trim((string)($cart['cart_type'] ?? 'toc'))) ?: 'toc',
+                cartType: strtolower(trim((string)($cart['cart_type'] ?? $cartType))) ?: $cartType,
             );
 
             return [
@@ -195,6 +196,9 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 expectedConfigVersion: $expectedConfig,
                 expectedTaxRuleSetHash: $expectedTaxHash,
                 paymentMethod: trim((string)($params['payment_method'] ?? '')) ?: null,
+                b2bCreditApplyMinor: array_key_exists('b2b_credit_apply_minor', $params)
+                    ? max(0, (int)$params['b2b_credit_apply_minor'])
+                    : null,
             );
             $payment = $this->paymentRecoveryState->get($quoteToken, $idempotencyKey);
             if (!is_array($payment)) {
@@ -211,7 +215,9 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 if ($cartType === 'tob' || $deposit !== []) {
                     $payContext['purpose'] = 'deposit';
                     $payContext['hang_purpose'] = 'deposit';
-                    if ((int)($deposit['deposit_amount_minor'] ?? 0) > 0) {
+                    if (array_key_exists('b2b_credit_cash_deposit_minor', $deposit)) {
+                        $payContext['deposit_amount_minor'] = max(0, (int)$deposit['b2b_credit_cash_deposit_minor']);
+                    } elseif ((int)($deposit['deposit_amount_minor'] ?? 0) > 0) {
                         $payContext['deposit_amount_minor'] = (int)$deposit['deposit_amount_minor'];
                     }
                     if ((int)($deposit['balance_amount_minor'] ?? 0) > 0) {
@@ -873,7 +879,20 @@ class CheckoutQueryProvider implements QueryProviderInterface
             ];
         }
 
-        $shippingAmount = $this->resolveShippingAmount($shippingMethod, $shippingAddress, $items, $currency);
+        $shippingMethods = $this->loadShippingMethods($shippingAddress, $items, $currency);
+        if ($shippingMethods === []) {
+            throw new \InvalidArgumentException((string)__('当前收货地址暂不可配送，请更换地址后再下单。'));
+        }
+        $shippingAmount = null;
+        foreach ($shippingMethods as $method) {
+            if ((string)($method['code'] ?? '') === $shippingMethod) {
+                $shippingAmount = (float)($method['amount'] ?? $method['fee'] ?? 0);
+                break;
+            }
+        }
+        if ($shippingAmount === null) {
+            throw new \InvalidArgumentException((string)__('所选配送方式不可用，请重新选择配送方式。'));
+        }
         $orderItems = [];
         foreach ($items as $item) {
             $qty = (float)($item['qty'] ?? $item['quantity'] ?? 1);
@@ -953,15 +972,11 @@ class CheckoutQueryProvider implements QueryProviderInterface
     private function loadCartSummary(array $params = []): array
     {
         $guestToken = trim((string)($params['guest_token'] ?? ''));
-        $mode = strtolower(trim((string)($params['cart_type'] ?? $params['selling_mode'] ?? '')));
-        if ($mode !== 'toc' && $mode !== 'tob') {
-            $mode = strtolower(trim((string)Cookie::get('weline_selling_mode')));
-        }
+        $cookieToken = trim((string)Cookie::get(CartService::GUEST_TOKEN_COOKIE));
+        $mode = $this->resolveCartTypePreference($params);
         $queryParams = $guestToken !== '' ? ['guest_token' => $guestToken] : [];
-        if ($mode === 'toc' || $mode === 'tob') {
-            $queryParams['cart_type'] = $mode;
-            $queryParams['selling_mode'] = $mode;
-        }
+        $queryParams['cart_type'] = $mode;
+        $queryParams['selling_mode'] = $mode;
         try {
             $v2Result = w_query('cart', 'getCart', $queryParams);
         } catch (\Throwable) {
@@ -969,15 +984,79 @@ class CheckoutQueryProvider implements QueryProviderInterface
         }
         $view = ObjectManager::getInstance(\Weline\Checkout\Service\CheckoutPageViewModel::class);
         $cart = $view->fromQueryResult($v2Result);
+        // Client sessionStorage may hold an orphan token while the HttpOnly cookie
+        // still owns the real cart (header SSR / mini-cart). Fall back to cookie.
+        if ($cart['is_empty'] && $cookieToken !== '' && !hash_equals($cookieToken, $guestToken)) {
+            $cookieParams = [
+                'guest_token' => $cookieToken,
+                'cart_type' => $mode,
+                'selling_mode' => $mode,
+            ];
+            try {
+                $cookieResult = w_query('cart', 'getCart', $cookieParams);
+            } catch (\Throwable) {
+                $cookieResult = null;
+            }
+            $cookieCart = $view->fromQueryResult($cookieResult);
+            if (!$cookieCart['is_empty']) {
+                $cart = $cookieCart;
+                $v2Result = $cookieResult;
+                $guestToken = $cookieToken;
+            }
+        }
         if ($cart['is_empty']) {
-            $cart = $view->currentCart($guestToken);
+            $cart = $view->currentCart($guestToken !== '' ? $guestToken : null);
+        }
+        // Logged-in: preferred toc empty while wholesale sibling has lines → use tob
+        // (header/万能车按类型；结账不得卡在空零售车).
+        if ($cart['is_empty'] && $mode === 'toc' && $this->currentCustomerId() !== null) {
+            $altParams = $guestToken !== '' ? ['guest_token' => $guestToken] : [];
+            $altParams['cart_type'] = 'tob';
+            $altParams['selling_mode'] = 'tob';
+            try {
+                $altResult = w_query('cart', 'getCart', $altParams);
+            } catch (\Throwable) {
+                $altResult = null;
+            }
+            $altCart = $view->fromQueryResult($altResult);
+            if (!$altCart['is_empty']) {
+                $cart = $altCart;
+                $v2Result = $altResult;
+                $mode = 'tob';
+            }
         }
         if (!isset($cart['cart_type'])) {
             $payload = \is_array($v2Result['data'] ?? null) ? $v2Result['data'] : (\is_array($v2Result) ? $v2Result : []);
-            $cart['cart_type'] = strtolower(trim((string)($payload['cart_type'] ?? $mode ?: 'toc'))) ?: 'toc';
+            $cart['cart_type'] = strtolower(trim((string)($payload['cart_type'] ?? $mode))) ?: $mode;
         }
 
         return $cart;
+    }
+
+    /**
+     * Resolve toc|tob for checkout reads/freeze (params → website cookie → global cookie → toc).
+     *
+     * @param array<string, mixed> $params
+     */
+    private function resolveCartTypePreference(array $params): string
+    {
+        $mode = strtolower(trim((string)($params['cart_type'] ?? $params['selling_mode'] ?? $params['sellingMode'] ?? '')));
+        if ($mode === 'toc' || $mode === 'tob') {
+            return $mode;
+        }
+        $websiteId = (int)RequestContext::getWelineWebsiteId();
+        if ($websiteId > 0) {
+            $scoped = strtolower(trim((string)Cookie::get('weline_selling_mode_w' . $websiteId)));
+            if ($scoped === 'toc' || $scoped === 'tob') {
+                return $scoped;
+            }
+        }
+        $cookie = strtolower(trim((string)Cookie::get('weline_selling_mode')));
+        if ($cookie === 'toc' || $cookie === 'tob') {
+            return $cookie;
+        }
+
+        return 'toc';
     }
 
     /**
@@ -1051,12 +1130,28 @@ class CheckoutQueryProvider implements QueryProviderInterface
                     'country_code' => $countryCode,
                     'country' => $countryCode,
                     'province' => (string)($shippingAddress['province'] ?? ''),
+                    'province_code' => (string)($shippingAddress['province_code'] ?? ''),
+                    'province_region_id' => (int)($shippingAddress['province_region_id'] ?? $shippingAddress['province_id'] ?? 0),
                     'city' => (string)($shippingAddress['city'] ?? ''),
+                    'city_code' => (string)($shippingAddress['city_code'] ?? ''),
+                    'city_region_id' => (int)($shippingAddress['city_region_id'] ?? $shippingAddress['city_id'] ?? 0),
                     'district' => (string)($shippingAddress['district'] ?? ''),
+                    'district_code' => (string)($shippingAddress['district_code'] ?? ''),
+                    'district_region_id' => (int)($shippingAddress['district_region_id'] ?? $shippingAddress['district_id'] ?? 0),
+                    'postal_code' => (string)($shippingAddress['postal_code'] ?? ''),
+                    'street_id' => (int)($shippingAddress['street_id'] ?? 0),
                 ],
                 'lines' => $lines,
                 'currency' => $currency !== '' ? $currency : 'CNY',
                 'currency_precision' => 2,
+                'scope' => [
+                    'website_id' => (int)RequestContext::getWelineWebsiteId(),
+                    'store_id' => (int)RequestContext::getWelineStoreId(),
+                    'channel_id' => (int)RequestContext::getWelineChannelId(),
+                ],
+                'website_id' => (int)RequestContext::getWelineWebsiteId(),
+                'store_id' => (int)RequestContext::getWelineStoreId(),
+                'channel_id' => (int)RequestContext::getWelineChannelId(),
             ]);
         } catch (\Throwable) {
             return [];
@@ -1395,6 +1490,8 @@ class CheckoutQueryProvider implements QueryProviderInterface
                         'payment_method' => ['type' => 'string', 'required' => false, 'max_length' => 64],
                         'client_hints' => ['type' => 'array', 'required' => false],
                         'guest_token' => ['type' => 'string', 'required' => false, 'max_length' => 64],
+                        'cart_type' => ['type' => 'string', 'required' => false, 'max_length' => 16],
+                        'selling_mode' => ['type' => 'string', 'required' => false, 'max_length' => 16],
                     ],
                     'returns' => ['type' => 'array'],
                     'summary' => 'Freeze the server-owned current Cart and create one Shipping Quote session',

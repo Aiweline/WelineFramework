@@ -119,17 +119,17 @@ $displayText = trim((string)($context['display_text'] ?? '')) ?: (string)__('选
             <button type="button" class="w-button" data-action="close" data-size="xs" data-variant="outline"><?= __('关闭') ?></button>
         </div>
 
-        <label class="w-field country-picker">
-            <span class="w-form-label w-field__label"><?= __('国家/地区') ?></span>
+        <div class="w-field country-picker">
+            <label class="w-field__label"><?= __('国家/地区') ?></label>
             <input type="hidden" data-country-code value="<?= $esc((string)($context['country_code'] ?? 'CN')) ?>">
             <input type="search"
-                   class="w-form-control w-input"
+                   class="w-input"
                    data-country-search
                    <?= $countrySearch ? '' : 'disabled' ?>
                    placeholder="<?= $esc((string)__('搜索国家/地区')) ?>"
                    value="<?= $esc((string)($context['country_name'] ?? '')) ?>">
             <div class="country-results" data-country-results hidden></div>
-        </label>
+        </div>
 
         <div class="address-list" data-address-list></div>
 

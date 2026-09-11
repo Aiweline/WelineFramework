@@ -107,8 +107,11 @@ if ($orderCurrency !== '' && $money !== []) {
 <main class="amz-order-confirm amz-order-confirm--<?= $escape($heroTone) ?> checkout-success-page<?= $paymentCancelled ? ' checkout-success-page--cancelled' : ' weline-pixel::checkout_success' ?>"
     weline-code="checkout.checkout.success.section_1"
     data-testid="checkout-success"
+    data-weline-load="cart,checkoutLifecycle,paymentLifecycle"
+    data-checkout-lifecycle="<?= $escape($paymentCancelled ? 'cancelled' : 'success') ?>"
     <?php if (!$paymentCancelled): ?>
     data-pixel-event="checkout_success"
+    data-payment-outcome="paid"
     <?php else: ?>
     data-payment-outcome="cancel"
     data-cancel-state="<?= $escape($cancelAlready ? 'already' : 'done') ?>"

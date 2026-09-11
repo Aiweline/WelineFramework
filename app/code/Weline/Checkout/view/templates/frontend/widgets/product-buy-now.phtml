@@ -38,18 +38,23 @@ if ($isPreviewMode && !$hasPreassigned && $cardProductId <= 0) {
 } else {
     $offer = StorefrontOfferResolver::resolve($this);
 }
-if ($offer === [] && !$isPreviewMode) {
+
+// Live PDP: never leave Theme purchase slot empty — emit unlockable buy-now
+// even when offer resolve fails or current selection is unsellable.
+if ($offer === [] && $isPreviewMode && !$hasPreassigned && $cardProductId <= 0) {
     return;
 }
 
-$productId = max(0, (int)($offer['product_id'] ?? 0));
+$productId = max(0, (int)($offer['product_id'] ?? $cardProductId));
 $offerUuid = trim((string)($offer['global_offer_uuid'] ?? ''));
 $sellable = !empty($offer['sellable']);
 $quoteOnly = !empty($offer['quote_only']);
 
-if ($quoteOnly || (!$isPreviewMode && (!$sellable || $offerUuid === ''))) {
+if ($quoteOnly) {
     return;
 }
+
+$buttonEnabled = $isPreviewMode ? false : ($sellable && $offerUuid !== '');
 ?>
 <div class="weline-checkout-product-buy-now"
      data-weline-load="cart"
@@ -69,7 +74,7 @@ if ($quoteOnly || (!$isPreviewMode && (!$sellable || $offerUuid === ''))) {
             data-global-offer-uuid="<?= $escape($offerUuid) ?>"
             data-checkout-url="@url{'checkout'}"
             data-qty="1"
-            <?= $isPreviewMode ? 'disabled' : '' ?>>
+            <?= $buttonEnabled ? '' : 'disabled' ?>>
         <?= __('立即结账') ?>
     </button>
 </div>

@@ -88,28 +88,53 @@ final class CheckoutOrderPaymentService
                 strtolower(trim((string)($context['hang_purpose'] ?? $context['purpose'] ?? ''))),
             );
             $typePayload = $order->typePayload;
-            if (isset($context['deposit_amount_minor']) && (int)$context['deposit_amount_minor'] > 0
-                && ($hangPurpose === 'deposit' || $hangPurpose === '')
-            ) {
-                $amountMinor = (int)$context['deposit_amount_minor'];
-                $hangPurpose = 'deposit';
-            } elseif (isset($context['balance_amount_minor']) && (int)$context['balance_amount_minor'] > 0
-                && $hangPurpose === 'balance'
-            ) {
-                $amountMinor = (int)$context['balance_amount_minor'];
-            } elseif ($hangPurpose === 'deposit' && isset($typePayload['deposit_amount_minor'])) {
-                $amountMinor = (int)$typePayload['deposit_amount_minor'];
-            } elseif ($hangPurpose === 'balance' && isset($typePayload['balance_amount_minor'])) {
-                $amountMinor = (int)$typePayload['balance_amount_minor'];
-            } elseif ($hangPurpose === 'deposit' || $hangPurpose === 'balance') {
-                $hangAmounts = $this->hangAmountsForOrder($order->orderUuid);
-                if ($hangPurpose === 'deposit' && ($hangAmounts['deposit_amount_minor'] ?? 0) > 0) {
-                    $amountMinor = (int)$hangAmounts['deposit_amount_minor'];
-                } elseif ($hangPurpose === 'balance' && ($hangAmounts['balance_amount_minor'] ?? 0) > 0) {
-                    $amountMinor = (int)$hangAmounts['balance_amount_minor'];
+            if ($hangPurpose === 'deposit' || ($hangPurpose === '' && strtolower($order->orderType) === 'tob')) {
+                $hangPurpose = $hangPurpose !== '' ? $hangPurpose : 'deposit';
+                // Cash deposit is authoritative when credit apply was planned (0 allowed).
+                if (array_key_exists('b2b_credit_cash_deposit_minor', $typePayload)) {
+                    $amountMinor = max(0, (int)$typePayload['b2b_credit_cash_deposit_minor']);
+                } elseif (array_key_exists('deposit_amount_minor', $context)) {
+                    $amountMinor = max(0, (int)$context['deposit_amount_minor']);
+                } elseif (isset($typePayload['deposit_amount_minor'])) {
+                    $amountMinor = max(0, (int)$typePayload['deposit_amount_minor']);
+                } else {
+                    $hangAmounts = $this->hangAmountsForOrder($order->orderUuid);
+                    $amountMinor = max(0, (int)($hangAmounts['deposit_amount_minor'] ?? 0));
+                }
+            } elseif ($hangPurpose === 'balance') {
+                if (isset($context['balance_amount_minor']) && (int)$context['balance_amount_minor'] > 0) {
+                    $amountMinor = (int)$context['balance_amount_minor'];
+                } elseif (isset($typePayload['balance_amount_minor'])) {
+                    $amountMinor = (int)$typePayload['balance_amount_minor'];
+                } else {
+                    $hangAmounts = $this->hangAmountsForOrder($order->orderUuid);
+                    $amountMinor = (int)($hangAmounts['balance_amount_minor'] ?? 0);
                 }
             }
+
+            $creditReserved = $this->reserveB2bCreditForDeposit($order, $typePayload, $idempotencyKey);
+            if ($creditReserved !== null) {
+                $typePayload = $creditReserved;
+            }
+
+            // Zero cash deposit: credit covered the deposit — skip PSP, mark deposit paid.
+            if ($hangPurpose === 'deposit' && $amountMinor <= 0) {
+                $lastPurpose = $hangPurpose;
+                $this->notifyHangDepositPaid($order->orderUuid, 'b2b_credit_zero_cash_' . $order->orderUuid);
+                $transactions[] = [
+                    'order_uuid' => $order->orderUuid,
+                    'transaction_id' => null,
+                    'transaction_no' => 'b2b_credit_zero_cash',
+                    'method_code' => 'b2b_credit',
+                    'status' => PaymentTransactionRecord::STATUS_SUCCESS,
+                    'response' => [],
+                ];
+                $hasPartial = true;
+                continue;
+            }
+
             if ($amountMinor <= 0) {
+                $this->releaseB2bCreditForDeposit($order->orderUuid, $typePayload, $idempotencyKey);
                 throw new \RuntimeException('checkout_payment_amount_invalid');
             }
             $lastPurpose = $hangPurpose;
@@ -179,8 +204,14 @@ final class CheckoutOrderPaymentService
                 $paymentContext['browser_landing_params'] = $landingParams;
             }
 
-            $transaction = $this->payments->tryCreatePayment($methodCode, $paymentContext);
+            try {
+                $transaction = $this->payments->tryCreatePayment($methodCode, $paymentContext);
+            } catch (\Throwable $e) {
+                $this->releaseB2bCreditForDeposit($order->orderUuid, $typePayload, $idempotencyKey);
+                throw $e;
+            }
             if (!$transaction instanceof PaymentTransactionRecord) {
+                $this->releaseB2bCreditForDeposit($order->orderUuid, $typePayload, $idempotencyKey);
                 throw new \RuntimeException('checkout_payment_method_unavailable');
             }
 
@@ -191,6 +222,7 @@ final class CheckoutOrderPaymentService
                 PaymentTransactionRecord::STATUS_REFUNDED,
             ], true)) {
                 $hasFailed = true;
+                $this->releaseB2bCreditForDeposit($order->orderUuid, $typePayload, $idempotencyKey);
             } elseif (!$paid) {
                 $hasPending = true;
             }
@@ -336,6 +368,87 @@ final class CheckoutOrderPaymentService
             $service->onDepositPaid($orderUuid, $intentCode !== '' ? $intentCode : 'deposit_' . $orderUuid);
         } catch (\Throwable) {
             // Hang row may be absent in unit fixtures; payment amount path still stands.
+        }
+    }
+
+    /**
+     * @param array<string,mixed> $typePayload
+     * @return array<string,mixed>|null updated type_payload
+     */
+    private function reserveB2bCreditForDeposit(
+        OrderReadResult $order,
+        array $typePayload,
+        string $idempotencyKey,
+    ): ?array {
+        if (strtolower($order->orderType) !== 'tob') {
+            return null;
+        }
+        $applyBase = max(0, (int)($typePayload['b2b_credit_apply_base_minor'] ?? 0));
+        if ($applyBase <= 0 || ($typePayload['discount_kind'] ?? '') !== 'asset_b2b_credit') {
+            return null;
+        }
+        if (!class_exists(\Weline\B2B\Service\B2BDepositCreditOrchestrator::class)) {
+            return null;
+        }
+        try {
+            $orch = ObjectManager::getInstance(\Weline\B2B\Service\B2BDepositCreditOrchestrator::class);
+            if (!$orch instanceof \Weline\B2B\Service\B2BDepositCreditOrchestrator) {
+                return null;
+            }
+            $customerId = (string)($order->customerId ?? '');
+            $result = $orch->reserveForDeposit(
+                $customerId,
+                $order->websiteId,
+                $order->orderUuid,
+                $idempotencyKey,
+                [
+                    'apply_base_minor' => $applyBase,
+                    'apply_checkout_minor' => (int)($typePayload['b2b_credit_apply_checkout_minor'] ?? 0),
+                    'cash_deposit_minor' => (int)($typePayload['b2b_credit_cash_deposit_minor'] ?? 0),
+                    'base_currency' => (string)($typePayload['fx_base_currency'] ?? ''),
+                    'checkout_currency' => (string)($typePayload['fx_checkout_currency'] ?? ''),
+                    'fx' => [
+                        'rate' => (string)($typePayload['fx_rate'] ?? ''),
+                        'label' => (string)($typePayload['fx_rate_label'] ?? ''),
+                    ],
+                ],
+            );
+            if (!$result['ok']) {
+                throw new \RuntimeException('b2b_credit_reserve_failed:' . (string)($result['error'] ?? ''));
+            }
+            $merged = array_merge($typePayload, $result['type_payload']);
+            if ($this->orders instanceof \Weline\Order\Service\OrderFacade) {
+                $this->orders->mergeTypePayload($order->orderUuid, $merged);
+            }
+
+            return $merged;
+        } catch (\RuntimeException $e) {
+            throw $e;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /** @param array<string,mixed> $typePayload */
+    private function releaseB2bCreditForDeposit(
+        string $orderUuid,
+        array $typePayload,
+        string $idempotencyKey,
+    ): void {
+        if (!class_exists(\Weline\B2B\Service\B2BDepositCreditOrchestrator::class)) {
+            return;
+        }
+        try {
+            $orch = ObjectManager::getInstance(\Weline\B2B\Service\B2BDepositCreditOrchestrator::class);
+            if (!$orch instanceof \Weline\B2B\Service\B2BDepositCreditOrchestrator) {
+                return;
+            }
+            $result = $orch->releaseOnFailure($typePayload, $orderUuid, $idempotencyKey);
+            if ($this->orders instanceof \Weline\Order\Service\OrderFacade) {
+                $this->orders->mergeTypePayload($orderUuid, $result['type_payload']);
+            }
+        } catch (\Throwable) {
+            // Soft-fail release.
         }
     }
 
