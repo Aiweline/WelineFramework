@@ -48,6 +48,11 @@
 只读查看站点检测、证据、发布与实验实时状态。,"Read-only view of site detection, evidence, publishing and experiment real-time status."
 "SEO 事件表现分析","SEO Event Performance Analysis"
 将汇总的访客与搜索证据转换为一条有边界的结构化优化建议。,"Converts aggregated Visitor/Search evidence into one bounded structured recommendation."
+"SEO 站内重复内容","SEO on-site duplicate content"
+SEO,SEO
+站内正文近重复检测报告（消息内含报告查看地址）,"On-site near-duplicate report (message includes report URL)"
+"SEO Sitemap","SEO Sitemap"
+"Sitemap 提交与账户绑定相关提示","Sitemap 提交与账户绑定相关提示"
 id属性不能为空,"The id attribute cannot be empty"
 搜索SEO账户...,"Search SEO accounts..."
 请选择SEO账户,"Please select SEO account"
@@ -104,6 +109,7 @@ SEO管理,"SEO Management"
 "Google OAuth 拒绝令牌（HTTP %{1}），请检查 Service Account 与 API 启用状态","Google OAuth 拒绝令牌（HTTP %{1}），请检查 Service Account 与 API 启用状态"
 "Google OAuth 响应缺少 access_token","Google OAuth 响应缺少 access_token"
 "缺少 Service Account 配置","Missing Service Account configuration"
+"GSC Platform Property（社交/视频）暂无公开 API；渠道 URL 仅本地登记，请在 Search Console 手动添加平台属性。","GSC Platform Property（社交/视频）暂无公开 API；渠道 URL 仅本地登记，请在 Search Console 手动添加平台属性。"
 "成功获取 Google Search Console 统计数据","Successfully retrieved Google Search Console statistics"
 获取统计数据失败：%{1},"Failed to fetch statistical data: %{1}"
 "缺少 inspectionUrl 或 site_url","缺少 inspectionUrl 或 site_url"
@@ -141,6 +147,14 @@ refresh,refresh
 AI优化控制台,"AI optimization console"
 sparkles,sparkles
 查看AI优化控制台,"View the AI ​​optimization console"
+"扫描完成：重复 %1，疑似 %2。报告：%3","Scan complete: %1 duplicates, %2 suspects. Report: %3"
+内容重复检测,"Content duplicate check"
+重复内容报告,"Duplicate content report"
+报告不存在：run_id=%1,"Report not found: run_id=%1"
+copy,copy
+"SEO 站内正文近重复检测","SEO 站内正文近重复检测"
+查看重复检测面板,查看重复检测面板
+查看重复检测报告,查看重复检测报告
 账户不存在,"Account does not exist"
 账户名称不能为空,"Account name cannot be empty"
 平台不能为空,"Platform cannot be empty"
@@ -628,20 +642,85 @@ AI优化建议,"AI optimization suggestions"
 优先级：,Priority:
 搜索量：,"Search volume:"
 难度：,Difficulty:
-总览,Overview
-SEO主体总数,"Total number of SEO subjects"
-关键词总数,"Total Keywords"
-已启用主体,"Enabled Subject"
-平均关键词数,"Average number of keywords"
-当前没有启用的SEO主体，请先创建SEO主体。,"No enabled SEO subject exists. Please create an SEO subject first."
+一眼看主体与关键词健康度；空站时按推荐步骤接入账户、绑定站点并创建主体。,"See subject and keyword health at a glance. On an empty site, follow recommended steps: connect accounts, bind websites, then create subjects."
+"SEO 账户","SEO account"
+创建主体,"Create subject"
+"暂无 SEO 主体","No SEO subjects yet"
+当前没有启用的主体。先创建主体，或按下方推荐步骤把平台账户接好。,"No enabled subjects yet. Create a subject first, or follow the recommended steps below to connect platform accounts."
+"创建 SEO 主体","Create SEO subject"
+推荐下一步,"Recommended next steps"
+"总览要有数据，通常按「账户 → 绑定 → 主体」完成接入。","To populate the overview, usually finish account → binding → subject."
 个关键词,keywords
+"SEO 主体","SEO 主体"
+已启用,已启用
+平均关键词,平均关键词
+接入搜索平台,"Connect a search platform"
+"新增 Google / Bing / 百度等账户并完成验证。","Add and verify Google / Bing / Baidu (or other) accounts."
+新增账户,"Add Account"
+绑定站点,"Bind site"
+把已验证账户挂到要优化的网站。,"Attach verified accounts to the websites you optimize."
+去绑定,"Go bind"
+为主体挂关键词后，总览才会出现可运营数据。,"After subjects have keywords, the overview shows operable data."
+总览操作,"Overview actions"
+总览指标,"Overview metrics"
+空态引导,"Empty-state guide"
 搜索主体,"Search subject"
 当前没有SEO主体记录。,"No SEO subject record currently exists."
 主体信息,"Subject information"
-"SEO 账户","SEO account"
+按站点与范围扫描站内正文近重复；每次跑批生成可打开的报告地址，告警消息会附带该地址。,"Scan near-duplicate main content by site and scope; each run produces an openable report URL included in alerts."
+最近报告,"Latest report"
+扫描范围,"Scan scope"
+先定站点与内容族，再决定抽多少。,"Pick the site and content family, then decide how many pages to sample."
+请选择站点,请选择站点
+实体类型,"Entity types"
+逗号分隔，空=全部,"Comma-separated; empty = all"
+"URL 路径前缀","URL path prefix"
+抽样,Sample
+全量,Full
+抽样上限,"Sample limit"
+判定阈值,Thresholds
+"Jaccard：重复与疑似分界，默认 0.85 / 0.70。","Jaccard cutoffs for duplicate / suspect; defaults 0.85 / 0.70."
+重复阈值,"Duplicate threshold"
+疑似阈值,"Suspect threshold"
+通知,通知
+有问题时发消息，正文带报告地址。,"Send a message when issues are found; the body includes the report URL."
+发现问题后发送消息,发现问题后发送消息
+"消息内含可打开的报告 URL，不是只丢摘要。","The message includes an openable report URL, not only a summary."
+查看上次报告,"Open last report"
+开始扫描,"Start scan"
+"历史跑批 / 报告","Run history / reports"
+"点「查看报告」打开稳定 run 地址。","Open the stable run report URL via “View report”."
+暂无跑批记录。选好站点后开始第一次扫描。,"No runs yet. Select a site and start the first scan."
+问题数,Issues
+开始,开始
+报告,报告
+查看报告,"View report"
+按范围扫描,"Scoped scan"
+历史报告,"Run history"
+报告地址,报告地址
+复制链接,"Copy link"
+返回面板,"Back to panel"
+报告不存在,报告不存在
+范围与过滤,"Scope and filters"
+本次跑批的站点、模式与路径前缀。,"Website, mode, and path prefix for this run."
+路径前缀,"Path prefix"
+时间,时间
+全部,全部
+仅重复,"Duplicates only"
+仅疑似,"Suspects only"
+问题对,"Issue pairs"
+"近重复 URL 对与 Jaccard 分数。","Near-duplicate URL pairs with Jaccard scores."
+本报告无近重复问题对（或已按分级过滤为空）。,"No near-duplicate pairs in this report (or filtered empty)."
+分级,Grade
+报告统计,"Report stats"
+扫描数,Scanned
+可比对,Compared
+重复,重复
+疑似,疑似
+抓取失败,"Fetch errors"
+分级过滤,"Grade filter"
 "统一管理平台能力、自动提交、URL Push、站点绑定和统计同步；敏感配置在列表中始终脱敏。","Unified management platform capabilities, automatic submission, URL push, site binding and statistics synchronization; sensitive configurations are always desensitized in the list."
 站点绑定,"site binding"
-新增账户,"Add Account"
 搜索账户,"Search account"
 "暂无 SEO 账户","No SEO account yet"
 "先新增 Google、Bing、百度、IndexNow 或其他搜索引擎账户。","先新增 Google、Bing、百度、IndexNow 或其他搜索引擎账户。"
@@ -667,6 +746,7 @@ SEO主体总数,"Total number of SEO subjects"
 新增SEO账户,"Add SEO Account"
 新增,Add
 平台(Platform),Platform
+"每个 SEO 账户只绑定一个搜索平台（必选）。下面按能力分组浏览，不是要把所有平台都填一遍。","每个 SEO 账户只绑定一个搜索平台（必选）。下面按能力分组浏览，不是要把所有平台都填一遍。"
 请选择平台（选择后将显示配置获取指南）,"Please select a platform (the configuration acquisition guide will be displayed after selection)"
 选择目标搜索引擎平台后，下方将自动显示：,"After selecting the target search engine platform, the following will be displayed automatically:"
 平台支持的功能列表,"List of features supported by the platform"
@@ -710,6 +790,7 @@ SEO主体总数,"Total number of SEO subjects"
 确定,Confirm
 "当前平台不支持 URL 定时推送；Google 普通页面请改用 Sitemap 定时提交","当前平台不支持 URL 定时推送；Google 普通页面请改用 Sitemap 定时提交"
 "当前平台不支持 Sitemap 定时提交","当前平台不支持 Sitemap 定时提交"
+"打开 Google Search Console 添加平台属性","打开 Google Search Console 添加平台属性"
 已配置，留空保留原凭证,"Configured; leave blank to keep the saved credential."
 "上传 JSON 文件","Upload JSON file"
 "请上传 JSON 文件","请上传 JSON 文件"
@@ -718,6 +799,7 @@ SEO主体总数,"Total number of SEO subjects"
 "JSON 文件格式错误","JSON 文件格式错误"
 文件读取失败，请重试,文件读取失败，请重试
 请先选择平台后再填写账户名称,"Select a platform before filling the account name"
+平台,Platform
 账户名,"account name"
 "SEO 自动优化分析队列","SEO automatic optimization analysis queue"
 发现达标目标并生成结构化建议；是否修改由站点策略决定。,"Discover compliance goals and generate structured recommendations; modifications are determined by site policy."
@@ -725,6 +807,9 @@ SEO主体总数,"Total number of SEO subjects"
 "SEO 自动优化评估队列","SEO automatic optimization evaluation queue"
 按连续观察窗口保留显著候选，或精确回滚受限字段。,"Preserve significant candidates by continuous observation windows, or precisely roll back restricted fields."
 "SEO 自动优化评估队列参数无效。","The SEO automatic optimization evaluation queue parameter is invalid."
+"SEO 站内重复内容扫描队列","SEO on-site duplicate content scan queue"
+按范围执行正文近重复扫描并生成可打开的报告地址。,"Run scoped near-duplicate scan and produce an openable report URL."
+"SEO 重复内容扫描队列参数无效。","SEO 重复内容扫描队列参数无效。"
 "SEO 自动优化分析","SEO automatic optimization analysis"
 "SEO 自动优化评估","SEO automated optimization assessment"
 "URL target 数据不是数组","URL target data is not an array"
@@ -858,7 +943,20 @@ SEO主体总数,"Total number of SEO subjects"
 "Search Console 中已验证的站点属性 URL","Verified site property URL in Search Console"
 "先下载 JSON；把其中的 client_email 在 GSC「用户和权限」加成所有者后，再粘贴到此处","Download the JSON first; add its client_email as Owner under GSC Users and permissions, then paste it here"
 "Search Console 站点属性 URL","Search Console 站点属性 URL"
-"可填 https 域名，保存时自动转为 sc-domain:example.com（去掉 www）。也可直接填 GSC 域名属性。请先在 GSC 验证属性并把服务账号加成所有者，再点验证","You can enter an https domain; on save it becomes sc-domain:example.com (www stripped). Or enter the GSC domain property directly. Verify the property in GSC and add the service account as Owner before verifying here."
+"须与 GSC 左侧属性名完全一致。可填 https 域名，保存时自动转为 sc-domain:example.com（去掉 www）。请先在 GSC 验证属性并把服务账号加成所有者，再点验证","须与 GSC 左侧属性名完全一致。可填 https 域名，保存时自动转为 sc-domain:example.com（去掉 www）。请先在 GSC 验证属性并把服务账号加成所有者，再点验证"
+"Discover / News 监测","Discover / News 监测"
+"使用现有网站属性，经 Search Analytics 的 type=discover / googleNews 拉取；无需新建账户类型","使用现有网站属性，经 Search Analytics 的 type=discover / googleNews 拉取；无需新建账户类型"
+"启用 Discover 统计","启用 Discover 统计"
+"定时同步时额外拉取 Discover 点击/展示，写入统计 extra.discover","定时同步时额外拉取 Discover 点击/展示，写入统计 extra.discover"
+"启用 Google News 统计","启用 Google News 统计"
+"可选；新闻向站点再开启。写入统计 extra.google_news","可选；新闻向站点再开启。写入统计 extra.google_news"
+"分发渠道（Platform Property）","分发渠道（Platform Property）"
+"为什么配置：在 Google Search Console 把官方社交/视频主页登记为「平台属性」，便于 Google 识别品牌官方渠道并对照表现。本系统只存 URL 作清单，不会自动分发内容，也不会直接提高排名或信任分；请在 GSC 手动添加平台属性（官方 API 尚未开放拉取）。","Why configure: Register official social/video homepages as GSC Platform Properties so Google can recognize your brand channels and you can review performance. This app only stores URLs as a checklist—it does not auto-distribute content and does not directly raise rankings or a trust score. Add platform properties manually in Search Console (no public API yet)."
+"对应 GSC 平台属性 YouTube","对应 GSC 平台属性 YouTube"
+"对应 GSC 平台属性 X","对应 GSC 平台属性 X"
+"对应 GSC 平台属性 Instagram","对应 GSC 平台属性 Instagram"
+"对应 GSC 平台属性 TikTok","对应 GSC 平台属性 TikTok"
+"品牌登记用；GSC 官方四平台以外仅本地存档","品牌登记用；GSC 官方四平台以外仅本地存档"
 百度站长平台,"Baidu Webmaster Platform"
 "请配置百度 Token 和已验证站点 URL","Configure the Baidu token and verified website URL."
 百度普通链接提交不提供删除接口，请在资源平台处理死链,"The Baidu link submission API does not provide deletion; manage dead links in its webmaster platform."
@@ -889,6 +987,8 @@ SEO主体总数,"Total number of SEO subjects"
 "Sitemap XML 条目数无效","Invalid number of Sitemap XML entries"
 "Sitemap loc 不是有效绝对 URL","Sitemap loc is not a valid absolute URL"
 "Sitemap loc 与当前站点不同源","Sitemap loc has a different origin than the current site"
+"站点 #%1 检出重复 %2、疑似 %3。查看报告：%4","Website #%1 found %2 duplicates and %3 suspects. View report: %4"
+"SEO 站内重复内容报告","SEO on-site duplicate content report"
 "百度配置字段有效；平台无不扣额 Token 验证接口，凭证权限需通过实际页面提交结果确认","Baidu configuration fields are valid. There is no token verification endpoint without consuming submission quota; actual submission is needed to verify permissions."
 "请填写可公开访问的 IndexNow Key 文件地址","Enter the publicly accessible IndexNow key file URL."
 "IndexNow Key 文件可访问且内容匹配；搜索引擎验证状态以提交响应为准","The IndexNow key file is accessible and matches; the search engine verification state is determined by its submission response."
@@ -940,6 +1040,13 @@ Canonical,Canonical
 "以下站点未绑定 SEO 账户，无法自动提交 sitemap：","The following sites are not bound to an SEO account, so sitemaps cannot be submitted automatically:"
 "请前往""SEO管理 > Sitemap管理""或""站点管理""绑定 SEO 账户。","Please go to ""SEO Management > Sitemap Management"" or ""Site Management"" to bind the SEO account."
 SEO账户配置,"SEO Account Configuration"
+总览,Overview
+SEO主体总数,"Total number of SEO subjects"
+关键词总数,"Total Keywords"
+已启用主体,"Enabled Subject"
+平均关键词数,"Average number of keywords"
+当前没有启用的SEO主体，请先创建SEO主体。,"No enabled SEO subject exists. Please create an SEO subject first."
+"可填 https 域名，保存时自动转为 sc-domain:example.com（去掉 www）。也可直接填 GSC 域名属性。请先在 GSC 验证属性并把服务账号加成所有者，再点验证","You can enter an https domain; on save it becomes sc-domain:example.com (www stripped). Or enter the GSC domain property directly. Verify the property in GSC and add the service account as Owner before verifying here."
 "须与 GSC 左侧属性名完全一致（含 sc-domain: / https / www / 末尾 /）。先在 GSC 验证该属性，再把服务账号加成所有者，填对后再点「验证配置与连接」","Must match the GSC property name exactly (including sc-domain: / https / www / trailing /). Verify the property in GSC, add the service account as Owner, then click Verify."
 "该服务账号下目前没有任何 GSC 属性。","This service account currently has no GSC properties."
 "该服务账号可见属性：%{1}。请确认本处填写的属性 URL 与其中某一项完全一致。","Properties visible to this service account: %{1}. Make sure the property URL here matches one of them exactly."
@@ -1007,7 +1114,6 @@ Scope,Scope
 "按回执精确清理 SEO Search 验收证据。","Clean up SEO Search acceptance evidence by receipt."
 "Sitemap 管理","Sitemap management"
 SEO账户列表,"SEO account list"
-绑定站点,"Bind site"
 暂无账户,"No accounts"
 暂无数据,"No data"
 已收录,Indexed
@@ -1072,7 +1178,6 @@ SEO账户列表,"SEO account list"
 实现平台特定的提交协议,"Implement Platform-Specific Submission Protocol"
 目录结构,"Directory Structure"
 平台规范对比,"Platform Specification Comparison"
-平台,Platform
 "最大 URL 数量","Max URL Count"
 最大文件大小,"Max File Size"
 提交方式,"Submission Method"
@@ -1125,78 +1230,8 @@ SEO账户,"SEO account"
 主体管理,"Subject management"
 账户名称必须符合格式：%{1}{账户名},"Account name must match format: %{1}{account name}"
 请选择网站,"Select a website"
-"内容重复检测","Content duplicate check"
-"SEO 站内重复内容","SEO on-site duplicate content"
-"站内正文近重复检测报告（消息内含报告查看地址）","On-site near-duplicate report (message includes report URL)"
-"SEO 站内重复内容报告","SEO on-site duplicate content report"
-"查看报告","View report"
-"重复内容报告","Duplicate content report"
-"立即检查","Run check now"
-"按范围扫描","Scoped scan"
-"历史跑批 / 报告","Run history / reports"
-"开始扫描","Start scan"
-"发现问题后发送消息（含报告地址）","Notify when issues found (includes report URL)"
-"站点 #%1 检出重复 %2、疑似 %3。查看报告：%4","Website #%1 found %2 duplicates and %3 suspects. View report: %4"
-"扫描完成：重复 %1，疑似 %2。报告：%3","Scan complete: %1 duplicates, %2 suspects. Report: %3"
-"报告不存在：run_id=%1","Report not found: run_id=%1"
-"SEO 站内重复内容扫描队列","SEO on-site duplicate content scan queue"
-"按范围执行正文近重复扫描并生成可打开的报告地址。","Run scoped near-duplicate scan and produce an openable report URL."
-
-# Duplicate panel UI 1.2.80
-Jaccard：重复与疑似分界，默认 0.85 / 0.70。,Jaccard cutoffs for duplicate / suspect; defaults 0.85 / 0.70.
-URL 路径前缀,URL path prefix
-仅疑似,Suspects only
-仅重复,Duplicates only
-先定站点与内容族，再决定抽多少。,"Pick the site and content family, then decide how many pages to sample."
-全量,Full
-分级,Grade
-分级过滤,Grade filter
-判定阈值,Thresholds
-历史报告,Run history
-可比对,Compared
-复制链接,Copy link
-实体类型,Entity types
-扫描数,Scanned
-扫描范围,Scan scope
-抓取失败,Fetch errors
-报告统计,Report stats
-抽样,Sample
-抽样上限,Sample limit
-按站点与范围扫描站内正文近重复；每次跑批生成可打开的报告地址，告警消息会附带该地址。,Scan near-duplicate main content by site and scope; each run produces an openable report URL included in alerts.
-暂无跑批记录。选好站点后开始第一次扫描。,No runs yet. Select a site and start the first scan.
-最近报告,Latest report
-有问题时发消息，正文带报告地址。,Send a message when issues are found; the body includes the report URL.
-本报告无近重复问题对（或已按分级过滤为空）。,No near-duplicate pairs in this report (or filtered empty).
-本次跑批的站点、模式与路径前缀。,"Website, mode, and path prefix for this run."
-查看上次报告,Open last report
-消息内含可打开的报告 URL，不是只丢摘要。,"The message includes an openable report URL, not only a summary."
-点「查看报告」打开稳定 run 地址。,Open the stable run report URL via “View report”.
-疑似阈值,Suspect threshold
-范围与过滤,Scope and filters
-路径前缀,Path prefix
-近重复 URL 对与 Jaccard 分数。,Near-duplicate URL pairs with Jaccard scores.
-返回面板,Back to panel
-逗号分隔，空=全部,Comma-separated; empty = all
-重复阈值,Duplicate threshold
-问题对,Issue pairs
-问题数,Issues
-
-# channels why-hint 1.2.88
-为什么配置：在 Google Search Console 把官方社交/视频主页登记为「平台属性」，便于 Google 识别品牌官方渠道并对照表现。本系统只存 URL 作清单，不会自动分发内容，也不会直接提高排名或信任分；请在 GSC 手动添加平台属性（官方 API 尚未开放拉取）。,Why configure: Register official social/video homepages as GSC Platform Properties so Google can recognize your brand channels and you can review performance. This app only stores URLs as a checklist—it does not auto-distribute content and does not directly raise rankings or a trust score. Add platform properties manually in Search Console (no public API yet).
-
-# dashboard overview 1.2.89
-一眼看主体与关键词健康度；空站时按推荐步骤接入账户、绑定站点并创建主体。,"See subject and keyword health at a glance. On an empty site, follow recommended steps: connect accounts, bind websites, then create subjects."
-为主体挂关键词后，总览才会出现可运营数据。,"After subjects have keywords, the overview shows operable data."
-创建 SEO 主体,Create SEO subject
-创建主体,Create subject
-去绑定,Go bind
-当前没有启用的主体。先创建主体，或按下方推荐步骤把平台账户接好。,"No enabled subjects yet. Create a subject first, or follow the recommended steps below to connect platform accounts."
-总览指标,Overview metrics
-总览操作,Overview actions
-总览要有数据，通常按「账户 → 绑定 → 主体」完成接入。,"To populate the overview, usually finish account → binding → subject."
-把已验证账户挂到要优化的网站。,Attach verified accounts to the websites you optimize.
-接入搜索平台,Connect a search platform
-推荐下一步,Recommended next steps
-新增 Google / Bing / 百度等账户并完成验证。,Add and verify Google / Bing / Baidu (or other) accounts.
-暂无 SEO 主体,No SEO subjects yet
-空态引导,Empty-state guide
+立即检查,"Run check now"
+发现问题后发送消息（含报告地址）,"Notify when issues found (includes report URL)"
+"# Duplicate panel UI 1.2.80",
+"# channels why-hint 1.2.88",
+"# dashboard overview 1.2.89",

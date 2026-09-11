@@ -487,7 +487,7 @@ class SitemapCrawlerAuditService implements SiteCrawlerAuditInterface
                 . ($pageUrl !== '' ? ('（' . $pageUrl . '）') : '')
                 . '，不读取 sitemap、不做结构抽样。';
         } else {
-            $assumptions[] = '同结构 URL（product/blog/category/help/promotion/page）每种只抽 1 个代表；其余单例 URL 全部审查。';
+            $assumptions[] = '同结构 URL（product/blog/category/faq/promotion/page）每种只抽 1 个代表；其余单例 URL 全部审查。';
             $assumptions[] = 'sitemap 的 image:loc / 静态媒体 URL 不作为独立 HTML 页面抓取；图片问题挂在发现该问题的页面下。';
         }
         $collapsed = (int)($sampling['collapsed'] ?? 0);
