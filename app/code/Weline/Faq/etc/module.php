@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 return [
     'name' => 'Weline_Faq',
-    'version' => '1.0.0',
+    'version' => '1.0.3',
     'requires' => [
         'Weline_Framework' => '*',
         'Weline_Websites' => '*',
@@ -18,5 +18,7 @@ return [
         'Weline_Product' => '*',
         'Weline_Search' => '*',
     ],
-    'provides' => [],
+    'provides' => [
+        \Weline\Faq\Api\FaqSeoFactsInterface::class => \Weline\Faq\Service\FaqService::class,
+    ],
 ];

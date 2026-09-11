@@ -1,0 +1,101 @@
+<?php
+/**
+ * Product FAQ accordion widget for the PDP product-faq slot.
+ *
+ * @var \Weline\Framework\View\Template $this
+ *
+ * @widget.code {product-faq}
+ * @widget.name {商品 FAQ}
+ * @widget.description {商品详情问答手风琴}
+ * @widget.type {content}
+ * @widget.area {frontend}
+ * @widget.position {["content"]}
+ * @widget.page_layouts {["product"]}
+ * @widget.supports {["layout-product-faq","product-faq","faq"]}
+ * @widget.default_injections {[{ "layout_type":"product", "layout_option":"default", "slot":"product-faq", "area":"content", "sort_order":0, "required":true, "reason":"商品详情默认 FAQ 槽", "config":{"title":"常见问题"} }]}
+ *
+ * @param title {default="常见问题",type="string",label="标题"}
+ */
+
+use Weline\Faq\Service\FaqService;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Theme\Helper\WidgetI18n;
+
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$titleSource = trim((string)($this->getData('title') ?? '')) ?: '常见问题';
+if (preg_match('/^Weline_[A-Za-z0-9_]+$/', $titleSource)) {
+    $titleSource = '常见问题';
+}
+$widgetTitle = WidgetI18n::label($titleSource, '常见问题');
+
+$offer = $this->getData('storefront_offer');
+if (!is_array($offer) || $offer === []) {
+    $product = $this->getData('product');
+    $offer = is_array($product) ? $product : [];
+}
+$entityUuid = '';
+foreach ([
+    $offer['global_offer_uuid'] ?? null,
+    $offer['global_product_uuid'] ?? null,
+    $offer['product_uuid'] ?? null,
+    $offer['uuid'] ?? null,
+] as $candidate) {
+    if (is_scalar($candidate) && trim((string)$candidate) !== '') {
+        $entityUuid = trim((string)$candidate);
+        break;
+    }
+}
+
+$websiteId = 0;
+try {
+    $websiteId = max(0, (int)($this->getRequest()->getWebsiteId() ?? 0));
+} catch (\Throwable) {
+    $websiteId = 0;
+}
+$locale = '';
+try {
+    $locale = trim((string)($this->getRequest()->getLocal() ?? ''));
+} catch (\Throwable) {
+    $locale = '';
+}
+
+$faqs = [];
+if ($entityUuid !== '') {
+    try {
+        $faqs = ObjectManager::getInstance(FaqService::class)
+            ->listForEntity('product', $entityUuid, $websiteId, $locale, true);
+    } catch (\Throwable) {
+        $faqs = [];
+    }
+}
+
+$isPreview = (bool)($this->getData('preview_mode') ?? false)
+    || (bool)($this->getData('editor_mode') ?? false);
+if ($faqs === [] && !$isPreview) {
+    return;
+}
+?>
+<section class="weline-product-faq" data-widget="product-faq" aria-label="<?= $escape($widgetTitle) ?>" weline-code="faq.product.section_faq">
+    <h2 class="weline-product-faq__title"><?= $escape($widgetTitle) ?></h2>
+    <?php if ($faqs === []): ?>
+        <p class="weline-product-faq__empty"><?= $escape(__('暂无常见问题。')) ?></p>
+    <?php else: ?>
+        <div class="weline-product-faq__list">
+            <?php foreach ($faqs as $index => $faq): ?>
+                <?php if (!is_array($faq)) { continue; } ?>
+                <details class="weline-product-faq__item" <?= $index === 0 ? 'open' : '' ?>>
+                    <summary class="weline-product-faq__question"><?= $escape($faq['question'] ?? '') ?></summary>
+                    <div class="weline-product-faq__answer"><?= nl2br($escape($faq['answer'] ?? '')) ?></div>
+                </details>
+            <?php endforeach; ?>
+        </div>
+    <?php endif; ?>
+</section>
+<style>
+.weline-product-faq { padding: var(--spacing-6, 1.5rem) 0; }
+.weline-product-faq__title { margin: 0 0 var(--spacing-4, 1rem); font-size: var(--font-size-xl, 1.25rem); }
+.weline-product-faq__item { border-bottom: 1px solid var(--weline-theme-border-color-subtle, #e5e7eb); padding: .75rem 0; }
+.weline-product-faq__question { cursor: pointer; font-weight: 600; }
+.weline-product-faq__answer { margin-top: .5rem; color: var(--color-text-secondary, #4b5563); line-height: 1.6; }
+.weline-product-faq__empty { color: var(--color-text-tertiary, #9ca3af); }
+</style>
