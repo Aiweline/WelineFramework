@@ -2,7 +2,9 @@
 
 ## 模块定位
 
-本文件由 `prepare_project` 的显式修复流程创建。模块能力以当前源码、测试和后续人工维护的专题文档为准。
+官方平台应用商店：模块仓库、版本/许可证、开发者与订单数据，供子站 `Weline_AppStore` 通过 REST 调用。
+
+后台入口（`backend_router=platform-appstore`）：模块管理、分类、订单、许可证、开发者、收益、API 配置；API 控制器在 `Controller/Api`。
 
 ## 知识维护约定
 

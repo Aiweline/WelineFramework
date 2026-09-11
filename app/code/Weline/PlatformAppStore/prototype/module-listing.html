@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>PROTOTYPE — Module listing variants</title>
+  <style>
+    body{font:14px/1.5 system-ui;margin:0;padding:24px;background:#f6f7f9;color:#1a1a1a}
+    .note{font-size:12px;color:#666;margin-bottom:16px}
+    .shell{max-width:960px;margin:0 auto}
+    .bar{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);background:#111;color:#fff;padding:8px 12px;border-radius:999px;display:flex;gap:8px;z-index:9}
+    .bar a{color:#fff;text-decoration:none;padding:4px 8px;border-radius:999px}
+    .bar a.on{background:#3b82f6}
+    .toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:16px}
+    .filters{display:flex;flex-wrap:wrap;gap:12px;align-items:end;background:#fff;border:1px solid #e5e5e5;border-radius:8px;padding:12px;margin-bottom:16px}
+    .field{display:grid;gap:4px;min-width:120px}
+    .field label{font-size:12px;color:#666}
+    .empty{min-height:12rem;display:grid;place-items:center;gap:8px;text-align:center;color:#666;background:#fff;border:1px dashed #ccc;border-radius:8px;padding:32px}
+    button,a.btn{display:inline-block;padding:6px 12px;border-radius:6px;background:#2563eb;color:#fff;text-decoration:none;border:0}
+    input,select{padding:6px 8px;border:1px solid #ccc;border-radius:4px}
+    .v{display:none}.v.on{display:block}
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <p class="note">PROTOTYPE — question: empty listing hierarchy? Verdict: B (toolbar + labeled filter strip + w-empty CTA). A=old card-only; C=stats-first rejected for density.</p>
+    <div id="A" class="v">
+      <h1>模块管理</h1>
+      <p>共 0 条</p>
+      <div class="empty"><strong>暂无平台模块</strong><p>无下一步</p></div>
+    </div>
+    <div id="B" class="v on">
+      <div class="toolbar"><div><h1 style="margin:0">模块管理</h1><small>共 0 条</small></div><a class="btn" href="#">新建模块</a></div>
+      <div class="filters">
+        <div class="field"><label>关键词</label><input placeholder="模块名 / 显示名"></div>
+        <div class="field"><label>状态</label><select><option>全部状态</option></select></div>
+        <div class="field"><label>定价</label><select><option>全部定价</option></select></div>
+        <button type="button">筛选</button>
+      </div>
+      <div class="empty"><strong>暂无平台模块</strong><p>先新建草稿，完善后再发布。</p><a class="btn" href="#">新建模块</a></div>
+    </div>
+    <div id="C" class="v">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px">
+        <div style="background:#fff;padding:16px;border-radius:8px">总数 0</div>
+        <div style="background:#fff;padding:16px;border-radius:8px">已发布 0</div>
+        <div style="background:#fff;padding:16px;border-radius:8px">草稿 0</div>
+      </div>
+      <div class="empty">统计优先，列表弱</div>
+    </div>
+  </div>
+  <div class="bar">
+    <a href="?variant=A" data-v="A">A 旧空卡</a>
+    <a href="?variant=B" data-v="B" class="on">B 工具条+CTA</a>
+    <a href="?variant=C" data-v="C">C 统计墙</a>
+  </div>
+  <script>
+    const v = new URLSearchParams(location.search).get('variant') || 'B';
+    document.querySelectorAll('.v').forEach(el => el.classList.toggle('on', el.id === v));
+    document.querySelectorAll('.bar a').forEach(a => a.classList.toggle('on', a.dataset.v === v));
+  </script>
+</body>
+</html>

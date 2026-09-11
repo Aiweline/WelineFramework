@@ -1,0 +1,28 @@
+<?php
+$developers = is_iterable($developers ?? null) ? $developers : [];
+$total = (int)($total ?? 0);
+$escape = static fn($v): string => htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+?>
+<div class="w-container" style="--w-pt:var(--weline-space-4);--w-pb:var(--weline-space-4);">
+    <h1 class="h4" style="--w-mb:var(--weline-space-1);"><?= __('开发者中心') ?></h1>
+    <div class="w-text" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-4);"><?= __('共 %{1} 位开发者。', [$total]) ?></div>
+    <?php if (!$developers): ?>
+        <div class="w-card"><div class="w-card__body w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-10);--w-pb:var(--weline-space-10);"><?= __('暂无开发者。') ?></div></div>
+    <?php else: ?>
+        <div class="w-table-wrap">
+            <table class="w-table">
+                <thead><tr><th>ID</th><th><?= __('名称') ?></th><th><?= __('模块数') ?></th><th><?= __('状态') ?></th></tr></thead>
+                <tbody>
+                <?php foreach ($developers as $row): if (!is_array($row)) continue; ?>
+                    <tr>
+                        <td><?= (int)($row['developer_id'] ?? 0) ?></td>
+                        <td><?= $escape($row['name'] ?? '') ?></td>
+                        <td><?= (int)($row['module_count'] ?? 0) ?></td>
+                        <td><?= $escape($row['status'] ?? '') ?></td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    <?php endif; ?>
+</div>

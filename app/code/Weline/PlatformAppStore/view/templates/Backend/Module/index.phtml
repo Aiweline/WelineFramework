@@ -1,0 +1,123 @@
+<?php
+/**
+ * PlatformAppStore Module listing — 去凌乱：服从布局 heading，不重复标题。
+ *
+ * 线稿（无数据）：
+ * [布局已有 h1+面包屑]
+ * [w-empty 撑满剩余高度：图标 / 说明 / 唯一 CTA]
+ * [页脚贴底]
+ *
+ * 线稿（有数据）：
+ * [布局 h1] [本区仅：计数 + 新建]
+ * [紧凑筛选]
+ * [表格]
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
+$modules = is_iterable($modules ?? null) ? $modules : [];
+$filters = is_array($filters ?? null) ? $filters : [];
+$emptyState = is_array($empty_state ?? null) ? $empty_state : [];
+$total = (int)($total ?? 0);
+$q = (string)($filters['q'] ?? '');
+$status = (string)($filters['status'] ?? '');
+$pricingType = (string)($filters['pricing_type'] ?? '');
+$createUrl = (string)($create_url ?? '');
+$listUrl = (string)($list_url ?? '');
+$moduleRows = [];
+foreach ($modules as $row) {
+    if (is_array($row)) {
+        $moduleRows[] = $row;
+    }
+}
+$hasModules = $moduleRows !== [];
+$hasFilters = $q !== '' || $status !== '' || $pricingType !== '';
+$showFilters = $hasModules || $hasFilters;
+$escape = static fn($v): string => htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+?>
+<div class="w-container pas-module-admin" style="--w-pt:0;--w-pb:var(--weline-space-2);">
+    <?php if ($showFilters): ?>
+        <div class="w-toolbar" style="--w-mb:var(--weline-space-3);">
+            <div class="w-text" data-tone="muted" data-size="sm"><?= __('共 %{1} 个模块', [$total]) ?></div>
+            <?php if ($createUrl !== ''): ?>
+                <a class="w-button" href="<?= $escape($createUrl) ?>" data-tone="primary" data-size="sm">
+                    <w:icon name="plus" size="sm"></w:icon><?= __('新建模块') ?>
+                </a>
+            <?php endif; ?>
+        </div>
+
+        <form method="get" action="<?= $escape($listUrl) ?>" class="w-cluster" data-align="center" data-wrap="true"
+              style="--w-gap:var(--weline-space-2);--w-mb:var(--weline-space-4);">
+            <input class="w-input" type="search" name="q" value="<?= $escape($q) ?>"
+                   aria-label="<?= $escape(__('关键词')) ?>"
+                   placeholder="<?= $escape(__('搜索模块名 / 显示名')) ?>"
+                   data-size="sm" style="--w-min-w:14rem;flex:1 1 14rem;">
+            <select class="w-select" name="status" aria-label="<?= $escape(__('状态')) ?>" data-size="sm" style="--w-min-w:8rem;">
+                <option value=""><?= __('全部状态') ?></option>
+                <option value="draft" <?= $status === 'draft' ? 'selected' : '' ?>><?= __('草稿') ?></option>
+                <option value="published" <?= $status === 'published' ? 'selected' : '' ?>><?= __('已发布') ?></option>
+                <option value="archived" <?= $status === 'archived' ? 'selected' : '' ?>><?= __('已归档') ?></option>
+            </select>
+            <select class="w-select" name="pricing_type" aria-label="<?= $escape(__('定价')) ?>" data-size="sm" style="--w-min-w:8rem;">
+                <option value=""><?= __('全部定价') ?></option>
+                <option value="free" <?= $pricingType === 'free' ? 'selected' : '' ?>><?= __('免费') ?></option>
+                <option value="one_time" <?= $pricingType === 'one_time' ? 'selected' : '' ?>><?= __('一次性') ?></option>
+                <option value="subscription" <?= $pricingType === 'subscription' ? 'selected' : '' ?>><?= __('订阅') ?></option>
+            </select>
+            <button class="w-button" type="submit" data-tone="neutral" data-variant="outline" data-size="sm"><?= __('筛选') ?></button>
+            <?php if ($hasFilters): ?>
+                <a class="w-button" href="<?= $escape($listUrl) ?>" data-tone="neutral" data-variant="ghost" data-size="sm"><?= __('清空') ?></a>
+            <?php endif; ?>
+        </form>
+    <?php endif; ?>
+
+    <?php if (!$hasModules): ?>
+        <div class="w-empty pas-module-admin__empty" data-testid="platform-appstore-module-empty"
+             style="min-height:max(16rem, calc(100dvh - 14rem));">
+            <w:icon name="puzzle" size="lg"></w:icon>
+            <div style="max-inline-size:22rem;">
+                <div class="w-text" data-weight="strong" style="--w-mb:var(--weline-space-1);"><?= $escape($emptyState['title'] ?? __('暂无平台模块')) ?></div>
+                <div class="w-text" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-4);"><?= $escape($emptyState['description'] ?? '') ?></div>
+                <?php if ($createUrl !== ''): ?>
+                    <a class="w-button" href="<?= $escape($createUrl) ?>" data-tone="primary">
+                        <w:icon name="plus" size="sm"></w:icon><?= $escape($emptyState['cta_label'] ?? __('新建模块')) ?>
+                    </a>
+                <?php endif; ?>
+            </div>
+        </div>
+    <?php else: ?>
+        <div class="w-table-wrap">
+            <table class="w-table" data-w-vertical="middle">
+                <thead>
+                <tr>
+                    <th>ID</th>
+                    <th><?= __('模块') ?></th>
+                    <th><?= __('版本') ?></th>
+                    <th><?= __('状态') ?></th>
+                    <th><?= __('定价') ?></th>
+                    <th><?= __('下载') ?></th>
+                </tr>
+                </thead>
+                <tbody>
+                <?php foreach ($moduleRows as $row): ?>
+                    <tr>
+                        <td><?= (int)($row['module_id'] ?? 0) ?></td>
+                        <td>
+                            <div class="w-text" data-weight="strong"><?= $escape($row['title'] ?? '') ?></div>
+                            <div class="w-text" data-tone="muted" data-size="sm"><code><?= $escape($row['name'] ?? '') ?></code></div>
+                        </td>
+                        <td><?= $escape($row['current_version'] ?? '') ?></td>
+                        <td><span class="w-badge"><?= $escape($row['status_label'] ?? '') ?></span></td>
+                        <td>
+                            <?= $escape($row['pricing_label'] ?? '') ?>
+                            <?php if ((string)($row['pricing_type'] ?? '') !== 'free'): ?>
+                                <div class="w-text" data-tone="muted" data-size="sm"><?= $escape((string)($row['price'] ?? '0')) ?></div>
+                            <?php endif; ?>
+                        </td>
+                        <td><?= (int)($row['downloads'] ?? 0) ?></td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    <?php endif; ?>
+</div>
