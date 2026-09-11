@@ -61,6 +61,15 @@ final class FakeProvider implements ProviderInterface
             'offline_confirmation' => false,
             'supported_currencies' => ['CNY', 'USD', 'EUR', 'GBP', 'JPY', 'HKD', 'SGD', 'AUD', 'CAD'],
             'supported_countries' => ['CN', 'US', 'GB', 'DE', 'FR', 'JP', 'HK', 'SG', 'AU', 'CA'],
+            // Local test pay must accept common Marketing discount actions or freeze/submit
+            // falsely rejects with 「不支持已选优惠方式」while the UI coupon field looks empty.
+            'supported_discount_actions' => [
+                'discount_fixed_amount',
+                'discount_percentage',
+                'free_shipping',
+                'buy_x_get_y',
+                'gift_product',
+            ],
         ];
     }
 
