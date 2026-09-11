@@ -22,13 +22,35 @@ use Weline\Theme\Service\SharedChromeService;
 
 class Upgrade implements UpgradeInterface
 {
-    public const VERSION = '2.2.190';
+    public const VERSION = '2.2.191';
 
     public function setup(Data\Setup $setup, Data\Context $context): void
     {
         $this->migrateSemanticIcons();
         $this->purgeLegacyLocalSharedChrome();
         $this->migrateHelpPageTypeToFaq();
+        $this->migrateFooterHelpCenterLinkToFaq();
+        $this->migrateScopedFooterHelpCenterLinkNodes();
+    }
+
+    /**
+     * Injection-table rename is not enough: scoped drafts still block publish with
+     * "widget not registered" until node widget_code is rewritten.
+     */
+    private function migrateScopedFooterHelpCenterLinkNodes(): void
+    {
+        try {
+            /** @var \Weline\Theme\Service\Scoped\FooterHelpCenterLinkScopedMigrator $migrator */
+            $migrator = ObjectManager::getInstance(
+                \Weline\Theme\Service\Scoped\FooterHelpCenterLinkScopedMigrator::class,
+            );
+            $result = $migrator->migrate();
+            if (($result['renamed_nodes'] ?? 0) > 0 || ($result['skipped'] ?? []) !== []) {
+                w_log_info('theme_footer_help_center_scoped_migrate: ' . \json_encode($result, JSON_UNESCAPED_UNICODE));
+            }
+        } catch (\Throwable $e) {
+            w_log_warning('theme_footer_help_center_scoped_migrate_failed: ' . $e->getMessage());
+        }
     }
 
     private function migrateSemanticIcons(): void
@@ -121,6 +143,58 @@ class Upgrade implements UpgradeInterface
             $this->migrateThemeVirtualLayoutHelpRows();
         } catch (\Throwable $e) {
             w_log_warning('theme_help_to_faq_migrate_failed: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Rename published/default footer help-center widget code to footer-faq-link.
+     */
+    private function migrateFooterHelpCenterLinkToFaq(): void
+    {
+        try {
+            /** @var ThemeWidgetDefaultInjection $model */
+            $model = ObjectManager::getInstance(ThemeWidgetDefaultInjection::class);
+            $rows = $model->clear()->clearQuery()
+                ->where(ThemeWidgetDefaultInjection::schema_fields_WIDGET_CODE, 'footer-help-center-link')
+                ->select()
+                ->fetch();
+            foreach ($this->iterateRows($rows) as $row) {
+                if (!\is_object($row) || !($row instanceof ThemeWidgetDefaultInjection)) {
+                    continue;
+                }
+                $row->setData(ThemeWidgetDefaultInjection::schema_fields_WIDGET_CODE, 'footer-faq-link');
+                $injectionKey = (string)$row->getData(ThemeWidgetDefaultInjection::schema_fields_INJECTION_KEY);
+                if ($injectionKey !== '' && \str_contains($injectionKey, 'footer-help-center-link')) {
+                    $row->setData(
+                        ThemeWidgetDefaultInjection::schema_fields_INJECTION_KEY,
+                        \str_replace('footer-help-center-link', 'footer-faq-link', $injectionKey),
+                    );
+                }
+                $themeId = (int)$row->getData(ThemeWidgetDefaultInjection::schema_fields_THEME_ID);
+                $componentArea = (string)$row->getData(ThemeWidgetDefaultInjection::schema_fields_COMPONENT_AREA);
+                $pageType = (string)$row->getData(ThemeWidgetDefaultInjection::schema_fields_PAGE_TYPE);
+                $injectionKey = (string)$row->getData(ThemeWidgetDefaultInjection::schema_fields_INJECTION_KEY);
+                $identity = new LayoutIdentity(
+                    (string)$row->getData(ThemeWidgetDefaultInjection::schema_fields_LAYOUT_OPTION),
+                    (string)$row->getData(ThemeWidgetDefaultInjection::schema_fields_SCOPE),
+                    (string)$row->getData(ThemeWidgetDefaultInjection::schema_fields_TARGET_TYPE),
+                    (int)$row->getData(ThemeWidgetDefaultInjection::schema_fields_TARGET_ID),
+                    (string)$row->getData(ThemeWidgetDefaultInjection::schema_fields_LOCALE_CODE),
+                );
+                $row->setData(
+                    ThemeWidgetDefaultInjection::schema_fields_IDENTITY_HASH,
+                    LayoutIdentityHasher::injection(
+                        $themeId,
+                        $componentArea,
+                        $pageType,
+                        $identity,
+                        $injectionKey,
+                    ),
+                );
+                $row->save();
+            }
+        } catch (\Throwable $e) {
+            w_log_warning('theme_footer_help_center_to_faq_failed: ' . $e->getMessage());
         }
     }
 

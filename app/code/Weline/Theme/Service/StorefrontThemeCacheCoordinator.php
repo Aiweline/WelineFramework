@@ -25,7 +25,7 @@ final class StorefrontThemeCacheCoordinator
             pool: self::HEADER_NAV_POOL,
             scope: 'channel',
             vary: ['lang', 'currency'],
-            dependencies: ['catalog', 'config'],
+            dependencies: ['catalog', 'config', 'theme'],
             freshTtlSeconds: 3600,
             staleTtlSeconds: 86400,
         );
@@ -58,7 +58,7 @@ final class StorefrontThemeCacheCoordinator
             pool: self::STOREFRONT_CHROME_POOL,
             scope: 'channel',
             vary: ['lang', 'currency'],
-            dependencies: ['catalog', 'config'],
+            dependencies: ['catalog', 'config', 'theme'],
             freshTtlSeconds: max(1, $freshTtlSeconds),
             staleTtlSeconds: max(0, $staleTtlSeconds),
         );

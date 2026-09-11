@@ -254,6 +254,26 @@ class LayoutSlotRenderer implements ObserverInterface
             }
         }
 
+        if ($this->slotRenderer->hasUnavailableWidgets()) {
+            $unavailable = $this->slotRenderer->getUnavailableWidgets();
+            if ($this->shouldShowEditorSlotDiagnostics()) {
+                $processedHtml = $this->injectUnavailableWarnings($processedHtml, $unavailable, $themeId, $pageType);
+            }
+            if (defined('DEV') && DEV) {
+                foreach ($unavailable as $item) {
+                    w_log_warning('[Widget Unavailable] ' . ($item['message'] ?? 'Unknown unavailable widget'));
+                }
+            }
+        } elseif ($this->shouldShowEditorSlotDiagnostics()
+            && \str_contains($processedHtml, 'widget-unavailable-tip')
+        ) {
+            $this->slotRenderer->syncUnavailableWidgetsFromHtml($processedHtml);
+            if ($this->slotRenderer->hasUnavailableWidgets()) {
+                $unavailable = $this->slotRenderer->getUnavailableWidgets();
+                $processedHtml = $this->injectUnavailableWarnings($processedHtml, $unavailable, $themeId, $pageType);
+            }
+        }
+
         // 鏇存柊浜嬩欢鏁版嵁锛坒etch_file_after 浜嬩欢浣跨敤 content锛?
         $processedHtml = $this->slotRenderer->finalizePreviewWidgetHealth($processedHtml);
         $event->setData('content', $this->finalizeFrontendHtml($processedHtml, $area));
@@ -435,7 +455,7 @@ class LayoutSlotRenderer implements ObserverInterface
         $removeOrphanWidgetsUrl = htmlspecialchars($this->url->getBackendUrl('theme/backend/theme-editor/remove-orphan-widgets'));
         
         $warningHtml = <<<HTML
-<div id="orphan-widgets-warning" style="
+<div id="orphan-widgets-warning" data-editor-interactive style="
     position: fixed;
     bottom: 20px;
     right: 20px;
@@ -445,9 +465,10 @@ class LayoutSlotRenderer implements ObserverInterface
     border-radius: 8px;
     padding: 15px;
     box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    z-index: 10000;
+    z-index: 2147483000;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     font-size: 14px;
+    pointer-events: auto;
 ">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
         <strong style="color: #856404;">组件警告</strong>
@@ -678,6 +699,361 @@ HTML;
             $html .= $warningHtml;
         }
         
+        return $html;
+    }
+
+    /**
+     * 编辑器预览：注入失效部件汇总面板（定义/模板缺失），按 node_uid 调用 remove-widget。
+     *
+     * @param list<array<string, mixed>> $unavailable
+     */
+    private function injectUnavailableWarnings(string $html, array $unavailable, int $themeId, string $pageType): string
+    {
+        if ($unavailable === []) {
+            return $html;
+        }
+
+        $warningItems = [];
+        $nodeUids = [];
+        foreach ($unavailable as $item) {
+            $widgetName = htmlspecialchars((string)($item['widget_name'] ?? $item['widget_code'] ?? '未知组件'));
+            $slotId = htmlspecialchars((string)($item['slot_id'] ?? '未知插槽'));
+            $code = htmlspecialchars((string)($item['widget_code'] ?? ''));
+            $warningItems[] = "<li><strong>{$widgetName}</strong> (<code>{$code}</code>) — 插槽 <code>{$slotId}</code></li>";
+            $nodeUid = strtolower(trim((string)($item['node_uid'] ?? '')));
+            if ($nodeUid !== '' && preg_match('/^[a-f0-9]{32}$/D', $nodeUid) === 1) {
+                $nodeUids[] = $nodeUid;
+            }
+        }
+
+        $nodeUidsJson = htmlspecialchars(
+            json_encode(array_values(array_unique($nodeUids)), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            ENT_QUOTES | ENT_SUBSTITUTE,
+            'UTF-8',
+        );
+        $editorContext = $this->resolveOrphanDeleteEditorContext($themeId, $pageType);
+        $editorContextJson = htmlspecialchars(
+            json_encode($editorContext ?? new \stdClass(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            ENT_QUOTES | ENT_SUBSTITUTE,
+            'UTF-8',
+        );
+        $removeWidgetUrl = htmlspecialchars($this->url->getBackendUrl('theme/backend/theme-editor/remove-widget'));
+        $bottomOffset = $this->slotRenderer->hasOrphanWidgets() ? '220px' : '20px';
+
+        $warningHtml = <<<HTML
+<div id="unavailable-widgets-warning" data-editor-interactive style="
+    position: fixed;
+    bottom: {$bottomOffset};
+    right: 20px;
+    max-width: 400px;
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    border-radius: 8px;
+    padding: 15px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    z-index: 2147483000;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 14px;
+    pointer-events: auto;
+">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+        <strong style="color: #856404;">失效部件</strong>
+        <button id="btnDismissUnavailableWarning" type="button" data-editor-interactive style="
+            background: none;
+            border: none;
+            font-size: 18px;
+            cursor: pointer;
+            color: #856404;
+            pointer-events: auto;
+        ">&times;</button>
+    </div>
+    <p style="margin: 0 0 10px 0; color: #856404;">以下部件定义或模板已缺失，仍留在当前布局配置中：</p>
+    <ul style="margin: 0; padding-left: 20px; color: #856404;">
+HTML;
+        $warningHtml .= implode("\n", $warningItems);
+        $warningHtml .= <<<HTML
+    </ul>
+    <p style="margin: 10px 0 5px 0; font-size: 12px; color: #856404;">
+        可从当前草稿版本移除这些失效配置（不影响已发布版本）。
+    </p>
+    <div id="unavailable-actions" style="display: flex; gap: 8px; margin-top: 10px;">
+        <button id="btnConfirmRemoveUnavailable" type="button" data-editor-interactive data-unavailable-node-uids='{$nodeUidsJson}' data-editor-context='{$editorContextJson}' style="
+            flex: 1;
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 6px 12px;
+            cursor: pointer;
+            font-size: 13px;
+            pointer-events: auto;
+        ">
+            从当前版本移除
+        </button>
+        <button id="btnDismissUnavailableLater" type="button" data-editor-interactive style="
+            flex: 1;
+            background: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 6px 12px;
+            cursor: pointer;
+            font-size: 13px;
+            pointer-events: auto;
+        ">
+            稍后处理
+        </button>
+    </div>
+    <div id="unavailable-confirm-message" style="display: none; margin-top: 10px; padding: 10px; background: #f8d7da; border-radius: 4px; color: #721c24; font-size: 13px;">
+        <strong>确认移除</strong>
+        <p style="margin: 5px 0;">将从当前草稿版本删除这些失效部件配置，不可恢复。</p>
+        <div style="display: flex; gap: 8px; margin-top: 8px;">
+            <button id="btnUnavailableConfirmYes" type="button" data-editor-interactive style="
+                flex: 1;
+                background: #dc3545;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 6px 12px;
+                cursor: pointer;
+                font-size: 12px;
+                pointer-events: auto;
+            ">
+                确认移除
+            </button>
+            <button id="btnUnavailableConfirmNo" type="button" data-editor-interactive style="
+                flex: 1;
+                background: #6c757d;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 6px 12px;
+                cursor: pointer;
+                font-size: 12px;
+                pointer-events: auto;
+            ">
+                取消
+            </button>
+        </div>
+    </div>
+    <div id="unavailable-delete-status" style="display: none; margin-top: 10px; padding: 10px; border-radius: 4px; font-size: 13px;"></div>
+</div>
+<script>
+(function() {
+    const removeWidgetUrl = '{$removeWidgetUrl}';
+    const panel = document.getElementById('unavailable-widgets-warning');
+    const btnConfirm = document.getElementById('btnConfirmRemoveUnavailable');
+    const confirmMessage = document.getElementById('unavailable-confirm-message');
+    const actions = document.getElementById('unavailable-actions');
+    const btnYes = document.getElementById('btnUnavailableConfirmYes');
+    const btnNo = document.getElementById('btnUnavailableConfirmNo');
+    const btnDismiss = document.getElementById('btnDismissUnavailableWarning');
+    const btnLater = document.getElementById('btnDismissUnavailableLater');
+    const deleteStatus = document.getElementById('unavailable-delete-status');
+
+    function dismissPanel() {
+        if (panel) panel.remove();
+    }
+    if (btnDismiss) btnDismiss.addEventListener('click', dismissPanel);
+    if (btnLater) btnLater.addEventListener('click', dismissPanel);
+
+    function resolveEditorContext(fromEl) {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (fromEl) {
+            const fromAttr = fromEl.getAttribute('data-editor-context') || '';
+            if (fromAttr && fromAttr !== '{}' && fromAttr !== 'null') {
+                try {
+                    const parsed = JSON.parse(fromAttr);
+                    if (parsed && typeof parsed === 'object' && parsed.scope) {
+                        return parsed;
+                    }
+                } catch (e) {}
+            }
+        }
+        if (btnConfirm) {
+            const fromAttr = btnConfirm.getAttribute('data-editor-context') || '';
+            if (fromAttr && fromAttr !== '{}' && fromAttr !== 'null') {
+                try {
+                    const parsed = JSON.parse(fromAttr);
+                    if (parsed && typeof parsed === 'object' && parsed.scope) {
+                        return parsed;
+                    }
+                } catch (e) {}
+            }
+        }
+        const raw = urlParams.get('editor_context') || '';
+        if (!raw) return null;
+        try {
+            const parsed = JSON.parse(raw);
+            return parsed && typeof parsed === 'object' ? parsed : null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function themeIdFromUrl() {
+        const urlParams = new URLSearchParams(window.location.search);
+        return urlParams.get('theme_id')
+            || urlParams.get('frontend_theme_id')
+            || urlParams.get('weline_theme_id')
+            || '';
+    }
+
+    function pageTypeFromUrl() {
+        const urlParams = new URLSearchParams(window.location.search);
+        return urlParams.get('page_type') || urlParams.get('layout_type') || 'homepage';
+    }
+
+    function removeOneNodeUid(nodeUid, editorContext) {
+        const payload = {
+            theme_id: themeIdFromUrl(),
+            node_uid: nodeUid,
+            page_type: pageTypeFromUrl(),
+            layout_type: pageTypeFromUrl(),
+            status: 'draft',
+        };
+        if (editorContext) {
+            payload.editor_context = editorContext;
+        }
+        return fetch(removeWidgetUrl, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        }).then(function (response) { return response.json(); });
+    }
+
+    function reloadPreview() {
+        const reloadUrl = new URL(window.location.href);
+        reloadUrl.searchParams.set('_t', String(Date.now()));
+        window.location.replace(reloadUrl.toString());
+    }
+
+    async function removeNodeUids(nodeUids, editorContext, statusEl, disableBtn) {
+        if (!nodeUids.length) {
+            if (statusEl) {
+                statusEl.style.display = 'block';
+                statusEl.style.background = '#f8d7da';
+                statusEl.style.color = '#721c24';
+                statusEl.textContent = '✗ 无可用 node_uid，无法从当前版本移除';
+            }
+            return false;
+        }
+        if (statusEl) {
+            statusEl.style.display = 'block';
+            statusEl.style.background = '#d1ecf1';
+            statusEl.style.color = '#0c5460';
+            statusEl.textContent = '正在移除...';
+        }
+        if (disableBtn) disableBtn.disabled = true;
+        let ok = 0;
+        let lastError = '';
+        for (let i = 0; i < nodeUids.length; i++) {
+            try {
+                const data = await removeOneNodeUid(nodeUids[i], editorContext);
+                if (data && data.success) {
+                    ok++;
+                } else {
+                    lastError = (data && data.message) ? data.message : '删除失败';
+                }
+            } catch (e) {
+                lastError = '网络错误';
+            }
+        }
+        if (ok > 0) {
+            if (statusEl) {
+                statusEl.style.background = '#d4edda';
+                statusEl.style.color = '#155724';
+                statusEl.textContent = '✓ 已从当前版本移除 ' + ok + ' 个失效部件，即将刷新...';
+            }
+            try {
+                if (window.parent && window.parent !== window) {
+                    window.parent.postMessage({
+                        source: 'weline-theme-preview',
+                        type: 'layout-draft-mutated',
+                        reason: 'remove-unavailable-widget',
+                        removed: ok,
+                    }, window.location.origin);
+                }
+            } catch (e) {}
+            setTimeout(function () {
+                if (panel) panel.remove();
+            }, 800);
+            setTimeout(reloadPreview, 1000);
+            return true;
+        }
+        if (statusEl) {
+            statusEl.style.background = '#f8d7da';
+            statusEl.style.color = '#721c24';
+            statusEl.textContent = '✗ ' + (lastError || '删除失败');
+        }
+        if (disableBtn) disableBtn.disabled = false;
+        if (confirmMessage) confirmMessage.style.display = 'none';
+        if (actions) actions.style.display = 'flex';
+        return false;
+    }
+
+    if (btnConfirm) {
+        btnConfirm.addEventListener('click', function () {
+            if (actions) actions.style.display = 'none';
+            if (confirmMessage) confirmMessage.style.display = 'block';
+        });
+    }
+    if (btnNo) {
+        btnNo.addEventListener('click', function () {
+            if (confirmMessage) confirmMessage.style.display = 'none';
+            if (actions) actions.style.display = 'flex';
+        });
+    }
+    if (btnYes) {
+        btnYes.addEventListener('click', function () {
+            const nodeUids = JSON.parse((btnConfirm && btnConfirm.getAttribute('data-unavailable-node-uids')) || '[]');
+            const editorContext = resolveEditorContext(btnConfirm);
+            if (confirmMessage) confirmMessage.style.display = 'none';
+            removeNodeUids(nodeUids, editorContext, deleteStatus, btnYes);
+        });
+    }
+
+    document.addEventListener('click', function (event) {
+        const target = event.target;
+        if (!(target instanceof Element)) return;
+        const btn = target.closest('[data-action="remove-unavailable-widget"]');
+        if (!btn) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const wrapper = btn.closest('.widget-wrapper');
+        let nodeUid = '';
+        if (btn.hasAttribute('data-node-uid')) {
+            nodeUid = String(btn.getAttribute('data-node-uid') || '').toLowerCase();
+        }
+        if (!nodeUid && wrapper) {
+            nodeUid = String(wrapper.getAttribute('data-node-uid') || '').toLowerCase();
+        }
+        if (!/^[a-f0-9]{32}$/.test(nodeUid)) {
+            if (window.Weline && window.Weline.UI && window.Weline.UI.toast) {
+                window.Weline.UI.toast.show('缺少 node_uid，无法从当前版本移除', { tone: 'warning', duration: 5000 });
+            } else {
+                console.warn('[UnavailableWidget] missing node_uid');
+            }
+            return;
+        }
+        if (!window.confirm('确认从当前草稿版本移除此失效部件？')) {
+            return;
+        }
+        const editorContext = resolveEditorContext(btnConfirm);
+        const statusEl = deleteStatus || document.createElement('div');
+        removeNodeUids([nodeUid], editorContext, statusEl, btn);
+    }, true);
+})();
+</script>
+HTML;
+
+        if (strpos($html, '</body>') !== false) {
+            $html = str_replace('</body>', $warningHtml . '</body>', $html);
+        } else {
+            $html .= $warningHtml;
+        }
+
         return $html;
     }
 

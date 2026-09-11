@@ -726,6 +726,128 @@
         max-inline-size: 100%;
     }
     .w-field__label { color: var(--weline-theme-text); font-size: var(--weline-font-size-sm); font-weight: 650; }
+    /* w-field--outlined-notch + floating label:
+       default (empty input/textarea): label rests as in-field placeholder;
+       :focus-within / :not(:placeholder-shown) / select: float to top-border notch.
+       Opt out: data-floating-label="0" (always notch). */
+    .w-field:has(> .w-field__label):has(:is(.w-input, .w-select, .w-textarea, .w-field__control)):not(
+        :has(> .w-check),
+        :has(> .w-switch),
+        .w-theme-disk-field--inline,
+        [data-label-layout="stacked"],
+        [data-label-layout="inline"],
+        .w-search-inline,
+        .w-search-bar
+    ) {
+        position: relative;
+    }
+    .w-field:has(> .w-field__label):has(:is(.w-input, .w-select, .w-textarea, .w-field__control)):not(
+        :has(> .w-check),
+        :has(> .w-switch),
+        .w-theme-disk-field--inline,
+        [data-label-layout="stacked"],
+        [data-label-layout="inline"],
+        .w-search-inline,
+        .w-search-bar
+    ) > .w-field__label {
+        position: absolute;
+        z-index: 1;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        inset-block-start: 0;
+        inset-inline-start: var(--weline-space-3);
+        translate: 0 -50%;
+        max-inline-size: calc(100% - (var(--weline-space-3) * 2));
+        margin: 0;
+        padding-inline: var(--weline-space-1);
+        overflow: hidden;
+        color: var(--weline-theme-text-muted);
+        background: var(--weline-theme-field-label-bg, var(--weline-theme-surface));
+        font-size: var(--weline-font-size-xs);
+        font-weight: 650;
+        line-height: 1.2;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+        pointer-events: none;
+        transition:
+            color var(--weline-motion-fast),
+            font-size var(--weline-motion-fast),
+            font-weight var(--weline-motion-fast),
+            inset-block-start var(--weline-motion-fast),
+            translate var(--weline-motion-fast),
+            background-color var(--weline-motion-fast),
+            padding-inline var(--weline-motion-fast);
+    }
+    .w-field:has(> .w-field__label):has(:is(.w-input, .w-select, .w-textarea, .w-field__control)):not(
+        :has(> .w-check),
+        :has(> .w-switch),
+        .w-theme-disk-field--inline,
+        [data-label-layout="stacked"],
+        [data-label-layout="inline"],
+        .w-search-inline,
+        .w-search-bar
+    ) > .w-field__label .w-icon {
+        width: 1em;
+        height: 1em;
+        min-width: 1em;
+        min-height: 1em;
+        flex: 0 0 1em;
+    }
+    /* Resting: empty text controls act as in-field placeholder (select stays notched). */
+    .w-field:has(> .w-field__label):has(:is(.w-input, .w-textarea)):not(
+        :has(> .w-check),
+        :has(> .w-switch),
+        .w-theme-disk-field--inline,
+        [data-label-layout="stacked"],
+        [data-label-layout="inline"],
+        [data-floating-label="0"],
+        .w-search-inline,
+        .w-search-bar
+    ):has(:is(.w-input, .w-textarea):placeholder-shown):not(:focus-within) > .w-field__label {
+        inset-block-start: 50%;
+        translate: 0 -50%;
+        padding-inline: 0;
+        color: var(--weline-theme-text-subtle);
+        background: transparent;
+        font-size: var(--weline-font-size-sm);
+        font-weight: 500;
+    }
+    .w-field:has(> .w-field__label):has(:is(.w-input, .w-select, .w-textarea, .w-field__control)):not(
+        :has(> .w-check),
+        :has(> .w-switch),
+        .w-theme-disk-field--inline,
+        [data-label-layout="stacked"],
+        [data-label-layout="inline"],
+        .w-search-inline,
+        .w-search-bar
+    ):focus-within > .w-field__label {
+        color: var(--weline-theme-primary);
+    }
+    .w-field:has(> .w-field__label):has(:is(.w-input, .w-select, .w-textarea, .w-field__control)[aria-invalid="true"]):not(
+        :has(> .w-check),
+        :has(> .w-switch),
+        .w-theme-disk-field--inline,
+        [data-label-layout="stacked"],
+        [data-label-layout="inline"],
+        .w-search-inline,
+        .w-search-bar
+    ) > .w-field__label {
+        color: var(--weline-theme-danger);
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .w-field:has(> .w-field__label):has(:is(.w-input, .w-select, .w-textarea, .w-field__control)):not(
+            :has(> .w-check),
+            :has(> .w-switch),
+            .w-theme-disk-field--inline,
+            [data-label-layout="stacked"],
+            [data-label-layout="inline"],
+            .w-search-inline,
+            .w-search-bar
+        ) > .w-field__label {
+            transition: none;
+        }
+    }
     .w-field__hint { color: var(--weline-theme-text-muted); font-size: var(--weline-font-size-sm); }
     .w-field__error { color: var(--weline-theme-danger); font-size: var(--weline-font-size-sm); }
     .w-input, .w-select, .w-textarea {
@@ -741,9 +863,48 @@
         color: var(--weline-theme-text);
         transition: border-color var(--weline-motion-fast), box-shadow var(--weline-motion-fast);
     }
+    /* Native select chevron: keep inset from the trailing edge (not flush). */
+    .w-select {
+        appearance: none;
+        -webkit-appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1.5 1.75 6 6.25 10.5 1.75' stroke='%23565959' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right var(--weline-space-3) center;
+        background-size: 0.75rem 0.5rem;
+        padding-inline-end: calc(var(--weline-space-3) + 1.15rem);
+    }
     :where(.w-input, .w-select)[data-size="sm"] { min-height: var(--weline-control-height-sm); padding-block: var(--weline-space-1); font-size: var(--weline-font-size-sm); }
     .w-textarea { min-height: 7rem; resize: vertical; }
     .w-input::placeholder, .w-textarea::placeholder { color: var(--weline-theme-text-subtle); }
+    /* Floating label: rest = label is the cue (hide native placeholder); float/focus = show placeholder hint. */
+    .w-field:has(> .w-field__label):has(:is(.w-input, .w-textarea)):not(
+        :has(> .w-check),
+        :has(> .w-switch),
+        .w-theme-disk-field--inline,
+        [data-label-layout="stacked"],
+        [data-label-layout="inline"],
+        [data-floating-label="0"],
+        .w-search-inline,
+        .w-search-bar
+    ):has(:is(.w-input, .w-textarea):placeholder-shown):not(:focus-within) :is(.w-input, .w-textarea)::placeholder {
+        color: transparent;
+        -webkit-text-fill-color: transparent;
+        opacity: 0;
+    }
+    .w-field:has(> .w-field__label):has(:is(.w-input, .w-textarea)):not(
+        :has(> .w-check),
+        :has(> .w-switch),
+        .w-theme-disk-field--inline,
+        [data-label-layout="stacked"],
+        [data-label-layout="inline"],
+        [data-floating-label="0"],
+        .w-search-inline,
+        .w-search-bar
+    ):focus-within :is(.w-input, .w-textarea)::placeholder {
+        color: var(--weline-theme-text-subtle);
+        -webkit-text-fill-color: var(--weline-theme-text-subtle);
+        opacity: 1;
+    }
     .w-input:hover, .w-select:hover, .w-textarea:hover { border-color: var(--weline-theme-primary); }
     .w-input:focus, .w-select:focus, .w-textarea:focus { border-color: var(--weline-theme-focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--weline-theme-focus) 20%, transparent); outline: 0; }
     :where(.w-input, .w-select, .w-textarea)[aria-invalid="true"] { border-color: var(--weline-theme-danger); }

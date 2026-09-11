@@ -31,6 +31,9 @@ final class ThemeScopedReleaseBatchEditorContractTest extends TestCase
             self::assertStringContainsString('resources:', $method, $relative);
             self::assertStringContainsString('state.lastScopedReleaseBatch', $method, $relative);
             self::assertStringContainsString('cache_retryable', $method, $relative);
+            self::assertStringContainsString('Always refresh before publish', $method, $relative);
+            self::assertStringContainsString('theme_scope_revision_conflict', $method, $relative);
+            self::assertStringContainsString('allowRetry', $method, $relative);
             self::assertStringNotContainsString('apiJson(config.apiPublishScopedWorkspace', $method, $relative);
         }
     }

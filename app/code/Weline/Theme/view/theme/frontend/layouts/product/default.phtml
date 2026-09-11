@@ -17,6 +17,7 @@
  * @param showSidebar {default=false,name="是否显示侧边栏",description="是否显示右侧边栏（相关产品推荐等）"}
  * @param showRelatedProducts {default=false,name="是否显示相关产品",description="是否显示相关产品推荐区域（相关/热销/最近浏览/搭配）；默认关闭"}
  * @param showReviews {default=true,name="是否显示评论容器",description="是否显示商品评论容器槽（由评论模块 default_injections 注入，布局不直接加载部件）"}
+ * @param showFaq {default=true,name="是否显示 FAQ 容器",description="是否显示商品 FAQ 容器槽（由 Faq 模块 default_injections 注入，布局不直接加载部件）"}
  * @param showTabs {default=false,name="是否显示详情标签",description="是否显示产品详情标签区域"}
  * @param class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
  * @param layout.leftsider {default=0,option={0:不显示,1:显示},name="显示左侧栏",description="是否显示左侧栏，用于控制布局结构"}
@@ -58,12 +59,14 @@ $coerceBool = static function (mixed $value, bool $default): bool {
 $showSidebar = $coerceBool($meta['showSidebar'] ?? $this->getData('showSidebar'), false);
 $showRelatedProducts = $coerceBool($meta['showRelatedProducts'] ?? $this->getData('showRelatedProducts'), false);
 $showReviews = $coerceBool($meta['showReviews'] ?? $this->getData('showReviews'), true);
+$showFaq = $coerceBool($meta['showFaq'] ?? $this->getData('showFaq'), true);
 // Product main info + description/specs live in the product-info widget; tabs stay off by default.
 $showTabs = $coerceBool($meta['showTabs'] ?? $this->getData('showTabs'), false);
 
 $meta['showSidebar'] = $showSidebar;
 $meta['showRelatedProducts'] = $showRelatedProducts;
 $meta['showReviews'] = $showReviews;
+$meta['showFaq'] = $showFaq;
 $meta['showTabs'] = $showTabs;
 $this->assign('meta', $meta);
 ?>
@@ -110,7 +113,7 @@ $this->assign('meta', $meta);
             <!-- ========== 商品详情页主体区域 ========== -->
             <w:slot id="content"
                     name="内容区"
-                    accept="layout-product-content,layout-default-content,content,product-detail,product-main,product-sidebar,product-tabs,product-reviews,related-products,bestsellers,recently-viewed,cross-sell"
+                    accept="layout-product-content,layout-default-content,content,product-detail,product-main,product-sidebar,product-tabs,product-reviews,product-faq,related-products,bestsellers,recently-viewed,cross-sell"
                     reject="header,footer"
                     multiple="true"
                     position="content"
@@ -188,6 +191,25 @@ $this->assign('meta', $meta);
                             <w:hook>Weline_Theme::frontend::layouts::product::reviews-slot-content</w:hook>
                         </w:slot>
                         <w:hook>Weline_Theme::frontend::layouts::product::reviews-after</w:hook>
+                    </div>
+                </section>
+            </if>
+
+            <!-- ========== 商品 FAQ 容器（仅 slot；部件由 Faq default_injections 注入，禁止布局直接 w:widget） ========== -->
+            <if condition="meta.showFaq">
+                <section class="product-detail-layout__faq" id="product-faq" weline-code="theme.product.section_faq">
+                    <div class="product-detail-layout__faq-container">
+                        <w:hook>Weline_Theme::frontend::layouts::product::faq-before</w:hook>
+                        <w:slot id="product-faq"
+                                name="商品 FAQ"
+                                accept="layout-product-faq,product-faq,faq"
+                                multiple="true"
+                                position="content"
+                                wrapper="div"
+                                class="product-detail-layout__faq-slot">
+                            <w:hook>Weline_Theme::frontend::layouts::product::faq-slot-content</w:hook>
+                        </w:slot>
+                        <w:hook>Weline_Theme::frontend::layouts::product::faq-after</w:hook>
                     </div>
                 </section>
             </if>
@@ -373,6 +395,29 @@ $this->assign('meta', $meta);
     }
 
     .product-detail-layout__reviews-slot > .widget-wrapper {
+        width: 100%;
+        min-width: 0;
+    }
+
+    /* ---- FAQ 容器区域 ---- */
+    .product-detail-layout__faq {
+        padding: var(--spacing-6) 0;
+    }
+
+    .product-detail-layout__faq-container {
+        width: min(100%, var(--weline-layout-content-max-width));
+        max-width: 100%;
+        margin: 0 auto;
+        padding: 0 var(--weline-layout-content-padding-inline);
+        box-sizing: border-box;
+    }
+
+    .product-detail-layout__faq-slot {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .product-detail-layout__faq-slot > .widget-wrapper {
         width: 100%;
         min-width: 0;
     }
@@ -586,6 +631,7 @@ $this->assign('meta', $meta);
 
         .product-detail-layout__tabs,
         .product-detail-layout__reviews,
+        .product-detail-layout__faq,
         .product-detail-layout__related {
             padding: var(--spacing-5) 0;
         }

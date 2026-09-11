@@ -10,10 +10,12 @@ use Weline\Framework\Cache\Contract\NamespaceGenerationInterface;
 use Weline\Framework\Cache\Contract\SharedCacheStateInterface;
 use Weline\Framework\Cache\Namespace\NamespacePath;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Model\Cache\NamespaceVersion;
 use Weline\Framework\Router\FullPageCacheCoordinator;
 use Weline\Framework\Runtime\RuntimeControlBroadcasterInterface;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\Runtime\ScopeIdentity;
+use Weline\Framework\Runtime\WlsRuntimeAdapterInterface;
 use Weline\SystemConfig\Api\Scope\ScopeContext;
 use Weline\Theme\Block\Partials;
 use Weline\Theme\Helper\ThemeData;
@@ -22,6 +24,47 @@ use Weline\Theme\Observer\ControllerFetchFileBefore;
 
 final class ThemeRuntimeCacheCleaner
 {
+    /**
+     * Full theme-related invalidation for publish / resource_changed.
+     * Clears theme namespace generations (all recorded theme scopes), WLS FPC,
+     * optional CDN full-page purge, plus the shared non-global theme runtime pools.
+     *
+     * @return array{reason:string,theme_id:int|null,steps:array<string,bool>,failures:array<string,string>}
+     */
+    public function clearAllThemeRelatedCaches(?int $themeId = null, string $reason = 'theme_changed'): array
+    {
+        $result = $this->clearNonGlobalCaches($themeId, $reason);
+        $result['reason'] = $reason;
+
+        $this->runStep($result, 'theme_namespace_generations_all', function (): void {
+            $this->bumpAllThemeNamespaces();
+        });
+        $this->runStep($result, 'fpc_cache_pools', function (): void {
+            $cacheManager = ObjectManager::getInstance(CacheManager::class);
+            foreach (['fpc', 'router'] as $pool) {
+                if (\method_exists($cacheManager, 'hasPool') && !$cacheManager->hasPool($pool)) {
+                    continue;
+                }
+                $cacheManager->pool($pool)->clear();
+            }
+        });
+        $this->runStep($result, 'wls_shared_fpc_full', function () use ($reason): void {
+            $this->clearWlsSharedFpcAndRouter($reason);
+        });
+        $this->runStep($result, 'wls_worker_broadcast_all', function (): void {
+            $broadcaster = $this->runtimeProvider(RuntimeControlBroadcasterInterface::class);
+            if ($broadcaster instanceof RuntimeControlBroadcasterInterface) {
+                // null = all WLS instances, not only the current worker.
+                $broadcaster->cacheClear(null);
+            }
+        });
+        $this->runStep($result, 'cdn_full_page_purge', function (): void {
+            $this->purgeCdnFullPageCaches();
+        });
+
+        return $result;
+    }
+
     /**
      * Invalidate only the published Theme namespace for this Scope. Because
      * storefront vectors include their parent paths, descendants are invalidated
@@ -301,6 +344,117 @@ final class ThemeRuntimeCacheCleaner
         }
 
         return $paths->website($websiteCode, $segments);
+    }
+
+    /** Bump every recorded theme cache namespace plus the global storefront theme authority. */
+    private function bumpAllThemeNamespaces(): void
+    {
+        $namespacePath = ObjectManager::getInstance(NamespacePath::class);
+        $namespaces = [
+            $namespacePath->global('storefront', ['theme']),
+        ];
+        try {
+            $rows = ObjectManager::getInstance(NamespaceVersion::class)
+                ->clear()
+                ->clearQuery()
+                ->fields(NamespaceVersion::schema_fields_NAMESPACE)
+                ->select()
+                ->fetchArray();
+            foreach (\is_array($rows) ? $rows : [] as $row) {
+                if (!\is_array($row)) {
+                    continue;
+                }
+                $ns = \trim((string)($row[NamespaceVersion::schema_fields_NAMESPACE] ?? ''));
+                if ($ns === '' || !\preg_match('#(^|/)theme(/|$)#', $ns)) {
+                    continue;
+                }
+                $namespaces[] = $namespacePath->canonicalize($ns);
+            }
+        } catch (\Throwable) {
+            // Table may be empty/unavailable during early bootstrap; global bump still runs.
+        }
+        $namespaces = \array_values(\array_unique($namespaces));
+        \sort($namespaces, \SORT_STRING);
+        ObjectManager::getInstance(NamespaceGenerationInterface::class)->bumpMany($namespaces);
+    }
+
+    private function clearWlsSharedFpcAndRouter(string $reason): void
+    {
+        $adapter = $this->runtimeProvider(WlsRuntimeAdapterInterface::class);
+        if ($adapter instanceof WlsRuntimeAdapterInterface) {
+            $facade = $adapter->createSharedState([
+                'consumer_code' => $reason,
+                'prefer_direct_connect' => true,
+                'pool_size' => 1,
+                'auto_start' => false,
+            ]);
+            $facade->clearCache('router');
+            $facade->clearCache('fpc');
+            $facade->disconnect();
+            return;
+        }
+
+        // Fallback when not under WLS adapter: clear SharedCacheState if present.
+        if ($this->currentRuntimeInstanceName() === null) {
+            return;
+        }
+        $state = $this->runtimeProvider(SharedCacheStateInterface::class);
+        if ($state instanceof SharedCacheStateInterface) {
+            $state->clearCache('router');
+            $state->clearCache('fpc');
+            $state->clearNamespace('theme_runtime');
+        }
+    }
+
+    /**
+     * Best-effort CDN full-page purge for every enabled domain.
+     * Soft-fails into the step result when Cdn is absent or a domain purge fails.
+     */
+    private function purgeCdnFullPageCaches(): void
+    {
+        if (!\class_exists(\Weline\Cdn\Model\Domain::class)
+            || !\class_exists(\Weline\Cdn\Service\CachePurger::class)
+        ) {
+            return;
+        }
+        /** @var \Weline\Cdn\Model\Domain $domainModel */
+        $domainModel = ObjectManager::getInstance(\Weline\Cdn\Model\Domain::class);
+        $domains = (clone $domainModel)->reset()
+            ->where(\Weline\Cdn\Model\Domain::schema_fields_ENABLED, 1)
+            ->select()
+            ->fetch()
+            ->getItems();
+        if ($domains === []) {
+            return;
+        }
+        /** @var \Weline\Cdn\Service\CachePurger $purger */
+        $purger = ObjectManager::getInstance(\Weline\Cdn\Service\CachePurger::class);
+        $errors = [];
+        foreach ($domains as $domain) {
+            if (!$domain instanceof \Weline\Cdn\Model\Domain) {
+                continue;
+            }
+            $domainId = (int)$domain->getData(\Weline\Cdn\Model\Domain::schema_fields_DOMAIN_ID);
+            $host = (string)$domain->getData(\Weline\Cdn\Model\Domain::schema_fields_DOMAIN_NAME);
+            if ($domainId < 1) {
+                continue;
+            }
+            try {
+                $result = $purger->purge($domainId, 'everything', []);
+                if (($result['success'] ?? false) !== true) {
+                    // Adapters that reject everything fall back to host purge.
+                    $result = $purger->purge($domainId, 'hosts', ['hosts' => [$host]]);
+                }
+                if (($result['success'] ?? false) !== true) {
+                    $errors[] = $host !== '' ? $host : ('domain:' . $domainId);
+                }
+            } catch (\Throwable $e) {
+                $errors[] = $e->getMessage();
+            }
+        }
+        if ($errors !== []) {
+            throw new \RuntimeException('cdn_purge_partial_failure:' . \implode(';', $errors));
+        }
     }
 
     private function currentRuntimeInstanceName(): ?string

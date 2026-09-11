@@ -103,6 +103,22 @@ final class PreparedContentStoreTest extends TestCase
         self::assertSame('missing', PreparedContentStore::get($key, 'missing'));
     }
 
+    public function testRequestContextWithoutScopeIdUsesFallbackStore(): void
+    {
+        $context = new Context(['meta' => ['type' => 'request', 'mode' => 'wls']]);
+        Context::enter($context);
+        // RequestContext initialized but no connection/request id yet.
+        RequestContext::setId('');
+        RequestContext::setConnectionId('');
+
+        $key = PreparedContentStore::put('<section>null-scope</section>');
+        self::assertTrue(PreparedContentStore::has($key));
+        self::assertSame('<section>null-scope</section>', PreparedContentStore::get($key));
+
+        PreparedContentStore::resetRequestState();
+        self::assertFalse(PreparedContentStore::has($key));
+    }
+
     public function testResolveLayoutContentSkipsEmptyMetaContentString(): void
     {
         $called = 0;

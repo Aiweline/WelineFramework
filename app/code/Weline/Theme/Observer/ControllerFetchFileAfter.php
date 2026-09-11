@@ -1195,6 +1195,9 @@ HTML;
         if ($this->isBackendLayoutTemplate($layoutTemplate)) {
             return [
                 'contentRenderKey' => $contentRenderKey,
+                // Keep rendered body as resolveLayoutContent fallback when the
+                // PreparedContentStore key is missing mid-layout (blank main).
+                'content' => $contentHtml,
             ];
         }
 

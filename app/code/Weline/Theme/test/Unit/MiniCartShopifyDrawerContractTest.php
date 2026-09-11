@@ -48,6 +48,8 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
         self::assertStringContainsString('readSummaryCache', $source);
         self::assertStringContainsString('rememberSummaryCache', $source);
         self::assertStringContainsString('forceNetwork', $source);
+        self::assertStringContainsString('needsOriginRefresh', $source);
+        self::assertStringContainsString('consumeNeedsOriginRefresh', $source);
         self::assertStringContainsString('weline.cart.summary_cache', $source);
         self::assertStringContainsString('summaryCacheStorageKey', $source);
         self::assertStringContainsString('localStorage.getItem(summaryCacheStorageKey', $source);
@@ -59,7 +61,8 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
         self::assertStringContainsString('forceRefresh', $source);
         self::assertStringContainsString('!forceRefresh && applyCachedSummaryToRoots()', $source);
         self::assertStringContainsString('preview.amount_minor', $source);
-        self::assertStringContainsString("getCachedSummary({ cartType: mode })", $source);
+        self::assertStringContainsString("getCachedSummary({ cartType: mode, requireTokenMatch: true })", $source);
+        self::assertStringContainsString('Ghost-cart gate: no matching guest_token', $source);
         self::assertStringContainsString('waitForCartApi', $source);
         self::assertStringContainsString('getCart', $source);
         self::assertStringContainsString('isDemoChromeOnly', $source);

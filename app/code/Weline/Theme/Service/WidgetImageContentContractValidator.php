@@ -17,6 +17,10 @@ final class WidgetImageContentContractValidator implements LayoutContentValidato
         '_file_alt',
         '_file_asset_id',
     ];
+    /** Hard-cut aliases: old registered code → current placeable code. */
+    private const LEGACY_WIDGET_CODE_ALIASES = [
+        'footer-help-center-link' => 'footer-faq-link',
+    ];
     private const MAX_NODES = 10000;
     private const MAX_DEPTH = 64;
 
@@ -61,7 +65,8 @@ final class WidgetImageContentContractValidator implements LayoutContentValidato
     private function definitions(array $widget, array $context = []): array
     {
         $module = trim((string)($widget['widget_module'] ?? ''));
-        $code = trim((string)($widget['widget_code'] ?? ''));
+        $rawCode = trim((string)($widget['widget_code'] ?? ''));
+        $code = self::LEGACY_WIDGET_CODE_ALIASES[$rawCode] ?? $rawCode;
         $type = trim((string)($widget['widget_type'] ?? ''));
         if ($module === '' || $code === '') {
             throw new \RuntimeException((string)__('主题布局包含缺少身份的部件，禁止保存或发布。'));
@@ -85,7 +90,7 @@ final class WidgetImageContentContractValidator implements LayoutContentValidato
         }
 
         throw new \RuntimeException((string)__('主题部件 %{1} 未注册，禁止保存或发布。', [
-            $module . '::' . $type . '::' . $code,
+            $module . '::' . $type . '::' . $rawCode,
         ]));
     }
 

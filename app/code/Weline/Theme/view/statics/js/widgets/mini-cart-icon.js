@@ -249,6 +249,43 @@
         }
     }
 
+    function summaryCacheHasLineItems(summary) {
+        if (!summary || typeof summary !== 'object' || summary.is_empty === true) {
+            return false;
+        }
+        if (Number(summary.cart_count || summary.item_count || 0) > 0) {
+            return true;
+        }
+        return Array.isArray(summary.items) && summary.items.length > 0;
+    }
+
+    function clearSummaryCacheBucket(mode) {
+        var next = normalizeCartType(mode);
+        try {
+            window.localStorage.removeItem(summaryCacheStorageKey(next));
+        } catch (e0) {}
+        if (window.WelineCart && typeof window.WelineCart.clearCachedSummary === 'function') {
+            try {
+                window.WelineCart.clearCachedSummary({ cartType: next });
+            } catch (e1) {}
+        }
+    }
+
+    // Sibling Persistence counts win over a stale empty Presentation bucket.
+    function invalidateEmptyCachesClaimedBySiblings(summary) {
+        var rows = summary && Array.isArray(summary.sibling_carts) ? summary.sibling_carts : [];
+        rows.forEach(function (row) {
+            if (!row || Number(row.item_count || row.cart_count || 0) <= 0) {
+                return;
+            }
+            var type = normalizeCartType(row.cart_type || 'toc');
+            var cached = normalizeSummary(readSummaryCache(type));
+            if (cached && !summaryCacheHasLineItems(cached)) {
+                clearSummaryCacheBucket(type);
+            }
+        });
+    }
+
     function currentStorefrontCurrency() {
         if (window.WelineCart && typeof window.WelineCart.currentDisplayCurrency === 'function') {
             try {
@@ -326,7 +363,10 @@
                 if (cacheMatchesStorefront(data)) {
                     var token = currentGuestTokenForCache();
                     var cachedToken = String(data.guest_token || '').trim();
-                    if (!(token && cachedToken && token !== cachedToken)) {
+                    // Ghost-cart gate: no matching guest_token → never paint local summary as has-items.
+                    if (!token || !cachedToken || token !== cachedToken) {
+                        // miss
+                    } else {
                         var typed = Object.assign({}, data.summary);
                         typed.cart_type = mode;
                         typed.selling_mode = mode;
@@ -337,7 +377,7 @@
         } catch (e) {}
         if (window.WelineCart && typeof window.WelineCart.getCachedSummary === 'function') {
             try {
-                var shared = window.WelineCart.getCachedSummary({ cartType: mode });
+                var shared = window.WelineCart.getCachedSummary({ cartType: mode, requireTokenMatch: true });
                 if (shared && shared.success !== false) {
                     var sharedType = normalizeCartType(shared.cart_type || shared.selling_mode || 'toc');
                     var sharedCurrency = String(shared.currency || '').toUpperCase();
@@ -363,6 +403,12 @@
                 if (legacyType !== 'toc') {
                     return null;
                 }
+                var legacyToken = currentGuestTokenForCache();
+                var legacyCachedToken = String(legacy.guest_token || '').trim();
+                // Ghost-cart gate (legacy untyped key).
+                if (!legacyToken || !legacyCachedToken || legacyToken !== legacyCachedToken) {
+                    return null;
+                }
                 return Object.assign({}, legacy.summary, { cart_type: 'toc', selling_mode: 'toc' });
             } catch (e3) {
                 return null;
@@ -372,6 +418,10 @@
     }
 
     function applyCachedSummaryToRoots() {
+        if (window.WelineCart && typeof window.WelineCart.needsOriginRefresh === 'function'
+            && window.WelineCart.needsOriginRefresh()) {
+            return false;
+        }
         if (window.Weline && window.Weline.MiniCart && window.Weline.MiniCart.__painting) {
             return !!window.Weline.MiniCart.__lastPaintHit;
         }
@@ -757,6 +807,57 @@
             p.textContent = emptyMessage || attr(root, 'data-i18n-empty', '购物车是空的');
             empty.appendChild(p);
 
+            var siblings = (root.__welineLastSummary && Array.isArray(root.__welineLastSummary.sibling_carts))
+                ? root.__welineLastSummary.sibling_carts
+                : [];
+            siblings.forEach(function (row) {
+                if (!row || Number(row.item_count || row.cart_count || 0) <= 0) {
+                    return;
+                }
+                var type = String(row.cart_type || '').toLowerCase() === 'tob' ? 'tob' : 'toc';
+                var label = String(row.label || type).trim() || type;
+                var count = Number(row.item_count || row.cart_count || 0);
+                if (row.switchable === false) {
+                    return;
+                }
+                var btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'mini-cart-drawer__btn mini-cart-drawer__btn--secondary';
+                btn.setAttribute('data-mini-cart-sibling', type);
+                btn.setAttribute('data-mini-cart-sibling-switch', type);
+                btn.textContent = '浏览' + label + ' ' + count + '件商品';
+                btn.addEventListener('click', function (event) {
+                    if (event && typeof event.preventDefault === 'function') {
+                        event.preventDefault();
+                    }
+                    if (event && typeof event.stopPropagation === 'function') {
+                        event.stopPropagation();
+                    }
+                    if (window.WelineCart && typeof window.WelineCart.requestCartType === 'function') {
+                        window.WelineCart.requestCartType(type, {
+                            source: 'mini-sibling-cta',
+                            forceNetwork: true,
+                        });
+                    } else {
+                        try {
+                            window.sessionStorage.setItem('weline_cart_type_explicit', type);
+                        } catch (e0) {}
+                        window.dispatchEvent(new CustomEvent('weline:cart-type-changed', {
+                            detail: {
+                                cart_type: type,
+                                selling_mode: type,
+                                source: 'mini-sibling-cta',
+                                forceNetwork: true,
+                            },
+                        }));
+                    }
+                    if (window.Weline && window.Weline.MiniCart && typeof window.Weline.MiniCart.refresh === 'function') {
+                        window.Weline.MiniCart.refresh({ forceNetwork: true });
+                    }
+                });
+                empty.appendChild(btn);
+            });
+
             var shop = document.createElement('a');
             shop.href = '/';
             shop.className = 'mini-cart-drawer__btn mini-cart-drawer__btn--secondary';
@@ -873,6 +974,10 @@
 
     function applySummary(root, summary) {
         if (!summary || typeof summary !== 'object') return;
+        if (!summaryCacheHasLineItems(summary)) {
+            invalidateEmptyCachesClaimedBySiblings(summary);
+        }
+        root.__welineLastSummary = summary;
         var count = Number(summary.cart_count || summary.item_count || 0);
         var currency = String(summary.currency || 'CNY');
         var subtotal = Number(summary.subtotal || summary.grand_total || 0);
@@ -1028,12 +1133,18 @@
             return;
         }
         options = options || {};
+        if (!options.forceNetwork
+            && window.WelineCart && typeof window.WelineCart.needsOriginRefresh === 'function'
+            && window.WelineCart.needsOriginRefresh()) {
+            options.forceNetwork = true;
+        }
         var mode = preferredCartType();
+        // Empty typed cache cannot short-circuit: sibling may claim the other cart still has lines.
         if (!options.forceNetwork) {
             var cached = normalizeSummary(readSummaryCache(mode));
             if (cached && cached.success !== false
                 && normalizeCartType(cached.cart_type || cached.selling_mode) === mode
-                && (cached.cart_count != null || Array.isArray(cached.items))) {
+                && summaryCacheHasLineItems(cached)) {
                 applySummary(root, cached);
                 return;
             }
@@ -1064,6 +1175,10 @@
                         message: payload && payload.message ? payload.message : '',
                     }));
                 }
+                if (options.forceNetwork && window.WelineCart
+                    && typeof window.WelineCart.consumeNeedsOriginRefresh === 'function') {
+                    window.WelineCart.consumeNeedsOriginRefresh();
+                }
                 return;
             }
             var normalized = normalizeSummary(payload) || payload;
@@ -1071,6 +1186,10 @@
             normalized.selling_mode = normalized.cart_type;
             applySummary(root, normalized);
             rememberSummaryCache(normalized);
+            if (options.forceNetwork && window.WelineCart
+                && typeof window.WelineCart.consumeNeedsOriginRefresh === 'function') {
+                window.WelineCart.consumeNeedsOriginRefresh();
+            }
             var count = Number(normalized.cart_count || normalized.item_count || 0);
             if (count > 0 && window.WelineCart && typeof window.WelineCart.markCartActive === 'function') {
                 window.WelineCart.markCartActive();
@@ -1343,12 +1462,18 @@
             return;
         }
         options = options || {};
+        if (!options.forceNetwork
+            && window.WelineCart && typeof window.WelineCart.needsOriginRefresh === 'function'
+            && window.WelineCart.needsOriginRefresh()) {
+            options.forceNetwork = true;
+        }
         var mode = preferredCartType();
+        // Empty typed cache cannot short-circuit: sibling may claim the other cart still has lines.
         if (!options.forceNetwork) {
             var cached = normalizeSummary(readSummaryCache(mode));
             if (cached && cached.success !== false
                 && normalizeCartType(cached.cart_type || cached.selling_mode) === mode
-                && (cached.cart_count != null || Array.isArray(cached.items))) {
+                && summaryCacheHasLineItems(cached)) {
                 applySummary(root, cached);
                 return;
             }
@@ -1378,6 +1503,10 @@
                         gate_reason: gateReasonFromPayload(payload),
                         message: payload && payload.message ? payload.message : '',
                     }));
+                    if (options.forceNetwork && window.WelineCart
+                        && typeof window.WelineCart.consumeNeedsOriginRefresh === 'function') {
+                        window.WelineCart.consumeNeedsOriginRefresh();
+                    }
                     return;
                 }
                 var normalized = normalizeSummary(payload) || payload;
@@ -1385,6 +1514,10 @@
                 normalized.selling_mode = normalized.cart_type;
                 applySummary(root, normalized);
                 rememberSummaryCache(normalized);
+                if (options.forceNetwork && window.WelineCart
+                    && typeof window.WelineCart.consumeNeedsOriginRefresh === 'function') {
+                    window.WelineCart.consumeNeedsOriginRefresh();
+                }
             } catch (e) {
                 applySummary(root, emptySummaryForType(mode));
             }
@@ -1396,7 +1529,10 @@
     }
 
     function scheduleCartSync(root) {
-        syncCartState(root).catch(function () {
+        var forceNetwork = !!(window.WelineCart
+            && typeof window.WelineCart.needsOriginRefresh === 'function'
+            && window.WelineCart.needsOriginRefresh());
+        syncCartState(root, forceNetwork ? { forceNetwork: true } : {}).catch(function () {
             // Keep server-rendered badge when cart API is unavailable.
         });
     }
@@ -1527,7 +1663,9 @@
     function bootMiniCartRoots(options) {
         options = options || {};
         var paintCache = options.paintCache !== false;
-        var hydratedFromCache = paintCache ? applyCachedSummaryToRoots() : false;
+        if (paintCache) {
+            applyCachedSummaryToRoots();
+        }
         document.querySelectorAll('[data-w-mini-cart="1"]').forEach(function (root) {
             if (root.getAttribute('data-w-mini-cart-init') === '1') {
                 return;
@@ -1536,9 +1674,8 @@
             bindDrawer(root);
             bindLineActions(root);
             if (paintCache) {
-                if (!hydratedFromCache) {
-                    scheduleCartSync(root);
-                }
+                // Soft paint may hydrate, but always revalidate against Cookie/DB authority.
+                scheduleCartSync(root);
                 return;
             }
             // Observer 路径：新根只做一次单根缓存画，避免全树重绘风暴。
@@ -1619,10 +1756,31 @@
             scheduleCartRefreshFromEvent(summary);
         });
 
+        window.addEventListener('weline:cart-type-changed', function (event) {
+            var detail = event && event.detail && typeof event.detail === 'object' ? event.detail : {};
+            var mode = normalizeCartType(detail.cart_type || detail.selling_mode || preferredCartType());
+            var forceNetwork = detail.forceNetwork === true;
+            document.querySelectorAll('[data-w-mini-cart="1"]').forEach(function (root) {
+                if (isDemoChromeOnly(root)) {
+                    return;
+                }
+                applyCartTypeAttr(root, { cart_type: mode });
+                syncCartState(root, { forceNetwork: forceNetwork, drawerBusy: isDrawerOpen(root) }).then(function () {
+                    if (isDrawerOpen(root)) {
+                        return loadDrawer(root, { forceNetwork: forceNetwork });
+                    }
+                    return null;
+                }).catch(function () {});
+            });
+        });
+
+        // Legacy B2B event: ignore echoes already mirrored as cart-type-changed.
         window.addEventListener('weline:selling-mode-changed', function (event) {
             var detail = event && event.detail && typeof event.detail === 'object' ? event.detail : {};
+            if (detail.source === 'b2b-setMode') {
+                return;
+            }
             var mode = normalizeCartType(detail.selling_mode || detail.cart_type || preferredCartType());
-            // Type switch: paint that type's local bucket; network only on miss or explicit force.
             var forceNetwork = detail.forceNetwork === true;
             document.querySelectorAll('[data-w-mini-cart="1"]').forEach(function (root) {
                 if (isDemoChromeOnly(root)) {

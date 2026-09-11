@@ -443,7 +443,8 @@ class Partials extends Block
 
             return KeyBuilder::environmentHash([
                 // v9: language-switcher SSR no longer inlines flags; bust stale SVG chrome.
-                'schema' => 'chrome-partial-v10-seo-path',
+                // v11: frontend header chrome is always guest-SSR; auth no longer splits the bucket.
+                'schema' => 'chrome-partial-v11-guest-header',
                 'nested_widgets' => ($area === 'frontend' && $type === 'header')
                     ? $this->frontendHeaderNestedChromeFingerprint()
                     : '',
@@ -630,28 +631,14 @@ class Partials extends Block
         ]);
     }
 
+    /**
+     * Storefront header chrome always SSRs the guest account shell (and empty
+     * wishlist badge). Login state is applied client-side — never bucket header
+     * HTML by frontend Session user.
+     */
     private function frontendHeaderAuthCacheContext(): ?string
     {
-        try {
-            $session = SessionFactory::getInstance()->createFrontendSession();
-            if (!$session->isLoggedIn()) {
-                return 'frontend-auth:0';
-            }
-
-            $userId = \method_exists($session, 'getLoginUserID')
-                ? (string)($session->getLoginUserID() ?? '')
-                : '';
-            $username = \method_exists($session, 'getLoginUsername')
-                ? (string)($session->getLoginUsername() ?? '')
-                : '';
-            if ($userId === '' && $username === '') {
-                return null;
-            }
-
-            return 'frontend-auth:1:' . \sha1($userId . '|' . $username);
-        } catch (\Throwable) {
-            return null;
-        }
+        return 'frontend-auth:0';
     }
 
     private function backendAuthCacheContext(string $authMode = 'user'): ?string
