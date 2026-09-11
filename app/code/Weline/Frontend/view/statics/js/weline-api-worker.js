@@ -29,6 +29,8 @@
     const responseCacheMemory = new Map();
     const responseCacheInflight = new Map();
     let responseCacheDbPromise = null;
+    /** Active deploy stamp for response cache; mismatch → wipe local storage. */
+    let activeResponseCacheDeployVersion = '';
     const RESPONSE_CACHE_DB = 'weline-querybin-response-cache';
     const RESPONSE_CACHE_STORE = 'entries';
     const RESPONSE_CACHE_DB_VERSION = 1;
@@ -69,6 +71,7 @@
 
         try {
             const config = normalizeConfig(message.config || {});
+            await ensureResponseCacheDeployVersion(config);
             if (message.type === 'scope-bootstrap' || message.type === 'backend-bootstrap') {
                 const session = await ensureSession(config);
                 self.postMessage({
@@ -473,6 +476,73 @@
                 resolve();
             }
         });
+    }
+
+    /**
+     * Drop memory + IndexedDB entries that do not belong to the page deployVersion
+     * (Weline.config.deployVersion). Keys are prefixed with wqrc1|{deploy}|…
+     */
+    async function clearResponseCacheNotMatchingDeploy(deployVersion) {
+        const keep = String(deployVersion || '');
+        const keepPrefix = 'wqrc1|' + keep + '|';
+        Array.from(responseCacheMemory.keys()).forEach((key) => {
+            if (String(key).indexOf(keepPrefix) !== 0) {
+                responseCacheMemory.delete(key);
+            }
+        });
+        Array.from(responseCacheInflight.keys()).forEach((key) => {
+            if (String(key).indexOf(keepPrefix) !== 0) {
+                responseCacheInflight.delete(key);
+            }
+        });
+        const db = await openResponseCacheDb();
+        if (!db) {
+            return;
+        }
+        return new Promise((resolve) => {
+            try {
+                const tx = db.transaction(RESPONSE_CACHE_STORE, 'readwrite');
+                const store = tx.objectStore(RESPONSE_CACHE_STORE);
+                const req = store.openCursor();
+                req.onsuccess = () => {
+                    const cursor = req.result;
+                    if (!cursor) {
+                        return;
+                    }
+                    const value = cursor.value || {};
+                    const key = typeof value.key === 'string' ? value.key : '';
+                    const entryDeploy = String(value.deployVersion || '');
+                    if (key.indexOf(keepPrefix) !== 0 || (entryDeploy !== '' && entryDeploy !== keep)) {
+                        cursor.delete();
+                    }
+                    cursor.continue();
+                };
+                tx.oncomplete = () => resolve();
+                tx.onerror = () => resolve();
+                tx.onabort = () => resolve();
+            } catch (_error) {
+                resolve();
+            }
+        });
+    }
+
+    async function ensureResponseCacheDeployVersion(config) {
+        const next = String((config && config.deployVersion) || '');
+        if (activeResponseCacheDeployVersion === next) {
+            return;
+        }
+        const previous = activeResponseCacheDeployVersion;
+        activeResponseCacheDeployVersion = next;
+        if (previous === '') {
+            // First message in this worker process: still purge foreign deploy rows
+            // left from an earlier page generation in the same browser profile.
+            await clearResponseCacheNotMatchingDeploy(next);
+            return;
+        }
+        if (workerSession && workerSession.deploy_version !== next) {
+            workerSession = null;
+        }
+        await clearResponseCacheNotMatchingDeploy(next);
     }
 
     function memoryGetFresh(key) {
