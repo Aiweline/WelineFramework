@@ -441,6 +441,8 @@ ID,ID
 "队列类：%{1} 属性错误。 队列属性必须继承自 %{2}","队列类：%{1} 属性错误。 队列属性必须继承自 %{2}"
 异步事件投递维护失败，已跳过并继续消费普通队列：%{1},异步事件投递维护失败，已跳过并继续消费普通队列：%{1}
 "异步事件投递 GC 失败，已跳过：%{1}","异步事件投递 GC 失败，已跳过：%{1}"
+"已扫描 %{1} 条队列，截断超大 result/process %{2} 条（上限 %{3} 字节）。","已扫描 %{1} 条队列，截断超大 result/process %{2} 条（上限 %{3} 字节）。"
+"涉及 queue_id：%{1}","涉及 queue_id：%{1}"
 "Queue Scope 映射工具：help/preflight/quarantine/verify（禁止 apply；信封 cutover 归 TASK-MIG-P1A）","Queue Scope 映射工具：help/preflight/quarantine/verify（禁止 apply；信封 cutover 归 TASK-MIG-P1A）"
 "队列并发数必须是大于 0 的整数。","队列并发数必须是大于 0 的整数。"
 "队列并发数已更新为 %{1}","队列并发数已更新为 %{1}"
