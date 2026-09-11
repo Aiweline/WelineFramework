@@ -16,7 +16,7 @@ use Weline\Framework\Runtime\DeveloperAccessPolicy;
  */
 class VisitorPanelBootstrapHtmlService
 {
-    private const PANEL_SCRIPT_VERSION = '20260817-lazy-panel-1';
+    private const PANEL_SCRIPT_VERSION = '20260910-lifecycle-assistant5';
 
     public function shouldInject(): bool
     {
@@ -43,6 +43,16 @@ class VisitorPanelBootstrapHtmlService
             \JSON_UNESCAPED_SLASHES | \JSON_HEX_TAG | \JSON_HEX_APOS | \JSON_HEX_QUOT | \JSON_HEX_AMP
         );
         if (!\is_string($panelScriptUrlJson)) {
+            return '';
+        }
+
+        $assistantScriptUrl = $this->moduleStaticUrl('Weline/Visitor', 'js/lifecycle-event-assistant.js')
+            . '?v=' . self::PANEL_SCRIPT_VERSION . '-wla';
+        $assistantScriptUrlJson = \json_encode(
+            $assistantScriptUrl,
+            \JSON_UNESCAPED_SLASHES | \JSON_HEX_TAG | \JSON_HEX_APOS | \JSON_HEX_QUOT | \JSON_HEX_AMP
+        );
+        if (!\is_string($assistantScriptUrlJson)) {
             return '';
         }
 
@@ -144,6 +154,30 @@ class VisitorPanelBootstrapHtmlService
     }
     window.__WELINE_VISITOR_PANEL_LAZY__ = { load: loadVisitorPanel };
 })(window, document);
+</script>
+<script data-no-extract="true"
+        data-load-order="last"
+        data-wla-bootstrap="1">
+(function () {
+  var SRC = {$assistantScriptUrlJson};
+  function need() {
+    try {
+      if (sessionStorage.getItem('weline_lifecycle_assistant_v1') === '1') return true;
+      return /(^|;\\s*)weline_lifecycle_assistant=1(;|$)/.test(String(document.cookie || ''));
+    } catch (e) { return false; }
+  }
+  function load() {
+    if (window.WelineLifecycleAssistant) return;
+    if (document.querySelector('script[data-weline-lifecycle-assistant-bundle="true"],script[data-wla-src]')) return;
+    var s = document.createElement('script');
+    s.src = SRC;
+    s.async = false;
+    s.setAttribute('data-wla-src', '1');
+    s.setAttribute('data-weline-lifecycle-assistant-bundle', 'true');
+    (document.body || document.documentElement).appendChild(s);
+  }
+  if (need()) load();
+})();
 </script>
 HTML;
     }

@@ -12,10 +12,86 @@
 $__request_path_raw = (string)($this->request->getPathInfo() ?: \w_env_request_uri());
 $__request_path_parsed = parse_url($__request_path_raw, PHP_URL_PATH);
 $__request_path = strtolower((string)(is_string($__request_path_parsed) && $__request_path_parsed !== '' ? $__request_path_parsed : $__request_path_raw));
-if ($__request_path === '/customer/account'
+$__wpp_q_early = (string)($this->request->getGet('weline_pixel_picker') ?? '');
+$__wpp_token_early = (string)($this->request->getGet('token') ?? '');
+$__wpp_cookie_on = (string)($_COOKIE['weline_pixel_picker'] ?? '') === '1';
+$__wpp_cookie_token = \trim((string)($_COOKIE['weline_pixel_picker_token'] ?? ''));
+$__wpp_url_on = ($__wpp_q_early === '1' && $__wpp_token_early !== '');
+$__wpp_cookie_active = ($__wpp_cookie_on && $__wpp_cookie_token !== '');
+$__wpp_js_disk = (\defined('BP') ? BP : \dirname(__DIR__, 8)) . '/app/code/Weline/Visitor/view/statics/js/pixel-event-picker.js';
+$__wpp_mtime = \is_file($__wpp_js_disk) ? (int)@\filemtime($__wpp_js_disk) : \time();
+$__wpp_script_url = htmlspecialchars(
+    (string)$this->fetchTagSource('statics', 'Weline_Visitor::js/pixel-event-picker.js'),
+    ENT_QUOTES | ENT_SUBSTITUTE,
+    'UTF-8'
+);
+$__wpp_script_url = \preg_replace('/[?&]v=[^&"\']*/', '', $__wpp_script_url) ?: $__wpp_script_url;
+$__wpp_script_url = \rtrim($__wpp_script_url, '?&');
+$__wpp_script_url .= '?v=picker-1.1.4-' . $__wpp_mtime;
+$__wpp_script_url_js = \json_encode($__wpp_script_url, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '""';
+
+$__skip_pixel_bootstrap = ($__request_path === '/customer/account'
     || $__request_path === 'customer/account'
-    || str_contains($__request_path, '/customer/account/')
-) {
+    || str_contains($__request_path, '/customer/account/'));
+// 账户页：无拾取会话时跳过像素；有 URL/cookie 会话时仍要续载拾取
+if ($__skip_pixel_bootstrap && !$__wpp_url_on && !$__wpp_cookie_active) {
+    // 仍注入轻量 bootstrap：仅 sessionStorage 有会话时动态加载（cookie 被拦时跨页续活）
+    ?>
+<script data-wpp-bootstrap="1">
+(function () {
+  var SRC = <?= $__wpp_script_url_js ?>;
+  function need() {
+    try {
+      var q = new URLSearchParams(location.search);
+      if (q.get('weline_pixel_picker') === '1' && q.get('token')) return true;
+      var raw = sessionStorage.getItem('wpp_session_v1');
+      if (!raw) return false;
+      var j = JSON.parse(raw);
+      return !!(j && j.active && j.token);
+    } catch (e) { return false; }
+  }
+  function load() {
+    if (document.querySelector('script[data-wpp-src]')) return;
+    var s = document.createElement('script');
+    s.src = SRC;
+    s.defer = true;
+    s.setAttribute('data-wpp-src', '1');
+    document.documentElement.appendChild(s);
+  }
+  if (need()) load();
+})();
+</script>
+<?php
+    return;
+}
+if ($__skip_pixel_bootstrap) {
+    ?>
+<script data-wpp-bootstrap="1">
+(function () {
+  var SRC = <?= $__wpp_script_url_js ?>;
+  function need() {
+    try {
+      var q = new URLSearchParams(location.search);
+      if (q.get('weline_pixel_picker') === '1' && q.get('token')) return true;
+      var raw = sessionStorage.getItem('wpp_session_v1');
+      if (!raw) return false;
+      var j = JSON.parse(raw);
+      return !!(j && j.active && j.token);
+    } catch (e) { return false; }
+  }
+  function load() {
+    if (document.querySelector('script[data-wpp-src]')) return;
+    var s = document.createElement('script');
+    s.src = SRC;
+    s.defer = true;
+    s.setAttribute('data-wpp-src', '1');
+    document.documentElement.appendChild(s);
+  }
+  if (need()) load();
+})();
+</script>
+<script src="<?= $__wpp_script_url ?>" defer data-wpp-src="1"></script>
+<?php
     return;
 }
 
@@ -77,8 +153,10 @@ $__visitor_tracking_config = [
     ],
 ];
 try {
+    $__website_id_for_runtime = (int)\Weline\Framework\Env\WelineEnv::server('WELINE_WEBSITE_ID', (string)($_SERVER['WELINE_WEBSITE_ID'] ?? '0'));
+    $__runtime_scope = $__website_id_for_runtime > 0 ? ('website.' . $__website_id_for_runtime) : null;
     $__visitor_tracking_config = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Visitor\Service\VisitorTrackingConfig::class)
-        ->getRuntimeConfig();
+        ->getRuntimeConfig($__runtime_scope);
 } catch (\Throwable $throwable) {
     if (defined('DEV') && DEV) {
         w_log_error('读取 Visitor 前台统计配置失败: ' . $throwable->getMessage());
@@ -139,7 +217,13 @@ if ($__visitor_pixel_enabled || $__visitor_ga4_enabled) {
         ENT_QUOTES | ENT_SUBSTITUTE,
         'UTF-8'
     );
+    $__event_chains_script_url = htmlspecialchars(
+        (string) $this->fetchTagSource('statics', 'Weline_Visitor::js/pixel-event-chains.js'),
+        ENT_QUOTES | ENT_SUBSTITUTE,
+        'UTF-8'
+    );
     ?>
+<script src="<?= $__event_chains_script_url ?>" defer></script>
 <script>
 (function () {
     'use strict';
@@ -280,4 +364,73 @@ if ($__visitor_pixel_enabled || $__visitor_ga4_enabled) {
 </script>
 <?php
 }
+
+// 事件拾取浮层：URL / cookie 会话时注入；并始终挂轻量 bootstrap（sessionStorage 跨页续活）
+$__wpp_q = (string)($this->request->getGet('weline_pixel_picker') ?? '');
+$__wpp_token = (string)($this->request->getGet('token') ?? '');
+$__wpp_want = ($__wpp_q === '1' && $__wpp_token !== '')
+    || ((string)($_COOKIE['weline_pixel_picker'] ?? '') === '1' && \trim((string)($_COOKIE['weline_pixel_picker_token'] ?? '')) !== '');
 ?>
+<script data-wpp-bootstrap="1">
+(function () {
+  var SRC = <?= $__wpp_script_url_js ?>;
+  function need() {
+    try {
+      var q = new URLSearchParams(location.search);
+      if (q.get('weline_pixel_picker') === '1' && q.get('token')) return true;
+      var raw = sessionStorage.getItem('wpp_session_v1');
+      if (!raw) return false;
+      var j = JSON.parse(raw);
+      return !!(j && j.active && j.token);
+    } catch (e) { return false; }
+  }
+  function load() {
+    if (document.querySelector('script[data-wpp-src]')) return;
+    var s = document.createElement('script');
+    s.src = SRC;
+    s.defer = true;
+    s.setAttribute('data-wpp-src', '1');
+    document.documentElement.appendChild(s);
+  }
+  if (need()) load();
+})();
+</script>
+<?php if ($__wpp_want) { ?>
+<script src="<?= $__wpp_script_url ?>" defer data-wpp-src="1"></script>
+<?php } ?>
+<?php
+// 生命周期小助手：面板开启后写入 session；跨页由 body-end 轻量 bootstrap 续载，关面板/关小助手清除。
+$__wla_js_disk = (\defined('BP') ? BP : \dirname(__DIR__, 8)) . '/app/code/Weline/Visitor/view/statics/js/lifecycle-event-assistant.js';
+$__wla_mtime = \is_file($__wla_js_disk) ? (int) @\filemtime($__wla_js_disk) : \time();
+$__wla_script_url = \htmlspecialchars(
+    (string) $this->fetchTagSource('statics', 'Weline_Visitor::js/lifecycle-event-assistant.js'),
+    ENT_QUOTES | ENT_SUBSTITUTE,
+    'UTF-8'
+);
+$__wla_script_url = \preg_replace('/[?&]v=[^&"\']*/', '', $__wla_script_url) ?: $__wla_script_url;
+$__wla_script_url = \rtrim($__wla_script_url, '?&');
+$__wla_script_url .= '?v=lifecycle-assistant-1.1.13-' . $__wla_mtime;
+$__wla_script_url_js = \json_encode($__wla_script_url, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '""';
+?>
+<script data-wla-bootstrap="1">
+(function () {
+  var SRC = <?= $__wla_script_url_js ?>;
+  function need() {
+    try {
+      if (sessionStorage.getItem('weline_lifecycle_assistant_v1') === '1') return true;
+      return /(^|;\s*)weline_lifecycle_assistant=1(;|$)/.test(String(document.cookie || ''));
+    } catch (e) { return false; }
+  }
+  function load() {
+    if (window.WelineLifecycleAssistant) return;
+    if (document.querySelector('script[data-weline-lifecycle-assistant-bundle="true"],script[data-wla-src]')) return;
+    var s = document.createElement('script');
+    s.src = SRC;
+    s.defer = true;
+    s.setAttribute('data-wla-src', '1');
+    s.setAttribute('data-weline-lifecycle-assistant-bundle', 'true');
+    document.documentElement.appendChild(s);
+  }
+  if (need()) load();
+})();
+</script>

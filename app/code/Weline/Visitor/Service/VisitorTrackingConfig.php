@@ -73,6 +73,7 @@ class VisitorTrackingConfig
         // Mutual exclusion: GTM wins → disable GA4 direct gtag forwarder.
         $ga4Enabled = $ga4SwitchEnabled && $measurementId !== '' && !$gtmConfigured;
         $dictionary = $this->dictionary()->toRuntimeFragment();
+        $vendors = $this->buildRuntimeVendors($scope);
 
         return [
             'module' => self::MODULE,
@@ -80,6 +81,7 @@ class VisitorTrackingConfig
             'scope' => $this->normalizeScope($scope),
             'dictVersion' => (string)($dictionary['version'] ?? ''),
             'eventDictionary' => $dictionary,
+            'vendors' => $vendors,
             'pixel' => [
                 'enabled' => $this->toBool($map[self::KEY_PIXEL_ENABLED] ?? true, true),
             ],
@@ -155,7 +157,43 @@ class VisitorTrackingConfig
                     'script' => $this->normalizeCustomForwarderScript((string)($map[self::KEY_CUSTOM_FORWARDER_JS] ?? '')),
                 ],
             ],
+            'eventChains' => $this->buildEventChainsRuntime($scope),
         ];
+    }
+
+    /**
+     * 高级事件链定义（version + chains），供前台 localStorage 对齐。
+     *
+     * @return array{version: int, chains: list<array<string, mixed>>}
+     */
+    private function buildEventChainsRuntime(?string $scope): array
+    {
+        try {
+            $websiteId = $this->websiteIdFromScope($scope);
+            /** @var EventChainService $svc */
+            $svc = ObjectManager::getInstance(EventChainService::class);
+
+            return $svc->getBundle($websiteId);
+        } catch (\Throwable) {
+            return ['version' => 0, 'chains' => []];
+        }
+    }
+
+    private function websiteIdFromScope(?string $scope): int
+    {
+        $s = $this->normalizeScope($scope);
+        if (\preg_match('/^website\.(\d+)$/', $s, $m)) {
+            return (int)$m[1];
+        }
+        try {
+            $envId = (int)(\Weline\Framework\Env\WelineEnv::server('WELINE_WEBSITE_ID', '0') ?: 0);
+            if ($envId > 0) {
+                return $envId;
+            }
+        } catch (\Throwable) {
+        }
+
+        return 0;
     }
 
     /**
@@ -390,6 +428,30 @@ class VisitorTrackingConfig
             }
 
             return false;
+        }
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function buildRuntimeVendors(?string $scope): array
+    {
+        $websiteId = 0;
+        $normalized = $this->normalizeScope($scope);
+        if (\preg_match('/website\.(\d+)/', $normalized, $m) || \preg_match('/^website\.(\d+)/', (string)$scope, $m)) {
+            $websiteId = (int)$m[1];
+        }
+        try {
+            /** @var PixelEventVendorManager $manager */
+            $manager = ObjectManager::getInstance(PixelEventVendorManager::class);
+
+            return $manager->listRuntimeVendors($websiteId);
+        } catch (\Throwable $e) {
+            if (\defined('DEV') && DEV) {
+                w_log_error('加载 pixel event vendors 失败: ' . $e->getMessage());
+            }
+
+            return [];
         }
     }
 
