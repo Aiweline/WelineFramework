@@ -99,16 +99,38 @@ $pixelCurrency = $transaction ? (string) $transaction->getData('currency') : '';
 $heroTone = $paymentReturnCancelled
     ? 'danger'
     : ($isSuccess ? 'success' : (($isPending || $isProcessing) ? 'pending' : ($paymentReturnEmpty ? 'info' : 'danger')));
+$paymentLifecycle = '';
+if ($paymentReturnCancelled) {
+    $paymentLifecycle = 'cancelled';
+} elseif ($isSuccess) {
+    $paymentLifecycle = 'paid';
+} elseif ($isPending || $isProcessing) {
+    $paymentLifecycle = 'pending';
+} elseif ($transaction) {
+    $paymentLifecycle = 'failed';
+}
 ?>
 <main class="amz-order-confirm amz-order-confirm--<?= $escape($heroTone) ?><?= $paymentSuccessTerminal ? ' weline-pixel::payment_success' : '' ?>"
     weline-code="payment.checkout_return"
     data-testid="payment-return"
-    <?php if ($paymentReturnCancelled): ?>
-    data-payment-outcome="cancel"
+    data-weline-load="cart,paymentLifecycle"
+    <?php if ($paymentLifecycle !== ''): ?>
+    data-payment-lifecycle="<?= $escape($paymentLifecycle) ?>"
+    data-payment-outcome="<?= $escape($paymentLifecycle === 'cancelled' ? 'cancel' : $paymentLifecycle) ?>"
+    data-payment-event-source="payment-return-page"
     <?php endif; ?>
-    <?php if ($paymentSuccessTerminal): ?>
-    data-pixel-event="payment_success"
+    <?php if ($orderUuid !== ''): ?>
+    data-order-uuid="<?= $escape($orderUuid) ?>"
+    <?php endif; ?>
+    <?php if ($transactionNo !== ''): ?>
     data-transaction-id="<?= $escape($transactionNo) ?>"
+    <?php endif; ?>
+    <?php if ($transactionAmountLabel !== '' || $pixelValue !== ''): ?>
+    data-amount="<?= $escape($pixelValue !== '' ? $pixelValue : (string) ($transaction ? $transaction->getData('amount') : '')) ?>"
+    data-currency="<?= $escape($pixelCurrency !== '' ? $pixelCurrency : (string) ($transaction ? $transaction->getData('currency') : '')) ?>"
+    <?php endif; ?>
+    <?php if ($paymentSuccessTerminal && $isSuccess): ?>
+    data-pixel-event="payment_success"
     data-pixel-value="<?= $escape($pixelValue) ?>"
     data-pixel-currency="<?= $escape($pixelCurrency) ?>"
     <?php endif; ?>>
