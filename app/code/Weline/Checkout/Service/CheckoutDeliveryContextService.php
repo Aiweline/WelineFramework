@@ -14,6 +14,8 @@ use Weline\Shipping\Model\DeliveryAddress;
 use Weline\Shipping\Service\AddressFormatter;
 use Weline\Shipping\Service\AddressValidationService;
 use Weline\Shipping\Service\DeliveryAddressService;
+use Weline\Shipping\Service\EmbargoService;
+use Weline\Framework\Runtime\RequestContext;
 
 /**
  * Header 与结账页共用的配送上下文。Weline_Location 仅提供可选自动定位。
@@ -50,8 +52,11 @@ final class CheckoutDeliveryContextService
             $this->ensureRegionCascade($countryCode);
             $countries = $this->listCountries();
             $countryName = $this->countryName($countryCode, $countries);
-            $addresses = $this->listAddresses($countryCode);
+            $addresses = $this->annotateEmbargoList($this->listAddresses($countryCode));
             $selected = $this->selectedAddress($addresses, $countryCode, $countryName);
+            if (\is_array($selected)) {
+                $selected = $this->annotateEmbargoOne($selected);
+            }
 
             return [
                 'country_code' => $countryCode,
@@ -62,6 +67,10 @@ final class CheckoutDeliveryContextService
                 'is_logged_in' => $this->currentCustomerId() > 0,
                 'can_auto_detect' => $this->canAutoDetect(),
                 'display_text' => $this->displayText($selected, $countryName),
+                'destination_blocked' => \is_array($selected) && !empty($selected['embargo_blocked']),
+                'destination_block_message' => \is_array($selected)
+                    ? (string)($selected['embargo_message'] ?? '')
+                    : '',
                 'checkout_address' => self::toFormAddress($selected ?? [
                     'country_code' => $countryCode,
                     'country' => $countryName,
@@ -131,6 +140,8 @@ final class CheckoutDeliveryContextService
             throw new \InvalidArgumentException((string)__('地址不存在'));
         }
 
+        $this->assertDestinationAllowed($match);
+
         $this->persistCountry((string)$match['country_code']);
         $this->writeSelected($match);
         $this->syncShippingSession($match);
@@ -155,6 +166,7 @@ final class CheckoutDeliveryContextService
             'contact_phone',
             'street',
         ]);
+        $this->assertDestinationAllowed($normalized);
 
         $customerId = $this->currentCustomerId();
         $saved = $customerId > 0
@@ -205,11 +217,83 @@ final class CheckoutDeliveryContextService
             'email' => trim($email),
             'country_code' => $countryCode,
             'province' => trim((string)($address['province'] ?? '')),
+            'province_code' => trim((string)($address['province_code'] ?? '')),
+            'province_region_id' => (string)(int)($address['province_region_id'] ?? $address['province_id'] ?? 0),
             'city' => trim((string)($address['city'] ?? '')),
+            'city_code' => trim((string)($address['city_code'] ?? '')),
+            'city_region_id' => (string)(int)($address['city_region_id'] ?? $address['city_id'] ?? 0),
             'district' => trim((string)($address['district'] ?? '')),
+            'district_code' => trim((string)($address['district_code'] ?? '')),
+            'district_region_id' => (string)(int)($address['district_region_id'] ?? $address['district_id'] ?? 0),
             'address1' => $street,
+            'street_id' => (string)(int)($address['street_id'] ?? 0),
             'postal_code' => trim((string)($address['postal_code'] ?? '')),
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $address
+     */
+    private function assertDestinationAllowed(array $address): void
+    {
+        try {
+            /** @var EmbargoService $embargo */
+            $embargo = ObjectManager::getInstance(EmbargoService::class);
+            $embargo->assertAllowed($address, [
+                'website_id' => (int)RequestContext::getWelineWebsiteId(),
+                'store_id' => (int)RequestContext::getWelineStoreId(),
+                'channel_id' => (int)RequestContext::getWelineChannelId(),
+            ]);
+        } catch (\RuntimeException $exception) {
+            throw new \InvalidArgumentException($exception->getMessage(), 0, $exception);
+        } catch (\Throwable) {
+            // Embargo service unavailable: fail closed for destination selection.
+            throw new \InvalidArgumentException((string)__('当前地址暂不可配送，请更换收货地址。'));
+        }
+    }
+
+    /**
+     * @param list<array<string, mixed>> $addresses
+     * @return list<array<string, mixed>>
+     */
+    private function annotateEmbargoList(array $addresses): array
+    {
+        $out = [];
+        foreach ($addresses as $address) {
+            if (!\is_array($address)) {
+                continue;
+            }
+            $out[] = $this->annotateEmbargoOne($address);
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param array<string, mixed> $address
+     * @return array<string, mixed>
+     */
+    private function annotateEmbargoOne(array $address): array
+    {
+        $fallback = (string)__('该地址所在地区暂不支持配送（禁运）。');
+        try {
+            /** @var EmbargoService $embargo */
+            $embargo = ObjectManager::getInstance(EmbargoService::class);
+            $result = $embargo->evaluateAddress($address, [
+                'website_id' => (int)RequestContext::getWelineWebsiteId(),
+                'store_id' => (int)RequestContext::getWelineStoreId(),
+                'channel_id' => (int)RequestContext::getWelineChannelId(),
+            ]);
+            $blocked = !empty($result['blocked']);
+            $message = trim((string)($result['message'] ?? ''));
+            $address['embargo_blocked'] = $blocked;
+            $address['embargo_message'] = $blocked ? ($message !== '' ? $message : $fallback) : '';
+        } catch (\Throwable) {
+            $address['embargo_blocked'] = false;
+            $address['embargo_message'] = '';
+        }
+
+        return $address;
     }
 
     public static function normalizeCountryCode(string $code): string

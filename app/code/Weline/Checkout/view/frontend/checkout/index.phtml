@@ -21,7 +21,7 @@ $copy = [
     'swatch_preview_close' => (string)__('关闭'),
 ];
 ?>
-<section class="weline-checkout" data-weline-checkout data-weline-load="cart,b2bCheckoutTob" data-testid="checkout-form-page" weline-code="checkout.checkout.index.section_1">
+<section class="weline-checkout" data-weline-checkout data-weline-load="cart,b2bCheckoutTob,checkoutLifecycle,paymentLifecycle" data-testid="checkout-form-page" weline-code="checkout.checkout.index.section_1">
     <header class="weline-checkout__header">
         <div>
             <p class="weline-checkout__eyebrow"><?= __('安全结账') ?></p>
@@ -143,6 +143,14 @@ $copy = [
                         position="content"
                         class="weline-checkout__note-slot"
                         weline-code="checkout.checkout.note_slot">
+                </w:slot>
+                <w:slot id="checkout-summary-credit"
+                        name="<?= __('结账批发信用') ?>"
+                        accept="checkout-summary-credit,b2b-checkout-credit,b2b-deposit-note,b2b"
+                        multiple="false"
+                        position="content"
+                        class="weline-checkout__credit-slot"
+                        weline-code="checkout.checkout.credit_slot">
                 </w:slot>
             </div>
             <link rel="stylesheet" href="@static(Weline_Theme::css/widgets/mini-cart-drawer.css)?v=20260907-price-header-layout">
@@ -782,7 +790,8 @@ $copy = [
         margin: 4px 0 12px;
     }
     .weline-checkout__coupon-slot,
-    .weline-checkout__note-slot {
+    .weline-checkout__note-slot,
+    .weline-checkout__credit-slot {
         margin: 0;
     }
     .weline-checkout__extras .mini-cart-drawer__extras-tablist {
@@ -809,7 +818,8 @@ $copy = [
         font-weight: 600;
     }
     .weline-checkout__extras .mini-cart-drawer__extras-tabs .w-marketing-checkout-coupon__label,
-    .weline-checkout__extras .mini-cart-drawer__extras-tabs .w-order-notice__label {
+    .weline-checkout__extras .mini-cart-drawer__extras-tabs .w-order-notice__label,
+    .weline-checkout__extras .mini-cart-drawer__extras-tabs .w-b2b-checkout-credit__label {
         display: none;
     }
     .weline-checkout__extras .mini-cart-drawer__extras-tabs .w-marketing-checkout-coupon__controls {
@@ -972,9 +982,19 @@ $copy = [
             phone: text(data.get('phone')).trim(),
             email: text(data.get('email')).trim(),
             country_code: text(data.get('country_code')).trim().toUpperCase() || 'CN',
+            country: text(data.get('country')).trim(),
             province: text(data.get('province')).trim(),
+            province_code: text(data.get('province_code')).trim(),
+            province_region_id: text(data.get('province_region_id')).trim(),
             city: text(data.get('city')).trim(),
+            city_code: text(data.get('city_code')).trim(),
+            city_region_id: text(data.get('city_region_id')).trim(),
             district: text(data.get('district')).trim(),
+            district_code: text(data.get('district_code')).trim(),
+            district_region_id: text(data.get('district_region_id')).trim(),
+            street: text(data.get('street')).trim(),
+            street_id: text(data.get('street_id')).trim(),
+            street_code: text(data.get('street_code')).trim(),
             address1: text(data.get('address1') || data.get('street')).trim(),
             postal_code: text(data.get('postal_code')).trim(),
         };
@@ -992,9 +1012,19 @@ $copy = [
             phone: text(data.get('billing_phone')).trim(),
             email: text(data.get('billing_email')).trim(),
             country_code: text(data.get('billing_country_code')).trim().toUpperCase() || 'CN',
+            country: text(data.get('billing_country')).trim(),
             province: text(data.get('billing_province')).trim(),
+            province_code: text(data.get('billing_province_code')).trim(),
+            province_region_id: text(data.get('billing_province_region_id')).trim(),
             city: text(data.get('billing_city')).trim(),
+            city_code: text(data.get('billing_city_code')).trim(),
+            city_region_id: text(data.get('billing_city_region_id')).trim(),
             district: text(data.get('billing_district')).trim(),
+            district_code: text(data.get('billing_district_code')).trim(),
+            district_region_id: text(data.get('billing_district_region_id')).trim(),
+            street: text(data.get('billing_street')).trim(),
+            street_id: text(data.get('billing_street_id')).trim(),
+            street_code: text(data.get('billing_street_code')).trim(),
             address1: text(data.get('billing_address1')).trim(),
             postal_code: text(data.get('billing_postal_code')).trim(),
         };
@@ -1056,37 +1086,48 @@ $copy = [
                 // The Query provider can still recover the trusted HttpOnly cookie.
             }
         }
-
+        // Re-read after Cart boot (may hydrate from legacy session keys).
         let token = guestToken();
-        if (token) {
-            return token;
-        }
+
         if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
+            if (token) {
+                return token;
+            }
             throw new Error(copy.api_missing);
         }
 
         const cartApi = await window.Weline.Api.resource('cart');
         if (!cartApi || typeof cartApi.issueGuestToken !== 'function') {
+            if (token) {
+                return token;
+            }
             throw new Error(copy.guest_session_failed);
         }
+        // Cookie is the server-owned guest cart authority. Always adopt it via
+        // issueGuestToken (server reuses the HttpOnly cookie when present).
+        // Trusting a stale sessionStorage token alone caused: header SSR shows
+        // items from cookie, while checkout.getData used an orphan empty token.
         const result = await cartApi.issueGuestToken({}, { silent: true });
         const payload = result && result.data && typeof result.data === 'object' ? result.data : result;
-        token = text(payload && payload.guest_token).trim();
-        if (!token) {
+        const adopted = text(payload && payload.guest_token).trim();
+        if (!adopted) {
+            if (token) {
+                return token;
+            }
             throw new Error(copy.guest_session_failed);
         }
 
         const expiresAt = Number(payload && payload.expires_at_ms || 0);
         if (window.WelineCart && typeof window.WelineCart.rememberGuestSession === 'function') {
-            window.WelineCart.rememberGuestSession(token, expiresAt || undefined);
+            window.WelineCart.rememberGuestSession(adopted, expiresAt || undefined);
         } else {
             try {
-                window.sessionStorage.setItem(guestTokenStorageKey, token);
+                window.sessionStorage.setItem(guestTokenStorageKey, adopted);
             } catch (error) {
                 // This request still owns the token even when storage is unavailable.
             }
         }
-        return token;
+        return adopted;
     }
 
     function newIdempotencyKey(prefix) {
@@ -1177,9 +1218,105 @@ $copy = [
             setText(paymentRetryButton, canContinue ? copy.continue_payment : copy.retry_payment);
         }
         setMessage(pending ? copy.payment_pending : copy.payment_failed, pending ? 'success' : 'error');
+        // Order already exists — emit checkout + payment lifecycle so Cart can clear mini-cart.
+        announceCheckoutOrderCreated(state, pending ? 'pending' : 'failed');
+    }
+
+    function announceCheckoutOrderCreated(state, paymentOutcome) {
+        const cart = checkoutState.cart && typeof checkoutState.cart === 'object' ? checkoutState.cart : {};
+        const summary = cart.summary && typeof cart.summary === 'object' ? cart.summary : {};
+        const amountCandidate = [
+            state && state.amount,
+            summary.grand_total,
+            summary.grand_total_amount,
+            cart.grand_total,
+            cart.total,
+        ].map(function (v) { return text(v).trim(); }).find(function (v) { return v !== ''; }) || '';
+        const detail = {
+            source: 'checkout-payment-recovery',
+            order_uuid: state && state.order_uuid ? state.order_uuid : '',
+            checkout_group_uuid: state && state.checkout_group_uuid ? state.checkout_group_uuid : '',
+            outcome: paymentOutcome || 'pending',
+            amount: amountCandidate,
+            currency: text((state && state.currency) || checkoutState.currency || summary.currency || '').trim(),
+        };
+        const outcome = paymentOutcome || 'pending';
+        try {
+            if (window.DEV === true || window.WELINE_ENV === 'DEV'
+                || window.WELINE_LIFECYCLE_DEBUG === true
+                || (window.localStorage && window.localStorage.getItem('weline_lifecycle_debug') === '1')) {
+                console.info('[WelineCheckout]', 'announceCheckoutOrderCreated', detail);
+            }
+        } catch (eDevLog) {}
+        // Prefer module APIs (validate order fields; DEV anomaly without dispatch when incomplete).
+        let emitted = false;
+        try {
+            if (window.WelineCheckout && typeof window.WelineCheckout.emitOrderCreated === 'function') {
+                emitted = !!window.WelineCheckout.emitOrderCreated(detail);
+            }
+            if (window.WelineCheckout && typeof window.WelineCheckout.emitPaymentBridge === 'function') {
+                window.WelineCheckout.emitPaymentBridge(outcome, detail);
+            } else if (window.WelinePayment && typeof window.WelinePayment.emitOutcome === 'function') {
+                window.WelinePayment.emitOutcome(outcome, detail);
+            } else if (detail.order_uuid && detail.amount && detail.currency) {
+                window.dispatchEvent(new CustomEvent('weline:checkout:order-created', { detail: detail }));
+                window.dispatchEvent(new CustomEvent(
+                    'weline:payment:' + (outcome === 'failed' ? 'failed' : (outcome === 'paid' ? 'paid' : 'pending')),
+                    { detail: detail }
+                ));
+                window.dispatchEvent(new CustomEvent('weline:payment:outcome', {
+                    detail: Object.assign({}, detail, { outcome: outcome }),
+                }));
+                emitted = true;
+            } else {
+                console.warn('[WelineCheckout][anomaly] 跳过派发：缺少订单字段', detail);
+                emitted = false;
+            }
+        } catch (eApiEvt) {}
+        // Race with async data-weline-load: ensure Cart invalidates once ready (only if emitted).
+        if (!emitted) {
+            return;
+        }
+        try {
+            if (window.WelineCart && typeof window.WelineCart.invalidateAfterCheckout === 'function') {
+                window.WelineCart.invalidateAfterCheckout({ reason: 'checkout-order-created', source: detail.source });
+            } else if (window.Weline && typeof window.Weline.load === 'function') {
+                window.Weline.load('cart').then(function () {
+                    if (window.WelineCart && typeof window.WelineCart.invalidateAfterCheckout === 'function') {
+                        window.WelineCart.invalidateAfterCheckout({
+                            reason: 'checkout-order-created-deferred',
+                            source: detail.source,
+                        });
+                    }
+                }).catch(function () {});
+            }
+        } catch (eCartInv) {}
     }
 
     function navigateToSuccess(state) {
+        if (window.WelineCart && typeof window.WelineCart.invalidateAfterCheckout === 'function') {
+            try {
+                window.WelineCart.invalidateAfterCheckout({ reason: 'checkout-navigate-success' });
+            } catch (eInvalidate) {}
+        }
+        try {
+            const detail = {
+                source: 'navigateToSuccess',
+                order_uuid: state && state.order_uuid ? state.order_uuid : '',
+                checkout_group_uuid: state && state.checkout_group_uuid ? state.checkout_group_uuid : '',
+            };
+            if (window.WelineCheckout && typeof window.WelineCheckout.emitSuccess === 'function') {
+                window.WelineCheckout.emitSuccess(detail);
+            } else {
+                window.dispatchEvent(new CustomEvent('weline:checkout:success', { detail: detail }));
+                window.dispatchEvent(new CustomEvent('weline:checkout:order-created', { detail: detail }));
+            }
+            if (window.WelineCheckout && typeof window.WelineCheckout.emitPaymentBridge === 'function') {
+                window.WelineCheckout.emitPaymentBridge('paid', detail);
+            } else if (window.WelinePayment && typeof window.WelinePayment.emitOutcome === 'function') {
+                window.WelinePayment.emitOutcome('paid', detail);
+            }
+        } catch (eEvent) {}
         const successUrl = new URL(successPageUrl, window.location.origin);
         successUrl.searchParams.set('order_uuid', state.order_uuid);
         successUrl.searchParams.set('checkout_group_uuid', state.checkout_group_uuid);
@@ -1378,6 +1515,17 @@ $copy = [
             }
         })();
         const cartIsEmpty = Boolean(checkoutState.cart.is_empty);
+        // One-shot cache clear for mini-cart; must not re-enter loadCheckout via cart-updated.
+        if (cartIsEmpty && !emptyCartInvalidateDone
+            && window.WelineCart && typeof window.WelineCart.invalidateAfterCheckout === 'function') {
+            emptyCartInvalidateDone = true;
+            try {
+                window.WelineCart.invalidateAfterCheckout({
+                    reason: 'checkout-empty',
+                    cartType: checkoutCartType(),
+                });
+            } catch (eEmptyInvalidate) {}
+        }
         const checkoutBlocked = Boolean(
             (data && data.checkout_blocked)
             || (checkoutState.cart && checkoutState.cart.checkout_blocked)
@@ -1438,37 +1586,7 @@ $copy = [
 
     async function loadCheckout() {
         const api = await getApi();
-        let sellingMode = 'toc';
-        try {
-            if (window.WelineB2BSellingMode && typeof window.WelineB2BSellingMode.preferredMode === 'function') {
-                sellingMode = window.WelineB2BSellingMode.preferredMode();
-            } else {
-                const names = [];
-                const site = window.site || {};
-                const websiteId = String(site.website_id || site.websiteId || '').trim();
-                if (websiteId !== '' && /^\d+$/.test(websiteId)) {
-                    names.push('weline_selling_mode_w' + websiteId);
-                }
-                String(document.cookie || '').split(';').forEach((part) => {
-                    const key = String(part.split('=')[0] || '').trim();
-                    if (/^weline_selling_mode_w\d+$/.test(key) && !names.includes(key)) {
-                        names.push(key);
-                    }
-                });
-                names.push('weline_selling_mode');
-                let value = '';
-                for (const name of names) {
-                    const match = document.cookie.match(new RegExp('(?:^|; )' + name.replace(/([.$?*|{}()[\]\\/+^])/g, '\\$1') + '=([^;]*)'));
-                    value = match ? decodeURIComponent(match[1]).toLowerCase() : '';
-                    if (value === 'tob' || value === 'toc') {
-                        break;
-                    }
-                }
-                sellingMode = value === 'tob' ? 'tob' : 'toc';
-            }
-        } catch (error) {
-            sellingMode = 'toc';
-        }
+        let sellingMode = checkoutCartType();
         const data = await api.getData({
             shipping_address: formAddress(),
             guest_token: await ensureGuestToken(),
@@ -1482,6 +1600,44 @@ $copy = [
             window.WelineB2BCheckoutTob.applyCartType(root, data && data.cart ? data.cart.cart_type : sellingMode);
         }
         render(data || {});
+    }
+
+    function checkoutCartType() {
+        try {
+            const fromRoot = String((root && root.getAttribute('data-cart-type')) || '').toLowerCase();
+            if (fromRoot === 'tob' || fromRoot === 'toc') {
+                return fromRoot;
+            }
+            if (window.WelineB2BSellingMode && typeof window.WelineB2BSellingMode.preferredMode === 'function') {
+                const preferred = String(window.WelineB2BSellingMode.preferredMode() || '').toLowerCase();
+                if (preferred === 'tob' || preferred === 'toc') {
+                    return preferred;
+                }
+            }
+            const names = [];
+            const site = window.site || {};
+            const websiteId = String(site.website_id || site.websiteId || '').trim();
+            if (websiteId !== '' && /^\d+$/.test(websiteId)) {
+                names.push('weline_selling_mode_w' + websiteId);
+            }
+            String(document.cookie || '').split(';').forEach((part) => {
+                const key = String(part.split('=')[0] || '').trim();
+                if (/^weline_selling_mode_w\d+$/.test(key) && !names.includes(key)) {
+                    names.push(key);
+                }
+            });
+            names.push('weline_selling_mode');
+            for (const name of names) {
+                const match = document.cookie.match(new RegExp('(?:^|; )' + name.replace(/([.$?*|{}()[\]\\/+^])/g, '\\$1') + '=([^;]*)'));
+                const value = match ? decodeURIComponent(match[1]).toLowerCase() : '';
+                if (value === 'tob' || value === 'toc') {
+                    return value;
+                }
+            }
+        } catch (error) {
+            // fall through
+        }
+        return 'toc';
     }
 
     function isTransientWorkerAuthError(error) {
@@ -1505,6 +1661,7 @@ $copy = [
 
     let reloadTimer = null;
     let cartReloadFailures = 0;
+    let emptyCartInvalidateDone = false;
     function scheduleReload(options) {
         const opts = options && typeof options === 'object' ? options : {};
         const hardOnFailure = opts.hardOnFailure !== false;
@@ -1524,10 +1681,16 @@ $copy = [
         }, 350);
     }
 
-    function validateCheckoutShippingFields(address) {
+    async function validateCheckoutShippingFields(address, options) {
+        const opts = options && typeof options === 'object' ? options : {};
         const widget = window.WelineShippingCheckoutAddress;
         if (widget && typeof widget.validateShippingFields === 'function') {
-            return widget.validateShippingFields(address);
+            return await widget.validateShippingFields(address, {
+                skipRequired: opts.skipRequired === true,
+            });
+        }
+        if (opts.skipRequired === true) {
+            return true;
         }
         const snap = address && typeof address === 'object' ? address : formAddress();
         const errors = {};
@@ -1559,7 +1722,11 @@ $copy = [
             throw new Error(copy.load_failed);
         }
         const address = formAddress();
-        if (requireFormValidity && !validateCheckoutShippingFields(address)) {
+        // Always run shipping validation for embargo (even express soft path).
+        // Prior bug: validateShippingFields is async but was not awaited, so !Promise never blocked.
+        if (!(await validateCheckoutShippingFields(address, {
+            skipRequired: !requireFormValidity,
+        }))) {
             return { cancelled: true, reason: 'shipping_fields' };
         }
         if (requireFormValidity && !form.reportValidity()) {
@@ -1579,7 +1746,13 @@ $copy = [
             }
         }
         if (!shippingMethod || !paymentMethod) {
-            throw new Error(copy.required);
+            const zeroCash = window.WelineB2BCheckoutTob
+                && typeof window.WelineB2BCheckoutTob.cashDepositMinor === 'function'
+                && window.WelineB2BCheckoutTob.cashDepositMinor() === 0;
+            if (!(zeroCash && shippingMethod)) {
+                throw new Error(copy.required);
+            }
+            paymentMethod = paymentMethod || 'fake_card';
         }
         const api = await getApi();
         const billingSameEl = form.querySelector('[data-billing-same]');
@@ -1592,6 +1765,8 @@ $copy = [
             service_code: shippingMethod,
             payment_method: paymentMethod,
             guest_token: guestToken(),
+            cart_type: checkoutCartType(),
+            selling_mode: checkoutCartType(),
         });
         if (!frozen || frozen.success === false) {
             const widget = window.WelineShippingCheckoutAddress;
@@ -1609,13 +1784,24 @@ $copy = [
         if (!quoteToken) {
             throw new Error(copy.load_failed);
         }
+        if (window.WelineB2BCheckoutTob && typeof window.WelineB2BCheckoutTob.syncFromFrozen === 'function') {
+            window.WelineB2BCheckoutTob.syncFromFrozen(frozen);
+        }
         const idempotencyKey = newIdempotencyKey(opts.idempotency_prefix || 'checkout_ui_');
+        if (window.WelineB2BCheckoutTob && typeof window.WelineB2BCheckoutTob.cashDepositMinor === 'function'
+            && window.WelineB2BCheckoutTob.cashDepositMinor() === 0) {
+            paymentMethod = paymentMethod || 'fake_card';
+        }
         const result = await api.submitV2({
             quote_token: quoteToken,
             payment_method: paymentMethod,
             idempotency_key: idempotencyKey,
             country_code: address.country_code,
             guest_token: guestToken(),
+            b2b_credit_apply_minor: (window.WelineB2BCheckoutTob
+                && typeof window.WelineB2BCheckoutTob.readApplyMinor === 'function')
+                ? window.WelineB2BCheckoutTob.readApplyMinor()
+                : 0,
         });
         if (!result || result.success === false) {
             throw new Error(text(result && result.message) || copy.load_failed);
@@ -1653,6 +1839,10 @@ $copy = [
                 setMessage(copy.required, 'error');
                 return;
             }
+            // Validate shipping/embargo BEFORE flipping the button to "submitting".
+            if (!(await validateCheckoutShippingFields(formAddress(), { skipRequired: false }))) {
+                return;
+            }
             if (submitButton) {
                 submitButton.disabled = true;
                 setText(submitButton, copy.submitting);
@@ -1664,7 +1854,14 @@ $copy = [
                     idempotency_prefix: 'checkout_ui_',
                 });
                 if (result && result.cancelled) {
-                    setMessage('', '');
+                    if (submitButton) {
+                        submitButton.disabled = false;
+                        setText(submitButton, copy.submit);
+                    }
+                    // Keep shipping/embargo validation messages visible.
+                    if (result.reason !== 'shipping_fields') {
+                        setMessage('', '');
+                    }
                     return;
                 }
             } catch (error) {
@@ -1685,6 +1882,10 @@ $copy = [
             : (event.target && event.target.closest
                 ? event.target.closest('[data-express-pay]')
                 : null);
+        // Embargo gate with skipRequired; do not flip UI before validation.
+        if (!(await validateCheckoutShippingFields(formAddress(), { skipRequired: true }))) {
+            return;
+        }
         if (expressButton) {
             expressButton.disabled = true;
         }
@@ -1695,7 +1896,13 @@ $copy = [
                 idempotency_prefix: 'checkout_express_',
             });
             if (result && result.cancelled) {
-                setMessage('', '');
+                if (expressButton) {
+                    expressButton.disabled = false;
+                }
+                // Keep shipping/embargo messages; do not blank the notice.
+                if (result.reason !== 'shipping_fields') {
+                    setMessage('', '');
+                }
                 return;
             }
         } catch (error) {
@@ -1719,7 +1926,13 @@ $copy = [
     // Mini-cart (header drawer) and checkout-summary coupon share this event.
     // Soft-reload the checkout summary so line items/totals stay matched; never
     // swallow failures (stale summary after qty/remove is worse than a hard refresh).
-    window.addEventListener('weline:cart-updated', function () {
+    // Ignore self-emitted checkout-empty invalidation or loadCheckout↔cart-updated storms.
+    window.addEventListener('weline:cart-updated', function (event) {
+        const detail = event && event.detail && typeof event.detail === 'object' ? event.detail : {};
+        const source = String(detail.source || detail.reason || '').trim();
+        if (source === 'checkout-empty') {
+            return;
+        }
         scheduleReload({ hardOnFailure: true });
     });
 

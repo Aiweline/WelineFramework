@@ -6,6 +6,7 @@ namespace Weline\Checkout\Service;
 
 use Weline\Cart\Service\CartService;
 use Weline\Framework\Http\Cookie;
+use Weline\Framework\Runtime\RequestContext;
 
 /**
  * Checkout page server view data.
@@ -21,7 +22,7 @@ final class CheckoutPageViewModel
     {
         $guestToken = $this->resolveGuestToken($guestToken);
         $v2Params = $guestToken !== '' ? ['guest_token' => $guestToken] : [];
-        $mode = strtolower(trim((string)Cookie::get('weline_selling_mode')));
+        $mode = $this->resolveSellingModeFromCookie();
         if ($mode === 'toc' || $mode === 'tob') {
             $v2Params['cart_type'] = $mode;
             $v2Params['selling_mode'] = $mode;
@@ -158,6 +159,23 @@ final class CheckoutPageViewModel
         }
 
         return trim((string)Cookie::get(CartService::GUEST_TOKEN_COOKIE));
+    }
+
+    private function resolveSellingModeFromCookie(): string
+    {
+        $websiteId = (int)RequestContext::getWelineWebsiteId();
+        if ($websiteId > 0) {
+            $scoped = strtolower(trim((string)Cookie::get('weline_selling_mode_w' . $websiteId)));
+            if ($scoped === 'toc' || $scoped === 'tob') {
+                return $scoped;
+            }
+        }
+        $cookie = strtolower(trim((string)Cookie::get('weline_selling_mode')));
+        if ($cookie === 'toc' || $cookie === 'tob') {
+            return $cookie;
+        }
+
+        return 'toc';
     }
 
     /**

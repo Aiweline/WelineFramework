@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Checkout\Service;
 
 use Weline\Captcha\Api\CaptchaManagerInterface;
+use Weline\Captcha\Service\LazyCaptchaClientRuntime;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Registry\Service\RegistryModulePresence;
@@ -28,11 +29,8 @@ final class DeliveryAddressCaptchaGuard
         }
 
         try {
-            return $this->manager()->renderChallenge([
-                'form_id' => self::FORM_ID,
-                'intent' => self::INTENT,
-                'required' => true,
-            ]);
+            // Prefer lazy host even if a caller SSRs this Guard into a shared shell.
+            return LazyCaptchaClientRuntime::hostMarkup(self::FORM_ID, self::INTENT, 'required');
         } catch (\Throwable $throwable) {
             \w_log_error(
                 'Checkout delivery address captcha render failed: ' . $throwable->getMessage(),
