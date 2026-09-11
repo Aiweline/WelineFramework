@@ -205,8 +205,9 @@ class HookScanner
             
             $module = $modules[$moduleName];
             $basePath = $module['base_path'] ?? '';
-            if (empty($basePath) || !($module['status'] ?? false)) {
-                RegistryProgress::module('Hook spec scan module', $moduleIndex, $totalModules, (string)$moduleName, 'skip inactive');
+            // 显式模块列表增量：允许扫描未激活但已在模块列表中的目录。
+            if (empty($basePath)) {
+                RegistryProgress::module('Hook spec scan module', $moduleIndex, $totalModules, (string)$moduleName, 'skip missing base_path');
                 continue;
             }
 
