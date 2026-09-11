@@ -8,6 +8,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\I18n\Api\Localization\LocalModel;
 use Weline\I18n\Service\AiTranslationConfig;
 use Weline\I18n\Service\I18nAiTranslationAdapter;
+use Weline\I18n\Service\I18nCsvCodec;
 
 final class LocalModelTranslationService
 {
@@ -247,7 +248,7 @@ final class LocalModelTranslationService
 
                 foreach ($chunk as $sourceText) {
                     $translation = trim((string)($result['translations'][$sourceText] ?? ''));
-                    if ($translation === '') {
+                    if ($translation === '' || I18nCsvCodec::isJunkTranslation($translation)) {
                         continue;
                     }
                     foreach ($indexesByText[$sourceText] ?? [] as $index) {
@@ -522,7 +523,7 @@ final class LocalModelTranslationService
     private function isRealTranslation(string $stored, string $sourceText): bool
     {
         $stored = trim($stored);
-        if ($stored === '') {
+        if ($stored === '' || I18nCsvCodec::isJunkTranslation($stored)) {
             return false;
         }
 

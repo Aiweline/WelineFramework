@@ -62,7 +62,7 @@ class AiTranslationQueueService
 
         return $this->admission->admit([
             'class' => self::QUEUE_CLASS,
-            'name' => (string)__('I18n AI翻译 %{1}', [$localeCode]),
+            'name' => 'I18n AI翻译 ' . $localeCode,
             'module' => AiTranslationConfig::MODULE,
             'content' => $content,
             'biz_key' => $bizKey,

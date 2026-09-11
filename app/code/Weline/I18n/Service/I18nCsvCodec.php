@@ -36,6 +36,24 @@ final class I18nCsvCodec
         return false;
     }
 
+    /**
+     * True when a stored/AI translation is structural garbage (e.g. truncated JSON "["),
+     * not real locale copy. Empty string is not junk — callers treat empty separately.
+     */
+    public static function isJunkTranslation(string $value): bool
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return false;
+        }
+
+        if (preg_match('/^[\[\]\{\}\s,",\'\\\\]+$/u', $value) === 1) {
+            return true;
+        }
+
+        return false;
+    }
+
     public static function stripBom(string $value): string
     {
         while ($value !== '' && str_starts_with($value, self::UTF8_BOM)) {
@@ -64,7 +82,7 @@ final class I18nCsvCodec
      */
     public static function normalizeTranslation(string $translation): string
     {
-        if (self::isGarbledText($translation)) {
+        if (self::isGarbledText($translation) || self::isJunkTranslation($translation)) {
             return '';
         }
 
