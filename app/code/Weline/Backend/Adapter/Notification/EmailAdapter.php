@@ -6,6 +6,8 @@ namespace Weline\Backend\Adapter\Notification;
 
 use Weline\Backend\Api\Notification\ChannelAdapterInterface;
 use Weline\Backend\Enum\NotificationType;
+use Weline\Backend\Service\TopicCollector;
+use Weline\Framework\Manager\ObjectManager;
 
 class EmailAdapter implements ChannelAdapterInterface
 {
@@ -27,14 +29,17 @@ class EmailAdapter implements ChannelAdapterInterface
         }
 
         $message = $this->formatMessage($notification);
+        $channel = $this->resolveMailChannel($notification, $config);
         $params = [
             'to' => $toEmail,
             'subject' => $message['subject'],
             'content' => $message['body'],
+            'channel' => $channel,
         ];
         $senderCode = $config['sender_code'] ?? $config['code'] ?? null;
         if ($senderCode !== null && $senderCode !== '') {
             $params['sender_code'] = $senderCode;
+            unset($params['channel']);
         }
 
         try {
@@ -48,6 +53,37 @@ class EmailAdapter implements ChannelAdapterInterface
             w_log_error('EmailAdapter::send failed: ' . $e->getMessage(), [], 'notification');
             return false;
         }
+    }
+
+    /**
+     * 约定：主题邮件渠道 = {module}::notify_{topic_code}；无主题时回退 notification_email。
+     */
+    private function resolveMailChannel(array $notification, array $config): string
+    {
+        $override = trim((string)($config['mail_channel'] ?? $config['channel'] ?? ''));
+        if ($override !== '') {
+            return $override;
+        }
+
+        $topicCode = trim((string)($notification['topic_code'] ?? ''));
+        if ($topicCode === '') {
+            return 'Weline_Backend::notification_email';
+        }
+
+        $module = 'Weline_Backend';
+        try {
+            /** @var TopicCollector $collector */
+            $collector = ObjectManager::getInstance(TopicCollector::class);
+            $topic = $collector->getTopicByCode($topicCode);
+            $fromTopic = trim((string)($topic['module'] ?? ''));
+            if ($fromTopic !== '') {
+                $module = $fromTopic;
+            }
+        } catch (\Throwable $e) {
+            // keep Backend fallback module
+        }
+
+        return $module . '::notify_' . $topicCode;
     }
 
     public function formatMessage(array $notification): array
