@@ -413,5 +413,41 @@ body .weline-language-select-dropdown[id^="dictionary_"] {
     display: block;
     height: 100%;
     border-radius: 999px;
-    background: linear-gradient(90deg, var(--i18n-primary), #60a5fa);
+    background: linear-gradient(90deg, var(--color-primary, var(--i18n-primary)), color-mix(in srgb, var(--color-primary, var(--i18n-primary)) 55%, white));
 }
+
+.i18n-admin-progress-board .i18n-admin-progress-table th,
+.i18n-admin-progress-board .i18n-admin-progress-table td {
+    vertical-align: middle;
+}
+
+.i18n-admin-progress-meter {
+    min-width: 9rem;
+    max-width: 16rem;
+}
+
+.i18n-admin-progress-bar {
+    display: block;
+    height: 8px;
+    min-height: 8px;
+    border-radius: 999px;
+    background: var(--i18n-primary-soft, rgba(37, 99, 235, 0.14));
+    overflow: hidden;
+    margin-bottom: var(--weline-space-1, 0.25rem);
+}
+
+.i18n-admin-progress-bar > span {
+    display: block;
+    height: 100%;
+    min-height: 8px;
+    border-radius: inherit;
+    background: var(--color-primary, var(--i18n-primary, #2563eb));
+    min-width: 0;
+    transition: width 0.2s ease;
+}
+
+[data-theme="dark"] .i18n-admin-progress-bar,
+[data-weline-topbar="dark"] .i18n-admin-progress-bar {
+    background: var(--i18n-primary-soft, rgba(96, 165, 250, 0.22));
+}
+

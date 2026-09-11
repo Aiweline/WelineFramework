@@ -508,9 +508,8 @@ class AiTranslationService
      */
     private function collectCandidateWords(string $targetLocale, string $sourceLocale): array
     {
+        // AI 批次候选只来自 DB 公共词典；不从 CSV/menu/generated 自找词。
         $candidates = [];
-        $this->appendBackendMenuWords($candidates, $targetLocale);
-        $this->appendModuleCsvWords($candidates, $targetLocale, $sourceLocale);
         $this->appendDictionaryWords($candidates);
 
         return array_values(array_map('strval', array_keys($candidates)));
@@ -814,10 +813,9 @@ class AiTranslationService
         $hasTranslatableText = $this->hasTranslatableText($word)
             || ($allowKeyOnlyWords && str_starts_with($word, 'google_taxonomy.'));
 
+        // 是否已译只看 DB locale 词典；不加载 generated/language 或模块 CSV。
         return $hasTranslatableText
-            && !$this->translationExists($word, $targetLocale)
-            && !$this->hasGeneratedTranslation($word, $targetLocale)
-            && !$this->hasCsvTranslation($word, $targetLocale);
+            && !$this->translationExists($word, $targetLocale);
     }
 
     private function hasTranslatableText(string $word): bool

@@ -387,21 +387,29 @@ i18n国际化,"i18n Internationalization"
 查看已安装,"View Installed"
 暂无翻译数据,"No translation data"
 "AI 翻译只用于补齐缺失翻译。","AI translation is only used to fill missing translations."
-"如果目标语言的模块 CSV 或全局语言包中已经存在有效译文，系统会自动跳过，不会再次调用 AI，避免浪费 token。AI 生成的译文会先写入词典并标记为 AI，可再增量导出回模块 CSV。","If the target language module CSV or global language pack already contains a valid translation, the system skips it and will not call AI again, avoiding token waste. AI-generated translations are written to the dictionary and marked as AI, then can be incrementally exported back to module CSV files."
-"「导出 AI 到模块」按词条采集时的来源模块写回各自 i18n/{语言}.csv；可选择全部模块或指定某一个模块。","""Export AI to modules"" writes each phrase back to its source module i18n/{locale}.csv; choose all modules or one module."
-"「按模块」可一键只翻译某个模块并写回该模块 CSV（仅开发环境）。","By Module can translate one module only and write back its CSV (dev environment only)."
-词条总数,"Dictionary Words"
-"AI 启用语言","AI Enabled Languages"
-"AI 已译词","AI Translated Phrases"
-全局状态,"Global Status"
+"词典 / LocalModel / 模块 CSV 写回三类进度见下方总览；队列状态已简化，不再堆砌原文日志。","词典 / LocalModel / 模块 CSV 写回三类进度见下方总览；队列状态已简化，不再堆砌原文日志。"
+"按语言 × 类型：词典补齐、LocalModel（共享队列）、模块 CSV 写回。","按语言 × 类型：词典补齐、LocalModel（共享队列）、模块 CSV 写回。"
 已开启,Enabled
 已关闭,Disabled
+源词,源词
+启用语言,启用语言
+词典完成度,词典完成度
+"待写回 CSV","待写回 CSV"
+LocalModel,LocalModel
+空闲,空闲
+剩余,剩余
+"模块 CSV","模块 CSV"
+词典队列,词典队列
+源语言,"Source Language"
+待补,待补
+"CSV 已对齐","CSV 已对齐"
+无队列,无队列
+暂无进度数据。,暂无进度数据。
 按语言,"By Language"
 按模块,"By Module"
 基础配置,"Basic Configuration"
 保存配置并入队,"Save Configuration And Queue"
 "开启 AI 翻译","Enable AI Translation"
-源语言,"Source Language"
 批量大小,"Batch Size"
 翻译策略,"Translation Strategy"
 轻量,Light
@@ -442,19 +450,12 @@ i18n国际化,"i18n Internationalization"
 没有匹配的模块。,"No matching modules."
 "系统中暂无带 i18n 目录的活跃模块。","No active modules with an i18n directory."
 源语言固定为基础词库语言，不需要重复选择。,"The source language is fixed to the base dictionary language and does not need to be selected again."
-语言配置,"Language Configuration"
-"待翻译 = 模块 CSV 与全局词典都没有有效目标译文的词。","Pending translations are phrases with no valid target translation in either module CSV files or the global dictionary."
+语言配置与操作,语言配置与操作
+进度见上方总览；此处只开关语言并触发翻译/导出。,进度见上方总览；此处只开关语言并触发翻译/导出。
 "AI 翻译","AI Translation"
-全局已译,"Global Translated"
-"AI 已译","AI Translated"
-待补翻译,"Pending Backfill"
-最近队列,"Latest Queue"
 源语言跳过,"Source Language Skipped"
 网站语言并集，强制翻译,网站语言并集，强制翻译
 已不在网站并集，跳过翻译,已不在网站并集，跳过翻译
-查看队列结果,"View queue result"
-队列失败，但未返回详细错误信息。,"Queue failed, but no detailed error was returned."
-无,None
 立即翻译,"Translate Now"
 "导出 AI 到模块","Export AI to Modules"
 导出全局包,"Export Global Pack"
@@ -549,7 +550,6 @@ i18n国际化,"i18n Internationalization"
 新增词条,新增词条
 "SSE 连接失败，请重试","SSE connection failed, please retry"
 本批成功,本批成功
-剩余,剩余
 "模块 AI 翻译完成","模块 AI 翻译完成"
 "模块 AI 翻译失败","模块 AI 翻译失败"
 已写回,已写回
@@ -645,7 +645,10 @@ i18n国际化,"i18n Internationalization"
 卸载中…,Uninstalling…
 "LocalModel 多语言翻译批次完成：本批=%{processed}，翻译=%{translated}，剩余=%{remaining}","LocalModel 多语言翻译批次完成：本批=%{processed}，翻译=%{translated}，剩余=%{remaining}"
 AI翻译繁忙或报错，已结束本批；不立刻续队，等待下一轮定时任务。,AI翻译繁忙或报错，已结束本批；不立刻续队，等待下一轮定时任务。
+AI翻译失败，已结束本批；不立刻续队，等待下一轮定时任务。,AI翻译失败，已结束本批；不立刻续队，等待下一轮定时任务。
+"保存失败已跳过 %{1} 条，继续后续条目。","保存失败已跳过 %{1} 条，继续后续条目。"
 已创建下一批队列：#%{1},"Created next batch queue: #%{1}"
+"LocalModel 翻译进程异常退出，Scheduler 将自动恢复（第 %{1}/%{2} 次）。","LocalModel 翻译进程异常退出，Scheduler 将自动恢复（第 %{1}/%{2} 次）。"
 "验证失败：缺少 locale_code。","Verification failed: missing locale_code."
 "验证失败：语言 %{1} 未安装启用或为源语言。","Verification failed: language %{1} is not installed, enabled, or is the source language."
 "验证失败：语言 %{1} 未开启 AI 自动翻译，自动队列已跳过。","Verification failed: language %{1} does not have AI automatic translation enabled, auto queue skipped."
@@ -654,6 +657,7 @@ AI翻译繁忙或报错，已结束本批；不立刻续队，等待下一轮定
 AI翻译繁忙，已结束本批；不立刻续队，等待下一轮定时任务。,AI翻译繁忙，已结束本批；不立刻续队，等待下一轮定时任务。
 "本批无进展，已停止续队（连续失败 %{1}/%{2}）；等待下一轮定时任务。","本批无进展，已停止续队（连续失败 %{1}/%{2}）；等待下一轮定时任务。"
 "连续失败已达 %{1} 次，已停止自动续跑；请等待下次 cron 或手动入队后再试。","连续失败已达 %{1} 次，已停止自动续跑；请等待下次 cron 或手动入队后再试。"
+"I18n AI 翻译进程异常退出，Scheduler 将自动恢复（第 %{1}/%{2} 次）。","I18n AI 翻译进程异常退出，Scheduler 将自动恢复（第 %{1}/%{2} 次）。"
 "国家 %{1} 没有可启用的地区","Country %{1} has no regions that can be enabled"
 不允许停用中国（CN），这是系统默认国家,"Disabling China (CN) is not allowed, this is the system default country"
 国家不存在！国家代码：%{1},"Country does not exist! Country code: %{1}"
@@ -692,6 +696,15 @@ AI翻译繁忙，已结束本批；不立刻续队，等待下一轮定时任务
 "名或姓长度不能超过 60 个字符","First or last name cannot exceed 60 characters"
 "姓名长度必须在 2 到 120 个字符之间","Full name must be between 2 and 120 characters"
 提交过于频繁，请稍后再试,"Submit too frequently, please try again later"
+模型忙碌,模型忙碌
+"词典待补约 %{1}","词典待补约 %{1}"
+等待本地模型空闲,等待本地模型空闲
+失败,失败
+待续跑,待续跑
+"剩余 %{1}","剩余 %{1}"
+本轮完成,本轮完成
+"本批 %{1}","本批 %{1}"
+运行中,运行中
 批量翻译请求标识无效,批量翻译请求标识无效
 字段为空，已跳过,字段为空，已跳过
 "开始一键 AI 批量翻译","开始一键 AI 批量翻译"
@@ -710,7 +723,6 @@ AI翻译繁忙，已结束本批；不立刻续队，等待下一轮定时任务
 "写回模块 CSV 仅允许在开发环境执行","写回模块 CSV 仅允许在开发环境执行"
 ...,...
 源文,源文
-"LocalModel 多语言 AI 翻译","LocalModel 多语言 AI 翻译"
 "未启用任何 AI 翻译目标语言，已跳过 LocalModel 批次。","未启用任何 AI 翻译目标语言，已跳过 LocalModel 批次。"
 "当前站点未配置可编辑的关联语言。请先在网站管理中配置关联语言，并确保这些语言已在 I18n 中安装启用。","当前站点未配置可编辑的关联语言。请先在网站管理中配置关联语言，并确保这些语言已在 I18n 中安装启用。"
 "暂不支持 config 嵌套字段的 AI 翻译","暂不支持 config 嵌套字段的 AI 翻译"
@@ -748,7 +760,6 @@ AI翻译未返回目标语言结果,AI翻译未返回目标语言结果
 "模块 %{1}：源语言词数 %{2}（新增 %{3}），翻译 %{4} 条，写回 %{5} 条，覆盖 %{6} 个语言%{7}。","Module %{1}: source words %{2} (added %{3}), translated %{4}, wrote back %{5}, across %{6} locales%{7}."
 "，%{1} 个语言校验未通过",", %{1} locale(s) failed verification"
 ，校验全部通过,", all locales verified"
-"I18n AI翻译 %{1}","I18n AI translation %{1}"
 目标语言为空，已跳过。,目标语言为空，已跳过。
 目标语言等于源语言，已跳过。,目标语言等于源语言，已跳过。
 "语言 %{1} 已有翻译批次在运行，本批已跳过以避免重复翻译。","语言 %{1} 已有翻译批次在运行，本批已跳过以避免重复翻译。"
@@ -781,13 +792,6 @@ CSV文件不存在：%{1},"CSV file does not exist: %{1}"
 同步默认语言译文…,同步默认语言译文…
 "提交 AI 翻译队列…","提交 AI 翻译队列…"
 开始收集词典,开始收集词典
-"I18n AI 自动翻译未启用，cron 已跳过","I18n AI 自动翻译未启用，cron 已跳过"
-"没有启用的 AI 翻译语言（含多网站语言并集）","没有启用的 AI 翻译语言（含多网站语言并集）"
-"所有启用语言与 LocalModel 翻译队列均已有待运行/运行中任务，cron 未重复入队（耗时 %{1} 秒）","所有启用语言与 LocalModel 翻译队列均已有待运行/运行中任务，cron 未重复入队（耗时 %{1} 秒）"
-"词典 %{1}: 队列 #%{2}","词典 %{1}: 队列 #%{2}"
-"LocalModel: 队列 #%{1}","LocalModel: 队列 #%{1}"
-"AI 翻译 cron 入队完成 - 词典语言数: %{1}, LocalModel: %{2}, 耗时: %{3} 秒\n%{4}","AI 翻译 cron 入队完成 - 词典语言数: %{1}, LocalModel: %{2}, 耗时: %{3} 秒\n%{4}"
-"AI批量翻译异常: %{1}","AI批量翻译异常: %{1}"
 开始AI翻译...,"Starting AI translation..."
 "目标语言: %{1}","Target language: %{1}"
 "源语言: %{1}","Source language: %{1}"
@@ -852,6 +856,36 @@ CSV文件路径（导入单个文件时必填）,"CSV file path (required when i
 "4. 网络连接是否正常","4. Is the network connection normal?"
 无法创建文件：%{1},"Unable to create file: %{1}"
 查看本地语言码,"View local language code"
+"词典 / LocalModel / 模块写回三类进度见下方总览；队列状态已简化，不再堆砌原文日志。","词典 / LocalModel / 模块写回三类进度见下方总览；队列状态已简化，不再堆砌原文日志。"
+模块写回,模块写回
+队列状态,队列状态
+共享队列,共享队列
+词条总数,"Dictionary Words"
+"AI 启用语言","AI Enabled Languages"
+全局状态,"Global Status"
+语言配置,"Language Configuration"
+"待翻译 = 模块 CSV 与全局词典都没有有效目标译文的词。","Pending translations are phrases with no valid target translation in either module CSV files or the global dictionary."
+词典进度,词典进度
+"AI 已译","AI Translated"
+待补翻译,"Pending Backfill"
+队列失败，但未返回详细错误信息。,"Queue failed, but no detailed error was returned."
+无,None
+"如果目标语言的模块 CSV 或全局语言包中已经存在有效译文，系统会自动跳过，不会再次调用 AI，避免浪费 token。AI 生成的译文会先写入词典并标记为 AI，可再增量导出回模块 CSV。","If the target language module CSV or global language pack already contains a valid translation, the system skips it and will not call AI again, avoiding token waste. AI-generated translations are written to the dictionary and marked as AI, then can be incrementally exported back to module CSV files."
+"「导出 AI 到模块」按词条采集时的来源模块写回各自 i18n/{语言}.csv；可选择全部模块或指定某一个模块。","""Export AI to modules"" writes each phrase back to its source module i18n/{locale}.csv; choose all modules or one module."
+"「按模块」可一键只翻译某个模块并写回该模块 CSV（仅开发环境）。","By Module can translate one module only and write back its CSV (dev environment only)."
+"AI 已译词","AI Translated Phrases"
+全局已译,"Global Translated"
+最近队列,"Latest Queue"
+查看队列结果,"View queue result"
+"LocalModel 多语言 AI 翻译","LocalModel 多语言 AI 翻译"
+"I18n AI翻译 %{1}","I18n AI translation %{1}"
+"I18n AI 自动翻译未启用，cron 已跳过","I18n AI 自动翻译未启用，cron 已跳过"
+"没有启用的 AI 翻译语言（含多网站语言并集）","没有启用的 AI 翻译语言（含多网站语言并集）"
+"所有启用语言与 LocalModel 翻译队列均已有待运行/运行中任务，cron 未重复入队（耗时 %{1} 秒）","所有启用语言与 LocalModel 翻译队列均已有待运行/运行中任务，cron 未重复入队（耗时 %{1} 秒）"
+"词典 %{1}: 队列 #%{2}","词典 %{1}: 队列 #%{2}"
+"LocalModel: 队列 #%{1}","LocalModel: 队列 #%{1}"
+"AI 翻译 cron 入队完成 - 词典语言数: %{1}, LocalModel: %{2}, 耗时: %{3} 秒\n%{4}","AI 翻译 cron 入队完成 - 词典语言数: %{1}, LocalModel: %{2}, 耗时: %{3} 秒\n%{4}"
+"AI批量翻译异常: %{1}","AI批量翻译异常: %{1}"
 "没有启用的 AI 翻译语言","没有启用的 AI 翻译语言"
 "AI翻译配置已保存，已入队 %{1} 个语言。","AI translation configuration saved. Queued %{1} language(s)."
 "已为 %{1} 个启用语言创建 AI 翻译队列。","Created AI translation queues for %{1} enabled language(s)."
