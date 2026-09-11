@@ -13,15 +13,49 @@
     var GUEST_TOKEN_KEY = 'weline.cart.guest_token';
     var GUEST_SESSION_KEY = 'weline.cart.guest_session';
     var SUMMARY_CACHE_KEY = 'weline.cart.summary_cache';
+    /** After checkout success: consumers must forceNetwork once, then consume. */
+    var SUMMARY_NEEDS_ORIGIN_KEY = 'weline.cart.summary_needs_origin';
     var CART_FLAG_KEY = 'weline_cart_has_items';
     var CART_COUNT_COOKIE = 'weline_cart_item_count';
     var CART_TRIGGER_SELECTOR = '[data-weline-cart-trigger]';
     var APPLY_EVENT = 'weline:cart:apply-coupon';
     var APPLIED_EVENT = 'weline:cart:coupon-applied';
     var WAIT_GIFT_REDEEMED_EVENT = 'weline:maintenance:wait-gift-redeemed';
+    var CHECKOUT_SUCCESS_EVENT = 'weline:checkout:success';
+    var CHECKOUT_ORDER_CREATED_EVENT = 'weline:checkout:order-created';
+    var PAYMENT_OUTCOME_EVENT = 'weline:payment:outcome';
+    var PAYMENT_PAID_EVENT = 'weline:payment:paid';
+    var PAYMENT_PENDING_EVENT = 'weline:payment:pending';
+    /** Cart-owned storefront Event: cart_type switch (B2B adapts; Theme must not bind B2B DOM). */
+    var CART_TYPE_CHANGED_EVENT = 'weline:cart-type-changed';
+    var CART_TYPE_EXPLICIT_KEY = 'weline_cart_type_explicit';
     var renewTimer = 0;
     var applyInFlight = null;
     var cartStatusBound = false;
+
+    function isLifecycleDevMode() {
+        try {
+            if (global.DEV === true || global.WELINE_ENV === 'DEV') {
+                return true;
+            }
+            if (global.WELINE_LIFECYCLE_DEBUG === true) {
+                return true;
+            }
+            if (global.localStorage && global.localStorage.getItem('weline_lifecycle_debug') === '1') {
+                return true;
+            }
+        } catch (eDev) {}
+        return false;
+    }
+
+    function logLifecycleReceive(eventName, detail, action) {
+        if (!isLifecycleDevMode()) {
+            return;
+        }
+        try {
+            console.info('[WelineCart]', 'listen', eventName, action || 'invalidateAfterCheckout', detail || {});
+        } catch (eLog) {}
+    }
 
     function callApiAuto(method) {
         try {
@@ -349,6 +383,20 @@
         return true;
     }
 
+    function summaryHasLineItems(summary) {
+        if (!summary || typeof summary !== 'object') {
+            return false;
+        }
+        if (summary.is_empty === true) {
+            return false;
+        }
+        var count = Number(summary.cart_count != null ? summary.cart_count : (summary.item_count || 0));
+        if (count > 0) {
+            return true;
+        }
+        return Array.isArray(summary.items) && summary.items.length > 0;
+    }
+
     function summaryTokenMatches(data, options) {
         options = options || {};
         if (!data || !isUsableSummary(data.summary)) {
@@ -357,15 +405,22 @@
         if (!summaryLocaleCurrencyMatches(data, options)) {
             return false;
         }
+        var expiresAt = Number(data.expires_at_ms || 0);
+        if (expiresAt > 0 && expiresAt <= nowMs()) {
+            return false;
+        }
         var token = currentGuestToken();
         var cachedToken = String(data.guest_token || '').trim();
+        // Ghost-cart gate: non-empty local summaries require an exact guest_token match.
+        var requireMatch = options.requireTokenMatch === true
+            || (options.requireTokenMatch !== false && summaryHasLineItems(data.summary));
+        if (requireMatch) {
+            if (!token || !cachedToken || token !== cachedToken) {
+                return false;
+            }
+            return true;
+        }
         if (token && cachedToken && token !== cachedToken) {
-            return false;
-        }
-        if (token && !cachedToken && options.requireTokenMatch) {
-            return false;
-        }
-        if (!token && cachedToken && options.requireTokenMatch) {
             return false;
         }
         return true;
@@ -392,6 +447,7 @@
             currency: currency,
             locale: locale,
             saved_at: nowMs(),
+            expires_at_ms: Number(summary.expires_at_ms || meta.expires_at_ms || 0) || guestSessionFrom(),
             summary: summary,
         };
         // Typed buckets: toc and tob each keep a browser-local copy; never clobber the other.
@@ -451,6 +507,101 @@
         writeJson(SUMMARY_CACHE_KEY, null);
         writeJson(summaryCacheKeyFor('toc'), null);
         writeJson(summaryCacheKeyFor('tob'), null);
+    }
+
+    function markNeedsOriginRefresh(reason) {
+        try {
+            global.localStorage.setItem(SUMMARY_NEEDS_ORIGIN_KEY, JSON.stringify({
+                reason: String(reason || 'manual'),
+                at: nowMs(),
+            }));
+        } catch (e) {
+            // privacy modes
+        }
+    }
+
+    function needsOriginRefresh() {
+        try {
+            var raw = global.localStorage.getItem(SUMMARY_NEEDS_ORIGIN_KEY);
+            return !!(raw && String(raw).trim());
+        } catch (e) {
+            return false;
+        }
+    }
+
+    function consumeNeedsOriginRefresh() {
+        var had = needsOriginRefresh();
+        try {
+            global.localStorage.removeItem(SUMMARY_NEEDS_ORIGIN_KEY);
+        } catch (e) {
+            // privacy modes
+        }
+        return had;
+    }
+
+    /** Success / paid / order-created recovery surfaces where local summary_cache must not paint stale lines. */
+    function isCheckoutSuccessSurface() {
+        try {
+            var path = String((global.location && global.location.pathname) || '');
+            var hash = String((global.location && global.location.hash) || '');
+            if (/\/checkout\/success(?:\.html)?\/?$/i.test(path)) {
+                return true;
+            }
+            if (/\/payment\/success(?:\.html)?\/?$/i.test(path)) {
+                return true;
+            }
+            if (/\/payment\/handoff(?:\.html)?\/?$/i.test(path)) {
+                return true;
+            }
+            // Checkout payment-recovery hash: order already created (pending/failed payment).
+            if (/\/checkout(?:\/index)?(?:\.html)?\/?$/i.test(path)
+                && hash.indexOf('#payment-recovery') === 0) {
+                return true;
+            }
+            if (global.document && global.document.querySelector) {
+                var recovery = global.document.querySelector('[data-checkout-payment-recovery]');
+                if (recovery && !recovery.hidden) {
+                    return true;
+                }
+            }
+            if (/\/payment\/(?:checkout\/)?return/i.test(path)) {
+                var q = new URLSearchParams((global.location && global.location.search) || '');
+                var outcome = String(q.get('outcome') || q.get('status') || '').toLowerCase();
+                if (outcome === 'paid' || outcome === 'success' || outcome === 'pending') {
+                    return true;
+                }
+            }
+        } catch (e) {}
+        return false;
+    }
+
+    /**
+     * Drop typed summary_cache + flag origin refresh so mini-cart cannot preferCache
+     * paint lines after the server cart was emptied by checkout.
+     */
+    function invalidateAfterCheckout(options) {
+        options = options || {};
+        var reason = String(options.reason || options.source || 'checkout-success').trim() || 'checkout-success';
+        if (options.cartType || options.cart_type) {
+            clearCachedSummary({ cartType: options.cartType || options.cart_type });
+        } else {
+            clearCachedSummary({});
+        }
+        markCartEmpty();
+        markNeedsOriginRefresh(reason);
+        try {
+            var detail = {
+                count: 0,
+                cart_count: 0,
+                source: reason,
+                refresh: true,
+                forceNetwork: true,
+            };
+            global.dispatchEvent(new CustomEvent('weline:cart:update', { detail: detail }));
+            global.dispatchEvent(new CustomEvent('weline:cart-updated', { detail: detail }));
+            global.dispatchEvent(new CustomEvent('weshop:cart:updated', { detail: detail }));
+        } catch (eDispatch) {}
+        return true;
     }
 
     function getGuestSession() {
@@ -610,13 +761,91 @@
         installCartStatus();
         getPendingCoupon(); // purge expired
         getGuestSession();
+        if (isCheckoutSuccessSurface()) {
+            invalidateAfterCheckout({ reason: 'checkout-success-surface' });
+        }
         applyPendingCoupon('boot');
         renewGuestSession();
         scheduleGuestRenewWatch();
     }
 
+    /**
+     * Request a cart_type switch. Owns the Event name and explicit session key.
+     * Optional Cart-owned chrome: [data-cart-type-option="toc|tob"] (B2B may mirror).
+     */
+    function requestCartType(type, opts) {
+        var next = String(type || '').toLowerCase() === 'tob' ? 'tob' : 'toc';
+        var options = opts && typeof opts === 'object' ? opts : {};
+        var source = String(options.source || 'cart-request').trim() || 'cart-request';
+        var forceNetwork = options.forceNetwork === true;
+        try {
+            global.sessionStorage.setItem(CART_TYPE_EXPLICIT_KEY, next);
+        } catch (eExplicit) {}
+        // Soft tab switch may click Cart-owned chrome. forceNetwork must emit Event
+        // (never chrome-only) so cart/mini-cart listeners keep the network reload and
+        // preferCache cannot paint a stale empty sibling cart.
+        var clicked = false;
+        if (!forceNetwork && options.clickChrome !== false) {
+            try {
+                var seg = global.document && global.document.querySelector
+                    ? global.document.querySelector('[data-cart-type-option="' + next + '"]')
+                    : null;
+                if (seg && typeof seg.click === 'function') {
+                    seg.click();
+                    clicked = true;
+                }
+            } catch (eClick) {}
+        }
+        if (!clicked) {
+            global.dispatchEvent(new CustomEvent(CART_TYPE_CHANGED_EVENT, {
+                detail: {
+                    cart_type: next,
+                    selling_mode: next,
+                    source: source,
+                    forceNetwork: forceNetwork,
+                },
+            }));
+        }
+        return next;
+    }
+
     global.addEventListener(APPLY_EVENT, onApplyCouponEvent);
     global.addEventListener(WAIT_GIFT_REDEEMED_EVENT, onWaitGiftRedeemed);
+    global.addEventListener(CHECKOUT_SUCCESS_EVENT, function (event) {
+        var detail = (event && event.detail) || {};
+        logLifecycleReceive(CHECKOUT_SUCCESS_EVENT, detail, 'invalidateAfterCheckout');
+        invalidateAfterCheckout({
+            reason: detail.source || 'checkout-success-event',
+            cartType: detail.cart_type || detail.cartType || '',
+        });
+    });
+    global.addEventListener(CHECKOUT_ORDER_CREATED_EVENT, function (event) {
+        var detail = (event && event.detail) || {};
+        logLifecycleReceive(CHECKOUT_ORDER_CREATED_EVENT, detail, 'invalidateAfterCheckout');
+        invalidateAfterCheckout({
+            reason: detail.source || 'checkout-order-created',
+            cartType: detail.cart_type || detail.cartType || '',
+        });
+    });
+    function onPaymentLifecycleEvent(event) {
+        var detail = (event && event.detail) || {};
+        var outcome = String(detail.outcome || '').toLowerCase();
+        var type = String((event && event.type) || '').toLowerCase();
+        // Order committed (paid or pending payment): drop stale mini-cart cache.
+        if (type === PAYMENT_PAID_EVENT || type === PAYMENT_PENDING_EVENT
+            || outcome === 'paid' || outcome === 'pending') {
+            logLifecycleReceive(type || PAYMENT_OUTCOME_EVENT, detail, 'invalidateAfterCheckout');
+            invalidateAfterCheckout({
+                reason: detail.source || type || 'payment-lifecycle',
+                cartType: detail.cart_type || detail.cartType || '',
+            });
+        } else if (isLifecycleDevMode()) {
+            logLifecycleReceive(type || PAYMENT_OUTCOME_EVENT, detail, 'ignored');
+        }
+    }
+    global.addEventListener(PAYMENT_OUTCOME_EVENT, onPaymentLifecycleEvent);
+    global.addEventListener(PAYMENT_PAID_EVENT, onPaymentLifecycleEvent);
+    global.addEventListener(PAYMENT_PENDING_EVENT, onPaymentLifecycleEvent);
     global.addEventListener('weline:cart-updated', function () {
         applyPendingCoupon('cart-updated');
     });
@@ -639,11 +868,15 @@
         PENDING_COUPON_KEY: PENDING_COUPON_KEY,
         GUEST_SESSION_KEY: GUEST_SESSION_KEY,
         SUMMARY_CACHE_KEY: SUMMARY_CACHE_KEY,
+        SUMMARY_NEEDS_ORIGIN_KEY: SUMMARY_NEEDS_ORIGIN_KEY,
         CART_FLAG_KEY: CART_FLAG_KEY,
         CART_COUNT_COOKIE: CART_COUNT_COOKIE,
         APPLY_EVENT: APPLY_EVENT,
         APPLIED_EVENT: APPLIED_EVENT,
         WAIT_GIFT_REDEEMED_EVENT: WAIT_GIFT_REDEEMED_EVENT,
+        CHECKOUT_SUCCESS_EVENT: CHECKOUT_SUCCESS_EVENT,
+        CART_TYPE_CHANGED_EVENT: CART_TYPE_CHANGED_EVENT,
+        requestCartType: requestCartType,
         markCartActive: markCartActive,
         markCartEmpty: markCartEmpty,
         restoreCartState: restoreCartState,
@@ -657,6 +890,11 @@
         rememberSummary: rememberSummary,
         getCachedSummary: getCachedSummary,
         clearCachedSummary: clearCachedSummary,
+        markNeedsOriginRefresh: markNeedsOriginRefresh,
+        needsOriginRefresh: needsOriginRefresh,
+        consumeNeedsOriginRefresh: consumeNeedsOriginRefresh,
+        invalidateAfterCheckout: invalidateAfterCheckout,
+        isCheckoutSuccessSurface: isCheckoutSuccessSurface,
         currentDisplayCurrency: currentDisplayCurrency,
         currentDisplayLocale: currentDisplayLocale,
         dispatchApplyCoupon: function (code, meta) {

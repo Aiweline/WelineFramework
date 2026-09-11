@@ -169,6 +169,56 @@ final class CartDbStore implements CartStoreInterface
         return $out;
     }
 
+    public function listByGuestTokenHint(string $hint, ?string $scopeKey = null): array
+    {
+        $hint = trim($hint);
+        if (strlen($hint) < 4) {
+            return [];
+        }
+        $scope = $scopeKey !== null ? trim($scopeKey) : '';
+        $query = clone $this->model;
+        $query->clear()
+            ->where(Cart::schema_fields_OWNER_KIND, CartService::OWNER_GUEST);
+        if ($scope !== '') {
+            $query->where(Cart::schema_fields_SCOPE_KEY, $scope);
+        }
+        $query->select()->fetch();
+        $rows = $query->getItems();
+        if (!is_array($rows) || $rows === []) {
+            return [];
+        }
+        $out = [];
+        foreach ($rows as $row) {
+            if (!$row instanceof Cart) {
+                continue;
+            }
+            $token = trim((string)$row->getData(Cart::schema_fields_GUEST_TOKEN));
+            if ($token === '') {
+                $token = trim((string)$row->getData(Cart::schema_fields_OWNER_ID));
+            }
+            if ($token === '' || ($token !== $hint && !str_ends_with($token, $hint))) {
+                continue;
+            }
+            $key = (string)$row->getData(Cart::schema_fields_CART_KEY);
+            if ($this->isExpired($row)) {
+                if ($key !== '') {
+                    $this->delete($key);
+                }
+                continue;
+            }
+            $decoded = $this->decodePayload($row);
+            if (!is_array($decoded)) {
+                continue;
+            }
+            $decoded['expires_at'] = $row->getData(Cart::schema_fields_EXPIRES_AT);
+            $decoded['updated_at'] = $row->getData(Cart::schema_fields_UPDATED_AT);
+            $decoded['cart_type'] = (string)$row->getData(Cart::schema_fields_CART_TYPE);
+            $out[] = $decoded;
+        }
+
+        return $out;
+    }
+
     private function findModel(string $cartKey): Cart
     {
         $model = clone $this->model;

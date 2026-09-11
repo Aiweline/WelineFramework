@@ -281,16 +281,32 @@
         }, {});
     }
 
+    /**
+     * Resolve add/buy cart_type. Cookie/session preferredMode and button stamps
+     * beat FPC SSR html[data-selling-mode] (cached HTML often still says toc).
+     */
+    function resolveAddCartType(button) {
+        var preferred = '';
+        if (window.WelineB2BSellingMode && typeof window.WelineB2BSellingMode.preferredMode === 'function') {
+            preferred = String(window.WelineB2BSellingMode.preferredMode() || '').toLowerCase();
+        }
+        if (preferred !== 'toc' && preferred !== 'tob') {
+            try {
+                preferred = String(window.sessionStorage.getItem('weline_cart_type_explicit') || '').toLowerCase();
+            } catch (eExplicit) {
+                preferred = '';
+            }
+        }
+        var fromButton = String(
+            (button && (button.dataset.sellingMode || button.dataset.cartType)) || ''
+        ).toLowerCase();
+        var fromHtml = String(document.documentElement.getAttribute('data-selling-mode') || '').toLowerCase();
+        var mode = preferred || fromButton || fromHtml || 'toc';
+        return mode === 'tob' ? 'tob' : 'toc';
+    }
+
     async function addOfferFromButton(button) {
-        const sellingMode = String(
-            button.dataset.sellingMode
-            || button.dataset.cartType
-            || (document.documentElement.getAttribute('data-selling-mode') || '')
-            || (window.WelineB2BSellingMode && typeof window.WelineB2BSellingMode.preferredMode === 'function'
-                ? window.WelineB2BSellingMode.preferredMode()
-                : '')
-            || 'toc'
-        ).toLowerCase() === 'tob' ? 'tob' : 'toc';
+        const sellingMode = resolveAddCartType(button);
         const qtySelect = (detailRoot(button) || document).querySelector('[data-testid="product-qty"]');
         const qtyFromSelect = qtySelect ? Math.max(1, Number(qtySelect.value || 1) || 1) : 0;
         const result = await (await waitForCartApi()).add({
@@ -773,15 +789,7 @@
         if (String(button.dataset.needsSelection || '') === '1') {
             return true;
         }
-        const sellingMode = String(
-            button.dataset.sellingMode
-            || button.dataset.cartType
-            || (document.documentElement.getAttribute('data-selling-mode') || '')
-            || (global.WelineB2BSellingMode && typeof global.WelineB2BSellingMode.preferredMode === 'function'
-                ? global.WelineB2BSellingMode.preferredMode()
-                : '')
-            || 'toc',
-        ).toLowerCase();
+        const sellingMode = resolveAddCartType(button);
         // Listing card + wholesale: always open panel so MOQ / ladder prices are explicit.
         return sellingMode === 'tob' && !!widgetRoot(button) && !detailRoot(button);
     }
