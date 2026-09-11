@@ -22,10 +22,20 @@ final class TaskPlanGate
     private const MAX_FORBIDDEN = 30;
     private const MAX_EXTENSION_POINT = 120;
     private const MAX_ARCHITECTURE = 4000;
+    /** Minimum architecture text so agents map requirements at the architecture layer. */
+    private const MIN_ARCHITECTURE = 40;
     private const MAX_REQUIREMENTS = 20;
+    private const MAX_COUPLING_FINDINGS = 20;
+    private const MAX_REQUIREMENT_SCRUTINY = 20;
 
     /** @var list<string> */
-    private const ACCEPTANCE_TYPES = ['unit', 'probe', 'browser', 'doc'];
+    private const ACCEPTANCE_TYPES = ['unit', 'probe', 'browser', 'doc', 'shentu'];
+
+    /** @var list<string> */
+    public const WORK_KINDS = ['feature', 'non_feature'];
+
+    /** Feature plans must declare these skill roles in skill_participation. */
+    public const FEATURE_REQUIRED_SKILLS = ['prototype', 'frontend-design'];
 
     /**
      * @param array<string, mixed> $raw
@@ -178,6 +188,19 @@ final class TaskPlanGate
                 );
             }
         }
+        foreach ($acceptance as $row) {
+            if (($row['type'] ?? '') !== 'shentu' || ($row['status'] ?? '') !== 'passed') {
+                continue;
+            }
+            $evidence = trim((string) ($row['evidence'] ?? ''));
+            if (!TaskPlanWorkflow::evidenceLooksLikeShentu($evidence)) {
+                throw new ToolException(
+                    self::ERROR_PLAN_INVALID,
+                    'acceptance ' . ($row['id'] ?? '?')
+                    . ' type=shentu status=passed requires 审图 evidence (审图/shentu/线稿/checklist).',
+                );
+            }
+        }
 
         $devTasks = TaskPlanWorkflow::normalizeDevTasks($raw['dev_tasks'] ?? null);
         if (count($devTasks) > self::MAX_DEV_TASKS) {
@@ -187,12 +210,44 @@ final class TaskPlanGate
             );
         }
 
-        $architecture = trim((string) ($raw['architecture'] ?? ''));
-        if ($architecture !== '' && mb_strlen($architecture, 'UTF-8') > self::MAX_ARCHITECTURE) {
-            throw new ToolException(
-                self::ERROR_PLAN_INVALID,
-                'architecture cannot exceed ' . self::MAX_ARCHITECTURE . ' characters.',
-            );
+        $architecture = TaskPlanWorkflow::normalizeArchitecture(
+            $raw['architecture'] ?? null,
+            $requirements,
+            $extensionPoint,
+            self::MIN_ARCHITECTURE,
+            self::MAX_ARCHITECTURE,
+        );
+
+        $couplingFindings = TaskPlanWorkflow::normalizeCouplingFindings(
+            $raw['coupling_findings'] ?? null,
+            self::MAX_COUPLING_FINDINGS,
+        );
+
+        $requirementScrutiny = TaskPlanWorkflow::normalizeRequirementScrutiny(
+            $raw['requirement_scrutiny'] ?? null,
+            self::MAX_REQUIREMENT_SCRUTINY,
+        );
+
+        $workKind = TaskPlanWorkflow::normalizeWorkKind($raw['work_kind'] ?? null);
+        $skillParticipation = TaskPlanWorkflow::normalizeSkillParticipation(
+            $raw['skill_participation'] ?? null,
+            $workKind,
+        );
+        if ($workKind === 'feature') {
+            $hasShentuAcceptance = false;
+            foreach ($acceptance as $row) {
+                if (($row['type'] ?? '') === 'shentu') {
+                    $hasShentuAcceptance = true;
+                    break;
+                }
+            }
+            if (!$hasShentuAcceptance) {
+                throw new ToolException(
+                    self::ERROR_PLAN_INVALID,
+                    'work_kind=feature requires ≥1 acceptance type=shentu '
+                    . '(acceptance_phase_requires_shentu: 验收阶段必须审图).',
+                );
+            }
         }
 
         $workflowPhase = strtolower(trim((string) ($raw['workflow_phase'] ?? 'plan')));
@@ -219,6 +274,11 @@ final class TaskPlanGate
             );
         }
 
+        $huishenNotes = trim((string) ($raw['huishen_notes'] ?? ''));
+        if ($huishenNotes !== '' && mb_strlen($huishenNotes, 'UTF-8') > 2000) {
+            throw new ToolException(self::ERROR_PLAN_INVALID, 'huishen_notes cannot exceed 2000 characters.');
+        }
+
         $plan = [
             'schema_version' => self::SCHEMA,
             'goal' => $goal,
@@ -229,14 +289,19 @@ final class TaskPlanGate
             'dev_tasks' => $devTasks,
             'forbidden' => $forbidden,
             'risk' => $risk,
+            'work_kind' => $workKind,
+            'skill_participation' => $skillParticipation,
             'workflow_phase' => $workflowPhase,
             'phase' => $workflowPhase === 'implement' || $workflowPhase === 'verify' || $workflowPhase === 'review' || $workflowPhase === 'closeout'
                 ? $workflowPhase
                 : 'plan',
             'status' => 'accepted',
+            'architecture' => $architecture,
+            'coupling_findings' => $couplingFindings,
+            'requirement_scrutiny' => $requirementScrutiny,
         ];
-        if ($architecture !== '') {
-            $plan['architecture'] = $architecture;
+        if ($huishenNotes !== '') {
+            $plan['huishen_notes'] = $huishenNotes;
         }
 
         return $plan;
@@ -274,6 +339,58 @@ final class TaskPlanGate
                 'Accepted task plan must retain requirements (requirement analysis).',
                 false,
                 ['next_action' => 'submit_task_plan', 'hard_constraint' => 'user_requirement_full_workflow'],
+            );
+        }
+        if (trim((string) ($plan['architecture'] ?? '')) === '') {
+            throw new ToolException(
+                self::ERROR_PLAN_REQUIRED,
+                'Accepted task plan must retain architecture that maps requirements '
+                . 'to extension points, module boundaries, and key paths '
+                . '(architecture_first_for_requirements).',
+                false,
+                [
+                    'next_action' => 'submit_task_plan',
+                    'hard_constraint' => 'architecture_first_for_requirements',
+                ],
+            );
+        }
+        $couplingFindings = $plan['coupling_findings'] ?? null;
+        if (!is_array($couplingFindings) || $couplingFindings === []) {
+            throw new ToolException(
+                self::ERROR_PLAN_REQUIRED,
+                'Accepted task plan must retain coupling_findings '
+                . '(framework_decoupled_only: list findings or explicit 无/无耦合).',
+                false,
+                [
+                    'next_action' => 'submit_task_plan',
+                    'hard_constraint' => 'framework_decoupled_only',
+                ],
+            );
+        }
+        $requirementScrutiny = $plan['requirement_scrutiny'] ?? null;
+        if (!is_array($requirementScrutiny) || $requirementScrutiny === []) {
+            throw new ToolException(
+                self::ERROR_PLAN_REQUIRED,
+                'Accepted task plan must retain requirement_scrutiny '
+                . '(requirement_framework_scrutiny: 合理/无调整 or problem + better approach).',
+                false,
+                [
+                    'next_action' => 'submit_task_plan',
+                    'hard_constraint' => 'requirement_framework_scrutiny',
+                ],
+            );
+        }
+        $workKind = strtolower(trim((string) ($plan['work_kind'] ?? '')));
+        if (!in_array($workKind, self::WORK_KINDS, true)) {
+            throw new ToolException(
+                self::ERROR_PLAN_REQUIRED,
+                'Accepted task plan must retain work_kind=feature|non_feature '
+                . '(requirement_feature_kind_gate).',
+                false,
+                [
+                    'next_action' => 'submit_task_plan',
+                    'hard_constraint' => 'requirement_feature_kind_gate',
+                ],
             );
         }
         $acceptance = $plan['acceptance'] ?? null;
@@ -327,6 +444,14 @@ final class TaskPlanGate
             'workflow_phase' => (string) ($plan['workflow_phase'] ?? $plan['phase'] ?? 'plan'),
             'scope_path_count' => count(is_array($plan['scope_paths'] ?? null) ? $plan['scope_paths'] : []),
             'requirement_count' => count(is_array($plan['requirements'] ?? null) ? $plan['requirements'] : []),
+            'requirement_scrutiny_count' => count(is_array($plan['requirement_scrutiny'] ?? null) ? $plan['requirement_scrutiny'] : []),
+            'requirement_scrutiny_alert' => TaskPlanWorkflow::requirementScrutinyNeedsReportPrompt(
+                is_array($plan['requirement_scrutiny'] ?? null) ? $plan['requirement_scrutiny'] : [],
+            ),
+            'coupling_findings_count' => count(is_array($plan['coupling_findings'] ?? null) ? $plan['coupling_findings'] : []),
+            'coupling_alert' => TaskPlanWorkflow::couplingFindingsNeedReportPrompt(
+                is_array($plan['coupling_findings'] ?? null) ? $plan['coupling_findings'] : [],
+            ),
             'dev_task_count' => count($devTasks),
             'dev_task_open' => $openDev,
             'acceptance_count' => count($acceptance),
@@ -352,7 +477,9 @@ final class TaskPlanGate
                 'goal' => '',
                 'requirements' => ['理解后的编码/工程需求要点'],
                 'extension_point' => '',
-                'architecture' => '',
+                'architecture' => '将每条 requirements 按框架信息映射到解耦方案：扩展点/机制、归属模块边界、关键路径/分层、禁止耦合（architecture_first_for_requirements + framework_decoupled_only）。',
+                'requirement_scrutiny' => ['合理'],
+                'coupling_findings' => ['无'],
                 'dev_tasks' => [
                     ['id' => 'task-1', 'title' => '', 'status' => 'pending'],
                 ],
