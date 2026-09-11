@@ -50,6 +50,17 @@ final class PixelDashboardListShellContractTest extends TestCase
         self::assertStringContainsString('name="utm_campaign"', $src);
         self::assertStringContainsString('name="range"', $src);
         self::assertStringContainsString('<lang>应用筛选</lang>', $src);
+        self::assertStringContainsString('weline-pixel-list-toolbar__primary', $src);
+        self::assertStringContainsString('weline-pixel-list-toolbar__primary-meta', $src);
+        self::assertStringContainsString('weline-pixel-list-toolbar__advanced', $src);
+        self::assertStringContainsString('overflow: hidden', $src);
+        self::assertStringContainsString('overflow-x: auto', $src);
+        self::assertStringContainsString('min-width: 52rem', $src);
+        self::assertStringContainsString('weline-pixel-list-url', $src);
+        self::assertStringContainsString('max-width: 18rem', $src);
+        self::assertStringContainsString('data-truncate="true"', $src);
+        self::assertStringNotContainsString('width: max-content', $src);
+        self::assertStringContainsString('weline-pixel-list-field-hint', $src);
         // 翻页须保留归因 query
         self::assertStringContainsString("'channel_code' => \$selectedChannel", $src);
         self::assertStringContainsString("'utm_source' => \$selectedUtmSource", $src);

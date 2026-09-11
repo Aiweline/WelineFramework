@@ -1,229 +1,407 @@
 {
-  "version": "1.0.0",
-  "events": [
-    {
-      "weline_event": "page_view",
-      "ga4_event": "page_view",
-      "google_recommended": true,
-      "event_family": "page",
-      "require_exact_marker": false,
-      "skip_gtm_push": true,
-      "required_params": ["page_location", "page_title"],
-      "markers": {
-        "classes": ["weline-pixel::page_view"],
-        "attrs": ["data-pixel-event=page_view"]
-      },
-      "page_scopes": ["*"]
-    },
-    {
-      "weline_event": "page_enter",
-      "ga4_event": "page_view",
-      "google_recommended": false,
-      "event_family": "page",
-      "require_exact_marker": false,
-      "skip_gtm_push": true,
-      "required_params": ["page_location"],
-      "markers": {
-        "classes": ["weline-pixel::page_enter"],
-        "attrs": ["data-pixel-event=page_enter"]
-      },
-      "page_scopes": ["*"]
-    },
-    {
-      "weline_event": "cta_click",
-      "ga4_event": "cta_click",
-      "google_recommended": false,
-      "event_family": "cta",
-      "require_exact_marker": false,
-      "skip_gtm_push": false,
-      "required_params": ["link_url", "link_text"],
-      "markers": {
-        "classes": ["weline-pixel::cta_click"],
-        "attrs": ["data-pixel-event=cta_click", "data-cta-event", "data-cta", "data-visitor-event", "data-ga-event"]
-      },
-      "page_scopes": ["home", "content", "*"]
-    },
-    {
-      "weline_event": "hero_cta_click",
-      "ga4_event": "cta_click",
-      "google_recommended": false,
-      "event_family": "cta",
-      "require_exact_marker": false,
-      "skip_gtm_push": false,
-      "required_params": ["link_url", "link_text"],
-      "markers": {
-        "classes": ["weline-pixel::hero_cta_click"],
-        "attrs": ["data-pixel-event=hero_cta_click", "data-cta-event=hero_cta_click"]
-      },
-      "page_scopes": ["home", "content"]
-    },
-    {
-      "weline_event": "view_item",
-      "ga4_event": "view_item",
-      "google_recommended": true,
-      "event_family": "ecommerce",
-      "require_exact_marker": true,
-      "skip_gtm_push": false,
-      "required_params": ["items", "currency"],
-      "markers": {
-        "classes": ["weline-pixel::view_item"],
-        "attrs": ["data-pixel-event=view_item"]
-      },
-      "page_scopes": ["checkout"]
-    },
-    {
-      "weline_event": "add_to_cart",
-      "ga4_event": "add_to_cart",
-      "google_recommended": true,
-      "event_family": "ecommerce",
-      "require_exact_marker": true,
-      "skip_gtm_push": false,
-      "required_params": ["items", "currency", "value"],
-      "markers": {
-        "classes": ["weline-pixel::add_to_cart"],
-        "attrs": ["data-pixel-event=add_to_cart"]
-      },
-      "page_scopes": ["checkout"]
-    },
-    {
-      "weline_event": "begin_checkout",
-      "ga4_event": "begin_checkout",
-      "google_recommended": true,
-      "event_family": "ecommerce",
-      "require_exact_marker": true,
-      "skip_gtm_push": false,
-      "required_params": ["items", "currency", "value"],
-      "markers": {
-        "classes": ["weline-pixel::begin_checkout"],
-        "attrs": ["data-pixel-event=begin_checkout"]
-      },
-      "page_scopes": ["checkout"]
-    },
-    {
-      "weline_event": "checkout_success",
-      "ga4_event": "purchase",
-      "google_recommended": true,
-      "event_family": "ecommerce",
-      "require_exact_marker": true,
-      "skip_gtm_push": false,
-      "required_params": ["transaction_id", "value", "currency", "items"],
-      "markers": {
-        "classes": ["weline-pixel::checkout_success", "weline-pixel::purchase"],
-        "attrs": ["data-pixel-event=checkout_success", "data-pixel-event=purchase"]
-      },
-      "page_scopes": ["checkout"]
-    },
-    {
-      "weline_event": "payment_success",
-      "ga4_event": "purchase",
-      "google_recommended": true,
-      "event_family": "ecommerce",
-      "require_exact_marker": true,
-      "skip_gtm_push": false,
-      "required_params": ["transaction_id", "value", "currency"],
-      "markers": {
-        "classes": ["weline-pixel::payment_success"],
-        "attrs": ["data-pixel-event=payment_success"]
-      },
-      "page_scopes": ["payment"]
-    },
-    {
-      "weline_event": "checkout_failure",
-      "ga4_event": "checkout_failure",
-      "google_recommended": false,
-      "event_family": "ecommerce",
-      "require_exact_marker": true,
-      "skip_gtm_push": false,
-      "required_params": [],
-      "markers": {
-        "classes": ["weline-pixel::checkout_failure"],
-        "attrs": ["data-pixel-event=checkout_failure"]
-      },
-      "page_scopes": ["checkout"]
-    },
-    {
-      "weline_event": "search_submit",
-      "ga4_event": "search",
-      "google_recommended": true,
-      "event_family": "search",
-      "require_exact_marker": false,
-      "skip_gtm_push": false,
-      "required_params": ["search_term"],
-      "markers": {
-        "classes": ["weline-pixel::search_submit", "weline-pixel::search"],
-        "attrs": ["data-pixel-event=search_submit", "data-pixel-event=search"]
-      },
-      "page_scopes": []
-    },
-    {
-      "weline_event": "search_suggestion_click",
-      "ga4_event": "select_content",
-      "google_recommended": true,
-      "event_family": "search",
-      "require_exact_marker": false,
-      "skip_gtm_push": false,
-      "required_params": [],
-      "markers": {
-        "classes": ["weline-pixel::search_suggestion_click"],
-        "attrs": ["data-pixel-event=search_suggestion_click"]
-      },
-      "page_scopes": []
-    },
-    {
-      "weline_event": "route_click",
-      "ga4_event": "route_click",
-      "google_recommended": false,
-      "event_family": null,
-      "require_exact_marker": false,
-      "skip_gtm_push": false,
-      "required_params": ["link_url"],
-      "markers": {
-        "classes": ["weline-pixel::route_click"],
-        "attrs": ["data-pixel-event=route_click"]
-      },
-      "page_scopes": ["*"]
-    },
-    {
-      "weline_event": "login",
-      "ga4_event": "login",
-      "google_recommended": true,
-      "event_family": "account",
-      "require_exact_marker": false,
-      "skip_gtm_push": false,
-      "required_params": [],
-      "markers": {
-        "classes": ["weline-pixel::login"],
-        "attrs": ["data-pixel-event=login"]
-      },
-      "page_scopes": ["account"]
-    },
-    {
-      "weline_event": "register",
-      "ga4_event": "sign_up",
-      "google_recommended": true,
-      "event_family": "account",
-      "require_exact_marker": false,
-      "skip_gtm_push": false,
-      "required_params": [],
-      "markers": {
-        "classes": ["weline-pixel::register"],
-        "attrs": ["data-pixel-event=register"]
-      },
-      "page_scopes": ["account"]
-    },
-    {
-      "weline_event": "site_error",
-      "ga4_event": "exception",
-      "google_recommended": false,
-      "event_family": "error",
-      "require_exact_marker": false,
-      "skip_gtm_push": true,
-      "required_params": ["error_message"],
-      "markers": {
-        "classes": ["weline-pixel::site_error"],
-        "attrs": ["data-pixel-event=site_error"]
-      },
-      "page_scopes": ["*"]
-    }
-  ]
+    "version": "1.1.0",
+    "events": [
+        {
+            "weline_event": "page_view",
+            "ga4_event": "page_view",
+            "google_recommended": true,
+            "event_family": "page",
+            "require_exact_marker": false,
+            "skip_gtm_push": true,
+            "required_params": [
+                "page_location",
+                "page_title"
+            ],
+            "markers": {
+                "classes": [
+                    "weline-pixel::page_view"
+                ],
+                "attrs": [
+                    "data-pixel-event=page_view"
+                ]
+            },
+            "page_scopes": [
+                "*"
+            ],
+            "label_zh": "页面浏览"
+        },
+        {
+            "weline_event": "page_enter",
+            "ga4_event": "page_view",
+            "google_recommended": false,
+            "event_family": "page",
+            "require_exact_marker": false,
+            "skip_gtm_push": true,
+            "required_params": [
+                "page_location"
+            ],
+            "markers": {
+                "classes": [
+                    "weline-pixel::page_enter"
+                ],
+                "attrs": [
+                    "data-pixel-event=page_enter"
+                ]
+            },
+            "page_scopes": [
+                "*"
+            ],
+            "label_zh": "页面进入"
+        },
+        {
+            "weline_event": "cta_click",
+            "ga4_event": "cta_click",
+            "google_recommended": false,
+            "event_family": "cta",
+            "require_exact_marker": false,
+            "skip_gtm_push": false,
+            "required_params": [
+                "link_url",
+                "link_text"
+            ],
+            "markers": {
+                "classes": [
+                    "weline-pixel::cta_click"
+                ],
+                "attrs": [
+                    "data-pixel-event=cta_click",
+                    "data-cta-event",
+                    "data-cta",
+                    "data-visitor-event",
+                    "data-ga-event"
+                ]
+            },
+            "page_scopes": [
+                "home",
+                "content",
+                "*"
+            ],
+            "label_zh": "通用 CTA 点击"
+        },
+        {
+            "weline_event": "hero_cta_click",
+            "ga4_event": "cta_click",
+            "google_recommended": false,
+            "event_family": "cta",
+            "require_exact_marker": false,
+            "skip_gtm_push": false,
+            "required_params": [
+                "link_url",
+                "link_text"
+            ],
+            "markers": {
+                "classes": [
+                    "weline-pixel::hero_cta_click"
+                ],
+                "attrs": [
+                    "data-pixel-event=hero_cta_click",
+                    "data-cta-event=hero_cta_click"
+                ]
+            },
+            "page_scopes": [
+                "home",
+                "content"
+            ],
+            "label_zh": "首屏 CTA 点击"
+        },
+        {
+            "weline_event": "view_item",
+            "ga4_event": "view_item",
+            "google_recommended": true,
+            "event_family": "ecommerce",
+            "require_exact_marker": true,
+            "skip_gtm_push": false,
+            "required_params": [
+                "items",
+                "currency"
+            ],
+            "markers": {
+                "classes": [
+                    "weline-pixel::view_item"
+                ],
+                "attrs": [
+                    "data-pixel-event=view_item"
+                ]
+            },
+            "page_scopes": [
+                "checkout"
+            ],
+            "label_zh": "查看商品"
+        },
+        {
+            "weline_event": "add_to_cart",
+            "ga4_event": "add_to_cart",
+            "google_recommended": true,
+            "event_family": "ecommerce",
+            "require_exact_marker": true,
+            "skip_gtm_push": false,
+            "required_params": [
+                "items",
+                "currency",
+                "value"
+            ],
+            "markers": {
+                "classes": [
+                    "weline-pixel::add_to_cart"
+                ],
+                "attrs": [
+                    "data-pixel-event=add_to_cart"
+                ]
+            },
+            "page_scopes": [
+                "checkout"
+            ],
+            "label_zh": "加入购物车"
+        },
+        {
+            "weline_event": "begin_checkout",
+            "ga4_event": "begin_checkout",
+            "google_recommended": true,
+            "event_family": "ecommerce",
+            "require_exact_marker": true,
+            "skip_gtm_push": false,
+            "required_params": [
+                "items",
+                "currency",
+                "value"
+            ],
+            "markers": {
+                "classes": [
+                    "weline-pixel::begin_checkout"
+                ],
+                "attrs": [
+                    "data-pixel-event=begin_checkout"
+                ]
+            },
+            "page_scopes": [
+                "checkout"
+            ],
+            "label_zh": "开始结账"
+        },
+        {
+            "weline_event": "checkout_success",
+            "ga4_event": "purchase",
+            "google_recommended": true,
+            "event_family": "ecommerce",
+            "require_exact_marker": true,
+            "skip_gtm_push": false,
+            "required_params": [
+                "transaction_id",
+                "value",
+                "currency",
+                "items"
+            ],
+            "markers": {
+                "classes": [
+                    "weline-pixel::checkout_success",
+                    "weline-pixel::purchase"
+                ],
+                "attrs": [
+                    "data-pixel-event=checkout_success",
+                    "data-pixel-event=purchase"
+                ]
+            },
+            "page_scopes": [
+                "checkout"
+            ],
+            "label_zh": "结账成功"
+        },
+        {
+            "weline_event": "payment_success",
+            "ga4_event": "purchase",
+            "google_recommended": true,
+            "event_family": "ecommerce",
+            "require_exact_marker": true,
+            "skip_gtm_push": false,
+            "required_params": [
+                "transaction_id",
+                "value",
+                "currency"
+            ],
+            "markers": {
+                "classes": [
+                    "weline-pixel::payment_success"
+                ],
+                "attrs": [
+                    "data-pixel-event=payment_success"
+                ]
+            },
+            "page_scopes": [
+                "payment"
+            ],
+            "label_zh": "支付成功"
+        },
+        {
+            "weline_event": "checkout_failure",
+            "ga4_event": "checkout_failure",
+            "google_recommended": false,
+            "event_family": "ecommerce",
+            "require_exact_marker": true,
+            "skip_gtm_push": false,
+            "required_params": [],
+            "markers": {
+                "classes": [
+                    "weline-pixel::checkout_failure"
+                ],
+                "attrs": [
+                    "data-pixel-event=checkout_failure"
+                ]
+            },
+            "page_scopes": [
+                "checkout"
+            ],
+            "label_zh": "结账失败"
+        },
+        {
+            "weline_event": "search_submit",
+            "ga4_event": "search",
+            "google_recommended": true,
+            "event_family": "search",
+            "require_exact_marker": false,
+            "skip_gtm_push": false,
+            "required_params": [
+                "search_term"
+            ],
+            "markers": {
+                "classes": [
+                    "weline-pixel::search_submit",
+                    "weline-pixel::search"
+                ],
+                "attrs": [
+                    "data-pixel-event=search_submit",
+                    "data-pixel-event=search"
+                ]
+            },
+            "page_scopes": [],
+            "label_zh": "搜索提交"
+        },
+        {
+            "weline_event": "search_suggestion_click",
+            "ga4_event": "select_content",
+            "google_recommended": true,
+            "event_family": "search",
+            "require_exact_marker": false,
+            "skip_gtm_push": false,
+            "required_params": [],
+            "markers": {
+                "classes": [
+                    "weline-pixel::search_suggestion_click"
+                ],
+                "attrs": [
+                    "data-pixel-event=search_suggestion_click"
+                ]
+            },
+            "page_scopes": [],
+            "label_zh": "搜索建议点击"
+        },
+        {
+            "weline_event": "route_click",
+            "ga4_event": "route_click",
+            "google_recommended": false,
+            "event_family": null,
+            "require_exact_marker": false,
+            "skip_gtm_push": false,
+            "required_params": [
+                "link_url"
+            ],
+            "markers": {
+                "classes": [
+                    "weline-pixel::route_click"
+                ],
+                "attrs": [
+                    "data-pixel-event=route_click"
+                ]
+            },
+            "page_scopes": [
+                "*"
+            ],
+            "label_zh": "路由/链接点击"
+        },
+        {
+            "weline_event": "lead_submit",
+            "label_zh": "线索提交",
+            "ga4_event": "generate_lead",
+            "google_recommended": true,
+            "event_family": "lead",
+            "require_exact_marker": false,
+            "skip_gtm_push": false,
+            "required_params": [],
+            "markers": {
+                "classes": [
+                    "weline-pixel::lead_submit"
+                ],
+                "attrs": [
+                    "data-pixel-event=lead_submit"
+                ]
+            },
+            "page_scopes": [
+                "*"
+            ]
+        },
+        {
+            "weline_event": "login",
+            "ga4_event": "login",
+            "google_recommended": true,
+            "event_family": "account",
+            "require_exact_marker": false,
+            "skip_gtm_push": false,
+            "required_params": [],
+            "markers": {
+                "classes": [
+                    "weline-pixel::login"
+                ],
+                "attrs": [
+                    "data-pixel-event=login"
+                ]
+            },
+            "page_scopes": [
+                "account"
+            ],
+            "label_zh": "登录成功"
+        },
+        {
+            "weline_event": "register",
+            "ga4_event": "sign_up",
+            "google_recommended": true,
+            "event_family": "account",
+            "require_exact_marker": false,
+            "skip_gtm_push": false,
+            "required_params": [],
+            "markers": {
+                "classes": [
+                    "weline-pixel::register"
+                ],
+                "attrs": [
+                    "data-pixel-event=register"
+                ]
+            },
+            "page_scopes": [
+                "account"
+            ],
+            "label_zh": "注册成功"
+        },
+        {
+            "weline_event": "site_error",
+            "ga4_event": "exception",
+            "google_recommended": false,
+            "event_family": "error",
+            "require_exact_marker": false,
+            "skip_gtm_push": true,
+            "required_params": [
+                "error_message"
+            ],
+            "markers": {
+                "classes": [
+                    "weline-pixel::site_error"
+                ],
+                "attrs": [
+                    "data-pixel-event=site_error"
+                ]
+            },
+            "page_scopes": [
+                "*"
+            ],
+            "label_zh": "站点异常"
+        }
+    ]
 }
