@@ -21,6 +21,10 @@ final class CheckoutShippingMethodsHomologyContractTest extends TestCase
         );
         self::assertStringContainsString('fulfillment_metadata', $src);
         self::assertStringContainsString('shipping_profile_code', $src);
+        self::assertStringContainsString("'scope' =>", $src);
+        self::assertStringContainsString('website_id', $src);
+        self::assertStringContainsString('store_id', $src);
+        self::assertStringContainsString('channel_id', $src);
         self::assertStringContainsString('当前地址下所选配送方案不可用', $src);
     }
 }

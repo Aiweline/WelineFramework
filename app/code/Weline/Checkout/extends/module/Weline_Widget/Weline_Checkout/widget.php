@@ -12,7 +12,7 @@ declare(strict_types=1);
 return [
     'checkout-storefront-slots' => [
         'name' => '结账页模块槽位',
-        'description' => '结账模块页模板槽目录：快捷支付、收货地址、优惠券、订单留言、成功页访客转化；供 Payment/Shipping/Marketing/Order/Customer 的 required default_injections 发现，禁止当作布局内容部件放置。',
+        'description' => '结账模块页模板槽目录：快捷支付、收货地址、优惠券、订单留言、批发信用、成功页访客转化；供 Payment/Shipping/Marketing/Order/B2B/Customer 的 required default_injections 发现，禁止当作布局内容部件放置。',
         'type' => 'container',
         'code' => 'checkout-storefront-slots',
         'area' => 'frontend',
@@ -56,6 +56,16 @@ return [
                     'checkout-summary-note',
                     'order-notice',
                     'order',
+                ],
+                'max' => 1,
+            ],
+            'checkout-summary-credit' => [
+                'name' => '结账批发信用',
+                'accepts' => [
+                    'checkout-summary-credit',
+                    'b2b-checkout-credit',
+                    'b2b-deposit-note',
+                    'b2b',
                 ],
                 'max' => 1,
             ],

@@ -1,4 +1,4 @@
-结账数据验证前,"Before Checkout Validation"
+﻿结账数据验证前,"Before Checkout Validation"
 在验证结账数据之前触发，允许其他模块修改验证数据或执行预处理操作。,"Triggered before validating checkout data, allowing other modules to modify validation data or perform preprocessing operations."
 结账数据验证后,"After Checkout Validation"
 在验证结账数据之后触发，允许其他模块根据验证结果执行后续操作。,"Triggered after validating checkout data, allowing other modules to perform follow-up operations based on validation results."
@@ -79,6 +79,8 @@
 客户端折扣金额被拒绝，请使用结账优惠券。,"Client discount amount was rejected. Please use a checkout coupon."
 请补全收货信息并选择配送和支付方式。,"Please complete the delivery information and select the delivery and payment method."
 该商品暂不可售。,"This product is currently unavailable for sale."
+当前收货地址暂不可配送，请更换地址后再下单。,"This delivery address cannot be shipped to. Please choose another address before placing the order."
+所选配送方式不可用，请重新选择配送方式。,"The selected shipping method is unavailable. Please choose another shipping method."
 订单创建成功,"Order created successfully"
 免邮,免邮
 前台结账,"Storefront checkout"
@@ -292,6 +294,7 @@ SKU,SKU
 优惠与留言,"Discounts and notes"
 结账优惠券,"Checkout coupon"
 结账订单留言,"Checkout order note"
+结账批发信用,结账批发信用
 应付合计,"Total payable"
 购物车中有不可结算的商品，请返回购物车移除后重试,购物车中有不可结算的商品，请返回购物车移除后重试
 请确认收货信息、配送方式和支付方式。,"Please confirm the delivery information, delivery method and payment method."
@@ -385,10 +388,13 @@ China,China
 已提交报价会话缺少冻结结果,"Submitted quote session is missing frozen results"
 批发结账禁止优惠与券,批发结账禁止优惠与券
 折扣报价已失效，请重新报价确认,"Discount quote expired. Please requote to confirm."
-当前支付方式不支持已选优惠方式：%{1},"The selected payment method does not support the chosen discount: %{1}"
+当前支付方式「%{1}」不支持已选优惠方式：%{2},当前支付方式「%{1}」不支持已选优惠方式：%{2}
 请选择国家/地区,"Please select a country/region"
 请选择配送地址,"Please select a shipping address"
 地址不存在,"Address not found"
+当前地址暂不可配送，请更换收货地址。,"This address cannot be shipped to. Please choose another delivery address."
+该地址所在地区暂不支持配送（禁运）。,"This address is in an embargoed area and cannot be shipped to."
+当前支付方式不支持已选优惠方式：%{1},"The selected payment method does not support the chosen discount: %{1}"
 暂无可用配送方式。,"There are currently no shipping methods available."
 "预计 %{1}-%{2} 天","Estimated %{1}-%{2} days"
 立即购买,"Buy Now"
