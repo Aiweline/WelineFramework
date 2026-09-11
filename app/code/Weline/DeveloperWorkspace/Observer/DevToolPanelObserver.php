@@ -537,8 +537,11 @@ HTML;
             $isWlsRuntime = Runtime::isWls();
             $versionMeta = $this->resolvePanelVersionMeta();
             $systemVersion = (string)($versionMeta['systemVersion'] ?? '');
+            $deployVersion = (string)($versionMeta['deployVersion'] ?? '');
             $themePublishedVersionId = (string)($versionMeta['themePublishedVersionId'] ?? '');
             $themePublishedVersion = (string)($versionMeta['themePublishedVersion'] ?? '');
+            $deployStampFile = BP . 'var' . DIRECTORY_SEPARATOR . 'deploy' . DIRECTORY_SEPARATOR . 'current.json';
+            $deployFileMtime = \is_file($deployStampFile) ? (string)\filemtime($deployStampFile) : '0';
             $cacheKey = sha1(json_encode([
                 'backend' => $isBackend,
                 'session' => $hasPanelSession,
@@ -546,6 +549,8 @@ HTML;
                 'runtime' => $runtimeMode,
                 'is_wls' => $isWlsRuntime,
                 'system_version' => $systemVersion,
+                'deploy_version' => $deployVersion,
+                'deploy_file_mtime' => $deployFileMtime,
                 'theme_published_version_id' => $themePublishedVersionId,
                 'theme_published_version' => $themePublishedVersion,
                 'shell' => $this->panelShellCacheSignature($templatePath),
@@ -611,7 +616,7 @@ HTML;
     }
 
     /**
-     * @return array{systemVersion:string,themePublishedVersionId:string,themePublishedVersion:string}
+     * @return array{systemVersion:string,deployVersion:string,themePublishedVersionId:string,themePublishedVersion:string}
      */
     private function resolvePanelVersionMeta(): array
     {
@@ -627,6 +632,43 @@ HTML;
             }
         } catch (\Throwable) {
             $systemVersion = 'unknown';
+        }
+
+        // Same source as Frontend runtime deployVersion / Weline.config.deployVersion.
+        $deployVersion = '';
+        try {
+            if (\class_exists(\Weline\Deploy\Service\DeployReleaseRuntimeService::class)) {
+                /** @var \Weline\Deploy\Service\DeployReleaseRuntimeService $deployRuntime */
+                $deployRuntime = ObjectManager::getInstance(
+                    \Weline\Deploy\Service\DeployReleaseRuntimeService::class
+                );
+                $deployVersion = \trim($deployRuntime->getDeployVersion());
+            }
+        } catch (\Throwable) {
+            $deployVersion = '';
+        }
+        if ($deployVersion === '') {
+            try {
+                $deployFile = BP . 'var' . DIRECTORY_SEPARATOR . 'deploy' . DIRECTORY_SEPARATOR . 'current.json';
+                if (\is_file($deployFile)) {
+                    $deployMeta = \json_decode((string)\file_get_contents($deployFile), true);
+                    if (\is_array($deployMeta)) {
+                        $deployVersion = \trim((string)($deployMeta['deploy_version'] ?? ''));
+                    }
+                }
+            } catch (\Throwable) {
+                $deployVersion = '';
+            }
+        }
+        if ($deployVersion === '') {
+            try {
+                $deployVersion = \trim((string)(Env::getInstance()->getConfig('deploy_version') ?? ''));
+            } catch (\Throwable) {
+                $deployVersion = '';
+            }
+        }
+        if ($deployVersion === '') {
+            $deployVersion = 'n/a';
         }
 
         $themePublishedVersionId = '';
@@ -648,6 +690,7 @@ HTML;
 
         return [
             'systemVersion' => $systemVersion,
+            'deployVersion' => $deployVersion,
             'themePublishedVersionId' => $themePublishedVersionId,
             'themePublishedVersion' => $themePublishedVersion,
         ];
