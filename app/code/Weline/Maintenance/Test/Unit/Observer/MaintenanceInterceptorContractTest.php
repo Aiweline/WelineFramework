@@ -41,4 +41,15 @@ final class MaintenanceInterceptorContractTest extends TestCase
         self::assertStringContainsString("'/maintenance/frontend/wait-gift'", $source);
         self::assertStringContainsString('WaitGiftService::COOKIE_GATE', $source);
     }
+
+    public function testBackendAreaAutoBypassesMaintenance(): void
+    {
+        $root = \dirname(__DIR__, 7);
+        $source = (string) \file_get_contents($root . '/app/code/Weline/Maintenance/Observer/MaintenanceInterceptor.php');
+
+        self::assertStringContainsString("\$area === 'backend' || \$area === 'rest_backend'", $source);
+        self::assertStringContainsString('X-Weline-Maintenance', $source);
+        self::assertStringContainsString('checkBackendPath($original_uri, $parse)', $source);
+        self::assertStringContainsString('UrlParser::parse($uri)', $source);
+    }
 }

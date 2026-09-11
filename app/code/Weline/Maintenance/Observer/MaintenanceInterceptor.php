@@ -439,7 +439,7 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
             }
         }
 
-        if ($this->checkBackendPath($pure_uri)) {
+        if ($this->checkBackendPath($original_uri, $parse)) {
             $this->logBypass('backend_path', $pure_uri);
             return false;
         }
@@ -472,21 +472,33 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
 
     /**
      * 检查是否为后端路径（维护模式下自动放行）
-     * 
-     * @param string $uri
+     *
+     * 对齐框架约定：后台 HTML（backend）与后台 REST（rest_backend）在维护期自动放行，
+     * 以便管理员操作；额外可配置 maintenance.bypass.backend_paths。
+     *
+     * @param string $uri 原始请求 URI（含区域前缀）
+     * @param array<string, mixed>|null $parse UrlParser::parse 结果
      * @return bool
      */
-    private function checkBackendPath(string $uri): bool
+    private function checkBackendPath(string $uri, ?array $parse = null): bool
     {
+        $area = is_array($parse) ? (string)($parse['area'] ?? '') : '';
+        if ($area === '') {
+            $area = (string)(UrlParser::parse($uri)['area'] ?? '');
+        }
+        if ($area === 'backend' || $area === 'rest_backend') {
+            return true;
+        }
+
         $bypassConfig = Env::getInstance()->getConfig('maintenance.bypass', []);
         $backendPaths = $bypassConfig['backend_paths'] ?? [];
-        
+
         if (empty($backendPaths) || !is_array($backendPaths)) {
             return false;
         }
 
         foreach ($backendPaths as $path) {
-            if (!empty($path) && str_starts_with($uri, $path)) {
+            if (!empty($path) && (str_starts_with($uri, (string)$path) || str_contains($uri, (string)$path))) {
                 return true;
             }
         }
@@ -722,6 +734,7 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
                 'Cache-Control' => 'no-store, no-cache, must-revalidate',
                 'Pragma' => 'no-cache',
                 'Expires' => '0',
+                'X-Weline-Maintenance' => '1',
                 'Set-Cookie' => $setCookie,
             ]
         );
