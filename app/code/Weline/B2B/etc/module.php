@@ -4,19 +4,24 @@ declare(strict_types=1);
 
 return [
     'name' => 'Weline_B2B',
-    'version' => '2.6.20',
+    'version' => '2.6.52',
     'requires' => [
         'Weline_Backend' => '*',
         'Weline_Framework' => '*',
+        'Weline_I18n' => '*',
         'Weline_SystemConfig' => '*',
         'Weline_Websites' => '*',
     ],
-    'optional' => [
+        'optional' => [
         'Weline_Customer' => '*',
         'Weline_Product' => '*',
         'Weline_Cart' => '*',
         'Weline_Checkout' => '*',
         'Weline_Order' => '*',
+        'Weline_CustomerAsset' => '*',
+        'Weline_Cron' => '*',
+        'Weline_Payment' => '*',
+        'Weline_Currency' => '*',
     ],
     'provides' => [
         \Weline\B2B\Api\B2BPriceCandidateInterface::class
@@ -27,5 +32,7 @@ return [
             => \Weline\B2B\Service\CommerceTypeMembershipChecker::class,
         \Weline\Cart\Api\CommerceCartQtyPolicyInterface::class
             => \Weline\B2B\Service\B2BCartQtyPolicy::class,
+        'payment.asset_policy.Weline_B2B'
+            => \Weline\B2B\Service\B2BPaymentAssetPolicyProvider::class,
     ],
 ];

@@ -156,7 +156,33 @@
     margin-bottom: 12px;
 }
 
+.b2b-selling-mode__guest-lead {
+    margin: 0;
+    font-size: var(--weline-font-size-sm, 14px);
+    line-height: 1.45;
+    font-weight: 550;
+    color: var(--weline-theme-text, var(--color-text-primary, #0f1111));
+}
+
 .b2b-selling-mode__guest-gate[hidden],
+
+.b2b-membership-apply,
+.b2b-account-identity-apply {
+    display: grid;
+    gap: var(--weline-space-4, 1rem);
+}
+
+.b2b-membership-apply .w-field,
+.b2b-account-identity-apply .w-field {
+    gap: 0;
+    --weline-theme-field-label-bg: var(--weline-theme-surface-raised, var(--weline-theme-surface, #fff));
+}
+
+.b2b-membership-apply .w-field__control,
+.b2b-account-identity-apply .w-field__control {
+    display: block;
+}
+
 .b2b-membership-apply[hidden],
 .b2b-membership-apply-wrap[hidden] {
     display: none !important;
@@ -201,6 +227,7 @@
     min-height: var(--weline-control-height, 2.5rem);
 }
 
+/* Top ToB wholesale-order banner (summary-before). */
 .weline-checkout .b2b-checkout-deposit-note,
 .b2b-checkout-deposit-note {
     display: grid;
@@ -220,13 +247,147 @@
     background: var(--weline-theme-primary, var(--color-primary));
     color: var(--weline-theme-on-primary, var(--color-on-primary));
     border-color: transparent;
+    justify-self: start;
 }
 
 .b2b-checkout-deposit-note > p {
     margin: 0;
 }
 
+/* Credit extras tab: flat panel, no wholesale-order card chrome. */
+.weline-checkout .w-b2b-checkout-credit,
+.w-b2b-checkout-credit {
+    display: grid;
+    gap: var(--weline-theme-space-2, var(--weline-space-2, 0.5rem));
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--weline-theme-text, var(--color-text-primary, inherit));
+    font-size: var(--weline-font-size-sm, 13px);
+}
+
+.weline-checkout .w-b2b-checkout-credit__body,
+.weline-checkout .b2b-checkout-credit,
+.b2b-checkout-credit {
+    display: grid;
+    gap: var(--weline-theme-space-2, var(--weline-space-2, 0.5rem));
+    min-width: 0;
+}
+
+.weline-checkout .w-b2b-checkout-credit__row,
+.w-b2b-checkout-credit__row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--weline-theme-space-2, var(--weline-space-2, 0.5rem));
+    min-width: 0;
+}
+
+.weline-checkout .w-b2b-checkout-credit__toggle,
+.w-b2b-checkout-credit__toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--weline-theme-space-2, var(--weline-space-2, 0.5rem));
+    margin: 0;
+    min-width: 0;
+    cursor: pointer;
+}
+
+.weline-checkout .w-b2b-checkout-credit__toggle input,
+.w-b2b-checkout-credit__toggle input {
+    flex: 0 0 auto;
+}
+
+/* Quiet help glyph — not a link, not a solid chip. */
+.weline-checkout .w-b2b-checkout-credit__help,
+.w-b2b-checkout-credit__help {
+    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    padding: 0;
+    min-width: 1.1em;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    color: var(--weline-theme-text-muted, var(--color-text-muted, inherit));
+    font: inherit;
+    font-size: 0.95em;
+    line-height: 1;
+    text-decoration: none;
+    cursor: help;
+    opacity: 0.75;
+}
+
+.weline-checkout .w-b2b-checkout-credit__help:hover,
+.weline-checkout .w-b2b-checkout-credit__help:focus-visible,
+.w-b2b-checkout-credit__help:hover,
+.w-b2b-checkout-credit__help:focus-visible {
+    opacity: 1;
+    color: var(--weline-theme-text, var(--color-text-primary, inherit));
+    outline: none;
+}
+
+/* In-place reason under checkbox — never fade with disabled controls. */
+.weline-checkout .w-b2b-checkout-credit__reason,
+.w-b2b-checkout-credit__reason {
+    margin: 0;
+    padding: 0;
+    color: var(--weline-theme-text, var(--color-text-primary, inherit));
+    font-weight: var(--weline-font-weight-medium, 500);
+    line-height: 1.45;
+    opacity: 1;
+}
+
+.weline-checkout .w-b2b-checkout-credit__amount,
+.w-b2b-checkout-credit__amount {
+    display: grid;
+    gap: var(--weline-theme-space-1, var(--weline-space-1, 0.25rem));
+    min-width: 0;
+}
+
+.weline-checkout .w-b2b-checkout-credit__amount-label,
+.w-b2b-checkout-credit__amount-label {
+    margin: 0;
+    color: var(--weline-theme-text-muted, var(--color-text-muted, inherit));
+}
+
+.weline-checkout .w-b2b-checkout-credit__amount-input,
+.w-b2b-checkout-credit__amount-input {
+    width: 100%;
+    max-width: none;
+    box-sizing: border-box;
+}
+
+.weline-checkout .w-b2b-checkout-credit__links,
+.w-b2b-checkout-credit__links {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--weline-theme-space-3, var(--weline-space-3, 0.75rem));
+}
+
+.weline-checkout .w-b2b-checkout-credit.is-toc-unavailable .w-b2b-checkout-credit__toggle,
+.weline-checkout .w-b2b-checkout-credit.is-toc-unavailable .w-b2b-checkout-credit__amount,
+.w-b2b-checkout-credit.is-toc-unavailable .w-b2b-checkout-credit__toggle,
+.w-b2b-checkout-credit.is-toc-unavailable .w-b2b-checkout-credit__amount {
+    opacity: 0.55;
+}
+
+.weline-checkout .w-b2b-checkout-credit.is-toc-unavailable .w-b2b-checkout-credit__reason,
+.weline-checkout .w-b2b-checkout-credit.is-toc-unavailable .w-b2b-checkout-credit__links,
+.w-b2b-checkout-credit.is-toc-unavailable .w-b2b-checkout-credit__reason,
+.w-b2b-checkout-credit.is-toc-unavailable .w-b2b-checkout-credit__links {
+    opacity: 1;
+    pointer-events: auto;
+}
+
 .b2b-checkout-deposit-note[hidden],
+.w-b2b-checkout-credit[hidden],
 .b2b-account-hang[hidden] {
     display: none !important;
 }

@@ -19,5 +19,7 @@
               action="b2b/backend/controlcenter/hangorders" icon="clock" order="47"/>
         <menu source="Weline_B2B::commerce:partner:migration" name="b2b_migration" title="迁移状态"
               action="b2b/backend/controlcenter/migration" icon="eye" order="50"/>
+        <menu source="Weline_B2B::config" name="b2b_selling_mode_config" title="批发配置"
+              action="*/backend/config" icon="settings" order="60"/>
     </menu>
 </menus>

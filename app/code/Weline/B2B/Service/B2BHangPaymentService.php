@@ -36,6 +36,24 @@ final class B2BHangPaymentService
         $amountMinor = $purpose === B2BHangOrderService::PURPOSE_DEPOSIT
             ? $hang->depositAmountMinor
             : $hang->balanceAmountMinor;
+        $fullDeposit = $hang->depositAmountMinor;
+        $cashDeposit = $fullDeposit;
+        $creditApply = 0;
+        $currency = 'CNY';
+        try {
+            $read = $this->orders()->get($hang->orderRef);
+            $currency = strtoupper((string)($read->currency ?: $currency));
+            $tp = $read->typePayload;
+            if ($purpose === B2BHangOrderService::PURPOSE_DEPOSIT
+                && array_key_exists('b2b_credit_cash_deposit_minor', $tp)
+            ) {
+                $cashDeposit = max(0, (int)$tp['b2b_credit_cash_deposit_minor']);
+                $amountMinor = $cashDeposit;
+                $creditApply = max(0, (int)($tp['b2b_credit_apply_checkout_minor'] ?? 0));
+            }
+        } catch (\Throwable) {
+            // Fall back to hang full deposit.
+        }
 
         return [
             'success' => true,
@@ -44,9 +62,11 @@ final class B2BHangPaymentService
             'purpose' => $purpose,
             'hang_status' => $hang->hangStatus,
             'amount_minor' => $amountMinor,
-            'deposit_amount_minor' => $hang->depositAmountMinor,
+            'deposit_amount_minor' => $fullDeposit,
+            'b2b_credit_cash_deposit_minor' => $cashDeposit,
+            'b2b_credit_apply_checkout_minor' => $creditApply,
             'balance_amount_minor' => $hang->balanceAmountMinor,
-            'currency' => 'CNY',
+            'currency' => $currency,
             'label' => $purpose === B2BHangOrderService::PURPOSE_DEPOSIT
                 ? (string)__('支付定金')
                 : (string)__('支付尾款'),
@@ -78,7 +98,6 @@ final class B2BHangPaymentService
         $payContext = [
             'purpose' => $purpose,
             'hang_purpose' => $purpose,
-            'deposit_amount_minor' => $hang->depositAmountMinor,
             'balance_amount_minor' => $hang->balanceAmountMinor,
             'country_code' => (string)($context['country_code'] ?? ''),
             'locale' => (string)($context['locale'] ?? ''),
@@ -86,6 +105,19 @@ final class B2BHangPaymentService
             'quote_token' => (string)($context['quote_token'] ?? ''),
             'checkout_token' => (string)($context['checkout_token'] ?? $context['quote_token'] ?? ''),
         ];
+        // Prefer order type_payload cash deposit; do not force full hang deposit.
+        if ($purpose === B2BHangOrderService::PURPOSE_DEPOSIT) {
+            try {
+                $tp = $this->orders()->get($hang->orderRef)->typePayload;
+                if (array_key_exists('b2b_credit_cash_deposit_minor', $tp)) {
+                    $payContext['deposit_amount_minor'] = max(0, (int)$tp['b2b_credit_cash_deposit_minor']);
+                } else {
+                    $payContext['deposit_amount_minor'] = $hang->depositAmountMinor;
+                }
+            } catch (\Throwable) {
+                $payContext['deposit_amount_minor'] = $hang->depositAmountMinor;
+            }
+        }
 
         $payment = $this->payments()->pay(
             [$hang->orderRef],
