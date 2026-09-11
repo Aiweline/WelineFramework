@@ -46,7 +46,22 @@ final class LocalModelTranslationCronContractTest extends TestCase
             dirname(__DIR__, 4) . '/Service/LocalModelTranslation/LocalModelTranslationQueueService.php',
         );
         self::assertStringContainsString('findActiveFamilyQueueId', $queueService);
+        self::assertStringContainsString('isLiveActiveQueueRow', $queueService);
+        self::assertStringContainsString('posix_kill', $queueService);
         self::assertStringContainsString('function enqueueContinuation', $queueService);
         self::assertStringContainsString('collectWorkItems(0, 1)', $queueService);
+        $enqueueStart = strpos($queueService, 'public function enqueue(');
+        $enqueueEnd = strpos($queueService, 'public function enqueueContinuation');
+        self::assertNotFalse($enqueueStart);
+        self::assertNotFalse($enqueueEnd);
+        $enqueueBody = substr($queueService, $enqueueStart, $enqueueEnd - $enqueueStart);
+        self::assertLessThan(
+            strpos($enqueueBody, 'collectWorkItems(0, 1)'),
+            strpos($enqueueBody, 'findActiveFamilyQueueId'),
+        );
+        self::assertStringNotContainsString("__('", $cron);
+        self::assertStringContainsString('getActiveModules()', (string)file_get_contents(
+            dirname(__DIR__, 4) . '/Service/LocalModelTranslation/LocalModelTranslationCatalog.php',
+        ));
     }
 }

@@ -100,11 +100,12 @@ final class TaglibLocalFormService
 
             $existing = $rowsByCode[$code] ?? [];
             $storedValue = trim((string)($existing[$field] ?? ''));
+            $isFilled = $storedValue !== '' && !I18nCsvCodec::isJunkTranslation($storedValue);
 
             $locales[] = [
                 'local_code' => $code,
                 'value' => $storedValue,
-                'filled' => $storedValue !== '',
+                'filled' => $isFilled,
                 'is_base' => $baseLocale !== '' && strcasecmp($code, $baseLocale) === 0,
                 'local' => [
                     'code' => $code,
@@ -182,7 +183,7 @@ final class TaglibLocalFormService
             $localeRows[] = [
                 'local_code' => $code,
                 'value' => $stored,
-                'filled' => $stored !== '',
+                'filled' => $stored !== '' && !I18nCsvCodec::isJunkTranslation($stored),
             ];
         }
         $effective = $this->resolveEffectiveSource($localeRows, $baseLocale, $value);
@@ -228,7 +229,7 @@ final class TaglibLocalFormService
             }
 
             $translation = trim((string)($result['translations'][$sourceText] ?? ''));
-            if ($translation === '') {
+            if ($translation === '' || I18nCsvCodec::isJunkTranslation($translation)) {
                 continue;
             }
 
@@ -514,7 +515,7 @@ final class TaglibLocalFormService
             $localeRows[] = [
                 'local_code' => $code,
                 'value' => $stored,
-                'filled' => $stored !== '',
+                'filled' => $stored !== '' && !I18nCsvCodec::isJunkTranslation($stored),
             ];
         }
         $effective = $this->resolveEffectiveSource($localeRows, $baseLocale, $sourceValue);
@@ -578,7 +579,7 @@ final class TaglibLocalFormService
     private function isRealTranslation(string $stored, string $sourceText): bool
     {
         $stored = trim($stored);
-        if ($stored === '') {
+        if ($stored === '' || I18nCsvCodec::isJunkTranslation($stored)) {
             return false;
         }
 
@@ -736,7 +737,7 @@ final class TaglibLocalFormService
                 }
                 $code = trim((string)($row['local_code'] ?? ''));
                 $text = trim((string)($row['value'] ?? ''));
-                if ($code !== '' && strcasecmp($code, $baseLocale) === 0 && $text !== '') {
+                if ($code !== '' && strcasecmp($code, $baseLocale) === 0 && $text !== '' && !I18nCsvCodec::isJunkTranslation($text)) {
                     return ['locale' => $code, 'text' => $text, 'fallback' => false];
                 }
             }
@@ -748,7 +749,7 @@ final class TaglibLocalFormService
             }
             $code = trim((string)($row['local_code'] ?? ''));
             $text = trim((string)($row['value'] ?? ''));
-            if ($code !== '' && $text !== '') {
+            if ($code !== '' && $text !== '' && !I18nCsvCodec::isJunkTranslation($text)) {
                 $isFallback = $baseLocale === '' || strcasecmp($code, $baseLocale) !== 0;
 
                 return ['locale' => $code, 'text' => $text, 'fallback' => $isFallback];

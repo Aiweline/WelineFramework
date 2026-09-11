@@ -35,25 +35,26 @@ final class LocalModelTranslationQueueService
             return 0;
         }
 
-        // Anti-starve: do not occupy a LocalModel queue/worker slot when nothing is pending.
-        // An empty runner must not burn the model channel while dictionary/Meta still have work.
-        if ($this->localModelTranslationService->collectWorkItems(0, 1) === []) {
-            return 0;
-        }
-
         $bizKey = $this->buildBizKey();
         if (!$force) {
             // Continuations use "base:offset:N". Exact getByBizKey(base)
             // must not miss them or cron will spawn parallel offset=0 chains.
+            // Check active family before collectWorkItems to avoid expensive LocalModel scans.
             $activeId = $this->findActiveFamilyQueueId($bizKey);
             if ($activeId > 0) {
                 return $activeId;
             }
         }
 
+        // Anti-starve: do not occupy a LocalModel queue/worker slot when nothing is pending.
+        // An empty runner must not burn the model channel while dictionary/Meta still have work.
+        if ($this->localModelTranslationService->collectWorkItems(0, 1) === []) {
+            return 0;
+        }
+
         return $this->admission->admit([
             'class' => LocalModelTranslationQueue::class,
-            'name' => (string)__('LocalModel 多语言 AI 翻译'),
+            'name' => 'LocalModel 多语言 AI 翻译',
             'module' => 'Weline_I18n',
             'content' => [
                 'offset' => 0,
@@ -75,7 +76,7 @@ final class LocalModelTranslationQueueService
 
         return $this->admission->admit([
             'class' => LocalModelTranslationQueue::class,
-            'name' => (string)__('LocalModel 多语言 AI 翻译'),
+            'name' => 'LocalModel 多语言 AI 翻译',
             'module' => 'Weline_I18n',
             'content' => [
                 'offset' => $offset,
@@ -97,7 +98,7 @@ final class LocalModelTranslationQueueService
         }
 
         $exact = $this->getLatestQueueByBizKey($baseBizKey);
-        if ($exact && in_array((string)($exact['status'] ?? ''), [TaskStatus::PENDING, TaskStatus::RUNNING], true)) {
+        if ($exact && $this->isLiveActiveQueueRow($exact)) {
             return (int)($exact['queue_id'] ?? 0);
         }
 
@@ -108,15 +109,95 @@ final class LocalModelTranslationQueueService
                 ->where(Queue::schema_fields_BIZ_KEY, $baseBizKey . ':offset:%', 'LIKE')
                 ->where(Queue::schema_fields_status, [TaskStatus::PENDING, TaskStatus::RUNNING], 'IN')
                 ->order(Queue::schema_fields_ID, 'DESC')
-                ->limit(1)
+                ->limit(5)
                 ->select()
                 ->fetchArray();
-            $row = is_array($rows[0] ?? null) ? $rows[0] : [];
+            foreach (is_array($rows) ? $rows : [] as $row) {
+                if (!is_array($row) || !$this->isLiveActiveQueueRow($row)) {
+                    continue;
+                }
 
-            return (int)($row[Queue::schema_fields_ID] ?? 0);
+                return (int)($row[Queue::schema_fields_ID] ?? 0);
+            }
+
+            return 0;
         } catch (\Throwable) {
             return 0;
         }
+    }
+
+    /**
+     * Pending is always active. Running counts only while the worker PID is still alive;
+     * dead-PID "running" rows must not block cron/EAV re-enqueue (reconcile may lag).
+     *
+     * @param array<string, mixed> $row
+     */
+    private function isLiveActiveQueueRow(array $row): bool
+    {
+        $status = (string)($row['status'] ?? '');
+        if ($status === TaskStatus::PENDING) {
+            return true;
+        }
+        if ($status !== TaskStatus::RUNNING) {
+            return false;
+        }
+
+        $pid = (int)($row[Queue::schema_fields_pid] ?? $row['pid'] ?? 0);
+        if ($pid <= 0) {
+            return false;
+        }
+        if (\function_exists('posix_kill')) {
+            return @\posix_kill($pid, 0);
+        }
+
+        // Best-effort fallback when posix is unavailable.
+        $out = [];
+        $code = 1;
+        @\exec('ps -p ' . $pid . ' -o pid=', $out, $code);
+
+        return $code === 0 && $out !== [];
+    }
+
+    /**
+     * Latest LocalModel queue row for admin progress (base or newest offset continuation).
+     *
+     * @return array<string, mixed>|null
+     */
+    public function getLatestFamilyQueue(string $baseBizKey = ''): ?array
+    {
+        $baseBizKey = trim($baseBizKey !== '' ? $baseBizKey : $this->buildBizKey());
+        if ($baseBizKey === '') {
+            return null;
+        }
+
+        $exact = $this->getLatestQueueByBizKey($baseBizKey);
+        $best = $exact;
+        $bestId = is_array($exact) ? (int)($exact['queue_id'] ?? $exact['id'] ?? 0) : 0;
+
+        try {
+            /** @var Queue $queue */
+            $queue = ObjectManager::getInstance(Queue::class);
+            $rows = $queue->clearData()->reset()
+                ->where(Queue::schema_fields_BIZ_KEY, $baseBizKey . '%', 'LIKE')
+                ->order(Queue::schema_fields_ID, 'DESC')
+                ->limit(8)
+                ->select()
+                ->fetchArray();
+            foreach (is_array($rows) ? $rows : [] as $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+                $id = (int)($row[Queue::schema_fields_ID] ?? 0);
+                if ($id > $bestId) {
+                    $bestId = $id;
+                    $best = $row;
+                    $best['queue_id'] = $id;
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        return is_array($best) ? $best : null;
     }
 
     /**

@@ -50,7 +50,8 @@ class AiTranslation implements CronTaskInterface
 
         try {
             if (!$this->config->isEnabled()) {
-                return (string)__('I18n AI 自动翻译未启用，cron 已跳过');
+                // Hot path: plain strings — avoid Phrase loading generated/language/*.php.
+                return 'I18n AI 自动翻译未启用，cron 已跳过';
             }
 
             // Heal gaps: install website-union locales and force-enable them before enqueue.
@@ -58,7 +59,7 @@ class AiTranslation implements CronTaskInterface
 
             $enabledLocales = $this->config->getEnabledLocaleCodes();
             if ($enabledLocales === []) {
-                return (string)__('没有启用的 AI 翻译语言（含多网站语言并集）');
+                return '没有启用的 AI 翻译语言（含多网站语言并集）';
             }
 
             $queueIds = $this->queueService->enqueueEnabledLocales('cron', false);
@@ -66,26 +67,23 @@ class AiTranslation implements CronTaskInterface
             $duration = round(microtime(true) - $startTime, 2);
 
             if ($queueIds === [] && $localModelQueueId <= 0) {
-                return (string)__(
-                    '所有启用语言与 LocalModel 翻译队列均已有待运行/运行中任务，cron 未重复入队（耗时 %{1} 秒）',
-                    [$duration],
-                );
+                return '所有启用语言与 LocalModel 翻译队列均已有待运行/运行中任务，cron 未重复入队（耗时 '
+                    . $duration . ' 秒）';
             }
 
             $lines = [];
             foreach ($queueIds as $localeCode => $queueId) {
-                $lines[] = (string)__('词典 %{1}: 队列 #%{2}', [$localeCode, $queueId]);
+                $lines[] = '词典 ' . $localeCode . ': 队列 #' . $queueId;
             }
             if ($localModelQueueId > 0) {
-                $lines[] = (string)__('LocalModel: 队列 #%{1}', [$localModelQueueId]);
+                $lines[] = 'LocalModel: 队列 #' . $localModelQueueId;
             }
 
-            return (string)__(
-                "AI 翻译 cron 入队完成 - 词典语言数: %{1}, LocalModel: %{2}, 耗时: %{3} 秒\n%{4}",
-                [count($queueIds), $localModelQueueId > 0 ? '1' : '0', $duration, implode("\n", $lines)],
-            );
+            return 'AI 翻译 cron 入队完成 - 词典语言数: ' . count($queueIds)
+                . ', LocalModel: ' . ($localModelQueueId > 0 ? '1' : '0')
+                . ', 耗时: ' . $duration . " 秒\n" . implode("\n", $lines);
         } catch (\Throwable $throwable) {
-            return (string)__('AI批量翻译异常: %{1}', [$throwable->getMessage()]);
+            return 'AI批量翻译异常: ' . $throwable->getMessage();
         }
     }
 
