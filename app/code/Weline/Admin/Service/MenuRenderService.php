@@ -292,6 +292,27 @@ class MenuRenderService
 
         return $segments;
     }
+
+    /**
+     * 菜单激活比较时忽略段内连字符大小写差异。
+     *
+     * 路由常同时注册 control-center 与 controlcenter 等别名；地址栏与菜单 href
+     * 可能各用一种写法，比较前去掉 `-` 并小写，避免侧栏无法高亮与自动展开。
+     */
+    private function canonicalizeRouteKey(string $url): string
+    {
+        $segments = \array_values(\array_filter(
+            \explode('/', \trim($url, '/')),
+            static fn(string $segment): bool => $segment !== '',
+        ));
+        $segments = \array_map(
+            static fn(string $segment): string => \strtolower(\str_replace('-', '', $segment)),
+            $segments,
+        );
+
+        return \implode('/', $segments);
+    }
+
     /**
      * 检查菜单 URL 是否匹配当前 URL
      * 
@@ -310,24 +331,27 @@ class MenuRenderService
             return false;
         }
 
-        if ($menuUrl === $currentUrl) {
+        $menuKey = $this->canonicalizeRouteKey($menuUrl);
+        $currentKey = $this->canonicalizeRouteKey($currentUrl);
+
+        if ($menuKey === $currentKey) {
             $this->menuUrlActiveCache[$menuUrl] = true;
             return true;
         }
 
-        if (!empty($menuUrl) && strpos($currentUrl, $menuUrl) === 0) {
-            $nextChar = substr($currentUrl, strlen($menuUrl), 1);
-            if (empty($nextChar) || $nextChar === '/') {
+        if ($menuKey !== '' && str_starts_with($currentKey, $menuKey)) {
+            $nextChar = substr($currentKey, strlen($menuKey), 1);
+            if ($nextChar === '' || $nextChar === '/') {
                 $this->menuUrlActiveCache[$menuUrl] = true;
                 return true;
             }
         }
 
-        if (str_ends_with($menuUrl, '/index')) {
-            $controllerUrl = substr($menuUrl, 0, -strlen('/index'));
+        if (str_ends_with($menuKey, '/index')) {
+            $controllerKey = substr($menuKey, 0, -strlen('/index'));
             // 当前路由常为 …/controller（省略 /index），须与菜单 …/controller/index 对齐
-            if ($controllerUrl !== ''
-                && ($currentUrl === $controllerUrl || str_starts_with($currentUrl, $controllerUrl . '/'))
+            if ($controllerKey !== ''
+                && ($currentKey === $controllerKey || str_starts_with($currentKey, $controllerKey . '/'))
             ) {
                 $this->menuUrlActiveCache[$menuUrl] = true;
                 return true;
