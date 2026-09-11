@@ -5,4 +5,7 @@
     <menu source="Weline_Faq::page" name="help_page" title="帮助中心"
           action="faq/backend/page/listing" parent="Weline_Backend::cms_group"
           icon="faq-circle" order="25"/>
+    <menu source="Weline_Faq::item" name="faq_item" title="FAQ 条目"
+          action="faq/backend/item/listing" parent="Weline_Backend::cms_group"
+          icon="mdi-help-circle-outline" order="26"/>
 </menus>
