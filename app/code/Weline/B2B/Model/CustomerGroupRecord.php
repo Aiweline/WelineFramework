@@ -31,6 +31,24 @@ class CustomerGroupRecord extends Model
     #[Col('varchar', 64, nullable: false, comment: 'Website-scoped group code')]
     public const schema_fields_CODE = 'code';
 
+    #[Col('varchar', 128, nullable: false, default: '', comment: 'Display name (renameable)')]
+    public const schema_fields_NAME = 'name';
+
+    #[Col('tinyint', 1, nullable: false, default: 0, comment: '1=system protected (non-deletable)')]
+    public const schema_fields_IS_SYSTEM = 'is_system';
+
+    #[Col('text', nullable: true, comment: 'Level description / capability notes')]
+    public const schema_fields_DESCRIPTION = 'description';
+
+    #[Col('bigint', 20, nullable: false, default: 0, comment: 'Target b2b_credit grant minor units')]
+    public const schema_fields_CREDIT_LIMIT_MINOR = 'credit_limit_minor';
+
+    #[Col('bigint', 20, nullable: false, default: 0, comment: 'Spend threshold minor for auto-upgrade')]
+    public const schema_fields_SPEND_THRESHOLD_MINOR = 'spend_threshold_minor';
+
+    #[Col('int', 11, nullable: false, default: -1, comment: 'System VIP tier 0-12; -1=non-ladder')]
+    public const schema_fields_TIER_RANK = 'tier_rank';
+
     #[Col('varchar', 16, nullable: false, default: 'active', comment: 'active|disabled')]
     public const schema_fields_STATUS = 'status';
 

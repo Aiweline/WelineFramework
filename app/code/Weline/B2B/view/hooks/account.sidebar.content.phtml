@@ -10,8 +10,11 @@
  */
 use Weline\B2B\Model\CustomerGroup;
 use Weline\B2B\Model\MembershipApplicationRecord;
+use Weline\B2B\Service\AccountMembershipTierPresenter;
+use Weline\B2B\Service\B2BBaseCurrencyResolver;
 use Weline\B2B\Service\CustomerGroupStore;
 use Weline\B2B\Service\MembershipApplicationService;
+use Weline\B2B\Service\MembershipStatusProjection;
 use Weline\Customer\Api\View\AccountSidebarProjectionProviderInterface;
 use Weline\Customer\Model\Customer;
 use Weline\Customer\Service\AccountSidebarContentGate;
@@ -50,7 +53,27 @@ $loggedIn = $customerId > 0;
 
 $group = null;
 $application = null;
+$snap = [
+    'ui_state' => MembershipStatusProjection::UI_NEED_LOGIN,
+    'application_status' => null,
+    'should_poll' => false,
+    'can_submit' => false,
+    'membership_active' => false,
+];
 if ($loggedIn) {
+    try {
+        /** @var MembershipStatusProjection $projection */
+        $projection = ObjectManager::getInstance(MembershipStatusProjection::class);
+        $snap = $projection->snapshot((string)$customerId, $websiteId);
+    } catch (\Throwable) {
+        $snap = [
+            'ui_state' => MembershipStatusProjection::UI_CAN_APPLY,
+            'application_status' => null,
+            'should_poll' => false,
+            'can_submit' => true,
+            'membership_active' => false,
+        ];
+    }
     try {
         /** @var CustomerGroupStore $groups */
         $groups = ObjectManager::getInstance(CustomerGroupStore::class);
@@ -67,28 +90,73 @@ if ($loggedIn) {
     }
 }
 
-$hasMembership = $group instanceof CustomerGroup && $group->isActive();
-$appStatus = is_array($application) ? (string)($application['status'] ?? '') : '';
-$canApply = $loggedIn && !$hasMembership && $appStatus !== MembershipApplicationRecord::STATUS_PENDING;
+$hasMembership = !empty($snap['membership_active']);
+$uiState = (string)($snap['ui_state'] ?? MembershipStatusProjection::UI_CAN_APPLY);
+$appStatus = (string)($snap['application_status'] ?? '');
+$canApply = $loggedIn && !empty($snap['can_submit']);
+$shouldPoll = !empty($snap['should_poll']);
 
-$statusLabel = static function (?array $application, bool $hasMembership): string {
-    if ($hasMembership) {
-        return (string)__('已开通');
+$tierView = [
+    'has_membership' => false,
+    'group_id' => '',
+    'group_name' => '',
+    'group_code' => '',
+    'description' => '',
+    'credit_limit_minor' => 0,
+    'spend_threshold_minor' => 0,
+    'spend_minor' => 0,
+    'benefits' => [],
+    'next' => null,
+];
+$currencyCode = 'CNY';
+$creditWalletMinor = 0;
+if ($loggedIn) {
+    try {
+        $tierView = ObjectManager::getInstance(AccountMembershipTierPresenter::class)
+            ->present((string)$customerId, $websiteId);
+    } catch (\Throwable) {
     }
-    $status = is_array($application) ? (string)($application['status'] ?? '') : '';
-    return match ($status) {
-        MembershipApplicationRecord::STATUS_PENDING => (string)__('审核中'),
-        MembershipApplicationRecord::STATUS_APPROVED => (string)__('已批准'),
-        MembershipApplicationRecord::STATUS_REJECTED => (string)__('已驳回'),
-        default => (string)__('未申请'),
-    };
+    try {
+        $currencyCode = (new B2BBaseCurrencyResolver())->forWebsite($websiteId);
+    } catch (\Throwable) {
+        $currencyCode = 'CNY';
+    }
+    try {
+        if (interface_exists(\Weline\CustomerAsset\Api\CustomerAssetFacadeInterface::class)) {
+            /** @var \Weline\CustomerAsset\Api\CustomerAssetFacadeInterface $assets */
+            $assets = ObjectManager::getInstance(\Weline\CustomerAsset\Api\CustomerAssetFacadeInterface::class);
+            $bal = $assets->getBalance(
+                (string)$customerId,
+                $websiteId,
+                \Weline\B2B\Model\SystemVipLadder::ASSET_CODE_B2B_CREDIT,
+            );
+            $creditWalletMinor = max(0, (int)($bal['reservable_minor'] ?? $bal['available_minor'] ?? 0));
+        }
+    } catch (\Throwable) {
+        $creditWalletMinor = 0;
+    }
+}
+$formatMajor = static function (int $minor) use ($escape): string {
+    return $escape(number_format(max(0, $minor) / 100, 2, '.', ''));
 };
 
-$badgeTone = $hasMembership
-    ? 'success'
-    : ($appStatus === MembershipApplicationRecord::STATUS_PENDING
-        ? 'warning'
-        : ($appStatus === MembershipApplicationRecord::STATUS_REJECTED ? 'danger' : 'neutral'));
+$statusLabel = static function (array $snap): string {
+    /** @var MembershipStatusProjection $p */
+    try {
+        $p = ObjectManager::getInstance(MembershipStatusProjection::class);
+        return $p->statusLabel($snap);
+    } catch (\Throwable) {
+        return (string)__('未申请');
+    }
+};
+
+$badgeTone = match ($uiState) {
+    MembershipStatusProjection::UI_ACTIVE => 'success',
+    MembershipStatusProjection::UI_PENDING => 'warning',
+    MembershipStatusProjection::UI_REJECTED,
+    MembershipStatusProjection::UI_INACTIVE => 'danger',
+    default => 'neutral',
+};
 
 $formId = 'b2b-account-identity-apply';
 // Storefront root — avoid Template::getUrl resolving to the account route.
@@ -103,7 +171,10 @@ $homeUrl = '/';
          data-customer-id="<?= $escape((string)$customerId) ?>"
          data-website-id="<?= (int)$websiteId ?>"
          data-has-membership="<?= $hasMembership ? '1' : '0' ?>"
+         data-membership-ui-state="<?= $escape($uiState) ?>"
          data-application-status="<?= $escape($appStatus) ?>"
+         data-application-id="<?= $escape((string)($application['application_id'] ?? $snap['application_id'] ?? '')) ?>"
+         data-should-poll="<?= $shouldPoll ? '1' : '0' ?>"
          data-home-url="<?= $escape($homeUrl) ?>"
          data-weline-load="b2bSellingMode"
          data-i18n-submitting="<?= $escape(__('正在提交申请...')) ?>"
@@ -116,10 +187,10 @@ $homeUrl = '/';
         <header class="account-card__header">
             <div>
                 <h2 class="account-card__title"><lang>批发身份</lang></h2>
-                <p class="account-card__description"><lang>查看当前站点的批发等级、申请状态与联系信息。</lang></p>
+                <p class="account-card__description"><lang>查看当前站点的批发等级、优惠要点与下一档升级信息。</lang></p>
             </div>
             <span class="w-badge" data-tone="<?= $escape($badgeTone) ?>" data-testid="b2b-account-identity-badge">
-                <?= $escape($statusLabel($application, $hasMembership)) ?>
+                <?= $escape($statusLabel($snap)) ?>
             </span>
         </header>
         <div class="account-card__body">
@@ -129,10 +200,49 @@ $homeUrl = '/';
                 <div class="b2b-account-identity" data-testid="b2b-account-identity-profile">
                     <div>
                         <span class="b2b-account-identity__label"><lang>批发等级</lang></span>
-                        <span class="b2b-account-identity__value"><?= $hasMembership
-                            ? $escape(__('标准批发'))
-                            : $escape(__('暂无')) ?></span>
+                        <span class="b2b-account-identity__value" data-testid="b2b-account-tier-name"><?php
+                            if (!empty($tierView['has_membership'])) {
+                                echo $escape((string)$tierView['group_name']);
+                                $code = trim((string)$tierView['group_code']);
+                                if ($code !== '') {
+                                    echo ' <code>' . $escape($code) . '</code>';
+                                }
+                            } else {
+                                echo $escape(__('暂无'));
+                            }
+                        ?></span>
                     </div>
+                    <?php if (!empty($tierView['has_membership'])): ?>
+                        <?php if (trim((string)$tierView['description']) !== ''): ?>
+                            <div>
+                                <span class="b2b-account-identity__label"><lang>等级说明</lang></span>
+                                <span class="b2b-account-identity__value" data-testid="b2b-account-tier-description"><?= $escape((string)$tierView['description']) ?></span>
+                            </div>
+                        <?php endif; ?>
+                        <div>
+                            <span class="b2b-account-identity__label"><lang>折扣额度</lang></span>
+                            <span class="b2b-account-identity__value" data-testid="b2b-account-tier-credit">
+                                <?= $escape($currencyCode) ?> <?= $formatMajor((int)$tierView['credit_limit_minor']) ?>
+                            </span>
+                        </div>
+                        <div>
+                            <span class="b2b-account-identity__label"><lang>信用余额</lang></span>
+                            <span class="b2b-account-identity__value" data-testid="b2b-account-credit-wallet">
+                                <?= $escape($currencyCode) ?> <?= $formatMajor($creditWalletMinor) ?>
+                            </span>
+                        </div>
+                        <div>
+                            <span class="b2b-account-identity__label"><lang>累计消费</lang></span>
+                            <span class="b2b-account-identity__value" data-testid="b2b-account-tier-spend">
+                                <?= $escape($currencyCode) ?> <?= $formatMajor((int)$tierView['spend_minor']) ?>
+                                <?php if ((int)$tierView['spend_threshold_minor'] > 0): ?>
+                                    <span class="w-text" data-tone="muted" data-size="sm">
+                                        / <?= __('本档门槛') ?> <?= $escape($currencyCode) ?> <?= $formatMajor((int)$tierView['spend_threshold_minor']) ?>
+                                    </span>
+                                <?php endif; ?>
+                            </span>
+                        </div>
+                    <?php endif; ?>
                     <?php if (is_array($application)): ?>
                         <div>
                             <span class="b2b-account-identity__label"><lang>公司名称</lang></span>
@@ -157,6 +267,53 @@ $homeUrl = '/';
                     <?php endif; ?>
                 </div>
 
+                <?php if (!empty($tierView['has_membership'])): ?>
+                    <div class="w-stack" style="--w-gap:var(--weline-space-3); --w-mb:var(--weline-space-3);" data-testid="b2b-account-tier-benefits">
+                        <h3 class="w-text" data-weight="strong" style="--w-m:0;"><lang>当前优惠与权益</lang></h3>
+                        <ul class="w-stack" style="--w-gap:var(--weline-space-2); margin:0; padding-inline-start:1.25rem;">
+                            <?php foreach ((array)$tierView['benefits'] as $benefit): ?>
+                                <?php if (!is_string($benefit) || trim($benefit) === '') { continue; } ?>
+                                <li class="w-text" data-size="sm"><?= $escape($benefit) ?></li>
+                            <?php endforeach; ?>
+                        </ul>
+                    </div>
+                    <?php if (is_array($tierView['next'])): ?>
+                        <div class="w-alert" data-tone="info" data-testid="b2b-account-tier-next" style="--w-mb:var(--weline-space-3);">
+                            <div class="w-stack" style="--w-gap:0.35rem;">
+                                <div class="w-text" data-weight="strong" style="--w-m:0;">
+                                    <lang>下一档</lang>
+                                    <?= $escape((string)$tierView['next']['group_name']) ?>
+                                    <code><?= $escape((string)$tierView['next']['group_code']) ?></code>
+                                </div>
+                                <?php if (trim((string)($tierView['next']['description'] ?? '')) !== ''): ?>
+                                    <div class="w-text" data-size="sm" data-tone="muted" style="--w-m:0;">
+                                        <?= $escape((string)$tierView['next']['description']) ?>
+                                    </div>
+                                <?php endif; ?>
+                                <div class="w-text" data-size="sm" style="--w-m:0;">
+                                    <lang>升档门槛</lang>
+                                    <?= $escape($currencyCode) ?> <?= $formatMajor((int)$tierView['next']['spend_threshold_minor']) ?>
+                                    · <lang>折扣额度</lang>
+                                    <?= $escape($currencyCode) ?> <?= $formatMajor((int)$tierView['next']['credit_limit_minor']) ?>
+                                </div>
+                                <div class="w-text" data-size="sm" style="--w-m:0;">
+                                    <lang>距升档还需消费约</lang>
+                                    <?= $escape($currencyCode) ?> <?= $formatMajor((int)$tierView['next']['remain_spend_minor']) ?>
+                                </div>
+                            </div>
+                        </div>
+                    <?php else: ?>
+                        <div class="w-text" data-tone="muted" data-size="sm" data-testid="b2b-account-tier-top" style="--w-mb:var(--weline-space-3);">
+                            <lang>您已处于系统 VIP 阶梯最高可用档，或暂无更高启用档。</lang>
+                        </div>
+                    <?php endif; ?>
+                <?php endif; ?>
+
+                <p class="b2b-selling-mode__hint" data-testid="b2b-account-faq-link">
+                    <a href="/faq/b2b-wholesale"><lang>查看批发说明</lang></a>
+                    <span class="w-text" data-tone="muted" data-size="sm"><lang>（含 VIP、信用抵扣与汇率换算）</lang></span>
+                </p>
+
                 <?php if ($hasMembership): ?>
                     <div class="b2b-account-identity-actions" data-testid="b2b-account-identity-active">
                         <p class="b2b-selling-mode__hint" role="status">
@@ -170,58 +327,82 @@ $homeUrl = '/';
                             <lang>切换到批发身份并去首页</lang>
                         </button>
                     </div>
-                <?php elseif ($appStatus === MembershipApplicationRecord::STATUS_PENDING): ?>
+                <?php elseif ($uiState === MembershipStatusProjection::UI_PENDING): ?>
                     <p class="b2b-selling-mode__hint" role="status" data-testid="b2b-account-identity-pending">
                         <lang>申请已提交，正在审核中。通过后可在此切换批发身份浏览商品。</lang>
                     </p>
                 <?php elseif ($canApply): ?>
-                    <?php if ($appStatus === MembershipApplicationRecord::STATUS_REJECTED): ?>
+                    <?php
+                    $accountAppId = trim((string)($application['application_id'] ?? $snap['application_id'] ?? ''));
+                    $accountResubmit = $accountAppId !== '';
+                    ?>
+                    <?php if ($uiState === MembershipStatusProjection::UI_REJECTED): ?>
                         <p class="b2b-selling-mode__hint" role="status" data-testid="b2b-account-identity-rejected">
-                            <lang>上次申请已驳回，可修改资料后重新提交。</lang>
+                            <lang>上次申请已驳回，请修改资料后重新提交当前申请。</lang>
+                        </p>
+                    <?php elseif ($uiState === MembershipStatusProjection::UI_INACTIVE): ?>
+                        <p class="b2b-selling-mode__hint" role="status" data-testid="b2b-account-identity-inactive">
+                            <lang>批发资格当前不可用，请修改资料后重新提交当前申请。</lang>
                         </p>
                     <?php else: ?>
                         <p class="b2b-selling-mode__hint" role="status">
                             <lang>尚未开通批发身份，请填写下方资料提交申请。</lang>
                         </p>
                     <?php endif; ?>
+                    <div class="w-alert" data-tone="info" data-testid="b2b-account-membership-tier-info" style="--w-mb:var(--weline-space-3);">
+                        <p class="w-text" data-size="sm" style="--w-m:0;">
+                            <lang>批发等级从 VIP0 初级起。开启批发信用后，消费达标升档并按本档折扣额度授信，仅可用于批发订单优惠抵扣。</lang>
+                        </p>
+                    </div>
                     <form class="b2b-membership-apply b2b-account-identity-apply"
                           data-b2b-apply-form
                           method="post"
                           action="#"
                           data-testid="b2b-account-membership-apply-form">
+                        <?php if ($accountAppId !== ''): ?>
+                            <input type="hidden" name="application_id" value="<?= $escape($accountAppId) ?>">
+                        <?php endif; ?>
                         <div class="w-field">
-                            <label class="w-label" for="<?= $escape($formId) ?>-company"><lang>公司名称</lang></label>
-                            <input class="w-input"
-                                   id="<?= $escape($formId) ?>-company"
-                                   name="company_name"
-                                   type="text"
-                                   required
-                                   maxlength="191"
-                                   autocomplete="organization"
-                                   value="<?= $escape((string)($application['company_name'] ?? '')) ?>">
+                            <label class="w-field__label" for="<?= $escape($formId) ?>-company"><lang>公司名称</lang></label>
+                            <div class="w-field__control">
+                                <input class="w-input"
+                                       id="<?= $escape($formId) ?>-company"
+                                       name="company_name"
+                                       type="text"
+                                       required
+                                       maxlength="191"
+                                       autocomplete="organization"
+                                       value="<?= $escape((string)($application['company_name'] ?? '')) ?>">
+                            </div>
                         </div>
                         <div class="w-field">
-                            <label class="w-label" for="<?= $escape($formId) ?>-phone"><lang>联系电话</lang></label>
-                            <input class="w-input"
-                                   id="<?= $escape($formId) ?>-phone"
-                                   name="contact_phone"
-                                   type="tel"
-                                   required
-                                   maxlength="64"
-                                   autocomplete="tel"
-                                   value="<?= $escape((string)($application['contact_phone'] ?? '')) ?>">
+                            <label class="w-field__label" for="<?= $escape($formId) ?>-phone"><lang>联系电话</lang></label>
+                            <div class="w-field__control">
+                                <input class="w-input"
+                                       id="<?= $escape($formId) ?>-phone"
+                                       name="contact_phone"
+                                       type="tel"
+                                       required
+                                       maxlength="64"
+                                       autocomplete="tel"
+                                       value="<?= $escape((string)($application['contact_phone'] ?? '')) ?>">
+                            </div>
                         </div>
                         <div class="w-field">
-                            <label class="w-label" for="<?= $escape($formId) ?>-notes"><lang>备注</lang></label>
-                            <textarea class="w-textarea"
-                                      id="<?= $escape($formId) ?>-notes"
-                                      name="notes"
-                                      rows="3"
-                                      maxlength="2000"><?= $escape((string)($application['notes'] ?? '')) ?></textarea>
+                            <label class="w-field__label" for="<?= $escape($formId) ?>-notes"><lang>备注</lang></label>
+                            <div class="w-field__control">
+                                <textarea class="w-textarea"
+                                          id="<?= $escape($formId) ?>-notes"
+                                          name="notes"
+                                          rows="3"
+                                          maxlength="2000"><?= $escape((string)($application['notes'] ?? '')) ?></textarea>
+                            </div>
                         </div>
                         <p class="b2b-selling-mode__hint" data-b2b-apply-status aria-live="polite"></p>
                         <button type="submit" class="w-button" data-variant="primary" data-testid="b2b-account-membership-submit">
-                            <lang>提交批发身份申请</lang>
+                            <?= $accountResubmit
+                                ? __('修改后重新提交申请')
+                                : __('提交批发身份申请') ?>
                         </button>
                     </form>
                 <?php endif; ?>
@@ -229,4 +410,4 @@ $homeUrl = '/';
         </div>
     </div>
 </section>
-<link rel="stylesheet" href="@static(Weline_B2B::css/b2b-storefront.css)?v=20260908-account-identity3" data-no-extract="true">
+<link rel="stylesheet" href="@static(Weline_B2B::css/b2b-storefront.css)?v=20260910-apply-notch2" data-no-extract="true">

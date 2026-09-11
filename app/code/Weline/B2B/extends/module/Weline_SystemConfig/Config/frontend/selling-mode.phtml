@@ -32,4 +32,13 @@
         default="1"
         scope="global,website,store"
     />
+    <w:config:field
+        key="b2b_credit_enabled"
+        label="启用批发信用额度"
+        description="开启后按 VIP 等级目标额度授信（钱包补差额），并允许 tob 订单使用 b2b_credit 优惠抵扣；关闭后不授信、不抵扣、不自动升额。与全站支付信用资产无关。"
+        type="switch"
+        value-type="bool"
+        default="0"
+        scope="global"
+    />
 </w:config:group>

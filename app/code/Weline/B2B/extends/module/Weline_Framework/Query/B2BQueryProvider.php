@@ -8,6 +8,7 @@ use Weline\B2B\Service\B2BConflictException;
 use Weline\B2B\Service\B2BHangPaymentService;
 use Weline\B2B\Service\B2BQueryHarnessCatalog;
 use Weline\B2B\Service\MembershipApplicationService;
+use Weline\B2B\Service\MembershipStatusProjection;
 use Weline\Customer\Api\Auth\CustomerAccountFacadeInterface;
 use Weline\Customer\Model\Customer;
 use Weline\Framework\Manager\ObjectManager;
@@ -30,6 +31,7 @@ class B2BQueryProvider implements QueryProviderInterface
         return match ($operation) {
             'resolve' => $this->resolve($params),
             'membership.submit' => $this->submitMembership($params),
+            'membership.status' => $this->membershipStatus($params),
             'hang.paymentContext' => $this->hangPaymentContext($params),
             'hang.startPayment' => $this->hangStartPayment($params),
             default => throw new \InvalidArgumentException((string)__('B2B 接口不支持该操作：%{1}', $operation)),
@@ -133,6 +135,68 @@ class B2BQueryProvider implements QueryProviderInterface
                 'success' => false,
                 'ok' => false,
                 'error' => 'b2b_membership_submit_failed',
+                'message' => $e->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * Read-only membership CTA projection. Session customer only; short per-customer throttle.
+     *
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function membershipStatus(array $params): array
+    {
+        try {
+            $customerId = $this->currentCustomerId();
+            if ($customerId === null || $customerId <= 0) {
+                /** @var MembershipStatusProjection $projection */
+                $projection = ObjectManager::getInstance(MembershipStatusProjection::class);
+                $snap = $projection->snapshot('', max(0, (int)($params['website_id'] ?? 0)));
+                return [
+                    'success' => true,
+                    'ok' => true,
+                    'status' => $snap,
+                    'throttled' => false,
+                ];
+            }
+
+            $websiteId = max(0, (int)($params['website_id'] ?? 0));
+            $cacheKey = 'b2b.membership.status.' . $customerId . '.' . $websiteId;
+            $now = time();
+            $cached = \Weline\Framework\Runtime\RequestContext::get($cacheKey);
+            if (is_array($cached)
+                && isset($cached['at'], $cached['status'])
+                && ($now - (int)$cached['at']) < 45
+            ) {
+                return [
+                    'success' => true,
+                    'ok' => true,
+                    'status' => $cached['status'],
+                    'throttled' => true,
+                ];
+            }
+
+            /** @var MembershipStatusProjection $projection */
+            $projection = ObjectManager::getInstance(MembershipStatusProjection::class);
+            $snap = $projection->snapshot((string)$customerId, $websiteId);
+            \Weline\Framework\Runtime\RequestContext::set($cacheKey, [
+                'at' => $now,
+                'status' => $snap,
+            ]);
+
+            return [
+                'success' => true,
+                'ok' => true,
+                'status' => $snap,
+                'throttled' => false,
+            ];
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'ok' => false,
+                'error' => 'b2b_membership_status_failed',
                 'message' => $e->getMessage(),
             ];
         }
@@ -291,6 +355,19 @@ class B2BQueryProvider implements QueryProviderInterface
                     ],
                     'returns' => ['type' => 'array'],
                     'summary' => 'Submit B2B membership application (no client group_id)',
+                ],
+                [
+                    'name' => 'membership.status',
+                    'frontend' => true,
+                    'auth' => 'any',
+                    'mode' => 'read',
+                    'graph' => false,
+                    'cost' => 1,
+                    'params' => [
+                        'website_id' => ['type' => 'int', 'required' => false, 'min' => 0],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Read membership CTA projection; session customer; 45s throttle',
                 ],
                 [
                     'name' => 'hang.paymentContext',

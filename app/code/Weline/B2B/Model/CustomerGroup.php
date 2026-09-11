@@ -12,6 +12,13 @@ final class CustomerGroup
     public const STATUS_ACTIVE = 'active';
     public const STATUS_DISABLED = 'disabled';
 
+    /** @deprecated use SystemVipLadder::LEGACY_* / vip0 ladder */
+    public const SYSTEM_VIP_GROUP_ID = SystemVipLadder::LEGACY_GROUP_ID;
+    /** @deprecated */
+    public const SYSTEM_VIP_CODE = SystemVipLadder::LEGACY_CODE;
+    /** @deprecated */
+    public const SYSTEM_VIP_DEFAULT_NAME = 'VIP';
+
     public function __construct(
         public readonly string $groupId,
         public readonly int $websiteId,
@@ -35,6 +42,12 @@ final class CustomerGroup
     public function isActive(): bool
     {
         return $this->status === self::STATUS_ACTIVE;
+    }
+
+    public function isSystemVip(): bool
+    {
+        return SystemVipLadder::isSystemVipGroupId($this->groupId)
+            || SystemVipLadder::isSystemVipCode($this->code);
     }
 
     /**

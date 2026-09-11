@@ -73,9 +73,33 @@
         });
     }
 
+    function isCustomerLoggedIn(root) {
+        try {
+            var site = global.site || {};
+            if (Number(site.user_id || site.userId || 0) > 0) {
+                return true;
+            }
+        } catch (eSite) {}
+        var node = root || document.querySelector('[data-b2b-selling-mode="1"], [data-customer-logged-in]');
+        if (node && String(node.getAttribute('data-customer-logged-in') || '0') === '1') {
+            return true;
+        }
+        return !!document.querySelector('[data-customer-logged-in="1"]');
+    }
+
     function preferredMode(root) {
         // Cookie / session win over SSR data-selling-mode: FPC does not fork on
         // preference cookies, so cached HTML often still says toc after user chose tob.
+        // Guests: ignore leftover tob cookie on cold load; honor explicit session pick.
+        if (!isCustomerLoggedIn(root)) {
+            try {
+                var explicit = String(global.sessionStorage.getItem('weline_cart_type_explicit') || '').toLowerCase();
+                if (explicit === 'toc' || explicit === 'tob') {
+                    return explicit;
+                }
+            } catch (eExplicit) {}
+            return 'toc';
+        }
         var fromCookie = String(readCookie() || '').toLowerCase();
         if (fromCookie === 'toc' || fromCookie === 'tob') {
             return fromCookie;
@@ -93,7 +117,8 @@
         return 'toc';
     }
 
-    function setMode(root, mode) {
+    function setMode(root, mode, opts) {
+        opts = opts && typeof opts === 'object' ? opts : {};
         mode = mode === 'tob' ? 'tob' : 'toc';
         var previous = String(
             (root && root.getAttribute('data-selling-mode'))
@@ -107,6 +132,7 @@
         writeCookie(mode, root);
         try {
             global.sessionStorage.setItem(COOKIE_NAME, mode);
+            global.sessionStorage.setItem('weline_cart_type_explicit', mode);
         } catch (e) {}
         if (root) {
             root.setAttribute('data-selling-mode', mode);
@@ -123,9 +149,153 @@
         document.documentElement.setAttribute('data-selling-mode', mode);
         syncButtons(mode, root);
         syncQty(mode, root);
+        // Adapter from Cart-owned Event uses emit:false to avoid preferCache race.
+        if (opts.emit === false) {
+            return;
+        }
         global.dispatchEvent(new CustomEvent('weline:selling-mode-changed', {
-            detail: { selling_mode: mode, cart_type: mode }
+            detail: { selling_mode: mode, cart_type: mode, source: 'b2b-setMode' }
         }));
+        // Cart-owned Event: Theme/Cart page listen here; selling-mode-changed stays B2B legacy.
+        global.dispatchEvent(new CustomEvent('weline:cart-type-changed', {
+            detail: { cart_type: mode, selling_mode: mode, source: 'b2b-setMode' }
+        }));
+    }
+
+    var FIRST_PROBE_MS = 45000;
+    var POLL_INTERVAL_MS = 300000;
+    var pollTimers = typeof WeakMap !== 'undefined' ? new WeakMap() : null;
+
+    function uiStateOf(root) {
+        return String((root && root.getAttribute('data-membership-ui-state')) || '').toLowerCase();
+    }
+
+    function canOpenApply(root) {
+        if (!root) {
+            return false;
+        }
+        var state = uiStateOf(root);
+        if (state === 'active' || state === 'pending') {
+            return false;
+        }
+        if (String(root.getAttribute('data-has-membership') || '0') === '1' && state !== 'inactive') {
+            return false;
+        }
+        // need_login | can_apply | rejected | inactive | empty legacy
+        return true;
+    }
+
+    function applyCtaLabel(root, state) {
+        if (state === 'pending') {
+            return String(root.getAttribute('data-i18n-waiting') || '等待申请通过');
+        }
+        if (state === 'rejected' || state === 'inactive') {
+            return String(root.getAttribute('data-i18n-reapply') || '修改后重新提交');
+        }
+        return String(root.getAttribute('data-i18n-apply') || '申请批发身份');
+    }
+
+    function applyStatusSnapshot(root, status) {
+        if (!root || !status || typeof status !== 'object') {
+            return;
+        }
+        var state = String(status.ui_state || '');
+        var prev = uiStateOf(root);
+        root.setAttribute('data-membership-ui-state', state);
+        root.setAttribute('data-application-status', String(status.application_status || ''));
+        root.setAttribute('data-should-poll', status.should_poll ? '1' : '0');
+        root.setAttribute('data-can-submit', status.can_submit ? '1' : '0');
+        root.setAttribute('data-has-membership', status.membership_active ? '1' : '0');
+        syncApplyPanels(root, preferredMode(root));
+        scheduleMembershipPoll(root);
+        if (state === 'active' && prev !== 'active') {
+            refreshAfterMembershipActive(root);
+        }
+    }
+
+    function stopMembershipPoll(root) {
+        if (!root || !pollTimers) {
+            return;
+        }
+        var handle = pollTimers.get(root);
+        if (handle) {
+            if (handle.first) {
+                global.clearTimeout(handle.first);
+            }
+            if (handle.interval) {
+                global.clearInterval(handle.interval);
+            }
+            pollTimers.delete(root);
+        }
+    }
+
+    function fetchMembershipStatus(root) {
+        if (!root || !global.Weline || !global.Weline.Api || typeof global.Weline.Api.resource !== 'function') {
+            return Promise.resolve(null);
+        }
+        var websiteId = Number(root.getAttribute('data-website-id') || 0);
+        var api = global.Weline.Api.resource('b2b');
+        if (!api || typeof api['membership.status'] !== 'function') {
+            return Promise.resolve(null);
+        }
+        return api['membership.status']({ website_id: websiteId }, { silent: true }).then(function (result) {
+            if (!result || result.success === false || result.ok === false || !result.status) {
+                return null;
+            }
+            applyStatusSnapshot(root, result.status);
+            return result.status;
+        }).catch(function () {
+            return null;
+        });
+    }
+
+    function scheduleMembershipPoll(root) {
+        if (!root) {
+            return;
+        }
+        stopMembershipPoll(root);
+        if (String(root.getAttribute('data-should-poll') || '0') !== '1') {
+            return;
+        }
+        if (!pollTimers) {
+            return;
+        }
+        var handle = { first: null, interval: null };
+        handle.first = global.setTimeout(function () {
+            fetchMembershipStatus(root).then(function () {
+                if (String(root.getAttribute('data-should-poll') || '0') !== '1') {
+                    stopMembershipPoll(root);
+                    return;
+                }
+                handle.interval = global.setInterval(function () {
+                    if (String(root.getAttribute('data-should-poll') || '0') !== '1') {
+                        stopMembershipPoll(root);
+                        return;
+                    }
+                    fetchMembershipStatus(root);
+                }, POLL_INTERVAL_MS);
+            });
+        }, FIRST_PROBE_MS);
+        pollTimers.set(root, handle);
+    }
+
+    function refreshAfterMembershipActive(root) {
+        if (!root) {
+            return;
+        }
+        try {
+            setMode(root, 'tob');
+        } catch (eMode) {}
+        try {
+            global.dispatchEvent(new CustomEvent('weline:selling-mode-changed', {
+                detail: { selling_mode: 'tob', cart_type: 'tob', source: 'membership-active' }
+            }));
+        } catch (eEvt) {}
+        try {
+            if (global.WelineMiniCart && typeof global.WelineMiniCart.refresh === 'function') {
+                global.WelineMiniCart.refresh({ forceNetwork: true });
+            }
+        } catch (eCart) {}
     }
 
     function syncApplyPanels(root, mode) {
@@ -134,9 +304,14 @@
         }
         var membership = String(root.getAttribute('data-has-membership') || '0') === '1';
         var loggedIn = String(root.getAttribute('data-customer-logged-in') || '0') === '1';
+        var state = uiStateOf(root);
         var applyCta = root.querySelector('[data-b2b-open-apply]');
         if (applyCta) {
-            applyCta.hidden = !(mode === 'tob' && !membership);
+            var showCta = mode === 'tob' && state !== 'active';
+            applyCta.hidden = !showCta;
+            applyCta.disabled = state === 'pending';
+            applyCta.setAttribute('aria-disabled', state === 'pending' ? 'true' : 'false');
+            applyCta.textContent = applyCtaLabel(root, state || (membership ? 'active' : 'can_apply'));
         }
         var guestHint = root.querySelector('[data-b2b-guest-tob-hint]');
         if (guestHint) {
@@ -152,7 +327,7 @@
         if (guestGate) {
             guestGate.hidden = !(mode === 'tob' && !loggedIn);
         }
-        var showForm = loggedIn && !membership;
+        var showForm = loggedIn && canOpenApply(root) && state !== 'need_login';
         if (applyWrap) {
             applyWrap.hidden = !showForm;
         }
@@ -173,7 +348,7 @@
             btn.removeAttribute('data-tone');
         });
         document.querySelectorAll(
-            '[data-testid="product-add-to-cart"], [data-testid="product-buy-now"], .product-native-detail__add, .product-native-detail__buy-now'
+            '[data-testid="product-add-to-cart"], [data-testid="product-buy-now"], [data-testid="product-card-add-to-cart"], .product-native-detail__add, .product-native-detail__buy-now, .weline-cart-product-card-add-to-cart [data-action="add"]'
         ).forEach(function (button) {
             button.dataset.sellingMode = mode;
             button.dataset.cartType = mode;
@@ -370,6 +545,11 @@
         drawer.setAttribute('data-state', 'closed');
         drawer.setAttribute('aria-hidden', 'true');
         drawer.hidden = true;
+        try {
+            if (global.WelineSocialQuick && typeof global.WelineSocialQuick.syncFloatingVisibility === 'function') {
+                global.WelineSocialQuick.syncFloatingVisibility();
+            }
+        } catch (eSync) {}
     }
 
     function markApplyIntent() {
@@ -389,42 +569,144 @@
         return false;
     }
 
-    function promptGuestLogin(root) {
-        markApplyIntent();
-        // Prefer in-page social quick chooser; never hard-navigate to account center for apply.
+    function revealSocialQuickBar() {
         try {
-            if (global.WelineSocialQuick && typeof global.WelineSocialQuick.boot === 'function') {
-                global.WelineSocialQuick.boot();
+            if (global.WelineSocialQuick && typeof global.WelineSocialQuick.reveal === 'function') {
+                if (global.WelineSocialQuick.reveal()) {
+                    return true;
+                }
             }
-        } catch (e) {}
+        } catch (eReveal) {}
         var bar = document.querySelector('[data-w-social-quick-fallback-ui]');
         if (bar) {
             bar.hidden = false;
             try {
                 bar.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-            } catch (e2) {}
+            } catch (eScroll) {}
+            return true;
+        }
+        return false;
+    }
+
+    function clearGuestLoginFallback(root) {
+        if (!root) {
             return;
         }
-        var status = root && root.querySelector('[data-b2b-apply-status]');
-        if (status) {
-            status.textContent = String(root.getAttribute('data-i18n-login-required') || '请先登录后再提交申请');
+        var status = root.querySelector('[data-b2b-guest-login-status]');
+        if (!status) {
+            return;
         }
+        status.hidden = true;
+        status.setAttribute('hidden', '');
+        status.textContent = '';
+    }
+
+    function showGuestLoginFallback(root) {
+        if (!root) {
+            return;
+        }
+        var gate = root.querySelector('[data-b2b-apply-guest-gate]');
+        if (!gate) {
+            return;
+        }
+        var status = gate.querySelector('[data-b2b-guest-login-status]');
+        if (!status) {
+            status = document.createElement('p');
+            status.className = 'b2b-selling-mode__hint product-native-detail__price-label';
+            status.setAttribute('data-b2b-guest-login-status', '1');
+            status.setAttribute('aria-live', 'polite');
+            gate.appendChild(status);
+        }
+        status.hidden = false;
+        status.removeAttribute('hidden');
+        var loginUrl = String(root.getAttribute('data-login-url') || '/customer/account/login').trim()
+            || '/customer/account/login';
+        var returnPath = '';
+        try {
+            returnPath = String((global.location && global.location.pathname) || '/')
+                + String((global.location && global.location.search) || '');
+        } catch (ePath) {
+            returnPath = '/';
+        }
+        var sep = loginUrl.indexOf('?') >= 0 ? '&' : '?';
+        status.textContent = '';
+        status.appendChild(document.createTextNode(
+            String(root.getAttribute('data-i18n-login-chooser-missing')
+                || '快捷登录暂不可用，请前往登录页。')
+        ));
+        var link = document.createElement('a');
+        link.href = loginUrl + sep + 'redirect_url=' + encodeURIComponent(returnPath);
+        link.textContent = String(root.getAttribute('data-i18n-go-login') || '前往登录');
+        link.setAttribute('data-testid', 'b2b-apply-guest-login-fallback');
+        status.appendChild(document.createTextNode(' '));
+        status.appendChild(link);
+    }
+
+    function isLoginPanelReady(root) {
+        var host = root && root.querySelector('[data-weline-mount="customer/login-panel"]');
+        return !!(host && host.getAttribute('data-weline-mount-state') === 'ready'
+            && host.querySelector('[data-weline-login-panel]'));
+    }
+
+    function requestFrameworkMountScan(root) {
+        markApplyIntent();
+        var syncSocial = function () {
+            try {
+                if (global.WelineSocialQuick && typeof global.WelineSocialQuick.syncFloatingVisibility === 'function') {
+                    global.WelineSocialQuick.syncFloatingVisibility();
+                }
+            } catch (eSync) {}
+        };
+        var finish = function () {
+            if (isLoginPanelReady(root)) {
+                clearGuestLoginFallback(root);
+            } else {
+                showGuestLoginFallback(root);
+            }
+            syncSocial();
+        };
+        // Framework orchestrates providers; B2B must not call Account.scanMounts.
+        // scan() resolving ≠ panel ready (no_provider / async load) — waitFor ready/error.
+        if (global.Weline && global.Weline.mount && typeof global.Weline.mount.scan === 'function') {
+            var mountApi = global.Weline.mount;
+            Promise.resolve(mountApi.scan({ root: root, force: true })).catch(function () { return null; });
+            if (typeof mountApi.waitFor === 'function') {
+                Promise.resolve(mountApi.waitFor('customer/login-panel', {
+                    root: root,
+                    timeoutMs: 10000,
+                    force: true
+                })).then(function () {
+                    finish();
+                }).catch(function () {
+                    finish();
+                });
+                return;
+            }
+            Promise.resolve(mountApi.scan({ root: root, force: true })).then(finish).catch(finish);
+            return;
+        }
+        try {
+            document.dispatchEvent(new CustomEvent('weline:mount:scan', {
+                detail: { force: true, root: root }
+            }));
+        } catch (eEvt) {}
+        setTimeout(finish, 800);
     }
 
     function openApplyFlow(root) {
         if (!root) {
             return;
         }
-        var membership = String(root.getAttribute('data-has-membership') || '0') === '1';
-        if (membership) {
+        if (!canOpenApply(root)) {
             return;
         }
-        var mode = preferredMode(root);
-        syncApplyPanels(root, mode === 'tob' ? 'tob' : preferredMode(root));
+        // Apply drawer is always ToB context — do not hide guest gate via preferredMode=toc.
+        syncApplyPanels(root, 'tob');
         openDrawer(root.querySelector('[data-b2b-apply-drawer]'));
         var loggedIn = String(root.getAttribute('data-customer-logged-in') || '0') === '1';
         if (!loggedIn) {
-            promptGuestLogin(root);
+            // Host declares data-weline-mount; Weline.mount loads provider + fills.
+            requestFrameworkMountScan(root);
         }
     }
 
@@ -436,7 +718,7 @@
         var phone = String((form.querySelector('[name="contact_phone"]') || {}).value || '').trim();
         var notes = String((form.querySelector('[name="notes"]') || {}).value || '').trim();
         if (!customerId || customerId === '0') {
-            promptGuestLogin(root);
+            requestFrameworkMountScan(root);
             throw new Error(String(root.getAttribute('data-i18n-login-required') || '请先登录后再提交申请'));
         }
         if (status) {
@@ -446,15 +728,25 @@
             throw new Error('api_unavailable');
         }
         var api = global.Weline.Api.resource('b2b');
-        var result = await api['membership.submit']({
+        var applicationId = String((form.querySelector('[name="application_id"]') || {}).value
+            || root.getAttribute('data-application-id')
+            || '').trim();
+        var payload = {
             customer_id: customerId,
             website_id: websiteId,
             company_name: company,
             contact_phone: phone,
             notes: notes
-        }, { silent: true });
+        };
+        if (applicationId !== '') {
+            payload.application_id = applicationId;
+        }
+        var result = await api['membership.submit'](payload, { silent: true });
         if (!result || result.success === false || result.ok === false) {
             throw new Error((result && result.message) || 'submit_failed');
+        }
+        if (result.application_id) {
+            root.setAttribute('data-application-id', String(result.application_id));
         }
         if (status) {
             status.textContent = String(root.getAttribute('data-i18n-submitted') || 'Submitted');
@@ -471,19 +763,22 @@
         form.addEventListener('submit', function (event) {
             event.preventDefault();
             submitMembership(root, form).then(function () {
+                root.setAttribute('data-membership-ui-state', 'pending');
+                root.setAttribute('data-application-status', 'pending');
+                root.setAttribute('data-should-poll', '1');
+                root.setAttribute('data-can-submit', '0');
+                root.setAttribute('data-has-membership', '0');
+                syncApplyPanels(root, preferredMode(root));
+                scheduleMembershipPoll(root);
                 if (root.getAttribute('data-b2b-account-identity') === '1') {
-                    root.setAttribute('data-application-status', 'pending');
                     var badge = root.querySelector('[data-testid="b2b-account-identity-badge"]');
                     if (badge) {
                         badge.textContent = String(root.getAttribute('data-i18n-submitted') || 'Pending');
                         badge.setAttribute('data-tone', 'warning');
                     }
-                    var actions = root.querySelector('.b2b-account-identity-apply, [data-testid="b2b-account-identity-rejected"]');
-                    if (actions && actions.closest) {
-                        var formWrap = root.querySelector('[data-testid="b2b-account-membership-apply-form"]');
-                        if (formWrap) {
-                            formWrap.hidden = true;
-                        }
+                    var formWrap = root.querySelector('[data-testid="b2b-account-membership-apply-form"]');
+                    if (formWrap) {
+                        formWrap.hidden = true;
                     }
                     var hint = document.createElement('p');
                     hint.className = 'b2b-selling-mode__hint';
@@ -652,18 +947,17 @@
                     return;
                 }
                 setMode(root, next);
-                var membership = String(root.getAttribute('data-has-membership') || '0') === '1';
-                if (next === 'tob' && !membership) {
-                    openApplyFlow(root);
+                if (next === 'tob') {
+                    if (canOpenApply(root)) {
+                        openApplyFlow(root);
+                    } else if (uiStateOf(root) === 'active' || String(root.getAttribute('data-has-membership') || '0') === '1') {
+                        fetchMembershipStatus(root);
+                    }
                 }
                 return;
             }
             if (event.target.closest('[data-b2b-open-apply]')) {
                 openApplyFlow(root);
-                return;
-            }
-            if (event.target.closest('[data-b2b-guest-login]')) {
-                promptGuestLogin(root);
                 return;
             }
             if (event.target.closest('[data-b2b-close-apply]')) {
@@ -672,10 +966,10 @@
         });
 
         bindApplyForm(root);
+        scheduleMembershipPoll(root);
 
         var loggedIn = String(root.getAttribute('data-customer-logged-in') || '0') === '1';
-        var membership = String(root.getAttribute('data-has-membership') || '0') === '1';
-        if (loggedIn && !membership && (consumeApplyIntent() || (mode === 'tob' && root.getAttribute('data-auto-open-apply') === '1'))) {
+        if (loggedIn && canOpenApply(root) && (consumeApplyIntent() || (mode === 'tob' && root.getAttribute('data-auto-open-apply') === '1'))) {
             openApplyFlow(root);
         }
     }
@@ -946,6 +1240,8 @@
             btn.type = 'button';
             btn.className = 'b2b-mini-cart-type-option';
             btn.setAttribute('data-b2b-mini-cart-type-option', code);
+            // Cart-owned chrome selector (Theme/Cart call WelineCart.requestCartType → click this).
+            btn.setAttribute('data-cart-type-option', code);
             btn.setAttribute('data-testid', testId);
             btn.textContent = label;
             return btn;
@@ -1095,6 +1391,14 @@
             writeCookie: writeCookie
         };
         enhanceMiniCarts({ refresh: true });
+        document.addEventListener('visibilitychange', function () {
+            if (document.visibilityState !== 'visible') {
+                return;
+            }
+            document.querySelectorAll('[data-b2b-selling-mode="1"], [data-b2b-account-identity="1"]').forEach(function (root) {
+                fetchMembershipStatus(root);
+            });
+        });
         global.addEventListener('weline:selling-mode-changed', function (event) {
             var detail = event && event.detail && typeof event.detail === 'object' ? event.detail : {};
             // Ignore self-echo from enhanceMiniCarts to avoid chrome/DOM churn loops.
@@ -1105,6 +1409,22 @@
             syncMiniCartChrome(mode === 'tob' ? 'tob' : 'toc');
             syncCartPageChrome(mode === 'tob' ? 'tob' : 'toc');
             syncCheckoutChrome(mode === 'tob' ? 'tob' : 'toc');
+        });
+        // Cart-owned switch Event → adapt into setMode (Theme/Cart must not click B2B DOM).
+        global.addEventListener('weline:cart-type-changed', function (event) {
+            var detail = event && event.detail && typeof event.detail === 'object' ? event.detail : {};
+            if (detail.source === 'b2b-setMode' || detail.source === 'enhanceMiniCarts') {
+                return;
+            }
+            var mode = String(detail.cart_type || detail.selling_mode || '').toLowerCase();
+            if (mode !== 'toc' && mode !== 'tob') {
+                return;
+            }
+            // Silent adapt: keep forceNetwork on the original Cart Event; do not re-emit.
+            setMode(document.querySelector('[data-b2b-selling-mode="1"]'), mode, { emit: false });
+            syncMiniCartChrome(mode);
+            syncCartPageChrome(mode);
+            syncCheckoutChrome(mode);
         });
         global.addEventListener('weline:cart-updated', function () {
             syncMiniCartChrome(preferredMode(null));
