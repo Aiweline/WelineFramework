@@ -1,39 +1,175 @@
 <?php
 /**
- * 邮件发送记录管理器 - 内容模板
+ * 邮件发送记录 - 按作用范围 + 发信渠道筛选
  * @var \Weline\Framework\View\Template $this
+ * @var array $mail_channels
+ * @var string $channel_filter
+ * @var array $logs
+ * @var mixed $pagination
+ * @var mixed $total
  */
+$mail_channels = is_array($mail_channels ?? null) ? $mail_channels : [];
+$channel_filter = (string)($channel_filter ?? '');
+$selectedScope = (string)($this->getData('selected_scope') ?? $this->getData('target_scope') ?? 'default.default.default');
+$scopeWebsite = (string)($this->getData('scope_website_code') ?? '');
+$scopeStore = (string)($this->getData('scope_store_code') ?? '');
+$scopeChannel = (string)($this->getData('scope_channel_code') ?? '');
+$h = static function (mixed $v): string {
+    return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
+};
+$listingQuery = [
+    'target_scope' => $selectedScope,
+    'website_code' => $scopeWebsite,
+    'store_code' => $scopeStore,
+    'channel_code' => $scopeChannel,
+];
+$listingBase = (string)$this->getBackendUrl('smtp/backend/log/listing', $listingQuery);
+$tabHref = static function (string $channel) use ($listingBase): string {
+    if ($channel === '') {
+        return $listingBase;
+    }
+    return $listingBase . (str_contains($listingBase, '?') ? '&' : '?') . 'channel=' . rawurlencode($channel);
+};
 ?>
 
-<div class="w-grid">
-    <div style="--w-span:12;">
-        <template>Weline_Component::message.phtml</template>
-    </div>
-</div>
+<style>
+.smtp-log-scope-bar {
+    margin-block-end: var(--weline-space-4);
+}
+.smtp-log-channel-tabs.w-tabs__list {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: var(--weline-space-1);
+    margin-block-end: var(--weline-space-4);
+    overflow-x: auto;
+    padding-block-end: var(--weline-space-1);
+    scrollbar-width: thin;
+}
+.smtp-log-channel-tabs .w-tabs__tab {
+    text-decoration: none;
+    white-space: nowrap;
+}
+.smtp-log-channel-code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: var(--weline-font-size-xs);
+    color: var(--weline-theme-text-muted);
+}
+.smtp-log-content-cell {
+    max-inline-size: 18rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+</style>
 
 <div class="w-grid">
     <div style="--w-span:12;">
         <div class="w-card">
             <div class="w-card__body">
-                <h4 class="w-card__title"><?= __('邮件发送记录管理器') ?>:
-                    <lang>一共有</lang>
-                    <var>total</var>
-                    <lang>条数据</lang>
-                </h4>
+                <div class="smtp-log-scope-bar w-cluster" data-align="end" data-justify="between" style="--w-gap:var(--weline-space-3);" data-testid="smtp-log-scope-bar">
+                    <div class="w-field" style="--w-min-inline-size:16rem; --w-max-inline-size:24rem; --w-mb:0;" data-testid="smtp-log-scope">
+                        <label class="w-field__label" for="smtp-log-scope" style="--w-mb:0;"><?= __('作用范围') ?></label>
+                        <div class="w-field__control">
+                            <w:scope
+                                id="smtp-log-scope"
+                                name="target_scope"
+                                value="selected_scope"
+                                placeholder="@lang(选择网站范围)"
+                                search-placeholder="@lang(搜索作用范围)"
+                                aria-label="@lang(选择作用范围)"
+                                searchable="true"
+                                default-expand-all="true"
+                                required="true"
+                            />
+                        </div>
+                    </div>
+                    <div class="w-stack" style="--w-gap:var(--weline-space-1); --w-flex:1;">
+                        <h4 class="w-card__title" style="--w-mb:0;"><?= __('邮件发送记录') ?></h4>
+                        <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0;">
+                            <?= __('切换作用范围过滤本页列表；Global 看全部站点。再按发信渠道 Tab 细分。') ?>
+                            <?= __('一共') ?> <?= $h($total ?? 0) ?> <?= __('条') ?>
+                        </p>
+                    </div>
+                </div>
+                <script>
+                (function () {
+                    var root = document.getElementById('smtp-log-scope');
+                    if (!root) { return; }
+                    var field = root.querySelector('input[type="hidden"][name="target_scope"]') || root.querySelector('input[name="target_scope"]');
+                    if (!field) { return; }
+                    field.addEventListener('change', function () {
+                        var next = String(field.value || '').trim();
+                        if (!next) { return; }
+                        var url = new URL(window.location.href);
+                        url.searchParams.set('target_scope', next);
+                        var parts = next.split('.');
+                        url.searchParams.set('website_code', parts[0] && parts[0] !== 'default' ? parts[0] : '');
+                        url.searchParams.set('store_code', parts[1] && parts[1] !== 'default' ? parts[1] : '');
+                        url.searchParams.set('channel_code', parts[2] && parts[2] !== 'default' ? parts[2] : '');
+                        window.location.assign(url.toString());
+                    });
+                })();
+                </script>
+
+                <nav
+                    class="w-tabs__list smtp-log-channel-tabs"
+                    data-variant="soft"
+                    role="tablist"
+                    aria-label="<?= $h(__('按发信渠道筛选')) ?>"
+                    data-testid="smtp-log-channel-tabs"
+                >
+                    <a
+                        class="w-tabs__tab<?= $channel_filter === '' ? ' active' : '' ?>"
+                        href="<?= $h($tabHref('')) ?>"
+                        role="tab"
+                        aria-selected="<?= $channel_filter === '' ? 'true' : 'false' ?>"
+                        data-testid="smtp-log-tab-all"
+                    ><?= $h(__('全部')) ?></a>
+                    <a
+                        class="w-tabs__tab<?= $channel_filter === '__none__' ? ' active' : '' ?>"
+                        href="<?= $h($tabHref('__none__')) ?>"
+                        role="tab"
+                        aria-selected="<?= $channel_filter === '__none__' ? 'true' : 'false' ?>"
+                        data-testid="smtp-log-tab-none"
+                    ><?= $h(__('未标注渠道')) ?></a>
+                    <?php foreach ($mail_channels as $ch): ?>
+                        <?php
+                        if (!is_array($ch)) {
+                            continue;
+                        }
+                        $code = trim((string)($ch['code'] ?? ''));
+                        if ($code === '') {
+                            continue;
+                        }
+                        $name = trim((string)($ch['name'] ?? $code));
+                        $active = $channel_filter === $code;
+                        $tabId = preg_replace('/[^A-Za-z0-9_-]+/', '_', $code) ?: 'ch';
+                        ?>
+                        <a
+                            class="w-tabs__tab<?= $active ? ' active' : '' ?>"
+                            href="<?= $h($tabHref($code)) ?>"
+                            role="tab"
+                            aria-selected="<?= $active ? 'true' : 'false' ?>"
+                            title="<?= $h($code) ?>"
+                            data-testid="smtp-log-tab-<?= $h((string)$tabId) ?>"
+                        ><span><?= $h($name) ?></span></a>
+                    <?php endforeach; ?>
+                </nav>
 
                 <div class="w-table-wrap">
-                    <table class="w-table weline-editable-table" data-w-vertical="middle">
+                    <table class="w-table weline-editable-table" data-w-vertical="middle" data-testid="smtp-log-table">
                         <thead>
                         <tr>
-                            <th><lang>ID</lang></th>
-                            <th><lang>模组</lang></th>
-                            <th><lang>发送邮箱</lang></th>
-                            <th><lang>发送者名称</lang></th>
-                            <th><lang>接收者数据</lang></th>
-                            <th><lang>主题</lang></th>
-                            <th><lang>内容</lang></th>
-                            <th><lang>创建时间</lang></th>
-                            <th><lang>更新时间</lang></th>
+                            <th><?= __('ID') ?></th>
+                            <th data-testid="smtp-log-col-scope"><?= __('作用范围') ?></th>
+                            <th data-testid="smtp-log-col-channel"><?= __('发信渠道') ?></th>
+                            <th><?= __('传输账户') ?></th>
+                            <th><?= __('模组') ?></th>
+                            <th><?= __('发件邮箱') ?></th>
+                            <th><?= __('收件') ?></th>
+                            <th><?= __('主题') ?></th>
+                            <th><?= __('内容') ?></th>
+                            <th><?= __('时间') ?></th>
                             <th><?= __('操作') ?></th>
                         </tr>
                         </thead>
@@ -41,18 +177,34 @@
                         <foreach name="logs" item="log">
                             <tr>
                                 <td>{{log.id}}</td>
+                                <td data-testid="smtp-log-col-scope">
+                                    <code class="w-text" data-size="sm">{{log.scope_label}}</code>
+                                </td>
+                                <td data-testid="smtp-log-col-channel">
+                                    <div>{{log.channel_label}}</div>
+                                    <if condition="log.channel !== ''">
+                                        <div class="smtp-log-channel-code">{{log.channel}}</div>
+                                    </if>
+                                </td>
+                                <td>
+                                    <if condition="log.sender_code !== ''">
+                                        <code class="w-text" data-size="sm">{{log.sender_code}}</code>
+                                        <else/>
+                                        <span class="w-text" data-tone="muted" data-size="sm">—</span>
+                                    </if>
+                                </td>
                                 <td>{{log.module}}</td>
-                                <td>{{log.from_email}}</td>
-                                <td>{{log.sender_name}}</td>
+                                <td>
+                                    <div>{{log.from_email}}</div>
+                                    <div class="w-text" data-tone="muted" data-size="sm">{{log.sender_name}}</div>
+                                </td>
                                 <td>
                                     {{log.to_email}}
                                     <if condition="log.cc !== '[]'">
-                                        <lang>抄送：</lang>
-                                        {{log.cc}}
+                                        <div class="w-text" data-size="sm"><?= __('抄送：') ?>{{log.cc}}</div>
                                     </if>
                                     <if condition="log.bcc  !== '[]'">
-                                        <lang>密送：</lang>
-                                        {{log.bcc}}
+                                        <div class="w-text" data-size="sm"><?= __('密送：') ?>{{log.bcc}}</div>
                                     </if>
                                 </td>
                                 <td>{{log.subject}}</td>
@@ -62,27 +214,26 @@
                                         <else/>
                                         <span class="w-badge" data-w-background="danger">text</span>
                                     </if>
-                                    {{log.content}}
-                                    <if condition="log.alt!=''">
-                                        <br>
-                                        <span class="w-badge" data-w-background="info">{{log.alt}}</span>
-                                    </if>
+                                    <div class="smtp-log-content-cell" title="{{log.content}}">{{log.content}}</div>
                                 </td>
-                                <td>{{log.create_time}}</td>
-                                <td>{{log.update_time}}</td>
                                 <td>
-                                    <w:form action="@backend-url('*/backend/log/delete')" method='post'>
-                                        <input type='hidden' name='log_id' value='{{log.id}}'>
-                                        <button class="w-button" data-tone="danger">
-                                            <lang>删除</lang>
-                                        </button>
-                                    </w:form>
-                                    <w:form action="@backend-url('*/backend/log')" method='get'>
-                                        <input type='hidden' name='log_id' value='{{log.id}}'>
-                                        <button class="w-button" data-tone="primary">
-                                            <lang>阅读</lang>
-                                        </button>
-                                    </w:form>
+                                    <div>{{log.create_time}}</div>
+                                </td>
+                                <td>
+                                    <div class="w-cluster" style="--w-gap:var(--weline-space-2);">
+                                        <w:form action="@backend-url('*/backend/log')" method='get'>
+                                            <input type='hidden' name='log_id' value='{{log.id}}'>
+                                            <button class="w-button" data-tone="primary" data-variant="outline" data-size="sm">
+                                                <?= __('阅读') ?>
+                                            </button>
+                                        </w:form>
+                                        <w:form action="@backend-url('*/backend/log/delete')" method='post'>
+                                            <input type='hidden' name='log_id' value='{{log.id}}'>
+                                            <button class="w-button" data-tone="danger" data-variant="outline" data-size="sm">
+                                                <?= __('删除') ?>
+                                            </button>
+                                        </w:form>
+                                    </div>
                                 </td>
                             </tr>
                         </foreach>

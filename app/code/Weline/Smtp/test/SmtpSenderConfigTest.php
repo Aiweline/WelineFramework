@@ -59,5 +59,8 @@ class SmtpSenderConfigTest extends \Weline\Framework\Test\TestCore
         self::assertSame('', $resolve->invoke($sender, 'none', 25));
         self::assertSame(PHPMailer::ENCRYPTION_SMTPS, $resolve->invoke($sender, 'ssl', 465));
         self::assertSame(PHPMailer::ENCRYPTION_STARTTLS, $resolve->invoke($sender, '0', 587));
+        // 常见误配：465 选 tls / 587 选 ssl，按端口纠偏
+        self::assertSame(PHPMailer::ENCRYPTION_SMTPS, $resolve->invoke($sender, 'tls', 465));
+        self::assertSame(PHPMailer::ENCRYPTION_STARTTLS, $resolve->invoke($sender, 'ssl', 587));
     }
 }
