@@ -39,19 +39,11 @@ final class InjectCaptchaIntoForm implements ObserverInterface
 
         $formId = (string)($attributes['id'] ?? '');
         $intent = (string)($attributes['intent'] ?? 'generic');
-        $runtime = LazyCaptchaClientRuntime::onceScriptHtml();
         // Never SSR one-shot challenge HTML into shared page shells.
         $event->setData(
             'html',
             (string)$event->getData('html')
-            . '<div class="weline-captcha-lazy-host"'
-            . ' data-weline-captcha-lazy="1"'
-            . ' data-challenge-route="weline_captcha/frontend/challenge"'
-            . ' data-form-id="' . \htmlspecialchars($formId, \ENT_QUOTES, 'UTF-8') . '"'
-            . ' data-intent="' . \htmlspecialchars($intent, \ENT_QUOTES, 'UTF-8') . '"'
-            . ' data-captcha-mode="' . \htmlspecialchars($mode, \ENT_QUOTES, 'UTF-8') . '"'
-            . '></div>'
-            . $runtime
+            . LazyCaptchaClientRuntime::hostMarkup($formId, $intent, $mode)
         );
     }
 }

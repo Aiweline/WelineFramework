@@ -26,7 +26,8 @@
         default="CN"
         options-source="i18n:countries"
         scope="global,website"
-        validation="max:512" />
+        validation="max:512"
+        cache-namespaces="storefront/captcha" />
     <w:config:field
         key="captcha/routing/china_default"
         label="国内默认供应商"
@@ -35,7 +36,8 @@
         default="tencent_captcha"
         options="tencent_captcha:腾讯云验证码,google_enterprise:Google reCAPTCHA Enterprise,local_image:本地图形验证码"
         scope="global,website"
-        validation="in_options" />
+        validation="in_options"
+        cache-namespaces="storefront/captcha" />
     <w:config:field
         key="captcha/routing/world_default"
         label="海外默认供应商"
@@ -44,7 +46,8 @@
         default="google_enterprise"
         options="tencent_captcha:腾讯云验证码,google_enterprise:Google reCAPTCHA Enterprise,local_image:本地图形验证码"
         scope="global,website"
-        validation="in_options" />
+        validation="in_options"
+        cache-namespaces="storefront/captcha" />
     <w:config:field
         key="captcha/routing/unknown_default"
         label="未知国家默认供应商"
@@ -54,7 +57,8 @@
         default="google_enterprise"
         options="tencent_captcha:腾讯云验证码,google_enterprise:Google reCAPTCHA Enterprise,local_image:本地图形验证码"
         scope="global,website"
-        validation="in_options" />
+        validation="in_options"
+        cache-namespaces="storefront/captcha" />
     <w:config:field
         key="captcha/routing/country_overrides"
         label="国家覆盖"
@@ -65,7 +69,8 @@
         options-source="i18n:countries"
         value-options="tencent_captcha:腾讯云验证码,google_enterprise:Google reCAPTCHA Enterprise,local_image:本地图形验证码"
         scope="global,website"
-        validation="max:8000" />
+        validation="max:8000"
+        cache-namespaces="storefront/captcha" />
     <w:config:field
         key="captcha/routing/fallback_chain"
         label="就绪降级链"
@@ -75,7 +80,8 @@
         default="tencent_captcha+google_enterprise+local_image"
         options="tencent_captcha+google_enterprise+local_image:腾讯 → Google → 本地,google_enterprise+tencent_captcha+local_image:Google → 腾讯 → 本地,tencent_captcha+local_image:腾讯 → 本地,google_enterprise+local_image:Google → 本地,local_image:仅本地图码"
         scope="global,website"
-        validation="in_options" />
+        validation="in_options"
+        cache-namespaces="storefront/captcha" />
     <w:config:field
         key="captcha/routing/allow_local_degrade"
         label="允许客户端降级本地图码"
@@ -83,7 +89,8 @@
         type="switch"
         value-type="bool"
         default="1"
-        scope="global,website" />
+        scope="global,website"
+        cache-namespaces="storefront/captcha" />
     <w:config:field
         key="captcha/routing/geo_headers"
         label="可信国家头"
@@ -93,7 +100,8 @@
         default="CF-IPCountry,CloudFront-Viewer-Country,X-Country-Code,X-Geo-Country"
         options="CF-IPCountry:Cloudflare CF-IPCountry,CloudFront-Viewer-Country:AWS CloudFront-Viewer-Country,X-Country-Code:X-Country-Code,X-Geo-Country:X-Geo-Country"
         scope="global,website"
-        validation="max:512" />
+        validation="max:512"
+        cache-namespaces="storefront/captcha" />
 </w:config:group>
 
 <w:config:group code="captcha_tencent" label="腾讯云验证码" description="国内推荐。启用后需填写 CaptchaAppId 与 AppSecretKey 才会被路由选中。" sort="15">
@@ -111,23 +119,26 @@
         external-url="https://cloud.tencent.com/document/product/1110/36841"
         target="_blank"
         action-label="打开接入文档" />
-    <w:config:field key="captcha/tencent/enabled" label="启用腾讯云验证码" type="switch" value-type="bool" default="1" scope="global,website" />
-    <w:config:field key="captcha/tencent/app_id" label="CaptchaAppId" type="text" value-type="string" default="" scope="global,website" validation="max:64" />
-    <w:config:field key="captcha/tencent/app_secret_key" label="AppSecretKey" description="服务端票据校验密钥，勿泄露。" type="password" value-type="string" default="" scope="global,website" sensitive="1" validation="max:128" />
+    <w:config:field key="captcha/tencent/enabled" label="启用腾讯云验证码" type="switch" value-type="bool" default="1" scope="global,website"
+        cache-namespaces="storefront/captcha" />
+    <w:config:field key="captcha/tencent/app_id" label="CaptchaAppId" type="text" value-type="string" default="" scope="global,website" validation="max:64"
+        cache-namespaces="storefront/captcha" />
+    <w:config:field key="captcha/tencent/app_secret_key" label="AppSecretKey" description="服务端票据校验密钥，勿泄露。" type="password" value-type="string" default="" scope="global,website" sensitive="1" validation="max:128"
+        cache-namespaces="storefront/captcha" />
 </w:config:group>
 
-<w:config:group code="captcha_google_guide" label="Google 使用指南（开发者）" description="本模块不提供 Google 一键授权。请在 Google Cloud 控制台创建 Enterprise Key 与 API Key，再把凭据填回下方字段。" sort="20">
+<w:config:group code="captcha_google_guide" label="Google 使用指南（开发者）" description="本模块走 reCAPTCHA Enterprise Assessment：只需 Project ID + Site Key（控制台「ID」）+ Cloud API Key（AIza…）。Google 密钥编辑页没有「Site Key」字样——「ID」即 Site Key；同页 Secret Key 仅给旧版/第三方，本模块不填、不用。" sort="20">
     <w:config:adapter
         code="captcha.google.console"
         label="Google reCAPTCHA Enterprise 控制台"
-        description="创建 / 管理 Website 类型的 reCAPTCHA Enterprise Key，复制 Site Key。"
+        description="编辑密钥页：复制「ID」（即 Site Key，通常 6L…）。页面上没有「Site Key」标签；同页 Secret key 请忽略。"
         external-url="https://console.cloud.google.com/security/recaptcha"
         target="_blank"
         action-label="打开 reCAPTCHA 控制台" />
     <w:config:adapter
         code="captcha.google.credentials"
         label="Google Cloud API 凭据"
-        description="创建 API Key（建议限制 reCAPTCHA Enterprise API），用于服务端校验。"
+        description="在「API 与服务 → 凭据」创建 API 密钥（通常 AIza…），限制到 reCAPTCHA Enterprise API。这才是下方「Enterprise API Key」要填的值。"
         external-url="https://console.cloud.google.com/apis/credentials"
         target="_blank"
         action-label="打开凭据页" />
@@ -139,25 +150,50 @@
         target="_blank"
         action-label="打开官方文档" />
     <w:config:hint type="info" code="captcha.google.setup.guide">
+【密钥对照（必读）】
+• Google 控制台编辑密钥页通常没有「Site Key」字样：请复制「ID」字段（通常 6L…）→ 填本页「Enterprise Site Key（即控制台 ID）」。前端挂件用。
+• Secret key（同页、一串黑点，也常为 6L…）→ 本模块不用。Google 留给旧版校验 / 第三方集成；不要填到任何本页字段。
+• Cloud API Key（另在「凭据」页创建，通常 AIza…）→ 填本页「Enterprise API Key」。服务端调 Enterprise Assessment 用。
 【开发者配置步骤】
-1. 打开上方「reCAPTCHA 控制台」，选择或创建 Google Cloud Project。
+1. 打开「reCAPTCHA 控制台」，选择或创建 Google Cloud Project。
 2. 创建 Website 类型的 Enterprise Key；Allowed domains 填站点域名。
-3. 复制 Project ID、Site Key。
-4. 打开「凭据页」创建 API Key，并限制到 reCAPTCHA Enterprise API；复制 API Key。
-5. 回到本页「Google reCAPTCHA Enterprise」组：开启启用开关，填入 Project ID / Site Key / API Key，保存。
-6. 路由未选中或凭据不完整时不会使用 Google；远端风控失败仍拒绝。脚本不可达且开启「允许客户端降级」时可改拉本地图码。
+3. 打开密钥 → 复制「ID」（即 Site Key）与 Project ID。看到 Secret key 请忽略，不要复制到本模块。
+4. 打开「凭据页」创建 API 密钥，限制到 reCAPTCHA Enterprise API；复制该密钥（AIza…）。
+5. 下方「Google reCAPTCHA Enterprise」：开启开关，填 Project ID / Site Key（ID）/ API Key（AIza…），保存。
+6. 凭据不完整时不会走 Google；远端失败可按配置降级本地图码。DEV 下若误填 6L 到 API Key 会提示配置错误。
     </w:config:hint>
 </w:config:group>
 
-<w:config:group code="captcha_google_enterprise" label="Google reCAPTCHA Enterprise" description="海外默认。启用后需填写完整 Project ID、Site Key 与 API Key 才会被路由选中。" sort="30">
-    <w:config:field key="captcha/google/enabled" label="启用 Google Enterprise" type="switch" value-type="bool" default="1" scope="global,website" />
-    <w:config:field key="captcha/google/project_id" label="Google Cloud Project ID" type="text" value-type="string" default="" scope="global,website" validation="max:128" />
-    <w:config:field key="captcha/google/site_key" label="Enterprise Site Key" type="text" value-type="string" default="" scope="global,website" sensitive="0" validation="max:255" />
-    <w:config:field key="captcha/google/api_key" label="Enterprise API Key" description="服务端校验用；建议在 Google Cloud 凭据页限制到 reCAPTCHA Enterprise API。" type="password" value-type="string" default="" scope="global,website" sensitive="1" validation="max:512" />
+<w:config:group code="captcha_google_enterprise" label="Google reCAPTCHA Enterprise" description="海外默认。需 Project ID + Site Key（控制台「ID」，6L…）+ Cloud API Key（AIza…）。控制台无「Site Key」标签；不使用同页 Secret key。" sort="30">
+    <w:config:field key="captcha/google/enabled" label="启用 Google Enterprise" type="switch" value-type="bool" default="1" scope="global,website"
+        cache-namespaces="storefront/captcha" />
+    <w:config:field key="captcha/google/project_id" label="Google Cloud Project ID" description="与 reCAPTCHA Key、凭据 API Key 同一项目。" type="text" value-type="string" default="" scope="global,website" validation="max:128"
+        cache-namespaces="storefront/captcha" />
+    <w:config:adapter
+        code="captcha.google.enterprise.recaptcha"
+        label="跳转：复制控制台「ID」（Site Key）"
+        description="打开 reCAPTCHA → 编辑密钥：复制「ID」填到下方（页面没有 Site Key 字样）。同页 Secret key 请忽略。"
+        external-url="https://console.cloud.google.com/security/recaptcha?project=weline-framework"
+        target="_blank"
+        action-label="打开 reCAPTCHA 控制台" />
+    <w:config:field key="captcha/google/site_key" label="Enterprise Site Key（即控制台 ID）" description="Google 编辑密钥页没有「Site Key」标签：请复制「ID」字段（通常 6L…）填到这里。同页「Secret key」不要填到这里或 API Key。" type="text" value-type="string" default="" scope="global,website" sensitive="0" validation="max:255"
+        cache-namespaces="storefront/captcha" />
+    <w:config:adapter
+        code="captcha.google.enterprise.credentials"
+        label="跳转：创建 Cloud API Key（AIza…）"
+        description="打开「API 与服务 → 凭据」→ 创建凭据 → API 密钥，限制到 reCAPTCHA Enterprise API，再粘贴到下方。不要选 OAuth 客户端（….apps.googleusercontent.com / GOCSPX-…）。"
+        external-url="https://console.cloud.google.com/apis/credentials?project=weline-framework"
+        target="_blank"
+        action-label="打开凭据页（创建 API 密钥）" />
+    <w:config:field key="captcha/google/api_key" label="Enterprise API Key（Cloud 凭据）" description="仅填「API 与服务 → 凭据」里的 API 密钥（通常 AIza…）。不是控制台「ID / Site Key」，也不是密钥页 Secret key（二者多为 6L…；填错会出现 API key not valid）。Google 显示 Secret key 是给旧版/第三方用的，本模块走 Enterprise Assessment，不使用 Secret Key。" type="password" value-type="string" default="" scope="global,website" sensitive="1" validation="max:512"
+        cache-namespaces="storefront/captcha" />
 </w:config:group>
 
 <w:config:group code="captcha_google_runtime" label="Google 风控参数" description="域名白名单与分数阈值可按站点微调。" sort="40">
-    <w:config:field key="captcha/google/allowed_domains" label="允许域名" description="逗号或换行分隔；留空时仅接受当前请求域名，支持 *.example.com。" type="textarea" value-type="string" default="" scope="global,website" validation="max:4000" />
-    <w:config:field key="captcha/google/score_threshold" label="最低风险分数" type="number" value-type="float" default="0.5" scope="global,website" validation="min:0|max:1" />
-    <w:config:field key="captcha/google/token_max_age" label="Token 最大年龄（秒）" type="number" value-type="int" default="120" scope="global,website" validation="min:30|max:600" />
+    <w:config:field key="captcha/google/allowed_domains" label="允许域名" description="逗号或换行分隔；留空时仅接受当前请求域名，支持 *.example.com。" type="textarea" value-type="string" default="" scope="global,website" validation="max:4000"
+        cache-namespaces="storefront/captcha" />
+    <w:config:field key="captcha/google/score_threshold" label="最低风险分数" type="number" value-type="float" default="0.5" scope="global,website" validation="min:0|max:1"
+        cache-namespaces="storefront/captcha" />
+    <w:config:field key="captcha/google/token_max_age" label="Token 最大年龄（秒）" type="number" value-type="int" default="120" scope="global,website" validation="min:30|max:600"
+        cache-namespaces="storefront/captcha" />
 </w:config:group>
