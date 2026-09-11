@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    <menu source="Weline_Dropship::commerce:dropship:group" name="dropship_group"
+          title="货源代发" action="" parent="Weline_Backend::commerce:partner:group"
+          icon="package" order="40">
+        <menu source="Weline_Dropship::commerce:dropship:channels" name="dropship_channels"
+              title="货源平台" action="dropship/backend/channel/index" icon="grid" order="10"/>
+        <menu source="Weline_Dropship::commerce:dropship:warehouses" name="dropship_warehouses"
+              title="仓与国家映射" action="dropship/backend/warehouse/index" icon="map" order="20"/>
+        <menu source="Weline_Dropship::commerce:dropship:listings" name="dropship_listings"
+              title="货源商品" action="dropship/backend/listing/index" icon="tag" order="30"/>
+        <menu source="Weline_Dropship::commerce:dropship:orders" name="dropship_orders"
+              title="履约订单" action="dropship/backend/order/index" icon="list" order="40"/>
+        <menu source="Weline_Dropship::commerce:dropship:aftersale" name="dropship_aftersale"
+              title="售后异常" action="dropship/backend/aftersale/index" icon="alert" order="50"/>
+        <menu source="Weline_Dropship::commerce:dropship:dashboard" name="dropship_dashboard"
+              title="数据面板" action="dropship/backend/dashboard/index" icon="chart" order="60"/>
+        <menu source="Weline_Dropship::config" name="dropship_config"
+              title="货源配置" action="*/backend/config" icon="settings" order="70"/>
+    </menu>
+</menus>

@@ -1,0 +1,16 @@
+<?php /** @var \Weline\Framework\View\Template $this */ ?>
+<div class="container-fluid py-3" data-dropship-admin="orders">
+  <h1 class="h3 mb-3"><?= $this->getData('page_title') ?></h1>
+  <h2 class="h5"><?= __('履约') ?></h2>
+  <table class="table table-sm"><thead><tr><th>provider</th><th>order</th><th>external</th><th>status</th><th>tracking</th></tr></thead><tbody>
+  <?php foreach ((array)$this->getData('fulfillments') as $r): ?>
+    <tr><td><?= htmlspecialchars((string)$r['provider_code']) ?></td><td><?= htmlspecialchars((string)$r['order_uuid']) ?></td><td><?= htmlspecialchars((string)$r['external_order_id']) ?></td><td><?= htmlspecialchars((string)$r['status']) ?></td><td><?= htmlspecialchars((string)$r['tracking_number']) ?></td></tr>
+  <?php endforeach; ?>
+  </tbody></table>
+  <h2 class="h5 mt-4"><?= __('Outbox') ?></h2>
+  <table class="table table-sm"><thead><tr><th>biz</th><th>action</th><th>status</th><th>error</th></tr></thead><tbody>
+  <?php foreach ((array)$this->getData('outbox') as $r): ?>
+    <tr><td><code><?= htmlspecialchars((string)$r['biz_key']) ?></code></td><td><?= htmlspecialchars((string)$r['action']) ?></td><td><?= htmlspecialchars((string)$r['status']) ?></td><td class="small"><?= htmlspecialchars((string)($r['last_error'] ?? '')) ?></td></tr>
+  <?php endforeach; ?>
+  </tbody></table>
+</div>
