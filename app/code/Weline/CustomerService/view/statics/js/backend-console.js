@@ -978,6 +978,142 @@ const CustomerServiceConsole = (function() {
         };
     }
 
+    const phrasePanelState = {
+        phrases: [],
+        categories: [],
+        activeTab: '__all__',
+        query: '',
+        editorOpen: false
+    };
+
+    function normalizePhrasePayload(data) {
+        const payload = data && data.data;
+        if (Array.isArray(payload)) {
+            return { phrases: payload, categories: [] };
+        }
+        if (payload && typeof payload === 'object') {
+            return {
+                phrases: Array.isArray(payload.phrases) ? payload.phrases : [],
+                categories: Array.isArray(payload.categories) ? payload.categories : []
+            };
+        }
+        return { phrases: [], categories: [] };
+    }
+
+    function phraseCategoryLabel(category) {
+        const name = String(category || '').trim();
+        return name === '' ? __('未分类') : name;
+    }
+
+    function filterPhraseRows(phrases, query, activeTab) {
+        const q = String(query || '').trim().toLowerCase();
+        const tab = String(activeTab || '__all__');
+        return (Array.isArray(phrases) ? phrases : []).filter(function (row) {
+            const category = String(row.category || '').trim();
+            if (!q) {
+                if (tab === '__all__') return true;
+                if (tab === '__none__') return category === '';
+                return category === tab;
+            }
+            const hay = ((row.title || '') + ' ' + (row.content || '') + ' ' + category).toLowerCase();
+            return hay.indexOf(q) !== -1;
+        });
+    }
+
+    function renderPhraseTabs(container) {
+        if (!container) return;
+        const tabs = [
+            { key: '__all__', label: __('全部') },
+            { key: '__none__', label: __('未分类') }
+        ];
+        (phrasePanelState.categories || []).forEach(function (name) {
+            const n = String(name || '').trim();
+            if (n) tabs.push({ key: n, label: n });
+        });
+        container.innerHTML = tabs.map(function (tab) {
+            const active = tab.key === phrasePanelState.activeTab ? ' aria-selected="true" data-active="1"' : '';
+            return `<button type="button" class="cs-phrase-tab" data-cs-phrase-tab="${escapeHtml(tab.key)}"${active}>${escapeHtml(tab.label)}</button>`;
+        }).join('') + `<button type="button" class="cs-phrase-tab cs-phrase-tab-add" data-cs-phrase-tab-add="1" title="${__('新建分类')}">+</button>`;
+    }
+
+    function renderPhraseList(listEl) {
+        if (!listEl) return;
+        const rows = filterPhraseRows(phrasePanelState.phrases, phrasePanelState.query, phrasePanelState.activeTab);
+        const searching = String(phrasePanelState.query || '').trim() !== '';
+        if (!rows.length) {
+            listEl.innerHTML = `<p class="w-text cs-phrase-empty" data-tone="muted" data-size="sm">${searching ? __('没有匹配的话术') : __('暂无话术，点下方添加')}</p>`;
+            return;
+        }
+        listEl.innerHTML = rows.map(function (row, index) {
+            const cat = String(row.category || '').trim();
+            const badge = searching
+                ? `<em class="cs-phrase-cat">${escapeHtml(phraseCategoryLabel(cat))}</em>`
+                : '';
+            const hit = index === 0 && searching ? ' data-phrase-hit="1"' : '';
+            return `
+                <div class="cs-phrase-item"${hit} data-phrase-id="${normalizePositiveInt(row.phrase_id)}" data-category="${escapeHtml(cat)}">
+                    <button type="button" class="cs-phrase-use" data-content="${encodeURIComponent(row.content || '')}">
+                        <strong>${escapeHtml(row.title || '')}</strong>
+                        <span>${escapeHtml((row.content || '').slice(0, 72))}</span>
+                        ${badge}
+                    </button>
+                    <button type="button" class="w-button cs-phrase-del" data-tone="danger" data-variant="ghost" data-size="sm" data-del="${normalizePositiveInt(row.phrase_id)}" title="${__('删除')}">${__('删')}</button>
+                </div>
+            `;
+        }).join('');
+        const firstHit = listEl.querySelector('[data-phrase-hit="1"]');
+        if (firstHit && typeof firstHit.scrollIntoView === 'function') {
+            firstHit.scrollIntoView({ block: 'nearest' });
+        }
+    }
+
+    function refreshPhrasePanelView() {
+        renderPhraseTabs(document.getElementById('cs-phrase-tabs'));
+        renderPhraseList(document.getElementById('cs-phrase-list'));
+        const editor = document.getElementById('cs-phrase-editor');
+        const toggle = document.getElementById('cs-phrase-editor-toggle');
+        if (editor) editor.hidden = !phrasePanelState.editorOpen;
+        if (toggle) toggle.setAttribute('aria-expanded', phrasePanelState.editorOpen ? 'true' : 'false');
+        const catSelect = document.getElementById('cs-phrase-category');
+        if (catSelect) {
+            const current = catSelect.value;
+            const opts = ['<option value="">' + escapeHtml(__('未分类')) + '</option>']
+                .concat((phrasePanelState.categories || []).map(function (name) {
+                    return `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`;
+                }));
+            catSelect.innerHTML = opts.join('');
+            if (phrasePanelState.activeTab !== '__all__' && phrasePanelState.activeTab !== '__none__') {
+                catSelect.value = phrasePanelState.activeTab;
+            } else if (current) {
+                catSelect.value = current;
+            }
+        }
+    }
+
+    async function reloadPhrasePanelData(panel) {
+        const data = await csAdmin(config.consoleUrl + '/phrases');
+        if (!(data && data.success)) {
+            throw new Error((data && data.message) || __('加载话术失败'));
+        }
+        const normalized = normalizePhrasePayload(data);
+        phrasePanelState.phrases = normalized.phrases;
+        phrasePanelState.categories = normalized.categories;
+        if (
+            phrasePanelState.activeTab !== '__all__'
+            && phrasePanelState.activeTab !== '__none__'
+            && phrasePanelState.categories.indexOf(phrasePanelState.activeTab) === -1
+        ) {
+            phrasePanelState.activeTab = '__all__';
+        }
+        refreshPhrasePanelView();
+        if (panel) {
+            const search = panel.querySelector('#cs-phrase-search');
+            if (search && phrasePanelState.query) {
+                search.value = phrasePanelState.query;
+            }
+        }
+    }
+
     async function togglePhrasePanel() {
         const panel = document.getElementById('cs-phrase-panel');
         if (!panel) return;
@@ -990,31 +1126,76 @@ const CustomerServiceConsole = (function() {
         panel.hidden = false;
         panel.innerHTML = `<p class="w-text" data-tone="muted" data-size="sm">${__('加载话术…')}</p>`;
         try {
-            const data = await csAdmin(config.consoleUrl + '/phrases');
-            const rows = data && data.success && Array.isArray(data.data) ? data.data : [];
+            phrasePanelState.query = '';
+            phrasePanelState.editorOpen = false;
+            if (!phrasePanelState.activeTab) {
+                phrasePanelState.activeTab = '__all__';
+            }
             panel.innerHTML = `
-                <div class="cs-phrase-list" id="cs-phrase-list"></div>
-                <div class="cs-phrase-editor w-stack" style="--w-gap:var(--weline-space-2);">
-                    <input class="w-input" id="cs-phrase-title" placeholder="${__('话术标题')}" />
-                    <textarea class="w-textarea" id="cs-phrase-content" rows="2" placeholder="${__('话术内容')}"></textarea>
-                    <button type="button" class="w-button" data-tone="primary" data-size="sm" id="cs-phrase-save">${__('保存话术')}</button>
+                <div class="cs-phrase-shell">
+                    <label class="cs-phrase-search-label" for="cs-phrase-search">${__('搜索话术')}</label>
+                    <input class="w-input cs-phrase-search" id="cs-phrase-search" type="search" placeholder="${__('搜索标题或内容…')}" autocomplete="off" />
+                    <div class="cs-phrase-tabs" id="cs-phrase-tabs" role="tablist" aria-label="${__('话术分类')}"></div>
+                    <div class="cs-phrase-list" id="cs-phrase-list"></div>
+                    <button type="button" class="w-button cs-phrase-editor-toggle" data-tone="neutral" data-variant="ghost" data-size="sm" id="cs-phrase-editor-toggle" aria-expanded="false">${__('添加话术')}</button>
+                    <div class="cs-phrase-editor w-stack" id="cs-phrase-editor" hidden style="--w-gap:var(--weline-space-2);">
+                        <input class="w-input" id="cs-phrase-title" placeholder="${__('话术标题')}" />
+                        <textarea class="w-textarea" id="cs-phrase-content" rows="2" placeholder="${__('话术内容')}"></textarea>
+                        <select class="w-select" id="cs-phrase-category" aria-label="${__('所属分类')}"></select>
+                        <button type="button" class="w-button" data-tone="primary" data-size="sm" id="cs-phrase-save">${__('保存话术')}</button>
+                    </div>
                 </div>
             `;
-            const list = document.getElementById('cs-phrase-list');
-            if (!rows.length) {
-                list.innerHTML = `<p class="w-text" data-tone="muted" data-size="sm">${__('暂无话术，可在下方添加')}</p>`;
-            } else {
-                list.innerHTML = rows.map(row => `
-                    <div class="cs-phrase-item" data-phrase-id="${normalizePositiveInt(row.phrase_id)}">
-                        <button type="button" class="cs-phrase-use" data-content="${encodeURIComponent(row.content || '')}">
-                            <strong>${escapeHtml(row.title || '')}</strong>
-                            <span>${escapeHtml((row.content || '').slice(0, 48))}</span>
-                        </button>
-                        <button type="button" class="w-button cs-phrase-del" data-tone="danger" data-variant="ghost" data-size="sm" data-del="${normalizePositiveInt(row.phrase_id)}">${__('删除')}</button>
-                    </div>
-                `).join('');
-            }
-            list.onclick = async function (ev) {
+            await reloadPhrasePanelData(panel);
+
+            panel.querySelector('#cs-phrase-search')?.addEventListener('input', function (ev) {
+                phrasePanelState.query = ev.target.value || '';
+                if (phrasePanelState.query.trim()) {
+                    // 统一搜索：跨分类定位
+                    phrasePanelState.activeTab = '__all__';
+                    renderPhraseTabs(document.getElementById('cs-phrase-tabs'));
+                }
+                renderPhraseList(document.getElementById('cs-phrase-list'));
+            });
+
+            panel.querySelector('#cs-phrase-tabs')?.addEventListener('click', async function (ev) {
+                const addBtn = ev.target.closest('[data-cs-phrase-tab-add]');
+                if (addBtn) {
+                    const name = window.prompt(__('新分类名称'), '');
+                    if (name == null) return;
+                    const trimmed = String(name).trim();
+                    if (!trimmed) {
+                        notify('error', __('分类名不能为空'));
+                        return;
+                    }
+                    const formData = new URLSearchParams();
+                    formData.append('name', trimmed);
+                    const res = await csAdmin(config.consoleUrl + '/phrase-category-save', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: formData
+                    });
+                    if (res && res.success) {
+                        phrasePanelState.activeTab = trimmed;
+                        phrasePanelState.query = '';
+                        const search = document.getElementById('cs-phrase-search');
+                        if (search) search.value = '';
+                        await reloadPhrasePanelData(panel);
+                    } else {
+                        notify('error', (res && res.message) || __('保存分类失败'));
+                    }
+                    return;
+                }
+                const tabBtn = ev.target.closest('[data-cs-phrase-tab]');
+                if (!tabBtn) return;
+                phrasePanelState.activeTab = tabBtn.getAttribute('data-cs-phrase-tab') || '__all__';
+                phrasePanelState.query = '';
+                const search = document.getElementById('cs-phrase-search');
+                if (search) search.value = '';
+                refreshPhrasePanelView();
+            });
+
+            panel.querySelector('#cs-phrase-list')?.addEventListener('click', async function (ev) {
                 const useBtn = ev.target.closest('.cs-phrase-use');
                 if (useBtn) {
                     const input = document.getElementById('message-input');
@@ -1041,16 +1222,28 @@ const CustomerServiceConsole = (function() {
                         body: formData
                     });
                     if (res && res.success) {
-                        panel.hidden = true;
-                        togglePhrasePanel();
+                        await reloadPhrasePanelData(panel);
                     } else {
                         notify('error', (res && res.message) || __('删除失败'));
                     }
                 }
-            };
-            document.getElementById('cs-phrase-save')?.addEventListener('click', async function () {
+            });
+
+            panel.querySelector('#cs-phrase-editor-toggle')?.addEventListener('click', function () {
+                phrasePanelState.editorOpen = !phrasePanelState.editorOpen;
+                refreshPhrasePanelView();
+                if (phrasePanelState.editorOpen) {
+                    document.getElementById('cs-phrase-title')?.focus();
+                }
+            });
+
+            panel.querySelector('#cs-phrase-save')?.addEventListener('click', async function () {
                 const title = (document.getElementById('cs-phrase-title')?.value || '').trim();
                 const content = (document.getElementById('cs-phrase-content')?.value || '').trim();
+                let category = (document.getElementById('cs-phrase-category')?.value || '').trim();
+                if (phrasePanelState.activeTab !== '__all__' && phrasePanelState.activeTab !== '__none__' && !category) {
+                    category = phrasePanelState.activeTab;
+                }
                 if (!title || !content) {
                     notify('error', __('标题和内容不能为空'));
                     return;
@@ -1058,14 +1251,22 @@ const CustomerServiceConsole = (function() {
                 const formData = new URLSearchParams();
                 formData.append('title', title);
                 formData.append('content', content);
+                formData.append('category', category);
                 const res = await csAdmin(config.consoleUrl + '/phrase-save', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                     body: formData
                 });
                 if (res && res.success) {
-                    panel.hidden = true;
-                    togglePhrasePanel();
+                    phrasePanelState.editorOpen = false;
+                    if (category) {
+                        phrasePanelState.activeTab = category;
+                    }
+                    const titleEl = document.getElementById('cs-phrase-title');
+                    const contentEl = document.getElementById('cs-phrase-content');
+                    if (titleEl) titleEl.value = '';
+                    if (contentEl) contentEl.value = '';
+                    await reloadPhrasePanelData(panel);
                 } else {
                     notify('error', (res && res.message) || __('保存失败'));
                 }

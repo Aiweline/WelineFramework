@@ -1,16 +1,21 @@
 ﻿客服消息翻译,"Tradução de mensagens de serviço"
 客服模块通过此事件请求翻译服务。事件数据包含待翻译文本、源语言、目标语言等。翻译模块可以监听此事件并提供翻译服务。,"O módulo de serviço solicita tradução através deste evento."
+客服邮箱绑定验证,客服邮箱绑定验证
+客户绑定邮箱时的验证邮件,客户绑定邮箱时的验证邮件
 "Unsupported customer service provider operation: %{1}","Unsupported customer service provider operation: %{1}"
 "Missing URL","Missing URL"
 "Unsupported customer service admin path","Unsupported customer service admin path"
 "Controller missing: %{1}","Controller missing: %{1}"
 "Session and message content are required.","Session and message content are required."
 "Session ID is required.","Session ID is required."
+上传成功,上传成功
+上传失败：%{1},上传失败：%{1}
 "Language code is required.","Language code is required."
 "Language updated.","Language updated."
 "Please enter a valid email address.","Please enter a valid email address."
 "Session token is required.","Session token is required."
 人机验证服务暂不可用，已切换为本地图码，请填写后重试,人机验证服务暂不可用，已切换为本地图码，请填写后重试
+人机验证未完成，请再试一次,人机验证未完成，请再试一次
 人机验证失败或已过期，请重试,人机验证失败或已过期，请重试
 "Unable to send verification email. Please try again later.","Unable to send verification email. Please try again later."
 "Verification email has been sent.","Verification email has been sent."
@@ -98,6 +103,18 @@ settings,settings
 分配会话失败：%{1},"Falha ao atribuir sessão: %{1}"
 无权关闭此会话,"Sem permissão para fechar esta sessão"
 获取客服状态失败：%{1},"Falha ao obter status: %{1}"
+获取话术失败：%{1},获取话术失败：%{1}
+标题和内容不能为空,标题和内容不能为空
+话术不存在,话术不存在
+保存话术失败：%{1},保存话术失败：%{1}
+无效的话术ID,无效的话术ID
+删除话术失败：%{1},删除话术失败：%{1}
+分类名不能为空,分类名不能为空
+分类已创建,分类已创建
+保存分类失败：%{1},保存分类失败：%{1}
+该分类下还有话术，请先移出或删除,该分类下还有话术，请先移出或删除
+分类已删除,分类已删除
+删除分类失败：%{1},删除分类失败：%{1}
 客服聊天工作台,客服聊天工作台
 查看工作台,查看工作台
 查看客服工作台,查看客服工作台
@@ -112,17 +129,60 @@ settings,settings
 你转出的会话只显示在接收方工作台的「转让分配」中。,你转出的会话只显示在接收方工作台的「转让分配」中。
 暂无进行中的会话,暂无进行中的会话
 有等待中的会话时，点击「接单」开始接待。,有等待中的会话时，点击「接单」开始接待。
+"收到 %{1} 个会话的新消息","收到 %{1} 个会话的新消息"
+新消息,新消息
+"会话 #%{1} 有 %{2} 条新消息","会话 #%{1} 有 %{2} 条新消息"
+"会话 #%{1} 有新消息","会话 #%{1} 有新消息"
 转让会话,转让会话
 转让,转让
 来自客服「__AGENT__」,来自客服「__AGENT__」
 来自其他客服,来自其他客服
 加载会话失败,加载会话失败
 加载会话失败，请稍后重试,加载会话失败，请稍后重试
-会话,Sessão
+加载更早消息失败,加载更早消息失败
+加载更早消息失败，请稍后重试,加载更早消息失败，请稍后重试
+正在加载最新消息…,正在加载最新消息…
 在下方输入框发送第一条回复。,在下方输入框发送第一条回复。
+会话,Sessão
 输入消息...,"Digite uma mensagem..."
 发送,Enviar
+正在加载更早消息…,正在加载更早消息…
+上滑加载更早消息,上滑加载更早消息
+没有更早的消息了,没有更早的消息了
+请选择一个会话开始聊天,"Selecione uma sessão para conversar"
+从右侧「我的会话」点选，或先接单等待中的会话。,从右侧「我的会话」点选，或先接单等待中的会话。
+图片,Imagem
+文件,Arquivo
+聊天工具,"Ferramentas do chat"
+表情,Emoji
+话术库,话术库
+话术,话术
+未分类,未分类
+全部,Tudo
+新建分类,新建分类
+没有匹配的话术,没有匹配的话术
+暂无话术，点下方添加,暂无话术，点下方添加
+删除,Excluir
+删,删
+加载话术失败,加载话术失败
+加载话术…,加载话术…
+搜索话术,搜索话术
+搜索标题或内容…,搜索标题或内容…
+话术分类,话术分类
+添加话术,添加话术
+话术标题,话术标题
+话术内容,话术内容
+所属分类,所属分类
+保存话术,保存话术
+新分类名称,新分类名称
+保存分类失败,保存分类失败
+删除失败,"Falha ao excluir"
+保存失败,"Falha ao salvar"
+请先选择会话,请先选择会话
+正在上传…,正在上传…
+上传失败,上传失败
 发送失败,"Falha ao enviar"
+上传失败，请稍后重试,上传失败，请稍后重试
 发送失败，请稍后重试,发送失败，请稍后重试
 确定要接单此会话吗？,"Aceitar esta sessão?"
 确认接单,确认接单
@@ -131,8 +191,6 @@ settings,settings
 确定要关闭此会话吗？,"Fechar esta sessão?"
 确认关闭,确认关闭
 关闭,Fechar
-请选择一个会话开始聊天,"Selecione uma sessão para conversar"
-从右侧「我的会话」点选，或先接单等待中的会话。,从右侧「我的会话」点选，或先接单等待中的会话。
 关闭失败,"Falha ao fechar"
 关闭失败，请稍后重试,关闭失败，请稍后重试
 刚刚,"Agora mesmo"
@@ -146,12 +204,23 @@ settings,settings
 分钟,minutos
 最长,"Mais longo"
 秒,segundos
+打开验证链接,"Open verification link"
 提示,提示
 请注意,请注意
 操作失败,操作失败
 知道了,知道了
 人机验证凭证异常，请刷新页面后重试,人机验证凭证异常，请刷新页面后重试
 请求参数过长，请刷新页面后重试,请求参数过长，请刷新页面后重试
+上传参数异常，请刷新页面后重试,上传参数异常，请刷新页面后重试
+点击修改邮箱身份,点击修改邮箱身份
+当前登录身份,当前登录身份
+邮箱已绑定：%{1}，可以继续聊天,"Email bound: %{1}. You can continue chatting."
+邮箱已绑定，可以继续聊天,"Email bound. You can continue chatting."
+绑定成功,"Binding successful"
+今天,今天
+昨天,昨天
+客服新消息,客服新消息
+您有一条新的客服回复,您有一条新的客服回复
 请等待客服回复后再发送。验证邮箱后可跳过等待、连续发送消息。,请等待客服回复后再发送。验证邮箱后可跳过等待、连续发送消息。
 等待客服回复…,等待客服回复…
 客服服务,"Serviço de atendimento"
@@ -164,16 +233,40 @@ settings,settings
 仅显示译文,"Apenas tradução"
 原文+译文,"Original + Tradução"
 仅显示原文,"Apenas original"
+截图,Captura
 客服会话初始化失败，请稍后重试,客服会话初始化失败，请稍后重试
+已取消截图,已取消截图
+截图失败，请改用图片上传或粘贴,截图失败，请改用图片上传或粘贴
+在页面上拖拽选择要截取的区域,在页面上拖拽选择要截取的区域
+重选,重选
+完成,完成
+已选中区域，可点击「完成」发送,已选中区域，可点击「完成」发送
+请先拖拽选择截图区域,请先拖拽选择截图区域
+生成中…,生成中…
+正在生成截图…,正在生成截图…
+请在弹出窗口选择「这个标签页」以截取,请在弹出窗口选择「这个标签页」以截取
+生成失败，请重选区域或改用图片上传,生成失败，请重选区域或改用图片上传
 欢迎使用客服服务,欢迎使用客服服务
+会员,会员
+访客,访客
+客服,Agente
+图片加载失败,"Failed to load image"
 在线客服,在线客服
 "AI 智能客服","Serviço IA"
 离线,离线
+网站正在维护，请稍后再试,网站正在维护，请稍后再试
+请稍候,请稍候
+请填写下方图码后发送验证邮件,请填写下方图码后发送验证邮件
+云端人机验证暂不可用，请填写下方本地图码后再次发送,云端人机验证暂不可用，请填写下方本地图码后再次发送
+云端人机验证暂不可用，已切换为本地图码，请填写后重试,云端人机验证暂不可用，已切换为本地图码，请填写后重试
+请填写本地图码,请填写本地图码
+人机验证尚未就绪，请稍后重试,人机验证尚未就绪，请稍后重试
 请输入有效的邮箱地址,"Por favor digite um endereço de email válido"
 会话未初始化，请刷新页面重试,"Sessão não inicializada"
 人机验证尚未就绪，正在刷新，请稍后重试,人机验证尚未就绪，正在刷新，请稍后重试
 验证邮件已发送，请查收您的邮箱,验证邮件已发送，请查收您的邮箱
 检测中...,Verificando...
+修改邮箱身份,修改邮箱身份
 验证邮箱,验证邮箱
 接收客服回复与优惠通知,接收客服回复与优惠通知
 留下邮箱后，客服可将本次咨询的回复、报价进展和可用优惠发送到您的邮箱。,留下邮箱后，客服可将本次咨询的回复、报价进展和可用优惠发送到您的邮箱。
@@ -182,13 +275,32 @@ settings,settings
 请输入用于接收客服通知的邮箱,请输入用于接收客服通知的邮箱
 稍后再说,稍后再说
 发送验证邮件,"Enviar email de verificação"
+此页面用于独立聊天界面，实际聊天功能通过右下角悬浮按钮使用。,"Use o botão flutuante para conversar"
+邮箱绑定验证,"Verificação de email"
+验证成功,Verificado
+您的邮箱,"Seu email"
+已成功绑定到客服会话。,"Vinculado à sessão"
+返回首页,Início
+验证失败,Falhou
+邮箱已绑定,"Email bound"
+正在同步到客服聊天窗口…,"Syncing to the customer service chat…"
+已绑定邮箱,"Email vinculado"
+回到商城继续聊天,"Back to store to continue chatting"
+关闭此页,"Close this page"
+原页面客服窗口将自动显示已绑定邮箱；若未自动关闭，请关闭本页返回继续聊天。,"The original chat window will show your bound email. If this page does not close automatically"
+返回上一页,返回上一页
+如有问题，请,"Se tiver perguntas"
+联系客服,"Contatar serviço"
+已同步。可关闭此页，返回原页面继续聊天。,"Synced. You can close this page and continue chatting on the original tab."
+配置写入当前作用范围；切换范围后页面会按新范围加载。语言留空则跟随网站默认语言。,配置写入当前作用范围；切换范围后页面会按新范围加载。语言留空则跟随网站默认语言。
+在统一配置中心打开,在统一配置中心打开
+作用范围,作用范围
 关联后台用户并配置语言与并发上限，便于工作台分配会话。,关联后台用户并配置语言与并发上限，便于工作台分配会话。
 添加客服,"Adicionar agente"
 人员列表,人员列表
 "共 %{1} 人","共 %{1} 人"
 暂无客服人员,"Sem agentes"
 添加第一位客服后，即可在工作台接待客户。,添加第一位客服后，即可在工作台接待客户。
-客服,Agente
 语言,Idioma
 接待,接待
 操作,Ações
@@ -200,7 +312,6 @@ settings,settings
 查看统计,"Ver estatísticas"
 编辑,Editar
 转让会话：将未关闭会话转给其他客服,转让会话：将未关闭会话转给其他客服
-删除,Excluir
 关联后台用户,"Associar usuário"
 请选择用户,"Por favor selecione um usuário"
 客服名称,"Nome do agente"
@@ -227,7 +338,6 @@ settings,settings
 编辑客服,"Editar agente"
 未找到客服数据，请刷新页面后重试,未找到客服数据，请刷新页面后重试
 确认,确认
-保存失败,"Falha ao salvar"
 当前会话,当前会话
 删除客服,删除客服
 确认删除,确认删除
@@ -237,7 +347,6 @@ settings,settings
 客服「__AGENT__」当前没有未关闭会话。,客服「__AGENT__」当前没有未关闭会话。
 确定要删除此客服吗？,"Excluir este agente?"
 删除确认,删除确认
-删除失败,"Falha ao excluir"
 处理中…,处理中…
 转让成功,转让成功
 转让失败,转让失败
@@ -259,7 +368,6 @@ settings,settings
 今日,Hoje
 本周,"Esta semana"
 本月,"Este mês"
-全部,Tudo
 会话数,Sessões
 消息数,Mensagens
 客户,Cliente
@@ -276,21 +384,6 @@ settings,settings
 我的会话,"Minhas sessões"
 转让分配,转让分配
 等待分配,等待分配
-此页面用于独立聊天界面，实际聊天功能通过右下角悬浮按钮使用。,"Use o botão flutuante para conversar"
-邮箱绑定验证,"Verificação de email"
-验证成功,Verificado
-您的邮箱,"Seu email"
-已成功绑定到客服会话。,"Vinculado à sessão"
-返回首页,Início
-验证失败,Falhou
-已绑定邮箱,"Email vinculado"
-绑定成功后，您将收到客服回复的邮件通知,"Receba notificações após vincular"
-返回上一页,返回上一页
-如有问题，请,"Se tiver perguntas"
-联系客服,"Contatar serviço"
-配置写入当前作用范围；切换范围后页面会按新范围加载。语言留空则跟随网站默认语言。,配置写入当前作用范围；切换范围后页面会按新范围加载。语言留空则跟随网站默认语言。
-在统一配置中心打开,在统一配置中心打开
-作用范围,作用范围
 全部状态,"Todos os status"
 会话ID,"ID da sessão"
 客户ID,"ID do cliente"
@@ -311,8 +404,26 @@ settings,settings
 目标客服未激活,目标客服未激活
 由客服「__AGENT__」转出,由客服「__AGENT__」转出
 由其他客服转出,由其他客服转出
+上传数据无效,上传数据无效
+文件过大,文件过大
+不支持的图片类型,不支持的图片类型
+不支持的文件类型,不支持的文件类型
+无法创建上传目录,无法创建上传目录
+保存文件失败,保存文件失败
 "客服服务 - 邮箱绑定验证","Serviço de atendimento - Verificação de email"
 "邮件服务尚未配置。请先在后台 SMTP 设置中为 Weline_Smtp 或 Weline_CustomerService 添加发件人。","邮件服务尚未配置。请先在后台 SMTP 设置中为 Weline_Smtp 或 Weline_CustomerService 添加发件人。"
+已绑定邮箱身份：%{1}。如不正确可点击修改。,已绑定邮箱身份：%{1}。如不正确可点击修改。
+"已将会话邮箱从 %{1} 更换为 %{2}。","已将会话邮箱从 %{1} 更换为 %{2}。"
+开发模式：邮件服务不可用，未自动绑定。请点击下方链接完成绑定。,"Development mode: email service unavailable; binding was not automatic. Please click the link below to complete binding."
+无效的附件消息,无效的附件消息
+图片：%{1},图片：%{1}
+文件：%{1},文件：%{1}
+绑定成功后，您将收到客服回复的邮件通知,"Receba notificações após vincular"
+无法截取所选区域，请改用图片上传或粘贴截图,无法截取所选区域，请改用图片上传或粘贴截图
+正在截取当前页面…,正在截取当前页面…
+无法截取当前页面，请改用图片上传或粘贴截图,无法截取当前页面，请改用图片上传或粘贴截图
+拖拽选择要发送的区域,拖拽选择要发送的区域
+当前浏览器不支持屏幕截图，请改用图片上传或粘贴截图,当前浏览器不支持屏幕截图，请改用图片上传或粘贴截图
 目标客服,目标客服
 未关闭的会话将转给所选客服,未关闭的会话将转给所选客服
 "即将删除客服「__AGENT__」，其名下有 __COUNT__ 个未关闭会话，请选择转让目标或释放回等待池。","即将删除客服「__AGENT__」，其名下有 __COUNT__ 个未关闭会话，请选择转让目标或释放回等待池。"

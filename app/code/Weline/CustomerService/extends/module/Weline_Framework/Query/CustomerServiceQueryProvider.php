@@ -6,6 +6,8 @@ namespace Weline\CustomerService\Extends\Module\Weline_Framework\Query;
 use Weline\CustomerService\Model\ChatMessage;
 use Weline\CustomerService\Model\ServiceAgent;
 use Weline\CustomerService\Service\BindCaptchaGuard;
+use Weline\CustomerService\Service\ChatAttachmentCodec;
+use Weline\CustomerService\Service\ChatMediaUploader;
 use Weline\CustomerService\Service\ChatService;
 use Weline\CustomerService\Service\CustomerServiceSettings;
 use Weline\CustomerService\Service\EmailBindingService;
@@ -35,6 +37,7 @@ class CustomerServiceQueryProvider implements QueryProviderInterface
         return match ($operation) {
             'session' => $this->session($params),
             'sendMessage' => $this->sendMessage($params),
+            'upload' => $this->upload($params),
             'messages' => $this->messages($params),
             'setLanguage' => $this->setLanguage($params),
             'serviceStatus' => $this->serviceStatus(),
@@ -139,6 +142,11 @@ class CustomerServiceQueryProvider implements QueryProviderInterface
                     (int)$session->getId(),
                     $customerId !== null && $customerId > 0
                 ),
+                'identity' => $this->chatService->buildSessionIdentity(
+                    $session,
+                    $customerId !== null && $customerId > 0,
+                    $customerId
+                ),
             ],
         ];
     }
@@ -147,6 +155,24 @@ class CustomerServiceQueryProvider implements QueryProviderInterface
     {
         $sessionId = (int)($params['session_id'] ?? 0);
         $content = trim((string)($params['content'] ?? ''));
+        $attachmentType = trim((string)($params['attachment_type'] ?? ''));
+        $attachmentUrl = trim((string)($params['attachment_url'] ?? ''));
+        if ($attachmentType !== '' && $attachmentUrl !== '') {
+            try {
+                $content = ChatAttachmentCodec::encode([
+                    'type' => $attachmentType,
+                    'url' => $attachmentUrl,
+                    'name' => (string)($params['attachment_name'] ?? ''),
+                    'size' => (int)($params['attachment_size'] ?? 0),
+                    'mime' => (string)($params['attachment_mime'] ?? ''),
+                ]);
+            } catch (\InvalidArgumentException $e) {
+                return [
+                    'success' => false,
+                    'message' => $e->getMessage(),
+                ];
+            }
+        }
         if ($sessionId <= 0 || $content === '') {
             return [
                 'success' => false,
@@ -183,6 +209,60 @@ class CustomerServiceQueryProvider implements QueryProviderInterface
             'data' => $messageData,
             'guest_send' => $gate,
         ];
+    }
+
+    /**
+     * @param array<string,mixed> $params
+     */
+    private function upload(array $params): array
+    {
+        $sessionId = (int)($params['session_id'] ?? 0);
+        if ($sessionId <= 0) {
+            return [
+                'success' => false,
+                'message' => (string)__('Session ID is required.'),
+            ];
+        }
+        $frontendSession = $this->sessionFactory->createFrontendSession();
+        $customerId = $frontendSession->isLoggedIn() ? (int)($frontendSession->getUserId() ?? 0) : 0;
+        try {
+            $this->chatService->assertCustomerMaySend($sessionId, $customerId > 0);
+        } catch (\RuntimeException $e) {
+            $gate = $this->chatService->resolveGuestSendGate($sessionId, $customerId > 0);
+            return [
+                'success' => false,
+                'message' => $e->getMessage(),
+                'guest_send' => $gate,
+                'guest_send_locked' => true,
+            ];
+        }
+
+        $owner = $customerId > 0 ? 'c_' . $customerId : 's_' . $sessionId;
+        try {
+            /** @var ChatMediaUploader $uploader */
+            $uploader = ObjectManager::getInstance(ChatMediaUploader::class);
+            $stored = $uploader->storeBase64(
+                (string)($params['name'] ?? 'file'),
+                (string)($params['mime'] ?? 'application/octet-stream'),
+                (string)($params['data'] ?? ''),
+                $owner
+            );
+            return [
+                'success' => true,
+                'message' => (string)__('上传成功'),
+                'data' => $stored,
+            ];
+        } catch (\InvalidArgumentException $e) {
+            return [
+                'success' => false,
+                'message' => $e->getMessage(),
+            ];
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'message' => (string)__('上传失败：%{1}', $e->getMessage()),
+            ];
+        }
     }
 
     private function messages(array $params): array
@@ -285,7 +365,7 @@ class CustomerServiceQueryProvider implements QueryProviderInterface
     {
         $email = trim((string)($params['email'] ?? ''));
         $sessionToken = trim((string)($params['session_token'] ?? ''));
-        if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        if ($email === '' || !$this->emailBindingService->isValidEmail($email)) {
             return [
                 'success' => false,
                 'message' => (string)__('Please enter a valid email address.'),
@@ -302,28 +382,44 @@ class CustomerServiceQueryProvider implements QueryProviderInterface
             $degrade = $this->bindCaptchaGuard->allowsLocalDegrade() ? 'local_image' : '';
             $provider = \strtolower(\trim((string)($params['captcha_provider'] ?? '')));
             // Empty provider (stale/SSR slot) or remote provider failure → offer local degrade.
-            $shouldDegrade = $degrade !== '' && $provider !== 'local_image';
-
-            return [
+            $shouldDegrade = $this->bindCaptchaGuard->shouldOfferLocalDegrade($provider);
+            $detail = \trim($this->bindCaptchaGuard->lastFailureDetail());
+            $payload = [
                 'success' => false,
                 'message' => (string)(
                     $shouldDegrade
                         ? __('人机验证服务暂不可用，已切换为本地图码，请填写后重试')
-                        : __('人机验证失败或已过期，请重试')
+                        : (
+                            \str_contains(\strtolower($detail), 'browser_error')
+                                ? __('人机验证未完成，请再试一次')
+                                : __('人机验证失败或已过期，请重试')
+                        )
                 ),
                 'captcha_error' => true,
                 'captcha_degrade' => $shouldDegrade ? $degrade : null,
             ];
+            // Dev: keep provider failure reason for tooling; never append to user-facing message.
+            if (\defined('DEV') && \DEV && $detail !== '') {
+                $payload['captcha_detail'] = $detail;
+            }
+
+            return $payload;
         }
 
         if (!$this->emailBindingService->sendVerificationEmail($email, $sessionToken)) {
             $detail = trim($this->emailBindingService->getLastErrorMessage());
-            return [
+            $verificationUrl = trim($this->emailBindingService->getLastVerificationUrl());
+            $payload = [
                 'success' => false,
                 'message' => $detail !== ''
                     ? $detail
                     : (string)__('Unable to send verification email. Please try again later.'),
             ];
+            if ($verificationUrl !== '') {
+                $payload['verification_url'] = $verificationUrl;
+            }
+
+            return $payload;
         }
 
         return [
@@ -377,11 +473,31 @@ class CustomerServiceQueryProvider implements QueryProviderInterface
                     'cost' => 5,
                     'params' => [
                         'session_id' => ['type' => 'int', 'required' => true, 'min' => 1],
-                        'content' => ['type' => 'string', 'required' => true, 'max_length' => 4000],
+                        'content' => ['type' => 'string', 'required' => false, 'max_length' => 4000],
+                        'attachment_type' => ['type' => 'string', 'required' => false, 'max_length' => 16],
+                        'attachment_url' => ['type' => 'string', 'required' => false, 'max_length' => 1024],
+                        'attachment_name' => ['type' => 'string', 'required' => false, 'max_length' => 255],
+                        'attachment_size' => ['type' => 'int', 'required' => false, 'min' => 0],
+                        'attachment_mime' => ['type' => 'string', 'required' => false, 'max_length' => 128],
                         'locale' => ['type' => 'string', 'required' => false, 'max_length' => 32],
                     ],
                     'returns' => ['type' => 'array'],
                     'summary' => 'Send customer chat message',
+                ],
+                [
+                    'name' => 'upload',
+                    'frontend' => true,
+                    'mode' => 'write',
+                    'graph' => false,
+                    'cost' => 6,
+                    'params' => [
+                        'session_id' => ['type' => 'int', 'required' => true, 'min' => 1],
+                        'name' => ['type' => 'string', 'required' => false, 'max_length' => 255],
+                        'mime' => ['type' => 'string', 'required' => false, 'max_length' => 128],
+                        'data' => ['type' => 'string', 'required' => true, 'max_length' => 16000000],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Upload customer chat attachment (base64)',
                 ],
                 [
                     'name' => 'messages',

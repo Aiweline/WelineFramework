@@ -18,6 +18,11 @@ final class CustomerServiceWidgetUiContractTest extends TestCase
         $this->assertStringContainsString('class="w-select"', $content);
         $this->assertStringContainsString('class="w-input cs-form-input"', $content);
         $this->assertStringContainsString('class="w-button cs-send-button"', $content);
+        $this->assertStringContainsString('data-cs-tool="emoji"', $content);
+        $this->assertStringContainsString('data-cs-tool="image"', $content);
+        $this->assertStringContainsString('data-cs-tool="file"', $content);
+        $this->assertStringContainsString('data-cs-tool="screenshot"', $content);
+        $this->assertStringContainsString('cs-composer-toolbar', $content);
         $this->assertStringContainsString('class="cs-chat-window w-panel"', $content);
         $this->assertStringContainsString('class="cs-chat-header w-panel-header"', $content);
         $this->assertStringContainsString('class="cs-chat-body w-panel-body"', $content);
@@ -26,7 +31,7 @@ final class CustomerServiceWidgetUiContractTest extends TestCase
         $this->assertStringContainsString('class="w-modal-dialog w-modal-sm"', $content);
         $this->assertStringContainsString('id="cs-bind-form"', $content);
         $this->assertStringContainsString('data-weline-form="1"', $content);
-        $this->assertStringContainsString('data-weline-form-intent="customerservice.bind_email"', $content);
+        $this->assertStringContainsString('data-weline-form-intent="customerservice_bind_email"', $content);
         $this->assertStringContainsString('data-weline-form-captcha-slot', $content);
         $this->assertStringContainsString('BindCaptchaGuard', $content);
     }
@@ -77,5 +82,82 @@ final class CustomerServiceWidgetUiContractTest extends TestCase
         $this->assertStringContainsString('color: var(--cs-text)', $content);
         $this->assertStringContainsString('.cs-message-input', $content);
         $this->assertStringContainsString('color-scheme: inherit', $content);
+        $this->assertStringContainsString('.cs-composer-toolbar', $content);
+        $this->assertStringContainsString('.cs-composer-panel', $content);
+        $this->assertStringContainsString('.cs-shot-crop', $content);
+        $this->assertStringContainsString('.cs-shot-crop__rect', $content);
+    }
+
+    public function testFrontendWidgetJsSupportsComposerUploadAndScreenshot(): void
+    {
+        $jsFile = dirname(__DIR__, 3) . '/view/statics/js/customer-service.js';
+        $this->assertFileExists($jsFile);
+        $js = (string)file_get_contents($jsFile);
+        $this->assertStringContainsString('bindComposerTools', $js);
+        $this->assertStringContainsString('uploadAndSendAttachment', $js);
+        $this->assertStringContainsString('captureAndSendScreenshot', $js);
+        $this->assertStringContainsString('openLiveRegionPicker', $js);
+        $this->assertStringContainsString('captureClientRegionDirect', $js);
+        $this->assertStringContainsString('ensureModernScreenshot', $js);
+        $this->assertStringContainsString('captureWithModernScreenshot', $js);
+        $this->assertStringContainsString('CS_SHOT_CAPTURE_MS', $js);
+        $this->assertStringContainsString('withCaptureTimeout', $js);
+        $this->assertStringContainsString('region-only', $js);
+        $this->assertStringContainsString('restoreChatWidgetAfterShot', $js);
+        $this->assertStringContainsString('hideChatWidgetForShotCapture', $js);
+        // Theme CSS color() breaks FO libs — primary path is native getDisplayMedia.
+        $this->assertStringContainsString('canvas = await captureWithTabDisplayMedia(region);', $js);
+        $this->assertStringContainsString('Primary: browser getDisplayMedia', $js);
+        $this->assertStringContainsString('NotAllowedError', $js);
+        $this->assertStringContainsString('modernScreenshot.domToCanvas', $js);
+        $this->assertStringContainsString('html2CanvasScaleForRegion', $js);
+        $this->assertStringContainsString('canvasLooksBlank', $js);
+        $this->assertStringContainsString('cs-shot-crop--ready', $js);
+        $this->assertStringContainsString('已选中区域，可点击「完成」发送', $js);
+        $this->assertStringContainsString('生成中…', $js);
+        $this->assertStringContainsString('ensureModernScreenshot().catch', $js);
+        // Confirm must not wait on full-viewport prefetch + crop (main-thread lag).
+        $this->assertStringNotContainsString('ensureSnapshotPrefetch', $js);
+        $this->assertStringNotContainsString('captureVisibleViewport', $js);
+        $this->assertStringNotContainsString('cropRegionFromViewportSnapshot', $js);
+        $css = (string)file_get_contents(dirname(__DIR__, 3) . '/view/statics/css/customer-service.css');
+        $this->assertStringContainsString('cs-shot-crop--ready', $css);
+        $this->assertStringContainsString('cs-shot-confirm-pulse', $css);
+        $tpl = (string)file_get_contents(dirname(__DIR__, 3) . '/view/hooks/Weline_Theme/frontend/layouts/base/body-end.phtml');
+        $this->assertStringContainsString('modernScreenshotUrl', $tpl);
+        $this->assertStringContainsString('js/vendor/modern-screenshot.js', $tpl);
+        $this->assertFileExists(dirname(__DIR__, 3) . '/view/statics/js/vendor/modern-screenshot.js');
+        $this->assertStringContainsString('html2canvasUrl', $tpl);
+        $this->assertStringContainsString('js/vendor/html2canvas.min.js', $tpl);
+        $this->assertFileExists(dirname(__DIR__, 3) . '/view/statics/js/vendor/html2canvas.min.js');
+        $this->assertStringContainsString('.upload(', $js);
+        $this->assertStringContainsString("session_id: state.sessionId", $js);
+        // upload descriptor has no locale — must not send it (Unknown frontend worker param: locale).
+        $this->assertMatchesRegularExpression(
+            "/\\.upload\\(\\{[\\s\\S]*?data:\\s*dataUrl\\s*\\}/",
+            $js
+        );
+        $this->assertStringNotContainsString(
+            "data: dataUrl,\n                locale: state.locale\n            }, {silent: true})",
+            $js
+        );
+        $provider = (string)file_get_contents(dirname(__DIR__, 3) . '/extends/module/Weline_Framework/Query/CustomerServiceQueryProvider.php');
+        $this->assertStringContainsString("'upload' =>", $provider);
+        $this->assertStringContainsString("'name' => 'upload'", $provider);
+        $uploadBlockStart = strpos($provider, "'name' => 'upload'");
+        $this->assertNotFalse($uploadBlockStart);
+        $uploadBlock = substr($provider, (int)$uploadBlockStart, 700);
+        $this->assertStringContainsString("'session_id'", $uploadBlock);
+        $this->assertStringContainsString("'data'", $uploadBlock);
+        $this->assertStringNotContainsString("'locale'", $uploadBlock);
+        $this->assertStringContainsString('attachment_type', $provider);
+        $this->assertStringContainsString('ChatMediaUploader', $provider);
+        $uploader = (string)file_get_contents(dirname(__DIR__, 3) . '/Service/ChatMediaUploader.php');
+        $this->assertStringContainsString('storeBase64', $uploader);
+        $proto = (string)file_get_contents(dirname(__DIR__, 3) . '/view/statics/prototype/frontend-composer-screenshot.html');
+        $this->assertStringContainsString('截图', $proto);
+        $this->assertStringContainsString('variant=A', $proto);
+        $this->assertStringContainsString('框选', $proto);
+        $this->assertStringContainsString('2MB', $proto);
     }
 }

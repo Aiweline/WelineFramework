@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="utf-8">
+  <title>CS chat shell acceptance harness</title>
+  <link rel="stylesheet" href="/css/backend-console.css?v=harness">
+  <style>
+    /* harness only: fake admin chrome offset */
+    body { margin: 0; background: #eef1f6; }
+    .fake-admin { height: 3.5rem; background: #111; color: #fff; display:flex; align-items:center; padding: 0 1rem; }
+  </style>
+</head>
+<body>
+  <div class="fake-admin">admin chrome</div>
+  <div class="cs-console customer-service-console" style="--cs-layout-offset: 8rem; padding: 1rem;">
+    <header class="cs-console__header"><h1>客服工作台</h1></header>
+    <div class="cs-console__layout console-layout">
+      <section class="cs-console__main console-main">
+        <div class="chat-container" id="chat-container">
+          <div class="chat-header"><div class="chat-header-info"><h3>会话 #验收</h3></div></div>
+          <div class="chat-messages" id="chat-messages"></div>
+          <div class="chat-input-area"><div class="chat-input-wrapper">
+            <textarea class="chat-input" placeholder="输入消息..."></textarea>
+            <button type="button" class="btn-send">发送</button>
+          </div></div>
+        </div>
+      </section>
+      <aside class="cs-console__sidebar console-sidebar"><div class="sidebar-header"><h2>会话列表</h2></div></aside>
+    </div>
+  </div>
+  <pre id="out"></pre>
+  <script>
+    const msgs = document.getElementById('chat-messages');
+    for (let i = 1; i <= 40; i++) {
+      msgs.insertAdjacentHTML('beforeend', `<div class="message-item customer"><div class="message-bubble"><p class="message-content">验收撑高消息 ${i}</p></div><div class="message-time">刚刚</div></div>`);
+    }
+    const input = document.querySelector('.chat-input-area');
+    const layout = document.querySelector('.console-layout');
+    const ls = getComputedStyle(layout);
+    const ms = getComputedStyle(msgs);
+    const vh = innerHeight;
+    const inputRect = input.getBoundingClientRect();
+    const report = {
+      layoutHeight: ls.height,
+      layoutMaxHeight: ls.maxHeight,
+      msgsOverflowY: ms.overflowY,
+      msgsMinHeight: ms.minHeight,
+      msgsClientH: msgs.clientHeight,
+      msgsScrollH: msgs.scrollHeight,
+      scrollsInternally: msgs.scrollHeight > msgs.clientHeight + 8,
+      inputInViewport: inputRect.bottom <= vh + 2 && inputRect.top >= -2,
+      inputBottom: Math.round(inputRect.bottom),
+      viewport: vh
+    };
+    document.getElementById('out').textContent = JSON.stringify(report, null, 2);
+    document.title = report.scrollsInternally && report.inputInViewport ? 'PASS chat shell' : 'FAIL chat shell';
+  </script>
+</body>
+</html>

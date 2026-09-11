@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>PROTOTYPE — 话术统一搜索 + 分类 Tab</title>
+  <style>
+    :root {
+      --gap: 8px;
+      --line: #d8dde6;
+      --muted: #667085;
+      --primary: #2563eb;
+      --bg: #f4f6f9;
+      --surface: #fff;
+      --radius: 10px;
+    }
+    body { font-family: system-ui, sans-serif; max-width: 760px; margin: 24px auto; padding: 0 16px; background: #eef1f6; color: #1f2937; }
+    .note { background: #fff8e6; border: 1px solid #f0d78c; padding: 12px; border-radius: 8px; margin-bottom: 12px; }
+    .verdict { background: #ecfdf3; border: 1px solid #abefc6; padding: 12px; border-radius: 8px; margin-bottom: 16px; }
+    .chat { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--surface); }
+    .msgs { height: 140px; overflow: auto; background: var(--bg); padding: 12px; }
+    .composer { border-top: 1px solid var(--line); padding: 10px; }
+    .toolbar { display: flex; gap: var(--gap); margin-bottom: 8px; }
+    .toolbar button { border: 1px solid var(--line); background: #fff; border-radius: 8px; padding: 4px 10px; cursor: pointer; }
+    .toolbar button.active { border-color: var(--primary); color: var(--primary); }
+    .panel { border: 1px solid var(--line); border-radius: var(--radius); padding: 10px; margin-bottom: 8px; background: var(--bg); }
+    .row { display: flex; gap: var(--gap); align-items: flex-end; }
+    textarea { flex: 1; min-height: 44px; border-radius: 999px; border: 1px solid var(--line); padding: 10px 14px; resize: none; }
+    .send { background: var(--primary); color: #fff; border: 0; border-radius: 8px; padding: 10px 16px; }
+    .switcher { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); display: flex; gap: 8px; align-items: center; background: #111; color: #fff; border-radius: 999px; padding: 8px 12px; box-shadow: 0 8px 24px rgba(0,0,0,.25); z-index: 20; }
+    .switcher button { background: #333; color: #fff; border: 0; border-radius: 999px; width: 32px; height: 32px; cursor: pointer; }
+    .state { font-family: ui-monospace, monospace; white-space: pre-wrap; background: #111; color: #d1fae5; padding: 10px; border-radius: 8px; margin-top: 14px; font-size: 12px; }
+    /* A: search-first + category chips */
+    .A .search { width: 100%; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; }
+    .A .tabs { display: flex; gap: 6px; overflow-x: auto; margin-bottom: 8px; }
+    .A .tab { border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 4px 10px; font-size: 12px; cursor: pointer; white-space: nowrap; }
+    .A .tab[aria-selected="true"] { border-color: var(--primary); color: var(--primary); }
+    .A .item { display: flex; gap: 8px; margin-bottom: 6px; }
+    .A .use { flex: 1; text-align: left; border: 1px solid var(--line); background: #fff; border-radius: 8px; padding: 8px 10px; cursor: pointer; }
+    .A .use strong { display: block; font-size: 13px; }
+    .A .use span { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+    .A .use em { display: inline-block; margin-top: 4px; font-style: normal; font-size: 11px; border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; color: var(--muted); }
+    .A .hit .use { border-color: var(--primary); box-shadow: 0 0 0 1px rgba(37,99,235,.35); }
+    .A .add { border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 12px; }
+    .A .editor { margin-top: 8px; display: none; gap: 6px; flex-direction: column; }
+    .A .editor.open { display: flex; }
+    /* B: tabs primary, search secondary inside tab */
+    .B { display: grid; grid-template-columns: 110px 1fr; gap: 8px; min-height: 180px; }
+    .B .side { display: flex; flex-direction: column; gap: 4px; }
+    .B .side button { text-align: left; border: 1px solid var(--line); background: #fff; border-radius: 8px; padding: 6px 8px; cursor: pointer; font-size: 12px; }
+    .B .side button[aria-selected="true"] { border-color: var(--primary); color: var(--primary); }
+    .B .main .search { width: 100%; margin-bottom: 8px; padding: 8px; border-radius: 8px; border: 1px solid var(--line); }
+    .B .card { border: 1px solid var(--line); background: #fff; border-radius: 8px; padding: 8px; margin-bottom: 6px; cursor: pointer; }
+    /* C: command-palette style single search */
+    .C .palette { border: 1px solid var(--line); background: #fff; border-radius: 12px; overflow: hidden; }
+    .C .palette input { width: 100%; border: 0; border-bottom: 1px solid var(--line); padding: 12px; font-size: 14px; }
+    .C .group { padding: 6px 10px; font-size: 11px; color: var(--muted); background: #fafafa; }
+    .C .row-item { display: block; width: 100%; text-align: left; border: 0; border-bottom: 1px solid #f0f2f5; background: #fff; padding: 10px 12px; cursor: pointer; }
+    .C .row-item:hover, .C .row-item.hit { background: #eff6ff; }
+  </style>
+</head>
+<body>
+  <h1>话术搜索 + 分类 Tab（UI 原型）</h1>
+  <div class="note">问题：话术如何「统一搜索定位」并「新建分类即 Tab、快速选用」？三变体结构不同：A 搜索优先+横向 Tab；B 侧栏分类主导；C 命令面板式全局检索。</div>
+  <div class="verdict" id="verdict">选型默认 A（variant=A）：统一搜索在最上，分类 Tab 次之；搜索时跨分类定位并高亮首条；添加话术折叠，不抢选用主路径。</div>
+
+  <div class="chat">
+    <div class="msgs" id="msgs"><div>客户：在吗？</div></div>
+    <div class="composer">
+      <div class="toolbar">
+        <button type="button">表情</button>
+        <button type="button">图片</button>
+        <button type="button">文件</button>
+        <button type="button" class="active" id="open-phrase">话术</button>
+      </div>
+      <div class="panel" id="panel"></div>
+      <div class="row">
+        <textarea id="input" placeholder="输入消息..."></textarea>
+        <button class="send" type="button" id="send">发送</button>
+      </div>
+    </div>
+  </div>
+  <div class="state" id="state"></div>
+  <div class="switcher" id="switcher">
+    <button type="button" id="prev" aria-label="prev">←</button>
+    <span id="label">A (Search-first tabs)</span>
+    <button type="button" id="next" aria-label="next">→</button>
+  </div>
+
+  <script>
+    const variants = [
+      { key: 'A', name: 'Search-first tabs' },
+      { key: 'B', name: 'Sidebar categories' },
+      { key: 'C', name: 'Command palette' }
+    ];
+    const phrases = [
+      { id: 1, title: '问候', content: '您好，请问有什么可以帮您？', category: '开场' },
+      { id: 2, title: '稍等', content: '请稍等，我帮您查一下。', category: '开场' },
+      { id: 3, title: '退换政策', content: '支持 7 天无理由退换，运费按规则承担。', category: '售后' },
+      { id: 4, title: '物流查询', content: '请提供订单号，我帮您查物流。', category: '售后' },
+      { id: 5, title: '未分类示例', content: '这边先帮您备注，稍后回复。', category: '' }
+    ];
+    let categories = ['开场', '售后'];
+    const state = { variant: 'A', query: '', tab: '__all__', open: true };
+
+    function getVariant() {
+      const v = new URLSearchParams(location.search).get('variant') || 'A';
+      return variants.some(x => x.key === v) ? v : 'A';
+    }
+    function setVariant(v) {
+      const url = new URL(location.href);
+      url.searchParams.set('variant', v);
+      history.replaceState(null, '', url);
+      state.variant = v;
+      render();
+    }
+    function filtered() {
+      const q = state.query.trim().toLowerCase();
+      return phrases.filter(p => {
+        if (q) {
+          return (p.title + ' ' + p.content + ' ' + p.category).toLowerCase().includes(q);
+        }
+        if (state.tab === '__all__') return true;
+        if (state.tab === '__none__') return !p.category;
+        return p.category === state.tab;
+      });
+    }
+    function usePhrase(p) {
+      document.getElementById('input').value = p.content;
+      state.open = false;
+      render();
+    }
+    function renderA(root) {
+      const rows = filtered();
+      root.className = 'panel A';
+      root.innerHTML = `
+        <input class="search" id="q" placeholder="统一搜索标题或内容…" value="${state.query.replace(/"/g,'&quot;')}" />
+        <div class="tabs">
+          <button class="tab" data-tab="__all__" aria-selected="${state.tab==='__all__'}">全部</button>
+          <button class="tab" data-tab="__none__" aria-selected="${state.tab==='__none__'}">未分类</button>
+          ${categories.map(c => `<button class="tab" data-tab="${c}" aria-selected="${state.tab===c}">${c}</button>`).join('')}
+          <button class="tab" data-add="1">+</button>
+        </div>
+        <div id="list">${rows.map((p,i)=>`
+          <div class="item${i===0 && state.query.trim() ? ' hit' : ''}">
+            <button class="use" data-id="${p.id}"><strong>${p.title}</strong><span>${p.content.slice(0,40)}</span>${state.query.trim()?`<em>${p.category||'未分类'}</em>`:''}</button>
+          </div>`).join('') || '<div style="color:var(--muted);font-size:12px">没有匹配的话术</div>'}
+        </div>
+        <button class="add" id="toggle-add" type="button">添加话术</button>
+        <div class="editor" id="editor">
+          <input id="nt" placeholder="话术标题" />
+          <input id="nc" placeholder="话术内容" />
+          <button type="button" id="save">保存到当前分类</button>
+        </div>`;
+      root.querySelector('#q').oninput = (e) => { state.query = e.target.value; if (state.query.trim()) state.tab='__all__'; render(); };
+      root.querySelector('.tabs').onclick = (e) => {
+        const add = e.target.closest('[data-add]');
+        if (add) {
+          const name = prompt('新分类名称');
+          if (name && name.trim()) { categories.push(name.trim()); state.tab = name.trim(); render(); }
+          return;
+        }
+        const t = e.target.closest('[data-tab]');
+        if (!t) return;
+        state.tab = t.getAttribute('data-tab');
+        state.query = '';
+        render();
+      };
+      root.querySelector('#list').onclick = (e) => {
+        const btn = e.target.closest('[data-id]');
+        if (!btn) return;
+        const p = phrases.find(x => String(x.id) === btn.getAttribute('data-id'));
+        if (p) usePhrase(p);
+      };
+      root.querySelector('#toggle-add').onclick = () => root.querySelector('#editor').classList.toggle('open');
+      root.querySelector('#save').onclick = () => {
+        const title = root.querySelector('#nt').value.trim();
+        const content = root.querySelector('#nc').value.trim();
+        if (!title || !content) return;
+        const cat = state.tab === '__all__' || state.tab === '__none__' ? '' : state.tab;
+        phrases.push({ id: Date.now(), title, content, category: cat });
+        render();
+      };
+    }
+    function renderB(root) {
+      const rows = filtered();
+      root.className = 'panel B';
+      root.innerHTML = `
+        <div class="side">
+          <button data-tab="__all__" aria-selected="${state.tab==='__all__'}">全部</button>
+          ${categories.map(c=>`<button data-tab="${c}" aria-selected="${state.tab===c}">${c}</button>`).join('')}
+          <button data-add="1">+ 分类</button>
+        </div>
+        <div class="main">
+          <input class="search" id="q" placeholder="在当前分类搜索…" value="${state.query.replace(/"/g,'&quot;')}" />
+          ${rows.map(p=>`<button class="card" data-id="${p.id}"><strong>${p.title}</strong><div style="color:var(--muted);font-size:12px">${p.content}</div></button>`).join('') || '<div style="color:var(--muted)">空</div>'}
+        </div>`;
+      root.querySelector('#q').oninput = (e) => { state.query = e.target.value; render(); };
+      root.querySelector('.side').onclick = (e) => {
+        if (e.target.closest('[data-add]')) {
+          const name = prompt('新分类名称');
+          if (name && name.trim()) { categories.push(name.trim()); state.tab = name.trim(); render(); }
+          return;
+        }
+        const t = e.target.closest('[data-tab]');
+        if (!t) return;
+        state.tab = t.getAttribute('data-tab');
+        state.query = '';
+        render();
+      };
+      root.querySelector('.main').onclick = (e) => {
+        const btn = e.target.closest('[data-id]');
+        if (!btn) return;
+        const p = phrases.find(x => String(x.id) === btn.getAttribute('data-id'));
+        if (p) usePhrase(p);
+      };
+    }
+    function renderC(root) {
+      const q = state.query.trim().toLowerCase();
+      const groups = {};
+      phrases.filter(p => !q || (p.title+' '+p.content+' '+p.category).toLowerCase().includes(q))
+        .forEach(p => {
+          const g = p.category || '未分类';
+          (groups[g] = groups[g] || []).push(p);
+        });
+      root.className = 'panel C';
+      let html = `<div class="palette"><input id="q" placeholder="统一搜索定位…" value="${state.query.replace(/"/g,'&quot;')}" />`;
+      let first = true;
+      Object.keys(groups).forEach(g => {
+        html += `<div class="group">${g}</div>`;
+        groups[g].forEach(p => {
+          html += `<button class="row-item${first && q ? ' hit' : ''}" data-id="${p.id}"><strong>${p.title}</strong> — ${p.content.slice(0,36)}</button>`;
+          first = false;
+        });
+      });
+      html += `<button class="row-item" data-add="1">+ 新建分类 Tab</button></div>`;
+      root.innerHTML = html;
+      root.querySelector('#q').oninput = (e) => { state.query = e.target.value; render(); };
+      root.onclick = (e) => {
+        if (e.target.closest('[data-add]')) {
+          const name = prompt('新分类名称');
+          if (name && name.trim()) categories.push(name.trim());
+          render();
+          return;
+        }
+        const btn = e.target.closest('[data-id]');
+        if (!btn) return;
+        const p = phrases.find(x => String(x.id) === btn.getAttribute('data-id'));
+        if (p) usePhrase(p);
+      };
+    }
+    function render() {
+      state.variant = getVariant();
+      const meta = variants.find(v => v.key === state.variant);
+      document.getElementById('label').textContent = `${state.variant} (${meta.name})`;
+      const panel = document.getElementById('panel');
+      panel.style.display = state.open ? 'block' : 'none';
+      if (state.open) {
+        if (state.variant === 'B') renderB(panel);
+        else if (state.variant === 'C') renderC(panel);
+        else renderA(panel);
+      }
+      document.getElementById('state').textContent = JSON.stringify({ ...state, categories, count: filtered().length }, null, 2);
+    }
+    document.getElementById('open-phrase').onclick = () => { state.open = !state.open; render(); };
+    document.getElementById('prev').onclick = () => {
+      const i = variants.findIndex(v => v.key === getVariant());
+      setVariant(variants[(i - 1 + variants.length) % variants.length].key);
+    };
+    document.getElementById('next').onclick = () => {
+      const i = variants.findIndex(v => v.key === getVariant());
+      setVariant(variants[(i + 1) % variants.length].key);
+    };
+    window.addEventListener('keydown', (e) => {
+      const tag = (e.target && e.target.tagName || '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea') return;
+      if (e.key === 'ArrowLeft') document.getElementById('prev').click();
+      if (e.key === 'ArrowRight') document.getElementById('next').click();
+    });
+    document.getElementById('send').onclick = () => {
+      const t = document.getElementById('input').value.trim();
+      if (!t) return;
+      document.getElementById('msgs').insertAdjacentHTML('beforeend', `<div>客服：${t}</div>`);
+      document.getElementById('input').value = '';
+    };
+    if (!new URLSearchParams(location.search).get('variant')) {
+      history.replaceState(null, '', '?variant=A');
+    }
+    render();
+  </script>
+</body>
+</html>

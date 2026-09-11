@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>PROTOTYPE — 客服聊天：最新首屏 + 上滑更旧</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 24px auto; padding: 0 16px; color: #1a1a1a; }
+    .note { background: #fff8e6; border: 1px solid #f0d78c; padding: 12px; border-radius: 8px; margin-bottom: 16px; }
+    .panel { border: 1px solid #ddd; border-radius: 8px; padding: 12px; margin-bottom: 12px; }
+    .state { font-family: ui-monospace, monospace; white-space: pre-wrap; background: #f6f6f6; padding: 8px; border-radius: 6px; }
+    button { margin: 4px 4px 4px 0; }
+    .chat { height: 220px; overflow: auto; border: 1px solid #ccc; padding: 8px; background: #fafafa; }
+    .msg { margin: 6px 0; padding: 6px 8px; border-radius: 6px; background: #e8f1ff; max-width: 80%; }
+    .hint { text-align: center; color: #666; font-size: 12px; margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+  <h1>客服聊天历史分页（逻辑原型）</h1>
+  <div class="note">
+    <strong>问题：</strong>选会话应立刻进入聊天壳并展示<strong>最新消息</strong>；上滑加载更旧。本文件为 throwaway，验证状态机后再落到生产 JS。
+  </div>
+
+  <div class="panel">
+    <h2>当前状态</h2>
+    <div id="state" class="state"></div>
+  </div>
+
+  <div class="panel">
+    <h2>自由操作</h2>
+    <button type="button" data-act="select">选中会话</button>
+    <button type="button" data-act="fail">模拟加载失败</button>
+    <button type="button" data-act="scrollTop">上滑到顶</button>
+    <button type="button" data-act="reset">重置</button>
+  </div>
+
+  <div class="panel">
+    <h2>场景：首屏最新 → 上滑两页旧消息</h2>
+    <p>应看到：先 loading 壳 → 最新 3 条在底部 → 两次上滑 prepend 更旧，视口不跳飞。</p>
+    <button type="button" data-walk="happy">跑一遍</button>
+  </div>
+
+  <div class="panel">
+    <h2>聊天区预览</h2>
+    <div id="chat" class="chat"><div class="hint" id="hint"></div><div id="msgs"></div></div>
+  </div>
+
+  <script>
+  /** Portable reducer — verdict target for production */
+  function createChatHistoryModel(allIds) {
+    const pageSize = 3;
+    let state = {
+      phase: 'empty',
+      visible: [],
+      oldest: 0,
+      newest: 0,
+      hasMore: false,
+      loading: false,
+      historyLoading: false,
+      error: null
+    };
+    function snapshot() { return JSON.parse(JSON.stringify(state)); }
+    function openSession() {
+      state = { ...state, phase: 'shell', loading: true, error: null, visible: [], oldest: 0, newest: 0, hasMore: false };
+      return snapshot();
+    }
+    function loadLatest(fail) {
+      if (fail) {
+        state = { ...state, phase: 'empty', loading: false, error: 'load_failed', visible: [] };
+        return snapshot();
+      }
+      const latest = allIds.slice(-pageSize);
+      state = {
+        ...state,
+        phase: 'ready',
+        loading: false,
+        visible: latest.slice(),
+        oldest: latest[0] || 0,
+        newest: latest[latest.length - 1] || 0,
+        hasMore: allIds.length > latest.length,
+        error: null
+      };
+      return snapshot();
+    }
+    function loadOlder() {
+      if (!state.hasMore || state.historyLoading || !state.oldest) return snapshot();
+      state.historyLoading = true;
+      const older = allIds.filter(id => id < state.oldest).slice(-pageSize);
+      state.visible = older.concat(state.visible);
+      state.oldest = state.visible[0] || 0;
+      state.hasMore = allIds.some(id => id < state.oldest);
+      state.historyLoading = false;
+      return snapshot();
+    }
+    function reset() {
+      state = { phase: 'empty', visible: [], oldest: 0, newest: 0, hasMore: false, loading: false, historyLoading: false, error: null };
+      return snapshot();
+    }
+    return { openSession, loadLatest, loadOlder, reset, snapshot };
+  }
+
+  const model = createChatHistoryModel([1,2,3,4,5,6,7,8,9]);
+  const stateEl = document.getElementById('state');
+  const msgsEl = document.getElementById('msgs');
+  const hintEl = document.getElementById('hint');
+  const chatEl = document.getElementById('chat');
+
+  function render() {
+    const s = model.snapshot();
+    stateEl.textContent = JSON.stringify(s, null, 2);
+    hintEl.textContent = s.loading ? '正在加载最新消息…' : (s.historyLoading ? '正在加载更早消息…' : (s.hasMore ? '上滑加载更早消息' : (s.visible.length ? '没有更早的消息了' : '')));
+    msgsEl.innerHTML = s.visible.map(id => '<div class="msg">消息 #' + id + '</div>').join('');
+    if (s.phase === 'ready' && !s.historyLoading) chatEl.scrollTop = chatEl.scrollHeight;
+  }
+
+  document.body.addEventListener('click', (e) => {
+    const act = e.target.getAttribute('data-act');
+    const walk = e.target.getAttribute('data-walk');
+    if (act === 'select') { model.openSession(); render(); model.loadLatest(false); render(); }
+    if (act === 'fail') { model.openSession(); render(); model.loadLatest(true); render(); }
+    if (act === 'scrollTop') { model.loadOlder(); render(); }
+    if (act === 'reset') { model.reset(); render(); }
+    if (walk === 'happy') {
+      model.reset(); render();
+      model.openSession(); render();
+      model.loadLatest(false); render();
+      model.loadOlder(); render();
+      model.loadOlder(); render();
+    }
+  });
+  render();
+  </script>
+</body>
+</html>

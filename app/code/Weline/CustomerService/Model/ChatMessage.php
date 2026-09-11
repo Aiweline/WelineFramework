@@ -47,6 +47,7 @@ class ChatMessage extends Model
 
     public const SENDER_TYPE_CUSTOMER = 'customer';
     public const SENDER_TYPE_AGENT = 'agent';
+    public const SENDER_TYPE_SYSTEM = 'system';
 
     public function _init(): void
     {

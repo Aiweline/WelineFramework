@@ -24,6 +24,8 @@ class AgentPhrase extends Model
     public const schema_fields_TITLE = 'title';
     #[Col('text', nullable: false, comment: '话术正文')]
     public const schema_fields_CONTENT = 'content';
+    #[Col('varchar', 64, nullable: false, default: '', comment: '分类名（空=未分类）')]
+    public const schema_fields_CATEGORY = 'category';
     #[Col('int', nullable: false, default: 0, comment: '排序')]
     public const schema_fields_SORT = 'sort_order';
     #[Col('datetime', comment: '更新时间')]
@@ -63,6 +65,16 @@ class AgentPhrase extends Model
     public function setContent(string $content): static
     {
         return $this->setData(self::schema_fields_CONTENT, $content);
+    }
+
+    public function getCategory(): string
+    {
+        return (string)$this->getData(self::schema_fields_CATEGORY);
+    }
+
+    public function setCategory(string $category): static
+    {
+        return $this->setData(self::schema_fields_CATEGORY, $category);
     }
 
     public function getSortOrder(): int

@@ -70,7 +70,9 @@ final class CustomerServiceWidgetLazyBindModalTest extends TestCase
             "fetchTagSource('statics', 'Weline_CustomerService::css/customer-service.css')",
             $content
         );
-        $this->assertStringContainsString('window.Weline.load(', $content);
+        $this->assertStringContainsString('waitForWelineLoad', $content);
+        $this->assertStringContainsString('weline.load(', $content);
+        $this->assertStringContainsString('loadCustomerServiceScriptFallback', $content);
         $this->assertStringNotContainsString(
             "@static(Weline_CustomerService::js/customer-service.js)",
             $content
