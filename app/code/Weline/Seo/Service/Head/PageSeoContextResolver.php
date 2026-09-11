@@ -255,7 +255,7 @@ class PageSeoContextResolver
         );
 
         $context = $this->applySeoProfileProviders($template, $context);
-        // Providers often publish path-only canonicals (/blog, /help). Absolutize after merge
+        // Providers often publish path-only canonicals (/blog, /faq). Absolutize after merge
         // so head + JSON-LD never emit relative URLs to Google.
         $context['canonical_url'] = $this->canonicalizeUrl(
             $this->absoluteUrl($template, (string) ($context['canonical_url'] ?? ''))

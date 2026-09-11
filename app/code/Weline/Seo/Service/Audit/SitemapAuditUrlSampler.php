@@ -6,7 +6,7 @@ namespace Weline\Seo\Service\Audit;
 
 /**
  * After sitemap discovery, keep every singleton URL and only one representative
- * per repeating storefront structure (product/blog/category/help/…).
+ * per repeating storefront structure (product/blog/category/faq/…).
  */
 final class SitemapAuditUrlSampler
 {
@@ -102,9 +102,9 @@ final class SitemapAuditUrlSampler
             return 'category/*';
         }
 
-        // help/{slug}
-        if (\preg_match('#^help/([a-z0-9][a-z0-9_-]*)$#D', $path) === 1) {
-            return 'help/*';
+        // faq/{slug}
+        if (\preg_match('#^faq/([a-z0-9][a-z0-9_-]*)$#D', $path) === 1) {
+            return 'faq/*';
         }
 
         // promotion/{slug} (hub /promotion stays singleton)
@@ -163,10 +163,10 @@ final class SitemapAuditUrlSampler
                     'parentPath' => '/category',
                     'kind' => 'structure',
                 ],
-                'help/*' => [
+                'faq/*' => [
                     'key' => $pattern,
-                    'label' => '帮助文档',
-                    'parentPath' => '/help',
+                    'label' => 'FAQ 文档',
+                    'parentPath' => '/faq',
                     'kind' => 'structure',
                 ],
                 'promotion/*' => [
@@ -269,7 +269,7 @@ final class SitemapAuditUrlSampler
         $hubs = [
             'products' => '商品列表',
             'blog' => '博客首页',
-            'help' => '帮助中心',
+            'faq' => 'FAQ/帮助中心',
             'promotion' => '促销列表',
             'search' => '搜索页',
             'cart' => '购物车',
