@@ -169,8 +169,9 @@ class EventScanner
             
             $module = $modules[$moduleName];
             $basePath = $module['base_path'] ?? '';
-            if (empty($basePath) || !($module['status'] ?? false)) {
-                RegistryProgress::module('Event scan module', $moduleIndex, $totalModules, (string)$moduleName, 'skip inactive');
+            // 显式模块列表增量：允许扫描未激活但已在模块列表中的目录（安装/启用前的 -m 升级）。
+            if (empty($basePath)) {
+                RegistryProgress::module('Event scan module', $moduleIndex, $totalModules, (string)$moduleName, 'skip missing base_path');
                 continue;
             }
 

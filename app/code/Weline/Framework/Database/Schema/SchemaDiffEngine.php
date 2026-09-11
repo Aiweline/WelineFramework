@@ -55,14 +55,26 @@ final class SchemaDiffEngine
 
         $declaredIndexes = $this->indexesByKey($declared->indexes);
         $actualIndexes = $this->indexesByKey($actual->indexes);
+        $indexReplaceNames = [];
         foreach ($declaredIndexes as $name => $declaredIndex) {
-            if (isset($actualIndexes[$name])
-                && !IndexDefinitionContract::equals($declaredIndex, $actualIndexes[$name], $databaseType)) {
-                throw new \RuntimeException(__(
-                    '表 %{1} 的索引 %{2} 物理定义与 Schema 声明不一致',
-                    [$tableName, $declaredIndex->name],
-                ));
+            if (!isset($actualIndexes[$name])
+                || IndexDefinitionContract::equals($declaredIndex, $actualIndexes[$name], $databaseType)) {
+                continue;
             }
+            // 同名但定义漂移（含 PostgreSQL 遗留表达式/谓词唯一索引）：DROP 旧物理索引后 ADD 声明索引。
+            $indexReplaceNames[$name] = true;
+            $ops[] = new SchemaDiffOp(
+                SchemaDiffOp::KIND_DROP_INDEX,
+                $tableName,
+                $actualIndexes[$name],
+                $modelClass,
+            );
+            $ops[] = new SchemaDiffOp(
+                SchemaDiffOp::KIND_ADD_INDEX,
+                $tableName,
+                $declaredIndex,
+                $modelClass,
+            );
         }
         // Index DDL is ordered after ADD_COLUMN by SchemaMigrationExecutor.  A
         // column declared in this target schema is therefore available to an
@@ -125,23 +137,25 @@ final class SchemaDiffEngine
             }
         }
         foreach ($declared->indexes as $idx) {
-            if (!isset($actualIndexes[strtolower($idx->name)])) {
-                $allColsExist = true;
-                foreach ($idx->columns as $col) {
-                    if (!isset($declaredColNames[$col])) {
-                        $allColsExist = false;
-                        break;
-                    }
+            $indexKey = strtolower($idx->name);
+            if (isset($indexReplaceNames[$indexKey]) || isset($actualIndexes[$indexKey])) {
+                continue;
+            }
+            $allColsExist = true;
+            foreach ($idx->columns as $col) {
+                if (!isset($declaredColNames[$col])) {
+                    $allColsExist = false;
+                    break;
                 }
-                if ($allColsExist) {
-                    $ops[] = new SchemaDiffOp(SchemaDiffOp::KIND_ADD_INDEX, $tableName, $idx, $modelClass);
-                }
+            }
+            if ($allColsExist) {
+                $ops[] = new SchemaDiffOp(SchemaDiffOp::KIND_ADD_INDEX, $tableName, $idx, $modelClass);
             }
         }
         $matchedActualIndexNames = [];
         foreach ($actual->indexes as $idx) {
             $indexKey = strtolower($idx->name);
-            if (isset($implicitUniqueActualNames[$indexKey])) {
+            if (isset($implicitUniqueActualNames[$indexKey]) || isset($indexReplaceNames[$indexKey])) {
                 continue;
             }
             if (!isset($declaredIndexes[$indexKey])) {

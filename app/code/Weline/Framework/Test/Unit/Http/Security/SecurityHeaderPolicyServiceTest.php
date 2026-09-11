@@ -7,6 +7,8 @@ namespace Weline\Framework\Test\Unit\Http\Security;
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\App\Env;
 use Weline\Framework\Http\Security\ContentSecurityPolicyNormalizer;
+use Weline\Framework\Http\Security\CspSourceContribution;
+use Weline\Framework\Http\Security\CspSourceContributionRegistry;
 use Weline\Framework\Http\Security\EmptySecurityHeaderPolicyOverrideProvider;
 use Weline\Framework\Http\Security\InMemorySecurityPolicyLkgRepository;
 use Weline\Framework\Http\Security\SecurityHeaderPolicyService;
@@ -114,6 +116,46 @@ final class SecurityHeaderPolicyServiceTest extends TestCase
         self::assertSame("default-src 'self'; script-src 'self'", $a);
     }
 
+    public function testModuleCspContributionUnionsIntoBaseline(): void
+    {
+        Env::getInstance()->applyRuntimeConfig([
+            'security' => [
+                'headers' => [
+                    'csp' => "default-src 'self'; script-src 'self' https://cdn.example https://sdk.fixture.example; connect-src 'self' https://sdk.fixture.example",
+                    'csp_report_only' => "default-src 'self'; script-src 'self' https://cdn.example https://sdk.fixture.example; connect-src 'self' https://sdk.fixture.example",
+                ],
+            ],
+        ]);
+
+        $registry = new CspSourceContributionRegistry(
+            forcedContributions: [
+                new CspSourceContribution([
+                    'script-src' => ['https://sdk.fixture.example'],
+                    'connect-src' => ['https://sdk.fixture.example'],
+                ]),
+            ],
+        );
+        $service = new SecurityHeaderPolicyService(
+            lkgGate: new SecurityPolicyLkgGate(new InMemorySecurityPolicyLkgRepository()),
+            overrideProvider: new EmptySecurityHeaderPolicyOverrideProvider(),
+            cspContributions: $registry,
+        );
+        $baseline = $service->baselineFromEnv();
+        self::assertStringContainsString('https://sdk.fixture.example', $baseline['csp']);
+        self::assertStringContainsString("'self'", $baseline['csp']);
+
+        $effective = $service->resolveEffective([
+            'csp' => "default-src 'self'; script-src 'self' https://cdn.example; connect-src 'self'",
+        ]);
+        self::assertStringContainsString('https://sdk.fixture.example', $effective['csp']);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage(ContentSecurityPolicyNormalizer::ERROR_APP_DEFAULTS);
+        $service->assertOverrideNotWeaker([
+            'csp' => "default-src 'self'; script-src 'self' https://cdn.example; connect-src 'self'",
+        ]);
+    }
+
     public function testVerifiedLkgIsSharedAcrossGateInstances(): void
     {
         $repository = new InMemorySecurityPolicyLkgRepository();
@@ -124,5 +166,72 @@ final class SecurityHeaderPolicyServiceTest extends TestCase
         $second->assertCanActivate("default-src 'self'", scopeKey: 'store-a');
 
         self::assertSame('store-a', $second->getVerified('store-a')['scope_key'] ?? null);
+    }
+
+    public function testDeveloperToolingCspUnionsIntoResponseHeadersWhenEnabled(): void
+    {
+        Env::getInstance()->applyRuntimeConfig([
+            'security' => [
+                'headers' => [
+                    'csp' => "default-src 'self'; connect-src 'self'",
+                    'csp_report_only' => "default-src 'self'; connect-src 'self'",
+                    'csp_developer_tooling' => 'connect-src http://127.0.0.1:7277 http://localhost:7277',
+                ],
+            ],
+        ]);
+
+        $headers = $this->service->resolveCurrentResponseHeaders(null, true);
+        self::assertStringContainsString('http://127.0.0.1:7277', $headers['Content-Security-Policy']);
+        self::assertStringContainsString('http://localhost:7277', $headers['Content-Security-Policy']);
+        self::assertStringContainsString(
+            'http://127.0.0.1:7277',
+            $headers['Content-Security-Policy-Report-Only']
+        );
+
+        $effective = $this->service->resolveEffective([]);
+        self::assertStringNotContainsString('127.0.0.1:7277', $effective['csp']);
+        self::assertStringNotContainsString('localhost:7277', $effective['csp']);
+    }
+
+    public function testDeveloperToolingCspAbsentWhenDisabled(): void
+    {
+        Env::getInstance()->applyRuntimeConfig([
+            'security' => [
+                'headers' => [
+                    'csp' => "default-src 'self'; connect-src 'self'",
+                    'csp_report_only' => "default-src 'self'; connect-src 'self'",
+                    'csp_developer_tooling' => 'connect-src http://127.0.0.1:7277 http://localhost:7277',
+                ],
+            ],
+        ]);
+
+        $headers = $this->service->resolveCurrentResponseHeaders(null, false);
+        self::assertStringNotContainsString(
+            '127.0.0.1:7277',
+            $headers['Content-Security-Policy'] ?? ''
+        );
+        self::assertStringNotContainsString(
+            'localhost:7277',
+            $headers['Content-Security-Policy'] ?? ''
+        );
+    }
+
+    public function testDeveloperToolingCspAbsentWhenEnvFragmentEmpty(): void
+    {
+        Env::getInstance()->applyRuntimeConfig([
+            'security' => [
+                'headers' => [
+                    'csp' => "default-src 'self'; connect-src 'self'",
+                    'csp_report_only' => "default-src 'self'; connect-src 'self'",
+                    'csp_developer_tooling' => '',
+                ],
+            ],
+        ]);
+
+        $headers = $this->service->resolveCurrentResponseHeaders(null, true);
+        self::assertStringNotContainsString(
+            '127.0.0.1:7277',
+            $headers['Content-Security-Policy'] ?? ''
+        );
     }
 }

@@ -182,4 +182,60 @@ final class SchemaDiffEngineTest extends TestCase
         );
         self::assertSame('idx_demo_client_request_unique', $operations[1]->payload->name);
     }
+
+    public function testSameNameIndexDefinitionDriftEmitsDropThenAdd(): void
+    {
+        $declared = new TableSchema(
+            tableName: 'w_shipping_service_regions',
+            comment: '',
+            columns: [
+                new ColumnDefinition('service_id', 'int', null, false),
+                new ColumnDefinition('region_type', 'varchar', 16, false),
+                new ColumnDefinition('country_code', 'varchar', 2, false),
+                new ColumnDefinition('region_id', 'int', null, true),
+                new ColumnDefinition('region_code', 'varchar', 96, true),
+            ],
+            indexes: [
+                new IndexDefinition(
+                    'uk_service_lane_region',
+                    ['service_id', 'region_type', 'country_code', 'region_id', 'region_code'],
+                    'UNIQUE',
+                ),
+            ],
+            foreignKeys: [],
+            modelClass: null,
+        );
+        $actual = new TableSchema(
+            tableName: 'w_shipping_service_regions',
+            comment: '',
+            columns: [
+                new ColumnDefinition('service_id', 'int', null, false),
+                new ColumnDefinition('region_type', 'varchar', 16, false),
+                new ColumnDefinition('country_code', 'varchar', 2, false),
+                new ColumnDefinition('region_id', 'int', null, true),
+                new ColumnDefinition('region_code', 'varchar', 96, true),
+            ],
+            indexes: [
+                new IndexDefinition(
+                    'uk_service_lane_region',
+                    ['service_id', 'region_type', 'country_code', 'COALESCE(region_id, 0)', "COALESCE(region_code, ''::character varying)"],
+                    'UNIQUE',
+                ),
+            ],
+            foreignKeys: [],
+            modelClass: null,
+        );
+
+        $operations = (new SchemaDiffEngine())->diff($declared, $actual, 'pgsql');
+
+        self::assertSame(
+            [SchemaDiffOp::KIND_DROP_INDEX, SchemaDiffOp::KIND_ADD_INDEX],
+            array_map(static fn (SchemaDiffOp $operation): string => $operation->kind, $operations),
+        );
+        self::assertSame('uk_service_lane_region', $operations[0]->payload->name);
+        self::assertSame(
+            ['service_id', 'region_type', 'country_code', 'region_id', 'region_code'],
+            $operations[1]->payload->columns,
+        );
+    }
 }

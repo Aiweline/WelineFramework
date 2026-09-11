@@ -666,6 +666,9 @@ class Template extends DataObject
             'currency' => $dimension('user.currency', 'CNY', '/^[A-Z]{3}$/'),
             'website_url' => \function_exists('w_env_get') ? (string)\w_env_get('website.url', '') : '',
             'theme' => $this->resolveThemeCacheKeyForFetchFile($this->view_dir),
+            // Nested w:widget compile bakes <w:hook> output (header-account-links).
+            // New hooks.php → new ctx_ dir → miss → re-bake account dropdown menus.
+            'hooks_registry' => self::hooksRegistryCompileDigest(),
         ];
         $scopeJson = \json_encode($scope, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE);
         $scopeKey = \substr(\hash('sha256', \is_string($scopeJson) ? $scopeJson : \serialize($scope)), 0, 32);

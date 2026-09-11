@@ -49,6 +49,8 @@ w_changed($change);
         'previous_namespaces' => [],
         'urls' => [],
         'previous_urls' => [],
+        // optional acceleration: delete bare keys afterCommit (≤256 keys total)
+        // 'cache_ops' => [['pool' => 'system_config', 'keys' => ['…']]],
     ],
     'changed_fields' => ['name'],
     'before' => [],
@@ -82,6 +84,14 @@ w_changed($change);
 - `before/after` 仅允许业务白名单；不得放入 token、secret、cookie、Session、CSRF 或完整请求。
 - `context.user` 只是审计 `type/id`，Worker 不用它恢复授权。
 - `coalesced_event_ids` 只由 latest coalesce 产生，每项仍必须是合法 event ID。
+- `impact.cache_ops` 可选：`list<{pool,keys[]}>`；`pool` 为短小写标识；单次事件 keys 总数 ≤256。旧事件无该字段仍合法。
+
+### SLA：清理送达与防风暴
+
+- **namespaces bump（事务内）** 是跨 Worker 送达主路径；读侧须 `withNamespaces`。
+- **cache_ops delete（afterCommit）** 加速清理历史裸键；可接受毫秒级脏读窗口。
+- **禁止**配置保存触发 Worker 热重载；**禁止**单键清理走全量 `cache_clear`；广播/epoch apply 不得再 RPC mutate（防风暴）。
+- 本回合不做键级 L1 广播；默认靠 bump。
 
 `ResourceChangePayloadMapper` 再次验证 DTO、Context 与 Canonical JSON；payload 上限 49,152 bytes、深度 16，`payload_sha256` 基于关联键递归排序后的规范 JSON。
 
@@ -89,10 +99,10 @@ w_changed($change);
 
 | 模块 | Observer | 策略 | 作用 |
 |---|---|---|---|
-| Framework | `cache_namespace` | sync + critical, sort 10 | 对 current/previous namespace 执行 DB `bumpMany()` |
+| Framework | `cache_namespace` | sync + critical, sort 10 | 对 current/previous namespace 执行 DB `bumpMany()`（送达） |
+| Framework | `cache_impact` | sync + critical, sort 20 | 解析 `impact.cache_ops`，afterCommit 对声明池删键（加速） |
 | SEO | `seo_resource_changed` | sync + critical, sort 20 | 在主库事务中登记 SEO 目标 |
 | CDN | `cdn_resource_changed` | async + standard + latest, timeout 30 | 在 Delivery Worker 中消费 URL 影响 |
-
 `event.async.producer_enabled` 默认 false，因此 CDN async 声明不等于默认会产生 Outbox。critical sync Observer 仍照常执行。
 
 ## Outbox、Delivery 和 coalesce
