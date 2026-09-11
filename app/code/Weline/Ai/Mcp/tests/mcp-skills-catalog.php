@@ -61,6 +61,11 @@ $bundle = $policy['css_or_theme_skill_bundle'] ?? [];
 skillCheck(($bundle['rule_id'] ?? '') === 'css_or_theme_requires_ui_prototype_theme_skills', 'policy exposes css_or_theme skill bundle');
 skillCheck(is_array($bundle['required'] ?? null) && count($bundle['required']) === 3, 'css_or_theme bundle lists three skills');
 
+$featureBundle = $policy['feature_skill_bundle'] ?? [];
+skillCheck(($featureBundle['rule_id'] ?? '') === 'requirement_feature_kind_gate', 'policy exposes feature_skill_bundle');
+skillCheck(($featureBundle['also_require_acceptance_type'] ?? '') === 'shentu', 'feature bundle requires shentu acceptance');
+skillCheck(is_array($featureBundle['required'] ?? null) && count($featureBundle['required']) === 2, 'feature bundle lists prototype+UI');
+
 $shentuBundle = $policy['image_attachment_shentu_bundle'] ?? [];
 skillCheck(($shentuBundle['rule_id'] ?? '') === 'user_image_attachment_triggers_shentu', 'policy exposes image_attachment_shentu_bundle');
 skillCheck(($shentuBundle['hard_trigger'] ?? '') === 'any_user_message_image_or_screenshot_attachment', 'shentu bundle hard_trigger is any image attachment');
@@ -69,15 +74,29 @@ skillCheck(($shentuBundle['host_skill'] ?? '') === 'weline-ui-shentu', 'shentu b
 skillCheck(
     is_array($shentuBundle['required_actions'] ?? null)
     && in_array('judge_humanization_and_aesthetics_with_frontend_design_and_prototype', $shentuBundle['required_actions'], true)
-    && in_array('judge_theme_fit_with_weline_theme_development', $shentuBundle['required_actions'], true),
-    'shentu bundle requires UI+prototype humanization/aesthetics and theme-fit actions'
+    && in_array('judge_theme_fit_with_weline_theme_development', $shentuBundle['required_actions'], true)
+    && in_array('extract_structural_wireframe_line_sketch', $shentuBundle['required_actions'], true)
+    && in_array('provide_prototype_adjustments', $shentuBundle['required_actions'], true)
+    && in_array('ui_shot_defaults_to_ui_modification', $shentuBundle['required_actions'], true)
+    && in_array('joint_frontend_design_prototype_theme_same_turn', $shentuBundle['required_actions'], true),
+    'shentu bundle requires UI+prototype+wireframe+joint pipeline actions'
+);
+skillCheck(
+    is_array($shentuBundle['joint_pipeline'] ?? null)
+    && in_array('extract_structural_wireframe', $shentuBundle['joint_pipeline'], true)
+    && in_array('prototype_adjustments', $shentuBundle['joint_pipeline'], true)
+    && in_array('frontend_design_aesthetics', $shentuBundle['joint_pipeline'], true)
+    && in_array('theme_css_tokens_via_weline_theme_development', $shentuBundle['joint_pipeline'], true),
+    'shentu bundle exposes joint_pipeline wireframe→prototype→UI→theme'
 );
 skillCheck(
     is_array($shentuBundle['review_dimensions'] ?? null)
     && in_array('humanization', $shentuBundle['review_dimensions'], true)
     && in_array('aesthetic_standards', $shentuBundle['review_dimensions'], true)
-    && in_array('theme_fit', $shentuBundle['review_dimensions'], true),
-    'shentu bundle lists humanization/aesthetic/theme_fit dimensions'
+    && in_array('theme_fit', $shentuBundle['review_dimensions'], true)
+    && in_array('wireframe_structure', $shentuBundle['review_dimensions'], true)
+    && in_array('prototype_adjustment', $shentuBundle['review_dimensions'], true),
+    'shentu bundle lists humanization/aesthetic/theme_fit/wireframe/prototype dimensions'
 );
 $missingGate = $shentuBundle['missing_host_skills_gate'] ?? [];
 skillCheck(($missingGate['check'] ?? '') === 'available_skills_or_agent_store', 'shentu missing_host_skills_gate check is available_skills_or_agent_store');
