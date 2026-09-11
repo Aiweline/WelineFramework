@@ -49,11 +49,20 @@ class ShippingInfoQueryProvider implements QueryProviderInterface
     {
         try {
             $svc = $this->quoteService();
+            $scope = $this->normalizeQuoteScope($params);
             $configVersion = \array_key_exists('config_version', $params)
                 ? (string)$params['config_version']
-                : $svc->activeConfigVersion();
+                : '';
+            // listQuoteOptions：未传 version 时留空，跳过双读比对；quote 未传则用当前层 active。
+            if ($operation === 'quote' && $configVersion === '') {
+                $configVersion = $this->serviceManager->activeQuoteConfigVersion([
+                    'website_id' => (int)$scope['website_id'],
+                    'store_id' => (int)$scope['store_id'],
+                    'channel_id' => (int)$scope['channel_id'],
+                ]);
+            }
             $request = new \Weline\Shipping\Api\Quote\ShippingQuoteRequest(
-                scope: \is_array($params['scope'] ?? null) ? $params['scope'] : [],
+                scope: $scope,
                 address: \is_array($params['address'] ?? null) ? $params['address'] : [],
                 lines: \is_array($params['lines'] ?? null) ? $params['lines'] : [],
                 currency: (string)($params['currency'] ?? 'CNY'),
@@ -62,10 +71,22 @@ class ShippingInfoQueryProvider implements QueryProviderInterface
                 serviceCode: isset($params['service_code']) ? (string)$params['service_code'] : null,
             );
             if ($operation === 'listQuoteOptions') {
+                $options = $svc->listOptions($request);
+                $pinned = $configVersion !== ''
+                    ? $configVersion
+                    : $this->serviceManager->activeQuoteConfigVersion([
+                        'website_id' => (int)$scope['website_id'],
+                        'store_id' => (int)$scope['store_id'],
+                        'channel_id' => (int)$scope['channel_id'],
+                    ]);
+
                 return [
                     'success' => true,
                     'code' => 200,
-                    'data' => ['options' => $svc->listOptions($request)],
+                    'data' => [
+                        'options' => $options,
+                        'config_version' => $pinned,
+                    ],
                 ];
             }
             $serviceCode = trim((string)($params['service_code'] ?? ''));
@@ -87,6 +108,34 @@ class ShippingInfoQueryProvider implements QueryProviderInterface
                 'data' => [],
             ];
         }
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function normalizeQuoteScope(array $params): array
+    {
+        $scope = \is_array($params['scope'] ?? null) ? $params['scope'] : [];
+        foreach (['website_id', 'store_id', 'channel_id'] as $key) {
+            if (array_key_exists($key, $params) && !array_key_exists($key, $scope)) {
+                $scope[$key] = (int)$params[$key];
+            }
+        }
+        if (!isset($scope['website_id'])) {
+            $scope['website_id'] = (int)\Weline\Framework\Runtime\RequestContext::getWelineWebsiteId();
+        }
+        if (!isset($scope['store_id'])) {
+            $scope['store_id'] = (int)\Weline\Framework\Runtime\RequestContext::getWelineStoreId();
+        }
+        if (!isset($scope['channel_id'])) {
+            $scope['channel_id'] = (int)\Weline\Framework\Runtime\RequestContext::getWelineChannelId();
+        }
+        $scope['website_id'] = max(0, (int)$scope['website_id']);
+        $scope['store_id'] = max(0, (int)$scope['store_id']);
+        $scope['channel_id'] = max(0, (int)$scope['channel_id']);
+
+        return $scope;
     }
 
     private function quoteService(): ShippingQuoteServiceInterface
