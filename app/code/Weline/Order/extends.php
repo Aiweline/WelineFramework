@@ -9,6 +9,9 @@ declare(strict_types=1);
  * 论坛：https://bbs.aiweline.com
  */
 
+use Weline\Order\Extends\MailChannelProvider;
+use Weline\Smtp\Api\MailChannelProviderInterface;
+
 /**
  * Weline_Order 模块扩展规约
  *
@@ -16,6 +19,9 @@ declare(strict_types=1);
  * 下方 legacy 条目保留兼容说明，新对接请走 TrackingProvider。
  */
 return [
+    MailChannelProviderInterface::class => [
+        MailChannelProvider::class,
+    ],
     'type' => 'module',
     'documentation' => 'doc/extends.md',
     'extends' => [

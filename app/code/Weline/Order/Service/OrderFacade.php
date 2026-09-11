@@ -272,7 +272,7 @@ final class OrderFacade implements OrderFacadeInterface
                     'store_id' => $command->storeId,
                     'customer_id' => $command->customerId,
                     'order_type' => $this->orderTypeFromCommand($command),
-                    'type_payload' => $this->typePayloadFromCommand($command),
+                    'type_payload' => $this->typePayloadForPlannedOrder($command, (string)$planned['split_key']),
                     'items' => $planned['items'],
                     'money' => $money->toArray(),
                     'scope' => $scope->toArray(),
@@ -453,7 +453,7 @@ final class OrderFacade implements OrderFacadeInterface
                     'store_id' => $command->storeId,
                     'customer_id' => $command->customerId,
                     'order_type' => $this->orderTypeFromCommand($command),
-                    'type_payload' => $this->typePayloadFromCommand($command),
+                    'type_payload' => $this->typePayloadForPlannedOrder($command, (string)$planned['split_key']),
                     'items' => $planned['items'],
                     'money' => $money->toArray(),
                     'scope' => $scope->toArray(),
@@ -1236,9 +1236,73 @@ final class OrderFacade implements OrderFacadeInterface
                 'goods_subtotal_taxed_minor' => (int)($deposit['goods_subtotal_taxed_minor'] ?? 0),
                 'hang_status' => (string)($deposit['hang_status'] ?? 'awaiting_deposit'),
             ], $payload);
+            if (isset($deposit['b2b_credit_cash_deposit_minor'])) {
+                $payload['b2b_credit_cash_deposit_minor'] = (int)$deposit['b2b_credit_cash_deposit_minor'];
+            }
         }
 
         return $payload;
+    }
+
+    /** @return array<string,mixed> */
+    private function typePayloadForPlannedOrder(CreateCheckoutGroupCommand $command, string $splitKey): array
+    {
+        $payload = $this->typePayloadFromCommand($command);
+        $bySplit = is_array($command->options['type_payload_by_split'] ?? null)
+            ? $command->options['type_payload_by_split']
+            : [];
+        $splitKey = trim($splitKey);
+        if ($splitKey !== '' && isset($bySplit[$splitKey]) && is_array($bySplit[$splitKey])) {
+            $payload = array_merge($payload, $bySplit[$splitKey]);
+        }
+
+        return $payload;
+    }
+
+    /**
+     * Merge keys into persisted type_payload (memory + DB). Used by B2B credit reserve/commit.
+     *
+     * @param array<string,mixed> $patch
+     * @return array<string,mixed>
+     */
+    public function mergeTypePayload(string $orderUuid, array $patch): array
+    {
+        $orderUuid = trim($orderUuid);
+        if ($orderUuid === '' || $patch === []) {
+            return [];
+        }
+        if ($this->memory !== null) {
+            $row = $this->memory['orders'][$orderUuid] ?? null;
+            if (!is_array($row)) {
+                throw new OrderFacadeConflictException(
+                    self::ERROR_NOT_FOUND,
+                    \__('Order 不存在：%{1}', [$orderUuid]),
+                    ['order_uuid' => $orderUuid],
+                );
+            }
+            $current = is_array($row['type_payload'] ?? null) ? $row['type_payload'] : [];
+            $merged = array_merge($current, $patch);
+            $this->memory['orders'][$orderUuid]['type_payload'] = $merged;
+
+            return $merged;
+        }
+
+        $store = $this->dbStore();
+        $row = $store->findOrder($orderUuid);
+        if ($row === null) {
+            throw new OrderFacadeConflictException(
+                self::ERROR_NOT_FOUND,
+                \__('Order 不存在：%{1}', [$orderUuid]),
+                ['order_uuid' => $orderUuid],
+            );
+        }
+        $current = is_array($row['type_payload'] ?? null) ? $row['type_payload'] : [];
+        $merged = array_merge($current, $patch);
+        if (method_exists($store, 'updateTypePayload')) {
+            $store->updateTypePayload($orderUuid, $merged);
+        }
+
+        return $merged;
     }
 
     /**
