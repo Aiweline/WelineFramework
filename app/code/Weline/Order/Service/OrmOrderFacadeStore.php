@@ -151,6 +151,10 @@ final class OrmOrderFacadeStore implements OrderFacadeStoreInterface
             Order::schema_fields_IS_SHIPPING_CHARGE_OWNER => !empty($row['is_shipping_charge_owner']) ? 1 : 0,
             Order::schema_fields_SPLIT_KEY => (string)($row['split_key'] ?? 'default'),
             Order::schema_fields_STATE_VERSION => (int)($row['state_version'] ?? 0),
+            Order::schema_fields_ORDER_TYPE => strtolower(trim((string)($row['order_type'] ?? 'toc'))) ?: 'toc',
+            Order::schema_fields_TYPE_PAYLOAD_JSON => $this->encode(
+                \is_array($row['type_payload'] ?? null) ? $row['type_payload'] : [],
+            ),
         ])->save();
 
         $orderId = (int)$orderModel->getId();
@@ -279,7 +283,24 @@ final class OrmOrderFacadeStore implements OrderFacadeStoreInterface
             'state_version' => (int)$row->getData(Order::schema_fields_STATE_VERSION),
             'number_kind' => DisplayNumberRegistry::KIND_ORDER,
             'display_number' => (string)$row->getData(Order::schema_fields_ORDER_NUMBER),
+            'order_type' => strtolower(trim((string)($row->getData(Order::schema_fields_ORDER_TYPE) ?: 'toc'))) ?: 'toc',
+            'type_payload' => $this->decode((string)$row->getData(Order::schema_fields_TYPE_PAYLOAD_JSON)),
         ];
+    }
+
+    /**
+     * @param array<string,mixed> $typePayload
+     */
+    public function updateTypePayload(string $orderUuid, array $typePayload): void
+    {
+        $row = $this->order()
+            ->where(Order::schema_fields_ORDER_UUID, trim($orderUuid))
+            ->find()
+            ->fetch();
+        if (!$row instanceof Order || !$row->getId()) {
+            throw new \RuntimeException('order_type_payload_update_missing:' . $orderUuid);
+        }
+        $row->setData(Order::schema_fields_TYPE_PAYLOAD_JSON, $this->encode($typePayload))->save();
     }
 
     /** @return list<array<string, mixed>> */
