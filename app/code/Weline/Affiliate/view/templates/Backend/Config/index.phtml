@@ -1,0 +1,73 @@
+<?php
+/**
+ * 分销配置：嵌入统一配置声明的商品分销分享启停开关（支持 URL 范围）。
+ */
+$selectedScope = (string)($this->getData('selected_scope') ?? 'default.default.default');
+$centerUrl = $this->request->getUrlBuilder()->getBackendUrl('weline_systemconfig/backend/config', [
+    'module' => 'Weline_Affiliate',
+    'area' => 'frontend',
+    'target_scope' => $selectedScope,
+]);
+?>
+<div class="affiliate-product-share-config w-stack" style="--w-gap:var(--weline-space-6);" data-testid="affiliate-product-share-config">
+    <div class="w-cluster" data-align="center" data-justify="between" style="--w-gap:var(--weline-space-3);">
+        <div class="w-stack" style="--w-gap:var(--weline-space-1);">
+            <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0;">
+                <lang>配置写入当前作用范围；切换范围后页面会按新范围加载。关闭后商品详情不再展示分销分享。保存后经 SystemConfig 变更事件清理店面配置缓存。</lang>
+            </p>
+        </div>
+        <a class="w-button" data-tone="neutral" data-variant="outline" data-size="sm"
+           href="<?= htmlspecialchars($centerUrl, ENT_QUOTES, 'UTF-8') ?>">
+            <lang>在统一配置中心打开</lang>
+        </a>
+    </div>
+
+    <div class="w-field" style="--w-max-inline-size:22rem;">
+        <label class="w-field__label" for="affiliate-config-scope"><lang>作用范围</lang></label>
+        <div class="w-field__control">
+            <w:scope
+                id="affiliate-config-scope"
+                name="target_scope"
+                value="selected_scope"
+                placeholder="@lang(选择网站、店铺或渠道)"
+                search-placeholder="@lang(搜索作用范围)"
+                aria-label="@lang(选择作用范围)"
+                searchable="true"
+                default-expand-all="true"
+                required="true"
+            />
+        </div>
+    </div>
+
+    <w:config:embed
+        module="Weline_Affiliate"
+        area="frontend"
+        fields="product_share_enabled"
+        locale="default"
+    />
+</div>
+<script>
+(function () {
+    var root = document.getElementById('affiliate-config-scope');
+    if (!root) {
+        return;
+    }
+    var field = root.querySelector('input[type="hidden"][name="target_scope"]') || root.querySelector('input[name="target_scope"]');
+    if (!field) {
+        return;
+    }
+    field.addEventListener('change', function () {
+        var next = String(field.value || '').trim();
+        if (!next) {
+            return;
+        }
+        var url = new URL(window.location.href);
+        url.searchParams.set('target_scope', next);
+        var parts = next.split('.');
+        url.searchParams.set('website_code', parts[0] && parts[0] !== 'default' ? parts[0] : '');
+        url.searchParams.set('store_code', parts[1] && parts[1] !== 'default' ? parts[1] : '');
+        url.searchParams.set('channel_code', parts[2] && parts[2] !== 'default' ? parts[2] : '');
+        window.location.assign(url.toString());
+    });
+})();
+</script>

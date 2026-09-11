@@ -1,0 +1,26 @@
+<?php
+/**
+ * @meta.title {default="分销店面展示",description="按范围启用或关闭商品详情分销分享面板"}
+ * @meta.description {default="关闭后前台商品详情与快捷加购弹窗不再展示「分销分享」。未配置时默认启用。配置保存经 SystemConfig ResourceChange（w_changed）使 storefront/config 缓存代次失效。"}
+ * @config.area {frontend}
+ * @config.sort {75}
+ * @config.acl {Weline_Affiliate::config}
+ */
+?>
+
+<w:config:group
+    code="affiliate_product_share"
+    label="分销分享开关"
+    description="控制当前作用范围内是否在商品详情/加购区展示分销分享面板。"
+    sort="10"
+>
+    <w:config:field
+        key="product_share_enabled"
+        label="启用商品分销分享"
+        description="关闭后前台不再展示「分销分享」区块；页脚「我要推广」等其它入口不受此开关影响。"
+        type="switch"
+        value-type="bool"
+        default="1"
+        scope="global,website,store"
+    />
+</w:config:group>

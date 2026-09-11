@@ -8,7 +8,7 @@ Register::register(
     Register::MODULE,
     'Weline_Affiliate',
     __DIR__,
-    '1.0.0',
+    '1.0.17',
     'Weline 万能分销模块',
-    ['Weline_Framework', 'Weline_Customer', 'Weline_Backend', 'Weline_I18n']
+    ['Weline_Framework', 'Weline_Customer', 'Weline_Backend', 'Weline_I18n', 'Weline_SystemConfig']
 );

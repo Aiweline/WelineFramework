@@ -40,6 +40,11 @@
 "Inject affiliate summary and referral tools into the storefront customer account center.","Inject affiliate summary and referral tools into the storefront customer account center."
 "Please log in to continue.",请先登录。
 分享链接无效或已过期。,分享链接无效或已过期。
+分销配置,分销配置
+settings,settings
+分销店面展示启用与关闭,分销店面展示启用与关闭
+查看分销配置,查看分销配置
+查看分销店面展示配置,查看分销店面展示配置
 "Affiliate Management",推荐管理
 万能分销,万能分销
 "mdi mdi-account-tie-outline","mdi mdi-account-tie-outline"
@@ -78,17 +83,22 @@
 "mdi mdi-content-save-outline","mdi mdi-content-save-outline"
 我的分销,我的分销
 分享、转化与佣金,分享、转化与佣金
+加载中,加载中
+去登录,去登录
+分享好物，赚取佣金,分享好物，赚取佣金
+加入分销计划后可生成专属推广链接；登录后前往申请，审核通过即可开始分享。,加入分销计划后可生成专属推广链接；登录后前往申请，审核通过即可开始分享。
+登录前往申请分销,登录前往申请分销
+暂不可用,暂不可用
+已复制,已复制
+已分享,已分享
+"分销 API 未初始化","分销 API 未初始化"
+"分销 API 不支持分享链接操作","分销 API 不支持分享链接操作"
+分销数据加载失败,分销数据加载失败
 分销分享,分销分享
 分销分享链接,分销分享链接
 复制,复制
 分享,分享
-"分销 API 未初始化","分销 API 未初始化"
-分销数据加载失败,分销数据加载失败
-已复制,已复制
-已分享,已分享
-加载中,加载中
-"分销 API 不支持分享链接操作","分销 API 不支持分享链接操作"
-暂不可用,暂不可用
+分享到社交平台,分享到社交平台
 当前访问范围,当前访问范围
 账户范围,账户范围
 分销数据暂时无法加载，请稍后重试。,分销数据暂时无法加载，请稍后重试。
@@ -214,6 +224,9 @@ SKU,SKU
 鍩烘暟,鍩烘暟
 姣斾緥,姣斾緥
 鍘熷洜,鍘熷洜
+"配置写入当前作用范围；切换范围后页面会按新范围加载。关闭后商品详情不再展示分销分享。保存后经 SystemConfig 变更事件清理店面配置缓存。","配置写入当前作用范围；切换范围后页面会按新范围加载。关闭后商品详情不再展示分销分享。保存后经 SystemConfig 变更事件清理店面配置缓存。"
+在统一配置中心打开,在统一配置中心打开
+作用范围,作用范围
 "View and manage affiliate account information.",查看和管理推荐人账户信息。
 "Back to List",返回列表
 Edit,编辑
