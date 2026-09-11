@@ -43,7 +43,7 @@ $tips = [
         'code' => 'smtp',
         'category' => (string)__('通信'),
         'title' => (string)__('配置 SMTP 发信'),
-        'tip' => (string)__('新站/迁站后先测通发信，否则注册验证、订单通知都会失败。'),
+        'tip' => (string)__('新站/迁站后先测通发信；若已有配置或继承上层配置，须发送测试邮件确认。'),
         'status' => 'todo',
         'scenarios' => ['new', 'migrate'],
         'href' => $page('smtp/backend/config'),
@@ -160,6 +160,43 @@ $tips = [
         'module' => 'Weline_Websites',
     ],
 ];
+
+// 模块 Extends 覆盖状态（SMTP：自有/继承配置 → 待确认；测试通过 → 已完成）
+try {
+    /** @var \Weline\SiteSetupAssistant\Service\SetupTaskStatusCollector $statusCollector */
+    $statusCollector = \Weline\Framework\Manager\ObjectManager::getInstance(
+        \Weline\SiteSetupAssistant\Service\SetupTaskStatusCollector::class
+    );
+    $statusByCode = $statusCollector->collectByCode([
+        'website_id' => $websiteId,
+        'website_code' => '',
+        'storage_scope' => '',
+    ]);
+    foreach ($tips as &$tipRow) {
+        $code = (string)($tipRow['code'] ?? '');
+        if ($code === '' || !isset($statusByCode[$code])) {
+            continue;
+        }
+        $override = $statusByCode[$code];
+        if (isset($override['status'])) {
+            $tipRow['status'] = (string)$override['status'];
+        }
+        if (!empty($override['tip'])) {
+            $tipRow['tip'] = (string)$override['tip'];
+        }
+        if (!empty($override['title'])) {
+            $tipRow['title'] = (string)$override['title'];
+        }
+        if (!empty($override['href'])) {
+            $tipRow['href'] = (string)$override['href'];
+        }
+        if (!empty($override['meta']) && is_array($override['meta'])) {
+            $tipRow['meta'] = $override['meta'];
+        }
+    }
+    unset($tipRow);
+} catch (\Throwable) {
+}
 
 $total = count($tips);
 $done = count(array_filter($tips, static fn(array $t): bool => $t['status'] === 'done'));
