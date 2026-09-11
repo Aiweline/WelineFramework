@@ -1,17 +1,19 @@
 # weline-module-smtp
 
 #### 介绍
-Weline Smtp 模组提供统一发信入口，支持按发件人 code 配置多个发件来源。发件来源可以是外部 SMTP，也可以是 Weline Mail 自建邮局账号。
+Weline Smtp 模组提供统一发信入口：传输账户（SMTP 连接）与发信渠道（业务模块 Extends 注册）分离。发件来源可以是外部 SMTP，也可以是 Weline Mail 自建邮局账号。
 
 #### 使用说明
 
 后台入口：`Smtp邮件服务 -> Smtp配置`。
 
-1. 添加发件人并填写唯一 `code`，业务模块可通过 `w_query('smtp', 'send', ['sender_code' => 'code'])` 指定发件人。
-2. 选择 `外部 SMTP` 时，需要手动配置 SMTP 主机、端口、加密方式、认证方式、用户名和密码。
-3. 选择 `自建邮局账号` 时，页面会提供可搜索的 Mail 账号选择器；选中账号后自动带出 SMTP 主机、端口、加密方式和用户名。
-4. 自建 fake 邮局账号无需密码，测试发送会写入 Mail 发件箱和本地收件箱，并同步写入 SMTP 发送日志。
-5. 真实自建邮局账号仍依赖 Mail 模块底层邮件服务环境，真实外部 SMTP 发送仍依赖客户提供可连接的外部 SMTP 凭据。
+1. 添加**传输账户**（账户 ID 由系统生成，不是业务代号，也不是发件邮箱）。
+2. 业务模块通过 Extends 实现 `MailChannelProviderInterface` 注册发信渠道（如 `Weline_Order::order_paid`、`Weline_Product::product_update`）；本页将渠道绑定到传输账户。
+3. 调用请用 `w_query('smtp', 'send', ['channel' => 'Module::code', ...])`；旧 `sender_code` 仍兼容直接指定传输账户。
+4. 选择 `外部 SMTP` 时，需要手动配置 SMTP 主机、端口、加密方式、认证方式、用户名和密码。
+5. 选择 `自建邮局账号` 时，页面会提供可搜索的 Mail 账号选择器；选中账号后自动带出 SMTP 主机、端口、加密方式和用户名。
+6. 自建 fake 邮局账号无需密码，测试发送会写入 Mail 发件箱和本地收件箱，并同步写入 SMTP 发送日志。
+7. 真实自建邮局账号仍依赖 Mail 模块底层邮件服务环境，真实外部 SMTP 发送仍依赖客户提供可连接的外部 SMTP 凭据。
 
 #### 参与贡献
 

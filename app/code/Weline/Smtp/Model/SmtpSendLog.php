@@ -13,6 +13,7 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 #[Index(name: 'FROM_EMAIL', columns: ['from_email'], type: 'DEFAULT', method: 'BTREE')]
 #[Index(name: 'TO_EMAIL', columns: ['to_email'], type: 'DEFAULT', method: 'BTREE')]
 #[Index(name: 'SEND_MODULE', columns: ['module'], type: 'DEFAULT', method: 'BTREE')]
+#[Index(name: 'SEND_CHANNEL', columns: ['channel'], type: 'DEFAULT', method: 'BTREE')]
 class SmtpSendLog extends Model
 {
     public const schema_table = 'weline_smtp_send_log';
@@ -46,4 +47,10 @@ class SmtpSendLog extends Model
     public const schema_fields_ATTACHMENT = 'attachment';
     #[Col(type: 'varchar', length: 128, nullable: false, comment: '模组')]
     public const schema_fields_MODULE = 'module';
+    #[Col(type: 'varchar', length: 191, nullable: true, default: '', comment: '发信渠道 code（Module::channel）')]
+    public const schema_fields_CHANNEL = 'channel';
+    #[Col(type: 'varchar', length: 64, nullable: true, default: '', comment: '传输账户 code')]
+    public const schema_fields_SENDER_CODE = 'sender_code';
+    #[Col(type: 'varchar', length: 191, nullable: true, default: '', comment: 'SystemConfig storage_scope')]
+    public const schema_fields_STORAGE_SCOPE = 'storage_scope';
 }

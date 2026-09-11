@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Smtp',
-    "version" => '1.1.1',
+    "version" => '1.3.9',
     "requires" => [
         'Weline_Admin' => '*',
         'Weline_Backend' => '*',
