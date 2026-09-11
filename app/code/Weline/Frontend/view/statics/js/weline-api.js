@@ -530,9 +530,11 @@
     };
 
     /**
-     * Storefront pages can leave `new Worker(http(s) URL)` Network-pending forever
-     * (Chrome Dedicated Worker destination) while fetch() of the same URL succeeds.
-     * Bootstrap the classic Worker from a same-origin Blob URL instead.
+     * Prefer same-origin classic Worker URL (allowed by CSP worker-src/'self').
+     * Fall back to Blob Worker when URL construction fails or CSP blocks it —
+     * Blob path requires worker-src blob: (see SecurityHeaderDefaults::CSP).
+     * Historical note: some storefronts left `new Worker(http URL)` Network-pending;
+     * Blob bootstrap remains the recovery path after a short CSP/error probe.
      */
     const createDedicatedWorkerFromScriptUrl = (workerUrl, options = {}) => {
         if (!window.Worker) {
@@ -564,10 +566,16 @@
                 }
             }, timeoutMs);
         }
-        return fetch(scriptUrl, fetchInit).then((response) => {
+
+        const clearFetchTimeout = () => {
             if (timeoutId) {
                 window.clearTimeout(timeoutId);
+                timeoutId = 0;
             }
+        };
+
+        const createBlobWorker = () => fetch(scriptUrl, fetchInit).then((response) => {
+            clearFetchTimeout();
             if (!response.ok) {
                 throw new Error('[Weline.Api] worker script HTTP ' + response.status);
             }
@@ -580,13 +588,14 @@
             const blobUrl = URL.createObjectURL(blob);
             try {
                 const worker = new Worker(blobUrl);
+                // Keep blob URL until the worker has had time to parse (revoke@0 races CSP/load).
                 window.setTimeout(() => {
                     try {
                         URL.revokeObjectURL(blobUrl);
                     } catch (_error) {
                         /* ignore */
                     }
-                }, 0);
+                }, 5000);
                 return worker;
             } catch (error) {
                 try {
@@ -597,11 +606,49 @@
                 throw error;
             }
         }).catch((error) => {
-            if (timeoutId) {
-                window.clearTimeout(timeoutId);
-            }
+            clearFetchTimeout();
             throw error;
         });
+
+        const createUrlWorker = () => new Promise((resolve, reject) => {
+            let settled = false;
+            let worker = null;
+            try {
+                worker = new Worker(scriptUrl);
+            } catch (error) {
+                reject(error);
+                return;
+            }
+            const finishOk = () => {
+                if (settled) {
+                    return;
+                }
+                settled = true;
+                try {
+                    worker.removeEventListener('error', onError);
+                } catch (_e) { /* ignore */ }
+                clearFetchTimeout();
+                resolve(worker);
+            };
+            const onError = () => {
+                if (settled) {
+                    return;
+                }
+                settled = true;
+                try {
+                    worker.removeEventListener('error', onError);
+                } catch (_e) { /* ignore */ }
+                try {
+                    worker.terminate();
+                } catch (_t) { /* ignore */ }
+                reject(new Error('[Weline.Api] same-origin Worker blocked by CSP or failed to boot.'));
+            };
+            worker.addEventListener('error', onError);
+            // CSP violations surface asynchronously; accept URL worker if no error arrives quickly.
+            window.setTimeout(finishOk, 80);
+        });
+
+        return createUrlWorker().catch(() => createBlobWorker());
     };
 
     const getDefaultWorkerUrl = () => {
@@ -753,6 +800,9 @@
         }
         client.config.endpoint = freshConfig.endpoint;
         client.config.workerUrl = freshConfig.workerUrl;
+        if (String(client.config.deployVersion || '') !== String(freshConfig.deployVersion || '')) {
+            client.responseCacheL1.clear();
+        }
         client.config.deployVersion = freshConfig.deployVersion;
         client.config.workerBuildId = freshConfig.workerBuildId;
         client.config.locale = freshConfig.locale;

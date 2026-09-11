@@ -37,6 +37,9 @@ final class WelineApiWorkerNonceContractTest extends TestCase
         self::assertStringContainsString('createDedicatedWorkerFromScriptUrl', $script);
         self::assertStringContainsString('URL.createObjectURL', $script);
         self::assertStringContainsString('new Worker(blobUrl)', $script);
+        self::assertStringContainsString('createUrlWorker', $script);
+        self::assertStringContainsString('createBlobWorker', $script);
+        self::assertStringContainsString('same-origin Worker blocked', $script);
         self::assertStringContainsString('recoverWorkerAfterTimeout', $script);
         self::assertStringContainsString('workerRecoverPromise', $script);
     }
