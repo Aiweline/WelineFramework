@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="utf-8">
+  <title>PROTOTYPE — product card vertical rhythm</title>
+  <style>
+    :root {
+      --weline-space-2: 0.5rem;
+      --weline-space-5: 1.125rem;
+      --primary: #b84a3c;
+      --link: #007185;
+    }
+    body { font-family: system-ui, "PingFang SC", sans-serif; background: #f4f1ea; margin: 0; padding: 1.25rem; }
+    h1 { font-size: 1.05rem; }
+    .note { color: #565959; font-size: 0.85rem; max-width: 40rem; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-top: 1rem; }
+    .card { display: flex; flex-direction: column; min-height: 22rem; background: #fff; border-radius: 1rem; border: 1px solid #e7e7e7; overflow: hidden; }
+    .media { aspect-ratio: 1; background: linear-gradient(135deg, #dbe4ee, #c5d0db); }
+    .body { display: flex; flex: 1; flex-direction: column; gap: var(--weline-space-2); padding: 0.9rem; }
+    .title { margin: 0; min-height: 2.8em; color: var(--link); font-size: 0.9rem; }
+    .price { display: flex; flex-wrap: wrap; align-items: center; gap: var(--weline-space-2); }
+    .now { color: var(--primary); font-weight: 700; }
+    .was { color: #565959; text-decoration: line-through; font-size: 0.8rem; }
+    .chip { display: inline-flex; padding: 0.25rem 0.5rem; border-radius: 999px; background: color-mix(in srgb, var(--link) 12%, transparent); color: var(--link); font-size: 0.75rem; font-weight: 600; }
+    .cta { display: flex; flex-direction: column; gap: var(--weline-space-2); }
+    .btn { display: flex; align-items: center; justify-content: center; min-height: 2.35rem; border-radius: 0.65rem; font-weight: 600; font-size: 0.875rem; }
+    .btn-out { border: 1px solid var(--primary); background: #f8ede9; color: #7a3028; }
+    .btn-fill { border: 1px solid var(--primary); background: var(--primary); color: #fff; }
+    /* A broken: pager margin leaked onto buttons + price auto */
+    .v-a .price { margin-top: auto; }
+    .v-a .cta { gap: 6px; margin-top: 6px; }
+    .v-a .btn { margin: 18px 0 0; }
+    /* B recommended: single auto on CTA, one gap token */
+    .v-b .cta { margin-top: auto; padding-top: var(--weline-space-2); }
+    .v-b .btn { margin: 0; }
+    .meta { padding: 0.65rem 0.9rem 0.9rem; font-size: 0.78rem; color: #565959; }
+    .bar { position: fixed; left: 50%; bottom: 1rem; transform: translateX(-50%); display: flex; gap: 0.5rem; padding: 0.45rem 0.7rem; background: #111; border-radius: 999px; }
+    .bar a { color: #fff; text-decoration: none; font-size: 0.8rem; padding: 0.3rem 0.65rem; border-radius: 999px; }
+    .bar a[aria-current="true"] { background: #c45500; }
+    body[data-variant="a"] .only-a,
+    body[data-variant="b"] .only-b { outline: 2px solid #c45500; outline-offset: 2px; }
+  </style>
+</head>
+<body data-variant="b">
+  <h1>PROTOTYPE · 商品卡垂直节奏</h1>
+  <p class="note">PROTOTYPE（可丢）。问题：分类页 CSS 把分页 `margin:18px` 串到购买按钮，价→加购与加购→立即购买出现两种间距。B=单一吸底在 CTA + space-2 gap。</p>
+  <div class="grid">
+    <article class="card v-a only-a">
+      <div class="media"></div>
+      <div class="body">
+        <p class="title">SKU-DEMO-A</p>
+        <div class="price"><span class="now">CNY 89.10</span><span class="was">CNY 99.00</span><span class="chip">今日精选</span></div>
+        <div class="cta"><div class="btn btn-out">加入购物车</div><div class="btn btn-fill">立即购买</div></div>
+      </div>
+      <div class="meta"><strong>A 现状</strong><br>按钮 margin 18px + 价区 auto</div>
+    </article>
+    <article class="card v-b only-b">
+      <div class="media"></div>
+      <div class="body">
+        <p class="title">SKU-DEMO-B</p>
+        <div class="price"><span class="now">CNY 89.10</span><span class="was">CNY 99.00</span><span class="chip">今日精选</span></div>
+        <div class="cta"><div class="btn btn-out">加入购物车</div><div class="btn btn-fill">立即购买</div></div>
+      </div>
+      <div class="meta"><strong>B 推荐（已落地）</strong><br>CTA margin-top:auto · gap space-2 · 按钮 margin 0</div>
+    </article>
+  </div>
+  <div class="bar">
+    <a href="?variant=a" data-v="a">A 破损</a>
+    <a href="?variant=b" data-v="b">B 统一</a>
+  </div>
+  <script>
+    const v = new URLSearchParams(location.search).get('variant') || 'b';
+    document.body.dataset.variant = v;
+    document.querySelectorAll('.bar a').forEach(a => a.setAttribute('aria-current', a.dataset.v === v ? 'true' : 'false'));
+  </script>
+</body>
+</html>

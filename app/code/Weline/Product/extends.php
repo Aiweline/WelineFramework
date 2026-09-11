@@ -2,7 +2,13 @@
 
 declare(strict_types=1);
 
+use Weline\Product\Extends\MailChannelProvider;
+use Weline\Smtp\Api\MailChannelProviderInterface;
+
 return [
+    MailChannelProviderInterface::class => [
+        MailChannelProvider::class,
+    ],
     'type' => 'module',
     'documentation' => 'doc/provider-guide.md',
     'extends' => [

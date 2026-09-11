@@ -94,6 +94,10 @@
 "product_id 与 supplier_id 必须为正整数","product_id and supplier_id must be positive integers"
 商品供应商关联创建后无法回读：%{1},"Product-supplier link could not be reloaded after create: %{1}"
 商品供应商关联更新后无法回读,"Product-supplier link could not be reloaded after update"
+产品更新通知,产品更新通知
+产品信息/库存等更新相关邮件,产品信息/库存等更新相关邮件
+询价回复通知,询价回复通知
+产品询价回复邮件,产品询价回复邮件
 "Global Scope 不支持商品加购","Global Scope does not support additional product purchases"
 该商品已不存在或已下架，请从购物车移除,该商品已不存在或已下架，请从购物车移除
 "Offer 未发布","Offer not released"
@@ -335,15 +339,6 @@ check,check
 未找到属性集目录，请重新选择属性集。,未找到属性集目录，请重新选择属性集。
 "多选规格值后将按笛卡尔积生成子 SKU。","多选规格值后将按笛卡尔积生成子 SKU。"
 当前属性集没有可填写的商品属性（非规格组）。,当前属性集没有可填写的商品属性（非规格组）。
-请至少选择一个商品,请至少选择一个商品
-已添加,已添加
-已加入购物车,已加入购物车
-全部加入购物车,全部加入购物车
-正在加入购物车...,"Adding to cart..."
-加入购物车失败,"Failed to add to cart"
-"Buy these items together","Buy these items together"
-当前商品,当前商品
-总价,总价
 全部商品,全部商品
 浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。
 "第 %{1}–%{2} 件，共 %{3} 件商品","%{1}–%{2} of %{3} products"
@@ -392,6 +387,15 @@ SKU,SKU
 "已售 %{1}","%{1} sold"
 联系询价,"Contact for quote"
 查看详情,查看详情
+请至少选择一个商品,请至少选择一个商品
+已添加,已添加
+已加入购物车,已加入购物车
+全部加入购物车,全部加入购物车
+正在加入购物车...,"Adding to cart..."
+加入购物车失败,"Failed to add to cart"
+"Buy these items together","Buy these items together"
+当前商品,当前商品
+总价,总价
 商品信息暂不可用,"Product information is unavailable"
 商品类型,"Product type"
 属性集,"Attribute set"
@@ -471,6 +475,10 @@ DPI,DPI
 提交询价,"Submit quote request"
 加入购物车,"Add to Cart"
 立即结账,"Proceed to checkout"
+暂不可售,"Currently unavailable"
+前往购物车,前往购物车
+正在前往结账...,正在前往结账...
+结账准备失败,结账准备失败
 安全交易保障,"Secure transaction"
 技术细节,"Technical details"
 展示更多,"Show more"
@@ -1214,6 +1222,7 @@ SKU（每次新建使用唯一值）,"SKU (use a unique value for each new produ
 库存保存失败，商品修改已回滚,库存保存失败，商品修改已回滚
 发布校验未通过,发布校验未通过
 "商品类型 Provider 不可用：%{1}","商品类型 Provider 不可用：%{1}"
+"商品目录变更后清理前台/FPC 缓存失败：%{1}","商品目录变更后清理前台/FPC 缓存失败：%{1}"
 "万能产品 V2 身份盘点、迁移、验证与可回滚切换（仅 full clone）","万能产品 V2 身份盘点、迁移、验证与可回滚切换（仅 full clone）"
 "只读统计旧 1:1 与 V2 身份、缺 Offer、冲突及切换状态","只读统计旧 1:1 与 V2 身份、缺 Offer、冲突及切换状态"
 只读生成迁移决策，不写任何记录,只读生成迁移决策，不写任何记录
@@ -1253,7 +1262,6 @@ SKU（每次新建使用唯一值）,"SKU (use a unique value for each new produ
 切换属性集只改变当前可视化区域；其他属性行会继续保留在高级数据中。,切换属性集只改变当前可视化区域；其他属性行会继续保留在高级数据中。
 "多规格商品至少需要一个 EAV 规格轴","多规格商品至少需要一个 EAV 规格轴"
 已加入,"Added to cart"
-前往购物车,前往购物车
 返回商品列表,"Return to product list"
 从品牌目录选择；可在「品牌管理」中维护。,"Choose from the brand catalog. Manage brands separately."
 从供应商目录选择；可在「供应商管理」中维护。,"Choose from the supplier catalog. Manage suppliers separately."
@@ -1275,7 +1283,6 @@ SKU（每次新建使用唯一值）,"SKU (use a unique value for each new produ
 个组合未列出,个组合未列出
 属性集字段,"Attribute set fields"
 "按属性组分栏填写；带 * 为必填。多规格商品的规格维度可多选并自动生成子 SKU。","按属性组分栏填写；带 * 为必填。多规格商品的规格维度可多选并自动生成子 SKU。"
-暂不可售,"Currently unavailable"
 无法创建游客购物车会话,"Unable to create guest cart session"
 商品已加入购物车。,"Added to cart."
 "带 * 为必填，其余选填。","* Required; others optional."

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Product\Service;
 
 use Weline\Captcha\Api\CaptchaManagerInterface;
+use Weline\Captcha\Service\LazyCaptchaClientRuntime;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Registry\Service\RegistryModulePresence;
@@ -31,11 +32,8 @@ final class ProductQuoteRequestCaptchaGuard
         }
 
         try {
-            return $this->manager()->renderChallenge([
-                'form_id' => self::FORM_ID,
-                'intent' => self::INTENT,
-                'required' => true,
-            ]);
+            // FPC page shells must not SSR Google/local challenge HTML (stale/empty site keys).
+            return LazyCaptchaClientRuntime::hostMarkup(self::FORM_ID, self::INTENT, 'required');
         } catch (\Throwable $throwable) {
             if (function_exists('w_log_error')) {
                 w_log_error(
