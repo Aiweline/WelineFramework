@@ -30,17 +30,25 @@ final class WarehouseIndexTemplateContractTest extends TestCase
 
         self::assertStringContainsString('货源供应商', $tpl);
         self::assertStringContainsString('作用范围', $tpl);
-        self::assertStringContainsString('国家代码', $tpl);
         self::assertStringContainsString('远程仓', $tpl);
         self::assertStringContainsString('本地仓', $tpl);
         self::assertStringContainsString('保存映射', $tpl);
         self::assertStringContainsString('暂无映射', $tpl);
+
+        self::assertStringContainsString('w:theme:address', $tpl);
+        self::assertStringContainsString('selection="single"', $tpl);
+        self::assertStringContainsString('levels="country"', $tpl);
+        self::assertStringContainsString('catalog="global"', $tpl);
+        self::assertStringContainsString('country-name="cj_country_code"', $tpl);
+        self::assertStringContainsString('data-testid="dropship-wh-country"', $tpl);
 
         self::assertStringNotContainsString('form-control', $tpl);
         self::assertStringNotContainsString('container-fluid', $tpl);
         self::assertStringNotContainsString('btn-primary', $tpl);
         self::assertStringNotContainsString('table-striped', $tpl);
         self::assertStringNotContainsString('placeholder="provider (cj)"', $tpl);
+        self::assertStringNotContainsString('placeholder="US"', $tpl);
+        self::assertDoesNotMatchRegularExpression('/<input[^>]*\bname="cj_country_code"/', $tpl);
     }
 
     public function testWarehouseControllerResolvesScopeAndProviders(): void
