@@ -25,6 +25,26 @@ final class WelineApiWorkerResponseCacheContractTest extends TestCase
         self::assertStringContainsString("cache: 'no-store'", $script);
     }
 
+    public function testWorkerClearsLocalCacheWhenDeployVersionChanges(): void
+    {
+        $script = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/view/statics/js/weline-api-worker.js',
+        );
+        $api = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/view/statics/js/weline-api.js',
+        );
+        self::assertStringContainsString('activeResponseCacheDeployVersion', $script);
+        self::assertStringContainsString('ensureResponseCacheDeployVersion', $script);
+        self::assertStringContainsString('clearResponseCacheNotMatchingDeploy', $script);
+        self::assertStringContainsString('await ensureResponseCacheDeployVersion(config)', $script);
+        self::assertStringContainsString('wqrc1|', $script);
+        self::assertStringContainsString('responseCacheL1.clear()', $api);
+        self::assertStringContainsString(
+            "String(client.config.deployVersion || '') !== String(freshConfig.deployVersion || '')",
+            $api
+        );
+    }
+
     public function testWorkerInvalidatesConsentStatusAfterAccept(): void
     {
         $script = (string)file_get_contents(

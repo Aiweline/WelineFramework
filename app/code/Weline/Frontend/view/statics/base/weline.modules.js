@@ -26,8 +26,8 @@
             description: "迷你购物车 extras 页签交互"
         },
         miniCartIcon: {
-            origin_paths: ["app/code/Weline/Theme/view/statics/js/widgets/mini-cart-icon.js?v=20260909-coupon-breakdown1"],
-            paths: ["/Weline/Theme/view/statics/js/widgets/mini-cart-icon.js?v=20260909-coupon-breakdown1"],
+            origin_paths: ["app/code/Weline/Theme/view/statics/js/widgets/mini-cart-icon.js?v=20260910-checkout-invalidate1"],
+            paths: ["/Weline/Theme/view/statics/js/widgets/mini-cart-icon.js?v=20260910-checkout-invalidate1"],
             globalVar: "WelineMiniCartIcon",
             description: "迷你购物车图标与抽屉"
         },
@@ -119,10 +119,16 @@
             description: "前台账户退出确认"
         },
         customerSocialQuick: {
-            origin_paths: ["app/code/Weline/Customer/view/statics/js/account-social-quick.js?v=20260907-chooser-ui-1"],
-            paths: ["/Weline/Customer/view/statics/js/account-social-quick.js?v=20260907-chooser-ui-1"],
+            origin_paths: ["app/code/Weline/Customer/view/statics/js/account-social-quick.js?v=20260910-mount-fw2"],
+            paths: ["/Weline/Customer/view/statics/js/account-social-quick.js?v=20260910-mount-fw2"],
             globalVar: "WelineSocialQuick",
             description: "未登录右下角社媒快捷登录条（由 account JS 动态拉起）"
+        },
+        customerLoginPanel: {
+            origin_paths: ["app/code/Weline/Customer/view/statics/js/account-login-panel.js?v=20260910-mount-self-provide"],
+            paths: ["/Weline/Customer/view/statics/js/account-login-panel.js?v=20260910-mount-self-provide"],
+            globalVar: "WelineLoginPanel",
+            description: "可挂载完整登录面板（快捷+账密）"
         },
         accountTwoFactor: {
             origin_paths: ["app/code/Weline/TwoFactorAuth/view/statics/frontend/js/account-two-factor-inline-v2.js"],
@@ -142,6 +148,13 @@
             globalVar: null,
             description: "迷你购物车订单留言"
         },
+        paymentLifecycle: {
+            origin_paths: ["app/code/Weline/Payment/view/statics/js/payment-lifecycle.js?v=20260910-payment-lifecycle3"],
+            paths: ["/Weline/Payment/view/statics/js/payment-lifecycle.js?v=20260910-payment-lifecycle3"],
+            globalVar: "WelinePayment",
+            load: "eager",
+            description: "支付生命周期：weline:payment:* 统一事件"
+        },
         customerService: {
             origin_paths: ["app/code/Weline/CustomerService/view/statics/js/customer-service.js"],
             paths: ["/Weline/CustomerService/view/statics/js/customer-service.js"],
@@ -155,8 +168,8 @@
             description: "Geo定位模块（浏览器定位和IP定位）"
         },
         shippingCheckoutAddress: {
-            origin_paths: ["app/code/Weline/Shipping/view/statics/js/widgets/checkout-shipping-address.v20260917.js"],
-            paths: ["/Weline/Shipping/view/statics/js/widgets/checkout-shipping-address.v20260917.js"],
+            origin_paths: ["app/code/Weline/Shipping/view/statics/js/widgets/checkout-shipping-address.v20260910-submit-embargo1.js"],
+            paths: ["/Weline/Shipping/view/statics/js/widgets/checkout-shipping-address.v20260910-submit-embargo1.js"],
             globalVar: "WelineShippingCheckoutAddress",
             description: "结账收货地址部件"
         },
@@ -166,6 +179,13 @@
             globalVar: null,
             description: "账户中心发货/收货地址维护"
         },
+        checkoutLifecycle: {
+            origin_paths: ["app/code/Weline/Checkout/view/statics/js/checkout-lifecycle.js?v=20260910-checkout-lifecycle3"],
+            paths: ["/Weline/Checkout/view/statics/js/checkout-lifecycle.js?v=20260910-checkout-lifecycle3"],
+            globalVar: "WelineCheckout",
+            load: "eager",
+            description: "结账生命周期：weline:checkout:order-created / success"
+        },
         captchaLazy: {
             origin_paths: ["app/code/Weline/Captcha/view/statics/js/captcha-lazy.js?v=20260909-mo-guard1"],
             paths: ["/Weline/Captcha/view/statics/js/captcha-lazy.js?v=20260909-mo-guard1"],
@@ -173,14 +193,14 @@
             description: "FPC-safe lazy captcha client runtime (Weline.Captcha)"
         },
         checkoutCoupon: {
-            origin_paths: ["app/code/Weline/Marketing/view/statics/js/widgets/checkout-coupon.js?v=20260908-coupon-restore1"],
-            paths: ["/Weline/Marketing/view/statics/js/widgets/checkout-coupon.js?v=20260908-coupon-restore1"],
+            origin_paths: ["app/code/Weline/Marketing/view/statics/js/widgets/checkout-coupon.js?v=20260910-coupon-visible1"],
+            paths: ["/Weline/Marketing/view/statics/js/widgets/checkout-coupon.js?v=20260910-coupon-visible1"],
             globalVar: null,
             description: "结账/迷你购物车优惠券部件"
         },
         cart: {
-            origin_paths: ["app/code/Weline/Cart/view/statics/js/cart.js", "app/code/Weline/Cart/view/statics/js/widgets/product-purchase-actions.js?v=20260909-purchase-panel8"],
-            paths: ["/Weline/Cart/view/statics/js/cart.js", "/Weline/Cart/view/statics/js/widgets/product-purchase-actions.js?v=20260909-purchase-panel8"],
+            origin_paths: ["app/code/Weline/Cart/view/statics/js/cart.js?v=20260910-payment-lifecycle-listen3", "app/code/Weline/Cart/view/statics/js/widgets/product-purchase-actions.js?v=20260910-cart-type-pref"],
+            paths: ["/Weline/Cart/view/statics/js/cart.js?v=20260910-payment-lifecycle-listen3", "/Weline/Cart/view/statics/js/widgets/product-purchase-actions.js?v=20260910-cart-type-pref"],
             globalVar: "WelineCartPurchaseActions",
             load: "defer",
             description: "万能购物车：优惠券事件 / 游客续期 / 加购交互"
@@ -234,17 +254,41 @@
             globalVar: "WelineWishlistModule",
             description: "心愿单列表页交互"
         },
+        wishlistHeader: {
+            origin_paths: ["app/code/Weline/Wishlist/view/statics/js/wishlist-header.js"],
+            paths: ["/Weline/Wishlist/view/statics/js/wishlist-header.js"],
+            globalVar: "WelineWishlistHeaderModule",
+            description: "顶栏收藏角标水合（SSR 游客空角标）"
+        },
         affiliateAccount: {
             origin_paths: ["app/code/Weline/Affiliate/view/statics/js/affiliate-account.js"],
             paths: ["/Weline/Affiliate/view/statics/js/affiliate-account.js"],
             globalVar: null,
             description: "账户中心分销工作台"
         },
+        affiliateProductShare: {
+            origin_paths: ["app/code/Weline/Affiliate/view/statics/js/affiliate-product-share.js?v=20260909-default-icons2"],
+            paths: ["/Weline/Affiliate/view/statics/js/affiliate-product-share.js?v=20260909-default-icons2"],
+            globalVar: "WelineAffiliateProductShare",
+            description: "商品详情/加购弹窗分销分享（等账户会话后异步水合）"
+        },
         recentlyViewed: {
             origin_paths: ["app/code/Weline/RecentlyViewed/view/statics/js/widgets/recently-viewed.js"],
             paths: ["/Weline/RecentlyViewed/view/statics/js/widgets/recently-viewed.js"],
             globalVar: null,
             description: "最近浏览轮播/网格"
+        },
+        b2bSellingMode: {
+            origin_paths: ["app/code/Weline/B2B/view/statics/js/selling-mode.js?v=20260910-card-sync-cart-type"],
+            paths: ["/Weline/B2B/view/statics/js/selling-mode.js?v=20260910-card-sync-cart-type"],
+            globalVar: "WelineB2BSellingMode",
+            description: "B2B ToC/ToB selling mode + mini-cart/cart dual-type injection"
+        },
+        b2bCheckoutTob: {
+            origin_paths: ["app/code/Weline/B2B/view/statics/js/checkout-tob.js?v=20260910-credit-reason7"],
+            paths: ["/Weline/B2B/view/statics/js/checkout-tob.js?v=20260910-credit-reason7"],
+            globalVar: "WelineB2BCheckoutTob",
+            description: "B2B checkout deposit note and coupon hide for tob carts"
         }
     });
 
@@ -258,6 +302,8 @@
         worker: "welineApiWorker",
         dom: "welineDom",
         switcher: "welineSwitcher",
+        payment: "paymentLifecycle",
+        checkout: "checkoutLifecycle",
         captcha: "captchaLazy",
         geolocation: "location"
     });
