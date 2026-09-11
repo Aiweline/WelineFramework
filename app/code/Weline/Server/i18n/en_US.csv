@@ -813,6 +813,22 @@ LiteSSL,LiteSSL
 AttackDetector,AttackDetector
 最大唯一路径数,"Maximum number of unique paths"
 受保护路径列表,"List of protected paths"
+爬虫代理拦截,爬虫代理拦截
+"默认拦截只刮内容、不带来引荐流量的寄生爬虫（AI 训练 / SEO 刮取等）。Googlebot、Bingbot、百度等友好引擎始终放行。可关闭内置项或新增自定义正则。","默认拦截只刮内容、不带来引荐流量的寄生爬虫（AI 训练 / SEO 刮取等）。Googlebot、Bingbot、百度等友好引擎始终放行。可关闭内置项或新增自定义正则。"
+内置爬虫,内置爬虫
+分类,分类
+启用,Enabling
+名称,名称
+正则,正则
+原因,原因
+自定义拦截条目,自定义拦截条目
+末行留空可继续新增；保存时忽略空正则。,末行留空可继续新增；保存时忽略空正则。
+"UA 正则","UA 正则"
+说明,Description
+显示名,显示名
+拦截原因,拦截原因
+上一个变体,上一个变体
+下一个变体,下一个变体
 没有待保存的规则变更。,"There are no rule changes to save."
 "规则 JSON 无效，无法预览。","Rule JSON is invalid and cannot be previewed."
 "%{1} 项待保存变更","%{1} changes to be saved"
@@ -934,7 +950,6 @@ IP,IP
 项目路径,"Project path"
 "PHP 档案","PHP files"
 数据库档案,"database file"
-启用,Enabling
 停用,deactivate
 描述,Description
 保存项目,"Save project"
@@ -1076,7 +1091,6 @@ Fiber,Fiber
 完整文档,"Full Documentation"
 接口,Interface
 方法,Method
-说明,Description
 攻击统计,"Attack Statistics"
 近7天,"Last 7 days"
 暂无攻击记录,"No attack records"
@@ -1366,6 +1380,7 @@ URI,URI
 编码,编码
 "SQL 注入","SQL 注入"
 跨站脚本,跨站脚本
+爬虫拦截,爬虫拦截
 伪协议,伪协议
 命令注入,命令注入
 扫描器指纹,扫描器指纹
@@ -1662,6 +1677,9 @@ Rules,Rules
 "Whitelisted IPs","Whitelisted IPs"
 "Protected Paths","Protected Paths"
 Paths,Paths
+"Crawler Block","Crawler Block"
+"Disabled Builtins","Disabled Builtins"
+"Custom Entries","Custom Entries"
 "%{1} overrides / %{2} inherited","%{1} overrides / %{2} inherited"
 "Project override","Project override"
 "Custom equals global","Custom equals global"
@@ -1680,6 +1698,7 @@ Disabled,Disabled
 "Project policy editor","Project policy editor"
 "Advanced JSON","Advanced JSON"
 "WLS Panel","WLS Panel"
+"%{1} active crawlers","%{1} active crawlers"
 Configured,Configured
 "%{1} entries","%{1} entries"
 Local,Local
