@@ -40,6 +40,11 @@
 "Inject affiliate summary and referral tools into the storefront customer account center.","Inject affiliate summary and referral tools into the storefront customer account center."
 "Please log in to continue.","Please log in to continue."
 分享链接无效或已过期。,"The share link is invalid or expired."
+分销配置,分销配置
+settings,settings
+分销店面展示启用与关闭,分销店面展示启用与关闭
+查看分销配置,查看分销配置
+查看分销店面展示配置,查看分销店面展示配置
 "Affiliate Management","Affiliate Management"
 万能分销,"Universal affiliate"
 "mdi mdi-account-tie-outline","mdi mdi-account-tie-outline"
@@ -78,17 +83,22 @@
 "mdi mdi-content-save-outline","mdi mdi-content-save-outline"
 我的分销,"My Affiliate"
 分享、转化与佣金,"Shares, conversions, and commission"
+加载中,Loading
+去登录,去登录
+分享好物，赚取佣金,分享好物，赚取佣金
+加入分销计划后可生成专属推广链接；登录后前往申请，审核通过即可开始分享。,加入分销计划后可生成专属推广链接；登录后前往申请，审核通过即可开始分享。
+登录前往申请分销,登录前往申请分销
+暂不可用,Unavailable
+已复制,Copied
+已分享,Shared
+"分销 API 未初始化","Affiliate API is not initialized"
+"分销 API 不支持分享链接操作","Affiliate API does not support share link operations"
+分销数据加载失败,"Affiliate data failed to load"
 分销分享,"Affiliate share"
 分销分享链接,"Affiliate share link"
 复制,Copy
 分享,Share
-"分销 API 未初始化","Affiliate API is not initialized"
-分销数据加载失败,"Affiliate data failed to load"
-已复制,Copied
-已分享,Shared
-加载中,Loading
-"分销 API 不支持分享链接操作","Affiliate API does not support share link operations"
-暂不可用,Unavailable
+分享到社交平台,分享到社交平台
 当前访问范围,"Current scope"
 账户范围,"Account scope"
 分销数据暂时无法加载，请稍后重试。,"Affiliate data is temporarily unavailable. Please try again later."
@@ -214,6 +224,9 @@ SKU,SKU
 鍩烘暟,鍩烘暟
 姣斾緥,姣斾緥
 鍘熷洜,鍘熷洜
+"配置写入当前作用范围；切换范围后页面会按新范围加载。关闭后商品详情不再展示分销分享。保存后经 SystemConfig 变更事件清理店面配置缓存。","配置写入当前作用范围；切换范围后页面会按新范围加载。关闭后商品详情不再展示分销分享。保存后经 SystemConfig 变更事件清理店面配置缓存。"
+在统一配置中心打开,在统一配置中心打开
+作用范围,作用范围
 "View and manage affiliate account information.","View and manage affiliate account information."
 "Back to List","Back to List"
 Edit,Edit

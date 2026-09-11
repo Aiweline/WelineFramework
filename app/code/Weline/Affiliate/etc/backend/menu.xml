@@ -9,4 +9,11 @@
           parent="Weline_Backend::marketing_group"
           icon="mdi mdi-handshake-outline"
           order="50"/>
+    <menu source="Weline_Affiliate::config"
+          name="weline_affiliate_config"
+          title="分销配置"
+          action="*/backend/config"
+          parent="Weline_Backend::marketing_group"
+          icon="mdi mdi-cog-outline"
+          order="51"/>
 </menus>
