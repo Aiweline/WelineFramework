@@ -1,0 +1,16 @@
+<?php /** @var \Weline\Framework\View\Template $this */ $s = (array)$this->getData('stats'); $pf = (string)$this->getData('provider_filter'); ?>
+<div class="container-fluid py-3" data-dropship-admin="dashboard">
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <h1 class="h3 mb-0"><?= $this->getData('page_title') ?></h1>
+    <form method="get" class="d-flex gap-2">
+      <input class="form-control form-control-sm" name="provider" value="<?= htmlspecialchars($pf) ?>" placeholder="provider e.g. cj">
+      <button class="btn btn-sm btn-outline-primary" type="submit"><?= __('按平台筛') ?></button>
+    </form>
+  </div>
+  <div class="row g-3">
+    <div class="col-md-3"><div class="border rounded-3 p-3 bg-body-tertiary"><div class="text-muted small"><?= __('刊登数') ?></div><div class="fs-3 fw-semibold"><?= (int)($s['listings'] ?? 0) ?></div></div></div>
+    <div class="col-md-3"><div class="border rounded-3 p-3 bg-body-tertiary"><div class="text-muted small"><?= __('降价提示待处理') ?></div><div class="fs-3 fw-semibold"><?= (int)($s['price_drop_tips'] ?? 0) ?></div></div></div>
+    <div class="col-md-3"><div class="border rounded-3 p-3 bg-body-tertiary"><div class="text-muted small"><?= __('履约单') ?></div><div class="fs-3 fw-semibold"><?= (int)($s['fulfillments'] ?? 0) ?></div></div></div>
+    <div class="col-md-3"><div class="border rounded-3 p-3 bg-body-tertiary"><div class="text-muted small"><?= __('推送失败') ?></div><div class="fs-3 fw-semibold"><?= (int)($s['outbox_errors'] ?? 0) ?></div></div></div>
+  </div>
+</div>

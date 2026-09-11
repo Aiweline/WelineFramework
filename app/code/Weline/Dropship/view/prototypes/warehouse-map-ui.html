@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"/>
+  <title>PROTOTYPE · 仓与国家映射 UI 三变体</title>
+  <style>
+    :root { --gap: 12px; --border: #d7dde5; --muted: #667085; --bg: #f6f8fb; --card: #fff; --accent: #1f6feb; }
+    body { margin: 0; font: 14px/1.45 system-ui, sans-serif; background: var(--bg); color: #101828; }
+    .note { padding: 12px 16px; background: #fff8e6; border-bottom: 1px solid #f5d78e; }
+    .bar { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; gap: 8px; padding: 8px 12px; background: #111; border-radius: 999px; z-index: 9; }
+    .bar a { color: #fff; text-decoration: none; padding: 6px 10px; border-radius: 999px; }
+    .bar a[aria-current="true"] { background: var(--accent); }
+    main { max-width: 960px; margin: 24px auto 96px; padding: 0 16px; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+    .grid { display: grid; gap: var(--gap); }
+    label { display: grid; gap: 4px; font-size: 12px; color: var(--muted); }
+    input, select, button { font: inherit; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; }
+    button { background: var(--accent); color: #fff; border: 0; cursor: pointer; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border); }
+    .empty { text-align: center; color: var(--muted); padding: 32px 8px; }
+    .split { display: grid; grid-template-columns: 1fr 1.2fr; gap: 16px; }
+    .drawer { position: fixed; right: 0; top: 0; width: 360px; height: 100%; background: #fff; border-left: 1px solid var(--border); padding: 16px; box-shadow: -8px 0 24px rgba(0,0,0,.08); }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="note">
+    <strong>PROTOTYPE（可丢弃）</strong>：问题「仓映射后台主交互长什么样？」——A 上表单下列表（对齐货源平台）；B 左右分栏；C 列表为主 + 侧滑新增。
+    选定：<strong>A</strong>（与 Channel / Inventory 后台密度一致，避免新交互范式）。
+  </div>
+  <main id="app"></main>
+  <nav class="bar" aria-label="prototype variants">
+    <a href="?variant=A" data-v="A">A 上下</a>
+    <a href="?variant=B" data-v="B">B 分栏</a>
+    <a href="?variant=C" data-v="C">C 侧滑</a>
+  </nav>
+  <script>
+    const variant = new URLSearchParams(location.search).get('variant') || 'A';
+    document.querySelectorAll('.bar a').forEach(a => a.setAttribute('aria-current', a.dataset.v === variant ? 'true' : 'false'));
+    const formFields = `
+      <div class="grid" style="grid-template-columns:repeat(3,1fr)">
+        <label>货源供应商<select><option>cj</option><option>fake</option></select></label>
+        <label>作用范围<select><option>default.default.default</option></select></label>
+        <label>国家代码<input value="US"/></label>
+        <label>远程仓 ID<input placeholder="storageId"/></label>
+        <label>本地仓 ID<input placeholder="1"/></label>
+        <label>&nbsp;<button type="button">保存映射</button></label>
+      </div>`;
+    const table = `
+      <table><thead><tr><th>供应商</th><th>网站</th><th>店铺</th><th>渠道</th><th>国家</th><th>远程仓</th><th>本地仓</th></tr></thead>
+      <tbody><tr><td colspan="7" class="empty">暂无映射。保存后将按供应商 + 网站 + 店铺唯一键显示。</td></tr></tbody></table>`;
+    const app = document.getElementById('app');
+    if (variant === 'A') {
+      app.innerHTML = `<div class="card"><h3>新增映射</h3>${formFields}</div><div class="card"><h3>已有映射</h3>${table}</div>`;
+    } else if (variant === 'B') {
+      app.innerHTML = `<div class="split"><div class="card"><h3>新增</h3>${formFields}</div><div class="card"><h3>列表</h3>${table}</div></div>`;
+    } else {
+      app.innerHTML = `<div class="card"><div style="display:flex;justify-content:space-between;align-items:center"><h3>已有映射</h3><button id="open">新增映射</button></div>${table}</div>
+        <aside class="drawer hidden" id="drawer"><h3>新增映射</h3>${formFields}<p style="color:var(--muted)">C：列表优先，适合映射很多时；但引入侧滑成本，本模块当前数据少，不选。</p></aside>`;
+      document.getElementById('open').onclick = () => document.getElementById('drawer').classList.remove('hidden');
+    }
+  </script>
+</body>
+</html>
