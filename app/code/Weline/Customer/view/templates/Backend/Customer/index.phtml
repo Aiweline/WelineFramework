@@ -59,12 +59,12 @@ $keyword = $keyword ?? '';
         <div class="w-card">
             <div class="w-card__body">
                 <w:form method="get" action="@backend-url{'customer/backend/customer/index'}" class="w-grid" data-align="end" style="--w-gap:var(--weline-space-4);">
-                    <div style="--w-span-md:9;">
-                        <label class="w-field__label"><?= __('搜索关键字') ?></label>
+                    <div class="w-field" style="--w-span-md:9;">
+                            <label class="w-field__label"><?= __('搜索关键字') ?></label>
                         <input type="text" class="w-input" name="keyword" value="<?= htmlspecialchars($keyword) ?>" placeholder="<?= __('用户名模糊查询') ?>">
                     </div>
-                    <div style="--w-span-md:3;">
-                        <label class="w-field__label">&nbsp;</label>
+                    <div class="w-field" style="--w-span-md:3;">
+                            <label class="w-field__label">&nbsp;</label>
                         <div>
                             <button type="submit" class="w-button" data-tone="primary">
                                 <w:icon name="search" size="sm"></w:icon><?= __('搜索') ?>
@@ -230,15 +230,15 @@ $keyword = $keyword ?? '';
                 <div class="w-dialog__body">
                     <input type="hidden" name="user_id" id="customer_id" value="0">
                     <div class="w-grid" style="--w-gap:var(--weline-space-4);">
-                        <div style="--w-span-md:6;">
+                        <div class="w-field" style="--w-span-md:6;">
                             <label class="w-field__label"><?= __('用户名') ?> <span class="w-text" data-tone="danger">*</span></label>
                             <input type="text" class="w-input" name="username" id="customer_username" required>
                         </div>
-                        <div style="--w-span-md:6;">
+                        <div class="w-field" style="--w-span-md:6;">
                             <label class="w-field__label"><?= __('密码') ?> <span class="w-text" id="customer_password_required" data-tone="danger">*</span></label>
                             <input type="text" class="w-input" name="password" id="customer_password" placeholder="<?= __('留空则不修改当前密码') ?>">
                         </div>
-                        <div style="--w-span-md:12;">
+                        <div class="w-field" style="--w-span-md:12;">
                             <label class="w-field__label"><?= __('头像') ?></label>
                             <input type="text" class="w-input" name="avatar" id="customer_avatar" placeholder="https://example.com/avatar.png">
                             <div class="w-field__hint"><?= __('可填写图片URL或内联SVG标识') ?></div>
@@ -282,8 +282,8 @@ $keyword = $keyword ?? '';
             <w:form id="passwordForm">
                 <div class="w-dialog__body">
                     <input type="hidden" name="user_id" id="password_user_id">
-                    <div style="--w-mb:var(--weline-space-4);">
-                        <label class="w-field__label"><?= __('新密码') ?></label>
+                    <div class="w-field" style="--w-mb:var(--weline-space-4);">
+                            <label class="w-field__label"><?= __('新密码') ?></label>
                         <input type="text" class="w-input" name="new_password" id="password_new" placeholder="<?= __('留空则系统自动生成强密码') ?>">
                     </div>
                     <div class="w-alert" data-tone="warning">

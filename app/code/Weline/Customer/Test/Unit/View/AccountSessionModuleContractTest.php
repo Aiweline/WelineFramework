@@ -76,6 +76,12 @@ final class AccountSessionModuleContractTest extends TestCase
         self::assertStringContainsString('writeFrontendSessionCache(status)', $js);
         self::assertStringContainsString('const hasSignal = this.hasAuthRefreshSignal()', $js);
         self::assertStringContainsString('skip account.current network only', $js);
+        // Signed-in must come from isLogin/logged_in — never result.success alone.
+        self::assertStringContainsString(
+            'const loggedIn = !!(result && (result.isLogin || result.logged_in));',
+            $js
+        );
+        self::assertStringNotContainsString('result.isLogin || result.logged_in || result.success', $js);
         self::assertMatchesRegularExpression(
             '/Guest cache hit:[\s\S]{0,240}this\.maybeStartSocialQuickPrompt\(\)/',
             $js
@@ -89,6 +95,31 @@ final class AccountSessionModuleContractTest extends TestCase
         self::assertNotFalse($alignedPos);
         $alignedWindow = substr($js, max(0, $alignedPos - 160), 200);
         self::assertStringContainsString('maybeStartSocialQuickPrompt()', $alignedWindow);
+    }
+
+    public function testAuthPagesForceNetworkAndLeaveWhenSignedIn(): void
+    {
+        $js = $this->accountJs();
+        self::assertStringContainsString('isStorefrontAuthPage', $js);
+        self::assertStringContainsString('leaveAuthPageIfSignedIn', $js);
+        self::assertStringContainsString('resolveSignedInLeaveUrl', $js);
+        self::assertStringContainsString('customer/account/login', $js);
+        self::assertStringContainsString('customer/account/register', $js);
+        self::assertStringContainsString('onAuthPage', $js);
+        self::assertStringContainsString('applyFrontendSessionSnapshot', $js);
+        // Storage sync snapshot must also leave auth pages when cache says signed-in.
+        self::assertMatchesRegularExpression(
+            '/applyFrontendSessionSnapshot\([\s\S]*?leaveAuthPageIfSignedIn\(true\)/',
+            $js
+        );
+        self::assertMatchesRegularExpression(
+            '/needsNetwork\s*=\s*[^\n;]*onAuthPage/',
+            $js
+        );
+        self::assertStringContainsString('location.replace', $js);
+        self::assertStringContainsString('/customer/account', $js);
+        // Bootstrap must not hardcode force:true; auth pages force inside syncHeaderAccountChrome.
+        self::assertStringNotContainsString('syncHeaderAccountChrome({ force: true })', $js);
     }
 
     public function testLogoutAuthSignalClearsSessionCacheBeforeNetwork(): void
