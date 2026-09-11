@@ -56,6 +56,15 @@ final class BackendMenuPathMatchContractTest extends TestCase
         }
     }
 
+    public function testThemeNavFilterPathMatchIsHyphenInsensitive(): void
+    {
+        $jsPath = dirname(__DIR__, 4) . '/Theme/view/ui/js/weline-ui.js';
+        self::assertFileExists($jsPath, $jsPath);
+        $js = (string) file_get_contents($jsPath);
+        self::assertStringContainsString("replace(/-/g, '')", $js);
+        self::assertStringContainsString('control-center ↔ controlcenter', $js);
+    }
+
     private function read(string $relative): string
     {
         $path = dirname(__DIR__, 3) . '/' . ltrim($relative, '/');

@@ -71,4 +71,28 @@ final class MenuRenderServiceComparableUrlTest extends TestCase
             '/jRaxfEJaRUyO6ZBOA3wJX8bituje6oqH/shipping/backend/systemembargo'
         ));
     }
+
+    public function testIsMenuActiveMatchesHyphenatedControllerAliases(): void
+    {
+        $service = new MenuRenderService($this->createStub(MenuAccessLog::class));
+        $current = new \ReflectionProperty(MenuRenderService::class, 'cachedCurrentUrl');
+        $current->setAccessible(true);
+        $current->setValue($service, 'b2b/backend/control-center/groups');
+
+        $method = new ReflectionMethod(MenuRenderService::class, 'isMenuActive');
+        $method->setAccessible(true);
+
+        self::assertTrue($method->invoke(
+            $service,
+            '/jRaxfEJaRUyO6ZBOA3wJX8bituje6oqH/b2b/backend/controlcenter/groups'
+        ));
+        self::assertTrue($method->invoke(
+            $service,
+            '/jRaxfEJaRUyO6ZBOA3wJX8bituje6oqH/b2b/backend/control-center/groups'
+        ));
+        self::assertFalse($method->invoke(
+            $service,
+            '/jRaxfEJaRUyO6ZBOA3wJX8bituje6oqH/b2b/backend/control-center/quotes'
+        ));
+    }
 }
