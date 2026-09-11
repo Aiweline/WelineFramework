@@ -1,0 +1,139 @@
+<?php
+/**
+ * 仓与国家映射（对齐 Channel：w-card / w-table / w-field / w:scope）。
+ * Prototype 决策：Variant A 上表单下列表（见 view/prototypes/warehouse-map-ui.html）。
+ * @var \Weline\Framework\View\Template $this
+ */
+$maps = (array)$this->getData('maps');
+$providers = (array)$this->getData('providers');
+$selectedScope = (string)($this->getData('selected_scope') ?? 'default.default.default');
+$escape = static fn(mixed $v): string => htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+?>
+<div class="w-grid" data-dropship-admin="warehouses" data-testid="dropship-warehouse-map"
+     data-selected-scope="<?= $escape($selectedScope) ?>">
+    <div style="--w-span:12;">
+        <div class="w-card" style="--w-mb:var(--weline-space-4);">
+            <div class="w-card__header">
+                <p class="w-text" data-tone="muted" data-size="sm" style="margin:0;">
+                    <?= __('按货源供应商与作用范围配置远程国家/仓到本地仓的映射。唯一键为供应商 + 网站 + 店铺。') ?>
+                </p>
+            </div>
+            <div class="w-card__body">
+                <w:form method="post"
+                        action="@backend-url('dropship/backend/warehouse/save')"
+                        csrf="auto"
+                        class="w-grid"
+                        data-testid="dropship-warehouse-map-form"
+                        style="--w-gap:var(--weline-space-4);">
+                    <div class="w-field" style="--w-span-md:3;">
+                        <label class="w-field__label" for="dropship-wh-provider"><?= __('货源供应商') ?></label>
+                        <div class="w-field__control">
+                            <select class="w-select" id="dropship-wh-provider" name="provider_code" required
+                                    data-testid="dropship-wh-provider">
+                                <option value=""><?= __('请选择供应商') ?></option>
+                                <?php foreach ($providers as $p): ?>
+                                    <?php
+                                    $code = (string)($p['code'] ?? '');
+                                    $title = (string)($p['title'] ?? $code);
+                                    ?>
+                                    <option value="<?= $escape($code) ?>"><?= $escape($title) ?> (<?= $escape($code) ?>)</option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="w-field" style="--w-span-md:4;">
+                        <label class="w-field__label" for="dropship-wh-scope"><?= __('作用范围') ?></label>
+                        <div class="w-field__control">
+                            <w:scope
+                                id="dropship-wh-scope"
+                                name="target_scope"
+                                value="selected_scope"
+                                placeholder="@lang(选择网站、店铺或渠道)"
+                                search-placeholder="@lang(搜索作用范围)"
+                                aria-label="@lang(作用范围)"
+                                searchable="true"
+                                default-expand-all="true"
+                                required="true"
+                            />
+                        </div>
+                    </div>
+                    <div class="w-field" style="--w-span-md:2;">
+                        <label class="w-field__label" for="dropship-wh-country"><?= __('国家代码') ?></label>
+                        <div class="w-field__control">
+                            <input class="w-input" id="dropship-wh-country" name="cj_country_code"
+                                   maxlength="8" placeholder="US" required
+                                   data-testid="dropship-wh-country">
+                        </div>
+                    </div>
+                    <div class="w-field" style="--w-span-md:3;">
+                        <label class="w-field__label" for="dropship-wh-storage"><?= __('远程仓 ID') ?></label>
+                        <div class="w-field__control">
+                            <input class="w-input" id="dropship-wh-storage" name="cj_storage_id"
+                                   maxlength="64" placeholder="storageId"
+                                   data-testid="dropship-wh-storage">
+                        </div>
+                    </div>
+                    <div class="w-field" style="--w-span-md:3;">
+                        <label class="w-field__label" for="dropship-wh-local"><?= __('本地仓 ID') ?></label>
+                        <div class="w-field__control">
+                            <input class="w-input" id="dropship-wh-local" name="local_warehouse_id"
+                                   type="number" min="1" required
+                                   data-testid="dropship-wh-local">
+                        </div>
+                    </div>
+                    <div class="w-cluster" data-align="end" style="--w-span-md:3;">
+                        <button class="w-button" type="submit" data-tone="primary" data-w-width="full"
+                                data-testid="dropship-wh-save">
+                            <?= __('保存映射') ?>
+                        </button>
+                    </div>
+                </w:form>
+            </div>
+        </div>
+
+        <div class="w-card">
+            <div class="w-card__header">
+                <h5 class="w-text" style="margin:0;"><?= __('已有映射') ?></h5>
+            </div>
+            <div class="w-card__body" style="padding:0;">
+                <?php if ($maps === []): ?>
+                    <div class="w-text" data-align="center" data-tone="muted"
+                         style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);"
+                         data-testid="dropship-wh-empty">
+                        <w:icon name="map" size="sm"></w:icon>
+                        <p style="--w-mt:var(--weline-space-2);--w-mb:0;"><?= __('暂无映射。保存后将按供应商 + 网站 + 店铺唯一键显示。') ?></p>
+                    </div>
+                <?php else: ?>
+                    <div class="w-table-wrap">
+                        <table class="w-table" data-w-vertical="middle" data-testid="dropship-wh-table">
+                            <thead>
+                            <tr>
+                                <th><?= __('供应商') ?></th>
+                                <th><?= __('网站') ?></th>
+                                <th><?= __('店铺') ?></th>
+                                <th><?= __('渠道') ?></th>
+                                <th><?= __('国家') ?></th>
+                                <th><?= __('远程仓') ?></th>
+                                <th><?= __('本地仓') ?></th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <?php foreach ($maps as $m): ?>
+                                <tr>
+                                    <td><code><?= $escape($m['provider_code'] ?? '') ?></code></td>
+                                    <td><?= (int)($m['website_id'] ?? 0) ?></td>
+                                    <td><?= (int)($m['store_id'] ?? 0) ?></td>
+                                    <td><?= $escape($m['channel'] ?? '') ?></td>
+                                    <td><?= $escape($m['cj_country_code'] ?? '') ?></td>
+                                    <td><?= $escape($m['cj_storage_id'] ?? '') ?></td>
+                                    <td><?= (int)($m['local_warehouse_id'] ?? 0) ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</div>

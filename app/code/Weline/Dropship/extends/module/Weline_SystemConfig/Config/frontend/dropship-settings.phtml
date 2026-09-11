@@ -1,0 +1,32 @@
+<?php
+/**
+ * @meta.title {default="货源代发",description="范围级货源平台启用与涨价比例"}
+ * @meta.description {default="启用货源平台多选；涨价比例默认30%；支付后自动推单与商品跟随开关。"}
+ * @config.area {frontend}
+ * @config.sort {75}
+ * @config.acl {Weline_Dropship::config}
+ */
+?>
+<w:config:group code="dropship_platforms" label="货源平台" sort="10">
+  <w:config:field key="dropship/platforms/enabled" label="启用的货源平台" type="multiselect"
+                  value-type="string" default="cj" scope="global,website,store,channel"
+                  options="fake:Fake 货源,cj:CJ Dropshipping"
+                  description="从已注册货源中多选标签；仅勾选的平台可拉品/推单/报价。货源配置页会按已扫描 Provider 动态刷新选项。"/>
+  <w:config:adapter
+      code="dropship.channels"
+      label="管理货源平台"
+      description="查看已扫描 Provider、探活与能力列表。"
+      backend-url="dropship/backend/channel/index"
+      action-label="打开货源平台"/>
+</w:config:group>
+<w:config:group code="dropship_pricing" label="货源定价" sort="20">
+  <w:config:field key="dropship/pricing/uplift_percent" label="涨价比例%" type="number"
+                  value-type="int" default="30" scope="global,website,store,channel"
+                  description="范围公式真源；默认30。首刊与涨价跟随采用此比例。"/>
+</w:config:group>
+<w:config:group code="dropship_ops" label="货源运营" sort="30">
+  <w:config:field key="dropship/ops/auto_push" label="支付后自动推单" type="switch"
+                  value-type="bool" default="1" scope="global,website,store,channel"/>
+  <w:config:field key="dropship/ops/follow_enabled" label="启用商品跟随" type="switch"
+                  value-type="bool" default="1" scope="global,website,store,channel"/>
+</w:config:group>
