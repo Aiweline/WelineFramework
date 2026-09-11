@@ -57,13 +57,17 @@ $escape = static fn(mixed $v): string => htmlspecialchars((string)$v, ENT_QUOTES
                             />
                         </div>
                     </div>
-                    <div class="w-field" style="--w-span-md:2;">
-                        <label class="w-field__label" for="dropship-wh-country"><?= __('国家代码') ?></label>
-                        <div class="w-field__control">
-                            <input class="w-input" id="dropship-wh-country" name="cj_country_code"
-                                   maxlength="8" placeholder="US" required
-                                   data-testid="dropship-wh-country">
-                        </div>
+                    <div class="w-field" style="--w-span-md:3;" data-testid="dropship-wh-country">
+                        <?php /* 国家：官方地址单选标签；禁止手填 ISO。country-name 直投 cj_country_code */ ?>
+                        <w:theme:address
+                            selection="single"
+                            levels="country"
+                            catalog="global"
+                            searchable="true"
+                            cascade="false"
+                            code="dropship-wh-country"
+                            country-name="cj_country_code"
+                        />
                     </div>
                     <div class="w-field" style="--w-span-md:3;">
                         <label class="w-field__label" for="dropship-wh-storage"><?= __('远程仓 ID') ?></label>
