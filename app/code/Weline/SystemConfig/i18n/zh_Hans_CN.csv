@@ -19,7 +19,6 @@
 "Precheck whether a template-backed config version can rollback without mutation.",预先检查模板支持的配置版本是否可以在不发生突变的情况下回滚。
 "Rollback a template-backed config version after rollback precheck.",回滚预检查后回滚模板支持的配置版本。
 "Set a global compatibility config value.",设置全局兼容性配置值。
-"Set one scoped config value and create a version batch.",设置一个范围配置值并创建一批版本。
 "Delete one scoped value so resolution inherits from fallback scopes.",删除一个作用域值，以便解析继承后备作用域。
 "Rollback a scoped config version batch.",回滚范围内的配置版本批次。
 "List scoped config version batches.",列出范围内的配置版本批次。
@@ -49,13 +48,16 @@ backend|frontend,后端|前端
 统一配置中心,统一配置中心
 跨站请求被拒绝，配置未写入。,跨站请求被拒绝，配置未写入。
 "TargetScope 无效，配置未写入。","TargetScope 无效，配置未写入。"
-配置已回滚，回滚批次：%{1},配置已回滚，回滚批次：%{1}
+配置已回滚,配置已回滚
+"回滚批次 %{1}","回滚批次 %{1}"
 配置回滚预检失败，当前配置未改变。,配置回滚预检失败，当前配置未改变。
 锁操作已完成：%{1},锁操作已完成：%{1}
 锁操作失败,锁操作失败
 "Google OAuth JSON 无法识别：%{1}","Google OAuth JSON 无法识别：%{1}"
-配置已保存，版本批次：%{1},配置已保存，版本批次：%{1}
-"已从 Google OAuth JSON 导入 Client ID/Secret，并保存配置（版本批次：%{1}）","已从 Google OAuth JSON 导入 Client ID/Secret，并保存配置（版本批次：%{1}）"
+没有检测到配置变更，未创建新版本。,没有检测到配置变更，未创建新版本。
+未保存,未保存
+配置已保存,配置已保存
+版本已写入,版本已写入
 版本冲突，请刷新后重试。,版本冲突，请刷新后重试。
 配置保存失败，当前配置未改变。,配置保存失败，当前配置未改变。
 保存敏感配置需要重新输入登录密码。,保存敏感配置需要重新输入登录密码。
@@ -72,12 +74,13 @@ warning,警告
 "回滚配置版本 %{1}","回滚配置版本 %{1}"
 回滚配置失败，已恢复本次回滚前状态。%{1},回滚配置失败，已恢复本次回滚前状态。%{1}
 "当前 system_config 表尚未升级，不能保存非全局 scope 配置。","当前 system_config 表尚未升级，不能保存非全局 scope 配置。"
-配置已保存,配置已保存
 配置保存失败,配置保存失败
+请选择或搜索...,请选择或搜索...
+搜索并多选...,搜索并多选...
 管理,管理
 没有这个字段,没有这个字段
 前往统一配置中心修改,前往统一配置中心修改
-请选择或搜索...,请选择或搜索...
+可搜索多选标签；保存为逗号分隔值,可搜索多选标签；保存为逗号分隔值
 系统管理,系统管理
 系统配置,系统配置
 "按模块、区域与 Scope 管理全站配置项","按模块、区域与 Scope 管理全站配置项"
@@ -153,7 +156,6 @@ default,默认
 "OAuth Return URL（须原样登记到第三方 App）","OAuth Return URL（须原样登记到第三方 App）"
 已连接,已连接
 已配置，留空则保持不变,已配置，留空则保持不变
-搜索并多选...,搜索并多选...
 腾讯云验证码,腾讯云验证码
 本地图形验证码,本地图形验证码
 选择或搜索供应商...,选择或搜索供应商...
@@ -170,6 +172,18 @@ Global（全部网站、店铺和渠道）,Global（全部网站、店铺和渠�
 "店铺：%{1} / %{2}","店铺：%{1} / %{2}"
 渠道：%{1},渠道：%{1}
 "渠道：%{1} / %{2} / %{3}","渠道：%{1} / %{2} / %{3}"
+"已导入 Google OAuth 并保存","已导入 Google OAuth 并保存"
+"版本批次 %{1}","版本批次 %{1}"
+"等 %{1} 项","等 %{1} 项"
+已刷新缓存：%{1},已刷新缓存：%{1}
+"已清理配置快照约 %{1} 项（变更 %{2} 个字段）","已清理配置快照约 %{1} 项（变更 %{2} 个字段）"
+"已清理配置快照约 %{1} 项","已清理配置快照约 %{1} 项"
+已清理本模块配置请求缓存,已清理本模块配置请求缓存
+人机验证,人机验证
+登录认证,登录认证
+店面配置,店面配置
+主题,主题
+价格,价格
 配置嵌入自定义模板不存在：%{1},配置嵌入自定义模板不存在：%{1}
 配置嵌入默认模板缺失。,配置嵌入默认模板缺失。
 "配置嵌入标签缺少 module 属性。","配置嵌入标签缺少 module 属性。"
@@ -188,8 +202,20 @@ Global（全部网站、店铺和渠道）,Global（全部网站、店铺和渠�
 "当前字段不允许保存到所选 scope。","当前字段不允许保存到所选 scope。"
 此字段不能为空。,此字段不能为空。
 字段值不在允许选项内。,字段值不在允许选项内。
+"当前无 Extends CSP 应用默认。模块可在 extends/module/Weline_Framework/Security/Csp/ 贡献 source；贡献后将强制放行且不可被 Scope 覆盖。","当前无 Extends CSP 应用默认。模块可在 extends/module/Weline_Framework/Security/Csp/ 贡献 source；贡献后将强制放行且不可被 Scope 覆盖。"
+"应用默认 CSP（不可覆盖）","应用默认 CSP（不可覆盖）"
 "用法：scope:migrate-p1b preflight|apply|verify|rollback [--database=mig_clone_*]","常用：scope:migrate-p1b preflight|apply|verify|rollback [--database=mig_clone_*]"
 "MIG-P1B 配置 Scope 迁移：preflight/apply/verify/rollback（apply 必须 --database=mig_clone_*）","MIG-P1B 配置范围迁移：preflight/apply/verify/rollback（apply 必须 --database=mig_clone_*）"
+所有模块,所有模块
+"Set one scoped config value and create a version batch.",设置一个范围配置值并创建一批版本。
+配置已回滚，回滚批次：%{1},配置已回滚，回滚批次：%{1}
+配置已保存，版本批次：%{1},配置已保存，版本批次：%{1}
+"已从 Google OAuth JSON 导入 Client ID/Secret，并保存配置（版本批次：%{1}）","已从 Google OAuth JSON 导入 Client ID/Secret，并保存配置（版本批次：%{1}）"
+"已清理相关缓存：命名空间 %{1} 已 bump；%{2} 池删除约 %{3} 个键（变更字段 %{4} 个）。","已清理相关缓存：命名空间 %{1} 已 bump；%{2} 池删除约 %{3} 个键（变更字段 %{4} 个）。"
+"已清理相关缓存：命名空间 %{1} 已 bump。","已清理相关缓存：命名空间 %{1} 已 bump。"
+"已清理相关缓存：%{1} 池删除约 %{2} 个键。","已清理相关缓存：%{1} 池删除约 %{2} 个键。"
+已清理本模块配置请求缓存。,已清理本模块配置请求缓存。
+"等 %{1} 个","等 %{1} 个"
 国家用主题地址选择器搜索（每行一国）；供应商用可搜索选择器；须同时选齐后再保存,国家用主题地址选择器搜索（每行一国）；供应商用可搜索选择器；须同时选齐后再保存
 密码验证失败，敏感配置未写入。,密码验证失败，敏感配置未写入。
 "上传/修改 OAuth Secret 后，须在此填写后台登录密码再保存","上传/修改 OAuth Secret 后，须在此填写后台登录密码再保存"
@@ -198,7 +224,6 @@ Global（全部网站、店铺和渠道）,Global（全部网站、店铺和渠�
 敏感配置：重新输入登录密码,敏感配置：重新输入登录密码
 当前值,当前值
 Scope,范围
-所有模块,所有模块
 点击选择语言（可多选）,点击选择语言（可多选）
 点击选择语言,点击选择语言
 搜索国家、语言或代码...,搜索国家、语言或代码...

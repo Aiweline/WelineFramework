@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace Weline\SystemConfig\Service;
 
 use Weline\Framework\Cache\Namespace\NamespaceGenerationRepository;
+use Weline\Framework\Cache\Namespace\NamespaceKeyDecorator;
 use Weline\Framework\Cache\Namespace\NamespacePath;
 use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Database\Transaction\TransactionCoordinatorInterface;
 use Weline\Framework\Database\TransactionContext;
+use Weline\Framework\Event\ResourceChange\ResourceChange;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\SystemConfig\Model\SystemConfig;
@@ -133,6 +135,154 @@ final class ConfigCacheInvalidationService
     }
 
     /**
+     * Build dual-pool cache_ops for ResourceChange impact (acceleration only).
+     *
+     * Keys are computed with the current scope version vector; callers must publish
+     * them before bumping generation. Shared-pool delete is performed by Framework
+     * CacheImpactObserver afterCommit — not here.
+     *
+     * When $namespacePaths is non-empty, also emit pre-bump fingerprinted physical keys
+     * so afterCommit can delete namespaced entries (bump advances fingerprint afterward).
+     *
+     * @param list<string> $keys
+     * @param list<string> $fallbackScopes
+     * @param list<string> $fallbackLocales
+     * @param list<string> $namespacePaths canonical namespaces used by readers
+     * @return list<array{pool:string,keys:list<string>}>
+     */
+    public function buildCacheOps(
+        string $module,
+        string $area,
+        string $scope,
+        string $locale,
+        array $keys,
+        array $fallbackScopes = [],
+        array $fallbackLocales = [],
+        array $namespacePaths = [],
+    ): array {
+        $keys = $this->stringList($keys);
+        $fallbackScopes = $this->stringList($fallbackScopes);
+        $fallbackLocales = $this->stringList($fallbackLocales);
+
+        /** @var ScopeConfigCacheInvalidator $impact */
+        $impact = ObjectManager::getInstance(ScopeConfigCacheInvalidator::class);
+        /** @var SystemConfig $configModel */
+        $configModel = ObjectManager::getInstance(SystemConfig::class);
+        $plan = $impact->planImpact($module, $area, $scope, $locale, $keys, $configModel);
+
+        $scopesToTouch = $this->stringList(array_merge(
+            [$scope],
+            $fallbackScopes,
+            $plan['invalidate_scopes'],
+        ));
+        $localesToTouch = $this->stringList(array_merge([$locale], $fallbackLocales));
+
+        $logicalKeys = [];
+        foreach ($keys as $key) {
+            foreach ($scopesToTouch as $touchScope) {
+                $isWrittenOrAncestor = $touchScope === $scope || in_array($touchScope, $fallbackScopes, true);
+                $isSkippedOverride = in_array($touchScope, $plan['skipped_override_scopes'], true);
+                if (!$isWrittenOrAncestor && $isSkippedOverride
+                    && !$impact->shouldInvalidateKeyAtScope($configModel, $key, $module, $area, $touchScope, $locale)
+                ) {
+                    continue;
+                }
+                foreach ($localesToTouch as $touchLocale) {
+                    $logicalKeys[] = $this->singleKey($key, $module, $area, $touchScope, $touchLocale);
+                }
+            }
+        }
+
+        foreach ($scopesToTouch as $touchScope) {
+            if (in_array($touchScope, $plan['skipped_override_scopes'], true) && $touchScope !== $scope) {
+                continue;
+            }
+            foreach ($localesToTouch as $touchLocale) {
+                $logicalKeys[] = $this->moduleRowsKey($module, $area, $touchScope, $touchLocale);
+                $logicalKeys[] = $this->moduleMapKey($module, $area, $touchScope, $touchLocale);
+                $logicalKeys[] = $this->moduleExactRowsKey($module, $area, $touchScope, $touchLocale);
+            }
+        }
+
+        $logicalKeys = $this->stringList($logicalKeys);
+        if ($logicalKeys === []) {
+            return [];
+        }
+
+        $deleteKeys = $this->withPreBumpFingerprintedKeys(
+            $logicalKeys,
+            $namespacePaths,
+            (int)floor(ResourceChange::CACHE_OPS_MAX_KEYS / 2),
+        );
+
+        return [
+            ['pool' => 'system_config', 'keys' => $deleteKeys],
+            ['pool' => 'database', 'keys' => $deleteKeys],
+        ];
+    }
+
+    /**
+     * @param list<string> $logicalKeys
+     * @param list<string> $namespacePaths
+     * @return list<string>
+     */
+    private function withPreBumpFingerprintedKeys(array $logicalKeys, array $namespacePaths, int $budget): array
+    {
+        $namespacePaths = $this->stringList($namespacePaths);
+        $budget = max(1, $budget);
+        if ($logicalKeys === []) {
+            return [];
+        }
+        if (count($logicalKeys) > $budget) {
+            $logicalKeys = array_slice($logicalKeys, 0, $budget);
+        }
+        if ($namespacePaths === []) {
+            return $logicalKeys;
+        }
+
+        try {
+            $vector = $this->namespaces->resolveVector($namespacePaths);
+            $generations = is_array($vector['generations'] ?? null) ? $vector['generations'] : [];
+            if ($generations === []) {
+                return $logicalKeys;
+            }
+            /** @var NamespaceKeyDecorator $decorator */
+            $decorator = ObjectManager::getInstance(NamespaceKeyDecorator::class);
+            $fingerprint = $decorator->fingerprint($generations);
+        } catch (\Throwable) {
+            return $logicalKeys;
+        }
+
+        $out = $logicalKeys;
+        $decorateFirst = [];
+        $decorateRest = [];
+        foreach ($logicalKeys as $key) {
+            if (str_starts_with($key, 'system_config_exact_rows_')
+                || str_starts_with($key, 'system_config_rows_')
+                || str_starts_with($key, 'system_config_map_')
+            ) {
+                $decorateFirst[] = $key;
+            } else {
+                $decorateRest[] = $key;
+            }
+        }
+        foreach (array_merge($decorateFirst, $decorateRest) as $key) {
+            if (count($out) >= $budget) {
+                break;
+            }
+            $physical = $decorator->decorate($key, $fingerprint);
+            if (!in_array($physical, $out, true)) {
+                $out[] = $physical;
+            }
+        }
+        $out = $this->stringList($out);
+        if (count($out) > $budget) {
+            $out = array_slice($out, 0, $budget);
+        }
+        return $out;
+    }
+
+    /**
      * @param list<string> $keys
      * @param list<string> $fallbackScopes
      * @param list<string> $fallbackLocales
@@ -147,13 +297,13 @@ final class ConfigCacheInvalidationService
         array $fallbackLocales,
     ): void {
         unset(SystemConfig::$configs[$area][$module]);
-        $cache = w_cache('system_config');
 
         /** @var ScopeConfigCacheInvalidator $impact */
         $impact = ObjectManager::getInstance(ScopeConfigCacheInvalidator::class);
         /** @var SystemConfig $configModel */
         $configModel = ObjectManager::getInstance(SystemConfig::class);
-        // 先按旧 version vector 删键，再 bump（避免只删新键导致旧脏缓存残留）
+        // Shared-pool deletes moved to impact.cache_ops → Framework CacheImpactObserver.
+        // Keep request-local cleanup + scope generation bump here.
         $plan = $impact->planImpact($module, $area, $scope, $locale, $keys, $configModel);
 
         $scopesToTouch = $this->stringList(array_merge(
@@ -175,13 +325,6 @@ final class ConfigCacheInvalidationService
                 foreach ($localesToTouch as $touchLocale) {
                     RequestContext::remove($this->requestKey('raw', $module, $area, $key, $touchScope, $touchLocale));
                     RequestContext::remove($this->requestKey('resolved', $module, $area, $key, $touchScope, $touchLocale));
-                    $cache->delete($this->singleKey(
-                        $key,
-                        $module,
-                        $area,
-                        $touchScope,
-                        $touchLocale,
-                    ));
                 }
             }
         }
@@ -194,9 +337,6 @@ final class ConfigCacheInvalidationService
                 RequestContext::remove($this->requestKey('module_rows', $module, $area, null, $touchScope, $touchLocale));
                 RequestContext::remove($this->requestKey('module_map', $module, $area, null, $touchScope, $touchLocale));
                 RequestContext::remove($this->requestKey('module_exact_rows', $module, $area, null, $touchScope, $touchLocale));
-                $cache->delete($this->moduleRowsKey($module, $area, $touchScope, $touchLocale));
-                $cache->delete($this->moduleMapKey($module, $area, $touchScope, $touchLocale));
-                $cache->delete($this->moduleExactRowsKey($module, $area, $touchScope, $touchLocale));
             }
         }
 
@@ -205,7 +345,6 @@ final class ConfigCacheInvalidationService
         $plan['version_vector'] = $impact->versionVectorFor($scope);
         $plan['metrics']['generation'] = $generation;
 
-        // 记录最近一次影响指标（请求内可观测；TEST-P1C-06）
         RequestContext::set('system_config.cache_invalidation.last_plan', [
             'module' => $module,
             'area' => $area,

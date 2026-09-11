@@ -107,21 +107,35 @@ final class SystemConfigReadWriteCacheTest extends TestCase
         self::assertSame('new', $this->config->rows[0][SystemConfig::schema_fields_VALUE]);
     }
 
-    public function testCommittedInvalidationDeletesExactSnapshotsAndReadRebuilds(): void
+    public function testCommittedInvalidationClearsLocalSnapshotsAndReadRebuilds(): void
     {
         $this->map();
         $vector = (new ScopeConfigCacheInvalidator())->versionVectorFor(self::SCOPE);
-        $requestKey = implode(':', ['system_config', 'module_exact_rows', self::AREA, self::MODULE, self::SCOPE, 'default', $vector]);
-        $sharedKey = 'system_config_exact_rows_' . sha1(implode('|', [self::AREA, self::MODULE, self::SCOPE, 'default', $vector]));
-        self::assertTrue(RequestContext::has($requestKey));
-        self::assertTrue(\w_cache('system_config')->has($sharedKey));
+        $mapRequestKey = implode(':', ['system_config', 'module_map', self::AREA, self::MODULE, self::SCOPE, 'default', $vector]);
+        self::assertTrue(RequestContext::has($mapRequestKey));
         $this->config->rows = [$this->row('title', 'new', 2)];
-        // Exercise the existing after-commit body without a live DB transaction.
+        // Shared-pool delete is Framework cache_ops afterCommit; this service only
+        // clears request-local snapshots and bumps the scope version vector.
         $service = (new \ReflectionClass(ConfigCacheInvalidationService::class))->newInstanceWithoutConstructor();
         (new \ReflectionMethod($service, 'invalidateNow'))->invoke($service, self::MODULE, self::AREA, self::SCOPE, 'default', ['title'], [], []);
-        self::assertFalse(RequestContext::has($requestKey));
-        self::assertFalse(\w_cache('system_config')->has($sharedKey));
+        self::assertFalse(RequestContext::has($mapRequestKey));
         self::assertSame('new', $this->map()['title']);
+    }
+
+    public function testBuildCacheOpsEmitsDualPoolKeysForFrameworkObserver(): void
+    {
+        $ops = ObjectManager::getInstance(ConfigCacheInvalidationService::class)->buildCacheOps(
+            self::MODULE,
+            self::AREA,
+            self::SCOPE,
+            'default',
+            ['title'],
+            [],
+            [],
+        );
+        self::assertSame(['system_config', 'database'], array_column($ops, 'pool'));
+        self::assertNotEmpty($ops[0]['keys']);
+        self::assertSame($ops[0]['keys'], $ops[1]['keys']);
     }
 
     private function map(): array

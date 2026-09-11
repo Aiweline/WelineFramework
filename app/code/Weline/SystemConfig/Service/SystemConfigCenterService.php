@@ -83,6 +83,12 @@ class SystemConfigCenterService
                         $tree['modules'][$moduleIndex]['areas'][$areaIndex]['templates'][$templateIndex]['fields'][$fieldIndex] = $field;
                     }
 
+                    $tree['modules'][$moduleIndex]['areas'][$areaIndex]['templates'][$templateIndex]['hints']
+                        = $this->enrichSecurityHeaderAppDefaultHints(
+                            is_array($template['hints'] ?? null) ? $template['hints'] : [],
+                            (string)$moduleName,
+                        );
+
                     $enrichedFields = $tree['modules'][$moduleIndex]['areas'][$areaIndex]['templates'][$templateIndex]['fields'] ?? [];
                     foreach (($template['adapters'] ?? []) as $adapterIndex => $adapter) {
                         if (!is_array($adapter)) {
@@ -323,6 +329,14 @@ class SystemConfigCenterService
             'field_metadata' => $fieldMetadata,
             'sensitive_keys' => $sensitiveKeys,
             'operation' => 'template_save',
+            'cache_namespaces' => $this->mergeTemplateCacheNamespaces(
+                $fields,
+                $normalizedValues,
+                $normalizedInheritKeys,
+                is_array($options['cache_namespaces'] ?? null)
+                    ? array_values(array_map('strval', $options['cache_namespaces']))
+                    : [],
+            ),
             'metadata' => array_merge(
                 is_array($options['metadata'] ?? null) ? $options['metadata'] : [],
                 [
@@ -510,6 +524,55 @@ class SystemConfigCenterService
     /**
      * @return array<string, array<string, mixed>>
      */
+    /**
+     * Attribute + control binding: merge template field cache-namespaces with posted ones.
+     *
+     * @param array<string, array<string, mixed>> $fields
+     * @param array<string, mixed> $normalizedValues
+     * @param list<string> $inheritKeys
+     * @param list<string> $posted
+     * @return list<string>
+     */
+    private function mergeTemplateCacheNamespaces(
+        array $fields,
+        array $normalizedValues,
+        array $inheritKeys,
+        array $posted,
+    ): array {
+        $touched = array_values(array_unique(array_merge(
+            array_map('strval', array_keys($normalizedValues)),
+            array_map('strval', $inheritKeys),
+        )));
+        $out = [];
+        foreach ($posted as $raw) {
+            $raw = trim((string)$raw);
+            if ($raw !== '') {
+                $out[$raw] = $raw;
+            }
+        }
+        foreach ($touched as $key) {
+            $field = $fields[$key] ?? null;
+            if (!is_array($field)) {
+                continue;
+            }
+            $raw = trim((string)($field['cache-namespaces'] ?? $field['cache_namespaces'] ?? ''));
+            $prefix = trim((string)($field['cache-namespace-prefix'] ?? $field['cache_namespace_prefix'] ?? ''));
+            if ($prefix !== '') {
+                $raw = trim($raw . ' ' . $prefix);
+            }
+            if ($raw === '') {
+                continue;
+            }
+            foreach (preg_split('/[\s,]+/', $raw) ?: [] as $token) {
+                $token = trim((string)$token);
+                if ($token !== '') {
+                    $out[$token] = $token;
+                }
+            }
+        }
+        return array_values($out);
+    }
+
     private function fieldsByKey(array $template): array
     {
         $fields = [];
@@ -656,6 +719,9 @@ class SystemConfigCenterService
             'default' => $fieldFound ? ($field['default'] ?? null) : $default,
             'group' => $fieldFound ? (string)($field['group'] ?? '') : '',
             'scope' => $fieldFound ? (string)($field['scope'] ?? 'global') : '',
+            'cache-namespaces' => $fieldFound
+                ? trim((string)($field['cache-namespaces'] ?? $field['cache_namespaces'] ?? ''))
+                : '',
             'options' => $options['options'],
             'options_source' => $options['options_source'],
             'field_found' => $fieldFound,
@@ -990,6 +1056,72 @@ class SystemConfigCenterService
             'options' => $projected,
             'options_source' => $options,
         ];
+    }
+
+    /**
+     * Append live Extends CSP application-default floor to security-headers hints.
+     *
+     * @param list<array<string, mixed>> $hints
+     * @return list<array<string, mixed>>
+     */
+    private function enrichSecurityHeaderAppDefaultHints(array $hints, string $moduleName): array
+    {
+        if ($moduleName !== SecurityPolicyConfigGuard::MODULE) {
+            return $hints;
+        }
+        if (!\class_exists(\Weline\Framework\Http\Security\CspSourceContributionRegistry::class)) {
+            return $hints;
+        }
+        try {
+            $registry = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Framework\Http\Security\CspSourceContributionRegistry::class
+            );
+        } catch (\Throwable) {
+            return $hints;
+        }
+        if (!$registry instanceof \Weline\Framework\Http\Security\CspSourceContributionRegistry) {
+            return $hints;
+        }
+
+        $floor = '';
+        $rows = [];
+        try {
+            $floor = \trim($registry->appDefaultPolicy());
+            $rows = $registry->contributionSummaries();
+        } catch (\Throwable) {
+            return $hints;
+        }
+
+        if ($floor === '') {
+            $text = (string)__(
+                '当前无 Extends CSP 应用默认。模块可在 extends/module/Weline_Framework/Security/Csp/ 贡献 source；贡献后将强制放行且不可被 Scope 覆盖。'
+            );
+        } else {
+            $parts = [
+                (string)__('应用默认 CSP（不可覆盖）') . '：' . $floor,
+            ];
+            foreach ($rows as $row) {
+                if (!\is_array($row)) {
+                    continue;
+                }
+                $module = \trim((string)($row['module'] ?? ''));
+                $policy = \trim((string)($row['policy'] ?? ''));
+                if ($module === '' || $policy === '') {
+                    continue;
+                }
+                $parts[] = $module . ' → ' . $policy;
+            }
+            $text = \implode("\n", $parts);
+        }
+
+        $hints[] = [
+            'group' => 'framework_security_headers',
+            'type' => 'warning',
+            'description' => $text,
+            'text' => $text,
+        ];
+
+        return $hints;
     }
 
     private function stringifyValue(mixed $value): string

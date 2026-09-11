@@ -1,8 +1,13 @@
 /**
- * Immediate save for <w:config:embed> controls via system_config.setScopedConfig.
+ * Debounced save for <w:config:embed> controls via system_config.setScopedConfig.
+ * Text: TEXT_DEBOUNCE_MS idle + blur flush (no mid-type disable).
+ * Discrete (checkbox/select/search-select): change immediate.
  */
 (function () {
     'use strict';
+
+    /** Idle delay before text autosave (ms). Keep >= 1000 so typing is not per-keystroke. */
+    var TEXT_DEBOUNCE_MS = 1200;
 
     function toast(type, message) {
         var ui = window.Weline && window.Weline.UI && window.Weline.UI.toast;
@@ -36,14 +41,21 @@
         control.value = value == null ? '' : String(value);
     }
 
-    function saveField(root, fieldEl, control) {
+    function saveField(root, fieldEl, control, options) {
         if (!root || !fieldEl || !control || root.dataset.canUpdate !== '1') {
             return;
         }
         if (fieldEl.dataset.status && fieldEl.dataset.status !== 'ok') {
             return;
         }
-        if (control.disabled || control.dataset.saving === '1') {
+        options = options || {};
+        var lockControl = options.lockControl === true;
+        // ACL / scope-denied controls stay disabled; never write those.
+        if (control.disabled) {
+            return;
+        }
+        if (control.dataset.saving === '1') {
+            control.dataset.pendingSave = '1';
             return;
         }
 
@@ -58,7 +70,9 @@
         }
 
         control.dataset.saving = '1';
-        control.disabled = true;
+        if (lockControl) {
+            control.disabled = true;
+        }
 
         // Must match embed read locale (data-locale). Omitting locale lets
         // setScopedConfig fall into admin UI language and write a different row
@@ -85,6 +99,11 @@
         if (root.dataset.channelCode) {
             payload.channel_code = root.dataset.channelCode;
         }
+        if (fieldEl.dataset.cacheNamespaces) {
+            payload.cache_namespaces = String(fieldEl.dataset.cacheNamespaces)
+                .split(/[\s,]+/)
+                .filter(Boolean);
+        }
 
         Promise.resolve(window.Weline && window.Weline.load ? window.Weline.load('api') : window.Weline && window.Weline.Api)
             .then(function (api) {
@@ -94,11 +113,47 @@
                 return api.resource('system_config').setScopedConfig(payload);
             })
             .then(function (data) {
-                if (data === false || (data && typeof data === 'object' && data.result === false)) {
-                    throw new Error('set_scoped_config_failed');
+                // Query may return the save payload directly, or wrap it.
+                if (data && typeof data === 'object' && data.data && typeof data.data === 'object'
+                    && (data.data.message || data.data.cache_invalidation || data.data.success !== undefined)
+                    && data.message === undefined) {
+                    data = data.data;
+                }
+                if (data === false || (data && typeof data === 'object' && (data.result === false || data.success === false))) {
+                    throw new Error((data && (data.message || data.msg)) || 'set_scoped_config_failed');
                 }
                 control.dataset.lastValue = next;
-                toast('success', (window.__ && window.__('配置已保存')) || '配置已保存');
+                var msg = '';
+                if (data && typeof data === 'object') {
+                    msg = String(data.message || (data.cache_invalidation && data.cache_invalidation.summary) || '').trim();
+                }
+                if (!msg) {
+                    msg = (window.__ && window.__('配置已保存')) || '配置已保存';
+                }
+                if (data && typeof data === 'object' && data.status === 'noop') {
+                    var toastUi = window.Weline && window.Weline.UI && window.Weline.UI.toast;
+                    if (toastUi && typeof toastUi.warning === 'function') {
+                        toast('warning', msg);
+                    } else {
+                        toast('success', msg);
+                    }
+                    return;
+                }
+                var toastApi = window.Weline && window.Weline.UI && window.Weline.UI.toast;
+                var title = data && typeof data === 'object'
+                    ? String(data.message_title || '').trim()
+                    : '';
+                var body = data && typeof data === 'object'
+                    ? String(data.message_body || '').trim()
+                    : '';
+                if (toastApi && typeof toastApi.success === 'function' && (title || body)) {
+                    toastApi.success(body || msg, {
+                        title: title || ((window.__ && window.__('配置已保存')) || '配置已保存'),
+                        duration: 6500
+                    });
+                    return;
+                }
+                toast('success', msg);
             })
             .catch(function (error) {
                 setControlValue(control, previous);
@@ -110,7 +165,13 @@
             })
             .finally(function () {
                 control.dataset.saving = '0';
-                control.disabled = false;
+                if (lockControl) {
+                    control.disabled = false;
+                }
+                if (control.dataset.pendingSave === '1') {
+                    control.dataset.pendingSave = '0';
+                    saveField(root, fieldEl, control, options);
+                }
             });
     }
 
@@ -141,7 +202,7 @@
 
             if (isImmediate) {
                 control.addEventListener('change', function () {
-                    saveField(root, fieldEl, control);
+                    saveField(root, fieldEl, control, { lockControl: true });
                 });
                 return;
             }
@@ -152,15 +213,16 @@
                     clearTimeout(timer);
                 }
                 timer = setTimeout(function () {
-                    saveField(root, fieldEl, control);
-                }, 300);
+                    timer = null;
+                    saveField(root, fieldEl, control, { lockControl: false });
+                }, TEXT_DEBOUNCE_MS);
             });
             control.addEventListener('blur', function () {
                 if (timer) {
                     clearTimeout(timer);
                     timer = null;
                 }
-                saveField(root, fieldEl, control);
+                saveField(root, fieldEl, control, { lockControl: false });
             });
         });
     }
