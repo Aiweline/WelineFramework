@@ -87,7 +87,7 @@ final class ToolService
             self::tool(
                 'submit_task_plan',
                 'Submit session task plan',
-                'Store an accepted task-plan.v1 in this MCP process for the current readiness session. Required on every executable user requirement (not only before edits): include requirements (≥1), goal, extension_point, architecture, dev_tasks, and ≥1 acceptance covering analysis→acceptance. Missing plan returns PLAN_REQUIRED with plan_workflow — compose immediately. Track progress via update_task_plan_progress and review_task_plan before closeout. Plans are not written to the repository.',
+                'Store an accepted task-plan.v1 in this MCP process for the current readiness session. Required on every executable user requirement (not only before edits): include requirements (≥1), work_kind (feature|non_feature), goal, extension_point, requirement_scrutiny (≥1; use 合理/无调整/ok when framework-aligned, else problem + better approach), architecture (framework-based decoupled design mapping each requirement; ≥40 chars; all risk levels), coupling_findings (≥1; use 无/无耦合/none when none), skill_participation (feature must include prototype + frontend-design), dev_tasks, and ≥1 acceptance covering analysis→acceptance (feature must include type=shentu). Missing plan returns PLAN_REQUIRED with plan_workflow — compose immediately. Track progress via update_task_plan_progress and review_task_plan before closeout; closeout requires huishen_notes 汇审. If requirement_scrutiny has adjustments, user reports must include 「需求纠偏」. If coupling is found, user reports must include 「耦合提示」. Plans are not written to the repository.',
                 self::objectSchema($project + [
                     'plan' => [
                         'type' => 'object',
@@ -95,6 +95,14 @@ final class ToolService
                         'properties' => [
                             'goal' => self::stringSchema('What this edit session will achieve.'),
                             'requirements' => self::stringsSchema('Understood user-requirement bullets from requirement analysis (≥1).'),
+                            'work_kind' => [
+                                'type' => 'string',
+                                'enum' => ['feature', 'non_feature'],
+                                'description' => 'Required: feature = deliverable product capability / user-visible surface; non_feature = docs/infra/gate-only.',
+                            ],
+                            'skill_participation' => self::stringsSchema(
+                                'Skills participating this turn. Feature must include prototype and frontend-design.',
+                            ),
                             'scope_paths' => self::stringsSchema('Repository-relative paths expected to change.'),
                             'extension_point' => self::stringSchema('Selected Event/Query/Hook/Interface/Taglib, or explicit none:reason.'),
                             'acceptance' => [
@@ -106,17 +114,31 @@ final class ToolService
                                     'additionalProperties' => false,
                                     'properties' => [
                                         'id' => self::stringSchema('Stable acceptance id.'),
-                                        'type' => ['type' => 'string', 'enum' => ['unit', 'probe', 'browser', 'doc']],
+                                        'type' => ['type' => 'string', 'enum' => ['unit', 'probe', 'browser', 'doc', 'shentu']],
                                         'description' => self::stringSchema('How pass/fail is judged.'),
                                         'status' => ['type' => 'string', 'enum' => ['pending', 'passed', 'failed', 'skipped', 'na']],
-                                        'evidence' => self::stringSchema('Optional probe/browser/doc evidence when status is passed or failed.'),
+                                        'evidence' => self::stringSchema('Optional probe/browser/doc/shentu evidence when status is passed or failed.'),
                                     ],
                                     'required' => ['id', 'type', 'description'],
                                 ],
                             ],
                             'forbidden' => self::stringsSchema('Paths or actions that must not be touched.'),
                             'risk' => ['type' => 'string', 'enum' => ['normal', 'trivial']],
-                            'architecture' => self::stringSchema('Extension-point choice, module boundaries, key paths.'),
+                            'architecture' => self::stringSchema(
+                                'Required: map each requirement to a framework-based decoupled design '
+                                . '(extension mechanism, module boundaries, key paths/layers; ≥40 chars).',
+                            ),
+                            'requirement_scrutiny' => self::stringsSchema(
+                                'Required: framework scrutiny of the user ask — 合理/无调整/ok when aligned; '
+                                . 'otherwise why unreasonable + better approach. Report 「需求纠偏」 when adjusted.',
+                            ),
+                            'coupling_findings' => self::stringsSchema(
+                                'Required: coupling discovered during analysis/implement, or explicit 无/无耦合/none. '
+                                . 'User reports must include 「耦合提示」.',
+                            ),
+                            'huishen_notes' => self::stringSchema(
+                                'Joint closeout 汇审 notes (required before closeout_allowed; must contain 汇审).',
+                            ),
                             'workflow_phase' => ['type' => 'string', 'enum' => ['plan', 'implement', 'verify', 'review', 'closeout']],
                             'dev_tasks' => [
                                 'type' => 'array',
@@ -134,7 +156,16 @@ final class ToolService
                                 ],
                             ],
                         ],
-                        'required' => ['goal', 'requirements', 'extension_point', 'acceptance'],
+                        'required' => [
+                            'goal',
+                            'requirements',
+                            'work_kind',
+                            'extension_point',
+                            'architecture',
+                            'requirement_scrutiny',
+                            'coupling_findings',
+                            'acceptance',
+                        ],
                     ],
                 ], ['repository', 'client_session_id', 'readiness_id', 'plan']),
                 $additive,
@@ -149,7 +180,7 @@ final class ToolService
             self::tool(
                 'update_task_plan_progress',
                 'Update task plan progress',
-                'Update workflow_phase, requirements, dev_tasks status, acceptance status/evidence, architecture, or review_notes on the accepted session plan. Use during implement/verify/review phases.',
+                'Update workflow_phase, requirements, work_kind, skill_participation, dev_tasks status, acceptance status/evidence, architecture, requirement_scrutiny, coupling_findings, review_notes, or huishen_notes on the accepted session plan. Use during implement/verify/review phases; set huishen_notes before closeout.',
                 self::objectSchema($project + [
                     'progress' => [
                         'type' => 'object',
@@ -157,8 +188,27 @@ final class ToolService
                         'properties' => [
                             'workflow_phase' => ['type' => 'string', 'enum' => ['plan', 'implement', 'verify', 'review', 'closeout']],
                             'requirements' => self::stringsSchema('Updated requirement-analysis bullets.'),
-                            'architecture' => self::stringSchema('Updated architecture notes.'),
+                            'work_kind' => [
+                                'type' => 'string',
+                                'enum' => ['feature', 'non_feature'],
+                                'description' => 'Updated feature/non_feature classification.',
+                            ],
+                            'skill_participation' => self::stringsSchema(
+                                'Updated skill participation; feature must keep prototype + frontend-design.',
+                            ),
+                            'architecture' => self::stringSchema(
+                                'Updated architecture notes; must still map requirements with a framework-based decoupled design.',
+                            ),
+                            'requirement_scrutiny' => self::stringsSchema(
+                                'Updated framework scrutiny; use 合理/无调整/ok when aligned. Report 「需求纠偏」 when adjusted.',
+                            ),
+                            'coupling_findings' => self::stringsSchema(
+                                'Updated coupling findings; use 无/无耦合/none when none. Report 「耦合提示」 on closeout.',
+                            ),
                             'review_notes' => self::stringSchema('Omission review notes.'),
+                            'huishen_notes' => self::stringSchema(
+                                'Joint 汇审 notes required before closeout_allowed (must contain 汇审).',
+                            ),
                             'dev_task_updates' => [
                                 'type' => 'array',
                                 'items' => [
@@ -180,7 +230,7 @@ final class ToolService
                                     'properties' => [
                                         'id' => self::stringSchema(),
                                         'status' => ['type' => 'string', 'enum' => ['pending', 'passed', 'failed', 'skipped', 'na']],
-                                        'evidence' => self::stringSchema('Probe output, browser note, or test command.'),
+                                        'evidence' => self::stringSchema('Probe output, browser note, shentu note, or test command.'),
                                     ],
                                     'required' => ['id', 'status'],
                                 ],

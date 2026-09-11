@@ -1176,7 +1176,6 @@ API基础URL,"API Base URL"
 提示：先选供应商，再搜索并点击选择模型,"Tip: Select the supplier first, then search and click to select the model"
 "无法创建 AI 翻译锁目录。","无法创建 AI 翻译锁目录。"
 "无法打开 AI 翻译锁文件。","无法打开 AI 翻译锁文件。"
-AI翻译繁忙：已断开僵死占用进程，请稍后重试。,AI翻译繁忙：已断开僵死占用进程，请稍后重试。
 AI翻译繁忙：本地模型正被其他任务占用，请稍后重试。,AI翻译繁忙：本地模型正被其他任务占用，请稍后重试。
 "模型不存在: %{code}","Model does not exist: %{code}"
 "模型 %{code} 缺少API密钥配置","Model %{code} is missing API key configuration"
@@ -1322,6 +1321,7 @@ AI用量审计恢复,"AI usage audit recovery"
 "%{1} 同步失败：%{2}","%{1} Synchronization failed: %{2}"
 "模型收集完成，共 %{1} 个模型","Model collection completed, total %{1} models"
 已跳过模型收集,"Model collection skipped"
+AI翻译繁忙：已断开僵死占用进程，请稍后重试。,AI翻译繁忙：已断开僵死占用进程，请稍后重试。
 "支持 .ico, .png","支持 .ico, .png"
 """a, b""","""a, b"""
 请先设置默认测试模型或添加模型,"Please set a default test model or add a model first"
