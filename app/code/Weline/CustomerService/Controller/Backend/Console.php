@@ -12,10 +12,12 @@ declare(strict_types=1);
 namespace Weline\CustomerService\Controller\Backend;
 
 use Weline\CustomerService\Model\AgentPhrase;
+use Weline\CustomerService\Model\AgentPhraseCategory;
 use Weline\CustomerService\Model\ChatMessage;
 use Weline\CustomerService\Model\ChatSession;
 use Weline\CustomerService\Model\ServiceAgent;
 use Weline\CustomerService\Service\ChatAttachmentCodec;
+use Weline\CustomerService\Service\ChatMediaUploader;
 use Weline\CustomerService\Service\ChatService;
 use Weline\CustomerService\Service\StatisticsService;
 use Weline\Framework\App\Controller\BackendController;
@@ -540,71 +542,20 @@ class Console extends BackendController
             $name = trim((string)$this->request->getPost('name', 'file'));
             $mime = strtolower(trim((string)$this->request->getPost('mime', 'application/octet-stream')));
             $base64 = (string)$this->request->getPost('data', '');
-            if (str_contains($base64, ',')) {
-                $base64 = substr($base64, (int)strpos($base64, ',') + 1);
-            }
-            $binary = base64_decode($base64, true);
-            if ($binary === false || $binary === '') {
-                return $this->jsonResponse(false, __('上传数据无效'));
-            }
+            /** @var ChatMediaUploader $uploader */
+            $uploader = ObjectManager::getInstance(ChatMediaUploader::class);
+            $stored = $uploader->storeBase64($name, $mime, $base64, 'agent_' . (int)$agent->getId());
 
-            $size = strlen($binary);
-            $isImage = str_starts_with($mime, 'image/');
-            $max = $isImage ? 5 * 1024 * 1024 : 10 * 1024 * 1024;
-            if ($size > $max) {
-                return $this->jsonResponse(false, __('文件过大'));
-            }
-
-            $allowedImage = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-            $allowedFile = [
-                'application/pdf',
-                'text/plain',
-                'application/zip',
-                'application/msword',
-                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                'application/vnd.ms-excel',
-                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            ];
-            if ($isImage && !in_array($mime, $allowedImage, true)) {
-                return $this->jsonResponse(false, __('不支持的图片类型'));
-            }
-            if (!$isImage && !in_array($mime, $allowedFile, true)) {
-                return $this->jsonResponse(false, __('不支持的文件类型'));
-            }
-
-            $safeName = preg_replace('/[^a-zA-Z0-9._\-一-龥]+/u', '_', $name) ?: 'file';
-            $ext = pathinfo($safeName, PATHINFO_EXTENSION);
-            if ($ext === '') {
-                $ext = $isImage ? 'png' : 'bin';
-                $safeName .= '.' . $ext;
-            }
-            $dirRel = 'customerservice/' . (int)$agent->getId() . '/' . date('Y/m/d');
-            $dirAbs = rtrim((string)BP, '/\\') . DIRECTORY_SEPARATOR . 'pub' . DIRECTORY_SEPARATOR . 'media' . DIRECTORY_SEPARATOR
-                . str_replace('/', DIRECTORY_SEPARATOR, $dirRel);
-            if (!is_dir($dirAbs) && !mkdir($dirAbs, 0775, true) && !is_dir($dirAbs)) {
-                return $this->jsonResponse(false, __('无法创建上传目录'));
-            }
-            $stored = bin2hex(random_bytes(8)) . '_' . $safeName;
-            $pathAbs = $dirAbs . DIRECTORY_SEPARATOR . $stored;
-            if (file_put_contents($pathAbs, $binary) === false) {
-                return $this->jsonResponse(false, __('保存文件失败'));
-            }
-
-            $url = '/media/' . $dirRel . '/' . rawurlencode($stored);
-            return $this->jsonResponse(true, __('上传成功'), [
-                'url' => $url,
-                'name' => $safeName,
-                'mime' => $mime,
-                'size' => $size,
-                'kind' => $isImage ? ChatAttachmentCodec::TYPE_IMAGE : ChatAttachmentCodec::TYPE_FILE,
-            ]);
+            return $this->jsonResponse(true, __('上传成功'), $stored);
+        } catch (\InvalidArgumentException $e) {
+            return $this->jsonResponse(false, $e->getMessage());
         } catch (\Exception $e) {
             return $this->jsonResponse(false, __('上传失败：%{1}', $e->getMessage()));
         }
     }
 
     /**
-     * 个人话术列表
+     * 个人话术列表（含分类 Tab）
      * GET /customerservice/backend/console/phrases
      */
     public function getPhrases(): string
@@ -614,26 +565,42 @@ class Console extends BackendController
             if ($agent instanceof string) {
                 return $agent;
             }
+            $agentId = (int)$agent->getId();
             /** @var AgentPhrase $model */
             $model = ObjectManager::getInstance(AgentPhrase::class);
             $rows = $model->reset()
-                ->where(AgentPhrase::schema_fields_AGENT_ID, (int)$agent->getId())
+                ->where(AgentPhrase::schema_fields_AGENT_ID, $agentId)
                 ->order(AgentPhrase::schema_fields_SORT, 'ASC')
                 ->order(AgentPhrase::schema_fields_ID, 'DESC')
                 ->select()
                 ->fetch()
                 ->getItems();
             $list = [];
+            $usedCategories = [];
             foreach (is_array($rows) ? $rows : [] as $row) {
                 $data = is_array($row) ? $row : $row->getData();
+                $category = trim((string)($data[AgentPhrase::schema_fields_CATEGORY] ?? ''));
+                if ($category !== '') {
+                    $usedCategories[$category] = true;
+                }
                 $list[] = [
                     'phrase_id' => (int)($data[AgentPhrase::schema_fields_ID] ?? 0),
                     'title' => (string)($data[AgentPhrase::schema_fields_TITLE] ?? ''),
                     'content' => (string)($data[AgentPhrase::schema_fields_CONTENT] ?? ''),
+                    'category' => $category,
                     'sort_order' => (int)($data[AgentPhrase::schema_fields_SORT] ?? 0),
                 ];
             }
-            return $this->jsonResponse(true, __('获取成功'), $list);
+            $categories = $this->listPhraseCategoryNames($agentId);
+            foreach (array_keys($usedCategories) as $name) {
+                if (!in_array($name, $categories, true)) {
+                    $categories[] = $name;
+                }
+            }
+            return $this->jsonResponse(true, __('获取成功'), [
+                'phrases' => $list,
+                'categories' => array_values($categories),
+            ]);
         } catch (\Exception $e) {
             return $this->jsonResponse(false, __('获取话术失败：%{1}', $e->getMessage()));
         }
@@ -653,6 +620,7 @@ class Console extends BackendController
             $phraseId = (int)$this->request->getPost('phrase_id', 0);
             $title = trim((string)$this->request->getPost('title', ''));
             $content = trim((string)$this->request->getPost('content', ''));
+            $category = mb_substr(trim((string)$this->request->getPost('category', '')), 0, 64);
             if ($title === '' || $content === '') {
                 return $this->jsonResponse(false, __('标题和内容不能为空'));
             }
@@ -668,13 +636,24 @@ class Console extends BackendController
             }
             $model->setTitle(mb_substr($title, 0, 120))
                 ->setContent($content)
-                ->setData(AgentPhrase::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'))
-                ->save();
+                ->setData(AgentPhrase::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'));
+            try {
+                $model->setCategory($category)->save();
+            } catch (\Throwable $e) {
+                // category 列未升级完成时回退为仅保存标题/内容
+                $model->unsetModelData(AgentPhrase::schema_fields_CATEGORY);
+                $model->save();
+            }
+
+            if ($category !== '') {
+                $this->ensurePhraseCategory((int)$agent->getId(), $category);
+            }
 
             return $this->jsonResponse(true, __('保存成功'), [
                 'phrase_id' => (int)$model->getId(),
                 'title' => $model->getTitle(),
                 'content' => $model->getContent(),
+                'category' => $model->getCategory(),
             ]);
         } catch (\Exception $e) {
             return $this->jsonResponse(false, __('保存话术失败：%{1}', $e->getMessage()));
@@ -706,6 +685,134 @@ class Console extends BackendController
             return $this->jsonResponse(true, __('删除成功'));
         } catch (\Exception $e) {
             return $this->jsonResponse(false, __('删除话术失败：%{1}', $e->getMessage()));
+        }
+    }
+
+    /**
+     * 新建话术分类（即新 Tab）
+     * POST /customerservice/backend/console/phrase-category-save
+     */
+    public function postPhraseCategorySave(): string
+    {
+        try {
+            $agent = $this->requireCurrentAgent();
+            if ($agent instanceof string) {
+                return $agent;
+            }
+            $name = mb_substr(trim((string)$this->request->getPost('name', '')), 0, 64);
+            if ($name === '') {
+                return $this->jsonResponse(false, __('分类名不能为空'));
+            }
+            $this->ensurePhraseCategory((int)$agent->getId(), $name);
+            return $this->jsonResponse(true, __('分类已创建'), [
+                'name' => $name,
+                'categories' => $this->listPhraseCategoryNames((int)$agent->getId()),
+            ]);
+        } catch (\Exception $e) {
+            return $this->jsonResponse(false, __('保存分类失败：%{1}', $e->getMessage()));
+        }
+    }
+
+    /**
+     * 删除空话术分类 Tab
+     * POST /customerservice/backend/console/phrase-category-delete
+     */
+    public function postPhraseCategoryDelete(): string
+    {
+        try {
+            $agent = $this->requireCurrentAgent();
+            if ($agent instanceof string) {
+                return $agent;
+            }
+            $name = mb_substr(trim((string)$this->request->getPost('name', '')), 0, 64);
+            if ($name === '') {
+                return $this->jsonResponse(false, __('分类名不能为空'));
+            }
+            $agentId = (int)$agent->getId();
+            /** @var AgentPhrase $phraseModel */
+            $phraseModel = ObjectManager::getInstance(AgentPhrase::class);
+            $used = $phraseModel->reset()
+                ->where(AgentPhrase::schema_fields_AGENT_ID, $agentId)
+                ->where(AgentPhrase::schema_fields_CATEGORY, $name)
+                ->select()
+                ->fetch()
+                ->getItems();
+            if (is_array($used) && count($used) > 0) {
+                return $this->jsonResponse(false, __('该分类下还有话术，请先移出或删除'));
+            }
+            /** @var AgentPhraseCategory $catModel */
+            $catModel = ObjectManager::getInstance(AgentPhraseCategory::class);
+            $row = $catModel->reset()
+                ->where(AgentPhraseCategory::schema_fields_AGENT_ID, $agentId)
+                ->where(AgentPhraseCategory::schema_fields_NAME, $name)
+                ->find()
+                ->fetch();
+            if ($row && $row->getId()) {
+                $row->delete();
+            }
+            return $this->jsonResponse(true, __('分类已删除'), [
+                'categories' => $this->listPhraseCategoryNames($agentId),
+            ]);
+        } catch (\Exception $e) {
+            return $this->jsonResponse(false, __('删除分类失败：%{1}', $e->getMessage()));
+        }
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function listPhraseCategoryNames(int $agentId): array
+    {
+        try {
+            /** @var AgentPhraseCategory $catModel */
+            $catModel = ObjectManager::getInstance(AgentPhraseCategory::class);
+            $rows = $catModel->reset()
+                ->where(AgentPhraseCategory::schema_fields_AGENT_ID, $agentId)
+                ->order(AgentPhraseCategory::schema_fields_SORT, 'ASC')
+                ->order(AgentPhraseCategory::schema_fields_ID, 'ASC')
+                ->select()
+                ->fetch()
+                ->getItems();
+            $names = [];
+            foreach (is_array($rows) ? $rows : [] as $row) {
+                $data = is_array($row) ? $row : $row->getData();
+                $name = trim((string)($data[AgentPhraseCategory::schema_fields_NAME] ?? ''));
+                if ($name !== '' && !in_array($name, $names, true)) {
+                    $names[] = $name;
+                }
+            }
+            return $names;
+        } catch (\Throwable $e) {
+            // 表未升级完成时仍可返回话术列表，分类 Tab 退化为短语上的 category 去重。
+            return [];
+        }
+    }
+
+    private function ensurePhraseCategory(int $agentId, string $name): void
+    {
+        $name = mb_substr(trim($name), 0, 64);
+        if ($name === '') {
+            return;
+        }
+        try {
+            /** @var AgentPhraseCategory $catModel */
+            $catModel = ObjectManager::getInstance(AgentPhraseCategory::class);
+            $existing = $catModel->reset()
+                ->where(AgentPhraseCategory::schema_fields_AGENT_ID, $agentId)
+                ->where(AgentPhraseCategory::schema_fields_NAME, $name)
+                ->find()
+                ->fetch();
+            if ($existing && $existing->getId()) {
+                return;
+            }
+            $catModel->clear()
+                ->setAgentId($agentId)
+                ->setName($name)
+                ->setSortOrder(0)
+                ->setData(AgentPhraseCategory::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'))
+                ->save();
+        } catch (\Throwable $e) {
+            // 分类表尚未就绪时不阻断话术保存；分类名仍写在 phrase.category。
         }
     }
 

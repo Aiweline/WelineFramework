@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="UTF-8" />
+  <title>PROTOTYPE — 工作台默认选中 / 侧栏优先级 / 收消息反馈</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 920px; margin: 1.5rem auto; padding: 0 1rem; }
+    .note { background: #fff8e6; border: 1px solid #e6d7a8; padding: .75rem 1rem; border-radius: 8px; }
+    .row { display: flex; gap: 1rem; flex-wrap: wrap; }
+    .card { flex: 1 1 280px; border: 1px solid #ddd; border-radius: 10px; padding: .75rem; }
+    button { margin: .2rem .2rem .2rem 0; }
+    .session { padding: .5rem; border: 1px solid #eee; border-radius: 8px; margin: .35rem 0; }
+    .session.active { outline: 2px solid #3b82f6; }
+    .session.alert { background: #fff3cd; }
+    pre { background: #f6f6f6; padding: .75rem; overflow: auto; }
+    .toast { position: fixed; right: 1rem; bottom: 1rem; background: #111; color: #fff; padding: .6rem .9rem; border-radius: 8px; display: none; }
+  </style>
+</head>
+<body>
+  <div class="note">
+    <strong>问题：</strong>进入工作台空态不选会话；侧栏排序是否应「未读等待最久优先，其余最新在前」；收到消息时如何给反馈才不漏接。
+    <br/><strong>结论（已选型）：</strong>默认选中「我的会话」排序首位；未读按 waiting_since 升序（等最久更靠前）；已读按 last_message_at 降序；新未读增量 → toast + 列表脉冲 + 标题闪烁。
+  </div>
+
+  <div class="row">
+    <div class="card">
+      <h3>操作</h3>
+      <button id="btn-reset">重置样例</button>
+      <button id="btn-enter">模拟进入工作台</button>
+      <button id="btn-customer-msg">其他会话收到客户消息</button>
+      <button id="btn-active-msg">当前会话收到客户消息</button>
+      <div id="list"></div>
+    </div>
+    <div class="card">
+      <h3>状态</h3>
+      <pre id="state"></pre>
+    </div>
+  </div>
+  <div class="toast" id="toast"></div>
+
+  <script>
+  // Portable module — lift into backend-console / ChatService sort
+  function sortConsoleSessionsByPriority(sessions) {
+    return sessions.slice().sort((a, b) => {
+      const aU = (a.unread_count || 0) > 0;
+      const bU = (b.unread_count || 0) > 0;
+      if (aU !== bU) return aU ? -1 : 1;
+      if (aU && bU) {
+        const aw = Date.parse(a.waiting_since_at || '') || Number.MAX_SAFE_INTEGER;
+        const bw = Date.parse(b.waiting_since_at || '') || Number.MAX_SAFE_INTEGER;
+        if (aw !== bw) return aw - bw;
+      }
+      const al = Date.parse(a.last_message_at || '') || 0;
+      const bl = Date.parse(b.last_message_at || '') || 0;
+      return bl - al;
+    });
+  }
+
+  function pickDefaultSessionId(sessions) {
+    const sorted = sortConsoleSessionsByPriority(sessions);
+    return sorted[0] ? sorted[0].session_id : 0;
+  }
+
+  const seed = () => ([
+    { session_id: 4, unread_count: 0, last_message_at: '2026-09-09T08:00:00+08:00', waiting_since_at: null, label: '已回完' },
+    { session_id: 12, unread_count: 1, last_message_at: '2026-09-09T16:30:00+08:00', waiting_since_at: '2026-09-09T16:29:00+08:00', label: '刚未读' },
+    { session_id: 6, unread_count: 2, last_message_at: '2026-09-09T17:35:00+08:00', waiting_since_at: '2026-09-09T15:00:00+08:00', label: '等最久' },
+  ]);
+
+  let state = { sessions: seed(), current: 0, toasts: [] };
+
+  function render() {
+    const sorted = sortConsoleSessionsByPriority(state.sessions);
+    document.getElementById('list').innerHTML = sorted.map(s => `
+      <div class="session ${s.session_id===state.current?'active':''} ${s._alert?'alert':''}">
+        #${s.session_id} ${s.label} · unread=${s.unread_count} · last=${s.last_message_at.slice(11,16)}
+      </div>`).join('');
+    document.getElementById('state').textContent = JSON.stringify({
+      current: state.current,
+      order: sorted.map(s => s.session_id),
+      defaultWouldBe: pickDefaultSessionId(state.sessions),
+      toasts: state.toasts.slice(-5)
+    }, null, 2);
+  }
+
+  function toast(msg) {
+    state.toasts.push(msg);
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.style.display = 'block';
+    setTimeout(() => el.style.display = 'none', 1600);
+  }
+
+  document.getElementById('btn-reset').onclick = () => { state = { sessions: seed(), current: 0, toasts: [] }; render(); };
+  document.getElementById('btn-enter').onclick = () => {
+    state.current = pickDefaultSessionId(state.sessions);
+    toast('默认选中 #' + state.current);
+    render();
+  };
+  document.getElementById('btn-customer-msg').onclick = () => {
+    const other = state.sessions.find(s => s.session_id !== state.current) || state.sessions[0];
+    other.unread_count += 1;
+    other.last_message_at = new Date().toISOString();
+    if (!other.waiting_since_at) other.waiting_since_at = other.last_message_at;
+    other._alert = true;
+    toast('会话 #' + other.session_id + ' 有新消息');
+    render();
+    setTimeout(() => { other._alert = false; render(); }, 1200);
+  };
+  document.getElementById('btn-active-msg').onclick = () => {
+    toast('当前会话 #' + state.current + ' 有新消息');
+    render();
+  };
+
+  render();
+  </script>
+</body>
+</html>

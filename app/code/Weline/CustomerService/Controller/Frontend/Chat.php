@@ -14,6 +14,8 @@ namespace Weline\CustomerService\Controller\Frontend;
 use Weline\CustomerService\Model\ChatMessage;
 use Weline\CustomerService\Model\ChatSession;
 use Weline\CustomerService\Model\ServiceAgent;
+use Weline\CustomerService\Service\ChatAttachmentCodec;
+use Weline\CustomerService\Service\ChatMediaUploader;
 use Weline\CustomerService\Service\ChatService;
 use Weline\CustomerService\Service\CustomerServiceSettings;
 use Weline\Framework\App\Controller\FrontendController;
@@ -71,7 +73,12 @@ class Chat extends FrontendController
                     'customer_locale' => $session->getCustomerLocale(),
                     'agent_locale' => $session->getAgentLocale(),
                     'status' => $session->getStatus(),
-                    'agent_id' => $session->getAgentId()
+                    'agent_id' => $session->getAgentId(),
+                    'identity' => $this->chatService->buildSessionIdentity(
+                        $session,
+                        $customerId !== null && $customerId > 0,
+                        $customerId
+                    ),
                 ]
             ]);
         } catch (\Exception $e) {
@@ -91,6 +98,17 @@ class Chat extends FrontendController
         try {
             $sessionId = (int)$this->request->getPost('session_id', 0);
             $content = trim($this->request->getPost('content', ''));
+            $attachmentType = trim((string)$this->request->getPost('attachment_type', ''));
+            $attachmentUrl = trim((string)$this->request->getPost('attachment_url', ''));
+            if ($attachmentType !== '' && $attachmentUrl !== '') {
+                $content = ChatAttachmentCodec::encode([
+                    'type' => $attachmentType,
+                    'url' => $attachmentUrl,
+                    'name' => trim((string)$this->request->getPost('attachment_name', '')),
+                    'size' => (int)$this->request->getPost('attachment_size', 0),
+                    'mime' => trim((string)$this->request->getPost('attachment_mime', '')),
+                ]);
+            }
 
             if (empty($content)) {
                 return $this->fetchJson([
@@ -142,6 +160,59 @@ class Chat extends FrontendController
             return $this->fetchJson([
                 'success' => false,
                 'message' => __('发送消息失败：%{1}', $e->getMessage())
+            ]);
+        }
+    }
+
+    /**
+     * 上传聊天附件（base64）
+     * POST /customerservice/frontend/chat/upload
+     */
+    public function postUpload(): string
+    {
+        try {
+            $sessionId = (int)$this->request->getPost('session_id', 0);
+            if ($sessionId <= 0) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('无效的会话ID'),
+                ]);
+            }
+            $customerId = $this->session->isLoggedIn() ? (int)$this->session->getUserId() : 0;
+            try {
+                $this->chatService->assertCustomerMaySend($sessionId, $customerId > 0);
+            } catch (\RuntimeException $e) {
+                $gate = $this->chatService->resolveGuestSendGate($sessionId, $customerId > 0);
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => $e->getMessage(),
+                    'guest_send' => $gate,
+                    'guest_send_locked' => true,
+                ]);
+            }
+            $owner = $customerId > 0 ? 'c_' . $customerId : 's_' . $sessionId;
+            /** @var ChatMediaUploader $uploader */
+            $uploader = ObjectManager::getInstance(ChatMediaUploader::class);
+            $stored = $uploader->storeBase64(
+                trim((string)$this->request->getPost('name', 'file')),
+                strtolower(trim((string)$this->request->getPost('mime', 'application/octet-stream'))),
+                (string)$this->request->getPost('data', ''),
+                $owner
+            );
+            return $this->fetchJson([
+                'success' => true,
+                'message' => __('上传成功'),
+                'data' => $stored,
+            ]);
+        } catch (\InvalidArgumentException $e) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]);
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('上传失败：%{1}', $e->getMessage()),
             ]);
         }
     }
