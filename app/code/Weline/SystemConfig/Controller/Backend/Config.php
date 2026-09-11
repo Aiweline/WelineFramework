@@ -13,6 +13,7 @@ use Weline\Framework\Service\Query\FrontendQueryException;
 use Weline\Framework\Ui\FormKey;
 use Weline\Backend\Api\Auth\BackendInteractiveAuthInterface;
 use Weline\SystemConfig\Model\SystemConfig;
+use Weline\SystemConfig\Service\ConfigCacheInvalidationFeedback;
 use Weline\SystemConfig\Service\SystemConfigCenterService;
 use Weline\SystemConfig\Service\SystemConfigTargetScopeService;
 use Weline\SystemConfig\Service\SystemConfigTemplateService;
@@ -211,7 +212,12 @@ class Config extends BackendController
                     'locale' => $locale,
                 ], $this->actorOptions()));
                 if (!empty($result['success'])) {
-                    $this->getMessageManager()->addSuccess(__('配置已回滚，回滚批次：%{1}', (string)($result['rollback_version_id'] ?? '')));
+                    $title = (string)($result['message_title'] ?? __('配置已回滚'));
+                    $body = trim((string)($result['message_body'] ?? ''));
+                    if ($body === '') {
+                        $body = (string)($result['message'] ?? __('回滚批次 %{1}', [(string)($result['rollback_version_id'] ?? '')]));
+                    }
+                    $this->getMessageManager()->addSuccess($body, $title);
                 } else {
                     $this->getMessageManager()->addError(__('配置回滚预检失败，当前配置未改变。'));
                 }
@@ -276,16 +282,29 @@ class Config extends BackendController
                             locale: $locale,
                             options: array_merge($this->actorOptions(), [
                                 'scope_identity' => $target['identity'],
+                                'cache_namespaces' => $this->postedCacheNamespaces(),
                             ])
                         );
                         if (!empty($result['success'])) {
-                            $message = __('配置已保存，版本批次：%{1}', (string)($result['version_id'] ?? ''));
-                            if ($googleJsonImport['imported']) {
-                                $message = __('已从 Google OAuth JSON 导入 Client ID/Secret，并保存配置（版本批次：%{1}）', [
-                                    (string)($result['version_id'] ?? ''),
-                                ]);
+                            if ((string)($result['status'] ?? '') === 'noop') {
+                                $this->getMessageManager()->addWarning(
+                                    (string)($result['message'] ?? __('没有检测到配置变更，未创建新版本。')),
+                                    (string)__('未保存')
+                                );
+                            } else {
+                                /** @var ConfigCacheInvalidationFeedback $feedback */
+                                $feedback = ObjectManager::getInstance(ConfigCacheInvalidationFeedback::class);
+                                $parts = $feedback->formatSaveParts(
+                                    $result['version_id'] ?? '',
+                                    is_array($result['cache_invalidation'] ?? null)
+                                        ? $result['cache_invalidation']
+                                        : [],
+                                    (bool)$googleJsonImport['imported'],
+                                );
+                                $title = $parts['title'] !== '' ? $parts['title'] : (string)__('配置已保存');
+                                $body = $parts['body'] !== '' ? $parts['body'] : (string)__('版本已写入');
+                                $this->getMessageManager()->addSuccess($body, $title);
                             }
-                            $this->getMessageManager()->addSuccess($message);
                         } else {
                             $status = (string)($result['status'] ?? '');
                             if ($status === 'conflict') {
@@ -562,6 +581,30 @@ class Config extends BackendController
             'actor_name' => $actorName,
             'reason' => $reason,
         ];
+    }
+
+    /**
+     * Control binding: collect cache_namespaces from the config-center form POST.
+     *
+     * @return list<string>
+     */
+    private function postedCacheNamespaces(): array
+    {
+        $raw = $this->request->getPost('cache_namespaces', []);
+        if (is_string($raw)) {
+            $raw = preg_split('/[\s,]+/', $raw) ?: [];
+        }
+        if (!is_array($raw)) {
+            return [];
+        }
+        $out = [];
+        foreach ($raw as $item) {
+            $item = trim((string)$item);
+            if ($item !== '') {
+                $out[$item] = $item;
+            }
+        }
+        return array_values($out);
     }
 
     private function objectAuthorizationGuard(): BackendObjectAuthorizationGuardInterface

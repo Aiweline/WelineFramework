@@ -8,6 +8,7 @@ use Weline\Framework\Cache\Namespace\NamespacePath;
 use Weline\Framework\Event\ResourceChange\ResourceChange;
 use Weline\Framework\Event\ResourceChange\ResourceChangeFactory;
 use Weline\Framework\Event\ResourceChange\ResourceRevisionService;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\SystemConfig\Model\SystemConfig;
 
 final class SystemConfigResourceChangePublisher
@@ -16,10 +17,16 @@ final class SystemConfigResourceChangePublisher
         private readonly ResourceRevisionService $revisions,
         private readonly ResourceChangeFactory $changes,
         private readonly NamespacePath $namespacePath,
+        private readonly ConfigFieldCacheNamespaceResolver $namespaceResolver,
     ) {
     }
 
-    /** @param list<array<string,mixed>> $changes */
+    /**
+     * @param list<array<string,mixed>> $changes
+     * @param list<array{pool:string,keys:list<string>}> $cacheOps
+     * @param list<string> $extraNamespaces already-normalized paths
+     * @param list<string> $requestedNamespaces raw request cache_namespaces
+     */
     public function publish(
         string $module,
         string $area,
@@ -27,6 +34,9 @@ final class SystemConfigResourceChangePublisher
         string $locale,
         array $changes,
         string $entry,
+        array $cacheOps = [],
+        array $extraNamespaces = [],
+        array $requestedNamespaces = [],
     ): ?ResourceChange {
         $records = array_values(array_filter(array_map(
             fn(array $change): ?array => $this->sanitizeChange($change),
@@ -46,6 +56,30 @@ final class SystemConfigResourceChangePublisher
         $before = $this->snapshot($module, $area, $scope, $locale, $records, 'before');
         $after = $this->snapshot($module, $area, $scope, $locale, $records, 'after');
         $revision = $this->revisions->next('system_config', $resourceId);
+
+        $declaredMeta = $this->declaredBindingMetaForFields($module, $area, $changedFields);
+        $fieldNamespaces = $this->namespaceResolver->resolve(
+            $declaredMeta['namespaces'],
+            $requestedNamespaces,
+            true,
+            $changedFields,
+            $declaredMeta['bind_key_prefixes'],
+        );
+        $namespaces = array_values(array_unique(array_merge(
+            $this->impactNamespaces($module, $scope, $identity, $changedFields),
+            $extraNamespaces,
+            $fieldNamespaces,
+        )));
+        sort($namespaces, SORT_STRING);
+
+        $impact = [
+            'namespaces' => $namespaces,
+            'urls' => $this->impactUrls($module, $changedFields),
+        ];
+        if ($cacheOps !== []) {
+            $impact['cache_ops'] = $cacheOps;
+        }
+
         $change = $this->changes->create(
             resourceType: 'system_config',
             resourceId: $resourceId,
@@ -56,14 +90,88 @@ final class SystemConfigResourceChangePublisher
             before: $before,
             after: $after,
             changedFields: $changedFields,
-            impact: [
-                'namespaces' => $this->impactNamespaces($module, $scope, $identity, $changedFields),
-                'urls' => $this->impactUrls($module, $changedFields),
-            ],
+            impact: $impact,
             origin: ['entry' => $entry],
         );
         w_changed($change);
         return $change;
+    }
+
+    /**
+     * Resolve impact namespaces without publishing (for pre-bump cache_ops decoration).
+     *
+     * @param list<string> $changedFields
+     * @param list<string> $extraNamespaces
+     * @param list<string> $requestedNamespaces
+     * @return list<string>
+     */
+    public function resolveNamespaces(
+        string $module,
+        string $area,
+        string $scope,
+        string $locale,
+        array $changedFields,
+        array $extraNamespaces = [],
+        array $requestedNamespaces = [],
+    ): array {
+        $identity = implode('|', [$module, $area, $scope, $locale]);
+        $declaredMeta = $this->declaredBindingMetaForFields($module, $area, $changedFields);
+        $fieldNamespaces = $this->namespaceResolver->resolve(
+            $declaredMeta['namespaces'],
+            $requestedNamespaces,
+            true,
+            $changedFields,
+            $declaredMeta['bind_key_prefixes'],
+        );
+        $namespaces = array_values(array_unique(array_merge(
+            $this->impactNamespaces($module, $scope, $identity, $changedFields),
+            $extraNamespaces,
+            $fieldNamespaces,
+        )));
+        sort($namespaces, SORT_STRING);
+        return $namespaces;
+    }
+
+    /**
+     * @param list<string> $changedFields
+     * @return array{namespaces:list<string>,bind_key_prefixes:list<string>}
+     */
+    private function declaredBindingMetaForFields(string $module, string $area, array $changedFields): array
+    {
+        if ($changedFields === []) {
+            return ['namespaces' => [], 'bind_key_prefixes' => []];
+        }
+        /** @var SystemConfigTemplateService $templates */
+        $templates = ObjectManager::getInstance(SystemConfigTemplateService::class);
+        $declared = [];
+        $bindPrefixes = [];
+        foreach ($templates->getTemplates($module, $area) as $template) {
+            foreach (($template['fields'] ?? []) as $field) {
+                if (!is_array($field)) {
+                    continue;
+                }
+                $key = (string)($field['key'] ?? '');
+                if ($key === '' || !in_array($key, $changedFields, true)) {
+                    continue;
+                }
+                $raw = (string)($field['cache-namespaces'] ?? $field['cache_namespaces'] ?? '');
+                $prefixAttr = (string)($field['cache-namespace-prefix'] ?? $field['cache_namespace_prefix'] ?? '');
+                if ($prefixAttr !== '') {
+                    $raw = trim($raw . ' ' . $prefixAttr);
+                }
+                if ($raw !== '') {
+                    $declared[] = $raw;
+                }
+                $bind = (string)($field['cache-bind-key-prefixes'] ?? $field['cache_bind_key_prefixes'] ?? '');
+                if ($bind !== '') {
+                    $bindPrefixes[] = $bind;
+                }
+            }
+        }
+        return [
+            'namespaces' => $declared,
+            'bind_key_prefixes' => $bindPrefixes,
+        ];
     }
 
     /** @param list<string> $changedFields @return list<string> */
@@ -72,8 +180,7 @@ final class SystemConfigResourceChangePublisher
         string $scope,
         string $identity,
         array $changedFields = [],
-    ): array
-    {
+    ): array {
         $namespaces = [
             $this->namespacePath->global('system-config', [hash('sha256', $identity)]),
             $this->namespacePath->global('storefront', ['config']),
@@ -90,6 +197,9 @@ final class SystemConfigResourceChangePublisher
         };
         if ($module === 'Weline_Customer' && $this->hasSocialLoginFields($changedFields)) {
             $dimension = 'auth';
+        }
+        if ($module === 'Weline_Captcha') {
+            $dimension = 'captcha';
         }
         if ($dimension !== null) {
             $namespaces[] = $this->namespacePath->global('storefront', [$dimension]);

@@ -12,10 +12,12 @@
 
 | 标签 | 性质 | 放哪里 | 作用 |
 |------|------|--------|------|
-| `<w:config:group>` / `<w:config:field>` / `<w:config:adapter>` / `<w:config:hint>` | **声明契约**（模板解析，不是真实 Taglib） | `extends/module/Weline_SystemConfig/Config/{area}/{code}.phtml` | 定义 key、type、scope、敏感等 |
+| `<w:config:group>` / `<w:config:field>` / `<w:config:adapter>` / `<w:config:hint>` | **声明契约**（模板解析，不是真实 Taglib） | `extends/module/Weline_SystemConfig/Config/{area}/{code}.phtml` | 定义 key、type、scope、敏感、`cache-namespaces` 等 |
 | `<w:config:embed>` | **真实 Taglib（消费侧）** | 任意后台 `.phtml` | 按声明渲染控件并即时写入 |
 
 禁止在 embed 里「临时发明」新 key；未声明 key 会红标、不可改，但不阻断同标签其他字段。
+
+**硬契约（业务模块必读）**：`field` / `fields` 列出的字符串必须与 Extends 模板里 `<w:config:field key="...">` **完全一致**（含路径分隔 `/`）。禁止把 `dropship/platforms/enabled` 缩写成 `platforms_enabled` 这类自造短名——会得到红标「没有这个字段：未在配置模板中声明，无法修改。」正确范例：Affiliate `product_share_enabled`（声明与 embed 同短 key）、B2B `selling_mode`、Payment 路径型 key、Dropship 路径型 `dropship/...`。业务 Config 页推荐壳：Affiliate/B2B 的 `w-stack` + `<w:scope value="selected_scope">` + embed + 「在统一配置中心打开」。
 
 ## 3. 最小示例
 
@@ -85,9 +87,10 @@
 
 - 资源：`view/statics/js/config-embed.js`（壳层首次渲染时注入；`defer`）。
 - 控件带 `data-w-config-embed-control`：
-  - `checkbox` / `select` → `change` 立即保存；
-  - 文本类 → `input` 防抖 300ms + `blur` 再保存。
+  - `checkbox` / `select` / 搜索选择等离散控件 → `change` 立即保存（可短时禁用控件防连点）；
+  - 文本类 → `input` 防抖 `TEXT_DEBOUNCE_MS`（≥1000ms，当前 1200ms）+ `blur` flush；保存中**不** `disabled` 打断打字，仅用 `data-saving` / `pendingSave` 合并并发。
 - 写路径：`Weline.Api` → `api.resource('system_config').setScopedConfig({...})`。
+- 字段若声明 `cache-namespaces`，控件带 `data-cache-namespaces`；即时保存会透传 `cache_namespaces`（服务端仍以模板声明优先）。
 - 载荷关键字段：`key`、`value`、`module`、`area`、`locale`（与壳 `data-locale` 一致）、`target_scope`、`expected_grant_version`、`reason=config_embed_immediate_save`；有则带 `value_type`、`website_code`/`store_code`/`channel_code`。
 - 成功/失败：`Weline.UI.toast`；失败回滚控件到上次值。
 - 根节点 `data-can-update≠1` 时 JS 直接不写。
@@ -136,7 +139,7 @@
 |----------------|------------|
 | `switch` / `checkbox` / `boolean` | `w-switch` + checkbox |
 | `select`（且有 options） | `<w:theme:search-select>` 可搜索单选 |
-| `multiselect` / `select_multi` | `<w:theme:search-select multiple>`（逗号值） |
+| `multiselect` / `select_multi` / `tags` | `<w:theme:search-select multiple>`（逗号值；需声明 `options`） |
 | `textarea` | textarea |
 | `number` | `input type=number` |
 | `password` / `secret` | 禁用 password 掩码（只读） |

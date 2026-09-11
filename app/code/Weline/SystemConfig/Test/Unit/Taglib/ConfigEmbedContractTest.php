@@ -84,6 +84,12 @@ final class ConfigEmbedContractTest extends TestCase
         self::assertStringContainsString('payload.value_type = fieldEl.dataset.valueType', $js);
         self::assertStringContainsString('data-w-language-field', $js);
         self::assertStringContainsString('data-ai-model-value', $js);
+        self::assertSame(1, preg_match('/var\s+TEXT_DEBOUNCE_MS\s*=\s*(\d+)/', $js, $debounceMatch));
+        self::assertGreaterThanOrEqual(1000, (int)($debounceMatch[1] ?? 0), 'text autosave debounce must be >= 1000ms');
+        self::assertStringContainsString('}, TEXT_DEBOUNCE_MS)', $js);
+        self::assertStringNotContainsString('}, 300)', $js);
+        self::assertStringContainsString('lockControl: false', $js);
+        self::assertStringContainsString('pendingSave', $js);
 
         $css = (string)file_get_contents($root . '/view/statics/css/config-embed.css');
         self::assertStringContainsString('--weline-theme-surface', $css);
@@ -98,11 +104,11 @@ final class ConfigEmbedContractTest extends TestCase
         self::assertStringContainsString('fetchHtml($fetchSource', $renderer);
     }
 
-    public function testModuleVersionIs1339(): void
+    public function testModuleVersionIs1349(): void
     {
         $module = include dirname(__DIR__, 3) . '/etc/module.php';
         self::assertIsArray($module);
-        self::assertSame('1.3.39', $module['version'] ?? null);
+        self::assertSame('1.3.49', $module['version'] ?? null);
     }
 
     public function testSetScopedConfigDescriptorDeclaresValueType(): void

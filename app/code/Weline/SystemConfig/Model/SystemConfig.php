@@ -4,6 +4,8 @@ declare(strict_types=1);
 namespace Weline\SystemConfig\Model;
 
 use Weline\Framework\App\Exception;
+use Weline\Framework\Cache\Contract\NamespaceScopedCachePoolInterface;
+use Weline\Framework\Cache\Namespace\NamespacePath;
 use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
@@ -12,6 +14,7 @@ use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\ScopeContext;
+use Weline\SystemConfig\Service\ConfigCacheInvalidationFeedback;
 use Weline\SystemConfig\Service\ConfigCacheInvalidationService;
 use Weline\SystemConfig\Service\ScopeConfigCacheInvalidator;
 use Weline\SystemConfig\Service\SystemConfigLockService;
@@ -91,9 +94,10 @@ class SystemConfig extends \Weline\Framework\Database\Model
     public function __init()
     {
         parent::__init();
-        if (!isset($this->_cache)) {
-            $this->_cache = w_cache('system_config');
-        }
+        // Always bind the dedicated pool. parent::__init() sets AbstractModel::_cache
+        // to w_cache('database'); the previous !isset() guard left reads/writes on
+        // database while ConfigCacheInvalidationService cleared system_config only.
+        $this->_cache = w_cache('system_config');
     }
 
     public function normalizeScope(?string $scope = null): string
@@ -157,7 +161,8 @@ class SystemConfig extends \Weline\Framework\Database\Model
             return RequestContext::get($requestCacheKey);
         }
 
-        $cacheEntry = $this->readCacheEnvelope($this->buildModuleRowsCacheKey($module, $area, $scope, $locale));
+        $cache = $this->scopedConfigCache($module, $area, $scope, $locale);
+        $cacheEntry = $this->readCacheEnvelope($cache, $this->buildModuleRowsCacheKey($module, $area, $scope, $locale));
         // Empty envelopes are not durable hits: a prior negative cache must not hide
         // rows inserted after the empty snapshot was written.
         if ($cacheEntry['hit'] && \is_array($cacheEntry['value']) && $cacheEntry['value'] !== []) {
@@ -188,7 +193,7 @@ class SystemConfig extends \Weline\Framework\Database\Model
         self::$configs[$area][$module] = $rows;
         RequestContext::set($requestCacheKey, $rows);
         if ($rows !== []) {
-            $this->writeCacheEnvelope($this->buildModuleRowsCacheKey($module, $area, $scope, $locale), $rows);
+            $this->writeCacheEnvelope($cache, $this->buildModuleRowsCacheKey($module, $area, $scope, $locale), $rows);
         }
 
         return $rows;
@@ -210,7 +215,8 @@ class SystemConfig extends \Weline\Framework\Database\Model
             return (array)RequestContext::get($requestCacheKey);
         }
 
-        $cacheEntry = $this->readCacheEnvelope($this->buildModuleMapCacheKey($module, $area, $scope, $locale));
+        $cache = $this->scopedConfigCache($module, $area, $scope, $locale);
+        $cacheEntry = $this->readCacheEnvelope($cache, $this->buildModuleMapCacheKey($module, $area, $scope, $locale));
         if ($cacheEntry['hit']) {
             $cachedMap = is_array($cacheEntry['value']) ? $cacheEntry['value'] : [];
             RequestContext::set($requestCacheKey, $cachedMap);
@@ -234,7 +240,7 @@ class SystemConfig extends \Weline\Framework\Database\Model
         }
 
         RequestContext::set($requestCacheKey, $configMap);
-        $this->writeCacheEnvelope($this->buildModuleMapCacheKey($module, $area, $scope, $locale), $configMap);
+        $this->writeCacheEnvelope($cache, $this->buildModuleMapCacheKey($module, $area, $scope, $locale), $configMap);
 
         return $configMap;
     }
@@ -552,19 +558,21 @@ class SystemConfig extends \Weline\Framework\Database\Model
                     ];
                 }
 
-                $rollbackStack[] = [
-                    'key' => $key,
-                    'old_row' => $oldRow,
-                ];
-
                 if (in_array($key, $inheritKeys, true)) {
+                    // Already inheriting (no override row) — nothing to write.
+                    if ($oldRow === null) {
+                        continue;
+                    }
+                    $rollbackStack[] = [
+                        'key' => $key,
+                        'old_row' => $oldRow,
+                    ];
                     $this->deleteConfigRow($key, $module, $area, $scope, $locale);
                     $changes[] = $this->buildChangeRecord('inherit', $key, $module, $area, $scope, $locale, $oldRow, null);
                     continue;
                 }
 
                 $serialized = $this->serializeValue($value, (string)($valueTypes[$key] ?? ($options['value_type'] ?? '')));
-                $newVersion = ((int)($oldRow[self::schema_fields_VERSION] ?? 0)) + 1;
                 $isSensitive = array_key_exists($key, $sensitiveKeys)
                     ? 1
                     : (int)($sensitiveValues[$key] ?? ($options['is_sensitive'] ?? ($oldRow[self::schema_fields_IS_SENSITIVE] ?? 0)));
@@ -582,6 +590,19 @@ class SystemConfig extends \Weline\Framework\Database\Model
                     // 普通保存：保留旧 metadata（避免冲掉 suppress / lock 标记）
                     $nextMeta = $existingMeta;
                 }
+
+                if ($oldRow !== null && $this->isUnchangedConfigWrite(
+                    $oldRow,
+                    $serialized['value'],
+                    $serialized['type'],
+                    $isSensitive,
+                    $nextMeta,
+                    is_array($fieldMeta),
+                )) {
+                    continue;
+                }
+
+                $newVersion = ((int)($oldRow[self::schema_fields_VERSION] ?? 0)) + 1;
                 $row = [
                     self::schema_fields_KEY => $key,
                     self::schema_fields_MODULE => $module,
@@ -597,8 +618,26 @@ class SystemConfig extends \Weline\Framework\Database\Model
                     self::schema_fields_UPDATED_AT => $now,
                     self::schema_fields_UPDATED_BY => $actorName !== '' ? $actorName : $actorId,
                 ];
+                $rollbackStack[] = [
+                    'key' => $key,
+                    'old_row' => $oldRow,
+                ];
                 $this->upsertConfigRow($row, $oldRow !== null);
                 $changes[] = $this->buildChangeRecord($oldRow === null ? 'insert' : 'update', $key, $module, $area, $scope, $locale, $oldRow, $row);
+            }
+
+            if ($changes === []) {
+                return [
+                    'success' => true,
+                    'status' => 'noop',
+                    'version_id' => null,
+                    'module' => $module,
+                    'area' => $area,
+                    'scope' => $scope,
+                    'locale' => $locale,
+                    'changes' => [],
+                    'message' => (string)__('没有检测到配置变更，未创建新版本。'),
+                ];
             }
 
             $versionId = $this->recordVersionIfAvailable([
@@ -623,22 +662,57 @@ class SystemConfig extends \Weline\Framework\Database\Model
             throw new Exception((string)__('保存配置失败，已回滚本次批次。%{1}', $e->getMessage()));
         }
 
+        $invalidation = ObjectManager::getInstance(ConfigCacheInvalidationService::class);
+        $fallbackScopes = $this->getFallbackScopes($scope);
+        $fallbackLocales = $this->getFallbackLocales($locale);
+        $changedKeys = array_values(array_map('strval', array_keys($values)));
+        $requestedNamespaces = $this->normalizeCacheNamespacesOption($options['cache_namespaces'] ?? null);
+        /** @var SystemConfigResourceChangePublisher $publisher */
+        $publisher = ObjectManager::getInstance(SystemConfigResourceChangePublisher::class);
+        $impactNamespaces = $publisher->resolveNamespaces(
+            $module,
+            $area,
+            $scope,
+            $locale,
+            $changedKeys,
+            [],
+            $requestedNamespaces,
+        );
+        // Build cache_ops with the pre-bump version vector + namespace fingerprint, then
+        // schedule local-only cleanup; Framework CacheImpactObserver deletes after commit.
+        $cacheOps = $invalidation->buildCacheOps(
+            $module,
+            $area,
+            $scope,
+            $locale,
+            $changedKeys,
+            $fallbackScopes,
+            $fallbackLocales,
+            $impactNamespaces,
+        );
         $this->invalidateConfigCachesForModule(
             $module,
             $area,
             $scope,
             $locale,
-            array_keys($values),
+            $changedKeys,
             (bool)($options['defer_namespace_invalidation'] ?? false),
         );
-        ObjectManager::getInstance(SystemConfigResourceChangePublisher::class)->publish(
+        $publisher->publish(
             $module,
             $area,
             $scope,
             $locale,
             $changes,
             'system_config.save',
+            $cacheOps,
+            [],
+            $requestedNamespaces,
         );
+
+        $feedback = ObjectManager::getInstance(ConfigCacheInvalidationFeedback::class);
+        $cacheInvalidation = $feedback->build($impactNamespaces, $cacheOps, count($changedKeys));
+        $parts = $feedback->formatSaveParts($versionId, $cacheInvalidation);
 
         return [
             'success' => true,
@@ -649,6 +723,10 @@ class SystemConfig extends \Weline\Framework\Database\Model
             'scope' => $scope,
             'locale' => $locale,
             'changes' => $changes,
+            'cache_invalidation' => $cacheInvalidation,
+            'message' => $parts['message'],
+            'message_title' => $parts['title'],
+            'message_body' => $parts['body'],
         ];
     }
 
@@ -762,15 +840,49 @@ class SystemConfig extends \Weline\Framework\Database\Model
         }
 
         $rollbackMark = $this->markVersionRolledBack($versionId);
-        $this->invalidateConfigCachesForModule($module, $area, $scope, $locale, array_column($rollbackChanges, 'key'));
-        ObjectManager::getInstance(SystemConfigResourceChangePublisher::class)->publish(
+        $invalidation = ObjectManager::getInstance(ConfigCacheInvalidationService::class);
+        $rollbackKeys = array_values(array_map('strval', array_column($rollbackChanges, 'key')));
+        $fallbackScopes = $this->getFallbackScopes($scope);
+        $fallbackLocales = $this->getFallbackLocales($locale);
+        $requestedNamespaces = $this->normalizeCacheNamespacesOption($options['cache_namespaces'] ?? null);
+        /** @var SystemConfigResourceChangePublisher $publisher */
+        $publisher = ObjectManager::getInstance(SystemConfigResourceChangePublisher::class);
+        $impactNamespaces = $publisher->resolveNamespaces(
+            $module,
+            $area,
+            $scope,
+            $locale,
+            $rollbackKeys,
+            [],
+            $requestedNamespaces,
+        );
+        $cacheOps = $invalidation->buildCacheOps(
+            $module,
+            $area,
+            $scope,
+            $locale,
+            $rollbackKeys,
+            $fallbackScopes,
+            $fallbackLocales,
+            $impactNamespaces,
+        );
+        $this->invalidateConfigCachesForModule($module, $area, $scope, $locale, $rollbackKeys);
+        $publisher->publish(
             $module,
             $area,
             $scope,
             $locale,
             $rollbackChanges,
             'system_config.rollback',
+            $cacheOps,
+            [],
+            $requestedNamespaces,
         );
+
+        /** @var ConfigCacheInvalidationFeedback $feedback */
+        $feedback = ObjectManager::getInstance(ConfigCacheInvalidationFeedback::class);
+        $cacheInvalidation = $feedback->build($impactNamespaces, $cacheOps, count($rollbackKeys));
+        $parts = $feedback->formatRollbackParts($rollbackVersionId, $cacheInvalidation);
 
         return [
             'success' => true,
@@ -780,6 +892,10 @@ class SystemConfig extends \Weline\Framework\Database\Model
             'rolled_back_marked' => $rollbackMark['marked'],
             'rolled_back_mark_error' => $rollbackMark['error'],
             'changes' => $rollbackChanges,
+            'cache_invalidation' => $cacheInvalidation,
+            'message' => $parts['message'],
+            'message_title' => $parts['title'],
+            'message_body' => $parts['body'],
         ];
     }
 
@@ -969,7 +1085,8 @@ class SystemConfig extends \Weline\Framework\Database\Model
             return \is_array($cached) ? $cached : [];
         }
 
-        $cacheEntry = $this->readCacheEnvelope($this->buildExactModuleRowsCacheKey($module, $area, $scope, $locale));
+        $cache = $this->scopedConfigCache($module, $area, $scope, $locale);
+        $cacheEntry = $this->readCacheEnvelope($cache, $this->buildExactModuleRowsCacheKey($module, $area, $scope, $locale));
         if ($cacheEntry['hit'] && \is_array($cacheEntry['value']) && $cacheEntry['value'] !== []) {
             RequestContext::set($requestCacheKey, $cacheEntry['value']);
 
@@ -979,7 +1096,7 @@ class SystemConfig extends \Weline\Framework\Database\Model
         $rows = $this->loadConfigRowsByModuleIfAvailable($module, $area, $scope, $locale);
         RequestContext::set($requestCacheKey, $rows);
         if ($rows !== []) {
-            $this->writeCacheEnvelope($this->buildExactModuleRowsCacheKey($module, $area, $scope, $locale), $rows);
+            $this->writeCacheEnvelope($cache, $this->buildExactModuleRowsCacheKey($module, $area, $scope, $locale), $rows);
         }
 
         return $rows;
@@ -1175,6 +1292,38 @@ class SystemConfig extends \Weline\Framework\Database\Model
     private function getFallbackLocales(string $locale): array
     {
         return array_values(array_unique([$this->normalizeLocale($locale), self::LOCALE_DEFAULT]));
+    }
+
+    /**
+     * True when an upsert would not change stored value/type/sensitive/active.
+     * Template field_metadata churn alone must not create a new version.
+     *
+     * @param array<string, mixed> $oldRow
+     * @param array<string, mixed> $nextMeta unused; kept for call-site clarity
+     */
+    private function isUnchangedConfigWrite(
+        array $oldRow,
+        string $newValue,
+        string $newType,
+        int $isSensitive,
+        array $nextMeta = [],
+        bool $fieldMetaProvided = false,
+    ): bool {
+        unset($nextMeta, $fieldMetaProvided);
+        if ((int)($oldRow[self::schema_fields_IS_ACTIVE] ?? 1) !== 1) {
+            return false;
+        }
+        if ((string)($oldRow[self::schema_fields_VALUE] ?? '') !== $newValue) {
+            return false;
+        }
+        if ((string)($oldRow[self::schema_fields_VALUE_TYPE] ?? self::VALUE_TYPE_STRING) !== $newType) {
+            return false;
+        }
+        if ((int)($oldRow[self::schema_fields_IS_SENSITIVE] ?? 0) !== $isSensitive) {
+            return false;
+        }
+
+        return true;
     }
 
     /**
@@ -1565,11 +1714,40 @@ class SystemConfig extends \Weline\Framework\Database\Model
     }
 
     /**
+     * Namespace-scoped pool so ResourceChange bump delivers without relying on key deletes.
+     */
+    private function scopedConfigCache(string $module, string $area, string $scope, string $locale): mixed
+    {
+        $cache = $this->_cache;
+        if (!$cache instanceof NamespaceScopedCachePoolInterface) {
+            return $cache;
+        }
+        /** @var NamespacePath $paths */
+        $paths = ObjectManager::getInstance(NamespacePath::class);
+        $identity = implode('|', [$module, $area, $scope, $locale]);
+        $namespaces = [
+            $paths->global('system-config', [hash('sha256', $identity)]),
+            $paths->global('storefront', ['config']),
+        ];
+        if ($module === 'Weline_Captcha') {
+            $namespaces[] = $paths->global('storefront', ['captcha']);
+        } elseif ($module === 'Weline_Customer') {
+            $namespaces[] = $paths->global('storefront', ['auth']);
+        } elseif ($module === 'Weline_Theme') {
+            $namespaces[] = $paths->global('storefront', ['theme']);
+        } elseif ($module === 'Weline_Currency') {
+            $namespaces[] = $paths->global('storefront', ['price']);
+        }
+
+        return $cache->withNamespaces($namespaces);
+    }
+
+    /**
      * @return array{hit: bool, value: mixed}
      */
-    private function readCacheEnvelope(string $cacheKey): array
+    private function readCacheEnvelope(mixed $cache, string $cacheKey): array
     {
-        $cached = $this->_cache?->get($cacheKey);
+        $cached = is_object($cache) && method_exists($cache, 'get') ? $cache->get($cacheKey) : null;
         if (!is_array($cached) || ($cached[self::CACHE_HIT_FLAG] ?? false) !== true || !array_key_exists('value', $cached)) {
             return ['hit' => false, 'value' => null];
         }
@@ -1577,12 +1755,35 @@ class SystemConfig extends \Weline\Framework\Database\Model
         return ['hit' => true, 'value' => $cached['value']];
     }
 
-    private function writeCacheEnvelope(string $cacheKey, mixed $value): void
+    private function writeCacheEnvelope(mixed $cache, string $cacheKey, mixed $value): void
     {
-        $this->_cache?->set($cacheKey, [
-            self::CACHE_HIT_FLAG => true,
-            'value' => $value,
-        ]);
+        if (is_object($cache) && method_exists($cache, 'set')) {
+            $cache->set($cacheKey, [
+                self::CACHE_HIT_FLAG => true,
+                'value' => $value,
+            ]);
+        }
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function normalizeCacheNamespacesOption(mixed $raw): array
+    {
+        if (is_string($raw)) {
+            $raw = preg_split('/[\s,]+/', $raw) ?: [];
+        }
+        if (!is_array($raw)) {
+            return [];
+        }
+        $out = [];
+        foreach ($raw as $item) {
+            $item = trim((string)$item);
+            if ($item !== '') {
+                $out[$item] = $item;
+            }
+        }
+        return array_values($out);
     }
 
     private function encodeJson(mixed $value): string
