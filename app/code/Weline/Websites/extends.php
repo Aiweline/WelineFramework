@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 use Weline\Backend\Api\NotificationTopicProviderInterface;
+use Weline\Smtp\Api\MailChannelProviderInterface;
+use Weline\Websites\Extends\MailChannelProvider;
 use Weline\Websites\Extends\NotificationTopicProvider;
 
 /**
@@ -11,6 +13,9 @@ use Weline\Websites\Extends\NotificationTopicProvider;
 return [
     NotificationTopicProviderInterface::class => [
         NotificationTopicProvider::class,
+    ],
+    MailChannelProviderInterface::class => [
+        MailChannelProvider::class,
     ],
     'type' => 'module',
     'documentation' => 'extends.md',
