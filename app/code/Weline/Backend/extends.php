@@ -10,6 +10,8 @@ use Weline\Backend\Adapter\Notification\EmailAdapter;
 use Weline\Backend\Adapter\Notification\TelegramAdapter;
 use Weline\Backend\Adapter\Notification\WebhookAdapter;
 use Weline\Backend\Extends\NotificationTopicProvider;
+use Weline\Backend\Extends\MailChannelProvider;
+use Weline\Smtp\Api\MailChannelProviderInterface;
 
 return [
     ChannelAdapterInterface::class => [
@@ -21,5 +23,8 @@ return [
     ],
     NotificationTopicProviderInterface::class => [
         NotificationTopicProvider::class,
+    ],
+    MailChannelProviderInterface::class => [
+        MailChannelProvider::class,
     ],
 ];

@@ -253,8 +253,8 @@
         return cachedDevWorkerUrls[cacheKey];
     }
 
-    // Same Chrome storefront hang: `new Worker(httpUrl)` can Network-pending forever
-    // while fetch() succeeds. Prefer fetch + Blob URL for classic Workers.
+    // Prefer same-origin Worker URL (CSP worker-src/'self'); fall back to Blob
+    // (needs worker-src blob:). Blob revoke delayed to avoid parse race.
     function createDedicatedWorkerFromScriptUrl(workerUrl) {
         if (typeof window.Worker !== 'function') {
             return Promise.reject(new Error('[Weline.Api] Worker is unavailable; backend direct requests are disabled.'));
@@ -263,36 +263,81 @@
         if (!scriptUrl) {
             return Promise.reject(new Error('[Weline.Api] backend workerUrl is not configured.'));
         }
-        return fetch(scriptUrl, {
-            credentials: 'same-origin',
-            cache: isDevMode() ? 'no-store' : 'force-cache'
-        }).then(function (response) {
-            if (!response.ok) {
-                throw new Error('[Weline.Api] worker script HTTP ' + response.status);
-            }
-            return response.text();
-        }).then(function (code) {
-            if (!code || !String(code).trim()) {
-                throw new Error('[Weline.Api] worker script body is empty.');
-            }
-            var blob = new Blob([code], {type: 'text/javascript'});
-            var blobUrl = URL.createObjectURL(blob);
-            try {
-                var worker = new Worker(blobUrl);
-                window.setTimeout(function () {
+        function createBlobWorker() {
+            return fetch(scriptUrl, {
+                credentials: 'same-origin',
+                cache: isDevMode() ? 'no-store' : 'force-cache'
+            }).then(function (response) {
+                if (!response.ok) {
+                    throw new Error('[Weline.Api] worker script HTTP ' + response.status);
+                }
+                return response.text();
+            }).then(function (code) {
+                if (!code || !String(code).trim()) {
+                    throw new Error('[Weline.Api] worker script body is empty.');
+                }
+                var blob = new Blob([code], {type: 'text/javascript'});
+                var blobUrl = URL.createObjectURL(blob);
+                try {
+                    var worker = new Worker(blobUrl);
+                    window.setTimeout(function () {
+                        try {
+                            URL.revokeObjectURL(blobUrl);
+                        } catch (_error) {
+                        }
+                    }, 5000);
+                    return worker;
+                } catch (error) {
                     try {
                         URL.revokeObjectURL(blobUrl);
                     } catch (_error) {
                     }
-                }, 0);
-                return worker;
-            } catch (error) {
-                try {
-                    URL.revokeObjectURL(blobUrl);
-                } catch (_error) {
+                    throw error;
                 }
-                throw error;
-            }
+            });
+        }
+        function createUrlWorker() {
+            return new Promise(function (resolve, reject) {
+                var settled = false;
+                var worker;
+                try {
+                    worker = new Worker(scriptUrl);
+                } catch (error) {
+                    reject(error);
+                    return;
+                }
+                function finishOk() {
+                    if (settled) {
+                        return;
+                    }
+                    settled = true;
+                    try {
+                        worker.removeEventListener('error', onError);
+                    } catch (_e) {
+                    }
+                    resolve(worker);
+                }
+                function onError() {
+                    if (settled) {
+                        return;
+                    }
+                    settled = true;
+                    try {
+                        worker.removeEventListener('error', onError);
+                    } catch (_e) {
+                    }
+                    try {
+                        worker.terminate();
+                    } catch (_t) {
+                    }
+                    reject(new Error('[Weline.Api] same-origin Worker blocked by CSP or failed to boot.'));
+                }
+                worker.addEventListener('error', onError);
+                window.setTimeout(finishOk, 80);
+            });
+        }
+        return createUrlWorker().catch(function () {
+            return createBlobWorker();
         });
     }
 

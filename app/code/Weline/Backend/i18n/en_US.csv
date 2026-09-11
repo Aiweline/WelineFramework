@@ -1,4 +1,10 @@
-﻿系统信息,"System Information"
+﻿后台通知邮件（默认）,后台通知邮件（默认）
+通知中心邮件渠道默认回退；无主题专用绑定时使用,通知中心邮件渠道默认回退；无主题专用绑定时使用
+系统告警邮件,系统告警邮件
+"通知主题 system_alert 的邮件渠道","通知主题 system_alert 的邮件渠道"
+安全告警邮件,安全告警邮件
+"通知主题 security_alert 的邮件渠道","通知主题 security_alert 的邮件渠道"
+系统信息,"System Information"
 系统,System
 一般系统信息通知,"General system information notifications"
 系统警告,"System Warning"
@@ -562,6 +568,8 @@ DI编译失败：%{1},"DI compilation failed: %{1}"
 模板缓存清理完成！,"Template cache cleanup complete!"
 模板缓存清理失败：%{1},"Template cache cleanup failed: %{1}"
 菜单收集和系统更新完成！菜单已生效。,"Menu collection and system update complete! Menu is now active."
+后台通知邮件,后台通知邮件
+通知中心邮件渠道发信,通知中心邮件渠道发信
 消息主题,"Message Subject"
 "使用 ← → 方向键可切换上/下一条","Use ← → to switch between notifications"
 "JS: inject_path函数path路径不允许为空！","JS: The inject_path function path is not allowed to be empty!"
