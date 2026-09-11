@@ -7,7 +7,11 @@
 - **热路径**：未装/卸载后加车、列表价、结账 **零** B2B 类探测与 miss 重试税。
 - **SellingModePolicy**（`2.4.0`）：Website/Store ConfigStore 键 `selling_mode_toc_enabled` / `selling_mode_tob_enabled`（默认 true）；商品 flags fail-soft；会话仅偏好；MOQ/step 默认 5。
 - **批发配置页（`2.6.15`）**：菜单「批发配置」→ `Controller/Backend/Config`；Extends 声明同上二键；本页 `<w:config:embed>` 快捷启停（参照客服配置）；范围走 URL `target_scope`。
-- **身份申请**（`2.4.0`）：`MembershipApplicationService` + 表 `weline_b2b_membership_application`；前台 Query `b2b.membership.submit`；后台 ControlCenter 批准指定组；**不**改 Customer 注册。
+- **ControlCenter 作用范围（`2.6.43`）**：客户组/价目表/报价/快照/身份申请/挂单/迁移状态顶栏统一 `<w:scope>`（网站→店铺→渠道）；列表按 `website_id`/`channel_id` 过滤；写回保留 `target_scope`。
+- **身份申请**（`2.4.0` / 状态投影 `2.6.29` / 运营面 `2.6.38` / 唯一 upsert `2.6.39` / 删除 ACL `2.6.40` / 删动作 `2.6.42` / 全模块范围 `2.6.43`）：`MembershipApplicationService` + 表 `weline_b2b_membership_application`；前台 Query `b2b.membership.submit` / `b2b.membership.status`；后台 ControlCenter 批准指定组、驳回、**行内撤销**、**重新授权**、**删除申请**（ACL `applications:delete` + `<acl>` 包裹）与**多站快速撤销**；顶栏作用范围过滤整页；**不**改 Customer 注册。
+- **店面 CTA 投影**：`MembershipStatusProjection`（`need_login|can_apply|pending|rejected|active|inactive`）。有效 membership 永远 `active` 且 `should_poll=false`。仅 `pending` 轮询：首探 45s，之后 300s；通过后停申请 poll；回前台/再点批发做资格机会刷新。`approved` 无资格投影为 `inactive`（可编辑后重提）。
+- **重复提交**：同一 `(customer, website)` **仅一条申请记录**；已有 pending 拒绝再插；驳回/撤销后 `submit` 更新当前行回 pending；已开通拒绝再申请。
+- **在途单**：撤销后新 tob 加车/报价/结账 fail-closed；已生成 hang/订单不自动作废，走既有 hang 状态机。
 - **定金挂单**（仅 `order_type=tob`）：全面禁折后含税商品小计 × 30% 为定金；`hang_status`：`awaiting_deposit` → `awaiting_merchant_approval` → `awaiting_balance` → paid；先定金后审批再尾款。状态图见 [`hang-status-state.md`](hang-status-state.md)。
 - **数量档 / MOQ**：价目项 `min_qty`（旧行默认 1）；Engine `qty` 取最高档；tob 车默认 moq=5 / step=5（`B2BCartQtyPolicy`）。
 - **店面 Theme UI（2.6.0 / 双车 2.6.20）**：PDP 价格旁 ToC/ToB 切换（cookie `weline_selling_mode`）；tob 数量 MOQ/step=5；**迷你车/购物车「零售车|批发车」分段**（body-end boot 加载 `b2bSellingMode` 注入 type-host）；结账定金说明+禁券；账户订单 hang CTA（`purpose=deposit|balance`）。

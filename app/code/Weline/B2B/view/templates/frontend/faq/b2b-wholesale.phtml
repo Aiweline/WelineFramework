@@ -1,0 +1,110 @@
+<?php
+/**
+ * SPI FAQ body: wholesale identity, VIP ladder (from backend groups), credit, deposit, FX.
+ */
+use Weline\B2B\Service\WholesaleFaqVipLadderPresenter;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
+
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+$ladder = [
+    'currency_code' => 'CNY',
+    'credit_enabled' => true,
+    'groups' => [],
+];
+try {
+    $websiteId = max(0, (int)RequestContext::getWelineWebsiteId());
+    $ladder = ObjectManager::getInstance(WholesaleFaqVipLadderPresenter::class)->present($websiteId);
+} catch (\Throwable) {
+}
+$currencyCode = (string)($ladder['currency_code'] ?? 'CNY');
+$creditEnabled = !empty($ladder['credit_enabled']);
+$vipGroups = is_array($ladder['groups'] ?? null) ? $ladder['groups'] : [];
+?>
+<div class="b2b-faq-wholesale" data-testid="b2b-faq-wholesale">
+    <section weline-code="b2b.faq.wholesale.vip">
+        <h2><lang>批发身份与 VIP 等级</lang></h2>
+        <p><lang>批准后默认从最低可用档起。下列等级与后台「客户组」配置一致，按运营排序展示；消费达标后可自动升入更高启用档。名称、说明、消费门槛与达标折扣额度均以站点当前配置为准。</lang></p>
+        <?php if (!$creditEnabled): ?>
+            <p class="w-text" data-tone="muted" data-size="sm" data-testid="b2b-faq-credit-off">
+                <lang>当前站点未开启「批发信用」：仍可按等级升档，但不会按达标折扣额度授信，结账亦不可用批发信用抵扣。</lang>
+            </p>
+        <?php endif; ?>
+        <?php if ($vipGroups === []): ?>
+            <p class="w-text" data-tone="muted" data-testid="b2b-faq-vip-empty">
+                <lang>暂无启用中的批发等级，请稍后再查看或联系客服。</lang>
+            </p>
+        <?php else: ?>
+            <div class="w-stack" style="--w-gap:var(--weline-space-4);" data-testid="b2b-faq-vip-ladder">
+                <p class="w-text" data-size="sm" data-tone="muted" style="--w-m:0;" data-testid="b2b-faq-vip-currency">
+                    <lang>金额按站点默认基准货币</lang>
+                    <strong><?= $escape($currencyCode) ?></strong>
+                    <lang>计；达标后按折扣额度向批发信用钱包补差额，仅可抵扣批发（ToB）订单定金。</lang>
+                </p>
+                <?php foreach ($vipGroups as $groupRow):
+                    if (!is_array($groupRow)) {
+                        continue;
+                    }
+                    $gName = trim((string)($groupRow['name'] ?? ''));
+                    $gCode = trim((string)($groupRow['code'] ?? ''));
+                    $gDesc = trim((string)($groupRow['description'] ?? ''));
+                    $tierRank = (int)($groupRow['tier_rank'] ?? -1);
+                    $spendMajor = (string)($groupRow['spend_threshold_major'] ?? '0.00');
+                    $creditMajor = (string)($groupRow['credit_limit_major'] ?? '0.00');
+                    $isSystem = !empty($groupRow['is_system']);
+                    ?>
+                    <article class="b2b-faq-vip-tier" data-testid="b2b-faq-vip-tier" data-group-id="<?= $escape((string)($groupRow['group_id'] ?? '')) ?>" data-tier-rank="<?= $escape((string)$tierRank) ?>">
+                        <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2); --w-mb:var(--weline-space-1);">
+                            <h3 class="w-text" data-weight="strong" style="--w-m:0;"><?= $escape($gName !== '' ? $gName : $gCode) ?></h3>
+                            <?php if ($gCode !== ''): ?>
+                                <code><?= $escape($gCode) ?></code>
+                            <?php endif; ?>
+                            <span class="w-badge" data-tone="secondary"><?= __('排序') ?> <?= $escape((string)$tierRank) ?></span>
+                            <?php if ($isSystem): ?>
+                                <span class="w-badge" data-tone="info"><lang>系统 VIP</lang></span>
+                            <?php else: ?>
+                                <span class="w-badge" data-tone="secondary"><lang>自定义组</lang></span>
+                            <?php endif; ?>
+                        </div>
+                        <?php if ($gDesc !== ''): ?>
+                            <p class="w-text" data-size="sm" data-tone="muted" style="--w-mb:var(--weline-space-2);"><?= $escape($gDesc) ?></p>
+                        <?php endif; ?>
+                        <ul class="w-stack" style="--w-gap:0.35rem; margin:0; padding-inline-start:1.25rem;">
+                            <li class="w-text" data-size="sm" data-testid="b2b-faq-vip-spend">
+                                <lang>消费门槛</lang>：
+                                <?= $escape($currencyCode) ?> <?= $escape($spendMajor) ?>
+                                <span class="w-text" data-tone="muted">（<?= __('累计批发已付消费达到本档后可升入') ?>）</span>
+                            </li>
+                            <li class="w-text" data-size="sm" data-testid="b2b-faq-vip-credit">
+                                <lang>达标折扣额度</lang>：
+                                <?= $escape($currencyCode) ?> <?= $escape($creditMajor) ?>
+                                <span class="w-text" data-tone="muted">（<?= __('升入本档后补到此额度，可抵扣批发订单定金') ?>）</span>
+                            </li>
+                        </ul>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+    </section>
+    <section weline-code="b2b.faq.wholesale.credit">
+        <h2><lang>批发信用额度</lang></h2>
+        <p><lang>开启「批发信用」后，系统按等级达标折扣额度向您的批发信用钱包补差额（同档消费后不自动回补）。该额度仅可用于批发（ToB）订单的定金优惠抵扣，与全站支付信用、营销优惠券无关。</lang></p>
+    </section>
+    <section weline-code="b2b.faq.wholesale.deposit">
+        <h2><lang>定金与优惠券</lang></h2>
+        <p><lang>批发结账需支付含税商品小计 30% 定金；营销优惠券与满减不可用。运费计入尾款。您可选用批发信用抵扣本期现金定金（可输入额度）。</lang></p>
+    </section>
+    <section weline-code="b2b.faq.wholesale.fx" data-testid="b2b-faq-fx-algorithm">
+        <h2><lang>信用抵扣与汇率换算</lang></h2>
+        <p><lang>批发信用钱包按站点基准货币记账。若结账货币与基准货币不同，系统按站内汇率换算：</lang></p>
+        <ol>
+            <li><lang>可用信用（结账币）= 将钱包可预占余额从基准货币换算为结账货币。</lang></li>
+            <li><lang>本单上限 = 可用信用（结账币）与本期定金的较小值。</lang></li>
+            <li><lang>您输入的抵扣额（结账币）不得超过上限；实际扣减钱包时再换算回基准货币，并四舍五入到分。</lang></li>
+            <li><lang>若往返取整导致超出可用余额，以钱包基准货币为准钳位，并可能微调结账币展示金额。</lang></li>
+            <li><lang>现金定金 = 定金 − 最终抵扣额（结账币）。提交时冻结本单汇率快照，支付过程中不再改价。</lang></li>
+            <li><lang>暂无可用汇率时，无法使用批发信用抵扣。</lang></li>
+        </ol>
+    </section>
+</div>

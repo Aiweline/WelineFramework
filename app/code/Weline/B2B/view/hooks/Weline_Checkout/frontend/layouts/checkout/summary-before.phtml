@@ -1,9 +1,12 @@
 <?php
 /**
- * Hook: Weline_Checkout::frontend::layouts::checkout::summary-before
+ * Checkout summary-before: wholesale order deposit notice (ToB).
+ * Credit controls inject via Widget default_injections into checkout-summary-credit.
  *
  * @hook-priority 170
  * @hook-sort-order 5
  * @hook-solo false
+ *
+ * @var \Weline\Framework\View\Template $this
  */
-echo $this->fetch('Weline_B2B::templates/frontend/widgets/checkout-tob-deposit-note.phtml');
+echo $this->fetch('Weline_B2B::templates/frontend/widgets/checkout-tob-order-note.phtml');

@@ -16,6 +16,9 @@ final class MembershipApplicationService
     public const ERROR_NOT_FOUND = 'b2b_membership_application_not_found';
     public const ERROR_NOT_PENDING = 'b2b_membership_application_not_pending';
     public const ERROR_INVALID = 'b2b_membership_application_invalid';
+    public const ERROR_ALREADY_PENDING = 'b2b_membership_already_pending';
+    public const ERROR_ALREADY_MEMBER = 'b2b_membership_already_active';
+    public const ERROR_NOT_REAUTHORIZABLE = 'b2b_membership_not_reauthorizable';
 
     /** @var list<array<string,mixed>>|null */
     private ?array $rows = null;
@@ -30,6 +33,7 @@ final class MembershipApplicationService
         private readonly CustomerGroupStore $groups,
         ?callable $recordFactory = null,
         bool $useMemory = false,
+        private readonly ?B2BCreditGrantService $creditGrant = null,
     ) {
         $this->recordFactory = $recordFactory !== null ? \Closure::fromCallable($recordFactory) : null;
         if ($useMemory) {
@@ -37,9 +41,15 @@ final class MembershipApplicationService
         }
     }
 
-    public static function forTesting(?CustomerGroupStore $groups = null): self
-    {
-        return new self($groups ?? CustomerGroupStore::forTesting(), useMemory: true);
+    public static function forTesting(
+        ?CustomerGroupStore $groups = null,
+        ?B2BCreditGrantService $creditGrant = null,
+    ): self {
+        return new self(
+            $groups ?? CustomerGroupStore::forTesting(),
+            useMemory: true,
+            creditGrant: $creditGrant,
+        );
     }
 
     public function isMemory(): bool
@@ -83,6 +93,34 @@ final class MembershipApplicationService
                     'website_id' => $websiteId,
                 ],
             );
+        }
+
+        $existingGroup = $this->groups->groupForCustomer($customerId, $websiteId);
+        if ($existingGroup !== null && $existingGroup->isActive()) {
+            throw new B2BConflictException(
+                self::ERROR_ALREADY_MEMBER,
+                __('已开通批发身份，无需重复申请'),
+                ['customer_id' => $customerId, 'website_id' => $websiteId, 'group_id' => $existingGroup->groupId],
+            );
+        }
+
+        $pending = $this->findPendingForCustomer($customerId, $websiteId);
+        if ($pending !== null) {
+            throw new B2BConflictException(
+                self::ERROR_ALREADY_PENDING,
+                __('已有待审核的批发身份申请'),
+                [
+                    'customer_id' => $customerId,
+                    'website_id' => $websiteId,
+                    'application_id' => (string)$pending[MembershipApplicationRecord::schema_fields_APPLICATION_ID],
+                ],
+            );
+        }
+
+        // One application per customer+website: edit+resubmit updates the latest row.
+        $latest = $this->findLatestRow($customerId, $websiteId);
+        if ($latest !== null) {
+            return $this->resubmitExisting($latest, $company, $phone, $notes);
         }
 
         $now = gmdate('Y-m-d H:i:s');
@@ -182,14 +220,155 @@ final class MembershipApplicationService
 
         $row = $this->requirePending($applicationId);
         $customerId = (string)$row[MembershipApplicationRecord::schema_fields_CUSTOMER_ID];
+        $websiteId = (int)$row[MembershipApplicationRecord::schema_fields_WEBSITE_ID];
         $this->groups->assignCustomer($customerId, $groupId);
 
         $now = gmdate('Y-m-d H:i:s');
         $row[MembershipApplicationRecord::schema_fields_STATUS] = MembershipApplicationRecord::STATUS_APPROVED;
         $row[MembershipApplicationRecord::schema_fields_ASSIGNED_GROUP_ID] = $groupId;
         $row[MembershipApplicationRecord::schema_fields_UPDATED_AT] = $now;
-        $this->persist($row);
+        try {
+            $this->persist($row);
+        } catch (\Throwable $e) {
+            // Compensate half-success: membership without approved application row.
+            try {
+                $this->groups->unassignCustomer($customerId, $websiteId);
+            } catch (\Throwable) {
+            }
+            throw $e;
+        }
+        $this->grantCreditAfterApprove($customerId, $websiteId, $groupId);
         return $this->publicRow($row);
+    }
+
+    /**
+     * Re-grant entitlement for an approved audit row after revoke.
+     * Keeps status=approved; updates assigned_group_id and membership.
+     *
+     * @return array<string,mixed>
+     */
+    public function reauthorize(string $applicationId, string $groupId): array
+    {
+        $applicationId = trim($applicationId);
+        $groupId = trim($groupId);
+        if ($applicationId === '' || $groupId === '') {
+            throw new B2BConflictException(self::ERROR_INVALID, __('重新授权参数非法'));
+        }
+
+        $row = $this->find($applicationId);
+        if ($row === null) {
+            throw new B2BConflictException(
+                self::ERROR_NOT_FOUND,
+                __('申请单不存在：%{1}', [$applicationId]),
+                ['application_id' => $applicationId],
+            );
+        }
+        if ((string)$row[MembershipApplicationRecord::schema_fields_STATUS]
+            !== MembershipApplicationRecord::STATUS_APPROVED
+        ) {
+            throw new B2BConflictException(
+                self::ERROR_NOT_REAUTHORIZABLE,
+                __('仅已批准且资格已撤销的申请可重新授权'),
+                [
+                    'application_id' => $applicationId,
+                    'status' => (string)$row[MembershipApplicationRecord::schema_fields_STATUS],
+                ],
+            );
+        }
+
+        $customerId = (string)$row[MembershipApplicationRecord::schema_fields_CUSTOMER_ID];
+        $websiteId = (int)$row[MembershipApplicationRecord::schema_fields_WEBSITE_ID];
+        $existing = $this->groups->groupForCustomer($customerId, $websiteId);
+        if ($existing !== null && $existing->isActive()) {
+            throw new B2BConflictException(
+                self::ERROR_ALREADY_MEMBER,
+                __('已开通批发身份'),
+                ['customer_id' => $customerId, 'website_id' => $websiteId],
+            );
+        }
+
+        $this->groups->assignCustomer($customerId, $groupId);
+        $now = gmdate('Y-m-d H:i:s');
+        $row[MembershipApplicationRecord::schema_fields_ASSIGNED_GROUP_ID] = $groupId;
+        $row[MembershipApplicationRecord::schema_fields_UPDATED_AT] = $now;
+        try {
+            $this->persist($row);
+        } catch (\Throwable $e) {
+            try {
+                $this->groups->unassignCustomer($customerId, $websiteId);
+            } catch (\Throwable) {
+            }
+            throw $e;
+        }
+        $this->grantCreditAfterApprove($customerId, $websiteId, $groupId);
+
+        return $this->publicRow($row);
+    }
+
+    private function grantCreditAfterApprove(string $customerId, int $websiteId, string $groupId): void
+    {
+        $grant = $this->creditGrant;
+        if ($grant === null) {
+            try {
+                $grant = ObjectManager::getInstance(B2BCreditGrantService::class);
+            } catch (\Throwable) {
+                return;
+            }
+        }
+        if (!$grant instanceof B2BCreditGrantService) {
+            return;
+        }
+        try {
+            $grant->grantToTarget($customerId, $websiteId, $groupId);
+        } catch (\Throwable $e) {
+            w_log_error('b2b_credit_grant_after_approve_failed: ' . $e->getMessage(), [
+                'customer_id' => $customerId,
+                'website_id' => $websiteId,
+                'group_id' => $groupId,
+            ]);
+        }
+    }
+
+    /**
+     * Latest application for storefront projection (any status).
+     *
+     * @return array<string,mixed>|null
+     */
+    public function latestForCustomer(string $customerId, int $websiteId): ?array
+    {
+        $customerId = trim($customerId);
+        if ($customerId === '' || $websiteId < 0) {
+            return null;
+        }
+
+        if ($this->rows !== null) {
+            $best = null;
+            foreach ($this->rows as $row) {
+                if ((string)$row[MembershipApplicationRecord::schema_fields_CUSTOMER_ID] !== $customerId) {
+                    continue;
+                }
+                if ((int)$row[MembershipApplicationRecord::schema_fields_WEBSITE_ID] !== $websiteId) {
+                    continue;
+                }
+                if ($best === null
+                    || (string)$row[MembershipApplicationRecord::schema_fields_CREATED_AT]
+                        >= (string)$best[MembershipApplicationRecord::schema_fields_CREATED_AT]
+                ) {
+                    $best = $row;
+                }
+            }
+            return $best !== null ? $this->publicRow($best) : null;
+        }
+
+        $model = $this->newRecord()->clear()
+            ->where(MembershipApplicationRecord::schema_fields_CUSTOMER_ID, $customerId)
+            ->where(MembershipApplicationRecord::schema_fields_WEBSITE_ID, $websiteId)
+            ->order(MembershipApplicationRecord::schema_fields_CREATED_AT, 'DESC')
+            ->limit(1)
+            ->select()
+            ->fetchArray();
+        $row = $model[0] ?? null;
+        return is_array($row) ? $this->publicRow($row) : null;
     }
 
     /** @return array<string,mixed> */
@@ -211,6 +390,151 @@ final class MembershipApplicationService
                 ? ($existing . "\n" . $notes)
                 : $notes;
         }
+        $this->persist($row);
+        return $this->publicRow($row);
+    }
+
+    /**
+     * Permanently remove an application audit row (does not unassign live entitlement).
+     *
+     * @return array<string,mixed>
+     */
+    public function delete(string $applicationId): array
+    {
+        $applicationId = trim($applicationId);
+        if ($applicationId === '') {
+            throw new B2BConflictException(self::ERROR_INVALID, __('删除申请参数非法'));
+        }
+
+        $row = $this->find($applicationId);
+        if ($row === null) {
+            throw new B2BConflictException(
+                self::ERROR_NOT_FOUND,
+                __('申请单不存在：%{1}', [$applicationId]),
+                ['application_id' => $applicationId],
+            );
+        }
+
+        $public = $this->publicRow($row);
+        if ($this->rows !== null) {
+            $index = $row['_memory_index'] ?? null;
+            if (!is_int($index)) {
+                throw new \RuntimeException('b2b_membership_memory_index_missing');
+            }
+            array_splice($this->rows, $index, 1);
+            return $public + ['deleted' => true];
+        }
+
+        $model = $this->newRecord();
+        $model->clear()
+            ->where(MembershipApplicationRecord::schema_fields_APPLICATION_ID, $applicationId)
+            ->find()
+            ->fetch();
+        if (!$model->getId()) {
+            throw new B2BConflictException(
+                self::ERROR_NOT_FOUND,
+                __('申请单不存在：%{1}', [$applicationId]),
+                ['application_id' => $applicationId],
+            );
+        }
+        $model->delete();
+
+        return $public + ['deleted' => true];
+    }
+
+    /** @return array<string,mixed>|null */
+    private function findPendingForCustomer(string $customerId, int $websiteId): ?array
+    {
+        if ($this->rows !== null) {
+            foreach ($this->rows as $row) {
+                if ((string)$row[MembershipApplicationRecord::schema_fields_CUSTOMER_ID] !== $customerId) {
+                    continue;
+                }
+                if ((int)$row[MembershipApplicationRecord::schema_fields_WEBSITE_ID] !== $websiteId) {
+                    continue;
+                }
+                if ((string)$row[MembershipApplicationRecord::schema_fields_STATUS]
+                    === MembershipApplicationRecord::STATUS_PENDING
+                ) {
+                    return $row;
+                }
+            }
+            return null;
+        }
+
+        $model = $this->newRecord()->clear()
+            ->where(MembershipApplicationRecord::schema_fields_CUSTOMER_ID, $customerId)
+            ->where(MembershipApplicationRecord::schema_fields_WEBSITE_ID, $websiteId)
+            ->where(
+                MembershipApplicationRecord::schema_fields_STATUS,
+                MembershipApplicationRecord::STATUS_PENDING,
+            )
+            ->order(MembershipApplicationRecord::schema_fields_CREATED_AT, 'DESC')
+            ->limit(1)
+            ->select()
+            ->fetchArray();
+        $row = $model[0] ?? null;
+        return is_array($row) ? $row : null;
+    }
+
+    /**
+     * Raw latest row (any status) with optional memory index for persist.
+     *
+     * @return array<string,mixed>|null
+     */
+    private function findLatestRow(string $customerId, int $websiteId): ?array
+    {
+        if ($this->rows !== null) {
+            $best = null;
+            $bestIndex = null;
+            foreach ($this->rows as $index => $row) {
+                if ((string)$row[MembershipApplicationRecord::schema_fields_CUSTOMER_ID] !== $customerId) {
+                    continue;
+                }
+                if ((int)$row[MembershipApplicationRecord::schema_fields_WEBSITE_ID] !== $websiteId) {
+                    continue;
+                }
+                if ($best === null
+                    || (string)$row[MembershipApplicationRecord::schema_fields_CREATED_AT]
+                        >= (string)$best[MembershipApplicationRecord::schema_fields_CREATED_AT]
+                ) {
+                    $best = $row;
+                    $bestIndex = $index;
+                }
+            }
+            if ($best === null || !is_int($bestIndex)) {
+                return null;
+            }
+            $best['_memory_index'] = $bestIndex;
+            return $best;
+        }
+
+        $model = $this->newRecord()->clear()
+            ->where(MembershipApplicationRecord::schema_fields_CUSTOMER_ID, $customerId)
+            ->where(MembershipApplicationRecord::schema_fields_WEBSITE_ID, $websiteId)
+            ->order(MembershipApplicationRecord::schema_fields_CREATED_AT, 'DESC')
+            ->limit(1)
+            ->select()
+            ->fetchArray();
+        $row = $model[0] ?? null;
+        return is_array($row) ? $row : null;
+    }
+
+    /**
+     * @param array<string,mixed> $row
+     * @return array<string,mixed>
+     */
+    private function resubmitExisting(array $row, string $company, string $phone, string $notes): array
+    {
+        $now = gmdate('Y-m-d H:i:s');
+        $row[MembershipApplicationRecord::schema_fields_COMPANY_NAME] = $company;
+        $row[MembershipApplicationRecord::schema_fields_CONTACT_PHONE] = $phone;
+        if ($notes !== '') {
+            $row[MembershipApplicationRecord::schema_fields_NOTES] = $notes;
+        }
+        $row[MembershipApplicationRecord::schema_fields_STATUS] = MembershipApplicationRecord::STATUS_PENDING;
+        $row[MembershipApplicationRecord::schema_fields_ASSIGNED_GROUP_ID] = null;
+        $row[MembershipApplicationRecord::schema_fields_UPDATED_AT] = $now;
         $this->persist($row);
         return $this->publicRow($row);
     }
@@ -294,6 +618,12 @@ final class MembershipApplicationService
             );
         }
         $model->setData([
+            MembershipApplicationRecord::schema_fields_COMPANY_NAME
+                => $row[MembershipApplicationRecord::schema_fields_COMPANY_NAME]
+                    ?? $model->getData(MembershipApplicationRecord::schema_fields_COMPANY_NAME),
+            MembershipApplicationRecord::schema_fields_CONTACT_PHONE
+                => $row[MembershipApplicationRecord::schema_fields_CONTACT_PHONE]
+                    ?? $model->getData(MembershipApplicationRecord::schema_fields_CONTACT_PHONE),
             MembershipApplicationRecord::schema_fields_STATUS
                 => $row[MembershipApplicationRecord::schema_fields_STATUS],
             MembershipApplicationRecord::schema_fields_ASSIGNED_GROUP_ID

@@ -200,8 +200,39 @@ final class B2BHangOrderService
         );
         $this->put($updated);
         $this->recordEvent($updated);
+        $this->commitB2bCreditOnDepositPaid($orderRef, $depositIntentCode);
 
         return $updated->toArray();
+    }
+
+    private function commitB2bCreditOnDepositPaid(string $orderRef, string $depositIntentCode): void
+    {
+        if (!class_exists(\Weline\Order\Api\OrderFacadeInterface::class)
+            || !class_exists(B2BDepositCreditOrchestrator::class)
+        ) {
+            return;
+        }
+        try {
+            $orders = ObjectManager::getInstance(\Weline\Order\Api\OrderFacadeInterface::class);
+            if (!$orders instanceof \Weline\Order\Api\OrderFacadeInterface) {
+                return;
+            }
+            $read = $orders->get($orderRef);
+            $typePayload = $read->typePayload;
+            if (($typePayload['discount_kind'] ?? '') !== 'asset_b2b_credit') {
+                return;
+            }
+            $orch = ObjectManager::getInstance(B2BDepositCreditOrchestrator::class);
+            if (!$orch instanceof B2BDepositCreditOrchestrator) {
+                return;
+            }
+            $result = $orch->commitOnDepositPaid($typePayload, $orderRef, $depositIntentCode);
+            if ($orders instanceof \Weline\Order\Service\OrderFacade) {
+                $orders->mergeTypePayload($orderRef, $result['type_payload']);
+            }
+        } catch (\Throwable) {
+            // Soft-fail: hang state already advanced; credit reconcile later.
+        }
     }
 
     /** Merchant approve only when awaiting_merchant_approval → awaiting_balance. */
