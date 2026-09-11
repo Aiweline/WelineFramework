@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PROTOTYPE · Theme Editor 作用范围顶栏 · 抛出勿合入生产</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --bar: #1e293b;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --border: #334155;
+      --accent: #3b82f6;
+      --danger: #ef4444;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font: 13px/1.4 system-ui, sans-serif;
+      color: var(--text);
+      background: #020617;
+      padding: 20px 20px 96px;
+    }
+    .note {
+      max-width: 1100px;
+      margin: 0 auto 14px;
+      padding: 10px 12px;
+      border: 1px dashed #f59e0b;
+      border-radius: 8px;
+      background: #422006;
+      color: #fde68a;
+      font-size: 12px;
+    }
+    .page { max-width: 1100px; margin: 0 auto; }
+    .shell {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      background: var(--bg);
+    }
+    .bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 52px;
+      padding: 8px 12px;
+      background: var(--bar);
+      border-bottom: 1px solid var(--border);
+    }
+    .left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 1 1 0%;
+      min-width: 0;
+    }
+    .right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 0 0 auto;
+    }
+    .ghost, .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 32px;
+      padding: 0 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text);
+      white-space: nowrap;
+    }
+    .btn.primary { background: var(--accent); border-color: var(--accent); }
+    .title { font-weight: 700; white-space: nowrap; }
+    .label { color: var(--muted); font-size: 12px; font-weight: 700; white-space: nowrap; }
+    .scope {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      padding: 4px 8px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: #0f172a;
+    }
+    .scope-display {
+      min-width: 0;
+      white-space: nowrap;
+    }
+    .more {
+      position: relative;
+      flex: 0 0 auto;
+    }
+    .more-menu {
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 0;
+      z-index: 5;
+      min-width: 180px;
+      padding: 8px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #0b1220;
+      box-shadow: 0 12px 28px rgba(0,0,0,.35);
+    }
+    .more-menu[hidden] { display: none !important; }
+    .more-menu .row {
+      display: grid;
+      gap: 4px;
+      margin-bottom: 8px;
+    }
+    .more-menu select, .chip select {
+      min-height: 32px;
+      width: 100%;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: #111827;
+      color: var(--text);
+      padding: 0 8px;
+    }
+    .chip select { width: auto; max-width: 160px; }
+    .selects {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      flex: 1 1 auto;
+    }
+    .fail-box { outline: 2px solid var(--danger); outline-offset: 2px; }
+
+    /* A: 现网挤乱（对照） */
+    .a .scope { flex: 0 0 auto; max-width: none; }
+    .a .scope-display { overflow: visible; text-overflow: clip; }
+    .a .selects { flex: 0 0 auto; overflow: visible; }
+    .a .left { overflow: visible; }
+
+    /* B: VERDICT — 省略号 + 弹性上限 + 次要进更多 */
+    .b .scope {
+      flex: 0 1 auto;
+      max-width: min(20rem, 36vw);
+    }
+    .b .scope-display {
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .b .selects { flex: 1 1 auto; }
+
+    /* C: 极短芯片 + 全部次要进更多 */
+    .c .scope { max-width: 12rem; }
+    .c .scope-display { overflow: hidden; text-overflow: ellipsis; }
+
+    .switcher {
+      position: fixed;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 8px;
+      padding: 8px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(15,23,42,.96);
+      z-index: 20;
+    }
+    .switcher a {
+      color: var(--text);
+      text-decoration: none;
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-weight: 600;
+      font-size: 13px;
+    }
+    .switcher a[aria-current="true"] { background: var(--accent); }
+  </style>
+</head>
+<body>
+  <div class="note">
+    <strong>PROTOTYPE（抛出）</strong> · 问题：主题可视化编辑器顶栏「作用范围」长店名如何与语言/更多共存而不重叠？
+    A=现网挤乱对照 · <strong>B=短友好名+省略号+弹性上限+次要进更多（VERDICT）</strong> · C=极短芯片。
+    触发器示例：<code>店铺：E2E Theme Default 默认店铺</code>（完整技术路径仅悬停 title）。
+    权威 token 仍走生产 Theme；本文件禁止合入运行时。
+  </div>
+  <div class="page">
+    <div class="shell" id="variant-root"></div>
+  </div>
+  <nav class="switcher" aria-label="prototype variants">
+    <a href="?variant=A" data-v="A">A 挤乱</a>
+    <a href="?variant=B" data-v="B">B 省略</a>
+    <a href="?variant=C" data-v="C">C 芯片</a>
+  </nav>
+
+  <template id="tpl-A">
+    <div class="bar a">
+      <div class="left fail-box">
+        <button class="ghost" type="button">← 返回</button>
+        <span class="title">主题编辑器</span>
+        <div class="scope">
+          <span class="label">作用范围</span>
+          <span class="scope-display">店铺: E2E Theme Default e2e_default_injection_mso3wfcu_1 默认店铺</span>
+        </div>
+        <button class="ghost" type="button">基础信息</button>
+        <div class="selects">
+          <select class="chip"><option>主题 Weline</option></select>
+          <select class="chip"><option>zh_Hans_CN · 中文</option></select>
+          <button class="ghost" type="button">更多</button>
+        </div>
+      </div>
+      <div class="right">
+        <button class="ghost" type="button">💾</button>
+        <button class="btn primary" type="button">发布</button>
+        <button class="ghost" type="button">固定</button>
+        <button class="ghost" type="button">收起</button>
+      </div>
+    </div>
+  </template>
+
+  <template id="tpl-B">
+    <div class="bar b">
+      <div class="left">
+        <button class="ghost" type="button">← 返回</button>
+        <span class="title">主题编辑器</span>
+        <div class="scope" title="店铺: E2E Theme Default e2e_default_injection_mso3wfcu_1 / E2E Theme Default e2e_default_injection_mso3wfcu_1 默认店铺">
+          <span class="label">作用范围</span>
+          <span class="scope-display">店铺：E2E Theme Default 默认店铺</span>
+        </div>
+        <button class="ghost" type="button">基础信息</button>
+        <div class="selects">
+          <select class="chip"><option>zh_Hans_CN · 中文</option></select>
+          <div class="more">
+            <button class="ghost" type="button" data-more>⋯ 更多</button>
+            <div class="more-menu" hidden>
+              <div class="row"><span class="label">主题</span><select><option>Weline</option></select></div>
+              <div class="row"><span class="label">布局类型</span><select><option>CMS 页面</option></select></div>
+              <div class="row"><span class="label">布局选项</span><select><option>默认</option></select></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="right">
+        <button class="ghost" type="button">💾</button>
+        <button class="btn primary" type="button">发布</button>
+        <button class="ghost" type="button">固定</button>
+        <button class="ghost" type="button">收起</button>
+      </div>
+    </div>
+  </template>
+
+  <template id="tpl-C">
+    <div class="bar c">
+      <div class="left">
+        <button class="ghost" type="button">← 返回</button>
+        <span class="title">主题编辑器</span>
+        <div class="scope" title="完整 scope 见悬停">
+          <span class="label">范围</span>
+          <span class="scope-display">E2E Theme Default · 默认店铺</span>
+        </div>
+        <div class="more">
+          <button class="ghost" type="button" data-more>⋯ 更多</button>
+          <div class="more-menu" hidden>
+            <div class="row"><span class="label">基础信息</span><button class="ghost" type="button">打开</button></div>
+            <div class="row"><span class="label">语言</span><select><option>中文</option></select></div>
+            <div class="row"><span class="label">主题</span><select><option>Weline</option></select></div>
+          </div>
+        </div>
+      </div>
+      <div class="right">
+        <button class="btn primary" type="button">发布</button>
+        <button class="ghost" type="button">收起</button>
+      </div>
+    </div>
+  </template>
+
+  <script>
+    const params = new URLSearchParams(location.search);
+    const variant = (params.get('variant') || 'B').toUpperCase();
+    const key = ['A','B','C'].includes(variant) ? variant : 'B';
+    const root = document.getElementById('variant-root');
+    root.appendChild(document.getElementById('tpl-' + key).content.cloneNode(true));
+    document.querySelectorAll('.switcher a').forEach((a) => {
+      a.setAttribute('aria-current', a.dataset.v === key ? 'true' : 'false');
+    });
+    root.querySelectorAll('[data-more]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const menu = btn.parentElement.querySelector('.more-menu');
+        if (menu) menu.hidden = !menu.hidden;
+      });
+    });
+  </script>
+</body>
+</html>

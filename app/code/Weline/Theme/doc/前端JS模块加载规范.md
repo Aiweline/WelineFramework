@@ -5,12 +5,44 @@
 
 ## 1. 原则
 
-1. **`weline.js` 只做框架加载引擎（强制，MCP `weline_js_loader_framework_only`）**：仅提供 `Weline.declare` / `Weline.load` / `data-weline-load|declare` 扫描与并发/延后策略，以及**维护场景下懒加载** Maintenance 模块 JS（如 `maintenanceAsyncWait`）——**禁止**路径启发式 URL 预载；**禁止**在 `weline.js` 内嵌维护 UI 或任何业务逻辑。**禁止**在默认配置、`nameMap` 或 `Weline.*` 业务代理里写死业务模块名（`cart` / `account` / `compareShopper` / `wishlist` / `miniCart*` / `storefront*` / `customer*` / `currency` 等）或业务能力。业务一律由归属模块 `weline.modules.js` + 部件 `data-weline-load` / `declare` 完成。允许的非业务传输别名仅 `api` / `dom`（及 `welineApi` / `welineDom`）——**明确禁止 `account`**。**核心国际化**由 `Weline_Framework` 登记模组 `i18n`（`Weline_Framework::js/i18n.js`，与 `Phrase` 同属框架能力面；**不**重命名 Phrase，以免与小写 `i18n/` CSV 目录冲突）；主题 head / 语言部件 `declare`/`data-weline-load="i18n"` 加载。外置 `Weline_I18n` 只做增强（语言切换器 UI、国旗、AI 翻译等）。
-2. **主题 head 提供加载器底座**（`theme.js` / 前台等价入口 `Weline`）：提供 `Weline.declare` / `Weline.load` / `data-weline-load`。
+1. **`weline.js` 只做框架加载引擎（强制，MCP `weline_js_loader_framework_only`）**：提供 `Weline.declare` / `Weline.load` / `data-weline-load|declare` 扫描与并发/延后策略、**声明式 UI 挂载编排**（`data-weline-mount` + `Weline.mount.provide/scan/waitFor`）、以及**维护场景下懒加载** Maintenance 模块 JS（如 `maintenanceAsyncWait`）——**禁止**路径启发式 URL 预载；**禁止**在 `weline.js` 内嵌维护 UI 或任何业务逻辑 / **业务挂载面名**。**禁止**在默认配置、`nameMap` 或 `Weline.*` 业务代理里写死业务模块名（`cart` / `account` / `compareShopper` / `wishlist` / `miniCart*` / `storefront*` / `customer*` / `currency` 等）或业务能力。业务一律由归属模块 `weline.modules.js` + 部件 `data-weline-load` / `declare` 完成；挂载面由提供方 `Weline.mount.provide(surface, handler)` 自注册。允许的非业务传输别名仅 `api` / `dom`（及 `welineApi` / `welineDom`）——**明确禁止 `account`**。**核心国际化**由 `Weline_Framework` 登记模组 `i18n`（`Weline_Framework::js/i18n.js`，与 `Phrase` 同属框架能力面；**不**重命名 Phrase，以免与小写 `i18n/` CSV 目录冲突）；主题 head / 语言部件 `declare`/`data-weline-load="i18n"` 加载。外置 `Weline_I18n` 只做增强（语言切换器 UI、国旗、AI 翻译等）。
+2. **主题 head 提供加载器底座**（`theme.js` / 前台等价入口 `Weline`）：提供 `Weline.declare` / `Weline.load` / `data-weline-load` / `Weline.mount`。
 3. **业务模块用 `weline.modules.js` 注册** JS 模块与别名（含 `paths` / `globalVar`），禁止在部件/布局里手写 `<script src>` / `@static(...js)` / 裸 `<js>` 去拉「模块级」脚本。
 4. **部件只声明依赖**：在部件根节点挂 `data-weline-load="cart"` 或 `data-weline-declare="account"`；加载器扫描属性后自动加载。延后策略由 `runtimeConfig.modulesLoad.deferByDefault`（默认 `true` → 空闲延后）控制；需要立刻加载的模块由**站点运行时** `eagerModules` 覆盖，或部件侧显式 `Weline.declare(name, { load: 'eager' })`——**不要**把业务名单写回 `weline.js` 默认值。
 5. **布局有 slot 就用 slot**：模块提供部件注入已有 slot；不要为同一能力再造平行挂载点。
 6. **PHP 可扫描**：声明必须可被 `Weline\I18n\Helper\JsModuleParser` 识别（`Weline.declare(...)` / `data-weline-load`）。
+
+### 1.0 声明式 UI 挂载（`Weline.mount`）
+
+框架级能力（与 `data-weline-load` 并列），**不是**业务模块自扫：
+
+| 角色 | 职责 |
+|------|------|
+| **框架** `Weline.mount` | **页面无 `[data-weline-mount]` 则不 boot core、不自动扫描**；有声明才 `ensureMountCore`；按 `data-weline-mount-load` 拉模块；按 `data-weline-mount-after` 等待依赖面 settled；调用已注册 provide；派发 `weline:mount:scan` / `weline:mount:ready` |
+| **提供方**（如 Account） | 仅在页上存在本模块宿主时 `Weline.mount.provide(...)`；`provide` 只对已声明 surface 触发 scan |
+| **宿主**（如 B2B） | 模板只写特殊属性；抽屉打开后可 `Weline.mount.scan({ root, force: true })`；**禁止**调 `Account.scanMounts` 作编排 |
+
+属性：
+
+| 属性 | 含义 |
+|------|------|
+| `data-weline-mount` | 主键，`{providerKey}/{surface}` |
+| `data-weline-mount-load` | 可选，逗号分隔模块名，确保提供方脚本加载并 `provide` |
+| `data-weline-mount-after` | 可选，逗号分隔 surface；依赖面 `ready\|empty\|error` 后才挂本宿主（例：批发面板等 account 挂好） |
+| `data-weline-mount-variant` / `-suppress-floating` / `-state` | 提供方约定的呈现与运行时状态 |
+
+```html
+<div data-weline-mount="customer/login-panel"
+     data-weline-mount-load="account"
+     data-weline-mount-suppress-floating="1"></div>
+<!-- 仅快捷：data-weline-mount="customer/social-quick" -->
+<!-- 依赖等待示例：本面等登录面板 settled 后再挂 -->
+<div data-weline-mount="b2b/apply-panel"
+     data-weline-mount-load="b2bSellingMode"
+     data-weline-mount-after="customer/login-panel"></div>
+```
+
+提供方清单写在各模块 `doc/挂载面.md`（如 Customer）；协议正文以本节为准。
 
 ### 1.1 两套加载通道（仅此两种）
 

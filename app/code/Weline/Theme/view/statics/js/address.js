@@ -1560,7 +1560,7 @@
         root.classList.toggle('w-address--single', levels.length === 1);
         root.innerHTML = levels.map(function (level) {
             var placeholder = level === 'country' ? labels.selectCountry : (level === 'province' ? labels.selectCountryFirst : (level === 'city' ? labels.selectProvinceFirst : labels.selectCityFirst));
-            return '<div class="w-address__item" data-address-level="' + level + '"><label class="w-address__label">' + escapeHtml(labels[level] || level) + '</label><div class="w-address__control"><input class="w-address__input" type="text" autocomplete="off" placeholder="' + escapeHtml(placeholder) + '"><span class="w-address__arrow">\u25be</span></div><div class="w-address__menu"></div></div>';
+            return '<div class="w-field w-address__item" data-address-level="' + level + '"><label class="w-field__label">' + escapeHtml(labels[level] || level) + '</label><div class="w-field__control w-address__control"><input class="w-input w-address__input" type="text" autocomplete="off" placeholder="' + escapeHtml(placeholder) + '"><span class="w-address__arrow">\u25be</span></div><div class="w-address__menu"></div></div>';
         }).join('');
     }
 
@@ -2822,16 +2822,17 @@
             + '.w-address__multi{display:flex;flex-direction:column;gap:var(--weline-layout-spacing-md,12px);color:var(--weline-theme-text,inherit);}'
             + '.w-address__multi-chips{display:flex;flex-wrap:wrap;gap:var(--weline-layout-spacing-xs,6px);align-items:center;min-height:1.5rem;}'
             + '.w-address__multi .w-address--multi{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:var(--weline-layout-spacing-md,12px);margin:0;}'
-            + '.w-address__multi .w-address__item{position:relative;min-width:0;}'
-            + '.w-address__multi .w-address__label{display:block;margin:0 0 var(--weline-layout-spacing-xs,6px);color:var(--weline-layout-text-primary,var(--weline-theme-text,inherit));font-size:var(--weline-layout-font-size-sm,13px);font-weight:var(--weline-layout-font-weight-semibold,600);}'
-            + '.w-address__multi .w-address__control{position:relative;display:flex;align-items:center;min-height:var(--weline-theme-control-height,40px);border:var(--weline-theme-border-width,1px) var(--weline-theme-border-style,solid) var(--weline-theme-border-color,#d0d5dd);border-radius:var(--weline-theme-radius-lg,10px);background:var(--weline-theme-surface,var(--weline-theme-surface-raised,#fff));box-shadow:var(--theme-input-shadow,none);color:var(--weline-theme-text,inherit);transition:border-color .16s ease,box-shadow .16s ease,background .16s ease;}'
+            + '.w-address__multi .w-address__item{position:relative;min-width:0;--weline-theme-field-label-bg:var(--weline-theme-surface,var(--weline-theme-surface-raised,#fff));}'
+            + '.w-address__multi .w-address__item.w-field{gap:0;}'
+            + '.w-address__multi .w-field__label{font-weight:var(--weline-layout-font-weight-semibold,600);}'
+            + '.w-address__multi .w-address__control{position:relative;display:flex;align-items:center;min-height:var(--weline-theme-control-height,40px);border:var(--weline-theme-border-width,1px) var(--weline-theme-border-style,solid) var(--weline-theme-border-color,#d0d5dd);border-radius:var(--weline-radius-md,var(--weline-theme-radius-md,8px));background:var(--weline-theme-surface,var(--weline-theme-surface-raised,#fff));box-shadow:var(--theme-input-shadow,none);color:var(--weline-theme-text,inherit);transition:border-color .16s ease,box-shadow .16s ease,background .16s ease;}'
             + '.w-address__multi .w-address__control:focus-within{border-color:var(--weline-theme-primary,var(--weline-theme-focus-outline,#2563eb));box-shadow:var(--weline-theme-focus-ring,0 0 0 3px var(--weline-theme-focus-ring-color,rgba(37,99,235,.15)));}'
-            + '.w-address__multi .w-address__input{width:100%;min-width:0;height:var(--weline-component-control-height,var(--weline-theme-control-height,40px));padding:0 28px 0 12px;border:0;outline:0;background:transparent;color:var(--weline-theme-text,inherit);caret-color:var(--weline-theme-text,currentColor);font:inherit;}'
-            + '.w-address__multi .w-address__input::placeholder{color:var(--weline-theme-text-muted,#98a2b3);}'
+            + '.w-address__multi .w-address__control .w-input,.w-address__multi .w-address__input{width:100%;min-width:0;height:var(--weline-component-control-height,var(--weline-theme-control-height,40px));min-height:0;padding:0 28px 0 12px;border:0;outline:0;box-shadow:none;background:transparent;color:var(--weline-theme-text,inherit);caret-color:var(--weline-theme-text,currentColor);font:inherit;}'
+            + '.w-address__multi .w-address__control .w-input::placeholder,.w-address__multi .w-address__input::placeholder{color:var(--weline-theme-text-muted,#98a2b3);}'
             + '.w-address__multi .w-address__arrow{position:absolute;inset-inline-end:12px;color:var(--weline-theme-text-muted,#98a2b3);font-size:12px;pointer-events:none;}'
             // Menu visuals + floating coords. Do NOT set top/inset-inline here — theme absolute+inset fights portal.
             // Clear layout so Weline.UI.floating --w-floating-* (flip / visualViewport bounds) owns placement.
-            + '.w-address__menu[data-multi-menu],.w-address__menu[data-w-float-surface]{box-sizing:border-box;position:fixed;inset:auto;top:auto;right:auto;bottom:auto;left:auto;inset-inline:auto;margin:0;z-index:var(--weline-z-menu,1080);max-block-size:min(260px,var(--w-floating-max-block-size,70vh));overflow:auto;padding:6px;border:var(--weline-theme-border-width,1px) var(--weline-theme-border-style,solid) var(--weline-theme-border-color,#d0d5dd);border-radius:var(--weline-theme-radius-lg,10px);background:var(--weline-theme-surface,var(--weline-theme-surface-raised,#fff));color:var(--weline-theme-text,inherit);box-shadow:var(--weline-theme-shadow-lg,0 12px 32px rgba(16,24,40,.14));}'
+            + '.w-address__menu[data-multi-menu],.w-address__menu[data-w-float-surface]{box-sizing:border-box;position:fixed;inset:auto;top:auto;right:auto;bottom:auto;left:auto;inset-inline:auto;margin:0;z-index:var(--weline-z-menu,1080);max-block-size:min(260px,var(--w-floating-max-block-size,70vh));overflow:auto;padding:6px;border:var(--weline-theme-border-width,1px) var(--weline-theme-border-style,solid) var(--weline-theme-border-color,#d0d5dd);border-radius:var(--weline-radius-md,var(--weline-theme-radius-md,8px));background:var(--weline-theme-surface,var(--weline-theme-surface-raised,#fff));color:var(--weline-theme-text,inherit);box-shadow:var(--weline-theme-shadow-lg,0 12px 32px rgba(16,24,40,.14));}'
             + '.w-address__menu[data-multi-menu][hidden],.w-address__menu[data-w-float-surface][hidden]{display:none!important;}'
             + '.w-address__menu[data-multi-menu]:not([hidden]),.w-address__menu[data-w-float-surface]:not([hidden]){display:block;}'
             + '.w-address__menu[data-w-floating-positioned]{top:max(var(--w-floating-top,0px),var(--w-floating-viewport-top,.5rem));left:max(var(--w-floating-left,0px),var(--w-floating-viewport-left,.5rem));inline-size:var(--w-floating-inline-size,auto);max-inline-size:min(var(--w-floating-max-inline-size,calc(100dvw - 1rem)),calc(var(--w-floating-viewport-right,calc(100dvw - .5rem)) - max(var(--w-floating-left,0px),var(--w-floating-viewport-left,.5rem))));max-block-size:min(260px,var(--w-floating-max-block-size,70vh),calc(var(--w-floating-viewport-bottom,calc(100dvh - .5rem)) - max(var(--w-floating-top,0px),var(--w-floating-viewport-top,.5rem))));transform-origin:var(--w-floating-transform-origin,top);}'
@@ -2850,10 +2851,10 @@
             + '<div class="w-address__multi-chips" data-multi-chips></div>'
             + '<div class="w-address w-address--multi">'
             + multiLevels.map(function (level) {
-                return '<div class="w-address__item" data-multi-panel="' + level + '" data-w-placement="bottom-start">'
-                    + '<label class="w-address__label">' + escapeHtml(labels[level] || level) + '</label>'
-                    + '<div class="w-address__control">'
-                    + '<input class="w-address__input" type="search" autocomplete="off" data-multi-search="' + level + '"'
+                return '<div class="w-field w-address__item" data-multi-panel="' + level + '" data-w-placement="bottom-start">'
+                    + '<label class="w-field__label">' + escapeHtml(labels[level] || level) + '</label>'
+                    + '<div class="w-field__control w-address__control">'
+                    + '<input class="w-input w-address__input" type="search" autocomplete="off" data-multi-search="' + level + '"'
                     + ' placeholder="' + escapeHtml(searchPlaceholder[level] || labels.loading || '…') + '">'
                     + '<span class="w-address__arrow">\u25be</span>'
                     + '</div>'
@@ -3723,25 +3724,35 @@
     }
 
     function ensureAddressBaseStyles() {
-        if (typeof document === 'undefined' || document.querySelector('style[data-w-address-base-style]')) {
+        if (typeof document === 'undefined') {
             return;
         }
         // Backend admin does not load frontend theme.css; single-select must self-contain
-        // menu absolute/hide rules (multi already injects its own). Idempotent document style.
-        var style = document.createElement('style');
-        style.setAttribute('data-w-address-base-style', '');
+        // menu absolute/hide rules (multi already injects its own). Refresh when token changes.
+        var styleToken = 'notch-md-20260910b';
+        var style = document.querySelector('style[data-w-address-base-style]');
+        if (style && style.getAttribute('data-w-address-base-style') === styleToken) {
+            return;
+        }
+        if (!style) {
+            style = document.createElement('style');
+            (document.head || document.documentElement).appendChild(style);
+        }
+        style.setAttribute('data-w-address-base-style', styleToken);
         style.textContent = ''
-            + '.w-address{font-family:inherit;color:var(--weline-theme-text,inherit);}'
+            + '.w-address{font-family:inherit;color:var(--weline-theme-text,inherit);--weline-theme-field-label-bg:var(--weline-theme-surface,var(--weline-theme-surface-raised,#fff));}'
             + '.w-address--single{display:block;}'
+            + '.w-address:not(.w-address--single){display:grid;gap:var(--weline-layout-spacing-md,12px);}'
             + '.w-address__item{position:relative;min-width:0;}'
-            + '.w-address__label{display:block;margin:0 0 var(--weline-layout-spacing-xs,6px);color:var(--weline-layout-text-primary,var(--weline-theme-text,inherit));font-size:var(--weline-layout-font-size-sm,13px);font-weight:var(--weline-layout-font-weight-semibold,600);}'
-            + '.w-address__control{position:relative;display:flex;align-items:center;min-height:var(--weline-theme-control-height,40px);border:var(--weline-theme-border-width,1px) var(--weline-theme-border-style,solid) var(--weline-theme-border-color,#d0d5dd);border-radius:var(--weline-theme-radius-lg,10px);background:var(--weline-theme-surface,var(--weline-theme-surface-raised,#fff));box-shadow:var(--theme-input-shadow,none);color:var(--weline-theme-text,inherit);transition:border-color .16s ease,box-shadow .16s ease,background .16s ease;}'
+            + '.w-address__item.w-field{gap:0;}'
+            + '.w-address__item > .w-field__label{font-weight:var(--weline-layout-font-weight-semibold,600);}'
+            + '.w-address__control{position:relative;display:flex;align-items:center;min-height:var(--weline-theme-control-height,40px);border:var(--weline-theme-border-width,1px) var(--weline-theme-border-style,solid) var(--weline-theme-border-color,#d0d5dd);border-radius:var(--weline-radius-md,var(--weline-theme-radius-md,8px));background:var(--weline-theme-surface,var(--weline-theme-surface-raised,#fff));box-shadow:var(--theme-input-shadow,none);color:var(--weline-theme-text,inherit);transition:border-color .16s ease,box-shadow .16s ease,background .16s ease;}'
             + '.w-address__control:focus-within{border-color:var(--weline-theme-primary,var(--weline-theme-focus-outline,#2563eb));box-shadow:var(--weline-theme-focus-ring,0 0 0 3px var(--weline-theme-focus-ring-color,rgba(37,99,235,.15)));}'
             + '.w-address__control.is-disabled{background:var(--weline-theme-surface-subtle,#f2f4f7);color:var(--weline-theme-text-muted,#98a2b3);cursor:not-allowed;}'
-            + '.w-address__input{width:100%;min-width:0;height:var(--weline-component-control-height,var(--weline-theme-control-height,40px));padding:0 28px 0 12px;border:0;outline:0;background:transparent;color:var(--weline-theme-text,inherit);caret-color:var(--weline-theme-text,currentColor);font:inherit;}'
-            + '.w-address__input::placeholder{color:var(--weline-theme-text-muted,#98a2b3);}'
+            + '.w-address__control .w-input,.w-address__input{width:100%;min-width:0;height:var(--weline-component-control-height,var(--weline-theme-control-height,40px));min-height:0;padding:0 28px 0 12px;border:0;outline:0;box-shadow:none;background:transparent;color:var(--weline-theme-text,inherit);caret-color:var(--weline-theme-text,currentColor);font:inherit;}'
+            + '.w-address__control .w-input::placeholder,.w-address__input::placeholder{color:var(--weline-theme-text-muted,#98a2b3);}'
             + '.w-address__arrow{position:absolute;inset-inline-end:12px;color:var(--weline-theme-text-muted,#98a2b3);font-size:12px;pointer-events:none;}'
-            + '.w-address__menu{position:absolute;z-index:var(--weline-z-menu,1080);top:calc(100% + 6px);inset-inline:0;display:none;box-sizing:border-box;max-height:min(260px,70vh);overflow:auto;padding:6px;border:var(--weline-theme-border-width,1px) var(--weline-theme-border-style,solid) var(--weline-theme-border-color,#d0d5dd);border-radius:var(--weline-theme-radius-lg,10px);background:var(--weline-theme-surface,var(--weline-theme-surface-raised,#fff));color:var(--weline-theme-text,inherit);box-shadow:var(--weline-theme-shadow-lg,0 12px 32px rgba(16,24,40,.14));}'
+            + '.w-address__menu{position:absolute;z-index:var(--weline-z-menu,1080);top:calc(100% + 6px);inset-inline:0;display:none;box-sizing:border-box;max-height:min(260px,70vh);overflow:auto;padding:6px;border:var(--weline-theme-border-width,1px) var(--weline-theme-border-style,solid) var(--weline-theme-border-color,#d0d5dd);border-radius:var(--weline-radius-md,var(--weline-theme-radius-md,8px));background:var(--weline-theme-surface,var(--weline-theme-surface-raised,#fff));color:var(--weline-theme-text,inherit);box-shadow:var(--weline-theme-shadow-lg,0 12px 32px rgba(16,24,40,.14));}'
             + '.w-address__menu[data-w-float-surface],.w-address__menu[data-multi-menu],.w-address__menu[data-w-floating-portal],.w-address__menu[data-w-floating-positioned]{position:fixed;inset:auto;top:auto;right:auto;bottom:auto;left:auto;inset-inline:auto;margin:0;}'
             + '.w-address__menu[data-multi-menu]:not([hidden]),.w-address__menu[data-w-float-surface]:not([hidden]){display:block;}'
             + '.w-address__menu[data-w-floating-positioned]{top:max(var(--w-floating-top,0px),var(--w-floating-viewport-top,.5rem));left:max(var(--w-floating-left,0px),var(--w-floating-viewport-left,.5rem));inline-size:var(--w-floating-inline-size,auto);max-inline-size:min(var(--w-floating-max-inline-size,calc(100dvw - 1rem)),calc(var(--w-floating-viewport-right,calc(100dvw - .5rem)) - max(var(--w-floating-left,0px),var(--w-floating-viewport-left,.5rem))));max-block-size:min(260px,var(--w-floating-max-block-size,70vh),calc(var(--w-floating-viewport-bottom,calc(100dvh - .5rem)) - max(var(--w-floating-top,0px),var(--w-floating-viewport-top,.5rem))));transform-origin:var(--w-floating-transform-origin,top);}'
@@ -3756,7 +3767,6 @@
             + '.w-address__option:hover,.w-address__option.is-active{background:var(--weline-theme-primary-subtle,var(--weline-theme-surface-hover,#eff4ff));color:var(--weline-theme-primary-text-emphasis,var(--weline-theme-primary,#1d4ed8));}'
             + '.w-address__empty,.w-address__menu-hint{padding:10px;color:var(--weline-theme-text-muted,#667085);font-size:var(--weline-layout-font-size-sm,13px);}'
             + '.w-address__menu .w-address__group-empty{padding:8px 10px 10px;color:var(--weline-theme-text-muted,#667085);font-size:var(--weline-layout-font-size-sm,13px);}';
-        (document.head || document.documentElement).appendChild(style);
     }
 
     function mount(root) {
@@ -4081,6 +4091,9 @@
         var postalLookupTimer = null;
         var postalJobSeq = 0;
         var postalJobQueue = Promise.resolve();
+        // Same postal must not re-hit postal_countries after debounce already enqueued it
+        // (paste historically also fired change/blur → second lookup).
+        var lastEnqueuedPostal = '';
         var code = group.code;
         var postalFieldSelector = '[data-w-address-postal], [data-postal-first], [data-shipping-field][name="postal_code"], [name="postal_code"]';
 
@@ -4148,9 +4161,15 @@
                 var postal = text(field && field.value).trim();
                 if (postal.length < 3) {
                     clearPostalCountryPrompt(group);
+                    lastEnqueuedPostal = '';
                     finishJob(jobId);
                     return null;
                 }
+                if (postal === lastEnqueuedPostal) {
+                    finishJob(jobId);
+                    return null;
+                }
+                lastEnqueuedPostal = postal;
                 var countryCode = text(metadataValue(group, 'country_code') || (group.fixed && group.fixed.country) || 'CN').toUpperCase() || 'CN';
                 return postalCountries(postal).then(function (countries) {
                     if (jobId !== postalJobSeq) {
@@ -4217,35 +4236,50 @@
         }
         function schedule() {
             window.clearTimeout(postalLookupTimer);
+            postalLookupTimer = null;
             var field = findPostalFieldForRoot(root);
             var postal = text(field && field.value).trim();
             if (postal.length < 3) {
                 setLoading(false);
                 clearPostalCountryPrompt(group);
+                lastEnqueuedPostal = '';
+                return;
+            }
+            // Already looked up this exact value: ignore duplicate input (e.g. paste re-fire).
+            if (postal === lastEnqueuedPostal) {
+                setLoading(false);
                 return;
             }
             setLoading(true);
-            postalLookupTimer = window.setTimeout(enqueue, POSTAL_LOOKUP_DEBOUNCE_MS);
+            postalLookupTimer = window.setTimeout(function () {
+                postalLookupTimer = null;
+                enqueue();
+            }, POSTAL_LOOKUP_DEBOUNCE_MS);
         }
         function onPostalEvent(event) {
             var t = event.target;
             if (!(t && t.matches && t.matches(postalFieldSelector))) {
                 return;
             }
+            // Skip only when we can resolve THIS group's postal and the event is for a sibling field
+            // (same form may host shipping + billing). If unresolved, still schedule — do not drop input.
+            var mine = findPostalFieldForRoot(root);
+            if (mine && t !== mine) {
+                return;
+            }
             schedule();
         }
         // Prefer form / checkout widget so shell-external data-postal-first receives input.
+        // Input-only: do not bind change/blur — paste + leave would double-query.
         var scope = root.closest('form')
             || root.closest('[data-shipping-checkout-address], .w-shipping-checkout-address, [data-address-editor]')
             || root.closest('[data-w-address-shell]')
             || root.parentElement
             || document;
         scope.addEventListener('input', onPostalEvent);
-        scope.addEventListener('change', onPostalEvent);
         var postalField = findPostalFieldForRoot(root);
         if (postalField && !scope.contains(postalField)) {
             postalField.addEventListener('input', schedule);
-            postalField.addEventListener('change', schedule);
         }
     }
 

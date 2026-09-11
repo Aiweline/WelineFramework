@@ -2020,23 +2020,22 @@ table.table tbody tr:hover {
 .w-address__item {
     position: relative;
     min-width: 0;
+    --weline-theme-field-label-bg: var(--weline-theme-surface, var(--weline-theme-surface-raised, #fff));
 }
 
-.w-address__label {
-    display: block;
-    margin: 0 0 var(--weline-layout-spacing-xs);
-    color: var(--weline-layout-text-primary);
-    font-size: var(--weline-layout-font-size-sm);
-    font-weight: var(--weline-layout-font-weight-semibold);
+.w-address__item.w-field {
+    gap: 0;
 }
+
+/* Legacy .w-address__label no longer used; cascade labels are .w-field__label. */
 
 .w-address__control {
     position: relative;
     display: flex;
     align-items: center;
-    min-height: var(--weline-theme-control-height);
-    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border-color);
-    border-radius: var(--weline-theme-radius-lg);
+    min-height: var(--weline-control-height, var(--weline-theme-control-height));
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border-strong, var(--weline-theme-border-color));
+    border-radius: var(--weline-radius-md, var(--weline-theme-radius-md, 8px));
     background: var(--weline-theme-surface);
     box-shadow: var(--theme-input-shadow, none);
     transition: border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;

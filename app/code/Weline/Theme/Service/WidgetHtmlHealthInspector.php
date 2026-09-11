@@ -28,12 +28,14 @@ final class WidgetHtmlHealthInspector
     /** @var list<array{pattern:string,severity:string,code:string}> */
     private const PHP_ERROR_MATCHERS = [
         [
-            'pattern' => '/(?:<br\s*\/?>\s*)?(?:<b>)?(Fatal error|Parse error)(?:<\/b>)?:\s*(.+?)(?:\s+in\s+(?:<b>)?(.+?)(?:<\/b>)?\s+on\s+line\s+(?:<b>)?(\d+)(?:<\/b>)?)?(?:<br\s*\/?>)?/is',
+            // Require "in … on line …" so CSS/prose like "--color-warning: var(…)" or
+            // "Warning: very …" cannot match (non-greedy body would otherwise be "v").
+            'pattern' => '/(?:<br\s*\/?>\s*)?(?:<b>)?\b(Fatal error|Parse error)(?:<\/b>)?:\s*(.+?)\s+in\s+(?:<b>)?(.+?)(?:<\/b>)?\s+on\s+line\s+(?:<b>)?(\d+)(?:<\/b>)?(?:<br\s*\/?>)?/is',
             'severity' => 'error',
             'code' => 'php_fatal',
         ],
         [
-            'pattern' => '/Uncaught\s+([A-Za-z0-9_\\\\]+(?:Error|Exception))\s*:\s*(.+?)(?:\s+in\s+(\S+)\s+on\s+line\s+(\d+))?/i',
+            'pattern' => '/\bUncaught\s+([A-Za-z0-9_\\\\]+(?:Error|Exception))\s*:\s*(.+?)\s+in\s+(\S+)\s+on\s+line\s+(\d+)/i',
             'severity' => 'error',
             'code' => 'php_uncaught',
         ],
@@ -43,7 +45,7 @@ final class WidgetHtmlHealthInspector
             'code' => 'php_wls_runtime',
         ],
         [
-            'pattern' => '/(?:<br\s*\/?>\s*)?(?:<b>)?(Warning|Notice|Deprecated|Strict Standards)(?:<\/b>)?:\s*(.+?)(?:\s+in\s+(?:<b>)?(.+?)(?:<\/b>)?\s+on\s+line\s+(?:<b>)?(\d+)(?:<\/b>)?)?(?:<br\s*\/?>)?/is',
+            'pattern' => '/(?:<br\s*\/?>\s*)?(?:<b>)?\b(Warning|Notice|Deprecated|Strict Standards)(?:<\/b>)?:\s*(.+?)\s+in\s+(?:<b>)?(.+?)(?:<\/b>)?\s+on\s+line\s+(?:<b>)?(\d+)(?:<\/b>)?(?:<br\s*\/?>)?/is',
             'severity' => 'warning',
             'code' => 'php_warning',
         ],
@@ -67,6 +69,35 @@ final class WidgetHtmlHealthInspector
         'command' => true,
         'keygen' => true,
         'menuitem' => true,
+    ];
+
+    /**
+     * SVG empty elements. Always treated as void for balance checks so
+     * `<path d="…"/>` / bare `<path>` and libxml `</path>` closes stay stable.
+     *
+     * @var array<string, true>
+     */
+    private const SVG_VOID_TAGS = [
+        'path' => true,
+        'circle' => true,
+        'ellipse' => true,
+        'line' => true,
+        'polygon' => true,
+        'polyline' => true,
+        'rect' => true,
+        'stop' => true,
+        'use' => true,
+        'animate' => true,
+        'animatemotion' => true,
+        'animatetransform' => true,
+        'set' => true,
+        'mpath' => true,
+        'fepointlight' => true,
+        'fespotlight' => true,
+        'fedistantlight' => true,
+        'hatchpath' => true,
+        'view' => true,
+        'image' => true, // SVG <image>; HTML <img> is already in VOID_TAGS
     ];
 
     private const RAW_TEXT_TAGS = [
@@ -187,9 +218,9 @@ final class WidgetHtmlHealthInspector
                 }
                 $name = strtolower($m[1]);
                 $offset = $lt + strlen($m[0]);
-                // libxml/saveHTML may emit </source>/</img> for void elements; never
+                // libxml/saveHTML may emit </source>/</img>/</path> for void elements; never
                 // let those closes pop real containers (picture/section/div cascade).
-                if (isset(self::VOID_TAGS[$name])) {
+                if ($this->isVoidLikeTag($name)) {
                     continue;
                 }
                 if ($stack === []) {
@@ -226,9 +257,10 @@ final class WidgetHtmlHealthInspector
             }
 
             $name = strtolower($m[1]);
-            $selfClosing = str_ends_with(rtrim($openTag), '/>')
-                || preg_match('/\/\s*>$/', $openTag) === 1
-                || isset(self::VOID_TAGS[$name]);
+            // HTML5: trailing "/>" only self-closes void / SVG-void tags.
+            // Non-void HTML like <button /> is still open until </button> (slash ignored).
+            // Treating button/div as XML self-close desynced hero-slider arrow stacks.
+            $selfClosing = $this->isVoidLikeTag($name);
             $offset = $openTagEnd;
 
             if ($selfClosing) {
@@ -453,6 +485,11 @@ final class WidgetHtmlHealthInspector
         }
 
         return [];
+    }
+
+    private function isVoidLikeTag(string $name): bool
+    {
+        return isset(self::VOID_TAGS[$name]) || isset(self::SVG_VOID_TAGS[$name]);
     }
 
     private function truncateDetail(string $detail, int $max = 180): string

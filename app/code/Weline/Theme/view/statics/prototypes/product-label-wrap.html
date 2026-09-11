@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="utf-8">
+  <title>PROTOTYPE — product label wrap variants</title>
+  <style>
+    :root {
+      --weline-space-1: 0.25rem;
+      --weline-space-2: 0.5rem;
+      --weline-space-3: 0.75rem;
+      --weline-radius-round: 999px;
+      --weline-font-size-xs: 0.75rem;
+      --sale-bg: #fde8ec;
+      --sale-text: #9f1239;
+    }
+    body { font-family: system-ui, "PingFang SC", "Noto Sans SC", sans-serif; background: #f4f1ea; margin: 0; padding: 1.5rem; }
+    h1 { font-size: 1.1rem; }
+    .note { color: #565959; font-size: 0.875rem; margin-bottom: 1rem; max-width: 52rem; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
+    .card { background: #fff; border-radius: 1rem; overflow: hidden; border: 1px solid #e7e7e7; }
+    .media { position: relative; aspect-ratio: 1; background: linear-gradient(135deg, #dbe4ee, #c5d0db); }
+    .label {
+      background: var(--sale-bg); color: var(--sale-text);
+      border-radius: var(--weline-radius-round);
+      font-size: var(--weline-font-size-xs); font-weight: 600;
+      white-space: nowrap;
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sale-text) 12%, transparent);
+    }
+    /* A: padding-only tight (CJK) */
+    .v-a .label {
+      position: absolute; top: 0.65rem; left: 0.65rem;
+      display: inline-flex; align-items: center; justify-content: center;
+      padding: var(--weline-space-1) var(--weline-space-2); line-height: 1.2; letter-spacing: 0.02em;
+    }
+    /* B: roomy inline padding (落地推荐) */
+    .v-b .label {
+      position: absolute; top: 0.65rem; left: 0.65rem;
+      display: inline-flex; align-items: center; justify-content: center;
+      box-sizing: border-box; inline-size: fit-content;
+      padding-block: var(--weline-space-1); padding-inline: var(--weline-space-3);
+      line-height: 1.25; letter-spacing: 0;
+    }
+    /* C: em chip */
+    .v-c .label {
+      position: absolute; top: 0.65rem; left: 0.65rem;
+      display: inline-flex; align-items: center; justify-content: center;
+      box-sizing: border-box; inline-size: fit-content; min-inline-size: 3.25em;
+      padding-block: 0.3em; padding-inline: 0.7em;
+      line-height: 1.2; letter-spacing: 0; text-align: center;
+    }
+    /* D: 真实根因 — 容器 class 泄漏到标签，误吃 absolute+column */
+    .v-d .wpc-badges {
+      position: absolute; top: 0.65rem; left: 0.65rem;
+      display: flex; flex-direction: column; align-items: flex-start;
+      padding: var(--weline-space-1) var(--weline-space-2);
+      letter-spacing: 0.02em; line-height: 1.2;
+    }
+    .meta { padding: 0.75rem; font-size: 0.8rem; }
+    .bar {
+      position: fixed; left: 50%; bottom: 1rem; transform: translateX(-50%);
+      display: flex; gap: 0.5rem; padding: 0.5rem 0.75rem;
+      background: #111; border-radius: 999px; z-index: 9;
+    }
+    .bar a { color: #fff; text-decoration: none; font-size: 0.8rem; padding: 0.35rem 0.7rem; border-radius: 999px; }
+    .bar a[aria-current="true"] { background: #c45500; }
+    body[data-variant="a"] .only-a,
+    body[data-variant="b"] .only-b,
+    body[data-variant="c"] .only-c,
+    body[data-variant="d"] .only-d { outline: 2px solid #c45500; outline-offset: 2px; }
+  </style>
+</head>
+<body data-variant="b">
+  <h1>PROTOTYPE · 商品促销标签包裹</h1>
+  <p class="note">PROTOTYPE（可丢）。问题：中文「促销」溢出粉胶囊。A=偏紧 padding；B=space-3 落地；C=em；D=容器 class 泄漏到标签（线上真实根因：宽度塌到约 padding 之和）。</p>
+  <div class="grid">
+    <article class="card v-a only-a">
+      <div class="media"><span class="label">促销</span></div>
+      <div class="meta"><strong>A 偏紧</strong><br>padding space-1/2 + letter-spacing 0.02em</div>
+    </article>
+    <article class="card v-b only-b">
+      <div class="media"><span class="label">促销</span></div>
+      <div class="meta"><strong>B 推荐（已落地）</strong><br>padding-inline space-3 · letter-spacing 0 · fit-content</div>
+    </article>
+    <article class="card v-c only-c">
+      <div class="media"><span class="label">促销</span></div>
+      <div class="meta"><strong>C 备选</strong><br>em 内边距 + min-inline-size 3.25em</div>
+    </article>
+    <article class="card v-d only-d">
+      <div class="media"><span class="label wpc-badges">促销</span></div>
+      <div class="meta"><strong>D 泄漏复现</strong><br>标签带 wpc-badges → absolute+column → 宽塌缩</div>
+    </article>
+  </div>
+  <div class="bar" role="navigation" aria-label="variants">
+    <a href="?variant=a" data-v="a">A</a>
+    <a href="?variant=b" data-v="b">B</a>
+    <a href="?variant=c" data-v="c">C</a>
+    <a href="?variant=d" data-v="d">D 泄漏</a>
+  </div>
+  <script>
+    const v = new URLSearchParams(location.search).get('variant') || 'b';
+    document.body.dataset.variant = v;
+    document.querySelectorAll('.bar a').forEach(a => {
+      a.setAttribute('aria-current', a.dataset.v === v ? 'true' : 'false');
+    });
+  </script>
+</body>
+</html>

@@ -24,6 +24,7 @@ interface ThemeScopedWorkspaceInterface
         string $actorId,
         string $actorName = '',
         string $summary = '',
+        bool $skipContentValidation = false,
     ): array;
 
     /**

@@ -38,13 +38,13 @@ if (!in_array($type, $allowedTypes, true)) {
 $fieldId = 'field-' . preg_replace('/[^a-zA-Z0-9_-]+/', '-', $name);
 ?>
 
-<div class="<?= $esc($wc) ?> w-form-group w-builder-field w-builder-field-<?= $esc($type) ?>"
+<div class="<?= $esc($wc) ?> w-field w-builder-field w-builder-field-<?= $esc($type) ?>"
      weline-code="<?= $esc($scope->code) ?>"
      data-uid="<?= $esc($scope->uid) ?>"
      data-js-ns="<?= $esc($scope->jsNs) ?>"
      data-field-type="<?= $esc($type) ?>">
     <?php if ($type !== 'hidden' && $label !== ''): ?>
-        <label class="w-form-label w-field__label field-label" for="<?= $esc($fieldId) ?>">
+        <label class="w-field__label field-label" for="<?= $esc($fieldId) ?>">
             <?= $esc($label) ?><?= $required ? ' *' : '' ?>
         </label>
     <?php endif; ?>
@@ -88,36 +88,7 @@ $fieldId = 'field-' . preg_replace('/[^a-zA-Z0-9_-]+/', '-', $name);
 
 <style>
 .<?= $wc ?> {
-    display: grid;
-    gap: var(--weline-space-2);
     margin-bottom: var(--weline-space-4);
-}
-
-.<?= $wc ?> .field-label {
-    color: var(--weline-theme-text);
-    font-size: var(--weline-font-size-sm);
-    font-weight: var(--weline-font-weight-medium);
-}
-
-.<?= $wc ?> .field-control,
-.<?= $wc ?> .w-form-control,
-.<?= $wc ?> .w-textarea,
-.<?= $wc ?> .w-select {
-    width: 100%;
-    padding: var(--weline-space-2) var(--weline-space-3);
-    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
-    border-radius: var(--weline-radius-md);
-    background: var(--weline-theme-surface);
-    color: var(--weline-theme-text);
-    font-size: var(--weline-font-size-base);
-}
-
-.<?= $wc ?> .field-control:focus,
-.<?= $wc ?> .w-form-control:focus,
-.<?= $wc ?> .w-textarea:focus,
-.<?= $wc ?> .w-select:focus {
-    outline: var(--spacing-0_5) solid color-mix(in srgb, var(--weline-theme-primary) 35%, transparent);
-    outline-offset: var(--spacing-px);
 }
 
 .<?= $wc ?> .field-options {

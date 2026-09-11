@@ -133,8 +133,7 @@ final class ThemeScopedWorkspaceRequestService
         $result['static_version'] = $this->layoutVersions->bumpStaticVersion(
             $publishedThemeId > 0 ? $publishedThemeId : 0,
         );
-        $result['cache_invalidation'] = $this->cacheCleaner->clearScopedCaches(
-            $context->scope,
+        $result['cache_invalidation'] = $this->cacheCleaner->clearAllThemeRelatedCaches(
             $publishedThemeId > 0 ? $publishedThemeId : null,
             'theme_scoped_publish',
         );
@@ -294,8 +293,7 @@ final class ThemeScopedWorkspaceRequestService
             $result['static_version'] = $this->layoutVersions->bumpStaticVersion(
                 $context->themeId > 0 ? $context->themeId : 0,
             );
-            $cacheInvalidation = $this->cacheCleaner->clearScopedCaches(
-                $context->scope,
+            $cacheInvalidation = $this->cacheCleaner->clearAllThemeRelatedCaches(
                 $context->themeId > 0 ? $context->themeId : null,
                 $reason,
             );

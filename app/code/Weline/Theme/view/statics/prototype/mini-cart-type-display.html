@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!--
+    PROTOTYPE (throwaway): mini-cart ToC/ToB type chrome.
+    Question: How should 零售/批发 appear on the header cart without hijacking the Amazon cart glyph?
+    Switch via ?variant=A|B|C|D or the floating bar. Do NOT ship this into production Theme as-is.
+  -->
+  <title>原型 · 迷你车类型展示</title>
+  <style>
+    :root {
+      --bg: #1a1a1a;
+      --ink: #fff;
+      --muted: #ccc;
+      --accent: #b84a3c;
+      --pill: #f5f5f5;
+      --teal: #007185;
+      --bar: #111;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Amazon Ember", "Helvetica Neue", Arial, sans-serif;
+      background: #eaeDED;
+      color: #0f1111;
+      min-height: 100vh;
+      padding-bottom: 96px;
+    }
+    .note {
+      max-width: 920px;
+      margin: 24px auto 12px;
+      padding: 0 16px;
+      font-size: 14px;
+      line-height: 1.5;
+      color: #565959;
+    }
+    .note strong { color: #0f1111; }
+    .stage {
+      max-width: 920px;
+      margin: 0 auto 24px;
+      padding: 0 16px;
+    }
+    .header-mock {
+      background: var(--bg);
+      color: var(--ink);
+      border-radius: 8px;
+      padding: 14px 18px;
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 20px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.18);
+    }
+    .header-mock__spacer { flex: 1; opacity: .35; font-size: 12px; }
+    .cart {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      color: inherit;
+      cursor: default;
+      user-select: none;
+    }
+    .cart__icon-wrap {
+      position: relative;
+      width: 40px;
+      height: 36px;
+      flex: 0 0 auto;
+    }
+    .cart__icon {
+      display: block;
+      width: 36px;
+      height: 36px;
+      color: #fff;
+    }
+    .cart__count {
+      position: absolute;
+      top: -4px;
+      right: -6px;
+      min-width: 18px;
+      height: 18px;
+      padding: 0 4px;
+      border-radius: 999px;
+      background: var(--accent);
+      color: #111;
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 18px;
+      text-align: center;
+    }
+    .cart__info { display: grid; line-height: 1.15; }
+    .cart__label { font-size: 12px; color: #ddd; }
+    .cart__price { font-size: 14px; font-weight: 700; }
+    .drawer-mock {
+      margin-top: 12px;
+      background: #fff;
+      border: 1px solid #d5d9d9;
+      border-radius: 8px;
+      padding: 14px 16px;
+      max-width: 360px;
+      margin-left: auto;
+    }
+    .drawer-mock h3 {
+      margin: 0 0 8px;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .drawer-mock p { margin: 0; font-size: 13px; color: #565959; }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      min-height: 22px;
+      padding: 0 8px;
+      border-radius: 999px;
+      border: 1px solid #d5d9d9;
+      background: #f7fafa;
+      font-size: 12px;
+      color: #0f1111;
+    }
+    .chip--strong {
+      border-color: var(--teal);
+      box-shadow: inset 0 0 0 1px var(--teal);
+    }
+    .seg {
+      display: flex;
+      gap: 0;
+      border: 1px solid #888c8c;
+      border-radius: 8px;
+      overflow: hidden;
+      margin-bottom: 10px;
+    }
+    .seg button {
+      flex: 1;
+      border: 0;
+      background: #fff;
+      padding: 8px 10px;
+      font: inherit;
+      font-size: 13px;
+      cursor: default;
+    }
+    .seg button.is-on {
+      background: #f0f2f2;
+      font-weight: 700;
+    }
+    .seg button + button { border-inline-start: 1px solid #d5d9d9; }
+
+    /* A: current — large pill between icon and text; count on pill */
+    .vA .cart__icon-wrap { width: auto; display: inline-flex; align-items: center; gap: 6px; }
+    .vA .cart__type-pill {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      padding: 0 12px;
+      border-radius: 999px;
+      background: var(--pill);
+      color: #333;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .vA .cart__count { top: -6px; right: -8px; }
+
+    /* B: caption under label — count back on icon */
+    .vB .cart__meta {
+      font-size: 11px;
+      color: #bbb;
+      letter-spacing: .02em;
+    }
+    .vB .cart__meta em {
+      font-style: normal;
+      color: #9ad0d8;
+    }
+
+    /* C: header clean; type only in drawer */
+    .vC .drawer-mock h3 .chip { margin-inline-start: 4px; }
+
+    /* D: dual-cart segment in drawer is the type surface */
+    .vD .mode-hint {
+      font-size: 11px;
+      color: #888c8c;
+      margin-top: 6px;
+    }
+
+    .verdict {
+      max-width: 920px;
+      margin: 0 auto 40px;
+      padding: 0 16px;
+      font-size: 13px;
+      color: #565959;
+    }
+    .verdict code { font-size: 12px; background: #f0f2f2; padding: 1px 6px; border-radius: 4px; }
+
+    .proto-bar {
+      position: fixed;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: #0f1111;
+      color: #fff;
+      box-shadow: 0 10px 30px rgba(0,0,0,.35);
+      font-size: 13px;
+    }
+    .proto-bar button {
+      appearance: none;
+      border: 0;
+      background: #333;
+      color: #fff;
+      width: 32px;
+      height: 32px;
+      border-radius: 999px;
+      cursor: pointer;
+      font-size: 16px;
+      line-height: 1;
+    }
+    .proto-bar button:hover { background: #444; }
+    .proto-bar__label { min-width: 210px; text-align: center; font-weight: 600; }
+    .proto-bar__hint { opacity: .65; font-weight: 400; font-size: 11px; display: block; }
+    [data-variant-panel][hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <p class="note">
+    <strong>原型问题：</strong>顶栏迷你车里「零售 / 批发」怎么露，才不抢购物车主信号？
+    现状把大胶囊塞进图标与「购物车」之间，数量角标还挂在胶囊上——层级反了。
+    下面四个方案<strong>结构不同</strong>（不是换色）。底部条切换；键盘 ← →。
+  </p>
+
+  <div class="stage">
+    <!-- A -->
+    <section data-variant-panel="A" class="vA" hidden>
+      <div class="header-mock">
+        <span class="header-mock__spacer">A · 现状（对照组）</span>
+        <div class="cart" aria-label="购物车 零售">
+          <span class="cart__icon-wrap">
+            <svg class="cart__icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M3 4h1.5l1.2 6.2a2 2 0 0 0 2 1.8h9.1a2 2 0 0 0 1.95-1.55L20 7H6.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+              <circle cx="9" cy="19" r="1.4" fill="currentColor"/>
+              <circle cx="17" cy="19" r="1.4" fill="currentColor"/>
+            </svg>
+            <span class="cart__type-pill">零售<span class="cart__count">1</span></span>
+          </span>
+          <span class="cart__info">
+            <span class="cart__label">购物车</span>
+            <span class="cart__price">¥59.40</span>
+          </span>
+        </div>
+      </div>
+      <div class="drawer-mock">
+        <h3>购物车 (1) <span class="chip">零售</span></h3>
+        <p>问题：类型胶囊变成主视觉；数量离开购物车图标，扫视路径断裂。</p>
+      </div>
+    </section>
+
+    <!-- B -->
+    <section data-variant-panel="B" class="vB" hidden>
+      <div class="header-mock">
+        <span class="header-mock__spacer">B · 文案副标</span>
+        <div class="cart" aria-label="零售购物车，1 件">
+          <span class="cart__icon-wrap">
+            <svg class="cart__icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M3 4h1.5l1.2 6.2a2 2 0 0 0 2 1.8h9.1a2 2 0 0 0 1.95-1.55L20 7H6.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+              <circle cx="9" cy="19" r="1.4" fill="currentColor"/>
+              <circle cx="17" cy="19" r="1.4" fill="currentColor"/>
+            </svg>
+            <span class="cart__count">1</span>
+          </span>
+          <span class="cart__info">
+            <span class="cart__label">购物车</span>
+            <span class="cart__meta"><em>零售</em> · ¥59.40</span>
+          </span>
+        </div>
+      </div>
+      <div class="drawer-mock">
+        <h3>购物车 (1) <span class="chip chip--strong">零售车</span></h3>
+        <p>顶栏：数量回到图标；类型降为「购物车」下一行的次要元信息。抽屉可再确认。</p>
+      </div>
+    </section>
+
+    <!-- C -->
+    <section data-variant-panel="C" class="vC" hidden>
+      <div class="header-mock">
+        <span class="header-mock__spacer">C · 顶栏干净 / 抽屉露类型</span>
+        <div class="cart" aria-label="购物车，1 件">
+          <span class="cart__icon-wrap">
+            <svg class="cart__icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M3 4h1.5l1.2 6.2a2 2 0 0 0 2 1.8h9.1a2 2 0 0 0 1.95-1.55L20 7H6.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+              <circle cx="9" cy="19" r="1.4" fill="currentColor"/>
+              <circle cx="17" cy="19" r="1.4" fill="currentColor"/>
+            </svg>
+            <span class="cart__count">1</span>
+          </span>
+          <span class="cart__info">
+            <span class="cart__label">购物车</span>
+            <span class="cart__price">¥59.40</span>
+          </span>
+        </div>
+      </div>
+      <div class="drawer-mock">
+        <h3>购物车 (1) <span class="chip chip--strong">零售</span></h3>
+        <p>顶栏完全恢复 Amazon 形制。类型只在打开抽屉后出现——适合「多数用户只开一车、很少切换」。</p>
+      </div>
+    </section>
+
+    <!-- D -->
+    <section data-variant-panel="D" class="vD" hidden>
+      <div class="header-mock">
+        <span class="header-mock__spacer">D · 抽屉内双车切换（对齐分车）</span>
+        <div class="cart" aria-label="当前零售车，1 件">
+          <span class="cart__icon-wrap">
+            <svg class="cart__icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M3 4h1.5l1.2 6.2a2 2 0 0 0 2 1.8h9.1a2 2 0 0 0 1.95-1.55L20 7H6.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+              <circle cx="9" cy="19" r="1.4" fill="currentColor"/>
+              <circle cx="17" cy="19" r="1.4" fill="currentColor"/>
+            </svg>
+            <span class="cart__count">1</span>
+          </span>
+          <span class="cart__info">
+            <span class="cart__label">购物车</span>
+            <span class="cart__price">¥59.40</span>
+          </span>
+        </div>
+      </div>
+      <div class="drawer-mock">
+        <div class="seg" role="group" aria-label="购物车类型">
+          <button type="button" class="is-on">零售车</button>
+          <button type="button">批发车</button>
+        </div>
+        <h3>零售车 (1)</h3>
+        <p>顶栏不写类型；打开后用分段在「零售车 / 批发车」间切——与后端分车键一致，类型是<strong>切换</strong>不是装饰徽章。</p>
+        <p class="mode-hint">切换批发车若为空/需登录，在此给空态与申请入口。</p>
+      </div>
+    </section>
+  </div>
+
+  <p class="verdict">
+    建议先盯 <code>B</code> 与 <code>D</code>：B 最小改动恢复扫视；D 更贴「两辆车」产品语义。
+    <code>C</code> 最克制但切换发现性弱。<code>A</code> 仅作反例。选好后我再折进 Theme 迷你车（原型本身不进生产样式）。
+  </p>
+
+  <div class="proto-bar" role="toolbar" aria-label="原型方案切换">
+    <button type="button" data-proto-prev aria-label="上一个方案">←</button>
+    <div class="proto-bar__label">
+      <span data-proto-label>A</span>
+      <span class="proto-bar__hint">← → 或点两侧</span>
+    </div>
+    <button type="button" data-proto-next aria-label="下一个方案">→</button>
+  </div>
+
+  <script>
+    (function () {
+      var KEYS = ['A', 'B', 'C', 'D'];
+      var NAMES = {
+        A: 'A（现状对照组）',
+        B: 'B（文案副标）',
+        C: 'C（仅抽屉露类型）',
+        D: 'D（抽屉双车切换）'
+      };
+
+      function current() {
+        var v = new URLSearchParams(location.search).get('variant') || 'B';
+        return KEYS.indexOf(v) >= 0 ? v : 'B';
+      }
+
+      function show(v) {
+        document.querySelectorAll('[data-variant-panel]').forEach(function (el) {
+          el.hidden = el.getAttribute('data-variant-panel') !== v;
+        });
+        var label = document.querySelector('[data-proto-label]');
+        if (label) label.textContent = NAMES[v] || v;
+        var url = new URL(location.href);
+        url.searchParams.set('variant', v);
+        history.replaceState(null, '', url);
+      }
+
+      function step(delta) {
+        var i = KEYS.indexOf(current());
+        show(KEYS[(i + delta + KEYS.length) % KEYS.length]);
+      }
+
+      document.querySelector('[data-proto-prev]').addEventListener('click', function () { step(-1); });
+      document.querySelector('[data-proto-next]').addEventListener('click', function () { step(1); });
+      document.addEventListener('keydown', function (e) {
+        var t = e.target;
+        if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+        if (e.key === 'ArrowLeft') step(-1);
+        if (e.key === 'ArrowRight') step(1);
+      });
+      show(current());
+    })();
+  </script>
+</body>
+</html>

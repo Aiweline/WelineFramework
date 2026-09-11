@@ -1838,7 +1838,187 @@
     /**
      * 读取服务端挂在 widget-wrapper 上的 HTML 健康检测结果，用 Toast 提示（禁止 alert）。
      * DEV / 预览态由 SlotRendererService 写入 data-w-widget-health*。
+     * 明细 toast 带「定位」：用 CSS 强制把异常 .widget-wrapper 弹窗暴露。
      */
+    function ensureWidgetHealthLocateStyles() {
+        if (document.getElementById('w-widget-health-locate-style')) return;
+        var style = document.createElement('style');
+        style.id = 'w-widget-health-locate-style';
+        style.textContent = [
+            'html.w-widget-health-locate-open{overflow:hidden!important;}',
+            '.w-widget-health-locate-backdrop{position:fixed;inset:0;z-index:calc(var(--weline-z-toast,1100) + 20);border:0;padding:0;margin:0;cursor:pointer;background:color-mix(in srgb,var(--weline-theme-text,#111) 42%,transparent);}',
+            '.w-widget-health-locate-host{outline:3px solid var(--weline-theme-warning,#c9a227)!important;outline-offset:4px!important;position:relative!important;z-index:calc(var(--weline-z-toast,1100) + 19)!important;min-block-size:3rem!important;background:color-mix(in srgb,var(--weline-theme-warning,#c9a227) 8%,var(--weline-theme-surface,#fff))!important;}',
+            '.w-widget-health-locate-pop,.w-widget-health-locate-panel{position:fixed!important;inset-block-start:50%!important;inset-inline-start:50%!important;transform:translate(-50%,-50%)!important;z-index:calc(var(--weline-z-toast,1100) + 21)!important;width:min(40rem,calc(100dvw - 2rem))!important;max-block-size:min(80dvh,calc(100dvh - 2rem))!important;overflow:auto!important;margin:0!important;padding:var(--weline-space-4,1rem)!important;display:grid!important;gap:var(--weline-space-3,.75rem)!important;background:var(--weline-theme-surface-raised,#fff)!important;color:var(--weline-theme-text,#111)!important;border:2px solid var(--weline-theme-danger,#b42318)!important;border-radius:var(--weline-radius-md,8px)!important;box-shadow:var(--weline-theme-shadow-md,0 12px 32px rgba(0,0,0,.28))!important;}',
+            '.w-widget-health-locate-chrome{display:flex;justify-content:space-between;align-items:center;gap:var(--weline-space-2,.5rem);}',
+            '.w-widget-health-locate-title{font-weight:600;margin:0;}',
+            '.w-widget-health-locate-meta{font-size:var(--weline-font-size-sm,.875rem);color:var(--weline-theme-text-muted,#666);}',
+            '.w-widget-health-locate-issue{display:grid;gap:var(--weline-space-1,.25rem);padding:var(--weline-space-3,.75rem);border:1px solid var(--weline-theme-border,#ddd);border-radius:var(--weline-radius-sm,6px);background:var(--weline-theme-surface,#fff);}',
+            '.w-widget-health-locate-detail{margin:0;padding:var(--weline-space-2,.5rem);overflow:auto;white-space:pre-wrap;word-break:break-word;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--weline-font-size-sm,.875rem);background:color-mix(in srgb,var(--weline-theme-danger,#b42318) 8%,var(--weline-theme-surface,#fff));border-radius:var(--weline-radius-sm,6px);}'
+        ].join('');
+        (document.head || document.documentElement).appendChild(style);
+    }
+    function dismissWidgetHealthLocate() {
+        document.querySelectorAll('[data-w-widget-health-locate-active="1"]').forEach(function (node) {
+            node.classList.remove('w-widget-health-locate-pop');
+            node.classList.remove('w-widget-health-locate-host');
+            node.removeAttribute('data-w-widget-health-locate-active');
+        });
+        document.querySelectorAll('[data-w-widget-health-locate-panel],[data-w-widget-health-locate-chrome],.w-widget-health-locate-backdrop').forEach(function (node) {
+            node.remove();
+        });
+        document.documentElement.classList.remove('w-widget-health-locate-open');
+        try { document.removeEventListener('keydown', onWidgetHealthLocateKeydown, true); } catch (e) {}
+    }
+    function onWidgetHealthLocateKeydown(event) {
+        if (event && event.key === 'Escape') dismissWidgetHealthLocate();
+    }
+    function findWidgetHealthNode(item) {
+        var nodes = document.querySelectorAll('.widget-wrapper[data-w-widget-health]');
+        var slot = String((item && item.slot) || '');
+        var code = String((item && item.code) || '');
+        var matched = null;
+        nodes.forEach(function (node) {
+            if (!(node instanceof HTMLElement) || matched) return;
+            var nodeSlot = String(node.dataset.slotId || '');
+            var nodeCode = String(node.dataset.widgetCode || '');
+            if (slot && code && nodeSlot === slot && nodeCode === code) matched = node;
+            else if (!matched && slot && nodeSlot === slot) matched = node;
+            else if (!matched && code && nodeCode === code) matched = node;
+        });
+        if (!matched && item && item.el instanceof HTMLElement) matched = item.el;
+        return matched;
+    }
+    function resolveLocateHost(node, item) {
+        if (!(node instanceof HTMLElement)) return null;
+        var slot = String((item && item.slot) || node.dataset.slotId || '').trim();
+        if (slot) {
+            try {
+                var byAttr = document.querySelector('[data-wslot="' + slot.replace(/"/g, '') + '"]');
+                if (byAttr instanceof HTMLElement) return byAttr;
+            } catch (e) {}
+        }
+        var closest = node.closest('[data-wslot]');
+        if (closest instanceof HTMLElement) return closest;
+        if (node.parentElement instanceof HTMLElement) return node.parentElement;
+        return node;
+    }
+    function collectHealthIssues(item, node) {
+        var issues = [];
+        if (item && Array.isArray(item.issues)) issues = item.issues.slice();
+        if (!issues.length && node) {
+            try {
+                var parsed = JSON.parse(node.getAttribute('data-w-widget-health-issues') || '[]');
+                if (Array.isArray(parsed)) issues = parsed;
+            } catch (e) {}
+        }
+        return issues;
+    }
+    function forceExposeHealthPanel(item, node, host) {
+        var issues = collectHealthIssues(item, node);
+        var panel = document.createElement('section');
+        panel.className = 'w-widget-health-locate-pop w-widget-health-locate-panel';
+        panel.setAttribute('data-w-widget-health-locate-panel', '1');
+        panel.setAttribute('role', 'dialog');
+        panel.setAttribute('aria-modal', 'true');
+        var titleText = String((item && (item.name || item.code)) || (node && (node.getAttribute('data-widget-name') || node.dataset.widgetCode)) || 'widget');
+        var slotText = String((item && item.slot) || (node && node.dataset.slotId) || (host && host.getAttribute('data-wslot')) || '');
+        if (slotText) titleText += ' @' + slotText;
+        var chrome = document.createElement('div');
+        chrome.className = 'w-widget-health-locate-chrome';
+        chrome.setAttribute('data-w-widget-health-locate-chrome', '1');
+        var title = document.createElement('h2');
+        title.className = 'w-widget-health-locate-title';
+        title.textContent = '部件异常：' + titleText;
+        var closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.className = 'w-button';
+        closeBtn.dataset.size = 'sm';
+        closeBtn.dataset.tone = 'neutral';
+        closeBtn.textContent = '关闭定位';
+        closeBtn.addEventListener('click', function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+            dismissWidgetHealthLocate();
+        });
+        chrome.appendChild(title);
+        chrome.appendChild(closeBtn);
+        panel.appendChild(chrome);
+        var meta = document.createElement('p');
+        meta.className = 'w-widget-health-locate-meta';
+        meta.textContent = '上层容器：' + (host && host.getAttribute('data-wslot')
+            ? ('[data-wslot="' + host.getAttribute('data-wslot') + '"]')
+            : (host && host.className ? ('.' + String(host.className).split(/\\s+/).filter(Boolean).join('.')) : 'parent'));
+        panel.appendChild(meta);
+        if (!issues.length) {
+            var empty = document.createElement('p');
+            empty.textContent = '未解析到错误明细，已高亮上层容器。';
+            panel.appendChild(empty);
+        } else {
+            issues.forEach(function (issue) {
+                var block = document.createElement('div');
+                block.className = 'w-widget-health-locate-issue';
+                var msg = document.createElement('strong');
+                msg.textContent = String((issue && (issue.message || issue.code)) || 'HTML 异常');
+                block.appendChild(msg);
+                var detail = String((issue && issue.detail) || '').trim();
+                if (detail) {
+                    var pre = document.createElement('pre');
+                    pre.className = 'w-widget-health-locate-detail';
+                    pre.textContent = detail;
+                    block.appendChild(pre);
+                }
+                panel.appendChild(block);
+            });
+        }
+        document.body.appendChild(panel);
+        return panel;
+    }
+    function locateHealthWidget(item) {
+        ensureWidgetHealthLocateStyles();
+        dismissWidgetHealthLocate();
+        var node = findWidgetHealthNode(item);
+        if (!node) {
+            showWidgetHealthToast('无法定位异常部件' + ((item && item.slot) ? (' @' + item.slot) : ''), 'warning');
+            return;
+        }
+        var host = resolveLocateHost(node, item) || node;
+        var backdrop = document.createElement('button');
+        backdrop.type = 'button';
+        backdrop.className = 'w-widget-health-locate-backdrop';
+        backdrop.setAttribute('aria-label', '关闭部件定位');
+        backdrop.addEventListener('click', dismissWidgetHealthLocate);
+        document.body.appendChild(backdrop);
+        host.classList.add('w-widget-health-locate-host');
+        host.setAttribute('data-w-widget-health-locate-active', '1');
+        forceExposeHealthPanel(item, node, host);
+        document.documentElement.classList.add('w-widget-health-locate-open');
+        document.addEventListener('keydown', onWidgetHealthLocateKeydown, true);
+        try { host.scrollIntoView({ block: 'center', inline: 'nearest' }); } catch (e) {}
+    }
+    function buildHealthToastMessage(text, item) {
+        const wrap = document.createElement('div');
+        wrap.style.display = 'grid';
+        wrap.style.gap = '0.5rem';
+        const copy = document.createElement('span');
+        copy.textContent = text;
+        wrap.appendChild(copy);
+        if (item) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'w-button';
+            btn.dataset.size = 'sm';
+            btn.dataset.tone = 'primary';
+            btn.textContent = '定位';
+            btn.addEventListener('click', function(event) {
+                event.preventDefault();
+                event.stopPropagation();
+                locateHealthWidget(item);
+            });
+            wrap.appendChild(btn);
+        }
+        return wrap;
+    }
+
     function reportWidgetHtmlHealth() {
         if (document.documentElement.dataset.wWidgetHealthReported === '1') {
             return;
@@ -1875,6 +2055,7 @@
                 slot: String(node.dataset.slotId || ''),
                 name: String(node.dataset.widgetName || node.getAttribute('data-widget-name') || node.dataset.widgetCode || 'widget'),
                 issues: issues,
+                el: node,
             });
         });
 
@@ -1889,7 +2070,7 @@
             + (errorCount ? '（错误 ' + errorCount + '）' : '')
             + (warningCount ? '（警告 ' + warningCount + '）' : '');
 
-        showWidgetHealthToast(summary, summaryTone);
+        showWidgetHealthToast(summary, summaryTone, findings.length === 1 ? findings[0] : null);
 
         findings.slice(0, 8).forEach(function(item) {
             const first = item.issues[0] || {};
@@ -1898,7 +2079,7 @@
                 + '：'
                 + String(first.message || first.code || 'HTML 异常');
             const tone = item.severity === 'error' ? 'error' : (item.severity === 'warning' ? 'warning' : 'info');
-            showWidgetHealthToast(detail, tone);
+            showWidgetHealthToast(detail, tone, item);
         });
 
         try {
@@ -1908,7 +2089,16 @@
                     type: 'widget-health',
                     summary: summary,
                     severity: summaryTone,
-                    findings: findings,
+                    findings: findings.map(function(item) {
+                        return {
+                            severity: item.severity,
+                            code: item.code,
+                            module: item.module,
+                            slot: item.slot,
+                            name: item.name,
+                            issues: item.issues,
+                        };
+                    }),
                 }, EDITOR_ORIGIN);
             }
         } catch (err) {
@@ -1916,22 +2106,24 @@
         }
     }
 
-    function showWidgetHealthToast(message, type) {
+    function showWidgetHealthToast(message, type, item) {
         const text = String(message || '').trim();
         if (!text) {
             return;
         }
         const tone = type === 'error' ? 'danger' : (['success', 'warning', 'info', 'danger'].includes(type) ? type : 'info');
+        const payload = item ? buildHealthToastMessage(text, item) : text;
+        const duration = item ? 0 : (type === 'error' ? 8000 : 5000);
         try {
             const UI = resolveEditorUi();
             if (UI && UI.toast && typeof UI.toast.show === 'function') {
-                UI.toast.show(text, { tone: tone, duration: type === 'error' ? 8000 : 5000 });
+                UI.toast.show(payload, { tone: tone, duration: duration });
                 return;
             }
         } catch (err) {}
         try {
             if (window.Weline && window.Weline.UI && window.Weline.UI.toast && typeof window.Weline.UI.toast.show === 'function') {
-                window.Weline.UI.toast.show(text, { tone: tone, duration: type === 'error' ? 8000 : 5000 });
+                window.Weline.UI.toast.show(payload, { tone: tone, duration: duration });
                 return;
             }
         } catch (err) {}

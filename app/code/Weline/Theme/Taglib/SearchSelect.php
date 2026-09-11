@@ -202,6 +202,7 @@ class SearchSelect implements TaglibInterface
             . ' style="' . $escape($style) . '"'
             . ' data-component="search-select"'
             . ' data-w-search-select="1"'
+            . ' data-w-placement="bottom-start"'
             . ' data-multiple="' . ($multiple ? '1' : '0') . '"'
             . ($disabled ? ' data-disabled="true"' : '')
             . '>';
@@ -225,7 +226,7 @@ class SearchSelect implements TaglibInterface
         }
         $html[] = '    <span class="w-search-select-arrow">&#9662;</span>';
         $html[] = '  </div>';
-        $html[] = '  <div class="w-search-select-dropdown" id="' . $escape($id) . '_dropdown" hidden>';
+        $html[] = '  <div class="w-search-select-dropdown" id="' . $escape($id) . '_dropdown" data-w-float-surface hidden>';
         $html[] = '    <div class="w-search-select-loading" id="' . $escape($id) . '_loading" hidden>' . $escape($tLoading) . '</div>';
         $html[] = '    <div class="w-search-select-list" id="' . $escape($id) . '_list"></div>';
         $html[] = '  </div>';
@@ -272,12 +273,15 @@ class SearchSelect implements TaglibInterface
 .w-search-select.has-value:not(.is-multiple) .w-search-select-display{display:block}
 .w-search-select.has-value:not(.is-multiple) .w-search-select-input::placeholder{color:transparent}
 .w-search-select.is-filtering .w-search-select-display{display:none!important}
-.w-search-select-arrow{position:absolute;right:10px;color:var(--weline-theme-text-muted,#6c757d);font-size:10px;transition:transform .2s}
-.w-search-select.open .w-search-select-arrow{transform:rotate(180deg)}
-.w-search-select-clear{position:absolute;right:25px;color:var(--weline-theme-text-muted,#6c757d);cursor:pointer;display:none;font-size:16px;line-height:1}
+.w-search-select-arrow{position:absolute;top:50%;right:10px;transform:translateY(-50%);color:var(--weline-theme-text-muted,#6c757d);font-size:10px;line-height:1;transition:transform .2s}
+.w-search-select.open .w-search-select-arrow{transform:translateY(-50%) rotate(180deg)}
+.w-search-select-clear{position:absolute;top:50%;right:25px;transform:translateY(-50%);color:var(--weline-theme-text-muted,#6c757d);cursor:pointer;display:none;font-size:16px;line-height:1}
 .w-search-select-clear:hover{color:var(--weline-theme-danger,#dc3545)}
-.w-search-select.has-value .w-search-select-clear{display:block}
-.w-search-select-dropdown{position:absolute;left:0;right:0;top:100%;margin-top:2px;background:var(--weline-theme-surface-raised,#fff);border:1px solid var(--weline-theme-border-color,#ced4da);border-radius:var(--weline-theme-radius-md,8px);box-shadow:var(--weline-theme-shadow-md,0 2px 8px rgba(0,0,0,.15));z-index:var(--weline-z-menu,1050);max-height:300px;overflow-y:auto}
+.w-search-select.has-value .w-search-select-clear{display:inline-flex;align-items:center;justify-content:center}
+.w-search-select.open{z-index:calc(var(--weline-z-menu,1050) + 3)}
+.w-table td:has(.w-search-select.open),.w-table th:has(.w-search-select.open){z-index:calc(var(--weline-z-menu,1050) + 3)}
+.w-search-select-dropdown{position:absolute;left:0;right:0;top:100%;margin-top:2px;background:var(--weline-theme-surface-raised,#fff);border:1px solid var(--weline-theme-border-color,#ced4da);border-radius:var(--weline-theme-radius-md,8px);box-shadow:var(--weline-theme-shadow-md,0 2px 8px rgba(0,0,0,.15));z-index:calc(var(--weline-z-menu,1050) + 3);max-height:300px;overflow-y:auto}
+.w-search-select-dropdown[data-w-floating-positioned],.w-search-select-dropdown[data-w-floating-portal]{position:fixed;inset:auto;top:max(var(--w-floating-top,0px),var(--w-floating-viewport-top,.5rem));left:max(var(--w-floating-left,0px),var(--w-floating-viewport-left,.5rem));right:auto;bottom:auto;margin:0;inline-size:var(--w-floating-inline-size,auto);min-inline-size:var(--w-floating-inline-size,auto);max-inline-size:min(var(--w-floating-max-inline-size,calc(100dvw - 1rem)),calc(var(--w-floating-viewport-right,calc(100dvw - .5rem)) - max(var(--w-floating-left,0px),var(--w-floating-viewport-left,.5rem))));max-block-size:min(300px,var(--w-floating-max-block-size,70vh),calc(var(--w-floating-viewport-bottom,calc(100dvh - .5rem)) - max(var(--w-floating-top,0px),var(--w-floating-viewport-top,.5rem))));transform-origin:var(--w-floating-transform-origin,top)}
 .w-search-select-dropdown[hidden]{display:none!important}
 .w-search-select-loading{padding:10px;text-align:center;color:var(--weline-theme-text-muted,#6c757d)}
 .w-search-select-loading[hidden]{display:none!important}
@@ -435,6 +439,7 @@ CSS;
     function renderOptions(items) {
       if (!items || !items.length) {
         list.innerHTML = '<div class="w-search-select-empty">' + escapeHtml(I18N.no_results) + '</div>';
+        if (isOpen) { placeFloat(); }
         return;
       }
       var current = selectedValues();
@@ -453,6 +458,7 @@ CSS;
         });
       });
       activeIndex = -1;
+      if (isOpen) { placeFloat(); }
     }
     function selectItem(value, label) {
       if (isDisabled()) { return; }
@@ -508,17 +514,52 @@ CSS;
       }
     }
     var debouncedSearch = debounce(doSearch, debounceTime);
+    var floatApi = null;
+    function uiFloating() {
+      return (global.Weline && global.Weline.UI && global.Weline.UI.floating)
+        ? global.Weline.UI.floating
+        : null;
+    }
+    function syncDropdownWidth() {
+      var trigger = container.querySelector('.w-search-select-trigger');
+      if (!trigger || !dropdown) { return; }
+      var width = Math.round(trigger.getBoundingClientRect().width);
+      if (width > 0) {
+        dropdown.style.setProperty('--w-floating-inline-size', width + 'px');
+        dropdown.style.minWidth = width + 'px';
+      }
+    }
+    function ensureFloat() {
+      if (floatApi) { return floatApi; }
+      var floating = uiFloating();
+      if (!floating || typeof floating.attach !== 'function') { return null; }
+      dropdown.setAttribute('data-w-float-surface', '');
+      container.setAttribute('data-w-placement', 'bottom-start');
+      floatApi = floating.attach(container, { placement: 'bottom-start' });
+      return floatApi;
+    }
+    function placeFloat() {
+      syncDropdownWidth();
+      var api = ensureFloat();
+      if (!api) { return; }
+      if (typeof api.show === 'function') { api.show(); }
+      else if (typeof api.sync === 'function') { api.sync(); }
+      else if (typeof api.place === 'function') { api.place(); }
+    }
     function openDropdown() {
       if (isDisabled()) { return; }
       dropdown.hidden = false;
       container.classList.add('open');
       isOpen = true;
+      placeFloat();
       if (!cache) {
         if (staticOptions.length) { cache = staticOptions; renderOptions(staticOptions); }
         else if (apiUrl) { doSearch(''); }
       } else { renderOptions(cache); }
+      placeFloat();
     }
     function closeDropdown() {
+      if (floatApi && typeof floatApi.hide === 'function') { floatApi.hide(); }
       dropdown.hidden = true;
       container.classList.remove('open');
       isOpen = false;
@@ -566,7 +607,7 @@ CSS;
       });
     }
     document.addEventListener('click', function (e) {
-      if (!container.contains(e.target)) { closeDropdown(); }
+      if (!container.contains(e.target) && !dropdown.contains(e.target)) { closeDropdown(); }
     });
     syncDisplay();
     return hidden;
@@ -591,6 +632,7 @@ CSS;
     root.id = id + '_container';
     root.setAttribute('data-component', 'search-select');
     root.setAttribute('data-w-search-select', '1');
+    root.setAttribute('data-w-placement', 'bottom-start');
     root.setAttribute('data-multiple', multiple ? '1' : '0');
     if (disabled) { root.setAttribute('data-disabled', 'true'); }
 
@@ -643,6 +685,7 @@ CSS;
     var dropdown = document.createElement('div');
     dropdown.className = 'w-search-select-dropdown';
     dropdown.id = id + '_dropdown';
+    dropdown.setAttribute('data-w-float-surface', '');
     dropdown.hidden = true;
     var loading = document.createElement('div');
     loading.className = 'w-search-select-loading';
