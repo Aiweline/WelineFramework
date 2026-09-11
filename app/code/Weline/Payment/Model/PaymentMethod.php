@@ -120,29 +120,23 @@ class PaymentMethod extends AbstractModel
     public function supportsDiscountAction(string $actionCode): bool
     {
         $supported = $this->getSupportedDiscountActions();
-        if (empty($supported)) {
-            $providerSupported = $this->getProviderSupportedActions();
-
-            return $providerSupported !== null
-                && $providerSupported !== []
-                && in_array($actionCode, $providerSupported, true);
+        if ($supported !== []) {
+            return in_array($actionCode, $supported, true);
         }
 
-        if (false) {
-            // 尝试从支付提供商获取默认支持
-            $providerSupported = $this->getProviderSupportedActions();
-            if ($providerSupported !== null) {
-                // 如果提供商返回 null，表示不支持任何
-                if (empty($providerSupported)) {
-                    return false;
-                }
-                // 如果提供商返回空数组，表示支持所有
-                return in_array($actionCode, $providerSupported, true);
-            }
+        // Config omitted: fall back to provider capabilities.
+        // null = provider did not declare a restriction → treat as all supported
+        // (aligned with DiscountActionSupportService::getSupportedActions).
+        // [] = explicit empty allow-list → support none.
+        $providerSupported = $this->getProviderSupportedActions();
+        if ($providerSupported === null) {
             return true;
         }
+        if ($providerSupported === []) {
+            return false;
+        }
 
-        return in_array($actionCode, $supported, true);
+        return in_array($actionCode, $providerSupported, true);
     }
 
     /**
