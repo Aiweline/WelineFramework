@@ -1,0 +1,470 @@
+<?php
+/**
+ * 货源平台列表（对齐 Payment Method：w-card / w-table / w-badge / w-button）。
+ * 凭证弹窗对齐 Affiliate/货源配置：w:scope + config:embed。
+ * Webhook 回调地址与 CJ 同款统一 Hook：endpoint_code={code}.{env}.default。
+ * @var \Weline\Framework\View\Template $this
+ */
+$providers = (array)$this->getData('providers');
+$selectedScope = (string)($this->getData('selected_scope') ?? 'default.default.default');
+$credDialog = (string)($this->getData('cred_dialog') ?? '');
+$capLabels = [
+    'catalog' => (string)__('目录'),
+    'fulfillment' => (string)__('履约'),
+    'freight' => (string)__('运费'),
+    'webhook' => (string)__('回调'),
+];
+$probeLabels = [
+    'cj_credentials_missing' => (string)__('缺少凭证'),
+    'fake_ok' => (string)__('已连接'),
+    'cj_probe_ok' => (string)__('已连接'),
+    'cj_token_empty' => (string)__('令牌为空'),
+];
+$configUrl = $this->getBackendUrl('dropship/backend/config', [
+    'target_scope' => $selectedScope,
+]);
+$probeUrl = (string)($this->getData('probe_url') ?? $this->getBackendUrl('dropship/backend/channel/probe'));
+?>
+<div class="w-grid" data-dropship-admin="channels" data-testid="dropship-channel-list"
+     data-selected-scope="<?= htmlspecialchars($selectedScope, ENT_QUOTES, 'UTF-8') ?>"
+     data-cred-dialog="<?= htmlspecialchars($credDialog, ENT_QUOTES, 'UTF-8') ?>"
+     data-probe-url="<?= htmlspecialchars($probeUrl, ENT_QUOTES, 'UTF-8') ?>">
+    <div style="--w-span:12;">
+        <div class="w-card">
+            <div class="w-card__header">
+                <div class="w-cluster" data-align="center" data-justify="between" style="--w-gap:var(--weline-space-3);">
+                    <p class="w-text" data-tone="muted" data-size="sm" style="margin:0;">
+                        <?= __('已注册的货源供应商。未配置凭证时连接检查会失败，不影响其它供应商与壳功能。') ?>
+                    </p>
+                    <a href="<?= htmlspecialchars((string)$configUrl, ENT_QUOTES, 'UTF-8') ?>"
+                       class="w-button"
+                       data-tone="primary"
+                       data-size="sm"
+                       data-testid="dropship-open-config">
+                        <w:icon name="settings" size="sm"></w:icon> <?= __('打开货源配置') ?>
+                    </a>
+                </div>
+            </div>
+            <div class="w-card__body">
+                <div class="w-table-wrap">
+                    <table class="w-table" data-w-vertical="middle">
+                        <thead>
+                        <tr>
+                            <th><?= __('代码') ?></th>
+                            <th><?= __('名称') ?></th>
+                            <th><?= __('能力') ?></th>
+                            <th><?= __('连接状态') ?></th>
+                            <th><?= __('操作') ?></th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <?php if ($providers === []): ?>
+                            <tr>
+                                <td colspan="5" class="w-text" data-align="center" data-tone="muted">
+                                    <?= __('暂无已注册供应商。启用 CJ 模块或内置演示供应商后刷新本页。') ?>
+                                </td>
+                            </tr>
+                        <?php endif; ?>
+                        <?php foreach ($providers as $p): ?>
+                            <?php
+                            $code = (string)($p['code'] ?? '');
+                            $ok = !empty($p['probe']['ok']);
+                            $rawMsg = (string)($p['probe']['message'] ?? '');
+                            $probeText = $ok
+                                ? (string)__('已连接')
+                                : ($probeLabels[$rawMsg] ?? ($rawMsg !== '' ? $rawMsg : (string)__('连接失败')));
+                            $caps = is_array($p['capabilities'] ?? null) ? $p['capabilities'] : [];
+                            ?>
+                            <tr data-provider-code="<?= htmlspecialchars($code, ENT_QUOTES, 'UTF-8') ?>">
+                                <td><code><?= htmlspecialchars($code, ENT_QUOTES, 'UTF-8') ?></code></td>
+                                <td><?= htmlspecialchars((string)($p['meta']['title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
+                                <td>
+                                    <div class="w-cluster" style="--w-gap:var(--weline-space-2);">
+                                        <?php foreach ($caps as $capKey => $capOn): ?>
+                                            <?php if (!$capOn) {
+                                                continue;
+                                            } ?>
+                                            <span class="w-badge" data-w-background="muted">
+                                                <?= htmlspecialchars($capLabels[(string)$capKey] ?? (string)$capKey, ENT_QUOTES, 'UTF-8') ?>
+                                            </span>
+                                        <?php endforeach; ?>
+                                    </div>
+                                </td>
+                                <td>
+                                    <?php if ($ok): ?>
+                                        <span class="w-badge" data-w-background="success"><?= htmlspecialchars($probeText, ENT_QUOTES, 'UTF-8') ?></span>
+                                    <?php else: ?>
+                                        <span class="w-badge" data-w-background="danger"><?= htmlspecialchars($probeText, ENT_QUOTES, 'UTF-8') ?></span>
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);">
+                                        <?php
+                                        $credentialsUrl = trim((string)($p['credentials_url'] ?? ''));
+                                        $credentialsEmbed = \is_array($p['credentials_embed'] ?? null) ? $p['credentials_embed'] : null;
+                                        $webhookUrl = trim((string)($p['webhook_url'] ?? ''));
+                                        $dialogId = 'dropship-cred-dialog-' . preg_replace('/[^a-zA-Z0-9_-]+/', '-', $code);
+                                        $webhookDialogId = 'dropship-webhook-dialog-' . preg_replace('/[^a-zA-Z0-9_-]+/', '-', $code);
+                                        $hasAction = false;
+                                        ?>
+                                        <?php if ($credentialsEmbed !== null): ?>
+                                            <?php $hasAction = true; ?>
+                                            <button type="button"
+                                                    class="w-button"
+                                                    data-tone="<?= $ok ? 'neutral' : 'primary' ?>"
+                                                    <?= $ok ? 'data-variant="outline"' : '' ?>
+                                                    data-size="sm"
+                                                    data-w-action="dialog.open"
+                                                    data-w-target="#<?= htmlspecialchars($dialogId, ENT_QUOTES, 'UTF-8') ?>"
+                                                    data-testid="dropship-config-credentials">
+                                                <?= __('配置') ?>
+                                            </button>
+                                        <?php elseif ($credentialsUrl !== ''): ?>
+                                            <?php $hasAction = true; ?>
+                                            <a href="<?= htmlspecialchars($credentialsUrl, ENT_QUOTES, 'UTF-8') ?>"
+                                               class="w-button"
+                                               data-tone="<?= $ok ? 'neutral' : 'primary' ?>"
+                                               <?= $ok ? 'data-variant="outline"' : '' ?>
+                                               data-size="sm"
+                                               data-testid="dropship-config-credentials">
+                                                <?= __('配置') ?>
+                                            </a>
+                                        <?php endif; ?>
+                                        <?php if ($webhookUrl !== ''): ?>
+                                            <?php $hasAction = true; ?>
+                                            <button type="button"
+                                                    class="w-button"
+                                                    data-tone="neutral"
+                                                    data-variant="outline"
+                                                    data-size="sm"
+                                                    data-w-action="dialog.open"
+                                                    data-w-target="#<?= htmlspecialchars($webhookDialogId, ENT_QUOTES, 'UTF-8') ?>"
+                                                    data-testid="dropship-webhook-url">
+                                                <?= __('回调地址') ?>
+                                            </button>
+                                        <?php endif; ?>
+                                        <?php if (!$hasAction): ?>
+                                            <?php if (!$ok): ?>
+                                                <span class="w-text" data-tone="muted" data-size="sm"><?= __('无凭证配置入口') ?></span>
+                                            <?php else: ?>
+                                                <span class="w-text" data-tone="muted" data-size="sm">—</span>
+                                            <?php endif; ?>
+                                        <?php endif; ?>
+                                    </div>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<?php foreach ($providers as $p): ?>
+    <?php
+    $code = (string)($p['code'] ?? '');
+    $credentialsEmbed = \is_array($p['credentials_embed'] ?? null) ? $p['credentials_embed'] : null;
+    if ($credentialsEmbed === null || $code === '') {
+        continue;
+    }
+    $dialogId = 'dropship-cred-dialog-' . preg_replace('/[^a-zA-Z0-9_-]+/', '-', $code);
+    $credentialsUrl = trim((string)($p['credentials_url'] ?? ''));
+    $credEmbedModule = (string)($credentialsEmbed['module'] ?? '');
+    $credEmbedArea = (string)($credentialsEmbed['area'] ?? 'backend');
+    $credEmbedGroup = (string)($credentialsEmbed['group'] ?? '');
+    $credScopeFieldId = 'dropship-cred-scope-' . preg_replace('/[^a-zA-Z0-9_-]+/', '-', $code);
+    $dialogTitle = (string)($credentialsEmbed['title'] ?? __('配置凭证'));
+    ?>
+    <div
+        class="w-dialog"
+        id="<?= htmlspecialchars($dialogId, ENT_QUOTES, 'UTF-8') ?>"
+        tabindex="-1"
+        aria-hidden="true"
+        data-w-component="dialog"
+        data-state="closed"
+        hidden
+        data-testid="dropship-cred-dialog"
+        data-provider-code="<?= htmlspecialchars($code, ENT_QUOTES, 'UTF-8') ?>"
+    >
+        <div class="w-dialog__frame" data-size="lg">
+            <div class="w-dialog__surface">
+                <div class="w-dialog__header">
+                    <h5 class="w-dialog__title"><?= htmlspecialchars($dialogTitle, ENT_QUOTES, 'UTF-8') ?></h5>
+                    <button type="button"
+                            class="w-button"
+                            aria-label="<?= htmlspecialchars((string)__('关闭'), ENT_QUOTES, 'UTF-8') ?>"
+                            data-w-action="dialog.close"
+                            data-w-close=""
+                            data-tone="quiet"
+                            data-size="sm"></button>
+                </div>
+                <div class="w-dialog__body">
+                    <p class="w-text" data-tone="muted" data-size="sm" style="margin:0 0 var(--weline-space-3);">
+                        <?= __('在本页直接填写并保存凭证；保存后可刷新列表查看连接状态。供应商凭证一般为全局一套，请优先选择全局作用范围。') ?>
+                    </p>
+                    <div class="w-field" style="--w-max-inline-size:22rem;--w-mb:var(--weline-space-3);"
+                         data-testid="dropship-cred-scope"
+                         data-provider-code="<?= htmlspecialchars($code, ENT_QUOTES, 'UTF-8') ?>">
+                        <label class="w-field__label" for="<?= htmlspecialchars($credScopeFieldId, ENT_QUOTES, 'UTF-8') ?>">
+                            <?= __('作用范围') ?>
+                        </label>
+                        <div class="w-field__control">
+                            <w:scope
+                                id="credScopeFieldId"
+                                name="target_scope"
+                                value="selected_scope"
+                                placeholder="@lang(选择网站、店铺或渠道)"
+                                search-placeholder="@lang(搜索作用范围)"
+                                aria-label="@lang(作用范围)"
+                                searchable="true"
+                                default-expand-all="true"
+                                required="true"
+                            />
+                        </div>
+                    </div>
+                    <div class="dropship-cred-embed" data-testid="dropship-cred-embed">
+                        <w:config:embed
+                            module="credEmbedModule"
+                            area="credEmbedArea"
+                            group="credEmbedGroup"
+                            locale="default"
+                        />
+                    </div>
+                </div>
+                <div class="w-dialog__footer">
+                    <button type="button" class="w-button" data-w-action="dialog.close" data-tone="neutral" data-variant="outline">
+                        <?= __('关闭') ?>
+                    </button>
+                    <button type="button"
+                            class="w-button"
+                            data-tone="primary"
+                            data-variant="outline"
+                            data-dropship-probe="<?= htmlspecialchars($code, ENT_QUOTES, 'UTF-8') ?>"
+                            data-testid="dropship-cred-probe">
+                        <w:icon name="link" size="sm"></w:icon> <?= __('测试连接') ?>
+                    </button>
+                    <?php if ($credentialsUrl !== ''): ?>
+                        <a href="<?= htmlspecialchars($credentialsUrl, ENT_QUOTES, 'UTF-8') ?>"
+                           class="w-button"
+                           data-tone="neutral"
+                           data-variant="outline"
+                           data-testid="dropship-cred-center-link">
+                            <?= __('在统一配置中心打开') ?>
+                        </a>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+<?php endforeach; ?>
+<?php foreach ($providers as $p): ?>
+    <?php
+    $code = (string)($p['code'] ?? '');
+    $webhookUrl = trim((string)($p['webhook_url'] ?? ''));
+    $webhookEndpoint = trim((string)($p['webhook_endpoint_code'] ?? ''));
+    if ($webhookUrl === '' || $code === '') {
+        continue;
+    }
+    $webhookDialogId = 'dropship-webhook-dialog-' . preg_replace('/[^a-zA-Z0-9_-]+/', '-', $code);
+    $providerTitle = (string)($p['meta']['title'] ?? $code);
+    ?>
+    <div
+        class="w-dialog"
+        id="<?= htmlspecialchars($webhookDialogId, ENT_QUOTES, 'UTF-8') ?>"
+        tabindex="-1"
+        aria-hidden="true"
+        data-w-component="dialog"
+        data-state="closed"
+        hidden
+        data-testid="dropship-webhook-dialog"
+        data-provider-code="<?= htmlspecialchars($code, ENT_QUOTES, 'UTF-8') ?>"
+    >
+        <div class="w-dialog__frame" data-size="md">
+            <div class="w-dialog__surface">
+                <div class="w-dialog__header">
+                    <h5 class="w-dialog__title"><?= htmlspecialchars($providerTitle . ' · ' . (string)__('Webhook 回调'), ENT_QUOTES, 'UTF-8') ?></h5>
+                    <button type="button"
+                            class="w-button"
+                            aria-label="<?= htmlspecialchars((string)__('关闭'), ENT_QUOTES, 'UTF-8') ?>"
+                            data-w-action="dialog.close"
+                            data-w-close=""
+                            data-tone="quiet"
+                            data-size="sm"></button>
+                </div>
+                <div class="w-dialog__body">
+                    <p class="w-text" data-tone="muted" data-size="sm" style="margin:0 0 var(--weline-space-3);">
+                        <?= __('与 CJ 相同：统一前台 Hook。将此 URL 配置到供应商后台；POST JSON，壳写入 Inbox 并推进履约。') ?>
+                    </p>
+                    <div class="w-field" style="--w-mb:var(--weline-space-3);">
+                        <label class="w-field__label"><?= __('endpoint_code') ?></label>
+                        <div class="w-field__control">
+                            <code data-testid="dropship-webhook-endpoint"><?= htmlspecialchars($webhookEndpoint, ENT_QUOTES, 'UTF-8') ?></code>
+                        </div>
+                    </div>
+                    <div class="w-field">
+                        <label class="w-field__label" for="<?= htmlspecialchars($webhookDialogId, ENT_QUOTES, 'UTF-8') ?>-url"><?= __('回调 URL') ?></label>
+                        <div class="w-field__control">
+                            <input class="w-input"
+                                   id="<?= htmlspecialchars($webhookDialogId, ENT_QUOTES, 'UTF-8') ?>-url"
+                                   type="text"
+                                   readonly
+                                   value="<?= htmlspecialchars($webhookUrl, ENT_QUOTES, 'UTF-8') ?>"
+                                   data-testid="dropship-webhook-url-input"
+                                   onclick="this.select();">
+                        </div>
+                    </div>
+                </div>
+                <div class="w-dialog__footer">
+                    <button type="button" class="w-button" data-w-action="dialog.close" data-tone="neutral" data-variant="outline">
+                        <?= __('关闭') ?>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+<?php endforeach; ?>
+<script>
+(function () {
+    function openCredDialog() {
+        var list = document.querySelector('[data-dropship-admin="channels"]');
+        var openCode = list ? String(list.getAttribute('data-cred-dialog') || '').trim() : '';
+        if (!openCode) {
+            try {
+                openCode = String(new URLSearchParams(window.location.search).get('cred_dialog') || '').trim();
+            } catch (e) {
+                openCode = '';
+            }
+        }
+        if (!openCode) {
+            return false;
+        }
+        var safe = openCode.replace(/[^a-zA-Z0-9_-]+/g, '-');
+        var dlg = document.getElementById('dropship-cred-dialog-' + safe);
+        if (!dlg) {
+            return false;
+        }
+        if (window.Weline && window.Weline.UI && window.Weline.UI.dialog && typeof window.Weline.UI.dialog.open === 'function') {
+            window.Weline.UI.dialog.open(dlg);
+            return dlg.getAttribute('data-state') === 'open';
+        }
+        return false;
+    }
+    function bindScopeReload() {
+        document.querySelectorAll('[data-testid="dropship-cred-scope"]').forEach(function (wrap) {
+            var field = wrap.querySelector('input[type="hidden"][name="target_scope"]')
+                || wrap.querySelector('input[name="target_scope"]');
+            if (!field || field.dataset.dropshipScopeBound === '1') {
+                return;
+            }
+            field.dataset.dropshipScopeBound = '1';
+            var code = String(wrap.getAttribute('data-provider-code') || '').trim();
+            field.addEventListener('change', function () {
+                var next = String(field.value || '').trim();
+                if (!next) {
+                    return;
+                }
+                var url = new URL(window.location.href);
+                url.searchParams.set('target_scope', next);
+                var parts = next.split('.');
+                url.searchParams.set('website_code', parts[0] && parts[0] !== 'default' ? parts[0] : '');
+                url.searchParams.set('store_code', parts[1] && parts[1] !== 'default' ? parts[1] : '');
+                url.searchParams.set('channel_code', parts[2] && parts[2] !== 'default' ? parts[2] : '');
+                if (code) {
+                    url.searchParams.set('cred_dialog', code);
+                }
+                window.location.assign(url.toString());
+            });
+        });
+    }
+    function bindProbeButtons() {
+        var list = document.querySelector('[data-dropship-admin="channels"]');
+        var probeUrl = list ? String(list.getAttribute('data-probe-url') || '').trim() : '';
+        if (!probeUrl) {
+            return;
+        }
+        document.querySelectorAll('[data-dropship-probe]').forEach(function (button) {
+            if (button.dataset.dropshipProbeBound === '1') {
+                return;
+            }
+            button.dataset.dropshipProbeBound = '1';
+            button.addEventListener('click', function () {
+                var code = String(button.getAttribute('data-dropship-probe') || '').trim();
+                if (!code) {
+                    return;
+                }
+                button.disabled = true;
+                var body = new FormData();
+                body.append('provider_code', code);
+                var notify = function (ok, message) {
+                    if (window.Weline && window.Weline.UI && window.Weline.UI.toast) {
+                        var toast = window.Weline.UI.toast;
+                        if (ok && typeof toast.success === 'function') {
+                            toast.success(message);
+                            return;
+                        }
+                        if (!ok && typeof toast.error === 'function') {
+                            toast.error(message);
+                            return;
+                        }
+                    }
+                    if (window.Weline && window.Weline.UI && window.Weline.UI.dialog && typeof window.Weline.UI.dialog.request === 'function') {
+                        window.Weline.UI.dialog.request({
+                            tone: ok ? 'success' : 'danger',
+                            title: ok ? <?= json_encode((string)__('连接成功'), JSON_UNESCAPED_UNICODE) ?> : <?= json_encode((string)__('连接失败'), JSON_UNESCAPED_UNICODE) ?>,
+                            message: message,
+                            duration: ok ? 1600 : 0,
+                            confirmable: !ok,
+                            confirmLabel: <?= json_encode((string)__('知道了'), JSON_UNESCAPED_UNICODE) ?>
+                        });
+                        return;
+                    }
+                    window.alert(message);
+                };
+                // Channel::probe 返回纯 JSON；勿走未注册的 adminRequest('dropship')（会进 catch）。
+                fetch(probeUrl, {
+                    method: 'POST',
+                    body: body,
+                    credentials: 'same-origin',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                    .then(function (r) {
+                        if (!r.ok) {
+                            throw new Error('HTTP ' + r.status);
+                        }
+                        return r.json();
+                    })
+                    .then(function (res) {
+                        var data = (window.Weline && window.Weline.ApiBusiness && typeof window.Weline.ApiBusiness.unwrapBusiness === 'function')
+                            ? window.Weline.ApiBusiness.unwrapBusiness(res)
+                            : res;
+                        var ok = !!(data && data.success);
+                        notify(ok, String((data && data.message) || (ok ? <?= json_encode((string)__('连接成功'), JSON_UNESCAPED_UNICODE) ?> : <?= json_encode((string)__('连接失败'), JSON_UNESCAPED_UNICODE) ?>)));
+                    })
+                    .catch(function () {
+                        notify(false, <?= json_encode((string)__('测试连接失败，请稍后重试'), JSON_UNESCAPED_UNICODE) ?>);
+                    })
+                    .finally(function () {
+                        button.disabled = false;
+                    });
+            });
+        });
+    }
+    function boot(attempt) {
+        bindScopeReload();
+        bindProbeButtons();
+        if (openCredDialog() || attempt >= 20) {
+            return;
+        }
+        window.setTimeout(function () { boot(attempt + 1); }, 100);
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function () { boot(0); });
+    } else {
+        boot(0);
+    }
+})();
+</script>

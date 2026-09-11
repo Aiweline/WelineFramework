@@ -1,0 +1,17 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+use Weline\Dropship\Model\DropshipListing;
+use Weline\Dropship\Model\DropshipPushOutbox;
+use Weline\Framework\Manager\ObjectManager;
+$listing = ObjectManager::getInstance(DropshipListing::class);
+$outbox = ObjectManager::getInstance(DropshipPushOutbox::class);
+$listings = $listing->clear()->select()->fetchArray() ?: [];
+$tips = 0;
+foreach ($listings as $row) { if (!empty($row['price_drop_tip'])) { $tips++; } }
+$errors = 0;
+foreach (($outbox->clear()->select()->fetchArray() ?: []) as $row) { if (($row['status'] ?? '') === 'error') { $errors++; } }
+?>
+<div class="card card-body h-100" data-dropship-widget="overview">
+  <div class="fw-semibold mb-2"><?= __('货源销售概览') ?></div>
+  <div class="small">listings <?= count($listings) ?> · <?= __('降价提示') ?> <?= $tips ?> · <?= __('推送失败') ?> <?= $errors ?></div>
+</div>

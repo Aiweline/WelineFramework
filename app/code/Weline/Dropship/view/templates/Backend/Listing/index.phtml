@@ -1,0 +1,32 @@
+<?php /** @var \Weline\Framework\View\Template $this */ ?>
+<div class="container-fluid py-3" data-dropship-admin="listings">
+  <h1 class="h3 mb-3"><?= $this->getData('page_title') ?></h1>
+  <form class="mb-3 d-flex gap-2" method="get">
+    <select name="sources[]" class="form-select w-auto" multiple size="3">
+      <?php foreach ((array)$this->getData('provider_codes') as $code): ?>
+        <option value="<?= htmlspecialchars($code) ?>" <?= in_array($code, (array)$this->getData('selected_sources'), true) ? 'selected' : '' ?>><?= htmlspecialchars($code) ?></option>
+      <?php endforeach; ?>
+    </select>
+    <button class="btn btn-outline-primary" type="submit"><?= __('按来源标记筛选') ?></button>
+    <a class="btn btn-primary" href="<?= $this->getBackendUrl('dropship/backend/listing/search') ?>"><?= __('搜索远程货源') ?></a>
+  </form>
+  <table class="table table-sm table-striped">
+    <thead><tr><th>ID</th><th>source</th><th>spu</th><th>origin</th><th>sale</th><th>uplift</th><th>dir</th><th>tip</th><th>qty</th><th>status</th></tr></thead>
+    <tbody>
+    <?php foreach ((array)$this->getData('listings') as $row): ?>
+      <tr>
+        <td><?= (int)($row['listing_id'] ?? 0) ?></td>
+        <td><code><?= htmlspecialchars((string)($row['provider_code'] ?? '')) ?></code></td>
+        <td><?= htmlspecialchars((string)($row['external_spu'] ?? '')) ?></td>
+        <td><?= (int)($row['origin_price_minor'] ?? 0) ?></td>
+        <td><?= (int)($row['sale_price_minor'] ?? 0) ?></td>
+        <td><?= (int)($row['uplift_percent'] ?? 0) ?>%</td>
+        <td><?= htmlspecialchars((string)($row['price_direction'] ?? '')) ?></td>
+        <td class="small"><?= htmlspecialchars((string)($row['price_drop_tip'] ?? '')) ?></td>
+        <td><?= (int)($row['remote_qty'] ?? 0) ?></td>
+        <td><?= htmlspecialchars((string)($row['sync_status'] ?? '')) ?></td>
+      </tr>
+    <?php endforeach; ?>
+    </tbody>
+  </table>
+</div>
