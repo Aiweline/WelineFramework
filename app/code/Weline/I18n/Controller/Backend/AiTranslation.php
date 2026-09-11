@@ -12,6 +12,7 @@ use Weline\I18n\Model\Locale\Dictionary as LocaleDictionary;
 use Weline\I18n\Service\AiTranslationConfig;
 use Weline\I18n\Service\AiTranslationExportService;
 use Weline\I18n\Service\AiTranslationModuleWorkspaceService;
+use Weline\I18n\Service\AiTranslationProgressService;
 use Weline\I18n\Service\AiTranslationQueueService;
 use Weline\I18n\Service\AiTranslationService;
 use Weline\I18n\Service\LocalModelTranslation\LocalModelTranslationQueueService;
@@ -30,6 +31,7 @@ class AiTranslation extends BaseController
         private readonly AiTranslationService $translationService,
         private readonly AiTranslationExportService $exportService,
         private readonly AiTranslationModuleWorkspaceService $moduleWorkspace,
+        private readonly AiTranslationProgressService $progressService,
         private readonly WordDictionary $dictionary,
         private readonly LocaleDictionary $localeDictionary
     ) {
@@ -52,20 +54,27 @@ class AiTranslation extends BaseController
         $moduleSearch = trim((string)$this->request->getGet('module_q', ''));
 
         $config = $this->config->getConfig();
+        $localeRows = $this->buildLocaleRows($config);
+        $totalWords = (int)$this->dictionary->clear()->reset()->count();
+        $progressBoard = $this->progressService->buildBoard($localeRows, $totalWords);
         $this->assign('config', $config);
         $this->assign('active_tab', $tab);
         $this->assign('module_search', $moduleSearch);
-        $this->assign('locales', $this->buildLocaleRows($config));
+        $this->assign('locales', $localeRows);
+        $this->assign('progress_board', $progressBoard);
         $this->assign(
             'modules',
             $tab === 'modules' ? $this->moduleWorkspace->listModulesLite($moduleSearch) : [],
         );
         $this->assign('stats', [
-            'total_words' => (int)$this->dictionary->clear()->reset()->count(),
+            'total_words' => $totalWords,
             'enabled_locales' => count($this->config->getEnabledLocaleCodes()),
             'ai_translated' => (int)$this->localeDictionary->clear()->reset()
                 ->where(LocaleDictionary::schema_fields_IS_AI, 1)
                 ->count(),
+            'dictionary_pct' => (int)($progressBoard['summary']['dictionary_pct'] ?? 0),
+            'module_pending_total' => (int)($progressBoard['summary']['module_pending_total'] ?? 0),
+            'local_model_label' => (string)($progressBoard['summary']['local_model_label'] ?? ''),
         ]);
 
         return $this->fetch();

@@ -25,13 +25,23 @@ class Local implements \Weline\Framework\Taglib\TaglibInterface
     private static array $ids = [];
     private static bool $stateRegistered = false;
     private static bool $bulkModalRendered = false;
-    
+    private static string $runtimeRecordId = '';
+
+    /**
+     * 运行期 tag-start：在循环内渲染前绑定当前记录 ID（避免把 <?= ?> 原样塞进 HTML）。
+     */
+    public static function bindRuntimeRecordId(int|string $recordId): void
+    {
+        self::$runtimeRecordId = trim((string)$recordId);
+    }
+
     private static function ensureStateRegistered(): void
     {
         if (!self::$stateRegistered) {
             StateManager::registerStaticResets(self::class, [
                 'ids' => [],
                 'bulkModalRendered' => false,
+                'runtimeRecordId' => '',
             ]);
             self::$stateRegistered = true;
         }
@@ -100,7 +110,14 @@ class Local implements \Weline\Framework\Taglib\TaglibInterface
             /**@var Taglib $Taglib */
             $Taglib = ObjectManager::getInstance(Taglib::class);
             $origin_id = $attributes['id'];
-            $parserId = '<?=(' . $Taglib->varParser($origin_id) . '?:\'' . str_replace('.', '-', $origin_id) . '\')?>';
+            $isRuntimePair = in_array($tag_key, ['tag-start', 'tag-end'], true);
+            if ($isRuntimePair && self::$runtimeRecordId !== '') {
+                $parserId = htmlspecialchars(self::$runtimeRecordId, ENT_QUOTES);
+            } elseif ($isRuntimePair && ctype_digit(trim((string)$origin_id))) {
+                $parserId = htmlspecialchars(trim((string)$origin_id), ENT_QUOTES);
+            } else {
+                $parserId = '<?=(' . $Taglib->varParser($origin_id) . '?:\'' . str_replace('.', '-', $origin_id) . '\')?>';
+            }
             /**@var Request $request */
             $request = ObjectManager::getInstance(Request::class);
             $isBackend = $request->isBackend();
@@ -176,7 +193,12 @@ BULK;
                 throw new Exception(__('请选择一个字段！'));
             }
 
-            $idName = 'local-off-canvas-' . $parserId . '-' . $field;
+            // 成对标签会派发 tag-start + tag-end；仅开标签占用唯一 ID。
+            if ($tag_key === 'tag-end') {
+                return '';
+            }
+
+            $idName = 'local-off-canvas-' . $parserId . '-' . $field . '-' . trim((string)($attributes['name'] ?? ''));
             if (in_array($idName, $ids)) {
                 throw new Exception('local标签ID不允许重复！');
             }
@@ -224,7 +246,7 @@ BULK;
             $i18nAiRetranslate = htmlspecialchars(__('已有翻译内容，是否重新翻译？'), ENT_QUOTES);
             $i18nAiRetranslateTitle = htmlspecialchars(__('重新翻译'), ENT_QUOTES);
             return match ($tag_key) {
-                'tag' => <<<TAG
+                'tag', 'tag-start' => <<<TAG
                     <link rel="stylesheet" href="{$cssUrl}">
                     <span class="w-local-translation__wrap"{$bulkParticipantAttrs}>
                     <button type="button" class="w-button w-local-translation__trigger" aria-controls='{$idName}' data-w-target='#{$idName}' data-w-action="drawer.open" data-tone="quiet" data-size="sm">
@@ -310,13 +332,14 @@ BULK;
                     </div>
                     </span>
 TAG,
+                'tag-end' => '',
             };
         };
     }
 
     private static function isBulkRenderTagKey(string $tag_key): bool
     {
-        return in_array($tag_key, ['tag', 'tag-self-close-with-attrs', 'tag-self-close', '@tag()', '@tag{}'], true);
+        return in_array($tag_key, ['tag', 'tag-start', 'tag-self-close-with-attrs', 'tag-self-close', '@tag()', '@tag{}'], true);
     }
 
     private static function resolveModuleStaticUrl(string $source): string

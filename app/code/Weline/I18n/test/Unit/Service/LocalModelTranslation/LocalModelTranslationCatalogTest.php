@@ -15,6 +15,11 @@ final class LocalModelTranslationCatalogTest extends TestCase
         );
 
         self::assertStringContainsString('discoverLocalModelClassNames', $source);
+        self::assertStringContainsString('candidateLocalModelPhpFiles', $source);
+        self::assertStringContainsString('getActiveModules()', $source);
+        self::assertStringContainsString('Local.php', $source);
+        self::assertStringContainsString('LocalDescription.php', $source);
+        self::assertStringContainsString('descriptorCacheFingerprint', $source);
         self::assertStringContainsString('is_subclass_of($class, LocalModel::class)', $source);
         self::assertStringContainsString('inferParentModelClass', $source);
         self::assertStringContainsString('resolveTranslatableFields', $source);

@@ -17,6 +17,17 @@ final class I18nCsvCodecTest extends TestCase
         self::assertSame('', I18nCsvCodec::normalizeWord(I18nCsvCodec::UTF8_BOM . '权限'));
     }
 
+    public function testIsJunkTranslationRejectsIncompleteJsonFragments(): void
+    {
+        self::assertTrue(I18nCsvCodec::isJunkTranslation('['));
+        self::assertTrue(I18nCsvCodec::isJunkTranslation(']'));
+        self::assertTrue(I18nCsvCodec::isJunkTranslation('{}'));
+        self::assertTrue(I18nCsvCodec::isJunkTranslation('","'));
+        self::assertFalse(I18nCsvCodec::isJunkTranslation('VIP0 初级'));
+        self::assertFalse(I18nCsvCodec::isJunkTranslation('ভিআইপি০ প্রাথমিক'));
+        self::assertFalse(I18nCsvCodec::isJunkTranslation(''));
+    }
+
     public function testReadWordsDropsGarbledRowsInsteadOfSalvaging(): void
     {
         $tmp = tempnam(sys_get_temp_dir(), 'i18n-bom-');
