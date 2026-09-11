@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Weline\Dashboard\Controller\Backend;
 
 use Weline\Framework\App\Controller\BackendPageController;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Dashboard\Model\DashboardView;
 use Weline\Dashboard\Service\DashboardViewService;
+use Weline\Theme\Api\Layout\LayoutIdentity;
 
 class Dashboard extends BackendPageController
 {
@@ -52,7 +54,11 @@ class Dashboard extends BackendPageController
 
     private function applyDashboardLayoutIdentity(DashboardView $view): void
     {
-        $identity = $this->dashboardViewService->layoutIdentity($view)->toArray();
+        $identityObject = $this->dashboardViewService->layoutIdentity($view);
+        // Live slot render reads RequestContext identity; without this install,
+        // backend falls back to global/0 and published dashboard widgets never bind.
+        RequestContext::set(LayoutIdentity::REQUEST_CONTEXT_KEY, $identityObject);
+        $identity = $identityObject->toArray();
         $params = [
             'page_type' => DashboardView::PAGE_TYPE,
             'layout_type' => DashboardView::PAGE_TYPE,
