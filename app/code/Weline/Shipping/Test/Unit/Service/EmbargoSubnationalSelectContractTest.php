@@ -44,7 +44,7 @@ final class EmbargoSubnationalSelectContractTest extends TestCase
         $loader = (string)file_get_contents(
             dirname(__DIR__, 4) . '/Theme/view/statics/js/address-loader.js',
         );
-        self::assertStringContainsString('20260909-subnational-embargo-block4', $loader);
+        self::assertStringContainsString('20260909-postal-input-once', $loader);
     }
 
     public function testModuleVersionsBumped(): void
@@ -52,6 +52,6 @@ final class EmbargoSubnationalSelectContractTest extends TestCase
         $shipping = include dirname(__DIR__, 3) . '/etc/module.php';
         $theme = include dirname(__DIR__, 4) . '/Theme/etc/module.php';
         self::assertSame('2.4.73', (string)($shipping['version'] ?? ''));
-        self::assertSame('2.2.285', (string)($theme['version'] ?? ''));
+        self::assertSame('2.2.288', (string)($theme['version'] ?? ''));
     }
 }

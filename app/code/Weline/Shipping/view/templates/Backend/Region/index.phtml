@@ -188,11 +188,11 @@ $listApiUrl = (string)w_url('/shipping/frontend/region/list', [], 'frontend');
                         <div class="w-stack" style="--w-gap:var(--weline-space-3);">
                             <p class="w-text" data-testid="shipping-region-create-section-title"><?= __('省份（必填）') ?></p>
                             <div class="w-grid" style="--w-gap:var(--weline-space-4);">
-                                <div style="--w-span:6;--w-span-md:6;">
+                                <div class="w-field" style="--w-span:6;--w-span-md:6;">
                                     <label class="w-field__label" for="shipping-region-province-name"><?= __('省份名称') ?></label>
                                     <input class="w-input" type="text" name="add_province_name" id="shipping-region-province-name" required maxlength="255" placeholder="<?= __('例如：加利福尼亚州') ?>" data-testid="shipping-region-province-name">
                                 </div>
-                                <div style="--w-span:6;--w-span-md:6;">
+                                <div class="w-field" style="--w-span:6;--w-span-md:6;">
                                     <label class="w-field__label" for="shipping-region-province-code"><?= __('省份代码') ?></label>
                                     <input class="w-input" type="text" name="add_province_code" id="shipping-region-province-code" required maxlength="50" placeholder="<?= __('例如：US-CA') ?>" data-testid="shipping-region-province-code" autocomplete="off">
                                 </div>
@@ -201,18 +201,18 @@ $listApiUrl = (string)w_url('/shipping/frontend/region/list', [], 'frontend');
                         <div class="w-stack" style="--w-gap:var(--weline-space-3);">
                             <p class="w-text" data-testid="shipping-region-create-section-title"><?= __('区县（可选）') ?></p>
                             <div class="w-grid" style="--w-gap:var(--weline-space-4);">
-                                <div style="--w-span:6;--w-span-md:6;">
+                                <div class="w-field" style="--w-span:6;--w-span-md:6;">
                                     <label class="w-field__label" for="shipping-region-district-name"><?= __('区县名称') ?></label>
                                     <input class="w-input" type="text" name="add_district_name" id="shipping-region-district-name" maxlength="255" placeholder="<?= __('例如：洛杉矶县') ?>" data-testid="shipping-region-district-name">
                                 </div>
-                                <div style="--w-span:6;--w-span-md:6;">
+                                <div class="w-field" style="--w-span:6;--w-span-md:6;">
                                     <label class="w-field__label" for="shipping-region-district-code"><?= __('区县代码') ?></label>
                                     <input class="w-input" type="text" name="add_district_code" id="shipping-region-district-code" maxlength="50" placeholder="<?= __('例如：US-CA-LA') ?>" data-testid="shipping-region-district-code" autocomplete="off">
                                 </div>
                             </div>
                         </div>
-                        <div style="--w-max-inline-size:8rem;">
-                            <label class="w-field__label" for="shipping-region-sort-order"><?= __('排序') ?></label>
+                        <div class="w-field" style="--w-max-inline-size:8rem;">
+                                    <label class="w-field__label" for="shipping-region-sort-order"><?= __('排序') ?></label>
                             <input class="w-input" type="number" min="0" name="sort_order" id="shipping-region-sort-order" value="0">
                         </div>
                     </div>

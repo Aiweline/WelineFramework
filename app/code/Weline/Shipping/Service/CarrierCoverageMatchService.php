@@ -32,6 +32,7 @@ final class CarrierCoverageMatchService
         ?string $city = null,
         ?string $district = null,
         ?array $context = null,
+        ?array $addressMeta = null,
     ): array {
         $address = [
             'country_code' => strtoupper(trim($countryCode)) ?: 'CN',
@@ -39,6 +40,17 @@ final class CarrierCoverageMatchService
             'city' => trim((string)$city),
             'district' => trim((string)$district),
         ];
+        if (\is_array($addressMeta)) {
+            foreach ([
+                'province_region_id', 'city_region_id', 'district_region_id', 'street_id',
+                'province_code', 'city_code', 'district_code', 'street_code',
+                'province_id', 'city_id', 'district_id',
+            ] as $key) {
+                if (\array_key_exists($key, $addressMeta)) {
+                    $address[$key] = $addressMeta[$key];
+                }
+            }
+        }
 
         $embargo = $this->embargoService->evaluateAddress($address, $context);
         if (!empty($embargo['blocked'])) {

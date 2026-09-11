@@ -23,37 +23,37 @@ $isEdit = $address && $address->getId();
         </div>
 
         <div class="w-grid">
-            <div style="--w-span-md:6;--w-mb:var(--weline-space-4);">
+            <div class="w-field"  style="--w-span-md:6;--w-mb:var(--weline-space-4);">
                 <label for="contact_name" class="w-field__label"><?= __('收货人姓名') ?> <span class="w-text" data-tone="danger">*</span></label>
                 <input type="text" class="w-input" id="contact_name" name="contact_name" value="<?= $address ? htmlspecialchars($address->getData('contact_name')) : '' ?>" required>
             </div>
-            <div style="--w-span-md:6;--w-mb:var(--weline-space-4);">
+            <div class="w-field"  style="--w-span-md:6;--w-mb:var(--weline-space-4);">
                 <label for="contact_phone" class="w-field__label"><?= __('联系电话') ?> <span class="w-text" data-tone="danger">*</span></label>
                 <input type="tel" class="w-input" id="contact_phone" name="contact_phone" value="<?= $address ? htmlspecialchars($address->getData('contact_phone')) : '' ?>" required>
             </div>
         </div>
 
         <div class="w-grid">
-            <div style="--w-span-md:4;--w-mb:var(--weline-space-4);">
+            <div class="w-field"  style="--w-span-md:4;--w-mb:var(--weline-space-4);">
                 <label for="country" class="w-field__label"><?= __('国家') ?></label>
                 <input type="text" class="w-input" id="country" name="country" value="<?= $address ? htmlspecialchars($address->getData('country') ?: '中国') : '中国' ?>">
             </div>
-            <div style="--w-span-md:4;--w-mb:var(--weline-space-4);">
+            <div class="w-field"  style="--w-span-md:4;--w-mb:var(--weline-space-4);">
                 <label for="province" class="w-field__label"><?= __('省份') ?> <span class="w-text" data-tone="danger">*</span></label>
                 <input type="text" class="w-input" id="province" name="province" value="<?= $address ? htmlspecialchars($address->getData('province')) : '' ?>" required>
             </div>
-            <div style="--w-span-md:4;--w-mb:var(--weline-space-4);">
+            <div class="w-field"  style="--w-span-md:4;--w-mb:var(--weline-space-4);">
                 <label for="city" class="w-field__label"><?= __('城市') ?> <span class="w-text" data-tone="danger">*</span></label>
                 <input type="text" class="w-input" id="city" name="city" value="<?= $address ? htmlspecialchars($address->getData('city')) : '' ?>" required>
             </div>
         </div>
 
         <div class="w-grid">
-            <div style="--w-span-md:6;--w-mb:var(--weline-space-4);">
+            <div class="w-field"  style="--w-span-md:6;--w-mb:var(--weline-space-4);">
                 <label for="district" class="w-field__label"><?= __('区县') ?></label>
                 <input type="text" class="w-input" id="district" name="district" value="<?= $address ? htmlspecialchars($address->getData('district')) : '' ?>">
             </div>
-            <div style="--w-span-md:6;--w-mb:var(--weline-space-4);">
+            <div class="w-field"  style="--w-span-md:6;--w-mb:var(--weline-space-4);">
                 <label for="postal_code" class="w-field__label"><?= __('邮政编码') ?></label>
                 <input type="text" class="w-input" id="postal_code" name="postal_code" value="<?= $address ? htmlspecialchars($address->getData('postal_code')) : '' ?>" pattern="[0-9]{6}" maxlength="6">
             </div>
