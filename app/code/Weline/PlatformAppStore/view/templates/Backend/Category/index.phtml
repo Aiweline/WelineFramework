@@ -1,0 +1,28 @@
+<?php
+$categories = is_iterable($categories ?? null) ? $categories : [];
+$total = (int)($total ?? 0);
+$escape = static fn($v): string => htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+?>
+<div class="w-container" style="--w-pt:var(--weline-space-4);--w-pb:var(--weline-space-4);">
+    <h1 class="h4" style="--w-mb:var(--weline-space-1);"><?= __('模块分类') ?></h1>
+    <div class="w-text" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-4);"><?= __('共 %{1} 条分类。', [$total]) ?></div>
+    <?php if (!$categories): ?>
+        <div class="w-card"><div class="w-card__body w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-10);--w-pb:var(--weline-space-10);"><?= __('暂无分类。') ?></div></div>
+    <?php else: ?>
+        <div class="w-table-wrap">
+            <table class="w-table">
+                <thead><tr><th>ID</th><th><?= __('名称') ?></th><th><?= __('排序') ?></th><th><?= __('启用') ?></th></tr></thead>
+                <tbody>
+                <?php foreach ($categories as $row): if (!is_array($row)) continue; ?>
+                    <tr>
+                        <td><?= (int)($row['category_id'] ?? 0) ?></td>
+                        <td><?= $escape($row['name'] ?? '') ?></td>
+                        <td><?= (int)($row['sort_order'] ?? 0) ?></td>
+                        <td><?= !empty($row['is_enabled']) ? __('是') : __('否') ?></td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    <?php endif; ?>
+</div>
