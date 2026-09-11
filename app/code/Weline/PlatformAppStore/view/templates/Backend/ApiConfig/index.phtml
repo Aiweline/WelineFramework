@@ -1,0 +1,29 @@
+<?php
+$endpoints = is_iterable($endpoints ?? null) ? $endpoints : [];
+$apiBase = (string)($api_base ?? '/rest/v1/platform');
+$escape = static fn($v): string => htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+?>
+<div class="w-container" style="--w-pt:var(--weline-space-4);--w-pb:var(--weline-space-4);">
+    <h1 class="h4" style="--w-mb:var(--weline-space-1);"><?= __('API配置') ?></h1>
+    <div class="w-text" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-4);"><?= __('子站 AppStore 调用的平台 API 入口说明。') ?></div>
+    <div class="w-card" style="--w-mb:var(--weline-space-4);">
+        <div class="w-card__body">
+            <div class="w-text" data-tone="muted" data-size="sm"><?= __('API 前缀') ?></div>
+            <code><?= $escape($apiBase) ?></code>
+        </div>
+    </div>
+    <div class="w-table-wrap">
+        <table class="w-table">
+            <thead><tr><th><?= __('方法') ?></th><th><?= __('路径') ?></th><th><?= __('说明') ?></th></tr></thead>
+            <tbody>
+            <?php foreach ($endpoints as $row): if (!is_array($row)) continue; ?>
+                <tr>
+                    <td><code><?= $escape($row['method'] ?? '') ?></code></td>
+                    <td><code><?= $escape($apiBase . ($row['path'] ?? '')) ?></code></td>
+                    <td><?= $escape($row['title'] ?? '') ?></td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+</div>
