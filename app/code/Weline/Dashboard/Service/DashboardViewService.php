@@ -1130,10 +1130,13 @@ class DashboardViewService
         try {
             $context = $this->scopedLayoutContext($view, $themeId);
             $state = $this->scopedWorkspace->load($context, true);
-            if ((int)($state['revision'] ?? 0) > 0
-                || (int)($state['published_release_id'] ?? 0) > 0
-                || (int)($state['draft_revision_id'] ?? 0) > 0
-            ) {
+            $publishedReleaseId = (int)($state['published_release_id'] ?? 0);
+            $draftRevisionId = (int)($state['draft_revision_id'] ?? 0);
+            $revision = (int)($state['revision'] ?? 0);
+
+            // Live page reads published only. Default injections write draft; if a draft
+            // exists without a release, promote it — do not project an empty published payload.
+            if ($publishedReleaseId > 0) {
                 $this->scopedResources->projectPublished(
                     $context,
                     is_array($state['published_payload'] ?? null) ? $state['published_payload'] : [],
@@ -1141,6 +1144,19 @@ class DashboardViewService
                 );
 
                 return true;
+            }
+
+            if ($draftRevisionId > 0 || $revision > 0) {
+                $published = $this->scopedWorkspace->publish(
+                    $context,
+                    $revision,
+                    $this->nullablePositiveInt($state['expected_parent_release_id'] ?? null),
+                    $this->dashboardActorId($view),
+                    'Dashboard',
+                    'dashboard_scoped_layout_seed',
+                );
+
+                return empty($published['blocked']) && (int)($published['release_id'] ?? 0) > 0;
             }
 
             $emptyPayload = [
