@@ -46,7 +46,8 @@ class SmtpQueryProvider implements QueryProviderInterface
     private function isAvailable(array $params): array
     {
         $module = (string) ($params['module'] ?? 'Weline_Smtp');
-        $senders = $this->getSendersInternal($module);
+        $scope = $this->resolveScopeParam($params);
+        $senders = $this->getSendersInternal($module, $scope);
         foreach ($senders as $s) {
             if ((string)($s['source_type'] ?? 'external') === 'mail_account') {
                 $mailConfig = $this->loadMailAccountConfig((int)($s['mail_account_id'] ?? 0));
@@ -67,14 +68,28 @@ class SmtpQueryProvider implements QueryProviderInterface
     private function getSenders(array $params): array
     {
         $module = (string) ($params['module'] ?? 'Weline_Smtp');
-        return $this->getSendersInternal($module);
+        return $this->getSendersInternal($module, $this->resolveScopeParam($params));
     }
 
-    private function getSendersInternal(string $module): array
+    private function getSendersInternal(string $module, ?string $scope = null): array
     {
         /** @var Data $data */
         $data = ObjectManager::getInstance(Data::class);
-        return $data->getSenders($module);
+        return $data->getSenders($module, $scope);
+    }
+
+    private function resolveScopeParam(array $params): ?string
+    {
+        $scope = trim((string)($params['scope'] ?? $params['target_scope'] ?? ''));
+        if ($scope !== '') {
+            return $scope;
+        }
+        $websiteCode = strtolower(trim((string)($params['website_code'] ?? '')));
+        if ($websiteCode !== '' && $websiteCode !== 'default') {
+            return $websiteCode . '.default.default';
+        }
+
+        return null;
     }
 
     private function getSenderByCode(array $params): ?array
@@ -86,7 +101,7 @@ class SmtpQueryProvider implements QueryProviderInterface
         }
         /** @var Data $data */
         $data = ObjectManager::getInstance(Data::class);
-        return $data->getSenderByCode($code, $module);
+        return $data->getSenderByCode($code, $module, $this->resolveScopeParam($params));
     }
 
     /**
@@ -102,7 +117,7 @@ class SmtpQueryProvider implements QueryProviderInterface
         }
         /** @var Data $data */
         $data = ObjectManager::getInstance(Data::class);
-        $data->setSenderContact($code, $toEmail, $module);
+        $data->setSenderContact($code, $toEmail, $module, $this->resolveScopeParam($params));
         return ['success' => true, 'message' => __('已保存')];
     }
 
@@ -118,7 +133,7 @@ class SmtpQueryProvider implements QueryProviderInterface
         }
         /** @var Data $data */
         $data = ObjectManager::getInstance(Data::class);
-        $toEmail = $data->getSenderContact($code, $module);
+        $toEmail = $data->getSenderContact($code, $module, $this->resolveScopeParam($params));
         return ['success' => true, 'to_email' => $toEmail];
     }
 
@@ -129,6 +144,7 @@ class SmtpQueryProvider implements QueryProviderInterface
         $content = (string)($params['content'] ?? '');
         $from = $params['from'] ?? null;
         $module = (string)($params['module'] ?? 'Weline_Smtp');
+        $channel = trim((string)($params['channel'] ?? $params['mail_channel'] ?? ''));
         $senderCode = $params['sender_code'] ?? $params['code'] ?? null;
         $alt = (string)($params['alt'] ?? '');
         $attachment = $params['attachment'] ?? '';
@@ -146,9 +162,19 @@ class SmtpQueryProvider implements QueryProviderInterface
         $data = ObjectManager::getInstance(Data::class);
         /** @var SmtpSender $sender */
         $sender = ObjectManager::getInstance(SmtpSender::class);
+        $scope = $this->resolveScopeParam($params);
+        $storageScope = $data->resolveScope($scope);
+
+        if ($channel !== '') {
+            $bound = $data->resolveTransportIdForChannel($channel, $module, $scope);
+            if ($bound === '') {
+                return ['success' => false, 'message' => __('发信渠道 %{1} 未绑定传输账户', [$channel])];
+            }
+            $senderCode = $bound;
+        }
 
         if ($senderCode !== null && $senderCode !== '') {
-            $senderConfig = $data->getSenderByCode((string) $senderCode, $module);
+            $senderConfig = $data->getSenderByCode((string) $senderCode, $module, $scope);
             if (!$senderConfig) {
                 return ['success' => false, 'message' => __('发件人 %{1} 未配置或配置不完整', [$senderCode])];
             }
@@ -163,7 +189,10 @@ class SmtpQueryProvider implements QueryProviderInterface
                     $attachment,
                     $cc,
                     $bcc,
-                    $module
+                    $module,
+                    $channel,
+                    (string)$senderCode,
+                    $storageScope
                 );
             }
             if (empty($senderConfig['smtp_host']) || empty($senderConfig['smtp_username'])) {
@@ -177,6 +206,9 @@ class SmtpQueryProvider implements QueryProviderInterface
                 $fromResolved = ['email' => $fromResolved, 'name' => __('系统')];
             }
             try {
+                $senderConfig['__channel'] = $channel;
+                $senderConfig['__sender_code'] = (string)$senderCode;
+                $senderConfig['__storage_scope'] = $storageScope;
                 $ok = $sender->sendWithConfig(
                     $fromResolved,
                     $to,
@@ -196,7 +228,7 @@ class SmtpQueryProvider implements QueryProviderInterface
             }
         }
 
-        $username = $data->get(Data::smtp_username, $module);
+        $username = $data->get(Data::smtp_username, $module, $scope);
         if (empty($username)) {
             return ['success' => false, 'message' => __('模块 %{1} 未配置 SMTP，请先在后台配置', [$module])];
         }
@@ -206,8 +238,19 @@ class SmtpQueryProvider implements QueryProviderInterface
         } elseif (is_string($fromResolved)) {
             $fromResolved = ['email' => $fromResolved, 'name' => __('系统')];
         }
+        $legacyConfig = [
+            'smtp_host' => (string)$data->get(Data::smtp_host, $module, $scope),
+            'smtp_port' => (string)$data->get(Data::smtp_port, $module, $scope),
+            'smtp_username' => (string)$username,
+            'smtp_password' => (string)$data->get(Data::smtp_password, $module, $scope),
+            'smtp_secure' => (string)$data->get(Data::smtp_secure, $module, $scope),
+            'smtp_auth' => (string)$data->get(Data::smtp_auth, $module, $scope),
+            '__channel' => $channel,
+            '__sender_code' => is_scalar($senderCode) ? (string)$senderCode : '',
+            '__storage_scope' => $storageScope,
+        ];
         try {
-            $ok = $sender->sender(
+            $ok = $sender->sendWithConfig(
                 $fromResolved,
                 $to,
                 $subject,
@@ -217,6 +260,7 @@ class SmtpQueryProvider implements QueryProviderInterface
                 '',
                 $cc,
                 $bcc,
+                $legacyConfig,
                 $module
             );
             return [
@@ -241,7 +285,10 @@ class SmtpQueryProvider implements QueryProviderInterface
         mixed $attachment,
         mixed $cc,
         mixed $bcc,
-        string $module
+        string $module,
+        string $channel = '',
+        string $senderCode = '',
+        string $storageScope = ''
     ): array {
         $mailAccountId = (int)($senderConfig['mail_account_id'] ?? 0);
         $mailConfig = $this->loadMailAccountConfig($mailAccountId);
@@ -266,7 +313,21 @@ class SmtpQueryProvider implements QueryProviderInterface
                     'content' => $content,
                 ]);
                 if (is_array($result) && !empty($result['success'])) {
-                    $this->writeVirtualSendLog($fromResolved, $to, $subject, $content, $alt, $attachment, $cc, $bcc, $mailEmail, $module);
+                    $this->writeVirtualSendLog(
+                        $fromResolved,
+                        $to,
+                        $subject,
+                        $content,
+                        $alt,
+                        $attachment,
+                        $cc,
+                        $bcc,
+                        $mailEmail,
+                        $module,
+                        $channel,
+                        $senderCode !== '' ? $senderCode : (string)($senderConfig['code'] ?? ''),
+                        $storageScope
+                    );
                     return ['success' => true, 'message' => __('发送成功')];
                 }
 
@@ -283,6 +344,9 @@ class SmtpQueryProvider implements QueryProviderInterface
             'smtp_auth' => (string)($mailConfig['smtp_auth'] ?? $senderConfig['smtp_auth'] ?? '1'),
             'smtp_username' => $mailEmail,
             'smtp_password' => (string)($senderConfig['smtp_password'] ?? ''),
+            '__channel' => $channel,
+            '__sender_code' => $senderCode !== '' ? $senderCode : (string)($senderConfig['code'] ?? ''),
+            '__storage_scope' => $storageScope,
         ]);
 
         /** @var SmtpSender $sender */
@@ -334,7 +398,10 @@ class SmtpQueryProvider implements QueryProviderInterface
         string|array $cc,
         string|array $bcc,
         string $proxy,
-        string $module
+        string $module,
+        string $channel = '',
+        string $senderCode = '',
+        string $storageScope = ''
     ): void {
         /** @var SmtpSendLog $sendLog */
         $sendLog = ObjectManager::getInstance(SmtpSendLog::class);
@@ -354,6 +421,9 @@ class SmtpQueryProvider implements QueryProviderInterface
                 ->setData(SmtpSendLog::schema_fields_IS_HTML, 1)
                 ->setData(SmtpSendLog::schema_fields_PROXY, $proxy)
                 ->setData(SmtpSendLog::schema_fields_MODULE, $module)
+                ->setData(SmtpSendLog::schema_fields_CHANNEL, $channel)
+                ->setData(SmtpSendLog::schema_fields_SENDER_CODE, $senderCode)
+                ->setData(SmtpSendLog::schema_fields_STORAGE_SCOPE, $storageScope)
                 ->save();
         } catch (\Throwable) {
         }
@@ -417,7 +487,7 @@ class SmtpQueryProvider implements QueryProviderInterface
         $module = (string)($params['module'] ?? 'Weline_Smtp');
         /** @var Data $data */
         $data = ObjectManager::getInstance(Data::class);
-        $all = $data->get('', $module);
+        $all = $data->get('', $module, $this->resolveScopeParam($params));
         return is_array($all) ? $all : [];
     }
 
@@ -438,6 +508,8 @@ class SmtpQueryProvider implements QueryProviderInterface
                         ['name' => 'content', 'type' => 'string', 'required' => true, 'description' => __('HTML 正文')],
                         ['name' => 'from', 'type' => 'string|array|null', 'required' => false, 'description' => __('发件人，空则用配置')],
                         ['name' => 'module', 'type' => 'string', 'required' => false, 'description' => __('使用哪一模块的 SMTP 配置')],
+                        ['name' => 'scope', 'type' => 'string', 'required' => false, 'description' => __('SystemConfig storage_scope，如 website.default.default')],
+                        ['name' => 'website_code', 'type' => 'string', 'required' => false, 'description' => __('网站 code，可推导 website 级 scope')],
                         ['name' => 'alt', 'type' => 'string', 'required' => false],
                         ['name' => 'attachment', 'type' => 'string|array', 'required' => false],
                         ['name' => 'cc', 'type' => 'string|array', 'required' => false],
