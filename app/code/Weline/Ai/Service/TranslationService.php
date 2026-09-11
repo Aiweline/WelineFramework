@@ -139,11 +139,33 @@ class TranslationService
 
         // 执行翻译
         $translation = $this->performTranslation($text, $targetLocale, $sourceLocale, $strategy, $concurrencyLane);
-        
+        if (self::isJunkTranslation($translation)) {
+            // Incomplete model replies (e.g. lone "[") must never be cached or returned as copy.
+            return '';
+        }
+
         // 缓存翻译结果
         $this->cache->set($cacheKey, $translation, 3600 * 24); // 缓存24小时
         
         return $translation;
+    }
+
+    /**
+     * True when a model reply is structural garbage (truncated JSON punctuation), not real UI copy.
+     */
+    public static function isJunkTranslation(string $value): bool
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return false;
+        }
+
+        // Lone / punctuation-only JSON fragments from failed batch parse (e.g. "[").
+        if (preg_match('/^[\[\]\{\}\s,",\'\\\\]+$/u', $value) === 1) {
+            return true;
+        }
+
+        return false;
     }
 
     /**
@@ -347,15 +369,21 @@ class TranslationService
     }
     
     /**
-     * 解析批量翻译响应
-     * 
-     * @param string $response
-     * @param int $expectedCount
-     * @return array
+     * 解析批量翻译响应。
+     * Fail closed: incomplete JSON / punctuation junk (e.g. lone "[") must not become translations.
+     *
+     * @return list<string>
      */
-    private function parseBatchTranslationResponse(string $response, int $expectedCount): array
+    public static function parseBatchTranslationResponse(string $response, int $expectedCount): array
     {
+        if ($expectedCount <= 0) {
+            return [];
+        }
+
         $json = trim($response);
+        if ($json === '') {
+            return [];
+        }
         if (str_starts_with($json, '```')) {
             $json = preg_replace('/^```(?:json)?\s*/i', '', $json) ?? $json;
             $json = preg_replace('/\s*```$/', '', $json) ?? $json;
@@ -364,27 +392,36 @@ class TranslationService
 
         $decoded = json_decode($json, true);
         if (!(is_array($decoded) && array_is_list($decoded) && count($decoded) === $expectedCount)) {
-            // Model often wraps JSON with prose; extract the outermost array.
+            // Model often wraps JSON with prose; extract the outermost array only when balanced.
             $start = strpos($json, '[');
             $end = strrpos($json, ']');
             if ($start !== false && $end !== false && $end > $start) {
-                $decoded = json_decode(substr($json, $start, $end - $start + 1), true);
+                $slice = substr($json, $start, $end - $start + 1);
+                $decoded = json_decode($slice, true);
+            } else {
+                // Truncated replies like "[" or '["foo"' have no closing bracket — never line-fallback them.
+                $decoded = null;
             }
         }
 
         if (is_array($decoded) && array_is_list($decoded) && count($decoded) === $expectedCount) {
-            return array_map(static fn($item): string => trim((string)$item), $decoded);
+            return self::normalizeParsedBatchItems($decoded, $expectedCount);
+        }
+
+        // Only allow numbered / plain-line fallback when the reply does not look like broken JSON.
+        if (str_contains($json, '[') || str_contains($json, ']')) {
+            return [];
         }
 
         $translations = [];
         $lines = explode("\n", trim($response));
-        
+
         foreach ($lines as $line) {
             $line = trim($line);
-            if ($line === '' || str_starts_with($line, '```')) {
+            if ($line === '' || str_starts_with($line, '```') || self::isJunkTranslation($line)) {
                 continue;
             }
-            
+
             // 匹配格式：1. 翻译内容 或 1.翻译内容
             if (preg_match('/^\d+\.\s*(.+)$/', $line, $matches)) {
                 $translations[] = trim($matches[1]);
@@ -392,23 +429,42 @@ class TranslationService
                 $translations[] = trim($matches[1]);
             }
         }
-        
+
         // 如果解析的数量不匹配，尝试其他解析方式
         if (count($translations) !== $expectedCount) {
             // 尝试按行分割，每行一个翻译
-            $translations = array_filter(array_map('trim', $lines), function($line) {
+            $translations = array_filter(array_map('trim', $lines), static function ($line) {
                 return $line !== ''
                     && !str_starts_with($line, '```')
-                    && !preg_match('/^(原文|翻译|Translation|Result|Input JSON)/i', $line);
+                    && !preg_match('/^(原文|翻译|Translation|Result|Input JSON)/i', $line)
+                    && !self::isJunkTranslation($line);
             });
             $translations = array_values($translations);
         }
-        
-        if (count($translations) !== $expectedCount) {
+
+        return self::normalizeParsedBatchItems($translations, $expectedCount);
+    }
+
+    /**
+     * @param list<mixed> $items
+     * @return list<string>
+     */
+    private static function normalizeParsedBatchItems(array $items, int $expectedCount): array
+    {
+        if (count($items) !== $expectedCount) {
             return [];
         }
 
-        return array_map(static fn($item): string => trim((string)$item), $translations);
+        $mapped = [];
+        foreach ($items as $item) {
+            $text = trim((string)$item);
+            if ($text === '' || self::isJunkTranslation($text)) {
+                return [];
+            }
+            $mapped[] = $text;
+        }
+
+        return $mapped;
     }
 
     /**

@@ -44,7 +44,7 @@
 - 对照归属模块 `doc/需求.md`（REQ-ID、范围、验收、待确认项）。
 - 用户已确认的需求优先于文档推断；临时决定用 `set_session_directives`，**不自动写入** `需求.md`。
 - 用 `resolve_task_context` 取有界证据；禁止凭通用框架经验发明需求或事件名。
-- **每条可执行编码/工程用户需求（硬门槛，`user_requirement_full_workflow`）**：提出后须**立即**理解意图/范围/非目标/成功标准，并 `submit_task_plan` 建立从**需求分析到验收**的完整会话工作流（`plan.requirements` ≥1 + `acceptance` ≥1 + 架构/任务拆解）；**不得**等到写码或 `PLAN_REQUIRED` 才补计划。需求不明时先澄清，禁止边写边猜。非编码任务不进入本阶段。
+- **每条可执行编码/工程用户需求（硬门槛，`user_requirement_full_workflow` + `requirement_feature_kind_gate` + `feature_add_requires_current_ui_review` + `requirement_framework_scrutiny` + `architecture_first_for_requirements` + `framework_decoupled_only`）**：提出后须**立即**判定 `work_kind=feature|non_feature`（功能=新增/变更可交付产品能力或用户可见表面；非功能=纯文档/门禁/基础设施/无产品表面修复）。**若是功能**：须让原型技能 `prototype` 与 UI 技能 `frontend-design` 参与（`skill_participation`），并规划 `type=shentu` 验收项。**若功能落在既有 Web UI 表面加功能**：设计前必须先打开/截取**当前页**并按 [审图](../../../../../dev/ai-command/theme/审图.md) 审现图再定位置；若现页已乱，须连同现页一并重设计（`feature_add_requires_current_ui_review`），禁止在混乱信息架构上硬塞控件。再理解意图/范围/非目标/成功标准，并按**框架信息审视**合理性：若字面需求不合理（耦合写法、有 Taglib 仍手写控件、发明事件、错误分层、过度设计等），**禁止原样照做**，须给出更合理做法并写入 `plan.requirement_scrutiny`，同时将 `plan.requirements` 改为纠偏后方案（合理则写「合理」/「无调整」）；再 `submit_task_plan` 建立从**需求分析到验收**的完整会话工作流（`plan.requirements` ≥1 + **`plan.requirement_scrutiny` 必填** + **`plan.architecture` 必填**（按**框架信息**将每条需求映射为**解耦方案**：扩展点/机制、归属模块边界、关键路径/分层；≥40 字；`trivial` 亦必填）+ **`plan.coupling_findings` 必填**（无耦合写「无」/「无耦合」）+ `acceptance` ≥1 + 任务拆解）；**禁止**耦合写法与从需求直接跳到补丁。过程中发现耦合须更新 `coupling_findings`，并向用户汇报时包含「**耦合提示**」小节；有纠偏须包含「**需求纠偏**」小节。**不得**等到写码或 `PLAN_REQUIRED` 才补计划。需求不明时先澄清，禁止边写边猜。非编码任务不进入本阶段。
 
 ### 2. 扩展点选型（写代码前硬关）
 
@@ -67,7 +67,7 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 ### 3. 计划拆解
 
 - 模块级：`doc/开发/plan.md`（阶段、范围、完成标准）+ `doc/开发/task.md`（可勾选任务）。
-- **MCP 会话计划（硬门槛）**：用户每提出可执行需求即须 `submit_task_plan` 提交 `task-plan.v1`（**`requirements`≥1**、`goal`、`extension_point`、`architecture`、`dev_tasks`、≥1 条 `acceptance` 且**至少 1 条 `type=unit`**；可选 `scope_paths` / `forbidden` / `risk` / `workflow_phase`）。未提交则 `get_edit_bundle` / `apply_compact_edit` 返回 **`PLAN_REQUIRED`**（硬约束 `user_requirement_full_workflow` / `task_plan_before_edit` / `plan_then_tdd_required`），响应内带 **`plan_workflow`**（需求分析→…→**TDD 红绿**→实际跑测→审查→收口）——代理须**立即**补计划并 `submit_task_plan`，不得当作完成。实现须 **TDD**：先失败测试再最小实现至绿，再亲自执行测试命令；`unit` 的 `passed` evidence 须像真实跑测输出（含 phpunit/PASS 等），否则 `closeout_allowed=false`。`risk=trivial` 仍须计划与 `requirements` 与 unit，且 `scope_paths` ≤3。计划仅存当前 MCP 进程会话，不写仓库。
+- **MCP 会话计划（硬门槛）**：用户每提出可执行需求即须 `submit_task_plan` 提交 `task-plan.v1`（**`requirements`≥1**、`goal`、`extension_point`、**`requirement_scrutiny` 必填**（`requirement_framework_scrutiny`：合理写「合理」/「无调整」；不合理须写问题+更合理做法并改写 requirements）、**`architecture` 必填**（`architecture_first_for_requirements` + `framework_decoupled_only`：按框架/扩展点选型映射为解耦方案；≥40 字；含 `trivial`）、**`coupling_findings` 必填**（≥1；无则「无」/「无耦合」）、`dev_tasks`、≥1 条 `acceptance` 且**至少 1 条 `type=unit`**；可选 `scope_paths` / `forbidden` / `risk` / `workflow_phase`）。未提交或缺少有效 `requirement_scrutiny`/`architecture`/`coupling_findings` 则 `get_edit_bundle` / `apply_compact_edit` 返回 **`PLAN_REQUIRED`**（硬约束 `user_requirement_full_workflow` / `requirement_framework_scrutiny` / `architecture_first_for_requirements` / `framework_decoupled_only` / `task_plan_before_edit` / `plan_then_tdd_required`），响应内带 **`plan_workflow`**（需求分析→**框架审视纠偏**→**框架解耦架构**→…→**TDD 红绿**→实际跑测→审查→收口）——代理须**立即**补计划并 `submit_task_plan`，不得当作完成。实现须 **TDD**：先失败测试再最小实现至绿，再亲自执行测试命令；`unit` 的 `passed` evidence 须像真实跑测输出（含 phpunit/PASS 等），否则 `closeout_allowed=false`。收口汇报须含「**需求纠偏**」（无调整/合理或逐条列出）与「**耦合提示**」（无耦合或逐条列出）。`risk=trivial` 仍须计划与 `requirements` 与 `requirement_scrutiny` 与 `architecture` 与 `coupling_findings` 与 unit，且 `scope_paths` ≤3。计划仅存当前 MCP 进程会话，不写仓库。
 - MCP 写码：`get_edit_bundle` 携带完整 **TaskContract**（goal、requirements、known_paths、known_symbols）。
 - 原子任务：单次变更宜 2–4 小时可验收；过大则拆 child_requests。
 
@@ -84,7 +84,7 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 
 ### 6. 分层测试与验收
 
-**自行验证（硬门槛，`agent_self_verify_before_done` + `plan_then_tdd_required`）**：需求须先 `submit_task_plan`；实现按 **TDD**（红→绿→重构）；结束后 Agent **必须亲自执行**测试命令并按验收层级验证，再标 acceptance / 向用户宣称完成。禁止「只改代码就收口」。`unit` 的 `passed` evidence 须含可识别的真实跑测输出；否则 `review_task_plan.closeout_allowed=false`。未完成只能报告「代码已改，TDD/测试未跑通」。
+**自行验证（硬门槛，`agent_self_verify_before_done` + `plan_then_tdd_required` + `acceptance_phase_requires_shentu`）**：需求须先 `submit_task_plan`；实现按 **TDD**（红→绿→重构）；结束后 Agent **必须亲自执行**测试命令并按验收层级验证，再标 acceptance / 向用户宣称完成。禁止「只改代码就收口」。`unit` 的 `passed` evidence 须含可识别的真实跑测输出；否则 `review_task_plan.closeout_allowed=false`。未完成只能报告「代码已改，TDD/测试未跑通」。
 
 | 变更表面 | 最低证据 |
 |----------|----------|
@@ -98,6 +98,10 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 **分章计划**：每章 Done 须 **UT → RT → WB → DL** 四段全 pass 才开下一章。含 Web 的章：**WB = WB-OP + WB-VIS**；截图存 `doc/evidence/ch{N}/`；禁止 curl/单测/纯文字替代 Browser 视觉证据。
 
 未完成对应层级时，只能报告「代码已改，测试未完成」或「WebUI 验收未完成」。
+
+**验收阶段审图（硬门槛，`acceptance_phase_requires_shentu`）**：`work_kind=feature` 或含 Browser/UI 验收时，verify 阶段必须对验收截图执行 [审图](../../../../../dev/ai-command/theme/审图.md)（线稿→原型→UI→主题），`acceptance` 须含 `type=shentu` 且 passed evidence 含审图/线稿/checklist 信号；弱证据则 `closeout_allowed=false`。非功能且无 UI 可省略或 `na` 并写明原因。
+
+**结束汇审（硬门槛，`closeout_requires_huishen`）**：宣称完成前必须写 `huishen_notes`（含「汇审」），对照需求/架构/验收/(功能时)原型·UI·审图结论；用户汇报须含「**汇审**」小节。缺汇审则 `review_task_plan.closeout_allowed=false`。
 
 **收口高压线（凡含页面/UI）**：
 
@@ -141,6 +145,7 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 - **规划 + TDD（硬门槛，`plan_then_tdd_required`）**：先 `submit_task_plan`（含 ≥1 `unit`）；红→绿→实际跑测 PASS evidence 才算完。
 - **自行验证（硬门槛，`agent_self_verify_before_done`）**：实现后须亲自跑 UT/RT/WB（按表面）；acceptance 无 evidence 不得标 passed，亦不得宣称完成。
 - **计划 / todo 诚实收口（硬门槛，`plan_todo_evidence_closeout`）**：多 todo 计划不得在未逐项举证时宣称「已完成 / done / 主链路完成」。每个 todo 须有可复核证据（代码路径、DB 行数/表状态、命令输出、Browser）。部分完成必须明确报告「部分完成」并附**未完成清单**；同步写入归属模块 `doc/开发日志.md`（禁止把 Cursor todo 无证据标为 completed）。虚报完成属硬违规。
+- **汇审（硬门槛，`closeout_requires_huishen`）**：收口前写 `huishen_notes` 并在用户汇报含「汇审」小节；缺则不得宣称完成。
 - **Browser 自测（硬门槛，含 Web 时）**：按约定用例用**当前宿主可用的真实 Browser**跑完操作员路径；**每次打开/导航前禁用 HTTP 缓存**（`browser_cache_disabled_on_open`）；未跑或宿主无 Browser 只能报「代码已改，WebUI 验收未完成」，禁止宣称完成。见 [WebUI浏览器验收与交付地址门禁.md](../Framework/doc/3-开发/WebUI浏览器验收与交付地址门禁.md)。
 - **交付后关闭 Browser（硬门槛，`browser_release_after_delivery`）**：面向用户写出「交付地址」小节之后，**立即关闭**本回合打开的全部验收 Browser 标签/webview（Cursor：`unlock` 后 `browser_tabs` close；其它宿主结束操作员会话）。禁止留下空转 Renderer。仅当用户明确要求保留时可例外并注明。从未打开过 Browser 记 `N/A`。
 - **文档对齐（硬门槛）**：打开归属模块 `doc/README.md`、`doc/需求.md`、`doc/开发日志.md` 及本次触及的专题文档，对照刚交付行为；有差异则改文档或回改代码，二者必须一致。

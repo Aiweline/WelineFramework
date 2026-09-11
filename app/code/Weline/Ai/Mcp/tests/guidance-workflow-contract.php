@@ -140,6 +140,31 @@ $checks = [
             && str_contains((string) ($rule['doc'] ?? ''), '审图.md')),
         false,
     ),
+    'hard_constraints include requirement_feature_kind_gate' => array_reduce(
+        is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'requirement_feature_kind_gate'
+            && str_contains((string) ($rule['summary'] ?? ''), 'work_kind')
+            && str_contains((string) ($rule['summary'] ?? ''), 'prototype')
+            && str_contains((string) ($rule['summary'] ?? ''), 'frontend-design')),
+        false,
+    ),
+    'hard_constraints include acceptance_phase_requires_shentu' => array_reduce(
+        is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'acceptance_phase_requires_shentu'
+            && str_contains((string) ($rule['summary'] ?? ''), '审图')
+            && str_contains((string) ($rule['summary'] ?? ''), 'shentu')),
+        false,
+    ),
+    'hard_constraints include closeout_requires_huishen' => array_reduce(
+        is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'closeout_requires_huishen'
+            && str_contains((string) ($rule['summary'] ?? ''), '汇审')
+            && str_contains((string) ($rule['summary'] ?? ''), 'huishen_notes')),
+        false,
+    ),
     'hard_constraints include theme_address_for_region_pickers' => array_reduce(
         is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
@@ -224,6 +249,15 @@ $checks = [
             && str_contains((string) ($rule['summary'] ?? ''), '交付地址')),
         false,
     ),
+    'hard_constraints include cursor_debug_csp_developer_tooling' => array_reduce(
+        is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'cursor_debug_csp_developer_tooling'
+            && str_contains((string) ($rule['summary'] ?? ''), 'csp_developer_tooling')
+            && str_contains((string) ($rule['summary'] ?? ''), '127.0.0.1:7277')
+            && str_contains((string) ($rule['summary'] ?? ''), 'DEV')),
+        false,
+    ),
     'hard_constraints include image_explicit_width_height_css' => array_reduce(
         is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
@@ -251,11 +285,63 @@ $checks = [
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule) && ($rule['id'] ?? '') === 'user_requirement_full_workflow'),
         false,
     ),
+    'hard_constraints include architecture_first_for_requirements' => array_reduce(
+        is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'architecture_first_for_requirements'
+            && str_contains((string) ($rule['summary'] ?? ''), 'architecture')),
+        false,
+    ),
+    'hard_constraints include requirement_framework_scrutiny' => array_reduce(
+        is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'requirement_framework_scrutiny'
+            && str_contains((string) ($rule['summary'] ?? ''), 'requirement_scrutiny')
+            && str_contains((string) ($rule['summary'] ?? ''), '需求纠偏')),
+        false,
+    ),
+    'hard_constraints include framework_decoupled_only' => array_reduce(
+        is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'framework_decoupled_only'
+            && str_contains((string) ($rule['summary'] ?? ''), 'decoupled')
+            && str_contains((string) ($rule['summary'] ?? ''), '耦合提示')),
+        false,
+    ),
     'mandatory_before_code includes requirement_analysis_in_task_plan' => in_array(
         'requirement_analysis_in_task_plan',
         is_array($contract['mandatory_before_code'] ?? null) ? $contract['mandatory_before_code'] : [],
         true,
     ),
+    'mandatory_before_code includes requirement_framework_scrutiny' => in_array(
+        'requirement_framework_scrutiny',
+        is_array($contract['mandatory_before_code'] ?? null) ? $contract['mandatory_before_code'] : [],
+        true,
+    ),
+    'mandatory_before_code includes architecture_mapped_to_requirements' => in_array(
+        'architecture_mapped_to_requirements',
+        is_array($contract['mandatory_before_code'] ?? null) ? $contract['mandatory_before_code'] : [],
+        true,
+    ),
+    'mandatory_before_code includes framework_decoupled_design' => in_array(
+        'framework_decoupled_design',
+        is_array($contract['mandatory_before_code'] ?? null) ? $contract['mandatory_before_code'] : [],
+        true,
+    ),
+    'mandatory_before_closeout includes requirement_scrutiny_reported' => in_array(
+        'requirement_scrutiny_reported',
+        is_array($contract['mandatory_before_closeout'] ?? null) ? $contract['mandatory_before_closeout'] : [],
+        true,
+    ),
+    'mandatory_before_closeout includes coupling_findings_reported' => in_array(
+        'coupling_findings_reported',
+        is_array($contract['mandatory_before_closeout'] ?? null) ? $contract['mandatory_before_closeout'] : [],
+        true,
+    ),
+    'closeout reminder requires requirement scrutiny report' => (bool) ($contract['closeout_delivery_reminder']['requirement_scrutiny_report_required'] ?? false)
+        && (($contract['closeout_delivery_reminder']['requirement_scrutiny_section_title'] ?? '') === '需求纠偏'),
+    'closeout reminder requires coupling report' => (bool) ($contract['closeout_delivery_reminder']['coupling_report_required'] ?? false)
+        && (($contract['closeout_delivery_reminder']['coupling_section_title'] ?? '') === '耦合提示'),
     'hard_constraints include plan_todo_evidence_closeout' => array_reduce(
         is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
