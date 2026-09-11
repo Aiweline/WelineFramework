@@ -23,7 +23,8 @@
         value-type="string"
         default=""
         scope="global,website"
-        validation="max:255" />
+        validation="max:255"
+        cache-namespaces="storefront/auth" />
     <w:config:field
         key="customer/social_login/http_proxy_type"
         label="代理类型"
@@ -32,7 +33,8 @@
         value-type="string"
         default="http"
         scope="global,website"
-        options="http:HTTP,socks5:SOCKS5" />
+        options="http:HTTP,socks5:SOCKS5"
+        cache-namespaces="storefront/auth" />
 </w:config:group>
 
 <w:config:group code="customer_social_login_google" label="Google 登录" description="内置 SocialLoginProvider（GoogleProvider）。推荐上传 Google 下载的 client_secret_*.json 一键解析；也可逐项填写。" sort="10">
@@ -86,10 +88,13 @@
         default=""
         scope="global,website"
         accept=".json,application/json"
-        validation="max:0" />
+        validation="max:0"
+        cache-namespaces="storefront/auth" />
 
-    <w:config:field key="customer/social_login/google/client_id" label="OAuth Client ID" type="text" value-type="string" default="" scope="global,website" validation="max:255" />
-    <w:config:field key="customer/social_login/google/client_secret" label="OAuth Client Secret" type="password" value-type="string" default="" scope="global,website" sensitive="1" validation="max:512" />
+    <w:config:field key="customer/social_login/google/client_id" label="OAuth Client ID" type="text" value-type="string" default="" scope="global,website" validation="max:255"
+        cache-namespaces="storefront/auth" />
+    <w:config:field key="customer/social_login/google/client_secret" label="OAuth Client Secret" type="password" value-type="string" default="" scope="global,website" sensitive="1" validation="max:512"
+        cache-namespaces="storefront/auth" />
     <w:config:field
         key="customer/social_login/google/enabled"
         label="激活前台入口"
@@ -97,7 +102,8 @@
         type="switch"
         value-type="bool"
         default="0"
-        scope="global,website" />
+        scope="global,website"
+        cache-namespaces="storefront/auth" />
     <w:config:field
         key="customer/social_login/google/quick_prompt"
         label="未登录 One Tap（需点击确认）"
@@ -105,7 +111,8 @@
         type="switch"
         value-type="bool"
         default="1"
-        scope="global,website" />
+        scope="global,website"
+        cache-namespaces="storefront/auth" />
 </w:config:group>
 
 <w:config:group code="customer_social_login_facebook" label="Facebook 登录" description="内置 SocialLoginProvider（FacebookProvider）。Meta：选「其他/消费者」或「无用例」→ 添加 Facebook Login → 保存 Valid OAuth Redirect URI + 开启 JS SDK/允许域名 → 填凭据 → 激活。" sort="20">
@@ -187,8 +194,10 @@
         callback-append-scope="false"
         callback-label="登记到数据删除说明网址" />
 
-    <w:config:field key="customer/social_login/facebook/client_id" label="App ID" type="text" value-type="string" default="" scope="global,website" validation="max:255" />
-    <w:config:field key="customer/social_login/facebook/client_secret" label="App Secret" type="password" value-type="string" default="" scope="global,website" sensitive="1" validation="max:512" />
+    <w:config:field key="customer/social_login/facebook/client_id" label="App ID" type="text" value-type="string" default="" scope="global,website" validation="max:255"
+        cache-namespaces="storefront/auth" />
+    <w:config:field key="customer/social_login/facebook/client_secret" label="App Secret" type="password" value-type="string" default="" scope="global,website" sensitive="1" validation="max:512"
+        cache-namespaces="storefront/auth" />
     <w:config:field
         key="customer/social_login/facebook/enabled"
         label="激活前台入口"
@@ -196,7 +205,8 @@
         type="switch"
         value-type="bool"
         default="0"
-        scope="global,website" />
+        scope="global,website"
+        cache-namespaces="storefront/auth" />
     <w:config:field
         key="customer/social_login/facebook/quick_prompt"
         label="未登录 Facebook One Tap（FedCM，需点击）"
@@ -204,7 +214,8 @@
         type="switch"
         value-type="bool"
         default="1"
-        scope="global,website" />
+        scope="global,website"
+        cache-namespaces="storefront/auth" />
 </w:config:group>
 
 <w:config:group code="customer_social_login_instagram" label="Instagram 登录" description="内置 SocialLoginProvider（InstagramProvider）。Meta：添加 Instagram → API setup with Instagram login → 登记回调 → 填 Instagram App ID/Secret → 激活。仅专业号（Business/Creator）。" sort="30">
@@ -268,8 +279,10 @@
         callback-append-scope="false"
         callback-label="登记到数据删除说明网址" />
 
-    <w:config:field key="customer/social_login/instagram/client_id" label="Instagram App ID" type="text" value-type="string" default="" scope="global,website" validation="max:255" />
-    <w:config:field key="customer/social_login/instagram/client_secret" label="Instagram App Secret" type="password" value-type="string" default="" scope="global,website" sensitive="1" validation="max:512" />
+    <w:config:field key="customer/social_login/instagram/client_id" label="Instagram App ID" type="text" value-type="string" default="" scope="global,website" validation="max:255"
+        cache-namespaces="storefront/auth" />
+    <w:config:field key="customer/social_login/instagram/client_secret" label="Instagram App Secret" type="password" value-type="string" default="" scope="global,website" sensitive="1" validation="max:512"
+        cache-namespaces="storefront/auth" />
     <w:config:field
         key="customer/social_login/instagram/enabled"
         label="激活前台入口"
@@ -277,5 +290,6 @@
         type="switch"
         value-type="bool"
         default="0"
-        scope="global,website" />
+        scope="global,website"
+        cache-namespaces="storefront/auth" />
 </w:config:group>

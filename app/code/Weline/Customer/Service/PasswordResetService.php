@@ -40,6 +40,7 @@ class PasswordResetService
 
         w_query('smtp', 'send', [
             'module' => 'Weline_Customer',
+            'channel' => 'Weline_Customer::password_reset',
             'to' => $email,
             'subject' => (string) __('重置您的密码'),
             'content' => sprintf(

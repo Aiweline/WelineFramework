@@ -12,7 +12,8 @@ final class TemplateCachePolicyProvider implements TemplateCachePolicyProviderIn
     {
         return [
             'output_files' => [
-                'Weline_Customer::hooks/header-account-links.phtml' => ['context' => 'frontend_auth'],
+                // Dual guest/signed-in items; visibility flipped by account JS — share one static fragment.
+                'Weline_Customer::hooks/header-account-links.phtml' => ['context' => 'static'],
                 'Weline_Customer::hooks/Weline_Theme/frontend/layouts/base/body-end.phtml' => ['context' => 'frontend_auth'],
                 'Weline_Customer::hooks/Weline_Theme/frontend/layouts/homepage/body-end.phtml' => ['context' => 'frontend_auth'],
             ],

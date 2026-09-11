@@ -76,6 +76,11 @@ final class SocialLoginQuickAuthContractTest extends TestCase
         self::assertStringContainsString('cfg.oauth', $js);
         self::assertStringContainsString('social-login/start', $js);
         self::assertStringContainsString('data-w-social-quick-fallback-ui', $js);
+        self::assertStringContainsString('MOUNT_SOCIAL_QUICK', $js);
+        self::assertStringContainsString('customer/social-quick', $js);
+        self::assertStringContainsString('mountIntoHost', $js);
+        self::assertStringContainsString('scanMountHosts', $js);
+        self::assertStringContainsString('revealVisibleFallback', $js);
         self::assertStringContainsString('weline-social-quick-bar__btn--google', $js);
         self::assertStringContainsString('weline-social-quick-bar__btn--facebook', $js);
         self::assertStringContainsString('providerButtonHtml', $js);
