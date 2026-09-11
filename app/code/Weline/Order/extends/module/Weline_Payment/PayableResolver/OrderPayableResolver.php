@@ -139,11 +139,14 @@ final class OrderPayableResolver implements PayableResolverInterface
             'store_id' => $scope->storeId,
             'refundable' => \in_array($paymentStatus, [self::STATUS_PAID, 'partial'], true),
             'business_tags' => ['weline_order', 'commerce'],
+            'order_type' => strtolower(trim((string) ($order['order_type'] ?? 'toc'))) ?: 'toc',
             'metadata' => [
                 'checkout_group_uuid' => (string) ($order['checkout_group_uuid'] ?? ''),
                 'is_shipping_charge_owner' => (bool) ($order['is_shipping_charge_owner'] ?? false),
                 'number_kind' => (string) ($order['number_kind'] ?? 'order'),
                 'display_number' => (string) ($order['display_number'] ?? ''),
+                'order_type' => strtolower(trim((string) ($order['order_type'] ?? 'toc'))) ?: 'toc',
+                'type_payload' => \is_array($order['type_payload'] ?? null) ? $order['type_payload'] : [],
             ],
         ]);
     }
@@ -372,6 +375,8 @@ final class OrderPayableResolver implements PayableResolverInterface
             'is_shipping_charge_owner' => $read->isShippingChargeOwner,
             'number_kind' => $read->numberKind,
             'display_number' => $read->displayNumber,
+            'order_type' => $read->orderType,
+            'type_payload' => $read->typePayload,
         ];
     }
 
