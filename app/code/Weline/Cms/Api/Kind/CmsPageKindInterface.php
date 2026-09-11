@@ -19,7 +19,7 @@ interface CmsPageKindInterface
     public function getPathGroup(): string;
 
     /**
-     * Public URI namespace prefix (e.g. "/help"). Empty for generic CMS pages.
+     * Public URI namespace prefix (e.g. "/faq"). Empty for generic CMS pages.
      */
     public function getPublicNamespace(): string;
 
