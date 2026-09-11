@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>PROTOTYPE — 店面客服：框选截图</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 480px; margin: 24px auto; padding: 0 12px 80px; background: #eef1f6; }
+    .note { background: #fff8e6; border: 1px solid #f0d78c; padding: 10px; border-radius: 8px; font-size: 13px; }
+    .verdict { background: #ecfdf3; border: 1px solid #abefc6; padding: 10px; border-radius: 8px; margin: 10px 0; font-size: 13px; }
+    .widget { border: 1px solid #d8dde6; border-radius: 12px; background: #fff; overflow: hidden; }
+    .msgs { height: 160px; overflow: auto; background: #f5f7fb; padding: 10px; }
+    .footer { padding: 8px; border-top: 1px solid #e5e7eb; }
+    .toolbar { display: flex; gap: 6px; margin-bottom: 6px; flex-wrap: wrap; }
+    .toolbar button { border: 1px solid #d8dde6; background: #fff; border-radius: 8px; padding: 4px 8px; cursor: pointer; font-size: 12px; }
+    .row { display: flex; gap: 6px; }
+    textarea { flex: 1; min-height: 40px; border-radius: 10px; border: 1px solid #d8dde6; padding: 8px; }
+    .send { background: #2563eb; color: #fff; border: 0; border-radius: 8px; padding: 8px 12px; }
+    .state { font-family: ui-monospace, monospace; white-space: pre-wrap; background: #111; color: #d1fae5; padding: 8px; border-radius: 8px; font-size: 11px; margin-top: 10px; }
+    .switcher { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); background: #111; color: #fff; border-radius: 999px; padding: 8px 12px; display: flex; gap: 8px; align-items: center; z-index: 20; }
+    .switcher button { background: #333; color: #fff; border: 0; width: 28px; height: 28px; border-radius: 999px; }
+    .bubble { max-width: 80%; margin: 6px 0; padding: 8px 10px; border-radius: 10px; background: #2563eb; color: #fff; margin-left: auto; font-size: 13px; }
+    .crop {
+      position: fixed; inset: 0; z-index: 50; display: none; flex-direction: column;
+      background: rgba(15,23,42,.72); color: #fff;
+    }
+    .crop.open { display: flex; }
+    .crop-stage { position: relative; flex: 1; cursor: crosshair; background:
+      linear-gradient(135deg,#334155,#1e293b); margin: 12px; border-radius: 8px; overflow: hidden; }
+    .crop-demo {
+      position: absolute; left: 12%; top: 18%; width: 76%; height: 58%;
+      background: #64748b; border: 1px dashed rgba(255,255,255,.5);
+      display: flex; align-items: center; justify-content: center; font-size: 13px;
+    }
+    .crop-rect {
+      position: absolute; border: 1px solid #fff; box-shadow: 0 0 0 9999px rgba(15,23,42,.55);
+      pointer-events: none; display: none;
+    }
+    .crop-bar { display: flex; justify-content: center; gap: 10px; padding: 12px; background: rgba(15,23,42,.9); }
+    .crop-bar button { min-width: 72px; border: 0; border-radius: 8px; padding: 8px 12px; cursor: pointer; }
+    .crop-bar .ok { background: #2563eb; color: #fff; }
+  </style>
+</head>
+<body>
+  <h1 style="font-size:18px">店面截图框选（UI 原型）</h1>
+  <div class="note">问题：必须先整页截图才能选区吗？业界更好做法是什么？三变体：A 先蒙层框选再截选区；B 先整页截再裁；C 系统共享屏幕。</div>
+  <div class="verdict">选型默认 A（variant=A）：点击即蒙层框选（微信/截图工具同款），确认后只截选区并 JPEG≤2MB。</div>
+  <div class="widget">
+    <div class="msgs" id="msgs"></div>
+    <div class="footer" id="footer"></div>
+  </div>
+  <div class="state" id="state"></div>
+  <div class="crop" id="crop">
+    <div class="crop-stage" id="stage">
+      <div class="crop-demo">模拟捕获画面</div>
+      <div class="crop-rect" id="rect"></div>
+    </div>
+    <p style="text-align:center;margin:0;padding:6px;font-size:13px">拖拽选择要发送的区域</p>
+    <div class="crop-bar">
+      <button type="button" id="c-cancel">取消</button>
+      <button type="button" id="c-reset">重选</button>
+      <button type="button" class="ok" id="c-ok" disabled>完成</button>
+    </div>
+  </div>
+  <div class="switcher">
+    <button type="button" id="prev">←</button>
+    <span id="label">A</span>
+    <button type="button" id="next">→</button>
+  </div>
+  <script>
+    const variants = ['A','B','C'];
+    const state = { variant: 'A', events: [], sel: null };
+    function getVariant() {
+      const v = new URLSearchParams(location.search).get('variant') || 'A';
+      return variants.includes(v) ? v : 'A';
+    }
+    function setVariant(v) {
+      const url = new URL(location.href);
+      url.searchParams.set('variant', v);
+      history.replaceState(null, '', url);
+      render();
+    }
+    function pushMsg(html) {
+      document.getElementById('msgs').insertAdjacentHTML('beforeend', `<div class="bubble">${html}</div>`);
+      state.events.push({type:'send', at: Date.now(), html: html.slice(0,48)});
+      renderState();
+    }
+    function renderState() {
+      document.getElementById('state').textContent = JSON.stringify({variant: getVariant(), events: state.events.slice(-5), sel: state.sel}, null, 2);
+    }
+    function openCrop() {
+      const crop = document.getElementById('crop');
+      const stage = document.getElementById('stage');
+      const rect = document.getElementById('rect');
+      const ok = document.getElementById('c-ok');
+      let drag = false, x0=0, y0=0;
+      state.sel = null;
+      rect.style.display = 'none';
+      ok.disabled = true;
+      crop.classList.add('open');
+      function pos(e) {
+        const b = stage.getBoundingClientRect();
+        return { x: Math.max(0, Math.min(b.width, e.clientX - b.left)), y: Math.max(0, Math.min(b.height, e.clientY - b.top)) };
+      }
+      function sync(a,b) {
+        const x = Math.min(a.x,b.x), y = Math.min(a.y,b.y), w = Math.abs(a.x-b.x), h = Math.abs(a.y-b.y);
+        state.sel = {x,y,w,h};
+        rect.style.display = w>2 && h>2 ? 'block' : 'none';
+        rect.style.left = x+'px'; rect.style.top = y+'px'; rect.style.width = w+'px'; rect.style.height = h+'px';
+        ok.disabled = !(w>2 && h>2);
+        renderState();
+      }
+      stage.onpointerdown = (e) => { drag = true; const p = pos(e); x0=p.x; y0=p.y; sync(p,p); stage.setPointerCapture(e.pointerId); };
+      stage.onpointermove = (e) => { if (!drag) return; sync({x:x0,y:y0}, pos(e)); };
+      stage.onpointerup = () => { drag = false; };
+      document.getElementById('c-cancel').onclick = () => { crop.classList.remove('open'); state.events.push({type:'cancel'}); renderState(); };
+      document.getElementById('c-reset').onclick = () => { state.sel=null; rect.style.display='none'; ok.disabled=true; renderState(); };
+      document.getElementById('c-ok').onclick = () => {
+        if (!state.sel) return;
+        crop.classList.remove('open');
+        pushMsg(`<em>region ${Math.round(state.sel.w)}×${Math.round(state.sel.h)}</em><br/><span style="opacity:.85">[框选截图 ≤2MB]</span>`);
+      };
+    }
+    function renderA(root) {
+      root.innerHTML = `
+        <div class="toolbar">
+          <button type="button" data-t="emoji">表情</button>
+          <button type="button" data-t="image">图片</button>
+          <button type="button" data-t="file">文件</button>
+          <button type="button" data-t="shot">截图</button>
+        </div>
+        <div class="row"><textarea id="input" placeholder="输入消息…（可粘贴截图）"></textarea><button class="send" id="send">发送</button></div>`;
+      root.querySelector('.toolbar').onclick = (e) => {
+        const t = e.target.getAttribute('data-t');
+        if (t === 'emoji') document.getElementById('input').value += '😊';
+        if (t === 'image' || t === 'file') pushMsg(t === 'image' ? '[图片]' : '[文件]');
+        if (t === 'shot') openCrop();
+      };
+      root.querySelector('#send').onclick = () => {
+        const v = root.querySelector('#input').value.trim();
+        if (!v) return;
+        pushMsg(v);
+        root.querySelector('#input').value = '';
+      };
+    }
+    function renderB(root) {
+      root.innerHTML = `
+        <div class="toolbar"><button type="button" data-t="shot">截图(整帧)</button></div>
+        <p style="font-size:12px;color:#667085;margin:0 0 6px">B：捕获后不框选，整帧直发（易超 2MB）。</p>
+        <div class="row"><textarea id="input"></textarea><button class="send" id="send">发送</button></div>`;
+      root.querySelector('[data-t="shot"]').onclick = () => pushMsg('[整帧截图 PNG 可能 &gt;2MB]');
+      root.querySelector('#send').onclick = () => {
+        const v = root.querySelector('#input').value.trim();
+        if (v) { pushMsg(v); root.querySelector('#input').value=''; }
+      };
+    }
+    function renderC(root) {
+      root.innerHTML = `
+        <div class="toolbar"><button type="button" data-t="image">图片/粘贴</button></div>
+        <p style="font-size:12px;color:#667085;margin:0 0 6px">C：无截图钮，依赖系统截图后粘贴。</p>
+        <div class="row"><textarea id="input" placeholder="粘贴截图到此…"></textarea><button class="send" id="send">发送</button></div>`;
+      root.querySelector('[data-t="image"]').onclick = () => pushMsg('[粘贴图片]');
+      root.querySelector('#send').onclick = () => {
+        const v = root.querySelector('#input').value.trim();
+        if (v) { pushMsg(v); root.querySelector('#input').value=''; }
+      };
+    }
+    function render() {
+      state.variant = getVariant();
+      const root = document.getElementById('footer');
+      if (state.variant === 'A') renderA(root);
+      else if (state.variant === 'B') renderB(root);
+      else renderC(root);
+      document.getElementById('label').textContent = state.variant + (state.variant==='A'?' (框选)': state.variant==='B'?' (整帧)':' (粘贴)');
+      renderState();
+    }
+    document.getElementById('prev').onclick = () => {
+      const i = variants.indexOf(getVariant());
+      setVariant(variants[(i + variants.length - 1) % variants.length]);
+    };
+    document.getElementById('next').onclick = () => {
+      const i = variants.indexOf(getVariant());
+      setVariant(variants[(i + 1) % variants.length]);
+    };
+    render();
+  </script>
+</body>
+</html>

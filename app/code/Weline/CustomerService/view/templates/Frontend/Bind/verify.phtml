@@ -2,9 +2,20 @@
 /**
  * 邮箱绑定验证结果页面
  */
-$success = $this->getData('success') ?? false;
-$message = $this->getData('message') ?? '';
-$email = $this->getData('email') ?? '';
+$success = (bool)($this->getData('success') ?? false);
+$message = (string)($this->getData('message') ?? '');
+$email = (string)($this->getData('email') ?? '');
+$sessionToken = (string)($this->getData('session_token') ?? '');
+$homeUrl = (string)($this->getData('home_url') ?? '/');
+if ($homeUrl === '') {
+    $homeUrl = '/';
+}
+$boundPayload = [
+    'type' => 'email_bound',
+    'email' => $email,
+    'session_token' => $sessionToken,
+    'ts' => time() * 1000,
+];
 ?>
 <!DOCTYPE html>
 <html lang="<?= $this->getLocale() ?>">
@@ -13,209 +24,237 @@ $email = $this->getData('email') ?? '';
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= __('邮箱绑定验证') ?></title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        :root {
+            --cs-verify-bg: var(--weline-theme-surface-muted, #f4f1ec);
+            --cs-verify-card: var(--weline-theme-surface, #ffffff);
+            --cs-verify-text: var(--weline-theme-text, #1c1917);
+            --cs-verify-muted: var(--weline-theme-text-muted, #78716c);
+            --cs-verify-primary: var(--weline-theme-primary, #9a3412);
+            --cs-verify-ok: var(--weline-theme-success, #15803d);
+            --cs-verify-bad: var(--weline-theme-danger, #b91c1c);
+            --cs-verify-border: var(--weline-theme-border, #e7e5e4);
+            --cs-verify-radius: var(--weline-radius-lg, 16px);
+            --cs-verify-space: var(--weline-space-4, 1rem);
         }
-        
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: "Source Han Sans SC", "Noto Sans SC", "PingFang SC", sans-serif;
+            background:
+                radial-gradient(circle at top left, color-mix(in srgb, var(--cs-verify-primary) 12%, transparent), transparent 42%),
+                var(--cs-verify-bg);
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 20px;
+            padding: var(--cs-verify-space);
+            color: var(--cs-verify-text);
         }
-        
+
         .verify-container {
-            background: white;
-            border-radius: 16px;
-            padding: 40px;
-            max-width: 450px;
+            background: var(--cs-verify-card);
+            border: 1px solid var(--cs-verify-border);
+            border-radius: var(--cs-verify-radius);
+            padding: calc(var(--cs-verify-space) * 2.5);
+            max-width: 28rem;
             width: 100%;
             text-align: center;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+            box-shadow: var(--weline-shadow-lg, 0 18px 40px rgba(28, 25, 23, 0.12));
         }
-        
+
         .verify-icon {
-            width: 80px;
-            height: 80px;
-            border-radius: 50%;
+            width: 4.5rem;
+            height: 4.5rem;
+            border-radius: 999px;
             display: flex;
             align-items: center;
             justify-content: center;
-            margin: 0 auto 24px;
-            font-size: 40px;
+            margin: 0 auto 1.25rem;
+            font-size: 2rem;
+            color: #fff;
         }
-        
-        .verify-icon.success {
-            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-            color: white;
-        }
-        
-        .verify-icon.error {
-            background: linear-gradient(135deg, #dc3545 0%, #ff6b6b 100%);
-            color: white;
-        }
-        
+
+        .verify-icon.success { background: var(--cs-verify-ok); }
+        .verify-icon.error { background: var(--cs-verify-bad); }
+
         .verify-title {
-            font-size: 24px;
-            font-weight: 600;
-            color: #333;
-            margin-bottom: 12px;
+            font-size: 1.35rem;
+            font-weight: 650;
+            margin-bottom: 0.65rem;
         }
-        
+
         .verify-message {
-            font-size: 16px;
-            color: #666;
+            font-size: 0.98rem;
+            color: var(--cs-verify-muted);
             line-height: 1.6;
-            margin-bottom: 24px;
+            margin-bottom: 1.1rem;
         }
-        
+
         .verify-email {
-            background: #f8f9fa;
-            padding: 12px 20px;
-            border-radius: 8px;
-            font-size: 14px;
-            color: #495057;
-            margin-bottom: 24px;
+            background: color-mix(in srgb, var(--cs-verify-bg) 88%, var(--cs-verify-primary));
+            border: 1px solid var(--cs-verify-border);
+            padding: 0.75rem 1rem;
+            border-radius: var(--weline-radius-md, 10px);
+            font-size: 0.92rem;
+            margin-bottom: 1.25rem;
             display: inline-block;
+            word-break: break-all;
         }
-        
-        .verify-email strong {
-            color: #667eea;
-        }
-        
+
+        .verify-email strong { color: var(--cs-verify-primary); }
+
         .verify-actions {
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 0.75rem;
         }
-        
+
         .btn {
-            display: inline-block;
-            padding: 12px 24px;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.75rem 1.1rem;
+            border-radius: var(--weline-radius-md, 10px);
+            font-size: 0.98rem;
+            font-weight: 560;
             text-decoration: none;
-            transition: all 0.3s ease;
             cursor: pointer;
-            border: none;
+            border: 1px solid transparent;
         }
-        
+
         .btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            background: var(--cs-verify-primary);
+            color: #fff;
         }
-        
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
-        }
-        
+
         .btn-secondary {
-            background: #f8f9fa;
-            color: #495057;
-            border: 1px solid #dee2e6;
+            background: transparent;
+            color: var(--cs-verify-text);
+            border-color: var(--cs-verify-border);
         }
-        
-        .btn-secondary:hover {
-            background: #e9ecef;
-        }
-        
+
         .help-text {
-            margin-top: 24px;
-            font-size: 14px;
-            color: #999;
+            margin-top: 1.25rem;
+            font-size: 0.88rem;
+            color: var(--cs-verify-muted);
+            line-height: 1.5;
         }
-        
+
         .help-text a {
-            color: #667eea;
-            text-decoration: none;
+            color: var(--cs-verify-primary);
         }
-        
-        .help-text a:hover {
-            text-decoration: underline;
-        }
-        
-        @media (max-width: 480px) {
-            .verify-container {
-                padding: 30px 20px;
-            }
-            
-            .verify-title {
-                font-size: 20px;
-            }
-            
-            .verify-message {
-                font-size: 14px;
-            }
-        }
+
+        [hidden] { display: none !important; }
     </style>
 </head>
 <body>
     <div class="verify-container">
         <?php if ($success): ?>
-            <div class="verify-icon success">
-                <span>✓</span>
-            </div>
-            <h1 class="verify-title"><?= __('邮箱绑定成功') ?></h1>
-            <p class="verify-message"><?= htmlspecialchars($message) ?></p>
-            <?php if ($email): ?>
+            <div class="verify-icon success" aria-hidden="true">✓</div>
+            <h1 class="verify-title"><?= __('邮箱已绑定') ?></h1>
+            <p class="verify-message" id="cs-verify-status">
+                <?= __('正在同步到客服聊天窗口…') ?>
+            </p>
+            <?php if ($email !== ''): ?>
                 <div class="verify-email">
-                    <?= __('已绑定邮箱') ?>: <strong><?= htmlspecialchars($email) ?></strong>
+                    <?= __('已绑定邮箱') ?>: <strong><?= htmlspecialchars($email, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></strong>
                 </div>
             <?php endif; ?>
             <div class="verify-actions">
-                <a href="@url{'/'}" class="w-button" data-tone="primary"><?= __('返回首页') ?></a>
+                <a href="<?= htmlspecialchars($homeUrl, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>" class="btn btn-primary" data-cs-verify-home>
+                    <?= __('回到商城继续聊天') ?>
+                </a>
+                <button type="button" class="btn btn-secondary" id="cs-verify-close" hidden>
+                    <?= __('关闭此页') ?>
+                </button>
             </div>
-            <p class="help-text">
-                <?= __('绑定成功后，您将收到客服回复的邮件通知') ?>
+            <p class="help-text" id="cs-verify-help">
+                <?= __('原页面客服窗口将自动显示已绑定邮箱；若未自动关闭，请关闭本页返回继续聊天。') ?>
             </p>
         <?php else: ?>
-            <div class="verify-icon error">
-                <span>✗</span>
-            </div>
+            <div class="verify-icon error" aria-hidden="true">✗</div>
             <h1 class="verify-title"><?= __('验证失败') ?></h1>
-            <p class="verify-message"><?= htmlspecialchars($message) ?></p>
+            <p class="verify-message"><?= htmlspecialchars($message, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></p>
             <div class="verify-actions">
-                <a href="@url{'/'}" class="w-button" data-tone="primary"><?= __('返回首页') ?></a>
-                <button class="w-button" type="button" data-cs-bind-back data-tone="neutral"><?= __('返回上一页') ?></button>
+                <a href="<?= htmlspecialchars($homeUrl, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>" class="btn btn-primary"><?= __('返回首页') ?></a>
+                <button class="btn btn-secondary" type="button" data-cs-bind-back><?= __('返回上一页') ?></button>
             </div>
             <p class="help-text">
-                <?= __('如有问题，请') ?> <a href="@url{'/'}" data-cs-bind-open-chat><?= __('联系客服') ?></a>
+                <?= __('如有问题，请') ?> <a href="<?= htmlspecialchars($homeUrl, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>" data-cs-bind-open-chat><?= __('联系客服') ?></a>
             </p>
         <?php endif; ?>
     </div>
-    
+
     <script>
-    function openChat() {
-        // 尝试打开客服聊天窗口
-        if (typeof CustomerServiceWidget !== 'undefined') {
-            CustomerServiceWidget.toggleChat();
-        } else {
-            // 如果客服组件不可用，跳转到首页
-            window.location.href='@url{'/'}';
-        }
-    }
+    (function () {
+        var SUCCESS = <?= $success ? 'true' : 'false' ?>;
+        var PAYLOAD = <?= json_encode($boundPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+        var STORAGE_KEY = 'cs_email_bound_v1';
+        var CHANNEL = 'weline-cs-email-bound';
+        var HOME = <?= json_encode($homeUrl, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
 
-    document.addEventListener('click', function(event) {
-        const backTrigger = event.target.closest('[data-cs-bind-back]');
-        if (backTrigger) {
-            event.preventDefault();
-            history.back();
-            return;
+        function publishBound() {
+            if (!SUCCESS || !PAYLOAD || !PAYLOAD.email) {
+                return;
+            }
+            PAYLOAD.ts = Date.now();
+            try {
+                if (typeof BroadcastChannel !== 'undefined') {
+                    var channel = new BroadcastChannel(CHANNEL);
+                    channel.postMessage(PAYLOAD);
+                    channel.close();
+                }
+            } catch (_e) {}
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(PAYLOAD));
+                // Retrigger storage listeners in other tabs even if value identical.
+                localStorage.removeItem(STORAGE_KEY);
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(PAYLOAD));
+            } catch (_e2) {}
         }
 
-        const chatTrigger = event.target.closest('[data-cs-bind-open-chat]');
-        if (chatTrigger) {
-            event.preventDefault();
-            openChat();
+        function tryClose() {
+            var status = document.getElementById('cs-verify-status');
+            var closeBtn = document.getElementById('cs-verify-close');
+            try {
+                window.close();
+            } catch (_e) {}
+            setTimeout(function () {
+                if (!window.closed) {
+                    if (status) {
+                        status.textContent = <?= json_encode((string)__('已同步。可关闭此页，返回原页面继续聊天。'), JSON_UNESCAPED_UNICODE) ?>;
+                    }
+                    if (closeBtn) {
+                        closeBtn.hidden = false;
+                        closeBtn.addEventListener('click', function () {
+                            try { window.close(); } catch (_e3) {}
+                            window.location.href = HOME;
+                        });
+                    }
+                }
+            }, 450);
         }
-    });
+
+        if (SUCCESS) {
+            publishBound();
+            tryClose();
+        }
+
+        document.addEventListener('click', function (event) {
+            var backTrigger = event.target.closest('[data-cs-bind-back]');
+            if (backTrigger) {
+                event.preventDefault();
+                history.back();
+                return;
+            }
+            var chatTrigger = event.target.closest('[data-cs-bind-open-chat]');
+            if (chatTrigger) {
+                event.preventDefault();
+                window.location.href = HOME;
+            }
+        });
+    })();
     </script>
 </body>
 </html>

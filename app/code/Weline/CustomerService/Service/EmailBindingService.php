@@ -25,10 +25,16 @@ use Weline\Framework\Runtime\RuntimeProviderResolver;
 class EmailBindingService
 {
     private string $lastErrorMessage = '';
+    private string $lastVerificationUrl = '';
 
     public function getLastErrorMessage(): string
     {
         return $this->lastErrorMessage;
+    }
+
+    public function getLastVerificationUrl(): string
+    {
+        return $this->lastVerificationUrl;
     }
 
     /**
@@ -41,6 +47,18 @@ class EmailBindingService
     public function sendVerificationEmail(string $email, string $sessionToken): bool
     {
         $this->lastErrorMessage = '';
+        $this->lastVerificationUrl = '';
+        $email = \strtolower(\trim($email));
+        if (!$this->isValidEmail($email)) {
+            $this->lastErrorMessage = (string) __('请输入有效的邮箱地址');
+
+            return false;
+        }
+        if (\trim($sessionToken) === '') {
+            $this->lastErrorMessage = (string) __('Session token is required.');
+
+            return false;
+        }
 
         $verificationToken = $this->generateVerificationToken($email, $sessionToken);
         $verificationUrl = $this->buildVerificationUrl($verificationToken);
@@ -64,6 +82,7 @@ class EmailBindingService
         try {
             $result = w_query('smtp', 'send', [
                 'module' => $module,
+                'channel' => 'Weline_CustomerService::email_binding',
                 'to' => ['email' => $email, 'name' => $email],
                 'subject' => $subject,
                 'content' => $content,
@@ -122,6 +141,23 @@ class EmailBindingService
     }
 
     /**
+     * Strict email check shared by Bind / Query / guest gate.
+     */
+    public function isValidEmail(string $email): bool
+    {
+        $email = \strtolower(\trim($email));
+        if ($email === '' || \strlen($email) > 254) {
+            return false;
+        }
+        if (!\filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return false;
+        }
+
+        // Reject toy domains like a@b.c — require host labels + TLD length >= 2.
+        return \preg_match('/^[^@\s]+@([a-z0-9](?:[a-z0-9\-]*[a-z0-9])?\.)+[a-z]{2,}$/iD', $email) === 1;
+    }
+
+    /**
      * 绑定客户到会话
      *
      * @param string $email 邮箱
@@ -135,6 +171,14 @@ class EmailBindingService
         ?int $customerId = null
     ): bool {
         try {
+            $email = \strtolower(\trim($email));
+            $sessionToken = \trim($sessionToken);
+            if (!$this->isValidEmail($email) || $sessionToken === '') {
+                return false;
+            }
+
+            $previousEmail = $this->readGuestEmail($sessionToken);
+
             if ($customerId) {
                 /** @var ChatSession $session */
                 $session = ObjectManager::getInstance(ChatSession::class);
@@ -148,6 +192,8 @@ class EmailBindingService
                         ->save();
 
                     $this->updateCustomerLanguageFromSession($customerId, $sessionToken);
+                    $this->persistGuestEmail($sessionToken, $email);
+                    $this->announceIdentityChange((int)$session->getId(), $previousEmail, $email);
 
                     return true;
                 }
@@ -169,35 +215,87 @@ class EmailBindingService
                         ->save();
 
                     $this->updateCustomerLanguageFromSession($resolvedCustomerId, $sessionToken);
+                    $this->persistGuestEmail($sessionToken, $email);
+                    $this->announceIdentityChange((int)$session->getId(), $previousEmail, $email);
 
                     return true;
                 }
             }
 
-            /** @var CustomerLanguage $language */
-            $language = ObjectManager::getInstance(CustomerLanguage::class);
-            $language->where(CustomerLanguage::schema_fields_session_id, $sessionToken)
+            $this->persistGuestEmail($sessionToken, $email);
+
+            /** @var ChatSession $session */
+            $session = ObjectManager::getInstance(ChatSession::class);
+            $session->where(ChatSession::schema_fields_SESSION_TOKEN, $sessionToken)
                 ->find()
                 ->fetch();
-
-            if ($language->getId()) {
-                $language->setEmail($email)
-                    ->setData(CustomerLanguage::schema_fields_updated_at, date('Y-m-d H:i:s'))
-                    ->save();
-            } else {
-                $language->reset()
-                    ->setEmail($email)
-                    ->setSessionId($sessionToken)
-                    ->setTargetLocale('zh_Hans_CN')
-                    ->setData(CustomerLanguage::schema_fields_created_at, date('Y-m-d H:i:s'))
-                    ->setData(CustomerLanguage::schema_fields_updated_at, date('Y-m-d H:i:s'))
-                    ->save();
+            if ($session->getId()) {
+                $this->announceIdentityChange((int)$session->getId(), $previousEmail, $email);
             }
 
             return true;
         } catch (\Exception $e) {
             w_log_error('EmailBindingService bindCustomerToSession error: ' . $e->getMessage());
             return false;
+        }
+    }
+
+    private function readGuestEmail(string $sessionToken): string
+    {
+        /** @var CustomerLanguage $language */
+        $language = ObjectManager::getInstance(CustomerLanguage::class);
+        $language->where(CustomerLanguage::schema_fields_session_id, $sessionToken)
+            ->find()
+            ->fetch();
+        if (!$language->getId()) {
+            return '';
+        }
+
+        $email = \strtolower(\trim((string)($language->getEmail() ?? '')));
+
+        return $this->isValidEmail($email) ? $email : '';
+    }
+
+    private function persistGuestEmail(string $sessionToken, string $email): void
+    {
+        /** @var CustomerLanguage $language */
+        $language = ObjectManager::getInstance(CustomerLanguage::class);
+        $language->where(CustomerLanguage::schema_fields_session_id, $sessionToken)
+            ->find()
+            ->fetch();
+
+        if ($language->getId()) {
+            $language->setEmail($email)
+                ->setData(CustomerLanguage::schema_fields_updated_at, date('Y-m-d H:i:s'))
+                ->save();
+        } else {
+            $language->reset()
+                ->setEmail($email)
+                ->setSessionId($sessionToken)
+                ->setTargetLocale('zh_Hans_CN')
+                ->setData(CustomerLanguage::schema_fields_created_at, date('Y-m-d H:i:s'))
+                ->setData(CustomerLanguage::schema_fields_updated_at, date('Y-m-d H:i:s'))
+                ->save();
+        }
+    }
+
+    private function announceIdentityChange(int $sessionId, string $previousEmail, string $email): void
+    {
+        if ($sessionId <= 0 || $email === '') {
+            return;
+        }
+        if ($previousEmail !== '' && \strcasecmp($previousEmail, $email) === 0) {
+            return;
+        }
+
+        $content = $previousEmail === ''
+            ? (string) __('已绑定邮箱身份：%{1}。如不正确可点击修改。', [$email])
+            : (string) __('已将会话邮箱从 %{1} 更换为 %{2}。', [$previousEmail, $email]);
+
+        try {
+            ObjectManager::getInstance(ChatService::class)->postSystemMessage($sessionId, $content);
+        } catch (\Throwable $e) {
+            w_log_warning('EmailBindingService announceIdentityChange failed: ' . $e->getMessage());
         }
     }
 
@@ -223,14 +321,19 @@ class EmailBindingService
         string $sessionToken,
         string $verificationUrl
     ): bool {
-        $this->bindCustomerToSession($email, $sessionToken, null);
+        // DEV must not silently bind — that made "any email send" look like verified identity.
         w_log_info(sprintf(
-            'EmailBindingService DEV fallback: bind email saved for session; verification URL: %s',
+            'EmailBindingService DEV fallback: SMTP unavailable; open verification URL to bind (%s / session=%s): %s',
+            $email,
+            $sessionToken,
             $verificationUrl
         ));
-        $this->lastErrorMessage = '';
+        $this->lastVerificationUrl = $verificationUrl;
+        $this->lastErrorMessage = (string) __(
+            '开发模式：邮件服务不可用，未自动绑定。请点击下方链接完成绑定。'
+        );
 
-        return true;
+        return false;
     }
 
     private function updateCustomerLanguageFromSession(int $customerId, string $sessionToken): void
@@ -294,14 +397,13 @@ class EmailBindingService
 
     private function buildVerificationUrl(string $token): string
     {
-        $path = '/customerservice/frontend/bind/verify?token=' . urlencode($token);
-
         try {
             /** @var Url $url */
             $url = ObjectManager::getInstance(Url::class);
-            return $url->getUrl($path);
+            // Pass token as query param so Url helper encodes once (avoid %253D).
+            return $url->getUrl('/customerservice/frontend/bind/verify', ['token' => $token]);
         } catch (\Throwable) {
-            return $path;
+            return '/customerservice/frontend/bind/verify?token=' . rawurlencode($token);
         }
     }
 
