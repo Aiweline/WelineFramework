@@ -21,6 +21,11 @@ final class LocalImageCaptcha implements VerificationProviderInterface
         return 'local_image';
     }
 
+    public function cspDirectives(): array
+    {
+        return [];
+    }
+
     public function render(array $context): string
     {
         $answer = $this->randomCode();

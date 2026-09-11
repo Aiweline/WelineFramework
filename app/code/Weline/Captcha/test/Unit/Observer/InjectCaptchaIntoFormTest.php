@@ -81,13 +81,17 @@ final class InjectCaptchaIntoFormTest extends TestCase
             \dirname(__DIR__, 3) . '/Observer/InjectCaptchaIntoForm.php'
         );
 
-        self::assertStringContainsString('LazyCaptchaClientRuntime::onceScriptHtml', $source);
-        self::assertStringContainsString('data-weline-captcha-lazy', $source);
-        self::assertStringContainsString('weline_captcha/frontend/challenge', $source);
+        self::assertStringContainsString('LazyCaptchaClientRuntime::hostMarkup', $source);
         self::assertStringNotContainsString('SharedResponseCachePolicy::forbid', $source);
         self::assertStringNotContainsString('captcha_ssr_challenge', $source);
         self::assertStringNotContainsString('renderChallenge', $source);
         self::assertStringNotContainsString("addModule('Weline_Captcha')", $source);
+
+        $runtime = (string)\file_get_contents(
+            \dirname(__DIR__, 3) . '/Service/LazyCaptchaClientRuntime.php'
+        );
+        self::assertStringContainsString('data-weline-captcha-lazy', $runtime);
+        self::assertStringContainsString('weline_captcha/frontend/challenge', $runtime);
     }
 
     public function testAsyncActionFormsSkipCaptchaEvenWhenRequired(): void

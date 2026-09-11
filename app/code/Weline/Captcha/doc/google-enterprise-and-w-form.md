@@ -60,8 +60,12 @@ US=local_image
 - 接受：`captcha_provider === preferred`，或开启 `allow_local_degrade` 且提交
   `local_image` 且本地凭证有效。
 - Google / 腾讯：**风控失败仍拒绝**，不因低分/假票回退本地。
+- Google Enterprise 服务端 `assessments` 出站经 `CaptchaOutboundProxy`：
+  `captcha/http/proxy` → 已配置的 `customer/social_login/http_proxy` → `HTTPS_PROXY` 等。
+  PHP curl 不会自动读环境代理，须显式 `CURLOPT_PROXY`（本机打洞依赖此项）。
 - 客户端 SDK 加载/执行失败：派发 `weline:captcha:degrade`；lazy 运行时以
   `prefer=local_image` 重新拉挑战（仅配置允许时服务端才兑现）。
+  自定义挑战槽（如客服绑定邮箱）须自行监听该事件并重拉本地图码。
 - 腾讯 `trerror_` 容灾票视为未通过。
 - 挑战→提交之间换 VPN 导致国家变化可能校验失败（重新拉挑战即可）。
 

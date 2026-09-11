@@ -97,6 +97,11 @@
     color: var(--weline-theme-text-muted, #64748b);
 }
 
+.weline-captcha-google-trust[hidden],
+.weline-captcha-google-trust[data-sdk-ready="0"] {
+    display: none !important;
+}
+
 .weline-captcha-google-trust__mark {
     flex: 0 0 auto;
     display: inline-flex;

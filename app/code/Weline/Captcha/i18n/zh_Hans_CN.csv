@@ -18,6 +18,8 @@
 隐私权,隐私权
 条款,条款
 "受 Google 保护","受 Google 保护"
+"Google Enterprise API Key 配置错误：当前值像 Site Key（6L…），服务端校验需要 Cloud「API 密钥」（通常 AIza… 开头）。请到系统配置 → Weline_Captcha 更换 API Key。","Google Enterprise API Key 配置错误：当前值像 Site Key（6L…），服务端校验需要 Cloud「API 密钥」（通常 AIza… 开头）。请到系统配置 → Weline_Captcha 更换 API Key。"
+"Google Enterprise Site Key 无效：与项目 %{1} 不匹配或已删除。请到 Google Cloud → reCAPTCHA Enterprise 为该项目新建/复制 Site Key，并加入本地域名（如 *.test.weline.com），再写回系统配置 Weline_Captcha。","Google Enterprise Site Key 无效：与项目 %{1} 不匹配或已删除。请到 Google Cloud → reCAPTCHA Enterprise 为该项目新建/复制 Site Key，并加入本地域名（如 *.test.weline.com），再写回系统配置 Weline_Captcha。"
 "Google reCAPTCHA Enterprise 验证失败：HTTP %{1} %{2}","Google reCAPTCHA Enterprise验证失败：HTTP %{1} %{2}"
 "Google reCAPTCHA Enterprise 返回了无效响应","Google reCAPTCHA Enterprise 返回了无效响应"
 "无法初始化 Google 验证请求","无法初始化 Google 验证请求"

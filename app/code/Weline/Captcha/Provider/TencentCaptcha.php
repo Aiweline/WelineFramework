@@ -26,6 +26,22 @@ final class TencentCaptcha implements VerificationProviderInterface
         return 'tencent_captcha';
     }
 
+    public function cspDirectives(): array
+    {
+        return [
+            'script-src' => [
+                'https://turing.captcha.qcloud.com',
+            ],
+            'frame-src' => [
+                'https://turing.captcha.qcloud.com',
+            ],
+            'connect-src' => [
+                'https://turing.captcha.qcloud.com',
+                'https://captcha.tencentcloudapi.com',
+            ],
+        ];
+    }
+
     public function render(array $context): string
     {
         $appId = $this->config->tencentAppId();
@@ -53,6 +69,8 @@ final class TencentCaptcha implements VerificationProviderInterface
             . 'form.dispatchEvent(new CustomEvent("weline:form:verification-error",{bubbles:true,detail:{form:form,error:error,degrade:allowDegrade?"local_image":"",provider:"tencent_captcha"}}));'
             . 'if(allowDegrade){form.dispatchEvent(new CustomEvent("weline:captcha:degrade",{bubbles:true,detail:{form:form,prefer:"local_image",reason:String(error&&error.message||error||"tencent_unavailable")}}));}};'
             . 'form.addEventListener("weline:form:prepare-submit",function(event){'
+            . 'var active=form.querySelector("[data-weline-captcha-provider]");'
+            . 'if(!active||active.getAttribute("data-weline-captcha-provider")!=="tencent_captcha"){return;}'
             . 'if(form.dataset.welineCaptchaVerified==="1"){return;}event.preventDefault();'
             . 'if(form.dataset.welineCaptchaPending==="1"){return;}form.dataset.welineCaptchaPending="1";'
             . 'var fail=function(error){degrade(error);};'
@@ -61,8 +79,9 @@ final class TencentCaptcha implements VerificationProviderInterface
             . 'var captcha=new window.TencentCaptcha(' . $appIdJson . ',function(res){'
             . 'if(!res||res.ret===2){delete form.dataset.welineCaptchaPending;return;}'
             . 'if(res.ret!==0||!res.ticket||String(res.ticket).indexOf("trerror_")==="0"){fail(new Error("tencent_ticket_invalid"));return;}'
-            . 'var ticketInput=form.querySelector("[name=captcha_response]");'
-            . 'var randInput=form.querySelector("[name=captcha_randstr]");'
+            . 'var root=form.querySelector("[data-weline-captcha-provider=\\"tencent_captcha\\"]");'
+            . 'var ticketInput=root?root.querySelector("[name=captcha_response]"):null;'
+            . 'var randInput=root?root.querySelector("[name=captcha_randstr]"):null;'
             . 'if(!ticketInput||!randInput){fail(new Error("tencent_inputs_missing"));return;}'
             . 'ticketInput.value=String(res.ticket);randInput.value=String(res.randstr||"");'
             . 'form.dataset.welineCaptchaVerified="1";delete form.dataset.welineCaptchaPending;'
