@@ -80,7 +80,7 @@ $headerHot = \Weline\Theme\Helper\HeaderCommerceData::resolveHotWords(8);
 $headerHotWords = $headerHot['words'] ?? [];
 $headerHotIsDemo = (bool)($headerHot['is_demo'] ?? false);
 
-// editor-preview-light: skip mega-menu panel trees in theme editor iframe.
+// editor-preview-light: 仅用于空分类时的演示导航兜底；不得拍平 children（可视化预览须与店面一致）。
 $editorPreviewLight = false;
 try {
     $editorModeFlag = trim((string)($this->request->getParam('editor_mode', '') ?? ''));
@@ -813,9 +813,7 @@ $defaultNavItemsFactory = static function (): array {
                             }
                             $sidebarNavItems = is_array($sidebarSource) ? $sidebarSource : [];
                         }
-                        if ($editorPreviewLight && is_array($sidebarNavItems) && $sidebarNavItems !== []) {
-                            $sidebarNavItems = $headerFlattenNavForEditor($sidebarNavItems);
-                        }
+                        // 保留 children：侧栏飞出 / mega 与店面同源，禁止 editor 拍平。
                         if (!empty($sidebarNavItems)):
                             echo \Weline\Theme\Helper\HeaderNavFragment::fetchCategoriesSidebarNav($this, [
                                 'items' => $sidebarNavItems,

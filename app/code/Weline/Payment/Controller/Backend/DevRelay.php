@@ -62,7 +62,7 @@ final class DevRelay extends BackendController
             $userApiToken = '';
         }
 
-        return $this->fetch('Weline_Payment::Backend/DevRelay/index.phtml', [
+        return $this->fetch('Weline_Payment::templates/Backend/DevRelay/index.phtml', [
             'is_local' => $isLocal,
             'is_online_host' => !$isLocal,
             'feature_enabled' => $featureOn,
@@ -267,7 +267,7 @@ final class DevRelay extends BackendController
         $ackUrl = $this->getBackendUrl('payment/backend/dev-relay/postAck');
         $commandUrl = $this->getBackendUrl('payment/backend/dev-relay/postCommand');
 
-        return $this->fetch('Weline_Payment::Backend/DevRelay/console.phtml', [
+        return $this->fetch('Weline_Payment::templates/Backend/DevRelay/console.phtml', [
             'session_code' => $sessionCode,
             'token' => $token,
             'stream_url' => $streamUrl,
@@ -283,18 +283,37 @@ final class DevRelay extends BackendController
     public function postWorkerStart(): string
     {
         try {
-            $onlineBaseUrl = trim((string) $this->request->getPost('online_base_url', ''));
-            $userToken = trim((string) $this->request->getPost('user_token', ''));
-            $status = $this->localWorker->start($onlineBaseUrl, $userToken);
-            try {
-                $this->settings->save(array_merge($this->settings->get(), [
-                    'enabled' => true,
-                    'online_base_url' => rtrim($onlineBaseUrl, '/'),
-                ]));
-            } catch (\Throwable) {
+            if (!$this->gate->isLocalEnvironment()) {
+                throw new \RuntimeException((string) __('仅本地环境可启动静默 DevRelay worker。'));
             }
 
-            return $this->json(['success' => true, 'status' => $status]);
+            $body = $this->jsonBody();
+            $onlineBaseUrl = trim((string) ($body['online_base_url'] ?? $this->request->getPost('online_base_url', '')));
+            $userToken = trim((string) ($body['user_token'] ?? $this->request->getPost('user_token', '')));
+            $remembered = $this->localWorker->readRememberedCredentials();
+            if ($onlineBaseUrl === '') {
+                $onlineBaseUrl = (string) ($this->gate->config()['online_base_url'] ?? '');
+            }
+            if ($onlineBaseUrl === '' && \is_array($remembered)) {
+                $onlineBaseUrl = (string) ($remembered['online_base_url'] ?? '');
+            }
+            if ($userToken === '' && \is_array($remembered)) {
+                $userToken = (string) ($remembered['user_token'] ?? '');
+            }
+
+            // 先启用再 start，避免 canOpenUi chicken-egg；开启本身即打开中继开关。
+            $this->settings->save(array_merge($this->settings->get(), [
+                'enabled' => true,
+                'online_base_url' => rtrim($onlineBaseUrl, '/'),
+            ]));
+
+            $status = $this->localWorker->start($onlineBaseUrl, $userToken);
+
+            return $this->json([
+                'success' => true,
+                'status' => $status,
+                'feature_enabled' => $this->gate->canOpenUi(),
+            ]);
         } catch (\Throwable $throwable) {
             return $this->json(['success' => false, 'message' => $throwable->getMessage()], 400);
         }

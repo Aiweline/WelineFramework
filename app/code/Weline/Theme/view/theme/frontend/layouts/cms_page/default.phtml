@@ -27,7 +27,8 @@ $meta = $this->getData('meta') ?? [];
 $colors = $this->getData('colors') ?? [];
 $rawContent = (string)$this->getData('content');
 $isEditorPreview = (bool)($this->getData('editor_mode') ?? false)
-    || (string)($this->getData('preview_mode') ?? '') !== '';
+    || (bool)($this->getData('theme_preview_content') ?? false)
+    || in_array((string)($this->getData('layout_preview_mode') ?? ''), ['live', 'version', 'draft', 'default'], true);
 ?>
 <!DOCTYPE html>
 <html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}">

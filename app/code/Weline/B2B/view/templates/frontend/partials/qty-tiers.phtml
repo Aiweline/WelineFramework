@@ -15,10 +15,10 @@ use Weline\Product\Helper\StorefrontOfferResolver;
 
 $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 
+// Always emit DOM: retail SSR used to early-return, so selling-mode.js could not
+// unhide tiers when switching toc→tob without a full reload.
 $mode = strtolower(trim((string)Cookie::get('weline_selling_mode')));
-if ($mode !== 'tob') {
-    return;
-}
+$tiersHidden = $mode !== 'tob';
 
 $offer = StorefrontOfferResolver::resolve($this);
 $sku = trim((string)($offer['sku'] ?? ''));
@@ -29,14 +29,29 @@ if ($sku === '') {
 }
 
 $websiteId = max(0, (int)RequestContext::getWelineWebsiteId());
+$storeId = max(0, (int)RequestContext::getWelineStoreId());
 $moq = SellingModePolicy::DEFAULT_MOQ;
 $step = SellingModePolicy::DEFAULT_QTY_STEP;
+$allowsWholesaleDisplay = false;
 try {
     /** @var SellingModePolicy $policy */
     $policy = ObjectManager::getInstance(SellingModePolicy::class);
     $moq = max(1, (int)$policy->defaultMoq());
     $step = max(1, (int)$policy->defaultQtyStep());
+    $productFlags = \Weline\B2B\Service\ProductSellingModeFlags::fromOffer(is_array($offer) ? $offer : []);
+    /** @var \Weline\B2B\Service\ProductWholesaleEligibility $eligibility */
+    $eligibility = ObjectManager::getInstance(\Weline\B2B\Service\ProductWholesaleEligibility::class);
+    $allowsWholesaleDisplay = $eligibility->allowsWholesaleDisplay(
+        $websiteId,
+        $storeId,
+        $productFlags,
+        $sku
+    );
 } catch (\Throwable) {
+}
+
+if (!$allowsWholesaleDisplay) {
+    return;
 }
 
 $customerId = '';
@@ -90,7 +105,8 @@ if ($customerId !== '' && $customerId !== '0') {
      data-testid="b2b-qty-tiers"
      data-b2b-qty-tiers="1"
      role="region"
-     aria-label="<?= $escape(__('批发起订与阶梯价')) ?>">
+     aria-label="<?= $escape(__('批发起订与阶梯价')) ?>"
+     <?= $tiersHidden ? 'hidden' : '' ?>>
     <p class="b2b-qty-tiers__moq" data-testid="b2b-qty-tiers-moq">
         <?= $escape(__('批发起订量为 %{1} 件，步进 %{2} 件', [$moq, $step])) ?>
     </p>

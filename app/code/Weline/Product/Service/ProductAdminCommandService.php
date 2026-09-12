@@ -899,44 +899,124 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
         $identity = $this->identity($command);
         $product = $this->localProduct($command, $identity->globalProductUuid);
         $productId = (int)$product->getId();
+        $currentStatus = strtolower(trim((string)$product->getData(Product::schema_fields_STATUS)));
+        $targetStatus = strtolower(trim($targetStatus));
+
+        // 目录「删除」= archive：已归档幂等成功，避免 bulk 全失败仍 toast 成功。
+        if ($targetStatus === Product::STATUS_ARCHIVED
+            && $currentStatus === Product::STATUS_ARCHIVED
+        ) {
+            return ProductAdminResult::ok(
+                [
+                    'identity' => $identity->toArray(),
+                    'product' => $product->getData(),
+                    'offers' => [],
+                    'noop' => true,
+                ],
+                (string)__('商品已归档'),
+            );
+        }
+
+        $steps = $this->lifecycleStepsToward($currentStatus, $targetStatus);
 
         $result = $this->transactions->run(
             $this->connectionFactory,
-            function () use ($command, $targetStatus, $identity, $productId): array {
+            function () use ($command, $steps, $identity, $productId): array {
+                $localVersion = $this->localVersion($command);
+                $identityVersion = $this->identityVersion($command);
+                $offerVersions = [];
                 $localOffers = [];
-                foreach ($this->offers->listByProductIds($command->websiteId, [$productId]) as $offer) {
-                    $localOffers[] = $this->offers->transition(
-                        $command->websiteId,
-                        (int)($offer['offer_id'] ?? 0),
-                        (int)($offer['publish_version'] ?? 0),
-                        $targetStatus,
-                    )->getData();
-                }
-                $local = $this->products->transition(
-                    $command->websiteId,
-                    $productId,
-                    $this->localVersion($command),
-                    $targetStatus,
-                );
+                $local = null;
                 $global = $identity;
-                if ($identity->ownerWebsiteId === $command->websiteId) {
-                    $global = $this->identities->transitionProduct(
-                        $identity->globalProductUuid,
-                        $targetStatus,
-                        $this->identityVersion($command),
+
+                foreach ($steps as $stepStatus) {
+                    $localOffers = [];
+                    foreach ($this->offers->listByProductIds($command->websiteId, [$productId]) as $offer) {
+                        $offerId = (int)($offer['offer_id'] ?? 0);
+                        if ($offerId <= 0) {
+                            continue;
+                        }
+                        $offerVersion = $offerVersions[$offerId]
+                            ?? (int)($offer['publish_version'] ?? 0);
+                        $updatedOffer = $this->offers->transition(
+                            $command->websiteId,
+                            $offerId,
+                            $offerVersion,
+                            $stepStatus,
+                        );
+                        $offerVersions[$offerId] = (int)$updatedOffer->getData(
+                            Offer::schema_fields_PUBLISH_VERSION,
+                        );
+                        $localOffers[] = $updatedOffer->getData();
+                    }
+                    $local = $this->products->transition(
                         $command->websiteId,
-                        $command->requestHash,
+                        $productId,
+                        $localVersion,
+                        $stepStatus,
                     );
+                    $localVersion = (int)$local->getData(Product::schema_fields_PUBLISH_VERSION);
+                    if ($identity->ownerWebsiteId === $command->websiteId) {
+                        $global = $this->identities->transitionProduct(
+                            $identity->globalProductUuid,
+                            $stepStatus,
+                            $identityVersion,
+                            $command->websiteId,
+                            $this->subRequestHash($command->requestHash, 'lifecycle:' . $stepStatus),
+                        );
+                        $identityVersion = (int)$global->version;
+                    }
                 }
+
                 return [
                     'identity' => $global->toArray(),
-                    'product' => $local->getData(),
+                    'product' => $local !== null ? $local->getData() : [],
                     'offers' => $localOffers,
                 ];
             },
         );
 
         return ProductAdminResult::ok($result);
+    }
+
+    /**
+     * Expand a lifecycle target into single-edge steps accepted by Repository/Identity.
+     * Archive from published goes published → disabled → archived (治理表义不变).
+     *
+     * @return list<string>
+     */
+    private function lifecycleStepsToward(string $currentStatus, string $targetStatus): array
+    {
+        $currentStatus = strtolower(trim($currentStatus));
+        $targetStatus = strtolower(trim($targetStatus));
+        if ($currentStatus === $targetStatus) {
+            return [];
+        }
+
+        $allowed = [
+            'draft' => ['published', 'archived'],
+            'published' => ['disabled'],
+            'disabled' => ['published', 'archived'],
+            'archived' => [],
+        ];
+        if (in_array($targetStatus, $allowed[$currentStatus] ?? [], true)) {
+            return [$targetStatus];
+        }
+
+        // catalog delete: published cannot jump to archived in one edge
+        if ($targetStatus === Product::STATUS_ARCHIVED
+            && $currentStatus === Product::STATUS_PUBLISHED
+            && in_array(Product::STATUS_DISABLED, $allowed['published'] ?? [], true)
+            && in_array(Product::STATUS_ARCHIVED, $allowed['disabled'] ?? [], true)
+        ) {
+            return [Product::STATUS_DISABLED, Product::STATUS_ARCHIVED];
+        }
+
+        throw new CatalogConflictException(
+            'product_lifecycle_transition_invalid',
+            __('非法商品状态转换：%{1} → %{2}', [$currentStatus, $targetStatus]),
+            ['from' => $currentStatus, 'to' => $targetStatus],
+        );
     }
 
     private function changeType(ProductAdminCommand $command): ProductAdminResult
@@ -2167,11 +2247,26 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
 
     private function writePrices(int $websiteId, int $productId, array $payload): void
     {
+        $offers = $this->offers->listByProductIds($websiteId, [$productId]);
+        if (array_key_exists('price_minor', $payload)) {
+            $currency = strtoupper(trim((string)($payload['currency'] ?? 'CNY')));
+            if ($currency === '') {
+                $currency = 'CNY';
+            }
+            $amount = (int)$payload['price_minor'];
+            foreach ($offers as $offer) {
+                $offerId = (int)($offer['offer_id'] ?? 0);
+                if ($offerId <= 0) {
+                    continue;
+                }
+                $this->prices->writeExplicit($websiteId, 0, $offerId, $currency, $amount);
+            }
+        }
+
         $rows = $payload['prices'] ?? [];
         if (!is_array($rows)) {
             throw new \InvalidArgumentException('product_prices_invalid');
         }
-        $offers = $this->offers->listByProductIds($websiteId, [$productId]);
         $byUuid = [];
         foreach ($offers as $offer) {
             $byUuid[(string)($offer['global_offer_uuid'] ?? '')] = (int)($offer['offer_id'] ?? 0);

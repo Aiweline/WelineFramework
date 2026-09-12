@@ -729,8 +729,8 @@ class SlotRendererService
      * 页头/页脚是全局 chrome：不属于 blog/product 等任一业务布局，编辑一次全站生效。
      *
      * 可视化当前把全局 chrome 持久化在 homepage workspace（存储载体，不是归属）。
-     * 其它 pageType 若本页未放置同名 chrome 槽（含嵌套 header/footer 扩展槽），则合并该套全局 chrome；
-     * 本页已有部件不覆盖，且不得整页回退 homepage，以免混入首页内容区部件。
+     * 其它 pageType 合并该套全局 chrome（含嵌套 header/footer 扩展槽）；
+     * 本页本地 chrome 副本不得覆盖全局，且不得整页回退 homepage，以免混入首页内容区部件。
      *
      * @param array<string, list<array<string, mixed>>> $slotWidgets
      * @return array<string, list<array<string, mixed>>>
@@ -761,9 +761,8 @@ class SlotRendererService
             if ($widgets === [] || !$this->slotWidgetsBelongToSharedChrome((string)$slotId, $widgets)) {
                 continue;
             }
-            if (empty($slotWidgets[$slotId])) {
-                $slotWidgets[$slotId] = $widgets;
-            }
+            // 发版本/全局语义：载体始终覆盖业务布局本地 chrome 残留。
+            $slotWidgets[$slotId] = $widgets;
         }
 
         return $slotWidgets;
@@ -2552,9 +2551,9 @@ class SlotRendererService
                     'theme.slots.widget.component_render',
                     fn(): string => (string)$this->componentRenderer->render($definition, $renderConfig, $this->renderTheme, [
                         'area' => $renderArea,
-                        // Editor / live preview must keep PDP widgets visible even without a
-                        // storefront product identity (reviews shell, placeholders, …).
-                        'preview_mode' => !empty($renderConfig['editor_mode']) || $this->isEditorPreviewRequest(),
+                        // Editor iframe may keep PDP shells without product identity.
+                        // Do not map editor/theme-preview to widget-canvas preview_mode (is-preview).
+                        'preview_mode' => !empty($renderConfig['preview_mode']),
                         'editor_mode' => $renderConfig['editor_mode'] ?? false,
                     ]),
                     $widgetTimingMeta,
@@ -3479,10 +3478,16 @@ HTML;
         $config['_widget_code'] = (string)($widget['widget_code'] ?? '');
         $config['_widget_type'] = (string)($widget['widget_type'] ?? '');
         $config['_widget_area'] = $renderArea;
-        $isPreview = $this->isEditorPreviewRequest();
-        $config['editor_mode'] = $isPreview;
+        $isEditor = $this->isEditorPreviewRequest();
+        $config['editor_mode'] = $isEditor || !empty($config['editor_mode']);
         // ComponentRenderer unsetData() 会清掉模板上的 preview_mode；必须显式写入 config。
-        $config['preview_mode'] = $isPreview || !empty($config['preview_mode']);
+        // preview_mode 布尔 = 部件库小画布压缩（is-preview），与查询串 preview_mode=live（整页布局预览）解耦。
+        // 整页 theme-preview/content 必须与店面 chrome 保真，禁止强制 preview_mode=true。
+        if ($this->isThemePreviewContentRequest()) {
+            $config['preview_mode'] = false;
+        } else {
+            $config['preview_mode'] = !empty($config['preview_mode']);
+        }
 
         foreach ($this->pageRenderContext as $key => $value) {
             if (!\array_key_exists($key, $config)
@@ -3533,8 +3538,9 @@ HTML;
     {
         try {
             $request = $this->template->getRequest();
+            // preview_mode=live|version|draft is a layout-source query flag for theme-preview/content.
+            // It must NOT imply widget-canvas compact preview (is-preview / flattened mega trees).
             if ((string)$request->getParam('editor_mode', '') === '1'
-                || (string)$request->getParam('preview_mode', '') === 'live'
                 || (string)$request->getParam('interaction_mode', '') === 'edit'
             ) {
                 return true;
@@ -3544,11 +3550,30 @@ HTML;
         }
 
         try {
-            return (bool)$this->template->getData('editor_mode')
-                || (bool)$this->template->getData('preview_mode');
+            return (bool)$this->template->getData('editor_mode');
         } catch (\Throwable) {
             return false;
         }
+    }
+
+    /**
+     * Full-page theme editor iframe content (not widget-library canvas).
+     */
+    private function isThemePreviewContentRequest(): bool
+    {
+        try {
+            $request = $this->template->getRequest();
+            $path = strtolower((string)($request->getPathInfo() ?: \w_env_request_uri()));
+            if (str_contains($path, 'theme/frontend/theme-preview/content')
+                || str_contains($path, 'theme/backend/theme-preview/content')
+            ) {
+                return true;
+            }
+        } catch (\Throwable) {
+            // fall through
+        }
+
+        return false;
     }
 
     private function mergeTranslatedWidgetConfig(

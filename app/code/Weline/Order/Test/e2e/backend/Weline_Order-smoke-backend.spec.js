@@ -22,7 +22,6 @@ async function openOrderList(page) {
   const candidates = [
     buildModuleBackendRoute(MODULE, 'order'),
     'order/backend/order',
-    'weline_order/backend/order',
   ];
   let lastError = null;
   for (const route of candidates) {

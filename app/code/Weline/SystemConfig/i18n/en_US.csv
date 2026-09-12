@@ -75,12 +75,12 @@ warning,warning
 回滚配置失败，已恢复本次回滚前状态。%{1},"The configuration rollback failed and the state before this rollback has been restored. %{1}"
 "当前 system_config 表尚未升级，不能保存非全局 scope 配置。","The current system_config table has not been upgraded and non-global scope configuration cannot be saved."
 配置保存失败,"Failed to save configuration"
-请选择或搜索...,请选择或搜索...
-搜索并多选...,搜索并多选...
 管理,Manage
 没有这个字段,"Field not found"
 前往统一配置中心修改,"Open unified config center"
 可搜索多选标签；保存为逗号分隔值,可搜索多选标签；保存为逗号分隔值
+请选择或搜索...,请选择或搜索...
+搜索并多选...,搜索并多选...
 系统管理,系统管理
 系统配置,系统配置
 "按模块、区域与 Scope 管理全站配置项","Manage site-wide configuration by module, area, and scope"

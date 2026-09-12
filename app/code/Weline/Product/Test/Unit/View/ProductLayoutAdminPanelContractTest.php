@@ -32,6 +32,8 @@ final class ProductLayoutAdminPanelContractTest extends TestCase
         self::assertStringContainsString('data-category-product-layout-panel', $tpl);
         self::assertStringContainsString('category_product_default', $tpl);
         self::assertStringContainsString('默认产品布局', $tpl);
+        self::assertStringContainsString('Ops tag only', $tpl);
+        self::assertStringNotContainsString('leafCode', $tpl);
     }
 
     public function testProductAdminJsBindsLayoutPanel(): void

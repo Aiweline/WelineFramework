@@ -17,9 +17,14 @@ final class TranslationBatchNoSerialFallbackContractTest extends TestCase
         self::assertStringContainsString('批量翻译结果解析失败', $source);
         self::assertStringContainsString('strrpos($json, \']\')', $source);
         self::assertStringContainsString("'max_tokens'", $source);
-        // The serial fallback loop must remain gated behind single-item only.
+        self::assertStringContainsString('splitAndRetryBatchTranslate', $source);
+        // Multi-item: binary split retry — never N serial translate() in the catch path.
         self::assertMatchesRegularExpression(
-            '/if \(count\(\$texts\) > 1\) \{\s*throw new Exception/s',
+            '/if \(count\(\$texts\) > 1\) \{\s*return \$this->splitAndRetryBatchTranslate/s',
+            $source,
+        );
+        self::assertDoesNotMatchRegularExpression(
+            '/if \(count\(\$texts\) > 1\) \{[^}]{0,200}foreach \(\$texts as/s',
             $source,
         );
     }

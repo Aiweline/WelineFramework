@@ -144,7 +144,8 @@ function r43_inventory_inspect(array $data): array
 /** @param array<string,mixed> $data @return array<string,mixed> */
 function r43_inventory_cleanup(array $data): array
 {
-    if (!str_starts_with((string)$data['warehouse_code'], 'r43_wh_')) {
+    $code = (string)$data['warehouse_code'];
+    if (!str_contains(strtoupper($code), 'R43')) {
         throw new RuntimeException('refusing inventory cleanup outside R43 namespace');
     }
     $websiteId = (int)$data['website_id'];

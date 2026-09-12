@@ -38,12 +38,59 @@
         });
     }
 
+    function escapeHtml(value) {
+        return String(value == null ? '' : value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
     function renderWorkerStatus(status) {
         var box = document.getElementById('dev-relay-worker-status');
         if (!box) {
             return;
         }
-        box.innerHTML = '<pre class="mb-0 small">' + JSON.stringify(status || {}, null, 2) + '</pre>';
+        status = status || {};
+        var running = !!status.running;
+        var online = String(status.online_base_url || '').trim();
+        var session = String(status.session_code || '').trim();
+        var pid = Number(status.pid || 0) || 0;
+        var lastError = String(status.last_error || '').trim();
+        var lastEvent = String(status.last_event_code || '').trim();
+        var headline = running ? '运行中' : '已停止';
+        var onlineLabel = online || '未连接';
+        var sessionLabel = session || '无';
+        var pidLabel = (running && pid > 0) ? String(pid) : '无';
+        var errorLabel = lastError || '无';
+        var eventLabel = lastEvent || '无';
+
+        box.setAttribute('data-tone', running ? 'success' : 'muted');
+        // 运行态由卡片头徽章表达；摘要区只展示连接细节，避免「已停止 已停止」。
+        box.innerHTML = ''
+            + '<div class="w-stack" style="--w-gap:var(--weline-space-2);" data-testid="payment-dev-relay-worker-summary">'
+            + '<div class="w-cluster" data-align="center" data-gap="2">'
+            + '<strong class="w-text" style="--w-mb:0;font-size:var(--weline-text-lg, 1.125rem);" data-testid="payment-dev-relay-worker-summary-badge">连接详情</strong>'
+            + '</div>'
+            + '<div class="w-stack" style="--w-gap:var(--weline-space-1);">'
+            + '<div class="w-text" style="--w-mb:0;">线上站点：<code>' + escapeHtml(onlineLabel) + '</code></div>'
+            + '<div class="w-text" style="--w-mb:0;">会话：<code>' + escapeHtml(sessionLabel) + '</code></div>'
+            + '<div class="w-text" style="--w-mb:0;">进程：<code>' + escapeHtml(pidLabel) + '</code></div>'
+            + '<div class="w-text" style="--w-mb:0;">最近事件：<code>' + escapeHtml(eventLabel) + '</code></div>'
+            + '<div class="w-text" style="--w-mb:0;" data-tone="' + (lastError ? 'danger' : 'muted') + '">最近错误：'
+            + escapeHtml(errorLabel) + '</div>'
+            + '</div>'
+            + '<details style="--w-mt:var(--weline-space-1);">'
+            + '<summary class="w-text" data-tone="muted" style="cursor:pointer;" data-testid="payment-dev-relay-worker-tech">技术详情（JSON）</summary>'
+            + '<pre class="w-text" style="--w-mb:0;--w-mt:var(--weline-space-2);white-space:pre-wrap;word-break:break-word;font-family:var(--weline-font-mono, ui-monospace, monospace);font-size:var(--weline-text-sm, 0.875rem);">'
+            + escapeHtml(JSON.stringify(status, null, 2))
+            + '</pre></details></div>';
+
+        var badge = document.getElementById('dev-relay-worker-running-badge');
+        if (badge) {
+            badge.setAttribute('data-tone', running ? 'success' : 'muted');
+            badge.textContent = headline;
+        }
     }
 
     window.WelinePaymentDevRelay = {
@@ -55,24 +102,81 @@
                 log(logEl, message);
             }
 
+            function setFieldInvalid(el, invalid) {
+                if (!el) {
+                    return;
+                }
+                if (invalid) {
+                    el.setAttribute('aria-invalid', 'true');
+                } else {
+                    el.removeAttribute('aria-invalid');
+                }
+            }
+
+            function showLocalFeedback(message, tone) {
+                var box = document.getElementById('dev-relay-local-feedback');
+                if (!box) {
+                    return;
+                }
+                var text = String(message || '').trim();
+                if (!text) {
+                    box.hidden = true;
+                    box.textContent = '';
+                    box.removeAttribute('data-tone');
+                    return;
+                }
+                box.hidden = false;
+                box.setAttribute('data-tone', tone || 'danger');
+                box.setAttribute('role', tone === 'success' ? 'status' : 'alert');
+                box.textContent = text;
+                try {
+                    box.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+                } catch (e) {
+                    box.scrollIntoView(true);
+                }
+            }
+
+            function notifyLocal(message, tone) {
+                appendLog(message);
+                showLocalFeedback(message, tone || 'danger');
+            }
+
             function applyFeatureEnabled(enabled) {
-                var actions = document.querySelector('[data-role="relay-actions"]');
-                if (actions) {
+                var onlineGate = document.querySelector('[data-role="online-actions-gate"]');
+                if (onlineGate) {
                     if (enabled) {
-                        actions.classList.remove('opacity-50');
+                        onlineGate.classList.remove('is-disabled');
+                        onlineGate.style.opacity = '';
+                        onlineGate.style.pointerEvents = '';
                     } else {
-                        actions.classList.add('opacity-50');
+                        onlineGate.classList.add('is-disabled');
+                        onlineGate.style.opacity = '0.55';
+                        onlineGate.style.pointerEvents = 'none';
                     }
                 }
-                ['dev-relay-worker-start', 'dev-relay-start-online', 'dev-relay-bind-local'].forEach(function (id) {
+                // 本机开启中继始终可点；仅线上面板动作随开关禁用。
+                ['dev-relay-start-online', 'dev-relay-bind-local'].forEach(function (id) {
                     var el = document.getElementById(id);
                     if (el) {
                         el.disabled = !enabled;
                     }
                 });
-                var hint = document.getElementById('dev-relay-settings-hint');
+                var startLocal = document.getElementById('dev-relay-worker-start');
+                if (startLocal) {
+                    startLocal.disabled = false;
+                }
+                var badge = document.getElementById('dev-relay-settings-hint');
+                if (badge) {
+                    badge.setAttribute('data-tone', enabled ? 'success' : 'warning');
+                    badge.textContent = enabled ? '已启用' : '未启用';
+                }
+                var hint = document.getElementById('dev-relay-settings-hint-text');
                 if (hint) {
-                    hint.textContent = enabled ? '当前已启用' : '当前未启用：保存开启后再操作中继';
+                    hint.textContent = enabled ? '当前已启用，可操作中继' : '当前未启用：保存开启后再操作中继（本机点开启也会自动启用）';
+                }
+                var localEnableHint = document.querySelector('[data-testid="payment-dev-relay-local-enable-hint"]');
+                if (localEnableHint) {
+                    localEnableHint.hidden = !!enabled;
                 }
             }
 
@@ -132,18 +236,62 @@
             var workerStart = document.getElementById('dev-relay-worker-start');
             if (workerStart) {
                 workerStart.addEventListener('click', function () {
+                    var onlineEl = document.getElementById('dev-relay-online-base-url');
+                    var tokenEl = document.getElementById('dev-relay-user-token');
+                    var tokenHint = document.getElementById('dev-relay-token-hint');
+                    var online = onlineEl ? String(onlineEl.value || '').trim() : '';
+                    var token = tokenEl ? String(tokenEl.value || '').trim() : '';
+                    setFieldInvalid(onlineEl, false);
+                    setFieldInvalid(tokenEl, false);
+                    if (!online) {
+                        setFieldInvalid(onlineEl, true);
+                        if (onlineEl) {
+                            onlineEl.focus();
+                        }
+                        notifyLocal('请填写线上站点地址（完整 http(s) URL）。', 'danger');
+                        return;
+                    }
+                    if (!token && !config.credentialsReady) {
+                        setFieldInvalid(tokenEl, true);
+                        if (tokenHint) {
+                            tokenHint.textContent = '首次开启必填：到线上后台复制当前用户 API Token。';
+                        }
+                        if (tokenEl) {
+                            tokenEl.focus();
+                        }
+                        notifyLocal('请填写线上用户 API Token（首次开启必填；成功后本机会记住）。', 'danger');
+                        return;
+                    }
+                    workerStart.disabled = true;
+                    showLocalFeedback('正在开启本机静默中继…', 'info');
                     postJson(config.urls.workerStart, {
-                        online_base_url: document.getElementById('dev-relay-online-base-url').value,
-                        user_token: document.getElementById('dev-relay-user-token').value
+                        online_base_url: online,
+                        user_token: token
                     }).then(function (result) {
                         if (!result.success) {
-                            appendLog(result.message || 'Worker start failed');
+                            notifyLocal(result.message || 'Worker start failed', 'danger');
                             return;
                         }
-                        appendLog('Silent worker started.');
+                        config.credentialsReady = true;
+                        applyFeatureEnabled(true);
+                        var enabledEl = document.getElementById('dev-relay-enabled');
+                        if (enabledEl) {
+                            enabledEl.checked = true;
+                        }
+                        notifyLocal('静默中继已开启。', 'success');
                         renderWorkerStatus(result.status);
+                        if (tokenHint) {
+                            tokenHint.textContent = '本机已记住 Token：可留空直接开启；填写则覆盖。';
+                        }
+                        if (tokenEl) {
+                            tokenEl.placeholder = '已记住凭证，可留空';
+                            tokenEl.value = '';
+                            setFieldInvalid(tokenEl, false);
+                        }
                     }).catch(function (error) {
-                        appendLog(String(error));
+                        notifyLocal(String(error), 'danger');
+                    }).finally(function () {
+                        workerStart.disabled = false;
                     });
                 });
             }
@@ -153,13 +301,13 @@
                 workerStop.addEventListener('click', function () {
                     postJson(config.urls.workerStop, {}).then(function (result) {
                         if (!result.success) {
-                            appendLog(result.message || 'Worker stop failed');
+                            notifyLocal(result.message || 'Worker stop failed', 'danger');
                             return;
                         }
-                        appendLog('Silent worker stopped.');
+                        notifyLocal('静默中继已关闭。', 'muted');
                         renderWorkerStatus(result.status);
                     }).catch(function (error) {
-                        appendLog(String(error));
+                        notifyLocal(String(error), 'danger');
                     });
                 });
             }
@@ -171,10 +319,10 @@
                         .then(function (response) { return response.json(); })
                         .then(function (result) {
                             renderWorkerStatus(result.status || {});
-                            appendLog('Worker status refreshed.');
+                            notifyLocal('Worker status refreshed.', 'muted');
                         })
                         .catch(function (error) {
-                            appendLog(String(error));
+                            notifyLocal(String(error), 'danger');
                         });
                 });
             }

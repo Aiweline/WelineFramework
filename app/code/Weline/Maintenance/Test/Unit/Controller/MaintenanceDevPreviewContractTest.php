@@ -54,4 +54,17 @@ final class MaintenanceDevPreviewContractTest extends TestCase
         self::assertStringNotContainsString('MaintenanceStaticPage::publicHtmlUrl', $template);
         self::assertStringNotContainsString('$maintenanceLanguageUrl', $generator);
     }
+
+    public function testStandaloneTemplateHomeLinksAreRootRelative(): void
+    {
+        $template = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/view/templates/maintenance.phtml',
+        );
+
+        // PHP include path — Taglib @url is never compiled on this surface.
+        self::assertStringNotContainsString("@url{'/'}", $template);
+        self::assertStringNotContainsString('@url{', $template);
+        self::assertStringContainsString('class="maintenance-brand" href="/"', $template);
+        self::assertStringContainsString('href="/" class="back-btn"', $template);
+    }
 }

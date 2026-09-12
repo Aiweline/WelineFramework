@@ -36,7 +36,7 @@ final class SlotRendererSharedChromeFooterContractTest extends TestCase
         self::assertGreaterThan($mergeLayoutPos, $mergeChromePos);
     }
 
-    public function testSharedChromeMergeFillsEmptyChromeSlotsFromGlobalCarrier(): void
+    public function testSharedChromeMergeOverwritesLocalChromeSlotsFromGlobalCarrier(): void
     {
         $src = $this->readService();
 
@@ -44,10 +44,13 @@ final class SlotRendererSharedChromeFooterContractTest extends TestCase
         self::assertStringContainsString('function slotWidgetsBelongToSharedChrome(', $src);
         self::assertStringContainsString('function sharedChromeCarrierIdentity(', $src);
         self::assertStringContainsString('if ($pageType === ThemeLayout::PAGE_TYPE_HOME)', $src);
-        self::assertStringContainsString('if (empty($slotWidgets[$slotId]))', $src);
+        // Global chrome is authoritative: local business-layout copies must not win.
+        self::assertStringContainsString('$slotWidgets[$slotId] = $widgets;', $src);
+        self::assertStringNotContainsString('if (empty($slotWidgets[$slotId]))', $src);
         self::assertStringContainsString('ThemeVirtualLayout::TARGET_GLOBAL', $src);
         self::assertStringContainsString('sharedChromeCarrierIdentity($this->currentLayoutIdentity($area))', $src);
         self::assertStringContainsString("\$widgetArea === 'header' || \$widgetArea === 'footer'", $src);
+        self::assertStringContainsString('本页本地 chrome 副本不得覆盖全局', $src);
     }
 
     public function testProcessSlotsWithLayoutAlsoMergesSharedChrome(): void

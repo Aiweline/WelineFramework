@@ -300,6 +300,21 @@ final class OrderCutoverGuardTest extends TestCase
             public function notifyOrderPaid(string $orderUuid, array $context = []): void
             {
             }
+
+            public function attachCustomerToGuestOrders(int $customerId, array $orderUuids): array
+            {
+                return [];
+            }
+
+            public function mergeTypePayload(string $orderUuid, array $patch): array
+            {
+                return $patch;
+            }
+
+            public function reviseTobHangPayable(string $orderUuid, array $revision): array
+            {
+                return $revision;
+            }
         };
         $reader = new OrderCompatibilityReader($facade);
         $reader->seedLegacy('SAME-KEY', ['order_number' => 'SAME-KEY']);

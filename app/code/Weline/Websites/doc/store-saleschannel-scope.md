@@ -142,3 +142,11 @@ Store/SalesChannel Model，也不会在读取路径补种默认目录。
 - 搜索框必须有显式可访问名称；目录折叠按钮必须保留键盘 `focus-visible` 指示。
 - 该页面没有 Store/Channel 创建、编辑、删除控件。对象 Scope ACL（`ObjectAuthorizationService`）已落地：Catalog 读在后台会话下按 LIST 过滤且无权限返回空列表；写 CRUD 入口仍关闭，须显式对象写授权后才能激活。
 - 目录为空时只展示修复提示；读取动作不得调用 `StoreChannelSeedService`。系统不变量缺失应运行 `setup:upgrade` 修复。
+
+## 后台 UI：作用范围选择（`<w:scope>`）
+
+业务后台凡需要选择 **Global / 网站 / 店铺 / 渠道** 的「作用范围」，统一使用官方标签 `<w:scope>`（实现于 `Weline_Taglib`，树数据经 SystemConfig `ScopeSelectorCatalog`，站/店/渠节点由本模块身份 Catalog 贡献）。
+
+- **完整用法、属性、与单域 website/store/channel Taglib 的分工、提交解析与禁止项**：见 [scope-select标签使用指南.md](./scope-select标签使用指南.md)。
+- **禁止**在业务页用三个下拉「网站 + 店铺 + 渠道」手写联动冒充范围；路径通配不是 Scope。
+- 参考落地：货源仓映射 / 货源配置 / 刊登弹窗（`Weline_Dropship`）均已消费同一标签。

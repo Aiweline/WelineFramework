@@ -22,13 +22,15 @@ final class B2BVipCreditUiContractTest extends TestCase
         $module = (string)file_get_contents($moduleRoot . '/etc/module.php');
 
         self::assertStringContainsString('b2b_credit_enabled', $declaration);
+        self::assertStringContainsString('b2b_credit_min_cash_deposit_percent', $declaration);
         self::assertStringContainsString('scope="global"', $declaration);
         self::assertStringContainsString('b2b_credit_enabled', $config);
+        self::assertStringContainsString('b2b_credit_min_cash_deposit_percent', $config);
         self::assertStringContainsString('defaultGroupValue', $controlCenter);
         self::assertStringContainsString('value="<?= $escape($defaultGroupValue) ?>"', $controlCenter);
         self::assertStringContainsString('credit_limit_minor', $controlCenter);
         self::assertStringContainsString('b2b-membership-tier-info', $switcher);
         self::assertStringContainsString('payment.asset_policy.Weline_B2B', $module);
-        self::assertStringContainsString('2.6.34', $module);
+        self::assertMatchesRegularExpression("/'version'\\s*=>\\s*'2\\.\\d+\\.\\d+'/", $module);
     }
 }

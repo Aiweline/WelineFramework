@@ -26,8 +26,10 @@ final class SharedChromeInheritContractTest extends TestCase
         self::assertStringContainsString('function detach(', $src);
         self::assertStringContainsString('function restore(', $src);
         self::assertStringContainsString('function restoreNonCarrierLayouts(', $src);
+        self::assertStringContainsString('function forceInheritAndPublishNonCarriers(', $src);
         self::assertStringContainsString('ThemeLayout::PAGE_TYPE_HOME', $src);
         self::assertStringContainsString('withLayoutType(ThemeLayout::PAGE_TYPE_HOME)', $src);
+        self::assertStringContainsString("workspace->publish(", $src);
     }
 
     public function testThemeEditorExposesChromeModeDetachRestoreEndpoints(): void
@@ -72,11 +74,11 @@ final class SharedChromeInheritContractTest extends TestCase
         $path = dirname(__DIR__, 2) . '/Setup/Upgrade.php';
         $src = (string)file_get_contents($path);
 
-        self::assertStringContainsString("VERSION = '2.2.190'", $src);
+        self::assertStringContainsString("VERSION = '2.2.326'", $src);
         self::assertStringContainsString('ScopeIdentity::global()', $src);
         self::assertStringContainsString('ScopeHierarchyInterface', $src);
         self::assertStringContainsString('new ThemeEditorContext(', $src);
-        self::assertStringContainsString('restoreNonCarrierLayouts(', $src);
+        self::assertStringContainsString('forceInheritAndPublishNonCarriers(', $src);
         self::assertStringNotContainsString('ThemeEditorContextFactory', $src);
         self::assertStringNotContainsString('theme_editor_typed_scope_required', $src);
     }
@@ -87,6 +89,8 @@ final class SharedChromeInheritContractTest extends TestCase
         $src = (string)file_get_contents($path);
 
         self::assertStringContainsString('function publishSharedChromeCarrierIfPending(', $src);
+        self::assertStringContainsString('function overwriteNonCarrierChromeAfterCarrierPublish(', $src);
+        self::assertStringContainsString('forceInheritAndPublishNonCarriers(', $src);
         self::assertStringContainsString('isChromeCarrierPageType(', $src);
         self::assertStringContainsString('PAGE_TYPE_HOME', $src);
         self::assertStringContainsString("shared_chrome_carrier", $src);
@@ -95,6 +99,11 @@ final class SharedChromeInheritContractTest extends TestCase
             1,
             substr_count($src, 'publishSharedChromeCarrierIfPending('),
             'publish and publishBatch must both flush the chrome carrier',
+        );
+        self::assertGreaterThan(
+            1,
+            substr_count($src, 'overwriteNonCarrierChromeAfterCarrierPublish('),
+            'publish and publishBatch must both overwrite non-carrier chrome',
         );
     }
 

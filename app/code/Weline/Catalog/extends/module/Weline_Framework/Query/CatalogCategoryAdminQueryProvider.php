@@ -25,6 +25,7 @@ final class CatalogCategoryAdminQueryProvider implements QueryProviderInterface
         return match ($operation) {
             'categoryAdminSave' => $this->categoryAdminSave($params),
             'categoryAdminDelete' => $this->categoryAdminDelete($params),
+            'categoryAdminListProductsForDelete' => $this->categoryAdminListProductsForDelete($params),
             'categoryAdminReorder' => $this->categoryAdminReorder($params),
             'categoryAdminView' => $this->categoryAdminView($params),
             'categoryAdminSaveDisplay' => $this->categoryAdminSaveDisplay($params),
@@ -66,8 +67,19 @@ final class CatalogCategoryAdminQueryProvider implements QueryProviderInterface
                     ['name' => 'banner', 'type' => 'string', 'required' => false, 'max_length' => 512],
                     ['name' => 'summary', 'type' => 'string', 'required' => false, 'max_length' => 500],
                     ['name' => 'description', 'type' => 'string', 'required' => false, 'max_length' => 20000],
+                    $this->grantVersionParam(),
                 ]),
                 $this->operation('categoryAdminDelete', (string)__('删除分类'), 'write', [
+                    ['name' => 'space', 'type' => 'string', 'required' => true],
+                    ['name' => 'scope_level', 'type' => 'string', 'required' => true],
+                    ['name' => 'website_id', 'type' => 'int', 'required' => true, 'min' => 0],
+                    ['name' => 'store_id', 'type' => 'int', 'required' => false, 'min' => 0],
+                    ['name' => 'channel_id', 'type' => 'int', 'required' => false, 'min' => 0],
+                    ['name' => 'id', 'type' => 'int', 'required' => true, 'min' => 1],
+                    ['name' => 'product_ids', 'type' => 'array', 'required' => false],
+                    $this->grantVersionParam(),
+                ]),
+                $this->operation('categoryAdminListProductsForDelete', (string)__('删除前产品清单'), 'read', [
                     ['name' => 'space', 'type' => 'string', 'required' => true],
                     ['name' => 'scope_level', 'type' => 'string', 'required' => true],
                     ['name' => 'website_id', 'type' => 'int', 'required' => true, 'min' => 0],
@@ -85,6 +97,7 @@ final class CatalogCategoryAdminQueryProvider implements QueryProviderInterface
                     ['name' => 'pid', 'type' => 'int', 'required' => false, 'min' => 0],
                     ['name' => 'level', 'type' => 'int', 'required' => false, 'min' => 1],
                     ['name' => 'position', 'type' => 'int', 'required' => false, 'min' => 1],
+                    $this->grantVersionParam(),
                 ]),
                 $this->operation('categoryAdminSaveDisplay', (string)__('保存展示选择'), 'write', [
                     ['name' => 'space', 'type' => 'string', 'required' => true],
@@ -93,6 +106,7 @@ final class CatalogCategoryAdminQueryProvider implements QueryProviderInterface
                     ['name' => 'store_id', 'type' => 'int', 'required' => false, 'min' => 0],
                     ['name' => 'channel_id', 'type' => 'int', 'required' => false, 'min' => 0],
                     ['name' => 'rows', 'type' => 'array', 'required' => true],
+                    $this->grantVersionParam(),
                 ]),
             ],
         ];
@@ -138,6 +152,7 @@ final class CatalogCategoryAdminQueryProvider implements QueryProviderInterface
                 'banner' => trim((string)($params['banner'] ?? '')),
                 'summary' => trim((string)($params['summary'] ?? '')),
                 'description' => trim((string)($params['description'] ?? '')),
+                'expected_grant_version' => $this->expectedGrantVersion($params),
             ],
             'POST',
         );
@@ -146,6 +161,14 @@ final class CatalogCategoryAdminQueryProvider implements QueryProviderInterface
     /** @param array<string,mixed> $params */
     private function categoryAdminDelete(array $params): mixed
     {
+        $productIds = [];
+        if (is_array($params['product_ids'] ?? null)) {
+            $productIds = array_values(array_unique(array_filter(
+                array_map('intval', $params['product_ids']),
+                static fn(int $id): bool => $id > 0,
+            )));
+        }
+
         return AdminControllerBridge::invoke(
             Category::class,
             ['postCategoryDelete'],
@@ -157,8 +180,29 @@ final class CatalogCategoryAdminQueryProvider implements QueryProviderInterface
                 'store_id' => max(0, (int)($params['store_id'] ?? 0)),
                 'channel_id' => max(0, (int)($params['channel_id'] ?? 0)),
                 'id' => max(0, (int)($params['id'] ?? 0)),
+                'product_ids' => $productIds,
+                'expected_grant_version' => $this->expectedGrantVersion($params),
             ],
             'POST',
+        );
+    }
+
+    /** @param array<string,mixed> $params */
+    private function categoryAdminListProductsForDelete(array $params): mixed
+    {
+        return AdminControllerBridge::invoke(
+            Category::class,
+            ['getCategoryProductsForDelete'],
+            [
+                'space' => $this->space($params),
+                'scope_level' => $this->scopeLevel($params),
+                'website_id' => $this->websiteId($params),
+                'store_id' => max(0, (int)($params['store_id'] ?? 0)),
+                'channel_id' => max(0, (int)($params['channel_id'] ?? 0)),
+                'id' => max(0, (int)($params['id'] ?? 0)),
+            ],
+            [],
+            'GET',
         );
     }
 
@@ -179,6 +223,7 @@ final class CatalogCategoryAdminQueryProvider implements QueryProviderInterface
                 'pid' => max(0, (int)($params['pid'] ?? 0)),
                 'level' => max(1, (int)($params['level'] ?? 1)),
                 'position' => max(1, (int)($params['position'] ?? 1)),
+                'expected_grant_version' => $this->expectedGrantVersion($params),
             ],
             'POST',
         );
@@ -198,6 +243,7 @@ final class CatalogCategoryAdminQueryProvider implements QueryProviderInterface
                 'store_id' => max(0, (int)($params['store_id'] ?? 0)),
                 'channel_id' => max(0, (int)($params['channel_id'] ?? 0)),
                 'rows' => is_array($params['rows'] ?? null) ? $params['rows'] : [],
+                'expected_grant_version' => $this->expectedGrantVersion($params),
             ],
             'POST',
         );
@@ -234,6 +280,32 @@ final class CatalogCategoryAdminQueryProvider implements QueryProviderInterface
         }
 
         return $websiteId;
+    }
+
+    /** @param array<string,mixed> $params */
+    private function expectedGrantVersion(array $params): int
+    {
+        $value = $params['expected_grant_version'] ?? null;
+        if (\is_int($value) && $value > 0) {
+            return $value;
+        }
+        if (\is_string($value) && \preg_match('/^[1-9][0-9]*$/D', $value) === 1) {
+            return (int)$value;
+        }
+
+        return 0;
+    }
+
+    /** @return array<string,mixed> */
+    private function grantVersionParam(): array
+    {
+        return [
+            'name' => 'expected_grant_version',
+            'type' => 'int',
+            'required' => true,
+            'min' => 1,
+            'description' => (string)__('页面下发的对象授权版本；提交前必须保持一致'),
+        ];
     }
 
     /** @return array<string,mixed> */

@@ -33,17 +33,43 @@ $tocEnabled = true;
 $tobEnabled = true;
 $moq = SellingModePolicy::DEFAULT_MOQ;
 $qtyStep = SellingModePolicy::DEFAULT_QTY_STEP;
+$productFlags = null;
+$offerForFlags = [];
+try {
+    if (class_exists(\Weline\Product\Helper\StorefrontOfferResolver::class)) {
+        $offerForFlags = \Weline\Product\Helper\StorefrontOfferResolver::resolve($this);
+    }
+    $productFlags = \Weline\B2B\Service\ProductSellingModeFlags::fromOffer(
+        is_array($offerForFlags) ? $offerForFlags : []
+    );
+} catch (\Throwable) {
+    $productFlags = null;
+}
+$skuForGate = trim((string)($offerForFlags['sku'] ?? ''));
 try {
     /** @var SellingModePolicy $policy */
     $policy = ObjectManager::getInstance(SellingModePolicy::class);
-    $tocEnabled = $policy->isModeEnabled(SellingModePolicy::MODE_TOC, $websiteId, $storeId);
-    $tobEnabled = $policy->isModeEnabled(SellingModePolicy::MODE_TOB, $websiteId, $storeId);
+    $tocEnabled = $policy->isModeEnabled(SellingModePolicy::MODE_TOC, $websiteId, $storeId, $productFlags);
+    $tobEnabled = $policy->isModeEnabled(SellingModePolicy::MODE_TOB, $websiteId, $storeId, $productFlags);
     $moq = $policy->defaultMoq();
     $qtyStep = $policy->defaultQtyStep();
 } catch (\Throwable) {
 }
 
-if (!$tocEnabled && !$tobEnabled) {
+// Product wholesale UI only when tob allowed AND SKU has configured price tiers.
+// Without tiers, treat as a normal product: omit this widget entirely so we do not
+// rewrite the global selling_mode cookie via bindRoot setMode(toc).
+try {
+    /** @var \Weline\B2B\Service\ProductWholesaleEligibility $eligibility */
+    $eligibility = ObjectManager::getInstance(\Weline\B2B\Service\ProductWholesaleEligibility::class);
+    if (!$eligibility->allowsWholesaleDisplay($websiteId, $storeId, $productFlags, $skuForGate)) {
+        $tobEnabled = false;
+    }
+} catch (\Throwable) {
+    $tobEnabled = false;
+}
+
+if (!$tobEnabled) {
     return;
 }
 

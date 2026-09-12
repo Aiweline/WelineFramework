@@ -249,7 +249,7 @@ class PaymentScopeConfigService
             return $this->normalizeListValue($value, \in_array($key, ['supported_currencies', 'supported_countries', 'currencies', 'countries', 'country_tags'], true));
         }
 
-        if (\in_array($key, ['enabled', 'is_default', 'default', 'sandbox', 'allow_partial_refund', 'require_authenticated_actor'], true)) {
+        if (\in_array($key, ['enabled', 'is_default', 'default', 'sandbox', 'allow_partial_refund', 'require_authenticated_actor', 'express_enabled'], true)) {
             return $this->toBool($value);
         }
 

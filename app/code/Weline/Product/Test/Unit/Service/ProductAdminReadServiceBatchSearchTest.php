@@ -51,6 +51,39 @@ final class ProductAdminReadServiceBatchSearchTest extends TestCase
         self::assertSame([[0], 'IN'], $queries->reads['attribute_value'][0]['store_id']);
     }
 
+    public function testSearchFailSoftOnCorruptGlobalProductUuid(): void
+    {
+        $identities = new \Weline\Product\Service\ProductIdentityV2Service(
+            $this->uninitialized(ConnectionFactory::class),
+            $this->createStub(DatabaseTransactionRunnerInterface::class),
+        );
+
+        [$service] = $this->fixture([
+            [
+                'product_id' => 1,
+                'global_product_uuid' => 'invalid-uuid',
+                'product_code' => 'CODE-BAD',
+                'product_type' => 'simple',
+                'sku' => 'SKU-BAD',
+                'status' => 'draft',
+                'updated_at' => '2026-09-12 00:00:00',
+            ],
+            [
+                'product_id' => 2,
+                'global_product_uuid' => '',
+                'product_code' => 'CODE-OK',
+                'product_type' => 'simple',
+                'sku' => 'SKU-OK',
+                'status' => 'draft',
+                'updated_at' => '2026-09-12 00:00:01',
+            ],
+        ], [], $identities);
+
+        $rows = $service->search(1);
+        self::assertEqualsCanonicalizing([1, 2], array_column($rows, 'product_id'));
+        self::assertEqualsCanonicalizing(['CODE-BAD', 'CODE-OK'], array_column($rows, 'product_code'));
+    }
+
     public function testEmptyProductsSkipRelatedReadsAndMissingStoreOverlayKeepsInheritance(): void
     {
         foreach ([[], [['product_id' => 0]]] as $products) {
@@ -73,6 +106,50 @@ final class ProductAdminReadServiceBatchSearchTest extends TestCase
         self::assertSame([], $service->search(1, ['sku' => 'ignored-root-2']));
         self::assertSame([], $service->search(1, ['name' => 'not an attribute']));
         self::assertSame([3], array_column($service->search(1, ['sku' => 'fallback-3']), 'product_id'));
+    }
+
+    public function testSourcePlatformFilterMatchesPlatformLabelAndNone(): void
+    {
+        $attributes = [
+            [
+                'entity_type' => 'product', 'entity_id' => 1, 'attribute_code' => 'name',
+                'locale' => 'en_US', 'store_id' => 0, 'value_type' => 'string',
+                'value_string' => 'Alpha', 'cleared' => 0, 'is_required' => 0,
+            ],
+            [
+                'entity_type' => 'product', 'entity_id' => 1, 'attribute_code' => 'source_platform',
+                'locale' => 'en_US', 'store_id' => 0, 'value_type' => 'string',
+                'value_string' => '1688', 'cleared' => 0, 'is_required' => 0,
+            ],
+            [
+                'entity_type' => 'product', 'entity_id' => 2, 'attribute_code' => 'name',
+                'locale' => 'en_US', 'store_id' => 0, 'value_type' => 'string',
+                'value_string' => 'Beta', 'cleared' => 0, 'is_required' => 0,
+            ],
+            [
+                'entity_type' => 'product', 'entity_id' => 2, 'attribute_code' => 'source_platform',
+                'locale' => 'en_US', 'store_id' => 0, 'value_type' => 'string',
+                'value_string' => 'cj', 'cleared' => 0, 'is_required' => 0,
+            ],
+            [
+                'entity_type' => 'product', 'entity_id' => 2, 'attribute_code' => 'attribute_set',
+                'locale' => 'en_US', 'store_id' => 0, 'value_type' => 'string',
+                'value_string' => 'dropship', 'cleared' => 0, 'is_required' => 0,
+            ],
+            [
+                'entity_type' => 'product', 'entity_id' => 3, 'attribute_code' => 'name',
+                'locale' => 'en_US', 'store_id' => 0, 'value_type' => 'string',
+                'value_string' => 'Local', 'cleared' => 0, 'is_required' => 0,
+            ],
+        ];
+        [$service] = $this->fixture(relatedRows: ['attribute_value' => $attributes]);
+
+        self::assertSame([1], array_column($service->search(1, ['source' => '1688']), 'product_id'));
+        self::assertSame([1], array_column($service->search(1, ['source_platform' => ' 1688 ']), 'product_id'));
+        self::assertSame([2], array_column($service->search(1, ['source' => 'CJ']), 'product_id'));
+        self::assertSame([2], array_column($service->search(1, ['source' => '货源']), 'product_id'));
+        self::assertSame([3], array_column($service->search(1, ['source' => '__none__']), 'product_id'));
+        self::assertSame([], $service->search(1, ['source' => 'alibaba']));
     }
 
     public function testMatchedProductsBatchPricesAndMediaWithoutChangingPayloads(): void

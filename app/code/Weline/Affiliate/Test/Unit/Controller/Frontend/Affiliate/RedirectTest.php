@@ -7,8 +7,8 @@ namespace Weline\Affiliate\Test\Unit\Controller\Frontend\Affiliate;
 use PHPUnit\Framework\TestCase;
 use Weline\Affiliate\Controller\Frontend\Affiliate\Redirect;
 use Weline\Affiliate\Service\AffiliateService;
-use Weline\Customer\Session\CustomerSession;
 use Weline\Framework\Http\Request;
+use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
 
 class RedirectTest extends TestCase
 {
@@ -22,8 +22,8 @@ class RedirectTest extends TestCase
                 'target_url' => '/product/frontend/product/view?id=652',
             ]);
 
-        $customerSession = $this->createMock(CustomerSession::class);
-        $customerSession->expects($this->once())
+        $session = $this->createMock(AuthenticatedSessionInterface::class);
+        $session->expects($this->once())
             ->method('getUserId')
             ->willReturn(42);
 
@@ -34,7 +34,7 @@ class RedirectTest extends TestCase
             ->willReturn(' AFF-CODE ');
 
         $controller = $this->getMockBuilder(Redirect::class)
-            ->setConstructorArgs([$affiliateService, $customerSession])
+            ->setConstructorArgs([$affiliateService])
             ->onlyMethods(['redirect'])
             ->getMock();
 
@@ -43,6 +43,7 @@ class RedirectTest extends TestCase
             ->with('/product/frontend/product/view?id=652');
 
         $this->setProtectedProperty($controller, 'request', $request);
+        $this->setProtectedProperty($controller, 'session', $session);
 
         $this->assertSame('', $controller->index());
     }

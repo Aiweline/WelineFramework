@@ -42,6 +42,7 @@ final class ProductCategoryEavBootstrap
         foreach ([
             ['code' => 'name', 'name' => '名称', 'type_id' => $varcharTypeId],
             ['code' => 'code', 'name' => 'Code', 'type_id' => $varcharTypeId],
+            ['code' => 'source_platform', 'name' => '来源平台', 'type_id' => $varcharTypeId],
             ['code' => 'google_taxonomy_id', 'name' => 'Google Taxonomy ID', 'type_id' => $varcharTypeId],
             ['code' => 'image', 'name' => '分类图标', 'type_id' => $varcharTypeId],
             ['code' => 'banner', 'name' => '分类 Banner', 'type_id' => $varcharTypeId],

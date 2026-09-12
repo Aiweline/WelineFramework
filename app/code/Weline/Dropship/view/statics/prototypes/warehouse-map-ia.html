@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"/>
+  <title>PROTOTYPE · 货源履约仓对接 IA</title>
+  <style>
+    :root {
+      --gap: 12px; --border: #d7dde5; --muted: #667085; --bg: #f4f6f9; --card: #fff;
+      --ink: #101828; --accent: #1f6feb; --ok: #067647; --warn: #b54708; --rail: #0f172a;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 14px/1.45 "IBM Plex Sans", "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--ink); }
+    .banner {
+      padding: 14px 18px; background: #111827; color: #e5e7eb; border-bottom: 1px solid #000;
+    }
+    .banner strong { color: #fff; }
+    .banner em { color: #93c5fd; font-style: normal; }
+    .bar {
+      position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
+      display: flex; gap: 6px; padding: 8px; background: #0b1220; border-radius: 999px; z-index: 20;
+      box-shadow: 0 10px 30px rgba(0,0,0,.28);
+    }
+    .bar a { color: #cbd5e1; text-decoration: none; padding: 8px 12px; border-radius: 999px; font-size: 12px; white-space: nowrap; }
+    .bar a[aria-current="true"] { background: var(--accent); color: #fff; }
+    main { max-width: 1100px; margin: 20px auto 110px; padding: 0 16px; }
+    h1 { font-size: 20px; margin: 0 0 4px; letter-spacing: -0.02em; }
+    .sub { color: var(--muted); margin: 0 0 16px; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; }
+    .filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin-bottom: 14px; }
+    label { display: grid; gap: 4px; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+    select, button, input {
+      font: inherit; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: #fff;
+    }
+    button.primary { background: var(--accent); color: #fff; border-color: var(--accent); cursor: pointer; }
+    button.ghost { background: #fff; cursor: pointer; }
+    .pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 999px; font-size: 12px; border: 1px solid var(--border); }
+    .pill.ok { color: var(--ok); border-color: #abefc6; background: #ecfdf3; }
+    .pill.gap { color: var(--warn); border-color: #f9dbaf; background: #fffaeb; }
+    .layout-a { display: grid; grid-template-columns: 220px 1fr; gap: 14px; min-height: 520px; }
+    .rail { background: var(--rail); color: #e2e8f0; border-radius: 14px; padding: 12px; }
+    .rail h2 { margin: 0 0 10px; font-size: 12px; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; }
+    .rail button {
+      width: 100%; text-align: left; background: transparent; color: #e2e8f0; border: 0; border-radius: 10px;
+      padding: 10px 10px; margin-bottom: 4px; cursor: pointer;
+    }
+    .rail button[aria-current="true"] { background: #1e293b; outline: 1px solid #334155; }
+    .rail .meta { display: block; font-size: 11px; color: #94a3b8; margin-top: 2px; }
+    .statrow { display: flex; gap: 10px; margin-bottom: 12px; }
+    .stat { flex: 1; border: 1px dashed var(--border); border-radius: 10px; padding: 10px 12px; }
+    .stat b { display: block; font-size: 22px; letter-spacing: -0.03em; }
+    .stat span { color: var(--muted); font-size: 12px; }
+    .row {
+      display: grid; grid-template-columns: 1.1fr 1.2fr 1fr auto; gap: 10px; align-items: center;
+      padding: 12px 0; border-bottom: 1px solid var(--border);
+    }
+    .row:last-child { border-bottom: 0; }
+    .name { font-weight: 600; }
+    .muted { color: var(--muted); font-size: 12px; }
+    .matrix { width: 100%; border-collapse: collapse; }
+    .matrix th, .matrix td { border: 1px solid var(--border); padding: 10px; text-align: left; vertical-align: top; }
+    .matrix th { background: #f8fafc; font-size: 12px; color: var(--muted); font-weight: 600; }
+    .tree { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+    .tree .node { padding: 6px 0; border-bottom: 1px dashed #e5e7eb; }
+    .tree .indent-1 { padding-left: 18px; }
+    .tree .indent-2 { padding-left: 36px; }
+    .verdict {
+      margin-top: 14px; padding: 12px 14px; border-radius: 12px; background: #eff6ff; border: 1px solid #bfdbfe; color: #1e3a8a;
+    }
+    .hidden { display: none !important; }
+    @media (max-width: 860px) {
+      .layout-a { grid-template-columns: 1fr; }
+      .row { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="banner">
+    <strong>PROTOTYPE（可丢弃）</strong>
+    问题：万能货源中心里，「仓与国家映射」的正确展示维度是什么？
+    纠偏：<em>不是库存仓树后台，也不是扁平映射流水账</em>——壳的主语是「货源 Provider 的履约原点如何接到本地仓」。
+  </div>
+  <main id="app"></main>
+  <nav class="bar" aria-label="prototype variants">
+    <a href="?variant=A" data-v="A">A 货源覆盖（荐）</a>
+    <a href="?variant=B" data-v="B">B 站点矩阵</a>
+    <a href="?variant=C" data-v="C">C 本地仓树</a>
+  </nav>
+  <script>
+    const variant = (new URLSearchParams(location.search).get('variant') || 'A').toUpperCase();
+    document.querySelectorAll('.bar a').forEach(a => {
+      a.setAttribute('aria-current', a.dataset.v === variant ? 'true' : 'false');
+    });
+
+    const providers = [
+      { code: 'cj', title: 'CJ Dropshipping', remotes: 17, bound: 9, gaps: 8 },
+      { code: 'fake', title: 'Fake Provider', remotes: 3, bound: 0, gaps: 3 },
+    ];
+    const remotes = [
+      { country: 'CN', remote: 'China · area 1', local: 'CN-GD-WH01 广东默认仓', scope: '默认网站', ok: true },
+      { country: 'US', remote: 'United States · area 2', local: 'US-CA-WH01 加州默认仓', scope: '默认网站', ok: true },
+      { country: 'JP', remote: 'Japan · area 10', local: 'JP-WH01 日本默认仓', scope: '默认网站', ok: true },
+      { country: 'GB', remote: 'United Kingdom · area 17', local: 'GB-WH01 英国默认仓', scope: '默认网站', ok: true },
+      { country: 'TH', remote: 'Thailand · area 3', local: '—', scope: '默认网站', ok: false },
+      { country: 'MX', remote: 'Mexico · area 12', local: '—', scope: '默认网站', ok: false },
+    ];
+
+    const filters = `
+      <div class="filters">
+        <label>售卖范围（网站/店）
+          <select><option>默认网站 / 默认店铺</option><option>E2E 站 #1</option><option>全部已映射范围</option></select>
+        </label>
+        <label>缺口
+          <select><option>全部</option><option>仅未绑定</option><option>仅已绑定</option></select>
+        </label>
+        <button class="ghost" type="button">拉取远程仓</button>
+        <button class="primary" type="button">按国家自动配对</button>
+      </div>`;
+
+    const app = document.getElementById('app');
+
+    if (variant === 'A') {
+      app.innerHTML = `
+        <h1>货源履约仓对接</h1>
+        <p class="sub">万能货源中心视角：先选货源，再看它能从哪些远程原点发货，最后绑定本地仓。网站范围是过滤，不是表头主语。</p>
+        <div class="layout-a">
+          <aside class="rail">
+            <h2>货源</h2>
+            ${providers.map((p, i) => `
+              <button type="button" aria-current="${i === 0 ? 'true' : 'false'}">
+                <strong>${p.title}</strong>
+                <span class="meta">${p.code} · 远程 ${p.remotes} · 已绑 ${p.bound} · 缺口 ${p.gaps}</span>
+              </button>`).join('')}
+          </aside>
+          <section class="card">
+            ${filters}
+            <div class="statrow">
+              <div class="stat"><b>9</b><span>已绑定国家</span></div>
+              <div class="stat"><b>8</b><span>远程有、本地未接</span></div>
+              <div class="stat"><b>3</b><span>本地有、远程无</span></div>
+            </div>
+            ${remotes.map(r => `
+              <div class="row">
+                <div>
+                  <div class="name">${r.country} · ${r.remote.split('·')[0].trim()}</div>
+                  <div class="muted">远程履约原点 ${r.remote}</div>
+                </div>
+                <div>
+                  <div class="${r.ok ? '' : 'muted'}">${r.ok ? r.local : '未绑定本地物理仓'}</div>
+                  <div class="muted">范围：${r.scope}</div>
+                </div>
+                <div><span class="pill ${r.ok ? 'ok' : 'gap'}">${r.ok ? '可履约' : '缺口'}</span></div>
+                <div><button class="ghost" type="button">${r.ok ? '改绑' : '绑定本地仓'}</button></div>
+              </div>`).join('')}
+            <div class="verdict"><strong>推荐 A。</strong>对齐壳职责：Provider 拥有远程仓；壳编排「远程原点 → 本地仓」。运营问题是「这个货源接好了没」，不是「库存树长什么样」。</div>
+          </section>
+        </div>`;
+    } else if (variant === 'B') {
+      app.innerHTML = `
+        <h1>货源履约仓对接 · 站点覆盖矩阵</h1>
+        <p class="sub">行=货源远程国家，列=网站。适合多站扩张时看「哪个站还没接」。仍以货源为上下文，但主扫描轴变成站点。</p>
+        <div class="card">
+          ${filters}
+          <table class="matrix">
+            <thead>
+              <tr><th>CJ 远程国家</th><th>默认网站</th><th>E2E #1</th><th>E2E #2</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>CN China</td><td><span class="pill ok">CN-GD-WH01</span></td><td><span class="pill ok">CN-GD-WH01</span></td><td><span class="pill gap">未绑</span></td></tr>
+              <tr><td>JP Japan</td><td><span class="pill ok">JP-WH01</span></td><td><span class="pill gap">未绑</span></td><td><span class="pill gap">未绑</span></td></tr>
+              <tr><td>US United States</td><td><span class="pill ok">US-CA-WH01</span></td><td><span class="pill gap">未绑</span></td><td><span class="pill ok">US-CA-WH01</span></td></tr>
+              <tr><td>TH Thailand</td><td><span class="pill gap">无本地仓</span></td><td><span class="pill gap">无本地仓</span></td><td><span class="pill gap">无本地仓</span></td></tr>
+            </tbody>
+          </table>
+          <div class="verdict">B 适合「多站运营」第二视图，不适合默认首页——单元格会很快变密，且弱化「先搞定一个货源」的壳流程。</div>
+        </div>`;
+    } else {
+      app.innerHTML = `
+        <h1>货源履约仓对接 · 本地仓树挂载</h1>
+        <p class="sub">把库存「国家→省→仓」树搬过来，叶子上挂供应商绑定。结构熟悉，但主语变成 Inventory，货源中心叙事被冲淡。</p>
+        <div class="card">
+          ${filters}
+          <div class="tree">
+            <div class="node">CN 中国 <span class="muted">逻辑节点</span></div>
+            <div class="node indent-1">CN-GD 广东</div>
+            <div class="node indent-2">CN-GD-WH01 广东默认仓 · <span class="pill ok">CJ → China</span></div>
+            <div class="node">JP 日本</div>
+            <div class="node indent-2">JP-WH01 日本默认仓 · <span class="pill ok">CJ → Japan</span></div>
+            <div class="node">TH 泰国 <span class="muted">无物理仓</span></div>
+            <div class="node">US 美国</div>
+            <div class="node indent-1">US-CA 加州</div>
+            <div class="node indent-2">US-CA-WH01 · <span class="pill ok">CJ → United States</span> <span class="pill gap">Fake 未绑</span></div>
+          </div>
+          <div class="verdict">C 适合库存同学排查，或作为「从本地反查」抽屉。默认页用 C 会让人以为在管仓库，而不是在对接货源履约能力。</div>
+        </div>`;
+    }
+  </script>
+</body>
+</html>

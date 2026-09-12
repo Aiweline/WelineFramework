@@ -734,7 +734,11 @@ final class StorefrontCatalogViewService
         // stock/sellability is still read live on every PDP request.
         $storeId = max(0, RequestContext::getWelineStoreId());
         $storeIds = \array_values(\array_unique([0, $storeId]));
-        $attributeRows = [];
+        // Summary listings must pass null (not []) so resolveCatalogOffers still
+        // loads the minimal name/product_type/quote_only rows. An empty array is
+        // a "provided" value for ??= and previously skipped that load, causing
+        // card titles to fall back to factory product.sku codes.
+        $attributeRows = null;
         if ($includeListingDetails) {
             $attributeStartedAt = hrtime(true);
             $attributeRows = $this->attributeValues->listExplicitRows(

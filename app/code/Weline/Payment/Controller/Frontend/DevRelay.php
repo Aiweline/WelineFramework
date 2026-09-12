@@ -175,9 +175,6 @@ final class DevRelay extends FrontendController
             if (!$this->gate->isLocalEnvironment()) {
                 throw new \RuntimeException((string) __('仅本地可启动静默 worker。'));
             }
-            if (!$this->gate->canOpenUi()) {
-                throw new \RuntimeException((string) __('请先在支付钩子控制台启用 DevRelay。'));
-            }
             if (!$this->request->isPost()) {
                 throw new \RuntimeException('method_not_allowed');
             }
@@ -194,16 +191,16 @@ final class DevRelay extends FrontendController
             if ($token === '' && $remembered) {
                 $token = $remembered['user_token'];
             }
-            $status = $this->localWorker->start($online, $token);
-            try {
-                $this->settings->save(array_merge($this->settings->get(), [
-                    'enabled' => true,
-                    'online_base_url' => $online,
-                ]));
-            } catch (\Throwable) {
-            }
 
-            return ['success' => true, 'status' => $status];
+            // 先启用再 start，避免 canOpenUi chicken-egg。
+            $this->settings->save(array_merge($this->settings->get(), [
+                'enabled' => true,
+                'online_base_url' => rtrim($online, '/'),
+            ]));
+
+            $status = $this->localWorker->start($online, $token);
+
+            return ['success' => true, 'status' => $status, 'feature_enabled' => true];
         });
     }
 

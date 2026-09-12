@@ -11,8 +11,9 @@ SEO Head 使用当前 Store 的名称和独立入口覆盖 Website 默认值，�
 
 1. `app/code/Weline/Websites/doc/default-website-and-request-detection.md`
 2. `app/code/Weline/Websites/doc/store-saleschannel-scope.md`（Store/渠道/三段 Scope，商城内核 P1a）
-3. `app/code/Weline/Websites/doc/WebsiteData类使用文档.md`
-4. 涉及主题目标、建站工作台时，让同一 Guidance Bundle 同时检索 Theme 文档
+3. `app/code/Weline/Websites/doc/scope-select标签使用指南.md`（后台 **`<w:scope>`** 四级范围选择：Global/网站/店铺/渠道）
+4. `app/code/Weline/Websites/doc/WebsiteData类使用文档.md`
+5. 涉及主题目标、建站工作台时，让同一 Guidance Bundle 同时检索 Theme 文档
 
 ## 模块定位
 
@@ -51,10 +52,11 @@ SEO Head 使用当前 Store 的名称和独立入口覆盖 Website 默认值，�
 - URL 本地化兼容货币/语言单段和两种双段顺序，canonical 固定为 `currency -> locale`；后台 area key 必须是 URL 第一段。
 - Website 默认时区只写当前 `RequestContext`，不得修改 PHP 进程全局 timezone。`QueryBin` 成功响应的 `scope_meta` 只包含 Scope 身份、locale/currency/timezone 和 context version 等安全字段，不包含 Token、签名、bootstrap ID 或密钥。
 - 跨模块与前端调用网站能力时，优先使用已发布的 `w_query('websites', ...)`，不要直接依赖内部服务类。
-- 站点选择 Taglib：
+- 站点 / 范围 Taglib：
+  - **作用范围（四级，首选）**：`<w:scope>` — Global → 网站 → 店铺 → 渠道树选；身份由 Websites Catalog 贡献，选择器由 Taglib + SystemConfig `ScopeSelectorCatalog` 组装。详文：[scope-select标签使用指南.md](./scope-select标签使用指南.md)。配置/仓映射/刊登等「范围」场景**禁止**拆成站+店+渠手写联动。
   - `<w:websites:website:select>`：站点搜索单选/多选；`allow-empty` 可表示 Global；筛选场景写 `auto-submit="true"`（选择即提交关联 form，对齐 LanguageSelect，不要再放「切换」按钮）。
   - `<w:websites:store:select>` / `<w:websites:channel:select>`：Store / Channel code 可搜索单选，选项由调用方传入 JSON；空值分别表示 Website 层 / Store 层。
-  - 共用渲染器：`Taglib/SearchableCodeSelect.php`。
+  - 共用渲染器（站/店/渠单域）：`Taglib/SearchableCodeSelect.php`；范围树：`Weline\Taglib\Taglib\Scope`。
 - 网站表单的语言与货币选项分别读取 I18n `LocaleRepositoryInterface` 和 Currency
   `CurrencyCatalogInterface` 的不可变 DTO；Controller 与模板不得引用对方 ORM Model/Query。
 - `WebsiteData::getCurrencies()` 通过 `RuntimeProviderResolver` 获取 Currency Catalog，继续返回

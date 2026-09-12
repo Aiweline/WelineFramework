@@ -1,0 +1,36 @@
+<?php
+/**
+ * Product create wizard · basics: wholesale enable switch.
+ *
+ * @hook-priority 100
+ * @hook-sort-order 10
+ */
+
+use Weline\B2B\Service\SellingModePolicy;
+
+$flagCode = SellingModePolicy::PRODUCT_FLAG_TOB;
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+?>
+<div class="w-stack b2b-product-wholesale-admin"
+     data-gap="sm"
+     data-testid="b2b-product-wholesale-admin-create"
+     data-b2b-product-wholesale="1"
+     style="margin-top:var(--weline-space-3, 0.75rem);">
+    <label class="w-product-create__basics-check" for="product-create-selling-mode-tob">
+        <input type="checkbox"
+               id="product-create-selling-mode-tob"
+               name="selling_mode_tob"
+               value="1"
+               scope="product_create_draft"
+               data-testid="b2b-product-wholesale-enabled"
+               data-b2b-wholesale-canonical="1"
+               data-b2b-wholesale-flag="<?= $escape($flagCode) ?>"
+               data-attribute-code="<?= $escape($flagCode) ?>"
+               data-value-type="boolean"
+               checked>
+        <span><lang>启用批发</lang></span>
+    </label>
+    <p class="w-field__help" style="--w-m:0;">
+        <lang>默认开启。关闭后前台不提供批发购买方式；开启且价目配置阶梯后才显示批发。阶梯价与价目仍在批发模块维护。</lang>
+    </p>
+</div>

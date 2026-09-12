@@ -1,16 +1,317 @@
-<?php /** @var \Weline\Framework\View\Template $this */ ?>
-<div class="container-fluid py-3" data-dropship-admin="orders">
-  <h1 class="h3 mb-3"><?= $this->getData('page_title') ?></h1>
-  <h2 class="h5"><?= __('履约') ?></h2>
-  <table class="table table-sm"><thead><tr><th>provider</th><th>order</th><th>external</th><th>status</th><th>tracking</th></tr></thead><tbody>
-  <?php foreach ((array)$this->getData('fulfillments') as $r): ?>
-    <tr><td><?= htmlspecialchars((string)$r['provider_code']) ?></td><td><?= htmlspecialchars((string)$r['order_uuid']) ?></td><td><?= htmlspecialchars((string)$r['external_order_id']) ?></td><td><?= htmlspecialchars((string)$r['status']) ?></td><td><?= htmlspecialchars((string)$r['tracking_number']) ?></td></tr>
-  <?php endforeach; ?>
-  </tbody></table>
-  <h2 class="h5 mt-4"><?= __('Outbox') ?></h2>
-  <table class="table table-sm"><thead><tr><th>biz</th><th>action</th><th>status</th><th>error</th></tr></thead><tbody>
-  <?php foreach ((array)$this->getData('outbox') as $r): ?>
-    <tr><td><code><?= htmlspecialchars((string)$r['biz_key']) ?></code></td><td><?= htmlspecialchars((string)$r['action']) ?></td><td><?= htmlspecialchars((string)$r['status']) ?></td><td class="small"><?= htmlspecialchars((string)($r['last_error'] ?? '')) ?></td></tr>
-  <?php endforeach; ?>
-  </tbody></table>
+<?php
+/**
+ * 履约订单：对齐 Channel 页 w-card / w-table / w-badge；行可展开商品手风琴。
+ * @var \Weline\Framework\View\Template $this
+ */
+$fulfillments = (array)$this->getData('fulfillments');
+$outbox = (array)$this->getData('outbox');
+$orderLinesUrl = (string)$this->getData('order_lines_url');
+$escape = static fn($v): string => htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$colspan = 6;
+?>
+<style>
+[data-dropship-admin="orders"] .ds-order-row[data-order-expandable="1"]{
+  cursor:pointer;
+}
+[data-dropship-admin="orders"] .ds-order-row[data-order-expandable="1"]:hover{
+  background:var(--weline-theme-surface-hover, var(--color-surface-hover, rgba(0,0,0,.03)));
+}
+[data-dropship-admin="orders"] .ds-order-row__hint{
+  display:inline-flex;
+  align-items:center;
+  gap:var(--weline-space-1);
+  margin-top:var(--weline-space-1);
+  color:var(--weline-theme-text-muted, var(--color-text-muted));
+  font-size:var(--weline-font-size-sm, .85rem);
+}
+[data-dropship-admin="orders"] .ds-order-row__hint .w-icon{
+  transition:transform .18s ease;
+  flex:0 0 auto;
+}
+[data-dropship-admin="orders"] .ds-order-detail-row:not(.is-open){
+  display:none !important;
+}
+[data-dropship-admin="orders"] .ds-order-detail-row.is-open{
+  display:table-row !important;
+}
+[data-dropship-admin="orders"] .ds-order-detail-row > td{
+  padding:0;
+  border-top:none;
+  background:var(--weline-theme-surface-subtle, var(--color-surface-subtle, rgba(0,0,0,.02)));
+}
+[data-dropship-admin="orders"] .ds-order-detail{
+  padding:var(--weline-space-3) var(--weline-space-4) var(--weline-space-4);
+  border-top:1px solid var(--weline-theme-border, var(--color-border));
+}
+[data-dropship-admin="orders"] .ds-order-line__product{
+  display:flex;
+  align-items:center;
+  gap:var(--weline-space-2);
+  min-width:0;
+}
+[data-dropship-admin="orders"] .ds-order-line__thumb,
+[data-dropship-admin="orders"] .ds-order-line__thumb-ph{
+  width:2.5rem;
+  height:2.5rem;
+  flex:0 0 auto;
+  border-radius:var(--weline-radius-sm, .35rem);
+  border:1px solid var(--weline-theme-border, var(--color-border));
+  object-fit:cover;
+  background:var(--weline-theme-surface-subtle, var(--color-surface-subtle, rgba(0,0,0,.04)));
+  display:inline-block;
+}
+[data-dropship-admin="orders"] .ds-order-line__product .w-text{
+  min-width:0;
+}
+</style>
+<div class="w-grid"
+     data-dropship-admin="orders"
+     data-testid="dropship-orders"
+     data-dropship-order-accordion="1"
+     data-weline-load="dropshipOrderAccordion"
+     data-order-lines-url="<?= $escape($orderLinesUrl) ?>"
+     data-i18n-loading="<?= $escape(__('加载商品中…')) ?>"
+     data-i18n-failed="<?= $escape(__('加载失败')) ?>"
+     data-i18n-no-lines="<?= $escape(__('暂无商品行')) ?>"
+     data-i18n-products="<?= $escape(__('订单商品')) ?>"
+     data-i18n-col-name="<?= $escape(__('商品')) ?>"
+     data-i18n-col-sku="<?= $escape(__('货号')) ?>"
+     data-i18n-col-qty="<?= $escape(__('数量')) ?>"
+     data-i18n-col-unit="<?= $escape(__('单价')) ?>"
+     data-i18n-col-row="<?= $escape(__('小计')) ?>"
+     data-i18n-expand="<?= $escape(__('点击展开商品')) ?>"
+     data-i18n-collapse="<?= $escape(__('点击收起')) ?>">
+  <div style="--w-span:12;">
+    <div class="w-card" style="--w-mb:var(--weline-space-5);">
+      <div class="w-card__header">
+        <div class="w-stack" style="--w-gap:var(--weline-space-1);">
+          <div class="w-text" data-weight="strong"><?= __('履约单') ?></div>
+          <p class="w-text" data-tone="muted" data-size="sm" style="margin:0;">
+            <?= __('展示已推送到货源平台的履约投影。点击行可展开查看本站订单商品。') ?>
+          </p>
+        </div>
+      </div>
+      <div class="w-card__body">
+        <?php if ($fulfillments === []): ?>
+          <div class="w-empty" style="min-height:8rem;" data-testid="dropship-orders-empty">
+            <div class="w-text" data-tone="muted" data-size="sm"><?= __('暂无履约单。支付成功并推送后会出现在此。') ?></div>
+          </div>
+        <?php else: ?>
+          <div class="w-table-wrap">
+            <table class="w-table" data-w-vertical="middle" data-testid="dropship-fulfillment-table">
+              <thead>
+              <tr>
+                <th><?= __('货源') ?></th>
+                <th><?= __('本站订单') ?></th>
+                <th><?= __('货源单号') ?></th>
+                <th><?= __('状态') ?></th>
+                <th><?= __('物流') ?></th>
+                <th><?= __('更新时间') ?></th>
+              </tr>
+              </thead>
+              <tbody>
+              <?php foreach ($fulfillments as $r): ?>
+                <?php
+                $providerTitle = (string)($r['provider_title'] ?? $r['provider_code'] ?? '');
+                $providerCode = (string)($r['provider_code'] ?? '');
+                $orderUuid = (string)($r['order_uuid'] ?? '');
+                $orderDisplay = (string)($r['order_display'] ?? $orderUuid);
+                $orderSecondary = (string)($r['order_secondary'] ?? '');
+                $isSandbox = !empty($r['is_sandbox_key']);
+                $expandable = !empty($r['expandable']) && $orderUuid !== '';
+                $statusLabel = (string)($r['status_label'] ?? $r['status'] ?? '');
+                $statusTone = (string)($r['status_tone'] ?? 'neutral');
+                $carrier = (string)($r['carrier_display'] ?? $r['carrier'] ?? '');
+                $tracking = (string)($r['tracking_display'] ?? $r['tracking_number'] ?? '');
+                $updated = (string)($r['updated_display'] ?? '—');
+                ?>
+                <tr class="ds-order-row"
+                    data-testid="dropship-order-row"
+                    data-order-uuid="<?= $escape($orderUuid) ?>"
+                    data-order-expandable="<?= $expandable ? '1' : '0' ?>"
+                    aria-expanded="false"
+                    <?= $expandable ? 'tabindex="0"' : '' ?>>
+                  <td>
+                    <div class="w-stack" style="--w-gap:0.15rem;">
+                      <span class="w-text" data-weight="strong"><?= $escape($providerTitle) ?></span>
+                      <?php if ($providerCode !== '' && strcasecmp($providerTitle, $providerCode) !== 0): ?>
+                        <span class="w-text" data-tone="muted" data-size="sm"><code><?= $escape($providerCode) ?></code></span>
+                      <?php endif; ?>
+                    </div>
+                  </td>
+                  <td>
+                    <div class="w-stack" style="--w-gap:0.15rem;">
+                      <span class="w-text" data-weight="strong" data-testid="dropship-order-display"><?= $escape($orderDisplay !== '' ? $orderDisplay : '—') ?></span>
+                      <?php if ($isSandbox): ?>
+                        <span class="w-badge" data-tone="warning" data-testid="dropship-order-sandbox"><?= __('测试单') ?></span>
+                      <?php elseif ($orderSecondary !== ''): ?>
+                        <span class="w-text" data-tone="muted" data-size="sm" title="<?= $escape($orderSecondary) ?>">
+                          <code><?= $escape(strlen($orderSecondary) > 20 ? substr($orderSecondary, 0, 8) . '…' . substr($orderSecondary, -6) : $orderSecondary) ?></code>
+                        </span>
+                      <?php endif; ?>
+                      <?php if ($expandable): ?>
+                        <span role="button"
+                              tabindex="0"
+                              class="ds-order-row__hint"
+                              data-order-expand-toggle
+                              data-testid="dropship-order-expand-hint"
+                              aria-expanded="false">
+                          <w:icon name="chevron-down" size="sm"></w:icon>
+                          <span data-order-expand-label><?= __('点击展开商品') ?></span>
+                        </span>
+                      <?php endif; ?>
+                    </div>
+                  </td>
+                  <td>
+                    <?php if (trim((string)($r['external_order_id'] ?? '')) !== ''): ?>
+                      <code data-testid="dropship-external-id"><?= $escape($r['external_order_id'] ?? '') ?></code>
+                    <?php else: ?>
+                      <span class="w-text" data-tone="muted">—</span>
+                    <?php endif; ?>
+                  </td>
+                  <td>
+                    <span class="w-badge" data-tone="<?= $escape($statusTone) ?>" data-testid="dropship-fulfillment-status">
+                      <?= $escape($statusLabel) ?>
+                    </span>
+                  </td>
+                  <td>
+                    <?php if ($tracking !== '' || $carrier !== ''): ?>
+                      <div class="w-stack" style="--w-gap:0.15rem;">
+                        <?php if ($carrier !== ''): ?>
+                          <span class="w-text" data-size="sm"><?= $escape($carrier) ?></span>
+                        <?php endif; ?>
+                        <?php if ($tracking !== ''): ?>
+                          <code data-testid="dropship-tracking"><?= $escape($tracking) ?></code>
+                        <?php else: ?>
+                          <span class="w-text" data-tone="muted" data-size="sm"><?= __('暂无运单号') ?></span>
+                        <?php endif; ?>
+                      </div>
+                    <?php else: ?>
+                      <span class="w-text" data-tone="muted">—</span>
+                    <?php endif; ?>
+                  </td>
+                  <td>
+                    <span class="w-text" data-size="sm" data-tone="muted"><?= $escape($updated) ?></span>
+                  </td>
+                </tr>
+                <?php if ($expandable): ?>
+                  <tr class="ds-order-detail-row"
+                      data-testid="dropship-order-detail"
+                      data-order-uuid="<?= $escape($orderUuid) ?>"
+                      hidden>
+                    <td colspan="<?= $colspan ?>">
+                      <div class="ds-order-detail" data-order-detail-body>
+                        <div class="w-text" data-tone="muted" data-size="sm"><?= __('展开后加载…') ?></div>
+                      </div>
+                    </td>
+                  </tr>
+                <?php endif; ?>
+              <?php endforeach; ?>
+              </tbody>
+            </table>
+          </div>
+        <?php endif; ?>
+      </div>
+    </div>
+
+    <div class="w-card">
+      <div class="w-card__header">
+        <div class="w-stack" style="--w-gap:var(--weline-space-1);">
+          <div class="w-text" data-weight="strong"><?= __('推送队列') ?></div>
+          <p class="w-text" data-tone="muted" data-size="sm" style="margin:0;">
+            <?= __('支付后入队的推送任务（原 Outbox）。失败可重试；已跳过表示供应商不支持该动作。') ?>
+          </p>
+        </div>
+      </div>
+      <div class="w-card__body">
+        <?php if ($outbox === []): ?>
+          <div class="w-empty" style="min-height:8rem;" data-testid="dropship-outbox-empty">
+            <div class="w-text" data-tone="muted" data-size="sm"><?= __('暂无推送记录') ?></div>
+          </div>
+        <?php else: ?>
+          <div class="w-table-wrap">
+            <table class="w-table" data-w-vertical="middle" data-testid="dropship-outbox-table">
+              <thead>
+              <tr>
+                <th><?= __('任务') ?></th>
+                <th><?= __('动作') ?></th>
+                <th><?= __('状态') ?></th>
+                <th><?= __('最近错误') ?></th>
+                <th><?= __('更新时间') ?></th>
+              </tr>
+              </thead>
+              <tbody>
+              <?php foreach ($outbox as $r): ?>
+                <?php
+                $bizFull = (string)($r['biz_key'] ?? '');
+                $bizShort = (string)($r['biz_short'] ?? $bizFull);
+                $actionLabel = (string)($r['action_label'] ?? $r['action'] ?? '');
+                $statusLabel = (string)($r['status_label'] ?? $r['status'] ?? '');
+                $statusTone = (string)($r['status_tone'] ?? 'neutral');
+                $error = (string)($r['error_display'] ?? $r['last_error'] ?? '');
+                $updated = (string)($r['updated_display'] ?? '—');
+                ?>
+                <tr>
+                  <td>
+                    <code title="<?= $escape($bizFull) ?>"><?= $escape($bizShort) ?></code>
+                  </td>
+                  <td><?= $escape($actionLabel) ?></td>
+                  <td>
+                    <span class="w-badge" data-tone="<?= $escape($statusTone) ?>" data-testid="dropship-outbox-status">
+                      <?= $escape($statusLabel) ?>
+                    </span>
+                  </td>
+                  <td>
+                    <?php if ($error !== ''): ?>
+                      <span class="w-text" data-size="sm" title="<?= $escape($error) ?>">
+                        <?= $escape(mb_strlen($error) > 80 ? mb_substr($error, 0, 80) . '…' : $error) ?>
+                      </span>
+                    <?php else: ?>
+                      <span class="w-text" data-tone="muted">—</span>
+                    <?php endif; ?>
+                  </td>
+                  <td>
+                    <span class="w-text" data-size="sm" data-tone="muted"><?= $escape($updated) ?></span>
+                  </td>
+                </tr>
+              <?php endforeach; ?>
+              </tbody>
+            </table>
+          </div>
+        <?php endif; ?>
+      </div>
+    </div>
+  </div>
 </div>
+<script>
+(function ensureOrderAccordion() {
+  var panel = document.querySelector('[data-dropship-order-accordion="1"]');
+  if (!panel) return;
+  function boot() {
+    if (panel.getAttribute('data-order-accordion-ready') === '1') return true;
+    if (window.WelineDropshipOrderAccordion && typeof window.WelineDropshipOrderAccordion.boot === 'function') {
+      window.WelineDropshipOrderAccordion.boot();
+      return panel.getAttribute('data-order-accordion-ready') === '1';
+    }
+    return false;
+  }
+  if (boot()) return;
+  var src = '/Weline/Dropship/view/statics/backend/order-accordion.js?v=1.0.69';
+  var existing = document.querySelector('script[data-dropship-order-accordion-src]');
+  if (existing) {
+    existing.addEventListener('load', function () { boot(); });
+    setTimeout(boot, 50);
+    return;
+  }
+  var s = document.createElement('script');
+  s.src = src;
+  s.async = true;
+  s.setAttribute('data-dropship-order-accordion-src', '1');
+  s.onload = function () { boot(); };
+  s.onerror = function () {
+    console.warn('[Dropship] order-accordion.js load failed', src);
+  };
+  document.head.appendChild(s);
+  setTimeout(boot, 1200);
+})();
+</script>

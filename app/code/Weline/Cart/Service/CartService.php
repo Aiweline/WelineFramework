@@ -1413,6 +1413,36 @@ final class CartService
                     if ($snapshot->currency !== '') {
                         $item['currency'] = $snapshot->currency;
                     }
+                    // tob：即使无批发价行，也必须把快照币金额换到展示币，避免币种标签与数字 1:1 混用。
+                    if ($cartType === 'tob' && $displayCurrency !== '') {
+                        $fromCurrency = strtoupper(trim((string)($item['currency'] ?? $snapshot->currency ?? ''))) ?: 'CNY';
+                        if ($displayCurrency !== $fromCurrency) {
+                            $convertedUnit = $this->convertPriceMinor(
+                                (int)$item['unit_price_minor'],
+                                $fromCurrency,
+                                $displayCurrency,
+                            );
+                            $convertedCompare = $this->convertPriceMinor(
+                                (int)$item['compare_at_minor'],
+                                $fromCurrency,
+                                $displayCurrency,
+                            );
+                            if ($convertedUnit !== null) {
+                                $item['unit_price_minor'] = $convertedUnit;
+                                $item['row_total_minor'] = $qty * $convertedUnit;
+                                $item['price'] = round($convertedUnit / 100, 2);
+                                $item['row_total'] = round(((int)$item['row_total_minor']) / 100, 2);
+                                $item['currency'] = $displayCurrency;
+                                if ($convertedCompare !== null) {
+                                    $item['compare_at_minor'] = $convertedCompare;
+                                    $item['original_price'] = round($convertedCompare / 100, 2);
+                                    $item['has_deal'] = $convertedCompare > $convertedUnit && $convertedUnit > 0;
+                                }
+                            }
+                        } else {
+                            $item['currency'] = $displayCurrency;
+                        }
+                    }
                 } else {
                     $fromCurrency = strtoupper(trim((string)($item['currency'] ?? '')));
                     if ($fromCurrency === '') {

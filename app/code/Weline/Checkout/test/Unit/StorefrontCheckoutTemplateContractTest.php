@@ -190,6 +190,11 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
         self::assertStringContainsString('data-weline-load="miniCartExtras"', $template);
         self::assertStringContainsString('discountAmountMajor', $template);
         self::assertStringContainsString('data-checkout-discount-row', $template);
+        self::assertStringContainsString('data-checkout-deposit-row', $template);
+        self::assertStringContainsString('data-checkout-credit-row', $template);
+        self::assertStringContainsString('data-grand-total-label', $template);
+        self::assertStringContainsString('weline:b2b-credit-changed', $template);
+        self::assertStringContainsString('WelineB2BCheckoutTob', $template);
         self::assertStringContainsString("weline:checkout:address-updated", $template);
         self::assertStringContainsString("scheduleReload({ hardOnFailure: false })", $template);
         self::assertStringNotContainsString('<w:widget', $template);
@@ -394,6 +399,9 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
         $modules = (string) file_get_contents($moduleRoot . '/view/statics/frontend/weline.modules.js');
 
         self::assertStringContainsString('announceCheckoutOrderCreated', $template);
+        self::assertStringContainsString('syncLifecycleDomFields', $template);
+        self::assertStringContainsString('data-order-amount', $template);
+        self::assertStringContainsString('weline:checkout:fields-ready', $template);
         self::assertStringContainsString('weline:checkout:order-created', $template);
         self::assertStringContainsString('weline:payment:outcome', $template);
         self::assertStringContainsString('checkoutLifecycle,paymentLifecycle', $template);

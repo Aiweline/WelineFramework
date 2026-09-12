@@ -25,6 +25,32 @@ class Dashboard extends Block
     private const MAX_ROWS = 1000;
 
     /**
+     * Map invariant severity to Theme semantic tone levels
+     * (theme-semantic-color-matrix: danger / warning / success / info / muted).
+     *
+     * @return array{status: string, count: string, strategy: string}
+     */
+    public static function resolveInvariantTones(bool $repairable, int $diffCount): array
+    {
+        $strategy = $repairable ? 'warning' : 'info';
+        if ($diffCount <= 0) {
+            return [
+                'status' => 'success',
+                'count' => 'muted',
+                'strategy' => $strategy,
+            ];
+        }
+
+        $level = $repairable ? 'danger' : 'warning';
+
+        return [
+            'status' => $level,
+            'count' => $level,
+            'strategy' => $strategy,
+        ];
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function getDashboardData(ScopeIdentity $targetScope): array

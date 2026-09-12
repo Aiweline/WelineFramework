@@ -152,6 +152,14 @@ $copy = [
                         class="weline-checkout__credit-slot"
                         weline-code="checkout.checkout.credit_slot">
                 </w:slot>
+                <w:slot id="checkout-summary-help-pay"
+                        name="<?= __('结账帮我付') ?>"
+                        accept="checkout-summary-help-pay,help-pay,helppay"
+                        multiple="false"
+                        position="content"
+                        class="weline-checkout__help-pay-slot"
+                        weline-code="checkout.checkout.help_pay_slot">
+                </w:slot>
             </div>
             <link rel="stylesheet" href="@static(Weline_Theme::css/widgets/mini-cart-drawer.css)?v=20260907-price-header-layout">
             <div class="weline-checkout__totals weline-checkout__totals--tail" role="list">
@@ -160,8 +168,16 @@ $copy = [
                     <span><?= __('优惠') ?></span>
                     <strong data-discount-amount="">0.00</strong>
                 </div>
+                <div role="listitem" data-checkout-deposit-row hidden>
+                    <span><?= __('批发定金') ?></span>
+                    <strong data-deposit-amount="">0.00</strong>
+                </div>
+                <div role="listitem" data-checkout-credit-row hidden>
+                    <span><?= __('批发信用抵扣') ?></span>
+                    <strong data-credit-amount="">0.00</strong>
+                </div>
                 <div class="weline-checkout__grand" role="listitem">
-                    <span><?= __('应付合计') ?></span>
+                    <span data-grand-total-label><?= __('应付合计') ?></span>
                     <strong data-grand-total="">0.00</strong>
                 </div>
             </div>
@@ -927,7 +943,16 @@ $copy = [
     const shippingAmountNode = root.querySelector('[data-shipping-amount]');
     const discountRowNode = root.querySelector('[data-checkout-discount-row]');
     const discountAmountNode = root.querySelector('[data-discount-amount]');
+    const depositRowNode = root.querySelector('[data-checkout-deposit-row]');
+    const depositAmountNode = root.querySelector('[data-deposit-amount]');
+    const creditRowNode = root.querySelector('[data-checkout-credit-row]');
+    const creditAmountNode = root.querySelector('[data-credit-amount]');
+    const grandTotalLabelNode = root.querySelector('[data-grand-total-label]');
     const grandTotalNode = root.querySelector('[data-grand-total]');
+    const grandTotalLabelDefault = grandTotalLabelNode
+        ? String(grandTotalLabelNode.textContent || '').trim()
+        : '';
+    const grandTotalLabelDeposit = <?= json_encode((string)__('本次应付定金'), JSON_UNESCAPED_UNICODE) ?>;
 
     let checkoutApi = null;
     let activePaymentRecovery = null;
@@ -1218,6 +1243,7 @@ $copy = [
             setText(paymentRetryButton, canContinue ? copy.continue_payment : copy.retry_payment);
         }
         setMessage(pending ? copy.payment_pending : copy.payment_failed, pending ? 'success' : 'error');
+        syncLifecycleDomFields(state);
         // Order already exists — emit checkout + payment lifecycle so Cart can clear mini-cart.
         announceCheckoutOrderCreated(state, pending ? 'pending' : 'failed');
     }
@@ -1236,11 +1262,13 @@ $copy = [
             source: 'checkout-payment-recovery',
             order_uuid: state && state.order_uuid ? state.order_uuid : '',
             checkout_group_uuid: state && state.checkout_group_uuid ? state.checkout_group_uuid : '',
+            quote_token: state && state.quote_token ? state.quote_token : '',
             outcome: paymentOutcome || 'pending',
             amount: amountCandidate,
             currency: text((state && state.currency) || checkoutState.currency || summary.currency || '').trim(),
         };
         const outcome = paymentOutcome || 'pending';
+        syncLifecycleDomFields(detail);
         try {
             if (window.DEV === true || window.WELINE_ENV === 'DEV'
                 || window.WELINE_LIFECYCLE_DEBUG === true
@@ -1304,7 +1332,11 @@ $copy = [
                 source: 'navigateToSuccess',
                 order_uuid: state && state.order_uuid ? state.order_uuid : '',
                 checkout_group_uuid: state && state.checkout_group_uuid ? state.checkout_group_uuid : '',
+                quote_token: state && state.quote_token ? state.quote_token : '',
+                amount: text(state && state.amount).trim(),
+                currency: text((state && state.currency) || checkoutState.currency || '').trim(),
             };
+            syncLifecycleDomFields(detail);
             if (window.WelineCheckout && typeof window.WelineCheckout.emitSuccess === 'function') {
                 window.WelineCheckout.emitSuccess(detail);
             } else {
@@ -1468,14 +1500,122 @@ $copy = [
         return minor / divisor;
     }
 
+    /**
+     * 把结账生命周期所需字段写到 DOM，供 checkout-lifecycle / 生命周期小助手读取。
+     * 下单前：amount + currency；recovery / 已下单：再补 order_uuid / session。
+     */
+    function syncLifecycleDomFields(extra) {
+        if (!root) {
+            return;
+        }
+        const cart = checkoutState.cart && typeof checkoutState.cart === 'object' ? checkoutState.cart : {};
+        const summary = cart.summary && typeof cart.summary === 'object' ? cart.summary : {};
+        const extraObj = extra && typeof extra === 'object' ? extra : {};
+        const recovery = activePaymentRecovery && typeof activePaymentRecovery === 'object'
+            ? activePaymentRecovery
+            : {};
+        const subtotal = Number(cart.subtotal || 0);
+        const shipping = selectedShippingAmount();
+        const discount = discountAmountMajor(cart);
+        const computedGrand = Math.max(0, subtotal + shipping - discount);
+        const amount = text(
+            extraObj.amount
+            || summary.grand_total
+            || summary.grand_total_amount
+            || cart.grand_total
+            || cart.total
+            || ''
+        ).trim() || computedGrand.toFixed(2);
+        const currency = text(
+            extraObj.currency
+            || checkoutState.currency
+            || summary.currency
+            || 'CNY'
+        ).trim() || 'CNY';
+        const orderUuid = text(extraObj.order_uuid || recovery.order_uuid || '').trim();
+        const groupUuid = text(extraObj.checkout_group_uuid || recovery.checkout_group_uuid || '').trim();
+        const sessionCode = text(
+            extraObj.checkout_session_code
+            || extraObj.quote_token
+            || recovery.quote_token
+            || ''
+        ).trim();
+
+        root.setAttribute('data-currency', currency);
+        root.setAttribute('data-order-amount', amount);
+        root.setAttribute('data-amount', amount);
+        if (grandTotalNode) {
+            grandTotalNode.setAttribute('data-amount', amount);
+            grandTotalNode.setAttribute('data-currency', currency);
+        }
+        if (orderUuid) {
+            root.setAttribute('data-order-uuid', orderUuid);
+        } else {
+            root.removeAttribute('data-order-uuid');
+        }
+        if (groupUuid) {
+            root.setAttribute('data-checkout-group-uuid', groupUuid);
+        } else {
+            root.removeAttribute('data-checkout-group-uuid');
+        }
+        if (sessionCode) {
+            root.setAttribute('data-checkout-session-code', sessionCode);
+        } else {
+            root.removeAttribute('data-checkout-session-code');
+        }
+        try {
+            window.dispatchEvent(new CustomEvent('weline:checkout:fields-ready', {
+                detail: {
+                    source: 'syncLifecycleDomFields',
+                    amount: amount,
+                    currency: currency,
+                    order_uuid: orderUuid,
+                    checkout_group_uuid: groupUuid,
+                    checkout_session_code: sessionCode,
+                },
+            }));
+        } catch (eFieldsReady) {}
+    }
+
     function renderTotals() {
         const subtotal = Number(checkoutState.cart.subtotal || 0);
         const shipping = selectedShippingAmount();
         const discount = discountAmountMajor(checkoutState.cart);
+        const cartType = checkoutCartType();
+        const tob = cartType === 'tob';
+        const tobApi = window.WelineB2BCheckoutTob;
+        let creditApplyMajor = 0;
+        let depositMajor = 0;
+        let cashDepositMajor = null;
+        if (tob && tobApi) {
+            if (typeof tobApi.readApplyMinor === 'function') {
+                creditApplyMajor = Math.max(0, Number(tobApi.readApplyMinor()) || 0) / 100;
+            }
+            if (typeof tobApi.estimateDepositMinor === 'function') {
+                depositMajor = Math.max(0, Number(tobApi.estimateDepositMinor({
+                    cart_type: 'tob',
+                    subtotal: subtotal,
+                    currency: checkoutState.currency || 'CNY',
+                })) || 0) / 100;
+            }
+            if (typeof tobApi.cashDepositMinor === 'function') {
+                const cashMinor = tobApi.cashDepositMinor();
+                if (cashMinor !== null && cashMinor !== undefined) {
+                    cashDepositMajor = Math.max(0, Number(cashMinor) || 0) / 100;
+                }
+            }
+            // 有报价现金态时，定金行与信用面板同源（apply+cash），避免本地 30% 估算漂移。
+            if (cashDepositMajor !== null) {
+                depositMajor = cashDepositMajor + creditApplyMajor;
+            } else if (depositMajor > 0) {
+                cashDepositMajor = Math.max(0, depositMajor - creditApplyMajor);
+            }
+        }
         setText(subtotalNode, money(subtotal));
         setText(shippingAmountNode, money(shipping));
         if (discountRowNode && discountAmountNode) {
-            if (discount > 0) {
+            // tob 禁营销折：优惠行只展示零售券预览。
+            if (!tob && discount > 0) {
                 discountRowNode.hidden = false;
                 setText(discountAmountNode, '-' + money(discount));
             } else {
@@ -1483,7 +1623,35 @@ $copy = [
                 setText(discountAmountNode, money(0));
             }
         }
-        setText(grandTotalNode, money(Math.max(0, subtotal + shipping - discount)));
+        if (depositRowNode && depositAmountNode) {
+            if (tob && depositMajor > 0) {
+                depositRowNode.hidden = false;
+                setText(depositAmountNode, money(depositMajor));
+            } else {
+                depositRowNode.hidden = true;
+                setText(depositAmountNode, money(0));
+            }
+        }
+        if (creditRowNode && creditAmountNode) {
+            if (tob && creditApplyMajor > 0) {
+                creditRowNode.hidden = false;
+                setText(creditAmountNode, '-' + money(creditApplyMajor));
+            } else {
+                creditRowNode.hidden = true;
+                setText(creditAmountNode, money(0));
+            }
+        }
+        if (grandTotalLabelNode) {
+            setText(
+                grandTotalLabelNode,
+                tob ? grandTotalLabelDeposit : (grandTotalLabelDefault || grandTotalLabelDeposit)
+            );
+        }
+        const payable = tob
+            ? Math.max(0, cashDepositMajor == null ? depositMajor : cashDepositMajor)
+            : Math.max(0, subtotal + shipping - discount);
+        setText(grandTotalNode, money(payable));
+        syncLifecycleDomFields({ amount: payable.toFixed(2) });
     }
 
     function render(data) {
@@ -1600,6 +1768,51 @@ $copy = [
             window.WelineB2BCheckoutTob.applyCartType(root, data && data.cart ? data.cart.cart_type : sellingMode);
         }
         render(data || {});
+        const cartType = String(
+            (data && data.cart && data.cart.cart_type) || sellingMode || ''
+        ).toLowerCase();
+        if (cartType === 'tob') {
+            const currency = text(data && (data.currency || (data.cart && data.cart.currency)) || checkoutState.currency || 'CNY') || 'CNY';
+            checkoutState.currency = currency;
+            const subtotal = Number(data && data.cart ? data.cart.subtotal : 0) || 0;
+            const site = window.site || {};
+            const quoteOpts = {
+                cart_type: 'tob',
+                currency: currency,
+                subtotal: subtotal,
+                website_id: Number(site.website_id || site.websiteId || 0) || 0,
+            };
+            if (root) {
+                root.setAttribute('data-currency', currency);
+                root.setAttribute('data-checkout-currency', currency);
+            }
+            // Wait briefly for b2bCheckoutTob — inline loadCheckout often races the module.
+            let tobApi = window.WelineB2BCheckoutTob;
+            if (!tobApi || typeof tobApi.ensureCreditQuote !== 'function') {
+                for (let i = 0; i < 40 && !(window.WelineB2BCheckoutTob && window.WelineB2BCheckoutTob.ensureCreditQuote); i += 1) {
+                    await new Promise(function (resolve) { window.setTimeout(resolve, 50); });
+                }
+                tobApi = window.WelineB2BCheckoutTob;
+            }
+            if (tobApi && typeof tobApi.rememberQuoteOpts === 'function') {
+                tobApi.rememberQuoteOpts(quoteOpts);
+            }
+            // Prefetch once via ensureCreditQuote — do not also pass ensureQuote on applyCartType
+            // (avoids double-flight). applyCartType here only syncs coupon/UI chrome.
+            if (tobApi && typeof tobApi.applyCartType === 'function') {
+                tobApi.applyCartType(root, 'tob');
+            }
+            if (tobApi && typeof tobApi.ensureCreditQuote === 'function') {
+                const depositMinor = tobApi.estimateDepositMinor
+                    ? tobApi.estimateDepositMinor(quoteOpts)
+                    : Math.floor(Math.round(subtotal * 100) * 3000 / 10000);
+                await tobApi.ensureCreditQuote(root, Object.assign({}, quoteOpts, {
+                    deposit_amount_minor: depositMinor,
+                }));
+            } else if (tobApi && typeof tobApi.refreshCreditQuote === 'function') {
+                await tobApi.refreshCreditQuote(root, quoteOpts);
+            }
+        }
     }
 
     function checkoutCartType() {
@@ -1798,6 +2011,7 @@ $copy = [
             idempotency_key: idempotencyKey,
             country_code: address.country_code,
             guest_token: guestToken(),
+            express_checkout: !!opts.express_checkout,
             b2b_credit_apply_minor: (window.WelineB2BCheckoutTob
                 && typeof window.WelineB2BCheckoutTob.readApplyMinor === 'function')
                 ? window.WelineB2BCheckoutTob.readApplyMinor()
@@ -1894,6 +2108,7 @@ $copy = [
             const result = await submitCheckoutPayment(paymentMethod, {
                 require_form_validity: false,
                 idempotency_prefix: 'checkout_express_',
+                express_checkout: true,
             });
             if (result && result.cancelled) {
                 if (expressButton) {
@@ -1916,6 +2131,11 @@ $copy = [
     if (shippingBox) {
         shippingBox.addEventListener('change', renderTotals);
     }
+
+    // tob 信用勾选/输入变更后刷新摘要抵扣行与本次应付定金。
+    window.addEventListener('weline:b2b-credit-changed', function () {
+        renderTotals();
+    });
 
     // Soft-reload shipping methods/totals only; never hard-refresh — that wipes
     // the just-rendered address card before the next paint can settle.
@@ -1970,11 +2190,56 @@ $copy = [
         });
     }
 
+    function pendingExpressPayMethod() {
+        try {
+            const params = new URLSearchParams(window.location.search || '');
+            const method = text(params.get('express_pay') || '').trim().toLowerCase();
+            const flag = params.get('express_checkout');
+            if (method) {
+                return method;
+            }
+            if (flag === '1' || flag === 'true') {
+                return 'paypal';
+            }
+        } catch (e) {}
+        return '';
+    }
+
+    function maybeAutoStartExpressPay() {
+        const method = pendingExpressPayMethod();
+        if (!method || root.dataset.expressAutoStarted === '1') {
+            return;
+        }
+        // Empty cart: do not start express.
+        if (checkoutState && checkoutState.cart && checkoutState.cart.is_empty) {
+            return;
+        }
+        if (!checkoutState || !checkoutState.cart || typeof checkoutState.cart !== 'object') {
+            return;
+        }
+        root.dataset.expressAutoStarted = '1';
+        try {
+            const url = new URL(window.location.href);
+            url.searchParams.delete('express_pay');
+            url.searchParams.delete('express_checkout');
+            window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+        } catch (e) {}
+        root.dispatchEvent(new CustomEvent('weline:checkout:express-pay', {
+            bubbles: true,
+            detail: {
+                payment_method: method,
+                express_checkout: true,
+            },
+        }));
+    }
+
     const initialPaymentRecovery = paymentRecoveryFromLocation();
     if (initialPaymentRecovery) {
         showPaymentRecovery(initialPaymentRecovery);
     } else {
-        loadCheckoutWithRetry().catch(function (error) {
+        loadCheckoutWithRetry().then(function () {
+            maybeAutoStartExpressPay();
+        }).catch(function (error) {
             setMessage(error.message || copy.load_failed, 'error');
             if (submitButton) {
                 submitButton.disabled = true;

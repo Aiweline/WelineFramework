@@ -15,6 +15,7 @@ final class PaymentBrowserReturnLandingOrchestrator
     public const DECISION_HANDOFF_L2 = 'handoff_l2';
     public const DECISION_STATUS_PAGE = 'status_page';
     public const DECISION_CHECKOUT_LANDING_CANCEL = 'checkout_landing_cancel';
+    public const DECISION_EXPRESS_REVIEW = 'express_review';
 
     public function __construct(
         private readonly PaymentCheckoutSessionPersistenceService $sessionPersistence,
@@ -34,6 +35,17 @@ final class PaymentBrowserReturnLandingOrchestrator
     {
         if ($transaction === null || !$transaction->getId()) {
             return $this->statusPage([]);
+        }
+
+        $requestData = $transaction->getRequestData();
+        if (!is_array($requestData)) {
+            $requestData = [];
+        }
+        if (
+            $transaction->isProcessing()
+            && ExpressCheckoutOrchestrator::isExpressAwaitingConfirm($requestData)
+        ) {
+            return $this->decideExpressReview($transaction);
         }
 
         if (!$transaction->isSuccess()) {
@@ -58,6 +70,33 @@ final class PaymentBrowserReturnLandingOrchestrator
             'redirect_params' => [
                 'checkout_session_code' => $landing['checkout_session_code'],
             ],
+            'absolute' => false,
+        ];
+    }
+
+    /**
+     * Express PayPal return after approve: review address/shipping before capture.
+     *
+     * @return array{
+     *   decision:string,
+     *   redirect_path:string,
+     *   redirect_params:array<string,mixed>,
+     *   absolute:bool
+     * }
+     */
+    public function decideExpressReview(?PaymentTransaction $transaction): array
+    {
+        $transactionNo = '';
+        if ($transaction !== null && $transaction->getId()) {
+            $transactionNo = trim((string) $transaction->getData(PaymentTransaction::schema_fields_TRANSACTION_NO));
+        }
+
+        return [
+            'decision' => self::DECISION_EXPRESS_REVIEW,
+            'redirect_path' => 'checkout/express-review',
+            'redirect_params' => $transactionNo !== ''
+                ? ['transaction_no' => $transactionNo]
+                : [],
             'absolute' => false,
         ];
     }

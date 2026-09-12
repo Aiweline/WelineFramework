@@ -5,7 +5,10 @@
 - **万能车/单**：不新建平行车/单；`Weline_Cart` / `Weline_Order` 各内置类型 SPI + Registry（默认 `toc`），**不**硬依赖 B2B。
 - **双注册**：B2B 启用后自动向 Cart **与** Order 注册 `tob`；卸载后 Registry 无 `tob`，零售继续，历史 tob 单只读 fail-soft。
 - **热路径**：未装/卸载后加车、列表价、结账 **零** B2B 类探测与 miss 重试税。
-- **SellingModePolicy**（`2.4.0`）：Website/Store ConfigStore 键 `selling_mode_toc_enabled` / `selling_mode_tob_enabled`（默认 true）；商品 flags fail-soft；会话仅偏好；MOQ/step 默认 5。
+- **SellingModePolicy**（`2.4.0` / 产品旗标水合 `2.6.58` / 显示门禁 `2.6.69`）：Website/Store ConfigStore 键 `selling_mode_toc_enabled` / `selling_mode_tob_enabled`（默认 true）；商品 EAV `selling_mode_tob` fail-soft（`ProductSellingModeFlags`）；会话仅偏好；MOQ/step 默认 5。
+- **批发显示门禁（`2.6.69`）**：`ProductWholesaleEligibility` 要求产品 tob 允许 + SKU 本站生效价目档才渲染 PDP 批发段/阶梯价；否则当正常品。无资格仍可进 tob 车（零售价，跳过 moq）；有资格仍走 moq/step + 价目。
+- **PDP 阶梯价说明（`2.6.58`/`2.6.69`/`2.6.70`）**：有资格时 `qty-tiers` 零售 SSR 仍输出 DOM（`hidden`），切批发即时 unhide；无资格/关批发则不渲染。后台：`edit::offers-after` 内嵌启用批发与 SKU 阶梯编辑（website 级价目 copy-forward）；`basic-after` 为镜像开关；创建仅 basic 开关。
+- **商品阶梯写入（`2.6.70`/`2.6.71`）**：`ProductSkuQtyTierAdminService::upsertSkuQtyTiers`；`save-product-sku-tiers`；ControlCenter 单档兼容 + 可选附加档；商品 Hook 深链/保存 URL 用 `getBackendUrl('b2b/backend/…')`（`2.6.71` 修 Product 宿主前缀 404）。
 - **批发配置页（`2.6.15`）**：菜单「批发配置」→ `Controller/Backend/Config`；Extends 声明同上二键；本页 `<w:config:embed>` 快捷启停（参照客服配置）；范围走 URL `target_scope`。
 - **ControlCenter 作用范围（`2.6.43`）**：客户组/价目表/报价/快照/身份申请/挂单/迁移状态顶栏统一 `<w:scope>`（网站→店铺→渠道）；列表按 `website_id`/`channel_id` 过滤；写回保留 `target_scope`。
 - **身份申请**（`2.4.0` / 状态投影 `2.6.29` / 运营面 `2.6.38` / 唯一 upsert `2.6.39` / 删除 ACL `2.6.40` / 删动作 `2.6.42` / 全模块范围 `2.6.43`）：`MembershipApplicationService` + 表 `weline_b2b_membership_application`；前台 Query `b2b.membership.submit` / `b2b.membership.status`；后台 ControlCenter 批准指定组、驳回、**行内撤销**、**重新授权**、**删除申请**（ACL `applications:delete` + `<acl>` 包裹）与**多站快速撤销**；顶栏作用范围过滤整页；**不**改 Customer 注册。
@@ -13,7 +16,11 @@
 - **重复提交**：同一 `(customer, website)` **仅一条申请记录**；已有 pending 拒绝再插；驳回/撤销后 `submit` 更新当前行回 pending；已开通拒绝再申请。
 - **在途单**：撤销后新 tob 加车/报价/结账 fail-closed；已生成 hang/订单不自动作废，走既有 hang 状态机。
 - **定金挂单**（仅 `order_type=tob`）：全面禁折后含税商品小计 × 30% 为定金；`hang_status`：`awaiting_deposit` → `awaiting_merchant_approval` → `awaiting_balance` → paid；先定金后审批再尾款。状态图见 [`hang-status-state.md`](hang-status-state.md)。
-- **数量档 / MOQ**：价目项 `min_qty`（旧行默认 1）；Engine `qty` 取最高档；tob 车默认 moq=5 / step=5（`B2BCartQtyPolicy`）。
+- **尾款支付闭环**：账户 `#orders`（列表+详情）「支付尾款」→ `/checkout?purpose=balance&order_uuid=`；hang 面板渲染可用支付方式（禁止 silent `fake_card`）；稳定幂等键 `hang_{purpose}_{order_uuid}`；浏览器回跳按 `metadata.purpose` 推进 hang（定金不 `notifyOrderPaid`）；`already_paid` 时 reconcile hang；尾款禁止再 reserve 批发信用。
+- **支付桥接**：`B2BHangPaymentBridgeInterface`；Hang Event `Weline_B2B::hang_status_changed`；定金后 `InventoryCapabilityInterface::reserve`。
+- **订单沟通**：`b2b.orderChat.*` + `#b2b-order-chat` + `AccountMenuSignal` `b2b.order_chat`（不绑客服 ChatSession）。
+- **尾款协商改价**：`proposeBalanceRevision` / `confirmBalanceRevision`；`hang_revision_pending` 挡支付；确认后 `OrderFacadeInterface::reviseTobHangPayable`。
+- **数量档 / MOQ**：价目项 `min_qty`（旧行默认 1）；Engine `qty` 取最高档；tob 车默认 moq=5 / step=5（`B2BCartQtyPolicy`）；`2.6.69` 起仅对批发资格 SKU 强制。
 - **店面 Theme UI（2.6.0 / 双车 2.6.20）**：PDP 价格旁 ToC/ToB 切换（cookie `weline_selling_mode`）；tob 数量 MOQ/step=5；**迷你车/购物车「零售车|批发车」分段**（body-end boot 加载 `b2bSellingMode` 注入 type-host）；结账定金说明+禁券；账户订单 hang CTA（`purpose=deposit|balance`）。
 - **店面价**：`B2BStorefrontPriceAdjustmentProvider`；含价缓存 vary `selling_mode` + tob `group_id`（详见 Product `storefront-offer-price.md`）。
 - 需求正文：`doc/需求.md`（`REQ-B2B-0002`…`0007`）；Cart 键与摘要：`Weline_Cart/doc/cart.md`；事件追加字段：`Weline_Order/doc/event/order_created.md` 等。

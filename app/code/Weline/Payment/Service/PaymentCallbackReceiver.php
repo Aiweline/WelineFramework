@@ -277,6 +277,8 @@ final class PaymentCallbackReceiver
             'status' => PaymentWebhookInbox::STATUS_RECEIVED,
             'intent_code' => $parsed->getIntentCode(),
             'event_type' => $parsed->getEventType(),
+            // PayPal CHECKOUT.ORDER.APPROVED maps to processing; inbox consumer guards
+            // express_awaiting_confirm so APPROVED never becomes paid/capture without confirm.
             'status_transition' => (string) ($parsed->getData(CallbackResult::FIELD_STATUS_TRANSITION) ?? ''),
             'secret_version' => $matchedSecretVersion,
             'received_at' => $receivedAt,

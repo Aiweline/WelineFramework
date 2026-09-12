@@ -1,28 +1,25 @@
-<?php /** @var \Weline\Framework\View\Template $this */ ?>
-<div class="container-fluid py-3">
-  <h1 class="h3 mb-3"><?= $this->getData('page_title') ?></h1>
-  <form class="row g-2 mb-3" method="get">
-    <div class="col-auto"><input class="form-control" name="provider" value="<?= htmlspecialchars((string)$this->getData('provider_code')) ?>" placeholder="provider"></div>
-    <div class="col-auto"><input class="form-control" name="q" value="<?= htmlspecialchars((string)$this->getData('keyword')) ?>" placeholder="keyword"></div>
-    <div class="col-auto"><input class="form-control" name="country_code" placeholder="US"></div>
-    <div class="col-auto"><button class="btn btn-primary" type="submit"><?= __('搜索') ?></button></div>
-  </form>
-  <?php foreach ((array)$this->getData('items') as $item): ?>
-    <div class="card mb-2">
-      <div class="card-body d-flex justify-content-between align-items-center">
-        <div>
-          <strong><?= htmlspecialchars((string)($item['title'] ?? '')) ?></strong>
-          <div class="small text-muted"><?= htmlspecialchars((string)($item['external_spu'] ?? '')) ?> · origin <?= (int)($item['origin_price_minor'] ?? 0) ?></div>
+<?php
+/**
+ * Legacy search 模板：深链兼容，正文提示已迁入货源商品 Tab。
+ * @var \Weline\Framework\View\Template $this
+ */
+$escape = static fn($v): string => htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$indexUrl = $this->getBackendUrl('dropship/backend/listing/index', ['tab' => 'search']);
+?>
+<div class="w-grid" data-dropship-admin="listing-search" data-testid="dropship-listing-search">
+    <div style="--w-span:12;">
+        <div class="w-card">
+            <div class="w-card__body">
+                <div class="w-empty" style="min-height:8rem;">
+                    <div class="w-text" data-weight="strong"><?= __('搜索已合并到货源商品') ?></div>
+                    <div class="w-text" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-3);">
+                        <?= __('请使用「货源商品」页的「搜索商品」Tab。') ?>
+                    </div>
+                    <a class="w-button" data-tone="primary" data-size="sm" href="<?= $escape($indexUrl) ?>">
+                        <?= __('打开搜索商品') ?>
+                    </a>
+                </div>
+            </div>
         </div>
-        <form method="post" action="<?= $this->getBackendUrl('dropship/backend/listing/publish') ?>">
-          <input type="hidden" name="provider_code" value="<?= htmlspecialchars((string)($item['provider_code'] ?? '')) ?>">
-          <input type="hidden" name="website_id" value="0">
-          <input type="hidden" name="store_id" value="0">
-          <input type="hidden" name="channel" value="default">
-          <input type="hidden" name="snapshot_json" value="<?= htmlspecialchars(json_encode($item, JSON_UNESCAPED_UNICODE)) ?>">
-          <button class="btn btn-sm btn-success" type="submit"><?= __('刊登') ?></button>
-        </form>
-      </div>
     </div>
-  <?php endforeach; ?>
 </div>

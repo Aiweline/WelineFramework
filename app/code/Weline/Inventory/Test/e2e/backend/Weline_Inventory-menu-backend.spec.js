@@ -82,9 +82,15 @@ moduleDescribe(test, MODULE, 'R4.3 库存与仓储菜单及真实写操作', () 
     await loginAsAdmin(page, { timeout: 90000, settleMs: 800 });
     try {
       await openBackendMenuBySource(page, 'Weline_Inventory::commerce:inventory:warehouses', CAPABILITIES[2]);
+      const addBtn = page.locator('[data-inventory-add="warehouse"]').first();
+      await expect(addBtn).toBeVisible({ timeout: 30000 });
+      const parentCode = String(await addBtn.getAttribute('data-parent-code') || '').toUpperCase();
+      const segment = String(data.warehouse_code).replace(/^r43_wh_/i, 'R43').toUpperCase();
+      data.warehouse_code = parentCode ? `${parentCode}-${segment}` : segment;
+      await addBtn.click();
       const warehouseForm = page.locator('[data-testid="inventory-warehouse-create-form"]');
-      await warehouseForm.locator('[name="website_id"]').fill(String(data.website_id));
-      await warehouseForm.locator('[name="warehouse_code"]').fill(data.warehouse_code);
+      await expect(warehouseForm).toBeVisible();
+      await warehouseForm.locator('[name="code_segment"]').fill(segment);
       await warehouseForm.locator('[name="name"]').fill(data.warehouse_name);
       await warehouseForm.locator('[name="mode"]').selectOption(data.warehouse_mode);
       await warehouseForm.locator('[name="warehouse_type"]').selectOption(data.warehouse_type);

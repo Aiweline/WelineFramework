@@ -36,11 +36,10 @@ final class ProductCategoryBulkAssignService
         array $categoryIds,
         array $items,
     ): array {
-        $websiteId = max(0, $websiteId);
-        $mode = strtolower(trim($mode));
-        if ($websiteId <= 0) {
+        if ($websiteId < 0) {
             throw new \InvalidArgumentException('product_admin_website_invalid');
         }
+        $mode = strtolower(trim($mode));
         if (!in_array($mode, self::MODES, true)) {
             throw new \InvalidArgumentException('product_category_bulk_mode_invalid');
         }

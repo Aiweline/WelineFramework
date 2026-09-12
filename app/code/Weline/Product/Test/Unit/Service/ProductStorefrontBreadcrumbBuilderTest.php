@@ -42,6 +42,35 @@ final class ProductStorefrontBreadcrumbBuilderTest extends TestCase
         self::assertSame('', $builder->toVisibleItems($result['primary'])[3]['url']);
     }
 
+    public function testSkipsDropshipShellOrganizationAncestors(): void
+    {
+        $builder = (new \ReflectionClass(ProductStorefrontBreadcrumbBuilder::class))
+            ->newInstanceWithoutConstructor();
+
+        $result = $builder->build(
+            1,
+            113,
+            ['name' => '菜板'],
+            '菜板',
+            'https://shop.test/product/board',
+            40,
+            '',
+            [
+                ['category_id' => 40, 'selected' => 1, 'position' => 1],
+            ],
+            [
+                'by_id' => [
+                    10 => ['id' => 10, 'parent_id' => 0, 'name' => '货源商城', 'url' => 'https://shop.test/category/sourcing', 'path' => 'sourcing'],
+                    20 => ['id' => 20, 'parent_id' => 10, 'name' => 'CJ货源', 'url' => 'https://shop.test/category/sourcing/cj', 'path' => 'sourcing/cj'],
+                    30 => ['id' => 30, 'parent_id' => 20, 'name' => '家居', 'url' => 'https://shop.test/category/sourcing/cj/home', 'path' => 'sourcing/cj/home'],
+                    40 => ['id' => 40, 'parent_id' => 30, 'name' => '收纳', 'url' => 'https://shop.test/category/sourcing/cj/home/storage', 'path' => 'sourcing/cj/home/storage'],
+                ],
+            ],
+        );
+
+        self::assertSame(['首页', '家居', '收纳', '菜板'], array_column($result['primary'], 'name'));
+    }
+
     public function testRefererCategoryPathSelectsMatchingTrail(): void
     {
         $builder = (new \ReflectionClass(ProductStorefrontBreadcrumbBuilder::class))

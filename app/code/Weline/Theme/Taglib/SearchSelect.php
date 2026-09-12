@@ -261,7 +261,8 @@ class SearchSelect implements TaglibInterface
 
         $style = <<<'CSS'
 <style data-w-search-select-style>
-.w-search-select{position:relative;display:block;width:100%;font:inherit;color:var(--weline-theme-text,inherit)}
+.w-search-select{position:relative;display:block;width:100%;height:fit-content;align-self:flex-start;font:inherit;color:var(--weline-theme-text,inherit)}
+.w-field:has(.w-search-select),.w-field__control:has(> .w-search-select){align-self:start;height:fit-content}
 .w-search-select-chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 6px}
 .w-search-select-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;background:var(--weline-theme-primary-subtle,rgba(37,99,235,.1));color:var(--weline-theme-primary-text-emphasis,var(--weline-theme-primary,#1d4ed8));font-size:12px}
 .w-search-select-chip-remove{border:0;background:transparent;color:inherit;cursor:pointer;font:inherit;line-height:1;padding:0 0 0 2px}
@@ -379,6 +380,7 @@ CSS;
     container.classList.toggle('is-multiple', multiple);
     container.setAttribute('data-w-search-select-bound', '1');
     container.__welineSearchSelectSetDisabled = applyDisabled;
+    container.__welineSearchSelectInvalidate = function () { cache = null; };
 
     function itemValue(item) { return String(item[valueField] || item.value || ''); }
     function itemLabel(item) { return String(item[labelField] || item.label || item.name || itemValue(item)); }
@@ -482,26 +484,48 @@ CSS;
       closeDropdown();
       input.blur();
     }
+    function liveApiUrl() {
+      return String(container.getAttribute('data-api-url') || apiUrl || '');
+    }
+    var searchSeq = 0;
+    var searchInFlight = false;
     function doSearch(keyword) {
       keyword = String(keyword || '').trim();
-      if (apiUrl) {
+      var activeApiUrl = liveApiUrl();
+      if (activeApiUrl) {
         if (keyword.length < minChars && minChars > 0) {
           list.innerHTML = '<div class="w-search-select-empty">' + escapeHtml(I18N.type_to_search) + '</div>';
           return;
         }
+        // Fail-closed: never leave cache null after a failed fetch, or openDropdown
+        // will re-fire doSearch('') on every focus/click/floating sync (request storm).
+        if (searchInFlight) { return; }
+        searchInFlight = true;
+        var seq = ++searchSeq;
         loading.hidden = false;
         list.hidden = true;
-        var searchUrl = apiUrl + (apiUrl.indexOf('?') > -1 ? '&' : '?') + 'q=' + encodeURIComponent(keyword) + '&limit=' + limit;
-        fetch(searchUrl).then(function (r) { return r.json(); }).then(function (res) {
+        var searchUrl = activeApiUrl + (activeApiUrl.indexOf('?') > -1 ? '&' : '?') + 'q=' + encodeURIComponent(keyword) + '&limit=' + limit;
+        fetch(searchUrl, { credentials: 'same-origin', cache: 'no-store' }).then(function (r) {
+          if (!r.ok) {
+            throw new Error('search_http_' + r.status);
+          }
+          return r.json();
+        }).then(function (res) {
+          if (seq !== searchSeq) { return; }
           loading.hidden = true;
           list.hidden = false;
           var data = res && res.success !== undefined ? (res.data || []) : (Array.isArray(res) ? res : []);
+          if (!Array.isArray(data)) { data = []; }
           cache = data;
           renderOptions(data);
         }).catch(function () {
+          if (seq !== searchSeq) { return; }
           loading.hidden = true;
           list.hidden = false;
+          cache = [];
           list.innerHTML = '<div class="w-search-select-empty">' + escapeHtml(I18N.load_error) + '</div>';
+        }).finally(function () {
+          if (seq === searchSeq) { searchInFlight = false; }
         });
         return;
       }
@@ -535,7 +559,15 @@ CSS;
       if (!floating || typeof floating.attach !== 'function') { return null; }
       dropdown.setAttribute('data-w-float-surface', '');
       container.setAttribute('data-w-placement', 'bottom-start');
-      floatApi = floating.attach(container, { placement: 'bottom-start' });
+      // Unique per-instance anchor — class selector falls back to document.querySelector
+      // and wrongly binds the first .w-search-select-trigger on the page (e.g. 远程仓).
+      var triggerAnchor = '#' + id + '_trigger';
+      container.setAttribute('data-w-float-anchor', triggerAnchor);
+      container.setAttribute('data-w-gap', '2');
+      floatApi = floating.attach(container, {
+        placement: 'bottom-start',
+        anchor: triggerAnchor,
+      });
       return floatApi;
     }
     function placeFloat() {
@@ -554,7 +586,7 @@ CSS;
       placeFloat();
       if (!cache) {
         if (staticOptions.length) { cache = staticOptions; renderOptions(staticOptions); }
-        else if (apiUrl) { doSearch(''); }
+        else if (liveApiUrl()) { doSearch(''); }
       } else { renderOptions(cache); }
       placeFloat();
     }

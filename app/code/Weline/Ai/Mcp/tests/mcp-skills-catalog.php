@@ -28,6 +28,19 @@ skillCheck(($policy['static_skill_files'] ?? true) === false, 'policy forbids st
 skillCheck(($policy['fetch']['discover'] ?? '') === 'resolve_skill', 'policy discover tool is resolve_skill');
 skillCheck(($policy['fetch']['load'] ?? '') === 'get_skill', 'policy load tool is get_skill');
 skillCheck(is_array($policy['catalog'] ?? null) && count($policy['catalog']) >= 8, 'policy catalog lists surfaces');
+skillCheck(($policy['catalog_mode'] ?? '') === 'index_only', 'policy catalog_mode is index_only');
+$catalogRow = is_array($policy['catalog'][0] ?? null) ? $policy['catalog'][0] : [];
+skillCheck(
+    isset($catalogRow['skill_id'], $catalogRow['name'], $catalogRow['kind'])
+    && !array_key_exists('description', $catalogRow)
+    && !array_key_exists('path', $catalogRow)
+    && !array_key_exists('module', $catalogRow),
+    'policy catalog rows are index-only (no description/path/module)'
+);
+$greeting = is_array($policy['greeting'] ?? null) ? $policy['greeting'] : [];
+skillCheck(isset($greeting['workflow_preview']) && is_array($greeting['workflow_preview']), 'greeting exposes workflow_preview');
+skillCheck(!isset($greeting['skills']), 'greeting does not embed full skills tree');
+skillCheck(array_key_exists('module_doc_count', $greeting), 'greeting exposes module_doc_count');
 
 $theme = McpSkillCatalog::get('weline-theme-development', true);
 skillCheck(is_array($theme), 'get by host alias weline-theme-development');
@@ -62,7 +75,8 @@ skillCheck(($bundle['rule_id'] ?? '') === 'css_or_theme_requires_ui_prototype_th
 skillCheck(is_array($bundle['required'] ?? null) && count($bundle['required']) === 3, 'css_or_theme bundle lists three skills');
 
 $featureBundle = $policy['feature_skill_bundle'] ?? [];
-skillCheck(($featureBundle['rule_id'] ?? '') === 'requirement_feature_kind_gate', 'policy exposes feature_skill_bundle');
+skillCheck(($featureBundle['rule_id'] ?? '') === 'requirement_implicit_analysis_skill_decision', 'policy exposes feature_skill_bundle');
+skillCheck(($featureBundle['required_when'] ?? '') === 'ui_skill_decision=participate', 'feature bundle gated by ui_skill_decision');
 skillCheck(($featureBundle['also_require_acceptance_type'] ?? '') === 'shentu', 'feature bundle requires shentu acceptance');
 skillCheck(is_array($featureBundle['required'] ?? null) && count($featureBundle['required']) === 2, 'feature bundle lists prototype+UI');
 

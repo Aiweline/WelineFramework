@@ -23,6 +23,8 @@
  */
 
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Payment\Api\PaymentExpressFacadeInterface;
+use Weline\Payment\Service\ExpressCheckoutOrchestrator;
 use Weline\Payment\Service\PaymentMethodIconResolver;
 use Weline\SystemConfig\Api\ConfigStore;
 use Weline\Theme\Helper\WidgetI18n;
@@ -38,13 +40,28 @@ $wc = $scope->cssClass;
 $esc = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
 $titleSource = trim((string)($this->getData('title') ?? '')) ?: '快捷支付';
 $title = WidgetI18n::label($titleSource, '快捷支付');
-$methodCode = strtolower(trim((string)($this->getData('method_code') ?? 'paypal'))) ?: 'paypal';
-$paypalLabel = (string)__('PayPal');
+$configMethod = strtolower(trim((string)($this->getData('method_code') ?? 'paypal'))) ?: 'paypal';
 $orLabel = (string)__('或使用下方结账');
 $defaultLogoRef = 'Weline_Payment::img/payment/paypal-express.svg';
 $logoFileHtml = trim((string)($this->getData('logo_file_html') ?? ''));
 $logoRaw = trim((string)($this->getData('logo') ?? ''));
-if ($logoRaw === '' && $logoFileHtml === '') {
+$iconResolver = ObjectManager::getInstance(PaymentMethodIconResolver::class);
+
+$expressMethods = [];
+try {
+    $facade = ObjectManager::getInstance(PaymentExpressFacadeInterface::class);
+    if (!$facade instanceof PaymentExpressFacadeInterface) {
+        $facade = new ExpressCheckoutOrchestrator();
+    }
+    $expressMethods = $facade->listExpressMethods([]);
+} catch (\Throwable) {
+    $expressMethods = [];
+}
+if ($expressMethods === []) {
+    return;
+}
+
+if ($logoFileHtml === '' && $logoRaw === '') {
     try {
         $logoRaw = trim((string) ObjectManager::getInstance(ConfigStore::class)->getConfig(
             'payment/method/paypal/express_logo',
@@ -56,12 +73,6 @@ if ($logoRaw === '' && $logoFileHtml === '') {
         $logoRaw = '';
     }
 }
-if ($logoFileHtml === '' && $logoRaw === '') {
-    $logoRaw = $defaultLogoRef;
-}
-$logoUrl = $logoRaw !== ''
-    ? ObjectManager::getInstance(PaymentMethodIconResolver::class)->toPublicUrl($logoRaw)
-    : '';
 ?>
 <section class="w-payment-express <?= $esc($wc) ?>"
          weline-code="<?= $esc($scope->code) ?>"
@@ -69,30 +80,51 @@ $logoUrl = $logoRaw !== ''
          data-js-ns="<?= $esc($scope->jsNs) ?>"
          data-testid="checkout-express-payment"
          data-payment-express
-         data-method-code="<?= $esc($methodCode) ?>">
+         data-method-code="<?= $esc($configMethod) ?>">
     <header class="w-payment-express__header">
         <h2 class="w-payment-express__title"><?= $esc($title) ?></h2>
     </header>
     <div class="w-payment-express__methods" role="group" aria-label="<?= $esc($title) ?>">
+        <?php foreach ($expressMethods as $method):
+            $code = strtolower(trim((string) ($method['method_code'] ?? '')));
+            if ($code === '') {
+                continue;
+            }
+            $label = trim((string) ($method['title'] ?? $code)) ?: $code;
+            $btnLogoHtml = ($code === 'paypal') ? $logoFileHtml : '';
+            $btnLogoRaw = '';
+            if ($btnLogoHtml === '') {
+                if ($code === 'paypal' && $logoRaw !== '') {
+                    $btnLogoRaw = $logoRaw;
+                } elseif ($code === 'paypal') {
+                    $btnLogoRaw = $defaultLogoRef;
+                } else {
+                    $btnLogoRaw = trim((string) ($method['icon_url'] ?? ''));
+                }
+            }
+            $btnLogoUrl = $btnLogoRaw !== '' ? $iconResolver->toPublicUrl($btnLogoRaw) : '';
+            $isPaypal = $code === 'paypal';
+            ?>
         <button type="button"
-                class="w-payment-express__btn w-payment-express__paypal"
+                class="w-payment-express__btn<?= $isPaypal ? ' w-payment-express__paypal' : '' ?>"
                 data-express-pay
-                data-method-code="<?= $esc($methodCode) ?>"
-                data-testid="checkout-express-paypal"
-                aria-label="<?= $esc((string)__('使用 PayPal 快捷支付')) ?>">
-            <?php if ($logoFileHtml !== ''): ?>
-                <span class="w-payment-express__logo" aria-hidden="true"><?= $logoFileHtml ?></span>
-            <?php elseif ($logoUrl !== ''): ?>
+                data-method-code="<?= $esc($code) ?>"
+                data-testid="checkout-express-<?= $esc($code) ?>"
+                aria-label="<?= $esc((string)__('使用 %{1} 快捷支付', [$label])) ?>">
+            <?php if ($btnLogoHtml !== ''): ?>
+                <span class="w-payment-express__logo" aria-hidden="true"><?= $btnLogoHtml ?></span>
+            <?php elseif ($btnLogoUrl !== ''): ?>
                 <img class="w-payment-express__logo-img"
-                     src="<?= $esc($logoUrl) ?>"
-                     alt="<?= $esc($paypalLabel) ?>"
+                     src="<?= $esc($btnLogoUrl) ?>"
+                     alt="<?= $esc($label) ?>"
                      width="90"
                      height="24"
                      decoding="async" />
             <?php else: ?>
-                <span class="w-payment-express__paypal-mark" aria-hidden="true"><?= $esc($paypalLabel) ?></span>
+                <span class="w-payment-express__paypal-mark" aria-hidden="true"><?= $esc($label) ?></span>
             <?php endif; ?>
         </button>
+        <?php endforeach; ?>
     </div>
     <div class="w-payment-express__divider" role="separator" aria-label="<?= $esc($orLabel) ?>">
         <span><?= $esc($orLabel) ?></span>

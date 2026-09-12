@@ -2717,9 +2717,27 @@ function registerAnchoredFloat() {
         const resolveAnchor = () => {
             const selector = element.dataset.wFloatAnchor || surface.dataset.wFloatAnchor || '';
             if (selector) {
-                return element.closest(selector)
-                    || surface.closest(selector)
-                    || resolveFloatingDocument(element).querySelector(selector);
+                // Prefer descendant (e.g. #id_trigger / .w-search-select-trigger), then ancestor.
+                // Never fall back to document.querySelector for class/tag selectors — that binds
+                // the first match on the page (wrong sibling search-select / menu).
+                const scoped = element.querySelector(selector)
+                    || (
+                        surface instanceof HTMLElement
+                        && !surface.hasAttribute('data-w-floating-portal')
+                        && surface.parentElement?.querySelector?.(selector)
+                    )
+                    || element.closest(selector)
+                    || (
+                        surface instanceof HTMLElement
+                        && !surface.hasAttribute('data-w-floating-portal')
+                        && surface.closest(selector)
+                    );
+                if (scoped) return scoped;
+                const trimmed = String(selector).trim();
+                if (trimmed.startsWith('#') && !trimmed.includes(' ') && !trimmed.includes('.')) {
+                    return resolveFloatingDocument(element).querySelector(trimmed);
+                }
+                return null;
             }
             if (surface === element) return element.parentElement;
             return element;

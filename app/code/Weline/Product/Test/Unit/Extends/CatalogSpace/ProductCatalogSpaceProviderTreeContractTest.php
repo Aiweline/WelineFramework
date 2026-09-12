@@ -26,7 +26,8 @@ final class ProductCatalogSpaceProviderTreeContractTest extends TestCase
             public function tree(array $scope): array { return $this->tree; }
             public function view(array $scope, int $nodeId): ?array { return null; }
             public function save(array $scope, array $payload): array { return []; }
-            public function delete(array $scope, int $nodeId): void {}
+            public function delete(array $scope, int $nodeId, array $options = []): void {}
+            public function listProductsForDelete(array $scope, int $nodeId): array { return []; }
             public function reorder(array $scope, array $payload): array { return []; }
             public function readDisplaySelection(array $scope): array { return []; }
             public function saveDisplaySelection(array $scope, array $payload): array { return []; }

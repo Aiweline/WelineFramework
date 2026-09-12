@@ -67,10 +67,96 @@ final class B2BHangPaymentService
             'b2b_credit_apply_checkout_minor' => $creditApply,
             'balance_amount_minor' => $hang->balanceAmountMinor,
             'currency' => $currency,
+            'payment_methods' => $this->loadPaymentMethods($amountMinor, $currency),
+            'revision_pending' => $this->isBalanceRevisionPending($hang->orderRef),
+            'revision_version' => $this->balanceRevisionVersion($hang->orderRef),
             'label' => $purpose === B2BHangOrderService::PURPOSE_DEPOSIT
                 ? (string)__('支付定金')
                 : (string)__('支付尾款'),
         ];
+    }
+
+    /**
+     * Active checkout payment methods for hang panel (fail-soft empty list).
+     *
+     * @return list<array{code:string,title:string}>
+     */
+    private function loadPaymentMethods(int $amountMinor, string $currency): array
+    {
+        try {
+            if (!function_exists('w_query')) {
+                return $this->fallbackActiveMethodCodes();
+            }
+            $result = w_query('payment', 'getCheckoutPaymentMethods', [
+                'currency' => $currency,
+                'amount' => $amountMinor / 100.0,
+                'amount_minor' => $amountMinor,
+            ]);
+            $list = [];
+            if (is_array($result)) {
+                $raw = is_array($result['data'] ?? null) ? $result['data'] : $result;
+                if (is_array($raw)) {
+                    $list = $raw;
+                }
+            }
+            $out = [];
+            foreach ($list as $method) {
+                if (!is_array($method)) {
+                    continue;
+                }
+                $code = strtolower(trim((string)($method['code'] ?? '')));
+                if ($code === '') {
+                    continue;
+                }
+                if (array_key_exists('enabled', $method) && !$method['enabled']) {
+                    continue;
+                }
+                $title = trim((string)($method['title'] ?? $method['name'] ?? $code));
+                $out[] = [
+                    'code' => $code,
+                    'title' => $title !== '' ? $title : $code,
+                ];
+            }
+
+            return $out !== [] ? $out : $this->fallbackActiveMethodCodes();
+        } catch (\Throwable) {
+            return $this->fallbackActiveMethodCodes();
+        }
+    }
+
+    /**
+     * @return list<array{code:string,title:string}>
+     */
+    private function fallbackActiveMethodCodes(): array
+    {
+        try {
+            if (!class_exists(\Weline\Payment\Service\PaymentMethodManager::class)) {
+                return [];
+            }
+            $mgr = ObjectManager::getInstance(\Weline\Payment\Service\PaymentMethodManager::class);
+            if (!$mgr instanceof \Weline\Payment\Service\PaymentMethodManager) {
+                return [];
+            }
+            $out = [];
+            foreach ($mgr->getActiveMethods([]) as $method) {
+                if (!$method instanceof \Weline\Payment\Model\PaymentMethod) {
+                    continue;
+                }
+                $code = strtolower(trim((string)$method->getData(\Weline\Payment\Model\PaymentMethod::schema_fields_CODE)));
+                if ($code === '') {
+                    continue;
+                }
+                $title = trim((string)$method->getData(\Weline\Payment\Model\PaymentMethod::schema_fields_NAME));
+                $out[] = [
+                    'code' => $code,
+                    'title' => $title !== '' ? $title : $code,
+                ];
+            }
+
+            return $out;
+        } catch (\Throwable) {
+            return [];
+        }
     }
 
     /**
@@ -174,6 +260,10 @@ final class B2BHangPaymentService
             );
         }
 
+        if ($purpose === B2BHangOrderService::PURPOSE_BALANCE) {
+            $this->assertBalanceRevisionNotPending($hang->orderRef);
+        }
+
         // Soft ownership check against Order projection when available.
         try {
             $order = $this->orders()->get($orderUuid);
@@ -188,6 +278,39 @@ final class B2BHangPaymentService
         }
 
         return $hang;
+    }
+
+    private function assertBalanceRevisionNotPending(string $orderRef): void
+    {
+        if ($this->isBalanceRevisionPending($orderRef)) {
+            throw new B2BConflictException(
+                self::ERROR_STATE,
+                __('尾款改价待确认，暂不可支付'),
+                ['order_ref' => $orderRef],
+            );
+        }
+    }
+
+    private function isBalanceRevisionPending(string $orderRef): bool
+    {
+        try {
+            $tp = $this->orders()->get($orderRef)->typePayload;
+
+            return (bool)($tp['hang_revision_pending'] ?? false);
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function balanceRevisionVersion(string $orderRef): int
+    {
+        try {
+            $tp = $this->orders()->get($orderRef)->typePayload;
+
+            return max(0, (int)($tp['hang_revision_version'] ?? 0));
+        } catch (\Throwable) {
+            return 0;
+        }
     }
 
     private function orders(): OrderFacadeInterface

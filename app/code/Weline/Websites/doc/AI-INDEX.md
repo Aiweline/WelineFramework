@@ -66,6 +66,7 @@
 - `app/code/Weline/Websites/doc/hook/backend/partials/domain/tabs.md`
 - `app/code/Weline/Websites/doc/hook/backend/website/form/sections-after.md`
 - `app/code/Weline/Websites/doc/scope-maintenance-preview.md`
+- `app/code/Weline/Websites/doc/scope-select标签使用指南.md`
 - `app/code/Weline/Websites/doc/store-saleschannel-scope.md`
 - `app/code/Weline/Websites/doc/开发/notification-plan.md`
 - `app/code/Weline/Websites/doc/开发/notification-task.md`

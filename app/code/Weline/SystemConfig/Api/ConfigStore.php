@@ -13,6 +13,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Model\Event\ResourceRevision;
 use Weline\SystemConfig\Model\SystemConfig;
 use Weline\SystemConfig\Model\SystemConfigVersion;
+use Weline\SystemConfig\Service\ConfigFieldCacheNamespaceResolver;
 use Weline\SystemConfig\Service\SystemConfigResourceChangePublisher;
 
 /**
@@ -63,6 +64,7 @@ final class ConfigStore
             $revisionService,
             ObjectManager::getInstance(ResourceChangeFactory::class),
             ObjectManager::getInstance(NamespacePath::class),
+            ObjectManager::getInstance(ConfigFieldCacheNamespaceResolver::class),
         );
         ObjectManager::setInstance(SystemConfigResourceChangePublisher::class, $publisher);
 

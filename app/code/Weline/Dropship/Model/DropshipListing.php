@@ -34,6 +34,12 @@ class DropshipListing extends Model
     #[Col('varchar', 128, nullable: false, default: '', comment: 'External SKU/VID')]
     public const schema_fields_EXTERNAL_SKU = 'external_sku';
 
+    #[Col('varchar', 512, nullable: false, default: '', comment: 'Remote product title snapshot')]
+    public const schema_fields_TITLE = 'title';
+
+    #[Col('varchar', 1024, nullable: false, default: '', comment: 'Remote thumb URL snapshot')]
+    public const schema_fields_THUMB_URL = 'thumb_url';
+
     #[Col('int', 11, nullable: false, comment: 'Website ID')]
     public const schema_fields_WEBSITE_ID = 'website_id';
 
@@ -52,8 +58,14 @@ class DropshipListing extends Model
     #[Col('int', 11, nullable: true, comment: 'Local warehouse ID')]
     public const schema_fields_LOCAL_WAREHOUSE_ID = 'local_warehouse_id';
 
-    #[Col('varchar', 8, nullable: false, default: '', comment: 'CJ/remote country')]
+    #[Col('varchar', 8, nullable: false, default: '', comment: 'Remote country')]
     public const schema_fields_REMOTE_COUNTRY = 'remote_country';
+
+    #[Col('varchar', 128, nullable: false, default: '', comment: 'Remote category id')]
+    public const schema_fields_REMOTE_CATEGORY_ID = 'remote_category_id';
+
+    #[Col('varchar', 512, nullable: false, default: '', comment: 'Remote category path')]
+    public const schema_fields_REMOTE_CATEGORY_PATH = 'remote_category_path';
 
     #[Col('varchar', 64, nullable: false, default: '', comment: 'Remote storage id')]
     public const schema_fields_REMOTE_STORAGE_ID = 'remote_storage_id';

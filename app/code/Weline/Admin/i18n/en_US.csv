@@ -149,29 +149,6 @@ AJAX分配角色,"AJAX assign role"
 删除成功,"Deletion successful"
 知道了,"Got it"
 主题模式切换失败,"Theme mode switch failed"
-"Weline 管理后台","Weline management background"
-后台主导航,"Backend main navigation"
-收起侧边栏,"Collapse sidebar"
-展开侧边栏,"Expand sidebar"
-搜索菜单,"Search menu"
-搜索菜单…,"Search menu…"
-没有匹配的菜单,"No matching menu"
-后台菜单,"Backend menu"
-关闭,closure
-系统维护,"System maintenance"
-后台登录,"Backend login"
-"登录 %{name} 管理面板","Login to %{name} Admin Panel"
-安全管理入口,"Security management entrance"
-管理员,Administrator
-请输入管理员账号,"Please enter the admin account"
-密码,Password
-请输入密码,"Enter password"
-验证码,"Verification code"
-请输入验证码,"Please enter the verification code"
-刷新验证码,"Refresh verification code"
-在受信任设备上记住我,"Remember me on trusted devices"
-登录,"Log in"
-登录中…,Login...
 网站维护,"Website Maintenance"
 网站正在维护中...,"Website is under maintenance..."
 请稍等片刻,"Please wait a moment"
@@ -199,7 +176,9 @@ AJAX分配角色,"AJAX assign role"
 请输入用户名,"Please enter the username"
 邮箱,Email
 请输入有效邮箱,"Please enter a valid email"
+密码,Password
 留空则不修改密码,"Leave empty to keep current password"
+请输入密码,"Enter password"
 保存,Save
 保存中...,Saving...
 编辑,Edit
@@ -220,6 +199,7 @@ AJAX分配角色,"AJAX assign role"
 禁用用户,"Disable User"
 角色归配,"Role Assignment"
 系统,System
+管理员,Administrator
 返回列表,"Back to List"
 选择角色后自动保存，无需手动提交。当前用户无法修改自己的角色。,"Roles are saved automatically after selection. You cannot modify your own role."
 当前角色,"Current Role"
@@ -324,12 +304,22 @@ Cms内容管理,"CMS Content Management"
 路由,Route
 版本,Version
 描述,Description
+后台主导航,"Backend main navigation"
+收起侧边栏,"Collapse sidebar"
+展开侧边栏,"Expand sidebar"
+搜索菜单,"Search menu"
+搜索菜单…,"Search menu…"
+没有匹配的菜单,"No matching menu"
+后台菜单,"Backend menu"
+"Weline 管理后台","Weline management background"
 加载中,loading
 "响应式 Bootstrap 5 管理后台","Responsive Bootstrap 5 Admin Dashboard"
 返回首页,"Return to Home"
 网站可能发生系统升级事件，或者大多数的内容发生变化，程序员们正在维护或者升级数据以提供更加优质的服务。,"The website may be undergoing system upgrades, or most of the content is being changed. Our developers are maintaining or upgrading data to provide better services."
 大部分的网站升级活动都只有几分钟甚至几秒钟的时间。,"Most website upgrade activities only take a few minutes or even seconds."
 如果你长期看到这个页面，对网站存在疑惑，请联系：,"If you see this page for a long time and have questions about the website, please contact:"
+关闭,closure
+系统维护,"System maintenance"
 面板,Dashboard
 后台,Backend
 概览,Overview
@@ -355,6 +345,16 @@ Cms内容管理,"CMS Content Management"
 区域营收,"Regional Revenue"
 查看更多,"View More"
 最近成交,"Recent Transactions"
+后台登录,"Backend login"
+"登录 %{name} 管理面板","Login to %{name} Admin Panel"
+安全管理入口,"Security management entrance"
+请输入管理员账号,"Please enter the admin account"
+验证码,"Verification code"
+请输入验证码,"Please enter the verification code"
+刷新验证码,"Refresh verification code"
+在受信任设备上记住我,"Remember me on trusted devices"
+登录,"Log in"
+登录中…,Login...
 安全后台入口,"Secure backend entrance"
 内容、配置、权限和发布动作都在统一后台完成。请仅在可信设备和网络环境中登录。,"Content, configuration, permissions and publishing actions are all completed in the unified backend. Please only log in from trusted devices and network environments."
 连续异常登录会自动提高验证强度。,"Continuous abnormal logins will automatically increase the verification strength."

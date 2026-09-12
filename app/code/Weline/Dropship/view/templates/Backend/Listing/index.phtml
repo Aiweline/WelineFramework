@@ -1,32 +1,1903 @@
-<?php /** @var \Weline\Framework\View\Template $this */ ?>
-<div class="container-fluid py-3" data-dropship-admin="listings">
-  <h1 class="h3 mb-3"><?= $this->getData('page_title') ?></h1>
-  <form class="mb-3 d-flex gap-2" method="get">
-    <select name="sources[]" class="form-select w-auto" multiple size="3">
-      <?php foreach ((array)$this->getData('provider_codes') as $code): ?>
-        <option value="<?= htmlspecialchars($code) ?>" <?= in_array($code, (array)$this->getData('selected_sources'), true) ? 'selected' : '' ?>><?= htmlspecialchars($code) ?></option>
-      <?php endforeach; ?>
-    </select>
-    <button class="btn btn-outline-primary" type="submit"><?= __('按来源标记筛选') ?></button>
-    <a class="btn btn-primary" href="<?= $this->getBackendUrl('dropship/backend/listing/search') ?>"><?= __('搜索远程货源') ?></a>
-  </form>
-  <table class="table table-sm table-striped">
-    <thead><tr><th>ID</th><th>source</th><th>spu</th><th>origin</th><th>sale</th><th>uplift</th><th>dir</th><th>tip</th><th>qty</th><th>status</th></tr></thead>
-    <tbody>
-    <?php foreach ((array)$this->getData('listings') as $row): ?>
-      <tr>
-        <td><?= (int)($row['listing_id'] ?? 0) ?></td>
-        <td><code><?= htmlspecialchars((string)($row['provider_code'] ?? '')) ?></code></td>
-        <td><?= htmlspecialchars((string)($row['external_spu'] ?? '')) ?></td>
-        <td><?= (int)($row['origin_price_minor'] ?? 0) ?></td>
-        <td><?= (int)($row['sale_price_minor'] ?? 0) ?></td>
-        <td><?= (int)($row['uplift_percent'] ?? 0) ?>%</td>
-        <td><?= htmlspecialchars((string)($row['price_direction'] ?? '')) ?></td>
-        <td class="small"><?= htmlspecialchars((string)($row['price_drop_tip'] ?? '')) ?></td>
-        <td><?= (int)($row['remote_qty'] ?? 0) ?></td>
-        <td><?= htmlspecialchars((string)($row['sync_status'] ?? '')) ?></td>
-      </tr>
-    <?php endforeach; ?>
-    </tbody>
-  </table>
+<?php
+/**
+ * 货源商品：选品三栏工作台 / 已刊登（供应商兼容，能力门控）。
+ * @var \Weline\Framework\View\Template $this
+ */
+$activeTab = (string)($this->getData('active_tab') ?? 'listed');
+if ($activeTab === 'search') {
+    $activeTab = 'pick';
+}
+if (!in_array($activeTab, ['listed', 'pick'], true)) {
+    $activeTab = 'listed';
+}
+$listings = (array)$this->getData('listings');
+$warehouseNames = (array)$this->getData('warehouse_names');
+$items = (array)$this->getData('items');
+$providerOptions = (array)$this->getData('provider_options');
+$selected = (array)$this->getData('selected_sources');
+$providerCode = (string)$this->getData('provider_code');
+$keyword = (string)$this->getData('keyword');
+$countryCode = (string)($this->getData('country_code') ?: 'US');
+$categoryId = (string)$this->getData('category_id');
+$categories = (array)$this->getData('categories');
+$browseEnabled = (bool)$this->getData('browse_enabled');
+$browseCountryFilter = (bool)$this->getData('browse_country_filter');
+$searchPage = max(1, (int)$this->getData('search_page'));
+$searchHasMore = (bool)$this->getData('search_has_more');
+$searchError = trim((string)$this->getData('search_error'));
+$searchAttempted = (bool)$this->getData('search_attempted');
+$emptyReason = (string)($this->getData('search_empty_reason') ?? ($searchAttempted ? 'no_results' : 'idle'));
+$browseAsync = (bool)$this->getData('browse_async');
+$browseUrl = (string)$this->getData('browse_url');
+$escape = static fn($v): string => htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$listedUrl = $this->getBackendUrl('dropship/backend/listing/index', ['tab' => 'listed']);
+$pickTabUrl = $this->getBackendUrl('dropship/backend/listing/index', ['tab' => 'pick']);
+$admitUrl = $this->getBackendUrl('dropship/backend/listing/admitDraft');
+$basketSelectUrl = $this->getBackendUrl('dropship/backend/listing/basketSelect');
+$basketCancelUrl = $this->getBackendUrl('dropship/backend/listing/basketCancel');
+$publishSelectedUrl = $this->getBackendUrl('dropship/backend/listing/publishSelected');
+$deleteSelectedUrl = $this->getBackendUrl('dropship/backend/listing/deleteSelected');
+$browseIndexBase = $this->getBackendUrl('dropship/backend/listing/index');
+$browseApiBase = $this->getBackendUrl('dropship/backend/listing/browse');
+$localDetailUrl = (string)($this->getData('local_detail_url') ?: $this->getBackendUrl('dropship/backend/listing/localDetail'));
+$browseBase = static function (array $extra) use ($providerCode, $keyword, $countryCode, $categoryId): array {
+    return array_filter([
+        'tab' => 'pick',
+        'provider_code' => $providerCode,
+        'q' => $keyword,
+        'country_code' => $countryCode,
+        'category_id' => $categoryId,
+        ...$extra,
+    ], static fn ($v) => $v !== null && $v !== '');
+};
+$money = static function (int $minor, string $currency = 'USD'): string {
+    $currency = strtoupper(trim($currency));
+    if ($currency === '') {
+        $currency = 'USD';
+    }
+
+    return $currency . ' ' . number_format($minor / 100, 2, '.', '');
+};
+$thumbUrl = static function (array $item): string {
+    $media = (array)($item['media'] ?? []);
+    foreach ($media as $m) {
+        if (!is_array($m)) {
+            continue;
+        }
+        $url = trim((string)($m['url'] ?? ''));
+        if ($url !== '' && (str_starts_with($url, 'http://') || str_starts_with($url, 'https://'))) {
+            return $url;
+        }
+    }
+
+    return '';
+};
+$providerTitle = $providerCode;
+foreach ($providerOptions as $opt) {
+    if ((string)($opt['code'] ?? '') === $providerCode) {
+        $t = trim((string)($opt['title'] ?? ''));
+        if ($t !== '') {
+            $providerTitle = $t;
+        }
+        break;
+    }
+}
+$categoryTitle = '';
+if ($categoryId === '') {
+    $categoryTitle = (string)__('全部');
+} else {
+    foreach ($categories as $cat) {
+        if ((string)($cat['id'] ?? '') === $categoryId) {
+            $categoryTitle = trim((string)($cat['name'] ?? $cat['path'] ?? $categoryId));
+            break;
+        }
+    }
+    if ($categoryTitle === '') {
+        $categoryTitle = $categoryId;
+    }
+}
+$categoryIsTree = false;
+foreach ($categories as $cat) {
+    $parent = trim((string)($cat['parent_id'] ?? ''));
+    if ($parent !== '') {
+        $categoryIsTree = true;
+        break;
+    }
+}
+?>
+<style data-dropship-listing-layout="1">
+[data-dropship-admin="listings"] .ds-pick-layout{
+  display:grid;
+  grid-template-columns:minmax(240px,300px) minmax(240px,320px) minmax(0,1fr);
+  gap:var(--weline-space-3);
+  align-items:start;
+}
+[data-dropship-admin="listings"] .ds-pick-layout[data-browse="0"]{
+  grid-template-columns:minmax(240px,300px) minmax(0,1fr);
+}
+[data-dropship-admin="listings"] .ds-pick-rail,
+[data-dropship-admin="listings"] .ds-pick-cats,
+[data-dropship-admin="listings"] .ds-pick-main{
+  background:var(--weline-theme-surface,var(--color-surface));
+  color:var(--weline-theme-on-surface,var(--color-on-surface,inherit));
+  border:1px solid var(--weline-theme-border,var(--color-border));
+  border-radius:var(--weline-theme-radius-lg,12px);
+  padding:var(--weline-space-3);
+}
+[data-dropship-admin="listings"] .ds-pick-rail a{
+  display:block;
+  color:inherit;
+  text-decoration:none;
+  border-radius:var(--weline-theme-radius-md,8px);
+  padding:var(--weline-space-3);
+  margin-bottom:var(--weline-space-1);
+  border-left:3px solid transparent;
+  line-height:1.35;
+  overflow-wrap:anywhere;
+  word-break:break-word;
+}
+[data-dropship-admin="listings"] .ds-pick-rail a:hover{
+  background:var(--weline-theme-primary-surface);
+}
+[data-dropship-admin="listings"] .ds-pick-rail a[aria-current="true"]{
+  background:var(--weline-theme-primary);
+  color:var(--weline-theme-on-primary);
+  border-left-color:var(--weline-theme-primary-hover,var(--weline-theme-primary));
+  font-weight:600;
+}
+[data-dropship-admin="listings"] .ds-pick-cats a{
+  display:block;
+  color:inherit;
+  text-decoration:none;
+  border-radius:var(--weline-theme-radius-md,8px);
+  padding:var(--weline-space-2) var(--weline-space-3);
+  margin-bottom:2px;
+  line-height:1.35;
+  overflow-wrap:anywhere;
+  word-break:break-word;
+  white-space:normal;
+}
+[data-dropship-admin="listings"] .ds-pick-cats a:hover{background:var(--weline-theme-primary-surface);}
+[data-dropship-admin="listings"] .ds-pick-cats a[aria-current="true"]{
+  background:var(--weline-theme-primary);
+  color:var(--weline-theme-on-primary);
+  font-weight:600;
+}
+[data-dropship-admin="listings"] .ds-pick-cats a[data-level="2"]{padding-left:calc(var(--weline-space-3) + 12px);}
+[data-dropship-admin="listings"] .ds-pick-cats a[data-level="3"]{padding-left:calc(var(--weline-space-3) + 24px);}
+[data-dropship-admin="listings"] .ds-pick-toolbar{
+  display:flex;
+  flex-wrap:wrap;
+  gap:var(--weline-space-3);
+  align-items:end;
+  margin-bottom:var(--weline-space-3);
+}
+[data-dropship-admin="listings"] .ds-browse-results tbody tr[data-pull-locked="0"][data-pull-basket="0"]{
+  cursor:pointer;
+}
+[data-dropship-admin="listings"] .ds-browse-results tbody tr[data-pull-locked="0"][data-pull-basket="0"]:hover{
+  background:var(--weline-theme-primary-surface,rgba(0,0,0,.04));
+}
+[data-dropship-admin="listings"] .ds-browse-results tbody tr:has(.ds-pick-check:checked){
+  background:var(--weline-theme-primary-surface,rgba(37,99,235,.08));
+}
+[data-dropship-admin="listings"] .ds-browse-results tbody tr[data-pull-locked="1"],
+[data-dropship-admin="listings"] .ds-browse-results tbody tr[data-pull-basket="1"]{
+  cursor:default;
+  opacity:.85;
+}
+[data-dropship-admin="listings"] .ds-pick-status[data-action="basket-cancel"]{
+  cursor:pointer;
+  border:0;
+  font:inherit;
+}
+[data-dropship-admin="listings"] .ds-pick-float{
+  position:fixed;
+  left:50%;
+  bottom:var(--weline-space-4,1.25rem);
+  transform:translateX(-50%);
+  z-index:60;
+  display:flex;
+  flex-wrap:wrap;
+  gap:var(--weline-space-3);
+  align-items:center;
+  justify-content:center;
+  max-width:min(42rem,calc(100vw - 2rem));
+  margin:0;
+  padding:var(--weline-space-2) var(--weline-space-3);
+  border:1px solid var(--weline-theme-border,var(--color-border));
+  border-radius:var(--weline-theme-radius-lg,12px);
+  background:var(--weline-theme-surface,var(--color-surface));
+  box-shadow:var(--weline-theme-shadow-md,0 8px 24px rgba(15,23,42,.12));
+}
+[data-dropship-admin="listings"] .ds-pick-float[hidden]{display:none!important;}
+[data-dropship-admin="listings"] .ds-browse-loading{
+  display:flex;
+  align-items:center;
+  gap:var(--weline-space-2);
+  min-height:8rem;
+  padding:var(--weline-space-4);
+  border:1px dashed var(--weline-theme-border,var(--color-border));
+  border-radius:var(--weline-theme-radius-md,8px);
+  background:var(--weline-theme-primary-surface,rgba(0,0,0,.03));
+  color:var(--weline-theme-on-surface-muted,inherit);
+  font-size:var(--weline-font-size-sm,13px);
+}
+[data-dropship-admin="listings"] .ds-browse-loading[hidden],
+[data-dropship-admin="listings"] .ds-browse-error[hidden],
+[data-dropship-admin="listings"] .ds-browse-meta[hidden],
+[data-dropship-admin="listings"] .ds-browse-empty[hidden],
+[data-dropship-admin="listings"] .ds-browse-results[hidden]{display:none!important;}
+[data-dropship-admin="listings"] .ds-cats-loading{
+  padding:var(--weline-space-3);
+  color:var(--weline-theme-on-surface-muted,inherit);
+  font-size:var(--weline-font-size-sm,12px);
+}
+[data-dropship-admin="listings"] .ds-pick-status{
+  display:inline-flex;
+  align-items:center;
+  padding:var(--weline-space-1) var(--weline-space-2);
+  border-radius:var(--weline-theme-radius-md,8px);
+  background:var(--weline-theme-primary-surface,rgba(0,0,0,.06));
+  color:var(--weline-theme-on-surface,inherit);
+  font-size:var(--weline-font-size-sm,12px);
+  white-space:nowrap;
+}
+[data-dropship-admin="listings"] .ds-pick-status[data-tone="locked"]{
+  background:var(--weline-theme-success-surface,rgba(22,163,74,.12));
+}
+[data-dropship-admin="listings"] .ds-cap-badge{
+  display:inline-block;
+  font-size:11px;
+  padding:2px 6px;
+  border-radius:999px;
+  background:var(--weline-theme-primary-surface,rgba(0,0,0,.06));
+  margin-left:6px;
+}
+[data-dropship-admin="listings"] .ds-pick-rail a[aria-current="true"] .ds-cap-badge{
+  background:rgba(255,255,255,.2);
+}
+[data-dropship-admin="listings"] .ds-modal[hidden]{display:none!important;}
+[data-dropship-admin="listings"] .ds-modal{
+  /* Above floating debug overlays (e.g. 事件监视 z-index ~2147483000) */
+  position:fixed;inset:0;z-index:2147483600;
+  background:rgba(15,23,42,.45);
+  display:grid;place-items:center;
+  padding:var(--weline-space-4);
+}
+[data-dropship-admin="listings"] .ds-modal__panel{
+  position:relative;
+  z-index:1;
+  width:min(480px,96vw);
+  background:var(--weline-theme-surface,var(--color-surface));
+  border:1px solid var(--weline-theme-border,var(--color-border));
+  border-radius:var(--weline-theme-radius-lg,12px);
+  padding:var(--weline-space-4);
+  overflow:visible;
+  pointer-events:auto;
+}
+[data-dropship-admin="listings"] .ds-modal .w-tree-select,
+[data-dropship-admin="listings"] .ds-modal .w-field__control{
+  width:100%;
+}
+[data-dropship-admin="listings"] .ds-listed-sources{
+  min-inline-size:min(100%,22rem);
+  inline-size:min(100%,22rem);
+}
+[data-dropship-admin="listings"] .ds-listed-sources .w-select{
+  inline-size:100%;
+  min-inline-size:100%;
+}
+[data-dropship-admin="listings"] .ds-listed-row[data-listed-expandable="1"]{
+  cursor:pointer;
+}
+[data-dropship-admin="listings"] .ds-listed-row[data-listed-expandable="1"]:hover{
+  background:var(--weline-theme-primary-surface, rgba(0,0,0,.03));
+}
+[data-dropship-admin="listings"] .ds-listed-row.is-expanded{
+  background:var(--weline-theme-primary-surface, rgba(0,0,0,.04));
+}
+[data-dropship-admin="listings"] .ds-listed-row__hint{
+  display:inline-flex;
+  align-items:center;
+  gap:var(--weline-space-1);
+  margin-top:var(--weline-space-1);
+  padding:var(--weline-space-1) var(--weline-space-2);
+  border:1px solid var(--weline-theme-border, var(--color-border));
+  border-radius:var(--weline-theme-radius-sm, var(--weline-radius-sm, 6px));
+  background:var(--weline-theme-surface, var(--color-surface));
+  color:var(--weline-theme-text-muted, var(--color-text-muted));
+  font:inherit;
+  font-size:var(--weline-font-size-sm, .8125rem);
+  cursor:pointer;
+  max-inline-size:100%;
+  user-select:none;
+  -webkit-user-select:none;
+}
+[data-dropship-admin="listings"] .ds-listed-row__hint:hover,
+[data-dropship-admin="listings"] .ds-listed-row__hint:focus-visible{
+  color:var(--weline-theme-text, var(--color-text));
+  border-color:var(--weline-theme-border-strong, var(--color-border-strong, var(--weline-theme-border)));
+  outline:2px solid var(--weline-theme-focus, var(--color-focus, Highlight));
+  outline-offset:2px;
+}
+[data-dropship-admin="listings"] .ds-listed-row__hint.is-expanded{
+  color:var(--weline-theme-primary, var(--color-primary));
+  border-color:var(--weline-theme-primary, var(--color-primary));
+  background:var(--weline-theme-primary-surface, rgba(0,0,0,.03));
+}
+[data-dropship-admin="listings"] .ds-listed-row__hint.is-expanded .w-icon{
+  transform:rotate(180deg);
+}
+[data-dropship-admin="listings"] .ds-listed-row__hint .w-icon{
+  transition:transform .18s ease;
+  flex:0 0 auto;
+}
+[data-dropship-admin="listings"] .ds-listed-detail-row:not(.is-open){
+  display:none !important;
+}
+[data-dropship-admin="listings"] .ds-listed-detail-row.is-open{
+  display:table-row !important;
+}
+[data-dropship-admin="listings"] .ds-listed-detail-row > td{
+  padding:0;
+  border-top:none;
+  background:var(--weline-theme-surface-subtle, var(--color-surface-subtle, rgba(0,0,0,.02)));
+}
+[data-dropship-admin="listings"] .ds-listed-detail{
+  padding:var(--weline-space-3) var(--weline-space-4) var(--weline-space-4);
+  border-top:1px solid var(--weline-theme-border, var(--color-border));
+}
+[data-dropship-admin="listings"] .ds-listed-detail__product{
+  margin-bottom:var(--weline-space-3);
+}
+[data-dropship-admin="listings"] .ds-listed-detail__pricing{
+  display:grid;
+  grid-template-columns:repeat(3, minmax(0, 1fr));
+  gap:var(--weline-space-3);
+  margin-bottom:var(--weline-space-4);
+  padding:var(--weline-space-3);
+  border:1px solid var(--weline-theme-border, var(--color-border));
+  border-radius:var(--weline-theme-radius-md, 8px);
+  background:var(--weline-theme-surface, var(--color-surface));
+}
+[data-dropship-admin="listings"] .ds-listed-detail__metric .w-text[data-size="lg"]{
+  font-variant-numeric:tabular-nums;
+  letter-spacing:0.01em;
+}
+[data-dropship-admin="listings"] .ds-listed-pricing-cell{
+  min-width:8.5rem;
+  line-height:1.35;
+}
+[data-dropship-admin="listings"] .ds-listed-pricing-cell__row{
+  display:flex;
+  justify-content:space-between;
+  gap:var(--weline-space-2);
+  font-variant-numeric:tabular-nums;
+}
+[data-dropship-admin="listings"] .ds-listed-pricing-cell [data-testid="dropship-listed-origin-change"][data-dir="up"]{
+  color:var(--weline-theme-danger, var(--color-danger, #b42318));
+}
+[data-dropship-admin="listings"] .ds-listed-pricing-cell [data-testid="dropship-listed-origin-change"][data-dir="down"]{
+  color:var(--weline-theme-success, var(--color-success, #027a48));
+}
+[data-dropship-admin="listings"] .ds-listed-detail__secondary{
+  display:flex;
+  flex-wrap:wrap;
+  gap:var(--weline-space-2) var(--weline-space-4);
+  margin:0 0 var(--weline-space-3);
+}
+[data-dropship-admin="listings"] .ds-listed-detail__tip{
+  margin:0 0 var(--weline-space-3);
+  padding:var(--weline-space-2) var(--weline-space-3);
+  border-left:3px solid var(--weline-theme-warning, var(--color-warning, #b54708));
+  background:var(--weline-theme-surface-subtle, var(--color-surface-subtle, rgba(0,0,0,.02)));
+}
+[data-dropship-admin="listings"] .ds-listed-detail__thumb,
+[data-dropship-admin="listings"] .ds-listed-detail__thumb-ph{
+  width:40px;
+  height:40px;
+  object-fit:cover;
+  border-radius:var(--weline-theme-radius-sm, 6px);
+  border:1px solid var(--weline-theme-border, var(--color-border));
+  display:inline-grid;
+  place-items:center;
+  background:var(--weline-theme-surface, var(--color-surface));
+  color:var(--weline-theme-text-muted, var(--color-text-muted));
+  font-size:0;
+}
+[data-dropship-admin="listings"] .ds-listed-detail__table{
+  margin:0;
+}
+@media (max-width:720px){
+  [data-dropship-admin="listings"] .ds-listed-detail__pricing{
+    grid-template-columns:1fr;
+  }
+}
+[data-dropship-admin="listings"] .ds-pick-layout[data-filters-collapsed="1"],
+[data-dropship-admin="listings"] .ds-pick-layout[data-rail-collapsed="1"][data-cats-collapsed="1"],
+[data-dropship-admin="listings"] .ds-pick-layout[data-browse="0"][data-rail-collapsed="1"]{
+  grid-template-columns:minmax(0,1fr);
+}
+[data-dropship-admin="listings"] .ds-pick-layout[data-rail-collapsed="1"]:not([data-cats-collapsed="1"]){
+  grid-template-columns:minmax(240px,320px) minmax(0,1fr);
+}
+[data-dropship-admin="listings"] .ds-pick-layout[data-browse="1"][data-cats-collapsed="1"]:not([data-rail-collapsed="1"]){
+  grid-template-columns:minmax(240px,300px) minmax(0,1fr);
+}
+[data-dropship-admin="listings"] .ds-pick-layout[data-rail-collapsed="1"] .ds-pick-rail,
+[data-dropship-admin="listings"] .ds-pick-layout[data-cats-collapsed="1"] .ds-pick-cats,
+[data-dropship-admin="listings"] .ds-pick-layout[data-filters-collapsed="1"] .ds-pick-rail,
+[data-dropship-admin="listings"] .ds-pick-layout[data-filters-collapsed="1"] .ds-pick-cats{
+  display:none;
+}
+[data-dropship-admin="listings"] .ds-pick-pane-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:var(--weline-space-2);
+  margin:0 0 var(--weline-space-2);
+}
+[data-dropship-admin="listings"] .ds-pick-pane-head .w-text{margin:0;}
+[data-dropship-admin="listings"] .ds-pick-filters-bar{
+  display:flex;
+  flex-wrap:wrap;
+  gap:var(--weline-space-2);
+  align-items:center;
+  justify-content:space-between;
+  margin-bottom:var(--weline-space-3);
+}
+[data-dropship-admin="listings"] .ds-pick-filters-summary{
+  display:flex;
+  flex-wrap:wrap;
+  gap:var(--weline-space-2);
+  align-items:center;
+  min-width:0;
+}
+[data-dropship-admin="listings"] .ds-pick-filters-summary:empty{display:none;}
+[data-dropship-admin="listings"] .ds-pick-chip{
+  display:inline-flex;
+  align-items:center;
+  gap:var(--weline-space-1);
+  max-width:min(100%,18rem);
+  padding:var(--weline-space-1) var(--weline-space-2);
+  border:1px solid var(--weline-theme-border,var(--color-border));
+  border-radius:var(--weline-theme-radius-md,8px);
+  background:var(--weline-theme-primary-surface,rgba(0,0,0,.06));
+  color:var(--weline-theme-on-surface,inherit);
+  font:inherit;
+  font-size:var(--weline-font-size-sm,12px);
+  line-height:1.35;
+  cursor:pointer;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+[data-dropship-admin="listings"] .ds-pick-chip[hidden]{display:none!important;}
+[data-dropship-admin="listings"] .ds-pick-thumb-cell{
+  width:4.25rem;
+  min-width:4.25rem;
+  max-width:4.25rem;
+  vertical-align:middle;
+}
+[data-dropship-admin="listings"] .ds-pick-thumb-box{
+  display:block;
+  width:3.5rem;
+  height:3.5rem;
+  min-width:3.5rem;
+  min-height:3.5rem;
+  overflow:hidden;
+  border-radius:var(--weline-theme-radius-md,8px);
+  background:var(--weline-theme-primary-surface,rgba(0,0,0,.04));
+  border:1px solid var(--weline-theme-border,var(--color-border));
+  flex-shrink:0;
+}
+[data-dropship-admin="listings"] .ds-pick-thumb{
+  display:block;
+  width:3.5rem !important;
+  height:3.5rem !important;
+  min-width:3.5rem;
+  max-width:none !important;
+  object-fit:cover;
+  object-position:center;
+  border:0;
+  border-radius:0;
+  background:transparent;
+}
+[data-dropship-admin="listings"] .ds-pick-thumb-ph{
+  display:grid;
+  place-items:center;
+  width:3.5rem;
+  height:3.5rem;
+  min-width:3.5rem;
+  border-radius:var(--weline-theme-radius-md,8px);
+  background:var(--weline-theme-primary-surface,rgba(0,0,0,.04));
+  border:1px dashed var(--weline-theme-border,var(--color-border));
+  color:var(--weline-theme-on-surface-variant,var(--color-muted,inherit));
+  font-size:11px;
+}
+[data-dropship-admin="listings"] .ds-pick-title-cell{
+  display:flex;
+  gap:var(--weline-space-3);
+  align-items:flex-start;
+  min-width:0;
+}
+[data-dropship-admin="listings"] .ds-pick-title-cell > div{min-width:0;}
+@media (max-width:960px){
+  [data-dropship-admin="listings"] .ds-pick-layout,
+  [data-dropship-admin="listings"] .ds-pick-layout[data-browse="0"],
+  [data-dropship-admin="listings"] .ds-pick-layout[data-filters-collapsed="1"],
+  [data-dropship-admin="listings"] .ds-pick-layout[data-rail-collapsed="1"],
+  [data-dropship-admin="listings"] .ds-pick-layout[data-cats-collapsed="1"],
+  [data-dropship-admin="listings"] .ds-pick-layout[data-rail-collapsed="1"][data-cats-collapsed="1"]{grid-template-columns:1fr;}
+  [data-dropship-admin="listings"] .ds-listed-sources{
+    min-inline-size:100%;
+    inline-size:100%;
+  }
+}
+</style>
+<div class="w-grid" data-dropship-admin="listings" data-testid="dropship-listings" data-active-tab="<?= $escape($activeTab) ?>">
+    <div style="--w-span:12;">
+        <div class="w-tabs" data-w-component="tabs" data-testid="dropship-listing-tabs" style="--w-mb:var(--weline-space-4);">
+            <nav class="w-tabs__list" data-variant="soft" role="tablist" aria-label="<?= $escape((string)__('货源商品分区')) ?>"
+                 style="--w-mb:var(--weline-space-4);">
+                <a class="w-tabs__tab<?= $activeTab === 'listed' ? ' active' : '' ?>"
+                   href="<?= $escape($listedUrl) ?>"
+                   role="tab"
+                   aria-selected="<?= $activeTab === 'listed' ? 'true' : 'false' ?>"
+                   aria-current="<?= $activeTab === 'listed' ? 'page' : 'false' ?>"
+                   data-testid="dropship-tab-listed">
+                    <w:icon name="package" size="sm"></w:icon>
+                    <span><?= __('已刊登') ?></span>
+                </a>
+                <a class="w-tabs__tab<?= $activeTab === 'pick' ? ' active' : '' ?>"
+                   href="<?= $escape($pickTabUrl) ?>"
+                   role="tab"
+                   aria-selected="<?= $activeTab === 'pick' ? 'true' : 'false' ?>"
+                   aria-current="<?= $activeTab === 'pick' ? 'page' : 'false' ?>"
+                   data-testid="dropship-tab-pick">
+                    <w:icon name="search" size="sm"></w:icon>
+                    <span><?= __('选品') ?></span>
+                </a>
+            </nav>
+
+            <?php if ($activeTab === 'listed'): ?>
+                <div class="w-tabs__panel" role="tabpanel" data-testid="dropship-panel-listed"
+                     data-dropship-listed-accordion="1"
+                     data-weline-load="dropshipListedAccordion"
+                     data-local-detail-url="<?= $escape($localDetailUrl) ?>"
+                     data-i18n-loading="<?= $escape((string)__('正在加载本地详情…')) ?>"
+                     data-i18n-failed="<?= $escape((string)__('加载失败，请重试')) ?>"
+                     data-i18n-no-local="<?= $escape((string)__('尚未关联本地商品（待刊登）')) ?>"
+                     data-i18n-no-variants="<?= $escape((string)__('暂无本地规格/报价')) ?>"
+                     data-i18n-local-sale="<?= $escape((string)__('本地售价')) ?>"
+                     data-i18n-origin="<?= $escape((string)__('货源原价')) ?>"
+                     data-i18n-uplift="<?= $escape((string)__('涨价比例')) ?>"
+                     data-i18n-product="<?= $escape((string)__('主产品')) ?>"
+                     data-i18n-variants-title="<?= $escape((string)__('规格与定价')) ?>"
+                     data-i18n-configurable="<?= $escape((string)__('多规格')) ?>"
+                     data-i18n-simple="<?= $escape((string)__('简单品')) ?>"
+                     data-i18n-default-variant="<?= $escape((string)__('默认规格')) ?>"
+                     data-i18n-col-image="<?= $escape((string)__('图')) ?>"
+                     data-i18n-col-variant="<?= $escape((string)__('规格')) ?>"
+                     data-i18n-col-sku="<?= $escape((string)__('SKU')) ?>"
+                     data-i18n-col-offer="<?= $escape((string)__('货源原价')) ?>"
+                     data-i18n-col-price="<?= $escape((string)__('售价')) ?>"
+                     data-i18n-col-uplift="<?= $escape((string)__('涨幅')) ?>"
+                     data-i18n-col-status="<?= $escape((string)__('状态')) ?>"
+                     data-i18n-cost="<?= $escape((string)__('换汇成本')) ?>"
+                     data-i18n-margin="<?= $escape((string)__('毛利')) ?>"
+                     data-i18n-origin-change="<?= $escape((string)__('货源变动')) ?>"
+                     data-i18n-synced="<?= $escape((string)__('上次同步')) ?>"
+                     data-i18n-price-lock="<?= $escape((string)__('售价已锁')) ?>"
+                     data-i18n-expand="<?= $escape((string)__('点击展开本地规格与售价')) ?>"
+                     data-i18n-collapse="<?= $escape((string)__('点击收起')) ?>">
+                    <div class="w-card">
+                        <div class="w-card__header">
+                            <p class="w-text" data-tone="muted" data-size="sm" style="margin:0;">
+                                <?= __('货源列表（含待刊登选品篮与已刊登）。点击已刊行可展开查看本地规格与售价；仅「待刊登」可勾选后刊登。要拉新品请切换到「选品」。') ?>
+                            </p>
+                        </div>
+                        <div class="w-card__body">
+                            <form class="w-cluster" data-align="end" data-wrap="true" method="get"
+                                  id="dropship-listed-filter"
+                                  data-testid="dropship-listed-filter"
+                                  style="--w-gap:var(--weline-space-3);margin:0 0 var(--weline-space-4);">
+                                <input type="hidden" name="tab" value="listed">
+                                <div class="w-field" style="min-width:min(100%,22rem);flex:1 1 18rem;" data-testid="dropship-listed-sources">
+                                    <label class="w-label" for="dropship-listed-providers_input"><?= __('货源供应商') ?></label>
+                                    <div class="w-field__control">
+                                        <w:dropship:provider:select
+                                            id="dropship-listed-providers"
+                                            name="sources"
+                                            options-json="providerSelectOptionsJson"
+                                            value="selectedSourcesCsv"
+                                            multiple="true"
+                                            clearable="true"
+                                            auto-submit="true"
+                                            form="dropship-listed-filter"
+                                            placeholder="@lang(搜索或选择供应商（留空=全部）)"
+                                        />
+                                    </div>
+                                    <div class="w-text" data-tone="muted" data-size="sm" style="margin-top:var(--weline-space-1);">
+                                        <?= __('默认全部；点选标签可多选筛选，变更后自动刷新。') ?>
+                                    </div>
+                                </div>
+                            </form>
+
+                            <?php if ($listings === []): ?>
+                                <div class="w-empty" style="min-height:10rem;" data-testid="dropship-listings-empty">
+                                    <w:icon name="package" size="lg"></w:icon>
+                                    <div class="w-text" data-weight="strong"><?= __('暂无刊登') ?></div>
+                                    <div class="w-text" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-3);">
+                                        <?= __('切换到「选品」浏览远程货源并拉取。') ?>
+                                    </div>
+                                    <a class="w-button" href="<?= $escape($pickTabUrl) ?>" data-tone="primary" data-size="sm">
+                                        <?= __('去选品') ?>
+                                    </a>
+                                </div>
+                            <?php else: ?>
+                                <form method="post" action="<?= $escape($publishSelectedUrl) ?>" id="dropship-listed-publish-form">
+                                    <input type="hidden" name="provider_code" id="listed-publish-provider" value="">
+                                    <input type="hidden" name="website_id" id="listed-publish-website" value="0">
+                                    <input type="hidden" name="store_id" id="listed-publish-store" value="0">
+                                    <input type="hidden" name="channel" value="default">
+                                    <div class="w-table-wrap">
+                                        <table class="w-table" data-w-vertical="middle" data-testid="dropship-listed-table">
+                                            <thead>
+                                            <tr>
+                                                <th></th>
+                                                <th class="ds-pick-thumb-cell"><?= __('图') ?></th>
+                                                <th><?= __('商品') ?></th>
+                                                <th><?= __('分类') ?></th>
+                                                <th><?= __('国家') ?></th>
+                                                <th><?= __('本地仓') ?></th>
+                                                <th><?= __('定价') ?></th>
+                                                <th><?= __('远程库存') ?></th>
+                                                <th><?= __('状态') ?></th>
+                                                <th><?= __('操作') ?></th>
+                                            </tr>
+                                            </thead>
+                                            <tbody>
+                                            <?php foreach ($listings as $row): ?>
+                                                <?php
+                                                $lid = (int)($row['listing_id'] ?? 0);
+                                                $wid = (int)($row['local_warehouse_id'] ?? 0);
+                                                $wlabel = $wid > 0 ? (string)($warehouseNames[$wid] ?? ('#' . $wid)) : '—';
+                                                $catPath = trim((string)($row['remote_category_path'] ?? ''));
+                                                $country = trim((string)($row['remote_country'] ?? ''));
+                                                $title = trim((string)($row['title'] ?? ''));
+                                                $spu = trim((string)($row['external_spu'] ?? ''));
+                                                if ($title === '') {
+                                                    $title = $spu !== '' ? $spu : ('#' . $lid);
+                                                }
+                                                $thumb = trim((string)($row['thumb_url'] ?? ''));
+                                                $provider = trim((string)($row['provider_code'] ?? ''));
+                                                $localSku = trim((string)($row['local_sku'] ?? ''));
+                                                $localEditUrl = trim((string)($row['local_edit_url'] ?? ''));
+                                                $sync = strtolower(trim((string)($row['sync_status'] ?? '')));
+                                                $statusLabel = match ($sync) {
+                                                    'pending' => (string)__('待刊登'),
+                                                    'active' => (string)__('已刊登'),
+                                                    'disabled' => (string)__('已停用'),
+                                                    default => $sync !== '' ? $sync : '—',
+                                                };
+                                                $statusTone = match ($sync) {
+                                                    'pending' => 'warning',
+                                                    'active' => 'success',
+                                                    'disabled' => 'muted',
+                                                    default => 'muted',
+                                                };
+                                                $localUuid = trim((string)($row['local_product_uuid'] ?? ''));
+                                                $expandable = $sync === 'active' && $localUuid !== '';
+                                                $originMinor = (int)($row['origin_price_minor'] ?? 0);
+                                                $originCur = (string)($row['origin_currency'] ?? 'USD');
+                                                $saleMinor = (int)($row['sale_price_minor'] ?? 0);
+                                                $upliftPct = (int)($row['uplift_percent'] ?? 0);
+                                                $upliftText = $upliftPct !== 0
+                                                    ? (($upliftPct > 0 ? '+' : '') . $upliftPct . '%')
+                                                    : '—';
+                                                $eco = is_array($row['economics'] ?? null) ? $row['economics'] : [];
+                                                $originDir = (string)($eco['origin_direction'] ?? ($row['price_direction'] ?? 'same'));
+                                                $originDeltaPct = $eco['origin_delta_percent'] ?? null;
+                                                $originChangeText = '—';
+                                                if ($originDir === 'up' && $originDeltaPct !== null) {
+                                                    $originChangeText = '+' . $originDeltaPct . '%';
+                                                } elseif ($originDir === 'down' && $originDeltaPct !== null) {
+                                                    $originChangeText = (string)$originDeltaPct . '%';
+                                                } elseif ($originDir === 'same') {
+                                                    $originChangeText = '0%';
+                                                }
+                                                $marginMinor = (int)($eco['margin_minor'] ?? 0);
+                                                $marginPct = $eco['margin_percent'] ?? null;
+                                                $costMinor = (int)($eco['cost_minor'] ?? 0);
+                                                $costCur = (string)($eco['cost_currency'] ?? 'CNY');
+                                                $saleCompare = is_array($row['sale_compare'] ?? null) ? $row['sale_compare'] : null;
+                                                $saleCompareMinor = (int)($saleCompare['compare_amount_minor'] ?? 0);
+                                                $saleCompareCur = strtoupper(trim((string)($saleCompare['compare_currency'] ?? '')));
+                                                $colspan = 10;
+                                                ?>
+                                                <tr class="ds-listed-row"
+                                                    data-testid="dropship-listed-row"
+                                                    data-listing-id="<?= $lid ?>"
+                                                    data-listed-expandable="<?= $expandable ? '1' : '0' ?>"
+                                                    aria-expanded="false"
+                                                    <?= $expandable ? 'tabindex="0"' : '' ?>>
+                                                    <td>
+                                                        <input type="checkbox"
+                                                               name="listing_ids[]"
+                                                               value="<?= $lid ?>"
+                                                               data-provider="<?= $escape($provider) ?>"
+                                                               data-sync="<?= $escape($sync) ?>"
+                                                               class="ds-listed-check"
+                                                               title="<?= $sync === 'pending' ? $escape((string)__('可刊登')) : $escape((string)__('可删除')) ?>">
+                                                    </td>
+                                                    <td class="ds-pick-thumb-cell">
+                                                        <?php if ($thumb !== '' && (str_starts_with($thumb, 'http://') || str_starts_with($thumb, 'https://'))): ?>
+                                                            <span class="ds-pick-thumb-box">
+                                                                <img class="ds-pick-thumb"
+                                                                     src="<?= $escape($thumb) ?>"
+                                                                     alt=""
+                                                                     loading="lazy"
+                                                                     width="56"
+                                                                     height="56"
+                                                                     data-testid="dropship-listed-thumb">
+                                                            </span>
+                                                        <?php else: ?>
+                                                            <span class="ds-pick-thumb-ph" data-testid="dropship-listed-thumb-ph" aria-hidden="true">—</span>
+                                                        <?php endif; ?>
+                                                    </td>
+                                                    <td>
+                                                        <div class="ds-pick-title-cell">
+                                                            <div>
+                                                                <div class="w-text" data-weight="strong"><?= $escape($title) ?></div>
+                                                                <div class="w-text" data-tone="muted" data-size="sm">
+                                                                    <code><?= $escape($provider) ?></code>
+                                                                    · <?= $escape($spu !== '' ? $spu : ('#' . $lid)) ?>
+                                                                </div>
+                                                                <?php if ($localSku !== '' || $localEditUrl !== ''): ?>
+                                                                    <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);margin-top:var(--weline-space-1);"
+                                                                         data-testid="dropship-listed-local-meta">
+                                                                        <?php if ($localSku !== ''): ?>
+                                                                            <span class="w-text" data-size="sm" data-testid="dropship-listed-local-sku">
+                                                                                <?= __('本地 SKU') ?>：<code><?= $escape($localSku) ?></code>
+                                                                            </span>
+                                                                        <?php endif; ?>
+                                                                        <?php if ($localEditUrl !== ''): ?>
+                                                                            <a class="w-button"
+                                                                               data-tone="neutral"
+                                                                               data-variant="outline"
+                                                                               data-size="sm"
+                                                                               href="<?= $escape($localEditUrl) ?>"
+                                                                               data-testid="dropship-listed-edit">
+                                                                                <?= __('编辑商品') ?>
+                                                                            </a>
+                                                                        <?php endif; ?>
+                                                                    </div>
+                                                                <?php endif; ?>
+                                                                <?php if ($expandable): ?>
+                                                                    <span role="button"
+                                                                          tabindex="0"
+                                                                          class="ds-listed-row__hint"
+                                                                          data-listed-expand-toggle
+                                                                          data-testid="dropship-listed-expand-hint"
+                                                                          aria-expanded="false">
+                                                                        <w:icon name="chevron-down" size="sm"></w:icon>
+                                                                        <span data-listed-expand-label><?= __('点击展开本地规格与售价') ?></span>
+                                                                    </span>
+                                                                <?php endif; ?>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td class="w-text" data-size="sm"><?= $escape($catPath !== '' ? $catPath : '—') ?></td>
+                                                    <td><?= $escape($country !== '' ? $country : '—') ?></td>
+                                                    <td class="w-text" data-size="sm"><?= $escape($wlabel) ?></td>
+                                                    <td data-testid="dropship-listed-pricing">
+                                                        <div class="ds-listed-pricing-cell">
+                                                            <div class="ds-listed-pricing-cell__row">
+                                                                <span class="w-text" data-tone="muted" data-size="sm"><?= __('货源') ?></span>
+                                                                <span class="w-text" data-size="sm" data-testid="dropship-listed-origin"><?= $escape($money($originMinor, $originCur)) ?></span>
+                                                            </div>
+                                                            <div class="ds-listed-pricing-cell__row">
+                                                                <span class="w-text" data-tone="muted" data-size="sm"><?= __('变动') ?></span>
+                                                                <span class="w-text" data-size="sm" data-testid="dropship-listed-origin-change"
+                                                                      data-dir="<?= $escape($originDir) ?>"><?= $escape($originChangeText) ?></span>
+                                                            </div>
+                                                            <div class="ds-listed-pricing-cell__row">
+                                                                <span class="w-text" data-tone="muted" data-size="sm"><?= __('售价') ?></span>
+                                                                <span class="w-text" data-weight="strong" data-size="sm" data-testid="dropship-listed-sale" style="text-align:right;">
+                                                                    <?php if ($saleMinor > 0): ?>
+                                                                        <span data-testid="dropship-listed-money-primary"><?= $escape($money($saleMinor, 'CNY')) ?></span>
+                                                                        <?php if ($saleCompareMinor > 0 && $saleCompareCur !== '' && $saleCompareCur !== 'CNY'): ?>
+                                                                            <div class="w-text" data-tone="muted" data-size="sm" data-testid="dropship-listed-sale-compare">
+                                                                                ≈ <?= $escape($money($saleCompareMinor, $saleCompareCur)) ?>
+                                                                            </div>
+                                                                        <?php endif; ?>
+                                                                    <?php else: ?>
+                                                                        —
+                                                                    <?php endif; ?>
+                                                                </span>
+                                                            </div>
+                                                            <div class="ds-listed-pricing-cell__row">
+                                                                <span class="w-text" data-tone="muted" data-size="sm"><?= __('涨幅') ?></span>
+                                                                <span class="w-text" data-size="sm" data-testid="dropship-listed-uplift"><?= $escape($upliftText) ?></span>
+                                                            </div>
+                                                            <?php if ($saleMinor > 0 && $costMinor > 0): ?>
+                                                                <div class="ds-listed-pricing-cell__row">
+                                                                    <span class="w-text" data-tone="muted" data-size="sm"><?= __('毛利') ?></span>
+                                                                    <span class="w-text" data-size="sm" data-testid="dropship-listed-margin">
+                                                                        <?= $escape($money($marginMinor, $costCur)) ?>
+                                                                        <?php if ($marginPct !== null): ?>
+                                                                            <span class="w-text" data-tone="muted">(<?= $escape((string)$marginPct) ?>%)</span>
+                                                                        <?php endif; ?>
+                                                                    </span>
+                                                                </div>
+                                                            <?php endif; ?>
+                                                        </div>
+                                                    </td>
+                                                    <td><?= (int)($row['remote_qty'] ?? 0) ?></td>
+                                                    <td>
+                                                        <span class="w-badge" data-w-background="<?= $escape($statusTone) ?>" data-testid="dropship-listed-status">
+                                                            <?= $escape($statusLabel) ?>
+                                                        </span>
+                                                    </td>
+                                                    <td>
+                                                        <button class="w-button"
+                                                                type="button"
+                                                                data-tone="danger"
+                                                                data-variant="outline"
+                                                                data-size="sm"
+                                                                data-listed-delete="<?= $lid ?>"
+                                                                data-testid="dropship-listed-delete">
+                                                            <?= __('删除') ?>
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                                <tr class="ds-listed-detail-row"
+                                                    data-testid="dropship-listed-detail"
+                                                    data-listing-id="<?= $lid ?>"
+                                                    hidden>
+                                                    <td colspan="<?= $colspan ?>">
+                                                        <div class="ds-listed-detail" data-listed-detail-body>
+                                                            <div class="w-text" data-tone="muted" data-size="sm"><?= __('展开后加载…') ?></div>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            <?php endforeach; ?>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <div class="ds-pick-bar">
+                                        <span class="w-text" data-tone="muted" data-size="sm" data-testid="listed-sel-count"><?= __('已选 0') ?></span>
+                                        <button class="w-button" type="button" data-tone="primary" data-size="sm"
+                                                id="listed-open-publish" data-testid="dropship-listed-publish" disabled>
+                                            <?= __('刊登选中') ?>
+                                        </button>
+                                        <button class="w-button" type="button" data-tone="danger" data-variant="outline" data-size="sm"
+                                                id="listed-open-delete" data-testid="dropship-listed-delete-selected" disabled>
+                                            <?= __('删除选中') ?>
+                                        </button>
+                                    </div>
+                                </form>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </div>
+            <?php else: ?>
+                <div class="w-tabs__panel" role="tabpanel" data-testid="dropship-panel-pick"
+                     data-dropship-admin="listing-pick">
+                    <div class="ds-pick-layout" id="dropship-pick-layout" data-browse="<?= $browseEnabled ? '1' : '0' ?>"
+                         data-rail-collapsed="0" data-cats-collapsed="0" data-filters-collapsed="0"
+                         data-testid="dropship-pick-layout">
+                        <aside class="ds-pick-rail" id="dropship-pick-rail" data-testid="dropship-pick-rail">
+                            <div class="ds-pick-pane-head">
+                                <div class="w-text" data-tone="muted" data-size="sm"><?= __('货源供应商') ?></div>
+                                <button class="w-button" type="button" data-tone="neutral" data-variant="ghost" data-size="sm"
+                                        data-pick-collapse="rail" data-testid="dropship-collapse-rail"
+                                        aria-controls="dropship-pick-rail" aria-expanded="true">
+                                    <?= __('收起') ?>
+                                </button>
+                            </div>
+                            <?php if ($providerOptions === []): ?>
+                                <div class="w-text" data-tone="muted" data-size="sm"><?= __('暂无已启用供应商') ?></div>
+                            <?php else: ?>
+                                <?php foreach ($providerOptions as $opt): ?>
+                                    <?php
+                                    $code = (string)($opt['code'] ?? '');
+                                    $title = (string)($opt['title'] ?? $code);
+                                    $caps = (array)($opt['capabilities'] ?? []);
+                                    $hasBrowse = !empty($caps['browse']);
+                                    $href = $this->getBackendUrl('dropship/backend/listing/index', array_filter([
+                                        'tab' => 'pick',
+                                        'provider_code' => $code,
+                                        'country_code' => $browseCountryFilter ? $countryCode : null,
+                                    ]));
+                                    ?>
+                                    <a href="<?= $escape($href) ?>"
+                                       aria-current="<?= $code === $providerCode ? 'true' : 'false' ?>"
+                                       data-provider="<?= $escape($code) ?>">
+                                        <?= $escape($title !== '' ? $title : $code) ?>
+                                        <?php if ($hasBrowse): ?>
+                                            <span class="ds-cap-badge"><?= __('分类') ?></span>
+                                        <?php endif; ?>
+                                    </a>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </aside>
+
+                        <?php if ($browseEnabled): ?>
+                            <aside class="ds-pick-cats" id="dropship-pick-cats" data-testid="dropship-pick-cats">
+                                <div class="ds-pick-pane-head">
+                                    <div class="w-text" data-tone="muted" data-size="sm"><?= __('分类') ?></div>
+                                    <button class="w-button" type="button" data-tone="neutral" data-variant="ghost" data-size="sm"
+                                            data-pick-collapse="cats" data-testid="dropship-collapse-cats"
+                                            aria-controls="dropship-pick-cats" aria-expanded="true">
+                                        <?= __('收起') ?>
+                                    </button>
+                                </div>
+                                <?php
+                                $allHref = $this->getBackendUrl('dropship/backend/listing/index', $browseBase(['category_id' => '']));
+                                ?>
+                                <div id="dropship-cats-list" data-testid="dropship-cats-list"
+                                     data-all-href="<?= $escape($allHref) ?>"
+                                     data-category-id="<?= $escape($categoryId) ?>">
+                                    <a href="<?= $escape($allHref) ?>" aria-current="<?= $categoryId === '' ? 'true' : 'false' ?>" data-cat-all="1">
+                                        <?= __('全部') ?>
+                                    </a>
+                                    <div class="ds-cats-loading" data-testid="dropship-cats-loading"><?= __('正在加载分类…') ?></div>
+                                </div>
+                            </aside>
+                        <?php endif; ?>
+
+                        <section class="ds-pick-main" data-testid="dropship-pick-main">
+                            <div class="ds-pick-filters-bar" data-testid="dropship-pick-filters-bar">
+                                <div class="ds-pick-filters-summary" data-testid="dropship-pick-filters-summary">
+                                    <button type="button" class="ds-pick-chip" hidden
+                                            data-pick-expand="rail" data-testid="dropship-expand-rail-chip"
+                                            title="<?= $escape((string)__('展开货源供应商')) ?>">
+                                        <?= $escape($providerTitle !== '' ? $providerTitle : (string)__('货源供应商')) ?>
+                                        · <?= __('展开') ?>
+                                    </button>
+                                    <?php if ($browseEnabled): ?>
+                                        <button type="button" class="ds-pick-chip" hidden
+                                                data-pick-expand="cats" data-testid="dropship-expand-cats-chip"
+                                                title="<?= $escape((string)__('展开分类')) ?>">
+                                            <?= $escape($categoryTitle !== '' ? $categoryTitle : (string)__('分类')) ?>
+                                            · <?= __('展开') ?>
+                                        </button>
+                                    <?php endif; ?>
+                                </div>
+                                <button class="w-button" type="button" data-tone="neutral" data-variant="outline" data-size="sm"
+                                        id="dropship-toggle-filters" data-testid="dropship-toggle-filters"
+                                        aria-controls="dropship-pick-layout"
+                                        aria-expanded="true">
+                                    <?= __('全部收起') ?>
+                                </button>
+                            </div>
+                            <form class="ds-pick-toolbar" method="get" data-testid="dropship-browse-form">
+                                <input type="hidden" name="tab" value="pick">
+                                <input type="hidden" name="provider_code" value="<?= $escape($providerCode) ?>">
+                                <input type="hidden" name="page" value="1">
+                                <input type="hidden" name="category_id" value="<?= $escape($categoryId) ?>">
+                                <?php if ($browseCountryFilter): ?>
+                                    <div class="w-field" style="min-inline-size:10rem;" data-testid="dropship-browse-country">
+                                        <label class="w-label"><?= __('库存国家') ?></label>
+                                        <w:theme:address
+                                            selection="single"
+                                            levels="country"
+                                            catalog="global"
+                                            searchable="true"
+                                            cascade="false"
+                                            street="false"
+                                            code="dropship-browse-country"
+                                            country-name="country_code"
+                                            country-value="<?= $escape($countryCode) ?>"
+                                        />
+                                    </div>
+                                <?php endif; ?>
+                                <div class="w-field" style="min-inline-size:12rem;flex:1;">
+                                    <label class="w-label" for="dropship-search-q"><?= __('关键词（可选）') ?></label>
+                                    <input id="dropship-search-q"
+                                           class="w-input"
+                                           name="q"
+                                           value="<?= $escape($keyword) ?>"
+                                           placeholder="<?= $escape((string)__('商品名 / SKU，可留空')) ?>">
+                                </div>
+                                <button class="w-button" type="submit" data-tone="primary" data-size="sm"
+                                        data-testid="dropship-browse-submit">
+                                    <?= __('浏览') ?>
+                                </button>
+                            </form>
+
+                            <?php if (!$browseEnabled): ?>
+                                <div class="w-text" data-tone="muted" data-size="sm" style="margin:0 0 var(--weline-space-3);"
+                                     data-testid="dropship-no-browse-hint">
+                                    <?= __('该供应商未提供分类，可直接浏览商品。') ?>
+                                </div>
+                            <?php endif; ?>
+
+                            <div id="dropship-browse-panel"
+                                 data-testid="dropship-browse-panel"
+                                 data-browse-async="<?= $browseAsync ? '1' : '0' ?>"
+                                 data-browse-url="<?= $escape($browseUrl) ?>"
+                                 data-browse-api="<?= $escape($browseApiBase) ?>"
+                                 data-browse-index="<?= $escape($browseIndexBase) ?>"
+                                 data-provider="<?= $escape($providerCode) ?>"
+                                 data-country="<?= $escape($countryCode) ?>"
+                                 data-category="<?= $escape($categoryId) ?>"
+                                 data-q="<?= $escape($keyword) ?>"
+                                 data-page="<?= (int)$searchPage ?>"
+                                 data-include-categories="<?= $browseEnabled ? '1' : '0' ?>"
+                                 data-country-filter="<?= $browseCountryFilter ? '1' : '0' ?>">
+                                <div class="ds-browse-loading" data-browse-loading data-testid="dropship-browse-loading"
+                                     <?= $browseAsync ? '' : 'hidden' ?>>
+                                    <?= __('正在从货源加载商品，页面可继续操作…') ?>
+                                </div>
+                                <div class="w-alert" data-tone="danger" data-browse-error data-testid="dropship-search-error"
+                                     style="margin:0 0 var(--weline-space-4);"
+                                     <?= (!$browseAsync && $providerCode !== '') ? '' : 'hidden' ?>>
+                                    <?= (!$browseAsync && $providerCode !== '') ? __('当前供应商不支持远程目录选品。') : '' ?>
+                                </div>
+                                <div class="w-cluster ds-browse-meta" data-browse-meta data-align="center" data-justify="between" data-wrap="true"
+                                     style="--w-gap:var(--weline-space-2);margin:0 0 var(--weline-space-3);" hidden>
+                                    <div class="w-text" data-tone="muted" data-size="sm" data-browse-meta-text></div>
+                                    <div class="w-cluster" style="--w-gap:var(--weline-space-2);" data-browse-pager></div>
+                                </div>
+                                <div class="w-empty ds-browse-empty" style="min-height:10rem;" data-browse-empty data-testid="dropship-search-empty"
+                                     data-empty-reason="loading" hidden>
+                                    <w:icon name="package" size="lg"></w:icon>
+                                    <div class="w-text" data-weight="strong" data-browse-empty-title><?= __('正在准备选品列表') ?></div>
+                                    <div class="w-text" data-tone="muted" data-size="sm" data-browse-empty-hint>
+                                        <?= __('按供应商能力浏览远程目录；分类与关键词均为可选。') ?>
+                                    </div>
+                                </div>
+                                <div class="ds-browse-results" data-browse-results hidden>
+                                    <form method="post" action="<?= $escape($admitUrl) ?>" id="dropship-admit-form"
+                                          data-basket-select-url="<?= $escape($basketSelectUrl) ?>"
+                                          data-basket-cancel-url="<?= $escape($basketCancelUrl) ?>">
+                                        <input type="hidden" name="provider_code" value="<?= $escape($providerCode) ?>">
+                                        <input type="hidden" name="country_code" value="<?= $escape($countryCode) ?>">
+                                        <input type="hidden" name="category_id" value="<?= $escape($categoryId) ?>">
+                                        <input type="hidden" name="snapshots_json" id="admit-snapshots-json" value="[]">
+                                        <div class="w-table-wrap">
+                                            <table class="w-table" data-w-vertical="middle" data-testid="dropship-search-results">
+                                                <thead>
+                                                <tr>
+                                                    <th><input type="checkbox" id="pick-check-all" aria-label="<?= $escape((string)__('全选')) ?>"></th>
+                                                    <th><?= __('图') ?></th>
+                                                    <th><?= __('标题') ?></th>
+                                                    <th><?= __('外部 SPU') ?></th>
+                                                    <th><?= __('原价') ?></th>
+                                                    <th><?= __('远程库存') ?></th>
+                                                    <th><?= __('状态') ?></th>
+                                                </tr>
+                                                </thead>
+                                                <tbody id="dropship-browse-tbody" data-testid="dropship-browse-tbody"></tbody>
+                                            </table>
+                                        </div>
+                                        <div class="ds-pick-float" id="dropship-pick-float" data-testid="dropship-pick-float" hidden>
+                                            <span class="w-text" data-tone="muted" data-size="sm" id="pick-sel-count" data-testid="pick-sel-count"><?= __('已选 0') ?></span>
+                                            <div class="w-cluster" style="--w-gap:var(--weline-space-2);">
+                                                <button class="w-button" type="button" data-tone="primary" data-size="sm"
+                                                        id="pick-float-select" data-testid="dropship-float-select" disabled>
+                                                    <?= __('选择') ?>
+                                                </button>
+                                                <button class="w-button" type="button" data-tone="neutral" data-variant="outline" data-size="sm"
+                                                        id="pick-float-cancel" data-testid="dropship-float-cancel" disabled>
+                                                    <?= __('取消选择') ?>
+                                                </button>
+                                                <button class="w-button" type="button" data-tone="primary" data-variant="outline" data-size="sm"
+                                                        id="pick-open-publish" data-testid="dropship-publish-selected" disabled>
+                                                    <?= __('刊登选中') ?>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+            <?php endif; ?>
+        </div>
+    </div>
+
+    <div class="ds-modal" id="dropship-publish-modal" hidden data-testid="dropship-publish-modal">
+        <div class="ds-modal__panel">
+            <div class="w-text" data-weight="strong" style="margin-bottom:var(--weline-space-2);"><?= __('刊登选中') ?></div>
+            <p class="w-text" data-tone="muted" data-size="sm"><?= __('选择刊登范围；本地仓将按仓与国家映射解析。') ?></p>
+            <form method="post" action="<?= $escape($publishSelectedUrl) ?>" id="dropship-modal-publish-form">
+                <input type="hidden" name="provider_code" id="modal-provider" value="<?= $escape($providerCode) ?>">
+                <input type="hidden" name="snapshots_json" id="modal-snapshots-json" value="[]">
+                <div class="w-field" style="margin:var(--weline-space-3) 0;">
+                    <label class="w-label" for="dropship-publish-scope"><?= __('刊登范围') ?></label>
+                    <div class="w-field__control">
+                        <w:scope
+                            id="dropship-publish-scope"
+                            name="target_scope"
+                            value="publishSelectedScope"
+                            placeholder="@lang(选择网站、店铺或渠道)"
+                            search-placeholder="@lang(搜索作用范围)"
+                            aria-label="@lang(刊登范围)"
+                            searchable="true"
+                            default-expand-all="true"
+                            required="true"
+                        />
+                    </div>
+                    <div class="w-field__help"><?= __('可选 Global / 网站 / 店铺 / 渠道四级；刊登须选到具体网站及以上。') ?></div>
+                </div>
+                <div class="w-field" style="margin:var(--weline-space-3) 0;">
+                    <label class="w-label"><?= __('本地仓') ?></label>
+                    <input class="w-input" type="text" value="<?= $escape((string)__('确认后按映射自动解析')) ?>" readonly>
+                </div>
+                <div class="w-cluster" data-justify="end" style="--w-gap:var(--weline-space-2);">
+                    <button class="w-button" type="button" data-tone="neutral" data-variant="outline" data-size="sm" id="modal-close">
+                        <?= __('取消') ?>
+                    </button>
+                    <button class="w-button" type="submit" data-tone="primary" data-size="sm">
+                        <?= __('确认刊登') ?>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="ds-modal" id="dropship-delete-modal" hidden data-testid="dropship-delete-modal">
+        <div class="ds-modal__panel" data-testid="dropship-delete-modal-panel">
+            <form method="post" action="<?= $escape($deleteSelectedUrl) ?>" id="dropship-delete-form" data-testid="dropship-delete-form">
+                <div class="w-text" data-weight="strong" style="margin-bottom:var(--weline-space-2);"><?= __('删除刊登') ?></div>
+                <p class="w-text" data-tone="muted" data-size="sm" data-testid="dropship-delete-modal-hint">
+                    <?= __('将移除货源刊登关联。可选择是否处理已生成的本地商品。') ?>
+                </p>
+                <div id="dropship-delete-ids" data-testid="dropship-delete-ids"></div>
+                <input type="hidden" name="csrf_token" id="dropship-delete-csrf" value="" data-testid="dropship-delete-csrf">
+                <div class="w-field" style="margin:var(--weline-space-3) 0;" data-testid="dropship-delete-local-action">
+                    <div class="w-label"><?= __('本地商品') ?></div>
+                    <label class="w-text" data-size="sm" style="display:flex;gap:var(--weline-space-2);align-items:flex-start;margin-top:var(--weline-space-2);">
+                        <input type="radio" name="local_product_action" value="keep" data-testid="dropship-delete-local-keep">
+                        <span><?= __('仅删除刊登（保留本地商品）') ?></span>
+                    </label>
+                    <label class="w-text" data-size="sm" style="display:flex;gap:var(--weline-space-2);align-items:flex-start;margin-top:var(--weline-space-2);">
+                        <input type="radio" name="local_product_action" value="disable" checked data-testid="dropship-delete-local-disable">
+                        <span><?= __('删除刊登并停用本地商品') ?></span>
+                    </label>
+                    <label class="w-text" data-size="sm" style="display:flex;gap:var(--weline-space-2);align-items:flex-start;margin-top:var(--weline-space-2);">
+                        <input type="radio" name="local_product_action" value="archive" data-testid="dropship-delete-local-archive">
+                        <span><?= __('删除刊登并物理删除本地商品（归档）') ?></span>
+                    </label>
+                    <div class="w-field__help"><?= __('目录治理不抹库：物理删除=归档，SKU 保留且不可再编辑。') ?></div>
+                </div>
+                <div class="w-cluster" data-justify="end" style="--w-gap:var(--weline-space-2);">
+                    <button class="w-button" type="button" data-tone="neutral" data-variant="outline" data-size="sm"
+                            id="dropship-delete-cancel" data-testid="dropship-delete-cancel">
+                        <?= __('取消') ?>
+                    </button>
+                    <button class="w-button" type="submit" data-tone="danger" data-size="sm"
+                            id="dropship-delete-confirm" data-testid="dropship-delete-confirm">
+                        <?= __('确认删除') ?>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
 </div>
+<script>
+(function () {
+  var root = document.querySelector('[data-dropship-admin="listings"]');
+  if (!root) return;
+  var modal = document.getElementById('dropship-publish-modal');
+  var modalClose = document.getElementById('modal-close');
+  var modalSnaps = document.getElementById('modal-snapshots-json');
+  var modalProvider = document.getElementById('modal-provider');
+
+  function selectedPickSnapshots() {
+    var out = [];
+    root.querySelectorAll('.ds-pick-check:checked').forEach(function (el) {
+      try { out.push(JSON.parse(el.getAttribute('data-snapshot') || '{}')); } catch (e) {}
+    });
+    return out;
+  }
+
+  function operableChecks() {
+    return root.querySelectorAll('.ds-pick-check');
+  }
+
+  function toastMsg(ok, msg) {
+    if (window.Weline && Weline.UI && typeof Weline.UI.toast === 'function') {
+      Weline.UI.toast({ tone: ok ? 'success' : 'danger', message: msg || '' });
+      return;
+    }
+    if (msg) alert(msg);
+  }
+
+  function appendCsrf(body) {
+    if (window.site && window.site.csrf_token) body.append('csrf_token', String(window.site.csrf_token));
+    var csrf = document.querySelector('input[name="csrf_token"], input[name="form_key"]');
+    if (csrf && csrf.value) body.append(csrf.name, csrf.value);
+  }
+
+  function markRowState(spu, st) {
+    var tr = root.querySelector('tr[data-spu="' + String(spu).replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"]');
+    if (!tr) {
+      tr = Array.prototype.find.call(root.querySelectorAll('tr[data-spu]'), function (node) {
+        return node.getAttribute('data-spu') === spu;
+      }) || null;
+    }
+    if (!tr) return;
+    var locked = !!(st && st.locked);
+    var basket = !!(st && st.in_basket) && !locked;
+    tr.setAttribute('data-pull-locked', locked ? '1' : '0');
+    tr.setAttribute('data-pull-basket', basket ? '1' : '0');
+    var statusCell = tr.querySelector('.ds-pick-status-cell');
+    var checkTd = tr.children[0];
+    var snap = tr.getAttribute('data-snapshot') || '{}';
+    // 已拉取 / 已入列表：禁止勾选（与 locked 同无 checkbox）
+    if (locked || basket) {
+      if (checkTd) checkTd.innerHTML = '<span class="w-text" data-tone="muted" data-size="sm">—</span>';
+      if (statusCell) {
+        statusCell.innerHTML = locked
+          ? ('<span class="ds-pick-status" data-tone="locked" data-testid="dropship-pull-locked">' +
+            <?= json_encode((string)__('已拉取'), JSON_UNESCAPED_UNICODE) ?> + '</span>')
+          : ('<button type="button" class="ds-pick-status" data-action="basket-cancel" data-testid="dropship-pull-basket" title="' +
+            <?= json_encode((string)__('点击移出货源列表'), JSON_UNESCAPED_UNICODE) ?> + '">' +
+            <?= json_encode((string)__('已入列表'), JSON_UNESCAPED_UNICODE) ?> + '</button>');
+      }
+      return;
+    }
+    var existing = tr.querySelector('.ds-pick-check');
+    if (!existing && checkTd) {
+      checkTd.innerHTML = '';
+      var input = document.createElement('input');
+      input.type = 'checkbox';
+      input.className = 'ds-pick-check';
+      input.setAttribute('data-spu', spu);
+      input.setAttribute('data-snapshot', snap);
+      checkTd.appendChild(input);
+      existing = input;
+    }
+    if (existing) {
+      existing.checked = false;
+      existing.disabled = false;
+      existing.setAttribute('data-snapshot', snap);
+    }
+    if (statusCell) {
+      statusCell.innerHTML = '<span class="w-text" data-tone="muted" data-size="sm">—</span>';
+    }
+  }
+
+  function applyStateMap(state) {
+    if (!state || typeof state !== 'object') return;
+    Object.keys(state).forEach(function (spu) {
+      markRowState(spu, state[spu]);
+    });
+    refreshPickCount();
+  }
+
+  function postBasket(url, snapshots) {
+    var form = document.getElementById('dropship-admit-form');
+    if (!form || !url) return Promise.resolve(null);
+    var body = new FormData();
+    body.append('provider_code', form.querySelector('[name="provider_code"]').value || '');
+    body.append('country_code', form.querySelector('[name="country_code"]').value || '');
+    body.append('category_id', form.querySelector('[name="category_id"]').value || '');
+    body.append('snapshots_json', JSON.stringify(snapshots || []));
+    appendCsrf(body);
+    return fetch(url, { method: 'POST', body: body, credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .catch(function () { return { success: false, message: 'network_error' }; });
+  }
+
+  function refreshPickCount() {
+    var n = root.querySelectorAll('.ds-pick-check:checked').length;
+    var label = root.querySelector('#pick-sel-count');
+    if (label) label.textContent = <?= json_encode((string)__('已选'), JSON_UNESCAPED_UNICODE) ?> + ' ' + n;
+    var floatBar = document.getElementById('dropship-pick-float');
+    if (floatBar) floatBar.hidden = n === 0;
+    var selBtn = document.getElementById('pick-float-select');
+    var cancelBtn = document.getElementById('pick-float-cancel');
+    var pub = document.getElementById('pick-open-publish');
+    // 已入列表不可勾选：悬浮「取消选择」仅清空当前勾选；移出列表点「已入列表」徽章
+    if (selBtn) selBtn.disabled = n === 0;
+    if (cancelBtn) cancelBtn.disabled = n === 0;
+    if (pub) pub.disabled = n === 0;
+  }
+
+  function refreshListedCount() {
+    var checks = root.querySelectorAll('.ds-listed-check:checked');
+    var n = checks.length;
+    var label = root.querySelector('[data-testid="listed-sel-count"]');
+    if (label) label.textContent = <?= json_encode((string)__('已选'), JSON_UNESCAPED_UNICODE) ?> + ' ' + n;
+    var pending = 0;
+    var providers = {};
+    checks.forEach(function (el) {
+      if ((el.getAttribute('data-sync') || '') === 'pending') {
+        pending++;
+        providers[el.getAttribute('data-provider') || ''] = true;
+      }
+    });
+    var btn = document.getElementById('listed-open-publish');
+    if (btn) btn.disabled = pending === 0;
+    var delBtn = document.getElementById('listed-open-delete');
+    if (delBtn) delBtn.disabled = n === 0;
+    var keys = Object.keys(providers).filter(Boolean);
+    var hidden = document.getElementById('listed-publish-provider');
+    if (hidden) hidden.value = keys.length === 1 ? keys[0] : '';
+  }
+
+  var pickLayout = root.querySelector('[data-testid="dropship-pick-layout"]');
+  var toggleFilters = document.getElementById('dropship-toggle-filters');
+  var keyRail = 'dropship.pick.railCollapsed';
+  var keyCats = 'dropship.pick.catsCollapsed';
+  var keyLegacy = 'dropship.pick.filtersCollapsed';
+  var labelCollapseAll = <?= json_encode((string)__('全部收起'), JSON_UNESCAPED_UNICODE) ?>;
+  var labelExpandAll = <?= json_encode((string)__('全部展开'), JSON_UNESCAPED_UNICODE) ?>;
+  var hasCatsPane = !!(pickLayout && pickLayout.getAttribute('data-browse') === '1');
+
+  function readFlag(key) {
+    try { return localStorage.getItem(key) === '1'; } catch (e) { return false; }
+  }
+  function writeFlag(key, on) {
+    try { localStorage.setItem(key, on ? '1' : '0'); } catch (e) {}
+  }
+  function applyPaneCollapsed(pane, collapsed) {
+    if (!pickLayout) return;
+    var attr = pane === 'rail' ? 'data-rail-collapsed' : 'data-cats-collapsed';
+    pickLayout.setAttribute(attr, collapsed ? '1' : '0');
+    writeFlag(pane === 'rail' ? keyRail : keyCats, collapsed);
+    var collapseBtn = root.querySelector('[data-pick-collapse="' + pane + '"]');
+    if (collapseBtn) collapseBtn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    var chip = root.querySelector('[data-pick-expand="' + pane + '"]');
+    if (chip) chip.hidden = !collapsed;
+    var railOn = pickLayout.getAttribute('data-rail-collapsed') === '1';
+    var catsOn = hasCatsPane ? pickLayout.getAttribute('data-cats-collapsed') === '1' : true;
+    var allOn = railOn && catsOn;
+    pickLayout.setAttribute('data-filters-collapsed', allOn ? '1' : '0');
+    if (toggleFilters) {
+      toggleFilters.setAttribute('aria-expanded', allOn ? 'false' : 'true');
+      toggleFilters.textContent = allOn ? labelExpandAll : labelCollapseAll;
+    }
+  }
+  function loadCollapsedState() {
+    if (!pickLayout) return;
+    var legacy = readFlag(keyLegacy);
+    var rail = readFlag(keyRail);
+    var cats = readFlag(keyCats);
+    if (legacy && !rail && !cats) {
+      rail = true;
+      cats = hasCatsPane;
+      writeFlag(keyRail, rail);
+      writeFlag(keyCats, cats);
+      try { localStorage.removeItem(keyLegacy); } catch (e) {}
+    }
+    applyPaneCollapsed('rail', rail);
+    if (hasCatsPane) applyPaneCollapsed('cats', cats);
+    else applyPaneCollapsed('cats', false);
+  }
+  if (pickLayout) {
+    loadCollapsedState();
+    root.querySelectorAll('[data-pick-collapse]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var pane = btn.getAttribute('data-pick-collapse');
+        var attr = pane === 'rail' ? 'data-rail-collapsed' : 'data-cats-collapsed';
+        var now = pickLayout.getAttribute(attr) === '1';
+        applyPaneCollapsed(pane, !now);
+      });
+    });
+    root.querySelectorAll('[data-pick-expand]').forEach(function (chip) {
+      chip.addEventListener('click', function () {
+        applyPaneCollapsed(chip.getAttribute('data-pick-expand'), false);
+      });
+    });
+    if (toggleFilters) {
+      toggleFilters.addEventListener('click', function () {
+        var railOn = pickLayout.getAttribute('data-rail-collapsed') === '1';
+        var catsOn = hasCatsPane ? pickLayout.getAttribute('data-cats-collapsed') === '1' : true;
+        var allOn = railOn && catsOn;
+        applyPaneCollapsed('rail', !allOn);
+        if (hasCatsPane) applyPaneCollapsed('cats', !allOn);
+      });
+    }
+  }
+
+  root.addEventListener('change', function (e) {
+    var t = e.target;
+    if (!t) return;
+    if (t.id === 'pick-check-all') {
+      root.querySelectorAll('.ds-pick-check').forEach(function (c) { c.checked = t.checked; });
+      refreshPickCount();
+      return;
+    }
+    if (t.classList.contains('ds-pick-check')) refreshPickCount();
+    if (t.classList.contains('ds-listed-check')) refreshListedCount();
+  });
+
+  // 点击整行即选中/取消勾选（已拉取 / 已入列表不可点）；已入列表点徽章移出
+  var admitForm = document.getElementById('dropship-admit-form');
+  var selectUrl = admitForm ? admitForm.getAttribute('data-basket-select-url') : '';
+  var cancelUrl = admitForm ? admitForm.getAttribute('data-basket-cancel-url') : '';
+
+  root.addEventListener('click', function (e) {
+    var t = e.target;
+    if (!t || !t.closest) return;
+    var basketBtn = t.closest('[data-action="basket-cancel"]');
+    if (basketBtn && root.contains(basketBtn)) {
+      e.preventDefault();
+      e.stopPropagation();
+      var basketTr = basketBtn.closest('tr');
+      if (!basketTr || basketTr.getAttribute('data-pull-basket') !== '1') return;
+      var snap = {};
+      try { snap = JSON.parse(basketTr.getAttribute('data-snapshot') || '{}'); } catch (err) { snap = {}; }
+      if (!cancelUrl) return;
+      basketBtn.disabled = true;
+      postBasket(cancelUrl, [snap]).then(function (res) {
+        toastMsg(!!(res && res.success), (res && res.message) || '');
+        if (res && res.state) applyStateMap(res.state);
+        else {
+          var spu = String((snap && snap.external_spu) || basketTr.getAttribute('data-spu') || '');
+          if (spu) markRowState(spu, { pulled: false, locked: false, in_basket: false, listing_id: 0 });
+          refreshPickCount();
+        }
+      }).catch(function () {
+        refreshPickCount();
+      }).finally(function () {
+        refreshPickCount();
+      });
+      return;
+    }
+    if (t.closest('a,button,input,label,textarea,select')) return;
+    var tr = t.closest('#dropship-browse-tbody tr, [data-testid="dropship-search-results"] tbody tr');
+    if (!tr || !root.contains(tr)) return;
+    if (tr.getAttribute('data-pull-locked') === '1') return;
+    if (tr.getAttribute('data-pull-basket') === '1') return;
+    var check = tr.querySelector('.ds-pick-check');
+    if (!check || check.disabled) return;
+    check.checked = !check.checked;
+    check.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+
+  var floatSelect = document.getElementById('pick-float-select');
+  var floatCancel = document.getElementById('pick-float-cancel');
+  if (floatSelect) {
+    floatSelect.addEventListener('click', function () {
+      var snaps = [];
+      root.querySelectorAll('.ds-pick-check:checked').forEach(function (el) {
+        var tr = el.closest('tr');
+        if (tr && tr.getAttribute('data-pull-basket') === '1') return;
+        if (tr && tr.getAttribute('data-pull-locked') === '1') return;
+        try { snaps.push(JSON.parse(el.getAttribute('data-snapshot') || '{}')); } catch (e) {}
+      });
+      if (!snaps.length) return;
+      floatSelect.disabled = true;
+      postBasket(selectUrl, snaps).then(function (res) {
+        toastMsg(!!(res && res.success), (res && res.message) || '');
+        if (res && res.state) applyStateMap(res.state);
+        else refreshPickCount();
+      }).catch(function () {
+        refreshPickCount();
+      }).finally(function () {
+        refreshPickCount();
+      });
+    });
+  }
+  if (floatCancel) {
+    floatCancel.addEventListener('click', function () {
+      // 仅清空当前勾选（已入列表无勾选，移出请点状态徽章）
+      root.querySelectorAll('.ds-pick-check:checked').forEach(function (el) { el.checked = false; });
+      var all = document.getElementById('pick-check-all');
+      if (all) all.checked = false;
+      refreshPickCount();
+    });
+  }
+  refreshPickCount();
+
+  function openModal(provider, snapshots, listingForm) {
+    if (modalProvider) modalProvider.value = provider || '';
+    if (modalSnaps) modalSnaps.value = JSON.stringify(snapshots || []);
+    if (listingForm) {
+      // listed form already has listing_ids; modal form for pick snapshots
+    }
+    if (modal) modal.hidden = false;
+  }
+
+  var pickOpen = document.getElementById('pick-open-publish');
+  if (pickOpen) {
+    pickOpen.addEventListener('click', function () {
+      openModal(<?= json_encode($providerCode, JSON_UNESCAPED_UNICODE) ?>, selectedPickSnapshots());
+    });
+  }
+  var listedOpen = document.getElementById('listed-open-publish');
+  if (listedOpen) {
+    listedOpen.addEventListener('click', function () {
+      var provider = (document.getElementById('listed-publish-provider') || {}).value || '';
+      if (!provider) {
+        alert(<?= json_encode((string)__('请只选择同一供应商的商品'), JSON_UNESCAPED_UNICODE) ?>);
+        return;
+      }
+      if (modalProvider) modalProvider.value = provider;
+      // Move checked listing_ids into modal form by cloning inputs
+      var modalForm = document.getElementById('dropship-modal-publish-form');
+      if (modalForm) {
+        modalForm.querySelectorAll('input[name="listing_ids[]"]').forEach(function (n) { n.remove(); });
+        root.querySelectorAll('.ds-listed-check:checked').forEach(function (c) {
+          if ((c.getAttribute('data-sync') || '') !== 'pending') return;
+          var i = document.createElement('input');
+          i.type = 'hidden';
+          i.name = 'listing_ids[]';
+          i.value = c.value;
+          modalForm.appendChild(i);
+        });
+        if (modalSnaps) modalSnaps.value = '[]';
+      }
+      if (modal) modal.hidden = false;
+    });
+  }
+
+  var deleteModal = document.getElementById('dropship-delete-modal');
+  var deleteForm = document.getElementById('dropship-delete-form');
+  var deleteIdsBox = document.getElementById('dropship-delete-ids');
+  var deleteCsrf = document.getElementById('dropship-delete-csrf');
+
+  function syncDeleteCsrf() {
+    var token = '';
+    if (window.site && window.site.csrf_token) token = String(window.site.csrf_token);
+    if (!token) {
+      var csrf = document.querySelector('input[name="csrf_token"], input[name="form_key"]');
+      if (csrf && csrf.value) token = String(csrf.value);
+    }
+    if (deleteCsrf) deleteCsrf.value = token;
+  }
+
+  function openDeleteModal(ids) {
+    var list = (ids || []).filter(function (id) { return parseInt(id, 10) > 0; });
+    if (!list.length || !deleteModal || !deleteForm || !deleteIdsBox) return;
+    deleteIdsBox.innerHTML = '';
+    list.forEach(function (id) {
+      var i = document.createElement('input');
+      i.type = 'hidden';
+      i.name = 'listing_ids[]';
+      i.value = String(id);
+      deleteIdsBox.appendChild(i);
+    });
+    var keep = document.querySelector('[data-testid="dropship-delete-local-keep"]');
+    var disable = document.querySelector('[data-testid="dropship-delete-local-disable"]');
+    var archive = document.querySelector('[data-testid="dropship-delete-local-archive"]');
+    if (disable) disable.checked = true;
+    if (keep) keep.checked = false;
+    if (archive) archive.checked = false;
+    syncDeleteCsrf();
+    deleteModal.hidden = false;
+  }
+
+  function closeDeleteModal() {
+    if (deleteModal) deleteModal.hidden = true;
+    if (deleteIdsBox) deleteIdsBox.innerHTML = '';
+  }
+
+  root.addEventListener('click', function (e) {
+    var rowBtn = e.target && e.target.closest ? e.target.closest('[data-listed-delete]') : null;
+    if (rowBtn && root.contains(rowBtn)) {
+      e.preventDefault();
+      e.stopPropagation();
+      var id = parseInt(rowBtn.getAttribute('data-listed-delete') || '0', 10);
+      if (id > 0) openDeleteModal([id]);
+      return;
+    }
+  });
+
+  var listedDelete = document.getElementById('listed-open-delete');
+  if (listedDelete) {
+    listedDelete.addEventListener('click', function () {
+      var ids = [];
+      root.querySelectorAll('.ds-listed-check:checked').forEach(function (c) {
+        var id = parseInt(c.value || '0', 10);
+        if (id > 0) ids.push(id);
+      });
+      if (!ids.length) return;
+      openDeleteModal(ids);
+    });
+  }
+
+  var deleteCancel = document.getElementById('dropship-delete-cancel');
+  if (deleteCancel) deleteCancel.addEventListener('click', function (e) {
+    e.preventDefault();
+    closeDeleteModal();
+  });
+  if (deleteForm) {
+    deleteForm.addEventListener('submit', function () {
+      syncDeleteCsrf();
+    });
+  }
+  if (deleteModal) {
+    deleteModal.addEventListener('click', function (e) {
+      if (e.target === deleteModal) closeDeleteModal();
+    });
+    var panel = deleteModal.querySelector('.ds-modal__panel');
+    if (panel) {
+      panel.addEventListener('click', function (e) { e.stopPropagation(); });
+    }
+  }
+
+  if (modalClose) modalClose.addEventListener('click', function () { if (modal) modal.hidden = true; });
+  if (modal) {
+    modal.addEventListener('click', function (e) {
+      if (e.target === modal) modal.hidden = true;
+    });
+  }
+
+  // Switching provider via rail uses full navigation — selection clears naturally.
+
+  (function initAsyncBrowse() {
+    var panel = document.getElementById('dropship-browse-panel');
+    if (!panel || panel.getAttribute('data-browse-async') !== '1') return;
+    var loadingEl = panel.querySelector('[data-browse-loading]');
+    var errorEl = panel.querySelector('[data-browse-error]');
+    var metaEl = panel.querySelector('[data-browse-meta]');
+    var metaText = panel.querySelector('[data-browse-meta-text]');
+    var pagerEl = panel.querySelector('[data-browse-pager]');
+    var emptyEl = panel.querySelector('[data-browse-empty]');
+    var emptyTitle = panel.querySelector('[data-browse-empty-title]');
+    var emptyHint = panel.querySelector('[data-browse-empty-hint]');
+    var resultsEl = panel.querySelector('[data-browse-results]');
+    var tbody = document.getElementById('dropship-browse-tbody');
+    var catsList = document.getElementById('dropship-cats-list');
+    var i18n = {
+      page: <?= json_encode((string)__('第 %{1} 页 · 本页 %{2} 条'), JSON_UNESCAPED_UNICODE) ?>,
+      country: <?= json_encode((string)__('国家'), JSON_UNESCAPED_UNICODE) ?>,
+      prev: <?= json_encode((string)__('上一页'), JSON_UNESCAPED_UNICODE) ?>,
+      next: <?= json_encode((string)__('下一页'), JSON_UNESCAPED_UNICODE) ?>,
+      locked: <?= json_encode((string)__('已拉取'), JSON_UNESCAPED_UNICODE) ?>,
+      basket: <?= json_encode((string)__('已入列表'), JSON_UNESCAPED_UNICODE) ?>,
+      basketCancelTip: <?= json_encode((string)__('点击移出货源列表'), JSON_UNESCAPED_UNICODE) ?>,
+      untitled: <?= json_encode((string)__('未命名商品'), JSON_UNESCAPED_UNICODE) ?>,
+      noCats: <?= json_encode((string)__('该供应商未提供分类，可直接浏览'), JSON_UNESCAPED_UNICODE) ?>,
+      emptyNo: <?= json_encode((string)__('暂无匹配商品'), JSON_UNESCAPED_UNICODE) ?>,
+      emptyErr: <?= json_encode((string)__('选品失败'), JSON_UNESCAPED_UNICODE) ?>,
+      emptyIdle: <?= json_encode((string)__('正在准备选品列表'), JSON_UNESCAPED_UNICODE) ?>,
+      hintNo: <?= json_encode((string)__('可换国家、换分类，或填写可选关键词；并到「货源平台」确认凭证已连接。'), JSON_UNESCAPED_UNICODE) ?>,
+      hintErr: <?= json_encode((string)__('请查看上方错误，或到「货源平台」测试连接。'), JSON_UNESCAPED_UNICODE) ?>,
+      hintIdle: <?= json_encode((string)__('按供应商能力浏览远程目录；分类与关键词均为可选。'), JSON_UNESCAPED_UNICODE) ?>,
+      loadFail: <?= json_encode((string)__('货源加载失败，请稍后重试。'), JSON_UNESCAPED_UNICODE) ?>
+    };
+
+    function esc(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+    function money(minor, currency) {
+      var cur = String(currency || 'USD').trim().toUpperCase() || 'USD';
+      return cur + ' ' + (Number(minor || 0) / 100).toFixed(2);
+    }
+    function thumbOf(item) {
+      var media = Array.isArray(item && item.media) ? item.media : [];
+      for (var i = 0; i < media.length; i++) {
+        var u = media[i] && media[i].url ? String(media[i].url) : '';
+        if (u.indexOf('http://') === 0 || u.indexOf('https://') === 0) return u;
+      }
+      return '';
+    }
+    function fmtPage(page, n) {
+      return String(i18n.page).replace('%{1}', String(page)).replace('%{2}', String(n));
+    }
+    function indexHref(extra) {
+      var base = panel.getAttribute('data-browse-index') || '';
+      var u = new URL(base, location.origin);
+      u.searchParams.set('tab', 'pick');
+      u.searchParams.set('provider_code', panel.getAttribute('data-provider') || '');
+      var q = panel.getAttribute('data-q') || '';
+      var country = panel.getAttribute('data-country') || '';
+      var cat = panel.getAttribute('data-category') || '';
+      if (q) u.searchParams.set('q', q); else u.searchParams.delete('q');
+      if (country) u.searchParams.set('country_code', country);
+      if (cat) u.searchParams.set('category_id', cat); else u.searchParams.delete('category_id');
+      Object.keys(extra || {}).forEach(function (k) {
+        var v = extra[k];
+        if (v === '' || v == null) u.searchParams.delete(k);
+        else u.searchParams.set(k, String(v));
+      });
+      return u.pathname + u.search;
+    }
+    function renderCategories(cats) {
+      if (!catsList) return;
+      var loading = catsList.querySelector('[data-testid="dropship-cats-loading"]');
+      if (loading) loading.remove();
+      catsList.querySelectorAll('a[data-cat-id], .w-empty, [data-testid="dropship-cats-empty"]').forEach(function (n) { n.remove(); });
+      var all = catsList.querySelector('[data-cat-all]');
+      var current = panel.getAttribute('data-category') || '';
+      if (all) all.setAttribute('aria-current', current === '' ? 'true' : 'false');
+      if (!Array.isArray(cats) || cats.length === 0) {
+        var empty = document.createElement('div');
+        empty.className = 'w-empty';
+        empty.style.minHeight = '8rem';
+        empty.style.padding = 'var(--weline-space-3)';
+        empty.setAttribute('data-testid', 'dropship-cats-empty');
+        empty.innerHTML = '<div class="w-text" data-size="sm" data-tone="muted">' + esc(i18n.noCats) + '</div>';
+        catsList.appendChild(empty);
+        return;
+      }
+      var tree = cats.some(function (c) { return String((c && c.parent_id) || '') !== ''; });
+      cats.forEach(function (cat) {
+        if (!cat) return;
+        var cid = String(cat.id || '');
+        var cname = String(cat.name || cat.path || cid);
+        var level = parseInt(cat.level || (tree ? 1 : 1), 10) || 1;
+        var a = document.createElement('a');
+        a.href = indexHref({ category_id: cid, page: '1' });
+        a.setAttribute('data-cat-id', cid);
+        a.setAttribute('data-level', String(level));
+        a.setAttribute('aria-current', cid !== '' && cid === current ? 'true' : 'false');
+        a.textContent = cname;
+        catsList.appendChild(a);
+      });
+      var chip = root.querySelector('[data-testid="dropship-expand-cats-chip"]');
+      if (chip && current) {
+        var hit = cats.find(function (c) { return String((c && c.id) || '') === current; });
+        var label = hit ? String(hit.name || hit.path || current) : current;
+        chip.textContent = label + ' · ' + <?= json_encode((string)__('展开'), JSON_UNESCAPED_UNICODE) ?>;
+      }
+    }
+    function renderRows(items) {
+      if (!tbody) return;
+      tbody.innerHTML = '';
+      (items || []).forEach(function (item) {
+        if (!item) return;
+        var spu = String(item.external_spu || '');
+        var title = String(item.title || '').trim() || spu || i18n.untitled;
+        var locked = !!item.pull_locked;
+        var inBasket = !!item.pull_in_basket && !locked;
+        var snap = esc(JSON.stringify(item));
+        var img = thumbOf(item);
+        var path = String(item.category_path || '');
+        var tr = document.createElement('tr');
+        tr.setAttribute('data-spu', spu);
+        tr.setAttribute('data-snapshot', JSON.stringify(item));
+        tr.setAttribute('data-pull-locked', locked ? '1' : '0');
+        tr.setAttribute('data-pull-basket', inBasket ? '1' : '0');
+        var checkHtml = (locked || inBasket)
+          ? '<span class="w-text" data-tone="muted" data-size="sm">—</span>'
+          : ('<input type="checkbox" class="ds-pick-check" data-spu="' + esc(spu) + '" data-snapshot="' + snap + '">');
+        var thumbHtml = img
+          ? ('<span class="ds-pick-thumb-box"><img class="ds-pick-thumb" src="' + esc(img) + '" alt="" loading="lazy" width="56" height="56" data-testid="dropship-pick-thumb"></span>')
+          : '<span class="ds-pick-thumb-ph" data-testid="dropship-pick-thumb-ph" aria-hidden="true">—</span>';
+        var statusHtml = locked
+          ? ('<span class="ds-pick-status" data-tone="locked" data-testid="dropship-pull-locked">' + esc(i18n.locked) + '</span>')
+          : (inBasket
+            ? ('<button type="button" class="ds-pick-status" data-action="basket-cancel" data-testid="dropship-pull-basket" title="' + esc(i18n.basketCancelTip || '') + '">' + esc(i18n.basket) + '</button>')
+            : '<span class="w-text" data-tone="muted" data-size="sm">—</span>');
+        tr.innerHTML =
+          '<td>' + checkHtml + '</td>' +
+          '<td class="ds-pick-thumb-cell">' + thumbHtml + '</td>' +
+          '<td><div class="ds-pick-title-cell"><div><div class="w-text" data-weight="strong">' + esc(title) + '</div>' +
+          '<div class="w-text" data-tone="muted" data-size="sm">' + esc(path || '—') + '</div></div></div></td>' +
+          '<td><code>' + esc(spu) + '</code></td>' +
+          '<td>' + esc(money(item.origin_price_minor, item.origin_currency)) + '</td>' +
+          '<td>' + esc(String(parseInt(item.qty || 0, 10) || 0)) + '</td>' +
+          '<td class="ds-pick-status-cell">' + statusHtml + '</td>';
+        tbody.appendChild(tr);
+      });
+      refreshPickCount();
+    }
+    function showState(payload) {
+      var reason = String((payload && payload.empty_reason) || 'idle');
+      var items = (payload && payload.items) || [];
+      var err = String((payload && (payload.error || payload.message)) || '');
+      if (errorEl) {
+        if (err) { errorEl.hidden = false; errorEl.textContent = err; }
+        else { errorEl.hidden = true; errorEl.textContent = ''; }
+      }
+      if (items.length) {
+        if (emptyEl) emptyEl.hidden = true;
+        if (resultsEl) resultsEl.hidden = false;
+        if (metaEl) metaEl.hidden = false;
+        var page = parseInt((payload && payload.page) || panel.getAttribute('data-page') || '1', 10) || 1;
+        var hasMore = !!(payload && payload.has_more);
+        var countryFilter = panel.getAttribute('data-country-filter') === '1';
+        var country = panel.getAttribute('data-country') || '';
+        if (metaText) {
+          metaText.textContent = fmtPage(page, items.length) + (countryFilter && country ? (' · ' + i18n.country + ' ' + country) : '');
+        }
+        if (pagerEl) {
+          pagerEl.innerHTML = '';
+          if (page > 1) {
+            var prev = document.createElement('a');
+            prev.className = 'w-button';
+            prev.setAttribute('data-tone', 'neutral');
+            prev.setAttribute('data-variant', 'outline');
+            prev.setAttribute('data-size', 'sm');
+            prev.href = indexHref({ page: String(page - 1) });
+            prev.textContent = i18n.prev;
+            pagerEl.appendChild(prev);
+          }
+          if (hasMore) {
+            var next = document.createElement('a');
+            next.className = 'w-button';
+            next.setAttribute('data-tone', 'neutral');
+            next.setAttribute('data-variant', 'outline');
+            next.setAttribute('data-size', 'sm');
+            next.href = indexHref({ page: String(page + 1) });
+            next.textContent = i18n.next;
+            pagerEl.appendChild(next);
+          }
+        }
+        renderRows(items);
+      } else {
+        if (resultsEl) resultsEl.hidden = true;
+        if (metaEl) metaEl.hidden = true;
+        if (emptyEl) {
+          emptyEl.hidden = false;
+          emptyEl.setAttribute('data-empty-reason', reason);
+          if (emptyTitle) emptyTitle.textContent = reason === 'error' ? i18n.emptyErr : (reason === 'no_results' ? i18n.emptyNo : i18n.emptyIdle);
+          if (emptyHint) emptyHint.textContent = reason === 'error' ? i18n.hintErr : (reason === 'no_results' ? i18n.hintNo : i18n.hintIdle);
+        }
+        if (tbody) tbody.innerHTML = '';
+        refreshPickCount();
+      }
+      // 先渲染完再关 loading，避免 e2e/竞态在空表时误判完成
+      if (loadingEl) loadingEl.hidden = true;
+    }
+    var url = panel.getAttribute('data-browse-url') || '';
+    if (!url) {
+      showState({ success: false, empty_reason: 'error', error: i18n.loadFail, items: [] });
+      return;
+    }
+    if (loadingEl) loadingEl.hidden = false;
+    var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var abortTimer = ctrl ? setTimeout(function () { try { ctrl.abort(); } catch (e) {} }, 90000) : null;
+    fetch(url, {
+      method: 'GET',
+      credentials: 'same-origin',
+      headers: { 'Accept': 'application/json' },
+      signal: ctrl ? ctrl.signal : undefined
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (payload) {
+        if (abortTimer) clearTimeout(abortTimer);
+        if (panel.getAttribute('data-include-categories') === '1') {
+          renderCategories((payload && payload.categories) || []);
+        }
+        showState(payload || {});
+      })
+      .catch(function () {
+        if (abortTimer) clearTimeout(abortTimer);
+        if (panel.getAttribute('data-include-categories') === '1') renderCategories([]);
+        showState({ success: false, empty_reason: 'error', error: i18n.loadFail, items: [] });
+      });
+  })();
+
+  refreshPickCount();
+  refreshListedCount();
+
+  // 已刊手风琴：内联强制加载（绕过静态 JS 长缓存 / data-weline-load 竞态）
+  (function ensureListedAccordion() {
+    var panel = document.querySelector('[data-dropship-listed-accordion="1"]');
+    if (!panel) return;
+    function boot() {
+      if (panel.getAttribute('data-listed-accordion-ready') === '1') return true;
+      if (window.WelineDropshipListedAccordion && typeof window.WelineDropshipListedAccordion.boot === 'function') {
+        window.WelineDropshipListedAccordion.boot();
+        return panel.getAttribute('data-listed-accordion-ready') === '1';
+      }
+      return false;
+    }
+    if (boot()) return;
+    var src = '/Weline/Dropship/view/statics/backend/listed-accordion.js?v=1.0.64';
+    var existing = document.querySelector('script[data-dropship-listed-accordion-src]');
+    if (existing) {
+      existing.addEventListener('load', function () { boot(); });
+      setTimeout(boot, 50);
+      return;
+    }
+    var s = document.createElement('script');
+    s.src = src;
+    s.async = true;
+    s.setAttribute('data-dropship-listed-accordion-src', '1');
+    s.onload = function () { boot(); };
+    s.onerror = function () {
+      console.warn('[Dropship] listed-accordion.js load failed', src);
+    };
+    document.head.appendChild(s);
+    // 若 data-weline-load 稍后成功，ready 标记会阻止重复绑定
+    setTimeout(boot, 1200);
+  })();
+})();
+</script>

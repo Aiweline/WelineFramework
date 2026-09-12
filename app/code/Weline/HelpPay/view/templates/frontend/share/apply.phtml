@@ -1,0 +1,36 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+$escape = static fn ($v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
+$share = is_array($this->getData('share')) ? $this->getData('share') : [];
+$checkout = (string) ($this->getData('checkout_url') ?? '/checkout');
+$help = (string) ($this->getData('help_url') ?? '/faq/selection-share');
+$lines = $share['selection_snapshot']['lines'] ?? [];
+?>
+<section class="w-helppay-selection w-stack"
+         style="--w-gap:var(--weline-space-5, var(--space-5));"
+         data-testid="selection-share-apply"
+         data-weline-load="helpPayShare"
+         weline-code="helppay.selection.apply">
+    <header class="w-stack" style="--w-gap:var(--weline-space-2, var(--space-2));">
+        <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0;"><lang>纯分享</lang></p>
+        <h1 class="w-text" data-weight="strong" style="--w-m:0;"><?= $escape(__('朋友帮你选好了规格')) ?></h1>
+        <p class="w-text" data-tone="muted" style="--w-m:0;">
+            <a href="<?= $escape($help) ?>" data-testid="selection-share-help">
+                <?= $escape(__('了解分享给朋友')) ?>
+            </a>
+        </p>
+    </header>
+    <div class="w-helppay-panel">
+        <ul class="w-stack" style="--w-gap:var(--weline-space-2, var(--space-2)); margin:0; padding-inline-start:1.25rem;" data-testid="selection-share-lines">
+            <?php if (is_array($lines)): foreach ($lines as $line): ?>
+                <li class="w-text"><?= $escape(($line['sku'] ?? $line['title'] ?? 'item') . ' × ' . ($line['qty'] ?? 1)) ?></li>
+            <?php endforeach; endif; ?>
+        </ul>
+        <p class="w-text" data-size="sm" data-tone="muted">
+            <?= $escape(__('将加入你自己的购物车并进入你的结账，订单归你。')) ?>
+        </p>
+    </div>
+    <a class="w-button w-button--primary"
+       data-testid="selection-share-checkout"
+       href="<?= $escape($checkout) ?>"><?= $escape(__('加入我的车并结账')) ?></a>
+</section>

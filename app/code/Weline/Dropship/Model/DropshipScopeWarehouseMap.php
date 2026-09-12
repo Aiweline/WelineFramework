@@ -10,7 +10,7 @@ use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
 
 #[Table(comment: 'Dropship scope warehouse map')]
-#[Index(name: 'uk_dropship_scope_wh', columns: ['provider_code', 'website_id', 'store_id'], type: 'UNIQUE')]
+#[Index(name: 'uk_dropship_scope_wh', columns: ['provider_code', 'website_id', 'store_id', 'remote_country_code'], type: 'UNIQUE')]
 class DropshipScopeWarehouseMap extends Model
 {
     public const schema_table = 'weline_dropship_scope_warehouse_map';
@@ -32,10 +32,10 @@ class DropshipScopeWarehouseMap extends Model
     public const schema_fields_CHANNEL = 'channel';
 
     #[Col('varchar', 8, nullable: false, comment: 'Remote country code')]
-    public const schema_fields_CJ_COUNTRY_CODE = 'cj_country_code';
+    public const schema_fields_REMOTE_COUNTRY_CODE = 'remote_country_code';
 
     #[Col('varchar', 64, nullable: false, default: '', comment: 'Remote storage id')]
-    public const schema_fields_CJ_STORAGE_ID = 'cj_storage_id';
+    public const schema_fields_REMOTE_STORAGE_ID = 'remote_storage_id';
 
     #[Col('int', 11, nullable: false, comment: 'Local warehouse id')]
     public const schema_fields_LOCAL_WAREHOUSE_ID = 'local_warehouse_id';

@@ -11,7 +11,7 @@ declare(strict_types=1);
 return [
     'cart-storefront-slots' => [
         'name' => '购物车页模块槽位',
-        'description' => '购物车模块页模板槽目录：摘要优惠券、订单留言；供 Marketing/Order required default_injections 发现，禁止当作布局内容部件放置。',
+        'description' => '购物车模块页模板槽目录：摘要优惠券、订单留言、批发信用；供 Marketing/Order/B2B required default_injections 发现，禁止当作布局内容部件放置。',
         'type' => 'container',
         'code' => 'cart-storefront-slots',
         'area' => 'frontend',
@@ -36,6 +36,25 @@ return [
                     'cart-summary-note',
                     'order-notice',
                     'order',
+                ],
+                'max' => 1,
+            ],
+            'cart-summary-credit' => [
+                'name' => '购物车批发信用',
+                'accepts' => [
+                    'cart-summary-credit',
+                    'b2b-checkout-credit',
+                    'b2b-deposit-note',
+                    'b2b',
+                ],
+                'max' => 1,
+            ],
+            'cart-summary-help-pay' => [
+                'name' => '购物车帮我付',
+                'accepts' => [
+                    'cart-summary-help-pay',
+                    'help-pay',
+                    'helppay',
                 ],
                 'max' => 1,
             ],

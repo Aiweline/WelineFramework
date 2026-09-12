@@ -17,22 +17,33 @@ class CjApiClient
     public const KEY_EMAIL = 'dropship/channel/cj/email';
     public const KEY_API_KEY = 'dropship/channel/cj/api_key';
     public const KEY_TOKEN = 'dropship/channel/cj/access_token';
+    public const KEY_ORDER_SANDBOX = 'dropship/channel/cj/order_sandbox';
     public const BASE = 'https://developers.cjdropshipping.com/api2.0/v1';
+
+    /**
+     * Whether createOrderV3 should send isSandbox=1 (CJ official sandbox order).
+     */
+    public function isOrderSandboxEnabled(): bool
+    {
+        $raw = strtolower($this->cfg(self::KEY_ORDER_SANDBOX));
+
+        return in_array($raw, ['1', 'true', 'yes', 'on'], true);
+    }
 
     public function probe(): array
     {
         $email = $this->cfg(self::KEY_EMAIL);
         $key = $this->cfg(self::KEY_API_KEY);
         if ($email === '' || $key === '') {
-            return ['ok' => false, 'message' => 'cj_credentials_missing'];
+            return ['ok' => false, 'message' => 'credentials_missing'];
         }
         try {
             $token = $this->ensureToken($email, $key);
             if ($token === '') {
-                return ['ok' => false, 'message' => 'cj_token_empty'];
+                return ['ok' => false, 'message' => 'token_empty'];
             }
 
-            return ['ok' => true, 'message' => 'cj_probe_ok'];
+            return ['ok' => true, 'message' => 'probe_ok'];
         } catch (\Throwable $e) {
             return ['ok' => false, 'message' => $e->getMessage()];
         }
@@ -65,6 +76,15 @@ class CjApiClient
      * @param array<string, mixed>|null $body
      * @return array<string, mixed>
      */
+    public function patch(string $path, ?array $body = null): array
+    {
+        return $this->request('PATCH', self::BASE . $path, $body);
+    }
+
+    /**
+     * @param array<string, mixed>|null $body
+     * @return array<string, mixed>
+     */
     private function request(string $method, string $url, ?array $body): array
     {
         $email = $this->cfg(self::KEY_EMAIL);
@@ -79,7 +99,7 @@ class CjApiClient
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_CUSTOMREQUEST => $method,
             CURLOPT_HTTPHEADER => $headers,
-            CURLOPT_TIMEOUT => 30,
+            CURLOPT_TIMEOUT => 60,
         ]);
         if ($body !== null) {
             curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($body, JSON_UNESCAPED_UNICODE));

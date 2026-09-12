@@ -137,6 +137,74 @@ final class WarehouseAuthorizationAndDefaultResolverTest extends TestCase
         self::assertSame(1, $auth->grantCount());
     }
 
+    public function testSeedDefaultAuthorizationCanRebindButNotDelete(): void
+    {
+        $auth = WarehouseAuthorizationService::forTesting();
+        $auth->registerWarehouse($this->warehouse(30, 0, Warehouse::MODE_NORMAL, true));
+        $auth->registerWarehouse($this->warehouse(31, 0, Warehouse::MODE_NORMAL, true));
+
+        $seed = $auth->bind([
+            'website_id' => 0,
+            'store_id' => 0,
+            'store_mode' => Warehouse::MODE_NORMAL,
+            'warehouse_id' => 30,
+            'is_default' => true,
+            'is_seed' => true,
+        ]);
+        self::assertSame(1, (int) ($seed['is_seed'] ?? 0));
+        self::assertSame(30, (int) $seed['warehouse_id']);
+
+        $rebound = $auth->bind([
+            'website_id' => 0,
+            'store_id' => 0,
+            'store_mode' => Warehouse::MODE_NORMAL,
+            'warehouse_id' => 31,
+            'is_default' => true,
+        ]);
+        self::assertSame(31, (int) $rebound['warehouse_id']);
+        self::assertSame(1, (int) ($rebound['is_seed'] ?? 0));
+        self::assertTrue($auth->isAuthorized(0, 0, 31));
+        self::assertFalse($auth->isAuthorized(0, 0, 30));
+        self::assertSame(1, $auth->grantCount());
+
+        try {
+            $auth->deleteAuthorization(0, (int) $rebound['authorization_id']);
+            self::fail('seed authorization must not delete');
+        } catch (InventoryConflictException $exception) {
+            self::assertSame(WarehouseAuthorizationService::ERROR_SEED_LOCKED, $exception->errorCode());
+        }
+        self::assertSame(1, $auth->grantCount());
+    }
+
+    public function testEnsureDefaultSiteAuthorizationIsIdempotentInMemory(): void
+    {
+        $auth = WarehouseAuthorizationService::forTesting();
+        $auth->registerWarehouse($this->warehouse(40, 0, Warehouse::MODE_NORMAL, true));
+
+        $first = $auth->ensureDefaultSiteAuthorization();
+        $second = $auth->ensureDefaultSiteAuthorization();
+
+        self::assertSame(40, (int) $first['warehouse_id']);
+        self::assertSame(40, (int) $second['warehouse_id']);
+        self::assertSame(1, (int) ($first['is_seed'] ?? 0));
+        self::assertSame(1, $auth->grantCount());
+    }
+
+    public function testNonSeedAuthorizationCanBeDeleted(): void
+    {
+        $auth = WarehouseAuthorizationService::forTesting();
+        $auth->registerWarehouse($this->warehouse(50, 0, Warehouse::MODE_NORMAL));
+        $row = $auth->bind([
+            'website_id' => 0,
+            'store_id' => 2,
+            'store_mode' => Warehouse::MODE_NORMAL,
+            'warehouse_id' => 50,
+        ]);
+        $auth->deleteAuthorization(0, (int) $row['authorization_id']);
+        self::assertSame(0, $auth->grantCount());
+        self::assertFalse($auth->isAuthorized(0, 2, 50));
+    }
+
     public function testDefaultLogicalResolverIsDeterministic(): void
     {
         $resolver = DefaultLogicalWarehouseResolver::forTesting();

@@ -68,6 +68,6 @@ final class Invoice extends BackendController
             $this->getMessageManager()->addError((string)__('开票操作失败，请稍后重试。'));
         }
 
-        return $this->redirect('weline_order/backend/invoice/index');
+        return $this->redirect('order/backend/invoice/index');
     }
 }

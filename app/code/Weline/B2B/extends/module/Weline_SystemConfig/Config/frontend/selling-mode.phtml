@@ -41,4 +41,14 @@
         default="0"
         scope="global"
     />
+    <w:config:field
+        key="b2b_credit_min_cash_deposit_percent"
+        label="定金最低现金占比（%）"
+        description="使用批发信用抵扣定金时，现金定金不得低于「定金×该占比」。例：20 表示至少付 20% 现金，信用最多抵 80%，避免定金被额度抵成 0。填 0 表示允许全额抵扣。"
+        type="number"
+        value-type="int"
+        default="20"
+        scope="global"
+        validation="min:0|max:100"
+    />
 </w:config:group>

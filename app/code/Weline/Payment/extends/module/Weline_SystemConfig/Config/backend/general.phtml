@@ -56,6 +56,15 @@
         value-type="bool"
         default="1"
         scope="global,website,store" />
+
+    <w:config:field
+        key="payment/general/express_checkout_enabled"
+        label="启用快捷智能支付"
+        description="壳级总开关。关闭后结账页与商品页均不展示快捷支付（PayPal Express 等），与主题部件「展示快捷支付」独立；各支付方式另有方式级开关。"
+        type="switch"
+        value-type="bool"
+        default="1"
+        scope="global,website,store" />
 </w:config:group>
 
 <w:config:group code="payment_management" label="支付管理入口" description="支付复杂对象保留在 Weline_Payment 业务表中，通过适配入口进入配置中心。" sort="20">
