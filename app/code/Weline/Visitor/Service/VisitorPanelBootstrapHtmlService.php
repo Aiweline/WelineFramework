@@ -16,7 +16,7 @@ use Weline\Framework\Runtime\DeveloperAccessPolicy;
  */
 class VisitorPanelBootstrapHtmlService
 {
-    private const PANEL_SCRIPT_VERSION = '20260910-lifecycle-assistant5';
+    private const PANEL_SCRIPT_VERSION = '20260911-event-sandbox-monitor9';
 
     public function shouldInject(): bool
     {
@@ -46,8 +46,8 @@ class VisitorPanelBootstrapHtmlService
             return '';
         }
 
-        $assistantScriptUrl = $this->moduleStaticUrl('Weline/Visitor', 'js/lifecycle-event-assistant.js')
-            . '?v=' . self::PANEL_SCRIPT_VERSION . '-wla';
+        $assistantScriptUrl = $this->moduleStaticUrl('Weline/Visitor', 'js/event-sandbox-monitor.js')
+            . '?v=' . self::PANEL_SCRIPT_VERSION . '-wesm';
         $assistantScriptUrlJson = \json_encode(
             $assistantScriptUrl,
             \JSON_UNESCAPED_SLASHES | \JSON_HEX_TAG | \JSON_HEX_APOS | \JSON_HEX_QUOT | \JSON_HEX_AMP
@@ -157,23 +157,25 @@ class VisitorPanelBootstrapHtmlService
 </script>
 <script data-no-extract="true"
         data-load-order="last"
-        data-wla-bootstrap="1">
+        data-wesm-bootstrap="1">
 (function () {
   var SRC = {$assistantScriptUrlJson};
   function need() {
     try {
+      if (sessionStorage.getItem('weline_event_sandbox_monitor_v1') === '1') return true;
       if (sessionStorage.getItem('weline_lifecycle_assistant_v1') === '1') return true;
+      if (/(^|;\\s*)weline_event_sandbox_monitor=1(;|$)/.test(String(document.cookie || ''))) return true;
       return /(^|;\\s*)weline_lifecycle_assistant=1(;|$)/.test(String(document.cookie || ''));
     } catch (e) { return false; }
   }
   function load() {
-    if (window.WelineLifecycleAssistant) return;
-    if (document.querySelector('script[data-weline-lifecycle-assistant-bundle="true"],script[data-wla-src]')) return;
+    if (window.WelineEventSandboxMonitor) return;
+    if (document.querySelector('script[data-weline-event-sandbox-monitor-bundle="true"],script[data-wesm-src]')) return;
     var s = document.createElement('script');
     s.src = SRC;
     s.async = false;
-    s.setAttribute('data-wla-src', '1');
-    s.setAttribute('data-weline-lifecycle-assistant-bundle', 'true');
+    s.setAttribute('data-wesm-src', '1');
+    s.setAttribute('data-weline-event-sandbox-monitor-bundle', 'true');
     (document.body || document.documentElement).appendChild(s);
   }
   if (need()) load();

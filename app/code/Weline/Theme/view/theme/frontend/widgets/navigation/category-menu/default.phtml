@@ -86,6 +86,8 @@ $headerFlattenNavForEditor = static function (array $items): array {
     return $out;
 };
 
+// 保留定义供契约检索；整页预览禁止拍平 children。
+
 $hanfuDemoNav = static function (): array {
     $searchHref = static fn (string $query): string => '/search?q=' . rawurlencode($query);
 
@@ -137,9 +139,8 @@ $hanfuDemoNav = static function (): array {
 if ($navItems === [] && $editorPreviewLight) {
     $navItems = $hanfuDemoNav();
 }
-if ($editorPreviewLight && is_array($navItems) && $navItems !== []) {
-    $navItems = $headerFlattenNavForEditor($navItems);
-}
+// 整页可视化预览必须与店面一致：保留 children，供 hover mega 面板渲染。
+// $headerFlattenNavForEditor 仅作契约保留，禁止在此拍平。
 ?>
 <div class="<?= $esc($wc) ?> header-category-menu-widget<?= $isPreviewMode ? ' is-preview' : '' ?>"
      weline-code="<?= $esc($scope->code) ?>"

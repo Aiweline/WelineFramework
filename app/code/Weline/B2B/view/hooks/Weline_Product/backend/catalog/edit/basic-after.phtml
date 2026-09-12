@@ -1,0 +1,133 @@
+<?php
+/**
+ * Product edit · basic panel: mirror wholesale switch + deep link to offers / CC.
+ *
+ * @hook-priority 100
+ * @hook-sort-order 10
+ */
+
+use Weline\B2B\Service\SellingModePolicy;
+
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+$flagCode = SellingModePolicy::PRODUCT_FLAG_TOB;
+$enabled = true;
+$productId = 0;
+$websiteId = 0;
+$sku = '';
+$groupId = '';
+
+try {
+    $productId = (int)($this->getData('productEntityId')
+        ?? $this->getData('product_id')
+        ?? 0);
+} catch (\Throwable) {
+}
+try {
+    $websiteId = (int)($this->getData('website_id') ?? 0);
+} catch (\Throwable) {
+}
+
+$attributeRows = [];
+try {
+    $snapshot = $this->getData('snapshot');
+    if (is_array($snapshot) && is_array($snapshot['attributes'] ?? null)) {
+        $attributeRows = $snapshot['attributes'];
+    }
+} catch (\Throwable) {
+}
+if ($attributeRows === []) {
+    try {
+        $attributeRows = (array)($this->getData('attributes') ?? []);
+    } catch (\Throwable) {
+        $attributeRows = [];
+    }
+}
+foreach ($attributeRows as $row) {
+    if (!is_array($row)) {
+        continue;
+    }
+    if ((string)($row['attribute_code'] ?? '') !== $flagCode) {
+        continue;
+    }
+    if ((int)($row['store_id'] ?? 0) !== 0 || (string)($row['locale'] ?? '') !== '') {
+        continue;
+    }
+    $raw = $row['value'] ?? true;
+    if (is_bool($raw)) {
+        $enabled = $raw;
+    } else {
+        $normalized = strtolower(trim((string)$raw));
+        $enabled = !in_array($normalized, ['0', 'false', 'no', 'off', 'disabled'], true);
+    }
+    break;
+}
+
+try {
+    $offers = $this->getData('offers');
+    if (is_array($offers)) {
+        foreach ($offers as $offer) {
+            if (!is_array($offer)) {
+                continue;
+            }
+            $sku = trim((string)($offer['sku'] ?? ''));
+            if ($sku !== '') {
+                break;
+            }
+        }
+    }
+} catch (\Throwable) {
+}
+
+$controlUrl = '';
+try {
+    // 须绝对 b2b/backend 路径：相对 * 前缀在 Product Hook 上下文会变成 weline_product → 404
+    $controlUrl = (string)$this->request->getUrlBuilder()->getBackendUrl(
+        'b2b/backend/control-center/price-lists',
+        ['sku' => $sku, 'website_id' => $websiteId, 'group_id' => $groupId]
+    );
+} catch (\Throwable) {
+    $controlUrl = '';
+}
+?>
+<section class="w-stack b2b-product-wholesale-admin"
+         data-gap="sm"
+         data-testid="b2b-product-wholesale-admin"
+         data-b2b-product-wholesale="1"
+         style="--w-span:12;grid-column:1/-1;">
+    <h3 class="w-text" data-size="sm" style="--w-m:0;"><lang>批发经营</lang></h3>
+    <label class="w-product-create__basics-check" for="product-edit-selling-mode-tob-mirror">
+        <input type="checkbox"
+               id="product-edit-selling-mode-tob-mirror"
+               name="selling_mode_tob_mirror"
+               value="1"
+               data-testid="b2b-product-wholesale-enabled-mirror"
+               data-b2b-wholesale-mirror="1"
+               data-b2b-wholesale-flag="<?= $escape($flagCode) ?>"
+               data-attribute-code="<?= $escape($flagCode) ?>"
+               data-value-type="boolean"
+               <?= $enabled ? 'checked' : '' ?>>
+        <span><lang>启用批发</lang></span>
+    </label>
+    <p class="w-field__help" style="--w-m:0;">
+        <lang>与「规格与价格」中的启用批发同步。阶梯价请在规格与价格面板配置。</lang>
+    </p>
+    <p class="w-text" data-size="sm" style="--w-m:0;">
+        <a class="w-button" data-tone="neutral" data-variant="outline" data-size="sm"
+           href="#b2b-product-offers-wholesale"
+           data-product-panel-focus="offers"
+           data-testid="b2b-product-wholesale-jump-offers">
+            <lang>前往规格与价格配置阶梯</lang>
+        </a>
+        <?php if ($controlUrl !== ''): ?>
+            <a class="w-button" data-tone="neutral" data-variant="ghost" data-size="sm"
+               href="<?= $escape($controlUrl) ?>"
+               data-testid="b2b-product-wholesale-manage">
+                <lang>管理本商品批发价目</lang>
+            </a>
+        <?php endif; ?>
+        <?php if ($sku !== ''): ?>
+            <span class="w-text" data-tone="muted" data-size="sm">SKU <?= $escape($sku) ?></span>
+        <?php endif; ?>
+    </p>
+</section>

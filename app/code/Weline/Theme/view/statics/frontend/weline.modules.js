@@ -15,7 +15,7 @@ Object.assign(window.WelineModulesConfig.modules, {
     },
     miniCartExtras: {
         paths: [
-            "Weline_Theme::js/widgets/mini-cart-extras-tabs.js?v=20260909-cart-summary-tabs1"
+            "Weline_Theme::js/widgets/mini-cart-extras-tabs.js?v=20260911-credit-tob-only1"
         ],
         globalVar: "WelineMiniCartExtras",
         description: "迷你购物车 extras 页签交互"

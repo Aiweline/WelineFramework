@@ -1,0 +1,325 @@
+<?php
+/**
+ * Product edit · offers panel: canonical wholesale enable + SKU qty tiers.
+ *
+ * @hook-priority 100
+ * @hook-sort-order 10
+ */
+
+use Weline\B2B\Service\B2BService;
+use Weline\B2B\Service\ProductSkuQtyTierAdminService;
+use Weline\B2B\Service\SellingModePolicy;
+use Weline\Framework\Manager\ObjectManager;
+
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+$flagCode = SellingModePolicy::PRODUCT_FLAG_TOB;
+$enabled = true;
+$productId = 0;
+$websiteId = 0;
+$canEditBusiness = true;
+$persistedSkus = [];
+
+try {
+    $productId = (int)($this->getData('productEntityId') ?? $this->getData('product_id') ?? 0);
+} catch (\Throwable) {
+}
+try {
+    $websiteId = (int)($this->getData('website_id') ?? 0);
+} catch (\Throwable) {
+}
+try {
+    $canEditBusiness = (bool)($this->getData('canEditBusiness') ?? true);
+} catch (\Throwable) {
+}
+
+$attributeRows = [];
+try {
+    $snapshot = $this->getData('snapshot');
+    if (is_array($snapshot) && is_array($snapshot['attributes'] ?? null)) {
+        $attributeRows = $snapshot['attributes'];
+    }
+} catch (\Throwable) {
+}
+if ($attributeRows === []) {
+    try {
+        $attributeRows = (array)($this->getData('attributes') ?? []);
+    } catch (\Throwable) {
+        $attributeRows = [];
+    }
+}
+foreach ($attributeRows as $row) {
+    if (!is_array($row)) {
+        continue;
+    }
+    if ((string)($row['attribute_code'] ?? '') !== $flagCode) {
+        continue;
+    }
+    if ((int)($row['store_id'] ?? 0) !== 0 || (string)($row['locale'] ?? '') !== '') {
+        continue;
+    }
+    $raw = $row['value'] ?? true;
+    if (is_bool($raw)) {
+        $enabled = $raw;
+    } else {
+        $normalized = strtolower(trim((string)$raw));
+        $enabled = !in_array($normalized, ['0', 'false', 'no', 'off', 'disabled'], true);
+    }
+    break;
+}
+
+try {
+    $offers = $this->getData('offers');
+    if (is_array($offers)) {
+        foreach ($offers as $offer) {
+            if (!is_array($offer)) {
+                continue;
+            }
+            $sku = trim((string)($offer['sku'] ?? ''));
+            if ($sku !== '') {
+                $persistedSkus[$sku] = true;
+            }
+        }
+    }
+} catch (\Throwable) {
+}
+$persistedSkuList = array_keys($persistedSkus);
+
+$editorState = [
+    'group_id' => '',
+    'list_id' => '',
+    'version' => 0,
+    'active' => false,
+    'sku_tiers' => [],
+    'product_skus' => $persistedSkuList,
+    'group_options' => [],
+];
+try {
+    $b2b = ObjectManager::getInstance(B2BService::class);
+    if ($b2b instanceof B2BService) {
+        $requestedGroup = '';
+        try {
+            $requestedGroup = trim((string)($this->request->getGet('b2b_group_id', '') ?? ''));
+        } catch (\Throwable) {
+            $requestedGroup = '';
+        }
+        $tierAdmin = new ProductSkuQtyTierAdminService($b2b);
+        $editorState = $tierAdmin->loadEditorState(
+            $websiteId,
+            $productId,
+            $requestedGroup !== '' ? $requestedGroup : null,
+        );
+        if ($editorState['product_skus'] === [] && $persistedSkuList !== []) {
+            $editorState['product_skus'] = $persistedSkuList;
+        }
+    }
+} catch (\Throwable) {
+}
+
+$groupOptions = is_array($editorState['group_options'] ?? null) ? $editorState['group_options'] : [];
+$groupId = (string)($editorState['group_id'] ?? '');
+$listId = (string)($editorState['list_id'] ?? '');
+$listVersion = (int)($editorState['version'] ?? 0);
+$skuTiers = is_array($editorState['sku_tiers'] ?? null) ? $editorState['sku_tiers'] : [];
+$productSkus = is_array($editorState['product_skus'] ?? null) ? $editorState['product_skus'] : $persistedSkuList;
+
+$hasAnyTier = false;
+foreach ($productSkus as $sku) {
+    if (!empty($skuTiers[$sku]) && is_array($skuTiers[$sku])) {
+        $hasAnyTier = true;
+        break;
+    }
+}
+
+$statusKey = 'off';
+$statusText = (string)__('未启用批发');
+if ($enabled && !$hasAnyTier) {
+    $statusKey = 'enabled-no-tiers';
+    $statusText = (string)__('已启用批发，但尚未配置阶梯价：前台仍按零售展示');
+} elseif ($enabled && $hasAnyTier) {
+    $statusKey = 'ready';
+    $statusText = (string)__('已启用批发且已有生效阶梯价');
+}
+
+$saveUrl = '';
+$controlUrl = '';
+$firstSku = $productSkus[0] ?? '';
+try {
+    // 须绝对 b2b/backend 路径：相对 * 前缀在 Product Hook 上下文会变成 weline_product → 404
+    $saveUrl = (string)$this->request->getUrlBuilder()->getBackendUrl(
+        'b2b/backend/control-center/save-product-sku-tiers'
+    );
+} catch (\Throwable) {
+    $saveUrl = '';
+}
+try {
+    $controlUrl = (string)$this->request->getUrlBuilder()->getBackendUrl(
+        'b2b/backend/control-center/price-lists',
+        ['sku' => $firstSku, 'website_id' => $websiteId, 'group_id' => $groupId]
+    );
+} catch (\Throwable) {
+    $controlUrl = '';
+}
+
+$tiersDisabled = !$canEditBusiness || $productId <= 0 || $productSkus === [];
+$readonlyAttr = $canEditBusiness ? '' : 'disabled';
+?>
+<section class="w-card b2b-product-offers-wholesale"
+         id="b2b-product-offers-wholesale"
+         data-testid="b2b-product-offers-wholesale"
+         data-b2b-product-offers-wholesale="1"
+         data-b2b-save-url="<?= $escape($saveUrl) ?>"
+         data-b2b-website-id="<?= $escape((string)$websiteId) ?>"
+         data-b2b-product-id="<?= $escape((string)$productId) ?>"
+         data-b2b-list-id="<?= $escape($listId) ?>"
+         data-b2b-list-version="<?= $escape((string)$listVersion) ?>"
+         data-b2b-group-id="<?= $escape($groupId) ?>"
+         data-b2b-status="<?= $escape($statusKey) ?>"
+         style="--w-mt:var(--weline-space-4);">
+    <div class="w-card__header w-cluster" data-align="center" data-justify="between" data-wrap="true">
+        <div>
+            <h2><lang>批发经营与阶梯价</lang></h2>
+            <p><lang>启用批发后需配置数量阶梯价，前台才会展示批发能力。本页只维护网站级价目（不含渠道覆盖）。</lang></p>
+        </div>
+        <span class="w-status" data-status="<?= $escape($statusKey === 'ready' ? 'published' : ($statusKey === 'enabled-no-tiers' ? 'draft' : 'disabled')) ?>"
+              data-testid="b2b-product-wholesale-status">
+            <?= $escape($statusText) ?>
+        </span>
+    </div>
+    <div class="w-card__body w-stack" data-gap="md">
+        <label class="w-product-create__basics-check" for="product-edit-selling-mode-tob-canonical">
+            <input type="checkbox"
+                   id="product-edit-selling-mode-tob-canonical"
+                   name="selling_mode_tob"
+                   value="1"
+                   data-testid="b2b-product-wholesale-enabled"
+                   data-b2b-wholesale-canonical="1"
+                   data-b2b-wholesale-flag="<?= $escape($flagCode) ?>"
+                   data-attribute-code="<?= $escape($flagCode) ?>"
+                   data-value-type="boolean"
+                   <?= $enabled ? 'checked' : '' ?>
+                   <?= $readonlyAttr ?>>
+            <span><lang>启用批发</lang></span>
+        </label>
+        <p class="w-field__help" style="--w-m:0;">
+            <lang>关闭后前台不展示批发购买方式与阶梯价说明。开启且本站价目已配置阶梯后，前台才显示批发。</lang>
+        </p>
+
+        <?php if (!$canEditBusiness): ?>
+            <div class="w-alert" data-tone="warning" role="status">
+                <lang>当前站不可编辑经营数据，阶梯价只读。</lang>
+            </div>
+        <?php elseif ($productSkus === []): ?>
+            <div class="w-alert" data-tone="info" role="status" data-testid="b2b-product-tiers-need-sku">
+                <lang>请先保存商品与 SKU 后再配置阶梯价。</lang>
+            </div>
+        <?php else: ?>
+            <div class="w-grid" style="--w-gap:var(--weline-space-3);">
+                <div style="--w-span-md:6;">
+                    <label class="w-field__label" for="b2b-product-tier-group"><lang>客户组</lang></label>
+                    <select class="w-select"
+                            id="b2b-product-tier-group"
+                            name="b2b_group_id"
+                            data-testid="b2b-product-tier-group"
+                            <?= $tiersDisabled ? 'disabled' : '' ?>>
+                        <?php foreach ($groupOptions as $opt): ?>
+                            <?php
+                            $value = (string)($opt['value'] ?? '');
+                            $label = (string)($opt['label'] ?? $value);
+                            ?>
+                            <option value="<?= $escape($value) ?>" <?= $value === $groupId ? 'selected' : '' ?>>
+                                <?= $escape($label) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <p class="w-field__help"><lang>一次编辑一个客户组；其它组请到 ControlCenter 价目表维护。</lang></p>
+                </div>
+                <div style="--w-span-md:6;" class="w-cluster" data-align="end" data-justify="end">
+                    <?php if ($controlUrl !== ''): ?>
+                        <a class="w-button" data-tone="neutral" data-variant="outline" data-size="sm"
+                           href="<?= $escape($controlUrl) ?>"
+                           data-testid="b2b-product-wholesale-manage-cc">
+                            <lang>在价目表管理其它组 / 渠道档</lang>
+                        </a>
+                    <?php endif; ?>
+                </div>
+            </div>
+
+            <div class="w-table-wrap" data-testid="b2b-product-tier-table-wrap">
+                <table class="w-table" data-testid="b2b-product-tier-table">
+                    <thead>
+                    <tr>
+                        <th>SKU</th>
+                        <th><lang>起订量</lang></th>
+                        <th><lang>批发价（分）</lang></th>
+                        <th><lang>操作</lang></th>
+                    </tr>
+                    </thead>
+                    <tbody data-b2b-tier-rows>
+                    <?php foreach ($productSkus as $sku): ?>
+                        <?php
+                        $rows = is_array($skuTiers[$sku] ?? null) ? $skuTiers[$sku] : [];
+                        if ($rows === []) {
+                            $rows = [1 => ''];
+                        }
+                        $rowIndex = 0;
+                        foreach ($rows as $minQty => $amount):
+                            $rowIndex++;
+                            ?>
+                            <tr data-b2b-tier-row data-sku="<?= $escape($sku) ?>">
+                                <td>
+                                    <?php if ($rowIndex === 1): ?>
+                                        <strong><?= $escape($sku) ?></strong>
+                                    <?php endif; ?>
+                                    <input type="hidden" data-b2b-tier-sku value="<?= $escape($sku) ?>">
+                                </td>
+                                <td>
+                                    <input class="w-input" type="number" min="1" step="1"
+                                           data-b2b-tier-min-qty
+                                           value="<?= $escape((string)(int)$minQty) ?>"
+                                           <?= $tiersDisabled ? 'disabled' : '' ?>>
+                                </td>
+                                <td>
+                                    <input class="w-input" type="number" min="0" step="1"
+                                           data-b2b-tier-amount
+                                           value="<?= $amount === '' ? '' : $escape((string)(int)$amount) ?>"
+                                           placeholder="@lang(分)"
+                                           <?= $tiersDisabled ? 'disabled' : '' ?>>
+                                </td>
+                                <td>
+                                    <button class="w-button" type="button" data-tone="neutral" data-variant="ghost" data-size="sm"
+                                            data-b2b-tier-remove
+                                            <?= $tiersDisabled ? 'disabled' : '' ?>>
+                                        <lang>删除</lang>
+                                    </button>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                        <tr data-b2b-tier-sku-actions data-sku="<?= $escape($sku) ?>">
+                            <td colspan="4">
+                                <button class="w-button" type="button" data-tone="neutral" data-variant="outline" data-size="sm"
+                                        data-b2b-tier-add="<?= $escape($sku) ?>"
+                                        <?= $tiersDisabled ? 'disabled' : '' ?>>
+                                    <lang>添加档位</lang>
+                                </button>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="w-cluster" data-align="center" data-justify="between" data-wrap="true">
+                <p class="w-text" data-tone="muted" data-size="sm" data-testid="b2b-product-tiers-dirty-hint" hidden>
+                    <lang>阶梯价有未保存更改；保存商品时会一并提交，也可单独保存阶梯。</lang>
+                </p>
+                <button class="w-button" type="button" data-tone="primary"
+                        data-testid="b2b-product-tiers-save"
+                        data-b2b-tiers-save
+                        <?= $tiersDisabled || $saveUrl === '' ? 'disabled' : '' ?>>
+                    <lang>保存阶梯价</lang>
+                </button>
+            </div>
+        <?php endif; ?>
+    </div>
+</section>

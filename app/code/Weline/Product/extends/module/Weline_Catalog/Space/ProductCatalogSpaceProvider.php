@@ -131,10 +131,36 @@ final class ProductCatalogSpaceProvider implements CatalogSpaceProviderInterface
 
     /**
      * @param array<string, mixed> $scope
+     * @param array<string, mixed> $options
      */
-    public function delete(array $scope, int $nodeId): void
+    public function delete(array $scope, int $nodeId, array $options = []): void
     {
-        $this->categoryAdmin->delete(max(0, (int)($scope['website_id'] ?? 0)), $nodeId);
+        $selected = is_array($options['product_ids'] ?? null) ? $options['product_ids'] : [];
+        $this->categoryAdmin->delete(
+            max(0, (int)($scope['website_id'] ?? 0)),
+            $nodeId,
+            $selected,
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return list<array{product_id:int,name:string,sku:string,exclusive:bool}>
+     */
+    public function listProductsForDelete(array $scope, int $nodeId): array
+    {
+        $result = $this->categoryAdmin->listProductsForDelete(
+            max(0, (int)($scope['website_id'] ?? 0)),
+            $nodeId,
+        );
+        if (!empty($result['truncated'])) {
+            throw new \InvalidArgumentException((string)__(
+                '该分类子树挂载产品超过 %{1} 个，请先缩小子树再删除。当前总数：%{2}',
+                [ProductCategoryAdminService::DELETE_PRODUCT_LIST_LIMIT, (int)($result['total'] ?? 0)],
+            ));
+        }
+
+        return is_array($result['products'] ?? null) ? $result['products'] : [];
     }
 
     /**

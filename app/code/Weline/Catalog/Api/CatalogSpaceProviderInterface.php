@@ -44,8 +44,18 @@ interface CatalogSpaceProviderInterface
 
     /**
      * @param array<string, mixed> $scope
+     * @param array<string, mixed> $options delete options (e.g. product_ids for product space)
      */
-    public function delete(array $scope, int $nodeId): void;
+    public function delete(array $scope, int $nodeId, array $options = []): void;
+
+    /**
+     * Products mounted under the category subtree that may be checked on delete.
+     * Non-product spaces return [].
+     *
+     * @param array<string, mixed> $scope
+     * @return list<array{product_id:int,name:string,sku:string,exclusive:bool}>
+     */
+    public function listProductsForDelete(array $scope, int $nodeId): array;
 
     /**
      * @param array<string, mixed> $scope

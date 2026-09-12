@@ -21,4 +21,19 @@ return [
         'description' => (string)__('在商品目录列表批量操作栏注入扩展按钮，例如分类模块的批量调整分类。'),
         'doc' => 'backend/catalog/products/bulk-actions.md',
     ],
+    'Weline_Product::backend::catalog::edit::basic-after' => [
+        'name' => (string)__('商品编辑 · 基础信息扩展'),
+        'description' => (string)__('在后台商品编辑「基础信息」面板末尾注入扩展区块，例如 B2B 产品级批发开关与批发数据管理入口。'),
+        'doc' => 'backend/catalog/edit/basic-after.md',
+    ],
+    'Weline_Product::backend::catalog::create::basic-after' => [
+        'name' => (string)__('商品新增 · 基础信息扩展'),
+        'description' => (string)__('在后台商品创建向导「基础信息」步骤注入扩展区块，例如 B2B 产品级批发开关。'),
+        'doc' => 'backend/catalog/create/basic-after.md',
+    ],
+    'Weline_Product::backend::catalog::edit::offers-after' => [
+        'name' => (string)__('商品编辑 · 规格与价格扩展'),
+        'description' => (string)__('在后台商品编辑「规格与价格」面板末尾注入扩展区块，例如 B2B 启用批发与 SKU 数量阶梯价编辑。'),
+        'doc' => 'backend/catalog/edit/offers-after.md',
+    ],
 ];

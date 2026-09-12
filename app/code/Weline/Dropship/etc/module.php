@@ -2,16 +2,18 @@
 
 return [
     'name' => 'Weline_Dropship',
-    'version' => '1.0.10',
+    'version' => '1.0.69',
     'requires' => [
         'Weline_SystemConfig',
         'Weline_Product',
         'Weline_Order',
         'Weline_Inventory',
+        'Weline_Currency',
         'Weline_Queue',
         'Weline_Cron',
         'Weline_Backend',
         'Weline_Websites',
+        'Weline_Theme',
     ],
     'optional' => [
         'Weline_CjDropshipping',

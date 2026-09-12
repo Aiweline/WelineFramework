@@ -107,6 +107,9 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         self::assertStringContainsString('@hook-sort-order 11', $nav);
         self::assertStringContainsString('B2B 等级、申请状态与联系信息', $nav);
         self::assertStringContainsString("AccountSidebarContentGate::accepts('b2b-identity')", $content);
+        self::assertStringContainsString('data-section="<?= htmlspecialchars($chatSection', $nav);
+        self::assertStringContainsString('data-testid="account-nav-b2b-order-chat"', $nav);
+        self::assertStringContainsString('data-testid="account-b2b-order-chat-section"', $content);
         self::assertStringContainsString('AccountSidebarProjectionProviderInterface', $content);
         self::assertStringContainsString('AccountMembershipTierPresenter', $content);
 
@@ -116,6 +119,12 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         self::assertStringContainsString('WholesaleFaqVipLadderPresenter', $faqContent);
         self::assertStringContainsString('data-testid="b2b-faq-vip-ladder"', $faqContent);
         self::assertStringContainsString('data-testid="b2b-faq-vip-tier"', $faqContent);
+        self::assertStringContainsString('data-testid="b2b-faq-credit-rules"', $faqContent);
+        self::assertStringContainsString('data-testid="b2b-faq-deposit-rules"', $faqContent);
+        self::assertStringContainsString('data-testid="b2b-faq-min-cash"', $faqContent);
+        self::assertStringContainsString('min_cash_deposit_percent', $faqContent);
+        self::assertStringContainsString('只抵「本期定金」', $faqContent);
+        self::assertStringContainsString('最低现金占比', $faqContent);
         self::assertStringContainsString('<lang>消费门槛</lang>', $faqContent);
         self::assertStringContainsString('<lang>达标折扣额度</lang>', $faqContent);
         self::assertStringContainsString('use Weline\\Customer\\Model\\Customer', $content);
@@ -178,7 +187,7 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         self::assertStringContainsString('data-b2b-credit-input', $depositContent);
         self::assertStringContainsString('data-w-component="tooltip"', $depositContent);
         self::assertStringContainsString('/faq/b2b-wholesale', $depositContent);
-        self::assertStringContainsString('b2b-storefront.css)?v=20260910-credit-reason5', $depositContent);
+        self::assertStringContainsString('b2b-storefront.css)&v=20260911-credit-contrast1', $depositContent);
         self::assertStringNotContainsString('<lang>批发订单</lang>', $depositContent);
         self::assertStringNotContainsString('data-b2b-deposit-note', $depositContent);
 
@@ -219,6 +228,7 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         self::assertStringContainsString('data-mini-cart-type-host', $miniCartContent);
         self::assertStringContainsString('data-mini-cart-type-caption', $miniCartContent);
         self::assertStringContainsString('data-mini-cart-title', $miniCartContent);
+        self::assertStringContainsString('b2b-checkout-credit', $miniCartContent);
         self::assertStringNotContainsString('data-mini-cart-type-seg', $miniCartContent);
         self::assertStringNotContainsString('data-mini-cart-type-option="tob"', $miniCartContent);
         self::assertStringNotContainsString('批发车', $miniCartContent);
@@ -279,6 +289,9 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         self::assertStringContainsString('.b2b-mini-cart-type-seg', $cssContent);
         self::assertStringContainsString('--amz-drawer-cta-bg', $cssContent);
         self::assertStringContainsString('.b2b-hang-payment', $cssContent);
+        self::assertStringContainsString('禁止走 tertiary muted', $cssContent);
+        self::assertStringContainsString('.w-b2b-checkout-credit__fx', $cssContent);
+        self::assertStringContainsString('--weline-theme-text', $cssContent);
         self::assertStringContainsString('.w-dialog.w-product-purchase-panel', $cssContent);
         self::assertStringContainsString('min-height: 0', $cssContent);
         self::assertStringContainsString('product-native-detail--quick-add', $cssContent);
@@ -312,6 +325,14 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         self::assertStringContainsString('hangPurposeFromLocation', $checkoutTob);
         self::assertStringContainsString("hang.startPayment", $checkoutTob);
         self::assertStringContainsString("hang.paymentContext", $checkoutTob);
+        self::assertStringContainsString('renderHangPaymentMethods', $checkoutTob);
+        self::assertStringContainsString('data-b2b-hang-methods', $checkoutTob);
+        self::assertStringContainsString("hang_' + hang.purpose + '_' + hang.orderUuid", $checkoutTob);
+        self::assertStringContainsString('hangRedirectUrl', $checkoutTob);
+        self::assertStringContainsString('请选择支付方式', $checkoutTob);
+        self::assertStringContainsString('暂无可用支付方式', $checkoutTob);
+        self::assertStringNotContainsString(": 'fake_card'", $checkoutTob);
+        self::assertStringNotContainsString('Date.now()', $checkoutTob);
         self::assertStringContainsString('redirect_url=', $checkoutTob);
         self::assertStringContainsString('hangLoginUrl', $checkoutTob);
         self::assertStringContainsString('suppressRetailEmptyChrome', $checkoutTob);
@@ -319,15 +340,63 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         self::assertStringContainsString('syncCheckoutCouponAvailability', $checkoutTob);
         self::assertStringContainsString('is-tob-unavailable', $checkoutTob);
         self::assertStringContainsString('批发不可用', $checkoutTob);
+        // 批发信用页签：仅 tob 展示；零售完全隐藏（禁止常显灰化）。
+        self::assertStringContainsString('仅批发结账显示', $checkoutTob);
+        self::assertStringContainsString('syncCreditExtrasTabVisibility', $checkoutTob);
+        self::assertStringContainsString('creditSlot.hidden = type !== \'tob\'', $checkoutTob);
+        self::assertStringContainsString('applyCartTypeAll', $checkoutTob);
+        self::assertStringContainsString('weshop:mini-cart:open', $checkoutTob);
+        self::assertStringContainsString('weline-cart-shell__credit-slot', $checkoutTob);
+        self::assertStringNotContainsString('常显；零售灰化', $checkoutTob);
         self::assertStringContainsString('MutationObserver', $checkoutTob);
+        // Observer must only sync coupon unavailability — never re-enter applyCartType/ensureCreditQuote.
+        self::assertStringContainsString('syncCheckoutCouponAvailability(root, \'tob\')', $checkoutTob);
+        self::assertStringContainsString('opts.ensureQuote === true', $checkoutTob);
+        self::assertStringContainsString('Keep any settled quote (including quote_failed)', $checkoutTob);
+        self::assertStringContainsString('lastRequestedDepositMinor', $checkoutTob);
+        self::assertStringContainsString('resolveCheckoutCurrency', $checkoutTob);
+        self::assertStringContainsString('currencyChanged', $checkoutTob);
+        self::assertStringContainsString('data-b2b-credit-currency', $checkoutTob);
+        self::assertStringContainsString('buildCreditFxSummary', $checkoutTob);
+        self::assertStringContainsString('data-b2b-credit-fx', $checkoutTob);
+        self::assertStringContainsString('formatInput', $checkoutTob);
+        self::assertStringContainsString('勿再整段回写 hint_short', $checkoutTob);
+        self::assertStringContainsString('Do not fetch from syncCreditUi', $checkoutTob);
         self::assertStringNotContainsString('couponSlot.hidden = true', $checkoutTob);
         self::assertStringContainsString('syncFromFrozen', $checkoutTob);
+        self::assertStringContainsString('refreshCreditQuote', $checkoutTob);
+        self::assertStringContainsString('ensureCreditQuote', $checkoutTob);
+        self::assertStringContainsString("credit.quote", $checkoutTob);
+        // 购物车/迷你车：按商品小计估算本期应付（=挂单定金基数）；取摘要最大小计，禁止误取顶栏迷你车小额。
+        self::assertStringContainsString('data-cart-goods-subtotal', $checkoutTob);
+        self::assertStringContainsString('readGoodsSubtotalMajor', $checkoutTob);
+        self::assertStringContainsString('pickLargestMoneyMajor', $checkoutTob);
+        self::assertStringContainsString('[data-weline-cart] [data-cart-goods-subtotal]', $checkoutTob);
+        self::assertStringContainsString('暂无法估算本期定金', $checkoutTob);
+        self::assertStringNotContainsString('当前订单无定金，无法用批发信用抵扣', $checkoutTob);
+        self::assertStringContainsString('本期定金', $checkoutTob);
+        self::assertStringContainsString('商品小计', $checkoutTob);
+        self::assertStringContainsString('× 30%', $checkoutTob);
+
+        $checkoutPage = self::bp('app/code/Weline/Checkout/view/frontend/checkout/index.phtml');
+        self::assertFileExists($checkoutPage);
+        $checkoutPageContent = (string)file_get_contents($checkoutPage);
+        self::assertStringContainsString('refreshCreditQuote', $checkoutPageContent);
+        self::assertStringContainsString('ensureCreditQuote', $checkoutPageContent);
+        self::assertStringContainsString('estimateDepositMinor', $checkoutPageContent);
+        self::assertStringContainsString('data-checkout-credit-row', $checkoutPageContent);
+        self::assertStringContainsString('data-checkout-deposit-row', $checkoutPageContent);
+        self::assertStringContainsString('weline:b2b-credit-changed', $checkoutPageContent);
+        self::assertStringContainsString('本次应付定金', $checkoutPageContent);
+        self::assertStringContainsString('keepChecked', $checkoutTob);
         self::assertStringContainsString('[data-weline-checkout], [data-checkout], .weline-checkout', $checkoutTob);
         self::assertStringNotContainsString("[data-checkout], .weline-checkout, form", $checkoutTob);
         self::assertStringContainsString('额度不够', $checkoutTob);
         self::assertStringNotContainsString('当前不可用批发信用', $checkoutTob);
         self::assertStringContainsString('readApplyMinor', $checkoutTob);
         self::assertStringContainsString('cashDepositMinor', $checkoutTob);
+        self::assertStringContainsString('weline:b2b-credit-changed', $checkoutTob);
+        self::assertStringContainsString('notifyCreditChanged', $checkoutTob);
         self::assertStringContainsString('data-b2b-credit', $checkoutTob);
 
         $b2bQuery = self::bp('app/code/Weline/B2B/extends/module/Weline_Framework/Query/B2BQueryProvider.php');
@@ -335,6 +404,9 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         $b2bQueryContent = (string)file_get_contents($b2bQuery);
         self::assertStringContainsString("'hang.startPayment'", $b2bQueryContent);
         self::assertStringContainsString("'hang.paymentContext'", $b2bQueryContent);
+        self::assertStringContainsString("'credit.quote'", $b2bQueryContent);
+        self::assertStringContainsString('function creditQuote', $b2bQueryContent);
+        self::assertStringContainsString('B2BCheckoutCreditQuote', $b2bQueryContent);
         self::assertStringContainsString('Weline\\Customer\\Api\\Auth\\CustomerAccountFacadeInterface', $b2bQueryContent);
         self::assertStringContainsString('Weline\\Framework\\Runtime\\RuntimeProviderResolver', $b2bQueryContent);
         self::assertStringContainsString('createFrontendSession', $b2bQueryContent);
@@ -361,6 +433,13 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         $hangControllerContent = (string)file_get_contents($hangController);
         self::assertStringContainsString('CurrentWebsiteStorefrontUrlProviderInterface', $hangControllerContent);
         self::assertStringContainsString('storefront_base_url', $hangControllerContent);
+
+        $adminService = self::bp('app/code/Weline/B2B/Service/B2BAdminService.php');
+        self::assertFileExists($adminService);
+        $adminServiceContent = (string)file_get_contents($adminService);
+        self::assertStringContainsString('function assignGroupMember', $adminServiceContent);
+        self::assertStringContainsString('grantCreditAfterAssign', $adminServiceContent);
+        self::assertStringContainsString('grantToTarget', $adminServiceContent);
 
         $checkoutDescriptor = self::bp('app/code/Weline/Checkout/extends/module/Weline_Framework/Query/CheckoutQueryProvider.php');
         self::assertFileExists($checkoutDescriptor);

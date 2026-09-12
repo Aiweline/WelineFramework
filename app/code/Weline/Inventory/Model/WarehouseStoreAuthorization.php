@@ -47,6 +47,9 @@ class WarehouseStoreAuthorization extends Model
     #[Col('tinyint', 1, nullable: false, default: 0, comment: 'Verified Warehouse writer enabled')]
     public const schema_fields_WRITER_ENABLED = 'writer_enabled';
 
+    #[Col('tinyint', 1, nullable: false, default: 0, comment: 'System seed authorization (immutable delete)')]
+    public const schema_fields_IS_SEED = 'is_seed';
+
     #[Col('int', 11, nullable: false, default: 0, comment: 'Authorization version')]
     public const schema_fields_AUTHORIZATION_VERSION = 'authorization_version';
 
@@ -73,6 +76,10 @@ class WarehouseStoreAuthorization extends Model
         $this->setData(
             self::schema_fields_WRITER_ENABLED,
             (int) $this->getData(self::schema_fields_WRITER_ENABLED) === 1 ? 1 : 0,
+        );
+        $this->setData(
+            self::schema_fields_IS_SEED,
+            (int) $this->getData(self::schema_fields_IS_SEED) === 1 ? 1 : 0,
         );
         $this->setData(
             self::schema_fields_AUTHORIZATION_VERSION,

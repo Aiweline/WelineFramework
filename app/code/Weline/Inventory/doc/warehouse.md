@@ -1,13 +1,32 @@
 # Warehouse / Pool / Quota / 仓维履约（P3A-001/002 + MIG）
 
+## 后台选择标签
+
+- Taglib：`<w:inventory:warehouse:select id name website-id? />` → `theme:search-select`
+- JSON：`weline_inventory/backend/warehouse-search/search?q=&website_id=&limit=`
+- 服务：`WarehouseSelectSearchService`（enabled 仓，按 code/name/id 过滤）
+
+## 仓库树（国家→省→仓）
+
+- 模型字段：`parent_id`、`node_kind`（`country|province|warehouse`）、`country_code`、`region_code`、`is_seed`
+- 服务：`WarehouseHierarchyService`
+  - 默认种子：CN/US/GB/DE/JP/AU/SG/CA/FR/KR/NL/AE + BR/ES/MX/NG/PH/RO/TH/VN（对齐常见货源远程履约国；CN/US 含典型省份容器）；种子节点 `is_seed=1`，**不可删除**（服务端守卫 + UI 不渲染删除）
+  - 仓码：`buildCode(父码, 片段)`，国家码累接省份码再累接仓片段
+  - **仓码创建后不可修改**（`Warehouse::save_before` + `assertCodeImmutable`）
+  - 删除：种子 / 有子节点 / `WarehouseQuota.qty_minor>0` / `Reservation.state=reserved` 则禁止
+- 展示：`WarehouseCodeAlias` 将 `node_kind`/`mode`/`warehouse_type` 英文码映射为中文别名（`__()`）；名称走 `Model/Warehouse/LocalDescription` + `<local>` 可点翻译
+- **码别名 Tab**（同页 `w-tabs`）：`WarehouseCodeLabel` + `LocalDescription` 字典管理；种子不可删；树表读 DB 别名（回退静态 MAP）
+- 后台：`inventory/warehouses` 使用 `<w:theme:address-quick>`（选国家立即过滤树 + 可添加国家）；树表行内「加省/加仓」；国家选码禁止手填 ISO
+
+
 ## P3A-001 current source
 
 | 类 | 职责 |
 |---|---|
 | `Model/Warehouse` | physical/logical Warehouse；同 Website+mode 默认逻辑仓 nullable unique guard |
 | `Model/WarehousePool` / `WarehouseQuota` | additive pool 与 Offer minor quota/version |
-| `Model/WarehouseStoreAuthorization` | 持久化 Store↔Warehouse 授权与 Store 默认仓；两组唯一约束 |
-| `WarehouseAuthorizationService` | 通过 `StoreCatalogInterface` 取得可信 Website/mode/lifecycle；拒绝 normal/test 跨环境绑定（TEST-P3A-04） |
+| `Model/WarehouseStoreAuthorization` | 持久化 Store↔Warehouse 授权与 Store 默认仓；`is_seed` 标记系统种子（不可删、可改绑）；两组唯一约束 |
+| `WarehouseAuthorizationService` | 通过 `StoreCatalogInterface` 取得可信 Website/mode/lifecycle；拒绝 normal/test 跨环境绑定（TEST-P3A-04）；`ensureDefaultSiteAuthorization` 为 website=0/store=0 幂等补默认逻辑仓 `SYS-DEFAULT` 种子授权 |
 | `DefaultLogicalWarehouseResolver` | fresh ORM 读取 Store 精确默认绑定，缺省时回退 Website+environment 唯一默认逻辑仓 |
 
 不变量：
@@ -15,7 +34,9 @@
 - `website_id=0` 合法；Store 与 Warehouse 必须同 Website 且都处于可用状态。
 - Store `normal→normal` Warehouse；Store `dev|test→test` Warehouse；未知 mode 拒绝。
 - 调用方 `store_mode` 仅供显式 memory harness 兼容，生产写入和读取均忽略它。
-- 默认绑定必须指向逻辑仓；完全相同请求幂等，第二个默认仓冲突且保留原绑定。
+- 默认绑定必须指向逻辑仓；完全相同请求幂等；非种子第二个默认仓冲突且保留原绑定；**种子默认授权允许改绑**（原地更新 `warehouse_id`，保持 `is_seed=1`）。
+- 默认站/店（`website_id=0`/`store_id=0`）种子授权：`ensureDefaultSiteAuthorization` 先 `ensureDefaultTree`，再挂载全部种子叶子仓（`node_kind=warehouse`）为 `is_seed` 非默认授权，并保证唯一默认逻辑仓 `SYS-DEFAULT`；已改绑默认仓不被覆盖。
+- 后台授权页以**仓库手风琴**为主轴：展开叶子仓查看已授权店铺清单（国家/省仅目录，不挂履约授权）；支持关键词搜索（仓名/仓码/国家/店铺）与翻页；页根用 `.w-backend-page` 满宽主栏（不用前台 `.w-container` 版心）。
 - 本卡不启用 Warehouse writer，不修改 Order、P3A-002 fulfillment 或 MIG-P3A cutover。
 
 ## P3A-002 current source（durable cutover flag）
@@ -78,7 +99,7 @@ php bin/w setup:schema:check -m Weline_Inventory --json
 php bin/w framework:compile
 ```
 
-模块版本：Inventory `2.5.5`。SQLite/内存测试覆盖授权、Reservation 映射、
+模块版本：Inventory `2.5.8`。SQLite/内存测试覆盖授权、Reservation 映射、
 原 WarehouseQuota 回库和 writer cutover；MIG-P3A 另以登记的真实
 PostgreSQL schema clone 覆盖首次 apply、幂等重跑、fresh verify、allowlist、
 mode-off rollback、冲突零写和 clone 销毁。

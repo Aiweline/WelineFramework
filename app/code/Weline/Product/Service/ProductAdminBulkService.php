@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Product\Service;
 
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Product\Api\Data\ProductAdminCommand;
 use Weline\Product\Api\Data\ProductAdminResult;
 use Weline\Product\Api\ProductAdminCommandInterface;
@@ -12,6 +13,7 @@ final class ProductAdminBulkService
 {
     public function __construct(
         private readonly ProductAdminCommandInterface $commands,
+        private readonly ?ProductPhysicalDeleteService $physicalDelete = null,
     ) {
     }
 
@@ -25,12 +27,11 @@ final class ProductAdminBulkService
         string $baseRequestHash,
         array $items,
     ): array {
-        $websiteId = max(0, $websiteId);
-        $action = strtolower(trim(str_replace('-', '_', $action)));
-        $baseRequestHash = $this->normalizeBaseRequestHash($baseRequestHash);
-        if ($websiteId <= 0) {
+        if ($websiteId < 0) {
             throw new \InvalidArgumentException('product_admin_website_invalid');
         }
+        $action = strtolower(trim(str_replace('-', '_', $action)));
+        $baseRequestHash = $this->normalizeBaseRequestHash($baseRequestHash);
         if ($items === []) {
             throw new \InvalidArgumentException('product_admin_bulk_items_empty');
         }
@@ -44,10 +45,52 @@ final class ProductAdminBulkService
                 continue;
             }
             $uuid = trim((string)($item['global_product_uuid'] ?? ''));
-            if ($uuid === '') {
+            $productId = max(0, (int)($item['product_id'] ?? 0));
+
+            // Corrupt/e2e UUIDs cannot enter ProductAdminCommand; archive deletes them physically.
+            if ($action === ProductAdminCommand::ACTION_ARCHIVE
+                && !$this->isValidProductUuid($uuid)
+                && $productId > 0
+            ) {
+                try {
+                    $physical = $this->physicalDelete
+                        ?? ObjectManager::getInstance(ProductPhysicalDeleteService::class);
+                    $purged = $physical->deleteByIds($websiteId, [$productId]);
+                    $deleted = (int)($purged['deleted'] ?? 0) > 0;
+                    if ($deleted) {
+                        $succeeded++;
+                    } else {
+                        $failed++;
+                    }
+                    $results[] = [
+                        'global_product_uuid' => $uuid,
+                        'product_id' => $productId,
+                        'success' => $deleted,
+                        'physical' => true,
+                        'error_code' => $deleted ? null : 'product_admin_bulk_physical_miss',
+                        'message' => $deleted
+                            ? (string)\__('已物理清理非法 UUID 商品')
+                            : (string)\__('未找到可清理商品'),
+                    ];
+                } catch (\Throwable $throwable) {
+                    $failed++;
+                    $results[] = [
+                        'global_product_uuid' => $uuid,
+                        'product_id' => $productId,
+                        'success' => false,
+                        'physical' => true,
+                        'error_code' => 'product_admin_bulk_item_failed',
+                        'message' => $throwable->getMessage(),
+                    ];
+                }
+                continue;
+            }
+
+            if ($uuid === '' || !$this->isValidProductUuid($uuid)) {
                 $failed++;
                 $results[] = [
-                    'global_product_uuid' => '',
+                    'global_product_uuid' => $uuid,
+                    'product_id' => $productId,
                     'success' => false,
                     'error_code' => 'product_admin_product_uuid_invalid',
                 ];
@@ -78,6 +121,7 @@ final class ProductAdminBulkService
                 }
                 $results[] = [
                     'global_product_uuid' => $uuid,
+                    'product_id' => $productId,
                     'success' => $result->success,
                     'error_code' => $result->errorCode,
                     'message' => $result->message,
@@ -86,6 +130,7 @@ final class ProductAdminBulkService
                 $failed++;
                 $results[] = [
                     'global_product_uuid' => $uuid,
+                    'product_id' => $productId,
                     'success' => false,
                     'error_code' => 'product_admin_bulk_item_failed',
                     'message' => $throwable->getMessage(),
@@ -100,11 +145,19 @@ final class ProductAdminBulkService
                 'failed' => $failed,
                 'items' => $results,
             ],
-            (string)__(
+            (string)\__(
                 '批量操作完成：成功 %{1}，失败 %{2}',
                 [(string)$succeeded, (string)$failed],
             ),
         )->toArray();
+    }
+
+    private function isValidProductUuid(string $uuid): bool
+    {
+        return preg_match(
+            '/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i',
+            $uuid,
+        ) === 1;
     }
 
     private function normalizeBaseRequestHash(string $hash): string

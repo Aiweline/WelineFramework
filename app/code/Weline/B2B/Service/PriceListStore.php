@@ -157,6 +157,72 @@ final class PriceListStore
         return count($this->newListRecord()->clear()->select()->fetchArray());
     }
 
+    /**
+     * True when any active price-list revision for the website contains the SKU
+     * (flat or qty-tier rows both count as configured wholesale pricing).
+     */
+    public function skuHasActiveTiers(string $sku, int $websiteId): bool
+    {
+        $sku = trim($sku);
+        if ($sku === '' || $websiteId < 0) {
+            return false;
+        }
+
+        if ($this->rows !== null) {
+            foreach ($this->rows as $versions) {
+                foreach ($versions as $list) {
+                    if ($list->active
+                        && $list->websiteId === $websiteId
+                        && $list->hasSku($sku)
+                    ) {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        try {
+            $items = $this->newItemRecord()->clear()
+                ->where(PriceListItemRecord::schema_fields_SKU, $sku)
+                ->select()
+                ->fetchArray();
+            if ($items === []) {
+                return false;
+            }
+            $seen = [];
+            foreach ($items as $item) {
+                $listId = trim((string)($item[PriceListItemRecord::schema_fields_LIST_ID] ?? ''));
+                $version = (int)($item[PriceListItemRecord::schema_fields_LIST_VERSION] ?? 0);
+                if ($listId === '' || $version < 1) {
+                    continue;
+                }
+                $key = $listId . '@' . $version;
+                if (isset($seen[$key])) {
+                    continue;
+                }
+                $seen[$key] = true;
+                $header = $this->findHeader($listId, $version);
+                if ($header === null) {
+                    continue;
+                }
+                if ((int)$header->getData(PriceListRecord::schema_fields_ACTIVE) !== 1) {
+                    continue;
+                }
+                if ((int)$header->getData(PriceListRecord::schema_fields_WEBSITE_ID) !== $websiteId) {
+                    continue;
+                }
+
+                return true;
+            }
+        } catch (Throwable) {
+            return false;
+        }
+
+        return false;
+    }
+
     private function putDurable(PriceList $list): null
     {
         $existing = $this->findHeader($list->listId, $list->version);

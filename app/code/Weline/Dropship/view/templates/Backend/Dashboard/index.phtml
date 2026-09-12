@@ -1,16 +1,26 @@
-<?php /** @var \Weline\Framework\View\Template $this */ $s = (array)$this->getData('stats'); $pf = (string)$this->getData('provider_filter'); ?>
-<div class="container-fluid py-3" data-dropship-admin="dashboard">
-  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
-    <h1 class="h3 mb-0"><?= $this->getData('page_title') ?></h1>
-    <form method="get" class="d-flex gap-2">
-      <input class="form-control form-control-sm" name="provider" value="<?= htmlspecialchars($pf) ?>" placeholder="provider e.g. cj">
-      <button class="btn btn-sm btn-outline-primary" type="submit"><?= __('按平台筛') ?></button>
-    </form>
-  </div>
-  <div class="row g-3">
-    <div class="col-md-3"><div class="border rounded-3 p-3 bg-body-tertiary"><div class="text-muted small"><?= __('刊登数') ?></div><div class="fs-3 fw-semibold"><?= (int)($s['listings'] ?? 0) ?></div></div></div>
-    <div class="col-md-3"><div class="border rounded-3 p-3 bg-body-tertiary"><div class="text-muted small"><?= __('降价提示待处理') ?></div><div class="fs-3 fw-semibold"><?= (int)($s['price_drop_tips'] ?? 0) ?></div></div></div>
-    <div class="col-md-3"><div class="border rounded-3 p-3 bg-body-tertiary"><div class="text-muted small"><?= __('履约单') ?></div><div class="fs-3 fw-semibold"><?= (int)($s['fulfillments'] ?? 0) ?></div></div></div>
-    <div class="col-md-3"><div class="border rounded-3 p-3 bg-body-tertiary"><div class="text-muted small"><?= __('推送失败') ?></div><div class="fs-3 fw-semibold"><?= (int)($s['outbox_errors'] ?? 0) ?></div></div></div>
+<?php
+/** @var \Weline\Framework\View\Template $this */
+$s = (array)$this->getData('stats');
+$pf = (string)$this->getData('provider_filter');
+$escape = static fn($v): string => htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$cards = [
+  ['listings', __('刊登数')],
+  ['price_drop_tips', __('降价提示待处理')],
+  ['fulfillments', __('履约单')],
+  ['outbox_errors', __('推送失败')],
+];
+?>
+<div class="w-container" style="--w-pt:0;" data-dropship-admin="dashboard" data-testid="dropship-dashboard">
+  <form method="get" class="w-cluster" data-align="center" data-wrap="true" style="--w-gap:var(--weline-space-2);--w-mb:var(--weline-space-4);">
+    <input class="w-input" name="provider" data-size="sm" value="<?= $escape($pf) ?>" placeholder="provider e.g. cj" aria-label="provider" style="width:auto;max-inline-size:16rem;flex:0 1 14rem;">
+    <button class="w-button" type="submit" data-tone="neutral" data-variant="outline" data-size="sm"><?= __('按平台筛') ?></button>
+  </form>
+  <div class="w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-3);">
+    <?php foreach ($cards as [$key, $label]): ?>
+      <div style="flex:1 1 10rem;min-inline-size:9rem;padding:var(--weline-space-3);border:1px solid var(--weline-theme-border, var(--color-border));border-radius:var(--weline-radius-md, 0.5rem);">
+        <div class="w-text" data-tone="muted" data-size="sm"><?= $escape($label) ?></div>
+        <div class="w-text" data-weight="strong" data-size="lg"><?= (int)($s[$key] ?? 0) ?></div>
+      </div>
+    <?php endforeach; ?>
   </div>
 </div>

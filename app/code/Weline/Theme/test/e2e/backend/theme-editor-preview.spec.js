@@ -88,6 +88,42 @@ test.describe('Theme editor iframe preview integration', () => {
     expect(themeAssets.some((url) => url.includes(`frontend_theme_id=${activeTheme.id}`))).toBeTruthy();
   });
 
+  test('homepage preview keeps storefront hover chrome (account dropdown + category mega)', async ({ page }) => {
+    const activeTheme = getActiveTheme('frontend');
+    test.skip(!activeTheme, 'No active frontend theme found in runtime info.');
+
+    await loginAsAdmin(page, {
+      timeout: 60000,
+      settleMs: 1000,
+    });
+
+    await gotoBackend(page, `theme/backend/theme-editor/index?theme_id=${activeTheme.id}&page_type=homepage`, {
+      waitUntil: 'domcontentloaded',
+      timeout: 60000,
+      settleMs: 2000,
+    });
+
+    const previewFrame = page.locator('#previewFrame');
+    await expect(previewFrame).toHaveAttribute('src', /theme-preview\/content|layout-preview/, { timeout: 60000 });
+
+    const frame = page.frameLocator('#previewFrame');
+    await frame.locator('body').first().waitFor({ state: 'visible', timeout: 60000 });
+
+    const account = frame.locator('.wc-theme_widget_account, [weline-code="theme.widget.account"]').first();
+    await expect(account).toBeVisible({ timeout: 60000 });
+    await expect(account).not.toHaveClass(/is-preview/);
+
+    const dropdown = account.locator('.account-dropdown').first();
+    await expect(dropdown).toHaveCount(1);
+    const displayBefore = await dropdown.evaluate((el) => getComputedStyle(el).display);
+    expect(displayBefore).not.toBe('none');
+
+    const megaItem = frame.locator('.category-item--mega, .category-item.has-children').first();
+    if (await megaItem.count()) {
+      await expect(megaItem.locator('[data-w-popover-panel], .header-category-panel, [data-w-mega-menu]').first()).toHaveCount(1);
+    }
+  });
+
   test('library drag exposes inside, before, and after placement feedback and clears on cancel', async ({ page }) => {
     const activeTheme = getActiveTheme('frontend');
     test.skip(!activeTheme, 'No active frontend theme found in runtime info.');

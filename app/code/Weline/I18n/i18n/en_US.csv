@@ -387,8 +387,9 @@ i18n国际化,"i18n Internationalization"
 查看已安装,"View Installed"
 暂无翻译数据,"No translation data"
 "AI 翻译只用于补齐缺失翻译。","AI translation is only used to fill missing translations."
-"词典 / LocalModel / 模块 CSV 写回三类进度见下方总览；队列状态已简化，不再堆砌原文日志。","词典 / LocalModel / 模块 CSV 写回三类进度见下方总览；队列状态已简化，不再堆砌原文日志。"
-"按语言 × 类型：词典补齐、LocalModel（共享队列）、模块 CSV 写回。","按语言 × 类型：词典补齐、LocalModel（共享队列）、模块 CSV 写回。"
+「翻译进度」与「配置与操作」用顶部页签分开；队列状态已简化，不再堆砌原文日志。,「翻译进度」与「配置与操作」用顶部页签分开；队列状态已简化，不再堆砌原文日志。
+配置与操作,配置与操作
+"按语言 × 类型：词典补齐、LocalModel（共享队列）、模块 CSV 写回。开关与入队请到「配置与操作」。","按语言 × 类型：词典补齐、LocalModel（共享队列）、模块 CSV 写回。开关与入队请到「配置与操作」。"
 已开启,Enabled
 已关闭,Disabled
 源词,源词
@@ -451,7 +452,7 @@ LocalModel,LocalModel
 "系统中暂无带 i18n 目录的活跃模块。","No active modules with an i18n directory."
 源语言固定为基础词库语言，不需要重复选择。,"The source language is fixed to the base dictionary language and does not need to be selected again."
 语言配置与操作,语言配置与操作
-进度见上方总览；此处只开关语言并触发翻译/导出。,进度见上方总览；此处只开关语言并触发翻译/导出。
+进度见「翻译进度」页签；此处只开关语言并触发翻译/导出。,进度见「翻译进度」页签；此处只开关语言并触发翻译/导出。
 "AI 翻译","AI Translation"
 源语言跳过,"Source Language Skipped"
 网站语言并集，强制翻译,网站语言并集，强制翻译
@@ -765,7 +766,9 @@ AI翻译未返回目标语言结果,AI翻译未返回目标语言结果
 "语言 %{1} 已有翻译批次在运行，本批已跳过以避免重复翻译。","语言 %{1} 已有翻译批次在运行，本批已跳过以避免重复翻译。"
 没有待翻译词。,"No words to translate."
 "AI 翻译服务返回失败。","The AI ​​translation service returned failure."
+多次失败已绕过：%{1},多次失败已绕过：%{1}
 译文乱码，已跳过本条（不影响本批其余词）：%{1},译文乱码，已跳过本条（不影响本批其余词）：%{1}
+多次失败已绕过（%{count}次）：%{word}；原因：%{reason},多次失败已绕过（%{count}次）：%{word}；原因：%{reason}
 "保存翻译失败 [%{1}]: %{2}","Failed to save translation [%{1}]: %{2}"
 翻译已写入词典库，但发布语言文件失败：%{1},"Translation written to dictionary, but publishing language file failed: %{1}"
 "I18n AI翻译完成","I18n AI translation completed"
@@ -856,6 +859,9 @@ CSV文件路径（导入单个文件时必填）,"CSV file path (required when i
 "4. 网络连接是否正常","4. Is the network connection normal?"
 无法创建文件：%{1},"Unable to create file: %{1}"
 查看本地语言码,"View local language code"
+"词典 / LocalModel / 模块 CSV 写回三类进度见下方总览；队列状态已简化，不再堆砌原文日志。","词典 / LocalModel / 模块 CSV 写回三类进度见下方总览；队列状态已简化，不再堆砌原文日志。"
+"按语言 × 类型：词典补齐、LocalModel（共享队列）、模块 CSV 写回。","按语言 × 类型：词典补齐、LocalModel（共享队列）、模块 CSV 写回。"
+进度见上方总览；此处只开关语言并触发翻译/导出。,进度见上方总览；此处只开关语言并触发翻译/导出。
 "词典 / LocalModel / 模块写回三类进度见下方总览；队列状态已简化，不再堆砌原文日志。","词典 / LocalModel / 模块写回三类进度见下方总览；队列状态已简化，不再堆砌原文日志。"
 模块写回,模块写回
 队列状态,队列状态

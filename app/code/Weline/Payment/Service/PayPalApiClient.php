@@ -49,6 +49,11 @@ final class PayPalApiClient
 
     /**
      * @param array<string, mixed> $config
+     * @param array{
+     *   shipping_preference?:string,
+     *   user_action?:string,
+     *   express_checkout?:bool
+     * } $options
      * @return array{order_id:string,approve_url:string,raw:array<string,mixed>}
      */
     public function createOrder(
@@ -58,8 +63,27 @@ final class PayPalApiClient
         string $referenceId,
         ?string $returnUrl = null,
         ?string $cancelUrl = null,
+        array $options = [],
     ): array {
         $token = $this->fetchAccessToken($config);
+        $shippingPreference = strtoupper(trim((string) ($options['shipping_preference'] ?? '')));
+        $userAction = strtoupper(trim((string) ($options['user_action'] ?? 'PAY_NOW'))) ?: 'PAY_NOW';
+        // Express / 快捷智能支付：由 PayPal 收集或确认收货地址。
+        if ($shippingPreference === '' && !empty($options['express_checkout'])) {
+            $shippingPreference = 'GET_FROM_FILE';
+        }
+        $applicationContext = array_filter([
+            'return_url' => $this->normalizeCallbackUrl(
+                $returnUrl ?: (string) ($config['return_url'] ?? ''),
+                $config,
+            ),
+            'cancel_url' => $this->normalizeCallbackUrl(
+                $cancelUrl ?: (string) ($config['cancel_url'] ?? ''),
+                $config,
+            ),
+            'user_action' => $userAction,
+            'shipping_preference' => $shippingPreference !== '' ? $shippingPreference : null,
+        ]);
         $payload = [
             'intent' => 'CAPTURE',
             'purchase_units' => [[
@@ -69,17 +93,7 @@ final class PayPalApiClient
                     'value' => $this->formatAmount($currencyCode, $amountMinor),
                 ],
             ]],
-            'application_context' => array_filter([
-                'return_url' => $this->normalizeCallbackUrl(
-                    $returnUrl ?: (string) ($config['return_url'] ?? ''),
-                    $config,
-                ),
-                'cancel_url' => $this->normalizeCallbackUrl(
-                    $cancelUrl ?: (string) ($config['cancel_url'] ?? ''),
-                    $config,
-                ),
-                'user_action' => 'PAY_NOW',
-            ]),
+            'application_context' => $applicationContext,
         ];
 
         $response = $this->request(
@@ -118,6 +132,57 @@ final class PayPalApiClient
             'approve_url' => $approveUrl,
             'raw' => $decoded,
         ];
+    }
+
+    /**
+     * Patch purchase unit amount before capture (express review total changes).
+     *
+     * @param array<string, mixed> $config
+     * @return array<string, mixed>
+     */
+    public function patchOrder(
+        array $config,
+        string $orderId,
+        int $amountMinor,
+        string $currencyCode,
+    ): array {
+        $token = $this->fetchAccessToken($config);
+        $currency = strtoupper(trim($currencyCode));
+        $body = [[
+            'op' => 'replace',
+            'path' => "/purchase_units/@reference_id=='default'/amount",
+            'value' => [
+                'currency_code' => $currency,
+                'value' => $this->formatAmount($currency, $amountMinor),
+            ],
+        ]];
+        // PayPal default reference_id may be custom — also try first unit via get+patch with known id.
+        $existing = $this->getOrder($config, $orderId);
+        $units = is_array($existing['purchase_units'] ?? null) ? $existing['purchase_units'] : [];
+        $refId = trim((string) ($units[0]['reference_id'] ?? 'default'));
+        if ($refId === '') {
+            $refId = 'default';
+        }
+        $body[0]['path'] = "/purchase_units/@reference_id=='" . $refId . "'/amount";
+
+        $response = $this->request(
+            $config,
+            'PATCH',
+            '/v2/checkout/orders/' . rawurlencode($orderId),
+            [
+                'Authorization: Bearer ' . $token,
+                'Content-Type: application/json',
+            ],
+            json_encode($body, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '[]',
+        );
+
+        if ($response['status'] < 200 || $response['status'] >= 300) {
+            throw new \RuntimeException($this->extractErrorMessage($response['body'], $response['status']));
+        }
+
+        $decoded = json_decode($response['body'], true);
+
+        return \is_array($decoded) ? $decoded : ['status' => $response['status']];
     }
 
     /**

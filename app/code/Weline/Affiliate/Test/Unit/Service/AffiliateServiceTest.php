@@ -221,7 +221,20 @@ class AffiliateServiceTest extends TestCase
         $method = new \ReflectionMethod(AffiliateService::class, 'resolveShareTargetUrl');
         $method->setAccessible(true);
 
-        $this->assertSame('/product/frontend/product/view?id=652', $method->invoke($service, $share));
+        $this->assertSame('/product/652', $method->invoke($service, $share));
+    }
+
+    public function testShareTargetUpgradesLegacyFrontendViewRouteToPublicProductPath(): void
+    {
+        $service = new AffiliateService();
+        $share = new AffiliateShare();
+        $share->setData(AffiliateShare::schema_fields_PRODUCT_ID, 559);
+        $share->setData(AffiliateShare::schema_fields_TARGET_PATH, 'product/frontend/product/view');
+
+        $method = new \ReflectionMethod(AffiliateService::class, 'resolveShareTargetUrl');
+        $method->setAccessible(true);
+
+        $this->assertSame('/product/559', $method->invoke($service, $share));
     }
 
     public function testShareTargetUsesPublicProductHandleWithoutExtraIdParam(): void

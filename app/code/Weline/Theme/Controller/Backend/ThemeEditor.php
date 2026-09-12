@@ -7041,7 +7041,9 @@ HTML;
             );
 
             $this->assign('editor_mode', true);
-            $this->assign('preview_mode', true);
+            $this->assign('theme_preview_content', true);
+            $this->assign('layout_preview_mode', PreviewContextService::DEFAULT_PREVIEW_MODE);
+            $this->assign('preview_mode', false); // 部件布尔：整页预览与店面保真，禁止 is-preview
             $this->assign('theme_id', $themeId);
             $this->assign('preview_context', $context);
             $this->assign('layout_type', $layoutType);
@@ -7389,7 +7391,9 @@ HTML;
             
             // 设置渲染参数（与getLayoutPreview()相同）
             $this->assign('editor_mode', true);
-            $this->assign('preview_mode', true); // 读取草稿数据
+            $this->assign('theme_preview_content', true);
+            $this->assign('layout_preview_mode', PreviewContextService::DEFAULT_PREVIEW_MODE);
+            $this->assign('preview_mode', false);
             $this->assign('theme_id', $themeId);
             $this->assign('page_type', $pageType);
             $this->assign('layout_type', $layoutType);
@@ -7423,7 +7427,9 @@ HTML;
             $this->applyThemeLayoutRuntimeContextToRequest($context);
             
             $this->assign('editor_mode', true);
-            $this->assign('preview_mode', true);
+            $this->assign('theme_preview_content', true);
+            $this->assign('layout_preview_mode', PreviewContextService::DEFAULT_PREVIEW_MODE);
+            $this->assign('preview_mode', false);
             $this->assign('theme_id', $themeId);
             $this->assign('page_type', $pageType);
             

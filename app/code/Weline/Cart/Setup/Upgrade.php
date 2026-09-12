@@ -17,12 +17,12 @@ use Weline\Theme\Service\WidgetDefaultInjectionService;
 
 final class Upgrade implements UpgradeInterface
 {
-    public const VERSION = '1.3.3';
+    public const VERSION = '1.3.4';
 
     public function setup(Setup $setup, Context $context): void
     {
         $this->seedLayoutSlotDefaults('mini-cart', ['footer-extras']);
-        $this->seedLayoutSlotDefaults('cart', ['cart-summary-discount', 'cart-summary-note']);
+        $this->seedLayoutSlotDefaults('cart', ['cart-summary-discount', 'cart-summary-note', 'cart-summary-credit']);
     }
 
     /**

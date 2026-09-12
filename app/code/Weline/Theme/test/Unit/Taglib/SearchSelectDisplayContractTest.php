@@ -34,6 +34,14 @@ final class SearchSelectDisplayContractTest extends TestCase
         self::assertStringContainsString('data-w-float-surface', $src);
         self::assertStringContainsString('data-w-placement="bottom-start"', $src);
         self::assertStringContainsString('floating.attach(container', $src);
+        self::assertStringContainsString("anchor: triggerAnchor", $src);
+        self::assertStringContainsString("var triggerAnchor = '#' + id + '_trigger'", $src);
+        self::assertStringContainsString('.w-field:has(.w-search-select)', $src);
+        self::assertStringContainsString("data-w-gap', '2'", $src);
+        self::assertStringNotContainsString("anchor: '.w-search-select-trigger'", $src);
+        self::assertStringContainsString('data-w-float-anchor', $src);
+        self::assertStringContainsString('height:fit-content', $src);
+        self::assertStringContainsString('align-self:flex-start', $src);
         self::assertStringContainsString('.w-search-select-dropdown[data-w-floating-positioned]', $src);
         self::assertStringContainsString('position:fixed', $src);
         self::assertStringContainsString("!container.contains(e.target) && !dropdown.contains(e.target)", $src);
@@ -46,5 +54,18 @@ final class SearchSelectDisplayContractTest extends TestCase
         self::assertStringContainsString('.w-search-select-arrow{position:absolute;top:50%;right:10px;transform:translateY(-50%)', $src);
         self::assertStringContainsString('.w-search-select.open .w-search-select-arrow{transform:translateY(-50%) rotate(180deg)}', $src);
         self::assertStringContainsString('.w-search-select-clear{position:absolute;top:50%;right:25px;transform:translateY(-50%)', $src);
+    }
+
+    public function testFailedSearchSetsEmptyCacheToPreventRequestStorm(): void
+    {
+        $src = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Taglib/SearchSelect.php');
+
+        self::assertStringContainsString('searchInFlight', $src);
+        self::assertStringContainsString('if (!r.ok)', $src);
+        self::assertStringContainsString('cache = [];', $src);
+        self::assertStringContainsString("throw new Error('search_http_'", $src);
+        self::assertStringContainsString("credentials: 'same-origin'", $src);
+        self::assertStringContainsString("else if (liveApiUrl()) { doSearch(''); }", $src);
+        self::assertStringContainsString('if (!cache) {', $src);
     }
 }

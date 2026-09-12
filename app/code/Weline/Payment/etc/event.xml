@@ -33,4 +33,18 @@
                   shared="true"
                   sort="20"/>
     </event>
+    <event name="Weline_Checkout::checkout::freeze_quote::enrich">
+        <observer name="Weline_Payment::checkout_freeze_quote_asset_enrich"
+                  instance="Weline\Payment\Observer\CheckoutFreezeQuoteAssetEnrichObserver"
+                  disabled="false"
+                  shared="false"
+                  sort="200"/>
+    </event>
+    <event name="Weline_Checkout::checkout::asset_discount::apply">
+        <observer name="Weline_Payment::checkout_asset_discount_apply"
+                  instance="Weline\Payment\Observer\CheckoutAssetDiscountApplyObserver"
+                  disabled="false"
+                  shared="false"
+                  sort="200"/>
+    </event>
 </config>

@@ -25,6 +25,7 @@ final class EventAnnotationService
         'lead' => '线索',
         'account' => '账户',
         'error' => '错误',
+        'chain' => '事件链',
         'custom' => '自定义',
         'other' => '其他',
     ];
@@ -35,6 +36,10 @@ final class EventAnnotationService
         'page_location' => 'page_location（完整 URL）',
         'page_path' => 'page_path（路径）',
         'page_referrer' => 'page_referrer（来源）',
+        'className' => 'className（CSS 类名）',
+        'text' => 'text（文案）',
+        'href' => 'href（链接）',
+        'tag' => 'tag（标签名）',
     ];
 
     /** @var array<string, string> */
@@ -50,6 +55,15 @@ final class EventAnnotationService
         'event_name' => '事件名匹配',
         'url' => 'URL 匹配',
         'custom' => '自定义条件',
+    ];
+
+    public const ORIGIN_MANUAL = 'manual';
+    public const ORIGIN_AUTO_DISCOVERED = 'auto_discovered';
+
+    /** @var array<string, string> */
+    public const ORIGIN_LABELS = [
+        self::ORIGIN_MANUAL => '自定义',
+        self::ORIGIN_AUTO_DISCOVERED => '自动发现',
     ];
 
     public function __construct(
@@ -133,8 +147,38 @@ final class EventAnnotationService
         $configKey = $this->configKey($scopeKey);
         $all = $this->readRaw($configKey);
         $current = isset($all[$n]) && \is_array($all[$n]) ? $all[$n] : [];
+        $currentNorm = $this->normalizeMeta($current, $n);
+        $promote = !empty($patch['promote']) || (string)($patch['promote'] ?? '') === '1';
+        // 自动发现锁定：禁止普通 patch 降级为可删，除非 promote=1
+        if (!$promote && $this->isLockedMeta($currentNorm)) {
+            $patch['origin'] = self::ORIGIN_AUTO_DISCOVERED;
+            $patch['deletable'] = false;
+        }
         $merged = $this->normalizeMeta(\array_merge($current, $patch), $n);
+        if (!$promote && $this->isLockedMeta($currentNorm)) {
+            $merged['origin'] = self::ORIGIN_AUTO_DISCOVERED;
+            $merged['deletable'] = false;
+        }
         $all[$n] = $merged;
+
+        return $this->writeRaw($configKey, $all);
+    }
+
+    /**
+     * 删除事件注解（运维清理 / purge；不改发现池字符串列表）。
+     */
+    public function removeMeta(int $websiteId, string $eventName, string $storageScope = ''): bool
+    {
+        $n = $this->dictionary()->normalizeEventName($eventName);
+        if ($n === '') {
+            return false;
+        }
+        $configKey = $this->configKey($this->scopeKeyFromStorage($storageScope, $websiteId));
+        $all = $this->readRaw($configKey);
+        if (!isset($all[$n])) {
+            return true;
+        }
+        unset($all[$n]);
 
         return $this->writeRaw($configKey, $all);
     }
@@ -175,6 +219,11 @@ final class EventAnnotationService
             $row['match_conditions'] = $ann['match_conditions'];
             $row['match_summary'] = $this->summarizeMatchConditions($ann['match_conditions']);
             $row['copy_params'] = $ann['copy_params'];
+            $row['param_mappings'] = $ann['param_mappings'];
+            $row['extract_params'] = $ann['extract_params'];
+            $row['origin'] = $ann['origin'];
+            $row['deletable'] = $ann['deletable'];
+            $row['origin_label'] = self::ORIGIN_LABELS[$ann['origin']] ?? $ann['origin'];
             $out[] = $row;
         }
         \usort($out, static function (array $a, array $b): int {
@@ -284,7 +333,7 @@ final class EventAnnotationService
 
     /**
      * @param array<string, mixed> $meta
-     * @return array{starred: bool, category: string, has_value: bool, match_type: string, match_conditions: list<array{param: string, op: string, value: string}>, copy_params: bool}
+     * @return array{starred: bool, category: string, has_value: bool, match_type: string, match_conditions: list<array{param: string, op: string, value: string}>, copy_params: bool, param_mappings: list<array{name: string, from: string}>, extract_params: list<string>, origin: string, deletable: bool}
      */
     private function normalizeMeta(array $meta, string $eventName): array
     {
@@ -297,6 +346,22 @@ final class EventAnnotationService
         if ($matchType === '') {
             $matchType = 'custom';
         }
+        $mappingsRaw = $meta['param_mappings'] ?? $meta['param_mappings_json'] ?? null;
+        if ($mappingsRaw === null || $mappingsRaw === '' || $mappingsRaw === []) {
+            $mappingsRaw = $meta['extract_params'] ?? [];
+        }
+        $mappings = $this->normalizeParamMappings($mappingsRaw);
+        $extractNames = [];
+        foreach ($mappings as $m) {
+            $extractNames[] = $m['name'];
+        }
+        $origin = $this->normalizeOrigin((string)($meta['origin'] ?? ''));
+        $deletable = \array_key_exists('deletable', $meta)
+            ? !empty($meta['deletable'])
+            : ($origin !== self::ORIGIN_AUTO_DISCOVERED);
+        if ($origin === self::ORIGIN_AUTO_DISCOVERED) {
+            $deletable = false;
+        }
 
         return [
             'starred' => !empty($meta['starred']),
@@ -305,7 +370,114 @@ final class EventAnnotationService
             'match_type' => $matchType,
             'match_conditions' => $conditions,
             'copy_params' => !isset($meta['copy_params']) || !empty($meta['copy_params']),
+            'param_mappings' => $mappings,
+            // 兼容旧字段：产出参数名列表
+            'extract_params' => $extractNames,
+            'origin' => $origin,
+            'deletable' => $deletable,
         ];
+    }
+
+    public function isLockedMeta(array $meta): bool
+    {
+        return $this->normalizeOrigin((string)($meta['origin'] ?? '')) === self::ORIGIN_AUTO_DISCOVERED;
+    }
+
+    public function isDeletable(int $websiteId, string $eventName, string $storageScope = ''): bool
+    {
+        $meta = $this->get($websiteId, $eventName, $storageScope);
+
+        return !empty($meta['deletable']) && ($meta['origin'] ?? '') !== self::ORIGIN_AUTO_DISCOVERED;
+    }
+
+    private function normalizeOrigin(string $origin): string
+    {
+        $o = \strtolower(\trim($origin));
+        if ($o === self::ORIGIN_AUTO_DISCOVERED || $o === 'auto' || $o === 'discovered') {
+            return self::ORIGIN_AUTO_DISCOVERED;
+        }
+
+        return self::ORIGIN_MANUAL;
+    }
+
+    /**
+     * 参数映射：产出名 ← 源表达式（{源参数} 模板可组装）。
+     *
+     * @param mixed $raw
+     * @return list<array{name: string, from: string}>
+     */
+    public function normalizeParamMappings(mixed $raw): array
+    {
+        if (\is_string($raw) && $raw !== '') {
+            $trim = \ltrim($raw);
+            if (\str_starts_with($trim, '[') || \str_starts_with($trim, '{')) {
+                $decoded = \json_decode($raw, true);
+                $raw = \is_array($decoded) ? $decoded : (\preg_split('/[\s,，;；]+/', $raw) ?: []);
+            } else {
+                $raw = \preg_split('/[\s,，;；]+/', $raw) ?: [];
+            }
+        }
+        if (!\is_array($raw)) {
+            return [];
+        }
+        $out = [];
+        $seen = [];
+        foreach ($raw as $item) {
+            $name = '';
+            $from = '';
+            if (\is_string($item) || \is_numeric($item)) {
+                $name = \trim((string)$item);
+                $from = $name !== '' ? ('{' . $name . '}') : '';
+            } elseif (\is_array($item)) {
+                $name = \trim((string)($item['name'] ?? $item['param'] ?? $item['key'] ?? $item['to'] ?? ''));
+                $from = \trim((string)($item['from'] ?? $item['source'] ?? $item['expr'] ?? $item['template'] ?? ''));
+                if ($from === '' && $name !== '') {
+                    $from = '{' . $name . '}';
+                }
+                if ($name === '' && $from !== '') {
+                    if (\preg_match('/^\{([a-zA-Z0-9_.\[\]-]+)\}$/', $from, $m)) {
+                        $name = $m[1];
+                    }
+                }
+            }
+            $name = \preg_replace('/[^a-zA-Z0-9_.\[\]-]+/', '', $name) ?: '';
+            if ($name === '' || \strlen($name) > 64) {
+                continue;
+            }
+            if ($from === '') {
+                $from = '{' . $name . '}';
+            }
+            if (\strlen($from) > 512) {
+                $from = \substr($from, 0, 512);
+            }
+            if (isset($seen[$name])) {
+                $out[$seen[$name]] = ['name' => $name, 'from' => $from];
+                continue;
+            }
+            $seen[$name] = \count($out);
+            $out[] = ['name' => $name, 'from' => $from];
+            if (\count($out) >= 24) {
+                break;
+            }
+        }
+
+        return \array_values($out);
+    }
+
+    /**
+     * 旧版白名单：仅参数名列表（归一为 {name} 映射后再取 name）。
+     *
+     * @param mixed $raw
+     * @return list<string>
+     */
+    public function normalizeExtractParams(mixed $raw): array
+    {
+        $names = [];
+        foreach ($this->normalizeParamMappings($raw) as $m) {
+            $names[] = $m['name'];
+        }
+
+        return $names;
     }
 
     /**
@@ -326,9 +498,10 @@ final class EventAnnotationService
             if (!\is_array($row)) {
                 continue;
             }
-            $param = \strtolower(\trim((string)($row['param'] ?? $row['parameter'] ?? '')));
-            $param = \preg_replace('/[^a-z0-9_]+/', '', $param) ?: '';
-            if ($param === '' || !isset(self::MATCH_PARAM_LABELS[$param])) {
+            $param = \trim((string)($row['param'] ?? $row['parameter'] ?? ''));
+            // 允许预设与手写参数（如 className）；保留大小写，仅剥非法字符
+            $param = \preg_replace('/[^a-zA-Z0-9_.\[\]-]+/', '', $param) ?: '';
+            if ($param === '' || \strlen($param) > 64) {
                 continue;
             }
             $op = \strtolower(\trim((string)($row['op'] ?? $row['operator'] ?? 'equals')));
@@ -443,7 +616,7 @@ final class EventAnnotationService
     private function writeRaw(string $configKey, array $all): bool
     {
         try {
-            return $this->store()->setScopedConfig(
+            $ok = $this->store()->setScopedConfig(
                 $configKey,
                 \json_encode($all, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}',
                 self::MODULE,
@@ -451,8 +624,21 @@ final class EventAnnotationService
                 SystemConfig::SCOPE_GLOBAL,
                 SystemConfig::LOCALE_DEFAULT
             );
+            if ($ok) {
+                $this->bumpRuntimeRevision();
+            }
+
+            return $ok;
         } catch (\Throwable) {
             return false;
+        }
+    }
+
+    private function bumpRuntimeRevision(): void
+    {
+        try {
+            ObjectManager::getInstance(VisitorTrackingConfig::class)->invalidateAfterMutation(null);
+        } catch (\Throwable) {
         }
     }
 

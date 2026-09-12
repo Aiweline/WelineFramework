@@ -32,7 +32,8 @@
 - P3A-001 durable contract：
   - `Warehouse` 区分 `physical|logical`，nullable unique guard 约束同
     Website+mode 最多一个默认逻辑仓；
-  - `WarehouseStoreAuthorization` 持久化 Store↔Warehouse 授权及 Store 默认仓；
+  - `WarehouseStoreAuthorization` 持久化 Store↔Warehouse 授权及 Store 默认仓；`is_seed` 标记默认站/店种子授权（不可删、可改绑）；
+  - `WarehouseAuthorizationService::ensureDefaultSiteAuthorization` 幂等补 `website_id=0`/`store_id=0` 默认逻辑仓授权；
   - 生产授权忽略调用方 `store_mode`，只信任 Websites 发布的
     `StoreCatalogInterface`；`normal→normal`、`dev|test→test`，未知 mode fail closed；
   - 默认解析顺序为 Store 精确默认绑定 → Website+environment 默认逻辑仓；fresh

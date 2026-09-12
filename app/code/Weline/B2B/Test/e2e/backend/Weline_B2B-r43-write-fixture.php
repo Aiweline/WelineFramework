@@ -202,7 +202,10 @@ try {
         $list->where(PriceListRecord::schema_fields_LIST_ID, r43_b2b_list_id($token))->find()->fetch();
         /** @var PriceListItemRecord $item */
         $item = r43_b2b_model(PriceListItemRecord::class);
-        $item->where(PriceListItemRecord::schema_fields_LIST_ID, r43_b2b_list_id($token))->where(PriceListItemRecord::schema_fields_SKU, 'R43-SKU-' . $token)->find()->fetch();
+        $item->where(PriceListItemRecord::schema_fields_LIST_ID, r43_b2b_list_id($token))
+            ->where(PriceListItemRecord::schema_fields_SKU, 'R43-SKU-' . $token)
+            ->where(PriceListItemRecord::schema_fields_MIN_QTY, 1)
+            ->find()->fetch();
         $ok = $list->getId() && $item->getId() && (int)$item->getData(PriceListItemRecord::schema_fields_AMOUNT_MINOR) === 7430;
         r43_b2b_output(['ok' => (bool)$ok, ...$base, 'list_id' => r43_b2b_list_id($token), 'amount_minor' => (int)$item->getData(PriceListItemRecord::schema_fields_AMOUNT_MINOR)], $ok ? 0 : 1);
     }

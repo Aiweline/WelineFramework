@@ -263,6 +263,8 @@ final class PaymentInboxConsumer implements QueueConsumerInterface
             return ['ok' => false, 'error_code' => self::ERROR_INTENT_REQUIRED, 'inbox_code' => $inboxCode];
         }
         $transition = (string) $inbox->getData(PaymentWebhookInbox::schema_fields_STATUS_TRANSITION);
+        $eventType = (string) $inbox->getData(PaymentWebhookInbox::schema_fields_EVENT_TYPE);
+        $transition = $this->guardExpressAwaitingConfirmTransition($intentCode, $eventType, $transition);
         $expectedAttemptCode = $inbox->getData(PaymentWebhookInbox::schema_fields_ATTEMPT_CODE);
         $applied = $this->orchestrator->applyWebhookTransition(
             $intentCode,
@@ -387,9 +389,14 @@ final class PaymentInboxConsumer implements QueueConsumerInterface
             return ['ok' => false, 'error_code' => self::ERROR_INTENT_REQUIRED, 'inbox_code' => $inboxCode];
         }
 
+        $transition = $this->guardExpressAwaitingConfirmTransition(
+            $intentCode,
+            (string) ($inbox['event_type'] ?? ''),
+            (string) ($inbox['status_transition'] ?? 'paid'),
+        );
         $applied = $this->orchestrator->applyWebhookTransition(
             $intentCode,
-            (string) ($inbox['status_transition'] ?? 'paid'),
+            $transition,
             null,
             \is_string($inbox['attempt_code'] ?? null) ? $inbox['attempt_code'] : null,
         );
@@ -600,6 +607,49 @@ final class PaymentInboxConsumer implements QueueConsumerInterface
             return $inventory instanceof InventoryReservationCommitCapabilityInterface ? $inventory : null;
         } catch (\Throwable) {
             return null;
+        }
+    }
+
+    /**
+     * Express awaiting_confirm: do not promote APPROVED (or non-capture paid) to success.
+     */
+    private function guardExpressAwaitingConfirmTransition(
+        string $intentCode,
+        string $eventType,
+        string $transition,
+    ): string {
+        if (!$this->isIntentExpressAwaitingConfirm($intentCode)) {
+            return $transition;
+        }
+        try {
+            $mapper = new \Weline\Payment\Service\PayPalWebhookTransitionMapper();
+            if ($mapper->shouldBlockPaidWhileAwaitingConfirm($eventType, $transition)) {
+                return 'processing';
+            }
+        } catch (\Throwable) {
+            // Soft-fail: keep original transition if mapper unavailable.
+        }
+
+        return $transition;
+    }
+
+    private function isIntentExpressAwaitingConfirm(string $intentCode): bool
+    {
+        $intentCode = trim($intentCode);
+        if ($intentCode === '') {
+            return false;
+        }
+        try {
+            /** @var \Weline\Payment\Model\PaymentTransaction $tx */
+            $tx = $this->newModel(\Weline\Payment\Model\PaymentTransaction::class);
+            $tx->load(\Weline\Payment\Model\PaymentTransaction::schema_fields_TRANSACTION_NO, $intentCode);
+            if (!$tx->getId()) {
+                return false;
+            }
+
+            return \Weline\Payment\Service\ExpressCheckoutOrchestrator::isExpressAwaitingConfirm($tx->getRequestData());
+        } catch (\Throwable) {
+            return false;
         }
     }
 

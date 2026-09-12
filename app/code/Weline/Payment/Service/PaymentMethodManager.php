@@ -586,6 +586,12 @@ class PaymentMethodManager
             }
         }
 
+        // 方式级快捷支付开关（SystemConfig payment/method/{code}/express_enabled；缺省视为开启）
+        $expressEnabled = $config['express_enabled'] ?? true;
+        if ($expressEnabled === false || $expressEnabled === 0 || $expressEnabled === '0' || $expressEnabled === '') {
+            unset($capabilities['express_checkout']);
+        }
+
         return $capabilities;
     }
 

@@ -401,6 +401,11 @@ final class ProductCatalogCartItemSnapshotResolver
         $overlay = new CatalogOverlayResolver();
 
         $attributeRowsByProductAndCode = [];
+        // Callers that pass [] (instead of null) must still get a name/type load;
+        // otherwise product.sku factory codes leak onto storefront card titles.
+        if ($attributeRows === []) {
+            $attributeRows = null;
+        }
         $attributeRows ??= \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
             'product.catalog.snapshot.attributes',
             fn() => $this->attributes->listExplicitRows($websiteId, 'product', $productIds, $storeIds),

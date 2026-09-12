@@ -95,6 +95,22 @@ $copy = [
                         class="weline-cart-shell__note-slot"
                         weline-code="cart.cart.note_slot">
                 </w:slot>
+                <w:slot id="cart-summary-credit"
+                        name="<?= __('购物车批发信用') ?>"
+                        accept="cart-summary-credit,b2b-checkout-credit,b2b-deposit-note,b2b"
+                        multiple="false"
+                        position="content"
+                        class="weline-cart-shell__credit-slot"
+                        weline-code="cart.cart.credit_slot">
+                </w:slot>
+                <w:slot id="cart-summary-help-pay"
+                        name="<?= __('购物车帮我付') ?>"
+                        accept="cart-summary-help-pay,help-pay,helppay"
+                        multiple="false"
+                        position="content"
+                        class="weline-cart-shell__help-pay-slot"
+                        weline-code="cart.cart.help_pay_slot">
+                </w:slot>
             </div>
             <div class="weline-cart-shell__totals" data-cart-discount-breakdown hidden>
                 <div class="weline-cart-shell__summary-row weline-cart-shell__summary-row--goods">

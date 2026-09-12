@@ -26,14 +26,6 @@
 购物车工作台,"Cart workspace"
 search,search
 "按 Scope / guest_token 检查真实 Cart 持久库","按 Scope / guest_token 检查真实 Cart 持久库"
-仅询价,"Quote only"
-加入购物车,"Add to Cart"
-暂不可售,"Currently unavailable"
-正在加入购物车...,"Adding to cart..."
-已加入购物车,"Added to cart"
-加入购物车失败,"Failed to add to cart"
-已加入,"Added to cart"
-前往购物车,"Go to Cart"
 迷你购物车,"Mini cart"
 商品行由购物车实时数据渲染，此处仅编辑底部扩展区。,商品行由购物车实时数据渲染，此处仅编辑底部扩展区。
 小计,Subtotal
@@ -65,8 +57,18 @@ search,search
 优惠券与订单留言,优惠券与订单留言
 购物车优惠券,"Cart coupon"
 购物车订单留言,"Cart order note"
+购物车批发信用,购物车批发信用
+购物车帮我付,购物车帮我付
 商品小计,"Items subtotal"
 继续购物,"Continue shopping"
+仅询价,"Quote only"
+加入购物车,"Add to Cart"
+暂不可售,"Currently unavailable"
+正在加入购物车...,"Adding to cart..."
+已加入购物车,"Added to cart"
+加入购物车失败,"Failed to add to cart"
+已加入,"Added to cart"
+前往购物车,"Go to Cart"
 "Inspection 按 scope_key 与/或 guest_token（完整或末 4+ 位）查询真实持久库；对照店面 Cookie weline_cart_guest_token。","Inspection 按 scope_key 与/或 guest_token（完整或末 4+ 位）查询真实持久库；对照店面 Cookie weline_cart_guest_token。"
 "完整 scope key（可选）","完整 scope key（可选）"
 "guest_token 完整或末 4+ 位","guest_token 完整或末 4+ 位"

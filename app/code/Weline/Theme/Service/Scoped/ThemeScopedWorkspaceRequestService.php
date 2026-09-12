@@ -126,6 +126,16 @@ final class ThemeScopedWorkspaceRequestService
         if ($carrier !== null) {
             $result['shared_chrome_carrier'] = $carrier;
         }
+        $chromeOverwrite = $this->overwriteNonCarrierChromeAfterCarrierPublish(
+            $context,
+            $carrier !== null,
+            $actorId,
+            $actorName,
+            $this->note($input['reason'] ?? '', 'reason'),
+        );
+        if ($chromeOverwrite !== null) {
+            $result['shared_chrome_overwrite'] = $chromeOverwrite;
+        }
 
         $publishedThemeId = $context->themeId > 0
             ? $context->themeId
@@ -182,6 +192,16 @@ final class ThemeScopedWorkspaceRequestService
         );
         if ($carrier !== null) {
             $result['shared_chrome_carrier'] = $carrier;
+        }
+        $chromeOverwrite = $this->overwriteNonCarrierChromeAfterCarrierPublish(
+            $context,
+            $carrier !== null,
+            $actorId,
+            $actorName,
+            $this->note($input['reason'] ?? '', 'reason'),
+        );
+        if ($chromeOverwrite !== null) {
+            $result['shared_chrome_overwrite'] = $chromeOverwrite;
         }
 
         return $this->finalizeBatchCacheState(
@@ -275,6 +295,37 @@ final class ThemeScopedWorkspaceRequestService
             actorId: $actorId,
             actorName: $actorName,
             reason: $carrierReason,
+        );
+    }
+
+    /**
+     * 全局头尾发版本覆盖：carrier 直发或顺带 flush 后，清空并发布非载体本地 chrome。
+     *
+     * @return array<string,mixed>|null
+     */
+    private function overwriteNonCarrierChromeAfterCarrierPublish(
+        ThemeEditorContext $context,
+        bool $carrierPublished,
+        string $actorId,
+        string $actorName,
+        string $reason,
+    ): ?array {
+        $carrierDirect = $this->sharedChrome->isChromeCarrierPageType($context->layoutType);
+        if (!$carrierDirect && !$carrierPublished) {
+            return null;
+        }
+
+        $overwriteReason = \trim($reason) !== ''
+            ? ($reason . '_shared_chrome_overwrite')
+            : 'shared_chrome_force_inherit_publish';
+
+        return $this->sharedChrome->forceInheritAndPublishNonCarriers(
+            $context->withLayoutType(ThemeLayout::PAGE_TYPE_HOME),
+            null,
+            null,
+            $actorId,
+            $actorName,
+            $overwriteReason,
         );
     }
 

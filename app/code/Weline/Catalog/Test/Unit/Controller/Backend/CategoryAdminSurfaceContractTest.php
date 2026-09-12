@@ -25,6 +25,8 @@ final class CategoryAdminSurfaceContractTest extends TestCase
 
         self::assertStringContainsString('CatalogHubService', $controller);
         self::assertStringContainsString('BackendObjectAuthorizationGuardInterface', $controller);
+        self::assertStringContainsString('expected_grant_version', $controller);
+        self::assertStringContainsString('grant_version_delete', $controller);
         self::assertStringContainsString('Website::ID_DEFAULT', $controller);
         self::assertStringContainsString('postCategoryUpdateOrder', $controller);
         self::assertStringContainsString("fetch('Weline_Catalog::templates/backend/category/index.phtml')", $controller);
@@ -32,6 +34,9 @@ final class CategoryAdminSurfaceContractTest extends TestCase
 
         foreach ([
             'data-catalog-admin',
+            'data-grant-version-create',
+            'data-grant-version-update',
+            'data-grant-version-delete',
             'data-category-dnd-tree',
             'draggable="true"',
             'data-catalog-form',
@@ -61,24 +66,53 @@ final class CategoryAdminSurfaceContractTest extends TestCase
             'weline_catalog/backend/category/display-save',
             'Weline_Catalog::js/backend/category-admin.js',
             'Weline_Catalog::css/backend/category-admin.css',
+            '?v=20260912-tree1',
+            'data-catalog-tree-toggle',
+            'aria-expanded="true"',
+            'data-text-delete-products-intro',
+            'Ops tag only',
         ] as $contract) {
             self::assertStringContainsString($contract, $template);
         }
+        self::assertStringNotContainsString("__('来源')", $template);
+        self::assertStringNotContainsString('leafCode', $template);
+        self::assertStringNotContainsString('data-w-ui="tree"', $template);
 
         self::assertStringContainsString('postDisplaySave', $controller);
+        self::assertStringContainsString('getCategoryProductsForDelete', $controller);
+        self::assertStringContainsString('product_ids', $controller);
         self::assertStringContainsString("api.resource('catalog_category_admin')", $script);
+        self::assertStringContainsString('expected_grant_version', $script);
+        self::assertStringContainsString('grantVersionCreate', $script);
         self::assertStringContainsString('scope_level: scopeLevel', $script);
         self::assertStringContainsString('categoryAdminReorder', $script);
         self::assertStringContainsString('categoryAdminSaveDisplay', $script);
+        self::assertStringContainsString('categoryAdminListProductsForDelete', $script);
+        self::assertStringContainsString('requiresGrantVersion', $script);
+        self::assertStringContainsString('initTreeCollapse', $script);
+        self::assertStringContainsString('weline.catalog.tree.collapsed', $script);
+        self::assertStringContainsString("size: 'lg'", $script);
+        self::assertStringContainsString('w-catalog-delete-products', $script);
+        self::assertStringNotContainsString('#64748b', $script);
+        self::assertStringNotContainsString('#b91c1c', $script);
         self::assertStringNotContainsString('alert(', $template . $script);
         self::assertStringNotContainsString('confirm(', $template . $script);
 
         self::assertStringContainsString("return 'catalog_category_admin';", $query);
         self::assertStringContainsString('categoryAdminReorder', $query);
         self::assertStringContainsString('categoryAdminSaveDisplay', $query);
+        self::assertStringContainsString('categoryAdminListProductsForDelete', $query);
+        self::assertStringContainsString("'name' => 'product_ids'", $query);
+        self::assertStringContainsString("'name' => 'expected_grant_version'", $query);
+        self::assertStringContainsString("'expected_grant_version' =>", $query);
         self::assertStringContainsString("'name' => 'store_id'", $query);
         self::assertStringContainsString("'name' => 'channel_id'", $query);
         self::assertStringContainsString("'name' => 'google_taxonomy_id'", $query);
+        self::assertStringContainsString('data-testid="catalog-google-mapping"', $template);
+        self::assertStringContainsString('data-label-layout="stacked"', $template);
+        self::assertStringContainsString('w-field__label-row', $template);
+        self::assertStringContainsString('id="catalog-google-taxonomy-id"', $template);
+        self::assertStringContainsString('for="catalog-google-taxonomy-id"', $template);
         self::assertStringContainsString("'name' => 'image'", $query);
         self::assertStringContainsString("'name' => 'banner'", $query);
         self::assertStringContainsString("'name' => 'summary'", $query);

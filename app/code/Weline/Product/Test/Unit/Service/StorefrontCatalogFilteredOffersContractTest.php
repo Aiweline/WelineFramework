@@ -53,6 +53,19 @@ final class StorefrontCatalogFilteredOffersContractTest extends TestCase
             'if ($includeListingDetails) {',
             substr($source, max(0, (int)$attributeLoad - 120), 180),
         );
+        // Summary path must seed null (not []) so snapshot still loads localized name.
+        self::assertStringContainsString('$attributeRows = null;', $source);
+        self::assertStringNotContainsString(
+            "\$attributeRows = [];\n        if (\$includeListingDetails) {",
+            $source,
+        );
+
+        $snapshotSource = (string)file_get_contents(
+            dirname(__DIR__, 3)
+            . '/extends/module/Weline_Cart/CartItemSnapshotProvider/ProductCatalogCartItemSnapshotResolver.php',
+        );
+        self::assertStringContainsString('if ($attributeRows === []) {', $snapshotSource);
+        self::assertStringContainsString('$attributeRows = null;', $snapshotSource);
 
         $filteredBlockStart = strpos($source, 'if ($filterIds !== [])');
         self::assertNotFalse($filteredBlockStart);

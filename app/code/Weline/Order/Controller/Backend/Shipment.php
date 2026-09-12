@@ -73,6 +73,6 @@ final class Shipment extends BackendController
             $this->getMessageManager()->addError((string)__('发货操作失败，请稍后重试。'));
         }
 
-        return $this->redirect('weline_order/backend/shipment/index');
+        return $this->redirect('order/backend/shipment/index');
     }
 }

@@ -53,4 +53,30 @@ interface OrderFacadeInterface
      * @throws OrderFacadeConflictException
      */
     public function attachCustomerToGuestOrders(int $customerId, array $orderUuids): array;
+
+    /**
+     * Merge keys into persisted type_payload (B2B credit / hang projection).
+     *
+     * @param array<string,mixed> $patch
+     * @return array<string,mixed> Merged type_payload
+     *
+     * @throws OrderFacadeConflictException
+     */
+    public function mergeTypePayload(string $orderUuid, array $patch): array;
+
+    /**
+     * Tob hang balance revision: update payable authority (type_payload + money grand_total audit).
+     *
+     * @param array{
+     *   balance_amount_minor:int,
+     *   payable_grand_total_minor?:int,
+     *   revision_version?:int,
+     *   revision_pending?:bool,
+     *   audit?:array<string,mixed>
+     * } $revision
+     * @return array<string,mixed> Merged type_payload
+     *
+     * @throws OrderFacadeConflictException
+     */
+    public function reviseTobHangPayable(string $orderUuid, array $revision): array;
 }

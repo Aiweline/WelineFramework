@@ -1,6 +1,6 @@
 <?php
 /**
- * FAQ item listing (minimal usable admin).
+ * FAQ item listing — Weline UI 2.0.
  *
  * @var \Weline\Framework\View\Template $this
  */
@@ -17,17 +17,27 @@ $newUrl = (string)($this->getData('new_url') ?: '');
 $deleteUrl = (string)($this->getData('delete_url') ?: '');
 $total = (int)($this->getData('total') ?: 0);
 $escape = static fn($v): string => htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$hasFilters = $websiteId !== '' || $typeCode !== '' || $status !== '' || $search !== '';
+$hasItems = is_array($items) && $items !== [];
+$editHref = static function (int $id) use ($editUrl): string {
+    $sep = str_contains($editUrl, '?') ? '&' : '?';
+    return $editUrl . $sep . 'faq_id=' . $id;
+};
 ?>
-<div class="faq-item-admin">
-    <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-3">
-        <div>
-            <h1 class="h4 mb-1"><?= $escape(__('FAQ 条目')) ?></h1>
-            <div class="text-muted small"><?= $escape(__('管理站点 / 商品等实体的问答条目。共 %{1} 条。', [$total])) ?></div>
-        </div>
-        <a class="btn btn-sm btn-primary" href="<?= $escape($newUrl) ?>"><?= $escape(__('新建')) ?></a>
+<div class="w-container faq-item-admin" style="--w-pt:0;--w-pb:var(--weline-space-2);" data-testid="faq-item-listing">
+    <div class="w-toolbar" style="--w-mb:var(--weline-space-3);">
+        <div class="w-text" data-tone="muted" data-size="sm"><?= $escape(__('共 %{1} 条。', [$total])) ?></div>
+        <?php if ($newUrl !== ''): ?>
+            <a class="w-button" href="<?= $escape($newUrl) ?>" data-tone="primary" data-size="sm">
+                <w:icon name="plus" size="sm"></w:icon><?= $escape(__('新建')) ?>
+            </a>
+        <?php endif; ?>
     </div>
-    <form method="get" action="<?= $escape($listingUrl) ?>" class="d-flex flex-wrap gap-2 mb-3">
-        <select class="form-select form-select-sm" name="website_id" style="min-width:180px">
+
+    <form method="get" action="<?= $escape($listingUrl) ?>" class="w-cluster" data-align="center" data-wrap="true"
+          style="--w-gap:var(--weline-space-2);--w-mb:var(--weline-space-4);" data-testid="faq-item-filters">
+        <select class="w-select" name="website_id" aria-label="<?= $escape(__('网站')) ?>" data-size="sm"
+                style="width:auto;max-inline-size:14rem;flex:0 1 12rem;">
             <option value=""><?= $escape(__('全部网站')) ?></option>
             <?php foreach ($websites as $website): ?>
                 <?php if (!is_array($website)) { continue; } ?>
@@ -37,60 +47,87 @@ $escape = static fn($v): string => htmlspecialchars((string)$v, ENT_QUOTES | ENT
                 </option>
             <?php endforeach; ?>
         </select>
-        <select class="form-select form-select-sm" name="type_code" style="min-width:140px">
+        <select class="w-select" name="type_code" aria-label="<?= $escape(__('类型')) ?>" data-size="sm"
+                style="width:auto;max-inline-size:10rem;flex:0 1 8rem;">
             <option value=""><?= $escape(__('全部类型')) ?></option>
             <?php foreach ($typeCodes as $code): ?>
                 <option value="<?= $escape($code) ?>" <?= $typeCode === (string)$code ? 'selected' : '' ?>><?= $escape($code) ?></option>
             <?php endforeach; ?>
         </select>
-        <select class="form-select form-select-sm" name="status" style="min-width:120px">
+        <select class="w-select" name="status" aria-label="<?= $escape(__('状态')) ?>" data-size="sm"
+                style="width:auto;max-inline-size:10rem;flex:0 1 8rem;">
             <option value=""><?= $escape(__('全部状态')) ?></option>
             <option value="enabled" <?= $status === 'enabled' ? 'selected' : '' ?>><?= $escape(__('启用')) ?></option>
             <option value="disabled" <?= $status === 'disabled' ? 'selected' : '' ?>><?= $escape(__('禁用')) ?></option>
         </select>
-        <input class="form-control form-control-sm" type="search" name="search" value="<?= $escape($search) ?>"
-               placeholder="<?= $escape(__('搜索问题 / UUID')) ?>" style="min-width:180px">
-        <button class="btn btn-sm btn-outline-secondary" type="submit"><?= $escape(__('筛选')) ?></button>
+        <input class="w-input" type="search" name="search" value="<?= $escape($search) ?>"
+               aria-label="<?= $escape(__('搜索')) ?>"
+               placeholder="<?= $escape(__('搜索问题 / UUID')) ?>"
+               data-size="sm" style="width:auto;max-inline-size:16rem;flex:1 1 12rem;">
+        <button class="w-button" type="submit" data-tone="neutral" data-variant="outline" data-size="sm"><?= $escape(__('筛选')) ?></button>
+        <?php if ($hasFilters): ?>
+            <a class="w-button" href="<?= $escape($listingUrl) ?>" data-tone="neutral" data-variant="ghost" data-size="sm"><?= $escape(__('清空')) ?></a>
+        <?php endif; ?>
     </form>
-    <div class="table-responsive border rounded">
-        <table class="table table-sm mb-0">
-            <thead class="table-light">
-            <tr>
-                <th>ID</th>
-                <th><?= $escape(__('网站')) ?></th>
-                <th><?= $escape(__('类型')) ?></th>
-                <th><?= $escape(__('实体 UUID')) ?></th>
-                <th><?= $escape(__('问题')) ?></th>
-                <th><?= $escape(__('状态')) ?></th>
-                <th><?= $escape(__('排序')) ?></th>
-                <th><?= $escape(__('操作')) ?></th>
-            </tr>
-            </thead>
-            <tbody>
-            <?php if ($items === []): ?>
-                <tr><td colspan="8" class="text-center text-muted py-4"><?= $escape(__('暂无 FAQ 条目。')) ?></td></tr>
-            <?php endif; ?>
-            <?php foreach ($items as $item): ?>
-                <?php if (!is_array($item)) { continue; } ?>
-                <?php $id = (int)($item['faq_id'] ?? 0); ?>
+
+    <?php if (!$hasItems): ?>
+        <div class="w-empty" data-testid="faq-item-empty" style="min-height:max(14rem, calc(100dvh - 16rem));">
+            <w:icon name="help-circle" size="lg"></w:icon>
+            <div style="max-inline-size:22rem;">
+                <div class="w-text" data-weight="strong" style="--w-mb:var(--weline-space-1);"><?= $escape(__('暂无 FAQ 条目')) ?></div>
+                <div class="w-text" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-4);"><?= $escape(__('为站点或商品等实体添加问答，前台部件即可展示。')) ?></div>
+                <?php if ($newUrl !== ''): ?>
+                    <a class="w-button" href="<?= $escape($newUrl) ?>" data-tone="primary">
+                        <w:icon name="plus" size="sm"></w:icon><?= $escape(__('新建')) ?>
+                    </a>
+                <?php endif; ?>
+            </div>
+        </div>
+    <?php else: ?>
+        <div class="w-table-wrap">
+            <table class="w-table" data-w-vertical="middle">
+                <thead>
                 <tr>
-                    <td><?= $id ?></td>
-                    <td><?= (int)($item['website_id'] ?? 0) ?></td>
-                    <td><?= $escape($item['type_code'] ?? '') ?></td>
-                    <td><code><?= $escape($item['entity_uuid'] ?? '') ?></code></td>
-                    <td><?= $escape(mb_substr((string)($item['question'] ?? ''), 0, 80)) ?></td>
-                    <td><?= $escape($item['status'] ?? '') ?></td>
-                    <td><?= (int)($item['sort_order'] ?? 0) ?></td>
-                    <td class="text-nowrap">
-                        <a href="<?= $escape($editUrl . (str_contains($editUrl, '?') ? '&' : '?') . 'faq_id=' . $id) ?>"><?= $escape(__('编辑')) ?></a>
-                        <form method="post" action="<?= $escape($deleteUrl) ?>" class="d-inline" onsubmit="return confirm('<?= $escape(__('确认删除？')) ?>')">
-                            <input type="hidden" name="faq_id" value="<?= $id ?>">
-                            <button type="submit" class="btn btn-link btn-sm text-danger p-0"><?= $escape(__('删除')) ?></button>
-                        </form>
-                    </td>
+                    <th>ID</th>
+                    <th><?= $escape(__('网站')) ?></th>
+                    <th><?= $escape(__('类型')) ?></th>
+                    <th><?= $escape(__('实体 UUID')) ?></th>
+                    <th><?= $escape(__('问题')) ?></th>
+                    <th><?= $escape(__('状态')) ?></th>
+                    <th><?= $escape(__('排序')) ?></th>
+                    <th><?= $escape(__('操作')) ?></th>
                 </tr>
-            <?php endforeach; ?>
-            </tbody>
-        </table>
-    </div>
+                </thead>
+                <tbody>
+                <?php foreach ($items as $item): ?>
+                    <?php if (!is_array($item)) { continue; } ?>
+                    <?php
+                    $id = (int)($item['faq_id'] ?? 0);
+                    $rowStatus = (string)($item['status'] ?? '');
+                    $tone = $rowStatus === 'enabled' ? 'success' : ($rowStatus === 'disabled' ? 'danger' : 'neutral');
+                    ?>
+                    <tr>
+                        <td><?= $id ?></td>
+                        <td><?= (int)($item['website_id'] ?? 0) ?></td>
+                        <td><?= $escape($item['type_code'] ?? '') ?></td>
+                        <td><code><?= $escape($item['entity_uuid'] ?? '') ?></code></td>
+                        <td><?= $escape(mb_substr((string)($item['question'] ?? ''), 0, 80)) ?></td>
+                        <td><span class="w-badge" data-tone="<?= $escape($tone) ?>"><?= $escape($rowStatus) ?></span></td>
+                        <td><?= (int)($item['sort_order'] ?? 0) ?></td>
+                        <td>
+                            <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);">
+                                <a class="w-button" href="<?= $escape($editHref($id)) ?>" data-tone="neutral" data-variant="ghost" data-size="sm"><?= $escape(__('编辑')) ?></a>
+                                <form method="post" action="<?= $escape($deleteUrl) ?>" class="w-inline"
+                                      onsubmit="return confirm('<?= $escape(__('确认删除？')) ?>')">
+                                    <input type="hidden" name="faq_id" value="<?= $id ?>">
+                                    <button type="submit" class="w-button" data-tone="danger" data-variant="ghost" data-size="sm"><?= $escape(__('删除')) ?></button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    <?php endif; ?>
 </div>

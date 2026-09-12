@@ -10,7 +10,7 @@ use Weline\Theme\Helper\StorefrontImagePlaceholder;
  * @widget.name {产品主要信息}
  * @widget.description {商品详情主信息：图库、标题、SKU、价格、购买操作槽与规格详情}
  * @widget.is_container {true}
- * @widget.slots {"product-purchase-actions":{"name":"购买操作","accepts":["product","cart","checkout"],"slot_type":"layout-product-purchase-actions","max":5},"product-selling-mode":{"name":"售卖模式","accepts":["product","b2b","selling-mode"],"slot_type":"layout-product-selling-mode","max":3}}
+ * @widget.slots {"product-purchase-actions":{"name":"购买操作","accepts":["product","cart","checkout"],"slot_type":"layout-product-purchase-actions","max":5},"product-express-payment":{"name":"快捷支付","accepts":["payment","express-checkout","express-payment","product-express-payment"],"slot_type":"layout-product-express-payment","max":3},"product-selling-mode":{"name":"售卖模式","accepts":["product","b2b","selling-mode"],"slot_type":"layout-product-selling-mode","max":3}}
  * @widget.type {product}
  * @widget.area {frontend}
  * @widget.position {["content"]}
@@ -1100,6 +1100,15 @@ if ($productBreadcrumbs === []) {
                         </div>
                     </div>
                 <?php endif; ?>
+                <w:slot id="product-express-payment"
+                        name="<?= $escape(__('快捷支付')) ?>"
+                        accept="layout-product-express-payment,product-express-payment,express-checkout,express-payment,payment"
+                        multiple="true"
+                        position="content"
+                        wrapper="div"
+                        class="product-native-detail__express"
+                        weline-code="product.frontend.detail.express_payment">
+                </w:slot>
                 <?= $this->getHook('Weline_Product::frontend::product::detail::after-add-to-cart') ?>
                 <button type="button"
                         class="product-native-detail__quote"

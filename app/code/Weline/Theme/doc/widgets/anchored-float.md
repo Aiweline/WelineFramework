@@ -42,7 +42,7 @@
 |------|------|
 | `data-w-float-self` | 当前元素即浮层表面，锚点默认父元素 |
 | `data-w-float-surface` | 浮层表面选择器目标（宿主模式下） |
-| `data-w-float-anchor` | 可选 CSS 选择器覆盖锚点 |
+| `data-w-float-anchor` | 可选 CSS 选择器覆盖锚点（**优先**在宿主内 `querySelector` 后代，再 `closest` 祖先） |
 | `data-w-placement` | 语义 placement，如 `top-end` / `bottom-start` |
 | `data-w-portal` | `0`/`false` 原地 fixed；默认可 portal 到 body/top-layer |
 | `data-w-gap` / `data-w-viewport-padding` | 间距与视口内边距（与其它浮层一致） |

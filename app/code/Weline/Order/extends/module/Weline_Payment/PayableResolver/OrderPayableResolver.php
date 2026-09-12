@@ -199,6 +199,19 @@ final class OrderPayableResolver implements PayableResolverInterface
             $this->memoryOrders[$payableId]['payment_status'] = self::STATUS_PAID;
             $this->memoryOrders[$payableId]['status'] = self::STATUS_PAID;
         }
+        $meta = $this->intentMetadata($intent);
+        $purpose = strtolower(trim((string)($meta['purpose'] ?? $meta['hang_purpose'] ?? '')));
+        if ($purpose === 'deposit' || $purpose === 'balance') {
+            $this->notifyB2BHangPartial($intent);
+            if ($purpose === 'deposit') {
+                if (isset($this->memoryOrders[$payableId])) {
+                    $this->memoryOrders[$payableId]['payment_status'] = 'partial';
+                    $this->memoryOrders[$payableId]['status'] = self::STATUS_PENDING;
+                }
+
+                return;
+            }
+        }
         if ($payableId !== '') {
             $this->orderFacade->notifyOrderPaid($payableId, [
                 'intent_code' => (string) $intent->getData(PaymentIntent::schema_fields_INTENT_CODE),
@@ -217,25 +230,43 @@ final class OrderPayableResolver implements PayableResolverInterface
         $this->notifyB2BHangPartial($intent);
     }
 
+    /**
+     * @return array<string,mixed>
+     */
+    private function intentMetadata(PaymentIntent $intent): array
+    {
+        $terms = $intent->getData(PaymentIntent::schema_fields_TERMS_SNAPSHOT);
+        if (is_string($terms) && $terms !== '') {
+            $decoded = json_decode($terms, true);
+            if (is_array($decoded)) {
+                return $decoded;
+            }
+        }
+        if (is_array($terms)) {
+            return $terms;
+        }
+        $meta = $intent->getData('metadata');
+        if (is_string($meta) && $meta !== '') {
+            $decoded = json_decode($meta, true);
+            if (is_array($decoded)) {
+                return $decoded;
+            }
+        }
+
+        return is_array($meta) ? $meta : [];
+    }
+
     private function notifyB2BHangPartial(PaymentIntent $intent): void
     {
-        if (!class_exists(\Weline\B2B\Service\B2BHangOrderService::class)) {
+        if (!interface_exists(\Weline\B2B\Api\B2BHangPaymentBridgeInterface::class)) {
             return;
         }
         try {
-            $hang = ObjectManager::getInstance(\Weline\B2B\Service\B2BHangOrderService::class);
-            if (!$hang instanceof \Weline\B2B\Service\B2BHangOrderService) {
+            $bridge = ObjectManager::getInstance(\Weline\B2B\Api\B2BHangPaymentBridgeInterface::class);
+            if (!$bridge instanceof \Weline\B2B\Api\B2BHangPaymentBridgeInterface) {
                 return;
             }
-            $meta = [];
-            $terms = $intent->getData(PaymentIntent::schema_fields_TERMS_SNAPSHOT);
-            if (is_string($terms) && $terms !== '') {
-                $decoded = json_decode($terms, true);
-                if (is_array($decoded)) {
-                    $meta = $decoded;
-                }
-            }
-            $hang->onPaymentIntentLifecycle($intent, $meta);
+            $bridge->onPaymentIntentLifecycle($intent, $this->intentMetadata($intent));
         } catch (\Throwable) {
             // Hang lifecycle is optional; payment SPI must not fail closed on missing B2B.
         }
@@ -356,11 +387,24 @@ final class OrderPayableResolver implements PayableResolverInterface
      */
     private function fromReadResult(OrderReadResult $read): array
     {
+        $typePayload = $read->typePayload;
+        $paymentStatus = strtolower(trim((string)($typePayload['payment_status'] ?? '')));
+        if ($paymentStatus === '') {
+            $paymentStatus = $read->status === self::STATUS_PAID ? self::STATUS_PAID : self::STATUS_PENDING;
+            $hangStatus = strtolower(trim((string)($typePayload['hang_status'] ?? '')));
+            if (strtolower($read->orderType) === 'tob' && in_array($hangStatus, [
+                'awaiting_merchant_approval',
+                'awaiting_balance',
+            ], true)) {
+                $paymentStatus = 'partial';
+            }
+        }
+
         return [
             'order_uuid' => $read->orderUuid,
             'checkout_group_uuid' => $read->checkoutGroupUuid,
             'status' => $read->status,
-            'payment_status' => $read->status === self::STATUS_PAID ? self::STATUS_PAID : self::STATUS_PENDING,
+            'payment_status' => $paymentStatus,
             'currency' => $read->currency,
             'website_id' => $read->websiteId,
             'store_id' => $read->storeId,
@@ -376,7 +420,7 @@ final class OrderPayableResolver implements PayableResolverInterface
             'number_kind' => $read->numberKind,
             'display_number' => $read->displayNumber,
             'order_type' => $read->orderType,
-            'type_payload' => $read->typePayload,
+            'type_payload' => $typePayload,
         ];
     }
 

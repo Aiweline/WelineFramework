@@ -27,7 +27,7 @@ class DropshipSettings
      */
     public function enabledPlatforms(string $storageScope = 'default.default.default'): array
     {
-        $raw = $this->read(self::KEY_PLATFORMS_ENABLED, $storageScope, 'cj');
+        $raw = $this->read(self::KEY_PLATFORMS_ENABLED, $storageScope, '');
         if (is_array($raw)) {
             return array_values(array_filter(array_map('strval', $raw)));
         }

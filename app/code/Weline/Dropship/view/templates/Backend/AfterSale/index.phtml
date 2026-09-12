@@ -1,15 +1,35 @@
-<?php /** @var \Weline\Framework\View\Template $this */ $pf = (string)$this->getData('provider_filter'); ?>
-<div class="container-fluid py-3" data-dropship-admin="aftersale">
-  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
-    <h1 class="h3 mb-0"><?= $this->getData('page_title') ?></h1>
-    <form method="get" class="d-flex gap-2">
-      <input class="form-control form-control-sm" name="provider" value="<?= htmlspecialchars($pf) ?>" placeholder="provider">
-      <button class="btn btn-sm btn-outline-primary" type="submit"><?= __('按平台筛') ?></button>
-    </form>
-  </div>
-  <table class="table table-sm table-striped"><thead><tr><th>biz</th><th>provider</th><th>status</th><th>error</th></tr></thead><tbody>
-  <?php foreach ((array)$this->getData('rows') as $r): ?>
-    <tr><td><code><?= htmlspecialchars((string)$r['biz_key']) ?></code></td><td><?= htmlspecialchars((string)$r['provider_code']) ?></td><td><?= htmlspecialchars((string)$r['status']) ?></td><td><?= htmlspecialchars((string)($r['last_error'] ?? '')) ?></td></tr>
-  <?php endforeach; ?>
-  </tbody></table>
+<?php
+/** @var \Weline\Framework\View\Template $this */
+$pf = (string)$this->getData('provider_filter');
+$rows = (array)$this->getData('rows');
+$escape = static fn($v): string => htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+?>
+<div class="w-container" style="--w-pt:0;" data-dropship-admin="aftersale" data-testid="dropship-aftersale">
+  <form method="get" class="w-cluster" data-align="center" data-wrap="true" style="--w-gap:var(--weline-space-2);--w-mb:var(--weline-space-4);">
+    <input class="w-input" name="provider" data-size="sm" value="<?= $escape($pf) ?>" placeholder="provider" aria-label="provider" style="width:auto;max-inline-size:14rem;flex:0 1 12rem;">
+    <button class="w-button" type="submit" data-tone="neutral" data-variant="outline" data-size="sm"><?= __('按平台筛') ?></button>
+  </form>
+  <?php if ($rows === []): ?>
+    <div class="w-empty" style="min-height:12rem;">
+      <w:icon name="inbox" size="lg"></w:icon>
+      <div class="w-text" data-weight="strong"><?= __('暂无售后记录') ?></div>
+      <div class="w-text" data-tone="muted" data-size="sm"><?= __('有平台售后同步后会出现在此列表。') ?></div>
+    </div>
+  <?php else: ?>
+    <div class="w-table-wrap">
+      <table class="w-table" data-w-vertical="middle">
+        <thead><tr><th>biz</th><th>provider</th><th>status</th><th>error</th></tr></thead>
+        <tbody>
+        <?php foreach ($rows as $r): ?>
+          <tr>
+            <td><code><?= $escape($r['biz_key'] ?? '') ?></code></td>
+            <td><?= $escape($r['provider_code'] ?? '') ?></td>
+            <td><span class="w-badge"><?= $escape($r['status'] ?? '') ?></span></td>
+            <td><?= $escape($r['last_error'] ?? '') ?></td>
+          </tr>
+        <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
+  <?php endif; ?>
 </div>

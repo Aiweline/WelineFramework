@@ -18,6 +18,8 @@ class AiTranslationConfig
     public const MAX_BATCH_SIZE = 1000;
     public const DEFAULT_STRATEGY = 'light';
     public const MAX_CONSECUTIVE_BATCH_FAILURES = 3;
+    /** Same as AiTranslationWordSkipStore::MAX_FAILURES — documented for operators. */
+    public const MAX_WORD_TRANSLATION_FAILURES = AiTranslationWordSkipStore::MAX_FAILURES;
 
     public function __construct(
         private readonly SystemConfig $systemConfig,

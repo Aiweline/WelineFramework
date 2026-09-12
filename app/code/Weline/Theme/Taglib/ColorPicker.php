@@ -110,8 +110,8 @@ class ColorPicker implements TaglibInterface
             $html[] = '    <span class="w-color-picker-arrow">&#9662;</span>';
             $html[] = '  </div>';
             
-            // 下拉面板
-            $html[] = '  <div class="w-color-picker-dropdown" id="<?= htmlspecialchars($Taglib__id) ?>_dropdown" style="display:none;">';
+            // 下拉面板（floating portal）
+            $html[] = '  <div class="w-color-picker-dropdown" id="<?= htmlspecialchars($Taglib__id) ?>_dropdown" data-w-float-surface hidden>';
             
             // 颜色选择区域
             $html[] = '    <div class="w-color-picker-panel">';
@@ -158,6 +158,8 @@ class ColorPicker implements TaglibInterface
             $html[] = '.w-color-picker-clear:hover { color: #dc3545; }';
             $html[] = '.w-color-picker.has-value .w-color-picker-clear { display: block; }';
             $html[] = '.w-color-picker-dropdown { position: absolute; left: 0; top: 100%; margin-top: 2px; background: #fff; border: 1px solid #ced4da; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); z-index: 1050; padding: 12px; width: 240px; }';
+            $html[] = '.w-color-picker-dropdown[hidden]{display:none!important;}';
+            $html[] = '.w-color-picker-dropdown[data-w-floating-positioned],.w-color-picker-dropdown[data-w-floating-portal]{position:fixed;inset:auto;top:max(var(--w-floating-top,0px),var(--w-floating-viewport-top,.5rem));left:max(var(--w-floating-left,0px),var(--w-floating-viewport-left,.5rem));right:auto;bottom:auto;margin:0;z-index:var(--weline-z-menu,1080);}';
             $html[] = '.w-color-picker-panel { }';
             $html[] = '.w-color-picker-saturation { position: relative; width: 100%; height: 150px; border-radius: 3px; cursor: crosshair; }';
             $html[] = '.w-color-picker-saturation-white { position: absolute; inset: 0; background: linear-gradient(to right, #fff, transparent); border-radius: 3px; }';
@@ -210,6 +212,29 @@ if (disabled) {
 
 let currentColor = { h: 210, s: 100, v: 100, a: 1 };
 let isOpen = false;
+let floatApi = null;
+
+function uiFloating() {
+    return (window.Weline && window.Weline.UI && window.Weline.UI.floating)
+        ? window.Weline.UI.floating
+        : null;
+}
+function ensureFloat() {
+    if (floatApi) return floatApi;
+    const floating = uiFloating();
+    if (!floating || typeof floating.attach !== 'function' || !dropdown) return null;
+    dropdown.setAttribute('data-w-float-surface', '');
+    container.setAttribute('data-w-placement', 'bottom-start');
+    floatApi = floating.attach(container, { placement: 'bottom-start' });
+    return floatApi;
+}
+function placeFloat() {
+    const api = ensureFloat();
+    if (!api) return;
+    if (typeof api.show === 'function') api.show();
+    else if (typeof api.sync === 'function') api.sync();
+    else if (typeof api.place === 'function') api.place();
+}
 
 // 颜色转换函数
 function hsvToRgb(h, s, v) {
@@ -419,12 +444,16 @@ if (showInput && inputEl) {
 // 打开/关闭
 function openDropdown() {
     if (disabled) return;
-    dropdown.style.display = 'block';
+    dropdown.hidden = false;
+    dropdown.style.display = '';
     container.classList.add('open');
     isOpen = true;
+    placeFloat();
 }
 
 function closeDropdown() {
+    if (floatApi && typeof floatApi.hide === 'function') floatApi.hide();
+    dropdown.hidden = true;
     dropdown.style.display = 'none';
     container.classList.remove('open');
     isOpen = false;
@@ -454,7 +483,7 @@ if (clearBtn) {
 }
 
 document.addEventListener('click', function(e) {
-    if (!container.contains(e.target)) {
+    if (!container.contains(e.target) && !dropdown.contains(e.target)) {
         closeDropdown();
     }
 });

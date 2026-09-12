@@ -75,6 +75,6 @@ final class Refund extends BackendController
             $this->getMessageManager()->addError((string)__('退款操作失败，请稍后重试。'));
         }
 
-        return $this->redirect('weline_order/backend/refund/index');
+        return $this->redirect('order/backend/refund/index');
     }
 }

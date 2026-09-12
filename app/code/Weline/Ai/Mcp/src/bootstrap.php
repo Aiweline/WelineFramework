@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/Support.php';
 require_once __DIR__ . '/ContextResponseBudget.php';
 require_once __DIR__ . '/HardConstraintsCatalog.php';
+require_once __DIR__ . '/SystemConfigTermRouting.php';
 require_once __DIR__ . '/GuidanceWorkflowCatalog.php';
 require_once __DIR__ . '/McpSkillCatalog.php';
 require_once __DIR__ . '/DocSkillCatalog.php';

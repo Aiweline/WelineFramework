@@ -5,6 +5,9 @@ $category = $this->getData('category');
 $websiteId = max(0, (int)($this->getData('website_id') ?? 0));
 $storeId = max(0, (int)($this->getData('store_id') ?? 0));
 $channelId = max(0, (int)($this->getData('channel_id') ?? 0));
+$grantVersionCreate = max(0, (int)($this->getData('grant_version_create') ?? 0));
+$grantVersionUpdate = max(0, (int)($this->getData('grant_version_update') ?? 0));
+$grantVersionDelete = max(0, (int)($this->getData('grant_version_delete') ?? 0));
 $space = trim((string)($this->getData('space') ?? 'product'));
 $scopeLevel = trim((string)($this->getData('scope_level') ?? 'website'));
 $isStructureMode = (bool)($this->getData('is_structure_mode') ?? ($scopeLevel === 'website'));
@@ -98,7 +101,7 @@ $renderTree = function (array $nodes) use (&$renderTree, $escape, $selectedId, $
     if ($nodes === []) {
         return;
     }
-    echo '<ul class="w-tree" data-category-tree-list>';
+    echo '<ul class="w-tree" data-category-tree-list role="group">';
     foreach (array_values($nodes) as $index => $node) {
         if (!is_array($node)) {
             continue;
@@ -111,17 +114,51 @@ $renderTree = function (array $nodes) use (&$renderTree, $escape, $selectedId, $
         $pid = max(0, (int)($node['parent_id'] ?? $node['pid'] ?? 0));
         $level = max(1, (int)($node['level'] ?? 1));
         $path = (string)($node['path'] ?? '');
+        $status = strtolower(trim((string)($node['status'] ?? 'active')));
+        $isActive = (int)($node['is_active'] ?? 1) === 1 && $status !== 'inactive';
+        $pathNorm = strtolower(trim(str_replace('\\', '/', $path), '/'));
+        // Hide retired dropship shell branch (and inactive rows) — no blunt「货源」top folders.
+        if (!$isActive || $pathNorm === 'sourcing' || str_starts_with($pathNorm, 'sourcing/')) {
+            continue;
+        }
         $nodeImage = trim((string)($node['image'] ?? ''));
         $children = is_array($node['nodes'] ?? null) ? $node['nodes'] : [];
+        $hasChildren = false;
+        foreach ($children as $child) {
+            if (!is_array($child)) {
+                continue;
+            }
+            $childId = max(0, (int)($child['category_id'] ?? $child['id'] ?? 0));
+            if ($childId <= 0) {
+                continue;
+            }
+            $childStatus = strtolower(trim((string)($child['status'] ?? 'active')));
+            $childActive = (int)($child['is_active'] ?? 1) === 1 && $childStatus !== 'inactive';
+            $childPath = strtolower(trim(str_replace('\\', '/', (string)($child['path'] ?? '')), '/'));
+            if ($childActive && $childPath !== 'sourcing' && !str_starts_with($childPath, 'sourcing/')) {
+                $hasChildren = true;
+                break;
+            }
+        }
         $rowState = $selectedId === $id ? 'selected' : 'idle';
         $rowClass = $isStructureMode
             ? 'w-tree__row w-catalog-tree__row w-catalog-tree__row--draggable'
             : 'w-tree__row w-catalog-tree__row';
-        echo '<li class="w-catalog-tree__item" data-category-node data-id="' . $id . '" data-pid="' . $pid . '" data-level="' . $level . '">';
+        $itemAttrs = ' class="w-catalog-tree__item" data-category-node data-id="' . $id . '" data-pid="' . $pid . '" data-level="' . $level . '" role="treeitem"';
+        if ($hasChildren) {
+            $itemAttrs .= ' aria-expanded="true"';
+        }
+        echo '<li' . $itemAttrs . '>';
         if ($isStructureMode) {
             echo '<div class="w-drop-indicator w-drop-indicator--before" data-drop-zone="before" hidden aria-hidden="true"></div>';
         }
         echo '<div class="' . $rowClass . '"' . ($isStructureMode ? ' draggable="true"' : '') . ' data-state="' . $rowState . '" data-id="' . $id . '" data-pid="' . $pid . '" data-level="' . $level . '" data-position="' . max(1, $index + 1) . '">';
+        if ($hasChildren) {
+            echo '<button class="w-catalog-tree__toggle" type="button" data-w-tree-toggle data-catalog-tree-toggle aria-label="'
+                . $escape(__('折叠/展开')) . '"><w-icon name="chevron-right" size="sm"></w-icon></button>';
+        } else {
+            echo '<span class="w-catalog-tree__toggle w-catalog-tree__toggle--spacer" aria-hidden="true"></span>';
+        }
         if ($isStructureMode) {
             echo '<button class="w-catalog-tree__handle" type="button" tabindex="-1" aria-hidden="true" data-drag-handle><w-icon name="menu" size="sm"></w-icon></button>';
         }
@@ -136,15 +173,17 @@ $renderTree = function (array $nodes) use (&$renderTree, $escape, $selectedId, $
             echo '<w-icon name="folder" size="sm"></w-icon>';
         }
         echo '<span>' . $escape($name) . '</span>';
-        if ($path !== '') {
-            echo '<span class="w-badge" data-tone="neutral">' . $escape($path) . '</span>';
+        // Ops tag only — never invent blunt top-level「货源」folders; slug stays in title/editor.
+        $sourcePlatform = strtoupper(trim((string)($node['source_platform'] ?? '')));
+        if ($sourcePlatform !== '' && !in_array(strtolower($sourcePlatform), ['dropship', 'sourcing'], true)) {
+            echo '<span class="w-badge" data-tone="info" title="' . $escape($path !== '' ? $path : '') . '">' . $escape($sourcePlatform) . '</span>';
         }
         echo $isStructureMode ? '</a>' : '</span>';
         echo '</div>';
         if ($isStructureMode) {
             echo '<div class="w-drop-indicator w-drop-indicator--inside" data-drop-zone="inside" hidden aria-hidden="true"></div>';
         }
-        if ($children !== []) {
+        if ($hasChildren) {
             $renderTree($children);
         }
         if ($isStructureMode) {
@@ -157,7 +196,7 @@ $renderTree = function (array $nodes) use (&$renderTree, $escape, $selectedId, $
 };
 ?>
 <link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-developer-catalogs.css)">
-<link rel="stylesheet" href="@static(Weline_Catalog::css/backend/category-admin.css)?v=20260328-media1">
+<link rel="stylesheet" href="@static(Weline_Catalog::css/backend/category-admin.css)?v=20260912-tree1">
 
 <section
     class="w-backend-page w-catalog-admin w-product-category-admin"
@@ -168,6 +207,9 @@ $renderTree = function (array $nodes) use (&$renderTree, $escape, $selectedId, $
     data-website-id="<?= $escape($websiteId) ?>"
     data-store-id="<?= $escape($storeId) ?>"
     data-channel-id="<?= $escape($channelId) ?>"
+    data-grant-version-create="<?= $escape($grantVersionCreate) ?>"
+    data-grant-version-update="<?= $escape($grantVersionUpdate) ?>"
+    data-grant-version-delete="<?= $escape($grantVersionDelete) ?>"
     data-structure-mode="<?= $isStructureMode ? '1' : '0' ?>"
     data-text-save-success="<?= $escape(__('分类已保存')) ?>"
     data-text-display-save-success="<?= $escape(__('展示选择已保存')) ?>"
@@ -175,8 +217,17 @@ $renderTree = function (array $nodes) use (&$renderTree, $escape, $selectedId, $
     data-text-save-failed="<?= $escape(__('分类保存失败')) ?>"
     data-text-delete-title="<?= $escape(__('删除分类')) ?>"
     data-text-delete-message="<?= $escape(__('删除分类会同时删除其子分类与关联，且无法恢复。确定继续吗？')) ?>"
+    data-text-delete-products-intro="<?= $escape(__('将删除该分类及其子分类。可勾选下方产品一并处理：独占产品将物理删除，仍挂在其他分类的仅解绑。默认不勾选。')) ?>"
+    data-text-delete-exclusive="<?= $escape(__('物理删除')) ?>"
+    data-text-delete-shared="<?= $escape(__('仅解绑')) ?>"
+    data-text-delete-select-all="<?= $escape(__('全选')) ?>"
+    data-text-delete-select-exclusive="<?= $escape(__('全选独占')) ?>"
+    data-text-delete-physical-summary="<?= $escape(__('将物理删除 %{n} 个产品')) ?>"
+    data-text-delete-confirm="<?= $escape(__('确认删除')) ?>"
+    data-text-delete-cancel="<?= $escape(__('取消')) ?>"
     data-text-delete-success="<?= $escape(__('分类已删除')) ?>"
     data-text-delete-failed="<?= $escape(__('分类删除失败')) ?>"
+    data-text-delete-list-failed="<?= $escape(__('加载可删除产品清单失败')) ?>"
     data-text-reorder-success="<?= $escape(__('分类顺序已保存')) ?>"
     data-text-reorder-failed="<?= $escape(__('分类排序失败')) ?>"
     data-text-drop-child="<?= $escape(__('挂靠为子分类')) ?>"
@@ -285,7 +336,7 @@ $renderTree = function (array $nodes) use (&$renderTree, $escape, $selectedId, $
             <header class="w-card__header"><h2 class="w-card__title" id="catalog-tree-heading"><w-icon name="folder" size="sm"></w-icon><?= $escape(__('分类树')) ?></h2></header>
             <div class="w-card__body">
                 <?php if ($catalogs !== []): ?>
-                    <nav class="w-catalog-tree<?= $isStructureMode ? ' w-product-category-dnd-tree' : '' ?>" aria-label="<?= $escape(__('分类树')) ?>" <?= $isStructureMode ? 'data-category-dnd-tree' : 'data-category-readonly-tree' ?> data-testid="catalog-category-tree">
+                    <nav class="w-catalog-tree<?= $isStructureMode ? ' w-product-category-dnd-tree' : '' ?>" aria-label="<?= $escape(__('分类树')) ?>" role="tree" <?= $isStructureMode ? 'data-category-dnd-tree' : 'data-category-readonly-tree' ?> data-testid="catalog-category-tree">
                         <?php $renderTree($catalogs); ?>
                     </nav>
                 <?php else: ?>
@@ -449,19 +500,19 @@ $renderTree = function (array $nodes) use (&$renderTree, $escape, $selectedId, $
                                       placeholder="<?= $escape(__('详情页完整描述')) ?>"><?= $escape($categoryDescription) ?></textarea>
                         </label>
 
-                        <label class="w-field" data-testid="catalog-google-mapping">
-                            <span class="w-field__label"><?= $escape(__('Google Taxonomy ID')) ?></span>
-                            <div class="w-cluster">
-                                <input class="w-input" type="text" name="google_taxonomy_id" maxlength="32"
-                                       value="<?= $escape($googleTaxonomyId) ?>"
-                                       placeholder="269"
-                                       data-google-taxonomy-id
-                                       list="catalog-google-taxonomy-suggestions">
-                                <a class="w-button" data-tone="neutral" target="_blank" rel="noopener"
+                        <div class="w-field" data-testid="catalog-google-mapping" data-label-layout="stacked">
+                            <div class="w-field__label-row w-cluster" data-align="center" data-gap="sm">
+                                <label class="w-field__label" for="catalog-google-taxonomy-id"><?= $escape(__('Google Taxonomy ID')) ?></label>
+                                <a class="w-button" data-tone="neutral" data-size="sm" target="_blank" rel="noopener"
                                    href="@backend-url('weline_catalog/backend/google-taxonomy/index')"><?= $escape(__('查阅参照树')) ?></a>
                             </div>
+                            <input id="catalog-google-taxonomy-id" class="w-input" type="text" name="google_taxonomy_id" maxlength="32"
+                                   value="<?= $escape($googleTaxonomyId) ?>"
+                                   placeholder="269"
+                                   data-google-taxonomy-id
+                                   list="catalog-google-taxonomy-suggestions">
                             <span class="w-field__hint"><?= $escape(__('Website 结构映射；填写官方 Google 分类 ID（只读参照，不可在此改结构）。')) ?></span>
-                        </label>
+                        </div>
 
                         <footer class="w-catalog-form__actions w-cluster" data-justify="between">
                             <div>
@@ -499,4 +550,4 @@ $renderTree = function (array $nodes) use (&$renderTree, $escape, $selectedId, $
     </div>
 </dialog>
 
-<script type="module" src="@static(Weline_Catalog::js/backend/category-admin.js)?v=20260328-media1"></script>
+<script type="module" src="@static(Weline_Catalog::js/backend/category-admin.js)?v=20260912-tree1"></script>

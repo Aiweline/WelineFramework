@@ -74,7 +74,7 @@ final class RandomCouponCampaignProvider implements RandomCouponCampaignProvider
             $rule->setActions([[
                 'type' => $actionType,
                 'discount_value' => $discountValue,
-                'apply_to' => 'cart',
+                'apply_to' => 'subtotal',
                 'external_managed' => 1,
                 'source_module' => $sourceModule,
                 'source_type' => $sourceType,

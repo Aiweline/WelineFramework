@@ -7,14 +7,91 @@ if (root) {
     const channelId = Number(root.dataset.channelId || 0);
     const space = String(root.dataset.space || 'product');
     const scopeLevel = String(root.dataset.scopeLevel || 'website');
+    const grantVersions = {
+        create: Number(root.dataset.grantVersionCreate || 0),
+        update: Number(root.dataset.grantVersionUpdate || 0),
+        delete: Number(root.dataset.grantVersionDelete || 0),
+    };
     const displayForm = root.querySelector('[data-catalog-display-form]');
     const form = root.querySelector('[data-catalog-form]');
     const treeRoot = root.querySelector('[data-category-dnd-tree]');
+    const treeNav = root.querySelector('[data-testid="catalog-category-tree"]');
+    let blockDragFromToggle = false;
     const text = Object.fromEntries(
         Object.entries(root.dataset)
             .filter(([key]) => key.startsWith('text'))
             .map(([key, value]) => [key.slice(4, 5).toLowerCase() + key.slice(5), String(value || '')]),
     );
+
+    function initTreeCollapse(nav) {
+        if (!(nav instanceof HTMLElement)) return;
+        const storageKey = `weline.catalog.tree.collapsed.${space}.${websiteId}.${scopeLevel}`;
+        let collapsed = {};
+        try {
+            collapsed = JSON.parse(sessionStorage.getItem(storageKey) || '{}') || {};
+        } catch (_error) {
+            collapsed = {};
+        }
+
+        const setExpanded = (item, expanded, persist = true) => {
+            if (!(item instanceof HTMLElement) || !item.hasAttribute('aria-expanded')) return;
+            item.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+            const group = item.querySelector(':scope > [data-category-tree-list]');
+            if (group instanceof HTMLElement) {
+                group.hidden = !expanded;
+            }
+            const id = String(item.dataset.id || '');
+            if (persist && id) {
+                if (expanded) delete collapsed[id];
+                else collapsed[id] = 1;
+                try {
+                    sessionStorage.setItem(storageKey, JSON.stringify(collapsed));
+                } catch (_error) {
+                    /* ignore quota */
+                }
+            }
+        };
+
+        nav.querySelectorAll('[data-category-node][aria-expanded]').forEach((item) => {
+            const id = String(item.dataset.id || '');
+            if (id && collapsed[id]) {
+                setExpanded(item, false, false);
+            }
+        });
+
+        const selectedRow = nav.querySelector('.w-catalog-tree__row[data-state="selected"]');
+        if (selectedRow instanceof HTMLElement) {
+            let cursor = selectedRow.closest('[data-category-node]');
+            while (cursor instanceof HTMLElement) {
+                setExpanded(cursor, true, false);
+                cursor = cursor.parentElement?.closest('[data-category-node]') || null;
+            }
+        }
+
+        nav.addEventListener('click', (event) => {
+            const toggle = event.target.closest('[data-catalog-tree-toggle]');
+            if (!(toggle instanceof HTMLElement)) return;
+            event.preventDefault();
+            event.stopPropagation();
+            const item = toggle.closest('[data-category-node][aria-expanded]');
+            if (!(item instanceof HTMLElement)) return;
+            const expanded = item.getAttribute('aria-expanded') === 'true';
+            setExpanded(item, !expanded, true);
+        });
+
+        nav.addEventListener('mousedown', (event) => {
+            blockDragFromToggle = !!event.target.closest('[data-catalog-tree-toggle]');
+            if (blockDragFromToggle) {
+                event.stopPropagation();
+            }
+        }, true);
+
+        nav.addEventListener('mouseup', () => {
+            blockDragFromToggle = false;
+        }, true);
+    }
+
+    initTreeCollapse(treeNav);
 
     async function apiResource() {
         const Weline = window.Weline;
@@ -27,19 +104,44 @@ if (root) {
         return String(result?.message || result?.msg || result?.data?.message || result?.data?.msg || fallback);
     }
 
+    function grantVersionFor(operation, params) {
+        if (operation === 'categoryAdminDelete') {
+            return grantVersions.delete;
+        }
+        if (operation === 'categoryAdminSave' && Number(params?.id || 0) <= 0) {
+            return grantVersions.create;
+        }
+        return grantVersions.update;
+    }
+
+    function requiresGrantVersion(operation) {
+        return [
+            'categoryAdminSave',
+            'categoryAdminDelete',
+            'categoryAdminReorder',
+            'categoryAdminSaveDisplay',
+        ].includes(operation);
+    }
+
     async function call(operation, params) {
         const resource = await apiResource();
         if (typeof resource[operation] !== 'function') {
             throw new Error(`Weline operation is unavailable: ${operation}`);
         }
-        const result = await resource[operation]({
+        const payload = {
             space,
             scope_level: scopeLevel,
             website_id: websiteId,
             store_id: storeId,
             channel_id: channelId,
             ...params,
-        }, { keepBusinessResult: true, silent: true });
+        };
+        if (requiresGrantVersion(operation)) {
+            payload.expected_grant_version = Number(
+                params?.expected_grant_version || grantVersionFor(operation, params) || 0,
+            );
+        }
+        const result = await resource[operation](payload, { keepBusinessResult: true, silent: true });
         if (result?.success === false || Number(result?.code || 200) >= 400) {
             throw new Error(resultMessage(result, text.saveFailed));
         }
@@ -298,15 +400,15 @@ if (root) {
         if (deleteTrigger instanceof HTMLButtonElement) {
             const id = Number(deleteTrigger.dataset.catalogDelete || 0);
             if (!id) return;
-            const confirmed = await window.Weline?.UI?.dialog?.confirm?.(text.deleteMessage, {
-                title: text.deleteTitle,
-                dangerous: true,
-                confirmTone: 'danger',
-            });
-            if (!confirmed) return;
             deleteTrigger.disabled = true;
             try {
-                const result = await call('categoryAdminDelete', { id });
+                const confirmed = await confirmCategoryDelete(id);
+                if (!confirmed) {
+                    deleteTrigger.disabled = false;
+                    return;
+                }
+                const productIds = Array.isArray(confirmed.product_ids) ? confirmed.product_ids : [];
+                const result = await call('categoryAdminDelete', { id, product_ids: productIds });
                 window.Weline?.UI?.toast?.success(resultMessage(result, text.deleteSuccess));
                 window.location.assign(catalogUrl());
             } catch (error) {
@@ -315,6 +417,131 @@ if (root) {
             }
         }
     });
+
+    async function confirmCategoryDelete(id) {
+        if (space !== 'product') {
+            const ok = await window.Weline?.UI?.dialog?.confirm?.(text.deleteMessage, {
+                title: text.deleteTitle,
+                dangerous: true,
+                confirmTone: 'danger',
+            });
+            return ok ? { product_ids: [] } : null;
+        }
+
+        let products = [];
+        try {
+            const listed = await call('categoryAdminListProductsForDelete', { id });
+            const candidates = [
+                listed?.data?.products,
+                listed?.data?.data?.products,
+                listed?.products,
+            ];
+            products = candidates.find((rows) => Array.isArray(rows)) || [];
+        } catch (error) {
+            window.Weline?.UI?.toast?.error(error instanceof Error ? error.message : text.deleteListFailed);
+            return null;
+        }
+
+        if (!products.length) {
+            const ok = await window.Weline?.UI?.dialog?.confirm?.(text.deleteMessage, {
+                title: text.deleteTitle,
+                dangerous: true,
+                confirmTone: 'danger',
+            });
+            return ok ? { product_ids: [] } : null;
+        }
+
+        const wrap = document.createElement('div');
+        wrap.className = 'w-catalog-delete-products';
+
+        const intro = document.createElement('p');
+        intro.className = 'w-catalog-delete-products__intro';
+        intro.textContent = text.deleteProductsIntro || text.deleteMessage;
+        wrap.appendChild(intro);
+
+        const summary = document.createElement('p');
+        summary.className = 'w-catalog-delete-products__summary';
+        summary.dataset.physicalSummary = '1';
+        wrap.appendChild(summary);
+
+        const actions = document.createElement('div');
+        actions.className = 'w-catalog-delete-products__actions';
+        const mkBtn = (label, onClick) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'w-catalog-delete-products__chip';
+            btn.textContent = label;
+            btn.addEventListener('click', onClick);
+            return btn;
+        };
+        actions.appendChild(mkBtn(text.deleteSelectExclusive || '全选独占', () => {
+            wrap.querySelectorAll('input[data-product-id][data-exclusive="1"]').forEach((el) => { el.checked = true; });
+            refreshSummary();
+        }));
+        actions.appendChild(mkBtn(text.deleteSelectAll || '全选', () => {
+            wrap.querySelectorAll('input[data-product-id]').forEach((el) => { el.checked = true; });
+            refreshSummary();
+        }));
+        wrap.appendChild(actions);
+
+        const list = document.createElement('div');
+        list.className = 'w-catalog-delete-products__list';
+        products.forEach((product) => {
+            const productId = Number(product?.product_id || 0);
+            if (!productId) return;
+            const exclusive = !!product?.exclusive;
+            const row = document.createElement('label');
+            row.className = 'w-catalog-delete-products__row';
+            const input = document.createElement('input');
+            input.type = 'checkbox';
+            input.dataset.productId = String(productId);
+            input.dataset.exclusive = exclusive ? '1' : '0';
+            input.addEventListener('change', refreshSummary);
+            const body = document.createElement('span');
+            body.className = 'w-catalog-delete-products__body';
+            const title = document.createElement('span');
+            title.className = 'w-catalog-delete-products__title';
+            const sku = String(product?.sku || '').trim();
+            title.textContent = String(product?.name || ('#' + productId)) + (sku ? ` (${sku})` : '');
+            const badge = document.createElement('span');
+            badge.className = exclusive
+                ? 'w-catalog-delete-products__badge w-catalog-delete-products__badge--danger'
+                : 'w-catalog-delete-products__badge';
+            badge.textContent = exclusive
+                ? (text.deleteExclusive || '物理删除')
+                : (text.deleteShared || '仅解绑');
+            body.appendChild(title);
+            body.appendChild(badge);
+            row.appendChild(input);
+            row.appendChild(body);
+            list.appendChild(row);
+        });
+        wrap.appendChild(list);
+
+        function refreshSummary() {
+            const n = [...wrap.querySelectorAll('input[data-product-id][data-exclusive="1"]:checked')].length;
+            const template = text.deletePhysicalSummary || '将物理删除 %{n} 个产品';
+            summary.textContent = n > 0 ? template.replace('%{n}', String(n)) : '';
+            summary.hidden = n <= 0;
+        }
+        refreshSummary();
+
+        const result = await window.Weline?.UI?.dialog?.request?.({
+            title: text.deleteTitle,
+            message: wrap,
+            size: 'lg',
+            dangerous: true,
+            confirmTone: 'danger',
+            cancelable: true,
+            confirmLabel: text.deleteConfirm || '确认删除',
+            cancelLabel: text.deleteCancel || '取消',
+        });
+        if (!result?.confirmed) return null;
+        const selected = [...wrap.querySelectorAll('input[data-product-id]:checked')]
+            .map((el) => Number(el.dataset.productId || 0))
+            .filter((value) => value > 0);
+        return { product_ids: selected };
+    }
 
     if (treeRoot) {
         let dragId = 0;
@@ -374,6 +601,10 @@ if (root) {
         }
 
         treeRoot.addEventListener('dragstart', (event) => {
+            if (blockDragFromToggle) {
+                event.preventDefault();
+                return;
+            }
             const row = event.target.closest('.w-catalog-tree__row--draggable');
             if (!(row instanceof HTMLElement)) return;
             const item = row.closest('[data-category-node]');

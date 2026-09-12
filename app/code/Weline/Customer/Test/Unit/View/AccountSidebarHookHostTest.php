@@ -145,6 +145,56 @@ final class AccountSidebarHookHostTest extends TestCase
         $this->assertStringContainsString('.account-index__email', $css);
         $this->assertStringContainsString('overflow-wrap: anywhere;', $css);
         $this->assertStringContainsString('word-break: break-word;', $css);
+        // Primary gradient header must use on-primary (not page body text-dark).
+        $this->assertStringContainsString(
+            '.account-index__username { font-size: 1.5rem; font-weight: 700; color: var(--weline-theme-on-primary, var(--color-on-primary));',
+            $css,
+        );
+        $this->assertStringContainsString(
+            '.account-index__welcome { margin: 0.5rem 0 0; font-size: 0.875rem; color: var(--weline-theme-on-primary, var(--color-on-primary));',
+            $css,
+        );
+        $this->assertStringContainsString(
+            '.account-index__logout { display: inline-flex; align-items: center; gap: 0.375rem; padding: 0.5rem 1rem; border-radius: var(--border-radius-lg, 0.75rem); background: color-mix(in srgb, var(--weline-theme-on-primary, var(--color-on-primary)) 18%, transparent);',
+            $css,
+        );
+        $this->assertStringNotContainsString(
+            '.account-index__username { font-size: 1.5rem; font-weight: 700; color: var(--color-text-dark);',
+            $css,
+        );
+    }
+
+    public function testAccountSidebarActiveNavUsesOnPrimary(): void
+    {
+        $cssFile = dirname(__DIR__, 3) . '/view/statics/css/account-sidebar.css';
+        $this->assertFileExists($cssFile);
+        $css = (string) file_get_contents($cssFile);
+
+        $onPrimary = 'var(--weline-theme-on-primary, var(--color-on-primary))';
+        $this->assertStringContainsString(
+            '.account-sidebar__nav-link--active { background: var(--color-primary); color: ' . $onPrimary . ';',
+            $css,
+        );
+        $this->assertStringContainsString(
+            '.account-sidebar__nav-link--active i { color: ' . $onPrimary . ';',
+            $css,
+        );
+        $this->assertStringContainsString(
+            '.account-hook-nav-link.is-active:not([data-account-nav-parent]) { background: var(--color-primary); border-color: transparent; box-shadow: none; color: ' . $onPrimary . ';',
+            $css,
+        );
+        $this->assertStringContainsString(
+            '.account-sidebar__avatar-fallback { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%); color: ' . $onPrimary . ';',
+            $css,
+        );
+        $this->assertStringNotContainsString(
+            '.account-sidebar__nav-link--active { background: var(--color-primary); color: var(--color-text-dark);',
+            $css,
+        );
+        $this->assertStringNotContainsString(
+            '.account-hook-nav-link.is-active:not([data-account-nav-parent]) { background: var(--color-primary); border-color: transparent; box-shadow: none; color: var(--color-text-dark);',
+            $css,
+        );
     }
 
     public function testTwoFactorAuthHookUsesAccountSectionProtocol(): void

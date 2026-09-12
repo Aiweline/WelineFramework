@@ -30,6 +30,7 @@
 ### 禁止
 
 - 壳 `Callback` / Facade 硬编码某网关（如直接依赖 `PayPalOAuthService`）。
+- 在壳 Controller / 壳 Service **重写**某支付方式的创建/退款/回调解析/能力判定（供应商业务必须在 Extends Provider；MCP `shell_provider_business_isomorph`）。
 - 每个 Provider 再登记一条独立 Developer Return URL（本仓统一一条）。
 - Provider checkout 模板直接改订单/库存/支付终态或绕过 Facade。
 - 新代码实现已废弃的 `PaymentProviderInterface`（只用 `ProviderInterface`）。
@@ -122,7 +123,22 @@ HMAC 签名 token（`PaymentBrowserCallbackTokenService`），解码得 `method_
 | method_code | provider_code | 说明 |
 |---|---|---|
 | `fake_card` | `fake` | 本地测试样板，无 OAuth |
-| `paypal` | `paypal` | 内置网关；Connect/OAuth 在 Provider 包内，经壳调度 |
+| `paypal` | `paypal` | 内置网关；Connect/OAuth 在 Provider 包内，经壳调度；**快捷智能支付**声明 `express_checkout`（GET_FROM_FILE 取址） |
+
+## 6.1 快捷智能支付（Express）
+
+- 能力位：`express_checkout`（可选 `express_modes` / `express_next_action`）
+- 壳 Facade：`PaymentExpressFacadeInterface` → `ExpressCheckoutOrchestrator`
+- 地址回写 SPI：`payment.express_address_sink.*`（Checkout 提供配送上下文实现）
+- 结账槽 `checkout-express-payment` 与 PDP 槽 `product-express-payment` 都只渲染壳 `listExpressMethods`
+- PDP：`startExpressCheckout` → 打开支付商窗体；回跳 `express_prepare_only`（不 capture）→ `/checkout/express-review` 轻量确认 → `express_confirm_capture`
+- PayPal express：`user_action=CONTINUE`；确认前可 `patchOrder`；元数据 `express_awaiting_confirm`
+- 支付商核心地址只读（卖家保护）；缺口字段（phone/email）在确认页补全
+- **后台开关（万能支付 SystemConfig，默认开启）**：
+  - 壳级：`payment/general/express_checkout_enabled`（支付核心配置 → 启用快捷智能支付）
+  - 方式级：`payment/method/paypal/express_enabled`（PayPal 支付方式 → 启用 PayPal 快捷支付）；`express_enabled=false` 时收窄掉 `express_checkout` 能力
+  - 布局级：主题部件参数「展示快捷支付」仅控制槽位渲染，与上两项独立
+- 禁止：在部件或 Checkout 内硬编码某一网关的取址逻辑；禁止 HelpPay 短链充当快捷智能支付；壳列表为空时禁止假按钮兜底；禁止 PDP 快捷跳完整结账表单
 
 ## 7. 反模式
 

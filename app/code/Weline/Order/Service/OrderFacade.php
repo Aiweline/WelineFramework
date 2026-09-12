@@ -1306,6 +1306,83 @@ final class OrderFacade implements OrderFacadeInterface
     }
 
     /**
+     * @param array<string,mixed> $revision
+     * @return array<string,mixed>
+     */
+    public function reviseTobHangPayable(string $orderUuid, array $revision): array
+    {
+        $orderUuid = trim($orderUuid);
+        if ($orderUuid === '') {
+            throw new OrderFacadeConflictException(
+                self::ERROR_NOT_FOUND,
+                \__('Order 不存在：%{1}', [$orderUuid]),
+                ['order_uuid' => $orderUuid],
+            );
+        }
+        $balance = isset($revision['balance_amount_minor']) ? (int)$revision['balance_amount_minor'] : null;
+        $patch = [];
+        if ($balance !== null) {
+            $patch['balance_amount_minor'] = max(0, $balance);
+        }
+        if (array_key_exists('payable_grand_total_minor', $revision)) {
+            $patch['payable_grand_total_minor'] = max(0, (int)$revision['payable_grand_total_minor']);
+        }
+        if (array_key_exists('revision_version', $revision)) {
+            $patch['hang_revision_version'] = max(0, (int)$revision['revision_version']);
+        }
+        if (array_key_exists('revision_pending', $revision)) {
+            $patch['hang_revision_pending'] = (bool)$revision['revision_pending'];
+        }
+        if (isset($revision['audit']) && is_array($revision['audit'])) {
+            $patch['hang_revision_audit'] = $revision['audit'];
+        }
+        $merged = $this->mergeTypePayload($orderUuid, $patch);
+
+        $payable = isset($patch['payable_grand_total_minor'])
+            ? (int)$patch['payable_grand_total_minor']
+            : null;
+        if ($payable === null && $balance !== null) {
+            $deposit = (int)($merged['deposit_amount_minor'] ?? 0);
+            $payable = $deposit + max(0, $balance);
+            $merged = $this->mergeTypePayload($orderUuid, ['payable_grand_total_minor' => $payable]);
+        }
+        if ($payable !== null) {
+            $this->applyHangPayableGrandTotal($orderUuid, $payable, is_array($revision['audit'] ?? null) ? $revision['audit'] : []);
+        }
+
+        return $merged;
+    }
+
+    /**
+     * @param array<string,mixed> $audit
+     */
+    private function applyHangPayableGrandTotal(string $orderUuid, int $payableGrandTotalMinor, array $audit): void
+    {
+        $payableGrandTotalMinor = max(0, $payableGrandTotalMinor);
+        if ($this->memory !== null) {
+            $row = &$this->memory['orders'][$orderUuid];
+            if (!is_array($row)) {
+                return;
+            }
+            $money = is_array($row['money'] ?? null) ? $row['money'] : [];
+            $prev = (int)($money['grand_total_minor'] ?? 0);
+            $money['grand_total_minor'] = $payableGrandTotalMinor;
+            $money['hang_revision_previous_grand_total_minor'] = $prev;
+            if ($audit !== []) {
+                $money['hang_revision_audit'] = $audit;
+            }
+            $row['money'] = $money;
+            $row['grand_total_minor'] = $payableGrandTotalMinor;
+
+            return;
+        }
+        $store = $this->dbStore();
+        if (method_exists($store, 'updateHangPayableGrandTotal')) {
+            $store->updateHangPayableGrandTotal($orderUuid, $payableGrandTotalMinor, $audit);
+        }
+    }
+
+    /**
      * @param list<array<string,mixed>>|null $items
      */
     private function taxSnapshotFromCommand(

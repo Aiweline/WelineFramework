@@ -8,6 +8,7 @@
  * @var list<string> $columns
  * @var string $error
  * @var array<string,mixed> $filters
+ * @var array<string,string> $source_platform_options
  * @var array<string,mixed> $creation_context
  * @var string $product_admin_state_json
  * @var list<array{category_id:int,name:string,path:string,depth:int}> $category_bulk_options
@@ -188,6 +189,7 @@ if ($section === 'products') {
             'offer_count' => (int)($row['offer_count'] ?? 0),
             'price_display' => $priceDisplay,
             'store_count' => count($row['selected_store_ids'] ?? []),
+            'source_label' => trim((string)($row['source_label'] ?? '')),
             'updated_at' => (string)($row['updated_at'] ?? '-'),
             'identity_version' => (int)($row['identity_version'] ?? 0),
             'local_version' => (int)($row['local_version'] ?? 0),
@@ -487,8 +489,12 @@ if ($section === 'products') {
                                                 <input class="w-input" id="product-create-stock" name="stock" type="number"
                                                        min="0" step="1" scope="product_create_draft" placeholder="0">
                                             </div>
-                                            <p class="w-field__help" data-span="full"><lang>售价写入默认 Offer；库存按已选 Store × Offer 写入现货量。</lang></p>
                                         </div>
+                                        <p class="w-field__help"><lang>售价写入默认 Offer；库存按已选 Store × Offer 写入现货量。</lang></p>
+                                        <?php
+                                        // Extension slot after commerce grid: B2B wholesale product flags, etc.
+                                        echo $this->getHook('Weline_Product::backend::catalog::create::basic-after');
+                                        ?>
                                     </section>
 
                                     <section class="w-product-create__basics-block w-stack" data-gap="sm" data-basics-section="shipping">
@@ -864,6 +870,18 @@ if ($section === 'products') {
                         <input class="w-input" name="name" value="<?= $escape($filters['name'] ?? '') ?>" placeholder="@lang(名称)">
                         <input class="w-input" name="sku" value="<?= $escape($filters['sku'] ?? '') ?>" placeholder="SKU">
                         <input class="w-input" name="product_code" value="<?= $escape($filters['product_code'] ?? '') ?>" placeholder="@lang(总货号)">
+                        <?php $selectedSource = (string)($filters['source'] ?? $filters['source_platform'] ?? ''); ?>
+                        <select class="w-select" name="source" data-testid="product-filter-source" aria-label="<?= $escape(__('来源')) ?>">
+                            <option value=""><lang>全部来源</lang></option>
+                            <option value="__none__" <?= $selectedSource === '__none__' || $selectedSource === 'none' ? 'selected' : '' ?>>
+                                <lang>无来源</lang>
+                            </option>
+                            <?php foreach (($source_platform_options ?? []) as $platformValue => $platformLabel): ?>
+                                <option value="<?= $escape((string)$platformValue) ?>" <?= $selectedSource === (string)$platformValue ? 'selected' : '' ?>>
+                                    <?= $escape((string)$platformLabel) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
                         <select class="w-select" name="product_type">
                             <option value=""><lang>全部类型</lang></option>
                             <?php foreach ($productTypes as $type): ?>
@@ -926,6 +944,7 @@ if ($section === 'products') {
                         <w:field belong="t-header" name="product_id_label" type="text" width="72"><lang>ID</lang></w:field>
                         <w:field belong="t-header" name="main_image" type="image" width="72"><lang>主图</lang></w:field>
                         <w:field belong="t-header" name="name" type="text" width="16rem"><lang>商品</lang></w:field>
+                        <w:field belong="t-header" name="source_label" type="text" width="9rem"><lang>来源</lang></w:field>
                         <w:field belong="t-header" name="product_code" type="text" width="10rem"><lang>总货号</lang></w:field>
                         <w:field belong="t-header" name="product_type" type="text" width="7rem"><lang>类型</lang></w:field>
                         <w:field belong="t-header" name="status" type="text" width="7rem"><lang>状态</lang></w:field>
@@ -1045,4 +1064,4 @@ if ($section === 'products') {
     <?php endif; ?>
 </div>
 <script type="module" src="@static(Weline_Theme::ui/pages/weline-eav-manager.js)"></script>
-<script src="@static(Weline_Product::js/backend/product-admin.js)?v=20260901-wizard-step-v6" defer data-no-extract="true"></script>
+<script src="@static(Weline_Product::js/backend/product-admin.js)?v=20260912-uuid-purge" defer data-no-extract="true"></script>

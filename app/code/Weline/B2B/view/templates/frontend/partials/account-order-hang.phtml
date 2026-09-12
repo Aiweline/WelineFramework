@@ -31,6 +31,7 @@ $depositHref = $checkoutUrl . (str_contains($checkoutUrl, '?') ? '&' : '?')
     . 'purpose=deposit&order_uuid=' . rawurlencode($orderUuid);
 $balanceHref = $checkoutUrl . (str_contains($checkoutUrl, '?') ? '&' : '?')
     . 'purpose=balance&order_uuid=' . rawurlencode($orderUuid);
+$chatHref = '/customer/account/index#b2b-order-chat';
 $progressSteps = [
     'awaiting_deposit',
     'awaiting_merchant_approval',
@@ -38,7 +39,7 @@ $progressSteps = [
     'completed',
 ];
 ?>
-<link rel="stylesheet" href="@static(Weline_B2B::css/b2b-storefront.css)&v=20260909-dual-cart1" data-no-extract="true">
+<link rel="stylesheet" href="@static(Weline_B2B::css/b2b-storefront.css)&v=20260912-hang-balance1" data-no-extract="true">
 <div class="b2b-account-hang"
      data-b2b-account-hang="1"
      data-hang-status="<?= $escape($hangStatus) ?>"
@@ -82,6 +83,14 @@ $progressSteps = [
                data-testid="b2b-pay-balance"
                href="<?= $escape($balanceHref) ?>">
                 <lang>支付尾款</lang>
+            </a>
+        <?php endif; ?>
+        <?php if ($orderUuid !== '' && !in_array($hangStatus, ['rejected', 'expired'], true)): ?>
+            <a class="w-button"
+               data-variant="secondary"
+               data-testid="b2b-order-chat"
+               href="<?= $escape($chatHref) ?>">
+                <lang>订单沟通</lang>
             </a>
         <?php endif; ?>
     </div>

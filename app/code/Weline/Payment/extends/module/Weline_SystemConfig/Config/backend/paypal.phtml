@@ -48,6 +48,15 @@
         validation="max:1024" />
 
     <w:config:field
+        key="payment/method/paypal/express_enabled"
+        label="启用 PayPal 快捷支付"
+        description="方式级开关。需同时开启「支付核心配置 → 启用快捷智能支付」。关闭后壳 listExpressMethods 不含 PayPal，结账/商品页快捷区不出现 PayPal 按钮（仍可走普通 PayPal 结账）。"
+        type="switch"
+        value-type="bool"
+        default="1"
+        scope="global,website,store" />
+
+    <w:config:field
         key="payment/method/paypal/express_logo"
         label="快捷支付 Logo"
         description="结账页快捷支付按钮 logo。留空使用默认 PayPal 快捷支付 logo（paypal-express.svg）。部件级 logo 优先于本配置。"

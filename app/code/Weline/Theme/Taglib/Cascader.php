@@ -155,8 +155,8 @@ class Cascader implements TaglibInterface
             $html[] = '    <span class="w-cascader-arrow">&#9662;</span>';
             $html[] = '  </div>';
             
-            // 下拉面板
-            $html[] = '  <div class="w-cascader-dropdown" id="<?= htmlspecialchars($Taglib__id) ?>_dropdown" style="display:none;">';
+            // 下拉面板（data-w-float-surface：经 Weline.UI.floating.attach portal 逃出 overflow）
+            $html[] = '  <div class="w-cascader-dropdown" id="<?= htmlspecialchars($Taglib__id) ?>_dropdown" data-w-float-surface hidden>';
             $html[] = '    <div class="w-cascader-menus" id="<?= htmlspecialchars($Taglib__id) ?>_menus"></div>';
             $html[] = '  </div>';
             $html[] = '</div>';
@@ -175,6 +175,8 @@ class Cascader implements TaglibInterface
             $html[] = '.w-cascader-clear:hover { color: #dc3545; }';
             $html[] = '.w-cascader.has-value .w-cascader-clear { display: block; }';
             $html[] = '.w-cascader-dropdown { position: absolute; left: 0; top: 100%; margin-top: 2px; background: #fff; border: 1px solid #ced4da; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); z-index: 1050; }';
+            $html[] = '.w-cascader-dropdown[hidden]{display:none!important;}';
+            $html[] = '.w-cascader-dropdown[data-w-floating-positioned],.w-cascader-dropdown[data-w-floating-portal]{position:fixed;inset:auto;top:max(var(--w-floating-top,0px),var(--w-floating-viewport-top,.5rem));left:max(var(--w-floating-left,0px),var(--w-floating-viewport-left,.5rem));right:auto;bottom:auto;margin:0;z-index:var(--weline-z-menu,1080);max-block-size:min(260px,var(--w-floating-max-block-size,70vh));}';
             $html[] = '.w-cascader-menus { display: flex; }';
             $html[] = '.w-cascader-menu { min-width: 150px; max-height: 250px; overflow-y: auto; border-right: 1px solid #e9ecef; }';
             $html[] = '.w-cascader-menu:last-child { border-right: none; }';
@@ -225,6 +227,29 @@ if (disabled) {
 let options = staticOptions || [];
 let selectedPath = []; // 选中的路径 [{value, label, level}]
 let isOpen = false;
+let floatApi = null;
+
+function uiFloating() {
+    return (window.Weline && window.Weline.UI && window.Weline.UI.floating)
+        ? window.Weline.UI.floating
+        : null;
+}
+function ensureFloat() {
+    if (floatApi) return floatApi;
+    const floating = uiFloating();
+    if (!floating || typeof floating.attach !== 'function' || !dropdown) return null;
+    dropdown.setAttribute('data-w-float-surface', '');
+    container.setAttribute('data-w-placement', 'bottom-start');
+    floatApi = floating.attach(container, { placement: 'bottom-start' });
+    return floatApi;
+}
+function placeFloat() {
+    const api = ensureFloat();
+    if (!api) return;
+    if (typeof api.show === 'function') api.show();
+    else if (typeof api.sync === 'function') api.sync();
+    else if (typeof api.place === 'function') api.place();
+}
 
 function escapeHtml(text) {
     const div = document.createElement('div');
@@ -465,14 +490,18 @@ function updateValue() {
 // 打开下拉
 function openDropdown() {
     if (disabled) return;
-    dropdown.style.display = 'block';
+    dropdown.hidden = false;
+    dropdown.style.display = '';
     container.classList.add('open');
     isOpen = true;
-    loadOptions();
+    placeFloat();
+    loadOptions().then(() => placeFloat());
 }
 
 // 关闭下拉
 function closeDropdown() {
+    if (floatApi && typeof floatApi.hide === 'function') floatApi.hide();
+    dropdown.hidden = true;
     dropdown.style.display = 'none';
     container.classList.remove('open');
     isOpen = false;
@@ -504,9 +533,9 @@ if (clearBtn) {
     });
 }
 
-// 点击外部关闭
+// 点击外部关闭（portal 后菜单可能在 body，须同时检测 dropdown）
 document.addEventListener('click', function(e) {
-    if (!container.contains(e.target)) {
+    if (!container.contains(e.target) && !dropdown.contains(e.target)) {
         closeDropdown();
     }
 });

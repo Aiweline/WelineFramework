@@ -96,6 +96,13 @@ if ($filterWebsiteValue !== '') {
 }
 $revokeWebsiteIdsValue = $filterWebsiteValue !== '' ? $filterWebsiteValue : $websiteSelectValue;
 $revokeWebsiteIdsDisplay = $filterWebsiteDisplay !== '' ? $filterWebsiteDisplay : $websiteSelectDisplay;
+$prefillSku = '';
+$prefillGroupId = '';
+try {
+    $prefillSku = trim((string)$this->request->getGet('sku', ''));
+    $prefillGroupId = trim((string)$this->request->getGet('group_id', ''));
+} catch (\Throwable) {
+}
 ?>
 <section class="commerce-control-center" data-testid="b2b-<?= $escape($code) ?>-management" data-workspace="<?= $escape($code) ?>">
     <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between" style="--w-gap:var(--weline-space-3);">
@@ -181,9 +188,24 @@ $revokeWebsiteIdsDisplay = $filterWebsiteDisplay !== '' ? $filterWebsiteDisplay 
                         />
                     </div>
                     <div style="--w-span-md:2;"><label class="w-field__label"><?= __('版本') ?></label><input class="w-input" type="number" min="1" name="version" value="1" required></div>
-                    <div style="--w-span-md:3;"><label class="w-field__label"><?= __('商品 SKU') ?></label><input class="w-input" name="sku" maxlength="128" required placeholder="<?= $escape(__('输入商品 SKU')) ?>"></div>
-                    <div style="--w-span-md:3;"><label class="w-field__label"><?= __('批发价（分）') ?></label><input class="w-input" type="number" min="0" name="amount_minor" required></div>
-                    <div style="--w-span-md:3;"><label class="w-field__label"><?= __('渠道（可选）') ?></label><input class="w-input" name="channel_id" maxlength="64" placeholder="<?= $escape(__('可留空')) ?>"></div>
+                    <div style="--w-span-md:3;"><label class="w-field__label"><?= __('商品 SKU') ?></label><input class="w-input" name="sku" maxlength="128" required placeholder="<?= $escape(__('输入商品 SKU')) ?>" value="<?= $escape($prefillSku) ?>" data-testid="b2b-price-list-sku"></div>
+                    <div style="--w-span-md:2;"><label class="w-field__label"><?= __('起订量') ?></label><input class="w-input" type="number" min="1" name="min_qty" value="1" data-testid="b2b-price-list-min-qty"></div>
+                    <div style="--w-span-md:3;"><label class="w-field__label"><?= __('批发价（分）') ?></label><input class="w-input" type="number" min="0" name="amount_minor" required data-testid="b2b-price-list-amount-minor"></div>
+                    <div style="--w-span-md:3;"><label class="w-field__label"><?= __('渠道（可选）') ?></label><input class="w-input" name="channel_id" maxlength="64" placeholder="<?= $escape(__('可留空；网站级价目请留空')) ?>"></div>
+                    <div style="--w-span-md:12;">
+                        <p class="w-field__help" style="--w-m:0;"><?= __('单档创建兼容旧流程（默认起订量 1）。多档请在商品编辑「规格与价格」配置，或下方追加附加档。') ?></p>
+                    </div>
+                    <div style="--w-span-md:12;" class="w-stack" data-gap="sm" data-testid="b2b-price-list-extra-tiers">
+                        <label class="w-field__label"><?= __('附加数量档（可选）') ?></label>
+                        <div class="w-grid" style="--w-gap:var(--weline-space-3);" data-b2b-cc-extra-tier>
+                            <div style="--w-span-md:2;"><input class="w-input" type="number" min="1" name="tiers[1][min_qty]" placeholder="<?= $escape(__('起订量')) ?>" data-testid="b2b-price-list-extra-min-qty-1"></div>
+                            <div style="--w-span-md:3;"><input class="w-input" type="number" min="0" name="tiers[1][amount_minor]" placeholder="<?= $escape(__('批发价（分）')) ?>" data-testid="b2b-price-list-extra-amount-1"></div>
+                        </div>
+                        <div class="w-grid" style="--w-gap:var(--weline-space-3);" data-b2b-cc-extra-tier>
+                            <div style="--w-span-md:2;"><input class="w-input" type="number" min="1" name="tiers[2][min_qty]" placeholder="<?= $escape(__('起订量')) ?>" data-testid="b2b-price-list-extra-min-qty-2"></div>
+                            <div style="--w-span-md:3;"><input class="w-input" type="number" min="0" name="tiers[2][amount_minor]" placeholder="<?= $escape(__('批发价（分）')) ?>" data-testid="b2b-price-list-extra-amount-2"></div>
+                        </div>
+                    </div>
                 <?php else: ?>
                     <div style="--w-span-md:4;">
                         <label class="w-field__label"><?= __('客户') ?></label>

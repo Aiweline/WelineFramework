@@ -36,4 +36,14 @@ final class CheckoutSuccessUrlBuilder
 
         return $this->url->getUrl('checkout/success', $params);
     }
+
+    /**
+     * Express review landing (PayPal return before capture).
+     *
+     * @param array<string, scalar|null> $queryExtras
+     */
+    public function buildExpressReview(array $queryExtras = []): string
+    {
+        return $this->url->getUrl('checkout/express-review', $queryExtras);
+    }
 }

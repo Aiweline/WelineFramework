@@ -109,6 +109,9 @@ final class ProductStorefrontBreadcrumbBuilder
             }
             $trail = [$home];
             foreach ($chain as $row) {
+                if (StorefrontCategoryPublicFilter::shouldHideFromCustomers($row)) {
+                    continue;
+                }
                 $name = trim((string)($row['name'] ?? ''));
                 $url = trim((string)($row['url'] ?? ''));
                 if ($name === '') {

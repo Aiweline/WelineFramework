@@ -6,6 +6,10 @@ namespace Weline\Payment\Service;
 
 /**
  * Maps PayPal webhook event_type → Payment inbox status_transition.
+ *
+ * Express defer-capture: CHECKOUT.ORDER.APPROVED must stay `processing` (never `paid`).
+ * When transaction metadata has express_awaiting_confirm, consumers must not treat APPROVED
+ * as capture/success — capture only after express_confirm_capture (merchant review).
  */
 final class PayPalWebhookTransitionMapper
 {
@@ -20,6 +24,7 @@ final class PayPalWebhookTransitionMapper
             'PAYMENT.CAPTURE.COMPLETED', 'CHECKOUT.ORDER.COMPLETED' => 'paid',
             'PAYMENT.CAPTURE.DENIED', 'PAYMENT.CAPTURE.REVERSED' => 'failed',
             'PAYMENT.CAPTURE.REFUNDED' => 'refunded',
+            // APPROVED ≠ captured; express awaiting_confirm must not auto-succeed from this event.
             'PAYMENT.CAPTURE.PENDING', 'CHECKOUT.ORDER.APPROVED', 'CHECKOUT.ORDER.PROCESSED' => 'processing',
             'PAYMENT.ORDER.CANCELLED', 'CHECKOUT.PAYMENT-APPROVAL.REVERSED' => 'failed',
             'CUSTOMER.DISPUTE.CREATED', 'CUSTOMER.DISPUTE.UPDATED', 'RISK.DISPUTE.CREATED' => 'disputed',
@@ -27,6 +32,29 @@ final class PayPalWebhookTransitionMapper
             'PAYMENT.FRAUDDETECTED', 'PAYMENT.CAPTURE.DECLINED' => 'failed',
             default => 'processing',
         };
+    }
+
+    /**
+     * Whether a mapped transition should be forced to processing while express awaits confirm.
+     * Blocks paid/success effects from APPROVED (and any paid transition without capture events).
+     */
+    public function shouldBlockPaidWhileAwaitingConfirm(string $eventType, string $statusTransition): bool
+    {
+        $eventType = strtoupper(trim($eventType));
+        $transition = strtolower(trim($statusTransition));
+        if (\in_array($eventType, ['CHECKOUT.ORDER.APPROVED', 'CHECKOUT.ORDER.PROCESSED'], true)) {
+            return true;
+        }
+        if (\in_array($transition, ['paid', 'succeeded', 'captured', 'success'], true)
+            && !\in_array($eventType, [
+                'PAYMENT.CAPTURE.COMPLETED',
+                'CHECKOUT.ORDER.COMPLETED',
+            ], true)
+        ) {
+            return true;
+        }
+
+        return false;
     }
 
     public function isSideEffectNotification(string $eventType): bool

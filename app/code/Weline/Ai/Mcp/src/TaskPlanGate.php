@@ -29,13 +29,20 @@ final class TaskPlanGate
     private const MAX_REQUIREMENT_SCRUTINY = 20;
 
     /** @var list<string> */
-    private const ACCEPTANCE_TYPES = ['unit', 'probe', 'browser', 'doc', 'shentu'];
+    private const ACCEPTANCE_TYPES = ['unit', 'probe', 'browser', 'e2e', 'doc', 'shentu'];
 
     /** @var list<string> */
     public const WORK_KINDS = ['feature', 'non_feature'];
 
-    /** Feature plans must declare these skill roles in skill_participation. */
+    /** When ui_skill_decision=participate, skill_participation must include these. */
     public const FEATURE_REQUIRED_SKILLS = ['prototype', 'frontend-design'];
+
+    /** @var list<string> */
+    public const UI_SKILL_DECISIONS = ['participate', 'skip'];
+
+    public const MAX_IMPLICIT_REQUIREMENTS = 20;
+    public const MIN_UI_SKILL_RATIONALE = 24;
+    public const MAX_UI_SKILL_RATIONALE = 500;
 
     /**
      * @param array<string, mixed> $raw
@@ -201,6 +208,21 @@ final class TaskPlanGate
                 );
             }
         }
+        foreach ($acceptance as $row) {
+            if (($row['type'] ?? '') !== 'e2e' || ($row['status'] ?? '') !== 'passed') {
+                continue;
+            }
+            $evidence = trim((string) ($row['evidence'] ?? ''));
+            if (!TaskPlanWorkflow::evidenceLooksLikeE2e($evidence)) {
+                throw new ToolException(
+                    self::ERROR_PLAN_INVALID,
+                    'acceptance ' . ($row['id'] ?? '?')
+                    . ' type=e2e status=passed requires Playwright/e2e:run PASS evidence'
+                    . ' (ui_feature_requires_e2e / forbid_user_manual_test_handoff;'
+                    . ' curl/CDP-only is not e2e; never ask the user to test).',
+                );
+            }
+        }
 
         $devTasks = TaskPlanWorkflow::normalizeDevTasks($raw['dev_tasks'] ?? null);
         if (count($devTasks) > self::MAX_DEV_TASKS) {
@@ -229,11 +251,21 @@ final class TaskPlanGate
         );
 
         $workKind = TaskPlanWorkflow::normalizeWorkKind($raw['work_kind'] ?? null);
+        $implicitRequirements = TaskPlanWorkflow::normalizeImplicitRequirements(
+            $raw['implicit_requirements'] ?? null,
+            self::MAX_IMPLICIT_REQUIREMENTS,
+        );
+        $uiSkillDecision = TaskPlanWorkflow::normalizeUiSkillDecision(
+            $raw['ui_skill_decision'] ?? null,
+            $raw['ui_skill_rationale'] ?? null,
+            $workKind,
+        );
         $skillParticipation = TaskPlanWorkflow::normalizeSkillParticipation(
             $raw['skill_participation'] ?? null,
             $workKind,
+            $uiSkillDecision['decision'],
         );
-        if ($workKind === 'feature') {
+        if ($uiSkillDecision['decision'] === 'participate') {
             $hasShentuAcceptance = false;
             foreach ($acceptance as $row) {
                 if (($row['type'] ?? '') === 'shentu') {
@@ -244,9 +276,60 @@ final class TaskPlanGate
             if (!$hasShentuAcceptance) {
                 throw new ToolException(
                     self::ERROR_PLAN_INVALID,
-                    'work_kind=feature requires ≥1 acceptance type=shentu '
+                    'ui_skill_decision=participate requires ≥1 acceptance type=shentu '
                     . '(acceptance_phase_requires_shentu: 验收阶段必须审图).',
                 );
+            }
+        }
+
+        if (TaskPlanWorkflow::planRequiresE2eAcceptance(
+            $workKind,
+            $uiSkillDecision['decision'],
+            $acceptance,
+            $scopePaths,
+        )) {
+            $hasE2eAcceptance = false;
+            foreach ($acceptance as $row) {
+                if (($row['type'] ?? '') === 'e2e') {
+                    $hasE2eAcceptance = true;
+                    break;
+                }
+            }
+            if (!$hasE2eAcceptance) {
+                throw new ToolException(
+                    self::ERROR_PLAN_INVALID,
+                    'Every work_kind=feature plan requires ≥1 acceptance type=e2e '
+                    . '(ui_feature_requires_e2e / plan_full_pathway_e2e_suite / forbid_user_manual_test_handoff: '
+                    . 'Agent must Playwright/e2e:run PASS full pathway per chapter; never ask the user to test; '
+                    . 'CDP/curl cannot substitute; never claim done on partial work without e2e).',
+                );
+            }
+            if (TaskPlanWorkflow::findPlanSuiteE2eItems($acceptance) === []) {
+                throw new ToolException(
+                    self::ERROR_PLAN_INVALID,
+                    'Every work_kind=feature plan requires a plan-level e2e suite acceptance '
+                    . '(plan_full_pathway_e2e_suite): id=e2e-plan-suite '
+                    . '(or description containing 计划链路/功能链路/e2e组/完整功能通路). '
+                    . 'After every chapter pathway e2e PASSes, Agent MUST re-run the unified feature-chain '
+                    . 'e2e group before closeout; never hand the suite to the user.',
+                );
+            }
+            foreach ($acceptance as $row) {
+                if (($row['type'] ?? '') !== 'e2e' || ($row['status'] ?? '') !== 'passed') {
+                    continue;
+                }
+                if (!TaskPlanWorkflow::acceptanceLooksLikePlanSuiteE2e($row)) {
+                    continue;
+                }
+                $evidence = trim((string) ($row['evidence'] ?? ''));
+                if (!TaskPlanWorkflow::evidenceLooksLikePlanSuiteE2e($evidence)) {
+                    throw new ToolException(
+                        self::ERROR_PLAN_INVALID,
+                        'acceptance ' . ($row['id'] ?? '?')
+                        . ' plan-suite e2e status=passed requires unified suite evidence '
+                        . '(suite/组测/多.spec.js/功能链路 + Playwright/e2e:run PASS).',
+                    );
+                }
             }
         }
 
@@ -283,6 +366,7 @@ final class TaskPlanGate
             'schema_version' => self::SCHEMA,
             'goal' => $goal,
             'requirements' => $requirements,
+            'implicit_requirements' => $implicitRequirements,
             'scope_paths' => $scopePaths,
             'extension_point' => $extensionPoint,
             'acceptance' => TaskPlanWorkflow::applyAcceptanceDefaults($acceptance),
@@ -290,6 +374,7 @@ final class TaskPlanGate
             'forbidden' => $forbidden,
             'risk' => $risk,
             'work_kind' => $workKind,
+            'ui_skill_decision' => $uiSkillDecision['decision'],
             'skill_participation' => $skillParticipation,
             'workflow_phase' => $workflowPhase,
             'phase' => $workflowPhase === 'implement' || $workflowPhase === 'verify' || $workflowPhase === 'review' || $workflowPhase === 'closeout'
@@ -300,9 +385,14 @@ final class TaskPlanGate
             'coupling_findings' => $couplingFindings,
             'requirement_scrutiny' => $requirementScrutiny,
         ];
+        if ($uiSkillDecision['rationale'] !== '') {
+            $plan['ui_skill_rationale'] = $uiSkillDecision['rationale'];
+        }
         if ($huishenNotes !== '') {
             $plan['huishen_notes'] = $huishenNotes;
         }
+
+        TaskPlanWorkflow::assertPlanProgressCompliance($plan, 'submit');
 
         return $plan;
     }

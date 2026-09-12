@@ -329,21 +329,40 @@ final class EventChainService
         }
         if ($type === 'track' || $type === 'click') {
             if ($sigType !== 'track' && $sigType !== 'click') {
-                return false;
-            }
-            $want = $this->dictionary()->normalizeEventName((string)($step['event'] ?? ''));
-            $got = $this->dictionary()->normalizeEventName((string)($signal['event'] ?? ''));
-            if ($want === '' || $got === '' || $want !== $got) {
-                return false;
-            }
-            $sel = \trim((string)($step['selector'] ?? ''));
-            if ($sel !== '') {
-                $gotSel = \trim((string)($signal['selector'] ?? ''));
+                // 路径回放：进到该步记录的 path 即推进（无需复现点击）
+                $stepPath = \trim((string)($step['path'] ?? ''));
+                $isPage = $sigType === 'page'
+                    || ($sigType === 'track' && $this->dictionary()->normalizeEventName((string)($signal['event'] ?? '')) === 'page_view');
+                if ($isPage && $stepPath !== '') {
+                    $path = (string)($signal['path'] ?? '');
 
-                return $gotSel !== '' && ($gotSel === $sel || \str_contains($gotSel, $sel));
+                    return $path === $stepPath
+                        || $path === \rtrim($stepPath, '/')
+                        || \rtrim($path, '/') === \rtrim($stepPath, '/');
+                }
+                if ($sigType === 'track' && (string)($signal['event'] ?? '') === 'page_view') {
+                    // fall through only if handled above
+                } else {
+                    return false;
+                }
+            }
+            if ($sigType === 'track' || $sigType === 'click') {
+                $want = $this->dictionary()->normalizeEventName((string)($step['event'] ?? ''));
+                $got = $this->dictionary()->normalizeEventName((string)($signal['event'] ?? ''));
+                if ($want === '' || $got === '' || $want !== $got) {
+                    return false;
+                }
+                $sel = \trim((string)($step['selector'] ?? ''));
+                if ($sel !== '') {
+                    $gotSel = \trim((string)($signal['selector'] ?? ''));
+
+                    return $gotSel !== '' && ($gotSel === $sel || \str_contains($gotSel, $sel));
+                }
+
+                return true;
             }
 
-            return true;
+            return false;
         }
         if ($type === 'input' || $type === 'submit') {
             return $sigType === $type;
@@ -413,18 +432,25 @@ final class EventChainService
             // 拾取器可能只写 event
             if ((string)($step['event'] ?? '') !== '') {
                 $type = 'track';
+            } elseif (\trim((string)($step['path'] ?? $step['path_prefix'] ?? '')) !== '') {
+                $type = 'page';
             } else {
                 return null;
             }
+        }
+        $event = $this->dictionary()->normalizeEventName((string)($step['event'] ?? ''));
+        // 未打标点击/track：降级为 page 路径步，保证「按事件路径访问」可推进闭环
+        if (($type === 'track' || $type === 'click') && $event === '') {
+            $type = 'page';
         }
         $out = ['type' => $type];
         $label = \trim((string)($step['label'] ?? ''));
         if ($label !== '') {
             $out['label'] = \mb_substr($label, 0, 80);
         }
+        $path = \trim((string)($step['path'] ?? ''));
+        $prefix = \trim((string)($step['path_prefix'] ?? ''));
         if ($type === 'page') {
-            $path = \trim((string)($step['path'] ?? ''));
-            $prefix = \trim((string)($step['path_prefix'] ?? ''));
             if ($path !== '') {
                 $out['path'] = $path;
             } elseif ($prefix !== '') {
@@ -432,7 +458,6 @@ final class EventChainService
             }
             // 无 path / path_prefix：匹配任意进页
         } else {
-            $event = $this->dictionary()->normalizeEventName((string)($step['event'] ?? ''));
             if ($event !== '') {
                 $out['event'] = $event;
             } elseif ($type === 'track' || $type === 'click') {
@@ -441,6 +466,10 @@ final class EventChainService
             $sel = \trim((string)($step['selector'] ?? ''));
             if ($sel !== '') {
                 $out['selector'] = \mb_substr($sel, 0, 200);
+            }
+            // 保留路径元数据，便于调试与路径对齐
+            if ($path !== '') {
+                $out['path'] = $path;
             }
         }
 
@@ -462,7 +491,7 @@ final class EventChainService
     private function writeBundle(int $websiteId, array $bundle): bool
     {
         try {
-            return $this->store()->setScopedConfig(
+            $ok = $this->store()->setScopedConfig(
                 $this->configKey($websiteId),
                 \json_encode($bundle, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}',
                 self::MODULE,
@@ -470,6 +499,15 @@ final class EventChainService
                 SystemConfig::SCOPE_GLOBAL,
                 SystemConfig::LOCALE_DEFAULT
             );
+            if ($ok) {
+                try {
+                    ObjectManager::getInstance(VisitorTrackingConfig::class)
+                        ->invalidateAfterMutation($websiteId > 0 ? ('website.' . $websiteId) : null);
+                } catch (\Throwable) {
+                }
+            }
+
+            return $ok;
         } catch (\Throwable $e) {
             if (\defined('DEV') && DEV) {
                 w_log_error('EventChainService write failed: ' . $e->getMessage());

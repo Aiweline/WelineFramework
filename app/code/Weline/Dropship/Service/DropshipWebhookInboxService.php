@@ -10,6 +10,7 @@ use Weline\Framework\Manager\ObjectManager;
 
 /**
  * Advances webhook inbox rows into fulfillment projection (shell-owned).
+ * Reads only shell-standard fulfillment keys produced by Provider::parseWebhook.
  */
 class DropshipWebhookInboxService
 {
@@ -31,11 +32,33 @@ class DropshipWebhookInboxService
 
         $providerCode = (string)$row->getData(DropshipWebhookInbox::schema_fields_PROVIDER_CODE);
         $body = (string)$row->getData(DropshipWebhookInbox::schema_fields_BODY);
-        $payload = json_decode($body, true) ?: [];
-        $externalOrderId = (string)($payload['orderId'] ?? $payload['external_order_id'] ?? $payload['id'] ?? '');
-        $tracking = (string)($payload['trackNumber'] ?? $payload['tracking'] ?? '');
-        $carrier = (string)($payload['logisticName'] ?? $payload['carrier'] ?? '');
-        $fulfillStatus = (string)($payload['orderStatus'] ?? $payload['status'] ?? 'updated');
+        $envelope = json_decode($body, true);
+        if (!\is_array($envelope)) {
+            $envelope = [];
+        }
+        $fulfillment = \is_array($envelope['fulfillment'] ?? null) ? $envelope['fulfillment'] : [];
+        // Legacy inbox rows may still store raw vendor JSON — re-parse via Provider when needed.
+        if ($fulfillment === [] && $providerCode !== '') {
+            try {
+                /** @var DropshipChannelManager $channels */
+                $channels = ObjectManager::getInstance(DropshipChannelManager::class);
+                $provider = $channels->getProvider($providerCode);
+                if ($provider instanceof \Weline\Dropship\Interface\DropshipWebhookProviderInterface) {
+                    $parsed = $provider->parseWebhook([], $body);
+                    if (\is_array($parsed['fulfillment'] ?? null)) {
+                        $fulfillment = $parsed['fulfillment'];
+                    }
+                }
+            } catch (\Throwable) {
+                // fall through with empty fulfillment
+            }
+        }
+
+        $externalOrderId = (string)($fulfillment['external_order_id'] ?? '');
+        $tracking = (string)($fulfillment['tracking_number'] ?? '');
+        $carrier = (string)($fulfillment['carrier'] ?? '');
+        $fulfillStatus = (string)($fulfillment['status'] ?? 'updated');
+        $orderUuid = (string)($fulfillment['order_uuid'] ?? '');
 
         if ($externalOrderId !== '') {
             /** @var DropshipFulfillment $ff */
@@ -57,7 +80,7 @@ class DropshipWebhookInboxService
             if ($existing && $existing->getId()) {
                 $existing->setData($data)->save();
             } else {
-                $data[DropshipFulfillment::schema_fields_ORDER_UUID] = (string)($payload['orderNumber'] ?? $payload['order_uuid'] ?? '');
+                $data[DropshipFulfillment::schema_fields_ORDER_UUID] = $orderUuid;
                 $data[DropshipFulfillment::schema_fields_CREATED_AT] = $now;
                 $ff->clear()->setData($data)->save();
             }

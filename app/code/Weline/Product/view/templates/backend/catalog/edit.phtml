@@ -529,6 +529,13 @@ $statusLabel = $statusLabelMap[$productStatus] ?? $productStatus;
                     </div>
                     <textarea class="w-input" id="product-edit-meta-keywords" name="meta_keywords" rows="2" maxlength="2000" placeholder="@lang(逗号分隔)"><?= $escape($metaKeywords) ?></textarea>
                 </div>
+                <?php
+                $this->setData('productEntityId', $productEntityId);
+                $this->setData('attributes', $attributes);
+                $this->setData('offers', $offers);
+                $this->setData('snapshot', $snapshot);
+                echo $this->getHook('Weline_Product::backend::catalog::edit::basic-after');
+                ?>
             </div></div>
         </div>
 
@@ -1084,6 +1091,15 @@ $statusLabel = $statusLabelMap[$productStatus] ?? $productStatus;
                     </table>
                 </div></div>
             <?php endif; ?>
+            <?php
+            $this->setData('productEntityId', $productEntityId);
+            $this->setData('product_id', $productEntityId);
+            $this->setData('website_id', (int)$website_id);
+            $this->setData('offers', $offers);
+            $this->setData('snapshot', $snapshot);
+            $this->setData('canEditBusiness', $canEditBusiness);
+            echo $this->getHook('Weline_Product::backend::catalog::edit::offers-after');
+            ?>
         </div>
 
         <div class="w-product-editor__panel" data-product-panel="taxonomy" hidden>

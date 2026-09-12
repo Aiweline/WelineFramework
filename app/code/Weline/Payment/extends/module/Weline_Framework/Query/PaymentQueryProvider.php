@@ -50,10 +50,31 @@ class PaymentQueryProvider implements QueryProviderInterface
             'listPaymentCustomerGuides' => $this->listPaymentCustomerGuides($params),
             'auditPaymentGuideI18n' => $this->auditPaymentGuideI18n($params),
             'enqueuePaymentGuideAiTranslation' => $this->enqueuePaymentGuideAiTranslation($params),
+            'listExpressMethods' => $this->listExpressMethods($params),
             default => throw new \InvalidArgumentException(
                 (string)__('Payment query provider does not support operation: %{1}', [$operation])
             ),
         };
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array{methods:list<array<string,mixed>>}
+     */
+    private function listExpressMethods(array $params): array
+    {
+        try {
+            $facade = $this->objectManager->getInstance(\Weline\Payment\Api\PaymentExpressFacadeInterface::class);
+            if (!$facade instanceof \Weline\Payment\Api\PaymentExpressFacadeInterface) {
+                $facade = new \Weline\Payment\Service\ExpressCheckoutOrchestrator();
+            }
+        } catch (\Throwable) {
+            $facade = new \Weline\Payment\Service\ExpressCheckoutOrchestrator();
+        }
+
+        return [
+            'methods' => $facade->listExpressMethods($params),
+        ];
     }
 
     /**
@@ -722,6 +743,21 @@ class PaymentQueryProvider implements QueryProviderInterface
                     ],
                     'returns' => $commonReturns,
                     'summary' => 'Replay one persisted transaction status query after object authorization.',
+                ],
+                [
+                    'name' => 'listExpressMethods',
+                    'frontend' => true,
+                    'mode' => 'read',
+                    'graph' => false,
+                    'cost' => 1,
+                    'params' => [
+                        ['name' => 'country_code', 'type' => 'string', 'required' => false],
+                        ['name' => 'currency_code', 'type' => 'string', 'required' => false],
+                        ['name' => 'scope', 'type' => 'string', 'required' => false],
+                        ['name' => 'environment', 'type' => 'string', 'required' => false],
+                    ],
+                    'returns' => $commonReturns,
+                    'summary' => 'List active payment methods that declare express_checkout (快捷智能支付).',
                 ],
                 [
                     'name' => 'listPaymentCustomerGuides',

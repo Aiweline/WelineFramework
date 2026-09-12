@@ -9,6 +9,7 @@ use Weline\Dropship\Interface\DropshipCatalogProviderInterface;
 use Weline\Dropship\Model\DropshipListing;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Inventory\Service\InventoryService;
+use Weline\Websites\Model\Website;
 
 class DropshipFollowService
 {
@@ -50,7 +51,18 @@ class DropshipFollowService
         $prev = (int)$listing->getData(DropshipListing::schema_fields_ORIGIN_PRICE_MINOR);
         $sale = (int)$listing->getData(DropshipListing::schema_fields_SALE_PRICE_MINOR);
         $lock = (int)$listing->getData(DropshipListing::schema_fields_PRICE_LOCK) === 1;
-        $price = $this->pricing->applyRemoteOrigin($prev, $snapshot->originPriceMinor, $sale, $uplift, $lock);
+        $websiteId = (int)$listing->getData(DropshipListing::schema_fields_WEBSITE_ID);
+        $targetCurrency = $this->resolveWebsiteCurrency($websiteId);
+        $originCurrency = trim((string)($snapshot->originCurrency !== '' ? $snapshot->originCurrency : $listing->getData(DropshipListing::schema_fields_ORIGIN_CURRENCY)));
+        $price = $this->pricing->applyRemoteOrigin(
+            $prev,
+            $snapshot->originPriceMinor,
+            $sale,
+            $uplift,
+            $lock,
+            $originCurrency !== '' ? $originCurrency : 'USD',
+            $targetCurrency,
+        );
 
         $data = [
             DropshipListing::schema_fields_ORIGIN_PRICE_PREV_MINOR => $price['origin_prev'],
@@ -63,6 +75,13 @@ class DropshipFollowService
             DropshipListing::schema_fields_LAST_SYNCED_AT => date('Y-m-d H:i:s'),
             DropshipListing::schema_fields_UPDATED_AT => date('Y-m-d H:i:s'),
         ];
+        if (trim($snapshot->title) !== '') {
+            $data[DropshipListing::schema_fields_TITLE] = $snapshot->title;
+        }
+        $thumb = DropshipListingDraftService::firstThumbUrl($snapshot->media);
+        if ($thumb !== '') {
+            $data[DropshipListing::schema_fields_THUMB_URL] = $thumb;
+        }
         if ($price['sale_minor'] !== null) {
             $data[DropshipListing::schema_fields_SALE_PRICE_MINOR] = $price['sale_minor'];
         }
@@ -101,5 +120,27 @@ class DropshipFollowService
         } catch (\Throwable $e) {
             w_log_error('dropship setOnHand failed: ' . $e->getMessage());
         }
+    }
+
+    private function resolveWebsiteCurrency(int $websiteId): string
+    {
+        try {
+            /** @var Website $website */
+            $website = ObjectManager::getInstance(Website::class);
+            $row = $website->clear()->where(Website::schema_fields_ID, $websiteId)->find()->fetch();
+            if ($row && $row->getId()) {
+                $code = strtoupper(trim((string)($row->getDefaultCurrency() ?? '')));
+                if ($code !== '') {
+                    return $code;
+                }
+                $codes = $row->getCurrencyCodes();
+                if ($codes !== []) {
+                    return strtoupper(trim((string)$codes[0]));
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        return 'CNY';
     }
 }

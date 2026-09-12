@@ -4,8 +4,10 @@
 读取分类详情,"Read category details"
 保存分类,"Save category"
 删除分类,"Delete category"
+删除前产品清单,删除前产品清单
 拖拽排序分类,"Reorder categories by drag and drop"
 保存展示选择,保存展示选择
+页面下发的对象授权版本；提交前必须保持一致,页面下发的对象授权版本；提交前必须保持一致
 万能分类,"Universal Catalog"
 "Catalog hub facade for multi-space category trees.","Catalog hub facade for multi-space category trees."
 id属性不能为空,id属性不能为空
@@ -31,6 +33,7 @@ id属性不能为空,id属性不能为空
 分类已删除,"Category deleted"
 分类顺序已保存,"Category order saved"
 分类不存在,"Category not found"
+加载删除产品清单失败,加载删除产品清单失败
 "website_id 必须是非负整数","website_id must be a non-negative integer"
 tree,tree
 维护多空间分类树,维护多空间分类树
@@ -42,6 +45,7 @@ trash,trash
 分类排序,分类排序
 查看分类,查看分类
 查看分类详情,查看分类详情
+列出分类子树挂载产品供删除勾选,列出分类子树挂载产品供删除勾选
 "Google 产品分类","Google Product Taxonomy"
 "已入队 AI 翻译","AI translation enqueued"
 "已入队 AI 翻译（队列 #%{1}）","AI translation enqueued (queue #%{1})"
@@ -87,9 +91,18 @@ Store,Store
 Channel,Channel
 切换,切换
 选择分类图片,选择分类图片
+折叠/展开,折叠/展开
 添加子分类,添加子分类
 删除分类会同时删除其子分类与关联，且无法恢复。确定继续吗？,删除分类会同时删除其子分类与关联，且无法恢复。确定继续吗？
+将删除该分类及其子分类。可勾选下方产品一并处理：独占产品将物理删除，仍挂在其他分类的仅解绑。默认不勾选。,将删除该分类及其子分类。可勾选下方产品一并处理：独占产品将物理删除，仍挂在其他分类的仅解绑。默认不勾选。
+物理删除,物理删除
+仅解绑,仅解绑
+全选,全选
+全选独占,全选独占
+"将物理删除 %{n} 个产品","将物理删除 %{n} 个产品"
+确认删除,确认删除
 分类删除失败,"Failed to delete category"
+加载可删除产品清单失败,加载可删除产品清单失败
 分类排序失败,"Failed to reorder categories"
 挂靠为子分类,挂靠为子分类
 插入到上方,插入到上方
@@ -154,6 +167,7 @@ Channel,Channel
 "展示选择只能在 Store/Channel 范围配置","Display selection can only be configured at store/channel scope"
 目标语言不能为空,"Target locale cannot be empty"
 "Google 分类 AI 翻译 %{1}","Google taxonomy AI translation %{1}"
+来源,来源
 """万能分类后台 Resource 不支持操作：%{1}""","Catalog admin resource does not support operation: %{1}"
 多语言翻译,"Multilingual Translation"
 "无效的 Google Taxonomy ID：%{1}","Invalid Google Taxonomy ID: %{1}"

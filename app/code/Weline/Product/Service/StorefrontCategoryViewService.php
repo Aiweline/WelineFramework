@@ -186,8 +186,15 @@ final class StorefrontCategoryViewService
         $chain = array_reverse($chain);
         $breadcrumbs = [];
         foreach ($chain as $row) {
+            if (StorefrontCategoryPublicFilter::shouldHideFromCustomers($row)) {
+                continue;
+            }
+            $label = trim((string)($row['name'] ?? ''));
+            if ($label === '') {
+                continue;
+            }
             $breadcrumbs[] = [
-                'label' => (string)($row['name'] ?? ''),
+                'label' => $label,
                 'url' => (string)($row['url'] ?? ''),
             ];
         }

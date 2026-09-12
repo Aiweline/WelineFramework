@@ -54,7 +54,7 @@ final class ControlCenter extends BackendController
     {
         return $this->renderWorkspace('price-lists', '价目表', [
             '价目表' => [PriceListRecord::class, ['list_id', 'group_id', 'website_id', 'version', 'channel_id', 'active', 'created_at']],
-            '价目表项目' => [PriceListItemRecord::class, ['list_id', 'list_version', 'sku', 'amount_minor']],
+            '价目表项目' => [PriceListItemRecord::class, ['list_id', 'list_version', 'sku', 'min_qty', 'amount_minor']],
         ], [], [
             'kind' => 'price-list',
             'action' => 'b2b/backend/control-center/save-price-list',
@@ -184,7 +184,7 @@ final class ControlCenter extends BackendController
     #[Acl('Weline_B2B::commerce:partner:groups', '添加客户组成员', 'user-plus', '将客户加入 B2B 客户组')]
     public function assignGroupMember()
     {
-        return $this->executeWrite('assignGroupMember', 'groups', '客户已加入该组。');
+        return $this->executeWrite('assignGroupMember', 'groups', '客户已加入该组；若批发信用已开启将按档补齐额度。');
     }
 
     #[Acl('Weline_B2B::commerce:partner:groups', '移除客户组成员', 'user-minus', '将客户移出 B2B 客户组')]
@@ -197,6 +197,22 @@ final class ControlCenter extends BackendController
     public function savePriceList()
     {
         return $this->executeWrite('createPriceList', 'price-lists', '价目表已创建。');
+    }
+
+    #[Acl('Weline_B2B::commerce:partner:price-lists', '保存商品阶梯价', 'edit', '从商品编辑保存 B2B SKU 数量阶梯价')]
+    public function saveProductSkuTiers(): string
+    {
+        try {
+            if (!$this->request->isPost()) {
+                throw new \InvalidArgumentException((string)__('仅允许 POST 请求。'));
+            }
+            $payload = $this->adminService->upsertSkuQtyTiers((array)$this->request->getPost());
+            return $this->jsonOk(['tiers' => $payload]);
+        } catch (\Weline\B2B\Service\B2BConflictException $conflict) {
+            return $this->jsonError($conflict, 'save-product-sku-tiers');
+        } catch (\Throwable $throwable) {
+            return $this->jsonError($throwable, 'save-product-sku-tiers');
+        }
     }
 
     #[Acl('Weline_B2B::commerce:partner:quotes', '审批报价', 'check', '签发报价、重新校验并生成不可变订单价格快照')]
