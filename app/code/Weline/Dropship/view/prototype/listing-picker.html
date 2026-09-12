@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PROTOTYPE · 货源选品器三栏（供应商兼容）</title>
+  <!--
+    Throwaway UI prototype (not a production route).
+    Question: Does capability-gated Variant A feel right for multi-provider 选品?
+    Open this file in a browser. Switch states via bottom bar or ?state=full|no_browse|…
+  -->
+  <style>
+    :root {
+      --bg: #f4f6f8;
+      --surface: #fff;
+      --border: #d8dee6;
+      --text: #1a2332;
+      --muted: #5b6b7c;
+      --primary: #1f6feb;
+      --primary-on: #fff;
+      --radius: 10px;
+      --space: 12px;
+      --rail: 220px;
+      --mid: 200px;
+      --font: "IBM Plex Sans", "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: var(--font);
+      color: var(--text);
+      background: var(--bg);
+      padding-bottom: 88px;
+    }
+    .banner {
+      background: #7c2d12;
+      color: #fff7ed;
+      padding: 8px 16px;
+      font-size: 13px;
+    }
+    .page { max-width: 1200px; margin: 0 auto; padding: 16px; }
+    .tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+    .tabs button {
+      border: 1px solid var(--border);
+      background: var(--surface);
+      border-radius: 999px;
+      padding: 8px 14px;
+      cursor: pointer;
+      font: inherit;
+    }
+    .tabs button[aria-current="true"] {
+      background: var(--primary);
+      color: var(--primary-on);
+      border-color: var(--primary);
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: var(--rail) var(--mid) minmax(0, 1fr);
+      gap: var(--space);
+      align-items: stretch;
+      min-height: 420px;
+    }
+    .layout[data-filters-collapsed="1"] {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .layout[data-filters-collapsed="1"] .rail,
+    .layout[data-filters-collapsed="1"] .cats { display: none; }
+    .thumb {
+      width: 48px; height: 48px; object-fit: cover;
+      border-radius: 8px; background: #eef2f7; border: 1px solid var(--border);
+      display: block;
+    }
+    .filters-bar {
+      display: flex; justify-content: space-between; gap: 8px; align-items: center;
+      margin-bottom: 10px;
+    }
+    .chip {
+      display: inline-block; max-width: 12rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      background: #eef2f7; border-radius: 8px; padding: 4px 8px; font-size: 12px; margin-right: 6px;
+    }
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: var(--space);
+    }
+    .rail a, .cats button {
+      display: block;
+      width: 100%;
+      text-align: left;
+      border: 0;
+      background: transparent;
+      padding: 10px;
+      margin-bottom: 4px;
+      border-radius: 8px;
+      border-left: 3px solid transparent;
+      cursor: pointer;
+      font: inherit;
+      color: inherit;
+      text-decoration: none;
+    }
+    .rail a:hover, .cats button:hover { background: #e8f0fe; }
+    .rail a[aria-current="true"], .cats button[aria-current="true"] {
+      background: var(--primary);
+      color: var(--primary-on);
+      border-left-color: #0b4bbb;
+      font-weight: 600;
+    }
+    .badge {
+      display: inline-block;
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 999px;
+      background: #eef2f7;
+      color: var(--muted);
+      margin-left: 6px;
+    }
+    .rail a[aria-current="true"] .badge { background: rgba(255,255,255,.2); color: inherit; }
+    .main-head {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: end;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+    .field input, .field select {
+      height: 36px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0 10px;
+      font: inherit;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--border); }
+    .empty {
+      min-height: 160px;
+      display: grid;
+      place-content: center;
+      text-align: center;
+      color: var(--muted);
+      gap: 6px;
+    }
+    .bar {
+      position: fixed;
+      left: 50%;
+      bottom: 16px;
+      transform: translateX(-50%);
+      z-index: 40;
+      margin: 0;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      max-width: min(42rem, calc(100vw - 2rem));
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px 12px;
+      box-shadow: 0 8px 24px rgba(15,23,42,.12);
+    }
+    .bar[hidden] { display: none !important; }
+    .btn {
+      border: 1px solid var(--border);
+      background: var(--surface);
+      border-radius: 8px;
+      padding: 8px 12px;
+      font: inherit;
+      cursor: pointer;
+    }
+    .btn.primary { background: var(--primary); color: var(--primary-on); border-color: var(--primary); }
+    .btn:disabled { opacity: .45; cursor: not-allowed; }
+    .debug {
+      margin-top: 12px;
+      font-family: ui-monospace, monospace;
+      font-size: 12px;
+      background: #0f172a;
+      color: #e2e8f0;
+      padding: 10px 12px;
+      border-radius: var(--radius);
+      white-space: pre-wrap;
+    }
+    .switcher {
+      position: fixed;
+      left: 0; right: 0; bottom: 0;
+      background: #111827;
+      color: #f9fafb;
+      padding: 10px 12px;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+      z-index: 20;
+    }
+    .switcher button {
+      border: 1px solid #374151;
+      background: #1f2937;
+      color: inherit;
+      border-radius: 999px;
+      padding: 6px 10px;
+      font: inherit;
+      cursor: pointer;
+    }
+    .switcher button[aria-current="true"] { background: #2563eb; border-color: #2563eb; }
+    .modal-backdrop {
+      position: fixed; inset: 0;
+      background: rgba(15,23,42,.45);
+      display: none;
+      place-items: center;
+      z-index: 30;
+    }
+    .modal-backdrop.open { display: grid; }
+    .modal {
+      width: min(420px, 92vw);
+      background: var(--surface);
+      border-radius: 12px;
+      padding: 16px;
+      border: 1px solid var(--border);
+    }
+    .muted { color: var(--muted); font-size: 13px; }
+    .tree-indent { padding-left: 18px; }
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="banner">PROTOTYPE · 非生产路由 · 验证能力门控三栏选品器（供应商 A/B，无真实供应商名）</div>
+  <div class="page">
+    <div class="tabs" role="tablist">
+      <button type="button" id="tab-pick" aria-current="true">选品</button>
+      <button type="button" id="tab-listed">已刊登</button>
+    </div>
+
+    <div id="view-pick">
+      <div class="layout" id="layout">
+        <aside class="panel rail" id="rail"></aside>
+        <aside class="panel cats" id="cats"></aside>
+        <section class="panel">
+          <div class="filters-bar">
+            <div id="filter-summary"></div>
+            <button class="btn" type="button" id="toggle-filters">收起筛选</button>
+          </div>
+          <div class="main-head">
+            <div class="field" id="country-field">
+              <label for="country">库存国家</label>
+              <select id="country">
+                <option value="US">US</option>
+                <option value="CN">CN</option>
+                <option value="DE">DE</option>
+              </select>
+            </div>
+            <div class="field" style="min-width:220px;flex:1;">
+              <label for="q">关键词（可选）</label>
+              <input id="q" placeholder="商品名 / SKU，可留空">
+            </div>
+            <button class="btn" type="button" id="browse-btn">浏览</button>
+          </div>
+          <div id="grid"></div>
+          <div class="bar" id="float-bar" hidden>
+            <span class="muted" id="sel-count">已选 0</span>
+            <div>
+              <button class="btn primary" type="button" id="select-btn" disabled>选择</button>
+              <button class="btn" type="button" id="cancel-btn" disabled>取消选择</button>
+              <button class="btn primary" type="button" id="publish-btn" disabled>刊登选中</button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <div id="view-listed" hidden>
+      <div class="panel">
+        <table>
+          <thead>
+            <tr>
+              <th>供应商</th><th>SPU</th><th>分类</th><th>国家</th><th>本地仓</th><th>状态</th>
+            </tr>
+          </thead>
+          <tbody id="listed-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="debug" id="debug"></div>
+  </div>
+
+  <div class="modal-backdrop" id="modal">
+    <div class="modal">
+      <h3 style="margin:0 0 8px;">刊登选中</h3>
+      <p class="muted">范围选择（占位）+ 本地仓只读</p>
+      <div class="field" style="margin:12px 0;">
+        <label>网站 / 店铺范围</label>
+        <select><option>演示站 · 默认店</option></select>
+      </div>
+      <div class="field" style="margin:12px 0;">
+        <label>本地仓（只读）</label>
+        <input value="WH-US-01 — 美国默认仓" readonly>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn" type="button" id="modal-close">取消</button>
+        <button class="btn primary" type="button" id="modal-ok">确认刊登</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="switcher" aria-label="prototype states">
+    <strong style="margin-right:4px;">state</strong>
+    <button type="button" data-state="full">full</button>
+    <button type="button" data-state="no_browse">no_browse</button>
+    <button type="button" data-state="no_country">no_country</button>
+    <button type="button" data-state="flat_cats">flat_cats</button>
+    <button type="button" data-state="switch_clear">switch_clear</button>
+    <button type="button" data-state="publish_modal">publish_modal</button>
+    <button type="button" data-state="listed">listed</button>
+  </div>
+
+  <script>
+    const PROVIDERS = {
+      A: {
+        code: 'A', title: '供应商 A',
+        caps: { browse: true, browse_country_filter: true },
+        catsTree: [
+          { id: 'root-apparel', name: '服饰', parent_id: '', level: 1, path: '服饰' },
+          { id: 'apparel-tee', name: 'T 恤', parent_id: 'root-apparel', level: 2, path: '服饰 / T 恤' },
+          { id: 'root-home', name: '家居', parent_id: '', level: 1, path: '家居' },
+        ],
+        catsFlat: [
+          { id: 'tag-1', name: '热销', parent_id: '', level: 1, path: '热销' },
+          { id: 'tag-2', name: '新品', parent_id: '', level: 1, path: '新品' },
+        ],
+        products: [
+          { id: 'p1', title: '棉质 T 恤', spu: 'SPU-A-1', price: '12.00', qty: 80, category_id: 'apparel-tee', category_path: '服饰 / T 恤', thumb: 'https://placehold.co/96x96/png?text=Tee' },
+          { id: 'p2', title: '桌面收纳', spu: 'SPU-A-2', price: '22.00', qty: 40, category_id: 'root-home', category_path: '家居', thumb: 'https://placehold.co/96x96/png?text=Home' },
+        ],
+      },
+      B: {
+        code: 'B', title: '供应商 B',
+        caps: { browse: false, browse_country_filter: true },
+        catsTree: [],
+        catsFlat: [],
+        products: [
+          { id: 'p3', title: '无分类浏览品', spu: 'SPU-B-1', price: '9.50', qty: 120, category_id: '', category_path: '', thumb: 'https://placehold.co/96x96/png?text=B' },
+        ],
+      },
+    };
+
+    const state = {
+      mode: 'full',
+      tab: 'pick',
+      provider: 'A',
+      categoryId: '',
+      country: 'US',
+      selectedIds: new Set(),
+      flatCats: false,
+      forceNoBrowse: false,
+      forceNoCountry: false,
+      filtersCollapsed: false,
+      draft: [],
+    };
+
+    const $ = (id) => document.getElementById(id);
+
+    function activeCaps() {
+      const p = PROVIDERS[state.provider];
+      return {
+        browse: state.forceNoBrowse ? false : !!p.caps.browse,
+        browse_country_filter: state.forceNoCountry ? false : !!p.caps.browse_country_filter,
+      };
+    }
+
+    function setProvider(code, clearSelection = true) {
+      if (code === state.provider) return;
+      state.provider = code;
+      state.categoryId = '';
+      if (clearSelection) state.selectedIds.clear();
+      render();
+    }
+
+    function renderDebug() {
+      const caps = activeCaps();
+      $('debug').textContent = JSON.stringify({
+        state: state.mode,
+        tab: state.tab,
+        provider: state.provider,
+        caps,
+        selectedIds: [...state.selectedIds],
+        categoryId: state.categoryId,
+        country: state.country,
+        draftCount: state.draft.length,
+      }, null, 2);
+    }
+
+    function renderRail() {
+      const el = $('rail');
+      el.innerHTML = '<div class="muted" style="margin-bottom:8px;">货源供应商</div>';
+      Object.values(PROVIDERS).forEach((p) => {
+        const caps = p.code === state.provider ? activeCaps() : p.caps;
+        const a = document.createElement('a');
+        a.href = '#';
+        a.setAttribute('aria-current', p.code === state.provider ? 'true' : 'false');
+        a.innerHTML = `${p.title}${caps.browse ? '<span class="badge">分类</span>' : ''}`;
+        a.onclick = (e) => { e.preventDefault(); setProvider(p.code, true); };
+        el.appendChild(a);
+      });
+    }
+
+    function renderCats() {
+      const el = $('cats');
+      const caps = activeCaps();
+      const p = PROVIDERS[state.provider];
+      if (!caps.browse) {
+        el.innerHTML = '<div class="empty"><strong>无分类能力</strong><span>该供应商未提供分类，可直接浏览商品</span></div>';
+        return;
+      }
+      const nodes = state.flatCats ? p.catsFlat : p.catsTree;
+      if (!nodes.length) {
+        el.innerHTML = '<div class="empty"><strong>暂无分类</strong><span>可直接浏览</span></div>';
+        return;
+      }
+      el.innerHTML = '<div class="muted" style="margin-bottom:8px;">分类</div>';
+      const all = document.createElement('button');
+      all.type = 'button';
+      all.textContent = '全部';
+      all.setAttribute('aria-current', state.categoryId === '' ? 'true' : 'false');
+      all.onclick = () => { state.categoryId = ''; render(); };
+      el.appendChild(all);
+      nodes.forEach((n) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = n.parent_id ? 'tree-indent' : '';
+        b.textContent = n.name;
+        b.setAttribute('aria-current', state.categoryId === n.id ? 'true' : 'false');
+        b.onclick = () => { state.categoryId = n.id; render(); };
+        el.appendChild(b);
+      });
+    }
+
+    function filteredProducts() {
+      const p = PROVIDERS[state.provider];
+      const q = ($('q').value || '').trim().toLowerCase();
+      return p.products.filter((item) => {
+        if (state.categoryId && item.category_id !== state.categoryId) return false;
+        if (q && !item.title.toLowerCase().includes(q) && !item.spu.toLowerCase().includes(q)) return false;
+        return true;
+      });
+    }
+
+    function renderGrid() {
+      const items = filteredProducts();
+      if (!items.length) {
+        $('grid').innerHTML = '<div class="empty" data-testid="proto-empty"><strong>暂无匹配商品</strong><span>可换分类或关键词</span></div>';
+        return;
+      }
+      let html = '<table><thead><tr><th></th><th>图</th><th>标题</th><th>SPU</th><th>价</th><th>库存</th></tr></thead><tbody>';
+      items.forEach((item) => {
+        const checked = state.selectedIds.has(item.id) ? 'checked' : '';
+        const img = item.thumb
+          ? `<img class="thumb" src="${item.thumb}" alt="">`
+          : '<span class="muted">—</span>';
+        html += `<tr>
+          <td><input type="checkbox" data-id="${item.id}" ${checked}></td>
+          <td>${img}</td>
+          <td>${item.title}<div class="muted">${item.category_path || '—'}</div></td>
+          <td><code>${item.spu}</code></td>
+          <td>${item.price}</td>
+          <td>${item.qty}</td>
+        </tr>`;
+      });
+      html += '</tbody></table>';
+      $('grid').innerHTML = html;
+      $('grid').querySelectorAll('input[type=checkbox]').forEach((box) => {
+        box.addEventListener('change', () => {
+          if (box.checked) state.selectedIds.add(box.dataset.id);
+          else state.selectedIds.delete(box.dataset.id);
+          renderBar();
+          renderDebug();
+        });
+      });
+    }
+
+    function renderBar() {
+      const n = state.selectedIds.size;
+      const bar = $('float-bar');
+      if (bar) bar.hidden = n === 0;
+      $('sel-count').textContent = `已选 ${n}`;
+      const selectBtn = $('select-btn');
+      const cancelBtn = $('cancel-btn');
+      if (selectBtn) selectBtn.disabled = n === 0;
+      if (cancelBtn) cancelBtn.disabled = n === 0;
+      $('publish-btn').disabled = n === 0;
+    }
+
+    function renderListed() {
+      const rows = state.draft.length ? state.draft : [
+        { provider: 'A', spu: 'SPU-A-1', category_path: '服饰 / T 恤', country: 'US', warehouse: 'WH-US-01', status: 'pending' },
+        { provider: 'B', spu: 'SPU-B-1', category_path: '', country: 'US', warehouse: '', status: 'pending' },
+      ];
+      $('listed-body').innerHTML = rows.map((r) => `<tr>
+        <td>${r.provider}</td><td>${r.spu}</td><td>${r.category_path || '—'}</td>
+        <td>${r.country || '—'}</td><td>${r.warehouse || '—'}</td><td>${r.status}</td>
+      </tr>`).join('');
+    }
+
+    function render() {
+      const caps = activeCaps();
+      $('country-field').hidden = !caps.browse_country_filter;
+      $('view-pick').hidden = state.tab !== 'pick';
+      $('view-listed').hidden = state.tab !== 'listed';
+      $('tab-pick').setAttribute('aria-current', state.tab === 'pick' ? 'true' : 'false');
+      $('tab-listed').setAttribute('aria-current', state.tab === 'listed' ? 'true' : 'false');
+      if (state.tab === 'listed') {
+        renderListed();
+      } else {
+        renderRail();
+        renderCats();
+        renderGrid();
+        renderBar();
+        const provider = PROVIDERS[state.provider] || {};
+        const catLabel = state.categoryId || '全部';
+        $('filter-summary').innerHTML = `<span class="chip">${provider.title || state.provider}</span><span class="chip">${catLabel}</span>`;
+        $('layout').setAttribute('data-filters-collapsed', state.filtersCollapsed ? '1' : '0');
+        $('toggle-filters').textContent = state.filtersCollapsed ? '展开筛选' : '收起筛选';
+      }
+      document.querySelectorAll('.switcher [data-state]').forEach((b) => {
+        b.setAttribute('aria-current', b.dataset.state === state.mode ? 'true' : 'false');
+      });
+      renderDebug();
+    }
+
+    function applyMode(mode) {
+      state.mode = mode;
+      state.forceNoBrowse = false;
+      state.forceNoCountry = false;
+      state.flatCats = false;
+      state.tab = 'pick';
+      $('modal').classList.remove('open');
+      if (mode === 'full') {
+        state.provider = 'A';
+        state.selectedIds = new Set(['p1']);
+      } else if (mode === 'no_browse') {
+        state.provider = 'B';
+        state.selectedIds.clear();
+      } else if (mode === 'no_country') {
+        state.provider = 'A';
+        state.forceNoCountry = true;
+        state.selectedIds.clear();
+      } else if (mode === 'flat_cats') {
+        state.provider = 'A';
+        state.flatCats = true;
+        state.selectedIds.clear();
+      } else if (mode === 'switch_clear') {
+        state.provider = 'A';
+        state.selectedIds = new Set(['p1', 'p2']);
+        render();
+        setTimeout(() => setProvider('B', true), 80);
+        return;
+      } else if (mode === 'publish_modal') {
+        state.provider = 'A';
+        state.selectedIds = new Set(['p1']);
+        render();
+        $('modal').classList.add('open');
+        return;
+      } else if (mode === 'listed') {
+        state.tab = 'listed';
+      }
+      const url = new URL(location.href);
+      url.searchParams.set('state', mode);
+      history.replaceState(null, '', url);
+      render();
+    }
+
+    $('tab-pick').onclick = () => { state.tab = 'pick'; render(); };
+    $('tab-listed').onclick = () => { state.tab = 'listed'; render(); };
+    $('toggle-filters').onclick = () => { state.filtersCollapsed = !state.filtersCollapsed; render(); };
+    $('country').onchange = () => { state.country = $('country').value; renderDebug(); };
+    $('browse-btn').onclick = () => render();
+    $('select-btn').onclick = () => {
+      const p = PROVIDERS[state.provider];
+      [...state.selectedIds].forEach((id) => {
+        const item = p.products.find((x) => x.id === id);
+        if (!item) return;
+        if (state.draft.some((d) => d.spu === item.spu && d.status === 'published')) return;
+        const existing = state.draft.find((d) => d.spu === item.spu);
+        if (existing) {
+          existing.status = 'pending';
+          return;
+        }
+        state.draft.push({
+          provider: p.code,
+          spu: item.spu,
+          category_path: item.category_path,
+          country: state.country,
+          warehouse: '',
+          status: 'pending',
+        });
+      });
+      render();
+    };
+    $('cancel-btn').onclick = () => {
+      const p = PROVIDERS[state.provider];
+      const removeSpus = new Set();
+      [...state.selectedIds].forEach((id) => {
+        const item = p.products.find((x) => x.id === id);
+        if (item) removeSpus.add(item.spu);
+      });
+      state.draft = state.draft.filter((d) => !(removeSpus.has(d.spu) && d.status === 'pending'));
+      state.selectedIds.clear();
+      render();
+    };
+    $('publish-btn').onclick = () => $('modal').classList.add('open');
+    $('modal-close').onclick = () => $('modal').classList.remove('open');
+    $('modal-ok').onclick = () => {
+      $('modal').classList.remove('open');
+      alert('原型：确认刊登（无持久化）');
+    };
+    document.querySelectorAll('.switcher [data-state]').forEach((b) => {
+      b.onclick = () => applyMode(b.dataset.state);
+    });
+
+    const initial = new URLSearchParams(location.search).get('state') || 'full';
+    applyMode(initial);
+  </script>
+</body>
+</html>

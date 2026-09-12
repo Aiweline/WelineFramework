@@ -111,10 +111,23 @@ final class BlogCatalogSpaceProvider implements CatalogSpaceProviderInterface
 
     /**
      * @param array<string, mixed> $scope
+     * @param array<string, mixed> $options
      */
-    public function delete(array $scope, int $nodeId): void
+    public function delete(array $scope, int $nodeId, array $options = []): void
     {
+        unset($options);
         $this->categoryAdmin->delete(max(0, (int)($scope['website_id'] ?? 0)), $nodeId);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return list<array{product_id:int,name:string,sku:string,exclusive:bool}>
+     */
+    public function listProductsForDelete(array $scope, int $nodeId): array
+    {
+        unset($scope, $nodeId);
+
+        return [];
     }
 
     /**

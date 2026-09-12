@@ -1,143 +1,566 @@
 <?php
 /**
- * 仓与国家映射（对齐 Channel：w-card / w-table / w-field / w:scope）。
- * Prototype 决策：Variant A 上表单下列表（见 view/prototypes/warehouse-map-ui.html）。
+ * 货源履约仓对接（原型变体 A）：货源轨 + 远程覆盖行内绑定 + 翻页。
  * @var \Weline\Framework\View\Template $this
  */
-$maps = (array)$this->getData('maps');
-$providers = (array)$this->getData('providers');
+$providers = (array)$this->getData('provider_summaries');
+if ($providers === []) {
+    $providers = (array)$this->getData('providers');
+}
+$selectedProvider = (string)($this->getData('selected_provider') ?? '');
 $selectedScope = (string)($this->getData('selected_scope') ?? 'default.default.default');
+$coverage = (array)$this->getData('coverage');
+$coverageRows = (array)($coverage['rows'] ?? []);
+$stats = (array)($coverage['stats'] ?? []);
+$coverageReady = (bool)$this->getData('coverage_ready');
+$gapFilter = (string)($this->getData('gap_filter') ?? 'all');
+$pagination = (array)$this->getData('pagination');
+$page = max(1, (int)($pagination['page'] ?? 1));
+$pageSize = max(5, (int)($pagination['page_size'] ?? 10));
+$pageCount = max(1, (int)($pagination['page_count'] ?? 1));
+$pageTotal = max(0, (int)($pagination['total'] ?? 0));
 $escape = static fn(mixed $v): string => htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-?>
-<div class="w-grid" data-dropship-admin="warehouses" data-testid="dropship-warehouse-map"
-     data-selected-scope="<?= $escape($selectedScope) ?>">
-    <div style="--w-span:12;">
-        <div class="w-card" style="--w-mb:var(--weline-space-4);">
-            <div class="w-card__header">
-                <p class="w-text" data-tone="muted" data-size="sm" style="margin:0;">
-                    <?= __('按货源供应商与作用范围配置远程国家/仓到本地仓的映射。唯一键为供应商 + 网站 + 店铺。') ?>
-                </p>
-            </div>
-            <div class="w-card__body">
-                <w:form method="post"
-                        action="@backend-url('dropship/backend/warehouse/save')"
-                        csrf="auto"
-                        class="w-grid"
-                        data-testid="dropship-warehouse-map-form"
-                        style="--w-gap:var(--weline-space-4);">
-                    <div class="w-field" style="--w-span-md:3;">
-                        <label class="w-field__label" for="dropship-wh-provider"><?= __('货源供应商') ?></label>
-                        <div class="w-field__control">
-                            <select class="w-select" id="dropship-wh-provider" name="provider_code" required
-                                    data-testid="dropship-wh-provider">
-                                <option value=""><?= __('请选择供应商') ?></option>
-                                <?php foreach ($providers as $p): ?>
-                                    <?php
-                                    $code = (string)($p['code'] ?? '');
-                                    $title = (string)($p['title'] ?? $code);
-                                    ?>
-                                    <option value="<?= $escape($code) ?>"><?= $escape($title) ?> (<?= $escape($code) ?>)</option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="w-field" style="--w-span-md:4;">
-                        <label class="w-field__label" for="dropship-wh-scope"><?= __('作用范围') ?></label>
-                        <div class="w-field__control">
-                            <w:scope
-                                id="dropship-wh-scope"
-                                name="target_scope"
-                                value="selected_scope"
-                                placeholder="@lang(选择网站、店铺或渠道)"
-                                search-placeholder="@lang(搜索作用范围)"
-                                aria-label="@lang(作用范围)"
-                                searchable="true"
-                                default-expand-all="true"
-                                required="true"
-                            />
-                        </div>
-                    </div>
-                    <div class="w-field" style="--w-span-md:3;" data-testid="dropship-wh-country">
-                        <?php /* 国家：官方地址单选标签；禁止手填 ISO。country-name 直投 cj_country_code */ ?>
-                        <w:theme:address
-                            selection="single"
-                            levels="country"
-                            catalog="global"
-                            searchable="true"
-                            cascade="false"
-                            code="dropship-wh-country"
-                            country-name="cj_country_code"
-                        />
-                    </div>
-                    <div class="w-field" style="--w-span-md:3;">
-                        <label class="w-field__label" for="dropship-wh-storage"><?= __('远程仓 ID') ?></label>
-                        <div class="w-field__control">
-                            <input class="w-input" id="dropship-wh-storage" name="cj_storage_id"
-                                   maxlength="64" placeholder="storageId"
-                                   data-testid="dropship-wh-storage">
-                        </div>
-                    </div>
-                    <div class="w-field" style="--w-span-md:3;">
-                        <label class="w-field__label" for="dropship-wh-local"><?= __('本地仓 ID') ?></label>
-                        <div class="w-field__control">
-                            <input class="w-input" id="dropship-wh-local" name="local_warehouse_id"
-                                   type="number" min="1" required
-                                   data-testid="dropship-wh-local">
-                        </div>
-                    </div>
-                    <div class="w-cluster" data-align="end" style="--w-span-md:3;">
-                        <button class="w-button" type="submit" data-tone="primary" data-w-width="full"
-                                data-testid="dropship-wh-save">
-                            <?= __('保存映射') ?>
-                        </button>
-                    </div>
-                </w:form>
-            </div>
-        </div>
+$isGlobalScope = $selectedScope === '' || $selectedScope === 'default.default.default';
+$queryBase = static function (array $extra = []) use ($selectedProvider, $selectedScope, $gapFilter, $pageSize): string {
+    $params = array_merge([
+        'provider_code' => $selectedProvider,
+        'target_scope' => $selectedScope,
+        'gap' => $gapFilter,
+        'page_size' => (string)$pageSize,
+    ], $extra);
 
-        <div class="w-card">
-            <div class="w-card__header">
-                <h5 class="w-text" style="margin:0;"><?= __('已有映射') ?></h5>
-            </div>
-            <div class="w-card__body" style="padding:0;">
-                <?php if ($maps === []): ?>
-                    <div class="w-text" data-align="center" data-tone="muted"
-                         style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);"
-                         data-testid="dropship-wh-empty">
-                        <w:icon name="map" size="sm"></w:icon>
-                        <p style="--w-mt:var(--weline-space-2);--w-mb:0;"><?= __('暂无映射。保存后将按供应商 + 网站 + 店铺唯一键显示。') ?></p>
-                    </div>
+    return http_build_query($params, '', '&', PHP_QUERY_RFC3986);
+};
+?>
+<style data-dropship-wh-layout="1">
+[data-dropship-admin="warehouses"] .ds-wh-layout{
+  display:grid;
+  grid-template-columns:minmax(200px,240px) minmax(0,1fr);
+  gap:var(--weline-space-4);
+  align-items:start;
+}
+[data-dropship-admin="warehouses"] .ds-wh-rail{
+  background:var(--weline-theme-surface,var(--color-surface));
+  color:var(--weline-theme-on-surface,var(--color-on-surface,inherit));
+  border:1px solid var(--weline-theme-border,var(--color-border));
+  border-radius:var(--weline-theme-radius-lg,12px);
+  padding:var(--weline-space-3);
+}
+[data-dropship-admin="warehouses"] .ds-wh-rail a{
+  display:block;
+  color:inherit;
+  text-decoration:none;
+  border-radius:var(--weline-theme-radius-md,8px);
+  padding:var(--weline-space-3);
+  margin-bottom:var(--weline-space-1);
+  border-left:3px solid transparent;
+  transition:background-color .15s ease,border-color .15s ease,color .15s ease;
+}
+[data-dropship-admin="warehouses"] .ds-wh-rail a:hover{
+  background:var(--weline-theme-primary-surface);
+}
+[data-dropship-admin="warehouses"] .ds-wh-rail a[aria-current="true"]{
+  background:var(--weline-theme-primary);
+  color:var(--weline-theme-on-primary);
+  border-left-color:var(--weline-theme-primary-hover,var(--weline-theme-primary));
+  box-shadow:none;
+  font-weight:600;
+}
+[data-dropship-admin="warehouses"] .ds-wh-rail a[aria-current="true"] .w-text{
+  opacity:.92;
+  color:inherit;
+}
+[data-dropship-admin="warehouses"] .ds-wh-stats{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:var(--weline-space-3);
+  margin-bottom:var(--weline-space-4);
+}
+[data-dropship-admin="warehouses"] .ds-wh-stat{
+  border:1px dashed var(--weline-theme-border,var(--color-border));
+  border-radius:var(--weline-theme-radius-md,8px);
+  padding:var(--weline-space-3);
+}
+[data-dropship-admin="warehouses"] .ds-wh-stat b{
+  display:block;
+  font-size:1.35rem;
+  line-height:1.2;
+}
+[data-dropship-admin="warehouses"] .ds-wh-row{
+  display:grid;
+  grid-template-columns:minmax(0,1.1fr) minmax(220px,1.3fr) auto auto;
+  gap:var(--weline-space-3);
+  align-items:center;
+  padding:var(--weline-space-3) 0;
+  border-bottom:1px solid var(--weline-theme-border,var(--color-border));
+}
+[data-dropship-admin="warehouses"] .ds-wh-row:last-child{border-bottom:0;}
+[data-dropship-admin="warehouses"] .ds-wh-pager{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:var(--weline-space-3);
+  flex-wrap:wrap;
+  margin-top:var(--weline-space-4);
+}
+[data-dropship-admin="warehouses"] .w-select{
+  height:var(--weline-theme-control-height,38px);
+  min-height:var(--weline-theme-control-height,38px);
+  box-sizing:border-box;
+}
+@media (max-width:960px){
+  [data-dropship-admin="warehouses"] .ds-wh-layout{grid-template-columns:1fr;}
+  [data-dropship-admin="warehouses"] .ds-wh-row{grid-template-columns:1fr;}
+  [data-dropship-admin="warehouses"] .ds-wh-stats{grid-template-columns:1fr;}
+}
+</style>
+<div class="w-grid" data-dropship-admin="warehouses" data-testid="dropship-warehouse-map"
+     data-selected-scope="<?= $escape($selectedScope) ?>"
+     data-selected-provider="<?= $escape($selectedProvider) ?>"
+     data-save-url="@backend-url('dropship/backend/warehouse/save')"
+     data-variant="A">
+    <input type="hidden" id="dropship-wh-provider" value="<?= $escape($selectedProvider) ?>" data-testid="dropship-wh-provider"/>
+    <div style="--w-span:12;">
+        <p class="w-text" data-tone="muted" data-size="sm" style="margin:0 0 var(--weline-space-3);">
+            <?= __('万能货源中心：左侧切换货源，右侧行内直接绑定或改绑本地仓。') ?>
+        </p>
+        <div class="ds-wh-layout">
+            <aside class="ds-wh-rail" data-testid="dropship-wh-rail" aria-label="<?= $escape((string)__('货源')) ?>">
+                <div class="w-text" data-size="sm" style="margin:0 0 var(--weline-space-2);opacity:.75;"><?= __('货源') ?></div>
+                <?php if ($providers === []): ?>
+                    <p class="w-text" data-size="sm" style="margin:0;opacity:.8;"><?= __('暂无货源供应商') ?></p>
                 <?php else: ?>
-                    <div class="w-table-wrap">
-                        <table class="w-table" data-w-vertical="middle" data-testid="dropship-wh-table">
-                            <thead>
-                            <tr>
-                                <th><?= __('供应商') ?></th>
-                                <th><?= __('网站') ?></th>
-                                <th><?= __('店铺') ?></th>
-                                <th><?= __('渠道') ?></th>
-                                <th><?= __('国家') ?></th>
-                                <th><?= __('远程仓') ?></th>
-                                <th><?= __('本地仓') ?></th>
-                            </tr>
-                            </thead>
-                            <tbody>
-                            <?php foreach ($maps as $m): ?>
-                                <tr>
-                                    <td><code><?= $escape($m['provider_code'] ?? '') ?></code></td>
-                                    <td><?= (int)($m['website_id'] ?? 0) ?></td>
-                                    <td><?= (int)($m['store_id'] ?? 0) ?></td>
-                                    <td><?= $escape($m['channel'] ?? '') ?></td>
-                                    <td><?= $escape($m['cj_country_code'] ?? '') ?></td>
-                                    <td><?= $escape($m['cj_storage_id'] ?? '') ?></td>
-                                    <td><?= (int)($m['local_warehouse_id'] ?? 0) ?></td>
-                                </tr>
-                            <?php endforeach; ?>
-                            </tbody>
-                        </table>
-                    </div>
+                    <?php foreach ($providers as $p): ?>
+                        <?php
+                        $code = (string)($p['code'] ?? '');
+                        $title = (string)($p['title'] ?? $code);
+                        $remoteTotal = (int)($p['remote_total'] ?? 0);
+                        $boundCount = (int)($p['bound'] ?? 0);
+                        $gapCount = (int)($p['gap'] ?? max(0, $remoteTotal - $boundCount));
+                        ?>
+                        <a href="@backend-url('dropship/backend/warehouse/index')?provider_code=<?= $escape(rawurlencode($code)) ?>&target_scope=<?= $escape(rawurlencode($selectedScope)) ?>"
+                           aria-current="<?= $code === $selectedProvider ? 'true' : 'false' ?>"
+                           data-testid="dropship-wh-rail-<?= $escape($code) ?>">
+                            <strong><?= $escape($title) ?></strong>
+                            <div class="w-text" data-size="sm" style="opacity:.75;margin-top:2px;">
+                                <?= $escape($code) ?> · <?= __('远程') ?> <?= $remoteTotal ?> · <?= __('已绑') ?> <?= $boundCount ?> · <?= __('缺口') ?> <?= $gapCount ?>
+                            </div>
+                        </a>
+                    <?php endforeach; ?>
                 <?php endif; ?>
+            </aside>
+
+            <div>
+                <div class="w-card" style="--w-mb:var(--weline-space-4);">
+                    <div class="w-card__body">
+                        <div class="w-grid" style="--w-gap:var(--weline-space-3);" data-testid="dropship-wh-filters">
+                            <div class="w-field" style="--w-span-md:5;">
+                                <label class="w-field__label" for="dropship-wh-scope"><?= __('售卖范围') ?></label>
+                                <div class="w-field__control">
+                                    <w:scope
+                                        id="dropship-wh-scope"
+                                        name="target_scope"
+                                        value="selected_scope"
+                                        placeholder="@lang(选择网站、店铺或渠道)"
+                                        search-placeholder="@lang(搜索作用范围)"
+                                        aria-label="@lang(售卖范围)"
+                                        searchable="true"
+                                        default-expand-all="true"
+                                        required="true"
+                                    />
+                                </div>
+                                <p class="w-text" data-tone="warning" data-size="sm" data-testid="dropship-wh-scope-hint"
+                                   id="dropship-wh-scope-hint"
+                                   style="--w-mt:var(--weline-space-2);margin-bottom:0;<?= $isGlobalScope ? '' : 'display:none;' ?>">
+                                    <?= __('请选择具体网站（如默认网站）。Global 无法查看覆盖与绑定。') ?>
+                                </p>
+                            </div>
+                            <div class="w-field" style="--w-span-md:3;">
+                                <label class="w-field__label" for="dropship-wh-gap-filter"><?= __('缺口过滤') ?></label>
+                                <div class="w-field__control">
+                                    <select class="w-select" id="dropship-wh-gap-filter" data-testid="dropship-wh-gap-filter">
+                                        <option value="all" <?= $gapFilter === 'all' ? 'selected' : '' ?>><?= __('全部') ?></option>
+                                        <option value="gap" <?= $gapFilter === 'gap' ? 'selected' : '' ?>><?= __('仅未绑定') ?></option>
+                                        <option value="bound" <?= $gapFilter === 'bound' ? 'selected' : '' ?>><?= __('仅已绑定') ?></option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="w-cluster" data-align="end" style="--w-span-md:4;">
+                                <button class="w-button" type="button" data-tone="neutral" data-size="sm"
+                                        id="dropship-wh-pull" data-testid="dropship-wh-pull"
+                                        data-pull-url="@backend-url('dropship/backend/warehouse/remotePull')">
+                                    <?= __('拉取远程仓') ?>
+                                </button>
+                                <button class="w-button" type="button" data-tone="neutral" data-size="sm"
+                                        id="dropship-wh-sync-pairs" data-testid="dropship-wh-sync-pairs"
+                                        data-sync-url="@backend-url('dropship/backend/warehouse/syncCountryPairs')">
+                                    <?= __('按国家自动配对') ?>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="w-card" style="--w-mb:var(--weline-space-4);">
+                    <div class="w-card__header">
+                        <h5 class="w-text" style="margin:0;"><?= __('远程履约覆盖') ?></h5>
+                        <p class="w-text" data-tone="muted" data-size="sm" style="margin:0;--w-mt:var(--weline-space-1);">
+                            <?= __('每一行选本地仓后点绑定/改绑即可；无需底部保存表单。') ?>
+                        </p>
+                    </div>
+                    <div class="w-card__body">
+                        <?php if (!$coverageReady): ?>
+                            <div class="w-text" data-align="center" data-tone="muted"
+                                 style="--w-pt:var(--weline-space-8);--w-pb:var(--weline-space-8);"
+                                 data-testid="dropship-wh-empty">
+                                <w:icon name="map" size="sm"></w:icon>
+                                <p style="--w-mt:var(--weline-space-2);--w-mb:0;">
+                                    <?= __('请选择左侧货源，并选择具体网站范围后查看覆盖。') ?>
+                                </p>
+                            </div>
+                        <?php else: ?>
+                            <div class="ds-wh-stats" data-testid="dropship-wh-stats">
+                                <div class="ds-wh-stat">
+                                    <b><?= (int)($stats['bound'] ?? 0) ?></b>
+                                    <span class="w-text" data-tone="muted" data-size="sm"><?= __('已绑定国家') ?></span>
+                                </div>
+                                <div class="ds-wh-stat">
+                                    <b><?= (int)($stats['gap'] ?? 0) ?></b>
+                                    <span class="w-text" data-tone="muted" data-size="sm"><?= __('远程有、未绑定') ?></span>
+                                </div>
+                                <div class="ds-wh-stat">
+                                    <b><?= (int)($stats['remote_total'] ?? 0) ?></b>
+                                    <span class="w-text" data-tone="muted" data-size="sm"><?= __('远程原点合计') ?></span>
+                                </div>
+                            </div>
+                            <?php if ($coverageRows === []): ?>
+                                <div class="w-text" data-tone="muted" data-testid="dropship-wh-coverage-empty">
+                                    <?= $pageTotal === 0 && $gapFilter !== 'all'
+                                        ? __('当前过滤条件下没有行。')
+                                        : __('该货源暂无远程仓。请先「拉取远程仓」。') ?>
+                                </div>
+                            <?php else: ?>
+                                <div data-testid="dropship-wh-coverage">
+                                    <?php foreach ($coverageRows as $row): ?>
+                                        <?php
+                                        $bound = !empty($row['bound']);
+                                        $country = (string)($row['country_code'] ?? '');
+                                        $remoteId = (string)($row['remote_id'] ?? '');
+                                        $remoteLabel = (string)($row['remote_label'] ?? $remoteId);
+                                        $localId = (int)($row['local_warehouse_id'] ?? 0);
+                                        $localLabel = trim((string)($row['local_label'] ?? ''));
+                                        $localIdValue = $localId > 0 ? (string)$localId : '';
+                                        $whSelectId = 'dropship-wh-local-' . preg_replace('/[^A-Za-z0-9_-]/', '', $country);
+                                        $whOptionsJson = '';
+                                        if ($localId > 0) {
+                                            $seedLabel = $localLabel !== '' ? $localLabel : ('#' . $localId);
+                                            $whOptionsJson = (string)json_encode(
+                                                [['value' => (string)$localId, 'label' => $seedLabel]],
+                                                JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
+                                            );
+                                        }
+                                        ?>
+                                        <div class="ds-wh-row"
+                                             data-bound="<?= $bound ? '1' : '0' ?>"
+                                             data-country="<?= $escape($country) ?>"
+                                             data-remote-id="<?= $escape($remoteId) ?>">
+                                            <div>
+                                                <div class="w-text" style="font-weight:600;margin:0;">
+                                                    <?= $escape($country) ?> · <?= $escape($remoteLabel) ?>
+                                                </div>
+                                                <div class="w-text" data-tone="muted" data-size="sm" style="margin:0;">
+                                                    <?= __('远程履约原点') ?> ID <?= $escape($remoteId) ?>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <w:inventory:warehouse:select
+                                                    id="whSelectId"
+                                                    name="local_warehouse_id"
+                                                    value="localIdValue"
+                                                    options-json="whOptionsJson"
+                                                    clearable="true"
+                                                />
+                                            </div>
+                                            <div>
+                                                <span class="w-badge" data-tone="<?= $bound ? 'success' : 'warning' ?>" data-row-badge="1">
+                                                    <?= $bound ? __('可履约') : __('缺口') ?>
+                                                </span>
+                                            </div>
+                                            <div>
+                                                <button class="w-button" type="button" data-tone="primary" data-size="sm"
+                                                        data-bind-row="1"
+                                                        data-testid="dropship-wh-bind-<?= $escape($country) ?>">
+                                                    <?= $bound ? __('改绑') : __('绑定') ?>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    <?php endforeach; ?>
+                                </div>
+                                <?php if ($pageCount > 1 || $pageTotal > $pageSize): ?>
+                                    <div class="ds-wh-pager" data-testid="dropship-wh-pagination">
+                                        <p class="w-text" data-tone="muted" data-size="sm" style="margin:0;">
+                                            <?= __('共 %{1} 条 · 第 %{2}/%{3} 页', [(string)$pageTotal, (string)$page, (string)$pageCount]) ?>
+                                        </p>
+                                        <nav aria-label="<?= $escape((string)__('分页')) ?>">
+                                            <ul class="w-pagination">
+                                                <li class="w-pagination__item">
+                                                    <?php if ($page <= 1): ?>
+                                                        <a class="w-pagination__link" href="#" aria-disabled="true"><?= __('上一页') ?></a>
+                                                    <?php else: ?>
+                                                        <a class="w-pagination__link"
+                                                           href="@backend-url('dropship/backend/warehouse/index')?<?= $escape($queryBase(['page' => (string)($page - 1)])) ?>"><?= __('上一页') ?></a>
+                                                    <?php endif; ?>
+                                                </li>
+                                                <?php
+                                                $windowStart = max(1, $page - 2);
+                                                $windowEnd = min($pageCount, $page + 2);
+                                                for ($i = $windowStart; $i <= $windowEnd; ++$i):
+                                                    ?>
+                                                    <li class="w-pagination__item">
+                                                        <a class="w-pagination__link"
+                                                           href="@backend-url('dropship/backend/warehouse/index')?<?= $escape($queryBase(['page' => (string)$i])) ?>"
+                                                           <?= $i === $page ? 'aria-current="page"' : '' ?>><?= $i ?></a>
+                                                    </li>
+                                                <?php endfor; ?>
+                                                <li class="w-pagination__item">
+                                                    <?php if ($page >= $pageCount): ?>
+                                                        <a class="w-pagination__link" href="#" aria-disabled="true"><?= __('下一页') ?></a>
+                                                    <?php else: ?>
+                                                        <a class="w-pagination__link"
+                                                           href="@backend-url('dropship/backend/warehouse/index')?<?= $escape($queryBase(['page' => (string)($page + 1)])) ?>"><?= __('下一页') ?></a>
+                                                    <?php endif; ?>
+                                                </li>
+                                            </ul>
+                                        </nav>
+                                    </div>
+                                <?php endif; ?>
+                            <?php endif; ?>
+                        <?php endif; ?>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 </div>
+<script data-dropship-wh-board="1">(function () {
+  var root = document.querySelector('[data-dropship-admin="warehouses"]');
+  var provider = document.getElementById('dropship-wh-provider');
+  var btn = document.getElementById('dropship-wh-pull');
+  var syncBtn = document.getElementById('dropship-wh-sync-pairs');
+  var scopeHint = document.getElementById('dropship-wh-scope-hint');
+  var gapFilter = document.getElementById('dropship-wh-gap-filter');
+  if (!root || !provider) { return; }
+
+  function themeToast(type, message) {
+    var toast = window.Weline && window.Weline.UI && window.Weline.UI.toast;
+    if (!toast) { return; }
+    if (typeof toast[type] === 'function') {
+      toast[type](String(message || ''));
+      return;
+    }
+    if (typeof toast.show === 'function') {
+      var tone = type === 'success' ? 'success' : (type === 'warning' ? 'warning' : 'danger');
+      toast.show(String(message || ''), { tone: tone });
+    }
+  }
+  function scopeValue() {
+    var scopeInput = document.querySelector('#dropship-wh-scope_value, input[name="target_scope"]');
+    return scopeInput ? String(scopeInput.value || '') : '';
+  }
+  function syncScopeHint() {
+    if (!scopeHint) { return; }
+    var v = scopeValue();
+    var isGlobal = !v || v === 'default.default.default';
+    scopeHint.style.display = isGlobal ? '' : 'none';
+  }
+  function appendCsrf(body) {
+    if (window.site && window.site.csrf_token) {
+      body.append('csrf_token', String(window.site.csrf_token));
+    }
+    var csrf = document.querySelector('input[name="csrf_token"], input[name="form_key"]');
+    if (csrf && csrf.value) {
+      body.append(csrf.name, csrf.value);
+    }
+  }
+  function reloadWithQuery(extra) {
+    var code = String(provider.value || '');
+    var bootScope = String(root.getAttribute('data-selected-scope') || '');
+    var scope = scopeValue() || bootScope || 'default.__website__.default';
+    var url = new URL(window.location.href);
+    if (code) { url.searchParams.set('provider_code', code); }
+    url.searchParams.set('target_scope', scope);
+    Object.keys(extra || {}).forEach(function (k) {
+      var v = extra[k];
+      if (v === null || v === undefined || v === '') {
+        url.searchParams.delete(k);
+      } else {
+        url.searchParams.set(k, String(v));
+      }
+    });
+    window.location.href = url.toString();
+  }
+  function rowLocalWarehouseId(row) {
+    var input = row.querySelector('input[name="local_warehouse_id"]');
+    return input ? String(input.value || '').trim() : '';
+  }
+
+  var bootScope = String(root.getAttribute('data-selected-scope') || '');
+  var scopeRoot = document.getElementById('dropship-wh-scope');
+  if (scopeRoot) {
+    scopeRoot.addEventListener('change', function () {
+      syncScopeHint();
+      var next = scopeValue();
+      var urlScope = new URL(window.location.href).searchParams.get('target_scope') || bootScope;
+      if (urlScope && urlScope !== 'default.default.default' && (!next || next === 'default.default.default')) {
+        return;
+      }
+      if (next && next === urlScope) {
+        return;
+      }
+      reloadWithQuery({ page: '1' });
+    });
+    document.addEventListener('change', function (e) {
+      if (e && e.target && (e.target.name === 'target_scope' || e.target.id === 'dropship-wh-scope_value')) {
+        syncScopeHint();
+      }
+    });
+  }
+  syncScopeHint();
+
+  if (gapFilter) {
+    gapFilter.addEventListener('change', function () {
+      reloadWithQuery({ gap: String(gapFilter.value || 'all'), page: '1' });
+    });
+  }
+
+  root.addEventListener('click', function (e) {
+    var t = e.target;
+    if (!t || !t.closest) { return; }
+    var bindBtn = t.closest('[data-bind-row]');
+    if (!bindBtn) { return; }
+    var row = bindBtn.closest('.ds-wh-row');
+    if (!row) { return; }
+    var country = row.getAttribute('data-country') || '';
+    var remoteId = row.getAttribute('data-remote-id') || '';
+    var localId = rowLocalWarehouseId(row);
+    var code = String(provider.value || '');
+    var scopeVal = scopeValue() || bootScope;
+    var saveUrl = String(root.getAttribute('data-save-url') || '');
+    if (!saveUrl) { return; }
+    if (!code) {
+      themeToast('warning', <?= json_encode((string)__('请先选择左侧货源'), JSON_UNESCAPED_UNICODE) ?>);
+      return;
+    }
+    if (!scopeVal || scopeVal === 'default.default.default') {
+      themeToast('warning', <?= json_encode((string)__('请先选择具体网站（不能使用 Global）'), JSON_UNESCAPED_UNICODE) ?>);
+      return;
+    }
+    if (!localId || Number(localId) <= 0) {
+      themeToast('warning', <?= json_encode((string)__('请先选择本地仓'), JSON_UNESCAPED_UNICODE) ?>);
+      return;
+    }
+    var body = new FormData();
+    body.append('ajax', '1');
+    body.append('provider_code', code);
+    body.append('target_scope', scopeVal);
+    body.append('remote_country_code', country);
+    body.append('remote_storage_id', remoteId);
+    body.append('local_warehouse_id', localId);
+    appendCsrf(body);
+    bindBtn.disabled = true;
+    fetch(saveUrl, {
+      method: 'POST',
+      body: body,
+      credentials: 'same-origin',
+      headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (res) {
+        var msg = (res && res.message) ? String(res.message) : '';
+        if (res && res.success) {
+          themeToast('success', msg || <?= json_encode((string)__('已绑定本地仓'), JSON_UNESCAPED_UNICODE) ?>);
+          row.setAttribute('data-bound', '1');
+          var badge = row.querySelector('[data-row-badge]');
+          if (badge) {
+            badge.setAttribute('data-tone', 'success');
+            badge.textContent = <?= json_encode((string)__('可履约'), JSON_UNESCAPED_UNICODE) ?>;
+          }
+          bindBtn.textContent = <?= json_encode((string)__('改绑'), JSON_UNESCAPED_UNICODE) ?>;
+          return;
+        }
+        themeToast('error', msg || <?= json_encode((string)__('绑定失败'), JSON_UNESCAPED_UNICODE) ?>);
+      })
+      .catch(function () {
+        themeToast('error', <?= json_encode((string)__('绑定失败'), JSON_UNESCAPED_UNICODE) ?>);
+      })
+      .finally(function () { bindBtn.disabled = false; });
+  });
+
+  if (btn) {
+    btn.addEventListener('click', function () {
+      var url = String(btn.getAttribute('data-pull-url') || '');
+      var code = String(provider.value || '');
+      if (!url) { return; }
+      if (!code) {
+        themeToast('warning', <?= json_encode((string)__('请先选择左侧货源'), JSON_UNESCAPED_UNICODE) ?>);
+        return;
+      }
+      var body = new FormData();
+      body.append('provider_code', code);
+      appendCsrf(body);
+      btn.disabled = true;
+      fetch(url, { method: 'POST', body: body, credentials: 'same-origin' })
+        .then(function (r) { return r.json(); })
+        .then(function (res) {
+          var msg = (res && res.message) ? String(res.message) : '';
+          if (res && res.success) {
+            themeToast('success', msg || <?= json_encode((string)__('已拉取远程仓'), JSON_UNESCAPED_UNICODE) ?>);
+            window.location.reload();
+            return;
+          }
+          themeToast('error', msg || <?= json_encode((string)__('拉取失败'), JSON_UNESCAPED_UNICODE) ?>);
+        })
+        .catch(function () {
+          themeToast('error', <?= json_encode((string)__('拉取失败'), JSON_UNESCAPED_UNICODE) ?>);
+        })
+        .finally(function () { btn.disabled = false; });
+    });
+  }
+
+  if (syncBtn) {
+    syncBtn.addEventListener('click', function () {
+      var url = String(syncBtn.getAttribute('data-sync-url') || '');
+      var code = String(provider.value || '');
+      if (!url) { return; }
+      if (!code) {
+        themeToast('warning', <?= json_encode((string)__('请先选择左侧货源'), JSON_UNESCAPED_UNICODE) ?>);
+        return;
+      }
+      var scopeVal = scopeValue() || bootScope;
+      if (!scopeVal || scopeVal === 'default.default.default') {
+        themeToast('warning', <?= json_encode((string)__('请先选择具体网站（不能使用 Global）'), JSON_UNESCAPED_UNICODE) ?>);
+        return;
+      }
+      var body = new FormData();
+      body.append('provider_code', code);
+      body.append('target_scope', scopeVal);
+      appendCsrf(body);
+      syncBtn.disabled = true;
+      fetch(url, { method: 'POST', body: body, credentials: 'same-origin' })
+        .then(function (r) { return r.json(); })
+        .then(function (res) {
+          var msg = (res && res.message) ? String(res.message) : '';
+          if (res && res.success) {
+            themeToast('success', msg || <?= json_encode((string)__('已按国家配对'), JSON_UNESCAPED_UNICODE) ?>);
+            window.location.reload();
+            return;
+          }
+          themeToast('error', msg || <?= json_encode((string)__('配对失败'), JSON_UNESCAPED_UNICODE) ?>);
+        })
+        .catch(function () {
+          themeToast('error', <?= json_encode((string)__('配对失败'), JSON_UNESCAPED_UNICODE) ?>);
+        })
+        .finally(function () { syncBtn.disabled = false; });
+    });
+  }
+})();</script>

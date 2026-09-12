@@ -50,7 +50,10 @@ class Percentage extends AbstractAction
 
         $discountValue = (float)($action['discount_value'] ?? 0);
         $maxDiscount = isset($action['max_discount']) ? (float)$action['max_discount'] : null;
-        $applyTo = $action['apply_to'] ?? 'subtotal'; // subtotal, shipping
+        $applyTo = \strtolower(\trim((string)($action['apply_to'] ?? 'subtotal')));
+        if ($applyTo === 'cart' || $applyTo === '') {
+            $applyTo = 'subtotal';
+        }
 
         $amount = 0;
         if ($applyTo === 'subtotal') {

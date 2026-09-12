@@ -557,7 +557,7 @@ if (str_starts_with($currentLang, 'zh_Hant')) {
 </head>
 <body>
     <header class="maintenance-topbar">
-        <a class="maintenance-brand" href="@url{'/'}">
+        <a class="maintenance-brand" href="/">
             <?php if (!empty($maintenance_logo_url)): ?>
                 <img
                     src="<?= $escape($maintenance_logo_url) ?>"
@@ -675,7 +675,7 @@ if (str_starts_with($currentLang, 'zh_Hant')) {
             </div>
 
             <div class="action-buttons">
-                <a href="@url{'/'}" class="back-btn">
+                <a href="/" class="back-btn">
                     <span aria-hidden="true">←</span>
                     <span><?= $escape($backHome ?? '返回首页') ?></span>
                 </a>

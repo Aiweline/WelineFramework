@@ -41,7 +41,13 @@ final class AiTranslationProgressContractTest extends TestCase
         self::assertStringContainsString('模块 CSV', $service);
         self::assertStringContainsString('i18n-admin-progress-bar', $template);
         self::assertStringContainsString('语言配置与操作', $template);
-        self::assertStringContainsString('进度见上方总览', $template);
+        // Primary top tabs: progress vs config (not one stacked page).
+        self::assertStringContainsString('data-ai-primary-tabs', $template);
+        self::assertStringContainsString('配置与操作', $template);
+        self::assertStringContainsString("tab=progress", $template);
+        self::assertStringContainsString("'progress', 'locales', 'modules'", $controller);
+        self::assertStringContainsString('primary_section', $controller);
+        self::assertStringContainsString('进度见「翻译进度」', $template);
         self::assertStringNotContainsString('white-space:pre-wrap', $template);
         // Ops table must not re-render progress columns (dedupe vs progress board).
         self::assertDoesNotMatchRegularExpression(
@@ -53,9 +59,19 @@ final class AiTranslationProgressContractTest extends TestCase
             $template,
         );
         self::assertStringNotContainsString('i18n-admin-stat-tiles', $template);
+        // Progress board and config ops must not both render unconditionally on one screen.
+        self::assertMatchesRegularExpression(
+            '/\$primarySection\s*===\s*[\'"]progress[\'"]/u',
+            $template,
+        );
+        self::assertMatchesRegularExpression(
+            '/\$primarySection\s*===\s*[\'"]config[\'"]/u',
+            $template,
+        );
 
         self::assertStringContainsString('.i18n-admin-progress-board', $css);
         self::assertStringContainsString('.i18n-admin-progress-bar', $css);
+        self::assertStringContainsString('.i18n-admin-primary-tabs', $css);
         self::assertStringContainsString('var(--color-primary', $css);
     }
 

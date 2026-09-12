@@ -7,16 +7,494 @@
     window.__WelinePixelLoaded = true;
 
     var __visitorTrackingConfig = window.__WelineVisitorTrackingConfig || {};
+    var __trackingRuntimeFetchInFlight = false;
+    var __trackingRuntimeLastRevision = Number(
+        (__visitorTrackingConfig && (__visitorTrackingConfig.configRevision || __visitorTrackingConfig.config_revision)) || 0
+    ) || 0;
+
+    function __applyVisitorTrackingConfig(next, opts) {
+        opts = opts || {};
+        if (!next || typeof next !== 'object') {
+            return;
+        }
+        __visitorTrackingConfig = next;
+        window.__WelineVisitorTrackingConfig = __visitorTrackingConfig;
+        var rev = Number(next.configRevision || next.config_revision || 0) || 0;
+        if (rev > 0) {
+            __trackingRuntimeLastRevision = rev;
+        }
+        try {
+            __syncCustomEventsLocalCacheFromRuntime(next, rev);
+        } catch (eLs) {}
+        __loadVisitorGa4();
+        __loadVisitorGtm();
+        __loadCustomVisitorForwarder();
+        if (window.WelinePixelSandbox && typeof window.WelinePixelSandbox.rebuildVendorFrames === 'function') {
+            window.WelinePixelSandbox.rebuildVendorFrames();
+        }
+        if (!opts.silent) {
+            try {
+                window.dispatchEvent(new CustomEvent('weline:visitor-tracking-config-applied', {
+                    detail: { configRevision: __trackingRuntimeLastRevision }
+                }));
+            } catch (e) {}
+        }
+        try {
+            __scheduleAutoDiscoverScan();
+        } catch (eScan) {}
+    }
+
+    /**
+     * 本范围自定义事件本地缓存（revision + events + pending_register）。
+     * 全量覆盖只动 events，保留未完成 pending。
+     */
+    function __resolvePixelStorageScope() {
+        try {
+            var cfg0 = window.__WelineVisitorTrackingConfig || __visitorTrackingConfig || {};
+            var storageScope = String(cfg0.storageScope || cfg0.storage_scope || '');
+            if (!storageScope && window.__WelinePixelEnv) {
+                var wc = String(window.__WelinePixelEnv.website_code || 'default');
+                var sc = String(window.__WelinePixelEnv.store_code || 'default');
+                var cc = String(window.__WelinePixelEnv.channel_code || 'default');
+                storageScope = [wc, sc, cc].join('.');
+            }
+            return storageScope || 'default.default.default';
+        } catch (e) {
+            return 'default.default.default';
+        }
+    }
+
+    function __customEventsLocalStorageKey(scope) {
+        return 'weline-visitor-custom-events:' + String(scope || 'default');
+    }
+
+    function __readCustomEventsLocalCache(scope) {
+        scope = scope || __resolvePixelStorageScope();
+        try {
+            var raw = window.localStorage.getItem(__customEventsLocalStorageKey(scope));
+            if (!raw) {
+                return { revision: 0, events: [], pending_register: [], updated_at: '' };
+            }
+            var parsed = JSON.parse(raw);
+            if (!parsed || typeof parsed !== 'object') {
+                return { revision: 0, events: [], pending_register: [], updated_at: '' };
+            }
+            return {
+                revision: Number(parsed.revision || 0) || 0,
+                events: Array.isArray(parsed.events) ? parsed.events : [],
+                pending_register: Array.isArray(parsed.pending_register) ? parsed.pending_register : [],
+                updated_at: String(parsed.updated_at || '')
+            };
+        } catch (e) {
+            return { revision: 0, events: [], pending_register: [], updated_at: '' };
+        }
+    }
+
+    function __writeCustomEventsLocalCache(scope, data) {
+        scope = scope || __resolvePixelStorageScope();
+        try {
+            var payload = {
+                revision: Number((data && data.revision) || 0) || 0,
+                events: Array.isArray(data && data.events) ? data.events : [],
+                pending_register: Array.isArray(data && data.pending_register) ? data.pending_register : [],
+                updated_at: String((data && data.updated_at) || new Date().toISOString())
+            };
+            window.localStorage.setItem(__customEventsLocalStorageKey(scope), JSON.stringify(payload));
+            return payload;
+        } catch (e) {
+            return data || { revision: 0, events: [], pending_register: [], updated_at: '' };
+        }
+    }
+
+    function __normalizeAutoEventName(name) {
+        return String(name || '').trim().toLowerCase().replace(/-/g, '_').replace(/[^a-z0-9_]/g, '').slice(0, 64);
+    }
+
+    function __isGenericAutoDiscoverName(name) {
+        var n = __normalizeAutoEventName(name);
+        return !n || [
+            'click', 'page_view', 'page_enter', 'page_leave', 'page_exit',
+            'scroll', 'mousemove', 'mouseover', 'mouseout', 'hover',
+            'focus', 'blur', 'input', 'change', 'submit', 'load', 'unload',
+            'resize', 'keydown', 'keyup', 'keypress', 'touchstart', 'touchend',
+            'visibilitychange', 'popstate', 'hashchange'
+        ].indexOf(n) !== -1;
+    }
+
+    function __syncCustomEventsLocalCacheFromRuntime(config, rev) {
+        var scope = String((config && (config.storageScope || config.storage_scope)) || __resolvePixelStorageScope());
+        rev = Number(rev || (config && (config.configRevision || config.config_revision)) || 0) || 0;
+        var prev = __readCustomEventsLocalCache(scope);
+        var pools = [(config && config.customEvents) || null, (config && config.custom_events) || null];
+        var events = [];
+        var seen = {};
+        for (var p = 0; p < pools.length; p++) {
+            var custom = pools[p];
+            if (!Array.isArray(custom)) {
+                continue;
+            }
+            for (var i = 0; i < custom.length; i++) {
+                var row = custom[i];
+                var nm = '';
+                var origin = 'manual';
+                var deletable = true;
+                var match_conditions = [];
+                if (typeof row === 'string') {
+                    nm = __normalizeAutoEventName(row);
+                } else if (row && typeof row === 'object') {
+                    nm = __normalizeAutoEventName(row.name || row.weline_event || row.event_name || '');
+                    origin = String(row.origin || 'manual');
+                    deletable = row.deletable !== false && origin !== 'auto_discovered';
+                    match_conditions = Array.isArray(row.match_conditions) ? row.match_conditions : [];
+                }
+                if (!nm || seen[nm]) {
+                    continue;
+                }
+                seen[nm] = true;
+                events.push({
+                    name: nm,
+                    origin: origin === 'auto_discovered' ? 'auto_discovered' : 'manual',
+                    deletable: !!deletable && origin !== 'auto_discovered',
+                    match_conditions: match_conditions
+                });
+            }
+        }
+        if (rev > 0 && prev.revision === rev && events.length === 0 && prev.events.length) {
+            // revision 未变且本次 payload 无事件列表时保留本地 events
+            return prev;
+        }
+        var pending = (prev.pending_register || []).filter(function (n) {
+            n = __normalizeAutoEventName(n);
+            return n && !seen[n];
+        });
+        return __writeCustomEventsLocalCache(scope, {
+            revision: rev > 0 ? rev : prev.revision,
+            events: events,
+            pending_register: pending,
+            updated_at: new Date().toISOString()
+        });
+    }
+
+    function __isSandboxMonitorActiveForAutoRegister() {
+        try {
+            if (window.WelinePixelSandbox && window.WelinePixelSandbox.monitor
+                && typeof window.WelinePixelSandbox.monitor.isEnabled === 'function'
+                && window.WelinePixelSandbox.monitor.isEnabled()) {
+                return true;
+            }
+        } catch (e0) {}
+        try {
+            if (window.WelineEventSandboxMonitor
+                && typeof window.WelineEventSandboxMonitor.isEnabled === 'function'
+                && window.WelineEventSandboxMonitor.isEnabled()) {
+                return true;
+            }
+        } catch (e1) {}
+        try {
+            return window.sessionStorage.getItem('weline_event_sandbox_monitor_v1') === '1'
+                || window.sessionStorage.getItem('weline_lifecycle_assistant_v1') === '1';
+        } catch (e2) {
+            return false;
+        }
+    }
+
+    var __autoDiscoverScanTimer = null;
+    var __autoRegisterInFlight = {};
+
+    function __scheduleAutoDiscoverScan() {
+        if (!__isSandboxMonitorActiveForAutoRegister()) {
+            return;
+        }
+        if (__autoDiscoverScanTimer) {
+            return;
+        }
+        __autoDiscoverScanTimer = setTimeout(function () {
+            __autoDiscoverScanTimer = null;
+            try {
+                __scanAndRegisterDeclaredPixelEvents();
+            } catch (e) {}
+        }, 80);
+    }
+
+    function __collectDeclaredPixelEventNames(root) {
+        var out = {};
+        var scopeRoot = root || document;
+        if (!scopeRoot || !scopeRoot.querySelectorAll) {
+            return out;
+        }
+        try {
+            var nodes = scopeRoot.querySelectorAll('[class*="weline-pixel::"], [data-visitor-event], [data-pixel-event]');
+            for (var i = 0; i < nodes.length; i++) {
+                var el = nodes[i];
+                var name = '';
+                if (typeof __findPixelEventNameFromElement === 'function') {
+                    name = __findPixelEventNameFromElement(el);
+                }
+                if (!name && el.getAttribute) {
+                    name = el.getAttribute('data-visitor-event') || el.getAttribute('data-pixel-event') || '';
+                }
+                name = __normalizeAutoEventName(name);
+                if (name && !__isGenericAutoDiscoverName(name)) {
+                    out[name] = true;
+                }
+            }
+        } catch (e) {}
+        return out;
+    }
+
+    function __localKnownAutoEventNames(scope) {
+        var cache = __readCustomEventsLocalCache(scope);
+        var known = {};
+        (cache.events || []).forEach(function (row) {
+            var n = __normalizeAutoEventName(typeof row === 'string' ? row : (row && row.name));
+            if (n) known[n] = true;
+        });
+        (cache.pending_register || []).forEach(function (n) {
+            n = __normalizeAutoEventName(n);
+            if (n) known[n] = true;
+        });
+        return { cache: cache, known: known };
+    }
+
+    function __maybeRegisterAutoDiscoveredEvent(name) {
+        name = __normalizeAutoEventName(name);
+        if (!name || __isGenericAutoDiscoverName(name)) {
+            return;
+        }
+        if (!__isSandboxMonitorActiveForAutoRegister()) {
+            return;
+        }
+        if (typeof __sandboxIsSystemDictEvent === 'function' && __sandboxIsSystemDictEvent(name)) {
+            return;
+        }
+        var scope = __resolvePixelStorageScope();
+        var pack = __localKnownAutoEventNames(scope);
+        if (pack.known[name]) {
+            return;
+        }
+        if (__autoRegisterInFlight[scope + ':' + name]) {
+            return;
+        }
+        var pending = (pack.cache.pending_register || []).slice();
+        if (pending.indexOf(name) === -1) {
+            pending.push(name);
+        }
+        __writeCustomEventsLocalCache(scope, {
+            revision: pack.cache.revision,
+            events: pack.cache.events,
+            pending_register: pending,
+            updated_at: new Date().toISOString()
+        });
+        __autoRegisterInFlight[scope + ':' + name] = true;
+        var websiteId = 0;
+        try {
+            websiteId = Number((window.__WelinePixelEnv && window.__WelinePixelEnv.website_id) || 0) || 0;
+        } catch (eWid) {}
+        var body = new URLSearchParams();
+        body.set('sandbox', '1');
+        body.set('register_auto', '1');
+        body.set('website_id', String(websiteId));
+        body.set('storage_scope', scope);
+        body.set('weline_event', name);
+        fetch('/visitor/analytics/event-picker/mapped', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: body.toString(),
+            cache: 'no-store'
+        }).then(function (r) { return r.json(); }).then(function (data) {
+            delete __autoRegisterInFlight[scope + ':' + name];
+            var cur = __readCustomEventsLocalCache(scope);
+            var nextPending = (cur.pending_register || []).filter(function (n) {
+                return __normalizeAutoEventName(n) !== name;
+            });
+            var events = Array.isArray(cur.events) ? cur.events.slice() : [];
+            if (data && data.ok && !data.skipped) {
+                var found = false;
+                for (var i = 0; i < events.length; i++) {
+                    if (__normalizeAutoEventName(events[i] && events[i].name) === name) {
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    events.push({
+                        name: name,
+                        origin: String((data && data.origin) || 'auto_discovered'),
+                        deletable: false,
+                        match_conditions: (data && data.match_conditions) || [
+                            { param: 'event_name', op: 'equals', value: name }
+                        ]
+                    });
+                }
+                var rev = Number((data && (data.configRevision || data.config_revision)) || cur.revision) || cur.revision;
+                __writeCustomEventsLocalCache(scope, {
+                    revision: rev,
+                    events: events,
+                    pending_register: nextPending,
+                    updated_at: new Date().toISOString()
+                });
+                if (rev > __trackingRuntimeLastRevision) {
+                    __noteServerConfigRevision(rev);
+                }
+            } else {
+                __writeCustomEventsLocalCache(scope, {
+                    revision: cur.revision,
+                    events: events,
+                    pending_register: nextPending,
+                    updated_at: new Date().toISOString()
+                });
+            }
+        }).catch(function () {
+            delete __autoRegisterInFlight[scope + ':' + name];
+        });
+    }
+
+    function __scanAndRegisterDeclaredPixelEvents(root) {
+        if (!__isSandboxMonitorActiveForAutoRegister()) {
+            return;
+        }
+        var names = __collectDeclaredPixelEventNames(root);
+        Object.keys(names).forEach(function (n) {
+            __maybeRegisterAutoDiscoveredEvent(n);
+        });
+    }
+
+    // 沙盒开启后扫描；同页点击声明名兜底注册
+    try {
+        document.addEventListener('click', function (ev) {
+            if (!__isSandboxMonitorActiveForAutoRegister()) {
+                return;
+            }
+            try {
+                var t = ev && ev.target;
+                var n = typeof __findPixelEventNameFromElement === 'function'
+                    ? __findPixelEventNameFromElement(t)
+                    : '';
+                if (n) {
+                    __maybeRegisterAutoDiscoveredEvent(n);
+                }
+            } catch (eClick) {}
+        }, true);
+        // 监视开启时触发扫描（不用定时探活，避免与 runtime 热更契约冲突）
+        var __wrapMonitorEnable = function () {
+            var m = window.WelineEventSandboxMonitor;
+            if (!m || typeof m.enable !== 'function' || m.__welineAutoDiscoverWrapped) {
+                return false;
+            }
+            m.__welineAutoDiscoverWrapped = true;
+            var origEnable = m.enable;
+            m.enable = function () {
+                var ret = origEnable.apply(m, arguments);
+                try {
+                    __scheduleAutoDiscoverScan();
+                } catch (eEn) {}
+                return ret;
+            };
+            return true;
+        };
+        if (!__wrapMonitorEnable()) {
+            document.addEventListener('DOMContentLoaded', function () {
+                __wrapMonitorEnable();
+                __scheduleAutoDiscoverScan();
+            }, { once: true });
+            setTimeout(__wrapMonitorEnable, 0);
+            setTimeout(__wrapMonitorEnable, 500);
+        }
+    } catch (eBindAuto) {}
+
+    try {
+        if (__visitorTrackingConfig && typeof __visitorTrackingConfig === 'object') {
+            __syncCustomEventsLocalCacheFromRuntime(__visitorTrackingConfig, __trackingRuntimeLastRevision);
+            __scheduleAutoDiscoverScan();
+        }
+    } catch (eInitLs) {}
 
     window.addEventListener('weline:visitor-tracking-config', function (event) {
         if (event && event.detail && typeof event.detail === 'object') {
-            __visitorTrackingConfig = event.detail;
-            window.__WelineVisitorTrackingConfig = __visitorTrackingConfig;
-            __loadVisitorGa4();
-            __loadVisitorGtm();
-            __loadCustomVisitorForwarder();
+            __applyVisitorTrackingConfig(event.detail, { silent: true });
         }
     });
+
+    function __fetchVisitorTrackingRuntime(force) {
+        if (__trackingRuntimeFetchInFlight) {
+            return;
+        }
+        var websiteId = 0;
+        var storageScope = '';
+        try {
+            websiteId = Number((window.__WelinePixelEnv && window.__WelinePixelEnv.website_id) || 0) || 0;
+        } catch (e0) {}
+        try {
+            storageScope = __resolvePixelStorageScope();
+        } catch (eScope) {}
+        // revision 未变：不重拉全量，仅用本地 LS
+        if (!force) {
+            try {
+                var ls = __readCustomEventsLocalCache(storageScope);
+                if (ls.revision > 0 && ls.revision === __trackingRuntimeLastRevision && Array.isArray(ls.events)) {
+                    return;
+                }
+            } catch (eSkip) {}
+        }
+        var url = '/visitor/analytics/event-picker/mapped?runtime_config=1&since=' + encodeURIComponent(String(__trackingRuntimeLastRevision || 0));
+        if (websiteId >= 0) {
+            url += '&website_id=' + encodeURIComponent(String(websiteId));
+        }
+        if (storageScope) {
+            url += '&storage_scope=' + encodeURIComponent(storageScope);
+        }
+        if (force) {
+            url += '&_=' + Date.now();
+        }
+        __trackingRuntimeFetchInFlight = true;
+        fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json' }, cache: 'no-store' })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                __trackingRuntimeFetchInFlight = false;
+                if (!data || !data.ok || !data.config || typeof data.config !== 'object') {
+                    return;
+                }
+                var rev = Number(data.configRevision || data.config_revision || data.config.configRevision || 0) || 0;
+                if (!force && rev > 0 && rev <= __trackingRuntimeLastRevision && data.changed === false) {
+                    return;
+                }
+                __applyVisitorTrackingConfig(data.config, {});
+            })
+            .catch(function () {
+                __trackingRuntimeFetchInFlight = false;
+            });
+    }
+
+    /**
+     * 实时改事件：提交响应里的 revision；仅当更大时才拉全量（无定时/长连接/可见探活）。
+     */
+    function __noteServerConfigRevision(rev) {
+        rev = Number(rev) || 0;
+        if (rev <= 0 || rev <= __trackingRuntimeLastRevision) {
+            return;
+        }
+        __fetchVisitorTrackingRuntime(true);
+    }
+
+    try {
+        if (typeof BroadcastChannel !== 'undefined') {
+            var __trackingReloadBc = new BroadcastChannel('weline-visitor-tracking-config');
+            __trackingReloadBc.onmessage = function () {
+                // 仅本机后台↔店面同浏览器预览；线上用户靠提交响应里的 revision
+                __fetchVisitorTrackingRuntime(true);
+            };
+        }
+    } catch (eBc) {}
+    window.addEventListener('storage', function (ev) {
+        if (!ev || ev.key !== 'weline-visitor-tracking-config:ping') {
+            return;
+        }
+        __fetchVisitorTrackingRuntime(true);
+    });
+    try {
+        window.__WelineNoteTrackingConfigRevision = __noteServerConfigRevision;
+    } catch (eExport) {}
 
     function __visitorConfigSection(section) {
         var config = window.__WelineVisitorTrackingConfig || __visitorTrackingConfig || {};
@@ -479,6 +957,7 @@
             window.dispatchEvent(new CustomEvent('weline:visitor:event', { detail: event }));
         } catch (error) {
         }
+        // Monitor 观察点在 Sandbox.publish（Forwarders 尾部透传），此处不再重复 emit。
         return event;
     }
 
@@ -497,6 +976,8 @@
     function __isVisitorDiagnosticPanelElement(element) {
         return Boolean(element && element.closest && element.closest([
             '#weline-panel-visitor',
+            '#weline-event-sandbox-monitor',
+            '#weline-lifecycle-assistant',
             '#dev-tool-trigger',
             '.dev-tool-container',
             '.dev-tool-trigger',
@@ -505,6 +986,665 @@
             '[data-weline-panel-visitor-bootstrap]',
             '[data-weline-panel-seo-bootstrap]'
         ].join(',')));
+    }
+
+    function __sandboxNormalizeEventKey(name) {
+        return String(name || '').trim().toLowerCase();
+    }
+
+    function __sandboxIsSystemDictEvent(name) {
+        var key = __sandboxNormalizeEventKey(name);
+        if (!key) {
+            return false;
+        }
+        var cfg = window.__WelineVisitorTrackingConfig || {};
+        var dict = cfg.eventDictionary || {};
+        var events = Array.isArray(dict.events) ? dict.events : [];
+        for (var i = 0; i < events.length; i++) {
+            var row = events[i] || {};
+            if (__sandboxNormalizeEventKey(row.weline_event || row.name || '') === key) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function __sandboxIsCustomPoolEvent(name) {
+        var key = __sandboxNormalizeEventKey(name);
+        if (!key) {
+            return false;
+        }
+        var cfg = window.__WelineVisitorTrackingConfig || {};
+        var pools = [cfg.customEvents, cfg.custom_events];
+        for (var p = 0; p < pools.length; p++) {
+            var custom = pools[p];
+            if (!custom) {
+                continue;
+            }
+            if (Array.isArray(custom)) {
+                for (var i = 0; i < custom.length; i++) {
+                    var row = custom[i];
+                    if (typeof row === 'string' && __sandboxNormalizeEventKey(row) === key) {
+                        return true;
+                    }
+                    if (row && typeof row === 'object'
+                        && __sandboxNormalizeEventKey(row.name || row.weline_event || row.event_name || '') === key) {
+                        return true;
+                    }
+                }
+            } else if (typeof custom === 'object') {
+                if (Object.prototype.hasOwnProperty.call(custom, name)
+                    || Object.prototype.hasOwnProperty.call(custom, key)) {
+                    return true;
+                }
+                var nested = custom.events;
+                if (nested && typeof nested === 'object'
+                    && (Object.prototype.hasOwnProperty.call(nested, name)
+                        || Object.prototype.hasOwnProperty.call(nested, key))) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 是否「有意义命中」（相对纯透传流过）。命中后再由 __sandboxHitKind 分系统/自定义。
+     */
+    function __sandboxIsCustomEventHit(name, extras) {
+        extras = extras && typeof extras === 'object' ? extras : {};
+        name = String(name || extras.event_name || '').trim();
+        if (!name) {
+            return false;
+        }
+        if (extras.event_hit === true) {
+            return true;
+        }
+        if (extras.event_hit === false) {
+            return false;
+        }
+        if (extras.mapping_source || extras.ga4_event || extras.third_party_event) {
+            return true;
+        }
+        if (name.indexOf('weline:') === 0) {
+            return true;
+        }
+        var generic = name === 'click' || name === 'event' || name === 'page_view' || name === 'page_load' || name === 'page_exit';
+        if (generic) {
+            return false;
+        }
+        if (__sandboxIsSystemDictEvent(name) || __sandboxIsCustomPoolEvent(name)) {
+            return true;
+        }
+        var cfg = window.__WelineVisitorTrackingConfig || {};
+        var vendors = Array.isArray(cfg.vendors) ? cfg.vendors : [];
+        for (var i = 0; i < vendors.length; i++) {
+            var map = vendors[i] && vendors[i].event_map && typeof vendors[i].event_map === 'object'
+                ? vendors[i].event_map
+                : null;
+            if (map && Object.prototype.hasOwnProperty.call(map, name)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * @returns {''|'system'|'custom'}
+     */
+    function __sandboxHitKind(name, extras) {
+        extras = extras && typeof extras === 'object' ? extras : {};
+        name = String(name || extras.event_name || '').trim();
+        if (!__sandboxIsCustomEventHit(name, extras)) {
+            return '';
+        }
+        var forced = String(extras.hit_kind || extras.event_kind || '').trim().toLowerCase();
+        if (forced === 'system' || forced === 'custom') {
+            return forced;
+        }
+        var source = String(extras.source || '').trim().toLowerCase();
+        if (source === 'lifecycle' || source === 'chain') {
+            return 'system';
+        }
+        if (name.indexOf('weline:') === 0) {
+            return 'system';
+        }
+        if (__sandboxIsSystemDictEvent(name)) {
+            return 'system';
+        }
+        var mappingSource = String(extras.mapping_source || '').trim().toLowerCase();
+        if (mappingSource === 'dictionary'
+            || mappingSource === 'legacy_fallback'
+            || mappingSource === 'site_cta_override'
+            || mappingSource === 'cta_heuristic') {
+            return 'system';
+        }
+        if (__sandboxIsCustomPoolEvent(name) || mappingSource === 'custom' || mappingSource === 'discovered') {
+            return 'custom';
+        }
+        // 搭接表命中但非系统字典 → 自定义事件
+        return 'custom';
+    }
+
+    /**
+     * 沙盒继电用：只保留可展示的标量参数，并展开 elementInfo.* / params.*。
+     * 避免把 DOM/嵌套对象 JSON 截断成非法 params_json。
+     */
+    function __sandboxCompactParams(raw) {
+        var out = {};
+        var count = 0;
+        function put(key, val) {
+            key = String(key || '').trim();
+            if (!key || Object.prototype.hasOwnProperty.call(out, key) || count >= 40) {
+                return;
+            }
+            var t = typeof val;
+            if (t === 'string' || t === 'number' || t === 'boolean') {
+                out[key] = val;
+                count++;
+            } else if (val == null) {
+                out[key] = '';
+                count++;
+            }
+        }
+        function takeObject(obj, prefix) {
+            if (!obj || typeof obj !== 'object') {
+                return;
+            }
+            Object.keys(obj).forEach(function (k) {
+                if (k === 'domElement' || k === 'element' || k === 'meta' || k === 'raw' || k === 'chain' || k === 'event') {
+                    return;
+                }
+                var val = obj[k];
+                var path = prefix ? (prefix + '.' + k) : k;
+                if (val && typeof val === 'object' && !Array.isArray(val)) {
+                    if (k === 'params' || k === 'elementInfo' || k === 'page') {
+                        takeObject(val, k === 'params' ? prefix : path);
+                        if (k === 'elementInfo' || k === 'page') {
+                            return;
+                        }
+                    }
+                    return;
+                }
+                put(path, val);
+            });
+        }
+        if (!raw || typeof raw !== 'object') {
+            return out;
+        }
+        if (raw.params && typeof raw.params === 'object') {
+            takeObject(raw.params, '');
+        }
+        takeObject(raw, '');
+        return out;
+    }
+
+    function __matchOp(actual, op, expected) {
+        actual = String(actual == null ? '' : actual);
+        expected = String(expected == null ? '' : expected);
+        op = String(op || 'equals').toLowerCase();
+        if (op === 'contains') {
+            return actual.indexOf(expected) !== -1;
+        }
+        if (op === 'starts_with') {
+            return actual.indexOf(expected) === 0;
+        }
+        if (op === 'ends_with') {
+            return expected === '' ? true : actual.slice(-expected.length) === expected;
+        }
+        return actual === expected;
+    }
+
+    function __buildCustomMatchContext(element, extras) {
+        extras = extras && typeof extras === 'object' ? extras : {};
+        var snapshot = element ? (__getElementSnapshot(element) || {}) : {};
+        var href = '';
+        try {
+            href = String((element && (element.href || (element.getAttribute && element.getAttribute('href')))) || snapshot.href || '');
+        } catch (eHref) {}
+        var pageLocation = '';
+        var pagePath = '';
+        var pageReferrer = '';
+        try {
+            pageLocation = String(window.location.href || '');
+            pagePath = String(window.location.pathname || '');
+            pageReferrer = String(document.referrer || '');
+        } catch (eLoc) {}
+        var className = String(snapshot.className || extras.className || '');
+        var text = String(snapshot.text || extras.text || '');
+        var tag = String((element && element.tagName) || snapshot.tagName || extras.tag || '').toLowerCase();
+        var id = String(snapshot.id || extras.id || '');
+        var name = String(snapshot.name || extras.name || '');
+        var type = String(snapshot.type || extras.type || '');
+        var tagName = String((element && element.tagName) || snapshot.tagName || '').toUpperCase();
+        var elementInfo = {
+            tagName: tagName,
+            tag: tag,
+            className: className,
+            id: id,
+            name: name,
+            type: type,
+            href: href,
+            text: text
+        };
+        if (extras.elementInfo && typeof extras.elementInfo === 'object') {
+            Object.keys(extras.elementInfo).forEach(function (k) {
+                var v = extras.elementInfo[k];
+                var t = typeof v;
+                if (t === 'string' || t === 'number' || t === 'boolean' || v == null) {
+                    elementInfo[k] = v == null ? '' : v;
+                }
+            });
+        }
+        return {
+            event_name: String(extras.event_name || extras.pixelEventName || extras.name || 'click'),
+            page_location: pageLocation,
+            page_path: pagePath,
+            page_referrer: pageReferrer,
+            className: className,
+            text: text,
+            href: href,
+            tag: tag,
+            id: id,
+            elementInfo: elementInfo
+        };
+    }
+
+    function __resolveNestedValue(root, path) {
+        path = String(path || '');
+        if (!path || root == null) {
+            return undefined;
+        }
+        if (Object.prototype.hasOwnProperty.call(root, path)) {
+            return root[path];
+        }
+        if (path.indexOf('.') < 0) {
+            return undefined;
+        }
+        var parts = path.split('.');
+        var cur = root;
+        for (var i = 0; i < parts.length; i++) {
+            var key = parts[i];
+            if (!key || cur == null || typeof cur !== 'object') {
+                return undefined;
+            }
+            if (!Object.prototype.hasOwnProperty.call(cur, key)) {
+                return undefined;
+            }
+            cur = cur[key];
+        }
+        return cur;
+    }
+
+    function __customEventConditionValue(ctx, param) {
+        param = String(param || '');
+        if (!param) {
+            return '';
+        }
+        if (Object.prototype.hasOwnProperty.call(ctx, param)) {
+            var direct = ctx[param];
+            if (direct != null && typeof direct !== 'object') {
+                return direct;
+            }
+            if (typeof direct === 'string' || typeof direct === 'number' || typeof direct === 'boolean') {
+                return direct;
+            }
+        }
+        var nested = __resolveNestedValue(ctx, param);
+        if (nested !== undefined) {
+            if (nested == null) {
+                return '';
+            }
+            if (typeof nested === 'object') {
+                try {
+                    return JSON.stringify(nested);
+                } catch (eJson) {
+                    return '';
+                }
+            }
+            return nested;
+        }
+        var lower = param.toLowerCase();
+        if (lower === 'classname') {
+            return ctx.className || '';
+        }
+        if (lower === 'pagelocation' || lower === 'page_location') {
+            return ctx.page_location || '';
+        }
+        if (lower === 'pagepath' || lower === 'page_path') {
+            return ctx.page_path || '';
+        }
+        if (lower === 'pagereferrer' || lower === 'page_referrer') {
+            return ctx.page_referrer || '';
+        }
+        if (lower === 'eventname' || lower === 'event_name') {
+            return ctx.event_name || '';
+        }
+        if (lower === 'elementinfo.text') {
+            return (ctx.elementInfo && ctx.elementInfo.text) || ctx.text || '';
+        }
+        if (lower === 'elementinfo.classname') {
+            return (ctx.elementInfo && ctx.elementInfo.className) || ctx.className || '';
+        }
+        if (lower === 'elementinfo.href') {
+            return (ctx.elementInfo && ctx.elementInfo.href) || ctx.href || '';
+        }
+        return '';
+    }
+
+    /**
+     * 按 runtime customEvents.match_conditions（AND）求值，返回命中的自定义事件行。
+     * @returns {object[]}
+     */
+    function __matchCustomEventRowsByConditions(ctx) {
+        ctx = ctx && typeof ctx === 'object' ? ctx : {};
+        var cfg = window.__WelineVisitorTrackingConfig || __visitorTrackingConfig || {};
+        var pools = [cfg.customEvents, cfg.custom_events];
+        var hits = [];
+        var seen = {};
+        for (var p = 0; p < pools.length; p++) {
+            var custom = pools[p];
+            if (!Array.isArray(custom)) {
+                continue;
+            }
+            for (var i = 0; i < custom.length; i++) {
+                var row = custom[i];
+                if (!row || typeof row !== 'object') {
+                    continue;
+                }
+                var name = __sandboxNormalizeEventKey(row.name || row.weline_event || row.event_name || '');
+                if (!name || seen[name]) {
+                    continue;
+                }
+                var conditions = row.match_conditions || row.matchConditions || [];
+                if (!Array.isArray(conditions) || !conditions.length) {
+                    continue;
+                }
+                var ok = true;
+                for (var c = 0; c < conditions.length; c++) {
+                    var cond = conditions[c];
+                    if (!cond || typeof cond !== 'object') {
+                        ok = false;
+                        break;
+                    }
+                    var actual = __customEventConditionValue(ctx, cond.param || cond.parameter || '');
+                    if (!__matchOp(actual, cond.op || cond.operator || 'equals', cond.value)) {
+                        ok = false;
+                        break;
+                    }
+                }
+                if (ok) {
+                    seen[name] = 1;
+                    hits.push(Object.assign({}, row, { name: name, weline_event: name }));
+                }
+            }
+        }
+        return hits;
+    }
+
+    function __matchCustomEventsByConditions(ctx) {
+        return __matchCustomEventRowsByConditions(ctx).map(function (row) {
+            return row.name || row.weline_event || '';
+        }).filter(Boolean);
+    }
+
+    function __isCopyParamsEnabled(row) {
+        if (!row || typeof row !== 'object') {
+            return true;
+        }
+        if (row.copy_params === false || row.copy_params === 0 || row.copy_params === '0') {
+            return false;
+        }
+        return true;
+    }
+
+    function __normalizeParamMappings(raw) {
+        if (!raw) {
+            return [];
+        }
+        if (typeof raw === 'string') {
+            var t = String(raw).trim();
+            if (!t) {
+                return [];
+            }
+            if (t.charAt(0) === '[' || t.charAt(0) === '{') {
+                try {
+                    raw = JSON.parse(t);
+                } catch (e) {
+                    raw = t.split(/[\s,，;；]+/);
+                }
+            } else {
+                raw = t.split(/[\s,，;；]+/);
+            }
+        }
+        if (!Array.isArray(raw)) {
+            return [];
+        }
+        var out = [];
+        var seen = {};
+        for (var i = 0; i < raw.length; i++) {
+            var item = raw[i];
+            var name = '';
+            var from = '';
+            if (item && typeof item === 'object') {
+                name = String(item.name || item.param || item.key || item.to || '').trim();
+                from = String(item.from || item.source || item.expr || item.template || '').trim();
+            } else {
+                name = String(item || '').trim();
+            }
+            name = name.replace(/[^a-zA-Z0-9_.\[\]-]+/g, '');
+            if (!name) {
+                continue;
+            }
+            if (!from) {
+                from = '{' + name + '}';
+            }
+            if (seen[name]) {
+                out[seen[name] - 1] = { name: name, from: from };
+                continue;
+            }
+            seen[name] = out.length + 1;
+            out.push({ name: name, from: from });
+            if (out.length >= 24) {
+                break;
+            }
+        }
+        return out;
+    }
+
+    function __normalizeExtractParamList(raw) {
+        return __normalizeParamMappings(raw).map(function (m) {
+            return m.name;
+        });
+    }
+
+    function __resolveParamTemplate(tpl, bag, ctx) {
+        tpl = String(tpl == null ? '' : tpl);
+        if (!tpl) {
+            return '';
+        }
+        if (tpl.indexOf('{') < 0) {
+            var nestedBag = __resolveNestedValue(bag, tpl);
+            if (nestedBag !== undefined) {
+                return nestedBag == null ? '' : nestedBag;
+            }
+            if (Object.prototype.hasOwnProperty.call(bag, tpl)) {
+                return bag[tpl];
+            }
+            return __customEventConditionValue(ctx, tpl);
+        }
+        return tpl.replace(/\{([a-zA-Z0-9_.\[\]-]+)\}/g, function (_m, key) {
+            var nested = __resolveNestedValue(bag, key);
+            if (nested !== undefined) {
+                return nested == null ? '' : String(nested);
+            }
+            if (Object.prototype.hasOwnProperty.call(bag, key)) {
+                var v = bag[key];
+                return v == null ? '' : String(v);
+            }
+            var fallback = __customEventConditionValue(ctx, key);
+            return fallback == null ? '' : String(fallback);
+        });
+    }
+
+    function __collectCustomSourceBag(ctx, extras) {
+        var bag = {};
+        var srcs = [ctx || {}, extras || {}];
+        if (extras && extras.params && typeof extras.params === 'object') {
+            srcs.push(extras.params);
+        }
+        if (extras && extras.payload && typeof extras.payload === 'object') {
+            srcs.push(extras.payload);
+        }
+        var skip = {
+            domElement: 1,
+            element: 1,
+            meta: 1,
+            raw: 1,
+            chain: 1,
+            event: 1,
+            domEvent: 1
+        };
+        for (var s = 0; s < srcs.length; s++) {
+            var obj = srcs[s];
+            if (!obj || typeof obj !== 'object') {
+                continue;
+            }
+            Object.keys(obj).forEach(function (key) {
+                if (skip[key]) {
+                    return;
+                }
+                var val = obj[key];
+                var t = typeof val;
+                if (t === 'string' || t === 'number' || t === 'boolean') {
+                    bag[key] = val;
+                } else if (val == null) {
+                    bag[key] = '';
+                }
+            });
+        }
+        return bag;
+    }
+
+    function __extractParamsForCustomEvent(row, ctx, extras) {
+        var bag = __collectCustomSourceBag(ctx, extras);
+        var copyAll = __isCopyParamsEnabled(row);
+        var mappings = __normalizeParamMappings(
+            row && (row.param_mappings || row.paramMappings || row.extract_params || row.extractParams)
+        );
+        var out = {};
+        if (copyAll) {
+            Object.keys(bag).forEach(function (key) {
+                out[key] = bag[key];
+            });
+        }
+        for (var i = 0; i < mappings.length; i++) {
+            var m = mappings[i];
+            out[m.name] = __resolveParamTemplate(m.from, bag, ctx);
+        }
+        return out;
+    }
+
+    function __trackMatchedCustomEvents(element, event, extras, meta) {
+        extras = extras && typeof extras === 'object' ? extras : {};
+        meta = meta && typeof meta === 'object' ? meta : {};
+        if (!window.WelinePixel || typeof window.WelinePixel.track !== 'function') {
+            return [];
+        }
+        var ctx = __buildCustomMatchContext(element, extras);
+        var rows = __matchCustomEventRowsByConditions(ctx);
+        var names = [];
+        for (var i = 0; i < rows.length; i++) {
+            var row = rows[i];
+            var name = row.name || row.weline_event || '';
+            if (!name) {
+                continue;
+            }
+            names.push(name);
+            var extracted = __extractParamsForCustomEvent(row, ctx, extras);
+            var payload = Object.assign({}, extracted, {
+                trigger: extras.trigger || 'click',
+                source: 'custom_match',
+                hit_kind: 'custom',
+                event_hit: true,
+                mapping_source: 'custom_match',
+                matched_from: ctx.event_name || 'click',
+                copy_params: __isCopyParamsEnabled(row),
+                param_mappings: __normalizeParamMappings(row.param_mappings || row.paramMappings || row.extract_params || row.extractParams),
+                extract_params: __normalizeExtractParamList(row.param_mappings || row.paramMappings || row.extract_params || row.extractParams),
+                params: extracted,
+                element: element ? (__getElementSnapshot(element) || null) : null,
+                domElement: element || null
+            });
+            if (payload.className == null && ctx.className) {
+                payload.className = ctx.className;
+            }
+            if (payload.page_location == null && ctx.page_location) {
+                payload.page_location = ctx.page_location;
+            }
+            if (payload.page_path == null && ctx.page_path) {
+                payload.page_path = ctx.page_path;
+            }
+            window.WelinePixel.track(name, payload, Object.assign({}, meta, {
+                element: element || meta.element,
+                domEvent: event || meta.domEvent
+            }));
+        }
+        return names;
+    }
+
+    /**
+     * 无业务 track 的点击仍走沙盒 publish 透传，Monitor 订 publish→emit 即可看见。
+     * 是否「命中自定义事件」由 normalize / 搭接表判定，不在此旁路 invent 第二套监听。
+     */
+    function __publishSandboxClickPassthrough(element, event, extras) {
+        extras = extras && typeof extras === 'object' ? extras : {};
+        var sb = window.WelineEventSandbox || window.WelinePixelSandbox;
+        if (!sb || typeof sb.publish !== 'function') {
+            return null;
+        }
+        var snapshot = __getElementSnapshot(element) || {};
+        var hitName = String(extras.event_name || extras.pixelEventName || '').trim();
+        var tag = String((element && element.tagName) || snapshot.tagName || '').toLowerCase();
+        var textPreview = '';
+        try {
+            textPreview = String((element && (element.innerText || element.textContent)) || snapshot.text || '')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .slice(0, 80);
+        } catch (eText) {}
+        var envelope = {
+            eventName: hitName || 'click',
+            name: hitName || 'click',
+            weline_event: hitName || 'click',
+            eventId: 'click-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8),
+            timestampMs: Date.now(),
+            event_hit: false,
+            hit_kind: '',
+            payload: {
+                trigger: 'click',
+                source: 'sandbox_passthrough',
+                tag: tag,
+                text: textPreview,
+                href: (element && (element.href || (element.getAttribute && element.getAttribute('href')))) || snapshot.href || '',
+                className: snapshot.className || '',
+                id: snapshot.id || '',
+                elementInfo: {
+                    tagName: String(snapshot.tagName || (element && element.tagName) || ''),
+                    className: snapshot.className || '',
+                    id: snapshot.id || '',
+                    text: textPreview,
+                    href: (element && (element.href || (element.getAttribute && element.getAttribute('href')))) || snapshot.href || ''
+                },
+                x: event && typeof event.clientX === 'number' ? event.clientX : null,
+                y: event && typeof event.clientY === 'number' ? event.clientY : null
+            },
+            element: snapshot,
+            trigger: 'click',
+            mappingSource: ''
+        };
+        sb.publish(envelope);
+        return envelope;
     }
 
     function __visitorBrowserLanguages() {
@@ -2096,6 +3236,15 @@
     function __findPixelEventNameFromElement(element) {
         var current = element;
         while (current && current !== document) {
+            if (current.getAttribute) {
+                var attr = current.getAttribute('data-visitor-event')
+                    || current.getAttribute('data-pixel-event')
+                    || '';
+                attr = String(attr || '').trim();
+                if (attr) {
+                    return attr;
+                }
+            }
             var className = typeof current.className === 'string' ? current.className : '';
             if (className.indexOf('weline-pixel::') > -1) {
                 var classNames = className.split(/\s+/);
@@ -3467,6 +4616,7 @@
             trigger: document.readyState === 'loading' ? 'script_init' : document.readyState,
             source: 'behavior_monitor'
         });
+        __trackMatchedCustomEvents(null, null, { event_name: 'page_view', trigger: 'page_view' }, {});
 
         if (__getSearchQueryFromUrl() || window.location.pathname.indexOf('/search') === 0) {
             window.WelinePixel.track('search_result_view', __getSearchMeta(__findSearchInput(document), 'page_view'));
@@ -3539,6 +4689,7 @@
                 return;
             }
             var startedAt = Date.now();
+            var tracked = false;
             var pixelEventName = __findPixelEventNameFromElement(element);
             if (pixelEventName) {
                 window.WelinePixel.track(pixelEventName, {
@@ -3547,6 +4698,7 @@
                     element: __getElementSnapshot(element),
                     domElement: element
                 }, { startedAt: startedAt, element: element, domEvent: event });
+                tracked = true;
             }
 
             var suggestion = element && element.closest ? element.closest('[data-search-suggestion], .search-suggestion, .search-suggestions a, [role="option"]') : null;
@@ -3569,6 +4721,7 @@
                     element: __getElementSnapshot(suggestion),
                     domElement: suggestion
                 }), { startedAt: startedAt, element: suggestion, domEvent: event });
+                tracked = true;
             }
 
             var link = element && element.closest ? element.closest('a[href]') : null;
@@ -3590,8 +4743,25 @@
                         meta_key: event.metaKey,
                         shift_key: event.shiftKey
                     }, { startedAt: startedAt, keepalive: true, element: link, domEvent: event });
+                    tracked = true;
                 }
             }
+
+            // 先按自定义事件 match_conditions 命中（创建后 runtime 热更即可立刻识别）
+            if (!tracked) {
+                var matched = __trackMatchedCustomEvents(element, event, {
+                    event_name: pixelEventName || 'click',
+                    trigger: 'click'
+                }, { startedAt: startedAt, element: element, domEvent: event });
+                if (matched && matched.length) {
+                    tracked = true;
+                }
+            }
+            // 原始 click 始终继电进本会话沙盒数据流（供勾选/组装参数）；不因业务/自定义命中而吞掉
+            __publishSandboxClickPassthrough(element, event, {
+                event_name: '',
+                event_hit: false
+            });
         }, true);
 
         var originalPushState = history.pushState;
@@ -3837,11 +5007,15 @@
     }
 
     // True sandbox bridge (Phase 6): postMessage envelopes only; no shared WelinePixel.
-    window.WelinePixelSandbox = window.WelinePixelSandbox || {
+    // Monitor bus: emit/subscribe observes passthrough stream without changing fanout.
+    // Always upgrade API (do not keep a stale pre-emit object via ||).
+    window.WelinePixelSandbox = {
         injectMode: (window.__WelineVisitorTrackingConfig && window.__WelineVisitorTrackingConfig.sandbox && window.__WelineVisitorTrackingConfig.sandbox.inject_mode) || (window.DEV ? 'dry_run' : 'live'),
-        subscribers: [],
-        iframe: null,
-        vendorFrames: {},
+        subscribers: (window.WelinePixelSandbox && Array.isArray(window.WelinePixelSandbox.subscribers)) ? window.WelinePixelSandbox.subscribers : [],
+        iframe: (window.WelinePixelSandbox && window.WelinePixelSandbox.iframe) || null,
+        vendorFrames: (window.WelinePixelSandbox && window.WelinePixelSandbox.vendorFrames) || {},
+        _lifecycleBridged: false,
+        _emitSeq: 0,
         ensureFrame: function () {
             if (this.iframe && this.iframe.isConnected) {
                 return this.iframe;
@@ -3883,7 +5057,300 @@
             }
             return frame;
         },
+        destroyVendorFrames: function () {
+            var frames = this.vendorFrames || {};
+            Object.keys(frames).forEach(function (code) {
+                var frame = frames[code];
+                try {
+                    if (frame && frame.parentNode) {
+                        frame.parentNode.removeChild(frame);
+                    }
+                } catch (e) {}
+            });
+            this.vendorFrames = {};
+        },
+        rebuildVendorFrames: function () {
+            this.destroyVendorFrames();
+            var cfg = window.__WelineVisitorTrackingConfig || {};
+            var vendors = Array.isArray(cfg.vendors) ? cfg.vendors : [];
+            for (var i = 0; i < vendors.length; i++) {
+                var vendor = vendors[i] || {};
+                var code = String(vendor.code || '').trim();
+                if (!code) {
+                    continue;
+                }
+                var enabled = vendor.enabled;
+                if (enabled === false || enabled === 0 || enabled === '0') {
+                    continue;
+                }
+                this.ensureVendorFrame(code, vendor);
+            }
+        },
+        /**
+         * 事件编辑后服务端 bump 的版本标记：沙盒见变大则自行拉 runtime 并重建 iframe。
+         */
+        noteConfigRevision: function (rev) {
+            if (typeof __noteServerConfigRevision === 'function') {
+                __noteServerConfigRevision(rev);
+            }
+        },
+        normalizeEnvelope: function (raw, extras) {
+            extras = extras && typeof extras === 'object' ? extras : {};
+            raw = raw && typeof raw === 'object' ? raw : {};
+            var detail = raw.detail && typeof raw.detail === 'object' ? raw.detail : raw;
+            var params = detail.payload && typeof detail.payload === 'object'
+                ? detail.payload
+                : (detail.params && typeof detail.params === 'object' ? detail.params : detail);
+            if (params === detail && detail.element) {
+                params = Object.assign({}, detail);
+            }
+            var name = String(
+                extras.event_name
+                || detail.eventName
+                || detail.weline_event
+                || detail.name
+                || raw.name
+                || extras.name
+                || 'event'
+            ).trim();
+            var meta = (detail.meta && typeof detail.meta === 'object') ? detail.meta : {};
+            var schema = meta.event_schema || detail.event_schema || {};
+            var missing = schema.missing_fields || meta.missing_fields || detail.missing_fields || detail.missing || extras.missing || [];
+            if (!Array.isArray(missing)) {
+                missing = [];
+            }
+            missing = missing.map(function (item) { return String(item || '').trim(); }).filter(Boolean);
+            var mappingSource = String(extras.mapping_source || detail.mappingSource || detail.mapping_source || '');
+            var ga4 = String(extras.ga4_event || (detail.platforms && detail.platforms.gtm && detail.platforms.gtm.eventName) || detail.ga4_event || '');
+            var third = String(extras.third_party_event || detail.third_party_event || ga4 || '');
+            var source = String(extras.source || detail.source || params.source || 'track');
+            var trigger = String(detail.trigger || (params && params.trigger) || extras.trigger || '');
+            if (trigger === 'click' || source === 'sandbox_passthrough') {
+                source = 'click';
+            }
+            if (params && typeof params === 'object') {
+                params = __sandboxCompactParams(params);
+            }
+            var hitExtras = {
+                event_hit: extras.event_hit != null ? extras.event_hit : detail.event_hit,
+                hit_kind: extras.hit_kind || extras.event_kind || detail.hit_kind || '',
+                mapping_source: mappingSource,
+                ga4_event: ga4,
+                third_party_event: third,
+                source: source
+            };
+            var eventHit = typeof __sandboxIsCustomEventHit === 'function'
+                ? __sandboxIsCustomEventHit(name, hitExtras)
+                : !!(mappingSource || ga4 || third);
+            if (source === 'click') {
+                eventHit = false;
+            }
+            if (source === 'lifecycle' || source === 'chain') {
+                eventHit = true;
+                if (!hitExtras.hit_kind) {
+                    hitExtras.hit_kind = 'system';
+                }
+            }
+            var hitKind = '';
+            if (eventHit) {
+                hitKind = typeof __sandboxHitKind === 'function'
+                    ? __sandboxHitKind(name, hitExtras)
+                    : 'custom';
+                if (hitKind !== 'system' && hitKind !== 'custom') {
+                    hitKind = 'custom';
+                }
+            }
+            var anomalyFlag = !!(extras.anomaly || detail.anomaly || /anomaly/i.test(name) || missing.length);
+            var id = String(detail.eventId || extras.id || ('sbx-' + Date.now() + '-' + (++this._emitSeq)));
+            return {
+                id: id,
+                ts: Number(detail.timestampMs || extras.ts || Date.now()) || Date.now(),
+                name: name,
+                event_name: eventHit ? (third || ga4 || name) : '',
+                source: source,
+                params: params && typeof params === 'object' ? params : {},
+                missing: missing,
+                anomaly: anomalyFlag,
+                event_hit: eventHit,
+                hit_kind: hitKind,
+                vendor: String(extras.vendor || detail.vendor_code || ''),
+                third_party_event: third,
+                mode: String(extras.mode || detail.vendor_mode || ''),
+                chain: extras.chain || detail.chain || null,
+                raw: detail
+            };
+        },
+        emit: function (raw, extras) {
+            var envelope = this.normalizeEnvelope(raw, extras);
+            var list = Array.isArray(this.subscribers) ? this.subscribers.slice() : [];
+            for (var i = 0; i < list.length; i++) {
+                try {
+                    list[i](envelope);
+                } catch (subErr) {
+                    if (window.DEV) {
+                        console.debug('WelineEventSandbox subscriber failed', subErr);
+                    }
+                }
+            }
+            try {
+                window.dispatchEvent(new CustomEvent('weline:pixel-sandbox:event', { detail: envelope }));
+            } catch (eDispatch) {
+            }
+            try {
+                this.relayToAdminSession(envelope);
+            } catch (eRelay) {
+            }
+            return envelope;
+        },
+        /**
+         * 继电到后台「本会话沙盒」accumulate（与 Monitor 同源全量流，含 click 透传）。
+         */
+        relayToAdminSession: function (envelope) {
+            if (!envelope || typeof envelope !== 'object') {
+                return;
+            }
+            var websiteId = '';
+            try {
+                websiteId = String(typeof __getPixelSiteEnvValue === 'function'
+                    ? (__getPixelSiteEnvValue('website_id', 'WELINE_WEBSITE_ID') || '')
+                    : '');
+            } catch (eWid) {
+                websiteId = '';
+            }
+            if (!/^\d+$/.test(websiteId)) {
+                return;
+            }
+            var seen = window.__welineSandboxStreamRelaySeen;
+            if (!seen || typeof seen !== 'object') {
+                seen = {};
+                window.__welineSandboxStreamRelaySeen = seen;
+            }
+            var id = String(envelope.id || '');
+            if (id && seen[id]) {
+                return;
+            }
+            if (id) {
+                seen[id] = 1;
+                var keys = Object.keys(seen);
+                if (keys.length > 200) {
+                    keys.slice(0, keys.length - 160).forEach(function (k) { delete seen[k]; });
+                }
+            }
+            var compact = typeof __sandboxCompactParams === 'function'
+                ? __sandboxCompactParams(envelope.params || envelope.payload || {})
+                : (envelope.params && typeof envelope.params === 'object' ? envelope.params : {});
+            var body = new URLSearchParams();
+            body.set('website_id', websiteId);
+            body.set('weline_event', String(envelope.name || envelope.event_name || 'event'));
+            body.set('third_party_event', String(envelope.third_party_event || envelope.event_name || ''));
+            body.set('source', String(envelope.source || 'sandbox_stream'));
+            body.set('hit_kind', String(envelope.hit_kind || ''));
+            body.set('event_hit', envelope.event_hit ? '1' : '0');
+            body.set('custom', String(envelope.hit_kind || '') === 'custom' ? '1' : '0');
+            body.set('path', String((window.location && window.location.href) || ''));
+            body.set('at', new Date().toISOString());
+            body.set('summary', String(envelope.source === 'click' ? 'click passthrough' : ''));
+            try {
+                body.set('params_json', JSON.stringify(compact));
+            } catch (eParams) {
+                body.set('params_json', '{}');
+            }
+            var url = '/visitor/analytics/event-picker/observe';
+            body.set('sandbox_stream', '1');
+            // 提交响应带 config_revision：版本变大则沙盒自行重载事件配置到浏览器
+            try {
+                var self = this;
+                fetch(url, {
+                    method: 'POST',
+                    body: body,
+                    credentials: 'same-origin',
+                    keepalive: true,
+                    headers: { 'Accept': 'application/json' }
+                }).then(function (r) { return r.json(); }).then(function (data) {
+                    if (!data) {
+                        return;
+                    }
+                    if (typeof self.noteConfigRevision === 'function') {
+                        self.noteConfigRevision(data.configRevision || data.config_revision);
+                    } else if (typeof __noteServerConfigRevision === 'function') {
+                        __noteServerConfigRevision(data.configRevision || data.config_revision);
+                    }
+                }).catch(function () {});
+                return;
+            } catch (eFetch) {
+            }
+            try {
+                if (navigator.sendBeacon) {
+                    navigator.sendBeacon(url, body);
+                }
+            } catch (eBeacon) {
+            }
+        },
+        subscribe: function (fn) {
+            if (typeof fn !== 'function') {
+                return function () {};
+            }
+            this.subscribers = Array.isArray(this.subscribers) ? this.subscribers : [];
+            this.subscribers.push(fn);
+            this.ensureLifecycleBridge();
+            var self = this;
+            return function unsubscribe() {
+                self.unsubscribe(fn);
+            };
+        },
+        unsubscribe: function (fn) {
+            this.subscribers = (Array.isArray(this.subscribers) ? this.subscribers : []).filter(function (item) {
+                return item !== fn;
+            });
+        },
+        ensureLifecycleBridge: function () {
+            if (this._lifecycleBridged) {
+                return;
+            }
+            this._lifecycleBridged = true;
+            var self = this;
+            var names = [
+                'weline:checkout:order-created',
+                'weline:checkout:success',
+                'weline:checkout:cancelled',
+                'weline:checkout:anomaly',
+                'weline:checkout:fields-ready',
+                'weline:payment:outcome',
+                'weline:payment:paid',
+                'weline:payment:pending',
+                'weline:payment:failed',
+                'weline:payment:cancelled',
+                'weline:payment:anomaly',
+                'weline:cart:update',
+                'weline:event-chain-complete'
+            ];
+            names.forEach(function (evtName) {
+                window.addEventListener(evtName, function (ev) {
+                    var detail = (ev && ev.detail) || {};
+                    var isChain = evtName === 'weline:event-chain-complete';
+                    var isAnomaly = /anomaly/i.test(evtName);
+                    self.emit(Object.assign({}, detail, {
+                        eventName: evtName,
+                        name: evtName,
+                        anomaly: isAnomaly || !!detail.anomaly
+                    }), {
+                        source: isChain ? 'chain' : 'lifecycle',
+                        event_hit: true,
+                        hit_kind: 'system',
+                        event_name: evtName,
+                        anomaly: isAnomaly || !!detail.anomaly,
+                        missing: detail.missing || detail.missing_fields || [],
+                        chain: isChain ? {
+                            chain_id: detail.chain && detail.chain.id,
+                            complete: true,
+                            event: detail.event
+                        } : null
+                    });
+                });
+            });
+        },
         publishVendor: function (code, envelope, vendor) {
+            // vendor 帧执行；Monitor 只从 publish 记一笔，避免同一 envelope 多 vendor 重复刷屏
             var frame = this.ensureVendorFrame(code, vendor || {});
             var win = frame.contentWindow;
             if (!win) {
@@ -3898,6 +5365,22 @@
             }, '*');
         },
         publish: function (envelope) {
+            // 透传入口：先通知 Monitor 订阅者，再 postMessage 进沙盒 iframe
+            try {
+                var detail = envelope && typeof envelope === 'object' ? envelope : {};
+                var trigger = String(detail.trigger || (detail.payload && detail.payload.trigger) || '');
+                var source = trigger === 'click' || String((detail.payload && detail.payload.source) || '') === 'sandbox_passthrough'
+                    ? 'click'
+                    : 'track';
+                this.emit(detail, {
+                    source: source,
+                    event_hit: detail.event_hit === false ? false : undefined,
+                    mapping_source: detail.mappingSource || detail.mapping_source || '',
+                    ga4_event: (detail.platforms && detail.platforms.gtm && detail.platforms.gtm.eventName) || detail.ga4_event || '',
+                    third_party_event: detail.third_party_event || ''
+                });
+            } catch (eEmit) {
+            }
             try {
                 var frame = this.ensureFrame();
                 var target = frame.contentWindow;
@@ -3912,9 +5395,32 @@
                 }, '*');
             } catch (e) {
             }
+        },
+        monitor: {
+            enable: function () {
+                if (window.WelineEventSandboxMonitor && typeof window.WelineEventSandboxMonitor.enable === 'function') {
+                    return window.WelineEventSandboxMonitor.enable();
+                }
+                return null;
+            },
+            disable: function () {
+                if (window.WelineEventSandboxMonitor && typeof window.WelineEventSandboxMonitor.disable === 'function') {
+                    return window.WelineEventSandboxMonitor.disable();
+                }
+                return null;
+            },
+            isEnabled: function () {
+                if (window.WelineEventSandboxMonitor && typeof window.WelineEventSandboxMonitor.isEnabled === 'function') {
+                    return !!window.WelineEventSandboxMonitor.isEnabled();
+                }
+                return false;
+            }
         }
     };
+    window.WelineEventSandbox = window.WelinePixelSandbox;
+    window.WelinePixelSandbox.ensureLifecycleBridge();
 
+    // Passthrough: keep existing default-iframe publish after forwarders (do not add another wrap).
     var __origForwardersEmit = window.WelineVisitorForwarders.emit;
     window.WelineVisitorForwarders.emit = function (event) {
         __origForwardersEmit.call(window.WelineVisitorForwarders, event);

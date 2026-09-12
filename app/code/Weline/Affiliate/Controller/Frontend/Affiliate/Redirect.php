@@ -5,14 +5,12 @@ declare(strict_types=1);
 namespace Weline\Affiliate\Controller\Frontend\Affiliate;
 
 use Weline\Affiliate\Service\AffiliateService;
-use Weline\Customer\Session\CustomerSession;
 use Weline\Framework\App\Controller\FrontendController;
 
 class Redirect extends FrontendController
 {
     public function __construct(
-        private readonly AffiliateService $affiliateService,
-        private readonly CustomerSession $customerSession
+        private readonly AffiliateService $affiliateService
     ) {
     }
 
@@ -40,7 +38,7 @@ class Redirect extends FrontendController
     private function getCustomerId(): int
     {
         try {
-            return (int) ($this->customerSession->getUserId() ?? 0);
+            return (int) ($this->session->getUserId() ?? 0);
         } catch (\Throwable) {
             return 0;
         }

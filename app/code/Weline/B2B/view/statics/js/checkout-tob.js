@@ -94,10 +94,11 @@
         });
     }
 
-    function applyCartType(root, cartType) {
+    function applyCartType(root, cartType, opts) {
         if (!root) {
             return;
         }
+        opts = opts && typeof opts === 'object' ? opts : {};
         var type = String(cartType || readMode() || 'toc').toLowerCase() === 'tob' ? 'tob' : 'toc';
         root.setAttribute('data-cart-type', type);
         root.classList.toggle('is-cart-type-tob', type === 'tob');
@@ -110,57 +111,61 @@
             }
             note.setAttribute('data-cart-type', type);
         }
-        // 摘要页签「批发信用」：常显；零售灰化，批发可用。
+        // 摘要页签「批发信用」：仅批发结账显示；零售完全隐藏（不灰化占位）。
+        var showCredit = type === 'tob';
         var creditRoot = root.querySelector('[data-b2b-checkout-credit]');
         if (creditRoot) {
-            creditRoot.hidden = false;
-            creditRoot.removeAttribute('hidden');
-            creditRoot.classList.toggle('is-toc-unavailable', type !== 'tob');
-            creditRoot.setAttribute('aria-disabled', type !== 'tob' ? 'true' : 'false');
-            creditRoot.setAttribute('data-cart-type', type);
-            var reasonEl = creditRoot.querySelector('[data-b2b-credit-reason]');
-            var switchCart = creditRoot.querySelector('[data-b2b-credit-switch-cart]');
-            if (reasonEl) {
-                if (type !== 'tob') {
-                    reasonEl.textContent = creditRoot.getAttribute('data-i18n-toc-unavailable')
-                        || '当前是零售结账，批发信用只能在「批发车」使用。请先到购物车切换到批发车，再回来结账。';
-                    reasonEl.hidden = false;
-                    reasonEl.removeAttribute('hidden');
-                }
-                // tob：原因留给 syncCreditUi 按报价写入；勿在此清空（可能尚未拉到 quote）。
+            creditRoot.hidden = !showCredit;
+            if (showCredit) {
+                creditRoot.removeAttribute('hidden');
+            } else {
+                creditRoot.setAttribute('hidden', '');
             }
+            creditRoot.classList.remove('is-toc-unavailable');
+            creditRoot.setAttribute('aria-disabled', showCredit ? 'false' : 'true');
+            creditRoot.setAttribute('data-cart-type', type);
+            var switchCart = creditRoot.querySelector('[data-b2b-credit-switch-cart]');
             if (switchCart) {
-                if (type !== 'tob') {
-                    switchCart.hidden = false;
-                    switchCart.removeAttribute('hidden');
-                } else {
-                    switchCart.hidden = true;
-                }
+                switchCart.hidden = true;
             }
         }
         var credit = root.querySelector('[data-b2b-credit-panel]');
         if (credit) {
-            credit.hidden = false;
-            credit.removeAttribute('hidden');
-            credit.querySelectorAll('[data-b2b-credit-toggle], [data-b2b-credit-input]').forEach(function (el) {
-                if ('disabled' in el) {
-                    el.disabled = type !== 'tob';
-                }
-            });
-            if (type === 'tob') {
+            credit.hidden = !showCredit;
+            if (showCredit) {
+                credit.removeAttribute('hidden');
+                credit.querySelectorAll('[data-b2b-credit-toggle], [data-b2b-credit-input]').forEach(function (el) {
+                    if ('disabled' in el) {
+                        el.disabled = false;
+                    }
+                });
                 bindCreditControls(root);
             } else {
+                credit.setAttribute('hidden', '');
                 var toggleOff = credit.querySelector('[data-b2b-credit-toggle]');
                 if (toggleOff) {
                     toggleOff.checked = false;
+                    toggleOff.disabled = true;
+                }
+                var inputOff = credit.querySelector('[data-b2b-credit-input]');
+                if (inputOff) {
+                    inputOff.disabled = true;
                 }
             }
         }
-        var creditSlot = root.querySelector('.weline-checkout__credit-slot');
+        var creditSlot = root.querySelector(
+            '.weline-checkout__credit-slot, .weline-cart-shell__credit-slot,'
+            + ' [data-wslot="checkout-summary-credit"], [data-wslot="cart-summary-credit"]'
+        );
         if (creditSlot) {
-            creditSlot.hidden = false;
-            creditSlot.removeAttribute('hidden');
+            creditSlot.hidden = type !== 'tob';
+            if (showCredit) {
+                creditSlot.removeAttribute('hidden');
+            } else {
+                creditSlot.setAttribute('hidden', '');
+            }
         }
+        syncCreditExtrasTabVisibility(root, showCredit);
         // 与迷你车同构：保留优惠券页签，灰化禁用并提示「批发不可用」，禁止整槽隐藏。
         var couponSlot = root.querySelector('.weline-checkout__coupon-slot');
         if (couponSlot) {
@@ -179,6 +184,13 @@
         syncCheckoutCouponAvailability(root, type);
         // toc 就地原因/切换链：apply 后立刻 sync，避免等 freeze 事件。
         if (type !== 'tob') {
+            syncCreditUi(root);
+            return;
+        }
+        // tob：仅在显式请求时预取。MutationObserver/勾选变更不得经 applyCartType 再打 credit.quote。
+        if (opts.ensureQuote === true) {
+            ensureCreditQuote(root, Object.assign({ cart_type: 'tob' }, opts.quoteOpts || {}));
+        } else {
             syncCreditUi(root);
         }
     }
@@ -254,12 +266,67 @@
     }
 
     function selectedPaymentMethod(root) {
-        var checked = root.querySelector('input[name="payment_method"]:checked');
+        var scope = root && root.querySelector
+            ? (root.querySelector('[data-b2b-hang-payment]') || root)
+            : root;
+        var checked = scope.querySelector('input[name="payment_method"]:checked');
         if (checked && checked.value) {
-            return String(checked.value);
+            return String(checked.value).trim();
         }
-        var first = root.querySelector('input[name="payment_method"]');
-        return first && first.value ? String(first.value) : 'fake_card';
+        var first = scope.querySelector('input[name="payment_method"]');
+        return first && first.value ? String(first.value).trim() : '';
+    }
+
+    function renderHangPaymentMethods(panel, methods) {
+        var host = panel.querySelector('[data-b2b-hang-methods]');
+        if (!host) {
+            return 0;
+        }
+        host.innerHTML = '';
+        var list = Array.isArray(methods) ? methods : [];
+        var count = 0;
+        list.forEach(function (method, index) {
+            var code = method && method.code ? String(method.code).trim() : '';
+            if (!code) {
+                return;
+            }
+            var title = method && method.title ? String(method.title) : code;
+            var id = 'b2b-hang-pay-' + code.replace(/[^a-z0-9_-]/gi, '_');
+            var label = document.createElement('label');
+            label.className = 'b2b-hang-payment__method';
+            label.setAttribute('data-testid', 'b2b-hang-payment-method');
+            var input = document.createElement('input');
+            input.type = 'radio';
+            input.name = 'payment_method';
+            input.value = code;
+            input.id = id;
+            if (count === 0) {
+                input.checked = true;
+            }
+            var span = document.createElement('span');
+            span.textContent = title;
+            label.appendChild(input);
+            label.appendChild(span);
+            host.appendChild(label);
+            count += 1;
+        });
+        host.hidden = count === 0;
+        return count;
+    }
+
+    function hangRedirectUrl(payment) {
+        payment = payment || {};
+        if (payment.redirect_url) {
+            return String(payment.redirect_url);
+        }
+        var txs = Array.isArray(payment.transactions) ? payment.transactions : [];
+        for (var i = 0; i < txs.length; i += 1) {
+            var response = txs[i] && txs[i].response ? txs[i].response : {};
+            if (response.redirect_url) {
+                return String(response.redirect_url);
+            }
+        }
+        return '';
     }
 
     function formatMinor(amountMinor, currency) {
@@ -274,12 +341,371 @@
         }
     }
 
+    function formatMajorPlain(amountMinor) {
+        return ((Number(amountMinor) || 0) / 100).toFixed(2);
+    }
+
+    /**
+     * Explicit FX copy: base currency + available (+ checkout equivalent) + max apply.
+     * Optionally append min-cash reserve once — never duplicate into hint_short UI.
+     */
+    function buildCreditFxSummary(quote) {
+        if (!quote || !quote.enabled) {
+            return '';
+        }
+        var base = String(quote.base_currency || '').toUpperCase();
+        var checkout = String(quote.checkout_currency || '').toUpperCase();
+        var availableBase = Math.max(0, Number(quote.available_base_minor) || 0);
+        var availableCheckout = Math.max(0, Number(quote.available_checkout_minor) || 0);
+        var maxApply = Math.max(0, Number(quote.max_apply_checkout_minor) || 0);
+        var minCash = Math.max(0, Number(quote.min_cash_deposit_minor) || 0);
+        if (!base || !checkout) {
+            return '';
+        }
+        var baseAmt = formatMajorPlain(availableBase);
+        var checkoutAmt = formatMajorPlain(availableCheckout);
+        var maxAmt = formatMajorPlain(maxApply);
+        var text;
+        if (base === checkout) {
+            text = '基准货币 ' + base + ' 可用 ' + baseAmt
+                + '；本单最多可抵 ' + maxAmt + ' ' + checkout;
+        } else {
+            text = '基准货币 ' + base + ' 可用 ' + baseAmt
+                + '，折合 ' + checkout + ' ' + checkoutAmt
+                + '；本单最多可抵 ' + maxAmt + ' ' + checkout;
+        }
+        if (minCash > 0) {
+            text += '。定金至少保留现金 ' + formatMajorPlain(minCash) + ' ' + checkout;
+        }
+        return text;
+    }
+
+    /** Parse typing buffer without forcing complete decimals mid-keystroke. */
+    function parseCreditInputMajor(raw) {
+        var text = String(raw || '').trim().replace(/,/g, '');
+        if (text === '' || text === '.' || text === '-') {
+            return { empty: true, major: 0, incomplete: true };
+        }
+        // Allow trailing "." or ".0" while typing.
+        if (!/^\d+(\.\d*)?$/.test(text)) {
+            return { empty: false, major: NaN, incomplete: true };
+        }
+        if (text.indexOf('.') === text.length - 1) {
+            return { empty: false, major: parseFloat(text + '0'), incomplete: true };
+        }
+        var major = parseFloat(text);
+        return {
+            empty: false,
+            major: isFinite(major) ? major : NaN,
+            incomplete: /\.\d{0,1}$/.test(text) && text.split('.')[1] && text.split('.')[1].length < 2
+                ? false
+                : false
+        };
+    }
+
+    function setCreditFxEl(fxEl, text) {
+        if (!fxEl) {
+            return;
+        }
+        if (!text) {
+            fxEl.hidden = true;
+            fxEl.setAttribute('hidden', '');
+            fxEl.textContent = '';
+            return;
+        }
+        fxEl.hidden = false;
+        fxEl.removeAttribute('hidden');
+        fxEl.textContent = text;
+    }
+
     var creditState = {
         quote: null,
         applyMinor: 0,
         cashMinor: null,
-        currency: 'CNY'
+        currency: 'CNY',
+        quoteLoading: false,
+        quoteSeq: 0,
+        pendingQuoteOpts: null,
+        // Last deposit we actually sent to credit.quote — do NOT compare against
+        // server-echoed deposit_amount_minor (mismatch would storm refetch).
+        lastRequestedDepositMinor: null
     };
+
+    var DEPOSIT_RATIO_BPS = 3000;
+
+    function parseMoneyMajor(text) {
+        // Strip currency letters/symbols; drop thousand separators; keep one decimal point.
+        var cleaned = String(text || '')
+            .replace(/,/g, '')
+            .replace(/[^\d.-]/g, '');
+        // Guard against "1.590.00" style leftovers: keep first dot only.
+        var firstDot = cleaned.indexOf('.');
+        if (firstDot >= 0) {
+            cleaned = cleaned.slice(0, firstDot + 1) + cleaned.slice(firstDot + 1).replace(/\./g, '');
+        }
+        var parsed = parseFloat(cleaned);
+        return isFinite(parsed) && parsed > 0 ? parsed : NaN;
+    }
+
+    function pickLargestMoneyMajor(nodes) {
+        var best = NaN;
+        for (var i = 0; i < nodes.length; i += 1) {
+            var parsed = parseMoneyMajor(nodes[i] && nodes[i].textContent);
+            if (isFinite(parsed) && (!isFinite(best) || parsed > best)) {
+                best = parsed;
+            }
+        }
+        return best;
+    }
+
+    /**
+     * Goods subtotal (major) for tob deposit base.
+     * Prefer page cart/checkout summary; among matches take the largest to avoid
+     * header mini-cart badge / stale smaller totals winning first-match.
+     */
+    function readGoodsSubtotalMajor(opts) {
+        opts = opts || {};
+        var fromOpts = Number(opts.subtotal != null ? opts.subtotal : opts.cart_subtotal);
+        if (isFinite(fromOpts) && fromOpts > 0) {
+            return fromOpts;
+        }
+        try {
+            var preferred = [
+                '[data-weline-cart] [data-cart-goods-subtotal]',
+                '[data-weline-checkout] [data-checkout-subtotal]',
+                '[data-checkout] [data-checkout-subtotal]',
+                '[data-testid="checkout-subtotal"]',
+                '.weline-checkout [data-checkout-subtotal]',
+                // Drawer body (open mini-cart), not the compact header badge alone.
+                '[data-w-mini-cart="1"] .mini-cart-drawer [data-cart-goods-subtotal]',
+                '[data-w-mini-cart="1"] [data-cart-goods-subtotal]',
+                '[data-cart-goods-subtotal]'
+            ];
+            var best = NaN;
+            for (var s = 0; s < preferred.length; s += 1) {
+                var nodes = document.querySelectorAll(preferred[s]);
+                var candidate = pickLargestMoneyMajor(nodes);
+                if (isFinite(candidate) && (!isFinite(best) || candidate > best)) {
+                    best = candidate;
+                }
+                // Cart page summary is authoritative once found.
+                if (s === 0 && isFinite(best) && best > 0) {
+                    return best;
+                }
+            }
+            if (isFinite(best) && best > 0) {
+                return best;
+            }
+            var attrHosts = document.querySelectorAll(
+                '[data-weline-cart][data-cart-subtotal], [data-w-mini-cart="1"][data-cart-subtotal], [data-cart-subtotal]'
+            );
+            for (var a = 0; a < attrHosts.length; a += 1) {
+                var fromAttr = parseMoneyMajor(attrHosts[a].getAttribute('data-cart-subtotal'));
+                if (isFinite(fromAttr) && (!isFinite(best) || fromAttr > best)) {
+                    best = fromAttr;
+                }
+            }
+            return best;
+        } catch (e) {
+            return NaN;
+        }
+    }
+
+    /**
+     * Resolve tob cash payable for this period (= hang deposit base: goods × 30%).
+     * Cart / mini-cart must estimate from goods subtotal — not wait for a hang deposit row.
+     */
+    function estimateDepositMinor(opts) {
+        opts = opts || {};
+        var explicit = Number(opts.deposit_amount_minor);
+        // 0 means "unknown" when a cart subtotal is also available — do not pin deposit at 0.
+        if (isFinite(explicit) && explicit > 0) {
+            return Math.max(0, Math.floor(explicit));
+        }
+        var subtotalMajor = readGoodsSubtotalMajor(opts);
+        if (!isFinite(subtotalMajor) || subtotalMajor <= 0) {
+            return isFinite(explicit) ? Math.max(0, Math.floor(explicit)) : 0;
+        }
+        var goodsMinor = Math.max(0, Math.round(subtotalMajor * 100));
+        return Math.floor((goodsMinor * DEPOSIT_RATIO_BPS) / 10000);
+    }
+
+    function resolveWebsiteId(opts) {
+        opts = opts || {};
+        var fromOpts = Number(opts.website_id);
+        if (isFinite(fromOpts) && fromOpts > 0) {
+            return Math.floor(fromOpts);
+        }
+        var site = global.site || {};
+        var fromSite = Number(site.website_id || site.websiteId || 0);
+        return isFinite(fromSite) && fromSite > 0 ? Math.floor(fromSite) : 0;
+    }
+
+    /**
+     * Resolve checkout/display currency for credit.quote.
+     * Never silently default to CNY when the cart/page already has another currency —
+     * that causes base-wallet numbers to be applied 1:1 against foreign deposits.
+     */
+    function resolveCheckoutCurrency(opts) {
+        opts = opts || {};
+        var candidates = [
+            opts.currency,
+            creditState.pendingQuoteOpts && creditState.pendingQuoteOpts.currency,
+            creditState.currency,
+            global.checkoutState && global.checkoutState.currency,
+        ];
+        try {
+            var root = document.querySelector('[data-weline-checkout], [data-checkout], .weline-checkout');
+            if (root) {
+                candidates.push(root.getAttribute('data-currency'));
+                candidates.push(root.getAttribute('data-checkout-currency'));
+            }
+            var curNode = document.querySelector('[data-checkout-currency], [data-currency], [data-pixel-currency]');
+            if (curNode) {
+                candidates.push(curNode.getAttribute('data-checkout-currency'));
+                candidates.push(curNode.getAttribute('data-currency'));
+                candidates.push(curNode.getAttribute('data-pixel-currency'));
+            }
+        } catch (e) {}
+        for (var i = 0; i < candidates.length; i += 1) {
+            var code = String(candidates[i] || '').trim().toUpperCase();
+            if (/^[A-Z]{3}$/.test(code)) {
+                return code;
+            }
+        }
+        return 'CNY';
+    }
+
+    function rememberQuoteOpts(opts) {
+        opts = opts || {};
+        creditState.pendingQuoteOpts = Object.assign({}, creditState.pendingQuoteOpts || {}, opts);
+        if (!creditState.pendingQuoteOpts.currency) {
+            creditState.pendingQuoteOpts.currency = resolveCheckoutCurrency(creditState.pendingQuoteOpts);
+        }
+        return creditState.pendingQuoteOpts;
+    }
+
+    /**
+     * Ensure tob credit quote is fetched at least once. Idempotent while in-flight.
+     * Does NOT endlessly retry quote_failed (prevents MutationObserver request storms).
+     * Pass opts.force=true to retry after user action / deposit change.
+     */
+    function ensureCreditQuote(root, opts) {
+        opts = rememberQuoteOpts(opts || {});
+        var cartType = String(opts.cart_type || readMode() || '').toLowerCase();
+        if (cartType !== 'tob') {
+            return Promise.resolve(null);
+        }
+        if (creditState.quoteLoading) {
+            return Promise.resolve(creditState.quote);
+        }
+        var nextDeposit = estimateDepositMinor(opts);
+        var nextCurrency = resolveCheckoutCurrency(opts);
+        var existing = creditState.quote;
+        var force = opts.force === true;
+        if (existing) {
+            var prevRequested = creditState.lastRequestedDepositMinor;
+            var prevCurrency = String(
+                (existing.checkout_currency || creditState.currency || '')
+            ).toUpperCase();
+            var depositChanged = nextDeposit > 0
+                && prevRequested != null
+                && nextDeposit !== Math.max(0, Number(prevRequested) || 0);
+            var currencyChanged = nextCurrency !== ''
+                && prevCurrency !== ''
+                && nextCurrency !== prevCurrency;
+            if (!force && !depositChanged && !currencyChanged) {
+                // Keep any settled quote (including quote_failed) unless deposit/currency/force says otherwise.
+                syncCreditUi(root || document.querySelector('[data-weline-checkout], [data-checkout], .weline-checkout'));
+                return Promise.resolve(existing);
+            }
+        }
+        return refreshCreditQuote(root, opts);
+    }
+
+    async function refreshCreditQuote(root, opts) {
+        opts = rememberQuoteOpts(opts || {});
+        var cartType = String(opts.cart_type || readMode() || '').toLowerCase();
+        if (cartType !== 'tob') {
+            return null;
+        }
+        if (!root) {
+            root = document.querySelector('[data-weline-checkout], [data-checkout], .weline-checkout');
+        }
+        if (!root || !creditPanel(root)) {
+            return null;
+        }
+        var deposit = estimateDepositMinor(opts);
+        var currency = resolveCheckoutCurrency(opts);
+        creditState.currency = currency;
+        var websiteId = resolveWebsiteId(opts);
+        var seq = ++creditState.quoteSeq;
+        creditState.lastRequestedDepositMinor = deposit;
+        creditState.quoteLoading = true;
+        var creditRoot = root.querySelector('[data-b2b-checkout-credit]');
+        if (creditRoot) {
+            creditRoot.setAttribute('data-cart-type', 'tob');
+            creditRoot.classList.remove('is-toc-unavailable');
+            creditRoot.setAttribute('aria-disabled', 'false');
+        }
+        var reasonEl = (creditRoot || creditPanel(root)).querySelector('[data-b2b-credit-reason]');
+        showCreditReason(
+            reasonEl,
+            (creditRoot && creditRoot.getAttribute('data-i18n-quote-loading'))
+                || '正在获取批发信用报价…'
+        );
+        // Disable toggle during in-flight fetch so checkbox cannot re-enter sync storms.
+        syncCreditUi(root);
+        if (!global.Weline || !global.Weline.Api || typeof global.Weline.Api.resource !== 'function') {
+            creditState.quoteLoading = false;
+            creditState.quote = {
+                enabled: false,
+                reason: 'quote_failed',
+                hint_short: (creditRoot && creditRoot.getAttribute('data-i18n-reason-quote-failed'))
+                    || '暂时无法获取批发信用报价，请刷新后重试'
+            };
+            syncCreditUi(root);
+            return creditState.quote;
+        }
+        try {
+            var api = await global.Weline.Api.resource('b2b');
+            var res = await api['credit.quote']({
+                deposit_amount_minor: deposit,
+                currency: currency,
+                website_id: websiteId
+            }, { silent: true });
+            if (seq !== creditState.quoteSeq) {
+                return creditState.quote;
+            }
+            var quote = null;
+            if (res && res.b2b_credit && typeof res.b2b_credit === 'object') {
+                quote = res.b2b_credit;
+            } else if (res && res.data && res.data.b2b_credit && typeof res.data.b2b_credit === 'object') {
+                quote = res.data.b2b_credit;
+            }
+            creditState.quote = quote || {
+                enabled: false,
+                reason: 'quote_failed',
+                deposit_amount_minor: deposit,
+                hint_short: (creditRoot && creditRoot.getAttribute('data-i18n-reason-quote-failed'))
+                    || '暂时无法获取批发信用报价，请刷新后重试'
+            };
+        } catch (err) {
+            if (seq !== creditState.quoteSeq) {
+                return creditState.quote;
+            }
+            creditState.quote = {
+                enabled: false,
+                reason: 'quote_failed',
+                deposit_amount_minor: deposit,
+                hint_short: (creditRoot && creditRoot.getAttribute('data-i18n-reason-quote-failed'))
+                    || '暂时无法获取批发信用报价，请刷新后重试'
+            };
+        }
+        creditState.quoteLoading = false;
+        syncCreditUi(root);
+        return creditState.quote;
+    }
 
     function creditPanel(root) {
         return root ? root.querySelector('[data-b2b-credit-panel]') : null;
@@ -310,7 +736,7 @@
             return attr('data-i18n-reason-login', '请先登录后再使用批发信用');
         }
         if (reason === 'not_applicable') {
-            return attr('data-i18n-reason-na', '当前订单无定金，无法用批发信用抵扣');
+            return attr('data-i18n-reason-na', '暂无法估算本期定金，无法用批发信用抵扣');
         }
         if (reason === 'zero_cap') {
             return attr('data-i18n-reason-zero', '额度不够：本单可抵扣额度为 0');
@@ -340,6 +766,99 @@
         el.removeAttribute('hidden');
     }
 
+    /**
+     * 批发信用槽已迁入 extras 页签后：隐藏槽位时同步隐藏对应 tab，避免零售仍见「批发信用」按钮。
+     * 若 tabs 在零售态已构建（无信用槽），切到批发时 rebuild 以纳入信用页签。
+     */
+    function syncCreditExtrasTabVisibility(root, visible) {
+        if (!root) {
+            return;
+        }
+        var creditSlot = root.querySelector(
+            '.weline-checkout__credit-slot, .weline-cart-shell__credit-slot,'
+            + ' [data-wslot="checkout-summary-credit"], [data-wslot="cart-summary-credit"]'
+        );
+        var creditRoot = root.querySelector('[data-b2b-checkout-credit]');
+        var anchor = creditSlot || creditRoot;
+        if (!anchor) {
+            return;
+        }
+        var extras = root.querySelector('.weline-checkout__extras, [data-cart-summary-extras="1"], .mini-cart-drawer__extras')
+            || (anchor.closest && anchor.closest('.weline-checkout__extras, [data-cart-summary-extras="1"], .mini-cart-drawer__extras'));
+        var panel = anchor.closest('[data-mini-cart-extras-panel]');
+        var shell = anchor.closest('[data-mini-cart-extras-tabs]')
+            || (extras && extras.querySelector('[data-mini-cart-extras-tabs]'));
+
+        if (visible && extras && shell && !panel
+            && global.WelineMiniCartExtras
+            && typeof global.WelineMiniCartExtras.rebuild === 'function') {
+            try {
+                global.WelineMiniCartExtras.rebuild(extras);
+            } catch (eRebuild) {}
+            panel = anchor.closest('[data-mini-cart-extras-panel]');
+            shell = anchor.closest('[data-mini-cart-extras-tabs]')
+                || extras.querySelector('[data-mini-cart-extras-tabs]');
+        }
+
+        if (!shell || !panel) {
+            return;
+        }
+        var panels = Array.prototype.slice.call(shell.querySelectorAll('[data-mini-cart-extras-panel]'));
+        var tabs = Array.prototype.slice.call(shell.querySelectorAll('[data-mini-cart-extras-tab]'));
+        var idx = panels.indexOf(panel);
+        if (idx < 0 || !tabs[idx]) {
+            return;
+        }
+        var tab = tabs[idx];
+        tab.hidden = !visible;
+        if (visible) {
+            tab.removeAttribute('hidden');
+            tab.removeAttribute('aria-hidden');
+        } else {
+            tab.setAttribute('hidden', '');
+            tab.setAttribute('aria-hidden', 'true');
+            if (tab.classList.contains('is-active')) {
+                var fallback = -1;
+                for (var i = 0; i < tabs.length; i += 1) {
+                    if (i === idx) {
+                        continue;
+                    }
+                    if (tabs[i] && !tabs[i].hidden) {
+                        fallback = i;
+                        break;
+                    }
+                }
+                if (fallback >= 0) {
+                    tabs.forEach(function (t, ti) {
+                        var active = ti === fallback;
+                        t.classList.toggle('is-active', active);
+                        t.setAttribute('aria-selected', active ? 'true' : 'false');
+                        t.tabIndex = active ? 0 : -1;
+                    });
+                    panels.forEach(function (p, pi) {
+                        var active = pi === fallback;
+                        p.classList.toggle('is-active', active);
+                        p.hidden = !active;
+                    });
+                    shell.setAttribute('data-active-tab', String(fallback));
+                }
+            }
+        }
+    }
+
+    function notifyCreditChanged(root) {
+        try {
+            window.dispatchEvent(new CustomEvent('weline:b2b-credit-changed', {
+                detail: {
+                    apply_minor: readApplyMinor(),
+                    cash_minor: cashDepositMinor(),
+                    cart_type: readMode(),
+                    root: root || null,
+                },
+            }));
+        } catch (eNotify) {}
+    }
+
     function syncCreditUi(root) {
         var panel = creditPanel(root);
         if (!panel) {
@@ -352,27 +871,39 @@
         var hint = panel.querySelector('[data-b2b-credit-hint]');
         var help = panel.querySelector('[data-b2b-credit-help]');
         var cashEl = panel.querySelector('[data-b2b-credit-cash]');
+        var fxEl = panel.querySelector('[data-b2b-credit-fx]');
         var reasonEl = (creditRoot || panel).querySelector('[data-b2b-credit-reason]');
+        var opts = arguments[1] && typeof arguments[1] === 'object' ? arguments[1] : {};
+        var formatInput = opts.formatInput === true;
         // Prefer widget data-cart-type (set by applyCartType); fall back to cookie/mode.
         var cartType = String(
             (creditRoot && creditRoot.getAttribute('data-cart-type')) || readMode() || ''
         ).toLowerCase();
         var isToc = cartType !== 'tob';
         if (isToc) {
+            // 零售：整槽隐藏，不写「去切换批发车」就地文案。
             if (creditRoot) {
-                creditRoot.classList.add('is-toc-unavailable');
+                creditRoot.hidden = true;
+                creditRoot.setAttribute('hidden', '');
+                creditRoot.classList.remove('is-toc-unavailable');
                 creditRoot.setAttribute('data-cart-type', 'toc');
                 creditRoot.setAttribute('aria-disabled', 'true');
             }
-            showCreditReason(
-                reasonEl,
-                (creditRoot && creditRoot.getAttribute('data-i18n-toc-unavailable'))
-                    || '当前是零售结账，批发信用只能在「批发车」使用。请先到购物车切换到批发车，再回来结账。'
+            panel.hidden = true;
+            panel.setAttribute('hidden', '');
+            var creditSlotToc = root.querySelector(
+                '.weline-checkout__credit-slot, .weline-cart-shell__credit-slot,'
+                + ' [data-wslot="checkout-summary-credit"], [data-wslot="cart-summary-credit"]'
             );
+            if (creditSlotToc) {
+                creditSlotToc.hidden = true;
+                creditSlotToc.setAttribute('hidden', '');
+            }
+            syncCreditExtrasTabVisibility(root, false);
+            showCreditReason(reasonEl, '');
             var switchCart = (creditRoot || panel).querySelector('[data-b2b-credit-switch-cart]');
             if (switchCart) {
-                switchCart.hidden = false;
-                switchCart.removeAttribute('hidden');
+                switchCart.hidden = true;
             }
             if (toggle) {
                 toggle.checked = false;
@@ -389,12 +920,43 @@
                 cashEl.hidden = true;
                 cashEl.textContent = '';
             }
+            setCreditFxEl(fxEl, '');
             creditState.applyMinor = 0;
+            notifyCreditChanged(root);
             return;
         }
+        // tob：确保槽位可见（页签按钮由 syncCreditExtrasTabVisibility 恢复）。
+        if (creditRoot) {
+            creditRoot.hidden = false;
+            creditRoot.removeAttribute('hidden');
+            creditRoot.classList.remove('is-toc-unavailable');
+        }
+        panel.hidden = false;
+        panel.removeAttribute('hidden');
+        var creditSlotTob = root.querySelector(
+            '.weline-checkout__credit-slot, .weline-cart-shell__credit-slot,'
+            + ' [data-wslot="checkout-summary-credit"], [data-wslot="cart-summary-credit"]'
+        );
+        if (creditSlotTob) {
+            creditSlotTob.hidden = false;
+            creditSlotTob.removeAttribute('hidden');
+        }
+        syncCreditExtrasTabVisibility(root, true);
         if (!quote || !quote.enabled) {
             panel.hidden = false;
-            showCreditReason(reasonEl, creditUnavailableMessage(root, quote));
+            if (!quote) {
+                // Do not fetch from syncCreditUi — that re-enters via DOM mutations.
+                showCreditReason(
+                    reasonEl,
+                    creditState.quoteLoading
+                        ? ((creditRoot && creditRoot.getAttribute('data-i18n-quote-loading'))
+                            || '正在获取批发信用报价…')
+                        : ((creditRoot && creditRoot.getAttribute('data-i18n-quote-missing'))
+                            || '暂时无法获取批发信用报价，请刷新后重试')
+                );
+            } else {
+                showCreditReason(reasonEl, creditUnavailableMessage(root, quote));
+            }
             if (toggle) {
                 toggle.checked = false;
                 toggle.disabled = true;
@@ -410,6 +972,7 @@
                 cashEl.hidden = true;
                 cashEl.textContent = '';
             }
+            setCreditFxEl(fxEl, '');
             if (help && quote) {
                 help.setAttribute('data-w-tooltip', String(quote.hint_detail || quote.hint_short || ''));
                 help.setAttribute('title', String(quote.hint_detail || quote.hint_short || ''));
@@ -418,14 +981,18 @@
             creditState.cashMinor = quote && quote.deposit_amount_minor != null
                 ? Number(quote.deposit_amount_minor)
                 : null;
+            notifyCreditChanged(root);
             return;
         }
         panel.hidden = false;
         showCreditReason(reasonEl, '');
+        var fxText = buildCreditFxSummary(quote);
+        setCreditFxEl(fxEl, fxText);
         if (hint) {
-            hint.hidden = false;
-            hint.removeAttribute('hidden');
-            hint.textContent = String(quote.hint_short || '');
+            // FX 行已含基准币/可用/上限（及最低现金）；勿再整段回写 hint_short，避免重复。
+            hint.hidden = true;
+            hint.setAttribute('hidden', '');
+            hint.textContent = '';
         }
         if (help) {
             help.setAttribute('data-w-tooltip', String(quote.hint_detail || quote.hint_short || ''));
@@ -433,23 +1000,48 @@
         }
         var maxApply = Math.max(0, Number(quote.max_apply_checkout_minor) || 0);
         var deposit = Math.max(0, Number(quote.deposit_amount_minor) || 0);
-        creditState.currency = String(quote.checkout_currency || creditState.currency || 'CNY');
+        // Authoritative checkout currency from quote — never use available_base_minor as UI max.
+        creditState.currency = String(quote.checkout_currency || creditState.currency || 'CNY').toUpperCase() || 'CNY';
+        var currencyLabel = panel.querySelector('[data-b2b-credit-currency]');
+        if (currencyLabel) {
+            currencyLabel.textContent = creditState.currency;
+            currencyLabel.hidden = false;
+            currencyLabel.removeAttribute('hidden');
+        }
         if (toggle) {
             toggle.disabled = false;
         }
         if (input) {
             input.disabled = !(toggle && toggle.checked);
-            input.max = (maxApply / 100).toFixed(2);
+            input.removeAttribute('max');
+            input.removeAttribute('min');
+            input.removeAttribute('step');
+            input.setAttribute('data-currency', creditState.currency);
+            input.setAttribute('inputmode', 'decimal');
             if (toggle && toggle.checked) {
-                var major = Number(input.value);
-                if (!isFinite(major) || major < 0) {
-                    major = maxApply / 100;
-                    input.value = major.toFixed(2);
+                var parsed = parseCreditInputMajor(input.value);
+                var apply;
+                if (!formatInput) {
+                    // Live typing / programmatic sync: keep raw buffer; never toFixed mid-keystroke.
+                    if (parsed.empty || !isFinite(parsed.major) || parsed.major < 0) {
+                        apply = 0;
+                    } else {
+                        apply = Math.round(parsed.major * 100);
+                        apply = Math.max(0, Math.min(apply, maxApply, deposit));
+                    }
+                    creditState.applyMinor = apply;
+                } else {
+                    var major;
+                    if (parsed.empty || !isFinite(parsed.major) || parsed.major < 0) {
+                        major = maxApply / 100;
+                    } else {
+                        major = parsed.major;
+                    }
+                    apply = Math.round(major * 100);
+                    apply = Math.max(0, Math.min(apply, maxApply, deposit));
+                    creditState.applyMinor = apply;
+                    input.value = (apply / 100).toFixed(2);
                 }
-                var apply = Math.round(major * 100);
-                apply = Math.max(0, Math.min(apply, maxApply, deposit));
-                creditState.applyMinor = apply;
-                input.value = (apply / 100).toFixed(2);
             } else {
                 creditState.applyMinor = 0;
             }
@@ -460,8 +1052,44 @@
         if (cashEl) {
             cashEl.hidden = false;
             cashEl.removeAttribute('hidden');
-            cashEl.textContent = '现金定金：' + formatMinor(creditState.cashMinor, creditState.currency)
-                + '（全额定金 ' + formatMinor(deposit, creditState.currency) + '）';
+            var goodsMajor = readGoodsSubtotalMajor(creditState.pendingQuoteOpts || {});
+            var depositLabel = formatMinor(deposit, creditState.currency);
+            var cashLabel = formatMinor(creditState.cashMinor, creditState.currency);
+            var goodsLabel = isFinite(goodsMajor) && goodsMajor > 0
+                ? formatMinor(Math.round(goodsMajor * 100), creditState.currency)
+                : '';
+            // 明示：本期定金=商品小计×30%；信用只抵定金；现金行可带最低现金占比。
+            var minCashPct = 0;
+            try {
+                minCashPct = parseInt(String((creditRoot && creditRoot.getAttribute('data-b2b-min-cash-percent')) || '0'), 10) || 0;
+            } catch (eMin) {
+                minCashPct = 0;
+            }
+            var minCashNote = (minCashPct > 0 && minCashPct < 100)
+                ? ('；现金至少保留定金的 ' + minCashPct + '%')
+                : '';
+            if (goodsLabel) {
+                if (creditState.applyMinor > 0) {
+                    cashEl.textContent = '本期定金 ' + depositLabel
+                        + '（商品小计 ' + goodsLabel + ' × 30%）'
+                        + '；抵扣后现金 ' + cashLabel
+                        + minCashNote
+                        + '；尾款另付';
+                } else {
+                    cashEl.textContent = '本期定金 ' + depositLabel
+                        + '（商品小计 ' + goodsLabel + ' × 30%；尾款结账时再付）'
+                        + minCashNote;
+                }
+            } else if (creditState.applyMinor > 0) {
+                cashEl.textContent = '本期定金 ' + depositLabel
+                    + '；抵扣后现金 ' + cashLabel
+                    + minCashNote
+                    + '；尾款另付';
+            } else {
+                cashEl.textContent = '本期定金 ' + depositLabel
+                    + '（批发首期 30%；尾款结账时再付）'
+                    + minCashNote;
+            }
         }
         // Zero cash: soft-disable payment radios (still allow submit via fake_card).
         root.querySelectorAll('input[name="payment_method"]').forEach(function (el) {
@@ -471,6 +1099,7 @@
                 el.removeAttribute('data-b2b-zero-cash');
             }
         });
+        notifyCreditChanged(root);
     }
 
     function syncFromFrozen(frozen) {
@@ -478,19 +1107,39 @@
         var quote = payload && payload.b2b_credit && typeof payload.b2b_credit === 'object'
             ? payload.b2b_credit
             : null;
-        creditState.quote = quote;
         // Do NOT include bare `form` — address quick-add forms appear earlier in DOM
         // and would steal querySelector before .weline-checkout.
         var root = document.querySelector('[data-weline-checkout], [data-checkout], .weline-checkout');
+        var panel = creditPanel(root);
+        var toggle = panel ? panel.querySelector('[data-b2b-credit-toggle]') : null;
+        var input = panel ? panel.querySelector('[data-b2b-credit-input]') : null;
+        var keepChecked = !!(toggle && toggle.checked);
+        var keepInput = input ? String(input.value || '') : '';
+        var keepApply = Math.max(0, Number(creditState.applyMinor) || 0);
+        creditState.quote = quote;
+        creditState.quoteLoading = false;
         if (root) {
             if (readMode() === 'tob') {
-                var panel = creditPanel(root);
                 if (panel) {
                     panel.hidden = false;
                 }
             }
             // toc / tob 都同步：不可用原因必须就地出现在勾选下方。
-            syncCreditUi(root);
+            syncCreditUi(root, { formatInput: true });
+            // freeze 权威报价到达后保留用户已选抵扣，避免 submit 瞬间 apply 恒为 0。
+            if (quote && quote.enabled && panel) {
+                if (toggle && keepChecked) {
+                    toggle.checked = true;
+                }
+                if (input && keepChecked) {
+                    if (keepInput !== '') {
+                        input.value = keepInput;
+                    } else if (keepApply > 0) {
+                        input.value = (keepApply / 100).toFixed(2);
+                    }
+                }
+                syncCreditUi(root, { formatInput: true });
+            }
         }
     }
 
@@ -515,15 +1164,19 @@
         var input = panel.querySelector('[data-b2b-credit-input]');
         if (toggle) {
             toggle.addEventListener('change', function () {
-                syncCreditUi(root);
+                syncCreditUi(root, { formatInput: true });
             });
         }
         if (input) {
             input.addEventListener('input', function () {
-                syncCreditUi(root);
+                // Mid-keystroke: update applyMinor / cash only; do not force toFixed.
+                syncCreditUi(root, { formatInput: false });
             });
             input.addEventListener('change', function () {
-                syncCreditUi(root);
+                syncCreditUi(root, { formatInput: true });
+            });
+            input.addEventListener('blur', function () {
+                syncCreditUi(root, { formatInput: true });
             });
         }
     }
@@ -540,6 +1193,7 @@
         panel.innerHTML = ''
             + '<h2 class="b2b-hang-payment__title" data-b2b-hang-title></h2>'
             + '<p class="b2b-hang-payment__amount" data-b2b-hang-amount></p>'
+            + '<div class="b2b-hang-payment__methods" data-b2b-hang-methods data-testid="b2b-hang-methods" hidden></div>'
             + '<p class="b2b-hang-payment__status" data-b2b-hang-status hidden></p>'
             + '<button type="button" class="w-button" data-variant="primary" data-b2b-hang-pay data-testid="b2b-hang-pay">'
             + '</button>';
@@ -632,9 +1286,28 @@
         if (amountEl) {
             amountEl.textContent = formatMinor(ctx.amount_minor, ctx.currency);
         }
+        var methodCount = renderHangPaymentMethods(panel, ctx.payment_methods);
+        if (methodCount <= 0) {
+            if (statusEl) {
+                statusEl.hidden = false;
+                statusEl.textContent = '暂无可用支付方式';
+            }
+            if (payBtn) {
+                payBtn.disabled = true;
+            }
+            return;
+        }
         if (payBtn) {
             payBtn.textContent = String(ctx.label || payBtn.textContent);
             payBtn.addEventListener('click', async function () {
+                var method = selectedPaymentMethod(panel);
+                if (!method) {
+                    if (statusEl) {
+                        statusEl.hidden = false;
+                        statusEl.textContent = '请选择支付方式';
+                    }
+                    return;
+                }
                 payBtn.disabled = true;
                 if (statusEl) {
                     statusEl.hidden = false;
@@ -644,8 +1317,8 @@
                     var result = await api['hang.startPayment']({
                         order_uuid: hang.orderUuid,
                         purpose: hang.purpose,
-                        payment_method: selectedPaymentMethod(root),
-                        payment_idempotency_key: 'hang_' + hang.purpose + '_' + Date.now()
+                        payment_method: method,
+                        payment_idempotency_key: 'hang_' + hang.purpose + '_' + hang.orderUuid
                     }, { silent: true });
                     if (!result || result.success === false || result.ok === false) {
                         if (isHangAuthError(null, result)) {
@@ -655,7 +1328,7 @@
                         throw new Error((result && result.message) || '支付失败');
                     }
                     var payment = result.payment || {};
-                    var redirect = payment.redirect_url;
+                    var redirect = hangRedirectUrl(payment);
                     if (redirect) {
                         global.location.assign(redirect);
                         return;
@@ -681,29 +1354,73 @@
         }
     }
 
-    function bindCheckout() {
-        var root = document.querySelector('[data-weline-checkout]');
-        if (!root) {
-            return;
+    function creditSurfaceRoots() {
+        var roots = [];
+        var seen = typeof WeakSet !== 'undefined' ? new WeakSet() : null;
+        function push(node) {
+            if (!node || (seen && seen.has(node))) {
+                return;
+            }
+            if (seen) {
+                seen.add(node);
+            }
+            roots.push(node);
         }
-        applyCartType(root, readMode());
-        bindHangPayment(root);
+        document.querySelectorAll('[data-weline-checkout], .weline-checkout').forEach(push);
+        document.querySelectorAll('[data-w-mini-cart="1"]').forEach(push);
+        document.querySelectorAll('[data-weline-cart], .weline-cart-shell').forEach(push);
+        // Orphan credit widgets (e.g. layout preview): still sync nearest extras host.
+        document.querySelectorAll('[data-b2b-checkout-credit]').forEach(function (credit) {
+            var host = credit.closest(
+                '[data-weline-checkout], .weline-checkout, [data-w-mini-cart="1"],'
+                + ' [data-weline-cart], .weline-cart-shell, .mini-cart-drawer, [data-cart-summary-extras="1"]'
+            ) || credit.parentElement;
+            push(host);
+        });
+        return roots;
+    }
+
+    function applyCartTypeAll(cartType, opts) {
+        creditSurfaceRoots().forEach(function (root) {
+            applyCartType(root, cartType, opts);
+        });
+    }
+
+    function bindCheckout() {
+        applyCartTypeAll(readMode(), { ensureQuote: true });
+        document.querySelectorAll('[data-weline-checkout]').forEach(function (root) {
+            bindHangPayment(root);
+        });
         global.addEventListener('weline:selling-mode-changed', function (event) {
             var mode = event && event.detail ? event.detail.cart_type || event.detail.selling_mode : readMode();
-            applyCartType(root, mode);
+            applyCartTypeAll(mode, { ensureQuote: true });
         });
         global.addEventListener('weline:cart-updated', function (event) {
             var summary = event && event.detail ? event.detail : null;
-            if (summary && summary.cart_type) {
-                applyCartType(root, summary.cart_type);
-            } else {
-                applyCartType(root, readMode());
+            var type = summary && summary.cart_type ? summary.cart_type : readMode();
+            // Sync chrome only — deposit-change refetch is handled inside ensureCreditQuote.
+            applyCartTypeAll(type);
+            if (String(type || '').toLowerCase() === 'tob') {
+                creditSurfaceRoots().forEach(function (root) {
+                    if (root.querySelector('[data-b2b-checkout-credit]')) {
+                        ensureCreditQuote(root, { cart_type: 'tob' });
+                    }
+                });
             }
-            if (root.getAttribute('data-b2b-hang-mode')) {
-                suppressRetailEmptyChrome(root);
+            document.querySelectorAll('[data-weline-checkout]').forEach(function (root) {
+                if (root.getAttribute('data-b2b-hang-mode')) {
+                    suppressRetailEmptyChrome(root);
+                }
+            });
+        });
+        global.addEventListener('weshop:mini-cart:open', function () {
+            if (readMode() === 'tob') {
+                applyCartTypeAll('tob', { ensureQuote: true });
+            } else {
+                applyCartTypeAll('toc');
             }
         });
-        // 优惠券部件可能晚于本脚本挂到 slot，观察后补同步「批发不可用」。
+        // 优惠券部件可能晚于本脚本挂到 slot，观察后仅补同步「批发不可用」，禁止再走 ensureCreditQuote。
         if (global.MutationObserver) {
             var pending = null;
             var observer = new MutationObserver(function () {
@@ -715,25 +1432,35 @@
                     if (readMode() !== 'tob') {
                         return;
                     }
-                    var coupon = root.querySelector('[data-marketing-checkout-coupon], .w-marketing-checkout-coupon');
-                    if (!coupon) {
-                        return;
-                    }
-                    // 仅补齐尚未标记的批发禁用态，避免与零售 preferredMode 互相覆盖。
-                    if (coupon.getAttribute('data-b2b-coupon-unavailable') === '1') {
-                        return;
-                    }
-                    applyCartType(root, 'tob');
+                    document.querySelectorAll('[data-weline-checkout], .weline-checkout').forEach(function (root) {
+                        var coupon = root.querySelector('[data-marketing-checkout-coupon], .w-marketing-checkout-coupon');
+                        if (!coupon) {
+                            return;
+                        }
+                        if (coupon.getAttribute('data-b2b-coupon-unavailable') === '1') {
+                            return;
+                        }
+                        syncCheckoutCouponAvailability(root, 'tob');
+                    });
                 }, 50);
             });
-            observer.observe(root, { childList: true, subtree: true });
+            document.querySelectorAll('[data-weline-checkout], .weline-checkout').forEach(function (root) {
+                observer.observe(root, { childList: true, subtree: true });
+            });
         }
         global.WelineB2BCheckoutTob = {
             applyCartType: applyCartType,
+            applyCartTypeAll: applyCartTypeAll,
             readMode: readMode,
             hangPurposeFromLocation: hangPurposeFromLocation,
             hangLoginUrl: hangLoginUrl,
+            bindHangPayment: bindHangPayment,
             syncFromFrozen: syncFromFrozen,
+            refreshCreditQuote: refreshCreditQuote,
+            ensureCreditQuote: ensureCreditQuote,
+            rememberQuoteOpts: rememberQuoteOpts,
+            estimateDepositMinor: estimateDepositMinor,
+            readGoodsSubtotalMajor: readGoodsSubtotalMajor,
             readApplyMinor: readApplyMinor,
             cashDepositMinor: cashDepositMinor
         };

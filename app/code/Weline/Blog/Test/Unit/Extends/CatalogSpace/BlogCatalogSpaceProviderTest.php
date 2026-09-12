@@ -36,4 +36,14 @@ final class BlogCatalogSpaceProviderTest extends TestCase
         self::assertStringContainsString('BlogCategoryAttributeEntity::entity_code', $source);
         self::assertStringContainsString("return 'blog'", $source);
     }
+
+    public function testListProductsForDeleteReturnsEmpty(): void
+    {
+        $source = (string)file_get_contents(
+            dirname(__DIR__, 4) . '/extends/module/Weline_Catalog/Space/BlogCatalogSpaceProvider.php',
+        );
+        self::assertStringContainsString('function listProductsForDelete', $source);
+        self::assertStringContainsString('return [];', $source);
+        self::assertStringContainsString('array $options = []', $source);
+    }
 }

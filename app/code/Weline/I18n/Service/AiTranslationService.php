@@ -51,6 +51,7 @@ class AiTranslationService
         private readonly I18nAiTranslationAdapter $translationAdapter,
         private readonly AiTranslationPublisher $publisher,
         private readonly AiTranslationBatchLock $batchLock,
+        private readonly AiTranslationWordSkipStore $wordSkipStore,
     ) {
     }
 
@@ -209,6 +210,14 @@ class AiTranslationService
 
             $translations = $this->normalizeTranslations((array)$response['translations'], $words);
             foreach ($words as $word) {
+                if ($this->wordSkipStore->shouldSkip($targetLocale, $word)) {
+                    $skipped++;
+                    $errors[] = (string)__(
+                        '多次失败已绕过：%{1}',
+                        [$word],
+                    );
+                    continue;
+                }
                 $translation = trim((string)($translations[$word] ?? ''));
                 // 乱码只跳过本条，不把整批标失败，其余词继续保存。
                 if (I18nCsvCodec::isGarbledText($word) || I18nCsvCodec::isGarbledText($translation)) {
@@ -218,8 +227,21 @@ class AiTranslationService
                 }
                 $validationError = $this->validateTranslation($word, $translation);
                 if ($validationError !== null) {
-                    $failed++;
-                    $errors[] = $validationError;
+                    $recorded = $this->wordSkipStore->recordFailure($targetLocale, $word, $validationError);
+                    if ($recorded['skipped']) {
+                        $skipped++;
+                        $errors[] = (string)__(
+                            '多次失败已绕过（%{count}次）：%{word}；原因：%{reason}',
+                            [
+                                'count' => (string)$recorded['count'],
+                                'word' => $word,
+                                'reason' => (string)$recorded['reason'],
+                            ],
+                        );
+                    } else {
+                        $failed++;
+                        $errors[] = $validationError;
+                    }
                     continue;
                 }
 
@@ -229,10 +251,25 @@ class AiTranslationService
                         $sourceModule = $scope['module_name'];
                     }
                     $this->saveTranslation($word, $translation, $targetLocale, true, $sourceModule);
+                    $this->wordSkipStore->clearSuccess($targetLocale, $word);
                     $translated++;
                 } catch (\Throwable $throwable) {
-                    $failed++;
-                    $errors[] = (string)__('保存翻译失败 [%{1}]: %{2}', [$word, $throwable->getMessage()]);
+                    $saveError = (string)__('保存翻译失败 [%{1}]: %{2}', [$word, $throwable->getMessage()]);
+                    $recorded = $this->wordSkipStore->recordFailure($targetLocale, $word, $saveError);
+                    if ($recorded['skipped']) {
+                        $skipped++;
+                        $errors[] = (string)__(
+                            '多次失败已绕过（%{count}次）：%{word}；原因：%{reason}',
+                            [
+                                'count' => (string)$recorded['count'],
+                                'word' => $word,
+                                'reason' => (string)$recorded['reason'],
+                            ],
+                        );
+                    } else {
+                        $failed++;
+                        $errors[] = $saveError;
+                    }
                 }
             }
 
@@ -814,8 +851,10 @@ class AiTranslationService
             || ($allowKeyOnlyWords && str_starts_with($word, 'google_taxonomy.'));
 
         // 是否已译只看 DB locale 词典；不加载 generated/language 或模块 CSV。
+        // Exhausted failure words are cached-skipped so queues stop re-picking them.
         return $hasTranslatableText
-            && !$this->translationExists($word, $targetLocale);
+            && !$this->translationExists($word, $targetLocale)
+            && !$this->wordSkipStore->shouldSkip($targetLocale, $word);
     }
 
     private function hasTranslatableText(string $word): bool

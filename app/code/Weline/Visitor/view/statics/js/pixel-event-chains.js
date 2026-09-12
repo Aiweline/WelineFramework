@@ -97,6 +97,15 @@
             return true;
         }
         if (type === 'track' || type === 'click') {
+            var stepPath = pathNorm(step.path || '');
+            var isPageSig = sigType === 'page'
+                || (sigType === 'track' && normalizeEvent(signal.event) === 'page_view');
+            // 路径回放：进入该步记录的 path 即推进
+            if (isPageSig && stepPath) {
+                var a = pathNorm(signal.path).replace(/\/$/, '') || '/';
+                var b = stepPath.replace(/\/$/, '') || '/';
+                return a === b;
+            }
             if (sigType !== 'track' && sigType !== 'click') return false;
             var want = normalizeEvent(step.event);
             var got = normalizeEvent(signal.event);
@@ -180,6 +189,26 @@
             if (st.i >= chain.steps.length) {
                 fireComplete(chain, st.hits.slice());
                 prog[chain.id] = { i: 0, hits: [] };
+            }
+            try {
+                if (window.WelineEventSandbox && typeof window.WelineEventSandbox.emit === 'function') {
+                    window.WelineEventSandbox.emit({
+                        eventName: signal.event || signal.type || 'chain_step',
+                        name: signal.event || signal.type || 'chain_step',
+                        payload: { path: signal.path || '', type: signal.type || '' }
+                    }, {
+                        source: 'chain',
+                        event_hit: true,
+                        hit_kind: 'system',
+                        chain: {
+                            chain_id: chain.id,
+                            step_i: st.i,
+                            steps: (chain.steps && chain.steps.length) || 0,
+                            complete: st.i >= chain.steps.length
+                        }
+                    });
+                }
+            } catch (eEmit) {
             }
         }
         if (changed) lsSet(LS_PROG, prog);

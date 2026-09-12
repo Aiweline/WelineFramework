@@ -35,11 +35,25 @@ final class McpSkillCatalog
      */
     public static function policy(string $repository = ''): array
     {
+        // Index-only for prepare_project: descriptions/paths stay in definitions + get_skill.
         $workflowSummary = self::summary($repository, 'workflow');
         $fullSummary = self::summary($repository);
         $greeting = $repository !== ''
             ? DocSkillCatalog::greetingCatalog($repository, $workflowSummary)
-            : null;
+            : [
+                'schema_version' => 'mcp-greeting-catalog.v1',
+                'when' => ['hi', '你好', 'hello', '提取技能', 'list skills'],
+                'list_from' => 'agent_guidance.mcp_skills.catalog',
+                'workflow_preview' => $workflowSummary,
+                'module_doc_count' => 0,
+                'commands' => [],
+                'how_to_load' => [
+                    'discover' => 'resolve_skill',
+                    'load' => 'get_skill',
+                    'list_all' => 'resolve_skill(list_all=true) or task=提取技能',
+                ],
+                'note' => 'On greeting: print workflow_preview + commands; module docs via resolve_skill(list_all=true). Bodies via get_skill.',
+            ];
 
         return [
             'schema_version' => self::SCHEMA,
@@ -47,28 +61,33 @@ final class McpSkillCatalog
             'static_skill_files' => false,
             'authority' => 'mcp',
             'host_shell_role' => 'optional_thin_mirror',
+            'catalog_mode' => 'index_only',
+            'catalog_index_fields' => ['skill_id', 'name', 'aliases', 'kind', 'surface_id'],
             'fetch' => [
                 'discover' => 'resolve_skill',
                 'load' => 'get_skill',
                 'list_all' => 'resolve_skill(list_all=true) or task=提取技能',
                 'required_fields' => ['skill_id'],
+                'body_via' => 'get_skill',
             ],
             'instructions' => [
                 'Engineering/product skills for this repository are served by MCP.',
                 'When a task needs a skill body, call resolve_skill(task) then get_skill(skill_id).',
                 'To list every skill (workflow + module doc indexes), call resolve_skill(list_all=true) or say 提取技能.',
-                'On greeting hi/你好/hello with no coding ask: list MCP skills + commands from agent_guidance.mcp_skills.greeting (or resolve_skill list_all).',
+                'On greeting hi/你好/hello with no coding ask: list MCP skills + commands from agent_guidance.mcp_skills.greeting.workflow_preview + commands (+ module_doc_count), or resolve_skill list_all; do not expect full descriptions in prepare_project catalog.',
                 'Do not treat host editor SKILL.md as authoritative over MCP skill bodies.',
                 'Host shells (e.g. Cursor Agent Skills) may exist only as thin reminders to call MCP.',
                 'Full task docs still come from resolve_task_context; skills are procedural checklists.',
                 'Whenever the task mentions CSS or 主题/theme: load UI skill frontend-design, prototype skill prototype, and theme skill weline-theme-development (get_skill) before styling.',
-                'HARD: At requirement start classify work_kind=feature|non_feature (requirement_feature_kind_gate). If feature: skill_participation MUST include prototype + frontend-design; acceptance MUST include type=shentu; verify phase MUST run 审图 (acceptance_phase_requires_shentu); closeout MUST write huishen_notes 汇审 (closeout_requires_huishen).',
+                'HARD: At requirement start analyze environment implicit requirements (requirement_implicit_analysis_skill_decision → implicit_requirements + ui_skill_decision=participate|skip). Classify work_kind=feature|non_feature (requirement_feature_kind_gate). Decide prototype/frontend-design participation FROM analysis—never blindly force on every feature. When participate: skill_participation MUST include prototype + frontend-design; acceptance MUST include type=shentu; verify MUST run 审图. Closeout MUST write huishen_notes 汇审 (closeout_requires_huishen).',
                 'HARD: Any user message with an image/screenshot attachment (admin/CMS/error/storefront—not only retail/B2B) MUST run MCP command 审图 (dev/ai-command/theme/审图.md) immediately; do not wait for the word 审图. Classify error_shot vs ui_shot: non-error (ui_shot) defaults to UI modification required. Same-turn joint pipeline: extract wireframe/line sketch → prototype adjustments (prototype) → frontend-design humanization + aesthetic standards → weline-theme-development CSS/tokens; fix fails (do not critique-only). Shot-only/silent screenshot: UI+prototype audit—NOT confirming prior chat. If host skills frontend-design or prototype are missing: prompt visibly and self-install into Cursor Agent Store before E/F pass (image_attachment_shentu_bundle.missing_host_skills_gate).',
                 'Module doc skills are extracted from doc/ai/INDEX.json + SKILL.md (+ AI-INDEX locators) into MCP memory only; never revive knowledge.auto_generate_skills.',
             ],
             'feature_skill_bundle' => [
-                'rule_id' => 'requirement_feature_kind_gate',
-                'triggers' => ['work_kind=feature', '功能', 'feature'],
+                'rule_id' => 'requirement_implicit_analysis_skill_decision',
+                'also_rule_id' => 'requirement_feature_kind_gate',
+                'triggers' => ['work_kind=feature', '功能', 'feature', 'ui_skill_decision=participate', '隐形需求'],
+                'required_when' => 'ui_skill_decision=participate',
                 'required' => [
                     ['role' => 'prototype', 'host_skill' => 'prototype'],
                     ['role' => 'ui', 'host_skill' => 'frontend-design'],
@@ -202,7 +221,8 @@ final class McpSkillCatalog
     }
 
     /**
-     * Compact catalog listing (no bodies).
+     * Index-only catalog listing for prepare_project / greeting (no bodies, no descriptions).
+     * Full descriptions and paths remain on definitions() / get_skill / resolve_skill(includeContent).
      *
      * @return list<array<string, mixed>>
      */
@@ -217,16 +237,17 @@ final class McpSkillCatalog
             if ($kindFilter !== null && $kind !== $kindFilter) {
                 continue;
             }
-            $rows[] = [
+            $row = [
                 'skill_id' => $skill['skill_id'],
                 'name' => $skill['name'],
-                'description' => $skill['description'],
-                'aliases' => $skill['aliases'],
-                'surface_id' => $skill['surface_id'] ?? '',
+                'aliases' => $skill['aliases'] ?? [],
                 'kind' => $kind,
-                'module' => $skill['module'] ?? '',
-                'path' => $skill['relative_path'] ?? '',
             ];
+            $surfaceId = trim((string) ($skill['surface_id'] ?? ''));
+            if ($surfaceId !== '') {
+                $row['surface_id'] = $surfaceId;
+            }
+            $rows[] = $row;
         }
 
         return $rows;

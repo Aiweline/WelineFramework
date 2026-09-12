@@ -9,6 +9,7 @@ use Weline\Cart\Api\CheckoutCartSnapshotInterface;
 use Weline\Cart\Service\CartConflictException;
 use Weline\Cart\Service\CartService;
 use Weline\Checkout\Service\CheckoutDeliveryContextService;
+use Weline\Checkout\Service\ExpressCheckoutFlowService;
 use Weline\Checkout\Service\CheckoutGroupSubmitService;
 use Weline\Checkout\Service\CheckoutIdentityService;
 use Weline\Checkout\Service\CheckoutOrderPaymentService;
@@ -76,6 +77,10 @@ class CheckoutQueryProvider implements QueryProviderInterface
             'freezeQuote' => $this->freezeQuote($params),
             'submitV2' => $this->submitV2($params),
             'resumePaymentV2' => $this->resumePaymentV2($params),
+            'startExpressCheckout' => $this->startExpressCheckout($params),
+            'getExpressReview' => $this->getExpressReview($params),
+            'confirmExpressCheckout' => $this->confirmExpressCheckout($params),
+            'cancelExpressCheckout' => $this->cancelExpressCheckout($params),
             default => throw new \InvalidArgumentException((string)__('结账接口不支持该操作：%{1}', $operation)),
         };
     }
@@ -209,6 +214,20 @@ class CheckoutQueryProvider implements QueryProviderInterface
                     'quote_token' => $quoteToken,
                     'checkout_token' => $quoteToken,
                 ];
+                if (!empty($params['express_checkout'])) {
+                    $payContext['express_checkout'] = true;
+                    $payContext['metadata'] = ['express_checkout' => true];
+                }
+                $guestTokenForPay = trim((string) ($params['guest_token'] ?? ''));
+                if ($guestTokenForPay === '') {
+                    $guestTokenForPay = trim((string) Cookie::get(CartService::GUEST_TOKEN_COOKIE));
+                }
+                if ($guestTokenForPay !== '') {
+                    $payContext['guest_token'] = $guestTokenForPay;
+                }
+                if (array_key_exists('requires_shipping', $params)) {
+                    $payContext['requires_shipping'] = (bool) $params['requires_shipping'];
+                }
                 $session = $this->checkoutGroupSubmitService->getSession($quoteToken);
                 $deposit = is_array($session['deposit'] ?? null) ? $session['deposit'] : [];
                 $cartType = strtolower(trim((string)($session['cart_type'] ?? '')));
@@ -1327,6 +1346,68 @@ class CheckoutQueryProvider implements QueryProviderInterface
      * @param array<string, mixed> $data
      * @return array<string, mixed>
      */
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function startExpressCheckout(array $params): array
+    {
+        $flow = ObjectManager::getInstance(ExpressCheckoutFlowService::class);
+        if (!$flow instanceof ExpressCheckoutFlowService) {
+            $flow = new ExpressCheckoutFlowService();
+        }
+
+        return $flow->start(
+            $params,
+            fn (array $p): array => $this->freezeQuote($p),
+            fn (array $p): array => $this->submitV2($p),
+            fn (array $p): array => $this->getData($p),
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function getExpressReview(array $params): array
+    {
+        $flow = ObjectManager::getInstance(ExpressCheckoutFlowService::class);
+        if (!$flow instanceof ExpressCheckoutFlowService) {
+            $flow = new ExpressCheckoutFlowService();
+        }
+
+        return $flow->getReview($params);
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function confirmExpressCheckout(array $params): array
+    {
+        $flow = ObjectManager::getInstance(ExpressCheckoutFlowService::class);
+        if (!$flow instanceof ExpressCheckoutFlowService) {
+            $flow = new ExpressCheckoutFlowService();
+        }
+
+        return $flow->confirm($params);
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function cancelExpressCheckout(array $params): array
+    {
+        $flow = ObjectManager::getInstance(ExpressCheckoutFlowService::class);
+        if (!$flow instanceof ExpressCheckoutFlowService) {
+            $flow = new ExpressCheckoutFlowService();
+        }
+
+        return $flow->cancel($params);
+    }
+
     private function ok(string $message, array $data): array
     {
         return [
@@ -1534,6 +1615,75 @@ class CheckoutQueryProvider implements QueryProviderInterface
                     ],
                     'returns' => ['type' => 'array'],
                     'summary' => 'Retry payment for the same already-submitted Checkout V2 order group',
+                ],
+                [
+                    'name' => 'startExpressCheckout',
+                    'frontend' => true,
+                    'external' => true,
+                    'auth' => 'any',
+                    'mode' => 'write',
+                    'graph' => false,
+                    'cost' => 5,
+                    'params' => [
+                        'payment_method' => ['type' => 'string', 'required' => true, 'max_length' => 64],
+                        'guest_token' => ['type' => 'string', 'required' => false, 'max_length' => 64],
+                        'cart_type' => ['type' => 'string', 'required' => false, 'max_length' => 16],
+                        'selling_mode' => ['type' => 'string', 'required' => false, 'max_length' => 16],
+                        'address' => ['type' => 'array', 'required' => false],
+                        'idempotency_key' => ['type' => 'string', 'required' => false, 'max_length' => 128],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Start express checkout (toc): freeze+submit with express_checkout and return approve URL',
+                ],
+                [
+                    'name' => 'getExpressReview',
+                    'frontend' => true,
+                    'external' => true,
+                    'auth' => 'any',
+                    'mode' => 'read',
+                    'graph' => false,
+                    'cost' => 2,
+                    'params' => [
+                        'transaction_no' => ['type' => 'string', 'required' => true, 'max_length' => 128],
+                        'guest_token' => ['type' => 'string', 'required' => false, 'max_length' => 64],
+                        'service_code' => ['type' => 'string', 'required' => false, 'max_length' => 64],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Load express-review DTO for awaiting_confirm transaction',
+                ],
+                [
+                    'name' => 'confirmExpressCheckout',
+                    'frontend' => true,
+                    'external' => true,
+                    'auth' => 'any',
+                    'mode' => 'write',
+                    'graph' => false,
+                    'cost' => 5,
+                    'params' => [
+                        'transaction_no' => ['type' => 'string', 'required' => true, 'max_length' => 128],
+                        'guest_token' => ['type' => 'string', 'required' => false, 'max_length' => 64],
+                        'service_code' => ['type' => 'string', 'required' => false, 'max_length' => 64],
+                        'contact_phone' => ['type' => 'string', 'required' => false, 'max_length' => 32],
+                        'email' => ['type' => 'string', 'required' => false, 'max_length' => 128],
+                        'idempotency_key' => ['type' => 'string', 'required' => false, 'max_length' => 128],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Confirm express checkout: amend unpaid order then capture',
+                ],
+                [
+                    'name' => 'cancelExpressCheckout',
+                    'frontend' => true,
+                    'external' => true,
+                    'auth' => 'any',
+                    'mode' => 'write',
+                    'graph' => false,
+                    'cost' => 3,
+                    'params' => [
+                        'transaction_no' => ['type' => 'string', 'required' => true, 'max_length' => 128],
+                        'guest_token' => ['type' => 'string', 'required' => false, 'max_length' => 64],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Cancel/abandon unpaid express checkout group',
                 ],
             ],
         ];

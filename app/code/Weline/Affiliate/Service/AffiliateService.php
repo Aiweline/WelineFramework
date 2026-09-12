@@ -1216,7 +1216,7 @@ class AffiliateService
             return 'product/' . ltrim($handle, '/');
         }
 
-        return self::PRODUCT_VIEW_ROUTE;
+        return 'product/' . $productId;
     }
 
     /**
@@ -2600,17 +2600,61 @@ class AffiliateService
     private function resolveShareTargetUrl(AffiliateShare $share): string
     {
         $productId = (int) ($share->getData(AffiliateShare::schema_fields_PRODUCT_ID) ?? 0);
-        $targetPath = trim((string) ($share->getData(AffiliateShare::schema_fields_TARGET_PATH) ?? self::PRODUCT_VIEW_ROUTE));
+        $targetPath = trim((string) ($share->getData(AffiliateShare::schema_fields_TARGET_PATH) ?? ''));
         if ($targetPath !== '' && preg_match('/^https?:\/\//i', $targetPath)) {
             return $targetPath;
         }
-        if ($targetPath === '' || $targetPath === 'product/view') {
-            $targetPath = self::PRODUCT_VIEW_ROUTE;
+
+        if ($this->isLegacyProductViewTargetPath($targetPath)) {
+            $resolved = '';
+            if ($productId > 0) {
+                try {
+                    $resolved = $this->resolveProductShareTargetPath($productId);
+                } catch (\Throwable) {
+                    $resolved = 'product/' . $productId;
+                }
+            }
+            if ($resolved === '') {
+                $resolved = $productId > 0 ? ('product/' . $productId) : '/';
+            }
+
+            if (
+                $resolved !== ''
+                && $resolved !== $targetPath
+                && (int) ($share->getId() ?? 0) > 0
+            ) {
+                try {
+                    $share->setData(AffiliateShare::schema_fields_TARGET_PATH, $resolved)
+                        ->setData(AffiliateShare::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'))
+                        ->save();
+                } catch (\Throwable) {
+                }
+            }
+
+            $targetPath = $resolved;
         }
 
-        $params = $targetPath === self::PRODUCT_VIEW_ROUTE ? ['id' => $productId] : [];
+        if ($targetPath === '') {
+            $targetPath = $productId > 0 ? ('product/' . $productId) : '/';
+        }
 
-        return $this->buildFrontendPath($targetPath, $params);
+        return $this->buildFrontendPath($targetPath);
+    }
+
+    private function isLegacyProductViewTargetPath(string $targetPath): bool
+    {
+        $raw = trim($targetPath);
+        // Homepage `/` and empty paths are not the old product view controller route.
+        if ($raw === '' || $raw === '/') {
+            return false;
+        }
+
+        $path = strtolower(trim(explode('?', $raw, 2)[0]));
+        $path = trim($path, '/');
+
+        return $path === 'product/view'
+            || $path === self::PRODUCT_VIEW_ROUTE
+            || $path === rtrim(self::PRODUCT_VIEW_ROUTE, '/');
     }
 
     /**

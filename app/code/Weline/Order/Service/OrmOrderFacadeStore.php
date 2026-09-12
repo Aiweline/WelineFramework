@@ -303,6 +303,32 @@ final class OrmOrderFacadeStore implements OrderFacadeStoreInterface
         $row->setData(Order::schema_fields_TYPE_PAYLOAD_JSON, $this->encode($typePayload))->save();
     }
 
+    /**
+     * Tob hang payable revision: update money snapshot grand_total + major grand_total.
+     *
+     * @param array<string,mixed> $audit
+     */
+    public function updateHangPayableGrandTotal(string $orderUuid, int $payableGrandTotalMinor, array $audit = []): void
+    {
+        $row = $this->order()
+            ->where(Order::schema_fields_ORDER_UUID, trim($orderUuid))
+            ->find()
+            ->fetch();
+        if (!$row instanceof Order || !$row->getId()) {
+            throw new \RuntimeException('order_hang_payable_update_missing:' . $orderUuid);
+        }
+        $money = $this->decode((string)$row->getData(Order::schema_fields_MONEY_SNAPSHOT_JSON));
+        $prev = (int)($money['grand_total_minor'] ?? 0);
+        $money['grand_total_minor'] = max(0, $payableGrandTotalMinor);
+        $money['hang_revision_previous_grand_total_minor'] = $prev;
+        if ($audit !== []) {
+            $money['hang_revision_audit'] = $audit;
+        }
+        $row->setData(Order::schema_fields_MONEY_SNAPSHOT_JSON, $this->encode($money))
+            ->setData(Order::schema_fields_GRAND_TOTAL, $this->minorToMajor(max(0, $payableGrandTotalMinor)))
+            ->save();
+    }
+
     /** @return list<array<string, mixed>> */
     private function hydrateFulfillmentUnits(string $orderUuid): array
     {

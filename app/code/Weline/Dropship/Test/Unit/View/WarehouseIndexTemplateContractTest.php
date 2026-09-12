@@ -7,61 +7,67 @@ namespace Weline\Dropship\Test\Unit\View;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Contract: 仓与国家映射须对齐货源平台 w-* 后台，禁止 Bootstrap 脚手架与裸 ID 主交互。
+ * Contract: 仓映射页变体 A（货源轨 + 行内绑定 + 翻页）。
  */
 final class WarehouseIndexTemplateContractTest extends TestCase
 {
-    public function testWarehouseIndexUsesThemeComponentsAndChineseLabels(): void
+    public function testWarehouseIndexUsesProviderCoverageBoardVariantA(): void
     {
         $root = dirname(__DIR__, 3);
         $path = $root . '/view/templates/Backend/Warehouse/index.phtml';
         self::assertFileExists($path);
         $tpl = (string)file_get_contents($path);
 
-        self::assertStringContainsString('w-card', $tpl);
-        self::assertStringContainsString('w-table', $tpl);
-        self::assertStringContainsString('w-field', $tpl);
-        self::assertStringContainsString('w-button', $tpl);
-        self::assertStringContainsString('w-input', $tpl);
+        self::assertStringContainsString('data-variant="A"', $tpl);
+        self::assertStringContainsString('data-testid="dropship-wh-rail"', $tpl);
+        self::assertStringContainsString('--weline-theme-primary-surface', $tpl);
+        self::assertStringContainsString('a[aria-current="true"]', $tpl);
+        self::assertStringContainsString('background:var(--weline-theme-primary)', $tpl);
+        self::assertStringContainsString('color:var(--weline-theme-on-primary)', $tpl);
+        self::assertStringNotContainsString('rgba(255,255,255,.08)', $tpl);
+        self::assertStringContainsString('data-testid="dropship-wh-coverage"', $tpl);
+        self::assertStringContainsString('data-testid="dropship-wh-stats"', $tpl);
+        self::assertStringContainsString('data-testid="dropship-wh-pagination"', $tpl);
+        self::assertStringContainsString('w-pagination', $tpl);
+        self::assertStringContainsString('远程履约覆盖', $tpl);
+        self::assertStringContainsString('万能货源中心', $tpl);
+        self::assertStringContainsString('按国家自动配对', $tpl);
+        self::assertStringContainsString('拉取远程仓', $tpl);
         self::assertStringContainsString('w:scope', $tpl);
-        self::assertStringContainsString('w:form', $tpl);
-        self::assertStringContainsString('data-dropship-admin="warehouses"', $tpl);
-        self::assertStringContainsString('data-testid="dropship-warehouse-map"', $tpl);
-
-        self::assertStringContainsString('货源供应商', $tpl);
-        self::assertStringContainsString('作用范围', $tpl);
-        self::assertStringContainsString('远程仓', $tpl);
-        self::assertStringContainsString('本地仓', $tpl);
-        self::assertStringContainsString('保存映射', $tpl);
-        self::assertStringContainsString('暂无映射', $tpl);
-
-        self::assertStringContainsString('w:theme:address', $tpl);
-        self::assertStringContainsString('selection="single"', $tpl);
-        self::assertStringContainsString('levels="country"', $tpl);
-        self::assertStringContainsString('catalog="global"', $tpl);
-        self::assertStringContainsString('country-name="cj_country_code"', $tpl);
-        self::assertStringContainsString('data-testid="dropship-wh-country"', $tpl);
-
-        self::assertStringNotContainsString('form-control', $tpl);
-        self::assertStringNotContainsString('container-fluid', $tpl);
-        self::assertStringNotContainsString('btn-primary', $tpl);
-        self::assertStringNotContainsString('table-striped', $tpl);
-        self::assertStringNotContainsString('placeholder="provider (cj)"', $tpl);
-        self::assertStringNotContainsString('placeholder="US"', $tpl);
-        self::assertDoesNotMatchRegularExpression('/<input[^>]*\bname="cj_country_code"/', $tpl);
+        self::assertStringContainsString('w:inventory:warehouse:select', $tpl);
+        self::assertStringContainsString('options-json', $tpl);
+        self::assertStringContainsString('whOptionsJson', $tpl);
+        self::assertStringContainsString('localIdValue', $tpl);
+        self::assertStringContainsString('data-bind-row', $tpl);
+        self::assertStringContainsString('data-save-url', $tpl);
+        self::assertStringContainsString('Weline.UI.toast', $tpl);
+        self::assertStringNotContainsString('data-testid="dropship-wh-bind-panel"', $tpl);
+        self::assertStringNotContainsString('保存映射', $tpl);
+        self::assertStringNotContainsString('w:theme:address', $tpl);
+        self::assertStringNotContainsString('w:dropship:remote-warehouse:select', $tpl);
+        self::assertStringNotContainsString('window.alert(', $tpl);
+        self::assertStringNotContainsString('已有映射', $tpl);
+        self::assertStringNotContainsString('data-testid="dropship-wh-table"', $tpl);
     }
 
-    public function testWarehouseControllerResolvesScopeAndProviders(): void
+    public function testWarehouseControllerBuildsCoverageBoard(): void
     {
         $root = dirname(__DIR__, 3);
         $ctrl = (string)file_get_contents($root . '/Controller/Backend/Warehouse.php');
 
-        self::assertStringContainsString('SystemConfigTargetScopeService', $ctrl);
-        self::assertStringContainsString('StoreCatalogInterface', $ctrl);
-        self::assertStringContainsString('DropshipChannelManager', $ctrl);
-        self::assertStringContainsString('target_scope', $ctrl);
-        self::assertStringContainsString('selected_scope', $ctrl);
-        self::assertStringContainsString('providers', $ctrl);
-        self::assertStringContainsString('toArray()', $ctrl);
+        self::assertStringContainsString('coverageBoard', $ctrl);
+        self::assertStringContainsString('providerSummaries', $ctrl);
+        self::assertStringContainsString('selected_provider', $ctrl);
+        self::assertStringContainsString('coverage_ready', $ctrl);
+        self::assertStringContainsString('货源履约仓对接', $ctrl);
+        self::assertStringContainsString('postSyncCountryPairs', $ctrl);
+        self::assertStringContainsString('resolveWorkScope', $ctrl);
+        self::assertStringContainsString('resolveMapStoreId', $ctrl);
+        self::assertStringContainsString('default.__website__.default', $ctrl);
+        self::assertStringContainsString('websiteId === null', $ctrl);
+        self::assertStringContainsString('page_size', $ctrl);
+        self::assertStringContainsString('wantsJsonResponse', $ctrl);
+        self::assertStringContainsString('assign(\'pagination\'', $ctrl);
+        self::assertStringNotContainsString('assign(\'maps\'', $ctrl);
     }
 }

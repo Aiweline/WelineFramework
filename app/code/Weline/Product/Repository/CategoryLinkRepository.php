@@ -204,26 +204,53 @@ final class CategoryLinkRepository extends AbstractWebsiteShardRepository
     }
 
     /**
+     * All store scopes for the given categories (admin exclusivity / purge).
+     *
+     * @param list<int> $categoryIds
+     * @return list<array<string,mixed>>
+     */
+    public function listByCategoryIdsAnyStore(int $websiteId, array $categoryIds): array
+    {
+        return $this->listRows($websiteId, $categoryIds, [], null);
+    }
+
+    /**
+     * All store scopes for the given products (admin exclusivity / purge).
+     *
+     * @param list<int> $productIds
+     * @return list<array<string,mixed>>
+     */
+    public function listByProductIdsAnyStore(int $websiteId, array $productIds): array
+    {
+        return $this->listRows($websiteId, [], $productIds, null);
+    }
+
+    /**
      * @param list<int> $categoryIds
      * @param list<int> $productIds
-     * @param list<int> $storeIds
+     * @param list<int>|null $storeIds null = every store scope
      * @return list<array<string,mixed>>
      */
     private function listRows(
         int $websiteId,
         array $categoryIds,
         array $productIds,
-        array $storeIds,
+        ?array $storeIds,
     ): array {
         $this->assertWebsite($websiteId);
         $categoryIds = $this->positiveIds($categoryIds);
         $productIds = $this->positiveIds($productIds);
-        $storeIds = array_values(array_unique(array_filter(
-            array_map('intval', $storeIds),
-            static fn(int $id): bool => $id >= 0,
-        )));
-        if (($categoryIds === [] && $productIds === []) || $storeIds === []) {
+        if ($categoryIds === [] && $productIds === []) {
             return [];
+        }
+        if ($storeIds !== null) {
+            $storeIds = array_values(array_unique(array_filter(
+                array_map('intval', $storeIds),
+                static fn(int $id): bool => $id >= 0,
+            )));
+            if ($storeIds === []) {
+                return [];
+            }
         }
         $query = $this->newModel($websiteId)->clear();
         if ($categoryIds !== []) {
@@ -232,8 +259,10 @@ final class CategoryLinkRepository extends AbstractWebsiteShardRepository
         if ($productIds !== []) {
             $query->where(CategoryLink::schema_fields_PRODUCT_ID, $productIds, 'IN');
         }
+        if ($storeIds !== null) {
+            $query->where(CategoryLink::schema_fields_STORE_ID, $storeIds, 'IN');
+        }
         $raw = $query
-            ->where(CategoryLink::schema_fields_STORE_ID, $storeIds, 'IN')
             ->select()
             ->fetchArray();
         $rows = [];

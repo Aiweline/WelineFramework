@@ -1213,7 +1213,10 @@ final class ProjectRetriever
                 '.phtml',
                 '/theme/doc/',
             ]],
-            ['needles' => ['统一配置中心', 'systemconfig', 'weline_systemconfig'], 'paths' => ['/weline/systemconfig/', 'systemconfig', 'weline_systemconfig']],
+            [
+                'needles' => SystemConfigTermRouting::pathIntentNeedles(),
+                'paths' => SystemConfigTermRouting::pathIntentPaths(),
+            ],
             ['needles' => ['站点', 'website'], 'paths' => ['/weline/websites/', 'website', 'scope']],
             ['needles' => ['主题', '暗色', 'theme', 'dark'], 'paths' => ['/weline/theme/', 'theme', 'dark', '.css']],
             ['needles' => ['mcp'], 'paths' => ['/mcp/', 'mcp']],
@@ -1713,10 +1716,8 @@ final class ProjectRetriever
         ])) {
             $add(['entrypoint', 'view_template', 'service', 'documentation']);
         }
-        if ($containsAny($lowerTask, [
-            '配置', 'scope', '站点', 'website', 'locale', 'provider',
-        ])) {
-            $add(['entrypoint', 'view_template', 'provider_query', 'configuration', 'service']);
+        if ($containsAny($lowerTask, SystemConfigTermRouting::contextRoleNeedles())) {
+            $add(SystemConfigTermRouting::contextRoles());
         }
         if ($containsAny($lowerTask, ['api', '接口', 'controller', '控制器', 'route', '路由'])) {
             $add(['entrypoint', 'service', 'contract']);
@@ -2025,8 +2026,6 @@ final class ProjectRetriever
             '技能' => 'skill guidance',
             '测试' => 'test testing phpunit pest vitest playwright browser e2e',
             '支付' => 'payment provider checkout refund payable',
-            '统一配置中心' => 'Weline_SystemConfig SystemConfig system configuration center',
-            '配置' => 'config configuration system scope',
             '队列' => 'queue job worker consumer',
             '部署' => 'deploy deployment release',
             '发布' => 'release deploy version tag',
@@ -2036,8 +2035,10 @@ final class ProjectRetriever
                 $expanded[] = $terms;
             }
         }
+        // Unified SystemConfig / config:embed lexicon (配置、统一配置、嵌入配置…).
+        $expanded[] = SystemConfigTermRouting::expandTask($task);
 
-        return implode(' ', array_values(array_unique($expanded)));
+        return implode(' ', array_values(array_unique(preg_split('/\s+/u', trim(implode(' ', $expanded))) ?: [])));
     }
 
     /** @param array<string,mixed> $row

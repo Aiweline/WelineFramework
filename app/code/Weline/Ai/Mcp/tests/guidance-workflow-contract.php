@@ -9,6 +9,8 @@ use LearningMcp\ToolService;
 require dirname(__DIR__) . '/src/bootstrap.php';
 
 $contract = GuidanceWorkflowCatalog::contract();
+$hardConstraintsPackage = HardConstraintsCatalog::package();
+$hardRulesFlat = HardConstraintsCatalog::workflowHardRules();
 $frontend = is_array($contract['frontend_development'] ?? null)
     ? $contract['frontend_development']
     : [];
@@ -32,7 +34,8 @@ $templateRules = is_array($contract['template_surface_rules'] ?? null)
     : [];
 $required = is_array($templateRules['required'] ?? null) ? $templateRules['required'] : [];
 $forbidden = is_array($templateRules['forbidden'] ?? null) ? $templateRules['forbidden'] : [];
-$hardRules = is_array($contract['hard_rules'] ?? null) ? $contract['hard_rules'] : [];
+$hardRulesRef = is_array($contract['hard_rules'] ?? null) ? $contract['hard_rules'] : [];
+$hardRules = $hardRulesFlat;
 $norms = is_array($frontend['norms'] ?? null) ? $frontend['norms'] : [];
 $surfaces = is_array($contract['surfaces'] ?? null) ? $contract['surfaces'] : [];
 $pinned = GuidanceWorkflowCatalog::pinnedDocumentPaths();
@@ -93,26 +96,40 @@ $checks = [
             static fn (bool $hit, mixed $notice): bool => $hit || (is_string($notice) && str_contains($notice, 'Weline UI 2.0') && str_contains($notice, 'w-field')),
             false,
         ),
-    'hard_constraints package present' => is_array($contract['hard_constraints'] ?? null)
+    'hard_constraints package present' => is_array($hardConstraintsPackage)
+        && ($hardConstraintsPackage['schema'] ?? '') === HardConstraintsCatalog::SCHEMA
+        && ($hardConstraintsPackage['must_obey'] ?? false) === true
+        && ($hardConstraintsPackage['authoritative_doc'] ?? '') === HardConstraintsCatalog::AUTHORITATIVE_DOC
+        && is_array($hardConstraintsPackage['rules'] ?? null)
+        && count($hardConstraintsPackage['rules']) >= 10
+        && is_string($hardConstraintsPackage['preamble'] ?? null)
+        && str_contains((string) $hardConstraintsPackage['preamble'], 'hard-constraints.v1'),
+    'workflow_contract hard_constraints is pointer' => is_array($contract['hard_constraints'] ?? null)
         && ($contract['hard_constraints']['schema'] ?? '') === HardConstraintsCatalog::SCHEMA
         && ($contract['hard_constraints']['must_obey'] ?? false) === true
-        && ($contract['hard_constraints']['authoritative_doc'] ?? '') === HardConstraintsCatalog::AUTHORITATIVE_DOC
-        && is_array($contract['hard_constraints']['rules'] ?? null)
-        && count($contract['hard_constraints']['rules']) >= 10
-        && is_string($contract['hard_constraints']['preamble'] ?? null)
-        && str_contains((string) $contract['hard_constraints']['preamble'], 'hard-constraints.v1'),
+        && ($contract['hard_constraints']['source'] ?? '') === 'prepare_project.agent_guidance.hard_constraints'
+        && !isset($contract['hard_constraints']['rules'])
+        && !isset($contract['hard_constraints']['preamble']),
+    'workflow_contract hard_rules is id index' => is_array($hardRulesRef)
+        && ($hardRulesRef['schema'] ?? '') === 'hard-rules-ref.v1'
+        && ($hardRulesRef['source'] ?? '') === 'prepare_project.agent_guidance.hard_constraints'
+        && is_array($hardRulesRef['rule_ids'] ?? null)
+        && count($hardRulesRef['rule_ids']) >= 10
+        && is_array($hardRulesRef['operational_ids'] ?? null)
+        && count($hardRulesRef['operational_ids']) >= 1
+        && !array_is_list($hardRulesRef),
     'hard_constraints include weline_ui_theme_first' => array_reduce(
-        is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule) && ($rule['id'] ?? '') === 'weline_ui_theme_first'),
         false,
     ),
     'hard_constraints include theme_base_components_token_only' => array_reduce(
-        is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule) && ($rule['id'] ?? '') === 'theme_base_components_token_only'),
         false,
     ),
     'hard_constraints include ui_skill_requires_theme_skill' => array_reduce(
-        is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
             && ($rule['id'] ?? '') === 'ui_skill_requires_theme_skill'
             && str_contains((string) ($rule['summary'] ?? ''), 'weline-theme-development')
@@ -120,7 +137,7 @@ $checks = [
         false,
     ),
     'hard_constraints include css_or_theme_requires_ui_prototype_theme_skills' => array_reduce(
-        is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
             && ($rule['id'] ?? '') === 'css_or_theme_requires_ui_prototype_theme_skills'
             && str_contains((string) ($rule['summary'] ?? ''), 'frontend-design')
@@ -129,7 +146,7 @@ $checks = [
         false,
     ),
     'hard_constraints include user_image_attachment_triggers_shentu' => array_reduce(
-        is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
             && ($rule['id'] ?? '') === 'user_image_attachment_triggers_shentu'
             && str_contains((string) ($rule['summary'] ?? ''), '审图')
@@ -141,16 +158,23 @@ $checks = [
         false,
     ),
     'hard_constraints include requirement_feature_kind_gate' => array_reduce(
-        is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
             && ($rule['id'] ?? '') === 'requirement_feature_kind_gate'
             && str_contains((string) ($rule['summary'] ?? ''), 'work_kind')
-            && str_contains((string) ($rule['summary'] ?? ''), 'prototype')
-            && str_contains((string) ($rule['summary'] ?? ''), 'frontend-design')),
+            && str_contains((string) ($rule['summary'] ?? ''), 'ui_skill_decision')),
+        false,
+    ),
+    'hard_constraints include requirement_implicit_analysis_skill_decision' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'requirement_implicit_analysis_skill_decision'
+            && str_contains((string) ($rule['summary'] ?? ''), 'implicit_requirements')
+            && str_contains((string) ($rule['summary'] ?? ''), 'ui_skill_decision')),
         false,
     ),
     'hard_constraints include acceptance_phase_requires_shentu' => array_reduce(
-        is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
             && ($rule['id'] ?? '') === 'acceptance_phase_requires_shentu'
             && str_contains((string) ($rule['summary'] ?? ''), '审图')
@@ -158,7 +182,7 @@ $checks = [
         false,
     ),
     'hard_constraints include closeout_requires_huishen' => array_reduce(
-        is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
             && ($rule['id'] ?? '') === 'closeout_requires_huishen'
             && str_contains((string) ($rule['summary'] ?? ''), '汇审')
@@ -166,31 +190,39 @@ $checks = [
         false,
     ),
     'hard_constraints include theme_address_for_region_pickers' => array_reduce(
-        is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
             && ($rule['id'] ?? '') === 'theme_address_for_region_pickers'
             && str_contains((string) ($rule['summary'] ?? ''), '<w:theme:address>')),
         false,
     ),
     'hard_constraints include weline_ui_floating_primitives' => array_reduce(
-        is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule) && ($rule['id'] ?? '') === 'weline_ui_floating_primitives'),
         false,
     ),
+    'hard_constraints include no_native_js_dialogs' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'no_native_js_dialogs'
+            && str_contains((string) ($rule['summary'] ?? ''), 'window.alert')
+            && str_contains((string) ($rule['summary'] ?? ''), 'Weline.UI.toast')),
+        false,
+    ),
     'hard_constraints include frontend_unified_content_container' => array_reduce(
-        is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
             && ($rule['id'] ?? '') === 'frontend_unified_content_container'
             && str_contains((string) ($rule['summary'] ?? ''), 'never invent a private page container')),
         false,
     ),
     'hard_constraints include theme_js_module_declare_only' => array_reduce(
-        is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule) && ($rule['id'] ?? '') === 'theme_js_module_declare_only'),
         false,
     ),
     'hard_constraints include weline_js_loader_framework_only' => array_reduce(
-        is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
             && ($rule['id'] ?? '') === 'weline_js_loader_framework_only'
             && str_contains((string) ($rule['summary'] ?? ''), 'MANDATORY')
@@ -203,12 +235,12 @@ $checks = [
         false,
     ),
     'hard_constraints include at_lang_no_unquoted_comma' => array_reduce(
-        is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule) && ($rule['id'] ?? '') === 'at_lang_no_unquoted_comma'),
         false,
     ),
     'hard_constraints include no_php_tags_in_comments' => array_reduce(
-        is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
             && ($rule['id'] ?? '') === 'no_php_tags_in_comments'
             && str_contains((string) ($rule['summary'] ?? ''), 'inside comments')
@@ -216,12 +248,12 @@ $checks = [
         false,
     ),
     'hard_constraints omit cancelled cache_lookup_tier_process_shared_db' => array_reduce(
-        is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule) && ($rule['id'] ?? '') === 'cache_lookup_tier_process_shared_db'),
         false,
     ) === false,
     'hard_constraints include chinese_comments_friendly_style' => array_reduce(
-        is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
             && ($rule['id'] ?? '') === 'chinese_comments_friendly_style'
             && str_contains((string) ($rule['summary'] ?? ''), 'Simplified Chinese')
@@ -229,12 +261,26 @@ $checks = [
         false,
     ),
     'hard_constraints include browser_operator_self_test' => array_reduce(
-        is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule) && ($rule['id'] ?? '') === 'browser_operator_self_test'),
         false,
     ),
+    'hard_constraints include ui_feature_requires_e2e' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'ui_feature_requires_e2e'
+            && str_contains((string) ($rule['summary'] ?? ''), 'EVERY work_kind=feature')),
+        false,
+    ),
+    'hard_constraints include forbid_user_manual_test_handoff' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'forbid_user_manual_test_handoff'
+            && str_contains((string) ($rule['summary'] ?? ''), 'MUST NOT ask the user to test')),
+        false,
+    ),
     'hard_constraints include browser_cache_disabled_on_open' => array_reduce(
-        is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
             && ($rule['id'] ?? '') === 'browser_cache_disabled_on_open'
             && str_contains((string) ($rule['summary'] ?? ''), 'setCacheDisabled')
@@ -242,7 +288,7 @@ $checks = [
         false,
     ),
     'hard_constraints include browser_release_after_delivery' => array_reduce(
-        is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
             && ($rule['id'] ?? '') === 'browser_release_after_delivery'
             && str_contains((string) ($rule['summary'] ?? ''), 'close')
@@ -250,7 +296,7 @@ $checks = [
         false,
     ),
     'hard_constraints include cursor_debug_csp_developer_tooling' => array_reduce(
-        is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
             && ($rule['id'] ?? '') === 'cursor_debug_csp_developer_tooling'
             && str_contains((string) ($rule['summary'] ?? ''), 'csp_developer_tooling')
@@ -259,7 +305,7 @@ $checks = [
         false,
     ),
     'hard_constraints include image_explicit_width_height_css' => array_reduce(
-        is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
             && ($rule['id'] ?? '') === 'image_explicit_width_height_css'
             && str_contains((string) ($rule['summary'] ?? ''), 'width')
@@ -268,7 +314,7 @@ $checks = [
         false,
     ),
     'hard_constraints feature_delivery_urls requires section' => array_reduce(
-        is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
             && ($rule['id'] ?? '') === 'feature_delivery_urls'
             && str_contains((string) ($rule['summary'] ?? ''), '交付地址')
@@ -276,24 +322,24 @@ $checks = [
         false,
     ),
     'hard_constraints include task_plan_before_edit' => array_reduce(
-        is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule) && ($rule['id'] ?? '') === 'task_plan_before_edit'),
         false,
     ),
     'hard_constraints include user_requirement_full_workflow' => array_reduce(
-        is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule) && ($rule['id'] ?? '') === 'user_requirement_full_workflow'),
         false,
     ),
     'hard_constraints include architecture_first_for_requirements' => array_reduce(
-        is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
             && ($rule['id'] ?? '') === 'architecture_first_for_requirements'
             && str_contains((string) ($rule['summary'] ?? ''), 'architecture')),
         false,
     ),
     'hard_constraints include requirement_framework_scrutiny' => array_reduce(
-        is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
             && ($rule['id'] ?? '') === 'requirement_framework_scrutiny'
             && str_contains((string) ($rule['summary'] ?? ''), 'requirement_scrutiny')
@@ -301,11 +347,19 @@ $checks = [
         false,
     ),
     'hard_constraints include framework_decoupled_only' => array_reduce(
-        is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
             && ($rule['id'] ?? '') === 'framework_decoupled_only'
             && str_contains((string) ($rule['summary'] ?? ''), 'decoupled')
             && str_contains((string) ($rule['summary'] ?? ''), '耦合提示')),
+        false,
+    ),
+    'hard_constraints include shell_provider_business_isomorph' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'shell_provider_business_isomorph'
+            && str_contains((string) ($rule['summary'] ?? ''), 'Provider')
+            && str_contains((string) ($rule['summary'] ?? ''), 'MUST NOT reimplement')),
         false,
     ),
     'mandatory_before_code includes requirement_analysis_in_task_plan' => in_array(
@@ -343,14 +397,14 @@ $checks = [
     'closeout reminder requires coupling report' => (bool) ($contract['closeout_delivery_reminder']['coupling_report_required'] ?? false)
         && (($contract['closeout_delivery_reminder']['coupling_section_title'] ?? '') === '耦合提示'),
     'hard_constraints include plan_todo_evidence_closeout' => array_reduce(
-        is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
             && ($rule['id'] ?? '') === 'plan_todo_evidence_closeout'
             && str_contains((string) ($rule['summary'] ?? ''), 'evidence')),
         false,
     ),
     'hard_constraints include agent_self_verify_before_done' => array_reduce(
-        is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
             && ($rule['id'] ?? '') === 'agent_self_verify_before_done'
             && str_contains((string) ($rule['summary'] ?? ''), 'self-verify')
@@ -358,7 +412,7 @@ $checks = [
         false,
     ),
     'hard_constraints include plan_then_tdd_required' => array_reduce(
-        is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
             && ($rule['id'] ?? '') === 'plan_then_tdd_required'
             && str_contains((string) ($rule['summary'] ?? ''), 'TDD')
@@ -554,14 +608,14 @@ $checks = [
         false,
     ),
     'session_startup_notices allow native fallback on MCP capacity' => array_reduce(
-        is_array($contract['hard_constraints']['mcp_operational'] ?? null) ? $contract['hard_constraints']['mcp_operational'] : [],
+        is_array($hardConstraintsPackage['mcp_operational'] ?? null) ? $hardConstraintsPackage['mcp_operational'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
             && ($rule['id'] ?? '') === 'mcp_capacity_native_fallback'
             && str_contains((string) ($rule['summary'] ?? ''), 'MCP_TARGET_UNAVAILABLE')),
         false,
     ),
     'MCP hard constraints preserve dirty workspace changes' => array_reduce(
-        is_array($contract['hard_constraints']['mcp_operational'] ?? null) ? $contract['hard_constraints']['mcp_operational'] : [],
+        is_array($hardConstraintsPackage['mcp_operational'] ?? null) ? $hardConstraintsPackage['mcp_operational'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
             && ($rule['id'] ?? '') === 'preserve_dirty_workspace'
             && str_contains((string) ($rule['summary'] ?? ''), 'staged')
@@ -571,10 +625,22 @@ $checks = [
             && str_contains((string) ($rule['summary'] ?? ''), 'dirty-load')),
         false,
     ),
+    'MCP hard constraints require runtime status query local-first' => array_reduce(
+        is_array($hardConstraintsPackage['mcp_operational'] ?? null) ? $hardConstraintsPackage['mcp_operational'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'runtime_status_query_local_first'
+            && str_contains((string) ($rule['summary'] ?? ''), 'LOCAL')
+            && str_contains((string) ($rule['summary'] ?? ''), 'production')
+            && str_contains((string) ($rule['summary'] ?? ''), 'default profile')
+            && str_contains((string) ($rule['summary'] ?? ''), 'translation')),
+        false,
+    ),
+    'mcp instructions require local-first status queries' => str_contains(ToolService::instructions(), 'runtime_status_query_local_first')
+        && str_contains(ToolService::instructions(), 'LOCAL-FIRST status'),
     'mcp instructions ban git checkout before sealed dirty-load' => str_contains(ToolService::instructions(), 'DIRTY-LOAD ONLY')
         && str_contains(ToolService::instructions(), 'never git checkout'),
     'MCP hard constraints require host editor rules mcp-generated only' => array_reduce(
-        is_array($contract['hard_constraints']['mcp_operational'] ?? null) ? $contract['hard_constraints']['mcp_operational'] : [],
+        is_array($hardConstraintsPackage['mcp_operational'] ?? null) ? $hardConstraintsPackage['mcp_operational'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
             && ($rule['id'] ?? '') === 'host_editor_rules_mcp_generated_only'
             && str_contains((string) ($rule['summary'] ?? ''), 'MANDATORY')
@@ -584,7 +650,7 @@ $checks = [
         false,
     ),
     'MCP hard constraints require skills fetch from MCP' => array_reduce(
-        is_array($contract['hard_constraints']['mcp_operational'] ?? null) ? $contract['hard_constraints']['mcp_operational'] : [],
+        is_array($hardConstraintsPackage['mcp_operational'] ?? null) ? $hardConstraintsPackage['mcp_operational'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
             && ($rule['id'] ?? '') === 'mcp_skills_fetch_from_mcp'
             && str_contains((string) ($rule['summary'] ?? ''), 'resolve_skill')
@@ -592,7 +658,7 @@ $checks = [
         false,
     ),
     'MCP hard constraints require greeting lists skills and commands' => array_reduce(
-        is_array($contract['hard_constraints']['mcp_operational'] ?? null) ? $contract['hard_constraints']['mcp_operational'] : [],
+        is_array($hardConstraintsPackage['mcp_operational'] ?? null) ? $hardConstraintsPackage['mcp_operational'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
             && ($rule['id'] ?? '') === 'greeting_lists_mcp_skills_and_commands'
             && str_contains((string) ($rule['summary'] ?? ''), 'hi')),

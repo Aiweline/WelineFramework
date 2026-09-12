@@ -13,10 +13,19 @@ Object.assign(window.WelineModulesConfig.modules, {
         globalVar: "WelineCheckout",
         load: "eager",
         description: "结账生命周期：weline:checkout:order-created / success"
+    },
+    checkoutExpressReview: {
+        paths: [
+            "Weline_Checkout::js/express-review.js?v=20260912-express-review2"
+        ],
+        globalVar: "WelineCheckoutExpressReview",
+        load: "lazy",
+        description: "快捷支付回头确认页：摘要/缺口/确认收款"
     }
 });
 
 Object.assign(window.WelineModulesConfig.moduleAliases, {
     checkout: "checkoutLifecycle",
-    "WelineCheckout": "checkoutLifecycle"
+    "WelineCheckout": "checkoutLifecycle",
+    checkoutExpressReview: "checkoutExpressReview"
 });

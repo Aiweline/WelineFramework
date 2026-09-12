@@ -47,7 +47,10 @@ class FixedAmount extends AbstractAction
         }
 
         $discountValue = (float)($action['discount_value'] ?? 0);
-        $applyTo = $action['apply_to'] ?? 'subtotal';
+        $applyTo = \strtolower(\trim((string)($action['apply_to'] ?? 'subtotal')));
+        if ($applyTo === 'cart' || $applyTo === '') {
+            $applyTo = 'subtotal';
+        }
 
         $amount = 0;
         if ($applyTo === 'subtotal') {

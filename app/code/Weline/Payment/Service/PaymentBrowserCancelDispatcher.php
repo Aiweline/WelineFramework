@@ -117,6 +117,25 @@ final class PaymentBrowserCancelDispatcher
                         : PaymentTransaction::STATUS_FAILED,
                 )
                 ->save();
+
+            // Express defer-capture: release unpaid order / inventory reservation on cancel.
+            $requestData = $transaction->getRequestData();
+            if (
+                ExpressCheckoutOrchestrator::isExpressAwaitingConfirm($requestData)
+                || !empty($requestData['express_checkout'])
+                || !empty(($requestData['metadata']['express_checkout'] ?? null))
+            ) {
+                try {
+                    $flow = $this->objectManager->getInstance(\Weline\Checkout\Service\ExpressCheckoutFlowService::class);
+                    if (is_object($flow) && method_exists($flow, 'abandon')) {
+                        $flow->abandon(
+                            (string) $transaction->getData(PaymentTransaction::schema_fields_TRANSACTION_NO),
+                            'provider_cancel',
+                        );
+                    }
+                } catch (\Throwable) {
+                }
+            }
         }
 
         $cancelState = $alreadyCancelled

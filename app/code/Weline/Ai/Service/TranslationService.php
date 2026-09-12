@@ -37,6 +37,12 @@ class TranslationService
     public const STRATEGY_HIGH_FIDELITY = 'high_fidelity';
 
     /**
+     * Max strings per single model call. Dictionary UI allows batch_size=100, but
+     * translategemma + max_tokens≈4k truncates mid-JSON → parse returns 0 → idle loop.
+     */
+    public const MODEL_CHUNK_SIZE = 20;
+
+    /**
      * @var AiService
      */
     private AiService $aiService;
@@ -213,18 +219,14 @@ class TranslationService
         $indexToKey = [];
         $index = 0;
         foreach ($texts as $key => $text) {
-            $textsWithKeys[] = $text;
+            $textsWithKeys[] = (string)$text;
             $indexToKey[$index] = $key;
             $index++;
         }
         
-        // 验证目标语言
         $originalTargetLocale = $targetLocale;
         $targetLocale = $this->i18nIntegration->validateAndGetLocale($targetLocale);
         
-        // 优先使用独立翻译模型；未配置时回退到已配置的通用默认模型。
-        // 这样 I18n 的中立翻译事件在可用 AI 服务已存在时仍可完成工作，
-        // 而不要求每个调用方重复维护一份 translation 专用配置。
         $defaultModel = $this->defaultModelManager->getDefaultModel('translation')
             ?: $this->defaultModelManager->getDefaultModel('default');
         if (!$defaultModel) {
@@ -232,103 +234,313 @@ class TranslationService
         }
         $modelCode = $defaultModel->getData(\Weline\Ai\Model\AiModel::schema_fields_MODEL_CODE);
         
-        // 准备适配器参数
         $targetLanguage = $this->getLanguageName($targetLocale);
         $sourceLanguage = $sourceLocale === 'auto' ? 'auto-detected language' : $this->getLanguageName($sourceLocale);
         $adapterStrategy = $strategy === self::STRATEGY_HIGH_FIDELITY ? 'professional' : 'standard';
-        
-        // 构建批量翻译提示词
-        $batchPrompt = $this->buildBatchTranslationPrompt($textsWithKeys, $targetLanguage, $sourceLanguage, $adapterStrategy);
-        
-        try {
-            // Per-lane single-flight (dictionary vs LocalModel can run in parallel).
-            $this->concurrencyGate->acquire(TranslationConcurrencyGate::DEFAULT_WAIT_SECONDS, $concurrencyLane);
-            try {
-                // 一次性调用AI服务进行批量翻译
-                $response = $this->aiService->generate(
-                    $batchPrompt,
+
+        $ordered = $this->batchTranslateOrderedList(
+            $textsWithKeys,
+            $modelCode,
+            $targetLanguage,
+            $sourceLanguage,
+            $adapterStrategy,
+            $concurrencyLane,
+            $originalTargetLocale,
+            $sourceLocale,
+            $strategy,
+        );
+
+        $result = [];
+        foreach ($ordered as $i => $translation) {
+            $key = $indexToKey[$i] ?? $i;
+            $result[$key] = $translation;
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param list<string> $texts
+     * @return list<string>
+     */
+    private function batchTranslateOrderedList(
+        array $texts,
+        string $modelCode,
+        string $targetLanguage,
+        string $sourceLanguage,
+        string $adapterStrategy,
+        string $concurrencyLane,
+        string $originalTargetLocale,
+        string $sourceLocale,
+        string $strategy,
+    ): array {
+        if ($texts === []) {
+            return [];
+        }
+
+        // Split oversized caller batches before one model call (avoids truncated JSON → actual 0).
+        if (count($texts) > self::MODEL_CHUNK_SIZE) {
+            $merged = [];
+            foreach (array_chunk($texts, self::MODEL_CHUNK_SIZE) as $chunk) {
+                $merged = array_merge($merged, $this->batchTranslateOrderedList(
+                    $chunk,
                     $modelCode,
-                    null,
-                    null,
-                    [
-                        'target_language' => $targetLanguage,
-                        'source_language' => $sourceLanguage,
-                        'strategy' => $adapterStrategy,
-                        'timeout_seconds' => self::REQUEST_TIMEOUT_SECONDS,
-                        'low_speed_time' => self::REQUEST_LOW_SPEED_SECONDS,
-                        'connect_timeout' => self::REQUEST_CONNECT_TIMEOUT_SECONDS,
-                        // Batch JSON replies need headroom; default 2000 is usually enough
-                        // but long LocalModel fields can truncate mid-array and force parse failure.
-                        'max_tokens' => max(512, min(4096, 64 + (count($textsWithKeys) * 96))),
-                        'temperature' => 0.2,
-                    ]
-                );
-            } finally {
-                $this->concurrencyGate->release($concurrencyLane);
+                    $targetLanguage,
+                    $sourceLanguage,
+                    $adapterStrategy,
+                    $concurrencyLane,
+                    $originalTargetLocale,
+                    $sourceLocale,
+                    $strategy,
+                ));
             }
-            
-            // 解析批量翻译结果
-            $translations = $this->parseBatchTranslationResponse($response, count($textsWithKeys));
-            
-            // 恢复原始键值对应关系
-            $result = [];
-            foreach ($translations as $index => $translation) {
-                $key = $indexToKey[$index] ?? $index;
-                $result[$key] = $translation;
-            }
-            
-            // Multi-item batches must not silently fall back to N serial model calls
-            // (that re-acquires the concurrency gate and destroys LocalModel throughput).
-            if (count($result) !== count($texts)) {
-                if (count($texts) > 1) {
-                    throw new Exception(__(
-                        '批量翻译结果解析失败：期望 %{expected} 条，实际 %{actual} 条',
-                        [
-                            'expected' => (string)count($texts),
-                            'actual' => (string)count($result),
-                        ],
-                    ));
-                }
-                // Single-item only: fall back to the one-shot path.
-                $result = [];
-                foreach ($texts as $key => $text) {
-                    try {
-                        $translation = $this->translate($text, $originalTargetLocale, $sourceLocale, $strategy, $concurrencyLane);
-                        $result[$key] = $translation;
-                    } catch (\Exception $e) {
-                        if ($this->concurrencyGate->isBusyMarker($e->getMessage())) {
-                            throw $e;
-                        }
-                        $result[$key] = $text;
-                    }
-                }
-            }
-            
-            return $result;
+
+            return $merged;
+        }
+
+        try {
+            return $this->invokeOneModelBatch(
+                $texts,
+                $modelCode,
+                $targetLanguage,
+                $sourceLanguage,
+                $adapterStrategy,
+                $concurrencyLane,
+                $originalTargetLocale,
+                $sourceLocale,
+                $strategy,
+            );
         } catch (\Exception $e) {
-            // Busy / lock failures must not fall back into N more model calls.
             if ($this->concurrencyGate->isBusyMarker($e->getMessage())) {
                 throw $e;
             }
-            // Multi-item: surface the failure so callers (LocalModel) can abort/retry.
             if (count($texts) > 1) {
-                throw $e;
+                return $this->splitAndRetryBatchTranslate(
+                    $texts,
+                    $modelCode,
+                    $targetLanguage,
+                    $sourceLanguage,
+                    $adapterStrategy,
+                    $concurrencyLane,
+                    $originalTargetLocale,
+                    $sourceLocale,
+                    $strategy,
+                    $e,
+                );
             }
             // 单条失败时回退到循环翻译
-            $result = [];
-            foreach ($texts as $key => $text) {
-                try {
-                    $translation = $this->translate($text, $originalTargetLocale, $sourceLocale, $strategy, $concurrencyLane);
-                    $result[$key] = $translation;
-                } catch (\Exception $ex) {
-                    if ($this->concurrencyGate->isBusyMarker($ex->getMessage())) {
-                        throw $ex;
-                    }
-                    $result[$key] = $text;
+            try {
+                return [$this->translate($texts[0], $originalTargetLocale, $sourceLocale, $strategy, $concurrencyLane)];
+            } catch (\Exception $ex) {
+                if ($this->concurrencyGate->isBusyMarker($ex->getMessage())) {
+                    throw $ex;
                 }
+
+                return [$texts[0]];
             }
-            return $result;
         }
+    }
+
+    /**
+     * @param list<string> $texts
+     * @return list<string>
+     */
+    private function invokeOneModelBatch(
+        array $texts,
+        string $modelCode,
+        string $targetLanguage,
+        string $sourceLanguage,
+        string $adapterStrategy,
+        string $concurrencyLane,
+        string $originalTargetLocale,
+        string $sourceLocale,
+        string $strategy,
+    ): array {
+        $batchPrompt = $this->buildBatchTranslationPrompt($texts, $targetLanguage, $sourceLanguage, $adapterStrategy);
+        $maxTokens = $this->estimateBatchMaxTokens($texts);
+
+        $this->concurrencyGate->acquire(TranslationConcurrencyGate::DEFAULT_WAIT_SECONDS, $concurrencyLane);
+        try {
+            $response = $this->aiService->generate(
+                $batchPrompt,
+                $modelCode,
+                null,
+                null,
+                [
+                    'target_language' => $targetLanguage,
+                    'source_language' => $sourceLanguage,
+                    'strategy' => $adapterStrategy,
+                    'timeout_seconds' => self::REQUEST_TIMEOUT_SECONDS,
+                    'low_speed_time' => self::REQUEST_LOW_SPEED_SECONDS,
+                    'connect_timeout' => self::REQUEST_CONNECT_TIMEOUT_SECONDS,
+                    'max_tokens' => $maxTokens,
+                    'temperature' => 0.2,
+                ]
+            );
+        } finally {
+            $this->concurrencyGate->release($concurrencyLane);
+        }
+
+        $expected = count($texts);
+        $translations = self::parseBatchTranslationResponse((string)$response, $expected);
+        if (count($translations) === $expected) {
+            return $translations;
+        }
+
+        // Truncated JSON: keep complete leading items, retry only the remainder.
+        $salvaged = self::salvageCompleteJsonArrayItems((string)$response);
+        if (count($salvaged) === $expected) {
+            return $salvaged;
+        }
+        if ($salvaged !== [] && count($salvaged) < $expected) {
+            $remainder = array_slice($texts, count($salvaged));
+            $rest = $this->batchTranslateOrderedList(
+                $remainder,
+                $modelCode,
+                $targetLanguage,
+                $sourceLanguage,
+                $adapterStrategy,
+                $concurrencyLane,
+                $originalTargetLocale,
+                $sourceLocale,
+                $strategy,
+            );
+
+            return array_merge($salvaged, $rest);
+        }
+
+        throw new Exception(__(
+            '批量翻译结果解析失败：期望 %{expected} 条，实际 %{actual} 条',
+            [
+                'expected' => (string)$expected,
+                'actual' => (string)count($translations),
+            ],
+        ));
+    }
+
+    /**
+     * @param list<string> $texts
+     * @return list<string>
+     */
+    private function splitAndRetryBatchTranslate(
+        array $texts,
+        string $modelCode,
+        string $targetLanguage,
+        string $sourceLanguage,
+        string $adapterStrategy,
+        string $concurrencyLane,
+        string $originalTargetLocale,
+        string $sourceLocale,
+        string $strategy,
+        \Exception $previous,
+    ): array {
+        $n = count($texts);
+        if ($n <= 1) {
+            throw $previous;
+        }
+        $mid = (int)floor($n / 2);
+        if ($mid < 1) {
+            throw $previous;
+        }
+        $left = array_slice($texts, 0, $mid);
+        $right = array_slice($texts, $mid);
+
+        return array_merge(
+            $this->batchTranslateOrderedList(
+                $left,
+                $modelCode,
+                $targetLanguage,
+                $sourceLanguage,
+                $adapterStrategy,
+                $concurrencyLane,
+                $originalTargetLocale,
+                $sourceLocale,
+                $strategy,
+            ),
+            $this->batchTranslateOrderedList(
+                $right,
+                $modelCode,
+                $targetLanguage,
+                $sourceLanguage,
+                $adapterStrategy,
+                $concurrencyLane,
+                $originalTargetLocale,
+                $sourceLocale,
+                $strategy,
+            ),
+        );
+    }
+
+    /**
+     * @param list<string> $texts
+     */
+    private function estimateBatchMaxTokens(array $texts): int
+    {
+        $chars = 0;
+        foreach ($texts as $text) {
+            $chars += mb_strlen((string)$text, 'UTF-8');
+        }
+        // Target languages (e.g. Arabic) often expand; leave headroom for JSON quotes/commas.
+        $estimate = 256 + (int)ceil($chars * 3.0) + (count($texts) * 48);
+
+        return max(1024, min(8192, $estimate));
+    }
+
+    /**
+     * Extract complete leading JSON string elements from a (possibly truncated) array reply.
+     *
+     * @return list<string>
+     */
+    public static function salvageCompleteJsonArrayItems(string $response): array
+    {
+        $json = trim($response);
+        if ($json === '') {
+            return [];
+        }
+        if (str_starts_with($json, '```')) {
+            $json = preg_replace('/^```(?:json)?\s*/i', '', $json) ?? $json;
+            $json = preg_replace('/\s*```$/', '', $json) ?? $json;
+            $json = trim($json);
+        }
+
+        $start = strpos($json, '[');
+        if ($start === false) {
+            return [];
+        }
+
+        $items = [];
+        $offset = $start + 1;
+        $length = strlen($json);
+        while ($offset < $length) {
+            if (!preg_match('/\G[\s,]*/', $json, $skip, 0, $offset)) {
+                break;
+            }
+            $offset += strlen($skip[0]);
+            if ($offset >= $length) {
+                break;
+            }
+            if ($json[$offset] === ']') {
+                break;
+            }
+            if ($json[$offset] !== '"') {
+                break;
+            }
+            if (!preg_match('/\G"(?:\\\\.|[^"\\\\])*"/u', $json, $match, 0, $offset)) {
+                break;
+            }
+            $decoded = json_decode($match[0], true);
+            if (!is_string($decoded)) {
+                break;
+            }
+            $text = trim($decoded);
+            if ($text === '' || self::isJunkTranslation($text)) {
+                break;
+            }
+            $items[] = $text;
+            $offset += strlen($match[0]);
+        }
+
+        return $items;
     }
     
     /**

@@ -102,6 +102,63 @@ final class DevRelaySilentPairContractTest extends TestCase
         self::assertStringContainsString('dev-relay-enabled', $src);
         self::assertStringContainsString('dev-relay-save-settings', $src);
         self::assertStringContainsString('postSaveSettings', $src);
+        // 本机静默中继操作区不得被未启用时的 pointer-events 整块锁死
+        self::assertStringContainsString('data-testid="payment-dev-relay-local-actions"', $src);
+        self::assertStringContainsString('dev-relay-token-hint', $src);
+        self::assertStringContainsString('payment-dev-relay-worker-summary', $src);
+        self::assertStringContainsString('技术详情（JSON）', $src);
+        self::assertStringContainsString('当前状态', $src);
+        self::assertStringNotContainsString(
+            "data-role=\"relay-actions\"\n            class=\"w-stack <?= \$feature_enabled ? '' : 'is-disabled' ?>\"\n            style=\"--w-gap:var(--weline-space-4);<?= \$feature_enabled ? '' : 'opacity:0.55;pointer-events:none;' ?>\"",
+            $src
+        );
+    }
+
+    public function testBackendWorkerStartReadsJsonBodyAndEnablesFirst(): void
+    {
+        $src = file_get_contents(dirname(__DIR__, 3) . '/Controller/Backend/DevRelay.php');
+        self::assertIsString($src);
+        self::assertStringContainsString('function postWorkerStart(', $src);
+        self::assertStringContainsString('jsonBody()', $src);
+        self::assertMatchesRegularExpression(
+            '/function postWorkerStart\([\s\S]*?settings->save\([\s\S]*?\'enabled\' => true[\s\S]*?localWorker->start\(/',
+            $src
+        );
+        self::assertStringContainsString('readRememberedCredentials', $src);
+    }
+
+    public function testFrontendWorkerStartEnablesBeforeStart(): void
+    {
+        $src = file_get_contents(dirname(__DIR__, 3) . '/Controller/Frontend/DevRelay.php');
+        self::assertIsString($src);
+        self::assertMatchesRegularExpression(
+            '/function workerStart\([\s\S]*?settings->save\([\s\S]*?\'enabled\' => true[\s\S]*?localWorker->start\(/',
+            $src
+        );
+    }
+
+    public function testLocalConnectStartResolvesRememberedCredentials(): void
+    {
+        $src = file_get_contents(dirname(__DIR__, 3) . '/Service/DevRelayLocalConnectService.php');
+        self::assertIsString($src);
+        self::assertMatchesRegularExpression(
+            '/function start\([\s\S]*?readRememberedCredentials\(/',
+            $src
+        );
+        self::assertStringContainsString('isLocalEnvironment()', $src);
+    }
+
+    public function testDevRelayJsSurfacesEmptyTokenHint(): void
+    {
+        $src = file_get_contents(dirname(__DIR__, 3) . '/view/statics/js/backend/dev-relay.js');
+        self::assertIsString($src);
+        self::assertStringContainsString('请填写线上用户 API Token', $src);
+        self::assertStringContainsString('showLocalFeedback', $src);
+        self::assertStringContainsString('dev-relay-local-feedback', $src);
+        self::assertStringContainsString('dev-relay-worker-stop', $src);
+        self::assertStringContainsString('payment-dev-relay-worker-summary', $src);
+        self::assertStringContainsString('连接详情', $src);
+        self::assertStringContainsString('技术详情（JSON）', $src);
     }
 
     public function testSettingsServiceExists(): void

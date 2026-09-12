@@ -21,9 +21,9 @@ final class VisitorPanelBootstrapHtmlServiceTest extends TestCase
         $html = $service->render();
 
         self::assertStringContainsString('data-weline-panel-visitor-bootstrap="true"', $html);
-        self::assertStringContainsString('data-wla-bootstrap="1"', $html);
-        self::assertStringContainsString('weline_lifecycle_assistant_v1', $html);
-        self::assertStringContainsString('lifecycle-event-assistant.js', $html);
+        self::assertStringContainsString('data-wesm-bootstrap="1"', $html);
+        self::assertStringContainsString('weline_event_sandbox_monitor_v1', $html);
+        self::assertStringContainsString('event-sandbox-monitor.js', $html);
         self::assertStringNotContainsString('<script src=', $html);
         self::assertStringContainsString('function loadVisitorPanel()', $html);
         self::assertStringContainsString("id: 'visitor'", $html);

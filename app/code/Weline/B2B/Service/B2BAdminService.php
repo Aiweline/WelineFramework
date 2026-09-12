@@ -6,6 +6,7 @@ namespace Weline\B2B\Service;
 
 use Weline\B2B\Model\CustomerGroup;
 use Weline\B2B\Service\B2BConflictException;
+use Weline\Framework\Manager\ObjectManager;
 
 /**
  * Explicitly gated backend commands. The underlying B2B service remains the
@@ -283,13 +284,50 @@ final class B2BAdminService
             throw new \InvalidArgumentException(__('请选择客户'));
         }
         $store->assignCustomer($customerId, $groupId);
+        $creditGrant = $this->grantCreditAfterAssign($customerId, $group->websiteId, $groupId);
 
         return [
             'group_id' => $groupId,
             'customer_id' => $customerId,
             'website_id' => $group->websiteId,
             'assigned' => true,
+            'credit_grant' => $creditGrant,
         ];
+    }
+
+    /**
+     * Same top-up path as membership approve: fill b2b_credit up to group credit_limit.
+     *
+     * @return array{ok:bool,granted_minor:int,target_minor:int,balance_minor:int,skipped:?string}|null
+     */
+    private function grantCreditAfterAssign(string $customerId, int $websiteId, string $groupId): ?array
+    {
+        try {
+            $grant = ObjectManager::getInstance(B2BCreditGrantService::class);
+        } catch (\Throwable) {
+            return null;
+        }
+        if (!$grant instanceof B2BCreditGrantService) {
+            return null;
+        }
+        try {
+            return $grant->grantToTarget($customerId, $websiteId, $groupId);
+        } catch (\Throwable $e) {
+            w_log_error('b2b_credit_grant_after_assign_failed: ' . $e->getMessage(), [
+                'customer_id' => $customerId,
+                'website_id' => $websiteId,
+                'group_id' => $groupId,
+            ]);
+
+            return [
+                'ok' => false,
+                'granted_minor' => 0,
+                'target_minor' => 0,
+                'balance_minor' => 0,
+                'skipped' => 'grant_failed',
+                'error' => $e->getMessage(),
+            ];
+        }
     }
 
     /**
@@ -352,16 +390,82 @@ final class B2BAdminService
         if ($listId === '') {
             $listId = 'pl-' . bin2hex(random_bytes(6));
         }
-        $sku = trim((string)($input['sku'] ?? ''));
+        $skuAmounts = $this->normalizeCreatePriceListAmounts($input);
         return $this->service->seedPriceList(
             $listId,
             trim((string)($input['group_id'] ?? '')),
             $websiteId,
             (int)($input['version'] ?? 1),
-            [$sku => (int)($input['amount_minor'] ?? -1)],
+            $skuAmounts,
             trim((string)($input['channel_id'] ?? '')) ?: null,
             true,
         )->toMeta();
+    }
+
+    /**
+     * Product-edit website-level qty tiers (channel_id=null) with full copy-forward.
+     *
+     * @param array<string,mixed> $input
+     * @return array<string,mixed>
+     */
+    public function upsertSkuQtyTiers(array $input): array
+    {
+        $websiteId = (int)($input['website_id'] ?? -1);
+        $this->assertMutable($websiteId);
+
+        return $this->productSkuQtyTiers()->upsertSkuQtyTiers($input);
+    }
+
+    /**
+     * @param array<string,mixed> $input
+     * @return array<string, array<int,int>|int>
+     */
+    private function normalizeCreatePriceListAmounts(array $input): array
+    {
+        $sku = trim((string)($input['sku'] ?? ''));
+        if ($sku === '') {
+            throw new \InvalidArgumentException((string)__('请填写商品 SKU'));
+        }
+        $minQty = (int)($input['min_qty'] ?? 1);
+        if ($minQty < 1) {
+            $minQty = 1;
+        }
+        $amount = (int)($input['amount_minor'] ?? -1);
+        if ($amount < 0) {
+            throw new \InvalidArgumentException((string)__('批发价（分）必须 ≥ 0'));
+        }
+        $out = [$sku => [$minQty => $amount]];
+
+        $tierRows = $input['tiers'] ?? null;
+        if (is_array($tierRows)) {
+            foreach ($tierRows as $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+                $rowSku = trim((string)($row['sku'] ?? $sku));
+                if ($rowSku === '') {
+                    $rowSku = $sku;
+                }
+                $rowMinRaw = $row['min_qty'] ?? null;
+                $rowAmountRaw = $row['amount_minor'] ?? null;
+                if ($rowMinRaw === null || $rowMinRaw === '' || $rowAmountRaw === null || $rowAmountRaw === '') {
+                    continue;
+                }
+                $rowMin = (int)$rowMinRaw;
+                $rowAmount = (int)$rowAmountRaw;
+                if ($rowMin < 1 || $rowAmount < 0) {
+                    continue;
+                }
+                $out[$rowSku][$rowMin] = $rowAmount;
+            }
+        }
+
+        return $out;
+    }
+
+    private function productSkuQtyTiers(): ProductSkuQtyTierAdminService
+    {
+        return new ProductSkuQtyTierAdminService($this->service);
     }
 
     /** @param array<string,mixed> $input @return array<string,mixed> */

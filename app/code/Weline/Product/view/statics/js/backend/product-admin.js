@@ -114,6 +114,20 @@
         }
     }
 
+    function confirmTheme(message, options) {
+        options = options || {};
+        if (window.Weline && window.Weline.UI && window.Weline.UI.dialog
+            && typeof window.Weline.UI.dialog.confirm === 'function'
+        ) {
+            return Promise.resolve(window.Weline.UI.dialog.confirm(String(message || ''), options))
+                .then(Boolean);
+        }
+        var fallback = String(options.title || '')
+            + (options.title && message ? '\n\n' : '')
+            + String(message || '');
+        return Promise.resolve(window.confirm(fallback));
+    }
+
     function messageFrom(error, fallback) {
         if (error && error.message) {
             return String(error.message);
@@ -2106,6 +2120,7 @@
                         }
                     }
                     var createAttributes = collectCreateAttributes();
+                    createAttributes = mergeWholesaleSellingModeFlag(createAttributes || []);
                     if (createAttributes.length) {
                         payload.attributes = createAttributes;
                     }
@@ -2454,37 +2469,59 @@
             if (items.length === 0) {
                 return;
             }
-            var prompt = '确定删除选中的 ' + items.length + ' 个商品吗？\n\n按治理规则将归档（非物理删除），归档后不可再编辑。';
-            if (!window.confirm(prompt)) {
-                return;
-            }
-            setBusy([bulkDelete], true);
-            requestHash('bulk:archive', {
-                website_id: parseInt(state.website_id, 10) || 0,
-                items: items.map(function (item) { return item.global_product_uuid; }),
-            }).then(function (baseHash) {
-                return call('bulkCommand', {
-                    website_id: parseInt(state.website_id, 10) || 0,
-                    action: 'archive',
-                    base_request_hash: baseHash,
-                    items: items.map(function (item) {
-                        return {
-                            global_product_uuid: item.global_product_uuid,
-                            expected_version: item.identity_version,
-                            local_version: item.local_version,
-                        };
-                    }),
-                });
-            }).then(function (result) {
-                if (!result.success) {
-                    throw new Error(result.message || '批量删除失败');
+            confirmTheme(
+                '按治理规则将归档（非物理删除），归档后不可再编辑。',
+                {
+                    title: '确定删除选中的 ' + items.length + ' 个商品吗？',
+                    tone: 'warning',
+                    dangerous: true,
+                    confirmTone: 'danger',
+                    confirmLabel: '确定',
+                    cancelLabel: '取消',
                 }
-                notify('success', result.message || '批量删除完成');
-                window.location.reload();
-            }).catch(function (error) {
-                notify('error', messageFrom(error, '批量删除失败'));
-            }).finally(function () {
-                setBusy([bulkDelete], false);
+            ).then(function (ok) {
+                if (!ok) {
+                    return;
+                }
+                setBusy([bulkDelete], true);
+                requestHash('bulk:archive', {
+                    website_id: parseInt(state.website_id, 10) || 0,
+                    items: items.map(function (item) { return item.global_product_uuid; }),
+                }).then(function (baseHash) {
+                    return call('bulkCommand', {
+                        website_id: parseInt(state.website_id, 10) || 0,
+                        action: 'archive',
+                        base_request_hash: baseHash,
+                        items: items.map(function (item) {
+                            return {
+                                global_product_uuid: item.global_product_uuid,
+                                product_id: item.product_id,
+                                expected_version: item.identity_version,
+                                local_version: item.local_version,
+                            };
+                        }),
+                    });
+                }).then(function (result) {
+                    if (!result.success) {
+                        throw new Error(result.message || '批量删除失败');
+                    }
+                    var data = result.data || {};
+                    var failed = parseInt(data.failed, 10) || 0;
+                    var succeeded = parseInt(data.succeeded, 10) || 0;
+                    if (failed > 0 && succeeded === 0) {
+                        throw new Error(result.message || '批量删除失败');
+                    }
+                    if (failed > 0) {
+                        notify('warning', result.message || ('部分删除完成：成功 ' + succeeded + '，失败 ' + failed));
+                    } else {
+                        notify('success', result.message || '批量删除完成');
+                    }
+                    window.location.reload();
+                }).catch(function (error) {
+                    notify('error', messageFrom(error, '批量删除失败'));
+                }).finally(function () {
+                    setBusy([bulkDelete], false);
+                });
             });
         }
 
@@ -4694,6 +4731,7 @@
         if (shippingProfileEl) {
             payload.shipping_profile_code = String(shippingProfileEl.value || '').trim();
         }
+        payload.attributes = mergeWholesaleSellingModeFlag(payload.attributes || []);
         var priceSelector = payload.offer_matrix
             ? '[data-offer-price]:not([data-variant-price])'
             : '[data-offer-price]';
@@ -4831,6 +4869,268 @@
             advancedInput.value = JSON.stringify(merged, null, 2);
         }
         return merged;
+    }
+
+    function mergeWholesaleSellingModeFlag(rows) {
+        var list = Array.isArray(rows) ? rows.slice() : [];
+        var input = document.querySelector('[data-b2b-wholesale-canonical="1"]')
+            || document.querySelector(
+                '#product-create-selling-mode-tob, #product-edit-selling-mode-tob-canonical, [data-testid="b2b-product-wholesale-enabled"]'
+            );
+        if (!input) {
+            return list;
+        }
+        var code = String(input.getAttribute('data-attribute-code') || 'selling_mode_tob').trim();
+        if (code === '') {
+            code = 'selling_mode_tob';
+        }
+        var enabled = !!input.checked;
+        var entityId = parseInt(String(
+            (document.querySelector('[data-product-id]') || {}).getAttribute
+                ? document.querySelector('[data-product-id]').getAttribute('data-product-id')
+                : '0'
+        ) || '0', 10) || 0;
+        var eavRoot = document.getElementById('product-eav-editor');
+        if (eavRoot && entityId <= 0) {
+            entityId = parseInt(String(eavRoot.getAttribute('data-product-id') || '0'), 10) || 0;
+        }
+        var filtered = list.filter(function (row) {
+            return !(row && String(row.attribute_code || '') === code
+                && String(row.entity_type || 'product') === 'product'
+                && parseInt(row.store_id || 0, 10) === 0
+                && String(row.locale || '') === '');
+        });
+        filtered.push({
+            entity_type: 'product',
+            entity_id: entityId,
+            store_id: 0,
+            locale: '',
+            attribute_code: code,
+            value_type: 'boolean',
+            scope_state: 'explicit',
+            cleared: false,
+            value: enabled
+        });
+        return filtered;
+    }
+
+    function syncWholesaleCheckboxes(source) {
+        var canonical = document.querySelector('[data-b2b-wholesale-canonical="1"]');
+        if (!canonical) {
+            return;
+        }
+        var checked = source ? !!source.checked : !!canonical.checked;
+        if (source !== canonical) {
+            canonical.checked = checked;
+        }
+        document.querySelectorAll('[data-b2b-wholesale-mirror="1"]').forEach(function (el) {
+            if (el !== source) {
+                el.checked = checked;
+            }
+        });
+    }
+
+    function markB2bTiersDirty(dirty) {
+        var section = document.getElementById('b2b-product-offers-wholesale');
+        if (!section) {
+            return;
+        }
+        section.setAttribute('data-b2b-tiers-dirty', dirty ? '1' : '0');
+        var hint = section.querySelector('[data-testid="b2b-product-tiers-dirty-hint"]');
+        if (hint) {
+            hint.hidden = !dirty;
+        }
+    }
+
+    function collectB2bTierRows() {
+        var rows = [];
+        var section = document.getElementById('b2b-product-offers-wholesale');
+        if (!section) {
+            return rows;
+        }
+        section.querySelectorAll('[data-b2b-tier-row]').forEach(function (tr) {
+            var skuInput = tr.querySelector('[data-b2b-tier-sku]');
+            var minInput = tr.querySelector('[data-b2b-tier-min-qty]');
+            var amountInput = tr.querySelector('[data-b2b-tier-amount]');
+            if (!skuInput || !minInput || !amountInput) {
+                return;
+            }
+            var sku = String(skuInput.value || '').trim();
+            var amountRaw = String(amountInput.value || '').trim();
+            if (sku === '' || amountRaw === '') {
+                return;
+            }
+            var minQty = parseInt(String(minInput.value || '0'), 10);
+            var amount = parseInt(amountRaw, 10);
+            if (!Number.isInteger(minQty) || minQty < 1) {
+                throw new Error('起订量必须是 ≥ 1 的整数');
+            }
+            if (!Number.isInteger(amount) || amount < 0) {
+                throw new Error('批发价（分）必须是 ≥ 0 的整数');
+            }
+            rows.push({sku: sku, min_qty: minQty, amount_minor: amount});
+        });
+        return rows;
+    }
+
+    function saveB2bProductSkuTiers() {
+        var section = document.getElementById('b2b-product-offers-wholesale');
+        if (!section) {
+            return Promise.resolve(null);
+        }
+        var url = String(section.getAttribute('data-b2b-save-url') || '').trim();
+        if (url === '') {
+            return Promise.reject(new Error('阶梯价保存地址不可用'));
+        }
+        var groupEl = document.getElementById('b2b-product-tier-group');
+        var groupId = groupEl
+            ? String(groupEl.value || '').trim()
+            : String(section.getAttribute('data-b2b-group-id') || '').trim();
+        var body = new URLSearchParams();
+        body.set('website_id', String(section.getAttribute('data-b2b-website-id') || '0'));
+        body.set('product_id', String(section.getAttribute('data-b2b-product-id') || '0'));
+        body.set('group_id', groupId);
+        body.set('expected_version', String(section.getAttribute('data-b2b-list-version') || '0'));
+        var tiers = collectB2bTierRows();
+        body.set('tiers_json', JSON.stringify(tiers));
+        var headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'};
+        if (window.site && window.site.csrf_token) {
+            headers['X-CSRF-TOKEN'] = String(window.site.csrf_token);
+            body.set('form_key', String(window.site.csrf_token));
+        }
+        return fetch(url, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: headers,
+            body: body.toString()
+        }).then(function (response) {
+            return response.json().then(function (json) {
+                if (!response.ok || !json || json.ok !== true) {
+                    var err = new Error((json && (json.error || json.message)) || '保存阶梯价失败');
+                    err.payload = json;
+                    throw err;
+                }
+                var meta = (json.tiers && typeof json.tiers === 'object') ? json.tiers : {};
+                if (meta.version !== undefined) {
+                    section.setAttribute('data-b2b-list-version', String(meta.version || 0));
+                }
+                if (meta.list_id) {
+                    section.setAttribute('data-b2b-list-id', String(meta.list_id));
+                }
+                markB2bTiersDirty(false);
+                return json;
+            });
+        });
+    }
+
+    function saveB2bTiersIfDirty() {
+        var section = document.getElementById('b2b-product-offers-wholesale');
+        if (!section || section.getAttribute('data-b2b-tiers-dirty') !== '1') {
+            return Promise.resolve(null);
+        }
+        return saveB2bProductSkuTiers();
+    }
+
+    function initB2bWholesaleOffersUi() {
+        var section = document.getElementById('b2b-product-offers-wholesale');
+        document.querySelectorAll('[data-b2b-wholesale-canonical="1"], [data-b2b-wholesale-mirror="1"]').forEach(function (input) {
+            input.addEventListener('change', function () {
+                syncWholesaleCheckboxes(input);
+            });
+        });
+        syncWholesaleCheckboxes(null);
+        if (!section) {
+            return;
+        }
+        section.addEventListener('input', function (event) {
+            if (event.target && (
+                event.target.hasAttribute('data-b2b-tier-min-qty')
+                || event.target.hasAttribute('data-b2b-tier-amount')
+            )) {
+                markB2bTiersDirty(true);
+            }
+        });
+        section.addEventListener('change', function (event) {
+            if (event.target && event.target.id === 'b2b-product-tier-group') {
+                var groupId = String(event.target.value || '').trim();
+                var url = new URL(window.location.href);
+                if (groupId) {
+                    url.searchParams.set('b2b_group_id', groupId);
+                } else {
+                    url.searchParams.delete('b2b_group_id');
+                }
+                if (section.getAttribute('data-b2b-tiers-dirty') === '1') {
+                    if (!window.confirm('切换客户组将丢弃未保存的阶梯改动，是否继续？')) {
+                        event.target.value = String(section.getAttribute('data-b2b-group-id') || '');
+                        return;
+                    }
+                }
+                window.location.href = url.toString();
+            }
+        });
+        section.querySelectorAll('[data-b2b-tier-add]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                var sku = String(button.getAttribute('data-b2b-tier-add') || '').trim();
+                if (sku === '') {
+                    return;
+                }
+                var actions = section.querySelector('[data-b2b-tier-sku-actions][data-sku="' + sku.replace(/"/g, '\\"') + '"]');
+                if (!actions || !actions.parentNode) {
+                    return;
+                }
+                var tr = document.createElement('tr');
+                tr.setAttribute('data-b2b-tier-row', '1');
+                tr.setAttribute('data-sku', sku);
+                tr.innerHTML = ''
+                    + '<td><input type="hidden" data-b2b-tier-sku value="' + escapeHtml(sku) + '"></td>'
+                    + '<td><input class="w-input" type="number" min="1" step="1" data-b2b-tier-min-qty value="1"></td>'
+                    + '<td><input class="w-input" type="number" min="0" step="1" data-b2b-tier-amount value="" placeholder="分"></td>'
+                    + '<td><button class="w-button" type="button" data-tone="neutral" data-variant="ghost" data-size="sm" data-b2b-tier-remove>删除</button></td>';
+                actions.parentNode.insertBefore(tr, actions);
+                markB2bTiersDirty(true);
+            });
+        });
+        section.addEventListener('click', function (event) {
+            var remove = event.target && event.target.closest
+                ? event.target.closest('[data-b2b-tier-remove]')
+                : null;
+            if (!remove) {
+                return;
+            }
+            var row = remove.closest('[data-b2b-tier-row]');
+            if (!row) {
+                return;
+            }
+            var sku = String(row.getAttribute('data-sku') || '');
+            var siblings = section.querySelectorAll('[data-b2b-tier-row][data-sku="' + sku.replace(/"/g, '\\"') + '"]');
+            if (siblings.length <= 1) {
+                var amount = row.querySelector('[data-b2b-tier-amount]');
+                if (amount) {
+                    amount.value = '';
+                }
+            } else {
+                row.remove();
+            }
+            markB2bTiersDirty(true);
+        });
+        var saveBtn = section.querySelector('[data-b2b-tiers-save]');
+        if (saveBtn) {
+            saveBtn.addEventListener('click', function () {
+                saveB2bProductSkuTiers()
+                    .then(function () {
+                        notify('success', '阶梯价已保存');
+                    })
+                    .catch(function (error) {
+                        notify('error', messageFrom(error, '保存阶梯价失败'));
+                    });
+            });
+        }
+        window.addEventListener('beforeunload', function (event) {
+            if (section.getAttribute('data-b2b-tiers-dirty') === '1') {
+                event.preventDefault();
+                event.returnValue = '';
+            }
+        });
     }
 
     function escapeHtml(value) {
@@ -6834,7 +7134,11 @@
                     notify('error', messageFrom(error, '请检查编辑内容'));
                     return;
                 }
-                executeCommand('save', payload, form.querySelector('button[type="submit"]'))
+                var submitButton = form.querySelector('button[type="submit"]');
+                saveB2bTiersIfDirty()
+                    .then(function () {
+                        return executeCommand('save', payload, submitButton);
+                    })
                     .then(function () {
                         window.location.reload();
                     })
@@ -6843,6 +7147,8 @@
                     });
             });
         }
+
+        initB2bWholesaleOffersUi();
 
         root.querySelectorAll('[data-product-command]').forEach(function (button) {
             button.addEventListener('click', function () {

@@ -39,7 +39,10 @@ final class OutlinedFieldLabelContractTest extends TestCase
         self::assertStringContainsString('font-size: var(--weline-font-size-xs)', $css);
         self::assertStringContainsString(':placeholder-shown', $css);
         self::assertStringContainsString('[data-floating-label="0"]', $css);
-        self::assertStringContainsString('inset-block-start: 50%', $css);
+        self::assertStringContainsString(
+            'inset-block-start: calc(var(--weline-control-height) / 2)',
+            $css
+        );
         self::assertStringContainsString('display: inline-flex', $css);
         self::assertStringContainsString('-webkit-text-fill-color: transparent', $css);
         self::assertStringContainsString('opacity: 0', $css);

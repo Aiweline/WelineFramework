@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Checkout',
-    "version" => '1.4.67',
+    "version" => '1.4.71',
     "requires" => [
         'Weline_Backend' => '*',
         'Weline_Cart' => '*',
@@ -23,5 +23,7 @@ return [
             => \Weline\Checkout\Service\OrmCheckoutSessionStore::class,
         \Weline\Tax\Api\TaxShadowQuoteSourceInterface::class
             => \Weline\Checkout\Service\CheckoutTaxShadowQuoteSource::class,
+        'payment.express_address_sink.Weline_Checkout'
+            => \Weline\Checkout\Service\CheckoutPaymentExpressAddressSink::class,
     ],
 ];

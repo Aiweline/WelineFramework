@@ -71,22 +71,35 @@ final class CheckoutOrderPaymentService
         $lastPurpose = '';
         foreach ($orderUuids as $orderUuid) {
             $order = $this->orders->get($orderUuid);
+            $hangPurpose = $this->resolveHangPurpose(
+                $order,
+                strtolower(trim((string)($context['hang_purpose'] ?? $context['purpose'] ?? ''))),
+            );
             if (in_array(strtolower(trim($order->status)), ['paid', 'fulfilled', 'completed'], true)) {
+                // P0-2: Order already paid but hang may still need reconcile (async path drift).
+                $reconciled = $this->reconcileHangAfterAlreadyPaid(
+                    $order->orderUuid,
+                    $hangPurpose,
+                    $idempotencyKey,
+                );
                 $transactions[] = [
                     'order_uuid' => $order->orderUuid,
                     'transaction_id' => null,
                     'transaction_no' => '',
                     'method_code' => $methodCode,
                     'status' => 'already_paid',
+                    'hang_reconciled' => $reconciled,
                     'response' => [],
                 ];
+                if ($hangPurpose === 'deposit') {
+                    $hasPartial = true;
+                    $lastPurpose = 'deposit';
+                } elseif ($hangPurpose === 'balance') {
+                    $lastPurpose = 'balance';
+                }
                 continue;
             }
             $amountMinor = (int)($order->money['grand_total_minor'] ?? 0);
-            $hangPurpose = $this->resolveHangPurpose(
-                $order,
-                strtolower(trim((string)($context['hang_purpose'] ?? $context['purpose'] ?? ''))),
-            );
             $typePayload = $order->typePayload;
             if ($hangPurpose === 'deposit' || ($hangPurpose === '' && strtolower($order->orderType) === 'tob')) {
                 $hangPurpose = $hangPurpose !== '' ? $hangPurpose : 'deposit';
@@ -112,9 +125,12 @@ final class CheckoutOrderPaymentService
                 }
             }
 
-            $creditReserved = $this->reserveB2bCreditForDeposit($order, $typePayload, $idempotencyKey);
-            if ($creditReserved !== null) {
-                $typePayload = $creditReserved;
+            // P0-4: credit reserve only for deposit purpose (never on balance).
+            if ($hangPurpose === 'deposit') {
+                $creditReserved = $this->reserveB2bCreditForDeposit($order, $typePayload, $idempotencyKey);
+                if ($creditReserved !== null) {
+                    $typePayload = $creditReserved;
+                }
             }
 
             // Zero cash deposit: credit covered the deposit — skip PSP, mark deposit paid.
@@ -168,6 +184,24 @@ final class CheckoutOrderPaymentService
                 'idempotency_key' => $idempotencyKey . ':' . $order->orderUuid
                     . ($hangPurpose !== '' ? ':' . $hangPurpose : ''),
             ];
+            if (!empty($context['express_checkout'])) {
+                try {
+                    /** @var \Weline\Payment\Api\PaymentExpressFacadeInterface $express */
+                    $express = ObjectManager::getInstance(\Weline\Payment\Api\PaymentExpressFacadeInterface::class);
+                    $paymentContext = $express->withExpressContext($paymentContext, $methodCode);
+                } catch (\Throwable) {
+                    $paymentContext['express_checkout'] = true;
+                    $paymentContext['metadata']['express_checkout'] = true;
+                }
+            }
+            $guestToken = trim((string) ($context['guest_token'] ?? ''));
+            if ($guestToken !== '') {
+                $paymentContext['guest_token'] = $guestToken;
+                $paymentContext['metadata']['guest_token'] = $guestToken;
+            }
+            if (array_key_exists('requires_shipping', $context)) {
+                $paymentContext['requires_shipping'] = (bool) $context['requires_shipping'];
+            }
             foreach (['country_code', 'language_code', 'locale', 'timezone', 'scope', 'environment'] as $key) {
                 if (array_key_exists($key, $context) && !is_array($context[$key])) {
                     $paymentContext[$key] = $context[$key];
@@ -186,19 +220,39 @@ final class CheckoutOrderPaymentService
                 'source' => 'payment_return',
                 'checkout_group_uuid' => $order->checkoutGroupUuid,
             ];
+            if ($hangPurpose !== '') {
+                $landingExtras['purpose'] = $hangPurpose;
+            }
             if ($checkoutToken !== '') {
                 $landingExtras['checkout_token'] = $checkoutToken;
             }
-            $paymentContext['browser_landing_url'] = $this->successUrlBuilder->buildForOrders(
-                [$order->orderUuid],
-                $landingExtras,
-            );
+            $expressCheckout = !empty($context['express_checkout']);
+            $explicitLanding = trim((string) ($context['browser_landing_url'] ?? ''));
+            if ($expressCheckout) {
+                $paymentContext['browser_landing_url'] = $explicitLanding !== ''
+                    ? $explicitLanding
+                    : $this->successUrlBuilder->buildExpressReview([
+                        'checkout_group_uuid' => $order->checkoutGroupUuid,
+                        'checkout_token' => $checkoutToken !== '' ? $checkoutToken : null,
+                    ]);
+                $paymentContext['express_checkout'] = true;
+            } else {
+                $paymentContext['browser_landing_url'] = $explicitLanding !== ''
+                    ? $explicitLanding
+                    : $this->successUrlBuilder->buildForOrders(
+                        [$order->orderUuid],
+                        $landingExtras,
+                    );
+            }
             $landingParams = [];
             if ($order->checkoutGroupUuid !== '') {
                 $landingParams['checkout_group_uuid'] = $order->checkoutGroupUuid;
             }
             if ($checkoutToken !== '') {
                 $landingParams['checkout_token'] = $checkoutToken;
+            }
+            if ($hangPurpose !== '') {
+                $landingParams['purpose'] = $hangPurpose;
             }
             if ($landingParams !== []) {
                 $paymentContext['browser_landing_params'] = $landingParams;
@@ -213,6 +267,29 @@ final class CheckoutOrderPaymentService
             if (!$transaction instanceof PaymentTransactionRecord) {
                 $this->releaseB2bCreditForDeposit($order->orderUuid, $typePayload, $idempotencyKey);
                 throw new \RuntimeException('checkout_payment_method_unavailable');
+            }
+
+            if ($expressCheckout && trim((string) $transaction->transactionNumber) !== '') {
+                // Prefer landing with transaction_no so popup return can open review directly.
+                $paymentContext['browser_landing_url'] = $this->successUrlBuilder->buildExpressReview([
+                    'transaction_no' => $transaction->transactionNumber,
+                    'checkout_group_uuid' => $order->checkoutGroupUuid !== '' ? $order->checkoutGroupUuid : null,
+                    'checkout_token' => $checkoutToken !== '' ? $checkoutToken : null,
+                ]);
+                try {
+                    /** @var \Weline\Payment\Service\PaymentCheckoutSessionPersistenceService $sessions */
+                    $sessions = ObjectManager::getInstance(
+                        \Weline\Payment\Service\PaymentCheckoutSessionPersistenceService::class
+                    );
+                    if (is_object($sessions) && method_exists($sessions, 'updateBrowserLanding')) {
+                        $sessions->updateBrowserLanding(
+                            (string) $transaction->transactionNumber,
+                            $paymentContext['browser_landing_url'],
+                            ['transaction_no' => $transaction->transactionNumber] + $landingParams,
+                        );
+                    }
+                } catch (\Throwable) {
+                }
             }
 
             $status = strtolower(trim($transaction->status));
@@ -328,17 +405,16 @@ final class CheckoutOrderPaymentService
     /** @return array{deposit_amount_minor?:int,balance_amount_minor?:int,hang_status?:string}|null */
     private function hangForOrder(string $orderUuid): ?array
     {
-        if (!class_exists(\Weline\B2B\Service\B2BHangOrderService::class)) {
+        if (!interface_exists(\Weline\B2B\Api\B2BHangPaymentBridgeInterface::class)) {
             return null;
         }
         try {
-            $service = ObjectManager::getInstance(\Weline\B2B\Service\B2BHangOrderService::class);
-            if (!$service instanceof \Weline\B2B\Service\B2BHangOrderService) {
+            $bridge = ObjectManager::getInstance(\Weline\B2B\Api\B2BHangPaymentBridgeInterface::class);
+            if (!$bridge instanceof \Weline\B2B\Api\B2BHangPaymentBridgeInterface) {
                 return null;
             }
-            $hang = $service->getByOrderRef($orderUuid);
 
-            return $hang?->toArray();
+            return $bridge->getHangByOrderRef($orderUuid);
         } catch (\Throwable) {
             return null;
         }
@@ -357,17 +433,93 @@ final class CheckoutOrderPaymentService
 
     private function notifyHangDepositPaid(string $orderUuid, string $intentCode): void
     {
-        if (!class_exists(\Weline\B2B\Service\B2BHangOrderService::class)) {
+        if (!interface_exists(\Weline\B2B\Api\B2BHangPaymentBridgeInterface::class)) {
             return;
         }
         try {
-            $service = ObjectManager::getInstance(\Weline\B2B\Service\B2BHangOrderService::class);
-            if (!$service instanceof \Weline\B2B\Service\B2BHangOrderService) {
+            $bridge = ObjectManager::getInstance(\Weline\B2B\Api\B2BHangPaymentBridgeInterface::class);
+            if (!$bridge instanceof \Weline\B2B\Api\B2BHangPaymentBridgeInterface) {
                 return;
             }
-            $service->onDepositPaid($orderUuid, $intentCode !== '' ? $intentCode : 'deposit_' . $orderUuid);
+            $bridge->onDepositPaid($orderUuid, $intentCode !== '' ? $intentCode : 'deposit_' . $orderUuid);
+            $this->markOrderPaymentPartial($orderUuid);
         } catch (\Throwable) {
             // Hang row may be absent in unit fixtures; payment amount path still stands.
+        }
+    }
+
+    /** P0-2: when Order is already paid, still advance hang if purpose requires it. */
+    private function reconcileHangAfterAlreadyPaid(
+        string $orderUuid,
+        string $hangPurpose,
+        string $idempotencyKey,
+    ): bool {
+        if ($hangPurpose !== 'deposit' && $hangPurpose !== 'balance') {
+            return false;
+        }
+        if (!interface_exists(\Weline\B2B\Api\B2BHangPaymentBridgeInterface::class)) {
+            return false;
+        }
+        try {
+            $bridge = ObjectManager::getInstance(\Weline\B2B\Api\B2BHangPaymentBridgeInterface::class);
+            if (!$bridge instanceof \Weline\B2B\Api\B2BHangPaymentBridgeInterface) {
+                return false;
+            }
+            $intent = 'already_paid_' . $hangPurpose . '_' . ($idempotencyKey !== '' ? $idempotencyKey : $orderUuid);
+            $before = $bridge->getHangByOrderRef($orderUuid);
+            $bridge->reconcilePaymentSuccess($orderUuid, $hangPurpose, $intent);
+            if ($hangPurpose === 'deposit') {
+                $this->markOrderPaymentPartial($orderUuid);
+            }
+            $after = $bridge->getHangByOrderRef($orderUuid);
+
+            return ($before['hang_status'] ?? null) !== ($after['hang_status'] ?? null)
+                || ($after !== null && in_array((string)($after['hang_status'] ?? ''), [
+                    'awaiting_merchant_approval',
+                    'awaiting_balance',
+                    'completed',
+                ], true));
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function markOrderPaymentPartial(string $orderUuid): void
+    {
+        $orderUuid = trim($orderUuid);
+        if ($orderUuid === '') {
+            return;
+        }
+        try {
+            if ($this->orders instanceof \Weline\Order\Api\OrderFacadeInterface) {
+                $this->orders->mergeTypePayload($orderUuid, [
+                    'payment_status' => 'partial',
+                    'hang_status' => 'awaiting_merchant_approval',
+                ]);
+            }
+        } catch (\Throwable) {
+            // Soft-fail projection.
+        }
+        try {
+            if (!class_exists(\Weline\Order\Model\Order::class)) {
+                return;
+            }
+            /** @var \Weline\Order\Model\Order $model */
+            $model = ObjectManager::getInstance(\Weline\Order\Model\Order::class);
+            $model->reset()->load(\Weline\Order\Model\Order::schema_fields_ORDER_UUID, $orderUuid);
+            if (!(int)$model->getId()) {
+                return;
+            }
+            $current = strtolower(trim((string)$model->getData(\Weline\Order\Model\Order::schema_fields_PAYMENT_STATUS)));
+            if ($current === \Weline\Order\Model\Order::PAYMENT_STATUS_PAID) {
+                return;
+            }
+            $model->setData(
+                \Weline\Order\Model\Order::schema_fields_PAYMENT_STATUS,
+                \Weline\Order\Model\Order::PAYMENT_STATUS_PARTIAL,
+            )->save();
+        } catch (\Throwable) {
+            // Soft-fail DB write.
         }
     }
 
@@ -381,6 +533,10 @@ final class CheckoutOrderPaymentService
         string $idempotencyKey,
     ): ?array {
         if (strtolower($order->orderType) !== 'tob') {
+            return null;
+        }
+        $creditStatus = strtolower(trim((string)($typePayload['b2b_credit_status'] ?? '')));
+        if (in_array($creditStatus, ['committed', 'released'], true)) {
             return null;
         }
         $applyBase = max(0, (int)($typePayload['b2b_credit_apply_base_minor'] ?? 0));
@@ -444,7 +600,7 @@ final class CheckoutOrderPaymentService
                 return;
             }
             $result = $orch->releaseOnFailure($typePayload, $orderUuid, $idempotencyKey);
-            if ($this->orders instanceof \Weline\Order\Service\OrderFacade) {
+            if ($this->orders instanceof \Weline\Order\Api\OrderFacadeInterface) {
                 $this->orders->mergeTypePayload($orderUuid, $result['type_payload']);
             }
         } catch (\Throwable) {
@@ -454,15 +610,15 @@ final class CheckoutOrderPaymentService
 
     private function notifyHangBalancePaid(string $orderUuid, string $intentCode): void
     {
-        if (!class_exists(\Weline\B2B\Service\B2BHangOrderService::class)) {
+        if (!interface_exists(\Weline\B2B\Api\B2BHangPaymentBridgeInterface::class)) {
             return;
         }
         try {
-            $service = ObjectManager::getInstance(\Weline\B2B\Service\B2BHangOrderService::class);
-            if (!$service instanceof \Weline\B2B\Service\B2BHangOrderService) {
+            $bridge = ObjectManager::getInstance(\Weline\B2B\Api\B2BHangPaymentBridgeInterface::class);
+            if (!$bridge instanceof \Weline\B2B\Api\B2BHangPaymentBridgeInterface) {
                 return;
             }
-            $service->onBalancePaid($orderUuid, $intentCode !== '' ? $intentCode : 'balance_' . $orderUuid);
+            $bridge->onBalancePaid($orderUuid, $intentCode !== '' ? $intentCode : 'balance_' . $orderUuid);
         } catch (\Throwable) {
             // Soft-fail: balance charge already succeeded at Payment boundary.
         }

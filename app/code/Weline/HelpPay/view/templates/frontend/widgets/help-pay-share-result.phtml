@@ -1,0 +1,63 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+$url = trim((string) ($this->getData('url') ?? ''));
+$title = trim((string) ($this->getData('share_title') ?? ''));
+$hint = trim((string) ($this->getData('share_hint') ?? ''));
+if ($title === '') {
+    $title = (string) __('分享给付款人');
+}
+$escape = static fn ($v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
+$uid = 'helppay-share-url-' . substr(sha1($url !== '' ? $url : uniqid('hp', true)), 0, 8);
+?>
+<div class="w-helppay-share-result w-helppay-panel"
+     data-testid="help-pay-share-result"
+     data-helppay-share-result="1"
+     data-share-url="<?= $escape($url) ?>"
+     data-weline-load="helpPayShare">
+    <div class="w-stack" style="--w-gap:var(--weline-space-1, var(--space-1)); --w-mb:var(--weline-space-3, var(--space-3));">
+        <p class="w-helppay-share-result__title w-text" data-weight="strong" style="--w-m:0;"><?= $escape($title) ?></p>
+        <?php if ($hint !== ''): ?>
+            <p class="w-text" data-size="sm" data-tone="muted" style="--w-m:0;"><?= $escape($hint) ?></p>
+        <?php endif; ?>
+    </div>
+    <div class="w-helppay-share-result__grid">
+        <div class="w-helppay-share-result__url-block">
+            <label class="w-field" for="<?= $escape($uid) ?>">
+                <span class="w-field__label"><?= $escape(__('链接地址')) ?></span>
+                <input id="<?= $escape($uid) ?>"
+                       class="w-input"
+                       type="text"
+                       readonly
+                       data-testid="help-pay-share-url"
+                       value="<?= $escape($url) ?>">
+            </label>
+            <button type="button"
+                    class="w-button w-button--primary"
+                    data-testid="help-pay-copy-url"
+                    data-helppay-copy-url="1">
+                <?= $escape(__('复制链接')) ?>
+            </button>
+        </div>
+        <div class="w-helppay-share-result__qr-block">
+            <div class="w-helppay-share-result__qr-frame">
+                <canvas data-testid="help-pay-share-qr"
+                        data-helppay-qr-canvas="1"
+                        width="160"
+                        height="160"
+                        aria-label="<?= $escape(__('分享二维码')) ?>"></canvas>
+            </div>
+            <button type="button"
+                    class="w-button w-button--secondary"
+                    data-testid="help-pay-copy-qr"
+                    data-helppay-copy-qr="1">
+                <?= $escape(__('复制二维码图片')) ?>
+            </button>
+            <a class="w-helppay-share-result__dl w-text"
+               data-size="sm"
+               data-testid="help-pay-download-qr"
+               data-helppay-download-qr="1"
+               hidden
+               download="helppay-qr.png"><?= $escape(__('下载二维码')) ?></a>
+        </div>
+    </div>
+</div>

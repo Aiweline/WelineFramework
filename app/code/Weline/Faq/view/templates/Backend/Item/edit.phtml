@@ -1,6 +1,6 @@
 <?php
 /**
- * FAQ item edit form (minimal usable admin).
+ * FAQ item edit form — Weline UI 2.0.
  *
  * @var \Weline\Framework\View\Template $this
  */
@@ -15,16 +15,23 @@ $websiteId = (string)(int)($item['website_id'] ?? 0);
 $typeCode = (string)($item['type_code'] ?? 'site');
 $status = (string)($item['status'] ?? 'enabled');
 ?>
-<div class="faq-item-edit" style="max-width:720px">
-    <div class="mb-3">
-        <a href="<?= $escape($listingUrl) ?>">&larr; <?= $escape(__('返回列表')) ?></a>
-        <h1 class="h4 mt-2"><?= $escape($faqId > 0 ? __('编辑 FAQ 条目') : __('新建 FAQ 条目')) ?></h1>
+<div class="w-container faq-item-edit" style="--w-pt:0;--w-pb:var(--weline-space-4);max-inline-size:40rem;" data-testid="faq-item-edit">
+    <div class="w-toolbar" style="--w-mb:var(--weline-space-4);">
+        <a class="w-button" href="<?= $escape($listingUrl) ?>" data-tone="neutral" data-variant="ghost" data-size="sm">
+            <w:icon name="arrow-left" size="sm"></w:icon><?= $escape(__('返回列表')) ?>
+        </a>
     </div>
-    <form method="post" action="<?= $escape($saveUrl) ?>" class="d-grid gap-3">
+
+    <div class="w-text" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-4);">
+        <?= $escape($faqId > 0 ? __('编辑 FAQ 条目') : __('新建 FAQ 条目')) ?>
+    </div>
+
+    <form method="post" action="<?= $escape($saveUrl) ?>" class="w-stack" style="--w-gap:var(--weline-space-4);">
         <input type="hidden" name="faq_id" value="<?= $faqId ?>">
-        <div>
-            <label class="form-label"><?= $escape(__('网站')) ?></label>
-            <select class="form-select" name="website_id">
+
+        <div class="w-field">
+            <label class="w-label" for="faq-website-id"><?= $escape(__('网站')) ?></label>
+            <select class="w-select" id="faq-website-id" name="website_id">
                 <option value="0"><?= $escape(__('全局（0）')) ?></option>
                 <?php foreach ($websites as $website): ?>
                     <?php if (!is_array($website)) { continue; } ?>
@@ -35,47 +42,56 @@ $status = (string)($item['status'] ?? 'enabled');
                 <?php endforeach; ?>
             </select>
         </div>
-        <div>
-            <label class="form-label"><?= $escape(__('语言代码')) ?></label>
-            <input class="form-control" name="locale_code" value="<?= $escape($item['locale_code'] ?? '') ?>"
+
+        <div class="w-field">
+            <label class="w-label" for="faq-locale-code"><?= $escape(__('语言代码')) ?></label>
+            <input class="w-input" id="faq-locale-code" name="locale_code" value="<?= $escape($item['locale_code'] ?? '') ?>"
                    placeholder="zh_Hans_CN / en_US / 空=全部">
+            <div class="w-help"><?= $escape(__('留空表示适用于全部语言。')) ?></div>
         </div>
-        <div>
-            <label class="form-label"><?= $escape(__('类型')) ?></label>
-            <select class="form-select" name="type_code" required>
+
+        <div class="w-field">
+            <label class="w-label" for="faq-type-code"><?= $escape(__('类型')) ?></label>
+            <select class="w-select" id="faq-type-code" name="type_code" required>
                 <?php foreach ($typeCodes as $code): ?>
                     <option value="<?= $escape($code) ?>" <?= $typeCode === (string)$code ? 'selected' : '' ?>><?= $escape($code) ?></option>
                 <?php endforeach; ?>
             </select>
         </div>
-        <div>
-            <label class="form-label"><?= $escape(__('实体 UUID')) ?></label>
-            <input class="form-control" name="entity_uuid" required value="<?= $escape($item['entity_uuid'] ?? '') ?>"
+
+        <div class="w-field">
+            <label class="w-label" for="faq-entity-uuid"><?= $escape(__('实体 UUID')) ?></label>
+            <input class="w-input" id="faq-entity-uuid" name="entity_uuid" required value="<?= $escape($item['entity_uuid'] ?? '') ?>"
                    placeholder="site / product offer or product uuid">
         </div>
-        <div>
-            <label class="form-label"><?= $escape(__('问题')) ?></label>
-            <input class="form-control" name="question" required value="<?= $escape($item['question'] ?? '') ?>">
+
+        <div class="w-field">
+            <label class="w-label" for="faq-question"><?= $escape(__('问题')) ?></label>
+            <input class="w-input" id="faq-question" name="question" required value="<?= $escape($item['question'] ?? '') ?>">
         </div>
-        <div>
-            <label class="form-label"><?= $escape(__('答案')) ?></label>
-            <textarea class="form-control" name="answer" rows="6" required><?= $escape($item['answer'] ?? '') ?></textarea>
+
+        <div class="w-field">
+            <label class="w-label" for="faq-answer"><?= $escape(__('答案')) ?></label>
+            <textarea class="w-input" id="faq-answer" name="answer" rows="6" required><?= $escape($item['answer'] ?? '') ?></textarea>
         </div>
-        <div class="row g-2">
-            <div class="col-md-6">
-                <label class="form-label"><?= $escape(__('排序')) ?></label>
-                <input class="form-control" type="number" name="sort_order" value="<?= (int)($item['sort_order'] ?? 0) ?>">
+
+        <div class="w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-3);">
+            <div class="w-field" style="flex:1 1 10rem;">
+                <label class="w-label" for="faq-sort-order"><?= $escape(__('排序')) ?></label>
+                <input class="w-input" id="faq-sort-order" type="number" name="sort_order" value="<?= (int)($item['sort_order'] ?? 0) ?>">
             </div>
-            <div class="col-md-6">
-                <label class="form-label"><?= $escape(__('状态')) ?></label>
-                <select class="form-select" name="status">
+            <div class="w-field" style="flex:1 1 10rem;">
+                <label class="w-label" for="faq-status"><?= $escape(__('状态')) ?></label>
+                <select class="w-select" id="faq-status" name="status">
                     <option value="enabled" <?= $status === 'enabled' ? 'selected' : '' ?>><?= $escape(__('启用')) ?></option>
                     <option value="disabled" <?= $status === 'disabled' ? 'selected' : '' ?>><?= $escape(__('禁用')) ?></option>
                 </select>
             </div>
         </div>
-        <div>
-            <button class="btn btn-primary" type="submit"><?= $escape(__('保存')) ?></button>
+
+        <div class="w-toolbar">
+            <button class="w-button" type="submit" data-tone="primary"><?= $escape(__('保存')) ?></button>
+            <a class="w-button" href="<?= $escape($listingUrl) ?>" data-tone="neutral" data-variant="ghost"><?= $escape(__('取消')) ?></a>
         </div>
     </form>
 </div>

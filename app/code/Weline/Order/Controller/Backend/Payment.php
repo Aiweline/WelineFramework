@@ -51,7 +51,7 @@ class Payment extends BackendController
         if (!$orderId || !$paymentData['amount'] || !$paymentData['payment_method']) {
             $this->getMessageManager()->addError(\__('参数错误'));
             // 使用显式后台订单详情路由，避免生成错误的模块前缀
-            $this->redirect('weline_order/backend/order/view?id=' . $orderId);
+            $this->redirect('order/backend/order/view?id=' . $orderId);
             return;
         }
         
@@ -67,7 +67,7 @@ class Payment extends BackendController
         }
         
         // 支付处理完成后返回订单详情
-        $this->redirect('weline_order/backend/order/view?id=' . $orderId);
+        $this->redirect('order/backend/order/view?id=' . $orderId);
     }
     
     /**
@@ -82,7 +82,7 @@ class Payment extends BackendController
         if (!$paymentId || !$amount) {
             $this->getMessageManager()->addError(\__('参数错误'));
             // 参数错误时返回订单列表
-            $this->redirect('weline_order/backend/order/index');
+            $this->redirect('order/backend/order/index');
             return;
         }
         
@@ -98,15 +98,15 @@ class Payment extends BackendController
             $orderId = (int)$payment->getData(\Weline\Order\Model\OrderPayment::schema_fields_ORDER_ID);
             $this->getMessageManager()->addSuccess(\__('退款成功'));
             // 退款成功后返回订单详情
-            $this->redirect('weline_order/backend/order/view?id=' . $orderId);
+            $this->redirect('order/backend/order/view?id=' . $orderId);
         } catch (FrontendQueryException $exception) {
             $this->request->getResponse()->setCode(403);
             $this->getMessageManager()->addError($exception->getMessage());
-            $this->redirect('weline_order/backend/order/index');
+            $this->redirect('order/backend/order/index');
         } catch (\Exception $e) {
             $this->getMessageManager()->addError($e->getMessage());
             // 失败时返回订单列表
-            $this->redirect('weline_order/backend/order/index');
+            $this->redirect('order/backend/order/index');
         }
     }
 }

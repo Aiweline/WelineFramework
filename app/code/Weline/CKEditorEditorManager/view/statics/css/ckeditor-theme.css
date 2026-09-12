@@ -1,0 +1,192 @@
+/**
+ * CKEditor theme bridge: page chrome follows dark mode; editable content stays
+ * a light (normal-mode) reading surface so storefront HTML preview stays readable.
+ * Light-island leaf values match Theme foundation :root (not dark remaps).
+ */
+
+/* Dark page: map editor chrome / panels to backend theme tokens */
+html[data-theme="dark"] .ck.ck-editor,
+html[data-theme-mode="dark"] .ck.ck-editor,
+body[data-theme-mode="dark"] .ck.ck-editor,
+html[data-theme="dark"] .ck.ck-toolbar,
+html[data-theme-mode="dark"] .ck.ck-toolbar,
+body[data-theme-mode="dark"] .ck.ck-toolbar {
+    --ck-color-base-background: var(--weline-theme-surface);
+    --ck-color-base-foreground: var(--weline-theme-surface-muted);
+    --ck-color-base-border: var(--weline-theme-border);
+    --ck-color-base-text: var(--weline-theme-text);
+    --ck-color-text: var(--weline-theme-text);
+    --ck-color-toolbar-background: var(--weline-theme-surface);
+    --ck-color-toolbar-border: var(--weline-theme-border);
+    --ck-color-button-default: var(--weline-theme-text);
+    --ck-color-button-default-background: transparent;
+    --ck-color-button-default-hover-background: var(--weline-theme-surface-hover);
+    --ck-color-button-default-active-background: var(--weline-theme-surface-muted);
+    --ck-color-button-on-background: var(--weline-theme-primary-surface);
+    --ck-color-button-on-color: var(--weline-theme-primary);
+    --ck-color-button-on-hover-background: var(--weline-theme-primary-surface);
+    --ck-color-dropdown-panel-background: var(--weline-theme-surface-raised);
+    --ck-color-dropdown-panel-border: var(--weline-theme-border);
+    --ck-color-list-background: var(--weline-theme-surface-raised);
+    --ck-color-list-button-hover-background: var(--weline-theme-surface-hover);
+    --ck-color-panel-background: var(--weline-theme-surface-raised);
+    --ck-color-panel-border: var(--weline-theme-border);
+    --ck-color-input-background: var(--weline-theme-surface);
+    --ck-color-input-border: var(--weline-theme-border-strong);
+    --ck-color-input-text: var(--weline-theme-text);
+    --ck-color-focus-border: var(--weline-theme-focus, var(--weline-theme-primary));
+    --ck-border-radius: var(--weline-radius-md, 0.5rem);
+    color: var(--weline-theme-text);
+}
+
+html[data-theme="dark"] .ck.ck-toolbar .ck-button,
+html[data-theme-mode="dark"] .ck.ck-toolbar .ck-button,
+body[data-theme-mode="dark"] .ck.ck-toolbar .ck-button,
+html[data-theme="dark"] .ck.ck-toolbar .ck-dropdown__button,
+html[data-theme-mode="dark"] .ck.ck-toolbar .ck-dropdown__button,
+body[data-theme-mode="dark"] .ck.ck-toolbar .ck-dropdown__button {
+    color: var(--weline-theme-text) !important;
+}
+
+/*
+ * CK IconView paints .ck-icon__fill via inline style.fill; paths often keep black fill.
+ * color/currentColor alone is not enough — force fill on toolbar icons.
+ */
+html[data-theme="dark"] .ck.ck-toolbar .ck-icon,
+html[data-theme-mode="dark"] .ck.ck-toolbar .ck-icon,
+body[data-theme-mode="dark"] .ck.ck-toolbar .ck-icon {
+    color: var(--weline-theme-text) !important;
+}
+
+html[data-theme="dark"] .ck.ck-toolbar .ck-button__label,
+html[data-theme-mode="dark"] .ck.ck-toolbar .ck-button__label,
+body[data-theme-mode="dark"] .ck.ck-toolbar .ck-button__label {
+    color: var(--weline-theme-text) !important;
+}
+
+html[data-theme="dark"] .ck.ck-toolbar .ck-icon .ck-icon__fill,
+html[data-theme-mode="dark"] .ck.ck-toolbar .ck-icon .ck-icon__fill,
+body[data-theme-mode="dark"] .ck.ck-toolbar .ck-icon .ck-icon__fill,
+html[data-theme="dark"] .ck.ck-toolbar .ck-icon.ck-icon_inherit-color :not([fill]),
+html[data-theme-mode="dark"] .ck.ck-toolbar .ck-icon.ck-icon_inherit-color :not([fill]),
+body[data-theme-mode="dark"] .ck.ck-toolbar .ck-icon.ck-icon_inherit-color :not([fill]),
+html[data-theme="dark"] .ck.ck-toolbar .ck-icon path:not([fill]),
+html[data-theme-mode="dark"] .ck.ck-toolbar .ck-icon path:not([fill]),
+body[data-theme-mode="dark"] .ck.ck-toolbar .ck-icon path:not([fill]),
+html[data-theme="dark"] .ck.ck-toolbar .ck-icon path[fill="currentColor"],
+html[data-theme-mode="dark"] .ck.ck-toolbar .ck-icon path[fill="currentColor"],
+body[data-theme-mode="dark"] .ck.ck-toolbar .ck-icon path[fill="currentColor"],
+html[data-theme="dark"] .ck.ck-toolbar .ck-icon path[fill="#000"],
+html[data-theme-mode="dark"] .ck.ck-toolbar .ck-icon path[fill="#000"],
+body[data-theme-mode="dark"] .ck.ck-toolbar .ck-icon path[fill="#000"],
+html[data-theme="dark"] .ck.ck-toolbar .ck-icon path[fill="#000000"],
+html[data-theme-mode="dark"] .ck.ck-toolbar .ck-icon path[fill="#000000"],
+body[data-theme-mode="dark"] .ck.ck-toolbar .ck-icon path[fill="#000000"],
+html[data-theme="dark"] .ck.ck-toolbar .ck-icon path[fill="black"],
+html[data-theme-mode="dark"] .ck.ck-toolbar .ck-icon path[fill="black"],
+body[data-theme-mode="dark"] .ck.ck-toolbar .ck-icon path[fill="black"],
+html[data-theme="dark"] .ck.ck-toolbar .ck-button svg path:not([fill-opacity]),
+html[data-theme-mode="dark"] .ck.ck-toolbar .ck-button svg path:not([fill-opacity]),
+body[data-theme-mode="dark"] .ck.ck-toolbar .ck-button svg path:not([fill-opacity]) {
+    fill: var(--weline-theme-text) !important;
+}
+
+html[data-theme="dark"] .ck.ck-toolbar .ck-icon svg *[stroke]:not([stroke="none"]),
+html[data-theme-mode="dark"] .ck.ck-toolbar .ck-icon svg *[stroke]:not([stroke="none"]),
+body[data-theme-mode="dark"] .ck.ck-toolbar .ck-icon svg *[stroke]:not([stroke="none"]) {
+    stroke: var(--weline-theme-text) !important;
+}
+
+/* Active / on button: keep primary ink readable on tinted chip */
+html[data-theme="dark"] .ck.ck-toolbar .ck-button.ck-on,
+html[data-theme-mode="dark"] .ck.ck-toolbar .ck-button.ck-on,
+body[data-theme-mode="dark"] .ck.ck-toolbar .ck-button.ck-on {
+    color: var(--weline-theme-primary) !important;
+}
+
+html[data-theme="dark"] .ck.ck-toolbar .ck-button.ck-on .ck-icon .ck-icon__fill,
+html[data-theme-mode="dark"] .ck.ck-toolbar .ck-button.ck-on .ck-icon .ck-icon__fill,
+body[data-theme-mode="dark"] .ck.ck-toolbar .ck-button.ck-on .ck-icon .ck-icon__fill,
+html[data-theme="dark"] .ck.ck-toolbar .ck-button.ck-on .ck-icon path:not([fill-opacity]),
+html[data-theme-mode="dark"] .ck.ck-toolbar .ck-button.ck-on .ck-icon path:not([fill-opacity]),
+body[data-theme-mode="dark"] .ck.ck-toolbar .ck-button.ck-on .ck-icon path:not([fill-opacity]) {
+    fill: currentColor !important;
+}
+
+/* Hide the source textarea once Classic editor chrome is mounted (avoids light-ink ghost). */
+.w-product-description-editor:has(.ck.ck-editor) {
+    position: relative;
+    overflow: clip;
+}
+
+.ck.ck-editor ~ textarea[editor],
+.ck.ck-editor ~ textarea.ck-source,
+textarea[editor].ck-hidden,
+.w-product-description-editor:has(.ck.ck-editor) > textarea.w-input {
+    position: absolute !important;
+    inline-size: 1px !important;
+    block-size: 1px !important;
+    padding: 0 !important;
+    margin: -1px !important;
+    overflow: hidden !important;
+    clip: rect(0, 0, 0, 0) !important;
+    white-space: nowrap !important;
+    border: 0 !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+
+/*
+ * Content island: always normal (light) mode.
+ * Re-pin --weline-theme-text so foundation h1–h6 { color: var(--weline-theme-text) }
+ * does not leak dark-mode light ink onto the white editable canvas.
+ */
+.ck.ck-editor .ck-editor__editable,
+.ck.ck-editor .ck-content,
+.ck.ck-editor__editable.ck-content {
+    color-scheme: light;
+    --weline-theme-text: #182230;
+    --weline-theme-text-muted: #637083;
+    --weline-theme-text-subtle: #8490a2;
+    --weline-theme-surface: #ffffff;
+    --weline-theme-surface-raised: #ffffff;
+    --weline-theme-surface-muted: #eef1f6;
+    --weline-theme-border: #d7dde7;
+    --weline-theme-border-strong: #aeb8c7;
+    --backend-color-text: #172033;
+    --backend-color-text-primary: #172033;
+    --ck-color-base-background: #ffffff;
+    --ck-color-base-text: #182230;
+    --ck-color-engine-placeholder-text: #8490a2;
+    color: var(--weline-theme-text);
+    background-color: #ffffff;
+}
+
+.ck.ck-editor .ck-editor__editable h1,
+.ck.ck-editor .ck-editor__editable h2,
+.ck.ck-editor .ck-editor__editable h3,
+.ck.ck-editor .ck-editor__editable h4,
+.ck.ck-editor .ck-editor__editable h5,
+.ck.ck-editor .ck-editor__editable h6,
+.ck.ck-editor .ck-content h1,
+.ck.ck-editor .ck-content h2,
+.ck.ck-editor .ck-content h3,
+.ck.ck-editor .ck-content h4,
+.ck.ck-editor .ck-content h5,
+.ck.ck-editor .ck-content h6,
+.ck.ck-editor .ck-content p,
+.ck.ck-editor .ck-content li,
+.ck.ck-editor .ck-content span,
+.ck.ck-editor .ck-content strong,
+.ck.ck-editor .ck-content em {
+    color: var(--weline-theme-text);
+}
+
+.ck.ck-editor .ck-content a {
+    color: var(--weline-theme-primary);
+}
+
+.ck.ck-editor .ck-content blockquote {
+    color: var(--weline-theme-text-muted);
+    border-inline-start-color: var(--weline-theme-border-strong);
+}

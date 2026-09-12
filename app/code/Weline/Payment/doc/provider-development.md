@@ -2,6 +2,8 @@
 
 本文面向接入 `Weline_Payment` 万能支付壳的第三方支付模块。新支付方式不继承抽象类，只实现一个 Provider 接口类，并交付 checkout 模板和 SystemConfig 配置模板。
 
+**硬性同构（MCP `shell_provider_business_isomorph`）**：该支付方式的全部渠道业务（创建/退款/回调解析/能力/配置 schema/探活）写在 **一个 Extends Provider**（可再调本模块私有 Service）。壳 Controller 只编排；**禁止**为对接而在壳里重写该渠道业务或新开按渠道分裂的业务控制器。壳边界见 [payment-shell.md](payment-shell.md)。
+
 **统一 URL（硬要求）**：Developer 登记唯一 `payment/frontend/callback/{method_code}?target_scope=...`（OAuth 白名单）；取消与 return 同路径，追加 `outcome=cancel`。**运行时** `createPayment` 注入的 return/cancel 须带 `shell_token`（解码得 `method_code`+`transaction_no`）或显式 `method_code`+`transaction_no`。Webhook 用 `payment/frontend/callback/notify?endpoint_code={method}.{env}.default`。
 
 壳边界、结账三层、NextAction/iframe、幂等表见 [payment-shell.md](payment-shell.md)。支付、退款、回调归一化和业务状态推进必须回到 `Weline_Payment`。

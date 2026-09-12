@@ -15,6 +15,8 @@
  * @var string $mappable_events_json
  * @var string $pixel_list_url
  * @var string $recent_events_url
+ * @var string $live_events_url
+ * @var string $clear_session_sandbox_url
  * @var string $start_picker_url
  * @var bool $dev_no_report
  */
@@ -25,8 +27,8 @@ $scopeQuery = \is_array($scope_query ?? null) ? $scope_query : ['website_id' => 
 $devNoReport = !empty($dev_no_report);
 $h = static fn($v): string => htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
 $cssUrl = $this->fetchTagSource('statics', 'Weline_Visitor::/statics/css/tracking-vendor-admin.css');
-if (\is_string($cssUrl) && $cssUrl !== '' && !\str_contains($cssUrl, 'v=20260910-ga4-panel')) {
-    $cssUrl .= (\str_contains($cssUrl, '?') ? '&' : '?') . 'v=20260910-ga4-panel1';
+if (\is_string($cssUrl) && $cssUrl !== '' && !\str_contains($cssUrl, 'v=20260911-ga4-modal')) {
+    $cssUrl .= (\str_contains($cssUrl, '?') ? '&' : '?') . 'v=20260911-ga4-modal1';
 }
 $cmCss = $this->fetchTagSource('statics', 'Weline_Visitor::/statics/libs/codemirror/lib/codemirror.css');
 $cmThemeInk = $this->fetchTagSource('statics', 'Weline_Visitor::/statics/libs/codemirror/theme/material-darker.css');
@@ -60,6 +62,14 @@ if ($selected === null && $vendorsRuntime !== []) {
     <div class="tvp-topbar" data-testid="tv-topbar">
         <?= $this->fetch('Weline_Visitor::templates/Backend/TrackingVendor/partials/scope-toolbar.phtml') ?>
         <div class="tvp-toolbar" data-testid="tv-toolbar">
+            <span class="tvp-field__hint" id="tv-config-revision" data-testid="tv-config-revision" title="当前配置范围与事件配置版本（编辑后 bump，沙盒/助手对齐）" style="align-self:center;white-space:nowrap;max-width:min(52vw,420px);overflow:hidden;text-overflow:ellipsis;">
+                <strong data-tv-scope-version-label><?= $h(
+                    '站点 ' . (string)(($scopeQuery['website_code'] ?? '') !== '' ? $scopeQuery['website_code'] : ('website.' . (int)$websiteId))
+                    . ' · 店铺 ' . ((($scopeQuery['store_code'] ?? '') !== '') ? (string)$scopeQuery['store_code'] : 'default')
+                    . ' · 渠道 ' . ((($scopeQuery['channel_code'] ?? '') !== '') ? (string)$scopeQuery['channel_code'] : 'default')
+                    . ' · 版本 ' . (int)($config_revision ?? 0)
+                ) ?></strong>
+            </span>
             <form method="post" action="<?= $h($syncUrl) ?>">
                 <?= $csrfField ?>
                 <input type="hidden" name="target_scope" value="<?= $h($scopeQuery['target_scope'] ?? '') ?>">
@@ -286,7 +296,7 @@ if ($selected === null && $vendorsRuntime !== []) {
                         </div>
 
                         <div class="tvp-section" data-panel="map" hidden>
-                            <div class="tvp-map-layout" data-testid="tv-map-layout" data-map-variant="intake-sandbox">
+                            <div class="tvp-map-layout" data-testid="tv-map-layout" data-map-variant="subtabs-stream">
                                 <div class="tvp-map-main">
                                     <div class="tvp-map-scope" data-testid="tv-custom-scope-tip" role="note">
                                         <div class="tvp-map-scope__row">
@@ -300,146 +310,137 @@ if ($selected === null && $vendorsRuntime !== []) {
                                         <p class="tvp-field__hint tvp-map-scope__hint"><lang>自定义事件只进本范围；渠道/店铺请用页顶「配置范围」切换。换主题后请核对搭接。</lang></p>
                                     </div>
 
-                                    <section class="tvp-map-intake" data-testid="tv-map-intake" aria-labelledby="tv-map-intake-title">
-                                        <div class="tvp-map-intake__head">
-                                            <h3 class="tvp-map-intake__title" id="tv-map-intake-title"><lang>创建事件</lang></h3>
-                                            <p class="tvp-field__hint tvp-map-intake__sub"><lang>对齐 GA4：自定义事件名 + 匹配条件（参数 / 运算符 / 值）。可先选「事件名」或「URL」预设，再增删条件。</lang></p>
-                                        </div>
-                                        <div class="tvp-map-intake__actions w-cluster" style="--w-gap:var(--weline-space-2);">
-                                            <button type="button" class="w-button" data-size="sm" data-variant="outline" data-tone="neutral" id="tv-start-picker" data-testid="tv-start-picker">
-                                                <lang>启动事件拾取</lang>
-                                            </button>
-                                            <details class="tvp-map-more">
-                                                <summary class="w-button" data-size="sm" data-variant="outline" data-tone="neutral"><lang>更多</lang></summary>
-                                                <div class="tvp-map-more__menu w-cluster" style="--w-gap:var(--weline-space-2);">
-                                                    <button type="button" class="w-button" data-size="sm" data-variant="outline" data-tone="neutral" id="tv-ensure-demo-chain" data-testid="tv-ensure-demo-chain">
-                                                        <lang>发布演示跨页链</lang>
-                                                    </button>
-                                                    <a class="w-button" data-size="sm" data-variant="outline" data-tone="neutral" href="<?= $h($pixel_list_url ?? '#') ?>" target="_blank" rel="noopener" data-testid="tv-pixel-list-link">
-                                                        <lang>后台事件列表</lang>
-                                                    </a>
-                                                </div>
-                                            </details>
-                                        </div>
+                                    <div class="tvp-map-subtabs w-cluster" role="tablist" id="tv-map-subtabs" aria-label="<?= $h(__('事件搭接分区')) ?>" data-testid="tv-map-subtabs" style="--w-gap:var(--weline-space-1);">
+                                        <button type="button" class="w-button" data-size="sm" data-variant="outline" data-tone="neutral" role="tab" data-map-subtab="custom" data-active="1" data-testid="tv-map-subtab-custom" aria-selected="true"><lang>自定义事件</lang></button>
+                                        <button type="button" class="w-button" data-size="sm" data-variant="outline" data-tone="neutral" role="tab" data-map-subtab="wiring" data-active="0" data-testid="tv-map-subtab-wiring" aria-selected="false"><lang>事件搭接</lang></button>
+                                        <button type="button" class="w-button" data-size="sm" data-variant="outline" data-tone="neutral" role="tab" data-map-subtab="intake" data-active="0" data-testid="tv-map-subtab-intake" aria-selected="false"><lang>录入与拾取</lang></button>
+                                    </div>
 
-                                        <div class="tvp-ga4-panel" data-testid="tv-ga4-event-form">
-                                            <div class="tvp-ga4-panel__row">
-                                                <label class="tvp-field" for="tv-ga4-name">
-                                                    <span class="tvp-field__label"><lang>自定义事件名称</lang></span>
-                                                    <input id="tv-ga4-name" class="w-input" data-size="sm" data-testid="tv-ga4-name" placeholder="confirm_signup" autocomplete="off">
+                                    <div class="tvp-map-subpanel" data-map-subpanel="custom" data-testid="tv-map-subpanel-custom">
+                                        <section class="tvp-custom-pool" data-testid="tv-custom-event-pool">
+                                            <div class="w-cluster tvp-custom-pool__head" style="--w-gap:var(--weline-space-2);justify-content:space-between;align-items:center;flex-wrap:wrap;">
+                                                <p class="tvp-section__title" style="margin:0;"><lang>本范围自定义事件</lang> <span id="tv-custom-count" data-testid="tv-custom-count">0</span></p>
+                                                <div class="w-cluster" style="--w-gap:var(--weline-space-2);">
+                                                    <button type="button" class="w-button" data-size="sm" data-tone="primary" id="tv-custom-create" data-testid="tv-custom-create"><lang>创建事件</lang></button>
+                                                    <button type="button" class="w-button" data-size="sm" data-variant="outline" id="tv-custom-refresh" data-testid="tv-custom-refresh"><lang>刷新</lang></button>
+                                                </div>
+                                            </div>
+                                            <div class="tvp-custom-toolbar w-cluster" style="--w-gap:var(--weline-space-2);flex-wrap:wrap;align-items:center;" data-testid="tv-custom-toolbar">
+                                                <label class="tvp-field tvp-custom-search" style="margin:0;flex:1 1 12rem;min-inline-size:10rem;">
+                                                    <span class="visually-hidden"><lang>搜索自定义事件</lang></span>
+                                                    <input type="search" id="tv-custom-search" class="w-input" data-size="sm" data-testid="tv-custom-search" placeholder="<?= $h(__('搜索事件名 / 匹配条件')) ?>" autocomplete="off">
                                                 </label>
-                                                <label class="tvp-field" for="tv-ga4-third">
-                                                    <span class="tvp-field__label"><lang>三方事件名</lang></span>
-                                                    <input id="tv-ga4-third" class="w-input" data-size="sm" data-testid="tv-ga4-third" placeholder="<?= $h(__('可选，默认同名')) ?>" autocomplete="off">
-                                                </label>
-                                            </div>
-
-                                            <div class="tvp-ga4-match-type" data-testid="tv-ga4-match-type" role="group" aria-label="<?= $h(__('匹配类型')) ?>">
-                                                <span class="tvp-field__label"><lang>匹配类型</lang></span>
-                                                <div class="w-cluster" style="--w-gap:var(--weline-space-1);">
-                                                    <button type="button" class="w-button" data-size="sm" data-variant="outline" data-match-type="event_name" data-active="1" data-testid="tv-match-type-event"><lang>事件名匹配</lang></button>
-                                                    <button type="button" class="w-button" data-size="sm" data-variant="outline" data-match-type="url" data-active="0" data-testid="tv-match-type-url"><lang>URL 匹配</lang></button>
-                                                    <button type="button" class="w-button" data-size="sm" data-variant="outline" data-match-type="custom" data-active="0" data-testid="tv-match-type-custom"><lang>自定义条件</lang></button>
+                                                <div class="tvp-event-filters w-cluster" style="--w-gap:var(--weline-space-1);" data-testid="tv-event-filters">
+                                                    <button type="button" class="w-button" data-size="sm" data-variant="outline" data-event-filter="all" data-active="1"><lang>全部</lang></button>
+                                                    <button type="button" class="w-button" data-size="sm" data-variant="outline" data-event-filter="starred"><lang>星标</lang></button>
+                                                    <button type="button" class="w-button" data-size="sm" data-variant="outline" data-event-filter="valued"><lang>有值</lang></button>
                                                 </div>
-                                                <p class="tvp-field__hint" id="tv-match-type-hint" data-testid="tv-match-type-hint"><lang>事件名匹配：当源事件名等于某值时生成。URL 匹配：page_view + 页面地址包含某路径（GA4 常见写法）。</lang></p>
                                             </div>
+                                            <p class="tvp-field__hint" style="margin:0;"><lang>可搜索、编辑匹配条件、删除；也可加入搭接表。仅当前范围，不会一直累积。</lang></p>
+                                            <ul class="tvp-acc-list" id="tv-custom-list" data-testid="tv-custom-list"></ul>
+                                        </section>
+                                    </div>
 
-                                            <div class="tvp-ga4-conditions" data-testid="tv-ga4-conditions">
-                                                <div class="w-cluster" style="--w-gap:var(--weline-space-2);justify-content:space-between;align-items:center;">
-                                                    <p class="tvp-section__title" style="margin:0;"><lang>匹配条件</lang></p>
-                                                    <button type="button" class="w-button" data-size="sm" data-variant="outline" id="tv-ga4-cond-add" data-testid="tv-ga4-cond-add"><lang>添加条件</lang></button>
-                                                </div>
-                                                <table class="w-table tvp-ga4-cond-table" id="tv-ga4-cond-table" data-testid="tv-ga4-cond-table">
-                                                    <thead>
-                                                    <tr>
-                                                        <th><lang>参数</lang></th>
-                                                        <th><lang>运算符</lang></th>
-                                                        <th><lang>值</lang></th>
-                                                        <th></th>
-                                                    </tr>
-                                                    </thead>
-                                                    <tbody id="tv-ga4-cond-body"></tbody>
-                                                </table>
-                                            </div>
-
-                                            <label class="tvp-check" data-testid="tv-ga4-copy-params">
-                                                <input type="checkbox" id="tv-ga4-copy-params" checked>
-                                                <span><lang>复制源事件中的参数</lang></span>
-                                            </label>
-
-                                            <div class="tvp-ga4-panel__foot w-cluster" style="--w-gap:var(--weline-space-2);">
-                                                <button type="button" class="w-button" data-size="sm" data-tone="primary" id="tv-ga4-add" data-testid="tv-ga4-add">
-                                                    <lang>创建</lang>
-                                                </button>
-                                            </div>
-                                        </div>
-                                        <p class="tvp-field__hint" id="tv-create-event-hint" data-testid="tv-create-event-hint" hidden></p>
-                                        <p class="tvp-field__hint" id="tv-chain-status" data-testid="tv-chain-status"></p>
-                                    </section>
-
-                                    <section class="tvp-custom-pool" data-testid="tv-custom-event-pool">
-                                        <div class="w-cluster tvp-custom-pool__head" style="--w-gap:var(--weline-space-2);justify-content:space-between;align-items:center;">
-                                            <p class="tvp-section__title" style="margin:0;"><lang>本范围自定义事件</lang> <span id="tv-custom-count" data-testid="tv-custom-count">0</span></p>
-                                            <div class="w-cluster" style="--w-gap:var(--weline-space-2);">
-                                                <button type="button" class="w-button" data-size="sm" data-tone="primary" id="tv-custom-create" data-testid="tv-custom-create"><lang>聚焦创建</lang></button>
-                                                <button type="button" class="w-button" data-size="sm" data-variant="outline" id="tv-custom-refresh" data-testid="tv-custom-refresh"><lang>刷新</lang></button>
-                                            </div>
-                                        </div>
-                                        <div class="tvp-event-filters w-cluster" style="--w-gap:var(--weline-space-1);" data-testid="tv-event-filters">
-                                            <button type="button" class="w-button" data-size="sm" data-variant="outline" data-event-filter="all" data-active="1"><lang>全部</lang></button>
-                                            <button type="button" class="w-button" data-size="sm" data-variant="outline" data-event-filter="starred"><lang>星标</lang></button>
-                                            <button type="button" class="w-button" data-size="sm" data-variant="outline" data-event-filter="valued"><lang>有值</lang></button>
-                                        </div>
-                                        <p class="tvp-field__hint" style="margin:0;"><lang>可加入搭接；不用的请删除（仅当前范围，不会一直累积）。</lang></p>
-                                        <ul class="tvp-acc-list" id="tv-custom-list" data-testid="tv-custom-list"></ul>
-                                    </section>
-
-                                    <p class="tvp-section__title"><lang>事件搭接</lang></p>
-                                    <table class="w-table tvp-map-table" id="tv-map-table">
-                                        <thead><tr><th><lang>我方事件</lang></th><th><lang>三方事件</lang></th><th></th></tr></thead>
-                                        <tbody>
-                                        <?php foreach ($mapRows as $mr): ?>
-                                            <?php
-                                            $rowWeline = (string)($mr['weline_event'] ?? '');
-                                            $rowKnown = false;
-                                            foreach (($mappable_event_rows ?? []) as $evCheck) {
-                                                if ((string)($evCheck['name'] ?? '') === $rowWeline) {
-                                                    $rowKnown = true;
-                                                    break;
+                                    <div class="tvp-map-subpanel" data-map-subpanel="wiring" hidden data-testid="tv-map-subpanel-wiring">
+                                        <p class="tvp-section__title"><lang>事件搭接</lang></p>
+                                        <p class="tvp-field__hint"><lang>把我方事件映射到三方事件名；保存供应商时一并写入。</lang></p>
+                                        <table class="w-table tvp-map-table" id="tv-map-table">
+                                            <thead><tr><th><lang>我方事件</lang></th><th><lang>三方事件</lang></th><th></th></tr></thead>
+                                            <tbody>
+                                            <?php foreach ($mapRows as $mr): ?>
+                                                <?php
+                                                $rowWeline = (string)($mr['weline_event'] ?? '');
+                                                $rowKnown = false;
+                                                foreach (($mappable_event_rows ?? []) as $evCheck) {
+                                                    if ((string)($evCheck['name'] ?? '') === $rowWeline) {
+                                                        $rowKnown = true;
+                                                        break;
+                                                    }
                                                 }
-                                            }
-                                            ?>
-                                            <tr>
-                                                <td>
-                                                    <select class="w-input" data-size="sm" data-map-weline>
-                                                        <?php if ($rowWeline !== '' && !$rowKnown): ?>
-                                                            <option value="<?= $h($rowWeline) ?>" selected><?= $h($rowWeline) ?>（自定义）</option>
-                                                        <?php endif; ?>
-                                                        <?php foreach (($mappable_event_rows ?? []) as $evRow): ?>
-                                                            <?php
-                                                            $evName = (string)($evRow['name'] ?? '');
-                                                            $evLabel = (string)($evRow['label_zh'] ?? $evName);
-                                                            $optLabel = $evName === $evLabel ? $evName : ($evName . ' — ' . $evLabel);
-                                                            ?>
-                                                            <option value="<?= $h($evName) ?>" <?= $rowWeline === $evName ? 'selected' : '' ?>><?= $h($optLabel) ?></option>
-                                                        <?php endforeach; ?>
-                                                    </select>
-                                                </td>
-                                                <td><input class="w-input" data-size="sm" data-map-third value="<?= $h($mr['third_party_event'] ?? '') ?>"></td>
-                                                <td><button type="button" class="w-button" data-size="sm" data-map-remove><lang>删</lang></button></td>
-                                            </tr>
-                                        <?php endforeach; ?>
-                                        </tbody>
-                                    </table>
-                                    <button type="button" class="w-button" data-size="sm" id="tv-map-add" style="margin-block-start:var(--weline-space-2);"><lang>添加一行</lang></button>
+                                                ?>
+                                                <tr>
+                                                    <td>
+                                                        <select class="w-input" data-size="sm" data-map-weline>
+                                                            <?php if ($rowWeline !== '' && !$rowKnown): ?>
+                                                                <option value="<?= $h($rowWeline) ?>" selected><?= $h($rowWeline) ?>（自定义）</option>
+                                                            <?php endif; ?>
+                                                            <?php foreach (($mappable_event_rows ?? []) as $evRow): ?>
+                                                                <?php
+                                                                $evName = (string)($evRow['name'] ?? '');
+                                                                $evLabel = (string)($evRow['label_zh'] ?? $evName);
+                                                                $optLabel = $evName === $evLabel ? $evName : ($evName . ' — ' . $evLabel);
+                                                                ?>
+                                                                <option value="<?= $h($evName) ?>" <?= $rowWeline === $evName ? 'selected' : '' ?>><?= $h($optLabel) ?></option>
+                                                            <?php endforeach; ?>
+                                                        </select>
+                                                    </td>
+                                                    <td><input class="w-input" data-size="sm" data-map-third value="<?= $h($mr['third_party_event'] ?? '') ?>"></td>
+                                                    <td><button type="button" class="w-button" data-size="sm" data-map-remove><lang>删</lang></button></td>
+                                                </tr>
+                                            <?php endforeach; ?>
+                                            </tbody>
+                                        </table>
+                                        <button type="button" class="w-button" data-size="sm" id="tv-map-add" style="margin-block-start:var(--weline-space-2);"><lang>添加一行</lang></button>
+                                    </div>
+
+                                    <div class="tvp-map-subpanel" data-map-subpanel="intake" hidden data-testid="tv-map-subpanel-intake">
+                                        <section class="tvp-map-intake" data-testid="tv-map-intake" aria-labelledby="tv-map-intake-title">
+                                            <div class="tvp-map-intake__head">
+                                                <h3 class="tvp-map-intake__title" id="tv-map-intake-title"><lang>事件录入</lang></h3>
+                                                <p class="tvp-field__hint tvp-map-intake__sub"><lang>创建走 GA4 式弹窗（事件名 / URL 匹配条件）；也可从前台拾取。</lang></p>
+                                            </div>
+                                            <div class="tvp-map-intake__actions w-cluster" style="--w-gap:var(--weline-space-2);">
+                                                <button type="button" class="w-button" data-size="sm" data-tone="primary" id="tv-open-ga4-create" data-testid="tv-open-ga4-create">
+                                                    <lang>创建事件</lang>
+                                                </button>
+                                                <button type="button" class="w-button" data-size="sm" data-variant="outline" data-tone="neutral" id="tv-start-picker" data-testid="tv-start-picker">
+                                                    <lang>启动事件拾取</lang>
+                                                </button>
+                                                <details class="tvp-map-more">
+                                                    <summary class="w-button" data-size="sm" data-variant="outline" data-tone="neutral"><lang>更多</lang></summary>
+                                                    <div class="tvp-map-more__menu w-cluster" style="--w-gap:var(--weline-space-2);">
+                                                        <button type="button" class="w-button" data-size="sm" data-variant="outline" data-tone="neutral" id="tv-ensure-demo-chain" data-testid="tv-ensure-demo-chain">
+                                                            <lang>发布演示跨页链</lang>
+                                                        </button>
+                                                        <a class="w-button" data-size="sm" data-variant="outline" data-tone="neutral" href="<?= $h($pixel_list_url ?? '#') ?>" target="_blank" rel="noopener" data-testid="tv-pixel-list-link">
+                                                            <lang>后台事件列表</lang>
+                                                        </a>
+                                                    </div>
+                                                </details>
+                                            </div>
+                                            <p class="tvp-field__hint" id="tv-chain-status" data-testid="tv-chain-status"></p>
+                                        </section>
+                                    </div>
+
                                 </div>
-                                <aside class="tvp-map-acc" data-testid="tv-map-accumulate">
-                                    <p class="tvp-section__title"><lang>本会话沙盒</lang></p>
-                                    <p class="tvp-field__hint"><lang>本会话累计：前台操作后轮询出现；展开可看链接参数，便于判断渠道/UTM。</lang></p>
-                                    <ul class="tvp-acc-list" id="tv-acc-list" data-testid="tv-acc-list"></ul>
-                                    <button type="button" class="w-button" data-size="sm" data-variant="outline" id="tv-acc-refresh" data-testid="tv-acc-refresh">
-                                        <lang>刷新</lang>
-                                    </button>
+                                <aside class="tvp-map-acc tvp-map-stream" data-testid="tv-map-accumulate" data-float="0" aria-label="<?= $h(__('本会话沙盒数据流')) ?>">
+                                    <div class="tvp-map-stream__head w-cluster" style="--w-gap:var(--weline-space-2);justify-content:space-between;align-items:center;">
+                                        <p class="tvp-section__title" style="margin:0;"><lang>本会话沙盒</lang></p>
+                                        <div class="w-cluster" style="--w-gap:var(--weline-space-1);">
+                                            <button type="button" class="w-button" data-size="sm" data-variant="outline" data-tone="neutral" id="tv-acc-refresh" data-testid="tv-acc-refresh">
+                                                <lang>刷新</lang>
+                                            </button>
+                                            <button type="button" class="w-button" data-size="sm" data-variant="outline" data-tone="danger" id="tv-acc-clear" data-testid="tv-acc-clear" title="<?= $h(__('清空本会话沙盒并重新监听')) ?>">
+                                                <lang>清理</lang>
+                                            </button>
+                                            <button type="button" class="w-button" data-size="sm" data-variant="outline" data-tone="neutral" id="tv-sandbox-float-close" data-testid="tv-sandbox-float-close" hidden>
+                                                <lang>收起</lang>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <p class="tvp-field__hint"><lang>短间隔读取前台沙盒继电缓冲（同助手）；系统命中绿、自定义命中蓝；可清理后重新监听。无服务端长轮询。</lang></p>
+                                    <label class="tvp-field" for="tv-acc-search" style="margin-block-end:var(--weline-space-2);">
+                                        <span class="tvp-field__label"><lang>搜索事件名</lang></span>
+                                        <input id="tv-acc-search" class="w-input" data-size="sm" type="search" autocomplete="off" placeholder="<?= $h(__('过滤本会话事件名…')) ?>" data-testid="tv-acc-search">
+                                    </label>
+                                    <div class="tvp-stream-tabs w-cluster" role="tablist" data-testid="tv-stream-tabs" style="--w-gap:var(--weline-space-1);flex-wrap:wrap;margin-block-end:var(--weline-space-2);">
+                                        <button type="button" class="w-button" data-size="sm" data-variant="outline" data-tone="success" role="tab" data-stream-tab="system" data-active="0" data-testid="tv-stream-tab-system" aria-selected="false"><lang>系统命中</lang> <span id="tv-stream-system-count" data-testid="tv-stream-system-count">0</span></button>
+                                        <button type="button" class="w-button" data-size="sm" data-variant="outline" data-tone="info" role="tab" data-stream-tab="custom" data-active="0" data-testid="tv-stream-tab-custom" aria-selected="false"><lang>自定义命中</lang> <span id="tv-stream-custom-count" data-testid="tv-stream-custom-count">0</span></button>
+                                        <button type="button" class="w-button" data-size="sm" data-variant="outline" data-tone="neutral" role="tab" data-stream-tab="stream" data-active="1" data-testid="tv-stream-tab-stream" aria-selected="true"><lang>数据流</lang> <span id="tv-stream-all-count" data-testid="tv-stream-all-count">0</span></button>
+                                    </div>
+                                    <ul class="tvp-acc-list" id="tv-acc-hit-system" data-testid="tv-acc-hit-system" data-stream-panel="system" hidden></ul>
+                                    <ul class="tvp-acc-list" id="tv-acc-hit-custom" data-testid="tv-acc-hit-custom" data-stream-panel="custom" hidden></ul>
+                                    <ul class="tvp-acc-list" id="tv-acc-list" data-testid="tv-acc-list" data-stream-panel="stream"></ul>
                                 </aside>
                             </div>
                         </div>
@@ -507,11 +508,108 @@ if ($selected === null && $vendorsRuntime !== []) {
     </form>
 </dialog>
 
+<div
+    class="w-dialog"
+    id="tv-ga4-create-dialog"
+    tabindex="-1"
+    data-w-component="dialog"
+    data-state="closed"
+    hidden
+    aria-hidden="true"
+    data-testid="tv-ga4-create-dialog"
+>
+    <div class="w-dialog__frame" data-size="lg">
+        <div class="w-dialog__surface">
+            <div class="w-dialog__header">
+                <h5 class="w-dialog__title" id="tv-ga4-create-title" data-testid="tv-ga4-create-title"><lang>创建事件</lang></h5>
+                <button type="button" class="w-button" data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm" aria-label="<?= $h((string)__('关闭')) ?>" data-testid="tv-ga4-dialog-close"></button>
+            </div>
+            <div class="w-dialog__body">
+                <p class="tvp-field__hint" style="margin-block-start:0;"><lang>对齐 GA4：自定义事件名 + 匹配条件（参数 / 运算符 / 值）。可先选「事件名」或「URL」预设，再增删条件。</lang></p>
+                <div class="tvp-ga4-panel tvp-ga4-panel--dialog" data-testid="tv-ga4-event-form">
+                    <div class="tvp-ga4-panel__row">
+                        <label class="tvp-field" for="tv-ga4-name">
+                            <span class="tvp-field__label"><lang>自定义事件名称</lang></span>
+                            <input id="tv-ga4-name" class="w-input" data-size="sm" data-testid="tv-ga4-name" placeholder="confirm_signup" autocomplete="off">
+                        </label>
+                        <label class="tvp-field" for="tv-ga4-third">
+                            <span class="tvp-field__label"><lang>三方事件名</lang></span>
+                            <input id="tv-ga4-third" class="w-input" data-size="sm" data-testid="tv-ga4-third" placeholder="<?= $h(__('可选，默认同名')) ?>" autocomplete="off">
+                        </label>
+                    </div>
+
+                    <div class="tvp-ga4-match-type" data-testid="tv-ga4-match-type" role="group" aria-label="<?= $h(__('匹配类型')) ?>">
+                        <span class="tvp-field__label"><lang>匹配类型</lang></span>
+                        <div class="w-cluster" style="--w-gap:var(--weline-space-1);">
+                            <button type="button" class="w-button" data-size="sm" data-variant="outline" data-match-type="event_name" data-active="1" data-testid="tv-match-type-event"><lang>事件名匹配</lang></button>
+                            <button type="button" class="w-button" data-size="sm" data-variant="outline" data-match-type="url" data-active="0" data-testid="tv-match-type-url"><lang>URL 匹配</lang></button>
+                            <button type="button" class="w-button" data-size="sm" data-variant="outline" data-match-type="custom" data-active="0" data-testid="tv-match-type-custom"><lang>自定义条件</lang></button>
+                        </div>
+                        <p class="tvp-field__hint" id="tv-match-type-hint" data-testid="tv-match-type-hint"><lang>事件名匹配：当源事件名等于某值时生成。URL 匹配：page_view + 页面地址包含某路径（GA4 常见写法）。</lang></p>
+                    </div>
+
+                    <div class="tvp-ga4-conditions" data-testid="tv-ga4-conditions">
+                        <div class="w-cluster" style="--w-gap:var(--weline-space-2);justify-content:space-between;align-items:center;">
+                            <p class="tvp-section__title" style="margin:0;"><lang>匹配条件</lang></p>
+                            <button type="button" class="w-button" data-size="sm" data-variant="outline" id="tv-ga4-cond-add" data-testid="tv-ga4-cond-add"><lang>添加条件</lang></button>
+                        </div>
+                        <p class="tvp-field__hint" style="margin-block-start:var(--weline-space-1);"><lang>参数可点选预设，也可手写；支持多级点路径（如 elementInfo.text、elementInfo.className）。</lang></p>
+                        <datalist id="tv-ga4-param-list" data-testid="tv-ga4-param-list"></datalist>
+                        <table class="w-table tvp-ga4-cond-table" id="tv-ga4-cond-table" data-testid="tv-ga4-cond-table">
+                            <thead>
+                            <tr>
+                                <th><lang>参数</lang></th>
+                                <th><lang>运算符</lang></th>
+                                <th><lang>值</lang></th>
+                                <th></th>
+                            </tr>
+                            </thead>
+                            <tbody id="tv-ga4-cond-body"></tbody>
+                        </table>
+                    </div>
+
+                    <label class="tvp-check" data-testid="tv-ga4-copy-params">
+                        <input type="checkbox" id="tv-ga4-copy-params" checked>
+                        <span><lang>复制源事件中的参数</lang></span>
+                    </label>
+                    <div class="tvp-field" style="margin-block-start:var(--weline-space-2);" data-testid="tv-ga4-param-mapping">
+                        <span class="tvp-field__label"><lang>勾选源参数</lang></span>
+                        <div class="tvp-param-pick" id="tv-ga4-param-pick" data-testid="tv-ga4-param-pick" role="group" aria-label="<?= $h(__('源参数多选')) ?>"></div>
+                        <p class="tvp-field__hint"><lang>勾选后写入下方映射（产出名默认与源名相同）。也可自行添加组装规则。</lang></p>
+                        <div class="w-cluster" style="--w-gap:var(--weline-space-2);justify-content:space-between;align-items:center;margin-block:var(--weline-space-2) var(--weline-space-1);">
+                            <span class="tvp-field__label" style="margin:0;"><lang>参数映射 / 组装</lang></span>
+                            <button type="button" class="w-button" data-size="sm" data-variant="outline" id="tv-ga4-map-add" data-testid="tv-ga4-map-add"><lang>添加映射</lang></button>
+                        </div>
+                        <table class="w-table tvp-ga4-cond-table tvp-ga4-map-table" id="tv-ga4-map-table" data-testid="tv-ga4-map-table">
+                            <thead>
+                            <tr>
+                                <th><lang>产出参数名</lang></th>
+                                <th><lang>源 / 组装</lang></th>
+                                <th></th>
+                            </tr>
+                            </thead>
+                            <tbody id="tv-ga4-map-body"></tbody>
+                        </table>
+                        <p class="tvp-field__hint"><lang>组装用 {源参数名}，例如 {text} 或 {className}:{text}。勾选「复制」时先带上全部可用标量，映射同名会覆盖。</lang></p>
+                    </div>
+                    <p class="tvp-field__hint" id="tv-create-event-hint" data-testid="tv-create-event-hint" hidden></p>
+                </div>
+            </div>
+            <div class="w-dialog__footer w-cluster" style="--w-gap:var(--weline-space-2);">
+                <button type="button" class="w-button" data-w-action="dialog.close" data-tone="neutral" data-testid="tv-ga4-dialog-cancel"><lang>取消</lang></button>
+                <button type="button" class="w-button" data-tone="primary" id="tv-ga4-add" data-testid="tv-ga4-add"><lang>创建</lang></button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 (function () {
     var mappable = <?= $mappable_events_json ?: '[]' ?>;
     var customEvents = <?= $custom_events_json ?: '[]' ?>;
     var recentUrl = <?= \json_encode((string)($recent_events_url ?? ''), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    var liveEventsUrl = <?= \json_encode((string)($live_events_url ?? ''), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    var clearSessionSandboxUrl = <?= \json_encode((string)($clear_session_sandbox_url ?? ''), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
     var startPickerUrl = <?= \json_encode((string)($start_picker_url ?? ''), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
     var customEventsUrl = <?= \json_encode((string)($custom_events_url ?? ''), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
     var deleteCustomEventUrl = <?= \json_encode((string)($delete_custom_event_url ?? ''), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
@@ -528,9 +626,74 @@ if ($selected === null && $vendorsRuntime !== []) {
     var scopeQuery = <?= \json_encode($scopeQuery ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
     var selectedCode = <?= \json_encode((string)$selectedCode, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
     var csrfToken = <?= \json_encode((string)$csrfToken, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    var pageConfigRevision = <?= (int)($config_revision ?? 0) ?>;
     var TAB_STORE_KEY = 'tvp_ui_tab_v1';
+    var MAP_SUBTAB_STORE_KEY = 'tvp_map_subtab_v1';
     var ALLOWED_TABS = { config: 1, scope: 1, map: 1, js: 1 };
+    var TRACKING_RELOAD_CHANNEL = 'weline-visitor-tracking-config';
+
+    function formatScopeVersionLabel(rev) {
+        rev = Number(rev != null ? rev : pageConfigRevision) || 0;
+        var q = scopeQuery || {};
+        var site = String(q.website_code || '').trim();
+        if (!site) {
+            site = websiteId > 0 ? ('website.' + websiteId) : 'default';
+        }
+        var store = String(q.store_code || '').trim() || 'default';
+        var channel = String(q.channel_code || '').trim() || 'default';
+        return '站点 ' + site + ' · 店铺 ' + store + ' · 渠道 ' + channel + ' · 版本 ' + rev;
+    }
+
+    function setConfigRevisionDisplay(rev) {
+        rev = Number(rev) || 0;
+        if (rev > 0) {
+            pageConfigRevision = rev;
+        }
+        var el = document.getElementById('tv-config-revision');
+        var label = el && el.querySelector('[data-tv-scope-version-label]');
+        if (label) {
+            label.textContent = formatScopeVersionLabel(pageConfigRevision);
+        }
+        return pageConfigRevision;
+    }
+
+    function formatRevisionTip(rev) {
+        return ' · ' + formatScopeVersionLabel(rev);
+    }
+
+    function broadcastTrackingReload(data) {
+        data = data && typeof data === 'object' ? data : {};
+        if (!data.reload_tracking && data.configRevision == null && data.config_revision == null) {
+            return;
+        }
+        var rev = Number(data.configRevision != null ? data.configRevision : (data.config_revision || 0)) || 0;
+        if (rev > 0) {
+            setConfigRevisionDisplay(rev);
+        }
+        var payload = {
+            type: 'reload',
+            website_id: websiteId || 0,
+            storage_scope: storageScope || '',
+            configRevision: rev || pageConfigRevision || 0,
+            at: Date.now()
+        };
+        try {
+            if (typeof BroadcastChannel !== 'undefined') {
+                var bc = new BroadcastChannel(TRACKING_RELOAD_CHANNEL);
+                bc.postMessage(payload);
+                bc.close();
+            }
+        } catch (e) {}
+        try {
+            localStorage.setItem(TRACKING_RELOAD_CHANNEL + ':ping', JSON.stringify(payload));
+        } catch (e2) {}
+    }
+    var ALLOWED_MAP_SUBTABS = { custom: 1, wiring: 1, intake: 1 };
     var activeTab = 'config';
+    var activeMapSubtab = 'custom';
+    var customSearchQuery = '';
+    var ga4EditMode = false;
+    var ga4EditOriginalName = '';
     var autosaveTimer = null;
     var autosaveInFlight = false;
     var autosaveQueued = false;
@@ -552,6 +715,42 @@ if ($selected === null && $vendorsRuntime !== []) {
         try {
             sessionStorage.setItem(tabStorageKey(), tab);
         } catch (e) {}
+    }
+
+    function mapSubtabStorageKey() {
+        return MAP_SUBTAB_STORE_KEY + ':' + String(selectedCode || '') + ':' + String(storageScope || websiteId || '');
+    }
+
+    function readStoredMapSubtab() {
+        try {
+            var raw = sessionStorage.getItem(mapSubtabStorageKey());
+            if (raw && ALLOWED_MAP_SUBTABS[raw]) return raw;
+        } catch (e) {}
+        return '';
+    }
+
+    function writeStoredMapSubtab(tab) {
+        try {
+            sessionStorage.setItem(mapSubtabStorageKey(), tab);
+        } catch (e) {}
+    }
+
+    function activateMapSubtab(tab, opts) {
+        opts = opts || {};
+        tab = ALLOWED_MAP_SUBTABS[tab] ? tab : 'custom';
+        activeMapSubtab = tab;
+        var bar = document.getElementById('tv-map-subtabs');
+        if (bar) {
+            bar.querySelectorAll('[data-map-subtab]').forEach(function (b) {
+                var on = b.getAttribute('data-map-subtab') === tab;
+                b.setAttribute('data-active', on ? '1' : '0');
+                b.setAttribute('aria-selected', on ? 'true' : 'false');
+            });
+        }
+        document.querySelectorAll('[data-map-subpanel]').forEach(function (p) {
+            p.hidden = p.getAttribute('data-map-subpanel') !== tab;
+        });
+        writeStoredMapSubtab(tab);
     }
 
     function resolveInitialTab() {
@@ -608,8 +807,11 @@ if ($selected === null && $vendorsRuntime !== []) {
             } catch (e) {}
         }
         if (tab === 'map') {
-            refreshAccumulate();
+            var stored = readStoredMapSubtab() || activeMapSubtab || 'custom';
+            if (stored === 'sandbox') stored = 'custom';
+            activateMapSubtab(stored, { skipRefresh: true });
             refreshCustomEvents();
+            refreshAccumulate();
         }
     }
 
@@ -618,6 +820,14 @@ if ($selected === null && $vendorsRuntime !== []) {
         tabs.querySelectorAll('[data-tab]').forEach(function (btn) {
             btn.addEventListener('click', function () {
                 activateTab(btn.getAttribute('data-tab') || 'config');
+            });
+        });
+    }
+    var mapSubtabs = document.getElementById('tv-map-subtabs');
+    if (mapSubtabs) {
+        mapSubtabs.querySelectorAll('[data-map-subtab]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                activateMapSubtab(btn.getAttribute('data-map-subtab') || 'custom');
             });
         });
     }
@@ -746,7 +956,15 @@ if ($selected === null && $vendorsRuntime !== []) {
                 if (def && typeof data.use_default_map === 'boolean') {
                     def.checked = !!data.use_default_map;
                 }
-                setAutosaveStatus('已自动保存' + (data.map_count != null ? (' · 映射 ' + data.map_count + ' 条') : ''), 'success');
+                setAutosaveStatus('已自动保存' + (data.map_count != null ? (' · 映射 ' + data.map_count + ' 条') : '') + formatRevisionTip(data.configRevision || data.config_revision), 'success');
+                broadcastTrackingReload(data);
+                if (data.configRevision || data.config_revision) {
+                    try {
+                        if (window.Weline && Weline.UI && Weline.UI.toast) {
+                            Weline.UI.toast({ message: '配置已更新 · 版本 ' + (data.configRevision || data.config_revision), tone: 'success' });
+                        }
+                    } catch (eToast) {}
+                }
             } else {
                 setAutosaveStatus('自动保存失败：' + ((data && (data.error || data.message)) || 'unknown'), 'danger');
             }
@@ -858,10 +1076,18 @@ if ($selected === null && $vendorsRuntime !== []) {
 
     function eventBadgesHtml(ev) {
         var bits = [];
-        if (ev.custom) bits.push('<span class="tvp-acc-badge">自定义</span>');
+        if (ev.origin === 'auto_discovered' || ev.deletable === false) {
+            bits.push('<span class="tvp-acc-badge" data-tone="auto" data-testid="tv-badge-auto-discovered">自动发现</span>');
+        } else if (String(ev.category || '') === 'chain' || String(ev.category_label || '') === '事件链') {
+            bits.push('<span class="tvp-acc-badge" data-tone="chain" data-testid="tv-badge-event-chain">事件链</span>');
+        } else if (ev.custom) {
+            bits.push('<span class="tvp-acc-badge">自定义</span>');
+        }
         if (ev.has_value) bits.push('<span class="tvp-acc-badge" data-tone="value">有值</span>');
         var cat = String(ev.category_label || ev.category || '');
-        if (cat) bits.push('<span class="tvp-acc-badge" data-tone="cat">' + cat.replace(/</g, '') + '</span>');
+        if (cat && cat !== '事件链' && cat !== 'chain') {
+            bits.push('<span class="tvp-acc-badge" data-tone="cat">' + cat.replace(/</g, '') + '</span>');
+        }
         return bits.join(' ');
     }
 
@@ -888,11 +1114,65 @@ if ($selected === null && $vendorsRuntime !== []) {
     }
 
     function filteredCustomEvents() {
+        var q = String(customSearchQuery || '').trim().toLowerCase();
         return (customEvents || []).filter(function (ev) {
-            if (eventFilter === 'starred') return !!ev.starred;
-            if (eventFilter === 'valued') return !!ev.has_value;
-            return true;
+            if (eventFilter === 'starred' && !ev.starred) return false;
+            if (eventFilter === 'valued' && !ev.has_value) return false;
+            if (!q) return true;
+            var hay = [
+                ev.name, ev.weline_event, ev.label_zh, ev.match_summary, ev.match_type, ev.match_type_label, ev.category, ev.category_label
+            ].map(function (x) { return String(x || '').toLowerCase(); }).join(' ');
+            return hay.indexOf(q) !== -1;
         });
+    }
+
+    function setGa4DialogMode(edit) {
+        ga4EditMode = !!edit;
+        var title = document.getElementById('tv-ga4-create-title');
+        var btn = document.getElementById('tv-ga4-add');
+        var nameEl = document.getElementById('tv-ga4-name');
+        if (title) title.textContent = ga4EditMode ? '编辑事件' : '创建事件';
+        if (btn) btn.textContent = ga4EditMode ? '保存' : '创建';
+        if (nameEl) {
+            nameEl.readOnly = ga4EditMode;
+            nameEl.setAttribute('aria-readonly', ga4EditMode ? 'true' : 'false');
+        }
+    }
+
+    function seedConditionsFromList(conditions, matchType) {
+        var body = document.getElementById('tv-ga4-cond-body');
+        if (!body) return;
+        body.innerHTML = '';
+        currentMatchType = matchType || 'custom';
+        document.querySelectorAll('[data-match-type]').forEach(function (btn) {
+            btn.setAttribute('data-active', btn.getAttribute('data-match-type') === currentMatchType ? '1' : '0');
+        });
+        var list = Array.isArray(conditions) ? conditions : [];
+        if (!list.length) {
+            seedConditionsForType(currentMatchType, false);
+            return;
+        }
+        list.forEach(function (c) {
+            addConditionRow(c.param || 'event_name', c.op || 'equals', c.value || '');
+        });
+    }
+
+    function focusEditEvent(ev) {
+        ev = ev || {};
+        var name = String(ev.name || ev.weline_event || '').trim();
+        if (!name) return;
+        ga4EditOriginalName = name;
+        setGa4DialogMode(true);
+        var nameEl = document.getElementById('tv-ga4-name');
+        var thirdEl = document.getElementById('tv-ga4-third');
+        if (nameEl) nameEl.value = name;
+        if (thirdEl) thirdEl.value = String(ev.third_party_event || name);
+        var copyEl = document.getElementById('tv-ga4-copy-params');
+        if (copyEl) copyEl.checked = ev.copy_params !== false && ev.copy_params !== 0 && ev.copy_params !== '0';
+        seedParamMappings(ev.param_mappings || ev.extract_params || []);
+        seedConditionsFromList(ev.match_conditions || [], ev.match_type || 'custom');
+        setCreateHint('正在编辑「' + name + '」：事件名不可改；可改匹配条件后点「保存」。', 'info');
+        openGa4CreateDialog();
     }
 
     function renderCustomEvents(events) {
@@ -903,17 +1183,18 @@ if ($selected === null && $vendorsRuntime !== []) {
         if (countEl) countEl.textContent = String(customEvents.length);
         if (!list) return;
         if (!customEvents.length) {
-            list.innerHTML = '<li class="tvp-acc-empty">本范围暂无自定义事件。上方按 GA4 填写自定义事件名与匹配条件后点「创建」。</li>';
+            list.innerHTML = '<li class="tvp-acc-empty">本范围暂无自定义事件。切到「录入与拾取」或点「创建事件」按 GA4 填写后创建。</li>';
             return;
         }
         if (!shown.length) {
-            list.innerHTML = '<li class="tvp-acc-empty">当前筛选无事件。</li>';
+            list.innerHTML = '<li class="tvp-acc-empty">当前搜索 / 筛选无事件。</li>';
             return;
         }
         list.innerHTML = shown.map(function (ev) {
             var name = String(ev.name || ev.weline_event || '');
             var label = String(ev.label_zh || name);
             var starred = !!ev.starred;
+            var locked = ev.origin === 'auto_discovered' || ev.deletable === false;
             var matchSummary = String(ev.match_summary || '');
             var matchType = String(ev.match_type_label || ev.match_type || '');
             var matchBits = '';
@@ -921,7 +1202,10 @@ if ($selected === null && $vendorsRuntime !== []) {
             if (matchSummary) {
                 matchBits += '<div class="tvp-acc-item__match" title="' + matchSummary.replace(/"/g, '&quot;') + '">' + matchSummary.replace(/</g, '') + '</div>';
             }
-            return '<li class="tvp-acc-item" data-testid="tv-custom-row" data-starred="' + (starred ? '1' : '0') + '" data-has-value="' + (ev.has_value ? '1' : '0') + '">' +
+            var delBtn = locked
+                ? '<button type="button" class="w-button" data-size="sm" data-variant="outline" data-tone="neutral" data-custom-del data-testid="tv-custom-del" data-locked="1" data-weline="' + name.replace(/"/g, '') + '" disabled title="自动发现事件不可删除" aria-disabled="true">不可删</button>'
+                : '<button type="button" class="w-button" data-size="sm" data-variant="outline" data-tone="danger" data-custom-del data-testid="tv-custom-del" data-weline="' + name.replace(/"/g, '') + '">删除</button>';
+            return '<li class="tvp-acc-item" data-testid="tv-custom-row" data-origin="' + String(ev.origin || 'manual').replace(/"/g, '') + '" data-deletable="' + (locked ? '0' : '1') + '" data-starred="' + (starred ? '1' : '0') + '" data-has-value="' + (ev.has_value ? '1' : '0') + '">' +
                 '<div class="tvp-acc-item__name">' +
                 '<button type="button" class="tvp-star-btn" data-event-star data-weline="' + name.replace(/"/g, '') + '" data-starred="' + (starred ? '1' : '0') + '" title="标星" aria-label="标星">' + (starred ? '★' : '☆') + '</button> ' +
                 name.replace(/</g, '') + ' ' + eventBadgesHtml(ev) +
@@ -930,18 +1214,33 @@ if ($selected === null && $vendorsRuntime !== []) {
                 matchBits +
                 '<div class="w-cluster tvp-acc-item__actions" style="--w-gap:var(--weline-space-1);align-items:center;">' +
                 categorySelectHtml(ev.category || 'custom') +
-                '<button type="button" class="w-button" data-size="sm" data-custom-add data-weline="' + name.replace(/"/g, '') + '" data-third="' + name.replace(/"/g, '') + '">加入搭接</button>' +
-                '<button type="button" class="w-button" data-size="sm" data-variant="outline" data-tone="danger" data-custom-del data-testid="tv-custom-del" data-weline="' + name.replace(/"/g, '') + '">删除</button>' +
+                '<button type="button" class="w-button" data-size="sm" data-variant="outline" data-custom-edit data-testid="tv-custom-edit" data-weline="' + name.replace(/"/g, '') + '">编辑</button>' +
+                '<button type="button" class="w-button" data-size="sm" data-variant="outline" data-tone="neutral" data-custom-add data-weline="' + name.replace(/"/g, '') + '" data-third="' + name.replace(/"/g, '') + '">加入搭接</button>' +
+                delBtn +
                 '</div>' +
                 '</li>';
         }).join('');
         list.querySelectorAll('[data-custom-add]').forEach(function (btn) {
             btn.addEventListener('click', function () {
                 addMapRow(btn.getAttribute('data-weline'), btn.getAttribute('data-third'));
+                activateMapSubtab('wiring');
+            });
+        });
+        list.querySelectorAll('[data-custom-edit]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var n = btn.getAttribute('data-weline') || '';
+                var found = (customEvents || []).filter(function (ev) {
+                    return String(ev.name || ev.weline_event || '') === n;
+                })[0];
+                focusEditEvent(found || { name: n });
             });
         });
         list.querySelectorAll('[data-custom-del]').forEach(function (btn) {
             btn.addEventListener('click', function () {
+                if (btn.getAttribute('data-locked') === '1' || btn.disabled) {
+                    themeToastError('自动发现事件不可删除，可编辑条件/映射或加入搭接');
+                    return;
+                }
                 deleteCustomEvent(btn.getAttribute('data-weline') || '', btn);
             });
         });
@@ -957,11 +1256,11 @@ if ($selected === null && $vendorsRuntime !== []) {
                             }
                             return ev;
                         });
-                        // 星标置顶
                         customEvents.sort(function (a, b) {
                             return (!!b.starred) - (!!a.starred) || String(a.name || '').localeCompare(String(b.name || ''));
                         });
                         renderCustomEvents(customEvents);
+                        broadcastTrackingReload(data);
                     }
                 });
             });
@@ -982,6 +1281,7 @@ if ($selected === null && $vendorsRuntime !== []) {
                             return ev;
                         });
                         renderCustomEvents(customEvents);
+                        broadcastTrackingReload(data);
                     }
                 });
             });
@@ -997,6 +1297,14 @@ if ($selected === null && $vendorsRuntime !== []) {
             renderCustomEvents(customEvents);
         });
     });
+
+    var customSearch = document.getElementById('tv-custom-search');
+    if (customSearch) {
+        customSearch.addEventListener('input', function () {
+            customSearchQuery = customSearch.value || '';
+            renderCustomEvents(customEvents);
+        });
+    }
 
     function themeConfirm(message, options) {
         if (window.Weline && window.Weline.UI && window.Weline.UI.dialog
@@ -1059,11 +1367,16 @@ if ($selected === null && $vendorsRuntime !== []) {
             }).then(function (r) { return r.json(); }).then(function (data) {
                 if (data && data.ok && Array.isArray(data.events)) {
                     renderCustomEvents(data.events);
+                    broadcastTrackingReload(data);
                     return;
                 }
                 if (btn) {
                     btn.disabled = false;
-                    btn.textContent = '删除失败';
+                    btn.textContent = '删除';
+                }
+                if (data && data.error === 'locked_auto_discovered') {
+                    themeToastError(data.message || '自动发现事件不可删除');
+                    return;
                 }
                 themeToastError((data && (data.error || data.message)) || '删除失败');
             }).catch(function () {
@@ -1141,9 +1454,114 @@ if ($selected === null && $vendorsRuntime !== []) {
         }
     }
 
+    function eventParamsHtml(params) {
+        if (!params || typeof params !== 'object') {
+            return '<div class="tvp-acc-params" data-empty="1">无事件参数</div>';
+        }
+        var keys = Object.keys(params);
+        if (!keys.length) {
+            return '<div class="tvp-acc-params" data-empty="1">无事件参数</div>';
+        }
+        return '<div class="tvp-acc-params" data-testid="tv-acc-event-params">' +
+            keys.slice(0, 16).map(function (key) {
+                var val = params[key];
+                if (val != null && typeof val === 'object') {
+                    try { val = JSON.stringify(val); } catch (e) { val = String(val); }
+                }
+                return '<span class="tvp-acc-param"><b>' + String(key).replace(/</g, '') + '</b>=' + String(val).replace(/</g, '') + '</span>';
+            }).join('') +
+            '</div>';
+    }
+
+    function collectParamPairs(ev, insights) {
+        var pairs = [];
+        var seen = {};
+        function push(key, value) {
+            key = String(key || '').trim();
+            if (!key || seen[key]) return;
+            seen[key] = 1;
+            var val = value;
+            if (val != null && typeof val === 'object') {
+                try { val = JSON.stringify(val); } catch (e) { val = String(val); }
+            }
+            pairs.push({ key: key, value: val == null ? '' : String(val) });
+        }
+        var params = ev && ev.params && typeof ev.params === 'object' ? ev.params : {};
+        Object.keys(params).slice(0, 24).forEach(function (k) { push(k, params[k]); });
+        (insights && insights.params ? insights.params : []).forEach(function (p) {
+            push(p.key, p.value);
+        });
+        return pairs;
+    }
+
+    function escapeAttr(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/</g, '&lt;');
+    }
+
+    function copyableParamsHtml(pairs, idx) {
+        if (!pairs || !pairs.length) {
+            return '<div class="tvp-acc-params" data-empty="1">无事件参数</div>';
+        }
+        return '<div class="tvp-acc-copy-params" data-testid="tv-acc-copy-params">' +
+            pairs.map(function (p) {
+                return '<div class="tvp-acc-copy-row" data-testid="tv-acc-copy-row">' +
+                    '<code class="tvp-acc-copy-row__pair" title="' + escapeAttr(p.key + '=' + p.value) + '"><b>' + String(p.key).replace(/</g, '') + '</b>=' + String(p.value).replace(/</g, '') + '</code>' +
+                    '<span class="w-cluster tvp-acc-copy-row__actions" style="--w-gap:var(--weline-space-1);">' +
+                    '<button type="button" class="w-button" data-size="sm" data-variant="outline" data-tone="neutral" data-copy-kind="key" data-copy-text="' + escapeAttr(p.key) + '" data-testid="tv-acc-copy-key">名</button>' +
+                    '<button type="button" class="w-button" data-size="sm" data-variant="outline" data-tone="neutral" data-copy-kind="value" data-copy-text="' + escapeAttr(p.value) + '" data-testid="tv-acc-copy-value">值</button>' +
+                    '<button type="button" class="w-button" data-size="sm" data-variant="outline" data-tone="neutral" data-copy-kind="pair" data-copy-text="' + escapeAttr(p.key + '=' + p.value) + '" data-testid="tv-acc-copy-pair">键值</button>' +
+                    '</span></div>';
+            }).join('') +
+            '</div>';
+    }
+
+    function copyText(text, btn) {
+        var value = String(text == null ? '' : text);
+        function done(ok) {
+            if (!btn) return;
+            var prev = btn.getAttribute('data-label-prev') || btn.textContent;
+            if (!btn.getAttribute('data-label-prev')) btn.setAttribute('data-label-prev', prev);
+            btn.textContent = ok ? '已复制' : '失败';
+            window.setTimeout(function () {
+                btn.textContent = btn.getAttribute('data-label-prev') || prev;
+            }, 900);
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(value).then(function () { done(true); }).catch(function () {
+                try {
+                    var ta = document.createElement('textarea');
+                    ta.value = value;
+                    ta.setAttribute('readonly', 'readonly');
+                    ta.style.position = 'fixed';
+                    ta.style.insetInlineStart = '-9999px';
+                    document.body.appendChild(ta);
+                    ta.select();
+                    done(document.execCommand('copy'));
+                    document.body.removeChild(ta);
+                } catch (e) {
+                    done(false);
+                }
+            });
+            return;
+        }
+        try {
+            var ta2 = document.createElement('textarea');
+            ta2.value = value;
+            document.body.appendChild(ta2);
+            ta2.select();
+            done(document.execCommand('copy'));
+            document.body.removeChild(ta2);
+        } catch (e2) {
+            done(false);
+        }
+    }
+
     function urlParamsHtml(insights) {
         if (!insights || !insights.params || !insights.params.length) {
-            return '<div class="tvp-acc-params" data-empty="1">无查询参数</div>';
+            return '';
         }
         return '<div class="tvp-acc-params" data-testid="tv-acc-params">' +
             insights.params.map(function (p) {
@@ -1157,74 +1575,485 @@ if ($selected === null && $vendorsRuntime !== []) {
             '</div>';
     }
 
+    var STREAM_SESSION_KEY = 'tvp_session_stream_v1';
+    var activeStreamTab = 'stream';
+    var sessionStreamEvents = [];
+    var sandboxClearEpoch = 0;
+    var sandboxGeneration = 0;
+    var expandedAccIdx = {};
+    var streamSearchQuery = '';
+    var sandboxCompanionOpen = false;
+    var companionUserClosed = false;
+
+    function streamEventExpandKey(ev, idx) {
+        try {
+            return eventStreamKey(ev);
+        } catch (e) {
+            return 'idx:' + String(idx);
+        }
+    }
+
+    function setExclusiveExpanded(key, open) {
+        expandedAccIdx = {};
+        if (open && key) {
+            expandedAccIdx[key] = true;
+        }
+    }
+
+    function streamSessionKey() {
+        return STREAM_SESSION_KEY + ':' + String(websiteId || 0) + ':' + String(storageScope || '');
+    }
+
+    function loadSessionStream() {
+        try {
+            var raw = sessionStorage.getItem(streamSessionKey());
+            var parsed = raw ? JSON.parse(raw) : [];
+            sessionStreamEvents = Array.isArray(parsed) ? parsed : [];
+        } catch (e) {
+            sessionStreamEvents = [];
+        }
+        return sessionStreamEvents;
+    }
+
+    function saveSessionStream() {
+        try {
+            sessionStorage.setItem(streamSessionKey(), JSON.stringify((sessionStreamEvents || []).slice(0, 200)));
+        } catch (e) {}
+    }
+
+    function eventStreamKey(ev) {
+        if (ev && ev.id) return 'id:' + String(ev.id);
+        if (ev && ev.seq) return 'seq:' + String(ev.seq);
+        return [ev.weline_event || '', ev.at || '', ev.source || '', ev.path || ''].join('|');
+    }
+
+    function mergeSessionStream(incoming) {
+        loadSessionStream();
+        var map = {};
+        (sessionStreamEvents || []).forEach(function (ev) {
+            map[eventStreamKey(ev)] = ev;
+        });
+        (incoming || []).forEach(function (ev) {
+            if (!ev || typeof ev !== 'object') return;
+            map[eventStreamKey(ev)] = ev;
+        });
+        sessionStreamEvents = Object.keys(map).map(function (k) { return map[k]; });
+        sessionStreamEvents.sort(function (a, b) {
+            var sb = Number(b.seq || 0);
+            var sa = Number(a.seq || 0);
+            if (sb !== sa) return sb - sa;
+            return String(b.at || '').localeCompare(String(a.at || ''));
+        });
+        if (sessionStreamEvents.length > 200) {
+            sessionStreamEvents = sessionStreamEvents.slice(0, 200);
+        }
+        saveSessionStream();
+        return sessionStreamEvents;
+    }
+
+    function activateStreamTab(tab) {
+        tab = (tab === 'system' || tab === 'custom') ? tab : 'stream';
+        activeStreamTab = tab;
+        document.querySelectorAll('[data-stream-tab]').forEach(function (btn) {
+            var on = (btn.getAttribute('data-stream-tab') || '') === tab;
+            btn.setAttribute('data-active', on ? '1' : '0');
+            btn.setAttribute('aria-selected', on ? 'true' : 'false');
+        });
+        document.querySelectorAll('[data-stream-panel]').forEach(function (panel) {
+            var on = (panel.getAttribute('data-stream-panel') || '') === tab;
+            if (on) panel.removeAttribute('hidden');
+            else panel.setAttribute('hidden', 'hidden');
+        });
+    }
+
+    function bindStreamTabs() {
+        document.querySelectorAll('[data-stream-tab]').forEach(function (btn) {
+            if (btn.__tvStreamBound) return;
+            btn.__tvStreamBound = true;
+            btn.addEventListener('click', function () {
+                activateStreamTab(btn.getAttribute('data-stream-tab') || 'stream');
+            });
+        });
+        activateStreamTab(activeStreamTab);
+    }
+
+    function aggregateHits(events, kind) {
+        var counts = {};
+        (events || []).forEach(function (ev) {
+            if (ev && ev.event_hit === false) return;
+            var hk = String(ev.hit_kind || '').toLowerCase();
+            if (hk !== 'system' && hk !== 'custom') return;
+            if (hk !== kind) return;
+            var name = String(ev.weline_event || '');
+            if (!name) return;
+            counts[name] = (counts[name] || 0) + 1;
+        });
+        return Object.keys(counts).sort().map(function (name) {
+            return { name: name, count: counts[name] };
+        });
+    }
+
+    function renderHitList(listEl, hits, tone) {
+        if (!listEl) return;
+        if (!hits.length) {
+            listEl.innerHTML = '<li class="tvp-acc-empty">本会话尚无' + (tone === 'system' ? '系统' : '自定义') + '命中。</li>';
+            return;
+        }
+        listEl.innerHTML = hits.map(function (h) {
+            return '<li class="tvp-acc-item" data-hit-kind="' + tone + '" data-testid="tv-acc-hit-row">' +
+                '<div class="tvp-acc-item__name">' + String(h.name).replace(/</g, '') +
+                ' <span class="tvp-acc-badge" data-tone="' + (tone === 'system' ? 'system' : 'custom') + '">×' + h.count + '</span></div>' +
+                '</li>';
+        }).join('');
+    }
+
+    function bindParamCopyActions(root) {
+        if (!root) return;
+        root.querySelectorAll('[data-copy-text]').forEach(function (btn) {
+            if (btn.__tvCopyBound) return;
+            btn.__tvCopyBound = true;
+            btn.addEventListener('click', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                copyText(btn.getAttribute('data-copy-text') || '', btn);
+            });
+        });
+        root.querySelectorAll('[data-acc-bar]').forEach(function (bar) {
+            if (bar.__tvExpandBound) return;
+            bar.__tvExpandBound = true;
+            bar.addEventListener('click', function (e) {
+                if (e.target && e.target.closest && e.target.closest('[data-acc-star],button,a,input,select,textarea')) {
+                    return;
+                }
+                e.preventDefault();
+                var key = String(bar.getAttribute('data-acc-bar') || '');
+                var next = !expandedAccIdx[key];
+                setExclusiveExpanded(key, next);
+                renderSessionStream();
+            });
+        });
+    }
+
+    function bindAccActions(list) {
+        if (!list) return;
+        list.querySelectorAll('[data-acc-add]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                addMapRow(btn.getAttribute('data-weline'), btn.getAttribute('data-third'));
+            });
+        });
+        list.querySelectorAll('[data-acc-create]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                focusCreateEvent({
+                    name: btn.getAttribute('data-weline') || '',
+                    third: btn.getAttribute('data-third') || '',
+                    paramsHint: decodeURIComponent(btn.getAttribute('data-params') || '')
+                });
+            });
+        });
+        list.querySelectorAll('[data-acc-star]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var n = btn.getAttribute('data-weline') || '';
+                var next = btn.getAttribute('data-starred') === '1' ? '0' : '1';
+                annotateEvent(n, { starred: next }).then(function (data) {
+                    if (data && data.ok) refreshAccumulate();
+                });
+            });
+        });
+        bindParamCopyActions(list);
+    }
+
+    function streamEventItemHtml(ev, idx, opts) {
+        opts = opts || {};
+        var compact = !!opts.compact;
+        var name = String(ev.weline_event || '');
+        var third = String(ev.third_party_event || name);
+        var kind = String(ev.kind || 'single');
+        var steps = Number(ev.chain_steps || 0);
+        var rawUrl = String(ev.path || ev.summary || '');
+        var insights = parseUrlInsights(rawUrl);
+        var hitKind = String(ev.hit_kind || '').toLowerCase();
+        if (ev.event_hit === false || (hitKind !== 'system' && hitKind !== 'custom')) {
+            hitKind = '';
+        }
+        var pairs = collectParamPairs(ev, insights);
+        var expandKey = streamEventExpandKey(ev, idx);
+        var open = !!expandedAccIdx[expandKey];
+        var metaBits = [ev.source || '', kind === 'chain' ? ('链' + steps + '步') : '', ev.at || ''].filter(Boolean);
+        if (insights.host) metaBits.push(insights.host);
+        if (insights.channelHints && insights.channelHints.length) {
+            metaBits.push('渠道线索 ' + insights.channelHints.slice(0, 2).join(', '));
+        }
+        var badge = kind === 'chain' ? ' <span class="tvp-acc-badge">链</span>' : '';
+        var valued = ev.has_value ? ' <span class="tvp-acc-badge" data-tone="value">有值</span>' : '';
+        var kindBadge = hitKind === 'system'
+            ? ' <span class="tvp-acc-badge" data-tone="system">系统</span>'
+            : (hitKind === 'custom'
+                ? ' <span class="tvp-acc-badge" data-tone="custom">自定义</span>'
+                : ' <span class="tvp-acc-badge" data-tone="cat">流过</span>');
+        var paramsBlock = open
+            ? copyableParamsHtml(pairs, idx)
+            : '';
+        var actions = compact
+            ? ''
+            : ('<div class="w-cluster tvp-acc-item__actions" style="--w-gap:var(--weline-space-1);">' +
+                '<button type="button" class="w-button" data-size="sm" data-variant="outline" data-tone="neutral" data-acc-create data-testid="tv-acc-create" data-weline="' + name.replace(/"/g, '') + '" data-third="' + third.replace(/"/g, '') + '" data-params="' + encodeURIComponent((insights.channelHints || []).join('&')) + '">创建事件</button>' +
+                '<button type="button" class="w-button" data-size="sm" data-variant="outline" data-tone="neutral" data-acc-add data-testid="tv-acc-add" data-weline="' + name.replace(/"/g, '') + '" data-third="' + third.replace(/"/g, '') + '">加入搭接</button>' +
+                '</div>');
+        return '<li class="tvp-acc-item" data-acc-idx="' + idx + '" data-acc-key="' + expandKey.replace(/"/g, '') + '" data-hit-kind="' + (hitKind || 'stream') + '" data-expanded="' + (open ? '1' : '0') + '" data-has-params="' + (pairs.length ? '1' : '0') + '" data-testid="' + (compact ? 'tv-companion-row' : 'tv-acc-stream-row') + '">' +
+            '<div class="tvp-acc-item__bar" data-acc-bar="' + expandKey.replace(/"/g, '') + '" data-testid="tv-acc-bar" role="button" tabindex="0" aria-expanded="' + (open ? 'true' : 'false') + '" title="点击事件栏展开或折叠">' +
+            '<div class="tvp-acc-item__name">' +
+            (compact ? '' : ('<button type="button" class="tvp-star-btn" data-acc-star data-weline="' + name.replace(/"/g, '') + '" data-starred="' + (ev.starred ? '1' : '0') + '" title="标星">' + (ev.starred ? '★' : '☆') + '</button> ')) +
+            name.replace(/</g, '') + badge + valued + kindBadge +
+            (pairs.length ? ' <span class="tvp-acc-badge" data-tone="cat">参数 · ' + pairs.length + '</span>' : '') +
+            '</div>' +
+            '<div class="tvp-acc-item__meta">' + metaBits.join(' · ').replace(/</g, '') + '</div>' +
+            '<div class="tvp-acc-item__path" title="' + rawUrl.replace(/"/g, '&quot;') + '">' + String(insights.path || rawUrl).replace(/</g, '') + '</div>' +
+            '</div>' +
+            paramsBlock +
+            actions +
+            '</li>';
+    }
+
+    function showSandboxCompanion() {
+        var panel = document.getElementById('tv-map-accumulate') || document.querySelector('[data-testid="tv-map-accumulate"]');
+        var dlg = document.getElementById('tv-ga4-create-dialog');
+        var closeBtn = document.getElementById('tv-sandbox-float-close');
+        companionUserClosed = false;
+        sandboxCompanionOpen = true;
+        if (panel) {
+            panel.setAttribute('data-float', '1');
+            panel.classList.add('tvp-map-stream--float');
+        }
+        if (closeBtn) closeBtn.hidden = false;
+        if (dlg) dlg.setAttribute('data-with-sandbox', '1');
+        document.documentElement.setAttribute('data-tv-sandbox-float', '1');
+        activateStreamTab('stream');
+        loadSessionStream();
+        renderSessionStream();
+        refreshAccumulate();
+    }
+
+    function hideSandboxCompanion(fromUser) {
+        var panel = document.getElementById('tv-map-accumulate') || document.querySelector('[data-testid="tv-map-accumulate"]');
+        var dlg = document.getElementById('tv-ga4-create-dialog');
+        var closeBtn = document.getElementById('tv-sandbox-float-close');
+        if (fromUser) companionUserClosed = true;
+        sandboxCompanionOpen = false;
+        if (panel) {
+            panel.setAttribute('data-float', '0');
+            panel.classList.remove('tvp-map-stream--float');
+        }
+        if (closeBtn) closeBtn.hidden = true;
+        if (dlg) dlg.removeAttribute('data-with-sandbox');
+        document.documentElement.removeAttribute('data-tv-sandbox-float');
+    }
+
+    function renderSessionStream() {
+        var list = document.getElementById('tv-acc-list');
+        var systemList = document.getElementById('tv-acc-hit-system');
+        var customList = document.getElementById('tv-acc-hit-custom');
+        var searchEl = document.getElementById('tv-acc-search');
+        if (searchEl && !searchEl.__tvSearchBound) {
+            searchEl.__tvSearchBound = true;
+            searchEl.addEventListener('input', function () {
+                streamSearchQuery = String(searchEl.value || '').trim().toLowerCase();
+                renderSessionStream();
+            });
+        }
+        streamSearchQuery = searchEl ? String(searchEl.value || '').trim().toLowerCase() : streamSearchQuery;
+        var events = sessionStreamEvents || [];
+        var systemHits = aggregateHits(events, 'system');
+        var customHits = aggregateHits(events, 'custom');
+        var sysCount = systemHits.reduce(function (s, h) { return s + h.count; }, 0);
+        var custCount = customHits.reduce(function (s, h) { return s + h.count; }, 0);
+        var sysEl = document.getElementById('tv-stream-system-count');
+        var custEl = document.getElementById('tv-stream-custom-count');
+        var allEl = document.getElementById('tv-stream-all-count');
+        if (sysEl) sysEl.textContent = String(sysCount);
+        if (custEl) custEl.textContent = String(custCount);
+        if (allEl) allEl.textContent = String(events.length);
+        renderHitList(systemList, systemHits, 'system');
+        renderHitList(customList, customHits, 'custom');
+        if (!list) return;
+        if (!events.length) {
+            list.innerHTML = '<li class="tvp-acc-empty">沙盒暂无事件。前台点击/emit 会打洞即时出现；可点「清理」后重新监听。</li>';
+            return;
+        }
+        var shown = events.map(function (ev, idx) { return { ev: ev, idx: idx }; }).filter(function (row) {
+            if (!streamSearchQuery) return true;
+            var n = String(row.ev.weline_event || '').toLowerCase();
+            var t = String(row.ev.third_party_event || '').toLowerCase();
+            return n.indexOf(streamSearchQuery) >= 0 || t.indexOf(streamSearchQuery) >= 0;
+        });
+        if (!shown.length) {
+            list.innerHTML = '<li class="tvp-acc-empty">当前搜索无匹配事件。</li>';
+            return;
+        }
+        list.innerHTML = shown.map(function (row) {
+            return streamEventItemHtml(row.ev, row.idx, { compact: false });
+        }).join('');
+        bindAccActions(list);
+    }
+
+    var streamCursor = 0;
+    var liveTunnelAbort = null;
+    var liveTunnelActive = false;
+
+    function bumpStreamCursor(events, fallback) {
+        var max = Number(fallback || streamCursor || 0);
+        (events || []).forEach(function (ev) {
+            var seq = Number(ev && ev.seq || 0);
+            if (seq > max) max = seq;
+        });
+        streamCursor = max;
+        return streamCursor;
+    }
+
     function refreshAccumulate() {
         var list = document.getElementById('tv-acc-list');
         if (!list || !recentUrl) return;
-        var url = recentUrl + (recentUrl.indexOf('?') >= 0 ? '&' : '?') + 'limit=40';
+        bindStreamTabs();
+        var url = recentUrl + (recentUrl.indexOf('?') >= 0 ? '&' : '?') + 'limit=80&sandbox_only=1';
         fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
             .then(function (r) { return r.json(); })
             .then(function (data) {
                 var events = (data && data.events) || [];
-                if (!events.length) {
-                    list.innerHTML = '<li class="tvp-acc-empty">沙盒暂无事件。启动拾取后在前台操作，或等待像素入库。</li>';
-                    return;
+                if (data && data.cursor != null) {
+                    streamCursor = Math.max(streamCursor, Number(data.cursor) || 0);
                 }
-                list.innerHTML = events.map(function (ev, idx) {
-                    var name = String(ev.weline_event || '');
-                    var third = String(ev.third_party_event || name);
-                    var kind = String(ev.kind || 'single');
-                    var steps = Number(ev.chain_steps || 0);
-                    var rawUrl = String(ev.path || ev.summary || '');
-                    var insights = parseUrlInsights(rawUrl);
-                    var metaBits = [ev.source || '', kind === 'chain' ? ('链' + steps + '步') : '', ev.at || ''].filter(Boolean);
-                    if (insights.host) metaBits.push(insights.host);
-                    if (insights.channelHints && insights.channelHints.length) {
-                        metaBits.push('渠道线索 ' + insights.channelHints.slice(0, 2).join(', '));
-                    }
-                    var badge = kind === 'chain' ? ' <span class="tvp-acc-badge">链</span>' : '';
-                    var valued = ev.has_value ? ' <span class="tvp-acc-badge" data-tone="value">有值</span>' : '';
-                    var cat = ev.category_label ? (' <span class="tvp-acc-badge" data-tone="cat">' + String(ev.category_label).replace(/</g, '') + '</span>') : '';
-                    var custom = ev.custom ? ' <span class="tvp-acc-badge">自定义</span>' : '';
-                    return '<li class="tvp-acc-item" data-acc-idx="' + idx + '" data-has-params="' + (insights.params.length ? '1' : '0') + '">' +
-                        '<div class="tvp-acc-item__name">' +
-                        '<button type="button" class="tvp-star-btn" data-acc-star data-weline="' + name.replace(/"/g, '') + '" data-starred="' + (ev.starred ? '1' : '0') + '" title="标星">' + (ev.starred ? '★' : '☆') + '</button> ' +
-                        name.replace(/</g, '') + badge + valued + cat + custom + '</div>' +
-                        '<div class="tvp-acc-item__meta">' + metaBits.join(' · ').replace(/</g, '') + '</div>' +
-                        '<div class="tvp-acc-item__path" title="' + rawUrl.replace(/"/g, '&quot;') + '">' + String(insights.path || rawUrl).replace(/</g, '') + '</div>' +
-                        urlParamsHtml(insights) +
-                        '<div class="w-cluster tvp-acc-item__actions" style="--w-gap:var(--weline-space-1);">' +
-                        '<button type="button" class="w-button" data-size="sm" data-tone="primary" data-acc-create data-weline="' + name.replace(/"/g, '') + '" data-third="' + third.replace(/"/g, '') + '" data-params="' + encodeURIComponent((insights.channelHints || []).join('&')) + '">创建事件</button>' +
-                        '<button type="button" class="w-button" data-size="sm" data-acc-add data-weline="' + name.replace(/"/g, '') + '" data-third="' + third.replace(/"/g, '') + '">加入搭接</button>' +
-                        '</div>' +
-                        '</li>';
-                }).join('');
-                list.querySelectorAll('[data-acc-add]').forEach(function (btn) {
-                    btn.addEventListener('click', function () {
-                        addMapRow(btn.getAttribute('data-weline'), btn.getAttribute('data-third'));
-                    });
-                });
-                list.querySelectorAll('[data-acc-create]').forEach(function (btn) {
-                    btn.addEventListener('click', function () {
-                        focusCreateEvent({
-                            name: btn.getAttribute('data-weline') || '',
-                            third: btn.getAttribute('data-third') || '',
-                            paramsHint: decodeURIComponent(btn.getAttribute('data-params') || '')
-                        });
-                    });
-                });
-                list.querySelectorAll('[data-acc-star]').forEach(function (btn) {
-                    btn.addEventListener('click', function () {
-                        var n = btn.getAttribute('data-weline') || '';
-                        var next = btn.getAttribute('data-starred') === '1' ? '0' : '1';
-                        annotateEvent(n, { starred: next }).then(function (data) {
-                            if (data && data.ok) refreshAccumulate();
-                        });
-                    });
-                });
+                bumpStreamCursor(events, streamCursor);
+                mergeSessionStream(events);
+                renderSessionStream();
             })
             .catch(function () {
+                loadSessionStream();
+                if (sessionStreamEvents.length) {
+                    renderSessionStream();
+                    return;
+                }
                 list.innerHTML = '<li class="tvp-acc-empty">加载失败</li>';
             });
+    }
+
+    function clearSessionSandbox() {
+        stopLiveTunnel();
+        var clearGen = ++sandboxClearEpoch;
+        sessionStreamEvents = [];
+        streamCursor = 0;
+        try { sessionStorage.removeItem(streamSessionKey()); } catch (e) {}
+        saveSessionStream();
+        renderSessionStream();
+        var restart = function () {
+            if (clearGen !== sandboxClearEpoch) return;
+            startLiveTunnel();
+        };
+        if (!clearSessionSandboxUrl) {
+            restart();
+            return;
+        }
+        var body = new URLSearchParams();
+        body.set('website_id', String(websiteId));
+        body.set('csrf_token', csrfToken || '');
+        fetch(clearSessionSandboxUrl, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
+            },
+            body: body.toString()
+        }).then(function (r) { return r.json(); }).then(function (data) {
+            if (clearGen !== sandboxClearEpoch) return;
+            // 服务端确认清空后再次本地归零，避免短轮询把旧缓冲 merge 回来
+            sessionStreamEvents = [];
+            streamCursor = Number((data && data.cursor) || 0) || 0;
+            if (data && data.generation != null) {
+                sandboxGeneration = Math.max(sandboxGeneration, Number(data.generation) || 0);
+            }
+            try { sessionStorage.removeItem(streamSessionKey()); } catch (e2) {}
+            saveSessionStream();
+            renderSessionStream();
+            if (!data || data.ok === false) {
+                try {
+                    if (window.Weline && Weline.UI && Weline.UI.toast) {
+                        Weline.UI.toast({ type: 'error', message: '沙盒清理失败，请重试' });
+                    }
+                } catch (e3) {}
+            }
+            restart();
+        }).catch(function () {
+            if (clearGen !== sandboxClearEpoch) return;
+            try {
+                if (window.Weline && Weline.UI && Weline.UI.toast) {
+                    Weline.UI.toast({ type: 'error', message: '沙盒清理请求失败' });
+                }
+            } catch (e4) {}
+            restart();
+        });
+    }
+
+    function stopLiveTunnel() {
+        liveTunnelActive = false;
+        if (liveTunnelAbort && typeof liveTunnelAbort.abort === 'function') {
+            try { liveTunnelAbort.abort(); } catch (e) {}
+        }
+        liveTunnelAbort = null;
+    }
+
+    // 店面已继电入缓冲：后台短间隔即时拉即可，禁止 wait_ms 服务端长轮询。
+    var LIVE_POLL_MS = 1000;
+    function startLiveTunnel() {
+        if (!liveEventsUrl || liveTunnelActive) return;
+        liveTunnelActive = true;
+        var tunnelGen = sandboxClearEpoch;
+        var tick = function () {
+            if (!liveTunnelActive || tunnelGen !== sandboxClearEpoch) return;
+            var mapPanel = document.querySelector('[data-panel="map"]');
+            if (!mapPanel || mapPanel.hidden) {
+                setTimeout(tick, LIVE_POLL_MS);
+                return;
+            }
+            var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+            liveTunnelAbort = ctrl;
+            var url = liveEventsUrl
+                + (liveEventsUrl.indexOf('?') >= 0 ? '&' : '?')
+                + 'since=' + encodeURIComponent(String(streamCursor || 0))
+                + '&generation=' + encodeURIComponent(String(sandboxGeneration || 0))
+                + '&limit=80';
+            fetch(url, {
+                credentials: 'same-origin',
+                headers: { 'Accept': 'application/json' },
+                signal: ctrl ? ctrl.signal : undefined
+            }).then(function (r) { return r.json(); }).then(function (data) {
+                if (!liveTunnelActive || tunnelGen !== sandboxClearEpoch) return;
+                var nextGen = Number((data && data.generation) || 0) || 0;
+                if (sandboxGeneration > 0 && nextGen > sandboxGeneration) {
+                    sessionStreamEvents = [];
+                    streamCursor = 0;
+                    try { sessionStorage.removeItem(streamSessionKey()); } catch (eGen) {}
+                }
+                if (nextGen > 0) {
+                    sandboxGeneration = Math.max(sandboxGeneration, nextGen);
+                }
+                var events = (data && data.events) || [];
+                if (data && data.cursor != null) {
+                    streamCursor = Math.max(streamCursor, Number(data.cursor) || 0);
+                }
+                if (events.length) {
+                    bumpStreamCursor(events, streamCursor);
+                    mergeSessionStream(events);
+                    renderSessionStream();
+                } else if (data && data.changed) {
+                    renderSessionStream();
+                }
+            }).catch(function () {
+                /* aborted or network — short poll will retry */
+            }).then(function () {
+                if (!liveTunnelActive || tunnelGen !== sandboxClearEpoch) return;
+                setTimeout(tick, LIVE_POLL_MS);
+            });
+        };
+        tick();
     }
 
     function setCreateHint(text, tone) {
@@ -1242,14 +2071,163 @@ if ($selected === null && $vendorsRuntime !== []) {
 
     var currentMatchType = 'event_name';
 
+    var SOURCE_PARAM_PICKS = ['event_name', 'className', 'text', 'href', 'id', 'tag', 'page_path', 'page_location', 'page_referrer', 'value'];
+
+    function normalizeMappingList(raw) {
+        if (!raw) return [];
+        if (typeof raw === 'string') {
+            var t = raw.trim();
+            if (!t) return [];
+            if (t.charAt(0) === '[' || t.charAt(0) === '{') {
+                try { raw = JSON.parse(t); } catch (e) { raw = t.split(/[\s,，;；]+/); }
+            } else {
+                raw = t.split(/[\s,，;；]+/);
+            }
+        }
+        if (!Array.isArray(raw)) return [];
+        var out = [];
+        var seen = {};
+        raw.forEach(function (item) {
+            var name = '';
+            var from = '';
+            if (item && typeof item === 'object') {
+                name = String(item.name || item.param || item.key || item.to || '').trim();
+                from = String(item.from || item.source || item.expr || item.template || '').trim();
+            } else {
+                name = String(item || '').trim();
+            }
+            name = name.replace(/[^a-zA-Z0-9_.\[\]-]+/g, '');
+            if (!name) return;
+            if (!from) from = '{' + name + '}';
+            if (seen[name]) {
+                out[seen[name] - 1] = { name: name, from: from };
+                return;
+            }
+            seen[name] = out.length + 1;
+            out.push({ name: name, from: from });
+        });
+        return out.slice(0, 24);
+    }
+
+    function isSimpleSourcePick(from, name) {
+        from = String(from || '').trim();
+        name = String(name || '').trim();
+        return from === '{' + name + '}' || from === name;
+    }
+
+    function renderParamPick() {
+        var box = document.getElementById('tv-ga4-param-pick');
+        if (!box) return;
+        var opts = [];
+        var seen = {};
+        (matchParamOptions || []).forEach(function (o) {
+            var id = String(o.id || o.value || '').trim();
+            if (!id || seen[id]) return;
+            seen[id] = 1;
+            opts.push({ id: id, label: String(o.label || id) });
+        });
+        SOURCE_PARAM_PICKS.forEach(function (id) {
+            if (seen[id]) return;
+            seen[id] = 1;
+            opts.push({ id: id, label: id });
+        });
+        var selected = {};
+        collectParamMappings().forEach(function (m) {
+            if (isSimpleSourcePick(m.from, m.name)) selected[m.name] = 1;
+        });
+        box.innerHTML = opts.map(function (o) {
+            var id = o.id;
+            var checked = selected[id] ? ' checked' : '';
+            return '<label class="tvp-param-pick__item tvp-check" data-testid="tv-ga4-param-pick-item">' +
+                '<input type="checkbox" data-source-param="' + id.replace(/"/g, '') + '"' + checked + '>' +
+                '<span>' + String(o.label || id).replace(/</g, '') + '</span></label>';
+        }).join('');
+        box.querySelectorAll('input[data-source-param]').forEach(function (inp) {
+            inp.addEventListener('change', function () {
+                var key = String(inp.getAttribute('data-source-param') || '');
+                if (!key) return;
+                var rows = collectParamMappings();
+                if (inp.checked) {
+                    var exists = rows.some(function (r) { return r.name === key; });
+                    if (!exists) rows.push({ name: key, from: '{' + key + '}' });
+                } else {
+                    rows = rows.filter(function (r) {
+                        return !(r.name === key && isSimpleSourcePick(r.from, r.name));
+                    });
+                }
+                seedParamMappings(rows);
+            });
+        });
+    }
+
+    function addMappingRow(name, from) {
+        var body = document.getElementById('tv-ga4-map-body');
+        if (!body) return;
+        var tr = document.createElement('tr');
+        tr.innerHTML = '<td><input class="w-input" data-size="sm" data-map-name data-testid="tv-map-name" list="tv-ga4-param-list" value="' +
+            String(name || '').replace(/"/g, '&quot;') +
+            '" placeholder="产出名" autocomplete="off" spellcheck="false"></td>' +
+            '<td><input class="w-input" data-size="sm" data-map-from data-testid="tv-map-from" list="tv-ga4-param-list" value="' +
+            String(from || '').replace(/"/g, '&quot;') +
+            '" placeholder="{text} 或 {className}:{text}" autocomplete="off" spellcheck="false"></td>' +
+            '<td><button type="button" class="w-button" data-size="sm" data-map-remove data-testid="tv-map-remove">删</button></td>';
+        body.appendChild(tr);
+        var rm = tr.querySelector('[data-map-remove]');
+        if (rm) {
+            rm.addEventListener('click', function () {
+                tr.remove();
+                renderParamPick();
+            });
+        }
+        ['data-map-name', 'data-map-from'].forEach(function (sel) {
+            var el = tr.querySelector('[' + sel + ']');
+            if (el) el.addEventListener('change', function () { renderParamPick(); });
+            if (el) el.addEventListener('blur', function () { renderParamPick(); });
+        });
+    }
+
+    function collectParamMappings() {
+        var rows = [];
+        document.querySelectorAll('#tv-ga4-map-body tr').forEach(function (tr) {
+            var name = String((tr.querySelector('[data-map-name]') || {}).value || '').trim();
+            var from = String((tr.querySelector('[data-map-from]') || {}).value || '').trim();
+            name = name.replace(/[^a-zA-Z0-9_.\[\]-]+/g, '');
+            if (!name) return;
+            if (!from) from = '{' + name + '}';
+            rows.push({ name: name, from: from });
+        });
+        return rows.slice(0, 24);
+    }
+
+    function seedParamMappings(list) {
+        var body = document.getElementById('tv-ga4-map-body');
+        if (!body) return;
+        ensureMatchParamDatalist();
+        body.innerHTML = '';
+        var rows = normalizeMappingList(list);
+        rows.forEach(function (m) { addMappingRow(m.name, m.from); });
+        renderParamPick();
+    }
+
+        function ensureMatchParamDatalist() {
+        var list = document.getElementById('tv-ga4-param-list');
+        if (!list || list.getAttribute('data-ready') === '1') {
+            return;
+        }
+        list.innerHTML = (matchParamOptions || []).map(function (o) {
+            var id = String(o.id || '');
+            var label = String(o.label || id);
+            return '<option value="' + id.replace(/"/g, '&quot;') + '" label="' + label.replace(/"/g, '&quot;') + '"></option>';
+        }).join('');
+        list.setAttribute('data-ready', '1');
+    }
+
     function matchParamSelectHtml(selected) {
         selected = String(selected || 'event_name');
-        return '<select class="w-input" data-size="sm" data-cond-param>' +
-            (matchParamOptions || []).map(function (o) {
-                var id = String(o.id || '');
-                return '<option value="' + id.replace(/"/g, '') + '"' + (id === selected ? ' selected' : '') + '>' + String(o.label || id).replace(/</g, '') + '</option>';
-            }).join('') +
-            '</select>';
+        ensureMatchParamDatalist();
+        return '<input class="w-input" data-size="sm" data-cond-param data-testid="tv-cond-param" list="tv-ga4-param-list" value="'
+            + selected.replace(/"/g, '&quot;')
+            + '" placeholder="参数名，可选或手写" autocomplete="off" spellcheck="false">';
     }
 
     function matchOpSelectHtml(selected) {
@@ -1286,7 +2264,7 @@ if ($selected === null && $vendorsRuntime !== []) {
     function collectConditions() {
         var rows = [];
         document.querySelectorAll('#tv-ga4-cond-body tr').forEach(function (tr) {
-            var param = (tr.querySelector('[data-cond-param]') || {}).value || '';
+            var param = String((tr.querySelector('[data-cond-param]') || {}).value || '').trim();
             var op = (tr.querySelector('[data-cond-op]') || {}).value || 'equals';
             var value = String((tr.querySelector('[data-cond-value]') || {}).value || '').trim();
             if (!param || !value) return;
@@ -1312,11 +2290,11 @@ if ($selected === null && $vendorsRuntime !== []) {
             addConditionRow('event_name', 'equals', byParam.event_name || 'page_view');
             addConditionRow('page_location', 'contains', byParam.page_location || byParam.page_path || '');
         } else if (currentMatchType === 'custom') {
-            if (hint) hint.textContent = '自定义条件：自行添加参数 / 运算符 / 值（多条件为 AND）。';
+            if (hint) hint.textContent = '自定义条件：参数可选手写；支持多级点如 elementInfo.text；运算符 / 值（多条件为 AND）。';
             if (existing.length) {
                 existing.forEach(function (c) { addConditionRow(c.param, c.op, c.value); });
             } else {
-                addConditionRow('event_name', 'equals', '');
+                addConditionRow('className', 'contains', '');
             }
         } else {
             if (hint) hint.textContent = '事件名匹配：当源事件名等于某值时生成新事件（GA4：event_name equals …）。';
@@ -1324,11 +2302,51 @@ if ($selected === null && $vendorsRuntime !== []) {
         }
     }
 
+    function openGa4CreateDialog() {
+        var dlg = document.getElementById('tv-ga4-create-dialog');
+        if (!dlg) return;
+        showSandboxCompanion();
+        if (window.Weline && window.Weline.UI && window.Weline.UI.dialog
+            && typeof window.Weline.UI.dialog.open === 'function') {
+            window.Weline.UI.dialog.open(dlg);
+            return;
+        }
+        dlg.hidden = false;
+        dlg.setAttribute('data-state', 'open');
+        dlg.setAttribute('aria-hidden', 'false');
+    }
+
+    function closeGa4CreateDialog() {
+        var dlg = document.getElementById('tv-ga4-create-dialog');
+        if (!dlg) return;
+        hideSandboxCompanion();
+        if (window.Weline && window.Weline.UI && window.Weline.UI.dialog
+            && typeof window.Weline.UI.dialog.close === 'function') {
+            window.Weline.UI.dialog.close(dlg);
+            ga4EditOriginalName = '';
+            setGa4DialogMode(false);
+            return;
+        }
+        dlg.hidden = true;
+        dlg.setAttribute('data-state', 'closed');
+        dlg.setAttribute('aria-hidden', 'true');
+        ga4EditOriginalName = '';
+        setGa4DialogMode(false);
+    }
+
     function focusCreateEvent(opts) {
         opts = opts || {};
+        ga4EditOriginalName = '';
+        setGa4DialogMode(false);
         var nameEl = document.getElementById('tv-ga4-name');
         var thirdEl = document.getElementById('tv-ga4-third');
-        var intake = document.querySelector('[data-testid="tv-map-intake"]');
+        if (nameEl && !opts.name) nameEl.value = '';
+        if (thirdEl && !opts.third) thirdEl.value = '';
+        var copyEl = document.getElementById('tv-ga4-copy-params');
+        if (copyEl && opts.copy_params == null) copyEl.checked = true;
+        if (opts.param_mappings) seedParamMappings(opts.param_mappings);
+        else if (opts.extract_params) seedParamMappings(opts.extract_params);
+        else seedParamMappings([]);
         if (nameEl && opts.name) nameEl.value = String(opts.name);
         if (thirdEl && opts.third) thirdEl.value = String(opts.third);
         if (opts.matchType) {
@@ -1336,8 +2354,6 @@ if ($selected === null && $vendorsRuntime !== []) {
         }
         if (opts.paramsHint) {
             seedConditionsForType('url', false);
-            var loc = document.querySelector('#tv-ga4-cond-body [data-cond-param]');
-            // fill page_location value from first channel hint if present
             var pathVal = String(opts.paramsHint || '').split('&')[0] || '';
             if (pathVal.indexOf('=') >= 0) pathVal = pathVal.split('=').slice(1).join('=');
             document.querySelectorAll('#tv-ga4-cond-body tr').forEach(function (tr) {
@@ -1352,12 +2368,15 @@ if ($selected === null && $vendorsRuntime !== []) {
             if (firstVal && !firstVal.value) firstVal.value = String(opts.name);
             setCreateHint('已带入事件名条件，可改成 URL 匹配或继续编辑条件。', 'muted');
         } else {
+            if (!opts.matchType) seedConditionsForType(currentMatchType || 'event_name', false);
             setCreateHint('填写自定义事件名与匹配条件后点「创建」。', 'muted');
         }
-        if (intake && intake.scrollIntoView) intake.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        openGa4CreateDialog();
         if (nameEl) {
-            nameEl.focus();
-            if (!opts.name) nameEl.select();
+            window.setTimeout(function () {
+                nameEl.focus();
+                if (!opts.name) nameEl.select();
+            }, 30);
         }
     }
 
@@ -1366,7 +2385,12 @@ if ($selected === null && $vendorsRuntime !== []) {
         var thirdEl = document.getElementById('tv-ga4-third');
         var btn = document.getElementById('tv-ga4-add');
         var copyEl = document.getElementById('tv-ga4-copy-params');
+        var editing = !!ga4EditMode;
         var name = nameEl ? String(nameEl.value || '').trim() : '';
+        if (editing && ga4EditOriginalName) {
+            name = ga4EditOriginalName;
+            if (nameEl) nameEl.value = name;
+        }
         var third = thirdEl ? String(thirdEl.value || '').trim() : '';
         var conditions = collectConditions();
         if (!name) {
@@ -1387,7 +2411,7 @@ if ($selected === null && $vendorsRuntime !== []) {
         }
         if (btn) {
             btn.disabled = true;
-            btn.textContent = '创建中…';
+            btn.textContent = editing ? '保存中…' : '创建中…';
         }
         var body = new URLSearchParams();
         body.set('weline_event', name);
@@ -1395,6 +2419,7 @@ if ($selected === null && $vendorsRuntime !== []) {
         body.set('match_type', currentMatchType || 'custom');
         body.set('conditions_json', JSON.stringify(conditions));
         body.set('copy_params', copyEl && copyEl.checked ? '1' : '0');
+        body.set('param_mappings_json', JSON.stringify(collectParamMappings()));
         body.set('csrf_token', csrfToken || '');
         var q = scopeQuery || {};
         ['target_scope', 'website_code', 'store_code', 'channel_code', 'scope_kind', 'website_id'].forEach(function (k) {
@@ -1409,11 +2434,11 @@ if ($selected === null && $vendorsRuntime !== []) {
         }).then(function (r) { return r.json(); }).then(function (data) {
             if (btn) {
                 btn.disabled = false;
-                btn.textContent = '创建';
+                btn.textContent = editing ? '保存' : '创建';
             }
             if (!data || !data.ok) {
-                themeToastError((data && (data.error || data.message)) || '创建失败');
-                setCreateHint((data && (data.message || data.error)) || '创建失败', 'danger');
+                themeToastError((data && (data.error || data.message)) || (editing ? '保存失败' : '创建失败'));
+                setCreateHint((data && (data.message || data.error)) || (editing ? '保存失败' : '创建失败'), 'danger');
                 return;
             }
             if (Array.isArray(data.events)) {
@@ -1421,29 +2446,46 @@ if ($selected === null && $vendorsRuntime !== []) {
             } else {
                 refreshCustomEvents();
             }
-            addMapRow(data.weline_event || name, data.third_party_event || third || name);
+            broadcastTrackingReload(data);
+            if (!editing) {
+                addMapRow(data.weline_event || name, data.third_party_event || third || name);
+            }
             if (data.is_custom) {
-                themeToastSuccess('已创建到本范围');
-                setCreateHint('已创建「' + (data.weline_event || name) + '」' + (data.match_summary ? (' · ' + data.match_summary) : ''), 'success');
+                themeToastSuccess((editing ? '已保存' : '已创建到本范围') + formatRevisionTip(data.configRevision || data.config_revision));
+                setCreateHint((editing ? '已保存「' : '已创建「') + (data.weline_event || name) + '」' + (data.match_summary ? (' · ' + data.match_summary) : '') + formatRevisionTip(data.configRevision || data.config_revision), 'success');
                 if (nameEl) nameEl.value = '';
                 if (thirdEl) thirdEl.value = '';
+                seedParamMappings([]);
+                var copyReset = document.getElementById('tv-ga4-copy-params');
+                if (copyReset) copyReset.checked = true;
                 seedConditionsForType(currentMatchType, false);
+                ga4EditOriginalName = '';
+                setGa4DialogMode(false);
+                closeGa4CreateDialog();
+                activateMapSubtab('custom');
             } else {
-                themeToastSuccess(data.message || '系统事件已加入搭接');
+                themeToastSuccess((data.message || '系统事件已加入搭接') + formatRevisionTip(data.configRevision || data.config_revision));
                 setCreateHint(data.message || ('「' + (data.weline_event || name) + '」是系统字典事件，不会进入自定义池。'), 'warning');
             }
         }).catch(function () {
             if (btn) {
                 btn.disabled = false;
-                btn.textContent = '创建';
+                btn.textContent = editing ? '保存' : '创建';
             }
-            themeToastError('创建失败：网络异常');
-            setCreateHint('创建失败：网络异常', 'danger');
+            themeToastError(editing ? '保存失败：网络异常' : '创建失败：网络异常');
+            setCreateHint(editing ? '保存失败：网络异常' : '创建失败：网络异常', 'danger');
         });
     }
 
     var ga4Add = document.getElementById('tv-ga4-add');
     if (ga4Add) ga4Add.addEventListener('click', submitGa4Event);
+    var mapAdd = document.getElementById('tv-ga4-map-add');
+    if (mapAdd) {
+        mapAdd.addEventListener('click', function () {
+            addMappingRow('', '');
+        });
+    }
+    seedParamMappings([]);
     var condAdd = document.getElementById('tv-ga4-cond-add');
     if (condAdd) {
         condAdd.addEventListener('click', function () {
@@ -1456,7 +2498,7 @@ if ($selected === null && $vendorsRuntime !== []) {
         });
     });
     seedConditionsForType('event_name', false);
-    ['tv-custom-create'].forEach(function (id) {
+    ['tv-custom-create', 'tv-open-ga4-create'].forEach(function (id) {
         var el = document.getElementById(id);
         if (el) {
             el.addEventListener('click', function () {
@@ -1485,10 +2527,35 @@ if ($selected === null && $vendorsRuntime !== []) {
 
     var accRefresh = document.getElementById('tv-acc-refresh');
     if (accRefresh) accRefresh.addEventListener('click', refreshAccumulate);
+    var accClear = document.getElementById('tv-acc-clear');
+    if (accClear) accClear.addEventListener('click', clearSessionSandbox);
+    bindStreamTabs();
+    loadSessionStream();
+    bumpStreamCursor(sessionStreamEvents, 0);
+    if (sessionStreamEvents.length) renderSessionStream();
+    var companionClose = document.getElementById('tv-sandbox-float-close');
+    if (companionClose) {
+        companionClose.addEventListener('click', function () {
+            hideSandboxCompanion(true);
+        });
+    }
+    var ga4Dlg = document.getElementById('tv-ga4-create-dialog');
+    if (ga4Dlg && typeof MutationObserver === 'function') {
+        var dlgObs = new MutationObserver(function () {
+            var open = ga4Dlg.getAttribute('data-state') === 'open' && !ga4Dlg.hidden;
+            if (open && !sandboxCompanionOpen && !companionUserClosed) showSandboxCompanion();
+            if (!open) {
+                companionUserClosed = false;
+                if (sandboxCompanionOpen) hideSandboxCompanion(false);
+            }
+        });
+        dlgObs.observe(ga4Dlg, { attributes: true, attributeFilter: ['data-state', 'hidden'] });
+    }
+    refreshAccumulate();
+    startLiveTunnel();
     setInterval(function () {
         var mapPanel = document.querySelector('[data-panel="map"]');
         if (mapPanel && !mapPanel.hidden) {
-            refreshAccumulate();
             refreshCustomEvents();
         }
     }, 8000);
@@ -1582,7 +2649,10 @@ if ($selected === null && $vendorsRuntime !== []) {
 
     activateTab(resolveInitialTab(), { skipUrl: false });
     autosaveEnabled = true;
-    setAutosaveStatus('改动将自动保存', 'muted');
+    setConfigRevisionDisplay(pageConfigRevision);
+    setAutosaveStatus('改动将自动保存' + formatRevisionTip(pageConfigRevision), 'muted');
+    // 整页保存/创建后回到本页时，通知店面标签页重载 runtime
+    broadcastTrackingReload({ reload_tracking: true, configRevision: pageConfigRevision, config_revision: pageConfigRevision });
 })();
 </script>
 <script src="<?= $h($cmJs) ?>"></script>

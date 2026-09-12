@@ -25,10 +25,13 @@ final class B2BSellingModeSettingsContractTest extends TestCase
         self::assertStringContainsString('selling_mode_toc_enabled', $declaration);
         self::assertStringContainsString('selling_mode_tob_enabled', $declaration);
         self::assertStringContainsString('b2b_credit_enabled', $declaration);
+        self::assertStringContainsString('b2b_credit_min_cash_deposit_percent', $declaration);
+        self::assertStringContainsString('定金最低现金占比', $declaration);
         self::assertStringContainsString('type="switch"', $declaration);
         self::assertStringContainsString('value-type="bool"', $declaration);
         self::assertStringContainsString('scope="global,website,store"', $declaration);
         self::assertStringContainsString('key="b2b_credit_enabled"', $declaration);
+        self::assertStringContainsString('key="b2b_credit_min_cash_deposit_percent"', $declaration);
         self::assertStringContainsString('scope="global"', $declaration);
         self::assertStringContainsString('@config.area {frontend}', $declaration);
         self::assertStringContainsString('Weline_B2B::config', $declaration);
@@ -48,6 +51,7 @@ final class B2BSellingModeSettingsContractTest extends TestCase
         self::assertStringContainsString('selling_mode_toc_enabled', $configTemplate);
         self::assertStringContainsString('selling_mode_tob_enabled', $configTemplate);
         self::assertStringContainsString('b2b_credit_enabled', $configTemplate);
+        self::assertStringContainsString('b2b_credit_min_cash_deposit_percent', $configTemplate);
 
         self::assertStringContainsString('source="Weline_B2B::config"', $menuXml);
         self::assertStringContainsString('action="*/backend/config"', $menuXml);

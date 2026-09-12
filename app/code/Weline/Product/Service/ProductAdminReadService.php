@@ -73,6 +73,7 @@ final class ProductAdminReadService implements ProductAdminReadInterface, \Welin
         $codeFilter = strtolower(trim((string)($filters['product_code'] ?? '')));
         $typeFilter = strtolower(trim((string)($filters['product_type'] ?? $filters['type'] ?? '')));
         $statusFilter = strtolower(trim((string)($filters['status'] ?? '')));
+        $sourceFilter = strtolower(trim((string)($filters['source'] ?? $filters['source_platform'] ?? '')));
         $ownerFilter = array_key_exists('owner_website_id', $filters)
             ? (int)$filters['owner_website_id']
             : null;
@@ -122,7 +123,7 @@ final class ProductAdminReadService implements ProductAdminReadInterface, \Welin
                 $offersByProduct[(int)($offer['product_id'] ?? 0)][] = $offer;
             }
             $attributesByProduct = [];
-            $attributeRows = $includeDetails || $nameFilter !== ''
+            $attributeRows = $includeDetails || $nameFilter !== '' || $sourceFilter !== ''
                 ? $this->attributes->listExplicitRows($websiteId, 'product', $productIds, [0]) : [];
             foreach ($attributeRows as $attribute) {
                 $attributesByProduct[(int)($attribute['entity_id'] ?? 0)][] = $attribute;
@@ -139,12 +140,23 @@ final class ProductAdminReadService implements ProductAdminReadInterface, \Welin
                 ));
                 $attributes = $attributesByProduct[$productId] ?? [];
                 $name = '';
+                $sourcePlatform = '';
+                $attributeSet = '';
+                $attributeSetLabel = '';
                 foreach ($attributes as $attribute) {
-                    if ((string)($attribute['attribute_code'] ?? '') === 'name'
-                        && !($attribute['cleared'] ?? false)
-                    ) {
-                        $name = trim((string)($attribute['value'] ?? ''));
-                        break;
+                    $attributeCode = (string)($attribute['attribute_code'] ?? '');
+                    if (($attribute['cleared'] ?? false)) {
+                        continue;
+                    }
+                    $value = trim((string)($attribute['value'] ?? ''));
+                    if ($attributeCode === 'name' && $name === '') {
+                        $name = $value;
+                    } elseif ($attributeCode === 'source_platform' && $sourcePlatform === '') {
+                        $sourcePlatform = $value;
+                    } elseif ($attributeCode === 'attribute_set' && $attributeSet === '') {
+                        $attributeSet = $value;
+                    } elseif ($attributeCode === 'attribute_set_label' && $attributeSetLabel === '') {
+                        $attributeSetLabel = $value;
                     }
                 }
                 $skus = array_values(array_filter(array_map(
@@ -155,10 +167,14 @@ final class ProductAdminReadService implements ProductAdminReadInterface, \Welin
                     $skus[] = trim((string)($product['sku'] ?? ''));
                 }
                 $status = (string)($product['status'] ?? 'draft');
+                $sourceLabel = $this->formatSourceLabel($sourcePlatform, $attributeSet, $attributeSetLabel);
 
                 if (($nameFilter !== '' && !str_contains(strtolower($name), $nameFilter))
                     || ($skuFilter !== '' && !$this->containsAny($skus, $skuFilter))
+                    || ($statusFilter === '' && $includeDetails
+                        && strtolower((string)$status) === Product::STATUS_ARCHIVED)
                     || ($statusFilter !== '' && strtolower($status) !== $statusFilter)
+                    || !$this->matchesSourceFilter($sourceFilter, $sourcePlatform, $sourceLabel)
                 ) {
                     continue;
                 }
@@ -171,27 +187,39 @@ final class ProductAdminReadService implements ProductAdminReadInterface, \Welin
                     continue;
                 }
 
-                $baseMatches[] = compact('product', 'offers', 'offerIds', 'name', 'skus', 'status');
+                $baseMatches[] = compact(
+                    'product',
+                    'offers',
+                    'offerIds',
+                    'name',
+                    'skus',
+                    'status',
+                    'sourcePlatform',
+                    'attributeSet',
+                    'attributeSetLabel',
+                );
             }
 
             // Selection filters use authoritative identity fields without a query per product.
             // Base-filter rejections still never reach the identity reader.
+            // Admin catalog (includeDetails) must fail-soft on corrupt shard UUIDs so one bad
+            // row cannot 503 the whole products page; selection keeps strict:true.
             $identities = [];
-            if (!$includeDetails && $baseMatches !== []) {
+            if ($baseMatches !== []) {
                 $uuids = array_values(array_filter(array_map(
                     static fn(array $match): string => trim((string)($match['product']['global_product_uuid'] ?? '')),
                     $baseMatches,
                 )));
                 if ($uuids !== []) {
-                    $identities = $this->identities->resolveProductsByUuids($uuids, strict: true);
+                    $identities = $this->identities->resolveProductsByUuids($uuids, strict: !$includeDetails);
                 }
             }
             foreach ($baseMatches as ['product' => $product, 'offers' => $offers, 'offerIds' => $offerIds,
-                'name' => $name, 'skus' => $skus, 'status' => $status]) {
+                'name' => $name, 'skus' => $skus, 'status' => $status,
+                'sourcePlatform' => $sourcePlatform, 'attributeSet' => $attributeSet,
+                'attributeSetLabel' => $attributeSetLabel]) {
                 $uuid = trim((string)($product['global_product_uuid'] ?? ''));
-                $identity = $uuid === '' ? null : ($includeDetails
-                    ? $this->identities->resolveProductByUuid($uuid)
-                    : ($identities[strtolower($uuid)] ?? null));
+                $identity = $uuid === '' ? null : ($identities[strtolower($uuid)] ?? null);
                 $productCode = $identity?->productCode ?? (string)($product['product_code'] ?? '');
                 $productType = $identity?->productType ?? (string)($product['product_type'] ?? 'simple');
                 $ownerWebsiteId = $identity?->ownerWebsiteId
@@ -216,6 +244,9 @@ final class ProductAdminReadService implements ProductAdminReadInterface, \Welin
                     'product_type' => $productType,
                     'status' => $status,
                     'owner_website_id' => $ownerWebsiteId,
+                    'source_platform' => $sourcePlatform,
+                    'attribute_set' => $attributeSet,
+                    'attribute_set_label' => $attributeSetLabel,
                 ];
             }
             if ($matchedProducts === []) {
@@ -253,19 +284,17 @@ final class ProductAdminReadService implements ProductAdminReadInterface, \Welin
             }
             $activeStores ??= $this->activeStores($websiteId);
 
-            foreach ($matchedProducts as [
-                'product' => $product,
-                'identity' => $identity,
-                'uuid' => $uuid,
-                'offers' => $offers,
-                'offer_ids' => $offerIds,
-                'name' => $name,
-                'skus' => $skus,
-                'product_code' => $productCode,
-                'product_type' => $productType,
-                'status' => $status,
-                'owner_website_id' => $ownerWebsiteId,
-            ]) {
+            foreach ($matchedProducts as $matched) {
+                $product = $matched['product'];
+                $identity = $matched['identity'];
+                $uuid = (string)$matched['uuid'];
+                $offers = $matched['offers'];
+                $name = (string)$matched['name'];
+                $skus = $matched['skus'];
+                $productCode = (string)$matched['product_code'];
+                $productType = (string)$matched['product_type'];
+                $status = (string)$matched['status'];
+                $ownerWebsiteId = (int)$matched['owner_website_id'];
                 $productId = (int)$product['product_id'];
                 $priceRows = $pricesByProduct[$productId] ?? [];
                 $mediaRows = $mediaByProduct[$productId] ?? [];
@@ -297,6 +326,14 @@ final class ProductAdminReadService implements ProductAdminReadInterface, \Welin
                     'updated_at' => (string)($product['updated_at'] ?? ''),
                     'identity_version' => $identity?->version ?? 0,
                     'local_version' => (int)($product['publish_version'] ?? 0),
+                    'source_platform' => (string)($matched['source_platform'] ?? ''),
+                    'attribute_set' => (string)($matched['attribute_set'] ?? ''),
+                    'attribute_set_label' => (string)($matched['attribute_set_label'] ?? ''),
+                    'source_label' => $this->formatSourceLabel(
+                        (string)($matched['source_platform'] ?? ''),
+                        (string)($matched['attribute_set'] ?? ''),
+                        (string)($matched['attribute_set_label'] ?? ''),
+                    ),
                 ];
             }
         }
@@ -312,6 +349,46 @@ final class ProductAdminReadService implements ProductAdminReadInterface, \Welin
             ],
         );
         return $rows;
+    }
+
+    private function formatSourceLabel(string $sourcePlatform, string $attributeSet, string $attributeSetLabel): string
+    {
+        $sourcePlatform = strtolower(trim($sourcePlatform));
+        $attributeSet = strtolower(trim($attributeSet));
+        $attributeSetLabel = trim($attributeSetLabel);
+        if ($sourcePlatform !== '') {
+            $platform = strtoupper($sourcePlatform);
+            if ($attributeSetLabel !== '') {
+                return $platform . ' · ' . $attributeSetLabel;
+            }
+            if ($attributeSet === 'dropship') {
+                return $platform . ' · 货源商品';
+            }
+
+            return $platform;
+        }
+        if ($attributeSet === 'dropship') {
+            return $attributeSetLabel !== '' ? $attributeSetLabel : '货源商品';
+        }
+
+        return '';
+    }
+
+    private function matchesSourceFilter(string $sourceFilter, string $sourcePlatform, string $sourceLabel): bool
+    {
+        if ($sourceFilter === '') {
+            return true;
+        }
+        if ($sourceFilter === '__none__' || $sourceFilter === 'none') {
+            return trim($sourceLabel) === '';
+        }
+        $platform = strtolower(trim($sourcePlatform));
+        $label = strtolower(trim($sourceLabel));
+        if ($platform !== '' && ($platform === $sourceFilter || str_contains($platform, $sourceFilter))) {
+            return true;
+        }
+
+        return $label !== '' && str_contains($label, $sourceFilter);
     }
 
     public function creationContext(int $websiteId): array

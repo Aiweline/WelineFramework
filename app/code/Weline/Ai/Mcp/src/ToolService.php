@@ -87,7 +87,7 @@ final class ToolService
             self::tool(
                 'submit_task_plan',
                 'Submit session task plan',
-                'Store an accepted task-plan.v1 in this MCP process for the current readiness session. Required on every executable user requirement (not only before edits): include requirements (≥1), work_kind (feature|non_feature), goal, extension_point, requirement_scrutiny (≥1; use 合理/无调整/ok when framework-aligned, else problem + better approach), architecture (framework-based decoupled design mapping each requirement; ≥40 chars; all risk levels), coupling_findings (≥1; use 无/无耦合/none when none), skill_participation (feature must include prototype + frontend-design), dev_tasks, and ≥1 acceptance covering analysis→acceptance (feature must include type=shentu). Missing plan returns PLAN_REQUIRED with plan_workflow — compose immediately. Track progress via update_task_plan_progress and review_task_plan before closeout; closeout requires huishen_notes 汇审. If requirement_scrutiny has adjustments, user reports must include 「需求纠偏」. If coupling is found, user reports must include 「耦合提示」. Plans are not written to the repository.',
+                'Store an accepted task-plan.v1 in this MCP process for the current readiness session. Required on every executable user requirement (not only before edits): include requirements (≥1), work_kind (feature|non_feature), goal, extension_point, requirement_scrutiny (≥1; use 合理/无调整/ok when framework-aligned, else problem + better approach), architecture (framework-based decoupled design mapping each requirement; ≥40 chars; all risk levels), coupling_findings (≥1; use 无/无耦合/none when none), implicit_requirements (≥1), ui_skill_decision (participate|skip after analysis), ui_skill_rationale (required when skip), skill_participation (required when participate: prototype + frontend-design), dev_tasks, and ≥1 acceptance (participate must include type=shentu). Missing plan returns PLAN_REQUIRED with plan_workflow — compose immediately. Track progress via update_task_plan_progress and review_task_plan before closeout; closeout requires huishen_notes 汇审. If requirement_scrutiny has adjustments, user reports must include 「需求纠偏」. If coupling is found, user reports must include 「耦合提示」. Plans are not written to the repository.',
                 self::objectSchema($project + [
                     'plan' => [
                         'type' => 'object',
@@ -100,8 +100,19 @@ final class ToolService
                                 'enum' => ['feature', 'non_feature'],
                                 'description' => 'Required: feature = deliverable product capability / user-visible surface; non_feature = docs/infra/gate-only.',
                             ],
+                            'implicit_requirements' => self::stringsSchema(
+                                'Current-environment implicit/hidden requirements after analysis (≥1; use 无/无隐形需求/none only when truly none).',
+                            ),
+                            'ui_skill_decision' => [
+                                'type' => 'string',
+                                'enum' => ['participate', 'skip'],
+                                'description' => 'Decide after implicit analysis: participate = layout/interaction/CSS redesign in scope; skip = no visual redesign (rationale required).',
+                            ],
+                            'ui_skill_rationale' => self::stringSchema(
+                                'Required when ui_skill_decision=skip (≥24 chars): why prototype/UI skills are not needed.',
+                            ),
                             'skill_participation' => self::stringsSchema(
-                                'Skills participating this turn. Feature must include prototype and frontend-design.',
+                                'Skills participating this turn. Required when ui_skill_decision=participate: prototype + frontend-design.',
                             ),
                             'scope_paths' => self::stringsSchema('Repository-relative paths expected to change.'),
                             'extension_point' => self::stringSchema('Selected Event/Query/Hook/Interface/Taglib, or explicit none:reason.'),
@@ -114,10 +125,10 @@ final class ToolService
                                     'additionalProperties' => false,
                                     'properties' => [
                                         'id' => self::stringSchema('Stable acceptance id.'),
-                                        'type' => ['type' => 'string', 'enum' => ['unit', 'probe', 'browser', 'doc', 'shentu']],
+                                        'type' => ['type' => 'string', 'enum' => ['unit', 'probe', 'browser', 'e2e', 'doc', 'shentu']],
                                         'description' => self::stringSchema('How pass/fail is judged.'),
                                         'status' => ['type' => 'string', 'enum' => ['pending', 'passed', 'failed', 'skipped', 'na']],
-                                        'evidence' => self::stringSchema('Optional probe/browser/doc/shentu evidence when status is passed or failed.'),
+                                        'evidence' => self::stringSchema('Optional probe/browser/e2e/doc/shentu evidence when status is passed or failed.'),
                                     ],
                                     'required' => ['id', 'type', 'description'],
                                 ],
@@ -151,6 +162,12 @@ final class ToolService
                                         'title' => self::stringSchema('Task title.'),
                                         'status' => ['type' => 'string', 'enum' => ['pending', 'in_progress', 'done', 'blocked', 'cancelled']],
                                         'notes' => self::stringSchema('Optional progress notes.'),
+                                        'acceptance_ids' => self::stringsSchema(
+                                            'Hard-bound acceptance ids for this chapter closed loop (required when plan has acceptances). Feature chapters must include ≥1 type=e2e; chapters must not share the same e2e id.',
+                                        ),
+                                        'covers_requirements' => self::stringsSchema(
+                                            'Requirement bullets/snippets this chapter covers; required when multi-requirement chaptered plans.',
+                                        ),
                                     ],
                                     'required' => ['id', 'title'],
                                 ],
@@ -159,7 +176,9 @@ final class ToolService
                         'required' => [
                             'goal',
                             'requirements',
+                            'implicit_requirements',
                             'work_kind',
+                            'ui_skill_decision',
                             'extension_point',
                             'architecture',
                             'requirement_scrutiny',
@@ -193,8 +212,15 @@ final class ToolService
                                 'enum' => ['feature', 'non_feature'],
                                 'description' => 'Updated feature/non_feature classification.',
                             ],
+                            'implicit_requirements' => self::stringsSchema('Updated implicit environment-analysis bullets.'),
+                            'ui_skill_decision' => [
+                                'type' => 'string',
+                                'enum' => ['participate', 'skip'],
+                                'description' => 'Updated prototype/UI participation decision after analysis.',
+                            ],
+                            'ui_skill_rationale' => self::stringSchema('Updated skip rationale when ui_skill_decision=skip.'),
                             'skill_participation' => self::stringsSchema(
-                                'Updated skill participation; feature must keep prototype + frontend-design.',
+                                'Updated skill participation; when ui_skill_decision=participate keep prototype + frontend-design.',
                             ),
                             'architecture' => self::stringSchema(
                                 'Updated architecture notes; must still map requirements with a framework-based decoupled design.',
@@ -243,7 +269,7 @@ final class ToolService
             self::tool(
                 'review_task_plan',
                 'Review task plan completeness',
-                'Return gaps, completeness_ratio, and closeout_allowed for the session plan. Optionally append omission_notes. closeout_allowed=true is required before claiming feature done.',
+                'Return gaps, completeness_ratio, compliance_dimensions, and closeout_allowed for the session plan. Compliance dimensions (task_plan_compliance_review): architecture, decoupling, ecommerce, prototype, e2e completeness, plan size, closed-loop rigor. Chapters should each be one e2e closed loop; mark progress before the next chapter. Optionally append omission_notes. closeout_allowed=true is required before claiming feature done.',
                 self::objectSchema($project + [
                     'omission_notes' => self::stringSchema('Optional notes from omission review.'),
                 ], ['repository', 'client_session_id', 'readiness_id']),

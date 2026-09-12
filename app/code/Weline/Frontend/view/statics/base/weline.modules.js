@@ -20,8 +20,8 @@
             async: true
         },
         miniCartExtras: {
-            origin_paths: ["app/code/Weline/Theme/view/statics/js/widgets/mini-cart-extras-tabs.js?v=20260909-cart-summary-tabs1"],
-            paths: ["/Weline/Theme/view/statics/js/widgets/mini-cart-extras-tabs.js?v=20260909-cart-summary-tabs1"],
+            origin_paths: ["app/code/Weline/Theme/view/statics/js/widgets/mini-cart-extras-tabs.js?v=20260911-credit-tob-only1"],
+            paths: ["/Weline/Theme/view/statics/js/widgets/mini-cart-extras-tabs.js?v=20260911-credit-tob-only1"],
             globalVar: "WelineMiniCartExtras",
             description: "迷你购物车 extras 页签交互"
         },
@@ -155,6 +155,13 @@
             load: "eager",
             description: "支付生命周期：weline:payment:* 统一事件"
         },
+        productExpressPay: {
+            origin_paths: ["app/code/Weline/Payment/view/statics/js/product-express-pay.js?v=20260912-pdp-express-popup1"],
+            paths: ["/Weline/Payment/view/statics/js/product-express-pay.js?v=20260912-pdp-express-popup1"],
+            globalVar: "WelineProductExpressPay",
+            load: "lazy",
+            description: "PDP 快捷智能支付：加车后 startExpressCheckout 并打开支付商窗体"
+        },
         customerService: {
             origin_paths: ["app/code/Weline/CustomerService/view/statics/js/customer-service.js"],
             paths: ["/Weline/CustomerService/view/statics/js/customer-service.js"],
@@ -185,6 +192,13 @@
             globalVar: "WelineCheckout",
             load: "eager",
             description: "结账生命周期：weline:checkout:order-created / success"
+        },
+        checkoutExpressReview: {
+            origin_paths: ["app/code/Weline/Checkout/view/statics/js/express-review.js?v=20260912-express-review2"],
+            paths: ["/Weline/Checkout/view/statics/js/express-review.js?v=20260912-express-review2"],
+            globalVar: "WelineCheckoutExpressReview",
+            load: "lazy",
+            description: "快捷支付回头确认页：摘要/缺口/确认收款"
         },
         captchaLazy: {
             origin_paths: ["app/code/Weline/Captcha/view/statics/js/captcha-lazy.js?v=20260909-mo-guard1"],
@@ -279,16 +293,23 @@
             description: "最近浏览轮播/网格"
         },
         b2bSellingMode: {
-            origin_paths: ["app/code/Weline/B2B/view/statics/js/selling-mode.js?v=20260910-card-sync-cart-type"],
-            paths: ["/Weline/B2B/view/statics/js/selling-mode.js?v=20260910-card-sync-cart-type"],
+            origin_paths: ["app/code/Weline/B2B/view/statics/js/checkout-tob.js?v=20260912-hang-balance1", "app/code/Weline/B2B/view/statics/js/selling-mode.js?v=20260911-credit-fx-ui3"],
+            paths: ["/Weline/B2B/view/statics/js/checkout-tob.js?v=20260912-hang-balance1", "/Weline/B2B/view/statics/js/selling-mode.js?v=20260911-credit-fx-ui3"],
             globalVar: "WelineB2BSellingMode",
             description: "B2B ToC/ToB selling mode + mini-cart/cart dual-type injection"
         },
         b2bCheckoutTob: {
-            origin_paths: ["app/code/Weline/B2B/view/statics/js/checkout-tob.js?v=20260910-credit-reason7"],
-            paths: ["/Weline/B2B/view/statics/js/checkout-tob.js?v=20260910-credit-reason7"],
+            origin_paths: ["app/code/Weline/B2B/view/statics/js/checkout-tob.js?v=20260912-hang-balance1"],
+            paths: ["/Weline/B2B/view/statics/js/checkout-tob.js?v=20260912-hang-balance1"],
             globalVar: "WelineB2BCheckoutTob",
-            description: "B2B checkout deposit note and coupon hide for tob carts"
+            description: "B2B wholesale credit + checkout deposit note for tob carts"
+        },
+        helpPayShare: {
+            origin_paths: ["app/code/Weline/HelpPay/view/statics/js/helppay-share.js?v=20260911-layout-token2"],
+            paths: ["/Weline/HelpPay/view/statics/js/helppay-share.js?v=20260911-layout-token2"],
+            globalVar: "WelineModules.helpPayShare",
+            load: "defer",
+            description: "帮我付 / 纯分享 / 快捷购买：规则确认、出链双形态复制（样式由脚本注入主题 Token CSS）"
         }
     });
 
@@ -303,7 +324,9 @@
         dom: "welineDom",
         switcher: "welineSwitcher",
         payment: "paymentLifecycle",
+        productExpressPay: "productExpressPay",
         checkout: "checkoutLifecycle",
+        checkoutExpressReview: "checkoutExpressReview",
         captcha: "captchaLazy",
         geolocation: "location"
     });

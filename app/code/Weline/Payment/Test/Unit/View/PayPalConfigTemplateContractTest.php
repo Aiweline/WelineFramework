@@ -21,6 +21,8 @@ final class PayPalConfigTemplateContractTest extends TestCase
         self::assertStringContainsString('PayPal 沙箱环境', $template);
         self::assertStringContainsString('payment/method/paypal/express_logo', $template);
         self::assertStringContainsString('快捷支付 Logo', $template);
+        self::assertStringContainsString('payment/method/paypal/express_enabled', $template);
+        self::assertStringContainsString('启用 PayPal 快捷支付', $template);
         self::assertStringContainsString('无需去 PayPal Developer 手动创建 App', $template);
         self::assertStringContainsString('payment/backend/connect/authorize?method_code=paypal&environment=sandbox', $template);
         self::assertStringContainsString('沙箱一键授权', $template);

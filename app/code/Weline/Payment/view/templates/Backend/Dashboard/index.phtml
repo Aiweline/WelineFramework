@@ -168,23 +168,25 @@ $amountList = static function (array $amounts) use ($escape): string {
                                 <?php
                                 $invariantCode = (string)($invariant['code'] ?? '');
                                 $invariantCount = (int)($reconciliationByCode[$invariantCode] ?? 0);
+                                $invariantRepairable = !empty($invariant['repairable']);
+                                $tones = \Weline\Payment\Block\Backend\Dashboard::resolveInvariantTones($invariantRepairable, $invariantCount);
                                 ?>
-                                <tr>
+                                <tr data-testid="payment-invariant-row" data-invariant-code="<?= $escape($invariantCode) ?>" data-invariant-level="<?= $escape($tones['status']) ?>">
                                     <td><code><?= $escape($invariantCode) ?></code></td>
                                     <td><?= $escape(__((string)($invariant['description'] ?? ''))) ?></td>
-                                    <td class="w-text" data-align="end"><?= $countValue($invariantCount) ?></td>
+                                    <td class="w-text" data-align="end" data-tone="<?= $escape($tones['count']) ?>" data-testid="payment-invariant-count"><?= $countValue($invariantCount) ?></td>
                                     <td>
-                                        <?php if (!empty($invariant['repairable'])): ?>
-                                            <span class="w-badge w-text" data-w-background="muted" data-tone="muted"><?= __('双人授权 CLI') ?></span>
+                                        <?php if ($invariantRepairable): ?>
+                                            <span class="w-badge" data-tone="<?= $escape($tones['strategy']) ?>" data-testid="payment-invariant-strategy"><?= __('双人授权 CLI') ?></span>
                                         <?php else: ?>
-                                            <span class="w-badge w-text" data-w-background="muted" data-tone="muted"><?= __('仅告警，人工处置') ?></span>
+                                            <span class="w-badge" data-tone="<?= $escape($tones['strategy']) ?>" data-testid="payment-invariant-strategy"><?= __('仅告警，人工处置') ?></span>
                                         <?php endif; ?>
                                     </td>
                                     <td>
                                         <?php if ($invariantCount > 0): ?>
-                                            <span class="w-badge" data-w-background="danger"><?= __('异常 %{1}', [$invariantCount]) ?></span>
+                                            <span class="w-badge" data-tone="<?= $escape($tones['status']) ?>" data-testid="payment-invariant-status"><?= __('异常 %{1}', [$invariantCount]) ?></span>
                                         <?php else: ?>
-                                            <span class="w-badge" data-w-background="success"><?= __('通过') ?></span>
+                                            <span class="w-badge" data-tone="<?= $escape($tones['status']) ?>" data-testid="payment-invariant-status"><?= __('通过') ?></span>
                                         <?php endif; ?>
                                     </td>
                                 </tr>

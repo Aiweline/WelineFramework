@@ -71,6 +71,10 @@ final class PayPalProvider implements ProviderInterface, ProviderConnectInterfac
             'void' => false,
             'saved_instrument' => false,
             'offline_confirmation' => false,
+            // 快捷智能支付：PayPal 首发；其它网关声明同 key 即可进入壳列表。
+            'express_checkout' => true,
+            'express_modes' => ['redirect'],
+            'express_next_action' => 'redirect',
             // CNY/CN：本站默认币种与收货国；Sandbox/部分商户可测，正式以 PayPal 商户能力为准。
             'supported_currencies' => ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'HKD', 'SGD', 'CNY'],
             'supported_countries' => ['US', 'GB', 'DE', 'CA', 'AU', 'FR', 'IT', 'ES', 'JP', 'HK', 'SG', 'CN', 'XZ'],
@@ -260,6 +264,12 @@ final class PayPalProvider implements ProviderInterface, ProviderConnectInterfac
                 $request->getAmountMinor(),
                 $config,
             );
+            $express = $this->isExpressContext($request->getContext());
+            $ctx = $request->getContext();
+            $noShipping = $express && (
+                (array_key_exists('requires_shipping', $ctx) && $ctx['requires_shipping'] === false)
+                || strtoupper(trim((string) ($ctx['shipping_preference'] ?? ''))) === 'NO_SHIPPING'
+            );
             $order = $this->getApiClient()->createOrder(
                 $config,
                 $paypalCurrency,
@@ -267,6 +277,13 @@ final class PayPalProvider implements ProviderInterface, ProviderConnectInterfac
                 $referenceId,
                 $this->resolveShellUrl($request, PaymentOperationRequest::FIELD_RETURN_URL, 'return_url', $config),
                 $this->resolveShellUrl($request, PaymentOperationRequest::FIELD_CANCEL_URL, 'cancel_url', $config),
+                [
+                    'express_checkout' => $express,
+                    'shipping_preference' => $express
+                        ? ($noShipping ? 'NO_SHIPPING' : 'GET_FROM_FILE')
+                        : '',
+                    'user_action' => $express ? 'CONTINUE' : 'PAY_NOW',
+                ],
             );
 
             return PaymentResult::fromArray([
@@ -281,6 +298,7 @@ final class PayPalProvider implements ProviderInterface, ProviderConnectInterfac
                     'environment' => (string) ($config['environment'] ?? 'sandbox'),
                     'presentment_currency' => $request->getCurrencyCode(),
                     'paypal_currency' => $paypalCurrency,
+                    'express_checkout' => $express,
                 ],
             ]);
         } catch (Throwable $throwable) {
@@ -325,8 +343,75 @@ final class PayPalProvider implements ProviderInterface, ProviderConnectInterfac
 
         try {
             $config = $this->resolveRuntimeConfig($request->getContext());
+            $context = $request->getContext();
+            $express = $this->isExpressContext($context);
+            $prepareOnly = $express && (
+                !empty($context['express_prepare_only'])
+                || (
+                    \Weline\Payment\Service\ExpressCheckoutOrchestrator::isExpressAwaitingConfirm($context)
+                    && empty($context['express_confirm_capture'])
+                )
+            );
+            $confirmCapture = !empty($context['express_confirm_capture'])
+                || (!$express)
+                || (!$prepareOnly && empty($context['express_prepare_only']));
+
+            if ($express && $prepareOnly && empty($context['express_confirm_capture'])) {
+                $order = $this->getApiClient()->getOrder($config, $orderId);
+                $mapper = new \Weline\Payment\Service\PayPalExpressProfileMapper();
+                $expressProfile = $mapper->fromOrderPayload($order);
+
+                return PaymentResult::fromArray([
+                    'status' => PaymentResult::STATUS_PROCESSING,
+                    'intent_code' => $request->getIntentCode(),
+                    'attempt_code' => $request->getAttemptCode(),
+                    'provider_reference' => $orderId,
+                    'message' => (string) __('PayPal express approved; awaiting merchant confirm.'),
+                    'payload' => array_filter([
+                        'order_id' => $orderId,
+                        'order' => $order,
+                        'express_checkout' => true,
+                        'express_awaiting_confirm' => true,
+                        'express_profile' => $expressProfile,
+                    ], static fn (mixed $v): bool => $v !== null),
+                ]);
+            }
+
+            if ($express && $confirmCapture && !empty($context['patch_amount_minor'])) {
+                try {
+                    $this->getApiClient()->patchOrder(
+                        $config,
+                        $orderId,
+                        max(0, (int) $context['patch_amount_minor']),
+                        strtoupper(trim((string) ($context['patch_currency'] ?? $request->getCurrencyCode()))),
+                    );
+                } catch (Throwable $patchError) {
+                    return PaymentResult::fromArray([
+                        'status' => PaymentResult::STATUS_FAILED,
+                        'intent_code' => $request->getIntentCode(),
+                        'attempt_code' => $request->getAttemptCode(),
+                        'provider_reference' => $orderId,
+                        'retryable' => true,
+                        'message' => (string) __('PayPal amount update failed: %{1}', [$patchError->getMessage()]),
+                    ]);
+                }
+            }
+
             $capture = $this->getApiClient()->captureOrder($config, $orderId);
             $status = strtoupper(trim((string) ($capture['status'] ?? '')));
+            $expressProfile = null;
+            if ($express) {
+                $mapper = new \Weline\Payment\Service\PayPalExpressProfileMapper();
+                $expressProfile = $mapper->fromOrderPayload($capture);
+                if ($expressProfile === null) {
+                    try {
+                        $order = $this->getApiClient()->getOrder($config, $orderId);
+                        $expressProfile = $mapper->fromOrderPayload($order);
+                    } catch (Throwable) {
+                        $expressProfile = null;
+                    }
+                }
+            }
 
             if ($status === 'COMPLETED') {
                 $captureId = $this->getApiClient()->extractCaptureId($capture);
@@ -337,11 +422,13 @@ final class PayPalProvider implements ProviderInterface, ProviderConnectInterfac
                     'attempt_code' => $request->getAttemptCode(),
                     'provider_reference' => $captureId !== '' ? $captureId : $orderId,
                     'message' => (string) __('PayPal payment completed.'),
-                    'payload' => [
+                    'payload' => array_filter([
                         'capture_id' => $captureId,
                         'order_id' => $orderId,
                         'capture' => $capture,
-                    ],
+                        'express_checkout' => $express,
+                        'express_profile' => $expressProfile,
+                    ], static fn (mixed $v): bool => $v !== null),
                 ]);
             }
 
@@ -351,10 +438,12 @@ final class PayPalProvider implements ProviderInterface, ProviderConnectInterfac
                 'attempt_code' => $request->getAttemptCode(),
                 'provider_reference' => $orderId,
                 'message' => (string) __('PayPal payment is still processing.'),
-                'payload' => [
+                'payload' => array_filter([
                     'order_id' => $orderId,
                     'capture' => $capture,
-                ],
+                    'express_checkout' => $express,
+                    'express_profile' => $expressProfile,
+                ], static fn (mixed $v): bool => $v !== null),
             ]);
         } catch (Throwable $throwable) {
             return PaymentResult::fromArray([
@@ -366,6 +455,19 @@ final class PayPalProvider implements ProviderInterface, ProviderConnectInterfac
                 'message' => $throwable->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     */
+    private function isExpressContext(array $context): bool
+    {
+        if (!empty($context['express_checkout'])) {
+            return true;
+        }
+        $meta = is_array($context['metadata'] ?? null) ? $context['metadata'] : [];
+
+        return !empty($meta['express_checkout']);
     }
 
     public function cancelPayment(CancelRequest $request): PaymentResult

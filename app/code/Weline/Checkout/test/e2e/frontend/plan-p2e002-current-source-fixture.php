@@ -535,6 +535,21 @@ function p2e002_atomic_failure(array $fixture): array
         {
             $this->delegate->notifyOrderPaid($orderUuid, $context);
         }
+
+        public function attachCustomerToGuestOrders(int $customerId, array $orderUuids): array
+        {
+            return $this->delegate->attachCustomerToGuestOrders($customerId, $orderUuids);
+        }
+
+        public function mergeTypePayload(string $orderUuid, array $patch): array
+        {
+            return $this->delegate->mergeTypePayload($orderUuid, $patch);
+        }
+
+        public function reviseTobHangPayable(string $orderUuid, array $revision): array
+        {
+            return $this->delegate->reviseTobHangPayable($orderUuid, $revision);
+        }
     };
     $inventory = ObjectManager::getInstance(InventoryService::class);
     $sessions = ObjectManager::getInstance(OrmCheckoutSessionStore::class);

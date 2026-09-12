@@ -6,6 +6,10 @@
 在计算订单总额之前触发，允许其他模块修改计算参数（运费、税费、折扣等）。,"Triggered before calculating order totals, allowing other modules to modify calculation parameters (shipping, tax, discount, etc.)."
 计算订单总额后,"After Calculate Totals"
 在计算订单总额之后触发，允许其他模块修改计算结果或执行后续操作。,"Triggered after calculating order totals, allowing other modules to modify calculation results or perform follow-up operations."
+冻结报价富集,冻结报价富集
+"freezeAndQuote 生成基础 payload 后触发；Observer 可回写 b2b_credit 等扩展字段。支付模块不得注入额度。","freezeAndQuote 生成基础 payload 后触发；Observer 可回写 b2b_credit 等扩展字段。支付模块不得注入额度。"
+会话资产折扣应用,会话资产折扣应用
+"submit 前触发；Observer 钳制抵扣并写入 type_payload。支付仅 SPI 策略，不写结账金额。","submit 前触发；Observer 钳制抵扣并写入 type_payload。支付仅 SPI 策略，不写结账金额。"
 创建订单前,"Before creating order"
 在创建订单之前触发，允许其他模块修改订单数据、验证库存、应用优惠券等。,"Triggered before creating an order, allowing other modules to modify order data, verify inventory, apply coupons, etc."
 创建订单后,"After creating order"
@@ -185,6 +189,7 @@
 订单创建失败：%{1},"Order creation failed: %{1}"
 支付处理成功,"Payment processed successfully"
 支付处理失败：%{1},"Payment processing failed: %{1}"
+确认并付款,确认并付款
 该兼容入口已停用，请从订单管理更新状态,"This compatible portal has been deactivated, please update the status from order management"
 订单管理,"Order Management"
 cart,cart
@@ -295,9 +300,32 @@ SKU,SKU
 结账优惠券,"Checkout coupon"
 结账订单留言,"Checkout order note"
 结账批发信用,结账批发信用
+结账帮我付,结账帮我付
+批发定金,批发定金
+批发信用抵扣,批发信用抵扣
 应付合计,"Total payable"
+本次应付定金,本次应付定金
 购物车中有不可结算的商品，请返回购物车移除后重试,购物车中有不可结算的商品，请返回购物车移除后重试
 请确认收货信息、配送方式和支付方式。,"Please confirm the delivery information, delivery method and payment method."
+尚未扣款，确认后向支付商收款,尚未扣款，确认后向支付商收款
+收货地址（支付商带回，只读）,收货地址（支付商带回，只读）
+请补全信息,请补全信息
+电话,Telephone
+邮箱,Mail
+该地区暂不支持配送,该地区暂不支持配送
+应付,应付
+取消,取消
+全部,All
+请输入订单号,"Please enter order number"
+搜索,Search
+客户ID,"Customer ID"
+操作,Actions
+查看,View
+配送状态,"Shipping Status"
+订单项,"Order Items"
+总价,"Total Price"
+折扣,Discount
+返回列表,"Back to List"
 China,China
 国家/地区,Country/Region
 搜索国家/地区,"Search country/region"
@@ -319,17 +347,6 @@ China,China
 定位完成，但当前未启用地址添加模块。,"Location completed"
 定位完成，已自动选择国家/省市区，请补全收货人信息并保存。,"Location applied. Country/region cascade selected. Please complete recipient details and save."
 自动定位失败，请手动选择国家并完善地址。,"Auto-detect failed. Please select a country and complete the address."
-全部,All
-请输入订单号,"Please enter order number"
-搜索,Search
-客户ID,"Customer ID"
-操作,Actions
-查看,View
-配送状态,"Shipping Status"
-订单项,"Order Items"
-总价,"Total Price"
-折扣,Discount
-返回列表,"Back to List"
 正在前往结账...,"Proceeding to checkout..."
 结账准备失败,"Checkout preparation failed"
 立即结账,"Proceed to checkout"
@@ -361,6 +378,22 @@ China,China
 订单已支付,"Order has been paid"
 "Order %{1}","Order %{1}"
 "Checkout order %{1}","Checkout order %{1}"
+批发快捷支付请使用完整结账,批发快捷支付请使用完整结账
+请选择支付方式,请选择支付方式
+购物车为空,购物车为空
+购物车不可结算,购物车不可结算
+当前地区暂无可用配送，请调整地址后重试或使用完整结账,当前地区暂无可用配送，请调整地址后重试或使用完整结账
+无法冻结结账报价,无法冻结结账报价
+报价令牌缺失,报价令牌缺失
+快捷支付下单失败,快捷支付下单失败
+请在支付商窗口完成授权,请在支付商窗口完成授权
+缺少交易号,缺少交易号
+商品暂不可售,商品暂不可售
+无法更新订单金额,无法更新订单金额
+确认成功,确认成功
+已取消快捷支付,已取消快捷支付
+交易不存在,交易不存在
+无权查看该支付,无权查看该支付
 客户ID不能为空,"Customer ID cannot be empty"
 订单项不能为空,"Order items cannot be empty"
 "订单项 %{1} 的产品ID不能为空","Product ID of order item %{1} cannot be empty"
@@ -389,19 +422,25 @@ China,China
 批发结账禁止优惠与券,批发结账禁止优惠与券
 折扣报价已失效，请重新报价确认,"Discount quote expired. Please requote to confirm."
 当前支付方式「%{1}」不支持已选优惠方式：%{2},当前支付方式「%{1}」不支持已选优惠方式：%{2}
+已支付订单不可修改,已支付订单不可修改
 请选择国家/地区,"Please select a country/region"
 请选择配送地址,"Please select a shipping address"
 地址不存在,"Address not found"
 当前地址暂不可配送，请更换收货地址。,"This address cannot be shipped to. Please choose another delivery address."
 该地址所在地区暂不支持配送（禁运）。,"This address is in an embargoed area and cannot be shipped to."
+缺少支付单号,缺少支付单号
+支付交易不存在,支付交易不存在
+当前交易不是待确认的快捷支付,当前交易不是待确认的快捷支付
+更新订单失败,更新订单失败
+请补全必要联系信息,请补全必要联系信息
+支付方式不可用,支付方式不可用
+确认收款失败，请重试,确认收款失败，请重试
 当前支付方式不支持已选优惠方式：%{1},"The selected payment method does not support the chosen discount: %{1}"
 暂无可用配送方式。,"There are currently no shipping methods available."
 "预计 %{1}-%{2} 天","Estimated %{1}-%{2} days"
 立即购买,"Buy Now"
 感谢您的购买！您的订单已成功创建。,"Thank you for your purchase! Your order has been created successfully."
 收货人,consignee
-电话,Telephone
-邮箱,Mail
 国家/地区代码,"Country code"
 省/州,Province/State
 城市,City

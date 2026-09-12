@@ -62,7 +62,8 @@ final class AssetPaymentService implements PaymentAssetFacadeInterface
         ?array $policyOverride = null,
         bool $useMemory = false,
     ) {
-        $this->policyOverride = $policyOverride;
+        // ObjectManager may inject [] for `?array $x = null`; empty means no test override.
+        $this->policyOverride = $policyOverride === [] ? null : $policyOverride;
         if ($useMemory) {
             $this->memoryAllocations = [];
         }
@@ -105,6 +106,7 @@ final class AssetPaymentService implements PaymentAssetFacadeInterface
                 ],
                 'exchange_ratio' => '0',
                 'max_discount_ratio' => '1',
+                'min_cash_deposit_bps' => 0,
                 'allowed_payable_types' => [],
                 'required_order_types' => [],
                 'refund_strategy' => 'allocation',
@@ -146,6 +148,7 @@ final class AssetPaymentService implements PaymentAssetFacadeInterface
                 ],
                 'exchange_ratio' => $exchangeRatio,
                 'max_discount_ratio' => $maxDiscountRatio,
+                'min_cash_deposit_bps' => max(0, min(10000, (int)($assetConfig['min_cash_deposit_bps'] ?? 0))),
                 'allowed_payable_types' => $this->normalizeList(
                     $assetConfig['allowed_payable_types'] ?? [],
                 ),

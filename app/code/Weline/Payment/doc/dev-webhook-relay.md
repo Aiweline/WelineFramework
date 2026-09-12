@@ -32,7 +32,7 @@ Provider 无关的开发环境 Webhook 转发：任意本框架线上站（开�
 3. 点 **发送探测**（无需填 Token、无需打开线上 demo）
 4. 面板自动：补全已存凭证 → 保活中继 → 发线上探针 → 展示本机 SSE 重放结果
 
-首次需在支付后台 `payment/backend/dev-relay` 开启一次中继（会把线上 Token 记到本机 `var/payment-dev-relay-local.secret.json`，关闭中继后仍保留）。
+本机「静默中继」启停始终可点：点 **开启中继** 会自动打开中继开关，并读取 JSON 请求体中的线上地址与 Token（也可回落已记住凭证）。首次需填写线上用户 API Token（会记到本机 `var/payment-dev-relay-local.secret.json`，关闭中继后仍保留）；之后可留空再开。
 
 ### 3. CLI（可选）
 

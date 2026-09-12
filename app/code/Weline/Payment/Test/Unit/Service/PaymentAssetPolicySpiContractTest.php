@@ -30,6 +30,26 @@ final class PaymentAssetPolicySpiContractTest extends TestCase
         self::assertSame(['tob'], $policy['b2b_credit']['required_order_types']);
     }
 
+    public function testBuildAssetPolicyPreservesMinCashDepositBps(): void
+    {
+        $service = new AssetPaymentService();
+        $policy = $service->buildAssetPolicy([
+            'b2b_credit' => [
+                'enabled' => true,
+                'roles' => [
+                    AssetAllocationService::ROLE_DISCOUNT => true,
+                ],
+                'exchange_ratio' => '1',
+                'max_discount_ratio' => '0.8',
+                'min_cash_deposit_bps' => 2000,
+                'required_order_types' => ['tob'],
+            ],
+        ]);
+
+        self::assertSame(2000, $policy['b2b_credit']['min_cash_deposit_bps']);
+        self::assertSame('0.8', $policy['b2b_credit']['max_discount_ratio']);
+    }
+
     public function testAssertAssetPayableAllowedRequiresOrderType(): void
     {
         $service = new AssetPaymentService();
@@ -61,6 +81,29 @@ final class PaymentAssetPolicySpiContractTest extends TestCase
         self::assertSame(
             \Weline\B2B\Service\B2BPaymentAssetPolicyProvider::class,
             $module['provides']['payment.asset_policy.Weline_B2B'] ?? null,
+        );
+    }
+
+    /**
+     * ObjectManager historically injects [] for `?array $policyOverride = null`.
+     * An empty override must be treated as "no override" so scope+SPI merge still runs.
+     */
+    public function testEmptyPolicyOverrideDoesNotShortCircuitSpiMerge(): void
+    {
+        $service = new AssetPaymentService(policyOverride: []);
+        $prop = (new \ReflectionClass($service))->getProperty('policyOverride');
+        $prop->setAccessible(true);
+        self::assertNull(
+            $prop->getValue($service),
+            'Empty policyOverride must normalize to null (DI noise), not short-circuit SPI',
+        );
+
+        $src = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/Service/AssetPaymentService.php',
+        );
+        self::assertStringContainsString(
+            '$policyOverride === [] ? null : $policyOverride',
+            $src,
         );
     }
 }

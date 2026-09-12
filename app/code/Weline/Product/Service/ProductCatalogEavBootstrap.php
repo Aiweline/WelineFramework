@@ -401,6 +401,66 @@ final class ProductCatalogEavBootstrap
     }
 
     /**
+     * 货源/代发属性集：壳刊登商品使用，挂载来源平台与公开规格。
+     *
+     * @return array{entity_id:int,set_id:int,groups:array<string,int>,attributes:int}
+     */
+    public function ensureDropshipSchema(): array
+    {
+        $entityId = $this->resolveEntityId();
+        if ($entityId <= 0) {
+            return [
+                'entity_id' => 0,
+                'set_id' => 0,
+                'groups' => [],
+                'attributes' => 0,
+            ];
+        }
+
+        $setId = $this->ensureSet($entityId, 'dropship', '货源商品');
+        $basicGroupId = $this->ensureGroup($entityId, $setId, 'dropship_basic', '基本信息');
+        $sourceGroupId = $this->ensureGroup($entityId, $setId, 'dropship_source', '货源信息');
+        $specsGroupId = $this->ensureGroup($entityId, $setId, 'dropship_specs', '规格参数');
+
+        $typeId = $this->resolveVarcharTypeId();
+        $textTypeId = $this->resolveTypeId('textarea_text');
+        $attributeCount = 0;
+
+        foreach ([
+            ['code' => 'attribute_set', 'name' => '属性集', 'group' => $basicGroupId, 'type' => $typeId],
+            ['code' => 'attribute_set_label', 'name' => '属性集名称', 'group' => $basicGroupId, 'type' => $typeId],
+            ['code' => 'source_platform', 'name' => '来源平台', 'group' => $sourceGroupId, 'type' => $typeId],
+            ['code' => 'source_public_specs', 'name' => '货源公开规格', 'group' => $sourceGroupId, 'type' => $textTypeId],
+            ['code' => 'material', 'name' => '材质', 'group' => $specsGroupId, 'type' => $typeId],
+            ['code' => 'style_type', 'name' => '类型', 'group' => $specsGroupId, 'type' => $typeId],
+        ] as $attribute) {
+            if ($this->ensureAttribute(
+                $entityId,
+                $setId,
+                $attribute['group'],
+                $attribute['type'],
+                $attribute['code'],
+                $attribute['name'],
+            )) {
+                ++$attributeCount;
+            } elseif ($this->ensurePlacementByCode($entityId, $attribute['code'], $setId, $attribute['group'])) {
+                ++$attributeCount;
+            }
+        }
+
+        return [
+            'entity_id' => $entityId,
+            'set_id' => $setId,
+            'groups' => [
+                'basic' => $basicGroupId,
+                'source' => $sourceGroupId,
+                'specs' => $specsGroupId,
+            ],
+            'attributes' => $attributeCount,
+        ];
+    }
+
+    /**
      * Add source-discovered Hanfu specification options to the formal EAV attribute set.
      *
      * @param list<array<string,mixed>> $definitions

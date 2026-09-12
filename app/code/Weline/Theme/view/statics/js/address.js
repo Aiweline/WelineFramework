@@ -948,8 +948,10 @@
         closeMenus(group);
         var control = group.controls.country;
         control.item.classList.add('is-open');
+        control.menu.hidden = false;
         return ensureLevelChildren(group, 'country').then(function () {
             renderMenu(group, control, '');
+            placeSingleMenu(control);
             try {
                 control.input.focus();
             } catch (e) {}
@@ -1560,7 +1562,7 @@
         root.classList.toggle('w-address--single', levels.length === 1);
         root.innerHTML = levels.map(function (level) {
             var placeholder = level === 'country' ? labels.selectCountry : (level === 'province' ? labels.selectCountryFirst : (level === 'city' ? labels.selectProvinceFirst : labels.selectCityFirst));
-            return '<div class="w-field w-address__item" data-address-level="' + level + '"><label class="w-field__label">' + escapeHtml(labels[level] || level) + '</label><div class="w-field__control w-address__control"><input class="w-input w-address__input" type="text" autocomplete="off" placeholder="' + escapeHtml(placeholder) + '"><span class="w-address__arrow">\u25be</span></div><div class="w-address__menu"></div></div>';
+            return '<div class="w-field w-address__item" data-address-level="' + level + '"><label class="w-field__label">' + escapeHtml(labels[level] || level) + '</label><div class="w-field__control w-address__control"><input class="w-input w-address__input" type="text" autocomplete="off" placeholder="' + escapeHtml(placeholder) + '"><span class="w-address__arrow">\u25be</span></div><div class="w-address__menu" data-w-float-surface hidden></div></div>';
         }).join('');
     }
 
@@ -2291,6 +2293,7 @@
             hits = prioritizePostalCountryHits(group, control, hits || []);
             if (!hits.length) {
                 control.menu.innerHTML = '<div class="w-address__empty">' + escapeHtml(canUseManualInput(group, control) && needle ? labels.manual : labels.empty) + '</div>';
+                placeSingleMenu(control);
                 return;
             }
             // 邮编多国待选：若列表里至少有一个本站支持的国家，则禁用不支持项；
@@ -2391,6 +2394,7 @@
                     applySearchHit(group, control, hit);
                 });
             });
+            placeSingleMenu(control);
         }
 
         function markHitsForMenu(hits, blockedMap, rules) {
@@ -2612,9 +2616,95 @@
         clearAfter(group, control.level);
     }
 
+    function uiFloating() {
+        return window.Weline && window.Weline.UI && window.Weline.UI.floating
+            ? window.Weline.UI.floating
+            : null;
+    }
+
+    function syncSingleMenuWidth(control) {
+        if (!control || !control.menu || !control.item) {
+            return;
+        }
+        var box = control.item.querySelector('.w-address__control') || control.item;
+        var width = Math.round(box.getBoundingClientRect().width);
+        if (width > 0) {
+            control.menu.style.setProperty('--w-floating-inline-size', width + 'px');
+            control.menu.style.minWidth = width + 'px';
+        }
+    }
+
+    function ensureSingleFloat(control) {
+        if (!control || !control.menu || !control.item) {
+            return null;
+        }
+        if (control.floatApi) {
+            return control.floatApi;
+        }
+        var floating = uiFloating();
+        if (!floating || typeof floating.attach !== 'function') {
+            return null;
+        }
+        control.menu.setAttribute('data-w-float-surface', '');
+        control.item.setAttribute('data-w-placement', 'bottom-start');
+        control.floatApi = floating.attach(control.item, {placement: 'bottom-start'});
+        return control.floatApi;
+    }
+
+    function placeSingleMenu(control) {
+        if (!control || !control.item || !control.menu) {
+            return;
+        }
+        if (!control.item.classList.contains('is-open')) {
+            return;
+        }
+        control.menu.hidden = false;
+        syncSingleMenuWidth(control);
+        var api = ensureSingleFloat(control);
+        if (api) {
+            if (typeof api.show === 'function') {
+                api.show();
+            } else if (typeof api.sync === 'function') {
+                api.sync();
+            } else if (typeof api.place === 'function') {
+                api.place();
+            }
+            return;
+        }
+        // Fallback when Weline.UI unavailable: keep absolute under the field.
+        control.menu.style.position = 'absolute';
+        control.menu.style.top = 'calc(100% + 6px)';
+        control.menu.style.insetInline = '0';
+        control.menu.style.zIndex = '1080';
+        control.menu.style.display = 'block';
+    }
+
+    function hideSingleFloat(control) {
+        if (!control) {
+            return;
+        }
+        if (control.floatApi && typeof control.floatApi.hide === 'function') {
+            control.floatApi.hide();
+        }
+        if (control.menu) {
+            control.menu.hidden = true;
+            if (control.menu.style) {
+                control.menu.style.position = '';
+                control.menu.style.top = '';
+                control.menu.style.insetInline = '';
+                control.menu.style.zIndex = '';
+                control.menu.style.display = '';
+                control.menu.style.minWidth = '';
+                control.menu.style.removeProperty('--w-floating-inline-size');
+            }
+        }
+    }
+
     function closeMenus(group) {
         Object.keys(group.controls).forEach(function (level) {
-            group.controls[level].item.classList.remove('is-open');
+            var control = group.controls[level];
+            control.item.classList.remove('is-open');
+            hideSingleFloat(control);
         });
     }
 
@@ -2714,8 +2804,10 @@
             }
             closeMenus(group);
             control.item.classList.add('is-open');
+            control.menu.hidden = false;
             ensureLevelChildren(group, control.level).then(function () {
                 renderMenu(group, control, control.searchable ? text(control.input.value) : '');
+                placeSingleMenu(control);
             });
             if (!control.searchable) {
                 control.input.select();
@@ -2727,8 +2819,10 @@
                 return;
             }
             control.item.classList.add('is-open');
+            control.menu.hidden = false;
             ensureLevelChildren(group, control.level).then(function () {
                 renderMenu(group, control, control.input.value);
+                placeSingleMenu(control);
             });
             syncManualInput(group, control);
         });
@@ -3860,7 +3954,15 @@
             });
         }
         document.addEventListener('click', function (event) {
-            if (!root.contains(event.target)) {
+            var target = event.target;
+            if (root.contains(target)) {
+                return;
+            }
+            var hitPortal = Object.keys(group.controls || {}).some(function (level) {
+                var menu = group.controls[level] && group.controls[level].menu;
+                return !!(menu && menu.contains && menu.contains(target));
+            });
+            if (!hitPortal) {
                 closeMenus(group);
             }
         });

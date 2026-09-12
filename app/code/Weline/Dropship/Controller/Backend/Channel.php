@@ -158,9 +158,9 @@ class Channel extends BackendController
         $ok = !empty($probe['ok']);
         $raw = (string)($probe['message'] ?? '');
         $labels = [
-            'cj_credentials_missing' => (string)__('缺少凭证'),
-            'cj_probe_ok' => (string)__('连接成功'),
-            'cj_token_empty' => (string)__('令牌为空'),
+            'credentials_missing' => (string)__('缺少凭证'),
+            'probe_ok' => (string)__('连接成功'),
+            'token_empty' => (string)__('令牌为空'),
             'fake_ok' => (string)__('连接成功'),
             'probe_failed' => (string)__('探活失败'),
             'probe_invalid' => (string)__('探活返回无效'),

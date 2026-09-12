@@ -122,32 +122,20 @@ final class DocSkillCatalog
     {
         $docSkills = self::extractSkills($repository);
         $commands = self::extractCommands($repository);
-        $docSummary = [];
-        foreach ($docSkills as $skill) {
-            $docSummary[] = [
-                'skill_id' => $skill['skill_id'],
-                'name' => $skill['name'],
-                'kind' => $skill['kind'] ?? self::KIND_DOC_FILE,
-                'module' => $skill['module'] ?? '',
-                'path' => $skill['relative_path'] ?? '',
-            ];
-        }
 
         return [
             'schema_version' => 'mcp-greeting-catalog.v1',
             'when' => ['hi', '你好', 'hello', '提取技能', 'list skills'],
-            'skills' => [
-                'workflow' => $workflowSummary,
-                'module_doc' => $docSummary,
-                'total' => count($workflowSummary) + count($docSummary),
-            ],
+            'list_from' => 'agent_guidance.mcp_skills.catalog',
+            'workflow_preview' => $workflowSummary,
+            'module_doc_count' => count($docSkills),
             'commands' => $commands,
             'how_to_load' => [
                 'discover' => 'resolve_skill',
                 'load' => 'get_skill',
                 'list_all' => 'resolve_skill(list_all=true) or task=提取技能',
             ],
-            'note' => 'Module doc skills are read from doc/ai indexes into MCP memory only; knowledge.auto_generate_skills stays false.',
+            'note' => 'Greeting lists workflow_preview + commands + module_doc_count only; full module_doc index and bodies via resolve_skill(list_all)/get_skill. knowledge.auto_generate_skills stays false.',
         ];
     }
 

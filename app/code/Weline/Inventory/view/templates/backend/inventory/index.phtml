@@ -1,11 +1,28 @@
 <?php
 /** @var string $title @var string $section @var int $website_id @var array $rows @var array $columns @var string $error */
+/** @var array<string,string> $column_labels */
+/** @var list<array<string,mixed>> $code_label_rows */
 $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$warehouseRows = $section === 'warehouses' ? $rows : [];
+$codeLabelRows = $section === 'warehouses' && isset($code_label_rows) && is_array($code_label_rows) ? $code_label_rows : [];
+$columnLabels = isset($column_labels) && is_array($column_labels) ? $column_labels : [];
+$readableSections = ['stocks', 'adjustments'];
+$isReadableSection = in_array($section, $readableSections, true);
+$warehouseTab = strtolower(trim((string)($_GET['wh_tab'] ?? 'tree')));
+if (!in_array($warehouseTab, ['tree', 'labels'], true)) {
+    $warehouseTab = 'tree';
+}
+$websiteDisplay = isset($websiteSelectDisplay) ? trim((string)$websiteSelectDisplay) : '';
 ?>
-<div class="w-container" data-testid="inventory-management-<?= $escape($section) ?>" data-management-section="<?= $escape($section) ?>">
+<div class="w-backend-page" data-testid="inventory-management-<?= $escape($section) ?>" data-management-section="<?= $escape($section) ?>" style="width:100%;max-width:none;margin-inline:0;padding-inline:0;">
     <div class="w-cluster" data-align="center" data-justify="between" style="--w-mb:var(--weline-space-4);">
-        <div><h4 style="--w-mb:var(--weline-space-1);"><?= $escape($title) ?></h4><div class="w-text" data-tone="muted"><lang>库存内核管理工作台</lang> · website_id=<?= $website_id ?></div></div>
-        <form method="get" class="w-cluster" style="--w-gap:var(--weline-space-2);">
+        <div>
+            <h4 style="--w-mb:var(--weline-space-1);"><?= $escape($title) ?></h4>
+            <div class="w-text" data-tone="muted" data-testid="inventory-page-subtitle">
+                <lang>库存管理</lang><?php if ($websiteDisplay !== ''): ?> · <?= $escape($websiteDisplay) ?><?php else: ?> · #<?= (int)$website_id ?><?php endif; ?>
+            </div>
+        </div>
+        <form method="get" class="w-cluster" data-wrap="false" style="--w-gap:var(--weline-space-2);">
             <label class="w-visually-hidden" for="inventory-filter-website_trigger"><lang>网站</lang></label>
             <w:websites:website:select
                 id="inventory-filter-website"
@@ -23,50 +40,619 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
     </div>
 
     <?php if ($section === 'warehouses'): ?>
-        <div class="w-card" style="--w-mb:var(--weline-space-4);"><div class="w-card__body">
-            <w:form method="post" action="@backend-url('*/backend/inventory/create-warehouse')" csrf="auto" class="w-grid" data-testid="inventory-warehouse-create-form" style="--w-gap:var(--weline-space-4);">
-                <div style="--w-span-md:3;"><label class="w-field__label"><lang>网站</lang></label>
-                    <w:websites:website:select
-                        id="inventory-create-warehouse-website"
-                        name="website_id"
-                        value="websiteSelectValue"
-                        display="websiteSelectDisplay"
-                        options="websiteSelectOptionsJson"
-                        multiple="false"
-                        allow-empty="false"
-                        empty-label="@lang(请选择站点)"
-                        placeholder="@lang(搜索站点名称或编码)"
+        <div class="w-tabs" data-w-component="tabs" data-testid="inventory-warehouse-tabs" style="--w-mb:var(--weline-space-4);">
+            <nav class="w-tabs__list" data-variant="soft" role="tablist" aria-label="<?= $escape((string)__('仓库管理分区')) ?>" style="--w-mb:var(--weline-space-4);">
+                <button
+                    class="w-tabs__tab<?= $warehouseTab === 'tree' ? ' active' : '' ?>"
+                    id="inventory-wh-tab-tree"
+                    type="button"
+                    role="tab"
+                    aria-selected="<?= $warehouseTab === 'tree' ? 'true' : 'false' ?>"
+                    aria-controls="inventory-wh-panel-tree"
+                    tabindex="<?= $warehouseTab === 'tree' ? '0' : '-1' ?>"
+                    data-testid="inventory-wh-tab-tree"
+                >
+                    <span><lang>仓库树</lang></span>
+                </button>
+                <button
+                    class="w-tabs__tab<?= $warehouseTab === 'labels' ? ' active' : '' ?>"
+                    id="inventory-wh-tab-labels"
+                    type="button"
+                    role="tab"
+                    aria-selected="<?= $warehouseTab === 'labels' ? 'true' : 'false' ?>"
+                    aria-controls="inventory-wh-panel-labels"
+                    tabindex="<?= $warehouseTab === 'labels' ? '0' : '-1' ?>"
+                    data-testid="inventory-wh-tab-labels"
+                >
+                    <span><lang>码别名</lang></span>
+                </button>
+            </nav>
+
+            <div
+                class="w-tabs__panel"
+                id="inventory-wh-panel-tree"
+                role="tabpanel"
+                aria-labelledby="inventory-wh-tab-tree"
+                data-testid="inventory-wh-panel-tree"
+                <?= $warehouseTab === 'labels' ? 'hidden' : '' ?>
+            >
+        <div class="w-card" style="--w-mb:var(--weline-space-4);" data-testid="inventory-warehouse-tree-panel">
+            <div class="w-card__body">
+                <div class="w-cluster" data-align="center" data-justify="between" style="--w-mb:var(--weline-space-3);">
+                    <div class="w-text" data-tone="muted" style="--w-mb:0;">
+                        <lang>按国家→省份→仓库分级展示。仓码以父级前缀累接（国家码+省份码），创建后不可修改；系统种子不可删除；有库存或预占时不可删除。名称可点翻译；层级/模式/类型显示中文别名（在「码别名」Tab 管理）。</lang>
+                    </div>
+                    <w:form method="post" action="@backend-url('*/backend/inventory/seed-warehouses')" csrf="auto" class="w-cluster" data-testid="inventory-warehouse-seed-form" style="--w-gap:var(--weline-space-2);--w-mb:0;">
+                        <input type="hidden" name="website_id" value="<?= (int)$website_id ?>">
+                        <input type="hidden" name="mode" value="normal">
+                        <button class="w-button" type="submit" data-tone="primary"><lang>同步默认全球仓</lang></button>
+                    </w:form>
+                </div>
+
+                <div style="--w-mb:var(--weline-space-4);" data-testid="inventory-warehouse-country-pick">
+                    <w:theme:address-quick
+                        id="inventory-warehouse-country"
+                        code="inventory-warehouse-country"
+                        testid="inventory-warehouse-country"
+                        mode="both"
+                        levels="country"
+                        catalog="global"
+                        searchable="true"
+                        cascade="false"
+                        street="false"
+                        title="@lang(选择国家：立即过滤仓库树；可同时添加国家节点（地址目录选码）)"
+                        filter-target="[data-testid=inventory-warehouse-tree-table] tbody tr"
+                        filter-attr="data-country-code"
+                        filter-match="exact"
+                        filter-empty="all"
+                        add-action="@backend-url('*/backend/inventory/create-child-warehouse')"
+                        add-label="@lang(添加国家)"
+                        add-node-kind="country"
+                        add-parent-id="0"
+                        add-website-id="<?= (int)$website_id ?>"
+                        add-mode-value="normal"
+                        add-warehouse-type="logical"
+                        add-name-placeholder="@lang(例如：中国)"
+                        show-code="true"
+                        show-name="true"
+                        code-readonly="true"
+                        csrf="auto"
                     />
                 </div>
-                <div style="--w-span-md:3;"><label class="w-field__label"><lang>仓代码</lang></label><input class="w-input" name="warehouse_code" maxlength="64" required></div>
-                <div style="--w-span-md:3;"><label class="w-field__label"><lang>仓名称</lang></label><input class="w-input" name="name" maxlength="128" required></div>
-                <div style="--w-span-md:1;"><label class="w-field__label"><lang>模式</lang></label><select class="w-select" name="mode"><option value="normal">normal</option><option value="test">test</option></select></div>
-                <div style="--w-span-md:2;"><label class="w-field__label"><lang>类型</lang></label><select class="w-select" name="warehouse_type"><option value="physical">physical</option><option value="logical">logical</option></select></div>
-                <div class="w-cluster" data-align="end" style="--w-span-md:1;"><button class="w-button" type="submit" data-w-width="full" data-tone="primary"><lang>创建</lang></button></div>
-            </w:form>
-        </div></div>
+
+                <?php if ($error === '' && $warehouseRows !== []): ?>
+                    <div class="w-table-wrap">
+                        <table class="w-table" data-w-vertical="middle" data-testid="inventory-warehouse-tree-table" style="--w-mb:0;">
+                            <thead>
+                            <tr>
+                                <th style="width:32%;"><lang>名称</lang></th>
+                                <th><lang>仓码</lang></th>
+                                <th><lang>层级</lang></th>
+                                <th><lang>模式</lang></th>
+                                <th><lang>类型</lang></th>
+                                <th style="width:28%;"><lang>操作</lang></th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <?php foreach ($warehouseRows as $row):
+                                $depth = (int)($row['depth'] ?? 0);
+                                $nodeKind = (string)($row['node_kind'] ?? 'warehouse');
+                                $warehouseId = (int)($row['warehouse_id'] ?? 0);
+                                $code = (string)($row['warehouse_code'] ?? '');
+                                $countryCode = (string)($row['country_code'] ?? ($nodeKind === 'country' ? $code : ''));
+                                $regionCode = (string)($row['region_code'] ?? '');
+                                $isSeed = (int)($row['is_seed'] ?? 0) === 1;
+                                $displayName = (string)($row['name'] ?? '');
+                                $modePair = \Weline\Inventory\Service\WarehouseCodeAlias::pair('mode', (string)($row['mode'] ?? ''));
+                                $kindPair = \Weline\Inventory\Service\WarehouseCodeAlias::pair('node_kind', $nodeKind);
+                                $typePair = \Weline\Inventory\Service\WarehouseCodeAlias::pair('warehouse_type', (string)($row['warehouse_type'] ?? ''));
+                                $canAddProvince = $nodeKind === 'country';
+                                $canAddWarehouse = in_array($nodeKind, ['country', 'province'], true);
+                                $pad = max(0, $depth) * 1.25;
+                                \Weline\I18n\Taglib\Local::bindRuntimeRecordId($warehouseId);
+                                ?>
+                                <tr
+                                    data-warehouse-id="<?= $warehouseId ?>"
+                                    data-node-kind="<?= $escape($nodeKind) ?>"
+                                    data-warehouse-code="<?= $escape($code) ?>"
+                                    data-country-code="<?= $escape($countryCode) ?>"
+                                    data-region-code="<?= $escape($regionCode) ?>"
+                                    data-is-seed="<?= $isSeed ? '1' : '0' ?>"
+                                    style="<?= $depth > 0 ? 'box-shadow: inset ' . ($depth * 0.75) . 'rem 0 0 color-mix(in srgb, var(--weline-theme-border, #d0d5dd) 80%, transparent);' : '' ?>"
+                                >
+                                    <td>
+                                        <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);padding-inline-start:<?= $pad ?>rem;">
+                                            <?php if ($isSeed): ?>
+                                                <span class="w-badge" data-tone="neutral" data-testid="inventory-warehouse-seed-badge"><lang>系统</lang></span>
+                                            <?php endif; ?>
+                                            <span class="w-text" style="font-weight:<?= $depth === 0 ? '600' : '400' ?>;" data-testid="inventory-warehouse-name-<?= $warehouseId ?>">
+                                                <local
+                                                    model="Weline\Inventory\Model\Warehouse\LocalDescription"
+                                                    field="name"
+                                                    id="warehouse_id"
+                                                    name="inventory-warehouse-name-<?= $warehouseId ?>"
+                                                ><?= $escape($displayName !== '' ? $displayName : (string)__('翻译')) ?></local>
+                                            </span>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <code class="w-text" title="<?= $escape((string)__('仓码不可修改')) ?>"><?= $escape($code) ?></code>
+                                    </td>
+                                    <td>
+                                        <span class="w-text"><?= $escape($kindPair['label']) ?></span>
+                                        <code class="w-text" data-tone="muted" style="--w-font-size:var(--weline-layout-font-size-xs,12px);margin-inline-start:var(--weline-space-1);"><?= $escape($kindPair['code']) ?></code>
+                                    </td>
+                                    <td>
+                                        <span class="w-text"><?= $escape($modePair['label']) ?></span>
+                                        <code class="w-text" data-tone="muted" style="--w-font-size:var(--weline-layout-font-size-xs,12px);margin-inline-start:var(--weline-space-1);"><?= $escape($modePair['code']) ?></code>
+                                    </td>
+                                    <td>
+                                        <span class="w-text"><?= $escape($typePair['label']) ?></span>
+                                        <code class="w-text" data-tone="muted" style="--w-font-size:var(--weline-layout-font-size-xs,12px);margin-inline-start:var(--weline-space-1);"><?= $escape($typePair['code']) ?></code>
+                                    </td>
+                                    <td>
+                                        <div class="w-cluster" style="--w-gap:var(--weline-space-2);">
+                                            <?php if ($canAddProvince): ?>
+                                                <button type="button" class="w-button" data-size="sm" data-tone="quiet" data-inventory-add="province" data-parent-id="<?= $warehouseId ?>" data-parent-code="<?= $escape($code) ?>" data-country-code="<?= $escape($countryCode !== '' ? $countryCode : $code) ?>"><lang>加省</lang></button>
+                                            <?php endif; ?>
+                                            <?php if ($canAddWarehouse): ?>
+                                                <button type="button" class="w-button" data-size="sm" data-tone="quiet" data-inventory-add="warehouse" data-parent-id="<?= $warehouseId ?>" data-parent-code="<?= $escape($code) ?>" data-country-code="<?= $escape($countryCode) ?>" data-region-code="<?= $escape($regionCode) ?>"><lang>加仓</lang></button>
+                                            <?php endif; ?>
+                                            <?php if ($isSeed): ?>
+                                                <span class="w-field__help" data-testid="inventory-warehouse-seed-locked"><lang>系统种子不可删除</lang></span>
+                                            <?php else: ?>
+                                            <w:form method="post" action="@backend-url('*/backend/inventory/delete-warehouse')" csrf="auto" style="--w-mb:0;" data-testid="inventory-warehouse-delete-form-<?= $warehouseId ?>" onsubmit="return confirm('<?= $escape((string)__('确认删除该仓库？仓码不可恢复。')) ?>');">
+                                                <input type="hidden" name="website_id" value="<?= (int)$website_id ?>">
+                                                <input type="hidden" name="warehouse_id" value="<?= $warehouseId ?>">
+                                                <button class="w-button" type="submit" data-size="sm" data-tone="danger"><lang>删除</lang></button>
+                                            </w:form>
+                                            <?php endif; ?>
+                                        </div>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php endif; ?>
+
+                <div class="w-card" data-testid="inventory-warehouse-inline-create" hidden style="--w-mt:var(--weline-space-4);background:var(--weline-theme-surface-muted, transparent);">
+                    <div class="w-card__body">
+                        <w:form method="post" action="@backend-url('*/backend/inventory/create-child-warehouse')" csrf="auto" class="w-grid" data-testid="inventory-warehouse-create-form" style="--w-gap:var(--weline-space-3);">
+                            <input type="hidden" name="website_id" value="<?= (int)$website_id ?>">
+                            <input type="hidden" name="parent_id" value="0" data-inventory-parent-id>
+                            <input type="hidden" name="node_kind" value="warehouse" data-inventory-node-kind>
+                            <input type="hidden" name="country_code" value="" data-inventory-country-code>
+                            <input type="hidden" name="region_code" value="" data-inventory-region-code>
+                            <div style="--w-span:12;">
+                                <div class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-2);">
+                                    <lang>完整仓码</lang>：
+                                    <code data-inventory-code-preview></code>
+                                    · <lang>仓码创建后不可修改</lang>
+                                </div>
+                            </div>
+                            <div style="--w-span-md:3;">
+                                <label class="w-field__label"><lang>父级前缀</lang></label>
+                                <input class="w-input" type="text" readonly value="" data-inventory-parent-prefix>
+                            </div>
+                            <div style="--w-span-md:2;">
+                                <label class="w-field__label" for="inventory-code-segment"><lang>码片段</lang></label>
+                                <input class="w-input" id="inventory-code-segment" name="code_segment" maxlength="32" required data-inventory-code-segment placeholder="WH02">
+                            </div>
+                            <div style="--w-span-md:3;">
+                                <label class="w-field__label" for="inventory-child-name"><lang>名称</lang></label>
+                                <input class="w-input" id="inventory-child-name" name="name" maxlength="128" required>
+                            </div>
+                            <div style="--w-span-md:1;">
+                                <label class="w-field__label"><lang>模式</lang></label>
+                                <select class="w-select" name="mode"><option value="normal">normal</option><option value="test">test</option></select>
+                            </div>
+                            <div style="--w-span-md:2;">
+                                <label class="w-field__label"><lang>类型</lang></label>
+                                <select class="w-select" name="warehouse_type" data-inventory-warehouse-type>
+                                    <option value="physical">physical</option>
+                                    <option value="logical">logical</option>
+                                </select>
+                            </div>
+                            <div class="w-cluster" data-align="end" style="--w-span-md:1;">
+                                <button class="w-button" type="submit" data-w-width="full" data-tone="primary"><lang>创建</lang></button>
+                            </div>
+                        </w:form>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <script>
+        (function () {
+            var panel = document.querySelector('[data-testid="inventory-warehouse-inline-create"]');
+            var parentId = document.querySelector('[data-inventory-parent-id]');
+            var nodeKind = document.querySelector('[data-inventory-node-kind]');
+            var countryCode = document.querySelector('[data-inventory-country-code]');
+            var regionCode = document.querySelector('[data-inventory-region-code]');
+            var parentPrefix = document.querySelector('[data-inventory-parent-prefix]');
+            var segment = document.querySelector('[data-inventory-code-segment]');
+            var preview = document.querySelector('[data-inventory-code-preview]');
+            var warehouseType = document.querySelector('[data-inventory-warehouse-type]');
+            function normalize(value) {
+                return String(value || '').toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+            }
+            function refreshPreview() {
+                if (!preview || !parentPrefix || !segment) return;
+                var prefix = normalize(parentPrefix.value);
+                var part = normalize(segment.value);
+                preview.textContent = !part ? (prefix || '—') : (prefix ? (part.indexOf(prefix + '-') === 0 ? part : prefix + '-' + part) : part);
+            }
+            document.querySelectorAll('[data-inventory-add]').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    if (!panel) return;
+                    panel.hidden = false;
+                    var kind = btn.getAttribute('data-inventory-add') === 'province' ? 'province' : 'warehouse';
+                    if (parentId) parentId.value = btn.getAttribute('data-parent-id') || '0';
+                    if (nodeKind) nodeKind.value = kind;
+                    if (countryCode) countryCode.value = btn.getAttribute('data-country-code') || '';
+                    if (regionCode) regionCode.value = btn.getAttribute('data-region-code') || '';
+                    if (parentPrefix) parentPrefix.value = btn.getAttribute('data-parent-code') || '';
+                    if (segment) {
+                        segment.value = kind === 'province' ? '' : 'WH02';
+                        segment.placeholder = kind === 'province' ? 'GD' : 'WH02';
+                    }
+                    if (warehouseType) {
+                        warehouseType.value = kind === 'warehouse' ? 'physical' : 'logical';
+                        warehouseType.disabled = kind !== 'warehouse';
+                    }
+                    refreshPreview();
+                    if (segment) segment.focus();
+                });
+            });
+            if (segment) segment.addEventListener('input', refreshPreview);
+        })();
+        </script>
+            </div>
+
+            <div
+                class="w-tabs__panel"
+                id="inventory-wh-panel-labels"
+                role="tabpanel"
+                aria-labelledby="inventory-wh-tab-labels"
+                data-testid="inventory-wh-panel-labels"
+                <?= $warehouseTab === 'tree' ? 'hidden' : '' ?>
+            >
+                <div class="w-card" style="--w-mb:var(--weline-space-4);" data-testid="inventory-warehouse-code-label-panel">
+                    <div class="w-card__body">
+                        <div class="w-cluster" data-align="center" data-justify="between" style="--w-mb:var(--weline-space-3);">
+                            <div class="w-text" data-tone="muted" style="--w-mb:0;">
+                                <lang>管理树表「层级 / 模式 / 类型」列的英文码与展示名映射。名称可点翻译；系统种子不可删除。</lang>
+                            </div>
+                            <w:form method="post" action="@backend-url('*/backend/inventory/seed-warehouse-code-labels')" csrf="auto" class="w-cluster" data-testid="inventory-warehouse-code-label-seed-form" style="--w-gap:var(--weline-space-2);--w-mb:0;">
+                                <input type="hidden" name="website_id" value="<?= (int)$website_id ?>">
+                                <button class="w-button" type="submit" data-tone="quiet"><lang>同步默认别名</lang></button>
+                            </w:form>
+                        </div>
+
+                        <w:form method="post" action="@backend-url('*/backend/inventory/save-warehouse-code-label')" csrf="auto" class="w-grid" data-testid="inventory-warehouse-code-label-form" style="--w-gap:var(--weline-space-3);--w-mb:var(--weline-space-4);">
+                            <input type="hidden" name="website_id" value="<?= (int)$website_id ?>">
+                            <div style="--w-span-md:3;">
+                                <label class="w-field__label" for="inventory-code-label-group"><lang>分组</lang></label>
+                                <select class="w-select" id="inventory-code-label-group" name="code_group" required>
+                                    <option value="node_kind"><lang>层级</lang> (node_kind)</option>
+                                    <option value="mode"><lang>模式</lang> (mode)</option>
+                                    <option value="warehouse_type"><lang>类型</lang> (warehouse_type)</option>
+                                </select>
+                            </div>
+                            <div style="--w-span-md:2;">
+                                <label class="w-field__label" for="inventory-code-label-code"><lang>英文码</lang></label>
+                                <input class="w-input" id="inventory-code-label-code" name="code" maxlength="32" required placeholder="country">
+                            </div>
+                            <div style="--w-span-md:4;">
+                                <label class="w-field__label" for="inventory-code-label-name"><lang>展示名</lang></label>
+                                <input class="w-input" id="inventory-code-label-name" name="label_name" maxlength="128" required placeholder="<?= $escape((string)__('例如：国家')) ?>">
+                            </div>
+                            <div style="--w-span-md:1;">
+                                <label class="w-field__label" for="inventory-code-label-sort"><lang>排序</lang></label>
+                                <input class="w-input" id="inventory-code-label-sort" name="sort_order" type="number" min="0" placeholder="10">
+                            </div>
+                            <div class="w-cluster" data-align="end" style="--w-span-md:2;">
+                                <button class="w-button" type="submit" data-w-width="full" data-tone="primary"><lang>保存别名</lang></button>
+                            </div>
+                        </w:form>
+
+                        <?php if ($codeLabelRows === []): ?>
+                            <div class="w-text" data-tone="muted"><lang>暂无码别名，请同步默认别名或手动添加。</lang></div>
+                        <?php else: ?>
+                            <div class="w-table-wrap">
+                                <table class="w-table" data-w-vertical="middle" data-testid="inventory-warehouse-code-label-table" style="--w-mb:0;">
+                                    <thead>
+                                    <tr>
+                                        <th><lang>分组</lang></th>
+                                        <th><lang>英文码</lang></th>
+                                        <th style="width:40%;"><lang>展示名</lang></th>
+                                        <th><lang>来源</lang></th>
+                                        <th><lang>操作</lang></th>
+                                    </tr>
+                                    </thead>
+                                    <tbody>
+                                    <?php foreach ($codeLabelRows as $labelRow):
+                                        $labelId = (int)($labelRow['label_id'] ?? 0);
+                                        $isSeedLabel = (int)($labelRow['is_seed'] ?? 0) === 1;
+                                        $canDeleteLabel = (int)($labelRow['can_delete'] ?? 0) === 1;
+                                        $displayLabel = (string)($labelRow['display_name'] ?? $labelRow['label_name'] ?? '');
+                                        \Weline\I18n\Taglib\Local::bindRuntimeRecordId($labelId);
+                                        ?>
+                                        <tr data-label-id="<?= $labelId ?>" data-code-group="<?= $escape((string)($labelRow['code_group'] ?? '')) ?>" data-code="<?= $escape((string)($labelRow['code'] ?? '')) ?>">
+                                            <td>
+                                                <span class="w-text"><?= $escape((string)($labelRow['group_title'] ?? '')) ?></span>
+                                                <code class="w-text" data-tone="muted" style="--w-font-size:var(--weline-layout-font-size-xs,12px);margin-inline-start:var(--weline-space-1);"><?= $escape((string)($labelRow['code_group'] ?? '')) ?></code>
+                                            </td>
+                                            <td><code class="w-text"><?= $escape((string)($labelRow['code'] ?? '')) ?></code></td>
+                                            <td>
+                                                <span class="w-text" data-testid="inventory-code-label-name-<?= $labelId ?>">
+                                                    <local
+                                                        model="Weline\Inventory\Model\WarehouseCodeLabel\LocalDescription"
+                                                        field="label_name"
+                                                        id="label_id"
+                                                        name="inventory-code-label-name-<?= $labelId ?>"
+                                                    ><?= $escape($displayLabel !== '' ? $displayLabel : (string)__('翻译')) ?></local>
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <?php if ($isSeedLabel): ?>
+                                                    <span class="w-badge" data-tone="neutral"><lang>系统</lang></span>
+                                                <?php else: ?>
+                                                    <span class="w-badge" data-tone="primary"><lang>自建</lang></span>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td>
+                                                <?php if ($canDeleteLabel): ?>
+                                                    <w:form method="post" action="@backend-url('*/backend/inventory/delete-warehouse-code-label')" csrf="auto" style="--w-mb:0;" data-testid="inventory-code-label-delete-form-<?= $labelId ?>" onsubmit="return confirm('<?= $escape((string)__('确认删除该自建别名？')) ?>');">
+                                                        <input type="hidden" name="website_id" value="<?= (int)$website_id ?>">
+                                                        <input type="hidden" name="label_id" value="<?= $labelId ?>">
+                                                        <button class="w-button" type="submit" data-size="sm" data-tone="danger"><lang>删除</lang></button>
+                                                    </w:form>
+                                                <?php else: ?>
+                                                    <span class="w-field__help" data-testid="inventory-code-label-seed-locked"><lang>系统种子不可删除</lang></span>
+                                                <?php endif; ?>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+        </div>
     <?php elseif ($section === 'authorizations'): ?>
-        <div class="w-card" style="--w-mb:var(--weline-space-4);"><div class="w-card__body">
-            <w:form method="post" action="@backend-url('*/backend/inventory/authorize-warehouse')" csrf="auto" class="w-grid" data-testid="inventory-warehouse-authorization-form" style="--w-gap:var(--weline-space-4);">
-                <div style="--w-span-md:3;"><label class="w-field__label"><lang>网站</lang></label>
-                    <w:websites:website:select
-                        id="inventory-authorize-website"
-                        name="website_id"
-                        value="websiteSelectValue"
-                        display="websiteSelectDisplay"
-                        options="websiteSelectOptionsJson"
-                        multiple="false"
-                        allow-empty="false"
-                        empty-label="@lang(请选择站点)"
-                        placeholder="@lang(搜索站点名称或编码)"
-                    />
+        <?php
+        $leafRows = is_array($rows) ? $rows : [];
+        $authKeyword = isset($auth_keyword) ? trim((string)$auth_keyword) : '';
+        $authPage = max(1, (int)($auth_page ?? 1));
+        $authLimit = max(1, (int)($auth_limit ?? 10));
+        $authTotal = max(0, (int)($auth_total ?? count($leafRows)));
+        $authTotalPages = max(1, (int)($auth_total_pages ?? 1));
+        $authQueryBase = 'website_id=' . (int)$website_id
+            . '&store_id=' . (int)($store_id ?? 0)
+            . '&limit=' . $authLimit
+            . ($authKeyword !== '' ? '&keyword=' . rawurlencode($authKeyword) : '');
+        ?>
+        <div class="w-stack" style="--w-gap:var(--weline-space-4);" data-testid="inventory-authorization-accordion">
+            <div class="w-card" data-testid="inventory-authorization-list-card">
+                <div class="w-card__body">
+                    <div class="w-cluster" data-align="center" data-justify="between" style="--w-mb:var(--weline-space-3);">
+                        <div>
+                            <div class="w-text" style="--w-mb:var(--weline-space-1);font-weight:600;"><lang>仓库列表</lang></div>
+                            <div class="w-text" data-tone="muted" style="--w-mb:0;">
+                                <lang>按仓库展开查看已授权店铺。国家/省只是目录。</lang>
+                            </div>
+                        </div>
+                        <w:form method="post" action="@backend-url('*/backend/inventory/seed-default-authorization')" csrf="auto" class="w-cluster" data-testid="inventory-authorization-seed-form" style="--w-gap:var(--weline-space-2);--w-mb:0;">
+                            <input type="hidden" name="website_id" value="<?= (int)$website_id ?>">
+                            <button class="w-button" type="submit" data-size="sm" data-tone="quiet"><lang>同步默认站店挂载</lang></button>
+                        </w:form>
+                    </div>
+
+                    <form method="get" action="@backend-url('*/backend/inventory/authorizations')" class="w-grid" data-testid="inventory-authorization-search-form" style="--w-gap:var(--weline-space-3);--w-mb:var(--weline-space-3);">
+                        <input type="hidden" name="website_id" value="<?= (int)$website_id ?>">
+                        <input type="hidden" name="store_id" value="<?= (int)($store_id ?? 0) ?>">
+                        <input type="hidden" name="page" value="1">
+                        <div style="--w-span-md:7;">
+                            <label class="w-field__label" for="inventory-authorization-keyword"><lang>搜索仓库</lang></label>
+                            <input
+                                class="w-input"
+                                id="inventory-authorization-keyword"
+                                type="search"
+                                name="keyword"
+                                value="<?= $escape($authKeyword) ?>"
+                                placeholder="<?= $escape((string)__('仓库名 / 仓码 / 国家 / 店铺名')) ?>"
+                                data-testid="inventory-authorization-keyword"
+                            >
+                        </div>
+                        <div style="--w-span-md:2;">
+                            <label class="w-field__label" for="inventory-authorization-limit"><lang>每页</lang></label>
+                            <select class="w-select" id="inventory-authorization-limit" name="limit" data-testid="inventory-authorization-limit">
+                                <?php foreach ([10, 20, 50] as $limitOption): ?>
+                                    <option value="<?= $limitOption ?>"<?= $authLimit === $limitOption ? ' selected' : '' ?>><?= $limitOption ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="w-cluster" data-align="end" style="--w-span-md:3;--w-gap:var(--weline-space-2);">
+                            <button class="w-button" type="submit" data-tone="primary" data-testid="inventory-authorization-search-submit"><lang>搜索</lang></button>
+                            <a class="w-button" data-tone="quiet" data-testid="inventory-authorization-search-reset" href="@backend-url('*/backend/inventory/authorizations')?website_id=<?= (int)$website_id ?>&store_id=<?= (int)($store_id ?? 0) ?>&limit=<?= $authLimit ?>"><lang>重置</lang></a>
+                        </div>
+                    </form>
+
+                    <div class="w-cluster" data-align="center" data-justify="between" style="--w-mb:var(--weline-space-3);--w-gap:var(--weline-space-3);flex-wrap:wrap;">
+                        <div class="w-text" data-tone="muted" data-testid="inventory-authorization-search-summary" style="--w-mb:0;">
+                            <lang>共</lang> <?= $authTotal ?> <lang>个叶子仓</lang>
+                            · <lang>第</lang> <?= $authPage ?> / <?= $authTotalPages ?> <lang>页</lang>
+                            <?php if ($authKeyword !== ''): ?>
+                                · <lang>关键词</lang> 「<?= $escape($authKeyword) ?>」
+                            <?php endif; ?>
+                        </div>
+                        <?php if ($authTotalPages > 1): ?>
+                            <nav aria-label="<?= $escape((string)__('仓库授权分页')) ?>" data-testid="inventory-authorization-pagination" style="--w-mb:0;">
+                                <ul class="w-pagination" data-justify="end" style="--w-mb:0;">
+                                    <li class="w-pagination__item<?= $authPage <= 1 ? ' disabled' : '' ?>">
+                                        <?php if ($authPage <= 1): ?>
+                                            <span class="w-pagination__link"><lang>上一页</lang></span>
+                                        <?php else: ?>
+                                            <a class="w-pagination__link" href="@backend-url('*/backend/inventory/authorizations')?<?= $escape($authQueryBase) ?>&page=<?= $authPage - 1 ?>" data-testid="inventory-authorization-page-prev"><lang>上一页</lang></a>
+                                        <?php endif; ?>
+                                    </li>
+                                    <?php for ($i = max(1, $authPage - 2); $i <= min($authTotalPages, $authPage + 2); $i++): ?>
+                                        <li class="w-pagination__item<?= $i === $authPage ? ' active' : '' ?>">
+                                            <a class="w-pagination__link" href="@backend-url('*/backend/inventory/authorizations')?<?= $escape($authQueryBase) ?>&page=<?= $i ?>" data-testid="inventory-authorization-page-<?= $i ?>"><?= $i ?></a>
+                                        </li>
+                                    <?php endfor; ?>
+                                    <li class="w-pagination__item<?= $authPage >= $authTotalPages ? ' disabled' : '' ?>">
+                                        <?php if ($authPage >= $authTotalPages): ?>
+                                            <span class="w-pagination__link"><lang>下一页</lang></span>
+                                        <?php else: ?>
+                                            <a class="w-pagination__link" href="@backend-url('*/backend/inventory/authorizations')?<?= $escape($authQueryBase) ?>&page=<?= $authPage + 1 ?>" data-testid="inventory-authorization-page-next"><lang>下一页</lang></a>
+                                        <?php endif; ?>
+                                    </li>
+                                </ul>
+                            </nav>
+                        <?php endif; ?>
+                    </div>
+
+                    <?php if ($leafRows === []): ?>
+                        <div class="w-text" data-align="center" style="--w-pt:var(--weline-space-8);--w-pb:var(--weline-space-8);" data-testid="inventory-authorization-empty">
+                            <?php if ($authKeyword !== ''): ?>
+                                <lang>没有匹配的仓库。请调整关键词或重置搜索。</lang>
+                            <?php else: ?>
+                                <lang>暂无叶子仓库。请先同步全球仓树或点击「同步默认站店挂载」。</lang>
+                            <?php endif; ?>
+                        </div>
+                    <?php else: ?>
+                        <div class="w-stack" style="--w-gap:var(--weline-space-2);" data-testid="inventory-authorization-warehouse-list">
+                            <?php foreach ($leafRows as $authRow):
+                                $warehouseId = (int)($authRow['warehouse_id'] ?? 0);
+                                $stores = is_array($authRow['authorized_stores'] ?? null) ? $authRow['authorized_stores'] : [];
+                                $storeCount = (int)($authRow['authorized_store_count'] ?? count($stores));
+                                $isSeedAuth = (int)($authRow['auth_is_seed'] ?? 0) === 1;
+                                $hasDefault = (int)($authRow['is_default_auth'] ?? 0) === 1;
+                                $country = trim((string)($authRow['country_code'] ?? ''));
+                                $code = (string)($authRow['warehouse_code'] ?? '');
+                                $name = (string)($authRow['warehouse_name'] ?? '');
+                                $typePair = \Weline\Inventory\Service\WarehouseCodeAlias::pair('warehouse_type', (string)($authRow['warehouse_type'] ?? ''));
+                                ?>
+                                <details class="w-card" data-testid="inventory-authorization-warehouse-<?= $warehouseId ?>" style="--w-mb:0;border:1px solid var(--weline-theme-border, #d0d5dd);">
+                                    <summary class="w-card__body" style="cursor:pointer;list-style:none;">
+                                        <div class="w-cluster" data-align="center" data-justify="between">
+                                            <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);">
+                                                <span class="w-text" style="font-weight:600;" data-testid="inventory-authorization-warehouse-name"><?= $escape($name) ?></span>
+                                                <code class="w-text" data-tone="muted"><?= $escape($code) ?></code>
+                                                <?php if ($country !== ''): ?>
+                                                    <span class="w-badge" data-tone="neutral"><?= $escape($country) ?></span>
+                                                <?php endif; ?>
+                                                <span class="w-text" data-tone="muted"><?= $escape($typePair['label']) ?></span>
+                                            </div>
+                                            <div class="w-cluster" style="--w-gap:var(--weline-space-2);">
+                                                <span class="w-badge" data-tone="<?= $storeCount > 0 ? 'success' : 'neutral' ?>">
+                                                    <lang>已授权店铺</lang> <?= $storeCount ?>
+                                                </span>
+                                                <?php if ($hasDefault): ?><span class="w-badge" data-tone="primary"><lang>含默认逻辑仓</lang></span><?php endif; ?>
+                                                <?php if ($isSeedAuth): ?><span class="w-badge" data-tone="warning" data-testid="inventory-authorization-seed-badge"><lang>系统种子</lang></span><?php endif; ?>
+                                            </div>
+                                        </div>
+                                    </summary>
+                                    <div class="w-card__body" style="border-top:1px solid color-mix(in srgb, var(--weline-theme-border, #d0d5dd) 80%, transparent);">
+                                        <?php if ($stores === []): ?>
+                                            <div class="w-text" data-tone="muted"><lang>尚未授权任何店铺。用下方「授权 / 改绑」挂店铺。</lang></div>
+                                        <?php else: ?>
+                                            <div class="w-table-wrap">
+                                                <table class="w-table" style="--w-mb:0;" data-testid="inventory-authorization-store-table-<?= $warehouseId ?>">
+                                                    <thead>
+                                                    <tr>
+                                                        <th><lang>店铺</lang></th>
+                                                        <th><lang>默认逻辑仓</lang></th>
+                                                        <th><lang>来源</lang></th>
+                                                        <th><lang>操作</lang></th>
+                                                    </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                    <?php foreach ($stores as $storeAuth):
+                                                        $authId = (int)($storeAuth['authorization_id'] ?? 0);
+                                                        $storeName = (string)($storeAuth['store_name'] ?? '');
+                                                        $isDefault = (int)($storeAuth['is_default'] ?? 0) === 1;
+                                                        $isSeed = (int)($storeAuth['is_seed'] ?? 0) === 1;
+                                                        ?>
+                                                        <tr data-testid="inventory-authorization-row-<?= $authId ?>">
+                                                            <td data-testid="inventory-authorization-store-name"><?= $escape($storeName) ?></td>
+                                                            <td><?= $isDefault ? (string)__('是') : (string)__('否') ?></td>
+                                                            <td>
+                                                                <?php if ($isSeed): ?>
+                                                                    <span class="w-badge" data-tone="warning"><lang>系统种子</lang></span>
+                                                                <?php else: ?>
+                                                                    <span class="w-badge" data-tone="primary"><lang>自建</lang></span>
+                                                                <?php endif; ?>
+                                                            </td>
+                                                            <td>
+                                                                <?php if ($isSeed): ?>
+                                                                    <span class="w-field__help" data-testid="inventory-authorization-seed-locked"><lang>系统种子不可删除，可改绑</lang></span>
+                                                                <?php elseif ($authId > 0): ?>
+                                                                    <w:form method="post" action="@backend-url('*/backend/inventory/delete-authorization')" csrf="auto" style="--w-mb:0;" data-testid="inventory-authorization-delete-form-<?= $authId ?>" onsubmit="return confirm('<?= $escape((string)__('确认删除该授权？')) ?>');">
+                                                                        <input type="hidden" name="website_id" value="<?= (int)$website_id ?>">
+                                                                        <input type="hidden" name="authorization_id" value="<?= $authId ?>">
+                                                                        <button class="w-button" type="submit" data-size="sm" data-tone="danger"><lang>删除</lang></button>
+                                                                    </w:form>
+                                                                <?php else: ?>
+                                                                    —
+                                                                <?php endif; ?>
+                                                            </td>
+                                                        </tr>
+                                                    <?php endforeach; ?>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        <?php endif; ?>
+                                    </div>
+                                </details>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
                 </div>
-                <div style="--w-span-md:3;"><label class="w-field__label"><lang>Store ID</lang></label><input class="w-input" type="number" min="0" name="store_id" required></div>
-                <div style="--w-span-md:3;"><label class="w-field__label"><lang>Warehouse ID</lang></label><input class="w-input" type="number" min="1" name="warehouse_id" required></div>
-                <div style="--w-span-md:2;"><label class="w-field__label"><lang>默认逻辑仓</lang></label><select class="w-select" name="is_default"><option value="0">否</option><option value="1">是</option></select></div>
-                <div class="w-cluster" data-align="end" style="--w-span-md:2;"><button class="w-button" type="submit" data-w-width="full" data-tone="primary"><lang>授权</lang></button></div>
-            </w:form>
-        </div></div>
+            </div>
+
+            <div class="w-card" data-testid="inventory-authorization-bind-card">
+                <div class="w-card__body">
+                    <div class="w-text" style="--w-mb:var(--weline-space-1);font-weight:600;"><lang>授权 / 改绑</lang></div>
+                    <div class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-3);">
+                        <lang>把店铺挂到叶子仓。站点沿用上方「切换网站」。</lang>
+                    </div>
+                    <w:form method="post" action="@backend-url('*/backend/inventory/authorize-warehouse')" csrf="auto" class="w-grid" data-testid="inventory-warehouse-authorization-form" style="--w-gap:var(--weline-space-3);">
+                        <input type="hidden" name="website_id" value="<?= (int)$website_id ?>">
+                        <div style="--w-span-md:4;"><label class="w-field__label"><lang>店铺</lang></label>
+                            <w:websites:store:select
+                                id="inventory-authorize-store"
+                                name="store_id"
+                                value="storeSelectValue"
+                                options="storeSelectOptionsJson"
+                                allow-empty="false"
+                                clearable="false"
+                                empty-label="@lang(请选择店铺)"
+                                placeholder="@lang(搜索店铺名称或编码)"
+                            />
+                        </div>
+                        <div style="--w-span-md:4;"><label class="w-field__label"><lang>仓库</lang></label>
+                            <w:inventory:warehouse:select
+                                id="inventory-authorize-warehouse"
+                                name="warehouse_id"
+                                website-id="website_id"
+                                required="true"
+                                clearable="false"
+                                placeholder="@lang(搜索仓库代码或名称)"
+                            />
+                        </div>
+                        <div style="--w-span-md:2;"><label class="w-field__label"><lang>默认逻辑仓</lang></label><select class="w-select" name="is_default"><option value="0">否</option><option value="1">是</option></select></div>
+                        <div class="w-cluster" data-align="end" style="--w-span-md:2;">
+                            <button class="w-button" type="submit" data-tone="primary"><lang>提交</lang></button>
+                        </div>
+                    </w:form>
+                </div>
+            </div>
+        </div>
     <?php elseif ($section === 'adjustments'): ?>
         <div class="w-card" style="--w-mb:var(--weline-space-4);"><div class="w-card__body">
             <w:form method="post" action="@backend-url('*/backend/inventory/adjust-stock')" csrf="auto" class="w-grid" data-testid="inventory-stock-adjust-form" style="--w-gap:var(--weline-space-4);">
@@ -83,20 +669,111 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
                         placeholder="@lang(搜索站点名称或编码)"
                     />
                 </div>
-                <div style="--w-span-md:2;"><label class="w-field__label"><lang>Store ID</lang></label><input class="w-input" type="number" min="0" name="store_id" required></div>
-                <div style="--w-span-md:2;"><label class="w-field__label"><lang>Offer ID</lang></label><input class="w-input" type="number" min="1" name="offer_id" required></div>
-                <div style="--w-span-md:2;"><label class="w-field__label"><lang>在手库存</lang></label><input class="w-input" type="number" min="0" name="on_hand_minor" required></div>
-                <div style="--w-span-md:2;"><label class="w-field__label"><lang>命令 ID</lang></label><input class="w-input" name="command_id" maxlength="96" required></div>
-                <div style="--w-span-md:1;"><label class="w-field__label"><lang>策略</lang></label><select class="w-select" name="strategy"><option value="strict">strict</option><option value="oversell">oversell</option><option value="preorder">preorder</option><option value="unlimited">unlimited</option></select></div>
-                <div class="w-cluster" data-align="end" style="--w-span-md:1;"><button class="w-button" type="submit" data-w-width="full" data-tone="primary"><lang>提交</lang></button></div>
+                <div style="--w-span-md:2;"><label class="w-field__label"><lang>店铺</lang></label>
+                    <w:websites:store:select
+                        id="inventory-adjust-store"
+                        name="store_id"
+                        value="storeSelectValue"
+                        options="storeSelectOptionsJson"
+                        allow-empty="false"
+                        clearable="false"
+                        empty-label="@lang(请选择店铺)"
+                        placeholder="@lang(搜索店铺名称或编码)"
+                    />
+                    <div class="w-field__help"><lang>默认店铺可选 #0</lang></div>
+                </div>
+                <div style="--w-span-md:2;"><label class="w-field__label"><lang>商品 Offer</lang></label>
+                    <w:product:offer:select
+                        id="inventory-adjust-offer"
+                        name="offer_id"
+                        website-id="website_id"
+                        required="true"
+                        clearable="false"
+                        placeholder="@lang(搜索 Offer ID 或 SKU)"
+                    />
+                    <div class="w-field__help"><lang>商品 SKU 对应的 Offer 编号</lang></div>
+                </div>
+                <div style="--w-span-md:2;">
+                    <w:inventory:on-hand:field
+                        id="inventory-adjust-on-hand"
+                        name="on_hand_minor"
+                        required="true"
+                    />
+                </div>
+                <div style="--w-span-md:2;">
+                    <w:inventory:command-id:field
+                        id="inventory-adjust-command"
+                        name="command_id"
+                        required="true"
+                        prefix="adj_"
+                    />
+                </div>
+                <div style="--w-span-md:2;"><label class="w-field__label"><lang>策略</lang></label><select class="w-select" name="strategy"><option value="strict"><lang>严格</lang></option><option value="oversell"><lang>允许超卖</lang></option><option value="preorder"><lang>预售</lang></option><option value="unlimited"><lang>不限量</lang></option></select></div>
+                <div class="w-cluster" data-align="end" style="--w-span-md:2;">
+                    <button class="w-button" type="submit" data-tone="primary" data-testid="inventory-stock-adjust-submit"><lang>提交调整</lang></button>
+                </div>
             </w:form>
         </div></div>
     <?php endif; ?>
 
     <?php if ($error !== ''): ?>
         <div class="w-alert" role="alert" data-tone="danger"><?= $escape($error) ?></div>
+    <?php elseif ($section === 'warehouses' || $section === 'authorizations'): ?>
+        <?php if ($section === 'warehouses' && $warehouseRows === []): ?>
+            <div class="w-card"><div class="w-card__body w-text" data-align="center" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);"><w:icon name="database" size="sm"></w:icon><p style="--w-mt:var(--weline-space-2);--w-mb:0;"><lang>暂无仓库，请同步默认全球仓或添加国家节点</lang></p></div></div>
+        <?php elseif ($section === 'authorizations' && $rows === []): ?>
+            <div class="w-card"><div class="w-card__body w-text" data-align="center" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);"><w:icon name="database" size="sm"></w:icon><p style="--w-mt:var(--weline-space-2);--w-mb:0;"><lang>暂无授权，请同步默认站店授权或手动授权</lang></p></div></div>
+        <?php endif; ?>
     <?php elseif ($rows === []): ?>
         <div class="w-card"><div class="w-card__body w-text" data-align="center" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);"><w:icon name="database" size="sm"></w:icon><p style="--w-mt:var(--weline-space-2);--w-mb:0;"><lang>暂无数据</lang></p></div></div>
+    <?php elseif ($isReadableSection): ?>
+        <div class="w-card" data-testid="inventory-readable-table-card">
+            <div class="w-card__body" style="--w-pb:var(--weline-space-2);">
+                <div class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-3);">
+                    <?php if ($section === 'stocks'): ?>
+                        <lang>按商品查看当前在手、预占与可售件数。数量单位均为「件」。</lang>
+                    <?php else: ?>
+                        <lang>库存设置/调整事件流水。变动列为件数增减。</lang>
+                    <?php endif; ?>
+                </div>
+            </div>
+            <div class="w-table-wrap">
+                <table class="w-table" data-testid="inventory-readable-table" style="--w-mb:0;">
+                    <thead>
+                    <tr>
+                        <?php foreach ($columns as $column): ?>
+                            <th><?= $escape((string)($columnLabels[$column] ?? $column)) ?></th>
+                        <?php endforeach; ?>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <?php foreach ($rows as $row): ?>
+                        <tr>
+                            <?php foreach ($columns as $column): ?>
+                                <?php
+                                $cell = $row[$column] ?? '';
+                                $isQty = in_array($column, ['on_hand', 'reserved', 'available', 'oversell', 'preorder', 'qty_delta'], true);
+                                $isProduct = $column === 'product';
+                                $isStrategy = $column === 'strategy';
+                                ?>
+                                <td>
+                                    <?php if ($isProduct): ?>
+                                        <div class="w-text" style="--w-mb:0;font-weight:600;"><?= $escape((string)$cell) ?></div>
+                                    <?php elseif ($isStrategy): ?>
+                                        <span class="w-badge" data-tone="neutral"><?= $escape((string)$cell) ?></span>
+                                    <?php elseif ($isQty): ?>
+                                        <span class="w-text" data-testid="inventory-qty-<?= $escape($column) ?>"><?= $escape((string)$cell) ?></span>
+                                    <?php else: ?>
+                                        <?= $escape((string)$cell) ?>
+                                    <?php endif; ?>
+                                </td>
+                            <?php endforeach; ?>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
     <?php else: ?>
         <div class="w-card"><div class="w-table-wrap"><table class="w-table" style="--w-mb:0;">
             <thead><tr><?php foreach ($columns as $column): ?><th><?= $escape($column) ?></th><?php endforeach; ?></tr></thead>

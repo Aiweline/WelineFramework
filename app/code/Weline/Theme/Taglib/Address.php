@@ -109,6 +109,14 @@ class Address implements TaglibInterface
     /**
      * @param array<string, mixed> $attributes
      */
+    public static function renderHtml(array $attributes): string
+    {
+        return self::buildMarkup($attributes);
+    }
+
+    /**
+     * @param array<string, mixed> $attributes
+     */
     private static function buildMarkup(array $attributes): string
     {
         $escape = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
@@ -299,6 +307,8 @@ class Address implements TaglibInterface
             DataInterface::dir_type_STATICS,
             'Weline_Theme::js/address-loader.js',
         ));
+        // Explicit bust: module asset query can stick while file content already changed.
+        $loaderUrl .= (str_contains($loaderUrl, '?') ? '&' : '?') . 'v=20260911-single-float2';
         $html[] = '<script src="' . $loaderUrl . '" data-w-address-loader data-no-extract="true" defer></script>';
 
         return implode("\n", $html);
@@ -360,7 +370,7 @@ class Address implements TaglibInterface
 <li><code>postal="true"</code>：壳内输出邮编；<code>postal-lookup="true"</code>：邮编 debounce 反查回填（逻辑在 address.js）。仅 lookup 时可驱动壳外 <code>data-postal-first</code> 邮编框。</li>
 <li><code>detail="true"</code>：输出详细地址字段（默认 name=address1）。</li>
 <li><code>selection="multi"</code>：批量多选模式（承运商覆盖/可售目的地）。配合 <code>multi-levels="country|province|district"</code> 或字段级 <code>multi-country</code> 等；输出 <code>data-multi-selection</code> JSON，并触发 <code>weline:address:multi-change</code>。</li>
-<li><strong>浮层硬约束</strong>：multi 搜索下拉必须经 <code>Weline.UI.floating.attach</code>（<code>anchored-float</code>）做 portal / flip / 视口限界；禁止在业务脚本手写 <code>left/top</code> 或自研边界检测。单选级联菜单后续也应收敛到同一浮层内核。</li>
+<li><strong>浮层硬约束</strong>：single / multi 搜索下拉都必须经 <code>Weline.UI.floating.attach</code>（<code>anchored-float</code>）做 portal / flip / 视口限界，以逃出父级 <code>overflow</code> 裁切；禁止在业务脚本手写 <code>left/top</code> 或自研边界检测。</li>
 <li>门牌/补充：有街选择时，详细地址可作为可选补充；无街时 <code>address1</code> 为必填整段街道门牌。</li>
 </ul>
 <p>示例（全球国家，不联动省市区）：</p>

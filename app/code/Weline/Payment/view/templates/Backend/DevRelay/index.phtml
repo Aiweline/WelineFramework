@@ -14,158 +14,428 @@ $worker_status = \is_array($worker_status ?? null) ? $worker_status : [];
 $feature_enabled = !empty($feature_enabled);
 $config = \is_array($config ?? null) ? $config : [];
 $outboundMode = (string) ($config['outbound_mode'] ?? 'local_direct');
+$workerRunning = !empty($worker_status['running']);
+$credentialsReady = !empty($worker_status['credentials_ready']);
+$escape = static fn (mixed $value): string => htmlspecialchars((string) $value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 ?>
-<div class="card payment-dev-relay">
-    <div class="card-body">
-        <h4 class="card-title"><lang>开发 Webhook 转发</lang></h4>
-        <p class="text-muted">
-            <lang>在此统一开启中继；无需改 app/etc/env.php。本机填写线上站点完整地址与用户 Token 后后台挂接 SSE。</lang>
-        </p>
+<section
+    class="payment-dev-relay"
+    data-testid="payment-dev-relay-management"
+    style="max-width:min(42rem, 100%);"
+>
+    <p class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-4);">
+        <lang>在此统一开启中继；无需改 app/etc/env.php。本机填写线上站点完整地址与用户 Token 后后台挂接 SSE。</lang>
+    </p>
 
-        <section class="mb-4 border rounded p-3" data-role="settings-panel">
-            <h5><lang>中继开关（统一配置）</lang></h5>
-            <div class="form-check form-switch mb-3">
-                <input class="form-check-input" type="checkbox" id="dev-relay-enabled"
-                       <?= $feature_enabled ? 'checked' : '' ?> />
-                <label class="form-check-label" for="dev-relay-enabled"><lang>启用开发 Webhook 中继</lang></label>
+    <div class="w-stack" style="--w-gap:var(--weline-space-4);">
+        <div class="w-card" data-role="settings-panel" data-testid="payment-dev-relay-settings">
+            <div class="w-card__header w-cluster" data-align="center" data-justify="between">
+                <h4 class="w-card__title" style="--w-mb:0;">
+                    <w:icon name="settings" size="sm"></w:icon>
+                    <lang>中继开关（统一配置）</lang>
+                </h4>
+                <span
+                    class="w-badge"
+                    id="dev-relay-settings-hint"
+                    data-tone="<?= $feature_enabled ? 'success' : 'warning' ?>"
+                    data-testid="payment-dev-relay-enabled-badge"
+                >
+                    <?= $feature_enabled
+                        ? $escape((string) __('已启用'))
+                        : $escape((string) __('未启用')) ?>
+                </span>
             </div>
-            <?php if (!$is_local): ?>
-                <div class="form-check form-switch mb-3">
-                    <input class="form-check-input" type="checkbox" id="dev-relay-allow-on-production"
-                           <?= !empty($config['allow_on_production']) || $feature_enabled ? 'checked' : '' ?> />
-                    <label class="form-check-label" for="dev-relay-allow-on-production">
-                        <lang>允许本生产站作为线上中转主机</lang>
+            <div class="w-card__body">
+                <div class="w-stack" style="--w-gap:var(--weline-space-3);">
+                    <label class="w-switch" for="dev-relay-enabled">
+                        <input
+                            id="dev-relay-enabled"
+                            type="checkbox"
+                            <?= $feature_enabled ? 'checked' : '' ?>
+                        />
+                        <span><lang>启用开发 Webhook 中继</lang></span>
                     </label>
-                </div>
-            <?php endif; ?>
-            <div class="w-field mb-3">
-                <label class="w-field__label"><lang>出站模式（默认）</lang></label>
-                <select class="w-select form-select" id="dev-relay-settings-outbound-mode">
-                    <option value="local_direct" <?= $outboundMode === 'local_direct' ? 'selected' : '' ?>>
-                        <lang>本地直连 Provider（默认）</lang>
-                    </option>
-                    <option value="online_proxy" <?= $outboundMode === 'online_proxy' ? 'selected' : '' ?>>
-                        <lang>经线上代发 Provider API</lang>
-                    </option>
-                </select>
-            </div>
-            <?php if ($is_local): ?>
-                <div class="w-field mb-3">
-                <label class="w-field__label"><lang>预填线上站点地址（可选）</lang></label>
-                    <input type="text" class="w-input form-control" id="dev-relay-settings-online-base-url"
-                           value="<?= htmlspecialchars((string) ($config['online_base_url'] ?? ''), ENT_QUOTES) ?>"
-                           placeholder="https://www.example.com" />
-                </div>
-            <?php endif; ?>
-            <button type="button" class="btn btn-success" id="dev-relay-save-settings"><lang>保存配置</lang></button>
-            <span class="ms-2 text-muted small" id="dev-relay-settings-hint">
-                <?= $feature_enabled
-                    ? htmlspecialchars((string) __('当前已启用'), ENT_QUOTES)
-                    : htmlspecialchars((string) __('当前未启用：保存开启后再操作中继'), ENT_QUOTES) ?>
-            </span>
-        </section>
 
-        <div data-role="relay-actions" class="<?= $feature_enabled ? '' : 'opacity-50' ?>">
-        <?php if ($is_online_host): ?>
-            <section class="mb-4" data-role="online-panel">
-                <h5><lang>线上 Relay 主机</lang></h5>
-                <div class="w-field mb-3">
-                <label class="w-field__label"><lang>站点地址（复制到本机）</lang></label>
-                    <div class="input-group">
-                        <input type="text" class="w-input form-control" id="dev-relay-website-base-url" readonly
-                               value="<?= htmlspecialchars($website_base_url, ENT_QUOTES) ?>" />
-                        <button type="button" class="btn btn-outline-secondary" id="dev-relay-copy-base-url"><lang>复制</lang></button>
-                    </div>
-                    <div class="form-text"><lang>含多网站子路径的完整入口 URL。</lang></div>
-                </div>
-                <div class="w-field mb-3">
-                <label class="w-field__label"><lang>用户 API Token（复制到本机）</lang></label>
-                    <div class="input-group">
-                        <input type="text" class="w-input form-control" id="dev-relay-user-api-token" readonly
-                               value="<?= htmlspecialchars($user_api_token, ENT_QUOTES) ?>" />
-                        <button type="button" class="btn btn-outline-secondary" id="dev-relay-copy-user-token"><lang>复制</lang></button>
-                    </div>
-                </div>
-                <div class="w-field mb-3">
-                <label class="w-field__label"><lang>出站模式</lang></label>
-                    <select class="w-select form-select" id="dev-relay-outbound-mode">
-                        <option value="local_direct"><lang>本地直连 Provider（默认）</lang></option>
-                        <option value="online_proxy"><lang>经线上代发 Provider API</lang></option>
-                    </select>
-                </div>
-                <button type="button" class="btn btn-primary" id="dev-relay-start-online" <?= $feature_enabled ? '' : 'disabled' ?>>
-                    <lang>开启线上转发</lang>
-                </button>
-                <?php if ($active_online): ?>
-                    <div class="alert alert-info mt-3">
-                        <div><lang>当前会话</lang>: <code><?= htmlspecialchars((string) ($active_online['session_code'] ?? ''), ENT_QUOTES) ?></code></div>
-                        <div><lang>过期</lang>: <?= htmlspecialchars((string) ($active_online['expires_at'] ?? ''), ENT_QUOTES) ?></div>
-                    </div>
-                <?php endif; ?>
-            </section>
-        <?php endif; ?>
+                    <?php if (!$is_local): ?>
+                        <label class="w-switch" for="dev-relay-allow-on-production">
+                            <input
+                                id="dev-relay-allow-on-production"
+                                type="checkbox"
+                                <?= !empty($config['allow_on_production']) || $feature_enabled ? 'checked' : '' ?>
+                            />
+                            <span><lang>允许本生产站作为线上中转主机</lang></span>
+                        </label>
+                    <?php endif; ?>
 
-        <?php if ($is_local): ?>
-            <section class="mb-4" data-role="local-panel">
-                <h5><lang>本机静默中继</lang></h5>
-                <div class="w-field mb-3">
-                <label class="w-field__label"><lang>线上站点地址</lang></label>
-                    <input type="text" class="w-input form-control" id="dev-relay-online-base-url"
-                           placeholder="https://www.example.com 或 https://example.com/shop"
-                           value="<?= htmlspecialchars((string) ($config['online_base_url'] ?? ''), ENT_QUOTES) ?>" />
-                </div>
-                <div class="w-field mb-3">
-                <label class="w-field__label"><lang>线上用户 API Token</lang></label>
-                    <input type="password" class="w-input form-control" id="dev-relay-user-token" autocomplete="off" />
-                </div>
-                <button type="button" class="btn btn-primary" id="dev-relay-worker-start" <?= $feature_enabled ? '' : 'disabled' ?>>
-                    <lang>开启中继</lang>
-                </button>
-                <button type="button" class="btn btn-outline-danger ms-2" id="dev-relay-worker-stop"><lang>关闭中继</lang></button>
-                <button type="button" class="btn btn-outline-secondary ms-2" id="dev-relay-worker-refresh"><lang>刷新状态</lang></button>
-                <div class="alert alert-secondary mt-3" id="dev-relay-worker-status">
-                    <pre class="mb-0 small"><?= htmlspecialchars(json_encode($worker_status, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) ?: '{}', ENT_QUOTES) ?></pre>
-                </div>
-                <details class="mt-3">
-                    <summary><lang>兼容：旧版手动绑定</lang></summary>
-                    <div class="w-field mb-3 mt-2">
-                        <label class="w-field__label"><lang>本地 inbound 地址</lang></label>
-                        <div class="input-group">
-                            <input type="text" class="w-input form-control" id="dev-relay-local-copy-url" readonly
-                                   value="<?= htmlspecialchars((string) ($active_local['local_inbound_url'] ?? ''), ENT_QUOTES) ?>" />
-                            <button type="button" class="btn btn-outline-secondary" id="dev-relay-copy-inbound"><lang>复制</lang></button>
+                    <div class="w-field">
+                        <label class="w-field__label" for="dev-relay-settings-outbound-mode">
+                            <lang>出站模式（默认）</lang>
+                        </label>
+                        <select class="w-select" id="dev-relay-settings-outbound-mode">
+                            <option value="local_direct" <?= $outboundMode === 'local_direct' ? 'selected' : '' ?>>
+                                <lang>本地直连 Provider（默认）</lang>
+                            </option>
+                            <option value="online_proxy" <?= $outboundMode === 'online_proxy' ? 'selected' : '' ?>>
+                                <lang>经线上代发 Provider API</lang>
+                            </option>
+                        </select>
+                    </div>
+
+                    <?php if ($is_local): ?>
+                        <div class="w-field">
+                            <label class="w-field__label" for="dev-relay-settings-online-base-url">
+                                <lang>预填线上站点地址（可选）</lang>
+                            </label>
+                            <input
+                                type="text"
+                                class="w-input"
+                                id="dev-relay-settings-online-base-url"
+                                value="<?= $escape((string) ($config['online_base_url'] ?? '')) ?>"
+                                placeholder="https://www.example.com"
+                                autocomplete="url"
+                            />
+                            <div class="w-field__hint">
+                                <lang>保存后会带到下方「本机静默中继」。</lang>
+                            </div>
                         </div>
+                    <?php endif; ?>
+
+                    <div class="w-cluster" data-align="center" data-gap="2">
+                        <button
+                            type="button"
+                            class="w-button"
+                            data-tone="primary"
+                            id="dev-relay-save-settings"
+                            data-testid="payment-dev-relay-save-settings"
+                        >
+                            <w:icon name="save" size="sm"></w:icon>
+                            <lang>保存配置</lang>
+                        </button>
+                        <span class="w-text" data-tone="muted" id="dev-relay-settings-hint-text" style="--w-mb:0;">
+                            <?= $feature_enabled
+                                ? $escape((string) __('当前已启用，可操作中继'))
+                                : $escape((string) __('当前未启用：保存开启后再操作中继')) ?>
+                        </span>
                     </div>
-                    <div class="w-field mb-3">
-                <label class="w-field__label"><lang>线上 session_code</lang></label>
-                        <input type="text" class="w-input form-control" id="dev-relay-session-code" />
-                    </div>
-                    <div class="w-field mb-3">
-                <label class="w-field__label"><lang>线上 relay token</lang></label>
-                        <input type="password" class="w-input form-control" id="dev-relay-token" autocomplete="off" />
-                    </div>
-                    <div class="w-field mb-3">
-                <label class="w-field__label"><lang>线上 SSE Stream URL</lang></label>
-                        <input type="text" class="w-input form-control" id="dev-relay-online-stream-url" />
-                    </div>
-                    <button type="button" class="btn btn-secondary" id="dev-relay-bind-local" <?= $feature_enabled ? '' : 'disabled' ?>>
-                        <lang>绑定本地会话</lang>
-                    </button>
-                    <button type="button" class="btn btn-outline-secondary ms-2" id="dev-relay-open-console"><lang>打开浏览器 SSE</lang></button>
-                </details>
-            </section>
-        <?php endif; ?>
+                </div>
+            </div>
         </div>
 
-        <pre class="bg-light p-3 mt-3 small" id="dev-relay-log" style="max-height:240px;overflow:auto;"></pre>
+        <div
+            data-role="relay-actions"
+            class="w-stack"
+            style="--w-gap:var(--weline-space-4);"
+            data-testid="payment-dev-relay-actions"
+        >
+            <?php if ($is_online_host): ?>
+                <div
+                    class="<?= $feature_enabled ? '' : 'is-disabled' ?>"
+                    style="<?= $feature_enabled ? '' : 'opacity:0.55;pointer-events:none;' ?>"
+                    data-role="online-actions-gate"
+                >
+                <div class="w-card" data-role="online-panel" data-testid="payment-dev-relay-online">
+                    <div class="w-card__header">
+                        <h4 class="w-card__title" style="--w-mb:0;">
+                            <w:icon name="cloud" size="sm"></w:icon>
+                            <lang>线上 Relay 主机</lang>
+                        </h4>
+                    </div>
+                    <div class="w-card__body">
+                        <div class="w-stack" style="--w-gap:var(--weline-space-3);">
+                            <div class="w-field">
+                                <label class="w-field__label" for="dev-relay-website-base-url">
+                                    <lang>站点地址（复制到本机）</lang>
+                                </label>
+                                <div class="w-cluster" data-gap="2" style="--w-align:stretch;">
+                                    <input
+                                        type="text"
+                                        class="w-input"
+                                        id="dev-relay-website-base-url"
+                                        readonly
+                                        value="<?= $escape($website_base_url) ?>"
+                                        style="flex:1 1 auto;min-width:0;"
+                                    />
+                                    <button type="button" class="w-button" data-tone="neutral" data-variant="outline" id="dev-relay-copy-base-url">
+                                        <lang>复制</lang>
+                                    </button>
+                                </div>
+                                <div class="w-field__hint"><lang>含多网站子路径的完整入口 URL。</lang></div>
+                            </div>
+
+                            <div class="w-field">
+                                <label class="w-field__label" for="dev-relay-user-api-token">
+                                    <lang>用户 API Token（复制到本机）</lang>
+                                </label>
+                                <div class="w-cluster" data-gap="2" style="--w-align:stretch;">
+                                    <input
+                                        type="text"
+                                        class="w-input"
+                                        id="dev-relay-user-api-token"
+                                        readonly
+                                        value="<?= $escape($user_api_token) ?>"
+                                        style="flex:1 1 auto;min-width:0;"
+                                    />
+                                    <button type="button" class="w-button" data-tone="neutral" data-variant="outline" id="dev-relay-copy-user-token">
+                                        <lang>复制</lang>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="w-field">
+                                <label class="w-field__label" for="dev-relay-outbound-mode"><lang>出站模式</lang></label>
+                                <select class="w-select" id="dev-relay-outbound-mode">
+                                    <option value="local_direct"><lang>本地直连 Provider（默认）</lang></option>
+                                    <option value="online_proxy"><lang>经线上代发 Provider API</lang></option>
+                                </select>
+                            </div>
+
+                            <div class="w-cluster" data-gap="2">
+                                <button
+                                    type="button"
+                                    class="w-button"
+                                    data-tone="primary"
+                                    id="dev-relay-start-online"
+                                    <?= $feature_enabled ? '' : 'disabled' ?>
+                                >
+                                    <lang>开启线上转发</lang>
+                                </button>
+                            </div>
+
+                            <?php if ($active_online): ?>
+                                <div class="w-alert" role="status" data-tone="info" style="--w-mb:0;">
+                                    <div><lang>当前会话</lang>: <code><?= $escape((string) ($active_online['session_code'] ?? '')) ?></code></div>
+                                    <div><lang>过期</lang>: <?= $escape((string) ($active_online['expires_at'] ?? '')) ?></div>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </div>
+                </div>
+            <?php endif; ?>
+
+            <?php if ($is_local): ?>
+                <div class="w-card" data-role="local-panel" data-testid="payment-dev-relay-local">
+                    <div class="w-card__header w-cluster" data-align="center" data-justify="between">
+                        <h4 class="w-card__title" style="--w-mb:0;">
+                            <w:icon name="link" size="sm"></w:icon>
+                            <lang>本机静默中继</lang>
+                        </h4>
+                        <span
+                            class="w-badge"
+                            id="dev-relay-worker-running-badge"
+                            data-tone="<?= $workerRunning ? 'success' : 'muted' ?>"
+                            data-testid="payment-dev-relay-worker-badge"
+                        >
+                            <?= $workerRunning
+                                ? $escape((string) __('运行中'))
+                                : $escape((string) __('已停止')) ?>
+                        </span>
+                    </div>
+                    <div class="w-card__body">
+                        <div class="w-stack" style="--w-gap:var(--weline-space-3);">
+                            <?php if (!$feature_enabled): ?>
+                                <div class="w-alert" role="status" data-tone="info" data-testid="payment-dev-relay-local-enable-hint" style="--w-mb:0;">
+                                    <lang>本机启停始终可用：点「开启中继」会自动打开上方中继开关。</lang>
+                                </div>
+                            <?php endif; ?>
+                            <div class="w-field">
+                                <label class="w-field__label" for="dev-relay-online-base-url">
+                                    <lang>线上站点地址</lang>
+                                </label>
+                                <input
+                                    type="text"
+                                    class="w-input"
+                                    id="dev-relay-online-base-url"
+                                    placeholder="https://www.example.com 或 https://example.com/shop"
+                                    value="<?= $escape((string) ($config['online_base_url'] ?? '')) ?>"
+                                    autocomplete="url"
+                                />
+                            </div>
+                            <div class="w-field">
+                                <label class="w-field__label" for="dev-relay-user-token">
+                                    <lang>线上用户 API Token</lang>
+                                </label>
+                                <input
+                                    type="password"
+                                    class="w-input"
+                                    id="dev-relay-user-token"
+                                    autocomplete="off"
+                                    placeholder="<?= $credentialsReady ? $escape((string) __('已记住凭证，可留空')) : '' ?>"
+                                />
+                                <div class="w-field__hint" id="dev-relay-token-hint" data-testid="payment-dev-relay-token-hint">
+                                    <?= $credentialsReady
+                                        ? $escape((string) __('本机已记住 Token：可留空直接开启；填写则覆盖。'))
+                                        : $escape((string) __('首次开启必填：到线上后台复制当前用户 API Token。')) ?>
+                                </div>
+                            </div>
+
+                            <div
+                                class="w-alert"
+                                id="dev-relay-local-feedback"
+                                data-testid="payment-dev-relay-local-feedback"
+                                role="alert"
+                                hidden
+                                style="--w-mb:0;"
+                            ></div>
+
+                            <div class="w-cluster" data-gap="2" data-testid="payment-dev-relay-local-actions">
+                                <button
+                                    type="button"
+                                    class="w-button"
+                                    data-tone="primary"
+                                    id="dev-relay-worker-start"
+                                    data-testid="payment-dev-relay-worker-start"
+                                >
+                                    <lang>开启中继</lang>
+                                </button>
+                                <button
+                                    type="button"
+                                    class="w-button"
+                                    data-tone="danger"
+                                    data-variant="outline"
+                                    id="dev-relay-worker-stop"
+                                    data-testid="payment-dev-relay-worker-stop"
+                                >
+                                    <lang>关闭中继</lang>
+                                </button>
+                                <button
+                                    type="button"
+                                    class="w-button"
+                                    data-tone="neutral"
+                                    data-variant="outline"
+                                    id="dev-relay-worker-refresh"
+                                    data-testid="payment-dev-relay-worker-refresh"
+                                >
+                                    <lang>刷新状态</lang>
+                                </button>
+                            </div>
+
+                            <div
+                                class="w-alert"
+                                role="status"
+                                data-tone="<?= $workerRunning ? 'success' : 'muted' ?>"
+                                id="dev-relay-worker-status"
+                                data-testid="payment-dev-relay-worker-status"
+                                style="--w-mb:0;"
+                            >
+                                <?php
+                                $statusOnline = trim((string) ($worker_status['online_base_url'] ?? ''));
+                                $statusSession = trim((string) ($worker_status['session_code'] ?? ''));
+                                $statusPid = (int) ($worker_status['pid'] ?? 0);
+                                $statusError = trim((string) ($worker_status['last_error'] ?? ''));
+                                $statusEvent = trim((string) ($worker_status['last_event_code'] ?? ''));
+                                $statusOnlineLabel = $statusOnline !== '' ? $statusOnline : (string) __('未连接');
+                                $statusSessionLabel = $statusSession !== '' ? $statusSession : (string) __('无');
+                                $statusPidLabel = ($workerRunning && $statusPid > 0)
+                                    ? (string) $statusPid
+                                    : (string) __('无');
+                                $statusErrorLabel = $statusError !== '' ? $statusError : (string) __('无');
+                                $statusEventLabel = $statusEvent !== '' ? $statusEvent : (string) __('无');
+                                ?>
+                                <div class="w-stack" style="--w-gap:var(--weline-space-2);" data-testid="payment-dev-relay-worker-summary">
+                                    <div class="w-cluster" data-align="center" data-gap="2">
+                                        <strong class="w-text" style="--w-mb:0;font-size:var(--weline-text-lg, 1.125rem);" data-testid="payment-dev-relay-worker-summary-badge">
+                                            <lang>连接详情</lang>
+                                        </strong>
+                                    </div>
+                                    <div class="w-stack" style="--w-gap:var(--weline-space-1);">
+                                        <div class="w-text" style="--w-mb:0;"><lang>线上站点</lang>：<code><?= $escape($statusOnlineLabel) ?></code></div>
+                                        <div class="w-text" style="--w-mb:0;"><lang>会话</lang>：<code><?= $escape($statusSessionLabel) ?></code></div>
+                                        <div class="w-text" style="--w-mb:0;"><lang>进程</lang>：<code><?= $escape($statusPidLabel) ?></code></div>
+                                        <div class="w-text" style="--w-mb:0;"><lang>最近事件</lang>：<code><?= $escape($statusEventLabel) ?></code></div>
+                                        <div class="w-text" style="--w-mb:0;" data-tone="<?= $statusError !== '' ? 'danger' : 'muted' ?>"><lang>最近错误</lang>：<?= $escape($statusErrorLabel) ?></div>
+                                    </div>
+                                    <details style="--w-mt:var(--weline-space-1);">
+                                        <summary class="w-text" data-tone="muted" style="cursor:pointer;" data-testid="payment-dev-relay-worker-tech">
+                                            <lang>技术详情（JSON）</lang>
+                                        </summary>
+                                        <pre class="w-text" style="--w-mb:0;--w-mt:var(--weline-space-2);white-space:pre-wrap;word-break:break-word;font-family:var(--weline-font-mono, ui-monospace, monospace);font-size:var(--weline-text-sm, 0.875rem);"><?= $escape(json_encode($worker_status, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) ?: '{}') ?></pre>
+                                    </details>
+                                </div>
+                            </div>
+
+                            <details style="--w-mt:var(--weline-space-2);">
+                                <summary class="w-text" data-tone="muted" style="cursor:pointer;">
+                                    <lang>兼容：旧版手动绑定</lang>
+                                </summary>
+                                <div class="w-stack" style="--w-gap:var(--weline-space-3);--w-mt:var(--weline-space-3);">
+                                    <div class="w-field">
+                                        <label class="w-field__label" for="dev-relay-local-copy-url">
+                                            <lang>本地 inbound 地址</lang>
+                                        </label>
+                                        <div class="w-cluster" data-gap="2">
+                                            <input
+                                                type="text"
+                                                class="w-input"
+                                                id="dev-relay-local-copy-url"
+                                                readonly
+                                                value="<?= $escape((string) ($active_local['local_inbound_url'] ?? '')) ?>"
+                                                style="flex:1 1 auto;min-width:0;"
+                                            />
+                                            <button type="button" class="w-button" data-tone="neutral" data-variant="outline" id="dev-relay-copy-inbound">
+                                                <lang>复制</lang>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="w-field">
+                                        <label class="w-field__label" for="dev-relay-session-code"><lang>线上 session_code</lang></label>
+                                        <input type="text" class="w-input" id="dev-relay-session-code" />
+                                    </div>
+                                    <div class="w-field">
+                                        <label class="w-field__label" for="dev-relay-token"><lang>线上 relay token</lang></label>
+                                        <input type="password" class="w-input" id="dev-relay-token" autocomplete="off" />
+                                    </div>
+                                    <div class="w-field">
+                                        <label class="w-field__label" for="dev-relay-online-stream-url"><lang>线上 SSE Stream URL</lang></label>
+                                        <input type="text" class="w-input" id="dev-relay-online-stream-url" />
+                                    </div>
+                                    <div class="w-cluster" data-gap="2">
+                                        <button
+                                            type="button"
+                                            class="w-button"
+                                            data-tone="neutral"
+                                            id="dev-relay-bind-local"
+                                            <?= $feature_enabled ? '' : 'disabled' ?>
+                                        >
+                                            <lang>绑定本地会话</lang>
+                                        </button>
+                                        <button type="button" class="w-button" data-tone="neutral" data-variant="outline" id="dev-relay-open-console">
+                                            <lang>打开浏览器 SSE</lang>
+                                        </button>
+                                    </div>
+                                </div>
+                            </details>
+                        </div>
+                    </div>
+                </div>
+            <?php endif; ?>
+        </div>
+
+        <div class="w-card" data-testid="payment-dev-relay-log-card">
+            <div class="w-card__header">
+                <h4 class="w-card__title" style="--w-mb:0;">
+                    <w:icon name="terminal" size="sm"></w:icon>
+                    <lang>操作日志</lang>
+                </h4>
+            </div>
+            <div class="w-card__body">
+                <pre
+                    class="w-text"
+                    id="dev-relay-log"
+                    data-testid="payment-dev-relay-log"
+                    style="--w-mb:0;max-height:15rem;overflow:auto;white-space:pre-wrap;word-break:break-word;font-family:var(--weline-font-mono, ui-monospace, monospace);font-size:var(--weline-text-sm, 0.875rem);padding:var(--weline-space-3);border:1px solid var(--weline-theme-border, var(--color-border));border-radius:var(--weline-radius-md, 0.5rem);background:var(--weline-theme-surface-muted, var(--color-surface-muted, transparent));"
+                ></pre>
+            </div>
+        </div>
     </div>
-</div>
-<script src="@static(Weline_Payment::js/backend/dev-relay.js)"></script>
+</section>
+<script src="/Weline/Payment/view/statics/js/backend/dev-relay.js?v=1.9.61-<?= rawurlencode((string) (\Weline\Framework\App\Env::getInstance()->getConfig('theme_static_version') ?: 'dev')) ?>"></script>
 <script>
 window.WelinePaymentDevRelay && window.WelinePaymentDevRelay.initIndex({
     isLocal: <?= $is_local ? 'true' : 'false' ?>,
     isOnlineHost: <?= $is_online_host ? 'true' : 'false' ?>,
     featureEnabled: <?= $feature_enabled ? 'true' : 'false' ?>,
+    credentialsReady: <?= $credentialsReady ? 'true' : 'false' ?>,
     urls: {
         saveSettings: "@backend-url{'payment/backend/dev-relay/postSaveSettings'}",
         start: "@backend-url{'payment/backend/dev-relay/postStart'}",

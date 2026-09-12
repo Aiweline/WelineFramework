@@ -78,10 +78,14 @@ final class ProductAdminSurfaceContractTest extends TestCase
             'product-management-<?= $escape($section) ?>',
             'product-create-form',
             'product-filter-form',
+            'product-filter-source',
             'product-catalog-table',
         ] as $testId) {
             self::assertStringContainsString('data-testid="' . $testId . '"', $index);
         }
+        self::assertStringContainsString('name="source"', $index);
+        self::assertStringContainsString('<lang>全部来源</lang>', $index);
+        self::assertStringContainsString('<lang>无来源</lang>', $index);
         self::assertStringContainsString('"testId":"product-edit-button"', $index);
         self::assertStringContainsString('w:websites:website:select', $index);
         self::assertStringContainsString('name="store_ids[]"', $index);
@@ -736,9 +740,17 @@ final class ProductAdminSurfaceContractTest extends TestCase
             'w-datatable-product-catalog-list',
             'weline:product:catalog:selection-change',
             "call('bulkCommand'",
+            'function confirmTheme',
+            'Weline.UI.dialog.confirm',
+            "title: '确定删除选中的 '",
         ] as $marker) {
             self::assertStringContainsString($marker, $script);
         }
+        self::assertStringContainsString('product-admin.js)?v=20260912-uuid-purge', $index);
+        self::assertDoesNotMatchRegularExpression(
+            '/function bulkArchive\(\)[\s\S]{0,500}window\.confirm\(/',
+            $script,
+        );
         foreach ([
             'w-product-bulk-bar',
             'w-datatable__viewport',
