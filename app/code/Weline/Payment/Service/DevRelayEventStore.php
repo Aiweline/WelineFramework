@@ -25,8 +25,14 @@ final class DevRelayInboxPayloadService
      */
     public function loadFromInboxCode(string $inboxCode): array
     {
+        $inboxCode = trim($inboxCode);
+        // 货源 inbox_code 约定 dropship:{id}（与 DropshipWebhookDevRelayBridge::INBOX_PREFIX 对齐）
+        if (str_starts_with($inboxCode, 'dropship:')) {
+            return $this->loadDropshipInbox($inboxCode);
+        }
+
         $inbox = ObjectManager::getInstance(PaymentWebhookInbox::class)
-            ->where(PaymentWebhookInbox::schema_fields_INBOX_CODE, trim($inboxCode))
+            ->where(PaymentWebhookInbox::schema_fields_INBOX_CODE, $inboxCode)
             ->find()
             ->fetch();
         if (!$inbox->getId()) {
@@ -43,6 +49,58 @@ final class DevRelayInboxPayloadService
             'provider_event_id' => (string) $inbox->getData(PaymentWebhookInbox::schema_fields_PROVIDER_EVENT_ID),
             'provider_code' => (string) $inbox->getData(PaymentWebhookInbox::schema_fields_PROVIDER_CODE),
             'event_type' => (string) $inbox->getData(PaymentWebhookInbox::schema_fields_EVENT_TYPE),
+            'module' => 'payment',
+            'inbox_code' => $inboxCode,
+        ];
+    }
+
+    /**
+     * @return array{
+     *   raw_body:string,
+     *   headers:array<string,mixed>,
+     *   signature:string,
+     *   endpoint_code:string,
+     *   provider_event_id:string,
+     *   provider_code:string,
+     *   event_type:string,
+     *   module:string,
+     *   inbox_code:string
+     * }
+     */
+    private function loadDropshipInbox(string $inboxCode): array
+    {
+        $id = (int)substr($inboxCode, strlen('dropship:'));
+        if ($id <= 0 || !class_exists(\Weline\Dropship\Model\DropshipWebhookInbox::class)) {
+            throw new \RuntimeException((string) __('货源 Webhook inbox 不存在。'));
+        }
+        $inbox = ObjectManager::getInstance(\Weline\Dropship\Model\DropshipWebhookInbox::class)
+            ->clear()
+            ->where(\Weline\Dropship\Model\DropshipWebhookInbox::schema_fields_ID, $id)
+            ->find()
+            ->fetch();
+        if (!$inbox || !$inbox->getId()) {
+            throw new \RuntimeException((string) __('货源 Webhook inbox 不存在。'));
+        }
+        $envelope = json_decode((string)$inbox->getData(\Weline\Dropship\Model\DropshipWebhookInbox::schema_fields_BODY), true);
+        if (!\is_array($envelope)) {
+            $envelope = [];
+        }
+        $rawBody = (string)($envelope['raw_body'] ?? '');
+        if ($rawBody === '') {
+            $rawBody = (string)$inbox->getData(\Weline\Dropship\Model\DropshipWebhookInbox::schema_fields_BODY);
+        }
+        $headers = \is_array($envelope['headers'] ?? null) ? $envelope['headers'] : [];
+
+        return [
+            'raw_body' => $rawBody,
+            'headers' => $headers,
+            'signature' => '',
+            'endpoint_code' => (string)$inbox->getData(\Weline\Dropship\Model\DropshipWebhookInbox::schema_fields_ENDPOINT_CODE),
+            'provider_event_id' => (string)$inbox->getData(\Weline\Dropship\Model\DropshipWebhookInbox::schema_fields_EXTERNAL_EVENT_ID),
+            'provider_code' => (string)$inbox->getData(\Weline\Dropship\Model\DropshipWebhookInbox::schema_fields_PROVIDER_CODE),
+            'event_type' => (string)$inbox->getData(\Weline\Dropship\Model\DropshipWebhookInbox::schema_fields_EVENT_TYPE),
+            'module' => 'dropship',
+            'inbox_code' => $inboxCode,
         ];
     }
 

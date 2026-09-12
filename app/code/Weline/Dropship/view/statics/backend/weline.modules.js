@@ -8,7 +8,7 @@ window.WelineModulesConfig.moduleAliases = window.WelineModulesConfig.moduleAlia
 Object.assign(window.WelineModulesConfig.modules, {
     dropshipListedAccordion: {
         paths: [
-            'Weline_Dropship::backend/listed-accordion.js?v=1.0.64'
+            'Weline_Dropship::backend/listed-accordion.js?v=1.0.70'
         ],
         globalVar: 'WelineDropshipListedAccordion',
         description: '已刊列表手风琴：展开后再异步加载本地产品详情/规格'

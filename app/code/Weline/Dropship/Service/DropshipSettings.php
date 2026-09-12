@@ -20,6 +20,7 @@ class DropshipSettings
     public const KEY_UPLIFT_PERCENT = 'dropship/pricing/uplift_percent';
     public const KEY_AUTO_PUSH = 'dropship/ops/auto_push';
     public const KEY_FOLLOW_ENABLED = 'dropship/ops/follow_enabled';
+    public const KEY_AUTO_REFUND_ON_PUSH_FAIL = 'dropship/ops/auto_refund_on_push_fail';
     public const DEFAULT_UPLIFT = 30;
 
     /**
@@ -58,6 +59,11 @@ class DropshipSettings
     public function followEnabled(string $storageScope = 'default.default.default'): bool
     {
         return (int)$this->read(self::KEY_FOLLOW_ENABLED, $storageScope, '1') === 1;
+    }
+
+    public function isAutoRefundOnPushFail(string $storageScope = 'default.default.default'): bool
+    {
+        return (int)$this->read(self::KEY_AUTO_REFUND_ON_PUSH_FAIL, $storageScope, '1') === 1;
     }
 
     private function read(string $key, string $scope, string $default): mixed

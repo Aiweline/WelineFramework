@@ -24,6 +24,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Inventory\Model\Warehouse;
 use Weline\Product\Model\Shard\Offer;
+use Weline\Product\Model\Shard\Product;
 use Weline\SystemConfig\Service\SystemConfigTargetScopeService;
 use Weline\Websites\Api\Catalog\StoreCatalogInterface;
 
@@ -763,6 +764,8 @@ class Listing extends BackendController
         }
         /** @var array<int, array<int, true>> $offerIdsByWebsite */
         $offerIdsByWebsite = [];
+        /** @var array<int, array<string, true>> $uuidsByWebsite */
+        $uuidsByWebsite = [];
         foreach ($listings as $row) {
             if (!is_array($row)) {
                 continue;
@@ -771,6 +774,10 @@ class Listing extends BackendController
             $offerId = (int)($row[DropshipListing::schema_fields_LOCAL_OFFER_ID] ?? 0);
             if ($offerId > 0) {
                 $offerIdsByWebsite[$websiteId][$offerId] = true;
+            }
+            $uuid = trim((string)($row[DropshipListing::schema_fields_LOCAL_PRODUCT_UUID] ?? ''));
+            if ($uuid !== '') {
+                $uuidsByWebsite[$websiteId][$uuid] = true;
             }
         }
         /** @var array<string, string> $skuByKey */
@@ -797,6 +804,30 @@ class Listing extends BackendController
                 // 只读补齐失败不影响列表
             }
         }
+        /** @var array<string, string> $statusByKey */
+        $statusByKey = [];
+        foreach ($uuidsByWebsite as $websiteId => $uuids) {
+            try {
+                /** @var Product $product */
+                $product = ObjectManager::getInstance(Product::class)->forWebsite((int)$websiteId);
+                $rows = $product->clear()
+                    ->where(Product::schema_fields_GLOBAL_PRODUCT_UUID, array_keys($uuids), 'IN')
+                    ->select()
+                    ->fetchArray();
+                foreach (is_array($rows) ? $rows : [] as $prow) {
+                    if (!is_array($prow)) {
+                        continue;
+                    }
+                    $u = trim((string)($prow[Product::schema_fields_GLOBAL_PRODUCT_UUID] ?? ''));
+                    $st = strtolower(trim((string)($prow[Product::schema_fields_STATUS] ?? '')));
+                    if ($u !== '' && $st !== '') {
+                        $statusByKey[(int)$websiteId . ':' . $u] = $st;
+                    }
+                }
+            } catch (\Throwable) {
+                // 只读补齐失败不影响列表
+            }
+        }
 
         $out = [];
         /** @var DropshipPricingService $pricing */
@@ -810,6 +841,10 @@ class Listing extends BackendController
             $uuid = trim((string)($row[DropshipListing::schema_fields_LOCAL_PRODUCT_UUID] ?? ''));
             $sync = strtolower(trim((string)($row[DropshipListing::schema_fields_SYNC_STATUS] ?? '')));
             $localSku = $offerId > 0 ? (string)($skuByKey[$websiteId . ':' . $offerId] ?? '') : '';
+            $localProductStatus = $uuid !== '' ? (string)($statusByKey[$websiteId . ':' . $uuid] ?? '') : '';
+            [$localProductStatusLabel, $localProductStatusTone] = DropshipListedLocalDetailService::productStatusPresentation(
+                $localProductStatus
+            );
             $editUrl = '';
             if ($uuid !== '' && $sync === DropshipListing::STATUS_ACTIVE) {
                 $editUrl = (string)$this->request->getUrlBuilder()->getBackendUrl(
@@ -822,6 +857,9 @@ class Listing extends BackendController
             }
             $row['local_sku'] = $localSku;
             $row['local_edit_url'] = $editUrl;
+            $row['local_product_status'] = $localProductStatus;
+            $row['local_product_status_label'] = $localProductStatus !== '' ? $localProductStatusLabel : '';
+            $row['local_product_status_tone'] = $localProductStatus !== '' ? $localProductStatusTone : 'muted';
             try {
                 $row['economics'] = $pricing->economicsSnapshot(
                     (int)($row[DropshipListing::schema_fields_ORIGIN_PRICE_MINOR] ?? 0),
