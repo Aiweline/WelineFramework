@@ -20,6 +20,7 @@
 | [需求.md](需求.md) | 目标与边界 |
 | [功能现状.md](功能现状.md) | 已实现能力 |
 | [开发日志.md](开发日志.md) | 变更记录 |
+| [dropship-shell.md](dropship-shell.md) | 壳边界与 Provider 同构硬规定 |
 | [provider-development.md](provider-development.md) | 如何新增供应商 |
 | [extends.md](extends.md) | Extends 规约 |
 

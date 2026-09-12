@@ -96,13 +96,13 @@ const MODULE = 'Weline_Order';
 
 moduleDescribe(test, MODULE, 'R4.3 Order 后台菜单', () => {
   for (const entry of [
-    { id: 'CK-R43-ORDER-001', source: 'Weline_Order::order_list', title: '订单列表', parent: 'Weline_Backend::order_group', url: '/weline_order/backend/order/index', anchor: '[data-testid="order-management"]' },
-    { id: 'CK-R43-ORDER-002', source: 'Weline_Order::payment_manage', title: '订单收款记录', parent: 'Weline_Backend::payment_group', url: '/weline_order/backend/records/payment', anchor: '[data-testid="order-payment-management"]' },
-    { id: 'CK-R43-ORDER-003', source: 'Weline_Order::shipment_manage', title: '订单发货管理', parent: 'Weline_Backend::order_group', url: '/weline_order/backend/shipment/index', anchor: '[data-testid="order-shipment-management"]' },
-    { id: 'CK-R43-ORDER-004', source: 'Weline_Order::refund_manage', title: '订单退款管理', parent: 'Weline_Backend::order_group', url: '/weline_order/backend/refund/index', anchor: '[data-testid="order-refund-management"]' },
-    { id: 'CK-R43-ORDER-005', source: 'Weline_Order::invoice_manage', title: '订单发票管理', parent: 'Weline_Backend::order_group', url: '/weline_order/backend/invoice/index', anchor: '[data-testid="order-invoice-management"]' },
-    { id: 'CK-R43-ORDER-006', source: 'Weline_Order::status_manage', title: '订单状态管理', parent: 'Weline_Backend::order_group', url: '/weline_order/backend/status/index', anchor: '[data-testid="order-status-management"]' },
-    { id: 'CK-R43-ORDER-007', source: 'Weline_Order::exception_manage', title: '订单异常与补偿', parent: 'Weline_Backend::order_group', url: '/weline_order/backend/records/exceptions', anchor: '[data-testid="order-exception-management"]' },
+    { id: 'CK-R43-ORDER-001', source: 'Weline_Order::order_list', title: '订单列表', parent: 'Weline_Backend::order_group', url: '/order/backend/order/index', anchor: '[data-testid="order-management"]' },
+    { id: 'CK-R43-ORDER-002', source: 'Weline_Order::payment_manage', title: '订单收款记录', parent: 'Weline_Backend::payment_group', url: '/order/backend/records/payment', anchor: '[data-testid="order-payment-management"]' },
+    { id: 'CK-R43-ORDER-003', source: 'Weline_Order::shipment_manage', title: '订单发货管理', parent: 'Weline_Backend::order_group', url: '/order/backend/shipment/index', anchor: '[data-testid="order-shipment-management"]' },
+    { id: 'CK-R43-ORDER-004', source: 'Weline_Order::refund_manage', title: '订单退款管理', parent: 'Weline_Backend::order_group', url: '/order/backend/refund/index', anchor: '[data-testid="order-refund-management"]' },
+    { id: 'CK-R43-ORDER-005', source: 'Weline_Order::invoice_manage', title: '订单发票管理', parent: 'Weline_Backend::order_group', url: '/order/backend/invoice/index', anchor: '[data-testid="order-invoice-management"]' },
+    { id: 'CK-R43-ORDER-006', source: 'Weline_Order::status_manage', title: '订单状态管理', parent: 'Weline_Backend::order_group', url: '/order/backend/status/index', anchor: '[data-testid="order-status-management"]' },
+    { id: 'CK-R43-ORDER-007', source: 'Weline_Order::exception_manage', title: '订单异常与补偿', parent: 'Weline_Backend::order_group', url: '/order/backend/records/exceptions', anchor: '[data-testid="order-exception-management"]' },
   ]) {
     moduleCase(
       test,
@@ -130,7 +130,7 @@ moduleDescribe(test, MODULE, 'R4.3 Order 后台菜单', () => {
           source: 'Weline_Order::status_manage',
           title: '订单状态管理',
           parent: 'Weline_Backend::order_group',
-          url: '/weline_order/backend/status/index',
+          url: '/order/backend/status/index',
           anchor: '[data-testid="order-status-management"]',
         }, guards, actor.full);
         await page.locator('[data-testid="order-status-create"]').click();
@@ -183,7 +183,7 @@ moduleDescribe(test, MODULE, 'R4.3 Order 后台菜单', () => {
           source: 'Weline_Order::shipment_manage',
           title: '订单发货管理',
           parent: 'Weline_Backend::order_group',
-          url: '/weline_order/backend/shipment/index',
+          url: '/order/backend/shipment/index',
           anchor: '[data-testid="order-shipment-management"]',
         }, guards, seed.admin);
         let row = page.locator(`[data-testid="shipment-candidate"][data-unit-uuid="${seed.unit_uuid}"]`);
@@ -191,7 +191,7 @@ moduleDescribe(test, MODULE, 'R4.3 Order 后台菜单', () => {
         let form = row.locator('[data-testid="shipment-command-form"]');
         await form.locator('input[name="qty_minor"]').fill('1');
         await form.locator('input[name="idempotency_key"]').fill(seed.shipment_idempotency_key);
-        await submitWorkbenchForm(page, form, '/weline_order/backend/shipment/index');
+        await submitWorkbenchForm(page, form, '/order/backend/shipment/index');
 
         await expect.poll(
           () => Number(tradeFixture('inspect', ownedToken).data.fulfillment.fulfilled_qty_minor),
@@ -207,7 +207,7 @@ moduleDescribe(test, MODULE, 'R4.3 Order 后台菜单', () => {
         await form.locator('input[name="qty_minor"]').fill('1');
         await form.locator('input[name="idempotency_key"]').fill(seed.shipment_idempotency_key);
         await form.locator('input[name="expected_version"]').evaluate(input => { input.value = '0'; });
-        await submitWorkbenchForm(page, form, '/weline_order/backend/shipment/index');
+        await submitWorkbenchForm(page, form, '/order/backend/shipment/index');
         inspected = tradeFixture('inspect', ownedToken).data;
         expect(inspected.shipment_ledger_count).toBe(1);
         expect(Number(inspected.fulfillment.fulfilled_qty_minor)).toBe(1);
@@ -232,7 +232,7 @@ moduleDescribe(test, MODULE, 'R4.3 Order 后台菜单', () => {
           source: 'Weline_Order::refund_manage',
           title: '订单退款管理',
           parent: 'Weline_Backend::order_group',
-          url: '/weline_order/backend/refund/index',
+          url: '/order/backend/refund/index',
           anchor: '[data-testid="order-refund-management"]',
         }, guards, seed.admin);
         let row = page.locator(`[data-testid="refund-candidate"][data-item-uuid="${seed.item_uuid}"]`);
@@ -241,7 +241,7 @@ moduleDescribe(test, MODULE, 'R4.3 Order 后台菜单', () => {
         await form.locator('input[name="qty_minor"]').fill('1');
         await form.locator('input[name="reason"]').fill('R43 browser refund');
         await form.locator('input[name="idempotency_key"]').fill(seed.refund_idempotency_key);
-        await submitWorkbenchForm(page, form, '/weline_order/backend/refund/index');
+        await submitWorkbenchForm(page, form, '/order/backend/refund/index');
 
         await expect.poll(
           () => tradeFixture('inspect', ownedToken).data.refund_case_count,
@@ -261,7 +261,7 @@ moduleDescribe(test, MODULE, 'R4.3 Order 后台菜单', () => {
         await form.locator('input[name="qty_minor"]').fill('1');
         await form.locator('input[name="reason"]').fill('R43 browser refund');
         await form.locator('input[name="idempotency_key"]').fill(seed.refund_idempotency_key);
-        await submitWorkbenchForm(page, form, '/weline_order/backend/refund/index');
+        await submitWorkbenchForm(page, form, '/order/backend/refund/index');
         inspected = tradeFixture('inspect', ownedToken).data;
         expect(inspected.refund_case_count).toBe(1);
         expect(inspected.payment_refund_count).toBe(1);
@@ -287,7 +287,7 @@ moduleDescribe(test, MODULE, 'R4.3 Order 后台菜单', () => {
           source: 'Weline_Order::invoice_manage',
           title: '订单发票管理',
           parent: 'Weline_Backend::order_group',
-          url: '/weline_order/backend/invoice/index',
+          url: '/order/backend/invoice/index',
           anchor: '[data-testid="order-invoice-management"]',
         }, guards, seed.admin);
         let row = page.locator(`[data-testid="invoice-candidate"][data-outbox-code="${seed.invoice_outbox_code}"]`);
@@ -295,7 +295,7 @@ moduleDescribe(test, MODULE, 'R4.3 Order 后台菜单', () => {
         await submitWorkbenchForm(
           page,
           row.locator('[data-testid="invoice-command-form"]'),
-          '/weline_order/backend/invoice/index',
+          '/order/backend/invoice/index',
         );
         await expect.poll(
           () => tradeFixture('inspect', ownedToken).data.invoice_count,
@@ -311,7 +311,7 @@ moduleDescribe(test, MODULE, 'R4.3 Order 后台菜单', () => {
         await submitWorkbenchForm(
           page,
           row.locator('[data-testid="invoice-command-form"]'),
-          '/weline_order/backend/invoice/index',
+          '/order/backend/invoice/index',
         );
         inspected = tradeFixture('inspect', ownedToken).data;
         expect(inspected.invoice_count).toBe(1);

@@ -791,8 +791,13 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
         self::assertStringContainsString('$previewRenderCache->remember(', $content);
         self::assertStringContainsString('assign(\'editor_mode\', $isEditorMode)', $content);
         $header = $this->read('app/code/Weline/Theme/view/theme/frontend/partials/header/default.phtml');
-        self::assertStringContainsString('editor-preview-light: skip mega-menu panel trees', $header);
         self::assertStringContainsString('$headerFlattenNavForEditor', $header);
+        self::assertStringContainsString('editor-preview-light', $header);
+        // Full-page preview must keep mega/flyout children (storefront parity).
+        self::assertStringNotContainsString(
+            '$sidebarNavItems = $headerFlattenNavForEditor($sidebarNavItems);',
+            $header
+        );
         self::assertStringContainsString('private function assertBackendScopePreviewAllowed()', $content);
         self::assertStringContainsString('BackendUserContextProviderInterface::class', $content);
         self::assertStringContainsString('ResourceAuthorizationServiceInterface::class', $content);

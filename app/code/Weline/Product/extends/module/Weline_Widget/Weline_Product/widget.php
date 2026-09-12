@@ -21,6 +21,18 @@ return [
                 'slot_type' => 'layout-product-purchase-actions',
                 'max' => 5,
             ],
+            'product-express-payment' => [
+                'name' => '快捷支付',
+                'accepts' => ['payment', 'express-checkout', 'express-payment', 'product-express-payment'],
+                'slot_type' => 'layout-product-express-payment',
+                'max' => 3,
+            ],
+            'product-selling-mode' => [
+                'name' => '售卖模式',
+                'accepts' => ['product', 'b2b', 'selling-mode'],
+                'slot_type' => 'layout-product-selling-mode',
+                'max' => 3,
+            ],
         ],
         'supports' => [
             'layout-product-main',

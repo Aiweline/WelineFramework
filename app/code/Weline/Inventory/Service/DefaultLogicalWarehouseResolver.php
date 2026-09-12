@@ -117,7 +117,7 @@ final class DefaultLogicalWarehouseResolver implements DefaultWarehouseResolverI
         if ($store === null || $store->websiteId !== $websiteId) {
             throw new InventoryConflictException(
                 self::ERROR_MISSING,
-                __('Store %{1}/%{2} 默认仓缺失', [$websiteId, $storeId]),
+                self::t('Store %{1}/%{2} 默认仓缺失', [$websiteId, $storeId]),
             );
         }
         if (!$store->enabled
@@ -126,7 +126,7 @@ final class DefaultLogicalWarehouseResolver implements DefaultWarehouseResolverI
         ) {
             throw new InventoryConflictException(
                 WarehouseAuthorizationService::ERROR_STORE_INACTIVE,
-                __('Store %{1} 已停用或不在 active 生命周期', [$storeId]),
+                self::t('Store %{1} 已停用或不在 active 生命周期', [$storeId]),
             );
         }
         $warehouseMode = $this->warehouseModeForStore($store->storeMode);
@@ -134,7 +134,7 @@ final class DefaultLogicalWarehouseResolver implements DefaultWarehouseResolverI
         if (count($bindings) > 1) {
             throw new InventoryConflictException(
                 self::ERROR_AMBIGUOUS,
-                __('Store %{1}/%{2} 默认逻辑仓不唯一', [$websiteId, $storeId]),
+                self::t('Store %{1}/%{2} 默认逻辑仓不唯一', [$websiteId, $storeId]),
             );
         }
         if ($bindings !== []) {
@@ -149,13 +149,13 @@ final class DefaultLogicalWarehouseResolver implements DefaultWarehouseResolverI
         if ($candidates === []) {
             throw new InventoryConflictException(
                 self::ERROR_MISSING,
-                __('Website %{1} 无 mode=%{2} 默认逻辑仓', [$websiteId, $warehouseMode]),
+                self::t('Website %{1} 无 mode=%{2} 默认逻辑仓', [$websiteId, $warehouseMode]),
             );
         }
         if (count($candidates) > 1) {
             throw new InventoryConflictException(
                 self::ERROR_AMBIGUOUS,
-                __('Website %{1} 默认逻辑仓不唯一（mode=%{2}）', [$websiteId, $warehouseMode]),
+                self::t('Website %{1} 默认逻辑仓不唯一（mode=%{2}）', [$websiteId, $warehouseMode]),
             );
         }
         return $candidates[0];
@@ -212,13 +212,13 @@ final class DefaultLogicalWarehouseResolver implements DefaultWarehouseResolverI
         if ($candidates === []) {
             throw new InventoryConflictException(
                 self::ERROR_MISSING,
-                __('Website %{1} 无 mode=%{2} 默认逻辑仓', [$websiteId, $warehouseMode]),
+                self::t('Website %{1} 无 mode=%{2} 默认逻辑仓', [$websiteId, $warehouseMode]),
             );
         }
         if (count($candidates) > 1) {
             throw new InventoryConflictException(
                 self::ERROR_AMBIGUOUS,
-                __('Website %{1} 默认逻辑仓不唯一（mode=%{2}）', [$websiteId, $warehouseMode]),
+                self::t('Website %{1} 默认逻辑仓不唯一（mode=%{2}）', [$websiteId, $warehouseMode]),
             );
         }
         return $candidates[0];
@@ -285,13 +285,13 @@ final class DefaultLogicalWarehouseResolver implements DefaultWarehouseResolverI
         ) {
             throw new InventoryConflictException(
                 self::ERROR_MISSING,
-                __('Store %{1}/%{2} 默认仓缺失', [$websiteId, $storeId]),
+                self::t('Store %{1}/%{2} 默认仓缺失', [$websiteId, $storeId]),
             );
         }
         if ((string) ($warehouse[Warehouse::schema_fields_MODE] ?? '') !== $warehouseMode) {
             throw new InventoryConflictException(
                 WarehouseAuthorizationService::ERROR_MODE_MISMATCH,
-                __('Store 环境与仓模式不兼容'),
+                self::t('Store 环境与仓模式不兼容'),
             );
         }
     }
@@ -303,7 +303,7 @@ final class DefaultLogicalWarehouseResolver implements DefaultWarehouseResolverI
             'dev', 'test' => Warehouse::MODE_TEST,
             default => throw new InventoryConflictException(
                 WarehouseAuthorizationService::ERROR_STORE_MODE_INVALID,
-                __('Store mode 不受支持：%{1}', [$storeMode]),
+                self::t('Store mode 不受支持：%{1}', [$storeMode]),
             ),
         };
     }
@@ -342,5 +342,21 @@ final class DefaultLogicalWarehouseResolver implements DefaultWarehouseResolverI
     private function storeKey(int $websiteId, int $storeId): string
     {
         return $websiteId . ':' . $storeId;
+    }
+
+    /** @param list<string|int>|array<int, string|int> $args */
+    private static function t(string $text, array $args = []): string
+    {
+        try {
+            return (string) __($text, $args);
+        } catch (\Throwable) {
+            $out = $text;
+            $i = 1;
+            foreach ($args as $arg) {
+                $out = str_replace('%{' . $i . '}', (string) $arg, $out);
+                $i++;
+            }
+            return $out;
+        }
     }
 }

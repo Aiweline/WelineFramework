@@ -34,7 +34,7 @@ final class StorefrontAllMenuCategoryTreeService
             $locale = 'zh_Hans_CN';
         }
 
-        return 'product.all_menu_category_tree.v4.' . max(0, $websiteId) . '.' . $locale;
+        return 'product.all_menu_category_tree.v5.' . max(0, $websiteId) . '.' . $locale;
     }
 
     public static function cachePool(): string
@@ -117,6 +117,12 @@ final class StorefrontAllMenuCategoryTreeService
             $path = \trim((string)($row['path'] ?? ''), '/');
             if ($path !== '' && $path[0] === '/') {
                 $path = \ltrim($path, '/');
+            }
+            if (StorefrontCategoryPublicFilter::shouldHideFromCustomers([
+                'path' => $path,
+                'name' => \trim((string)($row['name'] ?? '')),
+            ])) {
+                continue;
             }
             $uuid = \trim((string)($row['uuid'] ?? $row['global_category_uuid'] ?? ''));
             $name = \trim((string)($row['name'] ?? ''));

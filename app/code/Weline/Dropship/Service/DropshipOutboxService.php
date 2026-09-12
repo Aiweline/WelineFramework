@@ -92,18 +92,31 @@ class DropshipOutboxService
             if ($action === 'create') {
                 $websiteId = (int)($payload['website_id'] ?? 0);
                 $storeId = (int)($payload['store_id'] ?? 0);
-                $map = $this->warehouseMap->resolve($providerCode, $websiteId, $storeId);
+                $shipCountry = strtoupper(trim((string)(
+                    $payload['shipping']['country_code']
+                    ?? $payload['shipping']['country']
+                    ?? $payload['from_country_code']
+                    ?? ''
+                )));
+                $map = $this->resolveWarehouseMapOrEmpty($providerCode, $websiteId, $storeId, $shipCountry);
                 $result = $provider->createFulfillment([
                     'order_uuid' => $orderUuid,
                     'lines' => $payload['lines'] ?? [],
                     'shipping' => $payload['shipping'] ?? [],
-                    'storage_id' => (string)($map['cj_storage_id'] ?? ''),
-                    'from_country_code' => (string)($map['cj_country_code'] ?? ''),
+                    'storage_id' => DropshipWarehouseMapService::remoteStorageId($map),
+                    'from_country_code' => DropshipWarehouseMapService::remoteCountryCode($map),
                 ]);
                 if (!($result['ok'] ?? false)) {
                     throw new \RuntimeException((string)($result['message'] ?? 'create_failed'));
                 }
-                $this->upsertFulfillment($providerCode, $orderUuid, (string)($result['external_order_id'] ?? ''), 'created');
+                $this->upsertFulfillment(
+                    $providerCode,
+                    $orderUuid,
+                    (string)($result['external_order_id'] ?? ''),
+                    (string)($result['status'] ?? 'created'),
+                    (string)($result['tracking_number'] ?? ''),
+                    (string)($result['carrier'] ?? ''),
+                );
             } elseif ($action === 'cancel') {
                 $result = $provider->cancelFulfillment(['order_uuid' => $orderUuid]);
                 if (($result['skipped'] ?? false) === true) {
@@ -199,7 +212,14 @@ class DropshipOutboxService
         }
     }
 
-    private function upsertFulfillment(string $providerCode, string $orderUuid, string $externalId, string $status): void
+    private function upsertFulfillment(
+        string $providerCode,
+        string $orderUuid,
+        string $externalId,
+        string $status,
+        string $trackingNumber = '',
+        string $carrier = '',
+    ): void
     {
         /** @var DropshipFulfillment $model */
         $model = ObjectManager::getInstance(DropshipFulfillment::class);
@@ -216,6 +236,12 @@ class DropshipOutboxService
             DropshipFulfillment::schema_fields_STATUS => $status,
             DropshipFulfillment::schema_fields_UPDATED_AT => $now,
         ];
+        if ($trackingNumber !== '') {
+            $data[DropshipFulfillment::schema_fields_TRACKING_NUMBER] = $trackingNumber;
+        }
+        if ($carrier !== '') {
+            $data[DropshipFulfillment::schema_fields_CARRIER] = $carrier;
+        }
         if ($existing && $existing->getId()) {
             $existing->setData($data)->save();
 
@@ -223,6 +249,23 @@ class DropshipOutboxService
         }
         $data[DropshipFulfillment::schema_fields_CREATED_AT] = $now;
         $model->clear()->setData($data)->save();
+    }
+
+    /**
+     * 仓映射缺失时降级为空 map（storage/from_country 由 Provider 自决），其它异常仍上抛。
+     *
+     * @return array<string, mixed>
+     */
+    private function resolveWarehouseMapOrEmpty(string $providerCode, int $websiteId, int $storeId, string $shipCountry): array
+    {
+        try {
+            return $this->warehouseMap->resolve($providerCode, $websiteId, $storeId, $shipCountry);
+        } catch (\Throwable $e) {
+            if ($e->getMessage() === DropshipWarehouseMapService::ERROR_MISSING) {
+                return [];
+            }
+            throw $e;
+        }
     }
 
     private function enqueueQueue(string $bizKey): void

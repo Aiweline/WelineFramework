@@ -1216,6 +1216,26 @@
                 btn.setAttribute('data-state', active ? 'active' : 'inactive');
             });
             syncMiniCartCouponAvailability(root, mode);
+            if (global.WelineB2BCheckoutTob && typeof global.WelineB2BCheckoutTob.applyCartType === 'function') {
+                try {
+                    global.WelineB2BCheckoutTob.applyCartType(root, mode, { ensureQuote: mode === 'tob' });
+                } catch (eMiniCredit) {
+                    // ignore
+                }
+            }
+        });
+        document.querySelectorAll('[data-weline-cart], .weline-cart-shell').forEach(function (root) {
+            root.setAttribute('data-cart-type', mode);
+            root.classList.toggle('is-cart-type-tob', mode === 'tob');
+            ensureMiniCartExtrasVisible(root, mode);
+            if (global.WelineB2BCheckoutTob && typeof global.WelineB2BCheckoutTob.applyCartType === 'function') {
+                try {
+                    global.WelineB2BCheckoutTob.applyCartType(root, mode, { ensureQuote: mode === 'tob' });
+                } catch (eCartCredit) {
+                    // ignore
+                }
+            }
+            syncMiniCartCouponAvailability(root, mode);
         });
         syncCheckoutChrome(mode);
     }

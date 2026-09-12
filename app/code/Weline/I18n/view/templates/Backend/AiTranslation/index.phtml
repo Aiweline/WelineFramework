@@ -18,9 +18,13 @@ foreach ($progressLocales as $progressLocale) {
     }
 }
 $progressSummary = (array)($progressBoard['summary'] ?? []);
-$activeTab = (string)($this->getData('active_tab') ?? 'locales');
-if (!in_array($activeTab, ['locales', 'modules'], true)) {
-    $activeTab = 'locales';
+$activeTab = (string)($this->getData('active_tab') ?? 'progress');
+if (!in_array($activeTab, ['progress', 'locales', 'modules'], true)) {
+    $activeTab = 'progress';
+}
+$primarySection = (string)($this->getData('primary_section') ?? ($activeTab === 'progress' ? 'progress' : 'config'));
+if (!in_array($primarySection, ['progress', 'config'], true)) {
+    $primarySection = $activeTab === 'progress' ? 'progress' : 'config';
 }
 $moduleSearch = (string)($this->getData('module_search') ?? '');
 $enabled = !empty($config['enabled']);
@@ -46,15 +50,31 @@ foreach ($locales as $locale) {
 <div class="i18n-admin-page" data-ai-module-workspace="1">
     <div class="w-alert i18n-admin-note i18n-admin-alert" data-w-border="none" data-w-shadow="sm" style="--w-mb:var(--weline-space-4);">
         <strong><?= __('AI 翻译只用于补齐缺失翻译。') ?></strong>
-        <?= __('词典 / LocalModel / 模块 CSV 写回三类进度见下方总览；队列状态已简化，不再堆砌原文日志。') ?>
+        <?= __('「翻译进度」与「配置与操作」用顶部页签分开；队列状态已简化，不再堆砌原文日志。') ?>
     </div>
 
+    <ul class="w-nav w-tabs__list i18n-admin-primary-tabs" role="tablist" data-ai-primary-tabs="1" data-w-component="tabs" style="--w-mb:var(--weline-space-4);">
+        <li>
+            <a class="<?= $primarySection === 'progress' ? 'active' : '' ?>"
+               href="@backend-url('*/backend/ai-translation')?tab=progress"
+               role="tab"
+               aria-selected="<?= $primarySection === 'progress' ? 'true' : 'false' ?>"><?= __('翻译进度') ?></a>
+        </li>
+        <li>
+            <a class="<?= $primarySection === 'config' ? 'active' : '' ?>"
+               href="@backend-url('*/backend/ai-translation')?tab=locales"
+               role="tab"
+               aria-selected="<?= $primarySection === 'config' ? 'true' : 'false' ?>"><?= __('配置与操作') ?></a>
+        </li>
+    </ul>
+
+    <?php if ($primarySection === 'progress'): ?>
     <div class="w-card i18n-admin-card i18n-admin-progress-board" data-ai-progress-board="1" data-w-shadow="sm" data-w-border="none" style="--w-mb:var(--weline-space-4);">
         <div class="w-card__header i18n-admin-card-header w-cluster" data-wrap="true" data-justify="between" data-align="center" style="--w-gap:var(--weline-space-2);">
             <div>
                 <strong><?= __('翻译进度') ?></strong>
                 <div class="w-text" data-tone="muted" data-size="sm">
-                    <?= __('按语言 × 类型：词典补齐、LocalModel（共享队列）、模块 CSV 写回。') ?>
+                    <?= __('按语言 × 类型：词典补齐、LocalModel（共享队列）、模块 CSV 写回。开关与入队请到「配置与操作」。') ?>
                 </div>
             </div>
             <div class="w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-2);">
@@ -154,8 +174,9 @@ foreach ($locales as $locale) {
             </div>
         </div>
     </div>
+    <?php else: ?>
 
-    <div class="w-cluster" data-wrap="true" data-align="center" style="--w-gap:var(--weline-space-2);--w-mb:var(--weline-space-4);">
+    <div class="w-cluster" data-wrap="true" data-align="center" data-ai-config-subtabs="1" style="--w-gap:var(--weline-space-2);--w-mb:var(--weline-space-4);">
         <a class="w-button"
            data-tone="<?= $activeTab === 'locales' ? 'primary' : 'neutral' ?>"
            data-variant="<?= $activeTab === 'locales' ? 'solid' : 'outline' ?>"
@@ -427,7 +448,7 @@ foreach ($locales as $locale) {
                 <div class="w-card__header i18n-admin-card-header w-cluster" data-wrap="true" data-justify="between" data-align="center" style="--w-gap:var(--weline-space-2);">
                     <div>
                         <strong><?= __('语言配置与操作') ?></strong>
-                        <div class="w-text" data-tone="muted" data-size="sm"><?= __('进度见上方总览；此处只开关语言并触发翻译/导出。') ?></div>
+                        <div class="w-text" data-tone="muted" data-size="sm"><?= __('进度见「翻译进度」页签；此处只开关语言并触发翻译/导出。') ?></div>
                     </div>
                     <button type="submit" class="w-button" data-tone="primary"><?= __('保存配置并入队') ?></button>
                 </div>
@@ -559,6 +580,7 @@ foreach ($locales as $locale) {
         <w:form method="post" action="@backend-url('*/backend/ai-translation/enqueue')" data-async-action="ai-enqueue-all" style="--w-mt:var(--weline-space-4);">
             <button type="submit" class="w-button" data-async-submit-label="<?= htmlspecialchars(__('入队中…'), ENT_QUOTES, 'UTF-8') ?>" data-async-default-label="<?= htmlspecialchars(__('为所有启用语言立即入队'), ENT_QUOTES, 'UTF-8') ?>" data-tone="success" data-variant="outline"><?= __('为所有启用语言立即入队') ?></button>
         </w:form>
+    <?php endif; ?>
     <?php endif; ?>
 </div>
 <script src="/Weline/I18n/view/statics/js/backend-admin.js?v=<?= htmlspecialchars($backendAdminJsVersion, ENT_QUOTES, 'UTF-8') ?>"></script>

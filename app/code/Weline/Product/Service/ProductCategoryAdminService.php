@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace Weline\Product\Service;
 
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Product\Model\Shard\Category;
+use Weline\Product\Model\Shard\Product;
 use Weline\Product\Repository\CategoryLinkRepository;
 use Weline\Product\Repository\CategoryRepository;
+use Weline\Product\Repository\ProductRepository;
 
 /**
  * Backend tree editor for website-scoped product categories.
@@ -15,12 +18,17 @@ final class ProductCategoryAdminService
 {
     private const DEFAULT_LOCALE = '';
 
+    public const DELETE_PRODUCT_LIST_LIMIT = 200;
+
     public function __construct(
         private readonly CategoryRepository $categories,
         private readonly ProductCategoryAttributeService $categoryAttributes,
         private readonly CategoryLinkRepository $categoryLinks,
         private readonly StorefrontCategoryTreeIndex $categoryTree,
         private readonly StorefrontCatalogCacheCoordinator $catalogCache,
+        private readonly ?ProductRepository $products = null,
+        private readonly ?ProductPhysicalDeleteService $physicalDelete = null,
+        private readonly mixed $transactionRunner = null,
     ) {
     }
 
@@ -287,7 +295,45 @@ final class ProductCategoryAdminService
         ];
     }
 
-    public function delete(int $websiteId, int $categoryId): void
+    /**
+     * @return list<int>
+     */
+    public function collectSubtreeCategoryIds(int $websiteId, int $categoryId): array
+    {
+        $this->assertWebsite($websiteId);
+        if ($categoryId <= 0) {
+            return [];
+        }
+        $childrenByParent = [];
+        foreach ($this->categories->listAll($websiteId) as $row) {
+            $id = (int)($row[Category::schema_fields_ID] ?? 0);
+            $parentId = max(0, (int)($row[Category::schema_fields_PARENT_ID] ?? 0));
+            if ($id <= 0) {
+                continue;
+            }
+            $childrenByParent[$parentId] ??= [];
+            $childrenByParent[$parentId][] = $id;
+        }
+        $ids = [];
+        $stack = [$categoryId];
+        while ($stack !== []) {
+            $current = (int)array_pop($stack);
+            if ($current <= 0 || isset($ids[$current])) {
+                continue;
+            }
+            $ids[$current] = true;
+            foreach ($childrenByParent[$current] ?? [] as $childId) {
+                $stack[] = (int)$childId;
+            }
+        }
+
+        return array_map('intval', array_keys($ids));
+    }
+
+    /**
+     * @return array{products:list<array{product_id:int,name:string,sku:string,exclusive:bool}>,truncated:bool,total:int}
+     */
+    public function listProductsForDelete(int $websiteId, int $categoryId): array
     {
         if ($categoryId <= 0) {
             throw new \InvalidArgumentException((string)__('分类 ID 不能为空'));
@@ -296,8 +342,111 @@ final class ProductCategoryAdminService
         if ($this->categories->findById($websiteId, $categoryId) === null) {
             throw new \InvalidArgumentException((string)__('分类不存在'));
         }
-        $this->deleteRecursive($websiteId, $categoryId);
+
+        $subtreeIds = $this->collectSubtreeCategoryIds($websiteId, $categoryId);
+        $subtreeSet = array_fill_keys($subtreeIds, true);
+        $links = $this->categoryLinks->listByCategoryIdsAnyStore($websiteId, $subtreeIds);
+        $productIds = [];
+        foreach ($links as $link) {
+            if (!ProductCategoryExclusiveClassifier::isActiveMount($link)) {
+                continue;
+            }
+            $productId = (int)($link['product_id'] ?? 0);
+            if ($productId > 0) {
+                $productIds[$productId] = true;
+            }
+        }
+        $productIds = array_map('intval', array_keys($productIds));
+        sort($productIds, SORT_NUMERIC);
+        $total = count($productIds);
+        $truncated = $total > self::DELETE_PRODUCT_LIST_LIMIT;
+        if ($truncated) {
+            $productIds = array_slice($productIds, 0, self::DELETE_PRODUCT_LIST_LIMIT);
+        }
+
+        $exclusiveMap = $this->classifyExclusiveProductIds($websiteId, $productIds, $subtreeSet);
+        $meta = $this->productDisplayMeta($websiteId, $productIds);
+        $products = [];
+        foreach ($productIds as $productId) {
+            $products[] = [
+                'product_id' => $productId,
+                'name' => (string)($meta[$productId]['name'] ?? ('#' . $productId)),
+                'sku' => (string)($meta[$productId]['sku'] ?? ''),
+                'exclusive' => (bool)($exclusiveMap[$productId] ?? false),
+            ];
+        }
+
+        return [
+            'products' => $products,
+            'truncated' => $truncated,
+            'total' => $total,
+        ];
+    }
+
+    /**
+     * @param list<int> $selectedProductIds
+     */
+    public function delete(int $websiteId, int $categoryId, array $selectedProductIds = []): void
+    {
+        if ($categoryId <= 0) {
+            throw new \InvalidArgumentException((string)__('分类 ID 不能为空'));
+        }
+        $this->assertWebsite($websiteId);
+        if ($this->categories->findById($websiteId, $categoryId) === null) {
+            throw new \InvalidArgumentException((string)__('分类不存在'));
+        }
+
+        $subtreeIds = $this->collectSubtreeCategoryIds($websiteId, $categoryId);
+        $subtreeSet = array_fill_keys($subtreeIds, true);
+        $mountedProductIds = $this->mountedProductIdsInSubtree($websiteId, $subtreeIds);
+        $selected = ProductCategoryExclusiveClassifier::intersectSelected($selectedProductIds, $mountedProductIds);
+        $exclusiveMap = $this->classifyExclusiveProductIds($websiteId, $selected, $subtreeSet);
+        $purgeIds = [];
+        foreach ($selected as $productId) {
+            if (!empty($exclusiveMap[$productId])) {
+                $purgeIds[] = $productId;
+            }
+        }
+
+        $this->withWebsiteTransaction($websiteId, function () use ($websiteId, $categoryId, $purgeIds): void {
+            if ($purgeIds !== []) {
+                $physical = $this->physicalDelete
+                    ?? ObjectManager::getInstance(ProductPhysicalDeleteService::class);
+                $physical->deleteByIds($websiteId, $purgeIds);
+            }
+            $this->deleteRecursive($websiteId, $categoryId);
+        });
         $this->invalidate($websiteId, $categoryId);
+    }
+
+    /**
+     * @param callable():void $work
+     */
+    private function withWebsiteTransaction(int $websiteId, callable $work): void
+    {
+        if (is_callable($this->transactionRunner)) {
+            ($this->transactionRunner)($websiteId, $work);
+            return;
+        }
+        /** @var Category $model */
+        $model = ObjectManager::create(Category::class, [], false)->forWebsite($websiteId);
+        $query = $model->getQuery();
+        $started = false;
+        try {
+            $query->beginTransaction();
+            $started = true;
+            $work();
+            $query->commit();
+        } catch (\Throwable $exception) {
+            if ($started) {
+                try {
+                    $query->rollBack();
+                } catch (\Throwable) {
+                    // keep original failure
+                }
+            }
+            throw $exception;
+        }
     }
 
     /**
@@ -389,6 +538,7 @@ final class ProductCategoryAdminService
         $banners = $this->categoryAttributes->readBannerMap($websiteId, $ids, $locale);
         $summaries = $this->categoryAttributes->readSummaryMap($websiteId, $ids, $locale);
         $descriptions = $this->categoryAttributes->readDescriptionMap($websiteId, $ids, $locale);
+        $sourcePlatforms = $this->categoryAttributes->readSourcePlatformMap($websiteId, $ids, $locale);
 
         $presented = [];
         foreach ($rows as $row) {
@@ -414,6 +564,7 @@ final class ProductCategoryAdminService
                 'banner' => (string)($banners[$categoryId] ?? ''),
                 'summary' => (string)($summaries[$categoryId] ?? ''),
                 'description' => (string)($descriptions[$categoryId] ?? ''),
+                'source_platform' => (string)($sourcePlatforms[$categoryId] ?? ''),
                 'level' => $this->depthFor($rows, $categoryId),
             ];
         }
@@ -459,13 +610,79 @@ final class ProductCategoryAdminService
 
     private function deleteCategoryLinks(int $websiteId, int $categoryId): void
     {
-        foreach ($this->categoryLinks->listByCategoryIds($websiteId, [$categoryId]) as $link) {
+        foreach ($this->categoryLinks->listByCategoryIdsAnyStore($websiteId, [$categoryId]) as $link) {
             $productId = (int)($link['product_id'] ?? 0);
             $storeId = (int)($link['store_id'] ?? 0);
             if ($productId > 0) {
                 $this->categoryLinks->unlink($websiteId, $categoryId, $productId, $storeId);
             }
         }
+    }
+
+    /**
+     * @param list<int> $subtreeIds
+     * @return array<int, true>
+     */
+    private function mountedProductIdsInSubtree(int $websiteId, array $subtreeIds): array
+    {
+        $mounted = [];
+        foreach ($this->categoryLinks->listByCategoryIdsAnyStore($websiteId, $subtreeIds) as $link) {
+            if (!ProductCategoryExclusiveClassifier::isActiveMount($link)) {
+                continue;
+            }
+            $productId = (int)($link['product_id'] ?? 0);
+            if ($productId > 0) {
+                $mounted[$productId] = true;
+            }
+        }
+
+        return $mounted;
+    }
+
+    /**
+     * @param list<int> $productIds
+     * @param array<int, true> $subtreeSet
+     * @return array<int, bool>
+     */
+    private function classifyExclusiveProductIds(int $websiteId, array $productIds, array $subtreeSet): array
+    {
+        if ($productIds === []) {
+            return [];
+        }
+
+        return ProductCategoryExclusiveClassifier::classify(
+            $productIds,
+            $subtreeSet,
+            $this->categoryLinks->listByProductIdsAnyStore($websiteId, $productIds),
+        );
+    }
+
+    /**
+     * @param list<int> $productIds
+     * @return array<int, array{name:string,sku:string}>
+     */
+    private function productDisplayMeta(int $websiteId, array $productIds): array
+    {
+        $meta = [];
+        if ($productIds === []) {
+            return $meta;
+        }
+        $products = $this->products
+            ?? ObjectManager::getInstance(ProductRepository::class);
+        foreach ($products->listByIds($websiteId, $productIds) as $row) {
+            $productId = (int)($row[Product::schema_fields_ID] ?? 0);
+            if ($productId <= 0) {
+                continue;
+            }
+            $sku = trim((string)($row[Product::schema_fields_SKU] ?? ''));
+            $code = trim((string)($row[Product::schema_fields_PRODUCT_CODE] ?? ''));
+            $meta[$productId] = [
+                'sku' => $sku !== '' ? $sku : $code,
+                'name' => $sku !== '' ? $sku : ($code !== '' ? $code : ('#' . $productId)),
+            ];
+        }
+
+        return $meta;
     }
 
     private function compactSiblingPositions(int $websiteId, int $parentId, int $excludeId): void

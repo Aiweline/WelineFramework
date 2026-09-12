@@ -640,6 +640,80 @@
         return found;
     }
 
+    /** 未打标点击：invent 可改名的草稿事件 id（中文文案无法作 slug）。 */
+    function suggestCustomName(el, label) {
+        var id = el && el.id ? normalizeName(el.id) : '';
+        var nameAttr = el ? normalizeName(el.getAttribute('name') || el.getAttribute('aria-label') || '') : '';
+        var hrefPart = '';
+        try {
+            if (el && el.closest) {
+                var a = el.closest('a[href]');
+                if (a && a.pathname) {
+                    var seg = String(a.pathname).split('/').filter(Boolean).pop() || '';
+                    hrefPart = normalizeName(seg);
+                }
+            }
+        } catch (_e) {}
+        var tag = el && el.tagName ? String(el.tagName).toLowerCase() : 'el';
+        var base = id || nameAttr || hrefPart || ('click_' + tag);
+        var seed = String(label || '') + '|' + selectorHint(el);
+        var h = 0;
+        for (var i = 0; i < seed.length; i += 1) {
+            h = ((h << 5) - h) + seed.charCodeAt(i);
+            h |= 0;
+        }
+        var suffix = Math.abs(h).toString(36).slice(0, 5) || 'x';
+        var name = normalizeName(base + '_' + suffix) || ('click_' + suffix);
+        if (name.length < 4) name = 'click_' + suffix;
+        return name.slice(0, 64);
+    }
+
+    function flashCaptureNotice(name, label) {
+        var el = document.getElementById('wpp-capture-flash');
+        if (!el) return;
+        el.hidden = false;
+        el.setAttribute('data-active', '1');
+        el.innerHTML = '<strong>已捕捉</strong> <code>' + esc(name) + '</code>' +
+            (label ? (' · ' + esc(String(label).slice(0, 40))) : '') +
+            ' — 改名后点「录入自定义」进池';
+        if (flashCaptureNotice._timer) clearTimeout(flashCaptureNotice._timer);
+        flashCaptureNotice._timer = setTimeout(function () {
+            el.hidden = true;
+            el.setAttribute('data-active', '0');
+        }, 3200);
+    }
+
+    function pulseCaptureTarget(el) {
+        if (!el || !el.style) return;
+        var prev = el.style.outline;
+        var prevOff = el.style.outlineOffset;
+        try {
+            el.style.outline = '2px solid var(--weline-color-primary, var(--color-primary, #2f6fed))';
+            el.style.outlineOffset = '3px';
+        } catch (_e) {}
+        setTimeout(function () {
+            try {
+                el.style.outline = prev;
+                el.style.outlineOffset = prevOff;
+            } catch (_e2) {}
+        }, 900);
+    }
+
+    function resolveClickTarget(el) {
+        if (!el || el.nodeType !== 1) return null;
+        var tag = String(el.tagName || '').toLowerCase();
+        if (tag === 'html' || tag === 'body' || tag === 'script' || tag === 'style' || tag === 'link') return null;
+        if (el.closest) {
+            var interactive = el.closest(
+                'a, button, [role="button"], input, select, textarea, summary, label,' +
+                ' [data-pixel-event], [data-cta-event], [data-visitor-event], [class*="weline-pixel::"],' +
+                ' [onclick], [tabindex]:not([tabindex="-1"])'
+            );
+            if (interactive) return interactive;
+        }
+        return el;
+    }
+
     function setMode(next) {
         mode = next === 'chain' ? 'chain' : (next === 'mapped' ? 'mapped' : 'simple');
         persistPickerSession({ mode: mode, chain_recording: chainRecording, token: token, vendor: vendorCode, website_id: auth.website_id, active: true });
@@ -691,6 +765,23 @@
         }).join('');
     }
 
+    function applyRecordRevisionAfterPersist(data) {
+        if (!data || !data.ok) return;
+        var rev = Number(data.configRevision || data.config_revision || 0) || 0;
+        if (rev <= 0) return;
+        try {
+            if (window.WelinePixelSandbox && typeof window.WelinePixelSandbox.noteConfigRevision === 'function') {
+                window.WelinePixelSandbox.noteConfigRevision(rev);
+                return;
+            }
+        } catch (_e0) {}
+        try {
+            if (typeof window.__noteServerConfigRevision === 'function') {
+                window.__noteServerConfigRevision(rev);
+            }
+        } catch (_e1) {}
+    }
+
     function submitRecord(fields, btn) {
         if (btn) {
             btn.disabled = true;
@@ -699,6 +790,7 @@
         return postForm(recordUrl, fields).then(function (data) {
             if (data && data.ok) {
                 markMapped(fields.weline_event, fields.third_party_event);
+                applyRecordRevisionAfterPersist(data);
                 return data;
             }
             if (data && (data.duplicate || data.error === 'duplicate')) {
@@ -709,6 +801,7 @@
                         return postForm(recordUrl, fields).then(function (data2) {
                             if (data2 && data2.ok) {
                                 markMapped(fields.weline_event, fields.third_party_event);
+                                applyRecordRevisionAfterPersist(data2);
                             }
                             return data2;
                         });
@@ -732,7 +825,7 @@
         var list = document.getElementById('wpp-list');
         if (!list) return;
         if (!items.length) {
-            list.innerHTML = '<li class="wpp-empty">自动发现只对照/观察，不进自定义池。输入名字点「录入自定义」，或「高级事件链」仅录入/发布，才会写入自定义。已打标点击仅对照系统事件；链内才允许点击入步。</li>';
+            list.innerHTML = '<li class="wpp-empty" data-testid="wpp-discover-empty">点击页面任意按钮、链接或可点区域，会出现候选事件。改名后点「录入自定义」才进池；系统已有事件仅对照观察。高级事件链用于跨页步骤录制。</li>';
             return;
         }
         list.innerHTML = items.map(function (it, idx) {
@@ -753,9 +846,12 @@
                     '<div class="wpp-item__done" data-testid="wpp-already-mapped">' + doneText + '</div>' +
                     '</li>';
             }
-            return '<li class="wpp-item wpp-item--custom" data-idx="' + idx + '">' +
+            var sourceBadge = it.fired || it.source === 'track'
+                ? '已自动触发'
+                : (it.source === 'click' || it.source === 'marker' ? '点击捕捉' : '自定义');
+            return '<li class="wpp-item wpp-item--custom" data-idx="' + idx + '" data-source="' + esc(it.source || '') + '">' +
                 '<div class="wpp-item__top"><span class="wpp-item__name">' + esc(it.weline_event) + '</span>' +
-                '<span class="wpp-badge">' + (it.fired || it.source === 'track' ? '已自动触发' : '自定义') + '</span>' + badge + '</div>' +
+                '<span class="wpp-badge" data-testid="wpp-badge-source">' + sourceBadge + '</span>' + badge + '</div>' +
                 '<div class="wpp-item__meta">' + esc(it.summary || it.path) + '</div>' +
                 (it.picked_value
                     ? ('<div class="wpp-item__meta" data-testid="wpp-item-value">值：' + esc(it.picked_value.display) +
@@ -952,7 +1048,7 @@
         root.id = 'wpp-root';
         root.setAttribute('data-testid', 'weline-pixel-picker');
         root.setAttribute('data-mode', 'simple');
-        root.setAttribute('data-wpp-build', '1.1.10-theme-confirm');
+        root.setAttribute('data-wpp-build', '1.1.12-record-bump-rev');
         root.setAttribute('data-wpp-cross-page', '1');
         root.innerHTML = '' +
             '<div class="wpp-panel">' +
@@ -964,13 +1060,14 @@
             '<strong>选值模式</strong>：点击页面元素取值，不会记录其它事件。' +
             '<button type="button" class="wpp-btn" id="wpp-value-pick-cancel" data-testid="wpp-value-pick-cancel">取消</button>' +
             '</div>' +
+            '<div class="wpp-capture-flash" id="wpp-capture-flash" hidden data-active="0" data-testid="wpp-capture-flash"></div>' +
             '<div class="wpp-modes" role="tablist" aria-label="拾取模式">' +
             '<button type="button" data-wpp-mode="simple" data-active="1">自动发现</button>' +
             '<button type="button" data-wpp-mode="mapped" data-active="0" data-testid="wpp-mode-mapped">已录入 <span id="wpp-mapped-count">0</span></button>' +
             '<button type="button" data-wpp-mode="chain" data-active="0" data-testid="wpp-mode-chain">高级事件链</button>' +
             '</div>' +
             '<div id="wpp-pane-simple">' +
-            '<p class="wpp-hint">进自定义池须「输入名字并录入」。录入前可点「选择值」进入选值模式，点页面元素取值（类 FB），选值时不会触发其它事件记录。</p>' +
+            '<p class="wpp-hint">点击页面任意可点元素即可捕捉候选（不限已打标）。进自定义池仍须改名并点「录入自定义」；「选择值」只取值不记其它事件。</p>' +
             '<button type="button" class="wpp-adv-cta" id="wpp-goto-chain" data-testid="wpp-goto-chain">' +
             '<span class="wpp-adv-cta__title">高级事件链</span>' +
             '<span class="wpp-adv-cta__desc">跨页按序录步骤 → 命名闭环 → 仅录入/发布写入自定义池</span>' +
@@ -1076,6 +1173,13 @@
             'border:1px solid color-mix(in srgb,var(--weline-color-warning,#b54708) 35%,transparent);' +
             'color:var(--weline-color-text,#1a1a1a)}' +
             '.wpp-value-banner[hidden]{display:none!important}' +
+            '.wpp-capture-flash{margin:0 0 10px;padding:8px 10px;border-radius:8px;font-size:12px;line-height:1.45;' +
+            'background:color-mix(in srgb,var(--weline-color-success,#16a34a) 12%,var(--weline-color-surface,#fff));' +
+            'border:1px solid color-mix(in srgb,var(--weline-color-success,#16a34a) 35%,transparent);' +
+            'color:var(--weline-color-text,#1a1a1a)}' +
+            '.wpp-capture-flash[hidden]{display:none!important}' +
+            '.wpp-capture-flash code{font-size:11px;padding:1px 4px;border-radius:4px;' +
+            'background:var(--weline-color-surface-muted,rgba(0,0,0,.04))}' +
             '.wpp-value-preview{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:8px;font-size:12px;' +
             'padding:8px;border-radius:8px;background:var(--weline-color-surface-muted,rgba(0,0,0,.03));' +
             'border:1px dashed var(--weline-color-border,rgba(0,0,0,.12))}' +
@@ -1282,8 +1386,7 @@
             applyPickedValue(picked);
         }, true);
 
-        // 简易模式：不靠「点一下就 invent 自定义」。只展示已打标/系统事件；
-        // 自定义事件来自下方 hookTrack（前端自动 track 成功）。事件链模式才允许点击入步。
+        // 自动发现：任意可点目标都出候选；未打标则 suggestCustomName 草稿，仍须「录入自定义」进池。
         document.addEventListener('click', function (e) {
             if (valuePick.active) return;
             var rootEl = document.getElementById('wpp-root');
@@ -1295,12 +1398,16 @@
                 el = el && el.parentElement ? el.parentElement : null;
             }
             if (!el) return;
-            var target = el.closest
-                ? (el.closest('a, button, [role="button"], input, select, textarea, summary, label, [data-pixel-event], [data-cta-event], [data-visitor-event], [class*="weline-pixel::"]') || el)
-                : el;
+            var target = resolveClickTarget(el);
+            if (!target) return;
 
             var name = eventNameFromEl(target);
             var label = ((target.innerText || target.textContent || target.getAttribute('aria-label') || target.getAttribute('name') || target.tagName) + '').trim().slice(0, 80);
+            var fromMarker = !!name;
+            if (!name) {
+                name = suggestCustomName(target, label);
+            }
+            if (!name) return;
 
             if (mode === 'chain') {
                 if (!chainRecording) return;
@@ -1311,20 +1418,19 @@
                     event: name,
                     path: location.pathname
                 });
+                pulseCaptureTarget(target);
                 return;
             }
 
-            // 自动发现：仅已打标/可解析事件名进列表；禁止点击 invent custom_*
-            if (!name) {
-                return;
-            }
             pushItem({
                 weline_event: name,
-                summary: label,
+                summary: label || selectorHint(target),
                 path: location.pathname,
                 already_mapped: isSystemOwned(name),
-                source: 'marker'
+                source: fromMarker ? 'marker' : 'click'
             });
+            pulseCaptureTarget(target);
+            flashCaptureNotice(name, label);
         }, true);
 
         document.addEventListener('change', function (e) {

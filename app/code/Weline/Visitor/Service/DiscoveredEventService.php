@@ -89,7 +89,7 @@ final class DiscoveredEventService
     private function writeRawList(string $configKey, array $list): bool
     {
         try {
-            return $this->store()->setScopedConfig(
+            $ok = $this->store()->setScopedConfig(
                 $configKey,
                 \json_encode(\array_values($list), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]',
                 self::MODULE,
@@ -97,6 +97,14 @@ final class DiscoveredEventService
                 SystemConfig::SCOPE_GLOBAL,
                 SystemConfig::LOCALE_DEFAULT
             );
+            if ($ok) {
+                try {
+                    ObjectManager::getInstance(VisitorTrackingConfig::class)->invalidateAfterMutation(null);
+                } catch (\Throwable) {
+                }
+            }
+
+            return $ok;
         } catch (\Throwable) {
             return false;
         }
@@ -162,12 +170,22 @@ final class DiscoveredEventService
 
     /**
      * 从本范围自定义池移除事件名（不跨范围；系统字典项不会出现在自定义列表）。
+     * 自动发现锁定事件不可删。
      */
     public function remove(int $websiteId, string $eventName, string $storageScope = ''): bool
     {
         $n = $this->dictionary()->normalizeEventName($eventName);
         if ($n === '') {
             return false;
+        }
+        try {
+            /** @var EventAnnotationService $annotations */
+            $annotations = ObjectManager::getInstance(EventAnnotationService::class);
+            if ($annotations->isLockedMeta($annotations->get($websiteId, $n, $storageScope))) {
+                return false;
+            }
+        } catch (\Throwable) {
+            // 注解服务异常时仍按可删继续，避免阻塞运维清理；Controller 层另有门禁
         }
         $scopeKey = $this->scopeKeyFromStorage($storageScope, $websiteId);
         $configKey = $this->configKey($scopeKey);
@@ -191,6 +209,56 @@ final class DiscoveredEventService
         }
 
         return $ok;
+    }
+
+    /**
+     * 测试/验收残留自动发现名（browser_auto_disc_* / auto_disc_* / e2e_*）。
+     * 正式业务名（如 buy_now）不命中。
+     */
+    public function isTestResidualAutoDiscoverName(string $eventName): bool
+    {
+        $n = $this->dictionary()->normalizeEventName($eventName);
+        if ($n === '') {
+            return false;
+        }
+
+        return (bool)\preg_match('/^(?:browser_)?auto_disc_\d+(?:_[a-z0-9]+)?$/', $n)
+            || (bool)\preg_match('/^e2e_(?:auto_disc|sf_auto)_\d+(?:_[a-z0-9]+)?$/', $n);
+    }
+
+    /**
+     * 清空本范围测试残留自动发现事件：promote 解锁 → remove 出池 → removeMeta。
+     *
+     * @return list<string> 已移除事件名
+     */
+    public function purgeTestResiduals(int $websiteId, string $storageScope = ''): array
+    {
+        /** @var EventAnnotationService $annotations */
+        $annotations = ObjectManager::getInstance(EventAnnotationService::class);
+        $removed = [];
+        $candidates = $this->list($websiteId, $storageScope);
+        foreach (\array_keys($annotations->all($websiteId, $storageScope)) as $annName) {
+            $candidates[] = (string)$annName;
+        }
+        $seen = [];
+        foreach ($candidates as $name) {
+            $n = $this->dictionary()->normalizeEventName((string)$name);
+            if ($n === '' || isset($seen[$n]) || !$this->isTestResidualAutoDiscoverName($n)) {
+                continue;
+            }
+            $seen[$n] = true;
+            $annotations->patch($websiteId, $n, [
+                'promote' => 1,
+                'origin' => EventAnnotationService::ORIGIN_MANUAL,
+                'deletable' => true,
+            ], $storageScope);
+            if ($this->remove($websiteId, $n, $storageScope)) {
+                $annotations->removeMeta($websiteId, $n, $storageScope);
+                $removed[] = $n;
+            }
+        }
+
+        return $removed;
     }
 
     /**

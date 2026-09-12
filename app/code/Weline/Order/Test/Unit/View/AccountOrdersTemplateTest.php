@@ -132,6 +132,79 @@ final class AccountOrdersTemplateTest extends TestCase
         self::assertStringContainsString('返回订单列表', $html);
     }
 
+    public function testOrderDetailIncludesHangCtaWhenAwaitingBalance(): void
+    {
+        $template = dirname(__DIR__, 3) . '/view/hooks/Weline_Order/frontend/account/index/orders.phtml';
+        $source = (string) file_get_contents($template);
+        self::assertStringContainsString('account-order-hang.phtml', $source);
+        self::assertStringContainsString('$detailHang', $source);
+
+        $view = new class {
+            /** @param array<string, scalar> $params */
+            public function getUrl(string $path, array $params = []): string
+            {
+                $query = $params === [] ? '' : '?' . http_build_query($params);
+
+                return '/CNY/' . ltrim($path, '/') . $query;
+            }
+
+            /** @param array<string, mixed> $data */
+            public function render(string $template, array $data): string
+            {
+                extract($data, EXTR_SKIP);
+                ob_start();
+                include $template;
+
+                return (string)ob_get_clean();
+            }
+        };
+
+        $html = $view->render($template, [
+            'accountCheckoutGroups' => [[
+                'group_uuid' => 'g-hang-1',
+                'display_number' => 'G-hang',
+                'status' => 'pending',
+                'grand_total_minor' => 11500,
+                'currency' => 'CNY',
+                'orders' => [[
+                    'order_uuid' => 'ord-hang-balance-1',
+                    'display_number' => 'TOB-1',
+                    'status' => 'pending',
+                    'amount_minor' => 11500,
+                    'status_label' => '待支付',
+                    'total_label' => 'CNY 115.00',
+                    'refund_label' => '',
+                    'invoice_label' => '',
+                    'fulfillment_label' => '',
+                    'hang' => [
+                        'hang_status' => 'awaiting_balance',
+                        'order_ref' => 'ord-hang-balance-1',
+                        'deposit_amount_minor' => 3000,
+                        'balance_amount_minor' => 8500,
+                    ],
+                ]],
+            ]],
+            'accountOrderDetail' => [
+                'order_uuid' => 'ord-hang-balance-1',
+                'display_number' => 'TOB-1',
+                'status' => 'pending',
+                'currency' => 'CNY',
+                'items' => [],
+                'money' => [
+                    'subtotal_minor' => 10000,
+                    'shipping_amount_minor' => 1500,
+                    'tax_amount_minor' => 0,
+                    'grand_total_minor' => 11500,
+                ],
+                'shipping' => [],
+            ],
+        ]);
+
+        self::assertStringContainsString('data-testid="b2b-pay-balance"', $html);
+        self::assertStringContainsString('purpose=balance', $html);
+        self::assertStringContainsString('ord-hang-balance-1', $html);
+    }
+
     public function testOrderDetailAvoidsTagsReservedByTheWelineTemplateCompiler(): void
     {
         $template = dirname(__DIR__, 3) . '/view/hooks/Weline_Order/frontend/account/index/orders.phtml';

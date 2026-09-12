@@ -1,0 +1,74 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+$escape = static fn ($v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
+/** @var array<string,mixed> $bill */
+$bill = is_array($this->getData('bill')) ? $this->getData('bill') : [];
+$amount = ((int) ($bill['amount_minor'] ?? 0)) / 100;
+$currency = (string) ($bill['currency_code'] ?? 'USD');
+$rulesUrl = (string) ($this->getData('help_rules_url') ?? '/faq/help-pay-payer');
+$privacyUrl = (string) ($this->getData('privacy_url') ?? '/faq/help-pay-privacy');
+?>
+<section class="w-helppay-payer w-stack"
+         style="--w-gap:var(--weline-space-5, var(--space-5));"
+         data-testid="help-pay-payer"
+         data-shipping-redacted="1"
+         data-weline-load="helpPayShare"
+         weline-code="helppay.payer.page">
+    <header class="w-helppay-payer__head w-stack" style="--w-gap:var(--weline-space-2, var(--space-2));">
+        <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0;"><lang>帮我付</lang></p>
+        <h1 class="w-text" data-weight="strong" style="--w-m:0;"><?= $escape(__('帮他人付款')) ?></h1>
+        <p class="w-text" data-tone="muted" style="--w-m:0;">
+            <a data-testid="help-pay-payer-rules" href="<?= $escape($rulesUrl) ?>"><?= $escape(__('付款说明')) ?></a>
+            ·
+            <a data-testid="help-pay-payer-privacy" href="<?= $escape($privacyUrl) ?>"><?= $escape(__('隐私说明')) ?></a>
+        </p>
+    </header>
+
+    <div class="w-helppay-panel" data-testid="help-pay-summary">
+        <p class="w-text" data-size="sm" data-tone="muted" style="--w-m:0;"><?= $escape(__('应付金额')) ?></p>
+        <p class="w-helppay-panel__amount" style="--w-m:0;">
+            <strong><?= $escape($currency) ?> <?= $escape(number_format($amount, 2)) ?></strong>
+        </p>
+        <p class="w-text" data-size="sm" data-tone="muted" data-testid="help-pay-shipping-redacted-note">
+            <?= $escape(__('收货地址已由发起人确认，本页不展示。')) ?>
+        </p>
+    </div>
+
+    <div class="w-helppay-panel" data-testid="help-pay-shipping-method">
+        <h2 class="w-text" data-weight="strong"><?= $escape(__('物流方式')) ?></h2>
+        <p class="w-text" data-size="sm" data-tone="muted">
+            <?= $escape(__('请选择物流（仅影响运费，不展示收货地址）。')) ?>
+        </p>
+        <label class="w-field">
+            <span class="w-field__label"><?= $escape(__('配送方式')) ?></span>
+            <select class="w-select" data-helppay-shipping-method>
+                <option value="standard"><?= $escape(__('标准配送')) ?></option>
+                <option value="express"><?= $escape(__('加急配送')) ?></option>
+            </select>
+        </label>
+    </div>
+
+    <div class="w-helppay-panel" data-testid="help-pay-payment">
+        <h2 class="w-text" data-weight="strong"><?= $escape(__('支付方式')) ?></h2>
+        <p class="w-text" data-size="sm" data-tone="muted">
+            <?= $escape(__('优惠券与积分不可用于帮我付。')) ?>
+        </p>
+        <div class="w-stack" style="--w-gap:var(--weline-space-3, var(--space-3));" data-testid="help-pay-billing">
+            <h3 class="w-text" data-weight="strong" style="--w-m:0;"><?= $escape(__('付款账单地址')) ?></h3>
+            <p class="w-text" data-size="sm" data-tone="muted" style="--w-m:0;">
+                <?= $escape(__('卡支付时填写付款人自己的账单地址，不会写回收货地址。')) ?>
+            </p>
+            <label class="w-field">
+                <span class="w-field__label"><?= $escape(__('账单地址')) ?></span>
+                <input class="w-input" type="text" name="billing_line1"
+                       placeholder="<?= $escape(__('街道、门牌等')) ?>"
+                       data-helppay-billing-line1>
+            </label>
+        </div>
+        <div class="w-helppay-payer__actions">
+            <button type="button" class="w-button w-button--primary" data-helppay-pay>
+                <?= $escape(__('确认付款')) ?>
+            </button>
+        </div>
+    </div>
+</section>

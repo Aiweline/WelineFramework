@@ -21,6 +21,7 @@ use Weline\Visitor\Service\EventDictionaryService;
 use Weline\Visitor\Service\EventPickerTokenService;
 use Weline\Visitor\Service\PixelChannelLandingUrlService;
 use Weline\Visitor\Service\PixelEventVendorManager;
+use Weline\Visitor\Service\VisitorTrackingConfig;
 
 /**
  * 事件供应商管理（正式页：变体2 左列表右详情）。
@@ -92,6 +93,10 @@ class TrackingVendor extends BackendController
         $recentUrl = $url->getBackendUrlPath('visitor/backend/tracking-vendor/getRecentEvents', [
             'website_id' => $websiteId,
         ]);
+        $liveUrl = $url->getBackendUrlPath('visitor/backend/tracking-vendor/getLiveEvents', [
+            'website_id' => $websiteId,
+        ]);
+        $clearSandboxUrl = $url->getBackendUrlPath('visitor/backend/tracking-vendor/postClearSessionSandbox');
         $startPickerUrl = $url->getBackendUrlPath('visitor/backend/tracking-vendor/postStartPicker');
         $customEventsUrl = $url->getBackendUrlPath('visitor/backend/tracking-vendor/getCustomEvents');
         $deleteCustomEventUrl = $url->getBackendUrlPath('visitor/backend/tracking-vendor/postDeleteCustomEvent');
@@ -123,6 +128,8 @@ class TrackingVendor extends BackendController
         $this->assign('custom_events_json', \json_encode($customRows, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
         $this->assign('pixel_list_url', $listUrl);
         $this->assign('recent_events_url', $recentUrl);
+        $this->assign('live_events_url', $liveUrl);
+        $this->assign('clear_session_sandbox_url', $clearSandboxUrl);
         $this->assign('start_picker_url', $startPickerUrl);
         $this->assign('custom_events_url', $customEventsUrl);
         $this->assign('delete_custom_event_url', $deleteCustomEventUrl);
@@ -136,6 +143,17 @@ class TrackingVendor extends BackendController
         $this->assign('event_chains_url', $eventChainsUrl);
         $this->assign('dev_no_report', \defined('DEV') && DEV);
         $this->assign('ui_layout', 'split');
+        $configRevision = 0;
+        try {
+            /** @var VisitorTrackingConfig $trackingCfg */
+            $trackingCfg = ObjectManager::getInstance(VisitorTrackingConfig::class);
+            $configRevision = $trackingCfg->getRuntimeRevision(
+                $websiteId > 0 ? ('website.' . $websiteId) : null
+            );
+        } catch (\Throwable) {
+            $configRevision = 0;
+        }
+        $this->assign('config_revision', $configRevision);
 
         return $this->fetch();
     }
@@ -174,7 +192,10 @@ class TrackingVendor extends BackendController
         $manager = ObjectManager::getInstance(PixelEventVendorManager::class);
         try {
             $row = $manager->saveCustom($websiteId, $payload, $id > 0 ? $id : null);
-            MessageManager::success((string)__('已保存供应商 %{1}', [$row->getData(PixelEventVendor::schema_fields_CODE)]));
+            MessageManager::success((string)__('已保存供应商 %{1}（配置版本 %{2}）', [
+                $row->getData(PixelEventVendor::schema_fields_CODE),
+                $this->bumpTrackingRuntimeRevision($workScope),
+            ]));
             return $this->redirect('visitor/backend/tracking-vendor/index', \array_merge(
                 $this->trackingScopeQuery($workScope),
                 [
@@ -213,7 +234,7 @@ class TrackingVendor extends BackendController
             $row = $manager->saveCustom($websiteId, $payload, $id > 0 ? $id : null);
             $map = $row->getEventMap();
 
-            return $this->jsonResponse([
+            return $this->jsonResponse($this->withRuntimeReloadMeta([
                 'ok' => true,
                 'code' => (string)$row->getData(PixelEventVendor::schema_fields_CODE),
                 'use_default_map' => (int)$row->getData(PixelEventVendor::schema_fields_USE_DEFAULT_MAP) === 1,
@@ -221,7 +242,7 @@ class TrackingVendor extends BackendController
                 'map_count' => \count($map),
                 'website_id' => $websiteId,
                 'storage_scope' => (string)($workScope['storage_scope'] ?? ''),
-            ]);
+            ], $workScope, true));
         } catch (\Throwable $e) {
             return $this->jsonResponse([
                 'ok' => false,
@@ -252,7 +273,8 @@ class TrackingVendor extends BackendController
                 'sandbox_js' => "// custom sandbox\n",
                 'inject_js' => '',
             ]);
-            MessageManager::success((string)__('已创建自定义供应商'));
+            $rev = $this->bumpTrackingRuntimeRevision($workScope);
+            MessageManager::success((string)__('已创建自定义供应商（配置版本 %{1}）', [$rev]));
             return $this->redirect('visitor/backend/tracking-vendor/index', \array_merge(
                 $this->trackingScopeQuery($workScope),
                 ['vendor' => (string)$row->getData(PixelEventVendor::schema_fields_CODE)],
@@ -266,7 +288,7 @@ class TrackingVendor extends BackendController
     }
 
     /**
-     * 本会话累计：拾取缓冲 + 近期入库像素事件。
+     * 本会话沙盒：默认只打洞读沙盒继电缓冲（同助手）；sandbox_only=0 时可附带 pixel_db。
      */
     #[Acl('Weline_Visitor::tracking_vendor_index', '查看事件供应商', 'plug', '查看事件供应商列表与配置')]
     public function getRecentEvents(): string
@@ -276,36 +298,40 @@ class TrackingVendor extends BackendController
         if ($limit < 1 || $limit > 100) {
             $limit = 40;
         }
+        $sandboxOnly = (string)($this->request->getGet('sandbox_only') ?? '1') !== '0';
 
         /** @var EventPickerTokenService $picker */
         $picker = ObjectManager::getInstance(EventPickerTokenService::class);
         $acc = $picker->listAccumulate($websiteId, $limit);
 
         $dbRows = [];
-        try {
-            $rows = w_obj(Pixel::class)->reset()
-                ->where(Pixel::schema_fields_WEBSITE_ID, $websiteId)
-                ->order(Pixel::schema_fields_CREATED_AT, 'DESC')
-                ->limit($limit)
-                ->select()
-                ->fetchArray();
-            foreach ((array)$rows as $row) {
-                if (!\is_array($row)) {
-                    continue;
+        if (!$sandboxOnly) {
+            try {
+                $rows = w_obj(Pixel::class)->reset()
+                    ->where(Pixel::schema_fields_WEBSITE_ID, $websiteId)
+                    ->order(Pixel::schema_fields_CREATED_AT, 'DESC')
+                    ->limit($limit)
+                    ->select()
+                    ->fetchArray();
+                foreach ((array)$rows as $row) {
+                    if (!\is_array($row)) {
+                        continue;
+                    }
+                    $dbRows[] = [
+                        'weline_event' => (string)($row[Pixel::schema_fields_EVENT] ?? ''),
+                        'third_party_event' => '',
+                        'source' => 'pixel_db',
+                        'summary' => \mb_substr((string)($row[Pixel::schema_fields_URL] ?? ''), 0, 120),
+                        'at' => (string)($row[Pixel::schema_fields_CREATED_AT] ?? ''),
+                        'path' => (string)($row[Pixel::schema_fields_URL] ?? ''),
+                        'value' => $row[Pixel::schema_fields_VALUE] ?? null,
+                        'has_value' => ((float)($row[Pixel::schema_fields_VALUE] ?? 0)) != 0.0,
+                        'params' => $this->extractRecentEventParams($row),
+                    ];
                 }
-                $dbRows[] = [
-                    'weline_event' => (string)($row[Pixel::schema_fields_EVENT] ?? ''),
-                    'third_party_event' => '',
-                    'source' => 'pixel_db',
-                    'summary' => \mb_substr((string)($row[Pixel::schema_fields_URL] ?? ''), 0, 120),
-                    'at' => (string)($row[Pixel::schema_fields_CREATED_AT] ?? ''),
-                    'path' => (string)($row[Pixel::schema_fields_URL] ?? ''),
-                    'value' => $row[Pixel::schema_fields_VALUE] ?? null,
-                    'has_value' => ((float)($row[Pixel::schema_fields_VALUE] ?? 0)) != 0.0,
-                ];
+            } catch (\Throwable) {
+                $dbRows = [];
             }
-        } catch (\Throwable) {
-            $dbRows = [];
         }
 
         $merged = [];
@@ -314,7 +340,7 @@ class TrackingVendor extends BackendController
             if (!\is_array($item)) {
                 continue;
             }
-            $key = ($item['weline_event'] ?? '') . '|' . ($item['at'] ?? '') . '|' . ($item['source'] ?? '');
+            $key = ($item['id'] ?? '') . '|' . ($item['weline_event'] ?? '') . '|' . ($item['at'] ?? '') . '|' . ($item['source'] ?? '') . '|' . ($item['seq'] ?? '');
             if (isset($seen[$key])) {
                 continue;
             }
@@ -329,7 +355,196 @@ class TrackingVendor extends BackendController
         $storageScope = (string)($workScope['storage_scope'] ?? '');
         /** @var EventAnnotationService $annotations */
         $annotations = ObjectManager::getInstance(EventAnnotationService::class);
+        $merged = $this->enrichSandboxStreamRows($websiteId, $storageScope, $merged);
+        \usort($merged, static function (array $a, array $b): int {
+            return \strcmp((string)($b['at'] ?? ''), (string)($a['at'] ?? ''));
+        });
+
+        $systemHits = [];
+        $customHits = [];
+        foreach ($merged as $row) {
+            if (!\is_array($row) || empty($row['event_hit'])) {
+                continue;
+            }
+            $n = (string)($row['weline_event'] ?? '');
+            if ($n === '') {
+                continue;
+            }
+            if (($row['hit_kind'] ?? '') === 'system') {
+                $systemHits[$n] = ($systemHits[$n] ?? 0) + 1;
+            } elseif (($row['hit_kind'] ?? '') === 'custom') {
+                $customHits[$n] = ($customHits[$n] ?? 0) + 1;
+            }
+        }
+
+        return $this->jsonResponse([
+            'ok' => true,
+            'website_id' => $websiteId,
+            'events' => $merged,
+            'hit_summary' => [
+                'system' => $systemHits,
+                'custom' => $customHits,
+                'system_count' => \array_sum($systemHits),
+                'custom_count' => \array_sum($customHits),
+                'system_unique' => \count($systemHits),
+                'custom_unique' => \count($customHits),
+            ],
+            'categories' => $annotations->categoryOptions(),
+            'sandbox_only' => $sandboxOnly,
+            'cursor' => $this->maxAccumulateCursor($acc),
+        ]);
+    }
+
+    /**
+     * 打洞长轮询：仅读沙盒继电缓冲 since cursor，有新事件立即返回（同助手即时观感）。
+     */
+    #[Acl('Weline_Visitor::tracking_vendor_index', '查看事件供应商', 'plug', '查看事件供应商列表与配置')]
+    public function getLiveEvents(): string
+    {
+        $websiteId = $this->resolveWebsiteId();
+        $since = (int)($this->request->getGet('since') ?? $this->request->getGet('cursor') ?? 0);
+        if ($since < 0) {
+            $since = 0;
+        }
+        // 沙盒事件已由店面继电写入会话缓冲；此处只做 since 即时读。
+        // 禁止 wait_ms / usleep 服务端长轮询，避免堵死 WLS worker。
+        $limit = (int)($this->request->getGet('limit') ?? 80);
+        if ($limit < 1 || $limit > 120) {
+            $limit = 80;
+        }
+
+        /** @var EventPickerTokenService $picker */
+        $picker = ObjectManager::getInstance(EventPickerTokenService::class);
+        $generation = $picker->bufferGeneration($websiteId);
+        $clientGeneration = (int)($this->request->getGet('generation') ?? 0);
+        if ($clientGeneration < 0) {
+            $clientGeneration = 0;
+        }
+        // 清理后 generation 变大：重置 since，避免回放清理前的 seq 窗口
+        $generationBumped = $clientGeneration > 0 && $generation > $clientGeneration;
+        if ($generationBumped) {
+            $since = 0;
+        }
+        $pack = $picker->listAccumulateSince($websiteId, $since, $limit);
+
+        $events = \is_array($pack['events'] ?? null) ? $pack['events'] : [];
+        $cursor = (int)($pack['cursor'] ?? $since);
+        $workScope = $this->assignTrackingWorkScope(false);
+        $storageScope = (string)($workScope['storage_scope'] ?? '');
+        $events = $this->enrichSandboxStreamRows($websiteId, $storageScope, $events);
+        \usort($events, static function (array $a, array $b): int {
+            $sa = (int)($a['seq'] ?? 0);
+            $sb = (int)($b['seq'] ?? 0);
+            if ($sa !== $sb) {
+                return $sa <=> $sb;
+            }
+
+            return \strcmp((string)($a['at'] ?? ''), (string)($b['at'] ?? ''));
+        });
+
+        return $this->jsonResponse([
+            'ok' => true,
+            'website_id' => $websiteId,
+            'events' => $events,
+            'cursor' => $cursor,
+            'since' => $since,
+            'has_new' => !empty($events),
+            'generation' => $generation,
+            'changed' => $generationBumped || !empty($events),
+            'source' => 'sandbox_tunnel',
+            'mode' => 'short_poll',
+        ]);
+    }
+
+    /**
+     * 清理本会话沙盒缓冲，便于重新监听。
+     */
+    #[Acl('Weline_Visitor::tracking_vendor_save', '保存事件供应商', 'save', '保存事件供应商配置')]
+    public function postClearSessionSandbox(): string
+    {
+        $workScope = $this->assignTrackingWorkScope(true);
+        $websiteId = $this->websiteIdFromWorkScope($workScope);
+        $posted = (int)($this->request->getPost('website_id') ?? $this->request->getGet('website_id') ?? 0);
+        $ids = [];
+        foreach ([$websiteId, $posted, 0] as $id) {
+            $id = (int)$id;
+            if ($id < 0) {
+                continue;
+            }
+            $ids[$id] = true;
+        }
+        /** @var EventPickerTokenService $picker */
+        $picker = ObjectManager::getInstance(EventPickerTokenService::class);
+        $ok = true;
+        $clearedIds = [];
+        foreach (\array_keys($ids) as $id) {
+            $one = $picker->clearAccumulate((int)$id);
+            $ok = $ok && $one;
+            if ($one) {
+                $clearedIds[] = (int)$id;
+            }
+        }
+
+        return $this->jsonResponse([
+            'ok' => $ok,
+            'website_id' => $websiteId > 0 ? $websiteId : $posted,
+            'cleared' => $ok,
+            'cleared_website_ids' => $clearedIds,
+            'cursor' => 0,
+            'generation' => $picker->bufferGeneration($websiteId > 0 ? $websiteId : $posted),
+            'changed' => true,
+        ]);
+    }
+
+    /**
+     * @param list<array<string, mixed>> $rows
+     */
+    private function maxAccumulateCursor(array $rows): int
+    {
+        $max = 0;
+        foreach ($rows as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $seq = (int)($row['seq'] ?? 0);
+            if ($seq > $max) {
+                $max = $seq;
+            }
+        }
+
+        return $max;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $merged
+     * @return list<array<string, mixed>>
+     */
+    private function enrichSandboxStreamRows(int $websiteId, string $storageScope, array $merged): array
+    {
+        /** @var EventAnnotationService $annotations */
+        $annotations = ObjectManager::getInstance(EventAnnotationService::class);
+        /** @var EventDictionaryService $dictionary */
+        $dictionary = ObjectManager::getInstance(EventDictionaryService::class);
+        /** @var DiscoveredEventService $discovered */
+        $discovered = ObjectManager::getInstance(DiscoveredEventService::class);
+        $customNames = [];
+        try {
+            foreach ($discovered->listCustomEvents($websiteId, $storageScope) as $ce) {
+                if (!\is_array($ce)) {
+                    continue;
+                }
+                $cn = $dictionary->normalizeEventName((string)($ce['name'] ?? $ce['weline_event'] ?? ''));
+                if ($cn !== '') {
+                    $customNames[$cn] = true;
+                }
+            }
+        } catch (\Throwable) {
+            $customNames = [];
+        }
         foreach ($merged as $item) {
+            if (!\is_array($item)) {
+                continue;
+            }
             if (!empty($item['has_value']) || $annotations->detectHasValueFromPayload($item)) {
                 try {
                     $annotations->markHasValue($websiteId, (string)($item['weline_event'] ?? ''), $storageScope);
@@ -338,13 +553,77 @@ class TrackingVendor extends BackendController
             }
         }
         $merged = $annotations->enrichRows($websiteId, $storageScope, $merged);
+        foreach ($merged as &$row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $name = $dictionary->normalizeEventName((string)($row['weline_event'] ?? $row['name'] ?? ''));
+            $source = \strtolower(\trim((string)($row['source'] ?? '')));
+            $forced = \strtolower(\trim((string)($row['hit_kind'] ?? '')));
+            $passthrough = \in_array($source, ['click', 'sandbox_stream', 'sandbox_passthrough'], true)
+                || $name === 'click';
+            if ($forced !== 'system' && $forced !== 'custom') {
+                if ($name !== '' && $dictionary->resolve($name) !== null) {
+                    $forced = 'system';
+                } elseif ($name !== '' && isset($customNames[$name])) {
+                    $forced = 'custom';
+                } elseif ($passthrough) {
+                    $forced = '';
+                } elseif (\array_key_exists('event_hit', $row) && empty($row['event_hit'])) {
+                    $forced = '';
+                } else {
+                    $forced = 'custom';
+                }
+            }
+            $row['hit_kind'] = $forced;
+            $row['custom'] = $forced === 'custom';
+            $row['event_hit'] = $forced === 'system' || $forced === 'custom';
+            if (!isset($row['params']) || !\is_array($row['params'])) {
+                $row['params'] = [];
+            }
+        }
+        unset($row);
 
-        return $this->jsonResponse([
-            'ok' => true,
-            'website_id' => $websiteId,
-            'events' => $merged,
-            'categories' => $annotations->categoryOptions(),
-        ]);
+        return $merged;
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     * @return array<string, mixed>
+     */
+    private function extractRecentEventParams(array $row): array
+    {
+        $params = [];
+        $raw = $row[Pixel::schema_fields_BROWSER_INFO] ?? null;
+        if (\is_string($raw) && $raw !== '') {
+            $decoded = \json_decode($raw, true);
+            if (\is_array($decoded)) {
+                if (isset($decoded['params']) && \is_array($decoded['params'])) {
+                    $params = $decoded['params'];
+                } elseif (isset($decoded['properties']) && \is_array($decoded['properties'])) {
+                    $params = $decoded['properties'];
+                } else {
+                    $params = $decoded;
+                }
+            }
+        } elseif (\is_array($raw)) {
+            $params = $raw;
+        }
+        foreach ([
+            'value' => Pixel::schema_fields_VALUE,
+            'currency' => Pixel::schema_fields_CURRENCY,
+            'page_type' => Pixel::schema_fields_PAGE_TYPE,
+            'channel_code' => Pixel::schema_fields_CHANNEL_CODE,
+            'utm_source' => Pixel::schema_fields_UTM_SOURCE,
+            'utm_medium' => Pixel::schema_fields_UTM_MEDIUM,
+            'utm_campaign' => Pixel::schema_fields_UTM_CAMPAIGN,
+        ] as $key => $field) {
+            if (!\array_key_exists($key, $params) && isset($row[$field]) && $row[$field] !== '' && $row[$field] !== null) {
+                $params[$key] = $row[$field];
+            }
+        }
+
+        return \array_slice($params, 0, 40, true);
     }
 
     /**
@@ -455,17 +734,18 @@ class TrackingVendor extends BackendController
         $ok = $annotations->patch($websiteId, $name, $patch, $storageScope);
         $meta = $annotations->get($websiteId, $name, $storageScope);
 
-        return $this->jsonResponse([
+        return $this->jsonResponse($this->withRuntimeReloadMeta([
             'ok' => $ok,
             'weline_event' => $name,
             'annotation' => $meta,
             'category_label' => EventAnnotationService::CATEGORY_LABELS[$meta['category']] ?? $meta['category'],
             'error' => $ok ? null : 'annotate_failed',
-        ], $ok ? 200 : 500);
+        ], $workScope, false), $ok ? 200 : 500);
     }
 
     /**
      * 删除当前配置范围内的自定义事件（不跨范围）。
+     * 自动发现锁定事件：403 locked_auto_discovered。
      */
     #[Acl('Weline_Visitor::tracking_vendor_save', '保存事件供应商', 'save', '保存事件供应商配置')]
     public function postDeleteCustomEvent(): string
@@ -477,15 +757,25 @@ class TrackingVendor extends BackendController
         if ($name === '') {
             return $this->jsonResponse(['ok' => false, 'error' => 'weline_event_required'], 400);
         }
+        /** @var EventAnnotationService $annotations */
+        $annotations = ObjectManager::getInstance(EventAnnotationService::class);
+        if (!$annotations->isDeletable($websiteId, $name, $storageScope)) {
+            return $this->jsonResponse([
+                'ok' => false,
+                'error' => 'locked_auto_discovered',
+                'message' => (string)__('自动发现事件不可删除，可编辑条件/映射或加入搭接。'),
+                'weline_event' => $name,
+                'website_id' => $websiteId,
+                'storage_scope' => $storageScope,
+            ], 403);
+        }
         /** @var DiscoveredEventService $discovered */
         $discovered = ObjectManager::getInstance(DiscoveredEventService::class);
         $ok = $discovered->remove($websiteId, $name, $storageScope);
         $events = $discovered->listCustomEvents($websiteId, $storageScope);
-        /** @var EventAnnotationService $annotations */
-        $annotations = ObjectManager::getInstance(EventAnnotationService::class);
         $events = $annotations->enrichRows($websiteId, $storageScope, $events);
 
-        return $this->jsonResponse([
+        return $this->jsonResponse($this->withRuntimeReloadMeta([
             'ok' => $ok,
             'deleted' => $name,
             'website_id' => $websiteId,
@@ -493,7 +783,7 @@ class TrackingVendor extends BackendController
             'count' => \count($events),
             'events' => $events,
             'error' => $ok ? null : 'delete_failed',
-        ], $ok ? 200 : 500);
+        ], $workScope, false), $ok ? 200 : 500);
     }
 
     /**
@@ -544,18 +834,28 @@ class TrackingVendor extends BackendController
         $conditions = $annotations->normalizeMatchConditions($conditionsRaw !== '' ? $conditionsRaw : []);
         $matchType = \trim((string)($this->request->getPost('match_type') ?? ''));
         $copyParams = (string)($this->request->getPost('copy_params') ?? '1') !== '0';
-        if ($isCustom && $ok && ($conditions !== [] || $matchType !== '')) {
+        $mappingsRaw = (string)($this->request->getPost('param_mappings_json') ?? $this->request->getPost('param_mappings') ?? '');
+        if ($mappingsRaw === '') {
+            $mappingsRaw = (string)($this->request->getPost('extract_params') ?? $this->request->getPost('extract_params_json') ?? '');
+        }
+        $paramMappings = $annotations->normalizeParamMappings($mappingsRaw !== '' ? $mappingsRaw : []);
+        $extractParams = [];
+        foreach ($paramMappings as $m) {
+            $extractParams[] = $m['name'];
+        }
+        if ($isCustom && $ok && ($conditions !== [] || $matchType !== '' || $paramMappings !== [] || $this->request->getPost('copy_params') !== null || $this->request->getPost('param_mappings_json') !== null)) {
             $annotations->patch($websiteId, $normalized, [
                 'match_type' => $matchType,
                 'match_conditions' => $conditions,
                 'copy_params' => $copyParams,
+                'param_mappings' => $paramMappings,
             ], $storageScope);
         }
 
         $events = $discovered->listCustomEvents($websiteId, $storageScope);
         $events = $annotations->enrichRows($websiteId, $storageScope, $events);
 
-        return $this->jsonResponse([
+        return $this->jsonResponse($this->withRuntimeReloadMeta([
             'ok' => $ok,
             'weline_event' => $normalized,
             'third_party_event' => $third !== '' ? $third : $normalized,
@@ -564,6 +864,9 @@ class TrackingVendor extends BackendController
             'match_type' => $matchType !== '' ? $matchType : ($annotations->get($websiteId, $normalized, $storageScope)['match_type'] ?? 'custom'),
             'match_conditions' => $conditions,
             'match_summary' => $annotations->summarizeMatchConditions($conditions),
+            'copy_params' => $copyParams,
+            'param_mappings' => $paramMappings,
+            'extract_params' => $extractParams,
             'website_id' => $websiteId,
             'storage_scope' => $storageScope,
             'count' => \count($events),
@@ -572,7 +875,7 @@ class TrackingVendor extends BackendController
                 ? null
                 : (string)__('「%{1}」是系统字典事件，已可直接搭接；自定义池只收录非字典名。', [$normalized]),
             'error' => $ok ? null : 'add_failed',
-        ], $ok ? 200 : 500);
+        ], $workScope, true), $ok ? 200 : 500);
     }
 
     /**
@@ -599,13 +902,13 @@ class TrackingVendor extends BackendController
             return $this->jsonResponse(['ok' => false, 'error' => 'invalid_chain'], 400);
         }
 
-        return $this->jsonResponse([
+        return $this->jsonResponse($this->withRuntimeReloadMeta([
             'ok' => true,
             'website_id' => $websiteId,
             'version' => $result['version'],
             'chain' => $result['chain'],
             'chains' => $result['chains'],
-        ]);
+        ], null, false));
     }
 
     /**
@@ -619,13 +922,13 @@ class TrackingVendor extends BackendController
         $svc = ObjectManager::getInstance(EventChainService::class);
         $result = $svc->ensureDemoCrossPageChain($websiteId);
 
-        return $this->jsonResponse([
+        return $this->jsonResponse($this->withRuntimeReloadMeta([
             'ok' => true,
             'website_id' => $websiteId,
             'version' => $result['version'],
             'chain' => $result['chain'],
             'chains' => $result['chains'],
-        ]);
+        ], null, false));
     }
 
     /**
@@ -897,6 +1200,38 @@ class TrackingVendor extends BackendController
                 ['name' => 'register', 'label_zh' => '注册成功', 'event_family' => 'account', 'ga4_event' => 'sign_up'],
             ];
         }
+    }
+
+    /**
+     * @param array<string, mixed>|null $workScope
+     */
+    private function bumpTrackingRuntimeRevision(?array $workScope = null): int
+    {
+        return $this->withRuntimeReloadMeta([], $workScope, true)['configRevision'] ?? 0;
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     * @param array<string, mixed>|null $workScope
+     * @return array<string, mixed>
+     */
+    private function withRuntimeReloadMeta(array $data, ?array $workScope = null, bool $bump = false): array
+    {
+        $scope = null;
+        if (\is_array($workScope)) {
+            $wid = $this->websiteIdFromWorkScope($workScope);
+            if ($wid > 0) {
+                $scope = 'website.' . $wid;
+            }
+        }
+        /** @var VisitorTrackingConfig $cfg */
+        $cfg = ObjectManager::getInstance(VisitorTrackingConfig::class);
+        $rev = $bump ? $cfg->invalidateAfterMutation($scope) : $cfg->getRuntimeRevision($scope);
+        $data['configRevision'] = $rev;
+        $data['config_revision'] = $rev;
+        $data['reload_tracking'] = true;
+
+        return $data;
     }
 
     /**

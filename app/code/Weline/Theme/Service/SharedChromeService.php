@@ -280,6 +280,93 @@ final class SharedChromeService
     }
 
     /**
+     * 发版本覆盖：清空非载体本地 chrome，并把清理后的草稿发布，避免 published 仍残留旧头尾。
+     *
+     * @param list<string>|null $pageTypes
+     * @param list<string>|null $areas
+     * @return array{
+     *   restored_layouts:int,
+     *   removed_nodes:int,
+     *   published_layouts:int,
+     *   layouts:list<array{page_type:string,removed:int,published:bool}>,
+     *   mode:string
+     * }
+     */
+    public function forceInheritAndPublishNonCarriers(
+        ThemeEditorContext $baseContext,
+        ?array $pageTypes,
+        ?array $areas,
+        string $actorId,
+        string $actorName = '',
+        string $reason = 'shared_chrome_force_inherit_publish',
+    ): array {
+        $baseContext = $baseContext->withResource(ThemeEditorContext::RESOURCE_LAYOUT);
+        $restore = $this->restoreNonCarrierLayouts($baseContext, $pageTypes, $areas, $actorId, $actorName);
+        $publishedLayouts = 0;
+        $layouts = [];
+
+        foreach ($restore['layouts'] as $layout) {
+            $pageType = (string)($layout['page_type'] ?? '');
+            $removed = (int)($layout['removed'] ?? 0);
+            $published = false;
+            if ($pageType === '') {
+                continue;
+            }
+
+            $pageContext = $baseContext->withLayoutType($pageType);
+            $needsPublish = $removed > 0;
+            if (!$needsPublish) {
+                // 草稿已空但 published 仍含本地 chrome 时也必须覆盖发布。
+                try {
+                    $state = $this->workspace->load($pageContext, true);
+                    $needsPublish = $this->chromeNodesFromPayload(
+                        \is_array($state['published_payload'] ?? null) ? $state['published_payload'] : [],
+                    ) !== [];
+                } catch (\Throwable) {
+                    $needsPublish = false;
+                }
+            }
+
+            if ($needsPublish) {
+                try {
+                    $state = $this->workspace->load($pageContext, true);
+                    $revision = (int)($state['revision'] ?? 0);
+                    if ($revision > 0) {
+                        $this->workspace->publish(
+                            context: $pageContext,
+                            expectedRevision: $revision,
+                            expectedParentReleaseId: $this->nullableReleaseId(
+                                $state['expected_parent_release_id'] ?? null,
+                            ),
+                            actorId: $actorId,
+                            actorName: $actorName,
+                            reason: $reason,
+                        );
+                        $published = true;
+                        ++$publishedLayouts;
+                    }
+                } catch (\Throwable) {
+                    $published = false;
+                }
+            }
+
+            $layouts[] = [
+                'page_type' => $pageType,
+                'removed' => $removed,
+                'published' => $published,
+            ];
+        }
+
+        return [
+            'restored_layouts' => (int)($restore['restored_layouts'] ?? 0),
+            'removed_nodes' => (int)($restore['removed_nodes'] ?? 0),
+            'published_layouts' => $publishedLayouts,
+            'layouts' => $layouts,
+            'mode' => self::MODE_INHERIT,
+        ];
+    }
+
+    /**
      * 清空本布局 chrome 占用，恢复跟随全局。
      *
      * @param list<string>|null $areas
@@ -339,7 +426,18 @@ final class SharedChromeService
      */
     private function chromeNodesFromState(array $state): array
     {
-        $nodes = \is_array($state['draft_payload']['nodes'] ?? null) ? $state['draft_payload']['nodes'] : [];
+        return $this->chromeNodesFromPayload(
+            \is_array($state['draft_payload'] ?? null) ? $state['draft_payload'] : [],
+        );
+    }
+
+    /**
+     * @param array<string,mixed> $payload
+     * @return array<string,array<string,mixed>>
+     */
+    private function chromeNodesFromPayload(array $payload): array
+    {
+        $nodes = \is_array($payload['nodes'] ?? null) ? $payload['nodes'] : [];
         $chrome = [];
         foreach ($nodes as $uid => $node) {
             if (!\is_array($node)) {

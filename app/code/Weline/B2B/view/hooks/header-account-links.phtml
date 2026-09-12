@@ -1,6 +1,6 @@
 <?php
 /**
- * Weline_B2B — header account dropdown: wholesale identity.
+ * Weline_B2B — header account dropdown: wholesale identity + order chat.
  *
  * Hook: header-account-links
  *
@@ -10,7 +10,21 @@
  *
  * Hidden until account JS promotes the header to signed-in.
  */
+use Weline\B2B\Model\B2BOrderThreadRecord;
+use Weline\Theme\Helper\WidgetI18n;
+
+$chatSection = B2BOrderThreadRecord::ACCOUNT_SECTION;
+$chatSignal = B2BOrderThreadRecord::MENU_SIGNAL_CODE;
+$chatLabel = WidgetI18n::label('订单沟通');
 ?>
 <li role="none" data-account-menu-auth="signed-in" hidden data-testid="header-account-b2b-identity">
     <a href="@url{'customer/account/index'}#b2b-identity" role="menuitem"><?= htmlspecialchars((string)__('批发身份'), ENT_QUOTES, 'UTF-8') ?></a>
+</li>
+<li role="none" data-account-menu-auth="signed-in" hidden data-testid="header-account-b2b-order-chat">
+    <a href="@url{'customer/account/index'}#<?= htmlspecialchars($chatSection, ENT_QUOTES, 'UTF-8') ?>"
+       role="menuitem"
+       data-account-menu-signal="<?= htmlspecialchars($chatSignal, ENT_QUOTES, 'UTF-8') ?>">
+        <?= htmlspecialchars($chatLabel, ENT_QUOTES, 'UTF-8') ?>
+        <span class="account-menu-signal-badge" data-account-menu-signal-badge="1" hidden aria-hidden="true"></span>
+    </a>
 </li>

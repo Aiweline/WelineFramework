@@ -61,4 +61,51 @@ moduleDescribe(test, MODULE, '万能商城内核计划账户面 Browser 用例',
       ).toBeTruthy();
     }
   );
+
+  moduleCase(
+    test,
+    { module: MODULE, id: 'TEST-ACCOUNT-HEADER-ON-PRIMARY' },
+    '账户横幅 CSS 使用 on-primary Token 而非 text-dark',
+    async ({ page }) => {
+      const fs = require('fs');
+      const path = require('path');
+      const cssPath = path.join(__dirname, '../../../view/statics/css/account-index.css');
+      const css = fs.readFileSync(cssPath, 'utf8');
+      expect(css).toContain('--weline-theme-on-primary');
+      expect(css).toContain('var(--color-on-primary)');
+      expect(css).toMatch(/\.account-index__username\s*\{[^}]*color:\s*var\(--weline-theme-on-primary/);
+      expect(css).toMatch(/\.account-index__welcome\s*\{[^}]*color:\s*var\(--weline-theme-on-primary/);
+      expect(css).toMatch(/\.account-index__logout\s*\{[^}]*color:\s*var\(--weline-theme-on-primary/);
+      expect(css).not.toMatch(/\.account-index__username\s*\{[^}]*color:\s*var\(--color-text-dark\)/);
+      expect(css).not.toMatch(/\.account-index__welcome\s*\{[^}]*color:\s*var\(--color-text-dark\)/);
+      // Keep a live storefront probe so this remains a frontend e2e gate.
+      await gotoFrontend(page, '/customer/account/login');
+      await expect(page.locator('body')).toBeVisible();
+    }
+  );
+
+  moduleCase(
+    test,
+    { module: MODULE, id: 'TEST-ACCOUNT-SIDEBAR-ON-PRIMARY' },
+    '账户侧栏选中态 CSS 使用 on-primary Token 而非 text-dark',
+    async ({ page }) => {
+      const fs = require('fs');
+      const path = require('path');
+      const cssPath = path.join(__dirname, '../../../view/statics/css/account-sidebar.css');
+      const css = fs.readFileSync(cssPath, 'utf8');
+      expect(css).toContain('--weline-theme-on-primary');
+      expect(css).toContain('var(--color-on-primary)');
+      expect(css).toMatch(
+        /\.account-sidebar__nav-link--active\s*\{[^}]*color:\s*var\(--weline-theme-on-primary/
+      );
+      expect(css).toMatch(
+        /\.account-hook-nav-link\.is-active:not\(\[data-account-nav-parent\]\)\s*\{[^}]*color:\s*var\(--weline-theme-on-primary/
+      );
+      expect(css).not.toMatch(
+        /\.account-sidebar__nav-link--active\s*\{[^}]*color:\s*var\(--color-text-dark\)/
+      );
+      await gotoFrontend(page, '/customer/account/login');
+      await expect(page.locator('body')).toBeVisible();
+    }
+  );
 });

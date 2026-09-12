@@ -1,4 +1,9 @@
 <?php
+/**
+ * Faq page edit hub — Weline UI 2.0（主任务：可视化编辑）.
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
 $page = is_array($this->getData('page')) ? $this->getData('page') : [];
 $themeEditorUrl = (string)($this->getData('theme_editor_url') ?: '');
 $cmsEditUrl = (string)($this->getData('cms_edit_url') ?: '');
@@ -7,40 +12,62 @@ $websiteLabel = (string)($this->getData('website_label') ?: '');
 $publicPath = (string)($this->getData('public_path') ?: '');
 $escape = static fn($v): string => htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 $status = strtolower(trim((string)($page['status'] ?? '')));
+$statusLabel = match ($status) {
+    'published' => (string)__('已发布'),
+    'disabled' => (string)__('已禁用'),
+    'draft' => (string)__('草稿'),
+    default => $status,
+};
+$statusTone = match ($status) {
+    'published' => 'success',
+    'disabled' => 'danger',
+    default => 'neutral',
+};
 ?>
-<div class="faq-page-edit">
-    <p><a href="<?= $escape($listingUrl) ?>">&larr; <?= $escape(__('返回该网站列表')) ?></a></p>
-    <h1 class="h4"><?= $escape($page['title'] ?? __('帮助页面')) ?></h1>
-    <dl class="row">
-        <dt class="col-sm-2"><?= $escape(__('网站')) ?></dt>
-        <dd class="col-sm-10"><?= $escape($websiteLabel) ?>
-            <span class="text-muted">(ID <?= (int)($page['website_id'] ?? 0) ?>
-            · <?= $escape($page['website_code'] ?? '') ?>)</span>
-        </dd>
-        <dt class="col-sm-2"><?= $escape(__('ID')) ?></dt>
-        <dd class="col-sm-10"><?= (int)($page['page_id'] ?? 0) ?></dd>
-        <dt class="col-sm-2"><?= $escape(__('Slug')) ?></dt>
-        <dd class="col-sm-10"><code><?= $escape($page['slug'] ?? '') ?></code></dd>
-        <dt class="col-sm-2"><?= $escape(__('公开路径')) ?></dt>
-        <dd class="col-sm-10"><code><?= $escape($publicPath) ?></code></dd>
-        <dt class="col-sm-2"><?= $escape(__('状态')) ?></dt>
-        <dd class="col-sm-10"><?= $escape($status) ?></dd>
-        <dt class="col-sm-2"><?= $escape(__('path_group')) ?></dt>
-        <dd class="col-sm-10"><code>faq</code></dd>
+<div class="w-container faq-page-edit" style="--w-pt:0;--w-pb:var(--weline-space-4);max-inline-size:42rem;" data-testid="faq-page-edit">
+    <div class="w-toolbar" style="--w-mb:var(--weline-space-4);">
+        <a class="w-button" href="<?= $escape($listingUrl) ?>" data-tone="neutral" data-variant="ghost" data-size="sm">
+            <w:icon name="arrow-left" size="sm"></w:icon><?= $escape(__('返回该网站列表')) ?>
+        </a>
+    </div>
+
+    <div class="w-text" data-weight="strong" data-size="lg" style="--w-mb:var(--weline-space-1);"><?= $escape($page['title'] ?? __('帮助页面')) ?></div>
+    <div class="w-text" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-4);">
+        <?= $escape($websiteLabel) ?>
+        · ID <?= (int)($page['page_id'] ?? 0) ?>
+        · <code><?= $escape($page['website_code'] ?? '') ?></code>
+        · <span class="w-badge" data-tone="<?= $escape($statusTone) ?>"><?= $escape($statusLabel) ?></span>
+    </div>
+
+    <dl class="w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-4);--w-mb:var(--weline-space-5);">
+        <div>
+            <div class="w-text" data-tone="muted" data-size="sm"><?= $escape(__('Slug')) ?></div>
+            <code><?= $escape($page['slug'] ?? '') ?></code>
+        </div>
+        <div>
+            <div class="w-text" data-tone="muted" data-size="sm"><?= $escape(__('公开路径')) ?></div>
+            <code><?= $escape($publicPath) ?></code>
+        </div>
+        <div>
+            <div class="w-text" data-tone="muted" data-size="sm">path_group</div>
+            <code>faq</code>
+        </div>
     </dl>
-    <div class="d-flex flex-wrap gap-2">
+
+    <div class="w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-2);--w-mb:var(--weline-space-4);">
         <?php if ($themeEditorUrl !== ''): ?>
-            <a class="btn btn-primary" href="<?= $escape($themeEditorUrl) ?>" target="_blank" rel="noopener">
-                <?= $escape(__('打开可视化编辑器（faq 布局）')) ?>
+            <a class="w-button" href="<?= $escape($themeEditorUrl) ?>" target="_blank" rel="noopener" data-tone="primary">
+                <w:icon name="edit" size="sm"></w:icon><?= $escape(__('打开可视化编辑器（faq 布局）')) ?>
             </a>
         <?php endif; ?>
         <?php if ($cmsEditUrl !== ''): ?>
-            <a class="btn btn-outline-secondary" href="<?= $escape($cmsEditUrl) ?>">
+            <a class="w-button" href="<?= $escape($cmsEditUrl) ?>" data-tone="neutral" data-variant="outline">
                 <?= $escape(__('CMS 字段编辑（标题/发布/多语言）')) ?>
             </a>
         <?php endif; ?>
     </div>
-    <p class="text-muted mt-3 mb-0">
+
+    <p class="w-text" data-tone="muted" data-size="sm" style="--w-mb:0;">
         <?= $escape(__('可视化编辑锁定 layout_type=faq；标题、slug、发布状态与多语言请在 CMS 字段编辑中修改。')) ?>
     </p>
 </div>

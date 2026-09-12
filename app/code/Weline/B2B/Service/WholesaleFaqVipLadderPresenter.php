@@ -23,6 +23,7 @@ final class WholesaleFaqVipLadderPresenter
      * @return array{
      *   currency_code:string,
      *   credit_enabled:bool,
+     *   min_cash_deposit_percent:int,
      *   groups:list<array{
      *     group_id:string,
      *     code:string,
@@ -43,11 +44,15 @@ final class WholesaleFaqVipLadderPresenter
         $this->groups->ensureSystemVipLadder($websiteId);
 
         $currencyCode = ($this->currency ?? new B2BBaseCurrencyResolver())->forWebsite($websiteId);
+        $creditPolicy = $this->creditPolicy ?? new B2BPaymentAssetPolicyProvider();
         $creditEnabled = true;
+        $minCashPercent = B2BPaymentAssetPolicyProvider::DEFAULT_MIN_CASH_DEPOSIT_PERCENT;
         try {
-            $creditEnabled = ($this->creditPolicy ?? new B2BPaymentAssetPolicyProvider())->isEnabled();
+            $creditEnabled = $creditPolicy->isEnabled();
+            $minCashPercent = $creditPolicy->minCashDepositPercent();
         } catch (\Throwable) {
             $creditEnabled = true;
+            $minCashPercent = B2BPaymentAssetPolicyProvider::DEFAULT_MIN_CASH_DEPOSIT_PERCENT;
         }
 
         $groups = [];
@@ -82,6 +87,7 @@ final class WholesaleFaqVipLadderPresenter
         return [
             'currency_code' => $currencyCode,
             'credit_enabled' => $creditEnabled,
+            'min_cash_deposit_percent' => $minCashPercent,
             'groups' => $groups,
         ];
     }

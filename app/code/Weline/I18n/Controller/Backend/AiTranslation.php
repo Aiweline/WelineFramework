@@ -47,10 +47,11 @@ class AiTranslation extends BaseController
 
     public function index()
     {
-        $tab = trim((string)$this->request->getGet('tab', 'locales'));
-        if (!in_array($tab, ['locales', 'modules'], true)) {
-            $tab = 'locales';
+        $tab = trim((string)$this->request->getGet('tab', 'progress'));
+        if (!in_array($tab, ['progress', 'locales', 'modules'], true)) {
+            $tab = 'progress';
         }
+        $primarySection = $tab === 'progress' ? 'progress' : 'config';
         $moduleSearch = trim((string)$this->request->getGet('module_q', ''));
 
         $config = $this->config->getConfig();
@@ -59,6 +60,7 @@ class AiTranslation extends BaseController
         $progressBoard = $this->progressService->buildBoard($localeRows, $totalWords);
         $this->assign('config', $config);
         $this->assign('active_tab', $tab);
+        $this->assign('primary_section', $primarySection);
         $this->assign('module_search', $moduleSearch);
         $this->assign('locales', $localeRows);
         $this->assign('progress_board', $progressBoard);

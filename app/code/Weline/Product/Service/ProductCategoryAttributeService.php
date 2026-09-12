@@ -134,6 +134,25 @@ final class ProductCategoryAttributeService
         );
     }
 
+    public function writeSourcePlatform(
+        int $websiteId,
+        int $categoryId,
+        string $sourcePlatform,
+        string $locale = '',
+    ): void {
+        $sourcePlatform = strtolower(trim($sourcePlatform));
+        $this->attributes->writeExplicit(
+            $websiteId,
+            AttributeValue::WEBSITE_STORE_ID,
+            self::ENTITY_TYPE,
+            $categoryId,
+            'source_platform',
+            $locale,
+            $sourcePlatform,
+            false,
+        );
+    }
+
     public function writeDescription(
         int $websiteId,
         int $categoryId,
@@ -204,6 +223,24 @@ final class ProductCategoryAttributeService
     public function readNameMap(int $websiteId, array $categoryIds, string $locale = ''): array
     {
         return $this->readAttributeMap($websiteId, $categoryIds, 'name', $locale);
+    }
+
+    /**
+     * @param list<int> $categoryIds
+     * @return array<int, string>
+     */
+    public function readCodeMap(int $websiteId, array $categoryIds, string $locale = ''): array
+    {
+        return $this->readAttributeMap($websiteId, $categoryIds, 'code', $locale);
+    }
+
+    /**
+     * @param list<int> $categoryIds
+     * @return array<int, string>
+     */
+    public function readSourcePlatformMap(int $websiteId, array $categoryIds, string $locale = ''): array
+    {
+        return $this->readAttributeMap($websiteId, $categoryIds, 'source_platform', $locale);
     }
 
     /**

@@ -332,12 +332,12 @@
     outline: none;
 }
 
-/* In-place reason under checkbox — never fade with disabled controls. */
+/* In-place reason under checkbox — theme alert/danger tip color; never fade. */
 .weline-checkout .w-b2b-checkout-credit__reason,
 .w-b2b-checkout-credit__reason {
     margin: 0;
     padding: 0;
-    color: var(--weline-theme-text, var(--color-text-primary, inherit));
+    color: var(--weline-theme-danger, var(--color-danger, var(--color-error, inherit)));
     font-weight: var(--weline-font-weight-medium, 500);
     line-height: 1.45;
     opacity: 1;
@@ -356,11 +356,51 @@
     color: var(--weline-theme-text-muted, var(--color-text-muted, inherit));
 }
 
+.weline-checkout .w-b2b-checkout-credit__amount-row,
+.w-b2b-checkout-credit__amount-row {
+    display: flex;
+    align-items: center;
+    gap: var(--weline-theme-space-2, var(--weline-space-2, 0.5rem));
+}
+
 .weline-checkout .w-b2b-checkout-credit__amount-input,
 .w-b2b-checkout-credit__amount-input {
     width: 100%;
     max-width: none;
     box-sizing: border-box;
+    /* text+inputmode：可键盘填写；隐藏残留 number spinner */
+    -moz-appearance: textfield;
+}
+
+.weline-checkout .w-b2b-checkout-credit__amount-input::-webkit-outer-spin-button,
+.weline-checkout .w-b2b-checkout-credit__amount-input::-webkit-inner-spin-button,
+.w-b2b-checkout-credit__amount-input::-webkit-outer-spin-button,
+.w-b2b-checkout-credit__amount-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.weline-checkout .w-b2b-checkout-credit__currency,
+.w-b2b-checkout-credit__currency {
+    flex: 0 0 auto;
+    min-width: 2.5em;
+    /* 迷你车/结账：额度币种须可读，禁止走 tertiary muted（亚马逊色板 #a6a6a6 过浅） */
+    color: var(--weline-theme-text, var(--color-text-primary, #0f1111));
+}
+
+.weline-checkout .w-b2b-checkout-credit__fx,
+.w-b2b-checkout-credit__fx,
+.weline-checkout .w-b2b-checkout-credit__blurb,
+.w-b2b-checkout-credit__blurb,
+.weline-checkout .w-b2b-checkout-credit__cash,
+.w-b2b-checkout-credit__cash {
+    margin: 0 0 var(--weline-theme-space-2, var(--weline-space-2, 0.5rem));
+    color: var(--weline-theme-text, var(--color-text-primary, #0f1111));
+}
+
+.weline-checkout .w-b2b-checkout-credit__cash,
+.w-b2b-checkout-credit__cash {
+    margin-bottom: 0;
 }
 
 .weline-checkout .w-b2b-checkout-credit__links,
@@ -568,6 +608,30 @@
 
 .b2b-hang-payment__status[hidden] {
     display: none !important;
+}
+
+.b2b-hang-payment__methods {
+    display: grid;
+    gap: 8px;
+}
+
+.b2b-hang-payment__methods[hidden] {
+    display: none !important;
+}
+
+.b2b-hang-payment__method {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    padding: 10px 12px;
+    border: 1px solid var(--weline-theme-border, #d4cfc5);
+    border-radius: var(--weline-theme-radius-sm, 6px);
+    cursor: pointer;
+}
+
+.b2b-hang-payment__method input {
+    margin: 0;
 }
 
 /* Hang deposit/balance checkout: never show retail empty-cart chrome. */

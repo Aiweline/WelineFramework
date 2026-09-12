@@ -1,26 +1,28 @@
 <?php
-
-return [
-    "name" => 'Weline_Ai',
-    "version" => '1.2.58',
-    "requires" => [
-        'Weline_Admin' => '*',
-        'Weline_Backend' => '*',
-        'Weline_Framework' => '*',
-    ],
-    "optional" => [
-        'Weline_I18n' => '*',
-    ],
-    "provides" => [
-        \Weline\Ai\Api\AgentCatalogInterface::class => \Weline\Ai\Service\Agent\AgentCatalogService::class,
-        \Weline\Ai\Api\AgentModelExecutorInterface::class => \Weline\Ai\Api\AgentModelExecutor::class,
-        \Weline\Ai\Api\AiRuntimeInterface::class => \Weline\Ai\Api\AiRuntime::class,
-        \Weline\Ai\Api\Configuration\ScenarioConfigurationInterface::class => \Weline\Ai\Service\Configuration\ScenarioConfiguration::class,
-        \Weline\Ai\Api\Image\ImageRuntimeInterface::class => \Weline\Ai\Api\Image\ImageRuntime::class,
-        \Weline\Ai\Api\Image\TextToImageScenarioBindingInterface::class => \Weline\Ai\Service\Image\TextToImageScenarioBindingManager::class,
-        \Weline\Ai\Api\Provider\ProviderRuntimeInterface::class => \Weline\Ai\Service\Provider\ProviderRuntime::class,
-        \Weline\Ai\Api\SecretStoreInterface::class => \Weline\Ai\Service\SecretStoreService::class,
-        \Weline\Ai\Api\StyleRuntimeInterface::class => \Weline\Ai\Api\StyleRuntime::class,
-        'request_resetter.Weline_Ai' => \Weline\Ai\Api\Runtime\RequestResetter::class,
-    ],
-];
+return array (
+  'name' => 'Weline_Ai',
+  'version' => '1.2.68',
+  'requires' => 
+  array (
+    'Weline_Admin' => '*',
+    'Weline_Backend' => '*',
+    'Weline_Framework' => '*',
+  ),
+  'optional' => 
+  array (
+    'Weline_I18n' => '*',
+  ),
+  'provides' => 
+  array (
+    'Weline\\Ai\\Api\\AgentCatalogInterface' => 'Weline\\Ai\\Service\\Agent\\AgentCatalogService',
+    'Weline\\Ai\\Api\\AgentModelExecutorInterface' => 'Weline\\Ai\\Api\\AgentModelExecutor',
+    'Weline\\Ai\\Api\\AiRuntimeInterface' => 'Weline\\Ai\\Api\\AiRuntime',
+    'Weline\\Ai\\Api\\Configuration\\ScenarioConfigurationInterface' => 'Weline\\Ai\\Service\\Configuration\\ScenarioConfiguration',
+    'Weline\\Ai\\Api\\Image\\ImageRuntimeInterface' => 'Weline\\Ai\\Api\\Image\\ImageRuntime',
+    'Weline\\Ai\\Api\\Image\\TextToImageScenarioBindingInterface' => 'Weline\\Ai\\Service\\Image\\TextToImageScenarioBindingManager',
+    'Weline\\Ai\\Api\\Provider\\ProviderRuntimeInterface' => 'Weline\\Ai\\Service\\Provider\\ProviderRuntime',
+    'Weline\\Ai\\Api\\SecretStoreInterface' => 'Weline\\Ai\\Service\\SecretStoreService',
+    'Weline\\Ai\\Api\\StyleRuntimeInterface' => 'Weline\\Ai\\Api\\StyleRuntime',
+    'request_resetter.Weline_Ai' => 'Weline\\Ai\\Api\\Runtime\\RequestResetter',
+  ),
+);

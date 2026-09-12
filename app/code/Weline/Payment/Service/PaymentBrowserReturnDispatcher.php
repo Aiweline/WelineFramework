@@ -183,6 +183,26 @@ final class PaymentBrowserReturnDispatcher
 
         $runtimeConfig = $this->methodManager->getRuntimeConfig($paymentMethod, $scope);
         $internalRef = (string) $transaction->getData(PaymentTransaction::schema_fields_TRANSACTION_NO);
+        $express = !empty($requestData['express_checkout'])
+            || !empty(($requestData['metadata']['express_checkout'] ?? null))
+            || ExpressCheckoutOrchestrator::isExpressAwaitingConfirm($requestData);
+        $alreadyAwaiting = ExpressCheckoutOrchestrator::isExpressAwaitingConfirm($requestData);
+
+        $resumeContext = array_replace($requestData, [
+            'runtime_config' => $runtimeConfig,
+            'scope' => $scope['scope'],
+            'environment' => $scope['environment'],
+            'browser_return_params' => $params,
+            'browser_return_context' => $context,
+        ]);
+        if ($express && !$transaction->isSuccess()) {
+            // First browser return: prepare only (get profile, no capture).
+            if (!$alreadyAwaiting || empty($params['express_confirm_capture'])) {
+                $resumeContext['express_prepare_only'] = true;
+                $resumeContext['express_checkout'] = true;
+            }
+        }
+
         $result = $provider->resumePayment(ResumeRequest::fromArray([
             PaymentOperationRequest::FIELD_INTENT_CODE => $internalRef,
             PaymentOperationRequest::FIELD_ATTEMPT_CODE => $internalRef . '-1',
@@ -192,16 +212,30 @@ final class PaymentBrowserReturnDispatcher
             PaymentOperationRequest::FIELD_SCOPE => $scope['scope'],
             PaymentOperationRequest::FIELD_AMOUNT_MINOR => (int) round(((float) $transaction->getData(PaymentTransaction::schema_fields_AMOUNT)) * 100),
             PaymentOperationRequest::FIELD_CURRENCY_CODE => (string) $transaction->getData(PaymentTransaction::schema_fields_CURRENCY),
-            PaymentOperationRequest::FIELD_CONTEXT => array_replace($requestData, [
-                'runtime_config' => $runtimeConfig,
-                'scope' => $scope['scope'],
-                'environment' => $scope['environment'],
-                'browser_return_params' => $params,
-                'browser_return_context' => $context,
-            ]),
+            PaymentOperationRequest::FIELD_CONTEXT => $resumeContext,
         ]));
 
-        $transaction->setResponseData(array_replace($transaction->getResponseData(), $result->getData()))
+        $responsePayload = $result->getData();
+        $awaiting = $express && (
+            $result->getStatus() === PaymentResult::STATUS_PROCESSING
+            && (
+                !empty($result->getPayload()['express_awaiting_confirm'])
+                || !empty($resumeContext['express_prepare_only'])
+            )
+        );
+
+        $nextRequest = $requestData;
+        if ($awaiting) {
+            $meta = is_array($nextRequest['metadata'] ?? null) ? $nextRequest['metadata'] : [];
+            $meta[ExpressCheckoutOrchestrator::META_AWAITING_CONFIRM] = 1;
+            $meta['express_checkout'] = true;
+            $nextRequest['metadata'] = $meta;
+            $nextRequest['express_checkout'] = true;
+            $nextRequest[ExpressCheckoutOrchestrator::META_AWAITING_CONFIRM] = 1;
+            $transaction->setRequestData($nextRequest);
+        }
+
+        $transaction->setResponseData(array_replace($transaction->getResponseData(), $responsePayload))
             ->setData(
                 PaymentTransaction::schema_fields_STATUS,
                 $result->getStatus() === PaymentResult::STATUS_PAID
@@ -212,6 +246,23 @@ final class PaymentBrowserReturnDispatcher
             $transaction->setData(PaymentTransaction::schema_fields_PAID_AT, date('Y-m-d H:i:s'));
         }
         $transaction->save();
+
+        try {
+            /** @var \Weline\Payment\Api\PaymentExpressFacadeInterface $expressFacade */
+            $expressFacade = $this->objectManager->getInstance(\Weline\Payment\Api\PaymentExpressFacadeInterface::class);
+            $expressFacade->applyExpressProfileFromPaymentResult($result->getData(), array_replace($nextRequest, [
+                'method_code' => $methodCode,
+                'transaction_no' => $internalRef,
+                'order_id' => (string) $transaction->getData(PaymentTransaction::schema_fields_ORDER_ID),
+                'express_checkout' => true,
+            ]));
+        } catch (\Throwable) {
+            // Address import is best-effort.
+        }
+
+        if ($awaiting) {
+            return $this->landingOrchestrator->decideExpressReview($transaction);
+        }
 
         if ($result->getStatus() !== PaymentResult::STATUS_PAID) {
             $redirectReference = trim((string) (
@@ -237,17 +288,82 @@ final class PaymentBrowserReturnDispatcher
             return;
         }
 
+        $transactionNo = (string) $transaction->getData(PaymentTransaction::schema_fields_TRANSACTION_NO);
+        $purpose = $this->hangPurposeFromTransaction($transaction);
+
         try {
+            if ($purpose === 'deposit' || $purpose === 'balance') {
+                $this->reconcileB2bHang($orderUuid, $purpose, $transactionNo !== '' ? $transactionNo : ('txn_' . $orderUuid));
+            }
+            // Deposit hang must NOT mark the Order fully paid.
+            if ($purpose === 'deposit') {
+                $this->markOrderPaymentPartialFromBrowser($orderUuid);
+
+                return;
+            }
+
             /** @var OrderFacadeInterface $orders */
             $orders = $this->objectManager->getInstance(OrderFacadeInterface::class);
             $orders->notifyOrderPaid($orderUuid, [
                 'payment_method' => (string) $transaction->getData(PaymentTransaction::schema_fields_METHOD_CODE),
                 'payment_transaction_id' => (int) $transaction->getId(),
-                'payment_transaction_no' => (string) $transaction->getData(PaymentTransaction::schema_fields_TRANSACTION_NO),
+                'payment_transaction_no' => $transactionNo,
+                'purpose' => $purpose !== '' ? $purpose : 'full',
             ]);
         } catch (\Throwable) {
             // Capture already succeeded; leave order for reconciliation rather than
             // failing the browser return path and risking a double-charge retry.
+        }
+    }
+
+    private function hangPurposeFromTransaction(PaymentTransaction $transaction): string
+    {
+        $request = $transaction->getRequestData();
+        if (!is_array($request)) {
+            return '';
+        }
+        $meta = is_array($request['metadata'] ?? null) ? $request['metadata'] : [];
+        $purpose = strtolower(trim((string) ($meta['purpose'] ?? $meta['hang_purpose'] ?? '')));
+        if ($purpose === '') {
+            $purpose = strtolower(trim((string) ($request['purpose'] ?? $request['hang_purpose'] ?? '')));
+        }
+
+        return in_array($purpose, ['deposit', 'balance', 'full'], true) ? $purpose : '';
+    }
+
+    private function reconcileB2bHang(string $orderUuid, string $purpose, string $intentCode): void
+    {
+        if (!interface_exists(\Weline\B2B\Api\B2BHangPaymentBridgeInterface::class)) {
+            return;
+        }
+        try {
+            $bridge = $this->objectManager->getInstance(\Weline\B2B\Api\B2BHangPaymentBridgeInterface::class);
+            if (!$bridge instanceof \Weline\B2B\Api\B2BHangPaymentBridgeInterface) {
+                return;
+            }
+            $bridge->reconcilePaymentSuccess($orderUuid, $purpose, $intentCode);
+        } catch (\Throwable) {
+            // Soft-fail: Order paid notify may still run for balance/full.
+        }
+    }
+
+    private function markOrderPaymentPartialFromBrowser(string $orderUuid): void
+    {
+        $orderUuid = trim($orderUuid);
+        if ($orderUuid === '' || !interface_exists(\Weline\Order\Api\OrderFacadeInterface::class)) {
+            return;
+        }
+        try {
+            $orders = $this->objectManager->getInstance(\Weline\Order\Api\OrderFacadeInterface::class);
+            if (!$orders instanceof \Weline\Order\Api\OrderFacadeInterface) {
+                return;
+            }
+            $orders->mergeTypePayload($orderUuid, [
+                'payment_status' => 'partial',
+                'hang_status' => 'awaiting_merchant_approval',
+            ]);
+        } catch (\Throwable) {
+            // Soft-fail partial projection.
         }
     }
 

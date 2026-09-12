@@ -76,6 +76,12 @@ $renderTree = function (array $nodes) use (&$renderTree, $escape, $selectedId, $
         $pid = max(0, (int)($node['parent_id'] ?? $node['pid'] ?? 0));
         $level = max(1, (int)($node['level'] ?? 1));
         $path = (string)($node['path'] ?? '');
+        $status = strtolower(trim((string)($node['status'] ?? 'active')));
+        $isActive = (int)($node['is_active'] ?? 1) === 1 && $status !== 'inactive';
+        $pathNorm = strtolower(trim(str_replace('\\', '/', $path), '/'));
+        if (!$isActive || $pathNorm === 'sourcing' || str_starts_with($pathNorm, 'sourcing/')) {
+            continue;
+        }
         $children = is_array($node['nodes'] ?? null) ? $node['nodes'] : [];
         $rowState = $selectedId === $id ? 'selected' : 'idle';
         echo '<li class="w-catalog-tree__item" data-category-node data-id="' . $id . '" data-pid="' . $pid . '" data-level="' . $level . '">';
@@ -84,8 +90,10 @@ $renderTree = function (array $nodes) use (&$renderTree, $escape, $selectedId, $
         echo '<button class="w-catalog-tree__handle" type="button" tabindex="-1" aria-hidden="true" data-drag-handle><w-icon name="menu" size="sm"></w-icon></button>';
         echo '<a class="w-catalog-tree__link" href="' . $escape($catalogPageUrl(['id' => $id])) . '"' . ($selectedId === $id ? ' aria-current="page"' : '') . '>';
         echo '<w-icon name="folder" size="sm"></w-icon><span>' . $escape($name) . '</span>';
-        if ($path !== '') {
-            echo '<span class="w-badge" data-tone="neutral">' . $escape($path) . '</span>';
+        // Ops tag only — shell must not create blunt「货源」top folders; path/code live in editor.
+        $sourcePlatform = strtoupper(trim((string)($node['source_platform'] ?? '')));
+        if ($sourcePlatform !== '' && !in_array(strtolower($sourcePlatform), ['dropship', 'sourcing'], true)) {
+            echo '<span class="w-badge" data-tone="info" title="' . $escape($path !== '' ? $path : '') . '">' . $escape($sourcePlatform) . '</span>';
         }
         echo '</a>';
         echo '</div>';

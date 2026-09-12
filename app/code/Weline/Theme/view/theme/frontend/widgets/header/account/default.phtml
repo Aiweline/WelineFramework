@@ -396,8 +396,8 @@ if (empty($dropdownItems)) {
     display: none !important;
 }
 
-.widget-preview-canvas .<?= $wc ?> .account-dropdown,
-.<?= $wc ?>.is-preview .account-dropdown {
+/* 仅部件库小画布压缩；整页 theme-preview 必须保留 hover 下拉（与店面一致）。 */
+.widget-preview-canvas .<?= $wc ?> .account-dropdown {
     display: none;
 }
 

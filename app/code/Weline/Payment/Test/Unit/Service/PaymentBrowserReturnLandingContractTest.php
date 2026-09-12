@@ -22,7 +22,10 @@ final class PaymentBrowserReturnLandingContractTest extends TestCase
         self::assertStringContainsString(PaymentBrowserReturnLandingOrchestrator::DECISION_TERMINAL_L1, $src);
         self::assertStringContainsString(PaymentBrowserReturnLandingOrchestrator::DECISION_HANDOFF_L2, $src);
         self::assertStringContainsString(PaymentBrowserReturnLandingOrchestrator::DECISION_CHECKOUT_LANDING_CANCEL, $src);
+        self::assertStringContainsString(PaymentBrowserReturnLandingOrchestrator::DECISION_EXPRESS_REVIEW, $src);
         self::assertStringContainsString('function decideCancel', $src);
+        self::assertStringContainsString('function decideExpressReview', $src);
+        self::assertStringContainsString('checkout/express-review', $src);
         self::assertStringContainsString('checkout/success', $src);
         self::assertStringContainsString('payment/success', $src);
         self::assertStringContainsString('payment/handoff', $src);

@@ -97,7 +97,11 @@ final class CatalogHubService
                 'tree' => $provider->tree($scope),
                 'view' => $provider->view($scope, max(0, (int)($params['category_id'] ?? $params['node_id'] ?? 0))),
                 'save' => $provider->save($scope, $params),
-                'delete' => $provider->delete($scope, max(0, (int)($params['category_id'] ?? $params['node_id'] ?? 0))),
+                'delete' => $this->executeDelete($provider, $scope, $params),
+                'listProductsForDelete' => $provider->listProductsForDelete(
+                    $scope,
+                    max(0, (int)($params['category_id'] ?? $params['node_id'] ?? $params['id'] ?? 0)),
+                ),
                 'reorder' => $provider->reorder($scope, $params),
                 'search' => $provider->searchNodes($scope, trim((string)($params['q'] ?? $params['query'] ?? ''))),
                 'readDisplaySelection' => $provider->readDisplaySelection($scope),
@@ -125,5 +129,25 @@ final class CatalogHubService
                 'context' => $exception->context,
             ];
         }
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $params
+     */
+    private function executeDelete(
+        CatalogSpaceProviderInterface $provider,
+        array $scope,
+        array $params,
+    ): mixed {
+        $provider->delete(
+            $scope,
+            max(0, (int)($params['category_id'] ?? $params['node_id'] ?? $params['id'] ?? 0)),
+            [
+                'product_ids' => is_array($params['product_ids'] ?? null) ? $params['product_ids'] : [],
+            ],
+        );
+
+        return ['success' => true];
     }
 }

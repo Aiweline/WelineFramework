@@ -22,7 +22,7 @@ use Weline\Theme\Service\SharedChromeService;
 
 class Upgrade implements UpgradeInterface
 {
-    public const VERSION = '2.2.191';
+    public const VERSION = '2.2.326';
 
     public function setup(Data\Setup $setup, Data\Context $context): void
     {
@@ -117,7 +117,7 @@ class Upgrade implements UpgradeInterface
                     layoutOption: 'default',
                 );
 
-                $chrome->restoreNonCarrierLayouts(
+                $chrome->forceInheritAndPublishNonCarriers(
                     $context,
                     null,
                     null,

@@ -107,6 +107,18 @@ final class Category extends BackendController
         $this->assign('catalogChannelSelectValue', (string)((int)$params['channel_id']));
         $this->assign('catalogChannelSelectDisplay', (string)((int)$params['channel_id']));
 
+        $identity = $this->websiteIdentity($websiteId);
+        foreach (
+            [
+                ObjectAction::CREATE => 'grant_version_create',
+                ObjectAction::UPDATE => 'grant_version_update',
+                ObjectAction::DELETE => 'grant_version_delete',
+            ] as $action => $assignKey
+        ) {
+            $grant = $this->objectAuthorization->check($action, $identity);
+            $this->assign($assignKey, $grant->allowed ? $grant->matchedGrantVersion : 0);
+        }
+
         return (string)$this->fetch('Weline_Catalog::templates/backend/category/index.phtml');
     }
 
@@ -210,8 +222,18 @@ final class Category extends BackendController
     {
         try {
             $params = $this->readMutationParams(ObjectAction::DELETE);
+            $productIdsRaw = $this->request->getPost('product_ids', []);
+            if (!is_array($productIdsRaw)) {
+                $decoded = json_decode((string)$productIdsRaw, true);
+                $productIdsRaw = is_array($decoded) ? $decoded : [];
+            }
+            $productIds = array_values(array_unique(array_filter(
+                array_map('intval', $productIdsRaw),
+                static fn(int $id): bool => $id > 0,
+            )));
             $this->hub->execute('delete', $params + [
                 'category_id' => max(0, (int)$this->request->getPost('id', 0)),
+                'product_ids' => $productIds,
             ]);
             if ($this->request->isAjax()) {
                 return $this->fetchJson(['success' => true, 'msg' => (string)__('分类已删除')]);
@@ -272,6 +294,38 @@ final class Category extends BackendController
             }
 
             return $this->fetchJson(['success' => true, 'data' => $category]);
+        } catch (\Throwable $exception) {
+            return $this->fetchJson(['success' => false, 'msg' => $exception->getMessage()]);
+        }
+    }
+
+    #[Acl(
+        'Weline_Catalog::commerce:universal-catalog:categories',
+        '删除前产品清单',
+        'tree',
+        '列出分类子树挂载产品供删除勾选',
+    )]
+    public function getCategoryProductsForDelete(): string
+    {
+        try {
+            $context = $this->readPageContext();
+            if ($context['error'] !== '') {
+                return $this->fetchJson(['success' => false, 'msg' => $context['error']]);
+            }
+            $params = $context['params'];
+            $products = $this->hub->execute('listProductsForDelete', $params + [
+                'category_id' => max(0, (int)$this->request->getParam('id', 0)),
+            ]);
+            if (is_array($products) && ($products['success'] ?? true) === false) {
+                throw new \RuntimeException((string)($products['message'] ?? __('加载删除产品清单失败')));
+            }
+
+            return $this->fetchJson([
+                'success' => true,
+                'data' => [
+                    'products' => is_array($products) ? $products : [],
+                ],
+            ]);
         } catch (\Throwable $exception) {
             return $this->fetchJson(['success' => false, 'msg' => $exception->getMessage()]);
         }
@@ -350,7 +404,7 @@ final class Category extends BackendController
         $this->objectAuthorization->requireSubmitForQuery(
             $action,
             $this->websiteIdentity($websiteId),
-            0,
+            $this->readExpectedGrantVersion(),
         );
 
         return [
@@ -377,6 +431,19 @@ final class Category extends BackendController
             'channel_id' => max(0, (int)($params['channel_id'] ?? 0)),
             ...$extra,
         ], static fn(mixed $value): bool => $value !== '' && $value !== null));
+    }
+
+    private function readExpectedGrantVersion(): int
+    {
+        $value = $this->request->getPost('expected_grant_version', 0);
+        if (\is_int($value) && $value > 0) {
+            return $value;
+        }
+        if (\is_string($value) && \preg_match('/^[1-9][0-9]*$/D', $value) === 1) {
+            return (int)$value;
+        }
+
+        return 0;
     }
 
     private function websiteIdentity(int $websiteId): ScopeIdentity

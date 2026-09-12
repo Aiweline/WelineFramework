@@ -265,42 +265,20 @@ final class CheckoutGroupSubmitService
             ] : null,
             'b2b_credit' => null,
         ];
-        if ($discountsBanned
-            && class_exists(\Weline\B2B\Service\B2BCheckoutCreditQuote::class)
-        ) {
-            $websiteId = (int)($scope['website_id'] ?? 0);
-            if ($customerId === null || $customerId <= 0) {
-                $payload['b2b_credit'] = \Weline\B2B\Service\B2BCheckoutCreditQuote::unavailableStub(
-                    'not_logged_in',
-                    $depositAmountMinor,
-                );
-            } elseif ($depositAmountMinor <= 0) {
-                $payload['b2b_credit'] = \Weline\B2B\Service\B2BCheckoutCreditQuote::unavailableStub(
-                    'not_applicable',
-                    $depositAmountMinor,
-                );
-            } else {
-                try {
-                    $creditQuote = ObjectManager::getInstance(\Weline\B2B\Service\B2BCheckoutCreditQuote::class);
-                    if ($creditQuote instanceof \Weline\B2B\Service\B2BCheckoutCreditQuote) {
-                        $payload['b2b_credit'] = $creditQuote->quote(
-                            (string)$customerId,
-                            $websiteId,
-                            $currency,
-                            $depositAmountMinor,
-                        );
-                    } else {
-                        $payload['b2b_credit'] = \Weline\B2B\Service\B2BCheckoutCreditQuote::unavailableStub(
-                            'quote_failed',
-                            $depositAmountMinor,
-                        );
-                    }
-                } catch (\Throwable) {
-                    $payload['b2b_credit'] = \Weline\B2B\Service\B2BCheckoutCreditQuote::unavailableStub(
-                        'quote_failed',
-                        $depositAmountMinor,
-                    );
-                }
+        $enrich = [
+            'payload' => $payload,
+            'customer_id' => $customerId,
+            'discounts_banned' => $discountsBanned,
+            'deposit_amount_minor' => $depositAmountMinor,
+            'currency' => $currency,
+            'scope' => $scope,
+            'cart_type' => strtolower(trim((string)($payload['cart_type'] ?? $payload['order_type'] ?? 'toc'))) ?: 'toc',
+        ];
+        $events = $this->events();
+        if ($events !== null) {
+            $events->dispatch('Weline_Checkout::checkout::freeze_quote::enrich', $enrich);
+            if (is_array($enrich['payload'] ?? null)) {
+                $payload = $enrich['payload'];
             }
         }
         $payload['request_hash'] = hash(
@@ -449,7 +427,7 @@ final class CheckoutGroupSubmitService
         }
 
         $this->assertSessionDiscountQuote($session, $paymentMethod);
-        $session = $this->applyB2bCreditApplyToSession($session, $customerId, $b2bCreditApplyMinor);
+        $session = $this->applyAssetDiscountToSession($session, $customerId, $b2bCreditApplyMinor);
 
         $session['state'] = \Weline\Checkout\Model\CheckoutSession::STATE_SUBMITTING;
         $session['idempotency_key'] = $idempotencyKey;
@@ -766,105 +744,38 @@ final class CheckoutGroupSubmitService
     }
 
     /**
-     * Clamp tob asset credit apply (not marketing discount) and freeze FX + splits.
+     * 万能结账经事件读取资产折扣贡献（Payment 只提供策略，业务模块 Observer 回写 session）。
      *
      * @param array<string,mixed> $session
      * @return array<string,mixed>
      */
-    private function applyB2bCreditApplyToSession(array $session, ?int $customerId, ?int $applyMinor): array
+    private function applyAssetDiscountToSession(array $session, ?int $customerId, ?int $applyMinor): array
     {
-        $cartType = strtolower(trim((string)($session['cart_type'] ?? $session['order_type'] ?? 'toc'))) ?: 'toc';
-        if ($cartType !== 'tob' || !class_exists(\Weline\B2B\Service\B2BCheckoutCreditQuote::class)) {
-            return $session;
-        }
-        $quote = is_array($session['b2b_credit'] ?? null) ? $session['b2b_credit'] : null;
-        if ($quote === null || empty($quote['enabled'])) {
-            return $session;
-        }
-        $requested = max(0, (int)($applyMinor ?? 0));
-        if ($requested <= 0) {
-            $session['b2b_credit_apply'] = null;
-            $session['b2b_credit_type_payload'] = [];
-            $session['b2b_credit_by_split'] = [];
-            if (is_array($session['deposit'] ?? null)) {
-                $session['deposit']['b2b_credit_cash_deposit_minor'] = (int)($session['deposit']['deposit_amount_minor'] ?? 0);
-                $session['deposit']['b2b_credit_apply_checkout_minor'] = 0;
-                $session['deposit']['b2b_credit_apply_base_minor'] = 0;
+        $eventData = [
+            'session' => $session,
+            'customer_id' => $customerId,
+            'apply_minor' => $applyMinor,
+        ];
+        $events = $this->events();
+        if ($events !== null) {
+            $events->dispatch('Weline_Checkout::checkout::asset_discount::apply', $eventData);
+            if (is_array($eventData['session'] ?? null)) {
+                return $eventData['session'];
             }
-
-            return $session;
-        }
-        try {
-            /** @var \Weline\B2B\Service\B2BCheckoutCreditQuote $svc */
-            $svc = ObjectManager::getInstance(\Weline\B2B\Service\B2BCheckoutCreditQuote::class);
-            $websiteId = (int)($session['scope']['website_id'] ?? $quote['website_id'] ?? 0);
-            $quote['website_id'] = $websiteId;
-            $clamped = $svc->clampApply($quote, $requested);
-            $orch = ObjectManager::getInstance(\Weline\B2B\Service\B2BDepositCreditOrchestrator::class);
-            $fragment = $orch instanceof \Weline\B2B\Service\B2BDepositCreditOrchestrator
-                ? $orch->typePayloadFragment([
-                    'apply_checkout_minor' => $clamped['apply_checkout_minor'],
-                    'apply_base_minor' => $clamped['apply_base_minor'],
-                    'cash_deposit_minor' => $clamped['cash_deposit_minor'],
-                    'base_currency' => (string)($quote['base_currency'] ?? ''),
-                    'checkout_currency' => (string)($quote['checkout_currency'] ?? ''),
-                    'fx' => $clamped['fx'],
-                ], \Weline\B2B\Service\B2BDepositCreditOrchestrator::STATUS_PLANNED, '')
-                : [];
-
-            $depositMinors = [];
-            $splitKeys = [];
-            $ratio = (int)($session['deposit']['deposit_ratio_bps'] ?? 3000);
-            foreach (is_array($session['orders'] ?? null) ? $session['orders'] : [] as $order) {
-                if (!is_array($order)) {
-                    continue;
-                }
-                $split = (string)($order['split_key'] ?? 'default');
-                $goods = 0;
-                foreach (is_array($order['items'] ?? null) ? $order['items'] : [] as $item) {
-                    if (!is_array($item)) {
-                        continue;
-                    }
-                    $goods += max(0, (int)($item['qty_minor'] ?? 0)) * max(0, (int)($item['unit_price_minor'] ?? 0));
-                }
-                $taxShare = 0; // tax is group-level in stub; deposit share uses goods only
-                $dep = intdiv(($goods + $taxShare) * max(0, $ratio), 10000);
-                $depositMinors[] = $dep;
-                $splitKeys[] = $split;
-            }
-            if ($depositMinors === []) {
-                $depositMinors = [(int)($quote['deposit_amount_minor'] ?? 0)];
-                $splitKeys = ['default'];
-            }
-            $parts = $svc->splitAcrossDeposits($quote, $clamped['apply_checkout_minor'], $depositMinors, $websiteId);
-            $bySplit = [];
-            foreach ($parts as $i => $part) {
-                $key = $splitKeys[$i] ?? ('split_' . $i);
-                $bySplit[$key] = $orch instanceof \Weline\B2B\Service\B2BDepositCreditOrchestrator
-                    ? $orch->typePayloadFragment([
-                        'apply_checkout_minor' => $part['apply_checkout_minor'],
-                        'apply_base_minor' => $part['apply_base_minor'],
-                        'cash_deposit_minor' => $part['cash_deposit_minor'],
-                        'base_currency' => (string)($quote['base_currency'] ?? ''),
-                        'checkout_currency' => (string)($quote['checkout_currency'] ?? ''),
-                        'fx' => $clamped['fx'],
-                    ], \Weline\B2B\Service\B2BDepositCreditOrchestrator::STATUS_PLANNED, '')
-                    : $part;
-            }
-
-            $session['b2b_credit_apply'] = $clamped;
-            $session['b2b_credit_type_payload'] = $fragment;
-            $session['b2b_credit_by_split'] = $bySplit;
-            if (is_array($session['deposit'] ?? null)) {
-                $session['deposit']['b2b_credit_cash_deposit_minor'] = $clamped['cash_deposit_minor'];
-                $session['deposit']['b2b_credit_apply_checkout_minor'] = $clamped['apply_checkout_minor'];
-                $session['deposit']['b2b_credit_apply_base_minor'] = $clamped['apply_base_minor'];
-            }
-        } catch (\Throwable) {
-            // Soft-fail: checkout without credit apply.
         }
 
         return $session;
+    }
+
+    private function events(): ?\Weline\Framework\Event\EventsManager
+    {
+        try {
+            $events = ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class);
+
+            return $events instanceof \Weline\Framework\Event\EventsManager ? $events : null;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     private function inventory(): ?InventoryCapabilityInterface

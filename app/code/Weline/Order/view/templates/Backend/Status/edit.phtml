@@ -29,7 +29,7 @@ $isNew = !$status || !$status->getId();
     <div style="--w-span:12;">
         <div class="w-card">
             <div class="w-card__body">
-                <w:form id="weline-order-status-form" data-testid="order-status-form" method="post" action="@backend-url{'weline_order/backend/status/save'}">
+                <w:form id="weline-order-status-form" data-testid="order-status-form" method="post" action="@backend-url{'order/backend/status/save'}">
                     <input type="hidden" name="expected_grant_version" value="<?= (int)($expected_grant_version ?? 0) ?>">
                     <?php if ($status && $status->getId()): ?>
                         <input type="hidden" name="id" value="<?= $status->getId() ?>">
@@ -135,7 +135,7 @@ $isNew = !$status || !$status->getId();
                         <button type="submit" class="w-button" data-tone="primary">
                             <w:icon name="save" size="sm"></w:icon><?= __('保存') ?>
                         </button>
-                        <a href="@backend-url{'weline_order/backend/status/index'}" class="w-button" data-tone="neutral">
+                        <a href="@backend-url{'order/backend/status/index'}" class="w-button" data-tone="neutral">
                             <w:icon name="arrow-left" size="sm"></w:icon><?= __('返回') ?>
                         </a>
                     </div>
@@ -176,7 +176,7 @@ $isNew = !$status || !$status->getId();
                         Weline.UI.toast.success(data.message || '<?= __('保存成功') ?>');
                     }
                     setTimeout(function() {
-                        location.href = '@backend-url{'weline_order/backend/status/index'}';
+                        location.href = '@backend-url{'order/backend/status/index'}';
                     }, 1500);
                 } else {
                     if (typeof Weline.UI.toast !== 'undefined') {

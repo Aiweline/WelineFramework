@@ -69,6 +69,15 @@ return [
                 ],
                 'max' => 1,
             ],
+            'checkout-summary-help-pay' => [
+                'name' => '结账帮我付',
+                'accepts' => [
+                    'checkout-summary-help-pay',
+                    'help-pay',
+                    'helppay',
+                ],
+                'max' => 1,
+            ],
             'checkout-success-guest-account' => [
                 'name' => '结账成功访客转化',
                 'accepts' => [

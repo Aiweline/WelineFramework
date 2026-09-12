@@ -6,6 +6,7 @@ namespace Weline\B2B\Service;
 
 use Weline\B2B\Model\B2BOrderHang;
 use Weline\B2B\Model\B2BOrderHangRecord;
+use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Inventory\Api\InventoryCapabilityInterface;
 use Weline\Payment\Model\PaymentIntent;
@@ -25,6 +26,9 @@ final class B2BHangOrderService
 
     public const PURPOSE_DEPOSIT = 'deposit';
     public const PURPOSE_BALANCE = 'balance';
+
+    /** Framework Event — see doc/event/hang_status_changed.md */
+    public const EVENT_HANG_STATUS_CHANGED = 'Weline_B2B::hang_status_changed';
 
     /** @var array<string, B2BOrderHang>|null keyed by hang_id */
     private ?array $byHangId = null;
@@ -165,6 +169,30 @@ final class B2BHangOrderService
         return $hang->toArray();
     }
 
+    /**
+     * Reconcile hang after PSP success (sync Checkout, browser return, or already_paid).
+     * Idempotent when hang already past the target stage for the given purpose.
+     *
+     * @return array<string,mixed>|null
+     */
+    public function reconcilePaymentSuccess(string $orderRef, string $purpose, string $intentCode): ?array
+    {
+        $orderRef = trim($orderRef);
+        $purpose = strtolower(trim($purpose));
+        $intentCode = trim($intentCode);
+        if ($orderRef === '' || $intentCode === '') {
+            return null;
+        }
+        if ($purpose === self::PURPOSE_DEPOSIT) {
+            return $this->onDepositPaid($orderRef, $intentCode);
+        }
+        if ($purpose === self::PURPOSE_BALANCE) {
+            return $this->onBalancePaid($orderRef, $intentCode);
+        }
+
+        return null;
+    }
+
     /** Deposit Payment Intent paid → reserve inventory → awaiting_merchant_approval. */
     public function onDepositPaid(
         string $orderRef,
@@ -172,6 +200,14 @@ final class B2BHangOrderService
         ?callable $reserveInventory = null,
     ): array {
         $hang = $this->requireByOrderRef($orderRef);
+        // Idempotent: already past deposit (approve / balance / completed).
+        if (in_array($hang->hangStatus, [
+            B2BOrderHang::STATUS_AWAITING_MERCHANT_APPROVAL,
+            B2BOrderHang::STATUS_AWAITING_BALANCE,
+            B2BOrderHang::STATUS_COMPLETED,
+        ], true)) {
+            return $hang->toArray();
+        }
         if ($hang->hangStatus !== B2BOrderHang::STATUS_AWAITING_DEPOSIT) {
             throw new B2BConflictException(
                 self::ERROR_INVALID_STATE,
@@ -185,9 +221,8 @@ final class B2BHangOrderService
         if ($reserveInventory !== null) {
             $result = $reserveInventory($hang);
             $reservations = is_array($result) ? array_values($result) : [];
-        } elseif ($this->inventory !== null) {
-            // Production path leaves reservation to caller; memory tests inject callable.
-            $reservations = [];
+        } else {
+            $reservations = $this->reserveInventoryForHang($hang);
         }
 
         $updated = $hang->with(
@@ -203,6 +238,76 @@ final class B2BHangOrderService
         $this->commitB2bCreditOnDepositPaid($orderRef, $depositIntentCode);
 
         return $updated->toArray();
+    }
+
+    /**
+     * Production path: reserve via InventoryCapabilityInterface after deposit.
+     *
+     * @return list<array<string,mixed>>
+     */
+    private function reserveInventoryForHang(B2BOrderHang $hang): array
+    {
+        $inventory = $this->inventory;
+        if ($inventory === null && class_exists(InventoryCapabilityInterface::class)) {
+            try {
+                $resolved = ObjectManager::getInstance(InventoryCapabilityInterface::class);
+                $inventory = $resolved instanceof InventoryCapabilityInterface ? $resolved : null;
+            } catch (\Throwable) {
+                $inventory = null;
+            }
+        }
+        if ($inventory === null || !class_exists(\Weline\Order\Api\OrderFacadeInterface::class)) {
+            return [];
+        }
+        try {
+            $orders = ObjectManager::getInstance(\Weline\Order\Api\OrderFacadeInterface::class);
+            if (!$orders instanceof \Weline\Order\Api\OrderFacadeInterface) {
+                return [];
+            }
+            $read = $orders->get($hang->orderRef);
+            $snapshots = [];
+            foreach ($read->items as $index => $item) {
+                if (!is_array($item)) {
+                    continue;
+                }
+                if (!(bool)($item['requires_shipping'] ?? true)) {
+                    continue;
+                }
+                $offerId = (int)($item['offer_id'] ?? 0);
+                $qty = max(0, (int)($item['qty_minor'] ?? 0));
+                if ($offerId <= 0 || $qty <= 0) {
+                    continue;
+                }
+                $lineKey = trim((string)($item['line_uuid'] ?? $item['order_item_uuid'] ?? ('idx' . $index)));
+                $idempotencyKey = 'hang_' . $hang->orderRef . '_' . ($lineKey !== '' ? $lineKey : (string)$offerId);
+                $requestHash = hash(
+                    'sha256',
+                    json_encode([
+                        'order_ref' => $hang->orderRef,
+                        'offer_id' => $offerId,
+                        'quantity_minor' => $qty,
+                        'website_id' => $read->websiteId,
+                        'store_id' => $read->storeId,
+                    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '',
+                );
+                $result = $inventory->reserve(
+                    $read->websiteId,
+                    $read->storeId,
+                    $offerId,
+                    $qty,
+                    $idempotencyKey,
+                    $requestHash,
+                );
+                $snapshots[] = $result->toArray() + [
+                    'offer_id' => $offerId,
+                    'line_key' => $lineKey,
+                ];
+            }
+
+            return $snapshots;
+        } catch (\Throwable) {
+            return [];
+        }
     }
 
     private function commitB2bCreditOnDepositPaid(string $orderRef, string $depositIntentCode): void
@@ -227,7 +332,7 @@ final class B2BHangOrderService
                 return;
             }
             $result = $orch->commitOnDepositPaid($typePayload, $orderRef, $depositIntentCode);
-            if ($orders instanceof \Weline\Order\Service\OrderFacade) {
+            if ($orders instanceof \Weline\Order\Api\OrderFacadeInterface) {
                 $orders->mergeTypePayload($orderRef, $result['type_payload']);
             }
         } catch (\Throwable) {
@@ -337,14 +442,29 @@ final class B2BHangOrderService
         return $updated->toArray() + ['notes' => $notes];
     }
 
-    public function onBalancePaid(string $orderRef, string $balanceIntentCode): array
+    public function onBalancePaid(string $orderRef, string $balanceIntentCode, ?int $paidAmountMinor = null): array
     {
         $hang = $this->requireByOrderRef($orderRef);
+        // Idempotent: already completed.
+        if ($hang->hangStatus === B2BOrderHang::STATUS_COMPLETED) {
+            return $hang->toArray();
+        }
         if ($hang->hangStatus !== B2BOrderHang::STATUS_AWAITING_BALANCE) {
             throw new B2BConflictException(
                 self::ERROR_INVALID_STATE,
                 __('仅 awaiting_balance 可确认尾款'),
                 ['hang_status' => $hang->hangStatus],
+            );
+        }
+        $this->assertNoPendingBalanceRevision($orderRef);
+        if ($paidAmountMinor !== null && $paidAmountMinor !== $hang->balanceAmountMinor) {
+            throw new B2BConflictException(
+                self::ERROR_INVALID_STATE,
+                __('尾款支付金额与当前应付不一致'),
+                [
+                    'expected_balance_minor' => $hang->balanceAmountMinor,
+                    'paid_amount_minor' => $paidAmountMinor,
+                ],
             );
         }
         $updated = $hang->with(
@@ -356,6 +476,203 @@ final class B2BHangOrderService
         $this->recordEvent($updated);
 
         return $updated->toArray();
+    }
+
+    /**
+     * Merchant proposes a new balance while awaiting_balance.
+     *
+     * @return array<string,mixed>
+     */
+    public function proposeBalanceRevision(string $orderRef, int $newBalanceMinor, int $expectedVersion = 0): array
+    {
+        $hang = $this->requireByOrderRef($orderRef);
+        if ($hang->hangStatus !== B2BOrderHang::STATUS_AWAITING_BALANCE) {
+            throw new B2BConflictException(
+                self::ERROR_INVALID_STATE,
+                __('仅 awaiting_balance 可提议尾款改价'),
+                ['hang_status' => $hang->hangStatus],
+            );
+        }
+        $newBalanceMinor = max(0, $newBalanceMinor);
+        $currentVersion = $this->readRevisionVersion($orderRef);
+        if ($expectedVersion > 0 && $expectedVersion !== $currentVersion) {
+            throw new B2BConflictException(
+                self::ERROR_INVALID_STATE,
+                __('尾款改价版本冲突'),
+                ['expected' => $expectedVersion, 'current' => $currentVersion],
+            );
+        }
+        $nextVersion = $currentVersion + 1;
+        $this->patchOrderRevision($orderRef, [
+            'hang_revision_pending' => true,
+            'hang_revision_version' => $nextVersion,
+            'hang_revision_proposed_balance_minor' => $newBalanceMinor,
+            'hang_revision_previous_balance_minor' => $hang->balanceAmountMinor,
+        ]);
+
+        return [
+            'order_ref' => $orderRef,
+            'hang_status' => $hang->hangStatus,
+            'revision_pending' => true,
+            'revision_version' => $nextVersion,
+            'proposed_balance_minor' => $newBalanceMinor,
+            'current_balance_minor' => $hang->balanceAmountMinor,
+        ];
+    }
+
+    /**
+     * Buyer confirms pending balance revision → update hang + OrderFacade payable.
+     *
+     * @return array<string,mixed>
+     */
+    public function confirmBalanceRevision(string $orderRef, int $expectedVersion): array
+    {
+        $hang = $this->requireByOrderRef($orderRef);
+        if ($hang->hangStatus !== B2BOrderHang::STATUS_AWAITING_BALANCE) {
+            throw new B2BConflictException(
+                self::ERROR_INVALID_STATE,
+                __('仅 awaiting_balance 可确认尾款改价'),
+                ['hang_status' => $hang->hangStatus],
+            );
+        }
+        $tp = $this->readTypePayload($orderRef);
+        if (!(bool)($tp['hang_revision_pending'] ?? false)) {
+            throw new B2BConflictException(self::ERROR_INVALID_STATE, __('没有待确认的尾款改价'));
+        }
+        $version = (int)($tp['hang_revision_version'] ?? 0);
+        if ($expectedVersion !== $version) {
+            throw new B2BConflictException(
+                self::ERROR_INVALID_STATE,
+                __('尾款改价版本冲突'),
+                ['expected' => $expectedVersion, 'current' => $version],
+            );
+        }
+        $newBalance = max(0, (int)($tp['hang_revision_proposed_balance_minor'] ?? -1));
+        if (!array_key_exists('hang_revision_proposed_balance_minor', $tp)) {
+            throw new B2BConflictException(self::ERROR_INVALID, __('尾款改价金额无效'));
+        }
+        $updated = $hang->with(
+            balanceAmountMinor: $newBalance,
+            updatedAtEpoch: ($this->clock)(),
+        );
+        $this->put($updated);
+        $this->recordEvent($updated);
+
+        if (class_exists(\Weline\Order\Api\OrderFacadeInterface::class)) {
+            try {
+                $orders = ObjectManager::getInstance(\Weline\Order\Api\OrderFacadeInterface::class);
+                if ($orders instanceof \Weline\Order\Api\OrderFacadeInterface) {
+                    $orders->reviseTobHangPayable($orderRef, [
+                        'balance_amount_minor' => $newBalance,
+                        'revision_version' => $version,
+                        'revision_pending' => false,
+                        'audit' => [
+                            'previous_balance_minor' => $hang->balanceAmountMinor,
+                            'confirmed_at_epoch' => ($this->clock)(),
+                        ],
+                    ]);
+                }
+            } catch (\Throwable) {
+                // Soft-fail: hang already updated; Order projection can reconcile later.
+            }
+        }
+
+        $this->appendRevisionSystemMessage(
+            $orderRef,
+            (string)$hang->customerId,
+            (int)$hang->websiteId,
+            $hang->hangId,
+            (int)$hang->balanceAmountMinor,
+            $newBalance,
+            $version,
+        );
+
+        return $updated->toArray() + [
+            'revision_pending' => false,
+            'revision_version' => $version,
+        ];
+    }
+
+    private function appendRevisionSystemMessage(
+        string $orderRef,
+        string $customerId,
+        int $websiteId,
+        ?string $hangId,
+        int $previousBalance,
+        int $newBalance,
+        int $version,
+    ): void {
+        try {
+            $chat = ObjectManager::getInstance(B2BOrderThreadService::class);
+            if (!$chat instanceof B2BOrderThreadService) {
+                return;
+            }
+            $thread = $chat->openOrCreate($orderRef, $customerId, $websiteId, $hangId);
+            $body = (string)__(
+                '尾款已确认改价：%{1} → %{2}（版本 %{3}）',
+                (string)$previousBalance,
+                (string)$newBalance,
+                (string)$version,
+            );
+            $chat->send(
+                (string)$thread['thread_id'],
+                \Weline\B2B\Model\B2BOrderMessageRecord::ROLE_SYSTEM,
+                $body,
+            );
+        } catch (\Throwable) {
+            // Chat is optional relative to hang payable authority.
+        }
+    }
+
+    private function assertNoPendingBalanceRevision(string $orderRef): void
+    {
+        $tp = $this->readTypePayload($orderRef);
+        if ((bool)($tp['hang_revision_pending'] ?? false)) {
+            throw new B2BConflictException(
+                self::ERROR_INVALID_STATE,
+                __('尾款改价待确认，暂不可完结尾款'),
+                ['order_ref' => $orderRef],
+            );
+        }
+    }
+
+    private function readRevisionVersion(string $orderRef): int
+    {
+        return max(0, (int)($this->readTypePayload($orderRef)['hang_revision_version'] ?? 0));
+    }
+
+    /** @return array<string,mixed> */
+    private function readTypePayload(string $orderRef): array
+    {
+        if (!class_exists(\Weline\Order\Api\OrderFacadeInterface::class)) {
+            return [];
+        }
+        try {
+            $orders = ObjectManager::getInstance(\Weline\Order\Api\OrderFacadeInterface::class);
+            if (!$orders instanceof \Weline\Order\Api\OrderFacadeInterface) {
+                return [];
+            }
+
+            return $orders->get($orderRef)->typePayload;
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /** @param array<string,mixed> $patch */
+    private function patchOrderRevision(string $orderRef, array $patch): void
+    {
+        if (!class_exists(\Weline\Order\Api\OrderFacadeInterface::class)) {
+            return;
+        }
+        try {
+            $orders = ObjectManager::getInstance(\Weline\Order\Api\OrderFacadeInterface::class);
+            if ($orders instanceof \Weline\Order\Api\OrderFacadeInterface) {
+                $orders->mergeTypePayload($orderRef, $patch);
+            }
+        } catch (\Throwable) {
+            // Soft-fail when Order absent in hang-only fixtures.
+        }
     }
 
     /**
@@ -416,6 +733,59 @@ final class B2BHangOrderService
         }
 
         return $this->hydrate($model->getData());
+    }
+
+    /**
+     * Storefront hub: hangs for one customer (website 0 matches any site).
+     *
+     * @return list<array<string,mixed>>
+     */
+    public function listForCustomer(string $customerId, int $websiteId = 0): array
+    {
+        $customerId = trim($customerId);
+        if ($customerId === '') {
+            return [];
+        }
+        $out = [];
+        if ($this->byHangId !== null) {
+            foreach ($this->byHangId as $hang) {
+                if ((string)$hang->customerId !== $customerId) {
+                    continue;
+                }
+                if ($websiteId > 0 && $hang->websiteId > 0 && $hang->websiteId !== $websiteId) {
+                    continue;
+                }
+                $out[] = $hang->toArray();
+            }
+            usort(
+                $out,
+                static fn (array $a, array $b): int => ((int)($b['updated_at_epoch'] ?? 0)) <=> ((int)($a['updated_at_epoch'] ?? 0)),
+            );
+
+            return $out;
+        }
+        try {
+            $model = $this->newRecord();
+            $model->clear()
+                ->where(B2BOrderHangRecord::schema_fields_CUSTOMER_ID, $customerId)
+                ->order(B2BOrderHangRecord::schema_fields_UPDATED_AT_EPOCH, 'DESC')
+                ->select()
+                ->fetch();
+            foreach ($model->getItems() ?? [] as $row) {
+                if (!$row instanceof B2BOrderHangRecord) {
+                    continue;
+                }
+                $hang = $this->hydrate($row->getData());
+                if ($websiteId > 0 && $hang->websiteId > 0 && $hang->websiteId !== $websiteId) {
+                    continue;
+                }
+                $out[] = $hang->toArray();
+            }
+        } catch (\Throwable) {
+            return [];
+        }
+
+        return $out;
     }
 
     public function get(string $hangId): ?B2BOrderHang
@@ -565,11 +935,26 @@ final class B2BHangOrderService
 
     private function recordEvent(B2BOrderHang $hang): void
     {
-        $this->eventPayloads[] = [
+        $payload = [
             'order_type' => 'tob',
             'type_payload' => $hang->typePayload(),
             'order_ref' => $hang->orderRef,
+            'hang_id' => $hang->hangId,
+            'hang_status' => $hang->hangStatus,
+            'website_id' => $hang->websiteId,
         ];
+        $this->eventPayloads[] = $payload;
+        try {
+            if (!class_exists(EventsManager::class)) {
+                return;
+            }
+            $events = ObjectManager::getInstance(EventsManager::class);
+            if ($events instanceof EventsManager) {
+                $events->dispatch(self::EVENT_HANG_STATUS_CHANGED, $payload);
+            }
+        } catch (\Throwable) {
+            // Soft-fail: hang persistence already succeeded.
+        }
     }
 
     private function newRecord(): B2BOrderHangRecord

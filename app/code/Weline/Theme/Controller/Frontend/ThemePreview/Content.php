@@ -88,7 +88,12 @@ class Content extends FrontendController
             $this->request->setGet('status', (string)($context['status'] ?? PreviewContextService::DEFAULT_STATUS));
         }
 
-        $this->assign('preview_mode', (string)($context['preview_mode'] ?? PreviewContextService::DEFAULT_PREVIEW_MODE));
+        $layoutPreviewMode = (string)($context['preview_mode'] ?? PreviewContextService::DEFAULT_PREVIEW_MODE);
+        // layout_preview_mode = live|version|draft（布局源）。
+        // 禁止把字符串赋给 preview_mode：部件里 (bool)'live'===true 会打上 is-preview，hover 菜单被裁掉。
+        $this->assign('layout_preview_mode', $layoutPreviewMode);
+        $this->assign('theme_preview_content', true);
+        $this->assign('preview_mode', false);
         $this->assign('preview_context', $context);
         $themeId = $previewContextService->getThemeIdForArea(PreviewContextService::AREA_FRONTEND, $context, true);
         if ($themeId > 0) {

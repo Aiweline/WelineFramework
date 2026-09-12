@@ -29,7 +29,21 @@ return [
         'description' => __('在计算订单总额之后触发，允许其他模块修改计算结果或执行后续操作。'),
         'doc' => 'checkout/计算订单总额后.md',
     ],
-    
+
+    // V2 冻结报价富集：业务模块贡献资产信用等，Payment 只提供策略不写额度
+    'Weline_Checkout::checkout::freeze_quote::enrich' => [
+        'name' => __('冻结报价富集'),
+        'description' => __('freezeAndQuote 生成基础 payload 后触发；Observer 可回写 b2b_credit 等扩展字段。支付模块不得注入额度。'),
+        'doc' => 'checkout/freeze-quote-enrich.md',
+    ],
+
+    // V2 提交会话资产折扣：结账经事件读取业务模块贡献的抵扣与 type_payload
+    'Weline_Checkout::checkout::asset_discount::apply' => [
+        'name' => __('会话资产折扣应用'),
+        'description' => __('submit 前触发；Observer 钳制抵扣并写入 type_payload。支付仅 SPI 策略，不写结账金额。'),
+        'doc' => 'checkout/asset-discount-apply.md',
+    ],
+
     // 创建订单前
     'Weline_Checkout::checkout::create_order::before' => [
         'name' => __('创建订单前'),

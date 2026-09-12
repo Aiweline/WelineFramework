@@ -6,6 +6,9 @@ namespace Weline\Dropship\Api\Data;
 
 /**
  * Provider → shell normalized catalog snapshot (shell owns persistence).
+ *
+ * Provider assembles catalog facts (media / variants / attributes / category path /
+ * description). Shell publishes via ProductAdmin — never reads provider raw keys.
  */
 final class DropshipCatalogSnapshot
 {
@@ -13,6 +16,7 @@ final class DropshipCatalogSnapshot
      * @param array<string, mixed> $variants
      * @param array<string, mixed> $media
      * @param array<string, string|int|float|bool|null> $suggestedEav
+     * @param list<array<string, mixed>> $attributes ProductAdmin attribute rows (attribute_code/value)
      * @param array<string, mixed> $raw
      */
     public function __construct(
@@ -29,6 +33,10 @@ final class DropshipCatalogSnapshot
         public readonly string $externalSku = '',
         public readonly string $countryCode = '',
         public readonly string $storageId = '',
+        public readonly string $categoryId = '',
+        public readonly string $categoryPath = '',
+        public readonly string $description = '',
+        public readonly array $attributes = [],
         public readonly array $raw = [],
     ) {
     }
@@ -38,6 +46,13 @@ final class DropshipCatalogSnapshot
      */
     public static function fromArray(array $data): self
     {
+        $attributes = [];
+        foreach ((array)($data['attributes'] ?? []) as $row) {
+            if (is_array($row)) {
+                $attributes[] = $row;
+            }
+        }
+
         return new self(
             providerCode: (string)($data['provider_code'] ?? ''),
             externalSpu: (string)($data['external_spu'] ?? ''),
@@ -52,6 +67,10 @@ final class DropshipCatalogSnapshot
             externalSku: (string)($data['external_sku'] ?? ''),
             countryCode: (string)($data['country_code'] ?? ''),
             storageId: (string)($data['storage_id'] ?? ''),
+            categoryId: (string)($data['category_id'] ?? ''),
+            categoryPath: (string)($data['category_path'] ?? ''),
+            description: (string)($data['description'] ?? ''),
+            attributes: $attributes,
             raw: (array)($data['raw'] ?? []),
         );
     }
@@ -75,6 +94,10 @@ final class DropshipCatalogSnapshot
             'suggested_eav' => $this->suggestedEav,
             'country_code' => $this->countryCode,
             'storage_id' => $this->storageId,
+            'category_id' => $this->categoryId,
+            'category_path' => $this->categoryPath,
+            'description' => $this->description,
+            'attributes' => $this->attributes,
             'raw' => $this->raw,
         ];
     }

@@ -189,9 +189,31 @@ $__pixel_env = [
     'website_id' => (string)\Weline\Framework\Env\WelineEnv::server('WELINE_WEBSITE_ID', (string)($_SERVER['WELINE_WEBSITE_ID'] ?? '')),
     'website_code' => (string)\Weline\Framework\Env\WelineEnv::server('WELINE_WEBSITE_CODE', (string)($_SERVER['WELINE_WEBSITE_CODE'] ?? '')),
     'website_url' => (string)\Weline\Framework\Env\WelineEnv::server('WELINE_WEBSITE_URL', (string)($_SERVER['WELINE_WEBSITE_URL'] ?? '')),
+    'store_code' => 'default',
+    'channel_code' => 'default',
     'language' => (string)\Weline\Framework\Env\WelineEnv::server('WELINE_USER_LANG', (string)($_SERVER['WELINE_USER_LANG'] ?? '')),
     'currency' => (string)\Weline\Framework\Env\WelineEnv::server('WELINE_USER_CURRENCY', (string)($_SERVER['WELINE_USER_CURRENCY'] ?? '')),
 ];
+try {
+    $__scope_identity = \Weline\Framework\Runtime\RequestContext::scopeIdentity();
+    if ($__scope_identity instanceof \Weline\Framework\Runtime\ScopeIdentity) {
+        if (\trim((string)($__scope_identity->websiteCode ?? '')) !== '') {
+            $__pixel_env['website_code'] = (string)$__scope_identity->websiteCode;
+        }
+        if ($__scope_identity->websiteId !== null && (int)$__scope_identity->websiteId > 0) {
+            $__pixel_env['website_id'] = (string)(int)$__scope_identity->websiteId;
+        }
+        $__store = \trim((string)($__scope_identity->storeCode ?? ''));
+        $__channel = \trim((string)($__scope_identity->channelCode ?? ''));
+        if ($__store !== '') {
+            $__pixel_env['store_code'] = $__store;
+        }
+        if ($__channel !== '') {
+            $__pixel_env['channel_code'] = $__channel;
+        }
+    }
+} catch (\Throwable) {
+}
 try {
     if ($__pixel_env['website_url'] !== '' && str_contains($__pixel_env['website_url'], '%')) {
         $__decoded_website_url = rawurldecode($__pixel_env['website_url']);
@@ -212,11 +234,16 @@ if ($__pixel_env_json === false) {
 if ($__visitor_pixel_enabled || $__visitor_ga4_enabled) {
     // Resolve static URL in PHP. Do not put the static tag inside a quoted PHP
     // assignment — the template compiler expands that tag and breaks the file.
+    $__pixel_js_disk = (\defined('BP') ? BP : \dirname(__DIR__, 8)) . '/app/code/Weline/Visitor/view/statics/js/pixel.js';
+    $__pixel_mtime = \is_file($__pixel_js_disk) ? (int) @\filemtime($__pixel_js_disk) : \time();
     $__pixel_script_url = htmlspecialchars(
         (string) $this->fetchTagSource('statics', 'Weline_Visitor::js/pixel.js'),
         ENT_QUOTES | ENT_SUBSTITUTE,
         'UTF-8'
     );
+    $__pixel_script_url = \preg_replace('/[?&]v=[^&"\']*/', '', $__pixel_script_url) ?: $__pixel_script_url;
+    $__pixel_script_url = \rtrim($__pixel_script_url, '?&');
+    $__pixel_script_url .= '?v=pixel-runtime-reload-1-' . $__pixel_mtime;
     $__event_chains_script_url = htmlspecialchars(
         (string) $this->fetchTagSource('statics', 'Weline_Visitor::js/pixel-event-chains.js'),
         ENT_QUOTES | ENT_SUBSTITUTE,
@@ -399,36 +426,38 @@ $__wpp_want = ($__wpp_q === '1' && $__wpp_token !== '')
 <script src="<?= $__wpp_script_url ?>" defer data-wpp-src="1"></script>
 <?php } ?>
 <?php
-// 生命周期小助手：面板开启后写入 session；跨页由 body-end 轻量 bootstrap 续载，关面板/关小助手清除。
-$__wla_js_disk = (\defined('BP') ? BP : \dirname(__DIR__, 8)) . '/app/code/Weline/Visitor/view/statics/js/lifecycle-event-assistant.js';
-$__wla_mtime = \is_file($__wla_js_disk) ? (int) @\filemtime($__wla_js_disk) : \time();
-$__wla_script_url = \htmlspecialchars(
-    (string) $this->fetchTagSource('statics', 'Weline_Visitor::js/lifecycle-event-assistant.js'),
+// 事件监视：面板开启后写入 session；跨页由 body-end 轻量 bootstrap 续载，关面板/关监视清除。
+$__wesm_js_disk = (\defined('BP') ? BP : \dirname(__DIR__, 8)) . '/app/code/Weline/Visitor/view/statics/js/event-sandbox-monitor.js';
+$__wesm_mtime = \is_file($__wesm_js_disk) ? (int) @\filemtime($__wesm_js_disk) : \time();
+$__wesm_script_url = \htmlspecialchars(
+    (string) $this->fetchTagSource('statics', 'Weline_Visitor::js/event-sandbox-monitor.js'),
     ENT_QUOTES | ENT_SUBSTITUTE,
     'UTF-8'
 );
-$__wla_script_url = \preg_replace('/[?&]v=[^&"\']*/', '', $__wla_script_url) ?: $__wla_script_url;
-$__wla_script_url = \rtrim($__wla_script_url, '?&');
-$__wla_script_url .= '?v=lifecycle-assistant-1.1.13-' . $__wla_mtime;
-$__wla_script_url_js = \json_encode($__wla_script_url, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '""';
+$__wesm_script_url = \preg_replace('/[?&]v=[^&"\']*/', '', $__wesm_script_url) ?: $__wesm_script_url;
+$__wesm_script_url = \rtrim($__wesm_script_url, '?&');
+$__wesm_script_url .= '?v=event-sandbox-monitor-1-' . $__wesm_mtime;
+$__wesm_script_url_js = \json_encode($__wesm_script_url, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '""';
 ?>
-<script data-wla-bootstrap="1">
+<script data-wesm-bootstrap="1">
 (function () {
-  var SRC = <?= $__wla_script_url_js ?>;
+  var SRC = <?= $__wesm_script_url_js ?>;
   function need() {
     try {
+      if (sessionStorage.getItem('weline_event_sandbox_monitor_v1') === '1') return true;
       if (sessionStorage.getItem('weline_lifecycle_assistant_v1') === '1') return true;
+      if (/(^|;\s*)weline_event_sandbox_monitor=1(;|$)/.test(String(document.cookie || ''))) return true;
       return /(^|;\s*)weline_lifecycle_assistant=1(;|$)/.test(String(document.cookie || ''));
     } catch (e) { return false; }
   }
   function load() {
-    if (window.WelineLifecycleAssistant) return;
-    if (document.querySelector('script[data-weline-lifecycle-assistant-bundle="true"],script[data-wla-src]')) return;
+    if (window.WelineEventSandboxMonitor) return;
+    if (document.querySelector('script[data-weline-event-sandbox-monitor-bundle="true"],script[data-wesm-src]')) return;
     var s = document.createElement('script');
     s.src = SRC;
     s.defer = true;
-    s.setAttribute('data-wla-src', '1');
-    s.setAttribute('data-weline-lifecycle-assistant-bundle', 'true');
+    s.setAttribute('data-wesm-src', '1');
+    s.setAttribute('data-weline-event-sandbox-monitor-bundle', 'true');
     document.documentElement.appendChild(s);
   }
   if (need()) load();

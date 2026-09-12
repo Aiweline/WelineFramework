@@ -421,6 +421,42 @@ body .weline-language-select-dropdown[id^="dictionary_"] {
     vertical-align: middle;
 }
 
+.i18n-admin-primary-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--weline-space-1, 0.25rem);
+    padding: 0 var(--weline-space-2, 0.5rem);
+    border-bottom: 1px solid var(--backend-color-border-default, var(--color-border, #e5e7eb));
+    background: var(--backend-color-card-bg, var(--color-surface, #fff));
+    border-radius: var(--weline-radius-md, 8px) var(--weline-radius-md, 8px) 0 0;
+    list-style: none;
+    margin: 0 0 var(--weline-space-4, 1rem);
+}
+
+.i18n-admin-primary-tabs > li {
+    margin: 0;
+}
+
+.i18n-admin-primary-tabs a {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.875rem 1rem;
+    color: var(--backend-color-text-secondary, var(--color-text-secondary, #6b7280));
+    font-weight: 500;
+    text-decoration: none;
+    border-bottom: 3px solid transparent;
+    white-space: nowrap;
+}
+
+.i18n-admin-primary-tabs a:hover {
+    color: var(--backend-color-primary, var(--color-primary, #2563eb));
+}
+
+.i18n-admin-primary-tabs a.active {
+    color: var(--backend-color-primary, var(--color-primary, #2563eb));
+    border-bottom-color: var(--backend-color-primary, var(--color-primary, #2563eb));
+}
+
 .i18n-admin-progress-meter {
     min-width: 9rem;
     max-width: 16rem;

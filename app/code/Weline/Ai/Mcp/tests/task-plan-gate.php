@@ -31,9 +31,17 @@ $validPlan = [
     'requirement_scrutiny' => ['合理'],
     'coupling_findings' => ['无'],
     'work_kind' => 'non_feature',
+    'implicit_requirements' => ['MCP 门禁层：分析环境后无产品表面隐形需求'],
+    'ui_skill_decision' => 'skip',
+    'ui_skill_rationale' => '非功能门禁变更，无布局交互或 CSS 重设计，跳过原型与 UI 技能。',
     'skill_participation' => [],
     'dev_tasks' => [
-        ['id' => 'task-1', 'title' => 'Extend TaskPlanGate', 'status' => 'pending'],
+        [
+            'id' => 'task-1',
+            'title' => 'Extend TaskPlanGate',
+            'status' => 'pending',
+            'acceptance_ids' => ['ut-plan-required'],
+        ],
     ],
     'acceptance' => [
         [
@@ -332,6 +340,7 @@ gateCheck(
         && ($blueprint['trigger'] ?? '') === 'every_coding_user_requirement'
         && count(is_array($blueprint['steps'] ?? null) ? $blueprint['steps'] : []) >= 10
         && in_array('requirement_analysis', $stepIds, true)
+        && in_array('implicit_analysis_ui_skill_decision', $stepIds, true)
         && in_array('feature_ui_prototype_participation', $stepIds, true)
         && in_array('acceptance', $stepIds, true)
         && in_array('tdd_red_green', $stepIds, true)
@@ -397,6 +406,7 @@ $rejectedFeatureWithoutSkills = false;
 try {
     TaskPlanGate::normalizeSubmission(array_merge($validPlan, [
         'work_kind' => 'feature',
+        'ui_skill_decision' => 'participate',
         'skill_participation' => ['prototype'],
         'acceptance' => [
             $validPlan['acceptance'][0],
@@ -412,23 +422,33 @@ try {
     $rejectedFeatureWithoutSkills = $e->errorCode === TaskPlanGate::ERROR_PLAN_INVALID
         && str_contains($e->getMessage(), 'frontend-design');
 }
-gateCheck($rejectedFeatureWithoutSkills, 'feature requires prototype + frontend-design skill_participation');
+gateCheck($rejectedFeatureWithoutSkills, 'participate requires prototype + frontend-design skill_participation');
 
 $rejectedFeatureWithoutShentu = false;
 try {
     TaskPlanGate::normalizeSubmission(array_merge($validPlan, [
         'work_kind' => 'feature',
+        'ui_skill_decision' => 'participate',
         'skill_participation' => ['prototype', 'frontend-design'],
     ]));
 } catch (ToolException $e) {
     $rejectedFeatureWithoutShentu = $e->errorCode === TaskPlanGate::ERROR_PLAN_INVALID
         && str_contains($e->getMessage(), 'shentu');
 }
-gateCheck($rejectedFeatureWithoutShentu, 'feature requires type=shentu acceptance');
+gateCheck($rejectedFeatureWithoutShentu, 'participate requires type=shentu acceptance');
 
 $featurePlan = TaskPlanGate::normalizeSubmission(array_merge($validPlan, [
     'work_kind' => 'feature',
+    'ui_skill_decision' => 'participate',
     'skill_participation' => ['prototype', 'frontend-design'],
+    'dev_tasks' => [
+        [
+            'id' => 'task-1',
+            'title' => 'Extend TaskPlanGate feature loop',
+            'status' => 'pending',
+            'acceptance_ids' => ['ut-plan-required', 'shentu-ui', 'e2e-ui'],
+        ],
+    ],
     'acceptance' => [
         $validPlan['acceptance'][0],
         [
@@ -437,14 +457,161 @@ $featurePlan = TaskPlanGate::normalizeSubmission(array_merge($validPlan, [
             'description' => '验收阶段 Browser 截图审图',
             'status' => 'pending',
         ],
+        [
+            'id' => 'e2e-ui',
+            'type' => 'e2e',
+            'description' => 'Playwright 端到端跑通功能路径（前后端完整通路）',
+            'status' => 'pending',
+        ],
+        [
+            'id' => 'e2e-plan-suite',
+            'type' => 'e2e',
+            'description' => '计划级功能链路 e2e 组套件统一组测',
+            'status' => 'pending',
+        ],
     ],
 ]));
 gateCheck(
     ($featurePlan['work_kind'] ?? '') === 'feature'
+        && ($featurePlan['ui_skill_decision'] ?? '') === 'participate'
         && in_array('prototype', $featurePlan['skill_participation'] ?? [], true)
         && in_array('frontend-design', $featurePlan['skill_participation'] ?? [], true),
-    'accepts feature plan with prototype+UI participation and shentu acceptance',
+    'accepts feature plan with participate + prototype+UI + shentu + e2e',
 );
+
+$rejectedFeatureWithoutE2e = false;
+try {
+    TaskPlanGate::normalizeSubmission(array_merge($validPlan, [
+        'work_kind' => 'feature',
+        'ui_skill_decision' => 'participate',
+        'skill_participation' => ['prototype', 'frontend-design'],
+        'acceptance' => [
+            $validPlan['acceptance'][0],
+            [
+                'id' => 'shentu-ui',
+                'type' => 'shentu',
+                'description' => '验收阶段审图',
+                'status' => 'pending',
+            ],
+        ],
+    ]));
+} catch (ToolException $e) {
+    $rejectedFeatureWithoutE2e = $e->errorCode === TaskPlanGate::ERROR_PLAN_INVALID
+        && str_contains($e->getMessage(), 'type=e2e');
+}
+gateCheck($rejectedFeatureWithoutE2e, 'participate requires type=e2e acceptance');
+
+$rejectedBrowserWithoutE2e = false;
+try {
+    TaskPlanGate::normalizeSubmission(array_merge($validPlan, [
+        'work_kind' => 'feature',
+        'ui_skill_decision' => 'skip',
+        'ui_skill_rationale' => '仅接线 API，无布局重设计，但计划含 browser 验收须强制 e2e。',
+        'acceptance' => [
+            $validPlan['acceptance'][0],
+            [
+                'id' => 'wb-op',
+                'type' => 'browser',
+                'description' => 'IDE Browser 点通',
+                'status' => 'pending',
+            ],
+        ],
+    ]));
+} catch (ToolException $e) {
+    $rejectedBrowserWithoutE2e = $e->errorCode === TaskPlanGate::ERROR_PLAN_INVALID
+        && str_contains($e->getMessage(), 'type=e2e');
+}
+gateCheck($rejectedBrowserWithoutE2e, 'type=browser acceptance requires type=e2e');
+
+$rejectedUiScopeWithoutE2e = false;
+try {
+    TaskPlanGate::normalizeSubmission(array_merge($validPlan, [
+        'work_kind' => 'feature',
+        'scope_paths' => ['app/code/Weline/Visitor/view/statics/js/pixel.js'],
+        'ui_skill_decision' => 'skip',
+        'ui_skill_rationale' => '改 pixel.js 行为，无布局重设计，但仍属 UI 表面须 e2e。',
+    ]));
+} catch (ToolException $e) {
+    $rejectedUiScopeWithoutE2e = $e->errorCode === TaskPlanGate::ERROR_PLAN_INVALID
+        && str_contains($e->getMessage(), 'type=e2e');
+}
+gateCheck($rejectedUiScopeWithoutE2e, 'feature UI scope_paths require type=e2e');
+
+$featureSkipPlan = TaskPlanGate::normalizeSubmission(array_merge($validPlan, [
+    'work_kind' => 'feature',
+    'implicit_requirements' => [
+        '仓映射页已有手填远程/本地仓 ID；本地仓缺 Taglib；Provider 缺仓库表与拉取',
+    ],
+    'ui_skill_decision' => 'skip',
+    'ui_skill_rationale' => '以既有 Taglib/SearchSelect 接线与 Provider 仓表拉取为主，无布局重设计，跳过原型与 UI 技能。',
+    'skill_participation' => [],
+    'dev_tasks' => [
+        [
+            'id' => 'task-1',
+            'title' => 'Wire provider warehouse pull',
+            'status' => 'pending',
+            'acceptance_ids' => ['ut-plan-required', 'e2e-feature'],
+        ],
+    ],
+    'acceptance' => [
+        $validPlan['acceptance'][0],
+        [
+            'id' => 'e2e-feature',
+            'type' => 'e2e',
+            'description' => 'Playwright 端到端跑通功能路径（前后端完整通路）',
+            'status' => 'pending',
+        ],
+        [
+            'id' => 'e2e-plan-suite',
+            'type' => 'e2e',
+            'description' => '计划级功能链路 e2e 组套件统一组测',
+            'status' => 'pending',
+        ],
+    ],
+]));
+gateCheck(
+    ($featureSkipPlan['ui_skill_decision'] ?? '') === 'skip'
+        && ($featureSkipPlan['skill_participation'] ?? null) === [],
+    'accepts feature plan with ui_skill_decision=skip without prototype/UI',
+);
+
+$rejectedFeatureSkipWithoutE2e = false;
+try {
+    TaskPlanGate::normalizeSubmission(array_merge($validPlan, [
+        'work_kind' => 'feature',
+        'scope_paths' => ['app/code/Weline/Product/Service/ProductAdminBulkService.php'],
+        'ui_skill_decision' => 'skip',
+        'ui_skill_rationale' => '后端校验修复，无布局重设计，但仍属 feature 须 e2e 自测。',
+    ]));
+} catch (ToolException $e) {
+    $rejectedFeatureSkipWithoutE2e = $e->errorCode === TaskPlanGate::ERROR_PLAN_INVALID
+        && str_contains($e->getMessage(), 'type=e2e');
+}
+gateCheck($rejectedFeatureSkipWithoutE2e, 'any feature requires type=e2e even with skip and non-UI paths');
+
+$rejectedSkipShortRationale = false;
+try {
+    TaskPlanGate::normalizeSubmission(array_merge($validPlan, [
+        'work_kind' => 'feature',
+        'ui_skill_decision' => 'skip',
+        'ui_skill_rationale' => '太短',
+    ]));
+} catch (ToolException $e) {
+    $rejectedSkipShortRationale = $e->errorCode === TaskPlanGate::ERROR_PLAN_INVALID
+        && str_contains($e->getMessage(), 'ui_skill_rationale');
+}
+gateCheck($rejectedSkipShortRationale, 'skip requires ui_skill_rationale ≥24 chars');
+
+$rejectedMissingImplicit = false;
+try {
+    $noImplicit = $validPlan;
+    unset($noImplicit['implicit_requirements']);
+    TaskPlanGate::normalizeSubmission($noImplicit);
+} catch (ToolException $e) {
+    $rejectedMissingImplicit = $e->errorCode === TaskPlanGate::ERROR_PLAN_INVALID
+        && str_contains($e->getMessage(), 'implicit_requirements');
+}
+gateCheck($rejectedMissingImplicit, 'rejects missing implicit_requirements');
 
 $featureDone = TaskPlanWorkflow::applyProgressPatch($featurePlan, [
     'workflow_phase' => 'review',
@@ -452,13 +619,46 @@ $featureDone = TaskPlanWorkflow::applyProgressPatch($featurePlan, [
     'acceptance_updates' => [
         ['id' => 'ut-plan-required', 'status' => 'passed', 'evidence' => 'task-plan-gate.php PASS'],
         ['id' => 'shentu-ui', 'status' => 'passed', 'evidence' => '审图 checklist pass；线稿+原型调整完成'],
+        ['id' => 'e2e-ui', 'status' => 'passed', 'evidence' => 'php bin/w e2e:run app/.../x.spec.js --project=chromium → passed(1)'],
+        ['id' => 'e2e-plan-suite', 'status' => 'passed', 'evidence' => 'php bin/w e2e:run x.spec.js y.spec.js → passed(2) 功能链路组测 suite'],
     ],
-    'huishen_notes' => '汇审：功能/原型/UI/审图/验收均已核对。',
+    'huishen_notes' => '汇审：功能/原型/UI/审图/e2e/计划组套件/验收均已核对。',
 ]);
 $featureReview = TaskPlanWorkflow::reviewCompleteness($featureDone);
 gateCheck(
     ($featureReview['closeout_allowed'] ?? false) === true,
-    'feature closeout allowed after shentu passed + 汇审',
+    'feature closeout allowed after shentu+e2e+plan-suite passed + 汇审',
+);
+
+$featureBadE2e = $featureDone;
+$featureBadE2e['acceptance'][2]['evidence'] = 'curl Runtime.evaluate browser clicked OK';
+$featureBadE2eReview = TaskPlanWorkflow::reviewCompleteness($featureBadE2e);
+$hasE2eEvidenceGap = false;
+foreach (is_array($featureBadE2eReview['gaps'] ?? null) ? $featureBadE2eReview['gaps'] : [] as $gap) {
+    if (is_array($gap) && ($gap['code'] ?? '') === 'e2e_evidence_weak') {
+        $hasE2eEvidenceGap = true;
+        break;
+    }
+}
+gateCheck(
+    ($featureBadE2eReview['closeout_allowed'] ?? true) === false && $hasE2eEvidenceGap,
+    'feature closeout blocked when e2e evidence is curl/CDP-only',
+);
+
+$featureSkippedE2e = $featureDone;
+$featureSkippedE2e['acceptance'][2]['status'] = 'skipped';
+$featureSkippedE2e['acceptance'][2]['evidence'] = 'N/A skip e2e for speed';
+$featureSkippedE2eReview = TaskPlanWorkflow::reviewCompleteness($featureSkippedE2e);
+$hasE2eSkippedGap = false;
+foreach (is_array($featureSkippedE2eReview['gaps'] ?? null) ? $featureSkippedE2eReview['gaps'] : [] as $gap) {
+    if (is_array($gap) && ($gap['code'] ?? '') === 'feature_e2e_incomplete') {
+        $hasE2eSkippedGap = true;
+        break;
+    }
+}
+gateCheck(
+    ($featureSkippedE2eReview['closeout_allowed'] ?? true) === false && $hasE2eSkippedGap,
+    'feature closeout blocked when e2e is skipped instead of passed',
 );
 
 $featureBadShentu = $featureDone;
@@ -548,6 +748,10 @@ $hasAcceptanceShentuRule = false;
 $hasHuishenRule = false;
 $hasBusinessScopeRule = false;
 $hasConfigEmbedDeclaredKeysRule = false;
+$hasUnifiedConfigTermsRule = false;
+$hasFeatureUiTopTabsRule = false;
+$hasForbidUserManualTestHandoffRule = false;
+$hasUiFeatureRequiresE2eRule = false;
 foreach (is_array($rules) ? $rules : [] as $rule) {
     if (!is_array($rule)) {
         continue;
@@ -588,6 +792,20 @@ foreach (is_array($rules) ? $rules : [] as $rule) {
     if (($rule['id'] ?? '') === 'systemconfig_config_embed_declared_keys') {
         $hasConfigEmbedDeclaredKeysRule = true;
     }
+    if (($rule['id'] ?? '') === 'systemconfig_unified_config_terms') {
+        $hasUnifiedConfigTermsRule = true;
+    }
+    if (($rule['id'] ?? '') === 'feature_ui_keep_simple_top_tabs') {
+        $hasFeatureUiTopTabsRule = true;
+    }
+    if (($rule['id'] ?? '') === 'forbid_user_manual_test_handoff') {
+        $hasForbidUserManualTestHandoffRule = true;
+    }
+    if (($rule['id'] ?? '') === 'ui_feature_requires_e2e'
+        && str_contains((string) ($rule['summary'] ?? ''), 'EVERY work_kind=feature')
+    ) {
+        $hasUiFeatureRequiresE2eRule = true;
+    }
 }
 gateCheck($hasTaskPlanRule, 'hard-constraints.v1 includes task_plan_before_edit');
 gateCheck($hasFullWorkflowRule, 'hard-constraints.v1 includes user_requirement_full_workflow');
@@ -597,10 +815,283 @@ gateCheck($hasArchitectureFirstRule, 'hard-constraints.v1 includes architecture_
 gateCheck($hasFrameworkDecoupledRule, 'hard-constraints.v1 includes framework_decoupled_only');
 gateCheck($hasRequirementScrutinyRule, 'hard-constraints.v1 includes requirement_framework_scrutiny');
 gateCheck($hasFeatureKindRule, 'hard-constraints.v1 includes requirement_feature_kind_gate');
+$hasImplicitRule = false;
+foreach ($rules as $rule) {
+    if (($rule['id'] ?? '') === 'requirement_implicit_analysis_skill_decision'
+        && str_contains((string) ($rule['summary'] ?? ''), 'ui_skill_decision')
+    ) {
+        $hasImplicitRule = true;
+        break;
+    }
+}
+gateCheck($hasImplicitRule, 'hard-constraints.v1 includes requirement_implicit_analysis_skill_decision');
 gateCheck($hasAcceptanceShentuRule, 'hard-constraints.v1 includes acceptance_phase_requires_shentu');
 gateCheck($hasHuishenRule, 'hard-constraints.v1 includes closeout_requires_huishen');
 gateCheck($hasBusinessScopeRule, 'hard-constraints.v1 includes weline_business_scope_hierarchy');
 gateCheck($hasConfigEmbedDeclaredKeysRule ?? false, 'hard-constraints.v1 includes systemconfig_config_embed_declared_keys');
+gateCheck($hasUnifiedConfigTermsRule, 'hard-constraints.v1 includes systemconfig_unified_config_terms');
+gateCheck($hasFeatureUiTopTabsRule, 'hard-constraints.v1 includes feature_ui_keep_simple_top_tabs');
+gateCheck($hasForbidUserManualTestHandoffRule, 'hard-constraints.v1 includes forbid_user_manual_test_handoff');
+gateCheck($hasUiFeatureRequiresE2eRule, 'hard-constraints.v1 ui_feature_requires_e2e covers EVERY feature');
+
+$hasPlanFullPathwaySuiteRule = false;
+foreach ($rules as $rule) {
+    if (($rule['id'] ?? '') === 'plan_full_pathway_e2e_suite'
+        && str_contains((string) ($rule['summary'] ?? ''), 'e2e-plan-suite')
+    ) {
+        $hasPlanFullPathwaySuiteRule = true;
+        break;
+    }
+}
+gateCheck($hasPlanFullPathwaySuiteRule, 'hard-constraints.v1 includes plan_full_pathway_e2e_suite');
+
+$rejectedFeatureWithoutPlanSuite = false;
+try {
+    TaskPlanGate::normalizeSubmission(array_merge($validPlan, [
+        'work_kind' => 'feature',
+        'ui_skill_decision' => 'skip',
+        'ui_skill_rationale' => '后端校验修复，无布局重设计，但仍属 feature 须 e2e 自测。',
+        'acceptance' => [
+            $validPlan['acceptance'][0],
+            [
+                'id' => 'e2e-only-chapter',
+                'type' => 'e2e',
+                'description' => 'Playwright 端到端跑通功能路径（前后端完整通路）',
+                'status' => 'pending',
+            ],
+        ],
+        'dev_tasks' => [
+            [
+                'id' => 'task-1',
+                'title' => 'Feature without plan suite',
+                'status' => 'pending',
+                'acceptance_ids' => ['ut-plan-required', 'e2e-only-chapter'],
+            ],
+        ],
+    ]));
+} catch (ToolException $e) {
+    $rejectedFeatureWithoutPlanSuite = $e->errorCode === TaskPlanGate::ERROR_PLAN_INVALID
+        && (str_contains($e->getMessage(), 'e2e-plan-suite') || str_contains($e->getMessage(), 'plan-level e2e suite'));
+}
+gateCheck($rejectedFeatureWithoutPlanSuite, 'feature requires plan-level e2e-plan-suite acceptance');
+
+$featureMissingSuiteCloseout = $featureDone;
+foreach ($featureMissingSuiteCloseout['acceptance'] as $i => $row) {
+    if (($row['id'] ?? '') === 'e2e-plan-suite') {
+        $featureMissingSuiteCloseout['acceptance'][$i]['status'] = 'pending';
+        $featureMissingSuiteCloseout['acceptance'][$i]['evidence'] = '';
+    }
+}
+$featureMissingSuiteReview = TaskPlanWorkflow::reviewCompleteness($featureMissingSuiteCloseout);
+$hasSuiteIncompleteGap = false;
+foreach (is_array($featureMissingSuiteReview['gaps'] ?? null) ? $featureMissingSuiteReview['gaps'] : [] as $gap) {
+    if (is_array($gap) && ($gap['code'] ?? '') === 'feature_plan_suite_e2e_incomplete') {
+        $hasSuiteIncompleteGap = true;
+        break;
+    }
+}
+gateCheck(
+    ($featureMissingSuiteReview['closeout_allowed'] ?? true) === false && $hasSuiteIncompleteGap,
+    'feature closeout blocked when plan suite e2e is not passed',
+);
+
+$hasPlanComplianceRule = false;
+foreach ($rules as $rule) {
+    if (($rule['id'] ?? '') === 'task_plan_compliance_review'
+        && str_contains((string) ($rule['summary'] ?? ''), 'ecommerce')
+        && str_contains((string) ($rule['summary'] ?? ''), 'closed-loop')
+    ) {
+        $hasPlanComplianceRule = true;
+        break;
+    }
+}
+gateCheck($hasPlanComplianceRule, 'hard-constraints.v1 includes task_plan_compliance_review');
+
+$rejectedMultiTaskNoChapter = false;
+try {
+    TaskPlanGate::normalizeSubmission(array_merge($validPlan, [
+        'dev_tasks' => [
+            ['id' => 'a', 'title' => 'First chunk', 'status' => 'pending'],
+            ['id' => 'b', 'title' => 'Second chunk', 'status' => 'pending'],
+        ],
+    ]));
+} catch (ToolException $e) {
+    $rejectedMultiTaskNoChapter = $e->errorCode === TaskPlanGate::ERROR_PLAN_INVALID
+        && str_contains($e->getMessage(), 'chapter-structured');
+}
+gateCheck($rejectedMultiTaskNoChapter, 'rejects multi-task plan without chapter-structured ids/titles');
+
+$chapterPlan = TaskPlanGate::normalizeSubmission(array_merge($validPlan, [
+    'acceptance' => [
+        $validPlan['acceptance'][0],
+        [
+            'id' => 'doc-ch2',
+            'type' => 'doc',
+            'description' => '章节2文档对齐',
+            'status' => 'pending',
+        ],
+    ],
+    'dev_tasks' => [
+        [
+            'id' => 'ch1-gate',
+            'title' => '章节1：门禁 UT 闭环',
+            'status' => 'pending',
+            'notes' => '验收 UT PASS',
+            'acceptance_ids' => ['ut-plan-required'],
+        ],
+        [
+            'id' => 'ch2-docs',
+            'title' => '章节2：文档对齐闭环',
+            'status' => 'pending',
+            'notes' => '验收 doc 对齐',
+            'acceptance_ids' => ['doc-ch2'],
+        ],
+    ],
+]));
+$chapterReview = TaskPlanWorkflow::reviewCompleteness($chapterPlan);
+gateCheck(
+    is_array($chapterReview['compliance_dimensions'] ?? null)
+        && ($chapterReview['compliance_dimensions']['architecture']['status'] ?? '') === 'pass'
+        && ($chapterReview['compliance_dimensions']['logic_closed_loop']['status'] ?? '') === 'pass'
+        && ($chapterReview['summary']['plan_compliance_ok'] ?? false) === true,
+    'chaptered plan exposes compliance_dimensions and passes closed-loop checks',
+);
+
+$seqRejected = false;
+try {
+    TaskPlanWorkflow::applyProgressPatch($chapterPlan, [
+        'dev_task_updates' => [
+            ['id' => 'ch2-docs', 'status' => 'in_progress'],
+        ],
+    ]);
+} catch (ToolException $e) {
+    $seqRejected = $e->errorCode === TaskPlanGate::ERROR_PLAN_INVALID
+        && str_contains($e->getMessage(), '上一章节');
+}
+gateCheck($seqRejected, 'blocks starting next chapter before prior chapter is done');
+
+$doneWithoutAccRejected = false;
+try {
+    TaskPlanWorkflow::applyProgressPatch($chapterPlan, [
+        'dev_task_updates' => [
+            ['id' => 'ch1-gate', 'status' => 'done', 'notes' => 'UT PASS'],
+        ],
+    ]);
+} catch (ToolException $e) {
+    $doneWithoutAccRejected = $e->errorCode === TaskPlanGate::ERROR_PLAN_INVALID
+        && (
+            str_contains($e->getMessage(), 'bound acceptances')
+            || str_contains($e->getMessage(), '已标 done')
+            || str_contains($e->getMessage(), 'acceptance_ids')
+            || str_contains($e->getMessage(), '绑定验收')
+        );
+}
+gateCheck($doneWithoutAccRejected, 'blocks chapter done before bound acceptances passed');
+
+$ch1Done = TaskPlanWorkflow::applyProgressPatch($chapterPlan, [
+    'acceptance_updates' => [
+        ['id' => 'ut-plan-required', 'status' => 'passed', 'evidence' => 'task-plan-gate.php PASS'],
+    ],
+    'dev_task_updates' => [
+        ['id' => 'ch1-gate', 'status' => 'done', 'notes' => 'UT PASS'],
+    ],
+]);
+$ch2Started = TaskPlanWorkflow::applyProgressPatch($ch1Done, [
+    'dev_task_updates' => [
+        ['id' => 'ch2-docs', 'status' => 'in_progress'],
+    ],
+]);
+gateCheck(
+    ($ch2Started['dev_tasks'][1]['status'] ?? '') === 'in_progress',
+    'allows next chapter in_progress after prior chapter done',
+);
+
+$rejectedNoAcceptanceIds = false;
+try {
+    TaskPlanGate::normalizeSubmission(array_merge($validPlan, [
+        'dev_tasks' => [
+            ['id' => 'task-1', 'title' => 'Missing binding', 'status' => 'pending'],
+        ],
+    ]));
+} catch (ToolException $e) {
+    $rejectedNoAcceptanceIds = $e->errorCode === TaskPlanGate::ERROR_PLAN_INVALID
+        && str_contains($e->getMessage(), 'acceptance_ids');
+}
+gateCheck($rejectedNoAcceptanceIds, 'rejects tasks without acceptance_ids binding');
+
+$rejectedSharedE2e = false;
+try {
+    TaskPlanGate::normalizeSubmission(array_merge($validPlan, [
+        'work_kind' => 'feature',
+        'ui_skill_decision' => 'skip',
+        'ui_skill_rationale' => '后端接线为主，无布局重设计，跳过原型与 UI 技能。',
+        'acceptance' => [
+            $validPlan['acceptance'][0],
+            [
+                'id' => 'e2e-shared',
+                'type' => 'e2e',
+                'description' => 'Playwright 端到端跑通功能路径（前后端完整通路）',
+                'status' => 'pending',
+            ],
+            [
+                'id' => 'e2e-only-ch2',
+                'type' => 'e2e',
+                'description' => 'Playwright ch2 端到端完整通路',
+                'status' => 'pending',
+            ],
+            [
+                'id' => 'e2e-plan-suite',
+                'type' => 'e2e',
+                'description' => '计划级功能链路 e2e 组套件统一组测',
+                'status' => 'pending',
+            ],
+        ],
+        'dev_tasks' => [
+            [
+                'id' => 'ch1-a',
+                'title' => '章节1：功能 A e2e 闭环',
+                'status' => 'pending',
+                'acceptance_ids' => ['ut-plan-required', 'e2e-shared'],
+                'covers_requirements' => ['Every user requirement'],
+            ],
+            [
+                'id' => 'ch2-b',
+                'title' => '章节2：功能 B e2e 闭环',
+                'status' => 'pending',
+                'acceptance_ids' => ['e2e-shared'],
+                'covers_requirements' => ['Every user requirement'],
+            ],
+        ],
+    ]));
+} catch (ToolException $e) {
+    $rejectedSharedE2e = $e->errorCode === TaskPlanGate::ERROR_PLAN_INVALID
+        && (str_contains($e->getMessage(), '共用') || str_contains($e->getMessage(), 'share') || str_contains($e->getMessage(), '已被'));
+}
+gateCheck($rejectedSharedE2e, 'rejects chapters sharing the same e2e acceptance');
+
+$ecommerceRejected = false;
+try {
+    TaskPlanGate::normalizeSubmission(array_merge($validPlan, [
+        'goal' => 'Fix checkout payment button on storefront',
+        'requirements' => ['修复结账页支付按钮'],
+        'architecture' => 'Map requirements to Weline_Checkout controller patch using framework 扩展点选型 with decoupled Event observer; module boundary Checkout; extension none:controller-fix.',
+    ]));
+} catch (ToolException $e) {
+    $ecommerceRejected = $e->errorCode === TaskPlanGate::ERROR_PLAN_INVALID
+        && str_contains($e->getMessage(), 'ecommerce compliance');
+}
+gateCheck($ecommerceRejected, 'rejects ecommerce-touched plan without compliance notes');
+
+$ecommerceOk = TaskPlanGate::normalizeSubmission(array_merge($validPlan, [
+    'goal' => 'Fix checkout payment button on storefront',
+    'requirements' => ['修复结账页支付按钮'],
+    'architecture' => 'Map requirements to Weline_Checkout using framework 扩展点选型 with decoupled Payment shell Provider; ecommerce 合规含站店渠 scope 与 SystemConfig；module boundary Checkout.',
+    'implicit_requirements' => ['结账触及 Payment shell 与站店渠继承，须 ACL/i18n 对齐'],
+]));
+gateCheck(
+    ($ecommerceOk['status'] ?? '') === 'accepted',
+    'accepts ecommerce plan when compliance signals present',
+);
 
 $contract = \LearningMcp\GuidanceWorkflowCatalog::contract();
 gateCheck(
@@ -609,8 +1100,9 @@ gateCheck(
         && in_array('work_kind_feature_or_non_feature_classified', is_array($contract['mandatory_before_code'] ?? null) ? $contract['mandatory_before_code'] : [], true)
         && in_array('requirement_framework_scrutiny', is_array($contract['mandatory_before_code'] ?? null) ? $contract['mandatory_before_code'] : [], true)
         && in_array('architecture_mapped_to_requirements', is_array($contract['mandatory_before_code'] ?? null) ? $contract['mandatory_before_code'] : [], true)
-        && in_array('framework_decoupled_design', is_array($contract['mandatory_before_code'] ?? null) ? $contract['mandatory_before_code'] : [], true),
-    'workflow_contract.mandatory_before_code includes work_kind, requirement analysis, scrutiny, architecture mapping, framework_decoupled_design and submit_task_plan_accepted',
+        && in_array('framework_decoupled_design', is_array($contract['mandatory_before_code'] ?? null) ? $contract['mandatory_before_code'] : [], true)
+        && in_array('plan_compliance_dimensions_reviewed', is_array($contract['mandatory_before_code'] ?? null) ? $contract['mandatory_before_code'] : [], true),
+    'workflow_contract.mandatory_before_code includes work_kind, requirement analysis, scrutiny, architecture mapping, framework_decoupled_design, plan_compliance and submit_task_plan_accepted',
 );
 gateCheck(
     in_array('requirement_scrutiny_reported', is_array($contract['mandatory_before_closeout'] ?? null) ? $contract['mandatory_before_closeout'] : [], true)

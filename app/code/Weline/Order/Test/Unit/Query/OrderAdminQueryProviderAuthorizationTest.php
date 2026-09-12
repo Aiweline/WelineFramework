@@ -38,7 +38,7 @@ final class OrderAdminQueryProviderAuthorizationTest extends TestCase
         }
 
         $this->expectException(\InvalidArgumentException::class);
-        $provider->execute('adminRequest', ['url' => '/weline_order/backend/order/save']);
+        $provider->execute('adminRequest', ['url' => '/order/backend/order/save']);
     }
 
     public function testTypedDeleteChecksGlobalDeleteGrantBeforeControllerInvocation(): void

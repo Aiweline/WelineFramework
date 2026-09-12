@@ -131,6 +131,7 @@ final class B2BOrderHang
         ?int $inventoryReservedAtEpoch = null,
         ?int $inventoryExpiresAtEpoch = null,
         ?int $updatedAtEpoch = null,
+        ?int $balanceAmountMinor = null,
     ): self {
         return new self(
             hangId: $this->hangId,
@@ -140,7 +141,7 @@ final class B2BOrderHang
             hangStatus: $hangStatus ?? $this->hangStatus,
             goodsSubtotalTaxedMinor: $this->goodsSubtotalTaxedMinor,
             depositAmountMinor: $this->depositAmountMinor,
-            balanceAmountMinor: $this->balanceAmountMinor,
+            balanceAmountMinor: $balanceAmountMinor ?? $this->balanceAmountMinor,
             shippingAmountMinor: $this->shippingAmountMinor,
             isShippingOwner: $this->isShippingOwner,
             depositRatioBps: $this->depositRatioBps,

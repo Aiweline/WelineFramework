@@ -1,7 +1,7 @@
 /** @weline-e2e-spec { module: Weline_Payment, type: flow, layer: backend } */
 const path = require('path');
 const { spawnSync } = require('child_process');
-const { test, expect, loginAsAdmin, moduleDescribe, moduleCase, installBackendBrowserGuards, openBackendMenuBySource } = require('../../../../../../../tests/e2e/framework');
+const { test, expect, loginAsAdmin, gotoBackend, buildModuleBackendRoute, moduleDescribe, moduleCase, installBackendBrowserGuards, openBackendMenuBySource, waitForBackendShellReady } = require('../../../../../../../tests/e2e/framework');
 const MODULE = 'Weline_Payment';
 const PARENT = 'Weline_Backend::payment_group';
 const FIXTURE = path.join(__dirname, 'Weline_Payment-r43-write-fixture.php');
@@ -24,6 +24,63 @@ moduleDescribe(test, MODULE, 'R4.3 支付后台菜单', () => {
     const guards = installBackendBrowserGuards(page);
     await loginAsAdmin(page);
     await openBackendMenuBySource(page, source, { parentSources: [PARENT], title, pageAnchor: `[data-testid="${anchor}"]` });
+    guards.assertClean();
+  });
+
+  moduleCase(test, { module: MODULE, id: 'CK-R43-PAYMENT-INVARIANT-TONE-001' }, '支付诊断不变量按主题语义色等级着色', async ({ page }) => {
+    const guards = installBackendBrowserGuards(page);
+    await loginAsAdmin(page, { timeout: 90000, settleMs: 1200, useProxy: false });
+    const routes = [
+      `${buildModuleBackendRoute(MODULE, 'dashboard/index')}?target_scope=default.default.default`,
+      `${buildModuleBackendRoute(MODULE, 'dashboard')}?target_scope=default.default.default`,
+      'payment/backend/dashboard/index?target_scope=default.default.default',
+    ];
+    let opened = false;
+    let lastBody = '';
+    for (const route of routes) {
+      await gotoBackend(page, route, { timeout: 90000, settleMs: 1200, useProxy: false });
+      await waitForBackendShellReady(page);
+      lastBody = await page.locator('body').innerText().catch(() => '');
+      if (/未登录|后台登录/.test(lastBody)) {
+        await loginAsAdmin(page, { timeout: 90000, settleMs: 1200, useProxy: false });
+        await gotoBackend(page, route, { timeout: 90000, settleMs: 1200, useProxy: false });
+        await waitForBackendShellReady(page);
+        lastBody = await page.locator('body').innerText().catch(() => '');
+      }
+      const hasAnchor =
+        (await page.getByTestId('payment-diagnostics-management').count()) > 0
+        || (await page.getByTestId('payment-invariant-row').count()) > 0
+        || /支付对账不变量/.test(lastBody);
+      if (hasAnchor) {
+        opened = true;
+        break;
+      }
+    }
+    expect(opened, `dashboard not opened; body=${lastBody.slice(0, 400)}`).toBeTruthy();
+    const rows = page.locator('[data-testid="payment-invariant-row"]');
+    await expect(rows.first()).toBeVisible({ timeout: 30000 });
+    const rowCount = await rows.count();
+    expect(rowCount).toBeGreaterThan(0);
+    const allowed = new Set(['danger', 'warning', 'success', 'info', 'muted']);
+    for (let i = 0; i < rowCount; i += 1) {
+      const row = rows.nth(i);
+      const level = await row.getAttribute('data-invariant-level');
+      expect(allowed.has(String(level))).toBeTruthy();
+      const statusTone = await row.getByTestId('payment-invariant-status').getAttribute('data-tone');
+      const strategyTone = await row.getByTestId('payment-invariant-strategy').getAttribute('data-tone');
+      const countTone = await row.getByTestId('payment-invariant-count').getAttribute('data-tone');
+      expect(statusTone).toBe(level);
+      expect(allowed.has(String(strategyTone))).toBeTruthy();
+      expect(allowed.has(String(countTone))).toBeTruthy();
+      const strategyText = (await row.getByTestId('payment-invariant-strategy').innerText()).trim();
+      if (/双人授权/.test(strategyText)) {
+        expect(strategyTone).toBe('warning');
+        expect(['danger', 'success']).toContain(statusTone);
+      } else {
+        expect(strategyTone).toBe('info');
+        expect(['warning', 'success']).toContain(statusTone);
+      }
+    }
     guards.assertClean();
   });
 

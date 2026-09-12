@@ -86,7 +86,10 @@
         }
 
         var widgets = Array.prototype.filter.call(extras.children, function (node) {
-            return node.nodeType === 1 && !node.matches('[data-mini-cart-extras-tabs]');
+            // 跳过已 hidden 的槽（例：零售结账隐藏批发信用），避免仍生成对应页签按钮。
+            return node.nodeType === 1
+                && !node.matches('[data-mini-cart-extras-tabs]')
+                && !node.hidden;
         });
         if (!widgets.length) {
             return;
@@ -149,6 +152,25 @@
         window.dispatchEvent(new CustomEvent('weshop:mini-cart:extras-ready'));
     }
 
+    function rebuildExtras(extras) {
+        if (!extras) {
+            return;
+        }
+        var shell = extras.querySelector('[data-mini-cart-extras-tabs]');
+        if (shell) {
+            var panels = shell.querySelectorAll('[data-mini-cart-extras-panel]');
+            panels.forEach(function (panel) {
+                while (panel.firstChild) {
+                    extras.insertBefore(panel.firstChild, shell);
+                }
+            });
+            shell.remove();
+        }
+        extras.removeAttribute('data-extras-tabs-init');
+        extras.classList.remove('mini-cart-drawer__extras--compact');
+        initExtras(extras);
+    }
+
     function boot() {
         document.querySelectorAll('.mini-cart-drawer__extras, [data-cart-summary-extras="1"]').forEach(initExtras);
     }
@@ -164,6 +186,7 @@
 
     window.WelineMiniCartExtras = {
         boot: boot,
-        initExtras: initExtras
+        initExtras: initExtras,
+        rebuild: rebuildExtras
     };
 })();

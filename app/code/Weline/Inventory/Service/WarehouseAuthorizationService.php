@@ -25,6 +25,10 @@ final class WarehouseAuthorizationService
     public const ERROR_DEFAULT_REQUIRES_LOGICAL = 'inventory_warehouse_default_requires_logical';
     public const ERROR_DEFAULT_CONFLICT = 'inventory_warehouse_default_conflict';
     public const ERROR_WRITE_CONFLICT = 'inventory_warehouse_authorization_write_conflict';
+    public const ERROR_SEED_LOCKED = 'inventory_warehouse_authorization_seed_locked';
+    public const DEFAULT_SITE_WEBSITE_ID = 0;
+    public const DEFAULT_SITE_STORE_ID = 0;
+    public const DEFAULT_LOGICAL_CODE = 'SYS-DEFAULT';
 
     /** @var array<string, array<string, mixed>>|null */
     private ?array $grants = null;
@@ -84,7 +88,7 @@ final class WarehouseAuthorizationService
         $code = trim((string)($warehouse[Warehouse::schema_fields_WAREHOUSE_CODE] ?? ''));
         $name = trim((string)($warehouse[Warehouse::schema_fields_NAME] ?? ''));
         if ($websiteId < 0 || $code === '' || $name === '') {
-            throw new \InvalidArgumentException(__('仓 website_id、代码和名称不能为空'));
+            throw new \InvalidArgumentException(self::t('仓 website_id、代码和名称不能为空'));
         }
 
         $now = date('Y-m-d H:i:s');
@@ -99,7 +103,7 @@ final class WarehouseAuthorizationService
         $warehouseId = (int)$model->getId();
         $loaded = $this->loadWarehouse($warehouseId);
         if ($loaded === null) {
-            throw new \RuntimeException(__('仓写入后无法回读：%{1}', [$warehouseId]));
+            throw new \RuntimeException(self::t('仓写入后无法回读：%{1}', [$warehouseId]));
         }
 
         return $loaded;
@@ -132,7 +136,7 @@ final class WarehouseAuthorizationService
         if (!$result['ok']) {
             throw new InventoryConflictException(
                 (string) $result['error'],
-                __('仓授权被拒绝'),
+                self::t('仓授权被拒绝'),
                 ['website_id' => $websiteId, 'store_id' => $storeId, 'warehouse_id' => $warehouseId],
             );
         }
@@ -153,7 +157,7 @@ final class WarehouseAuthorizationService
     }
 
     /**
-     * @param array{website_id:int,store_id:int,warehouse_id:int,store_mode?:string,is_default?:bool} $binding
+     * @param array{website_id:int,store_id:int,warehouse_id:int,store_mode?:string,is_default?:bool,is_seed?:bool} $binding
      * @return array<string, mixed>
      */
     public function bind(array $binding): array
@@ -162,32 +166,33 @@ final class WarehouseAuthorizationService
         $storeId = (int) ($binding['store_id'] ?? 0);
         $warehouseId = (int) ($binding['warehouse_id'] ?? 0);
         $isDefault = (bool) ($binding['is_default'] ?? false);
+        $isSeed = (bool) ($binding['is_seed'] ?? false);
         if ($websiteId < 0 || $storeId < 0 || $warehouseId <= 0) {
-            throw new InventoryConflictException(self::ERROR_NOT_AUTHORIZED, __('仓授权 Scope 无效'));
+            throw new InventoryConflictException(self::ERROR_NOT_AUTHORIZED, self::t('仓授权 Scope 无效'));
         }
 
         if ($this->warehouses !== null && $this->grants !== null) {
             $storeMode = (string) ($binding['store_mode'] ?? '');
-            return $this->bindMemory($websiteId, $storeId, $storeMode, $warehouseId, $isDefault);
+            return $this->bindMemory($websiteId, $storeId, $storeMode, $warehouseId, $isDefault, $isSeed);
         }
 
         $store = $this->storeCatalog()->byId($storeId);
         if ($store === null) {
             throw new InventoryConflictException(
                 self::ERROR_NOT_AUTHORIZED,
-                __('Store 不存在：%{1}', [$storeId]),
+                self::t('Store 不存在：%{1}', [$storeId]),
             );
         }
         if ($store->websiteId !== $websiteId) {
             throw new InventoryConflictException(
                 self::ERROR_WEBSITE_MISMATCH,
-                __('Store 与仓不属于同一 Website'),
+                self::t('Store 与仓不属于同一 Website'),
             );
         }
         if (!$store->enabled || $store->lifecycleStatus !== 'active' || $store->tombstonedAt !== null) {
             throw new InventoryConflictException(
                 self::ERROR_STORE_INACTIVE,
-                __('Store %{1} 已停用或不在 active 生命周期', [$storeId]),
+                self::t('Store %{1} 已停用或不在 active 生命周期', [$storeId]),
             );
         }
         $requiredWarehouseMode = $this->warehouseModeForStore($store->storeMode);
@@ -200,7 +205,81 @@ final class WarehouseAuthorizationService
             $store->storeMode,
             $warehouseId,
             $isDefault,
+            $isSeed,
         );
+    }
+
+    /**
+     * Ensure default website/store seed authorization matrix (idempotent).
+     * Mounts seed leaf warehouses under store 0 and keeps one default logical seed.
+     *
+     * @return array<string, mixed>
+     */
+    public function ensureDefaultSiteAuthorization(): array
+    {
+        $websiteId = self::DEFAULT_SITE_WEBSITE_ID;
+        $storeId = self::DEFAULT_SITE_STORE_ID;
+        if ($this->warehouses !== null && $this->grants !== null) {
+            return $this->ensureDefaultSiteAuthorizationMemory();
+        }
+
+        $store = $this->storeCatalog()->byId($storeId);
+        if ($store === null || $store->websiteId !== $websiteId) {
+            throw new InventoryConflictException(
+                self::ERROR_NOT_AUTHORIZED,
+                self::t('默认店铺不可用于仓授权种子'),
+            );
+        }
+        $mode = $this->warehouseModeForStore($store->storeMode);
+        $this->ensureSeedWarehouseTree($websiteId, $mode);
+        $default = $this->ensureDefaultLogicalSeedBinding($websiteId, $storeId, $store->storeMode, $mode);
+        $this->ensureSeedLeafAuthorizations($websiteId, $storeId, $store->storeMode);
+
+        return $default;
+    }
+
+    /** @return array{mounted:int,default_authorization_id:int} */
+    public function ensureDefaultStoreWarehouseMount(): array
+    {
+        $default = $this->ensureDefaultSiteAuthorization();
+
+        return [
+            'mounted' => $this->countSeedAuthorizations(
+                self::DEFAULT_SITE_WEBSITE_ID,
+                self::DEFAULT_SITE_STORE_ID,
+            ),
+            'default_authorization_id' => (int) ($default[WarehouseStoreAuthorization::schema_fields_ID] ?? 0),
+        ];
+    }
+
+    public function deleteAuthorization(int $websiteId, int $authorizationId): void
+    {
+        if ($websiteId < 0 || $authorizationId <= 0) {
+            throw new \InvalidArgumentException(self::t('删除仓授权参数无效'));
+        }
+        if ($this->grants !== null) {
+            $this->deleteAuthorizationMemory($websiteId, $authorizationId);
+            return;
+        }
+        $model = $this->newAuthorization();
+        $model->clear()
+            ->where(WarehouseStoreAuthorization::schema_fields_ID, $authorizationId)
+            ->where(WarehouseStoreAuthorization::schema_fields_WEBSITE_ID, $websiteId)
+            ->find()
+            ->fetch();
+        if (!$model->getId()) {
+            throw new \InvalidArgumentException(self::t('仓授权不存在'));
+        }
+        if ((int) $model->getData(WarehouseStoreAuthorization::schema_fields_IS_SEED) === 1) {
+            throw new InventoryConflictException(
+                self::ERROR_SEED_LOCKED,
+                self::t('系统种子授权不允许删除'),
+            );
+        }
+        $model->clear()
+            ->where(WarehouseStoreAuthorization::schema_fields_ID, $authorizationId)
+            ->where(WarehouseStoreAuthorization::schema_fields_WEBSITE_ID, $websiteId)
+            ->delete();
     }
 
     /** @return array<string, mixed> */
@@ -240,6 +319,7 @@ final class WarehouseAuthorizationService
         string $storeMode,
         int $warehouseId,
         bool $isDefault,
+        bool $isSeed = false,
     ): array {
         $requiredWarehouseMode = $this->warehouseModeForStore($storeMode);
         $warehouse = $this->warehouses[(string) $warehouseId] ?? null;
@@ -250,30 +330,46 @@ final class WarehouseAuthorizationService
             if ((bool) ($existing['is_default'] ?? false) !== $isDefault) {
                 throw new InventoryConflictException(
                     self::ERROR_DEFAULT_CONFLICT,
-                    __('仓授权请求与既有绑定冲突'),
+                    self::t('仓授权请求与既有绑定冲突'),
                 );
+            }
+            if ($isSeed && (int) ($existing['is_seed'] ?? 0) !== 1) {
+                $existing['is_seed'] = 1;
+                $this->grants[$key] = $existing;
             }
             return $existing;
         }
         if ($isDefault) {
-            foreach ($this->grants as $grant) {
+            foreach ($this->grants as $grantKey => $grant) {
                 if ((int) $grant['website_id'] === $websiteId
                     && (int) $grant['store_id'] === $storeId
                     && (bool) ($grant['is_default'] ?? false)
                 ) {
+                    if ((int) ($grant['is_seed'] ?? 0) === 1
+                        && (int) $grant['warehouse_id'] !== $warehouseId
+                    ) {
+                        unset($this->grants[$grantKey]);
+                        $grant['warehouse_id'] = $warehouseId;
+                        $grant['store_mode_snapshot'] = $storeMode;
+                        $grant['is_seed'] = 1;
+                        $this->grants[$this->grantKey($websiteId, $storeId, $warehouseId)] = $grant;
+                        return $grant;
+                    }
                     throw new InventoryConflictException(
                         self::ERROR_DEFAULT_CONFLICT,
-                        __('Store 已存在不同的默认逻辑仓'),
+                        self::t('Store 已存在不同的默认逻辑仓'),
                     );
                 }
             }
         }
         $row = [
+            'authorization_id' => count($this->grants) + 1,
             'website_id' => $websiteId,
             'store_id' => $storeId,
             'warehouse_id' => $warehouseId,
             'store_mode_snapshot' => $storeMode,
             'is_default' => $isDefault ? 1 : 0,
+            'is_seed' => $isSeed ? 1 : 0,
             'enabled' => 1,
         ];
         $this->grants[$key] = $row;
@@ -288,27 +384,27 @@ final class WarehouseAuthorizationService
         bool $isDefault,
     ): void {
         if ($warehouse === null) {
-            throw new InventoryConflictException(self::ERROR_NOT_AUTHORIZED, __('仓不存在'));
+            throw new InventoryConflictException(self::ERROR_NOT_AUTHORIZED, self::t('仓不存在'));
         }
         if ((int) ($warehouse[Warehouse::schema_fields_WEBSITE_ID] ?? -1) !== $websiteId) {
             throw new InventoryConflictException(
                 self::ERROR_WEBSITE_MISMATCH,
-                __('Store 与仓不属于同一 Website'),
+                self::t('Store 与仓不属于同一 Website'),
             );
         }
         if ((int) ($warehouse[Warehouse::schema_fields_ENABLED] ?? 0) !== 1) {
-            throw new InventoryConflictException(self::ERROR_DISABLED, __('仓已停用'));
+            throw new InventoryConflictException(self::ERROR_DISABLED, self::t('仓已停用'));
         }
         if ((string) ($warehouse[Warehouse::schema_fields_MODE] ?? '') !== $requiredWarehouseMode) {
             throw new InventoryConflictException(
                 self::ERROR_MODE_MISMATCH,
-                __('Store 环境与仓模式不兼容'),
+                self::t('Store 环境与仓模式不兼容'),
             );
         }
         if ($isDefault && !$this->isLogicalWarehouse($warehouse)) {
             throw new InventoryConflictException(
                 self::ERROR_DEFAULT_REQUIRES_LOGICAL,
-                __('默认仓必须是逻辑仓'),
+                self::t('默认仓必须是逻辑仓'),
             );
         }
     }
@@ -320,7 +416,7 @@ final class WarehouseAuthorizationService
             'dev', 'test' => Warehouse::MODE_TEST,
             default => throw new InventoryConflictException(
                 self::ERROR_STORE_MODE_INVALID,
-                __('Store mode 不受支持：%{1}', [$storeMode]),
+                self::t('Store mode 不受支持：%{1}', [$storeMode]),
             ),
         };
     }
@@ -340,6 +436,7 @@ final class WarehouseAuthorizationService
         string $storeMode,
         int $warehouseId,
         bool $isDefault,
+        bool $isSeed = false,
     ): array {
         $existing = $this->findAuthorization($websiteId, $storeId, $warehouseId);
         if ($existing !== null) {
@@ -348,8 +445,11 @@ final class WarehouseAuthorizationService
             ) {
                 throw new InventoryConflictException(
                     self::ERROR_DEFAULT_CONFLICT,
-                    __('仓授权请求与既有绑定冲突'),
+                    self::t('仓授权请求与既有绑定冲突'),
                 );
+            }
+            if ($isSeed && (int) ($existing[WarehouseStoreAuthorization::schema_fields_IS_SEED] ?? 0) !== 1) {
+                return $this->markAuthorizationSeed($existing);
             }
             return $existing;
         }
@@ -359,9 +459,12 @@ final class WarehouseAuthorizationService
                 && (int) $default[WarehouseStoreAuthorization::schema_fields_WAREHOUSE_ID]
                     !== $warehouseId
             ) {
+                if ((int) ($default[WarehouseStoreAuthorization::schema_fields_IS_SEED] ?? 0) === 1) {
+                    return $this->rebindSeedDefault($default, $warehouseId, $storeMode);
+                }
                 throw new InventoryConflictException(
                     self::ERROR_DEFAULT_CONFLICT,
-                    __('Store 已存在不同的默认逻辑仓'),
+                    self::t('Store 已存在不同的默认逻辑仓'),
                 );
             }
         }
@@ -376,6 +479,7 @@ final class WarehouseAuthorizationService
                 WarehouseStoreAuthorization::schema_fields_STORE_MODE_SNAPSHOT => $storeMode,
                 WarehouseStoreAuthorization::schema_fields_IS_DEFAULT => $isDefault ? 1 : 0,
                 WarehouseStoreAuthorization::schema_fields_ENABLED => 1,
+                WarehouseStoreAuthorization::schema_fields_IS_SEED => $isSeed ? 1 : 0,
                 WarehouseStoreAuthorization::schema_fields_AUTHORIZATION_VERSION => 0,
                 WarehouseStoreAuthorization::schema_fields_CREATED_AT => $now,
                 WarehouseStoreAuthorization::schema_fields_UPDATED_AT => $now,
@@ -392,16 +496,326 @@ final class WarehouseAuthorizationService
             if ($isDefault && $this->findDefaultAuthorization($websiteId, $storeId) !== null) {
                 throw new InventoryConflictException(
                     self::ERROR_DEFAULT_CONFLICT,
-                    __('Store 已存在不同的默认逻辑仓'),
+                    self::t('Store 已存在不同的默认逻辑仓'),
                     previous: $exception,
                 );
             }
             throw new InventoryConflictException(
                 self::ERROR_WRITE_CONFLICT,
-                __('仓授权写入冲突'),
+                self::t('仓授权写入冲突'),
                 previous: $exception,
             );
         }
+    }
+
+    /**
+     * @param array<string, mixed> $seed
+     * @return array<string, mixed>
+     */
+    private function rebindSeedDefault(array $seed, int $warehouseId, string $storeMode): array
+    {
+        $authorizationId = (int) ($seed[WarehouseStoreAuthorization::schema_fields_ID] ?? 0);
+        $websiteId = (int) ($seed[WarehouseStoreAuthorization::schema_fields_WEBSITE_ID] ?? -1);
+        $storeId = (int) ($seed[WarehouseStoreAuthorization::schema_fields_STORE_ID] ?? -1);
+        if ($authorizationId <= 0 || $websiteId < 0 || $storeId < 0) {
+            throw new InventoryConflictException(self::ERROR_WRITE_CONFLICT, self::t('种子授权改绑失败'));
+        }
+        $collision = $this->findAuthorization($websiteId, $storeId, $warehouseId);
+        if ($collision !== null
+            && (int) ($collision[WarehouseStoreAuthorization::schema_fields_ID] ?? 0) !== $authorizationId
+        ) {
+            $this->newAuthorization()->clear()
+                ->where(
+                    WarehouseStoreAuthorization::schema_fields_ID,
+                    (int) $collision[WarehouseStoreAuthorization::schema_fields_ID],
+                )
+                ->delete();
+        }
+        $version = max(0, (int) ($seed[WarehouseStoreAuthorization::schema_fields_AUTHORIZATION_VERSION] ?? 0)) + 1;
+        $now = date('Y-m-d H:i:s');
+        $this->newAuthorization()->clear()
+            ->where(WarehouseStoreAuthorization::schema_fields_ID, $authorizationId)
+            ->update([
+                WarehouseStoreAuthorization::schema_fields_WAREHOUSE_ID => $warehouseId,
+                WarehouseStoreAuthorization::schema_fields_STORE_MODE_SNAPSHOT => $storeMode,
+                WarehouseStoreAuthorization::schema_fields_IS_SEED => 1,
+                WarehouseStoreAuthorization::schema_fields_AUTHORIZATION_VERSION => $version,
+                WarehouseStoreAuthorization::schema_fields_UPDATED_AT => $now,
+            ])
+            ->fetch();
+        $reloaded = $this->findAuthorization($websiteId, $storeId, $warehouseId);
+        if ($reloaded === null) {
+            throw new InventoryConflictException(self::ERROR_WRITE_CONFLICT, self::t('种子授权改绑后无法回读'));
+        }
+        return $reloaded;
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     * @return array<string, mixed>
+     */
+    private function markAuthorizationSeed(array $row): array
+    {
+        $authorizationId = (int) ($row[WarehouseStoreAuthorization::schema_fields_ID] ?? 0);
+        if ($authorizationId <= 0) {
+            return $row;
+        }
+        if ((int) ($row[WarehouseStoreAuthorization::schema_fields_IS_SEED] ?? 0) === 1) {
+            return $row;
+        }
+        $now = date('Y-m-d H:i:s');
+        $this->newAuthorization()->clear()
+            ->where(WarehouseStoreAuthorization::schema_fields_ID, $authorizationId)
+            ->update([
+                WarehouseStoreAuthorization::schema_fields_IS_SEED => 1,
+                WarehouseStoreAuthorization::schema_fields_UPDATED_AT => $now,
+            ])
+            ->fetch();
+        $row[WarehouseStoreAuthorization::schema_fields_IS_SEED] = 1;
+        $row[WarehouseStoreAuthorization::schema_fields_UPDATED_AT] = $now;
+        return $row;
+    }
+
+    /** @return array<string, mixed> */
+    private function ensureDefaultLogicalWarehouse(int $websiteId, string $mode): array
+    {
+        $existing = $this->findDefaultLogicalWarehouse($websiteId, $mode);
+        if ($existing !== null) {
+            if ((int) ($existing[Warehouse::schema_fields_IS_SEED] ?? 0) !== 1) {
+                $this->newWarehouse()->clear()
+                    ->where(Warehouse::schema_fields_ID, (int) $existing[Warehouse::schema_fields_ID])
+                    ->update([
+                        Warehouse::schema_fields_IS_SEED => 1,
+                        Warehouse::schema_fields_UPDATED_AT => date('Y-m-d H:i:s'),
+                    ])
+                    ->fetch();
+                $existing[Warehouse::schema_fields_IS_SEED] = 1;
+            }
+            return $existing;
+        }
+
+        return $this->createWarehouse([
+            Warehouse::schema_fields_WEBSITE_ID => $websiteId,
+            Warehouse::schema_fields_PARENT_ID => 0,
+            Warehouse::schema_fields_NODE_KIND => Warehouse::NODE_WAREHOUSE,
+            Warehouse::schema_fields_WAREHOUSE_CODE => self::DEFAULT_LOGICAL_CODE,
+            Warehouse::schema_fields_NAME => '系统默认逻辑仓',
+            Warehouse::schema_fields_MODE => $mode,
+            Warehouse::schema_fields_WAREHOUSE_TYPE => Warehouse::TYPE_LOGICAL,
+            Warehouse::schema_fields_IS_DEFAULT_LOGICAL => 1,
+            Warehouse::schema_fields_ENABLED => 1,
+            Warehouse::schema_fields_IS_SEED => 1,
+        ]);
+    }
+
+    /** @return array<string, mixed>|null */
+    private function findDefaultLogicalWarehouse(int $websiteId, string $mode): ?array
+    {
+        $model = $this->newWarehouse();
+        $model->clear()
+            ->where(Warehouse::schema_fields_WEBSITE_ID, $websiteId)
+            ->where(Warehouse::schema_fields_MODE, $mode)
+            ->where(Warehouse::schema_fields_IS_DEFAULT_LOGICAL, 1)
+            ->where(Warehouse::schema_fields_ENABLED, 1)
+            ->find()
+            ->fetch();
+        if ($model->getId()) {
+            return $model->getData();
+        }
+        $model->clear()
+            ->where(Warehouse::schema_fields_WEBSITE_ID, $websiteId)
+            ->where(Warehouse::schema_fields_WAREHOUSE_CODE, self::DEFAULT_LOGICAL_CODE)
+            ->find()
+            ->fetch();
+        return $model->getId() ? $model->getData() : null;
+    }
+
+    /** @return array<string, mixed>|null */
+    private function findSeedAuthorization(int $websiteId, int $storeId): ?array
+    {
+        $model = $this->newAuthorization();
+        $model->clear()
+            ->where(WarehouseStoreAuthorization::schema_fields_WEBSITE_ID, $websiteId)
+            ->where(WarehouseStoreAuthorization::schema_fields_STORE_ID, $storeId)
+            ->where(WarehouseStoreAuthorization::schema_fields_IS_SEED, 1)
+            ->where(WarehouseStoreAuthorization::schema_fields_ENABLED, 1)
+            ->find()
+            ->fetch();
+        return $model->getId() ? $model->getData() : null;
+    }
+
+    private function ensureSeedWarehouseTree(int $websiteId, string $mode): void
+    {
+        try {
+            /** @var WarehouseHierarchyService $hierarchy */
+            $hierarchy = ObjectManager::getInstance(WarehouseHierarchyService::class);
+            $hierarchy->ensureDefaultTree($websiteId, $mode);
+        } catch (\Throwable) {
+            // Tree seed must not block authorization ensure; leaf mount uses whatever exists.
+        }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function ensureDefaultLogicalSeedBinding(
+        int $websiteId,
+        int $storeId,
+        string $storeMode,
+        string $warehouseMode,
+    ): array {
+        $seedDefault = $this->findSeedDefaultAuthorization($websiteId, $storeId);
+        if ($seedDefault !== null) {
+            return $seedDefault;
+        }
+        $default = $this->findDefaultAuthorization($websiteId, $storeId);
+        if ($default !== null) {
+            return $this->markAuthorizationSeed($default);
+        }
+        $warehouse = $this->ensureDefaultLogicalWarehouse($websiteId, $warehouseMode);
+
+        return $this->persistBinding(
+            $websiteId,
+            $storeId,
+            $storeMode,
+            (int) $warehouse[Warehouse::schema_fields_ID],
+            true,
+            true,
+        );
+    }
+
+    private function ensureSeedLeafAuthorizations(int $websiteId, int $storeId, string $storeMode): void
+    {
+        $leaves = $this->listSeedLeafWarehouses($websiteId);
+        foreach ($leaves as $leaf) {
+            $warehouseId = (int) ($leaf[Warehouse::schema_fields_ID] ?? 0);
+            if ($warehouseId <= 0) {
+                continue;
+            }
+            $existing = $this->findAuthorization($websiteId, $storeId, $warehouseId);
+            if ($existing !== null) {
+                if ((int) ($existing[WarehouseStoreAuthorization::schema_fields_IS_SEED] ?? 0) !== 1) {
+                    $this->markAuthorizationSeed($existing);
+                }
+                continue;
+            }
+            try {
+                $this->persistBinding(
+                    $websiteId,
+                    $storeId,
+                    $storeMode,
+                    $warehouseId,
+                    false,
+                    true,
+                );
+            } catch (InventoryConflictException) {
+                // Skip leaves that cannot bind under current mode/type rules.
+            }
+        }
+    }
+
+    /** @return list<array<string, mixed>> */
+    private function listSeedLeafWarehouses(int $websiteId): array
+    {
+        $model = $this->newWarehouse();
+        $rows = $model->clear()
+            ->where(Warehouse::schema_fields_WEBSITE_ID, $websiteId)
+            ->where(Warehouse::schema_fields_IS_SEED, 1)
+            ->where(Warehouse::schema_fields_NODE_KIND, Warehouse::NODE_WAREHOUSE)
+            ->where(Warehouse::schema_fields_ENABLED, 1)
+            ->select()
+            ->fetchArray();
+
+        return is_array($rows) ? $rows : [];
+    }
+
+    /** @return array<string, mixed>|null */
+    private function findSeedDefaultAuthorization(int $websiteId, int $storeId): ?array
+    {
+        $model = $this->newAuthorization();
+        $model->clear()
+            ->where(WarehouseStoreAuthorization::schema_fields_WEBSITE_ID, $websiteId)
+            ->where(WarehouseStoreAuthorization::schema_fields_STORE_ID, $storeId)
+            ->where(WarehouseStoreAuthorization::schema_fields_IS_SEED, 1)
+            ->where(WarehouseStoreAuthorization::schema_fields_IS_DEFAULT, 1)
+            ->where(WarehouseStoreAuthorization::schema_fields_ENABLED, 1)
+            ->find()
+            ->fetch();
+
+        return $model->getId() ? $model->getData() : null;
+    }
+
+    private function countSeedAuthorizations(int $websiteId, int $storeId): int
+    {
+        $rows = $this->newAuthorization()->clear()
+            ->where(WarehouseStoreAuthorization::schema_fields_WEBSITE_ID, $websiteId)
+            ->where(WarehouseStoreAuthorization::schema_fields_STORE_ID, $storeId)
+            ->where(WarehouseStoreAuthorization::schema_fields_IS_SEED, 1)
+            ->where(WarehouseStoreAuthorization::schema_fields_ENABLED, 1)
+            ->select()
+            ->fetchArray();
+
+        return is_array($rows) ? count($rows) : 0;
+    }
+
+    /** @return array<string, mixed> */
+    private function ensureDefaultSiteAuthorizationMemory(): array
+    {
+        foreach ($this->grants ?? [] as $grant) {
+            if ((int) $grant['website_id'] === self::DEFAULT_SITE_WEBSITE_ID
+                && (int) $grant['store_id'] === self::DEFAULT_SITE_STORE_ID
+                && (int) ($grant['is_seed'] ?? 0) === 1
+            ) {
+                return $grant;
+            }
+        }
+        $warehouseId = null;
+        foreach ($this->warehouses ?? [] as $warehouse) {
+            if ((int) ($warehouse[Warehouse::schema_fields_WEBSITE_ID] ?? -1) !== self::DEFAULT_SITE_WEBSITE_ID) {
+                continue;
+            }
+            if ($this->isLogicalWarehouse($warehouse)
+                && (int) ($warehouse[Warehouse::schema_fields_IS_DEFAULT_LOGICAL] ?? 0) === 1
+            ) {
+                $warehouseId = (int) $warehouse[Warehouse::schema_fields_ID];
+                break;
+            }
+        }
+        if ($warehouseId === null) {
+            throw new InventoryConflictException(
+                self::ERROR_NOT_AUTHORIZED,
+                self::t('内存 harness 需先注册默认逻辑仓'),
+            );
+        }
+        return $this->bindMemory(
+            self::DEFAULT_SITE_WEBSITE_ID,
+            self::DEFAULT_SITE_STORE_ID,
+            Warehouse::MODE_NORMAL,
+            $warehouseId,
+            true,
+            true,
+        );
+    }
+
+    private function deleteAuthorizationMemory(int $websiteId, int $authorizationId): void
+    {
+        foreach ($this->grants ?? [] as $key => $grant) {
+            if ((int) ($grant['authorization_id'] ?? 0) !== $authorizationId) {
+                continue;
+            }
+            if ((int) $grant['website_id'] !== $websiteId) {
+                throw new \InvalidArgumentException(self::t('仓授权不存在'));
+            }
+            if ((int) ($grant['is_seed'] ?? 0) === 1) {
+                throw new InventoryConflictException(
+                    self::ERROR_SEED_LOCKED,
+                    self::t('系统种子授权不允许删除'),
+                );
+            }
+            unset($this->grants[$key]);
+            return;
+        }
+        throw new \InvalidArgumentException(self::t('仓授权不存在'));
     }
 
     /** @return array<string, mixed>|null */
@@ -471,5 +885,21 @@ final class WarehouseAuthorizationService
     private function grantKey(int $websiteId, int $storeId, int $warehouseId): string
     {
         return $websiteId . ':' . $storeId . ':' . $warehouseId;
+    }
+
+    /** @param list<string|int>|array<int, string|int> $args */
+    private static function t(string $text, array $args = []): string
+    {
+        try {
+            return (string) __($text, $args);
+        } catch (\Throwable) {
+            $out = $text;
+            $i = 1;
+            foreach ($args as $arg) {
+                $out = str_replace('%{' . $i . '}', (string) $arg, $out);
+                $i++;
+            }
+            return $out;
+        }
     }
 }

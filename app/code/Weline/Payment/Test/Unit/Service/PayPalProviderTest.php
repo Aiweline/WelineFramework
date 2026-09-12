@@ -94,6 +94,122 @@ final class PayPalProviderTest extends TestCase
         );
     }
 
+    public function testExpressCreatePaymentUsesContinueAndOptionalNoShipping(): void
+    {
+        $seenBodies = [];
+        $provider = new PayPalProvider();
+        $provider->setApiClient(new PayPalApiClient(
+            static function (string $method, string $url, array $headers, ?string $body) use (&$seenBodies): array {
+                if (str_contains($url, '/v1/oauth2/token')) {
+                    return ['status' => 200, 'body' => json_encode(['access_token' => 'token-123']) ?: '{}'];
+                }
+                if (str_contains($url, '/v2/checkout/orders') && $method === 'POST') {
+                    $seenBodies[] = (string) $body;
+
+                    return [
+                        'status' => 201,
+                        'body' => json_encode([
+                            'id' => 'ORDER-EX',
+                            'links' => [
+                                ['rel' => 'approve', 'href' => 'https://sandbox.paypal.com/checkoutnow?token=ORDER-EX'],
+                            ],
+                        ], JSON_UNESCAPED_SLASHES) ?: '{}',
+                    ];
+                }
+
+                throw new \RuntimeException('Unexpected PayPal URL: ' . $url);
+            }
+        ));
+
+        $provider->createPayment(PaymentRequest::fromArray([
+            'intent_code' => 'INT-EX',
+            'attempt_code' => 'ATT-EX',
+            'payable_type' => 'order',
+            'payable_id' => 'ord-ex',
+            'method_code' => 'paypal',
+            'amount_minor' => 1000,
+            'currency_code' => 'USD',
+            'context' => [
+                'environment' => 'sandbox',
+                'express_checkout' => true,
+                'requires_shipping' => false,
+                'runtime_config' => [
+                    'sandbox_client_id' => 'sb-client',
+                    'sandbox_client_secret' => 'sb-secret',
+                    'return_url' => 'https://example.test/payment/return',
+                    'cancel_url' => 'https://example.test/payment/cancel',
+                ],
+            ],
+        ]));
+
+        self::assertNotEmpty($seenBodies);
+        self::assertStringContainsString('"user_action":"CONTINUE"', $seenBodies[0]);
+        self::assertStringContainsString('"shipping_preference":"NO_SHIPPING"', $seenBodies[0]);
+        self::assertStringNotContainsString('"user_action":"PAY_NOW"', $seenBodies[0]);
+    }
+
+    public function testExpressResumePrepareOnlyDoesNotCapture(): void
+    {
+        $captured = false;
+        $provider = new PayPalProvider();
+        $provider->setApiClient(new PayPalApiClient(
+            static function (string $method, string $url, array $headers, ?string $body) use (&$captured): array {
+                if (str_contains($url, '/v1/oauth2/token')) {
+                    return ['status' => 200, 'body' => json_encode(['access_token' => 'token-123']) ?: '{}'];
+                }
+                if (str_contains($url, '/capture')) {
+                    $captured = true;
+
+                    return ['status' => 201, 'body' => json_encode(['status' => 'COMPLETED', 'id' => 'CAP']) ?: '{}'];
+                }
+                if (str_contains($url, '/v2/checkout/orders/ORDER-PREP') && $method === 'GET') {
+                    return [
+                        'status' => 200,
+                        'body' => json_encode([
+                            'id' => 'ORDER-PREP',
+                            'status' => 'APPROVED',
+                            'payer' => ['email_address' => 'buyer@example.com'],
+                            'purchase_units' => [[
+                                'shipping' => [
+                                    'name' => ['full_name' => 'Ada'],
+                                    'address' => [
+                                        'address_line_1' => '1 St',
+                                        'country_code' => 'US',
+                                    ],
+                                ],
+                            ]],
+                        ]) ?: '{}',
+                    ];
+                }
+
+                throw new \RuntimeException('Unexpected PayPal URL: ' . $url);
+            }
+        ));
+
+        $result = $provider->resumePayment(\Weline\Payment\Api\Data\ResumeRequest::fromArray([
+            'intent_code' => 'INT-1',
+            'attempt_code' => 'ATT-1',
+            'method_code' => 'paypal',
+            'provider_reference' => 'ORDER-PREP',
+            'amount_minor' => 1000,
+            'currency_code' => 'USD',
+            'context' => [
+                'environment' => 'sandbox',
+                'express_checkout' => true,
+                'express_prepare_only' => true,
+                'runtime_config' => [
+                    'sandbox_client_id' => 'sb-client',
+                    'sandbox_client_secret' => 'sb-secret',
+                ],
+            ],
+        ]));
+
+        self::assertFalse($captured);
+        self::assertSame(PaymentResult::STATUS_PROCESSING, $result->getStatus());
+        self::assertTrue((bool) ($result->getPayload()['express_awaiting_confirm'] ?? false));
+        self::assertIsArray($result->getPayload()['express_profile'] ?? null);
+    }
+
     public function testTestConnectionUsesSandboxEnvironment(): void
     {
         $provider = new PayPalProvider();

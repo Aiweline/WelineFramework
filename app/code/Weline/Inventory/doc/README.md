@@ -31,6 +31,7 @@ Store 逻辑库存：不可变 ledger、四策略可售、预占租约/CAS/Cron�
   overlength command identity 和 signed integer overflow 在写入前拒绝。
 - `website_id=0`、`store_id=0` 都是合法 Scope，不得当作空值。
 - 后台库存调整/仓库授权表单与控制器解析 `store_id` 为非负整数（允许 0）；e2e fixture cleanup 不得因 `store_id=0` 跳过 stock 删除。
+- 库存/库存调整列表为运营可读投影（中文列、SKU·Offer、件数）；调整/账本查询带 LIMIT，禁止无界 ledger SELECT。
 - 仓迁移 `targetWarehouse` 对 `store_id=0` 与其它 Store 一样要求该店的默认授权绑定，禁止再把 0 解释为「网站级默认仓哨兵」。
 - `setOnHand` 在真正推进投影（非纯 ledger 重放）后派发 `Weline_Inventory::stock_projection_changed`（`website_id`/`store_id`/`offer_id`/`reason`），供 `Weline_Product` 失效店面 `publishedOffers` 热缓存；默认站 `website_id=0` 同样生效。
 
@@ -101,7 +102,7 @@ Store 逻辑库存：不可变 ledger、四策略可售、预占租约/CAS/Cron�
 
 - `Warehouse`、`WarehousePool`、`WarehouseQuota` 是 additive schema；默认逻辑仓以
   nullable unique guard 保证同 Website+mode 最多一个。
-- `WarehouseStoreAuthorization` 持久化 Store↔Warehouse 授权和 Store 默认仓；
+- `WarehouseStoreAuthorization` 持久化 Store↔Warehouse 授权和 Store 默认仓；`is_seed` 系统种子不可删、默认可改绑；
   生产授权只信任 `StoreCatalogInterface`，不信任调用方传入的 `store_mode`；
   `writer_enabled` 默认关闭，只有 MIG-P3A fresh verify 后才按 Website 开启。
 - Store environment 映射：`normal→normal`、`dev|test→test`；未知 mode、跨 Website、

@@ -147,8 +147,8 @@ class TreeSelect implements TaglibInterface
             $html[] = '    <span class="w-tree-select-arrow" aria-hidden="true">&#9662;</span>';
             $html[] = '  </div>';
             
-            // 下拉面板
-            $html[] = '  <div class="w-tree-select-dropdown" id="<?= htmlspecialchars($Taglib__id) ?>_dropdown" style="display:none;">';
+            // 下拉面板（floating portal）
+            $html[] = '  <div class="w-tree-select-dropdown" id="<?= htmlspecialchars($Taglib__id) ?>_dropdown" data-w-float-surface hidden>';
             $html[] = '    <div class="w-tree-select-tree" id="<?= htmlspecialchars($Taglib__id) ?>_tree" role="tree" aria-label="' . htmlspecialchars($ariaLabel) . '"></div>';
             $html[] = '  </div>';
             $html[] = '</div>';
@@ -171,6 +171,8 @@ class TreeSelect implements TaglibInterface
             $html[] = '.w-tree-select-clear:hover { color: #dc3545; }';
             $html[] = '.w-tree-select.has-value .w-tree-select-clear { display: block; }';
             $html[] = '.w-tree-select-dropdown { position: absolute; left: 0; right: 0; top: 100%; margin-top: 2px; background: #fff; border: 1px solid #ced4da; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); z-index: 1050; max-height: 300px; overflow-y: auto; }';
+            $html[] = '.w-tree-select-dropdown[hidden]{display:none!important;}';
+            $html[] = '.w-tree-select-dropdown[data-w-floating-positioned],.w-tree-select-dropdown[data-w-floating-portal]{position:fixed;inset:auto;top:max(var(--w-floating-top,0px),var(--w-floating-viewport-top,.5rem));left:max(var(--w-floating-left,0px),var(--w-floating-viewport-left,.5rem));right:auto;bottom:auto;margin:0;z-index:var(--weline-z-menu,1080);inline-size:var(--w-floating-inline-size,auto);max-block-size:min(300px,var(--w-floating-max-block-size,70vh));}';
             $html[] = '.w-tree-select-tree { padding: 8px; }';
             $html[] = '.w-tree-select-node { }';
             $html[] = '.w-tree-select-node-content { display: flex; align-items: center; padding: 6px 8px; cursor: pointer; border-radius: 3px; gap: 6px; }';
@@ -235,6 +237,37 @@ if (searchInput) {
 let options = staticOptions || [];
 let selectedValues = multiple ? [] : null;
 let isOpen = false;
+let floatApi = null;
+
+function uiFloating() {
+    return (window.Weline && window.Weline.UI && window.Weline.UI.floating)
+        ? window.Weline.UI.floating
+        : null;
+}
+function ensureFloat() {
+    if (floatApi) return floatApi;
+    const floating = uiFloating();
+    if (!floating || typeof floating.attach !== 'function' || !dropdown) return null;
+    dropdown.setAttribute('data-w-float-surface', '');
+    container.setAttribute('data-w-placement', 'bottom-start');
+    floatApi = floating.attach(container, { placement: 'bottom-start' });
+    return floatApi;
+}
+function placeFloat() {
+    const api = ensureFloat();
+    if (!api) return;
+    if (typeof api.show === 'function') api.show();
+    else if (typeof api.sync === 'function') api.sync();
+    else if (typeof api.place === 'function') api.place();
+}
+function syncDropdownWidth() {
+    if (!trigger || !dropdown) return;
+    const width = Math.round(trigger.getBoundingClientRect().width);
+    if (width > 0) {
+        dropdown.style.setProperty('--w-floating-inline-size', width + 'px');
+        dropdown.style.minWidth = width + 'px';
+    }
+}
 
 function escapeHtml(text) {
     const div = document.createElement('div');
@@ -573,11 +606,15 @@ function filterTree(keyword) {
 // 打开下拉
 function openDropdown() {
     if (disabled) return;
-    dropdown.style.display = 'block';
+    dropdown.hidden = false;
+    dropdown.style.display = '';
     container.classList.add('open');
     trigger.setAttribute('aria-expanded', 'true');
     isOpen = true;
+    syncDropdownWidth();
+    placeFloat();
     loadOptions().then(() => {
+        placeFloat();
         requestAnimationFrame(() => {
             if (searchInput) {
                 searchInput.tabIndex = 0;
@@ -591,6 +628,8 @@ function openDropdown() {
 
 // 关闭下拉
 function closeDropdown() {
+    if (floatApi && typeof floatApi.hide === 'function') floatApi.hide();
+    dropdown.hidden = true;
     dropdown.style.display = 'none';
     container.classList.remove('open');
     trigger.setAttribute('aria-expanded', 'false');
@@ -743,7 +782,7 @@ if (clearBtn) {
 }
 
 document.addEventListener('click', function(e) {
-    if (!container.contains(e.target)) {
+    if (!container.contains(e.target) && !dropdown.contains(e.target)) {
         closeDropdown();
     }
 });

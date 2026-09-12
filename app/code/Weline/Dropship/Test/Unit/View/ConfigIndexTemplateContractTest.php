@@ -56,5 +56,13 @@ final class ConfigIndexTemplateContractTest extends TestCase
         );
         self::assertStringContainsString('options="fake:Fake 货源,cj:CJ Dropshipping"', $declTpl);
         self::assertStringNotContainsString('逗号分隔已注册 provider_code', $declTpl);
+
+        self::assertStringContainsString('dropship/ops/follow_enabled', implode(',', $fields));
+        self::assertMatchesRegularExpression(
+            '/key="dropship\/ops\/follow_enabled"[^>]*label="启用库存\/价格跟随"/',
+            $declTpl,
+            'follow switch must be labeled for stock/price sync'
+        );
+        self::assertStringContainsString('同步远程库存与价格', $declTpl);
     }
 }

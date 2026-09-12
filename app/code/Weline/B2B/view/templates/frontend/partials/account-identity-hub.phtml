@@ -1,0 +1,155 @@
+<?php
+/**
+ * Wholesale identity hub: hang follow-up + order chat (included from account sidebar).
+ *
+ * @var int $customerId
+ * @var int $websiteId
+ * @var callable $escape
+ * @var callable $formatMajor
+ * @var string $currencyCode
+ */
+use Weline\B2B\Model\B2BOrderHang;
+use Weline\B2B\Service\B2BHangOrderService;
+use Weline\B2B\Service\B2BOrderThreadService;
+use Weline\Framework\Manager\ObjectManager;
+
+$hangs = [];
+$threadsByOrder = [];
+if ($customerId > 0) {
+    try {
+        $hangSvc = ObjectManager::getInstance(B2BHangOrderService::class);
+        if ($hangSvc instanceof B2BHangOrderService) {
+            $hangs = $hangSvc->listForCustomer((string)$customerId, $websiteId);
+        }
+    } catch (\Throwable) {
+        $hangs = [];
+    }
+    try {
+        $chatSvc = ObjectManager::getInstance(B2BOrderThreadService::class);
+        if ($chatSvc instanceof B2BOrderThreadService) {
+            foreach ($chatSvc->listThreadsForCustomer($customerId, $websiteId) as $thread) {
+                $threadsByOrder[(string)($thread['order_ref'] ?? '')] = $thread;
+            }
+            // website_id=0 hangs may store threads with website 0
+            if ($websiteId > 0) {
+                foreach ($chatSvc->listThreadsForCustomer($customerId, 0) as $thread) {
+                    $ref = (string)($thread['order_ref'] ?? '');
+                    if ($ref !== '' && !isset($threadsByOrder[$ref])) {
+                        $threadsByOrder[$ref] = $thread;
+                    }
+                }
+            }
+        }
+    } catch (\Throwable) {
+        $threadsByOrder = [];
+    }
+}
+
+$statusLabel = static function (string $status): string {
+    return match ($status) {
+        B2BOrderHang::STATUS_AWAITING_DEPOSIT => (string)__('待付定金'),
+        B2BOrderHang::STATUS_AWAITING_MERCHANT_APPROVAL => (string)__('待商家审批'),
+        B2BOrderHang::STATUS_AWAITING_BALANCE => (string)__('待付尾款'),
+        B2BOrderHang::STATUS_COMPLETED => (string)__('已完成'),
+        B2BOrderHang::STATUS_REJECTED => (string)__('已驳回'),
+        B2BOrderHang::STATUS_EXPIRED => (string)__('已过期'),
+        default => $status,
+    };
+};
+$statusTone = static function (string $status): string {
+    return match ($status) {
+        B2BOrderHang::STATUS_AWAITING_DEPOSIT, B2BOrderHang::STATUS_AWAITING_BALANCE => 'warning',
+        B2BOrderHang::STATUS_AWAITING_MERCHANT_APPROVAL => 'info',
+        B2BOrderHang::STATUS_COMPLETED => 'success',
+        B2BOrderHang::STATUS_REJECTED, B2BOrderHang::STATUS_EXPIRED => 'danger',
+        default => 'neutral',
+    };
+};
+?>
+<section class="b2b-identity-hub" data-testid="b2b-identity-hub" data-b2b-identity-hub="1">
+    <header class="b2b-identity-hub__head">
+        <div>
+            <h3 class="b2b-identity-hub__title"><lang>挂单跟进与沟通</lang></h3>
+            <p class="b2b-identity-hub__desc"><lang>定金、审批、尾款与协商消息集中在此处理</lang></p>
+        </div>
+        <a class="w-button" data-variant="secondary" data-size="sm" href="@url{'customer/account/index'}#orders">
+            <lang>全部订单</lang>
+        </a>
+    </header>
+
+    <?php if ($customerId <= 0): ?>
+        <p class="b2b-identity-hub__empty" role="status"><lang>登录后可查看挂单与协商。</lang></p>
+    <?php elseif ($hangs === []): ?>
+        <div class="b2b-identity-hub__empty" data-testid="b2b-identity-hub-empty" role="status">
+            <p><lang>暂无进行中的批发挂单。</lang></p>
+            <p class="w-text" data-tone="muted" data-size="sm"><lang>批发下单并支付定金后，进度与协商会出现在这里。</lang></p>
+            <a class="w-button" data-variant="primary" href="/"><lang>去逛批发商品</lang></a>
+        </div>
+    <?php else: ?>
+        <ul class="b2b-identity-hub__list" data-testid="b2b-identity-hub-list">
+            <?php foreach ($hangs as $hang): ?>
+                <?php
+                $orderRef = (string)($hang['order_ref'] ?? '');
+                $status = strtolower(trim((string)($hang['hang_status'] ?? '')));
+                $thread = $threadsByOrder[$orderRef] ?? null;
+                $unread = max(0, (int)($thread['customer_unread'] ?? 0));
+                $deposit = (int)($hang['deposit_amount_minor'] ?? 0);
+                $balance = (int)($hang['balance_amount_minor'] ?? 0);
+                $depositHref = '/checkout?purpose=deposit&order_uuid=' . rawurlencode($orderRef);
+                $balanceHref = '/checkout?purpose=balance&order_uuid=' . rawurlencode($orderRef);
+                $ordersHref = '/customer/account/index?order_uuid=' . rawurlencode($orderRef) . '#orders';
+                $shortRef = strlen($orderRef) > 12 ? substr($orderRef, 0, 8) . '…' : $orderRef;
+                ?>
+                <li class="b2b-identity-hub__card"
+                    data-order-ref="<?= $escape($orderRef) ?>"
+                    data-hang-status="<?= $escape($status) ?>"
+                    data-testid="b2b-identity-hub-card">
+                    <div class="b2b-identity-hub__card-top">
+                        <div class="b2b-identity-hub__card-meta">
+                            <a class="b2b-identity-hub__order" href="<?= $escape($ordersHref) ?>">
+                                <lang>订单</lang> <?= $escape($shortRef) ?>
+                            </a>
+                            <span class="w-badge" data-tone="<?= $escape($statusTone($status)) ?>">
+                                <?= $escape($statusLabel($status)) ?>
+                            </span>
+                            <?php if ($unread > 0): ?>
+                                <span class="account-menu-signal-badge" data-account-menu-signal-badge="1" aria-label="<?= $escape(__('未读消息')) ?>">
+                                    <?= $escape((string)$unread) ?>
+                                </span>
+                            <?php endif; ?>
+                        </div>
+                        <div class="b2b-identity-hub__amounts">
+                            <span><lang>定金</lang> <?= $escape($currencyCode) ?> <?= $escape($formatMajor($deposit)) ?></span>
+                            <span><lang>尾款</lang> <?= $escape($currencyCode) ?> <?= $escape($formatMajor($balance)) ?></span>
+                        </div>
+                    </div>
+                    <?php if (is_array($thread) && $unread > 0): ?>
+                        <p class="b2b-identity-hub__preview" data-testid="b2b-identity-hub-preview">
+                            <lang>商家有新消息，可在下方打开沟通。</lang>
+                        </p>
+                    <?php endif; ?>
+                    <div class="b2b-identity-hub__actions">
+                        <?php if ($status === B2BOrderHang::STATUS_AWAITING_DEPOSIT): ?>
+                            <a class="w-button" data-variant="primary" data-size="sm" href="<?= $escape($depositHref) ?>">
+                                <lang>支付定金</lang>
+                            </a>
+                        <?php endif; ?>
+                        <?php if ($status === B2BOrderHang::STATUS_AWAITING_BALANCE): ?>
+                            <a class="w-button" data-variant="primary" data-size="sm"
+                               href="<?= $escape($balanceHref) ?>"
+                               data-testid="b2b-identity-pay-balance">
+                                <lang>支付尾款</lang>
+                            </a>
+                        <?php endif; ?>
+                        <a class="w-button" data-variant="secondary" data-size="sm"
+                           href="<?= $escape($ordersHref) ?>"
+                           data-b2b-open-order-chat="<?= $escape($orderRef) ?>"
+                           data-testid="b2b-identity-open-chat">
+                            <lang>订单沟通</lang>
+                        </a>
+                    </div>
+                </li>
+            <?php endforeach; ?>
+        </ul>
+    <?php endif; ?>
+</section>

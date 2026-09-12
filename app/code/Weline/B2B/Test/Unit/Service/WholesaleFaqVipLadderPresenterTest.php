@@ -45,6 +45,7 @@ final class WholesaleFaqVipLadderPresenterTest extends TestCase
 
         self::assertSame('CNY', $view['currency_code']);
         self::assertTrue($view['credit_enabled']);
+        self::assertSame(20, $view['min_cash_deposit_percent']);
         self::assertNotEmpty($view['groups']);
 
         $codes = array_map(static fn(array $g): string => (string)$g['code'], $view['groups']);
@@ -95,6 +96,7 @@ final class WholesaleFaqVipLadderPresenterTest extends TestCase
         );
         $view = $presenter->present(0);
         self::assertFalse($view['credit_enabled']);
+        self::assertSame(20, $view['min_cash_deposit_percent']);
         self::assertSame('USD', $view['currency_code']);
         self::assertSame(SystemVipLadder::groupId(3), $view['groups'][0]['group_id']);
         self::assertSame(0, (int)$view['groups'][0]['tier_rank']);

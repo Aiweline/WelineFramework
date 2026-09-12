@@ -130,6 +130,58 @@ final class PixelEventDiscoveryContractTest extends TestCase
         self::assertIsArray($list[0]['chain'] ?? null);
     }
 
+    public function testPickerAccumulateStoresParams(): void
+    {
+        $svc = new EventPickerTokenService(new EventDictionaryService());
+        $svc->pushAccumulate(66, [
+            'weline_event' => 'cta_click',
+            'third_party_event' => 'click',
+            'source' => 'picker_observe',
+            'path' => '/x?utm_source=ad',
+            'params' => ['utm_source' => 'ad', 'value' => 12.5],
+            'hit_kind' => 'system',
+        ]);
+        $list = $svc->listAccumulate(66, 5);
+        self::assertNotEmpty($list);
+        self::assertSame('cta_click', $list[0]['weline_event'] ?? null);
+        self::assertIsArray($list[0]['params'] ?? null);
+        self::assertSame('ad', $list[0]['params']['utm_source'] ?? null);
+        self::assertSame('system', $list[0]['hit_kind'] ?? null);
+    }
+
+    public function testPickerAccumulateSinceAndClear(): void
+    {
+        $svc = new EventPickerTokenService(new EventDictionaryService());
+        $wid = 55;
+        $svc->clearAccumulate($wid);
+        $svc->pushAccumulate($wid, [
+            'weline_event' => 'click',
+            'source' => 'sandbox_stream',
+            'path' => '/',
+            'params' => ['x' => 1],
+            'event_hit' => false,
+        ]);
+        $svc->pushAccumulate($wid, [
+            'weline_event' => 'page_view',
+            'source' => 'sandbox_stream',
+            'path' => '/',
+            'hit_kind' => 'system',
+        ]);
+        $all = $svc->listAccumulate($wid, 10);
+        self::assertCount(2, $all);
+        self::assertGreaterThan(0, (int)($all[0]['seq'] ?? 0));
+        $firstSeq = (int)($all[1]['seq'] ?? 0);
+        $since = $svc->listAccumulateSince($wid, $firstSeq, 10);
+        self::assertNotEmpty($since['events']);
+        self::assertSame('page_view', $since['events'][0]['weline_event'] ?? null);
+        self::assertGreaterThan($firstSeq, (int)$since['cursor']);
+        self::assertTrue($svc->clearAccumulate($wid));
+        self::assertSame([], $svc->listAccumulate($wid, 10));
+        $empty = $svc->listAccumulateSince($wid, 0, 10);
+        self::assertSame([], $empty['events']);
+        self::assertSame(0, (int)$empty['cursor']);
+    }
+
     public function testAdminTemplateHasPickerAndAccumulate(): void
     {
         $path = \dirname(__DIR__, 3) . '/view/templates/Backend/TrackingVendor/index.phtml';
@@ -137,9 +189,28 @@ final class PixelEventDiscoveryContractTest extends TestCase
         self::assertStringContainsString('tv-start-picker', $src);
         self::assertStringContainsString('tv-map-accumulate', $src);
         self::assertStringContainsString('本会话沙盒', $src);
-        self::assertStringContainsString('本会话累计', $src);
+        self::assertStringContainsString('短间隔读取前台沙盒继电缓冲', $src);
+        self::assertStringContainsString('tv-acc-clear', $src);
+        self::assertStringContainsString('liveEventsUrl', $src);
+        self::assertStringContainsString('startLiveTunnel', $src);
+        self::assertStringContainsString('clearSessionSandbox', $src);
+        self::assertStringContainsString('sandboxClearEpoch', $src);
+        self::assertStringContainsString('sandboxGeneration', $src);
+        self::assertStringContainsString('generation=', $src);
+        self::assertStringContainsString('sandbox_only=1', $src);
+        // 纠偏：禁止 wait_ms 服务端长轮询；map 可见时短间隔短请求即可。
+        self::assertStringNotContainsString('wait_ms=2500', $src);
+        self::assertStringNotContainsString('wait_ms=', $src);
+        self::assertStringContainsString('LIVE_POLL_MS', $src);
+        self::assertStringContainsString('setTimeout(tick, LIVE_POLL_MS)', $src);
         self::assertStringContainsString('启动事件拾取', $src);
         self::assertStringContainsString('tv-ga4-event-form', $src);
+        self::assertStringContainsString('tv-ga4-create-dialog', $src);
+        self::assertStringContainsString('data-w-component="dialog"', $src);
+        self::assertStringContainsString('openGa4CreateDialog', $src);
+        self::assertStringContainsString('closeGa4CreateDialog', $src);
+        self::assertStringContainsString('Weline.UI.dialog.open', $src);
+        self::assertStringContainsString('tv-open-ga4-create', $src);
         self::assertStringContainsString('创建', $src);
         self::assertStringContainsString('匹配条件', $src);
         self::assertStringContainsString('tv-ga4-conditions', $src);
@@ -148,13 +219,53 @@ final class PixelEventDiscoveryContractTest extends TestCase
         self::assertStringContainsString('seedConditionsForType', $src);
         self::assertStringContainsString('conditions_json', $src);
         self::assertStringContainsString('match_param_options_json', $src);
+        self::assertStringContainsString('tv-ga4-param-list', $src);
+        self::assertStringContainsString('list="tv-ga4-param-list"', $src);
+        self::assertStringContainsString('tv-ga4-param-pick', $src);
+        self::assertStringContainsString('param_mappings_json', $src);
+        self::assertStringContainsString('seedParamMappings', $src);
+        self::assertStringContainsString('tv-ga4-map-table', $src);
+        self::assertStringContainsString('data-cond-param', $src);
+        self::assertStringContainsString('ensureMatchParamDatalist', $src);
+        self::assertStringContainsString('参数可点选预设，也可手写', $src);
+        self::assertStringContainsString('elementInfo.text', $src);
         self::assertStringContainsString('创建事件', $src);
         self::assertStringContainsString('tv-custom-create', $src);
         self::assertStringContainsString('focusCreateEvent', $src);
         self::assertStringContainsString('is_custom', $src);
         self::assertStringContainsString('parseUrlInsights', $src);
         self::assertStringContainsString('add_custom_event_url', $src);
-        self::assertStringContainsString('data-map-variant="intake-sandbox"', $src);
+        self::assertStringContainsString('data-map-variant="subtabs-stream"', $src);
+        self::assertStringContainsString('tvp-map-stream', $src);
+        self::assertStringContainsString('本会话沙盒数据流', $src);
+        self::assertStringContainsString('data-testid="tv-stream-tabs"', $src);
+        self::assertStringContainsString('data-testid="tv-stream-tab-system"', $src);
+        self::assertStringContainsString('data-testid="tv-stream-tab-custom"', $src);
+        self::assertStringContainsString('data-testid="tv-stream-tab-stream"', $src);
+        self::assertStringContainsString('tvp_session_stream_v1', $src);
+        self::assertStringContainsString('mergeSessionStream', $src);
+        self::assertStringContainsString('hit_kind', $src);
+        self::assertStringContainsString('data-hit-kind', $src);
+        self::assertStringContainsString('eventParamsHtml', $src);
+        self::assertStringContainsString('showSandboxCompanion', $src);
+        self::assertStringContainsString('tvp-map-stream--float', $src);
+        self::assertStringContainsString('data-float', $src);
+        self::assertStringContainsString('tv-sandbox-float-close', $src);
+        self::assertStringContainsString('copyableParamsHtml', $src);
+        self::assertStringContainsString('data-testid="tv-acc-copy-key"', $src);
+        self::assertStringContainsString('data-testid="tv-acc-copy-value"', $src);
+        // 沙盒：按事件名搜索；点事件栏单开；禁止底部「收起参数」按钮。
+        self::assertStringContainsString('data-testid="tv-acc-search"', $src);
+        self::assertStringContainsString('id="tv-acc-search"', $src);
+        self::assertStringContainsString('streamEventExpandKey', $src);
+        self::assertStringContainsString('data-acc-bar', $src);
+        self::assertStringContainsString('data-testid="tv-acc-bar"', $src);
+        self::assertStringNotContainsString('收起参数', $src);
+        self::assertStringNotContainsString('data-testid="tv-acc-expand"', $src);
+        self::assertStringNotContainsString('tv-sandbox-companion', $src);
+        self::assertStringContainsString('data-testid="tv-map-subtab-custom"', $src);
+        self::assertStringContainsString('class="w-button"', $src);
+        self::assertStringNotContainsString('data-map-subtab="sandbox"', $src);
         self::assertStringContainsString('confirm_signup', $src);
         self::assertStringNotContainsString('placeholder="add_to_cart"', $src);
         self::assertStringContainsString('mappable_event_rows', $src);
@@ -166,18 +277,26 @@ final class PixelEventDiscoveryContractTest extends TestCase
         self::assertStringContainsString('/visitor/analytics/event-picker/record', $pickerJs);
         self::assertStringContainsString('data-wpp-mode="chain"', $pickerJs);
         self::assertStringContainsString('自动发现', $pickerJs);
-        self::assertStringContainsString('不进自定义池', $pickerJs);
+        self::assertStringContainsString('进自定义池仍须', $pickerJs);
         self::assertStringContainsString("source: 'track'", $pickerJs);
-        self::assertStringContainsString('禁止点击 invent custom_*', $pickerJs);
-        self::assertStringNotContainsString('suggestCustomName', $pickerJs);
-        self::assertStringNotContainsString('点击发现', $pickerJs);
+        self::assertStringContainsString('suggestCustomName', $pickerJs);
+        self::assertStringContainsString('flashCaptureNotice', $pickerJs);
+        self::assertStringContainsString('点击捕捉', $pickerJs);
+        self::assertStringContainsString('任意可点', $pickerJs);
+        self::assertStringContainsString('data-testid="wpp-discover-empty"', $pickerJs);
+        self::assertStringContainsString('data-testid="wpp-capture-flash"', $pickerJs);
+        self::assertStringContainsString('1.1.12-record-bump-rev', $pickerJs);
+        self::assertStringContainsString('applyRecordRevisionAfterPersist', $pickerJs);
+        self::assertStringContainsString('noteConfigRevision', $pickerJs);
+        self::assertStringNotContainsString('禁止点击 invent custom_*', $pickerJs);
+        self::assertStringNotContainsString('已打标点击仅对照系统事件', $pickerJs);
         self::assertStringContainsString('高级事件链', $pickerJs);
         self::assertStringContainsString('已默认无需重新录入', $pickerJs);
         self::assertStringContainsString('isSystemOwned', $pickerJs);
         self::assertStringContainsString('录入自定义', $pickerJs);
         self::assertStringContainsString('named_custom', $pickerJs);
         self::assertStringContainsString('自定义池门禁', $pickerJs);
-        self::assertStringContainsString('进自定义池须「输入名字并录入」', $pickerJs);
+        self::assertStringContainsString('进自定义池仍须改名并点「录入自定义」', $pickerJs);
         self::assertStringContainsString('recordErrorText', $pickerJs);
         self::assertStringContainsString('invalid_token', $pickerJs);
         self::assertStringContainsString('maintenance', $pickerJs);
@@ -199,7 +318,7 @@ final class PixelEventDiscoveryContractTest extends TestCase
         self::assertStringContainsString('wpp-custom-pick-value', $pickerJs);
         self::assertStringContainsString('选值模式', $pickerJs);
         self::assertStringContainsString('attachValueFields', $pickerJs);
-        self::assertStringContainsString('1.1.10-theme-confirm', $pickerJs);
+        self::assertStringContainsString('1.1.12-record-bump-rev', $pickerJs);
         self::assertStringNotContainsString('window.confirm(', $pickerJs);
         self::assertStringContainsString('Weline.UI.dialog.confirm', $pickerJs);
         self::assertStringNotContainsString('window.confirm(', $src);
@@ -229,6 +348,13 @@ final class PixelEventDiscoveryContractTest extends TestCase
         self::assertStringContainsString('match_param_options_json', $tvPhp);
         self::assertStringContainsString('ResponseTerminateException', $tvPhp);
         self::assertStringContainsString('// redirect() 以 Error 终止响应，不可当业务失败', $tvPhp);
+        self::assertStringContainsString('tv-map-subtabs', $src);
+        self::assertStringContainsString('data-map-subtab', $src);
+        self::assertStringContainsString('tv-custom-search', $src);
+        self::assertStringContainsString('data-custom-edit', $src);
+        self::assertStringContainsString('focusEditEvent', $src);
+        self::assertStringContainsString('activateMapSubtab', $src);
+        self::assertStringContainsString('tvp_map_subtab_v1', $src);
         self::assertStringContainsString('data-custom-del', $src);
         self::assertStringContainsString('deleteCustomEvent', $src);
         self::assertStringContainsString('delete_custom_event_url', $src);
@@ -244,6 +370,8 @@ final class PixelEventDiscoveryContractTest extends TestCase
         self::assertStringContainsString('function enrichRows', $annSrc);
         self::assertStringContainsString('function normalizeMatchConditions', $annSrc);
         self::assertStringContainsString('MATCH_PARAM_LABELS', $annSrc);
+        self::assertStringContainsString("'className'", $annSrc);
+        self::assertStringContainsString('a-zA-Z0-9_', $annSrc);
         $tvPhp = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Controller/Backend/TrackingVendor.php');
         self::assertStringContainsString('function postAnnotateEvent', $tvPhp);
         $discoveredSrc = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Service/DiscoveredEventService.php');
@@ -252,6 +380,9 @@ final class PixelEventDiscoveryContractTest extends TestCase
         self::assertStringContainsString('function postMapped', $pickerPhp);
         self::assertStringContainsString("'error' => 'duplicate'", $pickerPhp);
         self::assertStringContainsString('自定义池门禁', $pickerPhp);
+        self::assertStringContainsString("\$kind === 'chain' && \$persistMap && \$chain !== null", $pickerPhp);
+        self::assertStringContainsString("'category' => 'chain'", $pickerPhp);
+        self::assertStringContainsString("'chain' => '事件链'", $annSrc);
         self::assertMatchesRegularExpression(
             '/自定义池门禁[\\s\\S]{0,200}if \\(\\$persistMap\\) \\{[\\s\\S]{0,80}\\$discovered->add/',
             $pickerPhp

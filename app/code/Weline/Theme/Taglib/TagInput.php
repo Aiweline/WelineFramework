@@ -128,8 +128,8 @@ class TagInput implements TaglibInterface
             $html[] = '    <input type="text" class="w-tag-input-field" id="<?= htmlspecialchars($Taglib__id) ?>_input" placeholder="' . htmlspecialchars($placeholder) . '" autocomplete="off" ' . $disabledAttr . '>';
             $html[] = '  </div>';
             
-            // 建议下拉
-            $html[] = '  <div class="w-tag-input-suggestions" id="<?= htmlspecialchars($Taglib__id) ?>_suggestions" style="display:none;"></div>';
+            // 建议下拉（floating portal）
+            $html[] = '  <div class="w-tag-input-suggestions" id="<?= htmlspecialchars($Taglib__id) ?>_suggestions" data-w-float-surface hidden></div>';
             
             // 隐藏字段容器
             $html[] = '  <div class="w-tag-input-hidden" id="<?= htmlspecialchars($Taglib__id) ?>_hidden"></div>';
@@ -147,6 +147,8 @@ class TagInput implements TaglibInterface
             $html[] = '.w-tag-input-tag-remove:hover { color: #dc3545; }';
             $html[] = '.w-tag-input-field { border: none; outline: none; flex: 1; min-width: 100px; background: transparent; font-size: inherit; padding: 2px 0; }';
             $html[] = '.w-tag-input-suggestions { position: absolute; left: 0; right: 0; top: 100%; margin-top: 2px; background: #fff; border: 1px solid #ced4da; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); z-index: 1050; max-height: 200px; overflow-y: auto; }';
+            $html[] = '.w-tag-input-suggestions[hidden]{display:none!important;}';
+            $html[] = '.w-tag-input-suggestions[data-w-floating-positioned],.w-tag-input-suggestions[data-w-floating-portal]{position:fixed;inset:auto;top:max(var(--w-floating-top,0px),var(--w-floating-viewport-top,.5rem));left:max(var(--w-floating-left,0px),var(--w-floating-viewport-left,.5rem));right:auto;bottom:auto;margin:0;z-index:var(--weline-z-menu,1080);inline-size:var(--w-floating-inline-size,auto);max-block-size:min(200px,var(--w-floating-max-block-size,70vh));}';
             $html[] = '.w-tag-input-suggestion { padding: 8px 12px; cursor: pointer; transition: background 0.15s; }';
             $html[] = '.w-tag-input-suggestion:hover, .w-tag-input-suggestion.active { background: #f8f9fa; }';
             $html[] = '.w-tag-input[data-disabled="true"] .w-tag-input-wrapper { background: #e9ecef; cursor: not-allowed; }';
@@ -183,6 +185,42 @@ if (disabled) {
 
 let tags = [];
 let activeIndex = -1;
+let floatApi = null;
+
+function uiFloating() {
+    return (window.Weline && window.Weline.UI && window.Weline.UI.floating)
+        ? window.Weline.UI.floating
+        : null;
+}
+function ensureFloat() {
+    if (floatApi) return floatApi;
+    const floating = uiFloating();
+    if (!floating || typeof floating.attach !== 'function' || !suggestionsContainer) return null;
+    suggestionsContainer.setAttribute('data-w-float-surface', '');
+    container.setAttribute('data-w-placement', 'bottom-start');
+    floatApi = floating.attach(container, { placement: 'bottom-start' });
+    return floatApi;
+}
+function placeFloat() {
+    const wrapper = container.querySelector('.w-tag-input-wrapper');
+    if (wrapper && suggestionsContainer) {
+        const width = Math.round(wrapper.getBoundingClientRect().width);
+        if (width > 0) {
+            suggestionsContainer.style.setProperty('--w-floating-inline-size', width + 'px');
+            suggestionsContainer.style.minWidth = width + 'px';
+        }
+    }
+    const api = ensureFloat();
+    if (!api) return;
+    if (typeof api.show === 'function') api.show();
+    else if (typeof api.sync === 'function') api.sync();
+    else if (typeof api.place === 'function') api.place();
+}
+function hideSuggestions() {
+    if (floatApi && typeof floatApi.hide === 'function') floatApi.hide();
+    suggestionsContainer.hidden = true;
+    suggestionsContainer.style.display = 'none';
+}
 
 function escapeHtml(text) {
     const div = document.createElement('div');
@@ -292,7 +330,7 @@ function showError(msg) {
 // 显示建议
 function showSuggestions(items) {
     if (!items || !items.length) {
-        suggestionsContainer.style.display = 'none';
+        hideSuggestions();
         return;
     }
     
@@ -301,8 +339,10 @@ function showSuggestions(items) {
         return '<div class="w-tag-input-suggestion" data-value="' + escapeAttr(text) + '" data-index="' + idx + '">' + escapeHtml(text) + '</div>';
     }).join('');
     
-    suggestionsContainer.style.display = 'block';
+    suggestionsContainer.hidden = false;
+    suggestionsContainer.style.display = '';
     activeIndex = -1;
+    placeFloat();
     
     // 绑定点击事件
     suggestionsContainer.querySelectorAll('.w-tag-input-suggestion').forEach(el => {
@@ -312,7 +352,7 @@ function showSuggestions(items) {
                 input.value = '';
                 input.focus();
             }
-            suggestionsContainer.style.display = 'none';
+            hideSuggestions();
         });
     });
 }
@@ -339,7 +379,7 @@ function searchSuggestions(keyword) {
 
 function filterStaticSuggestions(keyword) {
     if (!staticSuggestions.length) {
-        suggestionsContainer.style.display = 'none';
+        hideSuggestions();
         return;
     }
     
@@ -362,7 +402,7 @@ input.addEventListener('keydown', function(e) {
                 if (addTag(suggestions[activeIndex].dataset.value)) {
                     input.value = '';
                 }
-                suggestionsContainer.style.display = 'none';
+                hideSuggestions();
             } else if (input.value.trim()) {
                 if (addTag(input.value)) {
                     input.value = '';
@@ -377,7 +417,7 @@ input.addEventListener('keydown', function(e) {
             break;
             
         case 'ArrowDown':
-            if (suggestionsContainer.style.display !== 'none') {
+            if (!suggestionsContainer.hidden) {
                 e.preventDefault();
                 activeIndex = Math.min(activeIndex + 1, suggestions.length - 1);
                 updateActiveSuggestion(suggestions);
@@ -385,7 +425,7 @@ input.addEventListener('keydown', function(e) {
             break;
             
         case 'ArrowUp':
-            if (suggestionsContainer.style.display !== 'none') {
+            if (!suggestionsContainer.hidden) {
                 e.preventDefault();
                 activeIndex = Math.max(activeIndex - 1, 0);
                 updateActiveSuggestion(suggestions);
@@ -393,7 +433,7 @@ input.addEventListener('keydown', function(e) {
             break;
             
         case 'Escape':
-            suggestionsContainer.style.display = 'none';
+            hideSuggestions();
             break;
             
         default:
@@ -421,7 +461,7 @@ input.addEventListener('input', function() {
     if (this.value.trim() && (apiUrl || staticSuggestions.length)) {
         debouncedSearch(this.value);
     } else {
-        suggestionsContainer.style.display = 'none';
+        hideSuggestions();
     }
 });
 
@@ -434,10 +474,10 @@ input.addEventListener('focus', function() {
     }
 });
 
-// 点击外部关闭建议
+// 点击外部关闭建议（portal 后须检测 suggestions 节点）
 document.addEventListener('click', function(e) {
-    if (!container.contains(e.target)) {
-        suggestionsContainer.style.display = 'none';
+    if (!container.contains(e.target) && !suggestionsContainer.contains(e.target)) {
+        hideSuggestions();
     }
 });
 

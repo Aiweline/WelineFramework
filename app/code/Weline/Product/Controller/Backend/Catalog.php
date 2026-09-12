@@ -84,8 +84,34 @@ final class Catalog extends BackendController
             $error = (string)__('商品目录读取失败：%{1}', [$exception->getMessage()]);
         }
 
+        $sourcePlatformOptions = [];
+        $optionFilters = $filters;
+        unset($optionFilters['source'], $optionFilters['source_platform']);
+        $optionRows = $rows;
+        if ($optionFilters !== $filters && $error === '') {
+            try {
+                $optionRows = $this->productAdminRead->search($websiteId, $optionFilters);
+            } catch (\Throwable) {
+                $optionRows = $rows;
+            }
+        }
+        foreach ($optionRows as $row) {
+            $platform = strtolower(trim((string)($row['source_platform'] ?? '')));
+            if ($platform !== '') {
+                $sourcePlatformOptions[$platform] = strtoupper($platform);
+            }
+        }
+        $selectedSource = strtolower(trim((string)($filters['source'] ?? $filters['source_platform'] ?? '')));
+        if ($selectedSource !== '' && $selectedSource !== '__none__' && $selectedSource !== 'none'
+            && !isset($sourcePlatformOptions[$selectedSource])
+        ) {
+            $sourcePlatformOptions[$selectedSource] = strtoupper($selectedSource);
+        }
+        ksort($sourcePlatformOptions);
+
         $this->assignCommon('products', $websiteId, $error);
         $this->assign('filters', $filters);
+        $this->assign('source_platform_options', $sourcePlatformOptions);
         $this->assign('creation_context', $context);
         $this->assign('rows', $rows);
         $this->assign('category_bulk_options', $categoryBulkOptions);
@@ -645,11 +671,14 @@ final class Catalog extends BackendController
     private function productFilters(): array
     {
         $filters = [];
-        foreach (['name', 'sku', 'product_code', 'product_type', 'status'] as $field) {
+        foreach (['name', 'sku', 'product_code', 'product_type', 'status', 'source', 'source_platform'] as $field) {
             $value = trim((string)$this->request->getGet($field, ''));
             if ($value !== '') {
                 $filters[$field] = $value;
             }
+        }
+        if (isset($filters['source_platform']) && !isset($filters['source'])) {
+            $filters['source'] = (string)$filters['source_platform'];
         }
         $storeId = max(0, (int)$this->request->getGet('store_id', 0));
         if ($storeId > 0) {

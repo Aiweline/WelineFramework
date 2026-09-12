@@ -9,6 +9,8 @@ use Weline\Framework\Manager\ObjectManager;
 
 /**
  * ToB cart qty gates: default moq=5 / step=5 from SellingModePolicy when available.
+ * Ineligible wholesale SKUs (no product tob + active tiers) skip MOQ so they can
+ * still enter a tob cart at normal retail qty rules.
  */
 final class B2BCartQtyPolicy implements CommerceCartQtyPolicyInterface
 {
@@ -22,6 +24,7 @@ final class B2BCartQtyPolicy implements CommerceCartQtyPolicyInterface
 
     public function __construct(
         private readonly ?SellingModePolicy $sellingModePolicy = null,
+        private readonly ?ProductWholesaleEligibility $eligibility = null,
     ) {
     }
 
@@ -30,6 +33,10 @@ final class B2BCartQtyPolicy implements CommerceCartQtyPolicyInterface
         $cartType = strtolower(trim((string)($params['cart_type'] ?? '')));
         if ($cartType !== self::CART_TYPE_TOB) {
             return ['ok' => true];
+        }
+
+        if (!$this->requiresTobQtyGate($params)) {
+            return ['ok' => true, 'detail' => ['wholesale_qty_gate' => false]];
         }
 
         $qty = max(0, (int)($params['qty'] ?? 0));
@@ -68,8 +75,40 @@ final class B2BCartQtyPolicy implements CommerceCartQtyPolicyInterface
                 'qty' => $qty,
                 'moq' => $moq,
                 'qty_step' => $step,
+                'wholesale_qty_gate' => true,
             ],
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     */
+    private function requiresTobQtyGate(array $params): bool
+    {
+        $sku = trim((string)($params['sku'] ?? ''));
+        // Without SKU we cannot prove ineligibility — keep legacy MOQ.
+        if ($sku === '') {
+            return true;
+        }
+        $websiteId = max(0, (int)($params['website_id'] ?? 0));
+        $storeId = max(0, (int)($params['store_id'] ?? 0));
+        $productFlags = null;
+        if (isset($params['product_flags']) && is_array($params['product_flags'])) {
+            $productFlags = $params['product_flags'];
+        } elseif (isset($params['product_id']) && (int)$params['product_id'] > 0) {
+            $productFlags = ProductSellingModeFlags::fromOffer([
+                'product_id' => (int)$params['product_id'],
+                'sku' => $sku,
+            ]);
+        }
+
+        $gate = $this->eligibilityGate();
+        if ($gate === null) {
+            // Fail soft: keep legacy MOQ when eligibility helper unavailable.
+            return true;
+        }
+
+        return $gate->requiresTobQtyGate($websiteId, $storeId, $productFlags, $sku);
     }
 
     /**
@@ -115,6 +154,23 @@ final class B2BCartQtyPolicy implements CommerceCartQtyPolicyInterface
         try {
             $policy = ObjectManager::getInstance(SellingModePolicy::class);
             return $policy instanceof SellingModePolicy ? $policy : null;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function eligibilityGate(): ?ProductWholesaleEligibility
+    {
+        if ($this->eligibility instanceof ProductWholesaleEligibility) {
+            return $this->eligibility;
+        }
+        if (!class_exists(ProductWholesaleEligibility::class)) {
+            return null;
+        }
+        try {
+            $gate = ObjectManager::getInstance(ProductWholesaleEligibility::class);
+
+            return $gate instanceof ProductWholesaleEligibility ? $gate : null;
         } catch (\Throwable) {
             return null;
         }

@@ -24,8 +24,11 @@ final class CartStorefrontSlotsCatalogContractTest extends TestCase
         $slots = $catalog['slots'] ?? [];
         self::assertArrayHasKey('cart-summary-discount', $slots);
         self::assertArrayHasKey('cart-summary-note', $slots);
+        self::assertArrayHasKey('cart-summary-credit', $slots);
         self::assertContains('cart-coupon', $slots['cart-summary-discount']['accepts'] ?? []);
         self::assertContains('order-notice', $slots['cart-summary-note']['accepts'] ?? []);
+        self::assertContains('b2b-checkout-credit', $slots['cart-summary-credit']['accepts'] ?? []);
+        self::assertContains('b2b', $slots['cart-summary-credit']['accepts'] ?? []);
 
         $template = dirname(__DIR__, 3) . '/view/templates/frontend/widgets/cart-storefront-slots.phtml';
         self::assertFileExists($template);
@@ -38,8 +41,11 @@ final class CartStorefrontSlotsCatalogContractTest extends TestCase
         $template = (string)file_get_contents($path);
         self::assertStringContainsString('id="cart-summary-discount"', $template);
         self::assertStringContainsString('id="cart-summary-note"', $template);
+        self::assertStringContainsString('id="cart-summary-credit"', $template);
         self::assertStringContainsString('class="weline-cart-shell__coupon-slot"', $template);
         self::assertStringContainsString('class="weline-cart-shell__note-slot"', $template);
+        self::assertStringContainsString('class="weline-cart-shell__credit-slot"', $template);
+        self::assertStringContainsString('b2b-checkout-credit', $template);
         self::assertStringContainsString('data-cart-discount-breakdown', $template);
         self::assertStringContainsString('data-cart-goods-subtotal', $template);
         self::assertStringContainsString('data-cart-discount-lines', $template);

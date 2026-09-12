@@ -804,7 +804,8 @@
         .w-search-inline,
         .w-search-bar
     ):has(:is(.w-input, .w-textarea):placeholder-shown):not(:focus-within) > .w-field__label {
-        inset-block-start: 50%;
+        /* Relative to control height — not 50% of .w-field (hint/error would sink the label). */
+        inset-block-start: calc(var(--weline-control-height) / 2);
         translate: 0 -50%;
         padding-inline: 0;
         color: var(--weline-theme-text-subtle);

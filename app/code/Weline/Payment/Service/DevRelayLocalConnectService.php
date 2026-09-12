@@ -233,12 +233,18 @@ final class DevRelayLocalConnectService
      */
     public function start(string $onlineBaseUrl, string $userToken): array
     {
-        if (!$this->gate->canOpenUi() || !$this->gate->isLocalEnvironment()) {
+        if (!$this->gate->isLocalEnvironment()) {
             throw new \RuntimeException((string) __('仅本地环境可启动静默 DevRelay worker。'));
         }
 
-        $onlineBaseUrl = rtrim(trim($onlineBaseUrl), '/');
-        $userToken = trim($userToken);
+        $remembered = $this->readRememberedCredentials() ?? ['online_base_url' => '', 'user_token' => ''];
+        $onlineBaseUrl = rtrim(trim($onlineBaseUrl !== '' ? $onlineBaseUrl : (string) ($remembered['online_base_url'] ?: ($this->gate->config()['online_base_url'] ?? ''))), '/');
+        $userToken = trim($userToken !== '' ? $userToken : (string) ($remembered['user_token'] ?? ''));
+
+        if (!$this->gate->canOpenUi()) {
+            throw new \RuntimeException((string) __('请先在支付钩子控制台启用 DevRelay。'));
+        }
+
         if ($onlineBaseUrl === '' || $userToken === '') {
             throw new \InvalidArgumentException((string) __('请提供线上站点地址与用户 Token。'));
         }

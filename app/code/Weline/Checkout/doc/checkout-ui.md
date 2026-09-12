@@ -27,7 +27,7 @@
 - 收货地址：`checkout-shipping-address` 槽 + `Weline_Shipping::checkout-shipping-address` 部件（`<w:theme:address>` 级联 + 已存地址选择）；Checkout 禁止裸拼国家/省/市 input
 - 收货交互：有已存地址默认收起；radio 单选地址卡；可编辑 / 使用新地址；账单默认与收货相同，可展开修改（Shopify 分段 + Amazon 卡片）
 - 模块页槽发现：`checkout-storefront-slots` 容器声明结账模块页嵌套槽，供 Theme `findSlot` / required `default_injections` 安装（对齐 Product `product-info`）
-- 快捷支付：`checkout-express-payment` 槽（左侧主栏、收货信息上方）+ `Weline_Payment::checkout-express-payment` 部件（`enabled` 开关；Shopify Express 布局 + Amazon 色板）；禁止 Checkout 内嵌 PayPal
+- 快捷支付：`checkout-express-payment` 槽（左侧主栏、收货信息上方）+ `Weline_Payment::checkout-express-payment` 部件（壳 `listExpressMethods` / `express_checkout`；`enabled` 开关）；提交带 `express_checkout=true`，与万能支付壳同一逻辑；禁止 Checkout 内嵌 PayPal
 - 优先复用 Theme Amazon token（`--color-text-*` / `--color-link`）；CTA 黄按钮写死 Amazon 黄，避免站点品牌主色（如品红）污染结账主按钮
 - 入口页：`/checkout`
 - 页头副标题：控制器 `checkout_page_subtitle`（默认面向顾客的引导文案；赋空字符串可隐藏）

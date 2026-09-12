@@ -52,7 +52,7 @@ final class GuidanceWorkflowCatalog
 
     /**
      * Pointer-only bootstrap notices. Framework rule bodies live in HardConstraintsCatalog
-     * (prepare_project.agent_guidance.hard_constraints / workflow_contract.hard_rules).
+     * (prepare_project.agent_guidance.hard_constraints / workflow_contract.hard_rules id index).
      *
      * @return list<string>
      */
@@ -61,14 +61,14 @@ final class GuidanceWorkflowCatalog
         return [
             '【引导·只指路】框架硬约束不在本列表展开。请立即阅读 prepare_project.agent_guidance.hard_constraints（hard-constraints.v1）；权威正文 app/code/Weline/Ai/doc/AI硬规则索引.md；任务细则由 resolve_task_context → workflow_contract.v1 surfaces 下发；工程技能由 agent_guidance.mcp_skills + resolve_skill/get_skill 按需取。',
             '[Bootstrap · pointers only] Framework hard rules are not expanded here. Read agent_guidance.hard_constraints (hard-constraints.v1); authority app/code/Weline/Ai/doc/AI硬规则索引.md; task detail via resolve_task_context → workflow_contract.v1 surfaces; engineering skills via agent_guidance.mcp_skills + resolve_skill/get_skill.',
-            '交付地址机器契约见 agent_guidance.feature_delivery_urls 与 closeout_delivery_reminder；本机默认 Host 为 `{project_hash}.test.weline.com`，禁止主验收使用 `*.weline.test`。Browser 自测、每次打开禁用缓存、交付地址、汇报后关闭标签见 hard_constraints（browser_operator_self_test / browser_cache_disabled_on_open / feature_delivery_urls / browser_release_after_delivery）与 WebUI浏览器验收与交付地址门禁.md。',
-            'Delivery URL machine contract: agent_guidance.feature_delivery_urls and closeout_delivery_reminder; default local Host is {project_hash}.test.weline.com (never primary *.weline.test). Browser self-test, cache-disabled-on-open, delivery URLs, and close-after-report live in hard_constraints (browser_operator_self_test / browser_cache_disabled_on_open / feature_delivery_urls / browser_release_after_delivery) and WebUI browser closeout gate doc.',
+            '交付地址机器契约见 agent_guidance.feature_delivery_urls 与 closeout_delivery_reminder；本机默认 Host 为 `{project_hash}.test.weline.com`，禁止主验收使用 `*.weline.test`。任何 feature 必须 Agent 自跑 Playwright e2e PASS（禁止请用户测试）；Browser 自测、每次打开禁用缓存、交付地址、汇报后关闭标签见 hard_constraints（ui_feature_requires_e2e / forbid_user_manual_test_handoff / browser_operator_self_test / browser_cache_disabled_on_open / feature_delivery_urls / browser_release_after_delivery）与 WebUI浏览器验收与交付地址门禁.md。',
+            'Delivery URL machine contract: agent_guidance.feature_delivery_urls and closeout_delivery_reminder; default local Host is {project_hash}.test.weline.com (never primary *.weline.test). Every feature MUST Agent-run Playwright e2e to PASS (never ask the user to test). Browser self-test, cache-disabled-on-open, delivery URLs, and close-after-report live in hard_constraints (ui_feature_requires_e2e / forbid_user_manual_test_handoff / browser_operator_self_test / browser_cache_disabled_on_open / feature_delivery_urls / browser_release_after_delivery) and WebUI browser closeout gate doc.',
             '【宿主工具目录】密封编辑前确认本会话可见 submit_task_plan / get_task_plan。ensure 的 mcp_stdio 已含而本会话 GetDynamicTools 缺失时，记 HOST_MCP_SESSION_CATALOG_STALE 并新开 Agent 回合；禁止调用 mcp_auth。',
             '[Host tool catalog] Before sealed edits, confirm this chat exposes submit_task_plan / get_task_plan. If ensure mcp_stdio lists them but GetDynamicTools does not, record HOST_MCP_SESSION_CATALOG_STALE and start a new Agent turn; never call mcp_auth.',
-            '【调用范围】非编码（闲聊/概念问答）禁止 MCP；仅编码/工程走 ensure → prepare_project。例外：打招呼 hi/你好 或指令「提取技能」可 list MCP 技能+指令（禁止密封编辑）。细则见 hard_constraints.mcp_operational.mcp_call_scope / greeting_lists_mcp_skills_and_commands。',
-            '[Call scope] Skip MCP for non-coding; coding/engineering only uses ensure → prepare_project. Exception: greeting hi/你好 or command 提取技能 may list MCP skills+commands (no sealed edits). See mcp_call_scope / greeting_lists_mcp_skills_and_commands.',
-            '【每条编码需求】可执行编码/工程需求提出后，立即判定 work_kind=feature|non_feature；功能须原型+UI 参与并规划 type=shentu；按框架信息审视合理性（不合理则纠偏为更合理做法，写入 requirement_scrutiny），再做解耦方案并 submit_task_plan（requirements + work_kind + skill_participation + requirement_scrutiny + architecture + coupling_findings + ≥1 unit）；验收阶段须审图；结束须汇审（huishen_notes）；禁止耦合写法与字面照做不合理需求；有纠偏汇报「需求纠偏」；发现耦合须写入 coupling_findings 并在汇报「耦合提示」明示；再 TDD 红→绿并实际跑测。非编码勿 submit_task_plan。',
-            '[Every coding requirement] Immediately classify work_kind=feature|non_feature; if feature, prototype+UI must participate and plan type=shentu; scrutinize the ask against the framework, design a decoupled solution, and submit_task_plan; during verify run 审图; before done write 汇审 huishen_notes; then TDD red→green. Non-coding must not submit_task_plan.',
+            '【调用范围】非编码（闲聊/概念问答）禁止 MCP；仅编码/工程走 ensure → prepare_project。例外：打招呼 hi/你好 或指令「提取技能」可 list MCP 技能+指令（禁止密封编辑）。运行/翻译状态查询默认本机（runtime_status_query_local_first）；仅明示线上/生产才 SSH。细则见 mcp_call_scope / greeting_lists_mcp_skills_and_commands。',
+            '[Call scope] Skip MCP for non-coding; coding/engineering only uses ensure → prepare_project. Exception: greeting hi/你好 or command 提取技能 may list MCP skills+commands (no sealed edits). Status/translation queries default LOCAL (runtime_status_query_local_first); production SSH only when user explicitly asks. See mcp_call_scope / greeting_lists_mcp_skills_and_commands.',
+            '【每条编码需求】可执行编码/工程需求提出后，立即分析当前环境隐形需求并写入 implicit_requirements；判定 work_kind；据分析设 ui_skill_decision=participate|skip（禁止凡 feature 一律强制原型+UI）；participate 时原型+UI 参与并规划 type=shentu；按框架信息审视合理性，再做解耦方案并 submit_task_plan；计划须经合规审核（架构/解耦/电商合规/原型/e2e/体量/闭环；章节=e2e闭环；标进度后再下一章）；验收阶段按决策审图；结束须汇审；禁止耦合写法与字面照做不合理需求；有纠偏汇报「需求纠偏」；发现耦合须「耦合提示」；再 TDD 红→绿并实际跑测。非编码勿 submit_task_plan。',
+            '[Every coding requirement] Immediately analyze environment implicit requirements, classify work_kind, set ui_skill_decision=participate|skip from analysis (never blindly force prototype+UI), scrutinize against the framework, design a decoupled solution, and submit_task_plan; review plan compliance (architecture/decoupling/ecommerce/prototype/e2e/size/closed-loop; chapters=e2e loops); during verify run 审图 when participate; before done write 汇审; then TDD red→green. Non-coding must not submit_task_plan.',
         ];
     }
 
@@ -93,8 +93,8 @@ final class GuidanceWorkflowCatalog
                 'Forcing 127.0.0.1 when *.test.weline.com Host exists',
                 'Leaving acceptance Browser tabs/webviews open after the Delivery URLs section (idle Glass/Simple Browser/ide-browser)',
             ],
-            'summary_zh' => '每次向用户汇报功能完成或阶段性交付时：① 须已自行按验收层级验证（agent_self_verify_before_done：UT/RT/WB）；功能/Web/UI 须含验收阶段审图（acceptance_phase_requires_shentu）；Web/UI 须用当前宿主可用的真实 Browser 按用例自测，且每次打开/导航前禁用 HTTP 缓存（未测或宿主无 Browser 只能报验收未完成）；② 回复须含「需求纠偏」小节（requirement_framework_scrutiny：无调整写「无调整/合理」，有纠偏则逐条列出原问题与更合理做法）；③ 回复须含「耦合提示」小节（framework_decoupled_only：无耦合写「无耦合」，有发现则逐条列出，禁止静默交付耦合写法）；④ 回复须含「汇审」小节（closeout_requires_huishen：对照需求/验收/(功能时)原型·UI·审图）；⑤ 回复末尾必须包含「交付地址」小节，列出探活过的前台/后台/API 可点击 http(s) Markdown 链接；本机默认 Host 为 `{project_hash}.test.weline.com`（例 http://p05113ef3.test.weline.com:9555/...），禁止把 `*.weline.test` 当主验收 Host；纯逻辑无 UI 写 N/A。禁止省略该小节。⑥ 写完「交付地址」后立即关闭本回合打开的验收 Browser 标签/webview（Cursor：unlock 后 browser_tabs close；用户明确要求保留除外）。',
-            'summary_en' => 'On every feature completion or stage handoff: (1) Agent must have self-verified by acceptance tier (agent_self_verify_before_done: UT/RT/WB) including acceptance-phase 审图 when feature/UI; for Web/UI, run a host-available real Browser on agreed use cases with HTTP cache disabled on every open/navigate—otherwise only report WebUI incomplete; (2) include a 「需求纠偏」/Requirement correction section; (3) include a 「耦合提示」/Coupling tips section; (4) include a 「汇审」/Joint review section (closeout_requires_huishen); (5) end with a Delivery URLs section of probe-verified clickable http(s) Markdown links using default local Host {project_hash}.test.weline.com (never primary *.weline.test), or N/A when no UI. Never omit this section. (6) Immediately after that section, close every acceptance Browser tab/webview opened this turn, unless the user explicitly asks to keep them.',
+            'summary_zh' => '每次向用户汇报功能完成或阶段性交付时：① 须已自行按验收层级验证（agent_self_verify_before_done：UT/RT/WB）；任何 feature 须 Agent 自跑 Playwright e2e PASS（ui_feature_requires_e2e），禁止请用户测试/刷新自验（forbid_user_manual_test_handoff）；功能/Web/UI 须含验收阶段审图（acceptance_phase_requires_shentu）；Web/UI 须用当前宿主可用的真实 Browser 按用例自测，且每次打开/导航前禁用 HTTP 缓存（未测或宿主无 Browser 只能报验收未完成）；② 回复须含「需求纠偏」小节（requirement_framework_scrutiny：无调整写「无调整/合理」，有纠偏则逐条列出原问题与更合理做法）；③ 回复须含「耦合提示」小节（framework_decoupled_only：无耦合写「无耦合」，有发现则逐条列出，禁止静默交付耦合写法）；④ 回复须含「汇审」小节（closeout_requires_huishen：对照需求/验收/(功能时)原型·UI·审图·e2e）；⑤ 回复末尾必须包含「交付地址」小节，列出探活过的前台/后台/API 可点击 http(s) Markdown 链接；本机默认 Host 为 `{project_hash}.test.weline.com`（例 http://p05113ef3.test.weline.com:9555/...），禁止把 `*.weline.test` 当主验收 Host；纯逻辑无 UI 写 N/A。禁止省略该小节。⑥ 写完「交付地址」后立即关闭本回合打开的验收 Browser 标签/webview（Cursor：unlock 后 browser_tabs close；用户明确要求保留除外）。',
+            'summary_en' => 'On every feature completion or stage handoff: (1) Agent must have self-verified by acceptance tier (agent_self_verify_before_done: UT/RT/WB) including Playwright e2e PASS for every feature (ui_feature_requires_e2e)—never ask the user to test (forbid_user_manual_test_handoff); include acceptance-phase 审图 when feature/UI; for Web/UI, run a host-available real Browser on agreed use cases with HTTP cache disabled on every open/navigate—otherwise only report WebUI incomplete; (2) include a 「需求纠偏」/Requirement correction section; (3) include a 「耦合提示」/Coupling tips section; (4) include a 「汇审」/Joint review section (closeout_requires_huishen); (5) end with a Delivery URLs section of probe-verified clickable http(s) Markdown links using default local Host {project_hash}.test.weline.com (never primary *.weline.test), or N/A when no UI. Never omit this section. (6) Immediately after that section, close every acceptance Browser tab/webview opened this turn, unless the user explicitly asks to keep them.',
             'browser_self_test_required_for_web' => true,
             'agent_self_verify_required' => true,
             'agent_self_verify_rule' => 'agent_self_verify_before_done',
@@ -105,6 +105,7 @@ final class GuidanceWorkflowCatalog
             'huishen_section_title_en' => 'Joint review',
             'huishen_hard_constraint' => 'closeout_requires_huishen',
             'requirement_feature_kind_gate' => true,
+            'requirement_implicit_analysis_skill_decision' => true,
             'plan_then_tdd_required' => true,
             'plan_then_tdd_rule' => 'plan_then_tdd_required',
             'requirement_framework_scrutiny' => true,
@@ -213,13 +214,15 @@ final class GuidanceWorkflowCatalog
         return [
             'schema' => 'chapter-delivery.v1',
             'session_startup_notices_addon' => [
-                '分章计划：上一章 doc/开发日志.md 四段门禁全 pass 后才允许下一章编码。',
+                '分章计划：上一章 doc/开发日志.md 四段门禁全 pass 后才允许下一章编码；每章=可完整验收的 e2e 闭环，须 update_task_plan_progress 标进度后再开下一章。',
                 '含 Web 的分章 Done：WB 须 WB-OP；有视觉面且宿主可截图时再加 WB-VIS（存归属模块 doc/evidence/ch{N}/，有 doc/原型设计.md 则对照）。',
                 '每章收口须在交付汇报与 doc/开发日志.md 列出本章涉及的前台、后台与 API 地址清单。',
+                '计划合规审核（task_plan_compliance_review）：架构/解耦/电商合规/原型设计/e2e完整性/体量/逻辑闭环。',
             ],
             'mandatory_before_code' => [
                 'webui_acceptance_cases_agreed_for_web_surface',
                 'chapter_acceptance_defined_if_multi_chapter_plan',
+                'plan_compliance_dimensions_reviewed',
             ],
             'mandatory_before_chapter_closeout' => [
                 'unit_tests_pass_for_current_chapter',
@@ -281,6 +284,7 @@ final class GuidanceWorkflowCatalog
                 'shentu_acceptance_planned_when_feature',
                 'webui_acceptance_cases_agreed_for_web_surface',
                 'chapter_acceptance_defined_if_multi_chapter_plan',
+                'plan_compliance_dimensions_reviewed',
             ],
             'mandatory_before_closeout' => [
                 'agent_self_verify_with_acceptance_evidence',
@@ -296,7 +300,14 @@ final class GuidanceWorkflowCatalog
                 'webui_browser_released_after_delivery_or_na',
                 'module_i18n_csv_collected_when_strings_changed',
             ],
-            'hard_constraints' => HardConstraintsCatalog::package(),
+            // Pointer only: full hard-constraints.v1 already shipped in prepare_project.agent_guidance.
+            'hard_constraints' => [
+                'schema' => HardConstraintsCatalog::SCHEMA,
+                'must_obey' => true,
+                'authoritative_doc' => HardConstraintsCatalog::AUTHORITATIVE_DOC,
+                'source' => 'prepare_project.agent_guidance.hard_constraints',
+                'detail_via' => HardConstraintsCatalog::AUTHORITATIVE_DOC,
+            ],
             'phases' => [
                 ['id' => 'bootstrap', 'label' => '引导与 ready', 'tools' => ['ensure-project-guidance', 'prepare_project'], 'read' => ['agent_guidance.hard_constraints', 'session_startup_notices']],
                 ['id' => 'locate', 'label' => '定位与需求确认', 'tools' => ['resolve_task_context', 'search_project_knowledge', 'submit_task_plan'], 'notes' => [
@@ -310,7 +321,7 @@ final class GuidanceWorkflowCatalog
                     'On every coding/engineering user requirement: compose requirements + work_kind + skill_participation (feature→prototype+frontend-design) + requirement_scrutiny + architecture + coupling_findings + dev_tasks + acceptance (feature→type=shentu) and call submit_task_plan immediately. Non-coding skips MCP.',
                     'PLAN_REQUIRED is not a dead-end: follow plan_workflow steps and submit_task_plan now.',
                     'Track dev_tasks and acceptance status via update_task_plan_progress during implement/verify; update requirement_scrutiny / coupling_findings when corrections or coupling are discovered.',
-                    'Call review_task_plan before closeout; closeout_allowed=true required to claim done; user report MUST include 「需求纠偏」 (无调整/合理 or listed corrections), 「耦合提示」 (无耦合 or listed findings), and 「汇审」.',
+                    'Call review_task_plan before closeout; compliance_dimensions must cover architecture/decoupling/ecommerce/prototype/e2e/size/closed-loop (task_plan_compliance_review); chapters=e2e loops with progress before next; closeout_allowed=true required to claim done; user report MUST include 「需求纠偏」 (无调整/合理 or listed corrections), 「耦合提示」 (无耦合 or listed findings), and 「汇审」.',
                     'Web/UI tasks must list tablet and PC responsive acceptance in the plan.',
                 ]],
                 ['id' => 'implement', 'label' => '实现（TDD 绿）', 'tools' => ['get_edit_bundle', 'apply_compact_edit', 'update_task_plan_progress'], 'notes' => [
@@ -347,7 +358,8 @@ final class GuidanceWorkflowCatalog
                 ['surface' => 'page_interaction', 'minimum' => 'wls_browser_operator_path_multi_breakpoint'],
             ],
             'surfaces' => $surfaces,
-            'hard_rules' => HardConstraintsCatalog::workflowHardRules(),
+            // Index only: full summaries already in prepare_project.agent_guidance.hard_constraints.
+            'hard_rules' => HardConstraintsCatalog::workflowHardRulesRef(),
             // Compatibility alias used by older agents; prefer surfaces.frontend_development.
             'template_surface_rules' => $frontendDevelopment['template_surface_rules'],
             'frontend_development' => $frontendDevelopment,

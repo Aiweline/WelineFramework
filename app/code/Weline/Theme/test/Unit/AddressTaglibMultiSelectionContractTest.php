@@ -39,8 +39,19 @@ final class AddressTaglibMultiSelectionContractTest extends TestCore
         self::assertStringContainsString('floating.attach', $js);
         self::assertStringContainsString('data-w-float-surface', $js);
         self::assertStringContainsString("placement: 'bottom-start'", $js);
+        self::assertStringContainsString('function placeSingleMenu', $js);
+        self::assertStringContainsString('function ensureSingleFloat', $js);
         self::assertStringNotContainsString('function positionOpenMenus', $js);
         self::assertStringNotContainsString('is-dropup', $js);
+    }
+
+    public function testSingleMenuAlsoUsesWelineUiFloatingAttach(): void
+    {
+        $js = (string)file_get_contents(BP . 'app/code/Weline/Theme/view/statics/js/address.js');
+        self::assertStringContainsString('function placeSingleMenu', $js);
+        self::assertStringContainsString('function ensureSingleFloat', $js);
+        self::assertStringContainsString('data-w-float-surface hidden', $js);
+        self::assertMatchesRegularExpression('/menu\.contains\s*&&\s*menu\.contains\(target\)/', $js);
     }
 
     public function testMultiDistrictPoolSupportsCityLeafCountriesAndMenuGroups(): void
@@ -120,7 +131,7 @@ final class AddressTaglibMultiSelectionContractTest extends TestCore
         self::assertStringNotContainsString("postalField.addEventListener('change', schedule);", $js);
         self::assertStringContainsString('lastEnqueuedPostal', $js);
         self::assertStringContainsString('if (mine && t !== mine)', $js);
-        self::assertStringContainsString('address-notch', (string)file_get_contents(BP . 'app/code/Weline/Theme/view/statics/js/address-loader.js'));
+        self::assertStringContainsString('single-float', (string)file_get_contents(BP . 'app/code/Weline/Theme/view/statics/js/address-loader.js'));
         $doc = html_entity_decode(\Weline\Theme\Taglib\Address::document(), ENT_QUOTES, 'UTF-8');
         self::assertStringContainsString('postal-lookup', $doc);
     }
