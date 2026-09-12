@@ -76,5 +76,27 @@ final class DropshipListedLocalDetailServiceTest extends TestCase
         ], 'CNY');
         self::assertSame('Groove B · L', $row['label']);
         self::assertSame(10868, $row['amount_minor']);
+        self::assertSame('published', $row['status']);
+        self::assertNotSame('', (string)($row['status_label'] ?? ''));
+        self::assertNotSame('published', (string)($row['status_label'] ?? 'published'));
+    }
+
+    public function testProductStatusPresentationMapsLifecycle(): void
+    {
+        [$label, $tone] = DropshipListedLocalDetailService::productStatusPresentation('published');
+        self::assertNotSame('published', $label);
+        self::assertSame('success', $tone);
+
+        [$draftLabel, $draftTone] = DropshipListedLocalDetailService::productStatusPresentation('draft');
+        self::assertNotSame('draft', $draftLabel);
+        self::assertSame('warning', $draftTone);
+
+        [$disabledLabel, $disabledTone] = DropshipListedLocalDetailService::productStatusPresentation('disabled');
+        self::assertNotSame('disabled', $disabledLabel);
+        self::assertSame('muted', $disabledTone);
+
+        [$archivedLabel, $archivedTone] = DropshipListedLocalDetailService::productStatusPresentation('archived');
+        self::assertNotSame('archived', $archivedLabel);
+        self::assertSame('danger', $archivedTone);
     }
 }

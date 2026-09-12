@@ -10,6 +10,7 @@ use Weline\CjDropshipping\Service\CjCategoryLocalizer;
 use Weline\CjDropshipping\Service\CjProductTitleLocalizer;
 use Weline\CjDropshipping\Service\CjWarehouseMapper;
 use Weline\Dropship\Api\Data\DropshipCatalogSnapshot;
+use Weline\Dropship\Model\DropshipFulfillment;
 use Weline\Dropship\Interface\DropshipCatalogBrowseProviderInterface;
 use Weline\Dropship\Interface\DropshipCatalogProviderInterface;
 use Weline\Dropship\Interface\DropshipFreightProviderInterface;
@@ -662,10 +663,17 @@ class CjProvider implements
             $data = is_array($resp['data'] ?? null) ? $resp['data'] : [];
             $orderId = trim((string)($data['orderId'] ?? $data['orderNumber'] ?? ''));
             $shipmentOrderId = trim((string)($data['shipmentOrderId'] ?? ''));
+            $message = (string)($resp['message'] ?? '');
+            if (!$ok && self::isDuplicateCreateMessage($message)) {
+                $recovered = $this->recoverExistingCreate($command, $message, $sandbox);
+                if (($recovered['ok'] ?? false) === true) {
+                    return $recovered;
+                }
+            }
             $out = [
                 'ok' => $ok,
                 'external_order_id' => $orderId,
-                'message' => (string)($resp['message'] ?? ''),
+                'message' => $message,
                 'sandbox' => $sandbox,
                 'status' => $ok ? 'created' : 'error',
                 'raw' => $resp,
@@ -964,6 +972,72 @@ class CjProvider implements
         }
 
         return !empty($resp['result']) || !empty($resp['success']);
+    }
+
+    /** CJ 幂等建单：远端已存在同 orderNumber，应按成功恢复而非失败终态。 */
+    public static function isDuplicateCreateMessage(string $message): bool
+    {
+        $message = trim($message);
+        if ($message === '') {
+            return false;
+        }
+
+        return str_contains($message, 'Order exist')
+            || str_contains($message, 'do not duplicate create');
+    }
+
+    /**
+     * 从本地履约表 / getOrderDetail 恢复已建单。
+     *
+     * @param array<string, mixed> $command
+     * @return array<string, mixed>
+     */
+    private function recoverExistingCreate(array $command, string $message, bool $sandbox): array
+    {
+        $orderUuid = trim((string)($command['order_uuid'] ?? ''));
+        $externalId = '';
+        if ($orderUuid !== '') {
+            /** @var DropshipFulfillment $model */
+            $model = ObjectManager::getInstance(DropshipFulfillment::class);
+            $row = $model->clear()
+                ->where(DropshipFulfillment::schema_fields_PROVIDER_CODE, 'cj')
+                ->where(DropshipFulfillment::schema_fields_ORDER_UUID, $orderUuid)
+                ->find()
+                ->fetch();
+            if ($row && $row->getId()) {
+                $externalId = trim((string)$row->getData(DropshipFulfillment::schema_fields_EXTERNAL_ORDER_ID));
+            }
+        }
+        if ($externalId === '' && $orderUuid !== '') {
+            try {
+                $resp = $this->client()->get('/shopping/order/getOrderDetail', [
+                    'orderNumber' => $orderUuid,
+                ]);
+                if (self::isCjApiOk($resp)) {
+                    $data = is_array($resp['data'] ?? null) ? $resp['data'] : [];
+                    $externalId = trim((string)($data['orderId'] ?? $data['orderNumber'] ?? ''));
+                }
+            } catch (\Throwable) {
+                // fall through
+            }
+        }
+        if ($externalId === '') {
+            return [
+                'ok' => false,
+                'message' => $message,
+                'status' => 'error',
+                'duplicate' => true,
+            ];
+        }
+
+        return [
+            'ok' => true,
+            'external_order_id' => $externalId,
+            'message' => $message,
+            'sandbox' => $sandbox,
+            'status' => 'created',
+            'recovered_existing' => true,
+        ];
     }
 
     /**

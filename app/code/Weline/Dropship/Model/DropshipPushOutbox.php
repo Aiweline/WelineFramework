@@ -21,6 +21,8 @@ class DropshipPushOutbox extends Model
     public const STATUS_DONE = 'done';
     public const STATUS_ERROR = 'error';
     public const STATUS_SKIPPED = 'skipped';
+    /** 不可履约终态：停 Cron/队列重试；可触发自动退款补偿。 */
+    public const STATUS_DEAD = 'dead';
 
     #[Col('int', 11, primaryKey: true, autoIncrement: true, nullable: false, comment: 'ID')]
     public const schema_fields_ID = 'outbox_id';

@@ -8,10 +8,20 @@ use Weline\Dropship\Interface\DropshipFulfillmentProviderInterface;
 use Weline\Dropship\Model\DropshipFulfillment;
 use Weline\Dropship\Model\DropshipOrderLine;
 use Weline\Dropship\Model\DropshipPushOutbox;
+use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 
 class DropshipOutboxService
 {
+    public const MAX_ATTEMPTS = 5;
+
+    /** @var list<string> 永久失败白名单短语（不用过宽子串如单独 country；不含 Order exist——那是幂等已建单） */
+    private const PERMANENT_FAILURE_PHRASES = [
+        'Logistic not found',
+        'Platform not support',
+        'skipped:unsupported',
+    ];
+
     public function __construct(
         private readonly DropshipChannelManager $channels,
         private readonly DropshipSettings $settings,
@@ -65,8 +75,18 @@ class DropshipOutboxService
         if (!$row || !$row->getId()) {
             return ['ok' => false, 'message' => 'outbox_missing'];
         }
-        if ((string)$row->getData(DropshipPushOutbox::schema_fields_STATUS) === DropshipPushOutbox::STATUS_DONE) {
+
+        $status = (string)$row->getData(DropshipPushOutbox::schema_fields_STATUS);
+        if ($status === DropshipPushOutbox::STATUS_DONE) {
             return ['ok' => true, 'message' => 'already_done'];
+        }
+        if ($status === DropshipPushOutbox::STATUS_DEAD) {
+            if ($this->maybeRecoverExistingFulfillment($row, $bizKey)) {
+                return ['ok' => true, 'message' => 'recovered_existing', 'recovered' => true];
+            }
+            $this->maybeBackfillTerminalCompensation($row, $bizKey);
+
+            return ['ok' => true, 'message' => 'already_dead', 'terminal' => true];
         }
 
         $providerCode = (string)$row->getData(DropshipPushOutbox::schema_fields_PROVIDER_CODE);
@@ -79,9 +99,13 @@ class DropshipOutboxService
         $row->setData(DropshipPushOutbox::schema_fields_ATTEMPTS, $attempts)->save();
 
         if (!$provider instanceof DropshipFulfillmentProviderInterface) {
+            $lastError = 'skipped:unsupported';
+            if ($action === 'create') {
+                return $this->markTerminalDead($row, $bizKey, $providerCode, $action, $orderUuid, $payload, $lastError);
+            }
             $row->setData([
                 DropshipPushOutbox::schema_fields_STATUS => DropshipPushOutbox::STATUS_SKIPPED,
-                DropshipPushOutbox::schema_fields_LAST_ERROR => 'skipped:unsupported',
+                DropshipPushOutbox::schema_fields_LAST_ERROR => $lastError,
                 DropshipPushOutbox::schema_fields_UPDATED_AT => date('Y-m-d H:i:s'),
             ])->save();
 
@@ -141,14 +165,224 @@ class DropshipOutboxService
 
             return ['ok' => true];
         } catch (\Throwable $e) {
+            $message = $e->getMessage();
+            if ($this->shouldMarkTerminal($attempts, $message)) {
+                return $this->markTerminalDead($row, $bizKey, $providerCode, $action, $orderUuid, $payload, $message);
+            }
+
             $row->setData([
                 DropshipPushOutbox::schema_fields_STATUS => DropshipPushOutbox::STATUS_ERROR,
-                DropshipPushOutbox::schema_fields_LAST_ERROR => $e->getMessage(),
+                DropshipPushOutbox::schema_fields_LAST_ERROR => $message,
                 DropshipPushOutbox::schema_fields_UPDATED_AT => date('Y-m-d H:i:s'),
             ])->save();
 
-            return ['ok' => false, 'message' => $e->getMessage()];
+            return ['ok' => false, 'message' => $message];
         }
+    }
+
+    /**
+     * 合并写入 payload_json.compensation（无新表）。
+     *
+     * @param array<string, mixed> $compensation
+     */
+    public function mergeCompensation(string $bizKey, array $compensation): void
+    {
+        /** @var DropshipPushOutbox $model */
+        $model = ObjectManager::getInstance(DropshipPushOutbox::class);
+        $row = $model->clear()->where(DropshipPushOutbox::schema_fields_BIZ_KEY, $bizKey)->find()->fetch();
+        if (!$row || !$row->getId()) {
+            return;
+        }
+        $payload = json_decode((string)$row->getData(DropshipPushOutbox::schema_fields_PAYLOAD_JSON), true) ?: [];
+        if (!is_array($payload)) {
+            $payload = [];
+        }
+        $prev = is_array($payload['compensation'] ?? null) ? $payload['compensation'] : [];
+        $payload['compensation'] = array_merge($prev, $compensation);
+        $row->setData([
+            DropshipPushOutbox::schema_fields_PAYLOAD_JSON => json_encode($payload, JSON_UNESCAPED_UNICODE),
+            DropshipPushOutbox::schema_fields_UPDATED_AT => date('Y-m-d H:i:s'),
+        ])->save();
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @return array{ok:bool,terminal:bool,message:string}
+     */
+    private function markTerminalDead(
+        DropshipPushOutbox $row,
+        string $bizKey,
+        string $providerCode,
+        string $action,
+        string $orderUuid,
+        array $payload,
+        string $lastError,
+    ): array {
+        $prevStatus = (string)$row->getData(DropshipPushOutbox::schema_fields_STATUS);
+        $row->setData([
+            DropshipPushOutbox::schema_fields_STATUS => DropshipPushOutbox::STATUS_DEAD,
+            DropshipPushOutbox::schema_fields_LAST_ERROR => $lastError,
+            DropshipPushOutbox::schema_fields_UPDATED_AT => date('Y-m-d H:i:s'),
+        ])->save();
+
+        // 仅跃迁到 dead 时派一次（已是 dead 的 early-return 不会进这里）。
+        if ($prevStatus !== DropshipPushOutbox::STATUS_DEAD) {
+            $eventData = [
+                'biz_key' => $bizKey,
+                'order_uuid' => $orderUuid,
+                'provider_code' => $providerCode,
+                'action' => $action,
+                'website_id' => (int)($payload['website_id'] ?? 0),
+                'store_id' => (int)($payload['store_id'] ?? 0),
+                'last_error' => $lastError,
+                'payload' => $payload,
+            ];
+            try {
+                /** @var DropshipPushTerminalCompensationService $compensation */
+                $compensation = ObjectManager::getInstance(DropshipPushTerminalCompensationService::class);
+                $compensation->handle($eventData);
+            } catch (\Throwable $e) {
+                w_log_error('dropship push_terminal handle failed: ' . $e->getMessage());
+            }
+            $this->dispatchPushTerminal($eventData);
+        }
+
+        return ['ok' => true, 'terminal' => true, 'message' => $lastError];
+    }
+
+    /**
+     * dead 但本地已有远端履约单号：按幂等成功回收为 done（勿再自动退款）。
+     */
+    public function maybeRecoverExistingFulfillment(DropshipPushOutbox $row, string $bizKey = ''): bool
+    {
+        if ((string)$row->getData(DropshipPushOutbox::schema_fields_STATUS) !== DropshipPushOutbox::STATUS_DEAD) {
+            return false;
+        }
+        $action = (string)$row->getData(DropshipPushOutbox::schema_fields_ACTION);
+        if ($action !== 'create') {
+            return false;
+        }
+        if ($bizKey === '') {
+            $bizKey = (string)$row->getData(DropshipPushOutbox::schema_fields_BIZ_KEY);
+        }
+        $orderUuid = (string)$row->getData(DropshipPushOutbox::schema_fields_ORDER_UUID);
+        $providerCode = (string)$row->getData(DropshipPushOutbox::schema_fields_PROVIDER_CODE);
+        if ($orderUuid === '' || $providerCode === '') {
+            return false;
+        }
+
+        /** @var DropshipFulfillment $fulModel */
+        $fulModel = ObjectManager::getInstance(DropshipFulfillment::class);
+        $ful = $fulModel->clear()
+            ->where(DropshipFulfillment::schema_fields_PROVIDER_CODE, $providerCode)
+            ->where(DropshipFulfillment::schema_fields_ORDER_UUID, $orderUuid)
+            ->find()
+            ->fetch();
+        $externalId = '';
+        if ($ful && $ful->getId()) {
+            $externalId = trim((string)$ful->getData(DropshipFulfillment::schema_fields_EXTERNAL_ORDER_ID));
+        }
+        if ($externalId === '') {
+            return false;
+        }
+
+        $row->setData([
+            DropshipPushOutbox::schema_fields_STATUS => DropshipPushOutbox::STATUS_DONE,
+            DropshipPushOutbox::schema_fields_LAST_ERROR => '',
+            DropshipPushOutbox::schema_fields_UPDATED_AT => date('Y-m-d H:i:s'),
+        ])->save();
+        $this->mergeCompensation($bizKey, [
+            'status' => 'recovered_existing',
+            'external_order_id' => $externalId,
+            'at' => date('c'),
+            'note' => 'local_fulfillment_present',
+            'error_code' => '',
+            'error_message' => '',
+        ]);
+
+        return true;
+    }
+
+    /**
+     * 历史 dead（无 compensation）补派一次终态补偿（退款幂等，可安全重入）。
+     */
+    public function maybeBackfillTerminalCompensation(DropshipPushOutbox $row, string $bizKey = ''): bool
+    {
+        if ((string)$row->getData(DropshipPushOutbox::schema_fields_STATUS) !== DropshipPushOutbox::STATUS_DEAD) {
+            return false;
+        }
+        $action = (string)$row->getData(DropshipPushOutbox::schema_fields_ACTION);
+        if ($action !== 'create') {
+            return false;
+        }
+        if ($bizKey === '') {
+            $bizKey = (string)$row->getData(DropshipPushOutbox::schema_fields_BIZ_KEY);
+        }
+        $payload = json_decode((string)$row->getData(DropshipPushOutbox::schema_fields_PAYLOAD_JSON), true) ?: [];
+        if (!is_array($payload)) {
+            $payload = [];
+        }
+        $comp = is_array($payload['compensation'] ?? null) ? $payload['compensation'] : [];
+        if (($comp['status'] ?? '') !== '') {
+            return false;
+        }
+
+        $eventData = [
+            'biz_key' => $bizKey,
+            'order_uuid' => (string)$row->getData(DropshipPushOutbox::schema_fields_ORDER_UUID),
+            'provider_code' => (string)$row->getData(DropshipPushOutbox::schema_fields_PROVIDER_CODE),
+            'action' => $action,
+            'website_id' => (int)($payload['website_id'] ?? 0),
+            'store_id' => (int)($payload['store_id'] ?? 0),
+            'last_error' => (string)$row->getData(DropshipPushOutbox::schema_fields_LAST_ERROR),
+            'payload' => $payload,
+            'backfill' => true,
+        ];
+        // 直接调用补偿服务（不依赖事件目录是否已热更新），再派事件保持解耦监听面。
+        try {
+            /** @var DropshipPushTerminalCompensationService $compensation */
+            $compensation = ObjectManager::getInstance(DropshipPushTerminalCompensationService::class);
+            $compensation->handle($eventData);
+        } catch (\Throwable $e) {
+            w_log_error('dropship terminal backfill handle failed: ' . $e->getMessage());
+        }
+        $this->dispatchPushTerminal($eventData);
+
+        return true;
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    private function dispatchPushTerminal(array $data): void
+    {
+        try {
+            /** @var EventsManager $events */
+            $events = ObjectManager::getInstance(EventsManager::class);
+            $events->dispatch('Weline_Dropship::push_terminal', $data);
+        } catch (\Throwable $e) {
+            w_log_error('dropship push_terminal dispatch failed: ' . $e->getMessage());
+        }
+    }
+
+    private function shouldMarkTerminal(int $attempts, string $lastError): bool
+    {
+        if ($this->isPermanentFailure($lastError)) {
+            return true;
+        }
+
+        return $attempts >= self::MAX_ATTEMPTS;
+    }
+
+    private function isPermanentFailure(string $lastError): bool
+    {
+        foreach (self::PERMANENT_FAILURE_PHRASES as $phrase) {
+            if ($phrase !== '' && str_contains($lastError, $phrase)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -169,7 +403,8 @@ class DropshipOutboxService
             DropshipPushOutbox::schema_fields_UPDATED_AT => $now,
         ];
         if ($existing && $existing->getId()) {
-            if ((string)$existing->getData(DropshipPushOutbox::schema_fields_STATUS) === DropshipPushOutbox::STATUS_DONE) {
+            $st = (string)$existing->getData(DropshipPushOutbox::schema_fields_STATUS);
+            if ($st === DropshipPushOutbox::STATUS_DONE || $st === DropshipPushOutbox::STATUS_DEAD) {
                 return;
             }
             $existing->setData($data)->save();
@@ -219,8 +454,7 @@ class DropshipOutboxService
         string $status,
         string $trackingNumber = '',
         string $carrier = '',
-    ): void
-    {
+    ): void {
         /** @var DropshipFulfillment $model */
         $model = ObjectManager::getInstance(DropshipFulfillment::class);
         $existing = $model->clear()

@@ -266,6 +266,18 @@ final class CjProviderContractTest extends TestCase
         ]);
     }
 
+    public function testIsDuplicateCreateMessageDetectsCjIdempotent(): void
+    {
+        self::assertTrue(CjProvider::isDuplicateCreateMessage('Order exist, please do not duplicate create'));
+        self::assertTrue(CjProvider::isDuplicateCreateMessage('do not duplicate create'));
+        self::assertFalse(CjProvider::isDuplicateCreateMessage('Logistic not found'));
+        self::assertFalse(CjProvider::isDuplicateCreateMessage(''));
+        $src = (string)file_get_contents(dirname(__DIR__, 3) . '/extends/module/Weline_Dropship/DropshipProvider/CjProvider.php');
+        self::assertStringContainsString('recoverExistingCreate', $src);
+        self::assertStringContainsString('recovered_existing', $src);
+        self::assertStringContainsString('isDuplicateCreateMessage', $src);
+    }
+
     public function testConfigSchemaDeclaresOrderSandboxField(): void
     {
         $schema = (new CjProvider())->getConfigSchema();

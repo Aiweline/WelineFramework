@@ -667,15 +667,40 @@ final class DevRelayLocalConnectService
                 throw new \RuntimeException((string) ($fetched['message'] ?? 'fetch failed'));
             }
             $bodyPayload = $fetched['payload'];
-            $replay = $this->httpRaw('POST', $inbound, [
-                'Content-Type: application/json',
-                'X-Dev-Relay-Endpoint: ' . (string) ($bodyPayload['endpoint_code'] ?? ''),
-            ], json_encode([
-                'endpoint_code' => $bodyPayload['endpoint_code'] ?? '',
-                'raw_body_b64' => $bodyPayload['raw_body'] ?? '',
-                'headers' => $bodyPayload['headers'] ?? [],
-                'signature' => $bodyPayload['signature'] ?? '',
-            ], JSON_UNESCAPED_SLASHES) ?: '{}', 20);
+            $module = (string) ($bodyPayload['module'] ?? '');
+            $inboxCode = (string) ($bodyPayload['inbox_code'] ?? '');
+            $isDropship = $module === 'dropship' || str_starts_with($inboxCode, 'dropship:');
+            if ($isDropship) {
+                $endpoint = (string) ($bodyPayload['endpoint_code'] ?? '');
+                $rawB64 = (string) ($bodyPayload['raw_body'] ?? '');
+                $raw = base64_decode($rawB64, true);
+                if (!\is_string($raw)) {
+                    $raw = '';
+                }
+                $dropshipUrl = $this->resolveDropshipNotifyUrl($inbound, $endpoint);
+                $headerLines = ['Content-Type: application/json'];
+                foreach (\is_array($bodyPayload['headers'] ?? null) ? $bodyPayload['headers'] : [] as $hk => $hv) {
+                    if (!\is_string($hk) || $hk === '' || !\is_scalar($hv)) {
+                        continue;
+                    }
+                    $lower = strtolower($hk);
+                    if (\in_array($lower, ['host', 'content-length', 'transfer-encoding', 'connection'], true)) {
+                        continue;
+                    }
+                    $headerLines[] = $hk . ': ' . (string) $hv;
+                }
+                $replay = $this->httpRaw('POST', $dropshipUrl, $headerLines, $raw, 20);
+            } else {
+                $replay = $this->httpRaw('POST', $inbound, [
+                    'Content-Type: application/json',
+                    'X-Dev-Relay-Endpoint: ' . (string) ($bodyPayload['endpoint_code'] ?? ''),
+                ], json_encode([
+                    'endpoint_code' => $bodyPayload['endpoint_code'] ?? '',
+                    'raw_body_b64' => $bodyPayload['raw_body'] ?? '',
+                    'headers' => $bodyPayload['headers'] ?? [],
+                    'signature' => $bodyPayload['signature'] ?? '',
+                ], JSON_UNESCAPED_SLASHES) ?: '{}', 20);
+            }
             $ok = $replay['status'] >= 200 && $replay['status'] < 300;
             $this->ack($ackUrl, $sessionCode, $relayToken, $eventCode, $ok, $ok ? '' : $replay['body']);
             $this->recordEvent($eventCode, $ok, $ok ? '' : $replay['body']);
@@ -724,6 +749,25 @@ final class DevRelayLocalConnectService
         ]);
         $state['recent_events'] = array_slice($recent, 0, 30);
         $this->writeState($state);
+    }
+
+    private function resolveDropshipNotifyUrl(string $localInboundOrBase, string $endpointCode): string
+    {
+        $base = trim($localInboundOrBase);
+        if ($base === '') {
+            throw new \RuntimeException('local inbound url empty');
+        }
+        $parts = parse_url($base);
+        if (!\is_array($parts) || empty($parts['scheme']) || empty($parts['host'])) {
+            throw new \RuntimeException('invalid local inbound url');
+        }
+        $origin = $parts['scheme'] . '://' . $parts['host'];
+        if (!empty($parts['port'])) {
+            $origin .= ':' . $parts['port'];
+        }
+        $q = http_build_query(['endpoint_code' => $endpointCode]);
+
+        return $origin . '/dropship/frontend/callback/notify?' . $q;
     }
 
     /**

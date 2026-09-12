@@ -2,7 +2,7 @@
 
 return [
     'name' => 'Weline_Dropship',
-    'version' => '1.0.69',
+    'version' => '1.0.75',
     'requires' => [
         'Weline_SystemConfig',
         'Weline_Product',
@@ -20,6 +20,8 @@ return [
         'Weline_Dashboard',
         'Weline_Widget',
         'Weline_Shipping',
+        'Weline_Smtp',
+        'Weline_Payment',
     ],
     'provides' => [
         \Weline\Dropship\Api\DropshipFacadeInterface::class => \Weline\Dropship\Service\DropshipFacade::class,

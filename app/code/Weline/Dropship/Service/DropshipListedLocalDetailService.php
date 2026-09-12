@@ -15,6 +15,33 @@ use Weline\Product\Api\ProductAdminReadInterface;
 class DropshipListedLocalDetailService
 {
     /**
+     * Align with Product catalog lifecycle labels (edit.phtml).
+     *
+     * @return array{0:string,1:string} [label, tone]
+     */
+    public static function productStatusPresentation(string $status): array
+    {
+        $s = strtolower(trim($status));
+        // 与 Product 目录 edit.phtml 文案对齐（草稿/已发布/已下架/已归档）。
+        $label = match ($s) {
+            'draft' => '草稿',
+            'published' => '已发布',
+            'disabled' => '已下架',
+            'archived' => '已归档',
+            default => $s !== '' ? $s : '—',
+        };
+        $tone = match ($s) {
+            'published' => 'success',
+            'draft' => 'warning',
+            'disabled' => 'muted',
+            'archived' => 'danger',
+            default => 'muted',
+        };
+
+        return [$label, $tone];
+    }
+
+    /**
      * @param array<string, mixed> $listingRow
      * @return array<string, mixed>
      */
@@ -119,6 +146,8 @@ class DropshipListedLocalDetailService
                 }
                 $oid = (int)($offer['offer_id'] ?? 0);
                 $sku = trim((string)($offer['sku'] ?? ''));
+                $offerStatus = trim((string)($offer['status'] ?? ''));
+                [$offerStatusLabel, $offerStatusTone] = self::productStatusPresentation($offerStatus);
                 $variants[] = $this->withSaleCompare([
                     'offer_id' => $oid,
                     'sku' => $sku,
@@ -126,13 +155,16 @@ class DropshipListedLocalDetailService
                     'combination' => [],
                     'amount_minor' => $priceByOffer[$oid] ?? $saleMinor,
                     'currency' => $currency,
-                    'status' => trim((string)($offer['status'] ?? '')),
+                    'status' => $offerStatus,
+                    'status_label' => $offerStatusLabel,
+                    'status_tone' => $offerStatusTone,
                     'image_url' => '',
                 ], $originCurrency);
             }
         }
 
         if ($variants === [] && $saleMinor > 0) {
+            [$fallbackLabel, $fallbackTone] = self::productStatusPresentation('published');
             $variants[] = $this->withSaleCompare([
                 'offer_id' => (int)($listingRow[DropshipListing::schema_fields_LOCAL_OFFER_ID] ?? 0),
                 'sku' => '',
@@ -141,11 +173,15 @@ class DropshipListedLocalDetailService
                 'amount_minor' => $saleMinor,
                 'currency' => $currency,
                 'status' => 'published',
+                'status_label' => $fallbackLabel,
+                'status_tone' => $fallbackTone,
                 'image_url' => '',
             ], $originCurrency);
         }
 
         $resolvedSale = $saleMinor > 0 ? $saleMinor : (int)($variants[0]['amount_minor'] ?? 0);
+        $productStatus = trim((string)($product['status'] ?? ''));
+        [$productStatusLabel, $productStatusTone] = self::productStatusPresentation($productStatus);
 
         return [
             'ok' => true,
@@ -156,7 +192,9 @@ class DropshipListedLocalDetailService
                 'product_id' => (int)($product['product_id'] ?? $product['id'] ?? 0),
                 'product_type' => $productType,
                 'sku' => trim((string)($product['sku'] ?? '')),
-                'status' => trim((string)($product['status'] ?? '')),
+                'status' => $productStatus,
+                'status_label' => $productStatusLabel,
+                'status_tone' => $productStatusTone,
             ],
             'origin' => [
                 'amount_minor' => $originMinor,
@@ -272,6 +310,8 @@ class DropshipListedLocalDetailService
         if ($label === '') {
             $label = (string)__('规格');
         }
+        $status = trim((string)($row['status'] ?? ''));
+        [$statusLabel, $statusTone] = self::productStatusPresentation($status);
 
         return $this->withSaleCompare([
             'offer_id' => (int)($row['offer_id'] ?? 0),
@@ -280,7 +320,9 @@ class DropshipListedLocalDetailService
             'combination' => $combination,
             'amount_minor' => (int)($row['amount_minor'] ?? 0),
             'currency' => strtoupper(trim((string)($row['currency'] ?? $currency))) ?: $currency,
-            'status' => trim((string)($row['status'] ?? '')),
+            'status' => $status,
+            'status_label' => $statusLabel,
+            'status_tone' => $statusTone,
             'image_url' => trim((string)($row['image_url'] ?? '')),
         ], $originCurrency);
     }

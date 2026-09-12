@@ -19,5 +19,7 @@
               title="数据面板" action="dropship/backend/dashboard/index" icon="chart" order="60"/>
         <menu source="Weline_Dropship::config" name="dropship_config"
               title="货源配置" action="*/backend/config" icon="settings" order="70"/>
+        <menu source="Weline_Dropship::commerce:dropship:dev_relay" name="dropship_dev_relay"
+              title="Webhook 中继" action="dropship/backend/dev-relay" icon="webhook" order="80"/>
     </menu>
 </menus>

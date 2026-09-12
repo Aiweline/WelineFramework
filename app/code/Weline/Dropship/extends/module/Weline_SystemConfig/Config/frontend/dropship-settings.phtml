@@ -1,7 +1,7 @@
 <?php
 /**
  * @meta.title {default="货源代发",description="范围级货源平台启用与涨价比例"}
- * @meta.description {default="启用货源平台多选；涨价比例默认30%；支付后自动推单与库存/价格定时跟随开关。"}
+ * @meta.description {default="启用货源平台多选；涨价比例默认30%；支付后自动推单、库存/价格跟随，以及无法履约自动退款开关。"}
  * @config.area {frontend}
  * @config.sort {75}
  * @config.acl {Weline_Dropship::config}
@@ -30,4 +30,7 @@
   <w:config:field key="dropship/ops/follow_enabled" label="启用库存/价格跟随" type="switch"
                   value-type="bool" default="1" scope="global,website,store,channel"
                   description="开启后 Cron 每 6 小时同步远程库存与价格（涨价跟 uplift；降价仅 tip；可锁价）。关闭则停止定时跟随。"/>
+  <w:config:field key="dropship/ops/auto_refund_on_push_fail" label="推单无法履约时自动退款并通知顾客" type="switch"
+                  value-type="bool" default="1" scope="global,website,store,channel"
+                  description="开启后，货源推单进入无法履约终态时按失败平台行级自动启动退款，并向顾客发送安慰邮件（默认开启）。"/>
 </w:config:group>
