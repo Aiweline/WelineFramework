@@ -22,7 +22,8 @@ final class DropshipWebhookDevRelayBridgeContractTest extends TestCase
     {
         $ctrl = file_get_contents(dirname(__DIR__, 3) . '/Controller/Frontend/Callback.php');
         self::assertIsString($ctrl);
-        self::assertStringContainsString("'raw_body' => \$body", $ctrl);
+        self::assertStringContainsString('getBodyParams', $ctrl);
+        self::assertStringContainsString('getRawBody', $ctrl);
         self::assertStringContainsString('DropshipWebhookDevRelayBridge', $ctrl);
         self::assertStringContainsString('publishInbox', $ctrl);
     }
