@@ -72,6 +72,16 @@ php bin/w payment:devrelay:stop
 
 站点地址必须是完整 URL（`https://host` 或 `https://host/subpath`），不要只填裸域名。
 
+## 货源（Dropship / CJ）复用
+
+万能货源 **不另建** SSE/会话：生产收 `dropship/frontend/callback/notify` 后，若本站已是支付 DevRelay 线上中转主机，则把 inbox 以 `dropship:{id}` 注入同一 EventStore；本机静默 worker 拉取后 **直接 POST** 本机 `.../dropship/frontend/callback/notify?endpoint_code=...`（不是支付 inbound JSON 包装）。
+
+登记到 CJ 的回调必须是生产 URL，例如：
+
+`https://www.aiweline.com/dropship/frontend/callback/notify?endpoint_code=cj.sandbox.default`
+
+说明页：`dropship/backend/dev-relay`（开关仍在 `payment/backend/dev-relay`）。
+
 ## 约束
 
 - 线上 **不会** 直接 POST 到 `*.test.weline.com`；由本机 worker 拉 SSE 后重放
