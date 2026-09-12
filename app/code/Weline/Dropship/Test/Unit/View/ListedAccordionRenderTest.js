@@ -52,6 +52,10 @@ const i18n = {
   synced: '上次同步',
   priceLock: '售价已锁',
   defaultVariant: '默认规格',
+  statusDraft: '草稿',
+  statusPublished: '已发布',
+  statusDisabled: '已下架',
+  statusArchived: '已归档',
 };
 
 test('pricing trio and economics secondary are rendered', () => {
@@ -60,7 +64,13 @@ test('pricing trio and economics secondary are rendered', () => {
     ok: true,
     has_local: true,
     is_configurable: false,
-    product: { sku: 'DS-CJ-CJYD3153518', product_type: 'simple', status: 'published' },
+    product: {
+      sku: 'DS-CJ-CJYD3153518',
+      product_type: 'simple',
+      status: 'published',
+      status_label: '已发布',
+      status_tone: 'success',
+    },
     sale: { amount_minor: 2194, currency: 'CNY', uplift_percent: 30, compare_amount_minor: 274, compare_currency: 'USD' },
     origin: { amount_minor: 211, currency: 'USD', prev_minor: 250 },
     economics: {
@@ -85,6 +95,7 @@ test('pricing trio and economics secondary are rendered', () => {
       compare_amount_minor: 274,
       compare_currency: 'USD',
       status: 'published',
+      status_label: '已发布',
       image_url: '',
     }],
   }, i18n);
@@ -98,6 +109,9 @@ test('pricing trio and economics secondary are rendered', () => {
   assert.match(html, /data-testid="dropship-listed-detail-price-lock"/);
   assert.match(html, /data-testid="dropship-listed-detail-tip"/);
   assert.match(html, /data-testid="dropship-listed-sale-compare"/);
+  assert.match(html, /data-testid="dropship-listed-detail-product-status"/);
+  assert.match(html, /已发布/);
+  assert.doesNotMatch(html, /data-testid="dropship-listed-detail-product-status"[^>]*>published</);
   assert.match(html, /\+30%/);
   assert.match(html, /-15\.6%/);
   assert.match(html, /DS-CJ-CJYD3153518/);

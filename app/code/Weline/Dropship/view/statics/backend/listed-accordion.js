@@ -49,6 +49,37 @@
     return (n > 0 ? '+' : '') + String(n) + '%';
   }
 
+  function statusPresentation(raw, i18n, explicitLabel, explicitTone) {
+    var label = trimStr(explicitLabel);
+    var tone = trimStr(explicitTone);
+    var status = trimStr(raw).toLowerCase();
+    if (!label) {
+      if (status === 'draft') {
+        label = i18n.statusDraft || '草稿';
+      } else if (status === 'published') {
+        label = i18n.statusPublished || '已发布';
+      } else if (status === 'disabled') {
+        label = i18n.statusDisabled || '已下架';
+      } else if (status === 'archived') {
+        label = i18n.statusArchived || '已归档';
+      } else {
+        label = status;
+      }
+    }
+    if (!tone) {
+      if (status === 'published') {
+        tone = 'success';
+      } else if (status === 'draft') {
+        tone = 'warning';
+      } else if (status === 'archived') {
+        tone = 'danger';
+      } else {
+        tone = 'muted';
+      }
+    }
+    return { label: label, tone: tone || 'muted', status: status };
+  }
+
   function renderDetail(payload, i18n) {
     if (!payload || !payload.ok) {
       return '<div class="w-text" data-tone="danger" data-testid="dropship-listed-detail-error">' +
@@ -66,7 +97,12 @@
     var ops = payload.ops || {};
     var uplift = sale.uplift_percent;
     var productSku = trimStr(product.sku);
-    var productStatus = trimStr(product.status);
+    var productStatusInfo = statusPresentation(
+      product.status,
+      i18n,
+      product.status_label,
+      product.status_tone
+    );
     var typeLabel = payload.is_configurable ? i18n.configurable : i18n.simple;
 
     var productBlock =
@@ -76,9 +112,11 @@
       '<span class="w-badge" data-w-background="muted" data-testid="dropship-listed-detail-type">' +
       escapeHtml(typeLabel) +
       '</span>' +
-      (productStatus
-        ? '<span class="w-badge" data-w-background="success" data-testid="dropship-listed-detail-product-status">' +
-          escapeHtml(productStatus) + '</span>'
+      (productStatusInfo.label
+        ? '<span class="w-badge" data-w-background="' + escapeHtml(productStatusInfo.tone) +
+          '" data-status="' + escapeHtml(productStatusInfo.status) +
+          '" data-testid="dropship-listed-detail-product-status">' +
+          escapeHtml(productStatusInfo.label) + '</span>'
         : '') +
       '</div>' +
       (productSku
@@ -132,6 +170,7 @@
         ? { amount_minor: v.origin_amount_minor, currency: v.origin_currency || origin.currency }
         : origin;
       var rowUplift = (v.uplift_percent != null) ? v.uplift_percent : uplift;
+      var variantStatus = statusPresentation(v.status, i18n, v.status_label, v.status_tone);
 
       return '<tr data-testid="dropship-listed-variant-row">' +
         '<td>' + thumb + '</td>' +
@@ -155,7 +194,13 @@
         '<td data-testid="dropship-listed-variant-uplift">' +
         escapeHtml(upliftLabel(rowUplift)) +
         '</td>' +
-        '<td>' + escapeHtml(v.status || '—') + '</td>' +
+        '<td data-testid="dropship-listed-variant-status">' +
+        (variantStatus.label
+          ? '<span class="w-badge" data-w-background="' + escapeHtml(variantStatus.tone) +
+            '" data-status="' + escapeHtml(variantStatus.status) + '">' +
+            escapeHtml(variantStatus.label) + '</span>'
+          : '—') +
+        '</td>' +
         '</tr>';
     }).join('');
 
@@ -272,6 +317,10 @@
       originChange: root.getAttribute('data-i18n-origin-change') || 'Origin change',
       synced: root.getAttribute('data-i18n-synced') || 'Last sync',
       priceLock: root.getAttribute('data-i18n-price-lock') || 'Price locked',
+      statusDraft: root.getAttribute('data-i18n-status-draft') || '草稿',
+      statusPublished: root.getAttribute('data-i18n-status-published') || '已发布',
+      statusDisabled: root.getAttribute('data-i18n-status-disabled') || '已下架',
+      statusArchived: root.getAttribute('data-i18n-status-archived') || '已归档',
     };
     var cache = Object.create(null);
 

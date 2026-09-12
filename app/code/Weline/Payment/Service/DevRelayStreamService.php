@@ -109,6 +109,8 @@ final class DevRelayStreamService
             'provider_event_id' => $payload['provider_event_id'],
             'provider_code' => $payload['provider_code'],
             'event_type' => $payload['event_type'],
+            'module' => (string) ($payload['module'] ?? 'payment'),
+            'inbox_code' => (string) ($payload['inbox_code'] ?? ''),
             'raw_body' => base64_encode($payload['raw_body']),
             'raw_body_encoding' => 'base64',
             'headers' => $payload['headers'],

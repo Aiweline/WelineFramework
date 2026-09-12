@@ -5,7 +5,14 @@ declare(strict_types=1);
 /**
  * Weline_Dropship 模块扩展规约（对齐 Payment）。
  */
+
+use Weline\Dropship\Extends\MailChannelProvider;
+use Weline\Smtp\Api\MailChannelProviderInterface;
+
 return [
+    MailChannelProviderInterface::class => [
+        MailChannelProvider::class,
+    ],
     'type' => 'module',
     'documentation' => 'doc/extends.md',
     'extends' => [

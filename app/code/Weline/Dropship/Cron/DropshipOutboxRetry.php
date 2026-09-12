@@ -22,7 +22,7 @@ class DropshipOutboxRetry implements CronTaskInterface
 
     public function tip(): string
     {
-        return '扫描 pending/error outbox 补推入队';
+        return '扫描 pending/error outbox 补推入队（不含 dead）';
     }
 
     public function cron_time(): string

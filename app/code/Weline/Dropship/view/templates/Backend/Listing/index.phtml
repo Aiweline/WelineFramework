@@ -585,6 +585,10 @@ foreach ($categories as $cat) {
                      data-i18n-col-price="<?= $escape((string)__('售价')) ?>"
                      data-i18n-col-uplift="<?= $escape((string)__('涨幅')) ?>"
                      data-i18n-col-status="<?= $escape((string)__('状态')) ?>"
+                     data-i18n-status-draft="<?= $escape((string)__('草稿')) ?>"
+                     data-i18n-status-published="<?= $escape((string)__('已发布')) ?>"
+                     data-i18n-status-disabled="<?= $escape((string)__('已下架')) ?>"
+                     data-i18n-status-archived="<?= $escape((string)__('已归档')) ?>"
                      data-i18n-cost="<?= $escape((string)__('换汇成本')) ?>"
                      data-i18n-margin="<?= $escape((string)__('毛利')) ?>"
                      data-i18n-origin-change="<?= $escape((string)__('货源变动')) ?>"
@@ -689,6 +693,12 @@ foreach ($categories as $cat) {
                                                     default => 'muted',
                                                 };
                                                 $localUuid = trim((string)($row['local_product_uuid'] ?? ''));
+                                                $localProductStatus = strtolower(trim((string)($row['local_product_status'] ?? '')));
+                                                $localProductStatusLabel = trim((string)($row['local_product_status_label'] ?? ''));
+                                                $localProductStatusTone = trim((string)($row['local_product_status_tone'] ?? 'muted')) ?: 'muted';
+                                                if ($localProductStatus !== '' && $localProductStatusLabel === '') {
+                                                    [$localProductStatusLabel, $localProductStatusTone] = \Weline\Dropship\Service\DropshipListedLocalDetailService::productStatusPresentation($localProductStatus);
+                                                }
                                                 $expandable = $sync === 'active' && $localUuid !== '';
                                                 $originMinor = (int)($row['origin_price_minor'] ?? 0);
                                                 $originCur = (string)($row['origin_currency'] ?? 'USD');
@@ -837,9 +847,24 @@ foreach ($categories as $cat) {
                                                     </td>
                                                     <td><?= (int)($row['remote_qty'] ?? 0) ?></td>
                                                     <td>
-                                                        <span class="w-badge" data-w-background="<?= $escape($statusTone) ?>" data-testid="dropship-listed-status">
-                                                            <?= $escape($statusLabel) ?>
-                                                        </span>
+                                                        <div class="w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-1);" data-testid="dropship-listed-status-cell">
+                                                            <span class="w-badge" data-w-background="<?= $escape($statusTone) ?>" data-testid="dropship-listed-status">
+                                                                <?= $escape($statusLabel) ?>
+                                                            </span>
+                                                            <?php if ($localProductStatus !== ''): ?>
+                                                                <span class="w-badge"
+                                                                      data-w-background="<?= $escape($localProductStatusTone) ?>"
+                                                                      data-status="<?= $escape($localProductStatus) ?>"
+                                                                      title="<?= $escape((string)__('本地商品状态（是否可售）')) ?>"
+                                                                      data-testid="dropship-listed-product-status">
+                                                                    <?= $escape($localProductStatusLabel) ?>
+                                                                </span>
+                                                            <?php elseif ($sync === 'active' && $localUuid !== ''): ?>
+                                                                <span class="w-badge" data-w-background="muted" data-testid="dropship-listed-product-status">
+                                                                    <?= __('状态未知') ?>
+                                                                </span>
+                                                            <?php endif; ?>
+                                                        </div>
                                                     </td>
                                                     <td>
                                                         <button class="w-button"
@@ -1880,7 +1905,7 @@ foreach ($categories as $cat) {
       return false;
     }
     if (boot()) return;
-    var src = '/Weline/Dropship/view/statics/backend/listed-accordion.js?v=1.0.64';
+    var src = '/Weline/Dropship/view/statics/backend/listed-accordion.js?v=1.0.70';
     var existing = document.querySelector('script[data-dropship-listed-accordion-src]');
     if (existing) {
       existing.addEventListener('load', function () { boot(); });

@@ -17,4 +17,9 @@
                   instance="Weline\Dropship\Observer\OrderRefundedObserver"
                   disabled="false" shared="true" sort="120"/>
     </event>
+    <event name="Weline_Dropship::push_terminal">
+        <observer name="weline_dropship_push_terminal_refund"
+                  instance="Weline\Dropship\Observer\DropshipPushTerminalRefundObserver"
+                  disabled="false" shared="true" sort="100"/>
+    </event>
 </config>

@@ -67,6 +67,8 @@ final class ListingTemplateContractTest extends TestCase
         self::assertStringContainsString('DropshipListingDeleteService', $ctrl);
         self::assertStringContainsString('local_product_action', $ctrl);
         self::assertStringContainsString('enrichListedLocalMeta', $ctrl);
+        self::assertStringContainsString('local_product_status', $ctrl);
+        self::assertStringContainsString('productStatusPresentation', $ctrl);
         self::assertStringContainsString('getLocalDetail', $ctrl);
         self::assertStringContainsString('DropshipListedLocalDetailService', $ctrl);
         self::assertStringContainsString('data-dropship-listed-accordion="1"', $tpl);
@@ -76,7 +78,11 @@ final class ListingTemplateContractTest extends TestCase
         self::assertStringContainsString('data-listed-expand-label', $tpl);
         self::assertStringContainsString('role="button"', $tpl);
         self::assertStringContainsString('ensureListedAccordion', $tpl);
-        self::assertStringContainsString('listed-accordion.js?v=1.0.64', $tpl);
+        self::assertStringContainsString('listed-accordion.js?v=1.0.70', $tpl);
+        self::assertStringContainsString('data-i18n-status-published', $tpl);
+        self::assertStringContainsString('status_label', $tpl);
+        self::assertStringContainsString('data-testid="dropship-listed-product-status"', $tpl);
+        self::assertStringContainsString('local_product_status', $tpl);
         self::assertStringContainsString('data-testid="dropship-listed-sale-compare"', $tpl);
         self::assertStringContainsString('sale_compare', $ctrl);
         self::assertStringContainsString('data-i18n-cost', $tpl);

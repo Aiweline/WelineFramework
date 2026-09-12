@@ -58,11 +58,18 @@ final class ConfigIndexTemplateContractTest extends TestCase
         self::assertStringNotContainsString('逗号分隔已注册 provider_code', $declTpl);
 
         self::assertStringContainsString('dropship/ops/follow_enabled', implode(',', $fields));
+        self::assertStringContainsString('dropship/ops/auto_refund_on_push_fail', implode(',', $fields));
         self::assertMatchesRegularExpression(
             '/key="dropship\/ops\/follow_enabled"[^>]*label="启用库存\/价格跟随"/',
             $declTpl,
             'follow switch must be labeled for stock/price sync'
         );
         self::assertStringContainsString('同步远程库存与价格', $declTpl);
+        self::assertMatchesRegularExpression(
+            '/key="dropship\/ops\/auto_refund_on_push_fail"[^>]*default="1"/',
+            $declTpl,
+            'auto refund switch must default on'
+        );
+        self::assertStringContainsString('推单无法履约时自动退款并通知顾客', $declTpl);
     }
 }
