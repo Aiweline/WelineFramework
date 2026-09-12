@@ -23,8 +23,32 @@ class Callback extends FrontendController
         $endpoint = (string)$this->request->getGet('endpoint_code', '');
         $parts = explode('.', $endpoint);
         $providerCode = $parts[0] ?? '';
-        $body = (string)file_get_contents('php://input');
+        // WLS 下 php://input 常为空；统一走 Request raw body（FPM/WLS 兼容）。
+        $body = (string)$this->request->getBodyParams(false);
+        if ($body === '' || $body === '[]' || $body === '{}') {
+            $raw = '';
+            try {
+                $raw = (string)$this->request->getParameterBag()->getRawBody();
+            } catch (\Throwable) {
+                $raw = '';
+            }
+            if ($raw !== '') {
+                $body = $raw;
+            }
+        }
+        if (($body === '' || $body === '[]' || $body === '{}') && \is_string($GLOBALS['HTTP_RAW_POST_DATA'] ?? null)) {
+            $body = (string)$GLOBALS['HTTP_RAW_POST_DATA'];
+        }
         $headers = function_exists('getallheaders') ? (array)getallheaders() : [];
+        if ($headers === []) {
+            foreach ($_SERVER as $k => $v) {
+                if (!\is_string($k) || !str_starts_with($k, 'HTTP_') || !\is_scalar($v)) {
+                    continue;
+                }
+                $name = str_replace(' ', '-', ucwords(strtolower(str_replace('_', ' ', substr($k, 5)))));
+                $headers[$name] = (string)$v;
+            }
+        }
 
         /** @var DropshipChannelManager $channels */
         $channels = ObjectManager::getInstance(DropshipChannelManager::class);
