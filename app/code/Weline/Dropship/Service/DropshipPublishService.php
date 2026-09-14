@@ -225,6 +225,8 @@ class DropshipPublishService
             $payload['media_assignments'] = $mediaAssignments;
         }
 
+        $this->applyShippingDims($payload, $snapshot);
+
         $create = $cmd->execute(new ProductAdminCommand(
             action: ProductAdminCommand::ACTION_CREATE,
             websiteId: $websiteId,
@@ -341,6 +343,7 @@ class DropshipPublishService
                 $categoryIds,
             );
         }
+        $this->applyShippingDims($payload, $snapshot);
         if ($payload === []) {
             return;
         }
@@ -626,6 +629,28 @@ class DropshipPublishService
         }
 
         return $assignments;
+    }
+
+    /**
+     * Map provider-normalized shipping dims onto ProductAdmin payload (kg / cm).
+     *
+     * @param array<string, mixed> $payload
+     */
+    private function applyShippingDims(array &$payload, DropshipCatalogSnapshot $snapshot): void
+    {
+        $shipping = DropshipCatalogSnapshot::normalizeShipping($snapshot->shipping);
+        if ($shipping['weight_kg'] > 0) {
+            $payload['weight'] = $shipping['weight_kg'];
+        }
+        if ($shipping['length_cm'] > 0) {
+            $payload['length'] = $shipping['length_cm'];
+        }
+        if ($shipping['width_cm'] > 0) {
+            $payload['width'] = $shipping['width_cm'];
+        }
+        if ($shipping['height_cm'] > 0) {
+            $payload['height'] = $shipping['height_cm'];
+        }
     }
 
     /**

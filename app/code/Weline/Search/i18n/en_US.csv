@@ -9,8 +9,8 @@
 "Product Search 投影 Scope kind 无效","Product Search projection Scope kind is invalid"
 "Product Search 投影 Store Scope 无效","Product Search projection Store Scope is invalid"
 搜索：%{1},"Search: %{1}"
-查看“%{1}”在本站汉服、文章与帮助中的相关结果。,查看“%{1}”在本站汉服、文章与帮助中的相关结果。
-在汉服商城中搜索商品、搭配灵感与帮助指南。,在汉服商城中搜索商品、搭配灵感与帮助指南。
+查看“%{1}”在本站汉服、文章与帮助中的相关结果。,"See results for “%{1}” across Hanfu products, articles, and help on this site."
+在汉服商城中搜索商品、搭配灵感与帮助指南。,"Search Hanfu products, styling ideas, and help guides in the store."
 性能慢日志,性能慢日志
 clock,clock
 查看搜索性能慢日志,查看搜索性能慢日志
@@ -49,6 +49,7 @@ chart,chart
 "非法 search shard 实体名：%{1}","Illegal search shard entity name: %{1}"
 全部,All
 商品,Products
+博客,博客
 "共 %{1} 条","Total %{1} items"
 分类面包屑,"Category breadcrumb"
 请输入关键词开始搜索,"Enter a keyword to start searching"

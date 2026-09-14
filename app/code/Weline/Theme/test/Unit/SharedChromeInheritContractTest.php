@@ -74,7 +74,7 @@ final class SharedChromeInheritContractTest extends TestCase
         $path = dirname(__DIR__, 2) . '/Setup/Upgrade.php';
         $src = (string)file_get_contents($path);
 
-        self::assertStringContainsString("VERSION = '2.2.326'", $src);
+        self::assertStringContainsString("VERSION = '2.2.327'", $src);
         self::assertStringContainsString('ScopeIdentity::global()', $src);
         self::assertStringContainsString('ScopeHierarchyInterface', $src);
         self::assertStringContainsString('new ThemeEditorContext(', $src);

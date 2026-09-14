@@ -11,6 +11,7 @@ use Weline\Blog\Service\BlogScopeResolver;
 use Weline\Blog\Service\BlogSearchCategoryScopeService;
 use Weline\Blog\Service\BlogSeoFactsBuilder;
 use Weline\Framework\App\Controller\FrontendController;
+use Weline\Theme\Helper\WidgetI18n;
 
 /** Blog category listing: /blog/category/{slug} — Theme layout blog_category. */
 final class Category extends FrontendController
@@ -46,12 +47,12 @@ final class Category extends FrontendController
             : $this->resolver->listPublishedArticles($websiteId, $locale, 50, $this->scope->baseUrl());
 
         $heading = $active !== null
-            ? (string)($active['name'] ?? __('博客分类'))
-            : (string)__('博客分类');
+            ? (string)($active['name'] ?? WidgetI18n::label('博客分类'))
+            : WidgetI18n::label('博客分类');
         // Leaf for <title>: keep composed length in soft SERP budget (30-65) after site suffix.
         $title = $active !== null
-            ? (string)__('「%{1}」分类博客 · 穿搭与选购', [$heading])
-            : (string)__('汉服博客分类 · 穿搭灵感与选购指南');
+            ? WidgetI18n::label('「%{1}」分类博客 · 穿搭与选购', '', [$heading])
+            : WidgetI18n::label('汉服博客分类 · 穿搭灵感与选购指南');
 
         $this->layoutType = 'blog_category';
         $this->request->setGet('page_type', 'blog_category');
@@ -66,8 +67,8 @@ final class Category extends FrontendController
         $this->assign(
             'blog_page_subtitle',
             $active !== null
-                ? (string)__('浏览「%{1}」分类下的汉服穿搭、形制科普与选购避坑文章，帮助你更快做出合适选择。', [$heading])
-                : (string)__('按分类浏览汉服穿搭灵感、形制科普与选购指南，快速找到适合日常与礼仪场合的内容。'),
+                ? WidgetI18n::label('浏览「%{1}」分类下的汉服穿搭、形制科普与选购避坑文章，帮助你更快做出合适选择。', '', [$heading])
+                : WidgetI18n::label('按分类浏览汉服穿搭灵感、形制科普与选购指南，快速找到适合日常与礼仪场合的内容。'),
         );
         $this->assign('blog_active_category_id', $categoryId);
         $this->assign('blog_active_category_slug', $slug);
@@ -93,14 +94,14 @@ final class Category extends FrontendController
         if (mb_strlen((string)$seo['description']) < 50) {
             $seo['description'] = rtrim((string)$seo['description'], "。.;； ")
                 . '。'
-                . (string)__('阅读穿搭灵感、形制科普与选购避坑，帮助你更快做出合适选择。');
+                . WidgetI18n::label('阅读穿搭灵感、形制科普与选购避坑，帮助你更快做出合适选择。');
         }
         if (mb_strlen((string)$seo['description']) > 320) {
             $seo['description'] = mb_substr((string)$seo['description'], 0, 320);
         }
         $seo['breadcrumbs'] = [
-            ['name' => (string)__('首页'), 'url' => (string)$this->getUrl('/')],
-            ['name' => (string)__('博客'), 'url' => (string)$this->getUrl('blog')],
+            ['name' => WidgetI18n::label('首页'), 'url' => (string)$this->getUrl('/')],
+            ['name' => WidgetI18n::label('博客'), 'url' => (string)$this->getUrl('blog')],
             ['name' => $heading, 'url' => $listUrl],
         ];
         $seo['feeds'] = $slug !== ''
@@ -110,8 +111,8 @@ final class Category extends FrontendController
             ? BlogNamespace::categoryRssPublicPath($slug)
             : BlogNamespace::rssPublicPath());
         $this->assign('blog_rss_label', $slug !== ''
-            ? (string)__('订阅本分类 RSS')
-            : (string)__('订阅 RSS'));
+            ? WidgetI18n::label('订阅本分类 RSS')
+            : WidgetI18n::label('订阅 RSS'));
         $this->assign('seo', $seo);
 
         return (string)$this->fetch('Weline_Blog::templates/frontend/category/index.phtml');

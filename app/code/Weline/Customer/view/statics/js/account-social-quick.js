@@ -64,6 +64,125 @@
     }
   }
 
+  function storefrontLocalePrefixFromPath(pathname) {
+    var segs = String(pathname || '').split('/').filter(Boolean);
+    var prefix = [];
+    var i = 0;
+    while (i < segs.length && prefix.length < 2) {
+      var seg = segs[i];
+      if (/^[A-Z]{3}$/.test(seg) || /^[a-z]{2}_[A-Za-z0-9_]+$/.test(seg)) {
+        prefix.push(seg);
+        i += 1;
+        continue;
+      }
+      break;
+    }
+    return prefix.length ? '/' + prefix.join('/') : '';
+  }
+
+  function stripStorefrontLocalePrefix(pathname) {
+    var prefix = storefrontLocalePrefixFromPath(pathname);
+    if (!prefix) {
+      return pathname || '/';
+    }
+    var path = String(pathname || '/');
+    if (path === prefix) {
+      return '/';
+    }
+    if (path.indexOf(prefix + '/') === 0) {
+      return path.slice(prefix.length) || '/';
+    }
+    return path;
+  }
+
+  function ensureReturnUrlParam(path, returnUrl) {
+    var target = String(path || '');
+    var ret = String(returnUrl || '').trim();
+    if (!target || !ret) {
+      return target;
+    }
+    try {
+      var url = new URL(target, window.location.origin);
+      if (!url.searchParams.get('return_url') && !url.searchParams.get('redirect_url')) {
+        url.searchParams.set('return_url', ret);
+      }
+      if (target.indexOf('://') === -1) {
+        return url.pathname + url.search + url.hash;
+      }
+      return url.toString();
+    } catch (eUrl) {
+      return target;
+    }
+  }
+
+  /**
+   * Google must hit a locale-free start URL (redirect_uri is fixed in Google Cloud).
+   * Locale is carried only via return_url → OAuth state → forceLocalizationPrefix.
+   */
+  function resolveProviderOauthStart(cfg, provider, returnUrlHint) {
+    var oauthUrl = '';
+    try {
+      oauthUrl = String((cfg.oauth && cfg.oauth[provider]) || '').trim();
+    } catch (eOauth) { oauthUrl = ''; }
+    var ret = String(returnUrlHint || '').trim()
+      || (typeof resolveReturnUrl === 'function' ? resolveReturnUrl(cfg) : '')
+      || currentStorefrontPath();
+    if (!oauthUrl) {
+      oauthUrl = '/customer/account/social-login/start?provider=' + encodeURIComponent(provider);
+    }
+    if (String(provider || '').toLowerCase() === 'google') {
+      try {
+        var gUrl = new URL(oauthUrl, window.location.origin);
+        gUrl.pathname = stripStorefrontLocalePrefix(gUrl.pathname || '/');
+        oauthUrl = (oauthUrl.indexOf('://') === -1)
+          ? (gUrl.pathname + gUrl.search + gUrl.hash)
+          : gUrl.toString();
+      } catch (eStrip) { /* keep oauthUrl */ }
+      return ensureReturnUrlParam(oauthUrl, ret);
+    }
+    if (oauthUrl.indexOf('return_url=') === -1 && oauthUrl.indexOf('redirect_url=') === -1 && ret) {
+      oauthUrl += (oauthUrl.indexOf('?') === -1 ? '?' : '&') + 'return_url=' + encodeURIComponent(ret);
+    }
+    return withStorefrontLocalePrefix(oauthUrl, cfg);
+  }
+
+  function withStorefrontLocalePrefix(path, cfg) {
+    var target = String(path || '');
+    if (!target) {
+      return target;
+    }
+    // Live page path wins over bootstrap.locale_prefix — QueryBin worker URLs have no
+    // /{locale}/ and can stamp the wrong language onto oauth.start links.
+    var pagePrefix = '';
+    try {
+      pagePrefix = storefrontLocalePrefixFromPath(window.location.pathname || '');
+    } catch (eLoc) { pagePrefix = ''; }
+    var cfgPrefix = '';
+    try {
+      cfgPrefix = String((cfg && cfg.locale_prefix) || '').trim();
+    } catch (ePrefix) { cfgPrefix = ''; }
+    var prefix = pagePrefix || cfgPrefix;
+    if (prefix && prefix.charAt(0) !== '/') {
+      prefix = '/' + prefix;
+    }
+    prefix = String(prefix || '').replace(/\/$/, '');
+    if (!prefix) {
+      return target;
+    }
+    var url;
+    try {
+      url = new URL(target, window.location.origin);
+    } catch (eUrl) {
+      return target;
+    }
+    var bare = stripStorefrontLocalePrefix(url.pathname || '/');
+    url.pathname = prefix + (bare === '/' ? '' : bare);
+    if (target.indexOf('://') === -1) {
+      return url.pathname + url.search + url.hash;
+    }
+    return url.toString();
+  }
+
   function isAuthRoutePath(path) {
     var bare = String(path || '').split('?')[0].split('#')[0].toLowerCase();
     return /(^|\/)customer\/account\/(login|register|forgot-password|challenge|logout|social-login)(\/|$)/.test(bare);
@@ -73,6 +192,24 @@
     var bare = String(path || '').split('?')[0].split('#')[0].replace(/\/+$/, '').toLowerCase();
     return /(^|\/)customer\/account$/.test(bare)
       || /(^|\/)customer\/account\/index$/.test(bare);
+  }
+
+  function escapeHtml(value) {
+    return String(value == null ? '' : value).replace(/[&<>"']/g, function (ch) {
+      return ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      })[ch] || ch;
+    });
+  }
+
+  function i18nLabel(cfg, key, fallback) {
+    var pack = cfg && cfg.i18n && typeof cfg.i18n === 'object' ? cfg.i18n : {};
+    var value = String(pack[key] || '').trim();
+    return escapeHtml(value || fallback);
   }
 
   function withAuthRefresh(path) {
@@ -376,18 +513,7 @@
       }
 
       function resolveOauthStart(provider) {
-        var oauthUrl = '';
-        try {
-          oauthUrl = String((cfg.oauth && cfg.oauth[provider]) || '').trim();
-        } catch (eOauth) { oauthUrl = ''; }
-        if (!oauthUrl) {
-          oauthUrl = '/customer/account/social-login/start?provider=' + encodeURIComponent(provider);
-          var ret = returnUrl || currentStorefrontPath();
-          if (ret) {
-            oauthUrl += '&return_url=' + encodeURIComponent(ret);
-          }
-        }
-        return oauthUrl;
+        return resolveProviderOauthStart(cfg, provider, returnUrl || currentStorefrontPath());
       }
 
       function providerIconSvg(kind) {
@@ -432,17 +558,20 @@
         bar.setAttribute('data-w-social-quick-fallback-ui', '1');
         bar.setAttribute('data-testid', 'social-login-quick-fallback');
         bar.setAttribute('role', 'dialog');
-        bar.setAttribute('aria-label', 'Quick sign-in');
+        bar.setAttribute('aria-label', i18nLabel(cfg, 'title', '快捷登录'));
+        var title = i18nLabel(cfg, 'title', '快捷登录');
+        var closeLabel = i18nLabel(cfg, 'close', '关闭');
         var actions = '';
         if (cfg.google && cfg.google.client_id) {
-          actions += providerButtonHtml('google', '使用 Google 登录');
+          actions += providerButtonHtml('google', i18nLabel(cfg, 'google', '使用 Google 登录'));
         }
         if (cfg.facebook && cfg.facebook.app_id) {
-          actions += providerButtonHtml('facebook', '使用 Facebook 登录');
+          actions += providerButtonHtml('facebook', i18nLabel(cfg, 'facebook', '使用 Facebook 登录'));
         }
         bar.innerHTML = ''
-          + '<button type="button" class="weline-social-quick-bar__close" data-w-social-quick-dismiss aria-label="Close">&times;</button>'
-          + '<p class="weline-social-quick-bar__title">快捷登录</p>'
+          + '<button type="button" class="weline-social-quick-bar__close" data-w-social-quick-dismiss aria-label="'
+          + closeLabel + '">&times;</button>'
+          + '<p class="weline-social-quick-bar__title">' + title + '</p>'
           + '<div class="weline-social-quick-bar__actions">' + actions + '</div>';
         (document.body || document.documentElement).appendChild(bar);
         root.setAttribute(
@@ -603,18 +732,7 @@
   }
 
   function resolveOauthUrl(cfg, provider) {
-    var oauthUrl = '';
-    try {
-      oauthUrl = String((cfg.oauth && cfg.oauth[provider]) || '').trim();
-    } catch (eOauth) { oauthUrl = ''; }
-    if (!oauthUrl) {
-      oauthUrl = '/customer/account/social-login/start?provider=' + encodeURIComponent(provider);
-      var ret = resolveReturnUrl(cfg) || currentStorefrontPath();
-      if (ret) {
-        oauthUrl += '&return_url=' + encodeURIComponent(ret);
-      }
-    }
-    return oauthUrl;
+    return resolveProviderOauthStart(cfg, provider, resolveReturnUrl(cfg) || currentStorefrontPath());
   }
 
   function providerIconSvgStandalone(kind) {
@@ -775,10 +893,10 @@
     hydrateAuthReturnTargets(resolveReturnUrl(cfg));
     var actions = '';
     if (cfg.google && cfg.google.client_id) {
-      actions += providerButtonHtmlStandalone('google', '使用 Google 登录');
+      actions += providerButtonHtmlStandalone('google', i18nLabel(cfg, 'google', '使用 Google 登录'));
     }
     if (cfg.facebook && cfg.facebook.app_id) {
-      actions += providerButtonHtmlStandalone('facebook', '使用 Facebook 登录');
+      actions += providerButtonHtmlStandalone('facebook', i18nLabel(cfg, 'facebook', '使用 Facebook 登录'));
     }
     var shell = document.createElement('div');
     shell.className = 'weline-social-quick-inline';
@@ -790,7 +908,8 @@
     if (skipTitle) {
       shell.className += ' weline-social-quick-inline--flush';
     }
-    shell.innerHTML = (skipTitle ? '' : '<p class="weline-social-quick-inline__title">快捷登录</p>')
+    shell.innerHTML = (skipTitle ? '' : '<p class="weline-social-quick-inline__title">'
+      + i18nLabel(cfg, 'title', '快捷登录') + '</p>')
       + '<div class="weline-social-quick-bar__actions">' + actions + '</div>';
     host.innerHTML = '';
     host.appendChild(shell);

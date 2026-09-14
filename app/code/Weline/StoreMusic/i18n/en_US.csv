@@ -1,0 +1,46 @@
+﻿进店音乐,"Store music"
+settings,settings
+进店音乐与氛围播放配置,"Store music and ambiance playback settings"
+查看进店音乐配置,"View store music settings"
+查看进店音乐曲目与播放配置,"View store music tracks and playback settings"
+播放控制,"Playback controls"
+上一首,Previous
+播放,Play
+停止,Stop
+停止播放,"Stop playback"
+下一首,Next
+"请先同意营销 Cookie 后再播放","Accept marketing cookies before playing"
+点击开启音乐,"Tap to play music"
+点击开启声音,"Tap to unmute"
+波形不可用,"Waveform unavailable"
+开启波形,"Enable waveform"
+关闭波形,"Disable waveform"
+播放中,Playing
+当前浏览器暂不支持此音频格式,"This browser does not support this audio format"
+音频加载失败，请换一首曲目或格式,"Audio failed to load. Try another track or format."
+已关闭自动播放，点击播放可重新开启,"Autoplay is off. Press play to resume."
+已在其他页面播放,"Playing on another page"
+播放列表,Playlist
+"共 {n} 首","{n} tracks"
+点开选曲,"Open track picker"
+选择曲目聆听,"Choose a track to listen"
+音量,Volume
+配置写入当前作用范围；可多选曲目、拖拽排序，并为简介按语言填写。启用且至少一首曲目后，店面左下角显示进店音乐浮层。,"Settings apply to the current scope. Multi-select tracks, drag to reorder, and fill intros per language. When enabled with at least one track, the storefront shows the music widget at the bottom left."
+在统一配置中心打开,"Open in unified config center"
+作用范围,Scope
+进店曲目,"Entrance tracks"
+"可多选 mp3 / wav / ogg / m4a / aac / flac / opus / wma 等，单文件最大约 20MB。拖动手柄调整顺序；简介按下方语言分别填写。变更后自动写入当前范围。","Multi-select mp3 / wav / ogg / m4a / aac / flac / opus / wma, etc. Max ~20MB per file. Drag handles to reorder; fill intros per language below. Changes save to the current scope automatically."
+简介编辑语言,"Intro edit language"
+切换语言后可为每首曲目填写对应简介；店面按访客语言展示。,"After switching language, fill each track intro; the storefront shows the visitor locale."
+尚未选择曲目。请用上方媒体库添加多首进店音乐。,"No tracks yet. Use the media library above to add entrance music."
+拖拽排序,"Drag to reorder"
+曲名,Title
+简介,Intro
+选择进店音乐（可多选）,"Select entrance music (multi-select)"
+选择作用范围,"Select scope"
+搜索作用范围,"Search scopes"
+折叠,Collapse
+展开,Expand
+未找到匹配作用范围,"No matching scopes found"
+进店氛围音乐,"Store ambiance music"
+关闭选曲,"Close track picker"

@@ -18,6 +18,7 @@
  */
 
 use Weline\Theme\Helper\ProductCardAddToCartParams;
+use Weline\Theme\Helper\WidgetI18n;
 
 $metaParams = \Weline\Theme\Helper\ThemeData::getFileParams('partials.product.card');
 foreach ($metaParams as $key => $value) {
@@ -118,7 +119,7 @@ $uniqueId = 'product-card-' . uniqid();
             <?php if ($showPrice): ?>
                 <?php
                 $dealCurrency = trim((string)($product['currency'] ?? 'CNY')) ?: 'CNY';
-                $dealCampaign = trim((string)($product['campaign_label'] ?? ''));
+                $dealCampaign = WidgetI18n::label(trim((string)($product['campaign_label'] ?? '')));
                 $dealCampaignUrl = trim((string)($product['campaign_url'] ?? ''));
                 ?>
                 <div class="product-card-partial__price product-price">

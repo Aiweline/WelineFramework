@@ -1,0 +1,1 @@
+Pedido confirmado · {{var.order_number}}

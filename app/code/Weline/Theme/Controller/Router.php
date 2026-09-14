@@ -283,6 +283,20 @@ class Router implements RouterInterface
     }
 
     /**
+     * Non-PageBuilder websites prefer Theme shell layouts for public aliases
+     * like /privacy and /about. Stale UrlManager rewrites to missing
+     * pagebuilder/frontend/page/view?page_id=… must not steal those paths.
+     */
+    public static function prefersShellPublicAlias(string $path): bool
+    {
+        if (self::isPageBuilderOwnedCurrentWebsite()) {
+            return false;
+        }
+
+        return self::resolveDefaultPublicTarget(self::normalizePublicPath($path)) !== null;
+    }
+
+    /**
      * Optional Websites module: page_builder / pagebuilder_ai_site scopes are owned by PageBuilder.
      */
     private static function isPageBuilderOwnedCurrentWebsite(): bool

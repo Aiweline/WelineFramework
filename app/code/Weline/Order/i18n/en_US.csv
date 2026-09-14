@@ -64,6 +64,10 @@
 "按类型与 Scope 查询订单对象展示号","Query order object display number by type and scope"
 订单状态后台类型化操作,"Order status background typed operation"
 页面读取到的对象授权版本,"The authorized version of the object read by the page"
+未付订单信号,未付订单信号
+"只读未付订单事实，供营销挽回使用（无遗弃 TTL、无触达）。","只读未付订单事实，供营销挽回使用（无遗弃 TTL、无触达）。"
+列出未付零售订单事实供营销挽回,列出未付零售订单事实供营销挽回
+发信前再验订单是否仍未付,发信前再验订单是否仍未付
 退款接口不支持该操作：%{1},"The refund interface does not support this operation: %{1}"
 系统订单追踪,"System order tracking"
 暂无第三方物流商时，按订单履约状态展示系统追踪。,"Shows system tracking from fulfillment status when no carrier provider is bound."
@@ -106,10 +110,14 @@
 在订单详情页内容之后注入内容，允许其他模块在订单详情页底部添加自定义内容。,"Inject content after the order details page content, allowing other modules to add custom content at the bottom of the order details page."
 订单详情支付记录槽,订单详情支付记录槽
 "订单详情「支付记录」空槽内的默认扩展点；由万能支付模块注入 Attempt 记录，禁止 Order 直读 Payment 表。","订单详情「支付记录」空槽内的默认扩展点；由万能支付模块注入 Attempt 记录，禁止 Order 直读 Payment 表。"
+订单详情发货记录槽,订单详情发货记录槽
+"订单详情「发货记录」空槽内的默认扩展点；由配送模块注入发货/物流记录，禁止 Order 硬编码发货表 UI。","订单详情「发货记录」空槽内的默认扩展点；由配送模块注入发货/物流记录，禁止 Order 硬编码发货表 UI。"
 订单详情批发沟通槽,订单详情批发沟通槽
 "订单详情「批发订单沟通」空槽内的默认扩展点；由 B2B 部件注入商家侧协商消息，禁止 Order 直出聊天 UI。","订单详情「批发订单沟通」空槽内的默认扩展点；由 B2B 部件注入商家侧协商消息，禁止 Order 直出聊天 UI。"
 订单列表筛选器,"Order List Filters"
 在订单列表页面的筛选器区域注入内容，允许其他模块添加自定义筛选条件。,"Inject content in the filter area of the order list page, allowing other modules to add custom filter conditions."
+订单列表发货槽,订单列表发货槽
+"订单列表页发货工作台空槽；由配送模块默认注入发货入口与待发货摘要，禁止 Order 硬编码配送运营 UI。","订单列表页发货工作台空槽；由配送模块默认注入发货入口与待发货摘要，禁止 Order 硬编码配送运营 UI。"
 前端订单创建前,"Before Frontend Order Creation"
 在前端订单创建之前注入内容，允许其他模块在订单创建前执行自定义逻辑。,"Inject content before frontend order creation, allowing other modules to execute custom logic before order creation."
 前端订单创建后,"After Frontend Order Creation"
@@ -118,10 +126,17 @@
 "已创建以下数据表: weline_checkout_group, weline_order, weline_order_item, weline_fulfillment_unit, weline_display_number_registry, weline_order_payment, weline_order_shipment, weline_order_refund, weline_order_invoice, weline_order_history, weline_order_status, weline_order_status_translation","The following data tables have been created: weline_checkout_group, weline_order, weline_order_item, weline_fulfillment_unit, weline_display_number_registry, weline_order_payment, weline_order_shipment, weline_order_refund, weline_order_invoice, weline_order_history, weline_order_status, weline_order_status_translation"
 "安装失败: %{1}","Installation failed: %{1}"
 订单留言槽默认部件迁移失败（%{1}）：%{2},订单留言槽默认部件迁移失败（%{1}）：%{2}
+您的订单已发货,您的订单已发货
 开发物流中继未启用,开发物流中继未启用
 【演示】开发中继探针,【演示】开发中继探针
 【演示】中继探针节点,【演示】中继探针节点
+发货命令已幂等重放,发货命令已幂等重放
+发货已提交；已按勾选尝试发送「已发货」邮件给客户,发货已提交；已按勾选尝试发送「已发货」邮件给客户
+发货已提交（未勾选通知客户，未发邮件）,发货已提交（未勾选通知客户，未发邮件）
 发货操作失败，请稍后重试。,"The shipping operation failed, please try again later."
+请填写平台物流单号后再发货,请填写平台物流单号后再发货
+"物流单号过长，请控制在 100 字以内","物流单号过长，请控制在 100 字以内"
+"承运商名称过长，请控制在 100 字以内","承运商名称过长，请控制在 100 字以内"
 订单发货控制器,"Order Shipping Controller"
 truck,truck
 订单仓维履约管理,"Order warehouse maintenance and fulfillment management"
@@ -138,6 +153,11 @@ cash,cash
 查看可退款订单项和退款案例,"View refundable line items and refund cases"
 提交退款,"Submit a refund"
 "锁内占用可退金额和数量并生成退款 outbox","The refundable amount and quantity are occupied in the lock and a refund is generated outbox"
+万能结账,万能结账
+快捷支付,快捷支付
+快捷购买,快捷购买
+找朋友代付,找朋友代付
+未标记,未标记
 客户调整已保存,客户调整已保存
 订单创建成功,"Order created successfully"
 备注已添加,备注已添加
@@ -260,30 +280,42 @@ SKU,SKU
 查询失败,"Query failed"
 物流单号,"Tracking Number"
 当前,Current
-本单待发履约单元；提交后写入仓维进度账本。,本单待发履约单元；提交后写入仓维进度账本。
-履约单元,"fulfillment unit"
-仓库,storehouse
-已发/总量,"Issued/total amount"
-提交,提交
-本单暂无可发货履约单元,本单暂无可发货履约单元
-发货数量,"Shipment quantity"
-发货,发货
+填写承运商与平台物流单号后提交发货；勾选通知时会向客户邮箱发送「已发货」邮件。,填写承运商与平台物流单号后提交发货；勾选通知时会向客户邮箱发送「已发货」邮件。
+数量按履约单元扣减；成功后写入发货记录与仓维进度账本。,数量按履约单元扣减；成功后写入发货记录与仓维进度账本。
+本单暂无可发货履约单元（可能已全部发出，或尚未生成履约单元）。,本单暂无可发货履约单元（可能已全部发出，或尚未生成履约单元）。
+待发货包裹,待发货包裹
+发货仓,发货仓
+平台履约（未绑仓库）,平台履约（未绑仓库）
 进度,进度
+履约单元,"fulfillment unit"
+承运商,Carrier
+"例如：顺丰 / UPS / DHL","例如：顺丰 / UPS / DHL"
+平台物流单号,平台物流单号
+填写对外给客户的运单号,填写对外给客户的运单号
+本次发货数量,本次发货数量
+发货数量,"Shipment quantity"
+发货后发送「已发货」邮件给客户,发货后发送「已发货」邮件给客户
+确认发货,确认发货
+本单发货进度,本单发货进度
 版本,Version
 时间,Time
 本单可退项；占额由服务端重算。,本单可退项；占额由服务端重算。
 可退数量,可退数量
+提交,提交
 本单暂无可退款订单项,本单暂无可退款订单项
 退款数量,"Refund quantity"
 后台退款,"Backstage refund"
 退款原因,"Reason for refund"
 退款,Refund
 案例,案例
+渠道退款号,"Channel refund ID"
+原因,原因
 顾客视图,"customer view"
 支付记录与批发沟通（插件槽位）。,支付记录与批发沟通（插件槽位）。
 订单支付记录,订单支付记录
 批发订单沟通,批发订单沟通
 打开完整详情,打开完整详情
+状态流转,"Status flow"
 订单列表,"Order List"
 新建订单,"Create Order"
 "搜索订单号、分组号 G-xxx、UUID、客户","搜索订单号、分组号 G-xxx、UUID、客户"
@@ -291,9 +323,13 @@ SKU,SKU
 全部支付状态,"All Payment Status"
 全部发货状态,"All Fulfillment Status"
 全部类型,"All types"
+结账来源,结账来源
+全部来源,全部来源
 搜索,Search
 重置,Reset
+订单列表发货,订单列表发货
 类型,Type
+来源,来源
 客户,Customer
 订单状态,"Order Status"
 支付状态,"Payment Status"
@@ -317,10 +353,15 @@ SKU,SKU
 暂无收货地址,暂无收货地址
 账单地址,账单地址
 暂无账单地址,暂无账单地址
+配送服务,配送服务
+未指定配送方式,未指定配送方式
 备注与履约方式,备注与履约方式
 配送方式,"Shipping Method"
+点击复制服务码,点击复制服务码
 订单备注,"Order Notes"
 （无备注）,（无备注）
+已复制服务码,已复制服务码
+复制失败，请手动选择,复制失败，请手动选择
 订单项,"Order Items"
 结账快照,结账快照
 价格快照,价格快照
@@ -333,18 +374,13 @@ SKU,SKU
 原价未记录,原价未记录
 活动价,活动价
 无活动记录,无活动记录
-发货记录,"Shipment Records"
-承运商,Carrier
-发货时间,"Shipped At"
-送达时间,"Delivered At"
-暂无发货记录,"No Shipment Records"
+订单发货记录,订单发货记录
 订单历史,"Order History"
 是否通知客户,"Customer Notified"
 暂无历史记录,"No History Records"
 是,Yes
 否,No
 未指定,未指定
-未指定配送方式,未指定配送方式
 管理订单,管理订单
 订单摘要,订单摘要
 结账组号,结账组号
@@ -361,6 +397,7 @@ SKU,SKU
 订单办理,订单办理
 加载中…,加载中…
 加载失败，请重试,加载失败，请重试
+发货,发货
 支付与沟通,支付与沟通
 客户调整,客户调整
 切换到此页签时异步加载本单发货。,切换到此页签时异步加载本单发货。
@@ -399,6 +436,9 @@ SKU,SKU
 添加备注,添加备注
 取消原因,取消原因
 确认取消,确认取消
+发货记录,"Shipment Records"
+发货时间,"Shipped At"
+暂无发货记录,"No Shipment Records"
 "支付记录与沟通也可在上方「订单办理 → 支付与沟通」页签异步加载。","支付记录与沟通也可在上方「订单办理 → 支付与沟通」页签异步加载。"
 商品名称,"Product Name"
 删除,Delete
@@ -445,13 +485,17 @@ SKU,SKU
 保存失败,"Save Failed"
 保存失败，请重试,"Save failed. Please try again"
 订单发货管理,"Order delivery management"
-"发货动作写入仓维 FulfillmentUnit 与不可变进度账本；相同幂等键和载荷不会重复扣减可发数量。","The shipping action is written into the warehouse FulfillmentUnit and the immutable progress ledger; the same idempotent key and load will not repeatedly deduct the deliverable quantity."
+发货须填写平台物流单号；勾选通知时向客户发送「已发货」邮件。成功后写入发货记录、履约进度与不可变账本。,发货须填写平台物流单号；勾选通知时向客户发送「已发货」邮件。成功后写入发货记录、履约进度与不可变账本。
 待发货履约单元,"Fulfillment unit to be shipped"
-订单,Order
-"CAS 版本","CAS version"
 暂无可发货履约单元,"There is currently no delivery fulfillment unit"
+包裹,包裹
+已发/总量,"Issued/total amount"
+"例如：顺丰 / UPS","例如：顺丰 / UPS"
+运单号,运单号
 幂等键,"idempotent keys"
+发送「已发货」邮件,发送「已发货」邮件
 仓维发货进度账本,"Warehouse delivery progress ledger"
+订单,Order
 暂无进度记录,"No progress record yet"
 订单退款管理,"Order refund management"
 "退款金额由服务端按冻结订单项重算；提交会在同一事务内占用可退数量与金额，并生成 PaymentRefund 和确定性 outbox。","The refund amount is recalculated by the server based on frozen order items; submission will occupy the refundable quantity and amount in the same transaction, and generate PaymentRefund and deterministic outbox."
@@ -596,12 +640,18 @@ Outbox,Outbox
 当前订单状态不能接受支付成功通知,"The current order status cannot accept payment success notification"
 订单支付状态已被并发修改,"The order payment status has been modified concurrently"
 支付成功，订单进入处理,"The payment is successful and the order is processed"
+"仓库 #%{1}","仓库 #%{1}"
+"仓库 #%{1}（默认）","仓库 #%{1}（默认）"
+已发完,已发完
+未知,未知
 "未知 cutover mode：%{1}","Unknown cutover mode: %{1}"
 "生产 on 必须显式授权令牌","Production on must explicitly authorize the token"
 "实际 cutover 须由 TASK-MIG-P2-ORDER 携带 production_on_token","The actual cutover must be carried by TASK-MIG-P2-ORDER production_on_token"
 "rollback 不得直接设为 on","rollback cannot be directly set to on"
 "已有新 Order 时拒绝会混淆事实源的 unsafe rollback；可切 shadow，且绝不恢复旧 writer","When there is a new Order, unsafe rollback that would confuse the source of truth is rejected; shadow can be cut, and the old writer will never be restored."
 "禁止回滚恢复旧 Checkout writer","Disable rollback to restore old Checkout writer"
+成功,Success
+失败,Failed
 "Order 售卖类型 code 不能为空","Order 售卖类型 code 不能为空"
 "重复的 Order 售卖类型 code：%{1}","重复的 Order 售卖类型 code：%{1}"
 未注册的订单售卖类型：%{1},未注册的订单售卖类型：%{1}
@@ -648,6 +698,12 @@ Outbox,Outbox
 "旧 Checkout writer 已被 cutover gate 禁止（mode=%{1}）","The old Checkout writer has been disabled by the cutover gate (mode=%{1})"
 "新 Order writer 在当前 mode 不可写（mode=%{1}；shadow 仅允许 plan）","The new Order writer is not writable in the current mode (mode=%{1}; shadow only allows plan)"
 "MIG-P2-ORDER：Checkout→Order 单写切流（仅登记的隔离 clone）","MIG-P2-ORDER: Checkout→Order single write flow (only registered isolation clone)"
+本单待发履约单元；提交后写入仓维进度账本。,本单待发履约单元；提交后写入仓维进度账本。
+仓库,storehouse
+本单暂无可发货履约单元,本单暂无可发货履约单元
+"发货动作写入仓维 FulfillmentUnit 与不可变进度账本；相同幂等键和载荷不会重复扣减可发数量。","The shipping action is written into the warehouse FulfillmentUnit and the immutable progress ledger; the same idempotent key and load will not repeatedly deduct the deliverable quantity."
+"CAS 版本","CAS version"
+送达时间,"Delivered At"
 "订单详情支付记录空槽内的默认扩展点；由万能支付模块注入 Attempt 记录，禁止 Order 直读支付表拼表。","订单详情支付记录空槽内的默认扩展点；由万能支付模块注入 Attempt 记录，禁止 Order 直读支付表拼表。"
 配送方式代码,配送方式代码
 "为客户调整（联系 / 地址 / 备注）","为客户调整（联系 / 地址 / 备注）"

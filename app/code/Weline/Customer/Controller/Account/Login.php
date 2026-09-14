@@ -42,7 +42,7 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
     public function getIndex()
     {
         if ($this->isLoggedIn()) {
-            return $this->redirect('/customer/account');
+            return $this->redirect('customer/account');
         }
 
         $explicitTarget = $this->request->getParam('redirect_url') ?? $this->request->getParam('redirect') ?? '';
@@ -83,12 +83,12 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
                 return $this->json([
                     'success' => true,
                     'message' => __('你已经登录了，请先退出登录.'),
-                    'redirect' => '/customer/account',
+                    'redirect' => $this->getUrl('customer/account'),
                 ]);
             }
 
             $this->getMessageManager()->addWarning(__('你已经登录了，请先退出登录.'));
-            return (string) $this->redirect('/customer/account');
+            return (string) $this->redirect('customer/account');
         }
 
         $username = $this->request->getBodyParam('username');

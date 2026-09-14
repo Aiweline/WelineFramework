@@ -17,6 +17,7 @@
 <?php
 
 use Weline\Theme\Helper\ProductLabelStyle;
+use Weline\Theme\Helper\WidgetI18n;
 use Weline\Theme\Helper\WidgetUiScope;
 
 $scope = WidgetUiScope::forComponent('product-label');
@@ -35,6 +36,9 @@ if ($text === '') {
         ProductLabelStyle::KIND_DEMO => (string)__('DEMO'),
         default => (string)__('NEW'),
     };
+} elseif (preg_match('/\p{Han}/u', $text) === 1) {
+    // Catalog/layout may bake Chinese badge copy; resolve by path locale.
+    $text = WidgetI18n::label($text);
 }
 
 $class = trim((string)($this->getData('class') ?? $this->getData('meta.class') ?? ''));

@@ -549,4 +549,25 @@ final class CheckoutGroupSubmitServiceTest extends TestCase
             self::assertSame(CheckoutGroupSubmitService::ERROR_QUOTE_TOKEN, $e->errorCode());
         }
     }
+
+    public function testFreezeReusesExistingQuotedToken(): void
+    {
+        $svc = $this->submitter();
+        $first = $svc->freezeAndQuote(
+            lines: [['name' => 'A', 'qty_minor' => 1, 'unit_price_minor' => 100, 'requires_shipping' => true]],
+            address: ['country' => 'CN'],
+            scope: ['website_id' => 0, 'store_id' => 0],
+            serviceCode: 'std',
+            currency: 'CNY',
+        );
+        $second = $svc->freezeAndQuote(
+            lines: [['name' => 'A', 'qty_minor' => 1, 'unit_price_minor' => 100, 'requires_shipping' => true]],
+            address: ['country' => 'CN'],
+            scope: ['website_id' => 0, 'store_id' => 0],
+            serviceCode: 'std',
+            currency: 'CNY',
+            existingQuoteToken: (string)$first['quote_token'],
+        );
+        self::assertSame($first['quote_token'], $second['quote_token']);
+    }
 }

@@ -32,6 +32,8 @@ final class ProductExpressPaymentWidgetContractTest extends TestCase
         self::assertStringContainsString('listExpressMethods', $tpl);
         self::assertStringContainsString('data-weline-load="productExpressPay"', $tpl);
         self::assertStringContainsString('data-product-express-pay', $tpl);
+        self::assertStringContainsString('weline-pixel::express_pay', $tpl);
+        self::assertStringContainsString('data-pixel-event="express_pay"', $tpl);
     }
 
     public function testProductInfoDeclaresExpressSlot(): void

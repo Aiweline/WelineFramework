@@ -50,13 +50,24 @@ final class LocaleFallbackChainTest extends TestCore
         self::assertStringContainsString('websiteDefaultLocale', $source);
     }
 
-    public function testParserLoadsMaintainedEnglishModuleCopyForArabicFallback(): void
+    public function testParserModuleLocaleChainUsesTargetLocaleCsvNotNeutralEnglish(): void
     {
         $method = new \ReflectionMethod(Parser::class, 'loadModuleWordsForLocaleChain');
         $words = $method->invoke(null, 'Weline_Theme', 'ar_SA');
 
-        self::assertSame('About Us', $words['关于我们'] ?? null);
-        self::assertSame('Contact us', $words['联系我们'] ?? null);
-        self::assertSame('Contact Us Page Layout', $words['联系我们页面布局'] ?? null);
+        // Theme 有 ar_SA.csv：热层应是阿语，不得回落成 en_US「About Us」。
+        self::assertSame('من نحن', $words['关于我们'] ?? null);
+        self::assertNotSame('About Us', $words['关于我们'] ?? null);
+    }
+
+    public function testParserStillFallsBackToNeutralEnglishViaLocaleChainCandidates(): void
+    {
+        self::assertSame(
+            ['hi_IN', 'en_US', 'zh_Hans_CN'],
+            LocaleFallbackChain::candidates('hi_IN', 'zh_Hans_CN'),
+        );
+        $source = (string)file_get_contents(dirname(__DIR__) . '/Parser.php');
+        self::assertStringContainsString('loadGlobalDictionaryWord', $source);
+        self::assertStringContainsString('禁止把 en_US 等回退 locale 的模块 CSV 提前合并', $source);
     }
 }

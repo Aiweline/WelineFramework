@@ -35,7 +35,7 @@ final class LocalTemplatePricingService
      * @param array<string, mixed> $destAddress
      * @param array{website_id?:int,store_id?:int,channel_id?:int}|null $context
      * @param array<string, mixed> $addons
-     * @return array{rates: array<string, array<string, mixed>>, fx_skipped: list<string>}
+     * @return array{rates: array<string, array<string, mixed>>, fx_skipped: list<string>, unavailable_reasons: list<string>}
      */
     public function priceMatchedServices(
         array $matchedServices,
@@ -53,6 +53,7 @@ final class LocalTemplatePricingService
             : $this->subtotalMinor($lines);
         $rates = [];
         $fxSkipped = [];
+        $unavailableReasons = [];
         /** @var ShippingSurchargeService $surchargeSvc */
         $surchargeSvc = $this->objectManager->getInstance(ShippingSurchargeService::class);
         /** @var ShippingSeasonalSurchargeService $seasonalSvc */
@@ -113,8 +114,12 @@ final class LocalTemplatePricingService
                             $currencyPrecision,
                             $subtotalMinor,
                         );
-                    } catch (ShippingRateUnavailableException) {
+                    } catch (ShippingRateUnavailableException $e) {
                         $unavailable = true;
+                        $reason = trim((string)$e->getMessage());
+                        if ($reason !== '') {
+                            $unavailableReasons[] = $reason;
+                        }
                         break;
                     }
                 }
@@ -183,6 +188,7 @@ final class LocalTemplatePricingService
         return [
             'rates' => $rates,
             'fx_skipped' => array_values(array_unique($fxSkipped)),
+            'unavailable_reasons' => array_values(array_unique($unavailableReasons)),
         ];
     }
 

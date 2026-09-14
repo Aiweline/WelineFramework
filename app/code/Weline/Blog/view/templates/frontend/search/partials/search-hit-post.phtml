@@ -1,6 +1,7 @@
 <?php
 /** @var \Weline\Framework\View\Template $this */
 use Weline\Theme\Helper\StorefrontImagePlaceholder;
+use Weline\Theme\Helper\WidgetI18n;
 
 $payload = is_array($this->getData('payload') ?? null) ? $this->getData('payload') : [];
 $hit = is_array($this->getData('hit') ?? null) ? $this->getData('hit') : [];
@@ -13,7 +14,7 @@ $categoryLabel = '';
 foreach ($categories as $name) {
     $name = trim((string)$name);
     if ($name !== '') {
-        $categoryLabel = $name;
+        $categoryLabel = WidgetI18n::label($name, $name);
         break;
     }
 }

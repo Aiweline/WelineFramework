@@ -11,6 +11,7 @@ use Weline\Blog\Service\BlogScopeResolver;
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\Http\Response;
 use Weline\Framework\Xml\RssFeedWriter;
+use Weline\Theme\Helper\WidgetI18n;
 
 /** Reader RSS: /blog/rss.xml and /blog/category/{slug}/rss.xml */
 final class Rss extends FrontendController
@@ -34,9 +35,9 @@ final class Rss extends FrontendController
         }
         $categorySlug = strtolower(trim((string)$this->request->getParam('category_slug', '')));
 
-        $channelTitle = (string)__('博客');
+        $channelTitle = WidgetI18n::label('博客');
         $channelLink = $this->absolutePath(BlogNamespace::publicPath(), $baseUrl);
-        $channelDescription = (string)__('最新博客文章');
+        $channelDescription = WidgetI18n::label('最新博客文章');
         $articles = [];
 
         if ($categorySlug !== '') {
@@ -49,7 +50,7 @@ final class Rss extends FrontendController
             $categoryId = (int)($active['category_id'] ?? 0);
             $channelTitle = (string)($active['name'] ?? $categorySlug);
             $channelLink = $this->absolutePath(BlogNamespace::categoryPublicPath($categorySlug), $baseUrl);
-            $channelDescription = (string)__('分类「%{1}」的最新文章', [$channelTitle]);
+            $channelDescription = WidgetI18n::label('分类「%{1}」的最新文章', '', [$channelTitle]);
             $articles = $categoryId > 0
                 ? $this->resolver->listPublishedArticlesByCategory(
                     $websiteId,

@@ -467,12 +467,13 @@ final class StorefrontCatalogViewService
 
         $scope = $this->currentScope();
         $websiteId = max(0, (int)$scope->websiteId);
+        $locale = trim((string)RequestContext::getWelineUserLang());
         $requestKey = serialize([
             $productId,
             $scope->canonicalKey(),
             max(0, RequestContext::getWelineStoreId()),
             strtoupper(trim(RequestContext::getWelineUserCurrency())),
-            trim((string)RequestContext::getWelineUserLang()),
+            $locale,
         ]);
         $rows = RequestLifecycleTrace::measurePhase(
             'product.catalog.live_request',
@@ -496,7 +497,7 @@ final class StorefrontCatalogViewService
         foreach ($rows as $row) {
             $projected = $row;
             if ($supplierFacts === null) {
-                $projected = $this->attachPrimarySupplier($projected, $websiteId, $productId);
+                $projected = $this->attachPrimarySupplier($projected, $websiteId, $productId, $locale);
                 $supplierFacts = [
                     'supplier_id' => max(0, (int)($projected['supplier_id'] ?? 0)),
                     'supplier_name' => trim((string)($projected['supplier_name'] ?? '')),
@@ -1370,14 +1371,14 @@ final class StorefrontCatalogViewService
             $locale,
         );
 
-        return $this->attachPrimarySupplier($projected, $websiteId, $productId);
+        return $this->attachPrimarySupplier($projected, $websiteId, $productId, $locale);
     }
 
     /**
      * @param array<string, mixed> $offer
      * @return array<string, mixed>
      */
-    private function attachPrimarySupplier(array $offer, int $websiteId, int $productId): array
+    private function attachPrimarySupplier(array $offer, int $websiteId, int $productId, string $locale = ''): array
     {
         $offer['supplier_id'] = max(0, (int)($offer['supplier_id'] ?? 0));
         $offer['supplier_name'] = trim((string)($offer['supplier_name'] ?? ''));
@@ -1413,6 +1414,30 @@ final class StorefrontCatalogViewService
             $code = trim((string)$supplier->getData(Supplier::schema_fields_CODE));
             if ($name === '') {
                 return $offer;
+            }
+            // Prefer product EAV source_company_name for the request locale when present
+            // (supplier shard name has no local table).
+            $locale = trim($locale !== '' ? $locale : (string)RequestContext::getWelineUserLang());
+            if ($locale !== '') {
+                try {
+                    $resolvedCompany = $this->attributeValues->read(
+                        $websiteId,
+                        AttributeValue::WEBSITE_STORE_ID,
+                        'product',
+                        $productId,
+                        'source_company_name',
+                        $locale,
+                        $this->localeFallbacks($locale),
+                    );
+                    if ($resolvedCompany->isExplicit()) {
+                        $company = trim((string)$resolvedCompany->value);
+                        if ($company !== '') {
+                            $name = $company;
+                        }
+                    }
+                } catch (\Throwable) {
+                    // Keep supplier shard name when localized company lookup fails.
+                }
             }
             $offer['supplier_id'] = $supplierId;
             $offer['supplier_name'] = $name;

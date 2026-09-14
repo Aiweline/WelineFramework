@@ -53,7 +53,8 @@ final class SocialLoginPresentationService
      *   endpoints:array{google:string,facebook:string},
      *   oauth:array{facebook:string,google:string},
      *   google:?array{client_id:string},
-     *   facebook:?array{app_id:string}
+     *   facebook:?array{app_id:string},
+     *   i18n:array{title:string,google:string,facebook:string,close:string}
      * }
      */
     public function quickPromptBootstrap(array $widgetConfig, string $returnUrl = '', bool $loggedIn = false): array
@@ -70,8 +71,20 @@ final class SocialLoginPresentationService
                 'facebook' => $this->oauth->startUrl('facebook', $returnUrl),
                 'google' => $this->oauth->startUrl('google', $returnUrl),
             ],
+            // return_url carries the browser path locale; QueryBin getPrefix() alone can
+            // lag or mismatch when the worker request has no /{locale}/ segment.
+            'locale_prefix' => SocialLoginStorefrontLocale::firstNonEmpty(
+                $returnUrl,
+                $this->oauth->currentStorefrontLocalePrefix(),
+            ),
             'google' => null,
             'facebook' => null,
+            'i18n' => [
+                'title' => (string) __('快捷登录'),
+                'google' => (string) __('使用 %{1} 登录', ['Google']),
+                'facebook' => (string) __('使用 %{1} 登录', ['Facebook']),
+                'close' => (string) __('关闭'),
+            ],
         ];
         if ($loggedIn) {
             return $bootstrap;

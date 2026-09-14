@@ -26,7 +26,8 @@ final class FaqSearchProvider extends AbstractSearchProvider
 
     public function label(): string
     {
-        return (string)__('FAQ');
+        // Stable source key — translate at storefront render (WidgetI18n / type-filter).
+        return 'FAQ';
     }
 
     public function sortOrder(): int

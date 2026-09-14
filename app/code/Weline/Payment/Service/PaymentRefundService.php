@@ -94,7 +94,8 @@ class PaymentRefundService implements PaymentRefundFacadeInterface
         private readonly ObjectManager $objectManager,
         private readonly WriteIntentTransactionCoordinatorInterface $transactions,
         private readonly PaymentConnectorGuard $connectors,
-        private ?PaymentScopeConfigService $scopeConfigService = null
+        private ?PaymentScopeConfigService $scopeConfigService = null,
+        private ?PaymentCaptureReaderEnsureService $captureReaders = null,
     ) {
     }
 
@@ -1168,9 +1169,35 @@ class PaymentRefundService implements PaymentRefundFacadeInterface
         string $payableId,
         bool $forUpdate,
     ): ?PaymentIntent {
+        $payableId = trim($payableId);
+        foreach (PaymentCaptureReaderEnsureService::payableTypeAliases($payableType) as $type) {
+            $intent = $this->findCapturedIntent($type, $payableId, $forUpdate);
+            if ($intent instanceof PaymentIntent) {
+                return $intent;
+            }
+        }
+        try {
+            $this->captureReaders()->ensureFromPayable($payableType, $payableId);
+        } catch (\Throwable) {
+        }
+        foreach (PaymentCaptureReaderEnsureService::payableTypeAliases($payableType) as $type) {
+            $intent = $this->findCapturedIntent($type, $payableId, $forUpdate);
+            if ($intent instanceof PaymentIntent) {
+                return $intent;
+            }
+        }
+
+        return null;
+    }
+
+    private function findCapturedIntent(
+        string $payableType,
+        string $payableId,
+        bool $forUpdate,
+    ): ?PaymentIntent {
         $model = $this->objectManager->getInstance(PaymentIntent::class, [], false);
         $model->where(PaymentIntent::schema_fields_PAYABLE_TYPE, strtolower(trim($payableType)))
-            ->where(PaymentIntent::schema_fields_PAYABLE_ID, trim($payableId))
+            ->where(PaymentIntent::schema_fields_PAYABLE_ID, $payableId)
             ->where(PaymentIntent::schema_fields_STATUS, [
                 PaymentIntent::STATUS_AUTHORIZED,
                 PaymentIntent::STATUS_CAPTURED,
@@ -1188,6 +1215,12 @@ class PaymentRefundService implements PaymentRefundFacadeInterface
         $intent = $model->find()->fetch();
 
         return $intent instanceof PaymentIntent && $intent->getId() ? $intent : null;
+    }
+
+    private function captureReaders(): PaymentCaptureReaderEnsureService
+    {
+        return $this->captureReaders
+            ??= $this->objectManager->getInstance(PaymentCaptureReaderEnsureService::class);
     }
 
     private function loadSucceededAttempt(string $intentCode, bool $forUpdate): ?PaymentAttempt

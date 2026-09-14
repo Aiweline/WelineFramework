@@ -293,6 +293,7 @@ final class OrderFacade implements OrderFacadeInterface
                     'customer_id' => $command->customerId,
                     'order_type' => $this->orderTypeFromCommand($command),
                     'payment_method' => $this->paymentMethodFromCommand($command),
+                    'checkout_entry' => $this->checkoutEntryFromCommand($command),
                     'type_payload' => $this->typePayloadForPlannedOrder($command, (string)$planned['split_key']),
                     'items' => $planned['items'],
                     'money' => $money->toArray(),
@@ -486,6 +487,7 @@ final class OrderFacade implements OrderFacadeInterface
                     'customer_id' => $command->customerId,
                     'order_type' => $this->orderTypeFromCommand($command),
                     'payment_method' => $this->paymentMethodFromCommand($command),
+                    'checkout_entry' => $this->checkoutEntryFromCommand($command),
                     'type_payload' => $this->typePayloadForPlannedOrder($command, (string)$planned['split_key']),
                     'items' => $planned['items'],
                     'money' => $money->toArray(),
@@ -736,6 +738,8 @@ final class OrderFacade implements OrderFacadeInterface
             customerEmail: ($email = trim((string)($row['customer_email'] ?? ''))) !== '' ? $email : null,
             orderType: strtolower(trim((string)($row['order_type'] ?? 'toc'))) ?: 'toc',
             typePayload: is_array($row['type_payload'] ?? null) ? $row['type_payload'] : [],
+            paymentStatus: strtolower(trim((string)($row['payment_status'] ?? ''))),
+            checkoutEntry: strtolower(trim((string)($row['checkout_entry'] ?? 'unknown'))) ?: 'unknown',
         );
     }
 
@@ -1289,6 +1293,17 @@ final class OrderFacade implements OrderFacadeInterface
     private function paymentMethodFromCommand(CreateCheckoutGroupCommand $command): string
     {
         return strtolower(trim((string)($command->options['payment_method'] ?? '')));
+    }
+
+    private function checkoutEntryFromCommand(CreateCheckoutGroupCommand $command): string
+    {
+        $code = strtolower(trim((string)($command->options['checkout_entry'] ?? '')));
+        $allowed = ['checkout', 'express', 'quick_buy', 'helppay', 'unknown'];
+        if ($code === '' || !\in_array($code, $allowed, true)) {
+            return 'unknown';
+        }
+
+        return $code;
     }
 
     /**

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Dropship\Extends;
 
 use Weline\Smtp\Api\MailChannelProviderInterface;
+use Weline\Smtp\Service\MailTemplateDefaultLocales;
 
 class MailChannelProvider implements MailChannelProviderInterface
 {
@@ -20,18 +21,7 @@ class MailChannelProvider implements MailChannelProviderInterface
                     ['code' => 'order_uuid', 'label' => __('订单 UUID'), 'sample' => 'ord-uuid-example'],
                     ['code' => 'message', 'label' => __('安慰文案'), 'sample' => '已启动退款'],
                 ],
-                'default_templates' => [
-                    [
-                        'locale' => 'zh_Hans_CN',
-                        'subject_file' => 'view/email/fulfillment_consolation/zh_Hans_CN.subject.txt',
-                        'body_file' => 'view/email/fulfillment_consolation/zh_Hans_CN.html',
-                    ],
-                    [
-                        'locale' => 'en_US',
-                        'subject_file' => 'view/email/fulfillment_consolation/en_US.subject.txt',
-                        'body_file' => 'view/email/fulfillment_consolation/en_US.html',
-                    ],
-                ],
+                'default_templates' => MailTemplateDefaultLocales::fileEntries('fulfillment_consolation'),
             ],
         ];
     }

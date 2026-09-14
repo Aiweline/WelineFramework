@@ -103,13 +103,55 @@ final class FaqPdpResolveServiceTest extends TestCase
         self::assertSame('如何退换货？', $zh[1]['question'] ?? null);
     }
 
-    public function testCascadeDoesNotLeakOtherLocaleWhenEmptyLegacyAbsent(): void
+    public function testCascadeFallsBackAlongLocaleChainWhenExactLocaleMissing(): void
     {
         $rows = [
             $this->row('shipping', '配送多久能到？', 0, '', '', 10, FaqItem::STATUS_ENABLED, 'zh_Hans_CN'),
+            $this->row('shipping', 'How long does delivery take?', 0, '', '', 10, FaqItem::STATUS_ENABLED, 'en_US'),
+            $this->row('returns', '如何退换货？', 0, '', '', 20, FaqItem::STATUS_ENABLED, 'zh_Hans_CN'),
+            $this->row('returns', 'How do I return or exchange an item?', 0, '', '', 20, FaqItem::STATUS_ENABLED, 'en_US'),
         ];
-        $en = $this->svc->cascadeRows($rows, 0, '', '', 'en_US');
-        self::assertSame([], $en);
+        // hi_IN → en_US → website default; prefer maintained English over Chinese.
+        $hi = $this->svc->cascadeRows($rows, 0, '', '', 'hi_IN');
+        self::assertSame('How long does delivery take?', $hi[0]['question'] ?? null);
+        self::assertSame('How do I return or exchange an item?', $hi[1]['question'] ?? null);
+
+        // en_US missing → legacy empty-locale last resort (website default may already be en_US).
+        $emptyLegacy = [
+            $this->row('shipping', '配送多久能到？', 0, '', '', 10, FaqItem::STATUS_ENABLED, ''),
+        ];
+        $enFallback = $this->svc->cascadeRows($emptyLegacy, 0, '', '', 'en_US');
+        self::assertSame('配送多久能到？', $enFallback[0]['question'] ?? null);
+    }
+
+    public function testCascadePrefersExactHindiOverEnglishFallback(): void
+    {
+        $rows = [
+            $this->row('shipping', 'डिलीवरी में कितना समय लगता है?', 0, '', '', 10, FaqItem::STATUS_ENABLED, 'hi_IN'),
+            $this->row('shipping', 'How long does delivery take?', 0, '', '', 10, FaqItem::STATUS_ENABLED, 'en_US'),
+        ];
+        $hi = $this->svc->cascadeRows($rows, 0, '', '', 'hi_IN');
+        self::assertSame('डिलीवरी में कितना समय लगता है?', $hi[0]['question'] ?? null);
+    }
+
+    public function testCascadePrefersEnglishFallbackOverChineseForNonChineseLocale(): void
+    {
+        $rows = [
+            $this->row('shipping', '配送多久能到？', 0, '', '', 10, FaqItem::STATUS_ENABLED, 'zh_Hans_CN'),
+            $this->row('shipping', 'How long does delivery take?', 0, '', '', 10, FaqItem::STATUS_ENABLED, 'en_US'),
+        ];
+        $ar = $this->svc->cascadeRows($rows, 0, '', '', 'ar_SA');
+        self::assertSame('How long does delivery take?', $ar[0]['question'] ?? null);
+    }
+
+    public function testCascadePrefersExactArabicOverEnglishFallback(): void
+    {
+        $rows = [
+            $this->row('shipping', 'كم يستغرق التوصيل؟', 0, '', '', 10, FaqItem::STATUS_ENABLED, 'ar_SA'),
+            $this->row('shipping', 'How long does delivery take?', 0, '', '', 10, FaqItem::STATUS_ENABLED, 'en_US'),
+        ];
+        $ar = $this->svc->cascadeRows($rows, 0, '', '', 'ar_SA');
+        self::assertSame('كم يستغرق التوصيل؟', $ar[0]['question'] ?? null);
     }
 
     public function testMatchingLocaleBeatsWebsiteEmptyLocaleInheritance(): void

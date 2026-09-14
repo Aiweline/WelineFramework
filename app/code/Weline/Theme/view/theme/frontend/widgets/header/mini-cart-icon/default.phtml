@@ -319,7 +319,7 @@ $renderLine = static function (array $item) use ($esc, $placeholder, $cart): str
                 <span><?= __('小计') ?></span>
                 <strong class="total-amount" data-cart-total-amount><?= $esc($cartSubtotal) ?></strong>
             </div>
-            <p class="mini-cart-drawer__note"><?= __('税费与运费将在结算时计算') ?></p>
+            <p class="mini-cart-drawer__note" dir="auto"><?= __('税费与运费将在结算时计算') ?></p>
             <div class="mini-cart-drawer__actions">
                 <a href="@url{'checkout'}"
                    class="mini-cart-drawer__btn mini-cart-drawer__btn--primary"

@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<title>{{var.brand_display_name}}</title>
+<!-- Email-safe: tables + inline CSS only; no script. Colors from Theme brand_* tokens. -->
+</head>
+<body style="margin:0;padding:0;background:{{var.brand_canvas}};-webkit-text-size-adjust:100%;" data-weline-mail-shell="1">
+<div style="display:none;max-height:0;overflow:hidden;mso-hide:all;font-size:1px;line-height:1px;color:{{var.brand_canvas}};">{{PREHEADER}}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;background:{{var.brand_canvas}};margin:0;padding:0;">
+  <tr>
+    <td align="center" style="padding:24px 12px;">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;background:{{var.brand_surface}};border:1px solid {{var.brand_border}};">
+        <tr>
+          <td bgcolor="{{var.brand_header_bg}}" style="background:{{var.brand_header_bg}};padding:22px 28px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td align="left" valign="middle" style="vertical-align:middle;">{{var.site_logo_img|raw}}</td>
+                <td align="right" valign="middle" style="vertical-align:middle;font-family:Georgia,'Times New Roman',serif;padding-left:16px;">
+                  <div style="font-size:17px;line-height:1.35;font-weight:700;letter-spacing:0.02em;color:{{var.brand_header_text}};">{{var.brand_display_name}}</div>
+                  <div style="margin-top:6px;font-size:12px;line-height:1.45;font-family:Arial,Helvetica,sans-serif;color:{{var.brand_header_muted}};">{{var.site_description}}</div>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td bgcolor="{{var.brand_accent}}" height="4" style="height:4px;background:{{var.brand_accent}};font-size:0;line-height:0;">&nbsp;</td>
+        </tr>
+        <tr>
+          <td align="left" style="padding:28px 28px 12px;font-family:Arial,Helvetica,sans-serif;color:{{var.brand_text}};font-size:15px;line-height:1.7;">
+{{MAIL_BODY}}
+          </td>
+        </tr>
+        <tr>
+          <td align="left" bgcolor="{{var.brand_footer_bg}}" style="padding:20px 28px 10px;font-family:Arial,Helvetica,sans-serif;background:{{var.brand_footer_bg}};border-top:1px solid {{var.brand_border}};">
+            <div style="font-size:13px;font-weight:700;color:{{var.brand_footer_heading}};margin:0 0 8px;">Besoin d’aide ?</div>
+            <div style="font-size:12px;line-height:1.75;color:{{var.brand_muted}};">
+              Visitez <a href="{{var.site_url}}" style="color:{{var.brand_link}};text-decoration:underline;">{{var.site_url}}</a><br>
+              Support : <a href="mailto:{{var.contact_email}}" style="color:{{var.brand_link}};text-decoration:underline;">{{var.contact_email}}</a><br>
+              Téléphone : {{var.contact_phone}}<br>
+              Horaires : {{var.service_hours}}<br>
+              Adresse : {{var.contact_address}}
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td align="left" bgcolor="{{var.brand_footer_bg}}" style="padding:8px 28px 24px;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:1.6;color:{{var.brand_muted}};background:{{var.brand_footer_bg}};">
+            {{var.site_name}} · {{var.store_name}} · {{var.channel_name}}<br>
+            Ce message a été envoyé automatiquement. Merci de ne pas y répondre. Si vous ne l’attendiez pas, ignorez-le.
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>

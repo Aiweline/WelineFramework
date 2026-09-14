@@ -6,11 +6,18 @@
   'use strict';
 
   function ensureShareCss() {
-    if (d.querySelector('link[data-helppay-share-css]')) return;
+    var href = '/Weline/HelpPay/view/statics/css/helppay-share.css?v=20260914-payer-pc-split1';
+    var existing = d.querySelector('link[data-helppay-share-css]');
+    if (existing) {
+      if (existing.getAttribute('href') !== href) {
+        existing.setAttribute('href', href);
+      }
+      return;
+    }
     var link = d.createElement('link');
     link.rel = 'stylesheet';
     link.setAttribute('data-helppay-share-css', '1');
-    link.href = '/Weline/HelpPay/view/statics/css/helppay-share.css?v=20260914-share-spec1';
+    link.href = href;
     d.head.appendChild(link);
   }
   ensureShareCss();
@@ -28,6 +35,15 @@
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;');
+  }
+
+  /** Visitor 像素过程事件（事件链中间步） */
+  function trackPixel(name, payload, el) {
+    try {
+      if (w.WelinePixel && typeof w.WelinePixel.track === 'function') {
+        w.WelinePixel.track(name, payload || {}, { element: el || null, keepalive: true });
+      }
+    } catch (e) {}
   }
 
   function parseShareI18n(raw) {
@@ -92,12 +108,39 @@
     if (/helppay_shipping_incomplete/i.test(msg)) {
       return t('addressIncomplete', '请先完善收货地址后再生成快捷购买链接。');
     }
+    if (/helppay_missing_weight|missing_weight/i.test(msg)) {
+      return t(
+        'missingWeight',
+        '购物车商品缺少重量，无法计算运费。请联系客服协助处理后再试。'
+      );
+    }
+    if (/helppay_shipping_unavailable|helppay_shipping_mismatch|helppay_shipping_required/i.test(msg)) {
+      return t('shippingUnavailable', '该地址暂无可用配送方式，请更换地址后重试。');
+    }
+    if (/helppay_product_required/i.test(msg)) {
+      return t('cannotComplete', '无法完成操作');
+    }
+    if (/Frontend worker operation is not allowed/i.test(msg)) {
+      return ctx === 'payer'
+        ? t('payFailed', '无法发起支付，请刷新后重试。')
+        : ctx === 'share'
+          ? '分享服务暂未开通，请刷新页面后重试。'
+          : '快捷购买服务暂未开通，请刷新页面后重试，或使用加入购物车。';
+    }
+    if (/helppay_payment_start_failed|helppay_payment_method_unavailable|helppay_payment_unavailable|payer_type_not_allowed|付款人类型不能使用/i.test(msg)) {
+      return t('payFailed', '无法发起支付，请刷新后重试。');
+    }
     if (/capability_denied|auth_error|403/i.test(msg)) {
       return ctx === 'share'
         ? '当前无法生成分享链接，请稍后重试。'
-        : '当前无法完成快捷购买，请稍后重试或改用结账流程。';
+        : ctx === 'payer'
+          ? t('payFailed', '无法发起支付，请刷新后重试。')
+          : '当前无法完成快捷购买，请稍后重试或改用结账流程。';
     }
-    return msg || '生成链接失败，请稍后重试。';
+    if (ctx === 'payer' && /RuntimeException|in \/Users\/|PaymentService\.php/i.test(msg)) {
+      return t('payFailed', '无法发起支付，请刷新后重试。');
+    }
+    return msg || (ctx === 'payer' ? t('payFailed', '无法发起支付，请刷新后重试。') : '生成链接失败，请稍后重试。');
   }
 
   async function copyText(text) {
@@ -323,7 +366,7 @@
       escapeHtml(t('dialogRulesAccepted', '我已阅读并同意帮我付规则')) +
       '</span></label>' +
       '<div class="w-helppay-dialog__actions">' +
-      '<button type="button" class="w-button w-button--primary w-helppay-dialog__primary" data-helppay-next-address data-helppay-i18n-text="dialogNextAddress">' +
+      '<button type="button" class="w-button w-helppay-dialog__primary" data-helppay-next-address data-helppay-i18n-text="dialogNextAddress">' +
       escapeHtml(t('dialogNextAddress', '下一步：确认收货地址')) +
       '</button>' +
       '</div>' +
@@ -340,7 +383,7 @@
       '<div class="w-helppay-address-pick__body" data-helppay-address-mount></div>' +
       '<p class="w-text" data-tone="danger" data-size="sm" data-helppay-address-msg hidden role="alert"></p>' +
       '<div class="w-helppay-dialog__actions">' +
-      '<button type="button" class="w-button w-button--primary w-helppay-dialog__primary" data-helppay-confirm-quick data-testid="helppay-confirm-quick" data-helppay-i18n-text="confirmHelpPay">' +
+      '<button type="button" class="w-button w-helppay-dialog__primary" data-helppay-confirm-quick data-testid="helppay-confirm-quick" data-helppay-i18n-text="confirmHelpPay">' +
       escapeHtml(t('confirmHelpPay', '确认并生成代付链接')) +
       '</button>' +
       '</div>' +
@@ -357,10 +400,10 @@
       '<div class="w-stack" style="--w-gap:var(--weline-space-2);" data-helppay-shipping-list data-testid="helppay-shipping-list"></div>' +
       '<p class="w-text" data-tone="danger" data-size="sm" data-helppay-shipping-msg hidden role="alert"></p>' +
       '<div class="w-helppay-dialog__actions">' +
-      '<button type="button" class="w-button w-button--secondary" data-helppay-back-address data-testid="helppay-back-address">' +
+      '<button type="button" class="w-button" data-variant="outline" data-tone="neutral" data-helppay-back-address data-testid="helppay-back-address">' +
       escapeHtml(t('backToAddress', '返回地址')) +
       '</button>' +
-      '<button type="button" class="w-button w-button--primary w-helppay-dialog__primary" data-helppay-confirm-shipping data-testid="helppay-confirm-shipping">' +
+      '<button type="button" class="w-button w-helppay-dialog__primary" data-helppay-confirm-shipping data-testid="helppay-confirm-shipping">' +
       escapeHtml(t('confirmShipping', '下一步：付款')) +
       '</button>' +
       '</div>' +
@@ -377,10 +420,10 @@
       '<div class="w-helppay-panel" data-helppay-payment-summary data-testid="helppay-payment-summary"></div>' +
       '<p class="w-text" data-tone="danger" data-size="sm" data-helppay-payment-msg hidden role="alert"></p>' +
       '<div class="w-helppay-dialog__actions">' +
-      '<button type="button" class="w-button w-button--secondary" data-helppay-back-shipping data-testid="helppay-back-shipping">' +
+      '<button type="button" class="w-button" data-variant="outline" data-tone="neutral" data-helppay-back-shipping data-testid="helppay-back-shipping">' +
       escapeHtml(t('backToShipping', '返回物流')) +
       '</button>' +
-      '<button type="button" class="w-button w-button--primary w-helppay-dialog__primary" data-helppay-start-pay data-testid="helppay-start-pay">' +
+      '<button type="button" class="w-button w-helppay-dialog__primary" data-helppay-start-pay data-testid="helppay-start-pay">' +
       escapeHtml(t('confirmPay', '确认支付')) +
       '</button>' +
       '</div>' +
@@ -532,9 +575,13 @@
     if (closeBtn) closeBtn.setAttribute('aria-label', t('close', '关闭'));
     var stepRules = qs(dialog, '[data-helppay-step-dot="rules"]');
     var stepAddr = qs(dialog, '[data-helppay-step-dot="address"]');
+    var stepShipping = qs(dialog, '[data-helppay-step-dot="shipping"]');
+    var stepPayment = qs(dialog, '[data-helppay-step-dot="payment"]');
     var stepShare = qs(dialog, '[data-helppay-step-dot="result"]');
     if (stepRules) stepRules.textContent = t('dialogStepRules', '规则');
     if (stepAddr) stepAddr.textContent = t('dialogStepAddress', '地址');
+    if (stepShipping) stepShipping.textContent = t('dialogStepShipping', '物流');
+    if (stepPayment) stepPayment.textContent = t('dialogStepPay', '付款');
     if (stepShare) {
       var flow = dialog.getAttribute('data-helppay-flow') || dialog._helppayFlow || 'help';
       stepShare.textContent =
@@ -595,7 +642,7 @@
       '<p class="w-text" data-tone="muted" data-size="sm">' +
       escapeHtml(message || '') +
       '</p>' +
-      '<button type="button" class="w-button w-button--secondary" data-helppay-close>' +
+      '<button type="button" class="w-button" data-variant="outline" data-tone="neutral" data-helppay-close>' +
       escapeHtml(t('close', '关闭')) +
       '</button>' +
       '</div>';
@@ -621,8 +668,14 @@
     }
     var stepShipping = qs(dialog, '[data-helppay-step-dot="shipping"]');
     var stepPayment = qs(dialog, '[data-helppay-step-dot="payment"]');
-    if (stepShipping) stepShipping.hidden = mode !== 'quick';
-    if (stepPayment) stepPayment.hidden = mode !== 'quick';
+    if (stepShipping) {
+      stepShipping.hidden = mode !== 'quick';
+      stepShipping.textContent = t('dialogStepShipping', '物流');
+    }
+    if (stepPayment) {
+      stepPayment.hidden = mode !== 'quick';
+      stepPayment.textContent = t('dialogStepPay', '付款');
+    }
     if (stepResult) stepResult.hidden = mode === 'quick';
     var stepRules = qs(dialog, '[data-helppay-step-dot="rules"]');
     if (stepRules) stepRules.hidden = mode === 'quick';
@@ -653,7 +706,7 @@
       '<button type="button" class="w-button" data-tone="primary" data-testid="quick-pay-reopen" data-helppay-reopen-pay>' +
       escapeHtml(t('quickPayNow', '打开支付窗口')) +
       '</button>' +
-      '<button type="button" class="w-button w-button--secondary" data-helppay-close data-testid="quick-pay-done">' +
+      '<button type="button" class="w-button" data-variant="outline" data-tone="neutral" data-helppay-close data-testid="quick-pay-done">' +
       escapeHtml(t('close', '关闭')) +
       '</button>' +
       '</div>' +
@@ -725,38 +778,80 @@
     return axes;
   }
 
+  function readCurrentSpecImage() {
+    var root = qs(d, '[data-testid="storefront-product-detail"], .product-native-detail');
+    if (!root) return '';
+    var selected = qs(
+      root,
+      '[data-variant-option].is-selected, [data-variant-option][aria-current="true"]'
+    );
+    if (selected) {
+      var swatchImg = qs(selected, 'img.product-native-detail__variant-swatch-image, img');
+      if (swatchImg) {
+        var swatchSrc = String(swatchImg.currentSrc || swatchImg.src || swatchImg.getAttribute('src') || '').trim();
+        if (swatchSrc !== '' && swatchSrc.indexOf('data:') !== 0) {
+          return swatchSrc;
+        }
+      }
+    }
+    var primary = qs(root, '.product-native-detail__primary-image');
+    if (primary && !primary.hidden) {
+      var primarySrc = String(primary.currentSrc || primary.src || primary.getAttribute('src') || '').trim();
+      if (primarySrc !== '') return primarySrc;
+    }
+    var activeThumb = qs(root, '[data-gallery-src].is-active, [data-gallery-src][aria-current="true"]');
+    if (activeThumb) {
+      var thumbSrc = String(
+        activeThumb.getAttribute('data-gallery-src')
+          || activeThumb.getAttribute('data-gallery-poster')
+          || ''
+      ).trim();
+      if (thumbSrc !== '') return thumbSrc;
+      var thumbImg = qs(activeThumb, 'img');
+      if (thumbImg) {
+        var fromThumb = String(thumbImg.currentSrc || thumbImg.src || '').trim();
+        if (fromThumb !== '') return fromThumb;
+      }
+    }
+    return '';
+  }
+
   /**
    * @param {HTMLElement|null} btn
-   * @returns {{title:string,sku:string,qty:number,axes:Array<{label:string,value:string}>}|null}
+   * @returns {{title:string,sku:string,qty:number,image:string,axes:Array<{label:string,value:string}>}|null}
    */
   function readCurrentSpecSummary(btn) {
     var title = readProductTitle();
     var sku = readProductSku(btn);
     var qty = Math.max(1, readSelectedQty(btn) || 1);
     var axes = readCurrentSpecAxes();
-    if (title === '' && sku === 'SKU' && axes.length === 0) {
+    var image = readCurrentSpecImage();
+    if (title === '' && sku === 'SKU' && axes.length === 0 && image === '') {
       return null;
     }
-    return { title: title, sku: sku, qty: qty, axes: axes };
+    return { title: title, sku: sku, qty: qty, image: image, axes: axes };
   }
 
   /**
-   * @param {{title?:string,sku?:string,qty?:number,axes?:Array<{label:string,value:string}>}|null} spec
+   * @param {{title?:string,sku?:string,qty?:number,image?:string,axes?:Array<{label:string,value:string}>}|null} spec
+   * @param {string} [sectionLabel]
    */
-  function buildShareSpecHtml(spec) {
+  function buildShareSpecHtml(spec, sectionLabel) {
     if (!spec || typeof spec !== 'object') {
       return '';
     }
     var title = String(spec.title || '').trim();
     var sku = String(spec.sku || '').trim();
     var qty = Math.max(1, Number(spec.qty || 1) || 1);
+    var image = String(spec.image || '').trim();
     var axes = Array.isArray(spec.axes) ? spec.axes : [];
-    if (title === '' && (sku === '' || sku === 'SKU') && axes.length === 0) {
+    if (title === '' && (sku === '' || sku === 'SKU') && axes.length === 0 && image === '') {
       return '';
     }
-    var section = escapeHtml(t('specSection', '当前规格'));
+    var section = escapeHtml(sectionLabel || t('specSection', '当前规格'));
     var qtyLabel = escapeHtml(t('specQty', '数量'));
     var skuLabel = escapeHtml(t('specSku', 'SKU'));
+    var imgAlt = escapeHtml(title !== '' ? title : sectionLabel || t('specSection', '当前规格'));
     var rows = '';
     axes.forEach(function (axis) {
       var label = String((axis && axis.label) || '').trim();
@@ -777,11 +872,18 @@
     if (sku !== '' && sku !== 'SKU') {
       metaParts.push(skuLabel + ' ' + sku);
     }
-    return (
-      '<div class="w-helppay-share-result__spec" data-testid="help-pay-share-spec">' +
-      '<p class="w-helppay-share-result__section-label">' +
-      section +
-      '</p>' +
+    var media =
+      image !== ''
+        ? '<div class="w-helppay-share-result__spec-media">' +
+          '<img class="w-helppay-share-result__spec-image" src="' +
+          escapeHtml(image) +
+          '" alt="' +
+          imgAlt +
+          '" width="72" height="72" loading="lazy" decoding="async" data-testid="help-pay-share-spec-image">' +
+          '</div>'
+        : '';
+    var body =
+      '<div class="w-helppay-share-result__spec-body">' +
       (title !== ''
         ? '<p class="w-helppay-share-result__spec-title w-text" data-weight="strong">' +
           escapeHtml(title) +
@@ -791,6 +893,16 @@
       '<p class="w-helppay-share-result__spec-meta w-text" data-size="sm" data-tone="muted">' +
       escapeHtml(metaParts.join(' · ')) +
       '</p>' +
+      '</div>';
+    return (
+      '<div class="w-helppay-share-result__spec" data-testid="help-pay-share-spec">' +
+      '<p class="w-helppay-share-result__section-label">' +
+      section +
+      '</p>' +
+      '<div class="w-helppay-share-result__spec-main">' +
+      media +
+      body +
+      '</div>' +
       '</div>'
     );
   }
@@ -1362,6 +1474,16 @@
       if (!result || !result.url) {
         throw new Error('未返回分享链接');
       }
+      trackPixel(
+        'friend_help_pay_link_ready',
+        {
+          share_url: String(result.url || ''),
+          source: 'helppay',
+          trigger: 'link_ready',
+          placement: placement || 'product',
+        },
+        btn
+      );
       renderShareResult(
         host,
         absoluteUrl(result.url),
@@ -1406,6 +1528,15 @@
       if (!result || !result.url) {
         throw new Error('未返回分享链接');
       }
+      trackPixel(
+        'selection_share_link_ready',
+        {
+          share_url: String(result.url || ''),
+          source: 'helppay',
+          trigger: 'link_ready',
+        },
+        btn
+      );
       renderShareResult(
         host,
         absoluteUrl(result.url),
@@ -1585,20 +1716,24 @@
       var existingForm = qs(mountHost, '[data-helppay-address-host]');
       if (existingForm) existingForm.setAttribute('data-session-isolation', '1');
       if (existingRoot) existingRoot.setAttribute('data-session-isolation', '1');
-      if (
+      if (existingRoot && w.WelineShippingCheckoutAddress && typeof w.WelineShippingCheckoutAddress.mount === 'function') {
+        var remounted = w.WelineShippingCheckoutAddress.mount(existingRoot);
+        if (remounted) {
+          dialogShippingAddressApi = remounted;
+          w.WelineShippingCheckoutAddress = remounted;
+        } else if (w.WelineShippingCheckoutAddress.root === existingRoot) {
+          dialogShippingAddressApi = w.WelineShippingCheckoutAddress;
+        }
+      } else if (
         existingRoot &&
         dialogShippingAddressApi &&
         dialogShippingAddressApi.root === existingRoot
       ) {
         w.WelineShippingCheckoutAddress = dialogShippingAddressApi;
-        return;
-      }
-      if (existingRoot && w.WelineShippingCheckoutAddress && typeof w.WelineShippingCheckoutAddress.mount === 'function') {
-        var remounted = w.WelineShippingCheckoutAddress.mount(existingRoot);
-        if (remounted) {
-          dialogShippingAddressApi = remounted;
-        } else if (w.WelineShippingCheckoutAddress.root === existingRoot) {
-          dialogShippingAddressApi = w.WelineShippingCheckoutAddress;
+        if (typeof dialogShippingAddressApi.syncChangeAddressLabel === 'function') {
+          dialogShippingAddressApi.syncChangeAddressLabel(
+            existingRoot.getAttribute('data-mode') || 'collapsed'
+          );
         }
       }
       return;
@@ -1644,9 +1779,19 @@
       throw new Error(t('addressLoadFailed', '收货地址组件加载失败，请稍后重试。'));
     }
     addrRoot.setAttribute('data-session-isolation', '1');
+    // 弹层内允许点「更换地址」时再拉全量地址簿（避免 SSR 仅展示选中卡后误判 list-loaded）。
+    addrRoot.setAttribute('data-list-loaded', '0');
     if (w.WelineShippingCheckoutAddress && typeof w.WelineShippingCheckoutAddress.mount === 'function') {
       var mounted = w.WelineShippingCheckoutAddress.mount(addrRoot);
       dialogShippingAddressApi = mounted || w.WelineShippingCheckoutAddress;
+      if (dialogShippingAddressApi && typeof dialogShippingAddressApi.syncChangeAddressLabel === 'function') {
+        dialogShippingAddressApi.syncChangeAddressLabel(addrRoot.getAttribute('data-mode') || 'collapsed');
+      } else {
+        var changeBtn = qs(addrRoot, '[data-change-address]');
+        if (changeBtn && addrRoot.getAttribute('data-has-saved') === '1') {
+          changeBtn.hidden = false;
+        }
+      }
     }
   }
 
@@ -1719,21 +1864,22 @@
     return String(currency || 'CNY') + ' ' + n.toFixed(2);
   }
 
-  function buildQuoteLines(btn, goodsAmountMinor) {
-    var qty = Math.max(1, readSelectedQty(btn) || 1);
-    var unit = Math.max(0, Math.round(Number(goodsAmountMinor || 0) / qty));
-    return [
-      {
-        requires_shipping: true,
-        qty: qty,
-        qty_minor: qty,
-        unit_price_minor: unit,
-        row_total_minor: Math.max(0, Number(goodsAmountMinor || 0)),
-        weight_minor: 500,
-        volume_minor: 0,
-        product_id: Number((btn && (btn.dataset.productId || btn.getAttribute('data-product-id'))) || 0) || 0,
-      },
-    ];
+  function readQuickProductId(btn) {
+    var fromBtn = Number((btn && (btn.dataset.productId || btn.getAttribute('data-product-id'))) || 0) || 0;
+    if (fromBtn > 0) return fromBtn;
+    var root =
+      (btn && btn.closest && btn.closest('.product-native-detail, [data-testid="storefront-product-detail"]')) ||
+      qs(d, '[data-testid="storefront-product-detail"], .product-native-detail');
+    if (root) {
+      var fromRoot = Number(root.getAttribute('data-product-id') || root.dataset.productId || 0) || 0;
+      if (fromRoot > 0) return fromRoot;
+      var buyNow =
+        qs(root, '[data-action="buy-now"][data-product-id]') ||
+        qs(root, '[data-testid="product-buy-now"][data-product-id]');
+      var fromBuy = Number((buyNow && (buyNow.dataset.productId || buyNow.getAttribute('data-product-id'))) || 0) || 0;
+      if (fromBuy > 0) return fromBuy;
+    }
+    return 0;
   }
 
   function mapQuoteOptions(payload) {
@@ -1768,21 +1914,22 @@
     if (list) {
       list.innerHTML =
         '<p class="w-text" data-tone="muted">' +
-        escapeHtml(t('loadingShipping', '正在报价运费…')) +
+        escapeHtml(t('loadingShipping', '正在计算运费…')) +
         '</p>';
     }
     if (!w.Weline || !w.Weline.Api || typeof w.Weline.Api.resource !== 'function') {
       throw new Error(t('shippingQuoteFailed', '运费报价失败，请稍后重试。'));
     }
-    var payload = await w.Weline.Api.resource('shippingInfo').listQuoteOptions(
+    var payload = await w.Weline.Api.resource('helpPay').listQuickShippingOptions(
       {
-        address: {
+        shipping_address: {
           name: addr.name,
           contact_name: addr.name,
           phone: addr.phone,
           contact_phone: addr.phone,
           street: addr.line1,
           address1: addr.line1,
+          line1: addr.line1,
           country: addr.country || 'CN',
           country_code: addr.country_code || addr.country || 'CN',
           province: addr.province || '',
@@ -1790,12 +1937,23 @@
           district: addr.district || '',
           postal_code: addr.postal_code || '',
         },
-        lines: buildQuoteLines(btn, goodsMinor),
-        currency: currency,
-        currency_precision: 2,
+        product_id: readQuickProductId(btn),
+        qty: Math.max(1, readSelectedQty(btn) || 1),
+        goods_amount_minor: goodsMinor,
+        currency_code: currency,
+        cart_type: 'toc',
       },
       { silent: true }
     );
+    var data = (payload && (payload.data || payload)) || {};
+    if (data.missing_weight || (data.quote_diagnostics && data.quote_diagnostics.missing_weight)) {
+      throw new Error(
+        t(
+          'missingWeight',
+          '购物车商品缺少重量，无法计算运费。请联系客服协助处理后再试。'
+        )
+      );
+    }
     var methods = mapQuoteOptions(payload);
     if (!methods.length) {
       throw new Error(t('shippingUnavailable', '该地址暂无可用配送方式，请更换地址后重试。'));
@@ -1860,6 +2018,32 @@
     }
   }
 
+  /**
+   * @param {{name?:string,phone?:string,line1?:string,district?:string,city?:string,province?:string,postal_code?:string,country?:string,country_code?:string}|null} addr
+   */
+  function formatShipToLines(addr) {
+    if (!addr || typeof addr !== 'object') {
+      return { primary: '', secondary: '' };
+    }
+    var name = String(addr.name || '').trim();
+    var phone = String(addr.phone || '').trim();
+    var primaryParts = [];
+    if (name) primaryParts.push(name);
+    if (phone) primaryParts.push(phone);
+    var loc = [
+      String(addr.line1 || '').trim(),
+      String(addr.district || '').trim(),
+      String(addr.city || '').trim(),
+      String(addr.province || '').trim(),
+      String(addr.postal_code || '').trim(),
+      String(addr.country_code || addr.country || '').trim().toUpperCase(),
+    ].filter(Boolean);
+    return {
+      primary: primaryParts.join(' · '),
+      secondary: loc.join(', '),
+    };
+  }
+
   function renderPaymentSummary(dialog) {
     var state = dialog._helppayQuickState || {};
     var currency = readCurrencyCode();
@@ -1868,26 +2052,66 @@
     var total = goods + ship;
     var host = qs(dialog, '[data-helppay-payment-summary]');
     if (!host) return;
-    host.innerHTML =
-      '<p class="w-text" data-size="sm" data-tone="muted" style="--w-m:0;">' +
+    var spec = state.spec || null;
+    if (!spec && dialog._helppayQuickBtn) {
+      spec = readCurrentSpecSummary(dialog._helppayQuickBtn);
+      if (spec) {
+        state.spec = spec;
+        dialog._helppayQuickState = state;
+      }
+    }
+    var specHtml = buildShareSpecHtml(spec, t('paySummaryGoods', '商品'));
+    var shipTo = formatShipToLines(state.address || null);
+    var shipLabel = String(state.service_label || state.service_code || '').trim();
+    var addressHtml = '';
+    if (shipTo.primary || shipTo.secondary) {
+      addressHtml =
+        '<div class="w-helppay-pay-summary__ship-to" data-testid="helppay-payment-ship-to">' +
+        '<p class="w-helppay-share-result__section-label">' +
+        escapeHtml(t('paySummaryShipTo', '收货')) +
+        '</p>' +
+        (shipTo.primary
+          ? '<p class="w-helppay-pay-summary__ship-primary w-text" data-weight="strong">' +
+            escapeHtml(shipTo.primary) +
+            '</p>'
+          : '') +
+        (shipTo.secondary
+          ? '<p class="w-helppay-pay-summary__ship-secondary w-text" data-size="sm" data-tone="muted">' +
+            escapeHtml(shipTo.secondary) +
+            '</p>'
+          : '') +
+        '</div>';
+    }
+    var moneyHtml =
+      '<div class="w-helppay-pay-summary__money" data-testid="helppay-payment-money">' +
+      '<div class="w-helppay-pay-summary__row">' +
+      '<span class="w-text" data-size="sm" data-tone="muted">' +
       escapeHtml(t('paySummaryGoods', '商品')) +
-      '</p>' +
-      '<p class="w-text" style="--w-m:0;">' +
+      '</span>' +
+      '<span class="w-text" data-testid="helppay-payment-goods-amount">' +
       escapeHtml(formatMoneyMajor(goods, currency)) +
-      '</p>' +
-      '<p class="w-text" data-size="sm" data-tone="muted" style="--w-m:0;">' +
+      '</span>' +
+      '</div>' +
+      '<div class="w-helppay-pay-summary__row">' +
+      '<span class="w-text" data-size="sm" data-tone="muted">' +
       escapeHtml(t('paySummaryShipping', '运费')) +
-      ' · ' +
-      escapeHtml(state.service_label || state.service_code || '') +
-      '</p>' +
-      '<p class="w-text" style="--w-m:0;">' +
+      (shipLabel !== '' ? ' · ' + escapeHtml(shipLabel) : '') +
+      '</span>' +
+      '<span class="w-text" data-testid="helppay-payment-ship-amount">' +
       escapeHtml(formatMoneyMajor(ship, currency)) +
-      '</p>' +
-      '<p class="w-text" data-weight="strong" style="--w-m:0;" data-testid="helppay-payment-total">' +
+      '</span>' +
+      '</div>' +
+      '<div class="w-helppay-pay-summary__row w-helppay-pay-summary__row--total">' +
+      '<span class="w-text" data-weight="strong">' +
       escapeHtml(t('paySummaryTotal', '应付')) +
-      ' ' +
+      '</span>' +
+      '<span class="w-text w-helppay-panel__amount" data-weight="strong" data-testid="helppay-payment-total">' +
       escapeHtml(formatMoneyMajor(total, currency)) +
-      '</p>';
+      '</span>' +
+      '</div>' +
+      '</div>';
+    host.classList.add('w-helppay-pay-summary');
+    host.innerHTML = specHtml + addressHtml + moneyHtml;
   }
 
   async function openQuickPaymentStep(dialog) {
@@ -1915,6 +2139,12 @@
         // Keep top-level params within frontend worker whitelist.
         amount_minor: goodsMinor + shipMinor,
         currency_code: readCurrencyCode(),
+        product_id: readQuickProductId(dialog._helppayQuickBtn),
+        qty: Math.max(1, readSelectedQty(dialog._helppayQuickBtn) || 1),
+        service_code: state.service_code || '',
+        service_label: state.service_label || '',
+        goods_amount_minor: goodsMinor,
+        shipping_amount_minor: shipMinor,
         shipping_address: {
           name: addr.name,
           line1: addr.line1,
@@ -1936,6 +2166,16 @@
       if (!result || !result.url) {
         throw new Error(t('quickPayCreateFailed', '未返回付款入口，请稍后重试。'));
       }
+      trackPixel(
+        'quick_buy_checkout_ready',
+        {
+          pay_url: String(result.url || ''),
+          token: String(result.token || ''),
+          source: 'helppay',
+          trigger: 'checkout_ready',
+        },
+        dialog._helppayQuickBtn || payBtn
+      );
       state.pay_url = absoluteUrl(result.url);
       state.token = result.token || '';
       dialog._helppayQuickState = state;
@@ -2037,6 +2277,7 @@
         service_code: '',
         service_label: '',
         shipping_methods: [],
+        spec: readCurrentSpecSummary(btn),
       };
       // Popup checkout: address → shipping → payment (never location.assign).
       await openQuickShippingStep(dialog);
@@ -2068,6 +2309,87 @@
     msg.setAttribute('data-tone', isError === false ? 'muted' : 'danger');
   }
 
+  function setPayerPayMessage(root, text, isError) {
+    var msg = qs(root, '[data-helppay-pay-msg]');
+    if (!msg) return;
+    if (!text) {
+      msg.hidden = true;
+      msg.textContent = '';
+      return;
+    }
+    msg.hidden = false;
+    msg.textContent = text;
+    msg.setAttribute('data-tone', isError === false ? 'success' : 'danger');
+  }
+
+  function selectedPayerPaymentMethod(root) {
+    return qs(root, '[data-helppay-payment-method]:checked');
+  }
+
+  function payerBillingRequired(root) {
+    var radio = selectedPayerPaymentMethod(root);
+    if (!radio) return false;
+    return radio.getAttribute('data-requires-billing') === '1';
+  }
+
+  function syncPayerBillingVisibility(root) {
+    if (!root) return;
+    var panel = qs(root, '[data-helppay-billing-panel]');
+    if (!panel) return;
+    var required = payerBillingRequired(root);
+    panel.hidden = !required;
+    if (!required) {
+      setBillingMessage(root, '');
+      root._helppayBillingAddress = null;
+    }
+  }
+
+  function enhancePayerPaymentIntros(root) {
+    if (!root) return;
+    qsa(root, '[data-payment-intro]').forEach(function (wrap) {
+      var text = qs(wrap, '.weline-checkout__payment-intro-text');
+      var toggle = qs(wrap, '[data-payment-intro-toggle]');
+      if (!text || !toggle) return;
+      wrap.classList.remove('is-expanded');
+      toggle.hidden = text.scrollHeight <= text.clientHeight + 1;
+      toggle.textContent = toggle.getAttribute('data-label-expand') || toggle.textContent;
+      toggle.setAttribute('aria-expanded', 'false');
+    });
+  }
+
+  function wirePayerPaymentMethods(root) {
+    if (!root || root._helppayPaymentWired) return;
+    root._helppayPaymentWired = true;
+    root.addEventListener('change', function (ev) {
+      var t = ev && ev.target;
+      if (!t || !t.getAttribute || t.getAttribute('data-helppay-payment-method') === null) return;
+      syncPayerBillingVisibility(root);
+      if (payerBillingRequired(root)) {
+        ensurePayerBillingMounted(root)
+          .then(function (api) {
+            root._helppayBillingApi = api;
+          })
+          .catch(function () {});
+      }
+    });
+    root.addEventListener('click', function (ev) {
+      var t = ev && ev.target;
+      var toggle = t && t.closest ? t.closest('[data-payment-intro-toggle]') : null;
+      if (!toggle || !root.contains(toggle)) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      var wrap = toggle.closest('[data-payment-intro]');
+      if (!wrap) return;
+      var expanded = wrap.classList.toggle('is-expanded');
+      toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+      toggle.textContent = expanded
+        ? (toggle.getAttribute('data-label-collapse') || toggle.textContent)
+        : (toggle.getAttribute('data-label-expand') || toggle.textContent);
+    });
+    enhancePayerPaymentIntros(root);
+    syncPayerBillingVisibility(root);
+  }
+
   async function ensurePayerBillingMounted(root) {
     var mount = qs(root, '[data-helppay-billing-mount]');
     if (!mount) return null;
@@ -2096,6 +2418,10 @@
 
   async function confirmPayerBilling(root) {
     setBillingMessage(root, '');
+    if (!payerBillingRequired(root)) {
+      root._helppayBillingAddress = null;
+      return { skipped: true };
+    }
     var api = root._helppayBillingApi;
     if (!api || typeof api.resolveQuoteAddress !== 'function') {
       api = await ensurePayerBillingMounted(root);
@@ -2132,14 +2458,97 @@
     return root._helppayBillingAddress;
   }
 
+  async function onQuickSelfPayClick(btn) {
+    var root = btn.closest('[data-testid="quick-pay-self"]') || d;
+    var token = String(btn.getAttribute('data-token') || '').trim();
+    if (!token) {
+      var m = String(w.location.pathname || '').match(/\/q\/([^/?#]+)/);
+      token = m ? decodeURIComponent(m[1]) : '';
+    }
+    var method = String(btn.getAttribute('data-payment-method') || 'paypal').trim() || 'paypal';
+    if (!token) {
+      setPayerPayMessage(root, t('cannotComplete', '无法完成操作'), true);
+      return;
+    }
+    btn.disabled = true;
+    try {
+      var result = await w.Weline.Api.resource('helpPay').startQuickPayment({
+        token: token,
+        payment_method: method,
+        idempotency_key: 'quickpay_ui_' + token + '_' + Date.now(),
+      });
+      var data = (result && (result.data || result)) || {};
+      var redirect = String(data.redirect_url || data.approve_url || '').trim();
+      var status = String(data.status || '').toLowerCase();
+      if (redirect) {
+        w.location.assign(redirect);
+        return;
+      }
+      if (data.paid || status === 'paid' || status === 'success' || status === 'succeeded') {
+        setPayerPayMessage(root, t('paySuccess', '付款已完成，感谢您的帮助。'), false);
+        return;
+      }
+      setPayerPayMessage(root, t('payFailed', '无法发起支付，请刷新后重试。'), true);
+    } catch (err) {
+      setPayerPayMessage(root, humanizeApiError(err, 'payer') || t('payFailed', '无法发起支付，请刷新后重试。'), true);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
   async function onPayerPayClick(btn) {
     var root =
       (btn && btn.closest && btn.closest('[data-testid="help-pay-payer"]')) ||
       qs(d, '[data-testid="help-pay-payer"]');
     if (!root) return;
     btn.disabled = true;
+    setPayerPayMessage(root, '');
     try {
-      await confirmPayerBilling(root);
+      var billing = await confirmPayerBilling(root);
+      if (billing === null) return;
+      var method = selectedPayerPaymentMethod(root);
+      var methodCode = method ? String(method.value || '').trim() : '';
+      root._helppayPaymentMethod = methodCode;
+      if (!methodCode) {
+        setPayerPayMessage(root, t('paymentMethodRequired', '请选择支付方式。'), true);
+        return;
+      }
+      var token = String(root.getAttribute('data-helppay-token') || '').trim();
+      if (!token) {
+        setPayerPayMessage(root, t('payFailed', '无法发起支付，请刷新后重试。'), true);
+        return;
+      }
+      if (!(w.Weline && w.Weline.Api && typeof w.Weline.Api.resource === 'function')) {
+        setPayerPayMessage(root, t('payFailed', '无法发起支付，请刷新后重试。'), true);
+        return;
+      }
+      var payload = {
+        token: token,
+        payment_method: methodCode,
+        idempotency_key: 'helppay_' + token + '_' + methodCode + '_' + Date.now(),
+      };
+      if (billing && !billing.skipped) {
+        payload.billing_address = billing;
+      }
+      setPayerPayMessage(root, t('payStarting', '正在跳转支付…'), false);
+      var result = await w.Weline.Api.resource('helpPay').startPayerPayment(payload);
+      var data = result && typeof result === 'object' ? result : {};
+      if (data.data && typeof data.data === 'object') {
+        data = data.data;
+      }
+      var url = String(data.redirect_url || data.approve_url || '').trim();
+      if (url) {
+        w.location.assign(url);
+        return;
+      }
+      var status = String(data.status || '').toLowerCase();
+      if (data.paid || status === 'paid' || status === 'success' || status === 'succeeded') {
+        setPayerPayMessage(root, t('paySuccess', '付款已完成，感谢您的帮助。'), false);
+        return;
+      }
+      setPayerPayMessage(root, t('payFailed', '无法发起支付，请刷新后重试。'), true);
+    } catch (err) {
+      setPayerPayMessage(root, humanizeApiError(err, 'payer') || t('payFailed', '无法发起支付，请刷新后重试。'), true);
     } finally {
       btn.disabled = false;
     }
@@ -2153,6 +2562,12 @@
     if (payerPayBtn && payerPayBtn.closest('[data-testid="help-pay-payer"]')) {
       if (payerPayBtn.disabled || payerPayBtn.getAttribute('aria-disabled') === 'true') return;
       onPayerPayClick(payerPayBtn);
+      return;
+    }
+    if (payerPayBtn && (payerPayBtn.getAttribute('data-helppay-quick-self-pay') === '1'
+      || payerPayBtn.closest('[data-testid="quick-pay-self"]'))) {
+      if (payerPayBtn.disabled || payerPayBtn.getAttribute('aria-disabled') === 'true') return;
+      onQuickSelfPayClick(payerPayBtn);
       return;
     }
 
@@ -2190,11 +2605,14 @@
 
     var payerRoot = qs(d, '[data-testid="help-pay-payer"]');
     if (payerRoot) {
-      ensurePayerBillingMounted(payerRoot)
-        .then(function (api) {
-          payerRoot._helppayBillingApi = api;
-        })
-        .catch(function () {});
+      wirePayerPaymentMethods(payerRoot);
+      if (payerBillingRequired(payerRoot)) {
+        ensurePayerBillingMounted(payerRoot)
+          .then(function (api) {
+            payerRoot._helppayBillingApi = api;
+          })
+          .catch(function () {});
+      }
     }
 
     if (bootBound) {
@@ -2243,5 +2661,7 @@
     resolveOverlayHost: resolveOverlayHost,
     ensurePayerBillingMounted: ensurePayerBillingMounted,
     confirmPayerBilling: confirmPayerBilling,
+    syncPayerBillingVisibility: syncPayerBillingVisibility,
+    wirePayerPaymentMethods: wirePayerPaymentMethods,
   };
 })(window, document);

@@ -1,0 +1,1 @@
+Atur ulang kata sandi Anda · {{var.customer_email}}

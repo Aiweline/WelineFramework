@@ -313,6 +313,7 @@ class CjProvider implements
             'category_id' => $categoryId,
             'category_path' => $categoryPath,
             'media' => $media,
+            'shipping' => self::extractShippingDims($row),
             'raw' => $row,
             'suggested_eav' => ['dropship_source' => 'cj'],
         ]);
@@ -431,9 +432,115 @@ class CjProvider implements
         $data['external_sku'] = (string)($row['productSku'] ?? $data['external_sku'] ?? '');
         $data['description'] = self::extractDescription($row);
         $data['attributes'] = self::assembleAttributes($row);
+        $data['shipping'] = self::extractShippingDims($row);
         $data['raw'] = $row;
 
         return DropshipCatalogSnapshot::fromArray($data);
+    }
+
+    /**
+     * Normalize CJ weight/dims into shell shipping (kg / cm).
+     * variantWeight is grams when >30; variant L/W/H are mm when >=100 else cm.
+     *
+     * @param array<string, mixed> $row
+     * @return array{weight_kg:float,length_cm:float,width_cm:float,height_cm:float}
+     */
+    public static function extractShippingDims(array $row): array
+    {
+        $weightG = 0.0;
+        $length = 0.0;
+        $width = 0.0;
+        $height = 0.0;
+
+        $variants = $row['variants'] ?? null;
+        if (is_array($variants)) {
+            $fallback = null;
+            foreach ($variants as $variant) {
+                if (!is_array($variant)) {
+                    continue;
+                }
+                $w = (float)($variant['variantWeight'] ?? 0);
+                $l = (float)($variant['variantLength'] ?? 0);
+                $wd = (float)($variant['variantWidth'] ?? 0);
+                $h = (float)($variant['variantHeight'] ?? 0);
+                if ($w <= 0 || $l <= 0 || $wd <= 0 || $h <= 0) {
+                    continue;
+                }
+                $candidate = [$w, $l, $wd, $h];
+                $inv = (int)($variant['inventoryNum'] ?? 0);
+                if ($inv > 0) {
+                    [$weightG, $length, $width, $height] = $candidate;
+                    break;
+                }
+                if ($fallback === null) {
+                    $fallback = $candidate;
+                }
+            }
+            if ($weightG <= 0 && $fallback !== null) {
+                [$weightG, $length, $width, $height] = $fallback;
+            }
+        }
+
+        if ($weightG <= 0) {
+            $weightG = self::parseWeightGrams((string)($row['packingWeight'] ?? $row['productWeight'] ?? ''));
+        }
+
+        [$lengthCm, $widthCm, $heightCm] = self::cjDimsToCm($length, $width, $height);
+
+        return [
+            'weight_kg' => self::gramsToKg($weightG),
+            'length_cm' => $lengthCm,
+            'width_cm' => $widthCm,
+            'height_cm' => $heightCm,
+        ];
+    }
+
+    public static function parseWeightGrams(string $raw): float
+    {
+        $raw = trim($raw);
+        if ($raw === '') {
+            return 0.0;
+        }
+        if (preg_match('/(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)/', $raw, $m)) {
+            return ((float)$m[1] + (float)$m[2]) / 2.0;
+        }
+        if (preg_match('/(\d+(?:\.\d+)?)/', $raw, $m)) {
+            return (float)$m[1];
+        }
+
+        return 0.0;
+    }
+
+    public static function gramsToKg(float $gramsOrKg): float
+    {
+        if ($gramsOrKg <= 0) {
+            return 0.0;
+        }
+        // CJ weights are grams when clearly above parcel kg scale.
+        return $gramsOrKg > 30.0 ? ($gramsOrKg / 1000.0) : $gramsOrKg;
+    }
+
+    public static function cjLengthToCm(float $value, bool $treatAsMm = false): float
+    {
+        if ($value <= 0) {
+            return 0.0;
+        }
+
+        return $treatAsMm ? ($value / 10.0) : $value;
+    }
+
+    /**
+     * @return array{0:float,1:float,2:float} length/width/height in cm
+     */
+    public static function cjDimsToCm(float $length, float $width, float $height): array
+    {
+        $asMm = max($length, $width, $height) >= 100.0;
+
+        return [
+            self::cjLengthToCm($length, $asMm),
+            self::cjLengthToCm($width, $asMm),
+            self::cjLengthToCm($height, $asMm),
+        ];
     }
 
     /**

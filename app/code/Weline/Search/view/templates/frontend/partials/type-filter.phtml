@@ -7,12 +7,18 @@
  * @var int $search_category_id
  * @var list<array<string,mixed>> $search_types
  */
+use Weline\Theme\Helper\WidgetI18n;
+
 $q = trim((string)($search_query ?? ''));
 $type = trim((string)($search_type ?? 'all')) ?: 'all';
 $categoryId = (int)($search_category_id ?? 0);
 $types = $search_types ?? [];
 $types = is_array($types) ? $types : [];
 $esc = static fn (mixed $v): string => htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$localize = static fn (mixed $value, string $fallback = ''): string => WidgetI18n::label(
+    trim((string)$value),
+    $fallback !== '' ? $fallback : trim((string)$value),
+);
 if ($types === []) {
     return;
 }
@@ -48,6 +54,7 @@ $renderTree = static function (
     callable $esc,
     string $onChange,
     callable $containsCategory,
+    callable $localize,
 ) use (&$renderTree): void {
     if ($nodes === []) {
         return;
@@ -61,7 +68,7 @@ $renderTree = static function (
             if (!is_array($node)) {
                 continue;
             }
-            $nodeLabel = trim((string)($node['label'] ?? ''));
+            $nodeLabel = $localize($node['label'] ?? '');
             if ($nodeLabel === '') {
                 continue;
             }
@@ -109,7 +116,7 @@ $renderTree = static function (
                          id="<?= $esc($itemId) ?>"
                          data-search-filter-children
                          <?= $isOpen ? '' : 'hidden' ?>>
-                        <?php $renderTree($children, $typeCode, $selectedCategoryId, $depth + 1, $esc, $onChange, $containsCategory); ?>
+                        <?php $renderTree($children, $typeCode, $selectedCategoryId, $depth + 1, $esc, $onChange, $containsCategory, $localize); ?>
                     </div>
                 <?php endif; ?>
             </li>
@@ -135,7 +142,7 @@ $renderTree = static function (
                 if ($code === '') {
                     continue;
                 }
-                $label = (string)($row['label'] ?? $code);
+                $label = $localize($row['label'] ?? $code, $code);
                 $children = is_array($row['children'] ?? null) ? $row['children'] : [];
                 $hasChildren = $children !== [];
                 $isTypeActive = $code === $type && $categoryId <= 0;
@@ -175,7 +182,7 @@ $renderTree = static function (
                              id="<?= $esc($itemId) ?>"
                              data-search-filter-children
                              <?= $isOpen ? '' : 'hidden' ?>>
-                            <?php $renderTree($children, $code, $categoryId, 1, $esc, $onChange, $containsCategory); ?>
+                            <?php $renderTree($children, $code, $categoryId, 1, $esc, $onChange, $containsCategory, $localize); ?>
                         </div>
                     <?php endif; ?>
                 </li>

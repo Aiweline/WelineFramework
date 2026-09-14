@@ -15,17 +15,23 @@ use Weline\Product\Model\Shard\Category;
 use Weline\Product\Service\ProductCategoryAttributeService;
 
 /**
- * Product category name translations for official &lt;local&gt; Taglib.
+ * Product category name/description translations for official &lt;local&gt; Taglib.
  *
- * Drawer saves land here and sync into website-shard EAV `name` (storefront source of truth).
- * Main-form {@see ProductCategoryAttributeService::writeName()} also upserts this table.
+ * Drawer saves land here and sync into website-shard EAV (storefront source of truth).
+ * Main-form {@see ProductCategoryAttributeService::writeName()} /
+ * {@see ProductCategoryAttributeService::writeDescription()} also upsert this table.
  */
-#[Table(comment: '产品分类名称多语言')]
+#[Table(comment: '产品分类多语言')]
 #[Index(name: 'uniq_product_category_local', columns: ['category_id', 'local_code'], type: 'UNIQUE')]
 class LocalDescription extends LocalModel
 {
     public const schema_table = 'weline_product_category_local';
     public const indexer = 'product_category_local';
+
+    public const LOCAL_FIELDS = [
+        self::schema_fields_NAME,
+        self::schema_fields_DESCRIPTION,
+    ];
 
     #[Col(type: 'int', nullable: false, primaryKey: true, comment: '分类 ID')]
     public const schema_fields_ID = Category::schema_fields_ID;
@@ -35,6 +41,9 @@ class LocalDescription extends LocalModel
 
     #[Col(type: 'varchar', length: 255, nullable: true, comment: '分类名称')]
     public const schema_fields_NAME = 'name';
+
+    #[Col(type: 'text', nullable: true, comment: '分类描述')]
+    public const schema_fields_DESCRIPTION = 'description';
 
     /** @var list<array<string, mixed>> */
     private static array $pendingEavSync = [];
@@ -47,13 +56,20 @@ class LocalDescription extends LocalModel
     }
 
     /**
-     * Upsert Local row without re-entering EAV sync (used by AttributeService::writeName).
+     * Upsert Local row without re-entering EAV sync.
+     *
+     * BC: third argument may be the name string (legacy writeName callers) or a field map.
+     *
+     * @param string|array<string, string> $nameOrFields
      */
-    public static function upsertQuiet(int $categoryId, string $locale, string $name): void
-    {
+    public static function upsertQuiet(
+        int $categoryId,
+        string $locale,
+        string|array $nameOrFields = '',
+        string $description = '',
+    ): void {
         $categoryId = max(0, $categoryId);
-        $name = trim($name);
-        if ($categoryId <= 0 || $name === '') {
+        if ($categoryId <= 0) {
             return;
         }
         $locale = ProductCategoryAttributeService::normalizeLocaleKey(
@@ -63,17 +79,46 @@ class LocalDescription extends LocalModel
             $locale = 'zh_Hans_CN';
         }
 
+        if (is_array($nameOrFields)) {
+            $fields = $nameOrFields;
+        } else {
+            $fields = [];
+            $name = trim($nameOrFields);
+            if ($name !== '') {
+                $fields[self::schema_fields_NAME] = $name;
+            }
+            $description = trim($description);
+            if ($description !== '') {
+                $fields[self::schema_fields_DESCRIPTION] = $description;
+            }
+        }
+
+        $row = [
+            self::schema_fields_ID => $categoryId,
+            self::schema_fields_local_code => $locale,
+        ];
+        $updateCols = [];
+        foreach (self::LOCAL_FIELDS as $field) {
+            if (!array_key_exists($field, $fields)) {
+                continue;
+            }
+            $value = trim((string)$fields[$field]);
+            $row[$field] = $value;
+            $updateCols[] = $field;
+        }
+        if ($updateCols === []) {
+            return;
+        }
+
         self::$syncing = true;
         try {
             /** @var self $model */
             $model = ObjectManager::getInstance(self::class);
-            $model->reset()->insert([
-                [
-                    self::schema_fields_ID => $categoryId,
-                    self::schema_fields_local_code => $locale,
-                    self::schema_fields_NAME => $name,
-                ],
-            ], self::schema_fields_ID . ',local_code', self::schema_fields_NAME)->fetch();
+            $model->reset()->insert(
+                [$row],
+                self::schema_fields_ID . ',local_code',
+                implode(',', $updateCols),
+            )->fetch();
         } finally {
             self::$syncing = false;
         }
@@ -111,11 +156,19 @@ class LocalDescription extends LocalModel
                 $locale = ProductCategoryAttributeService::normalizeLocaleKey(
                     (string)($row[self::schema_fields_local_code] ?? ''),
                 );
-                $name = trim((string)($row[self::schema_fields_NAME] ?? ''));
-                if ($categoryId <= 0 || $name === '') {
+                if ($categoryId <= 0) {
                     continue;
                 }
-                $attributes->writeName($websiteId, $categoryId, $name, $locale);
+                if (array_key_exists(self::schema_fields_NAME, $row)) {
+                    $name = trim((string)$row[self::schema_fields_NAME]);
+                    if ($name !== '') {
+                        $attributes->writeName($websiteId, $categoryId, $name, $locale);
+                    }
+                }
+                if (array_key_exists(self::schema_fields_DESCRIPTION, $row)) {
+                    $description = trim((string)$row[self::schema_fields_DESCRIPTION]);
+                    $attributes->writeDescription($websiteId, $categoryId, $description, $locale);
+                }
             }
         } finally {
             self::$syncing = false;

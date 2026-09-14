@@ -26,6 +26,9 @@ use Weline\SystemConfig\Api\ConfigStore;
  *     }
  *   ]
  * }
+ *
+ * 模块注册：Framework 事件 `Weline_Visitor::event_chain_collect` 或 Extends EventChainProvider；
+ * getBundle 时与后台已发布链按 id 合并（模块注册优先）。
  */
 final class EventChainService
 {
@@ -36,6 +39,7 @@ final class EventChainService
         private readonly ?EventDictionaryService $dictionary = null,
         private readonly ?SystemConfig $systemConfig = null,
         private readonly ?ConfigStore $configStore = null,
+        private readonly ?EventChainCollector $collector = null,
     ) {
     }
 
@@ -48,6 +52,49 @@ final class EventChainService
      * @return array{version: int, chains: list<array<string, mixed>>}
      */
     public function getBundle(int $websiteId): array
+    {
+        $stored = $this->readStoredBundle($websiteId);
+        $byId = [];
+        foreach ($stored['chains'] as $chain) {
+            if (!\is_array($chain)) {
+                continue;
+            }
+            $id = (string)($chain['id'] ?? '');
+            if ($id === '') {
+                continue;
+            }
+            $byId[$id] = $chain;
+        }
+        foreach ($this->collector()->collect($websiteId) as $raw) {
+            if (!\is_array($raw)) {
+                continue;
+            }
+            $row = $this->normalizeChain($raw);
+            if ($row === null) {
+                continue;
+            }
+            if (!empty($raw['owner']) && \is_string($raw['owner'])) {
+                $row['owner'] = \mb_substr(\trim($raw['owner']), 0, 64);
+            }
+            $byId[$row['id']] = $row;
+        }
+        $chains = \array_values($byId);
+        \usort($chains, static function (array $a, array $b): int {
+            return \strcmp((string)($a['id'] ?? ''), (string)($b['id'] ?? ''));
+        });
+
+        return [
+            'version' => $this->computeRuntimeVersion((int)$stored['version'], $chains),
+            'chains' => $chains,
+        ];
+    }
+
+    /**
+     * 仅读后台已发布包（不含模块事件/Provider 注册）。
+     *
+     * @return array{version: int, chains: list<array<string, mixed>>}
+     */
+    public function readStoredBundle(int $websiteId): array
     {
         $raw = '';
         try {
@@ -88,6 +135,21 @@ final class EventChainService
             'version' => \max(0, $version),
             'chains' => $normalized,
         ];
+    }
+
+    /**
+     * @param list<array<string, mixed>> $chains
+     */
+    private function computeRuntimeVersion(int $storedVersion, array $chains): int
+    {
+        $payload = \json_encode(
+            ['v' => \max(0, $storedVersion), 'c' => $chains],
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+        ) ?: '';
+        $hash = \sprintf('%u', \crc32($payload));
+
+        // 正整数、内容变化即变；高位保留后台 version 便于人工对照
+        return ((\max(0, $storedVersion) % 100000) * 100000) + ((int)$hash % 100000);
     }
 
     /**
@@ -155,7 +217,7 @@ final class EventChainService
      */
     public function publishBundle(int $websiteId, array $chains): array
     {
-        $current = $this->getBundle($websiteId);
+        $current = $this->readStoredBundle($websiteId);
         $normalized = [];
         foreach ($chains as $chain) {
             if (!\is_array($chain)) {
@@ -176,10 +238,7 @@ final class EventChainService
             return $this->getBundle($websiteId);
         }
 
-        return [
-            'version' => (int)$bundle['version'],
-            'chains' => $normalized,
-        ];
+        return $this->getBundle($websiteId);
     }
 
     /**
@@ -200,7 +259,7 @@ final class EventChainService
                 'chain' => null,
             ];
         }
-        $bundle = $this->getBundle($websiteId);
+        $bundle = $this->readStoredBundle($websiteId);
         $chains = $bundle['chains'];
         $found = false;
         foreach ($chains as $i => $existing) {
@@ -530,5 +589,10 @@ final class EventChainService
     private function store(): ConfigStore
     {
         return $this->configStore ?? ObjectManager::getInstance(ConfigStore::class);
+    }
+
+    private function collector(): EventChainCollector
+    {
+        return $this->collector ?? ObjectManager::getInstance(EventChainCollector::class);
     }
 }

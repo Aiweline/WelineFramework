@@ -17,6 +17,9 @@ final class SocialLoginReturnUrlContractTest extends TestCase
         $controller = (string) file_get_contents($root . '/Controller/Account/SocialLogin.php');
         self::assertStringContainsString('formatSocialLoginSuccessRedirect', $controller);
         self::assertStringContainsString('formatAuthSuccessRedirect', $controller);
+        self::assertStringContainsString('forceLocalizationPrefix', $controller);
+        self::assertStringContainsString('SocialLoginOAuthFailedException', $controller);
+        self::assertStringContainsString('buildAuthPageUrl', $controller);
         self::assertStringNotContainsString("\$target = '/customer/account';", $controller);
         self::assertStringNotContainsString("'redirect' => '/customer/account'", $controller);
 

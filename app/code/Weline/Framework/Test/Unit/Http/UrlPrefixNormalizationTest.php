@@ -31,6 +31,28 @@ final class UrlPrefixNormalizationTest extends TestCase
         parent::tearDown();
     }
 
+    public function testWithoutStorefrontLocalizationPrefixStripsCurrencyAndLanguage(): void
+    {
+        self::assertSame(
+            'https://shop.test/customer/account/social-login/callback',
+            Url::withoutStorefrontLocalizationPrefix(
+                'https://shop.test/USD/en_US/customer/account/social-login/callback'
+            )
+        );
+        self::assertSame(
+            'http://127.0.0.1:9555/customer/account/social-login/callback',
+            Url::withoutStorefrontLocalizationPrefix(
+                'http://127.0.0.1:9555/zh_Hans_CN/customer/account/social-login/callback'
+            )
+        );
+        self::assertSame(
+            'https://shop.test/customer/account/social-login/callback',
+            Url::withoutStorefrontLocalizationPrefix(
+                'https://shop.test/customer/account/social-login/callback'
+            )
+        );
+    }
+
     public function testPrefixDoesNotAppendApiAreaSegmentAsCurrency(): void
     {
         if (Env::getAreaRoutePrefix('rest_frontend') === null) {

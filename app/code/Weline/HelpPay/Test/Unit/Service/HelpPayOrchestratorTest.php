@@ -5,19 +5,37 @@ declare(strict_types=1);
 namespace Weline\HelpPay\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Checkout\Service\CheckoutQuoteLineWeightResolver;
 use Weline\HelpPay\Service\HelpPayOrchestrator;
+use Weline\HelpPay\Service\HelpPayQuickShippingQuoteService;
 use Weline\HelpPay\Service\ShippingRedactionService;
 use Weline\Payment\Service\PaymentLinkService;
 
 final class HelpPayOrchestratorTest extends TestCase
 {
-    private function orch(): HelpPayOrchestrator
+    private function orch(?HelpPayQuickShippingQuoteService $shipping = null): HelpPayOrchestrator
     {
         $repo = new \Weline\Payment\Service\PaymentLinkRecordRepository(
             sys_get_temp_dir() . '/helppay-orch-' . uniqid('', true) . '.json'
         );
 
-        return new HelpPayOrchestrator(new PaymentLinkService($repo));
+        return new HelpPayOrchestrator(
+            new PaymentLinkService($repo),
+            new ShippingRedactionService(),
+            $shipping,
+        );
+    }
+
+    private function shippingStub(int $weightMinor = 300, int $amountMinor = 200): HelpPayQuickShippingQuoteService
+    {
+        return HelpPayQuickShippingQuoteService::forTesting(
+            CheckoutQuoteLineWeightResolver::forTesting(static fn (): int => $weightMinor),
+            [[
+                'service_code' => 'SEED_LANE_AMERICAS',
+                'label' => '美洲',
+                'amount_minor' => $amountMinor,
+            ]],
+        );
     }
 
     public function testCreateHelpPayRequiresRulesAndAddressConfirm(): void
@@ -99,7 +117,9 @@ final class HelpPayOrchestratorTest extends TestCase
         self::assertTrue($quick['session_isolation'] ?? false);
         self::assertGreaterThanOrEqual(time() + 86400 * 6, (int) ($quick['expires_at'] ?? 0));
 
-        $withShip = $orch->createQuickPay([
+        $withShip = $this->orch($this->shippingStub())->createQuickPay([
+            'product_id' => 321,
+            'qty' => 1,
             'goods_amount_minor' => 1000,
             'shipping_amount_minor' => 200,
             'service_code' => 'SEED_LANE_AMERICAS',
@@ -112,6 +132,40 @@ final class HelpPayOrchestratorTest extends TestCase
         self::assertSame(1200, (int) ($withShip['amount_minor'] ?? 0));
         self::assertSame('SEED_LANE_AMERICAS', (string) ($withShip['service_code'] ?? ''));
         self::assertSame('美洲', (string) ($withShip['service_label'] ?? ''));
+    }
+
+    public function testCreateQuickPayRefusesMissingWeight(): void
+    {
+        $orch = $this->orch($this->shippingStub(0, 200));
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('helppay_missing_weight');
+        $orch->createQuickPay([
+            'product_id' => 192,
+            'qty' => 1,
+            'goods_amount_minor' => 1000,
+            'shipping_amount_minor' => 200,
+            'service_code' => 'SEED_LANE_AMERICAS',
+            'shipping_address' => [
+                'name' => 'Bob', 'line1' => 'St', 'phone' => '1', 'country' => 'US',
+            ],
+            'public_origin' => 'https://demo.test.weline.com',
+        ]);
+    }
+
+    public function testCreateQuickPayRequiresProductWhenShippingSelected(): void
+    {
+        $orch = $this->orch($this->shippingStub());
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('helppay_product_required');
+        $orch->createQuickPay([
+            'goods_amount_minor' => 1000,
+            'shipping_amount_minor' => 200,
+            'service_code' => 'SEED_LANE_AMERICAS',
+            'shipping_address' => [
+                'name' => 'Bob', 'line1' => 'St', 'phone' => '1', 'country' => 'US',
+            ],
+            'public_origin' => 'https://demo.test.weline.com',
+        ]);
     }
 
     public function testShippingRedactionStripsOwnerFacingFields(): void

@@ -11,6 +11,7 @@ use Weline\Framework\Database\Model;
 use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
+use Weline\Framework\DateTime\Timezone;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Marketing\Service\ExternalManagedRuleOwnership;
 /** 营销规则模型 @package Weline_Marketing */
@@ -142,16 +143,13 @@ class Rule extends Model
         if ($this->getData(self::schema_fields_STATUS) !== self::STATUS_ACTIVE) {
             return false;
         }
-        $now = date('Y-m-d H:i:s');
         $startDate = $this->getData(self::schema_fields_START_DATE);
         $endDate = $this->getData(self::schema_fields_END_DATE);
-        if ($startDate && $now < $startDate) {
-            return false;
-        }
-        if ($endDate && $now > $endDate) {
-            return false;
-        }
-        return true;
+
+        return Timezone::isWithinUtcWindow(
+            $startDate !== null && $startDate !== '' ? (string)$startDate : null,
+            $endDate !== null && $endDate !== '' ? (string)$endDate : null,
+        );
     }
 
     public function delete(): static

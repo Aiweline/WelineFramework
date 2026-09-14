@@ -1125,9 +1125,6 @@ SKU：%{1},SKU：%{1}
 "Product shard provision 返回未声明表：%{1}","Product shard provision 返回未声明表：%{1}"
 "Product shard provision ready 未返回完整声明表集合","Product shard provision ready 未返回完整声明表集合"
 "Product shard provision ready 指纹不能为空","Product shard provision ready 指纹不能为空"
-"0 - 99 元","0 - 99 元"
-"100 - 299 元","100 - 299 元"
-"300 元以上","300 元以上"
 "entity_id 必须是正整数","entity_id 必须是正整数"
 "attribute_code 仅允许小写字母、数字和下划线","attribute_code 仅允许小写字母、数字和下划线"
 "locale 格式无效","locale 格式无效"
@@ -1258,6 +1255,9 @@ SKU（每次新建使用唯一值）,SKU（每次新建使用唯一值）
 "必须与当前 env 配置一致的 mig_clone_* 数据库","必须与当前 env 配置一致的 mig_clone_* 数据库"
 "cutover/rollback 必填的切换状态版本","cutover/rollback 必填的切换状态版本"
 "rollback 目标：dual_read（默认）或 legacy","rollback 目标：dual_read（默认）或 legacy"
+"0 - 99 元","0 - 99 元"
+"100 - 299 元","100 - 299 元"
+"300 元以上","300 元以上"
 根据当前商品为你推荐,根据当前商品为你推荐
 优惠主题,优惠主题
 "Offer 不存在","Offer 不存在"
@@ -1453,3 +1453,7 @@ Available,可用
 视频排序,视频排序
 视频媒体库,视频媒体库
 猜你喜欢,猜你喜欢
+大小:,大小:
+类型:,类型:
+存货单位,存货单位
+存货单位:,存货单位:

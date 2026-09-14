@@ -96,6 +96,9 @@ Website,Website
 返回列表,返回列表
 主题键,主题键
 "路径 slug","路径 slug"
+开始时间,开始时间
+"按站点时区 %{1} 录入（可空=不限制），系统以 UTC 存储与判定。","按站点时区 %{1} 录入（可空=不限制），系统以 UTC 存储与判定。"
+结束时间,结束时间
 "商品 price band","商品 price band"
 不限,不限
 活动折扣,"Deal discount"
@@ -153,6 +156,8 @@ SKU,SKU
 "活动主题必须指定 Website（一站一活动；0 为默认网站）。","Activity themes require a Website (one site per campaign; 0 is the default website)."
 预览请求失败，请刷新页面后重试。,"Preview request failed. Refresh the page and try again."
 正在加载命中商品…,"Loading matched products…"
+"共 [[total]] 条命中（前台最多展示 [[limit]] 条）","{{total}} matched (up to {{limit}} shown on storefront)"
+"第 [[page]] / [[page_count]] 页","Page {{page}} / {{page_count}}"
 上一页,Previous
 下一页,Next
 图片,Image
@@ -166,6 +171,7 @@ ID,ID
 "活动主题 Website 无效。","Activity theme Website is invalid."
 "配置渠道范围时必须同时指定店铺 code。","配置渠道范围时必须同时指定店铺 code。"
 "以下 SKU 已出现在其他真实折扣活动中。确认后前台将允许顾客选择参考哪个活动（默认显示最强折扣）。","以下 SKU 已出现在其他真实折扣活动中。确认后前台将允许顾客选择参考哪个活动（默认显示最强折扣）。"
+活动结束时间必须晚于开始时间。,活动结束时间必须晚于开始时间。
 今日特价,"Today's Deals"
 今日特价专场,"Today's Deals"
 从价格友好的配饰、发冠与日常常服单品开始，引导买家进入购物车和结账路径。,"Begin with accessible accessories, hairpieces and everyday Hanfu, then move smoothly into cart and checkout."
@@ -291,7 +297,7 @@ ID,ID
 "单商品活动只能绑定 1 个商品。","Single-product campaigns can bind only one product."
 "商品 #%{1} 不在网站 #%{2} 的当前活动范围内，或尚未发布。","商品 #%{1} 不在网站 #%{2} 的当前活动范围内，或尚未发布。"
 配置渠道范围时必须同时选择店铺。,"Store is required when a channel scope is set."
-"店铺 code「%{1}」在当前 Website 下不存在。","Store code \"%{1}\" does not exist for the selected website."
+"店铺 code「%{1}」在当前 Website 下不存在。","Store code \%{1}\" does not exist for the selected website."""""""
 默认网站,"Default website"
 全部店铺,"All stores"
 全部渠道,"All channels"
@@ -364,3 +370,4 @@ ID,ID
 当前活动视图下可用于前台承接的商品数量。,当前活动视图下可用于前台承接的商品数量。
 "列表按所选范围过滤；前台访客只会看到与其 website / 店铺 / 渠道匹配的活动。","List is filtered by the selected scope; storefront visitors only see matching campaigns."
 活动主题自动同步的折扣规则，请勿手动改归属。,"Auto-synced from an activity theme; do not manually reassign ownership."
+促销,Promotion

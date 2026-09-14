@@ -49,6 +49,19 @@ final class WidgetI18nRequestMemoTest extends TestCase
         parent::tearDown();
     }
 
+    public function testPathLocaleIncludesHindiAndOtherDefaultSitePacks(): void
+    {
+        self::assertSame('hi_IN', WidgetI18n::localeFromRequestUri('/hi_IN/product/foo?x=1'));
+        self::assertSame('ar_SA', WidgetI18n::localeFromRequestUri('/ar_SA/'));
+        self::assertNull(WidgetI18n::localeFromRequestUri('/product/foo'));
+    }
+
+    public function testPreferredModulesIncludeShippingForPdpFreightHint(): void
+    {
+        $src = (string)file_get_contents(dirname(__DIR__, 3) . '/Helper/WidgetI18n.php');
+        self::assertStringContainsString("'Weline_Shipping'", $src);
+    }
+
     public function testRepeatedIdenticalLabelsUseTheRequestMemo(): void
     {
         self::assertSame('Color translated (red)', WidgetI18n::label('Color', '', ['red']));

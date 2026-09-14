@@ -102,9 +102,35 @@ refresh,refresh
 复制模板,复制模板
 copy,copy
 复制到其它范围或语言,复制到其它范围或语言
+"← 返回渠道管理","← Back to channel management"
+保存,保存
+刷新预览,刷新预览
+重置为默认,重置为默认
+语言,Language
+作用范围,作用范围
+选择作用范围,选择作用范围
+搜索作用范围,搜索作用范围
+折叠,折叠
+展开,展开
+未找到匹配作用范围,未找到匹配作用范围
+主题,Subject
+插入变量,插入变量
+"页头/页尾由系统固定注入；正文只插业务变量。实时预览链接按当前作用范围站点地址填充（非 example.com 样例）。品牌色变量仅预览壳使用。","页头/页尾由系统固定注入；正文只插业务变量。实时预览链接按当前作用范围站点地址填充（非 example.com 样例）。品牌色变量仅预览壳使用。"
+"站店渠 / 联系信息","站店渠 / 联系信息"
+品牌色（壳用）,品牌色（壳用）
+此渠道未声明变量,此渠道未声明变量
+正文,正文
+实时预览,实时预览
+含固定页头/页尾；编辑后自动刷新。,含固定页头/页尾；编辑后自动刷新。
+邮件实时预览,邮件实时预览
+高级：纯文本,高级：纯文本
+纯文本（可选）,纯文本（可选）
+"复制到其他范围 / 语言","复制到其他范围 / 语言"
+复制到范围,复制到范围
+复制到语言,复制到语言
+复制,复制
 "发件人账户写入当前作用范围；切换网站范围后按新范围加载。未覆盖时继承 Global。","发件人账户写入当前作用范围；切换网站范围后按新范围加载。未覆盖时继承 Global。"
 在统一配置中心打开,在统一配置中心打开
-作用范围,作用范围
 传输账户管理,传输账户管理
 发信渠道绑定,发信渠道绑定
 "录入 SMTP 传输账户；可选在账户上直接绑定发信渠道（标签可搜索多选）。","录入 SMTP 传输账户；可选在账户上直接绑定发信渠道（标签可搜索多选）。"
@@ -190,8 +216,6 @@ copy,copy
 "已有 %{1} / %{2} 语言","%{1} / %{2} locales present"
 本列表已按上方「作用范围」加载；未配置语言时，发送将使用网站默认语模板（可就近向上）。,"This list is loaded for the scope above; missing locales use the website default-language template (nearest upward)."
 没有匹配的语言模板,"No matching language templates"
-语言,Language
-主题,Subject
 来源,Source
 继承,Inheritance
 操作,Actions
@@ -199,25 +223,13 @@ copy,copy
 发送将继承自,"Send will inherit from"
 未配置本语言；发送时使用此默认语主题,"Locale not configured; send uses this default-language subject"
 编辑,Edit
-"← 返回渠道管理","← Back to channel management"
-保存,保存
-刷新预览,刷新预览
-重置为默认,重置为默认
-插入变量,插入变量
-"页头/页尾由系统固定注入；正文只插业务变量。实时预览链接按当前作用范围站点地址填充（非 example.com 样例）。品牌色变量仅预览壳使用。","页头/页尾由系统固定注入；正文只插业务变量。实时预览链接按当前作用范围站点地址填充（非 example.com 样例）。品牌色变量仅预览壳使用。"
-"站店渠 / 联系信息","站店渠 / 联系信息"
-品牌色（壳用）,品牌色（壳用）
-此渠道未声明变量,此渠道未声明变量
-正文,正文
-实时预览,实时预览
-含固定页头/页尾；编辑后自动刷新。,含固定页头/页尾；编辑后自动刷新。
-邮件实时预览,邮件实时预览
-高级：纯文本,高级：纯文本
-纯文本（可选）,纯文本（可选）
-"复制到其他范围 / 语言","复制到其他范围 / 语言"
-复制到范围,复制到范围
-复制到语言,复制到语言
-复制,复制
+需要帮助？,"Need help?"
+访问,Visit
+客服邮箱：,Support:
+客服电话：,Phone:
+服务时间：,Hours:
+地址：,Address:
+此邮件由系统自动发送，请勿直接回复。如非本人操作，请忽略本邮件。,"This message was sent automatically. Please do not reply. If you did not expect it, you can ignore this email."
 网站名称,网站名称
 店铺名称,店铺名称
 销售渠道名称,销售渠道名称
@@ -245,8 +257,8 @@ copy,copy
 邮件链接色,邮件链接色
 页尾标题色,页尾标题色
 页尾浅底,页尾浅底
-官方商城客户服务,官方商城客户服务
-"周一至周五 9:00 - 18:00","周一至周五 9:00 - 18:00"
+官方商城客户服务,"Official store customer service"
+"周一至周五 9:00 - 18:00","Mon–Fri 9:00–18:00"
 "异步/CLI 发信必须显式传入 scope 或 website_code","异步/CLI 发信必须显式传入 scope 或 website_code"
 "异步/CLI 发信必须显式传入 locale，或确保网站有默认语言","异步/CLI 发信必须显式传入 locale，或确保网站有默认语言"
 配置项不齐全%{1},"Configuration item is incomplete %{1}"
@@ -255,11 +267,10 @@ copy,copy
 "SMTP 用户名未配置","SMTP username is not configured"
 接受者邮箱为空：请正确设置接收邮箱！,"Recipient email is empty: Please set the receiving email correctly!"
 发送者邮箱为空：请正确设置发件邮箱！,"Sender email is empty: please set the sending email correctly!"
-选择作用范围,选择作用范围
-搜索作用范围,搜索作用范围
-折叠,折叠
-展开,展开
-未找到匹配作用范围,未找到匹配作用范围
+"周一至周五 9:00 - 18:00（法定节假日除外）","Mon–Fri 9:00–18:00 (except public holidays)"
+系统通知,"System notification"
+通知内容,"Notification content"
+信息,Information
 未选语言标签时显示全部语言；多选后仅保留勾选语言的模板行。当前范围：%{1},"No tags selected = all locales; multi-select keeps only those locale rows. Current scope: %{1}"
 "按作用范围管理发信渠道；展开渠道查看并编辑各语言模板。未配置语言发送时使用网站默认语模板。共 %{1} 个渠道。","Manage mail channels by scope; expand to edit per-locale templates. Unconfigured locales use the website default-language template. %{1} channels."
 搜索语言模板,"Search language templates"
@@ -306,3 +317,7 @@ Smtp配置,"Smtp configuration"
 发件记录,"Shipping records"
 点击选择语言（可多选过滤）,"Click to choose languages (multi-select filter)"
 搜索国家、语言或代码以过滤模板,"Search country, language, or code to filter templates"
+来自商城的通知,"A message from the store"
+默认网站,Default website
+默认店铺,Default store
+默认渠道,Default channel

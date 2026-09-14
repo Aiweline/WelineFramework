@@ -214,7 +214,7 @@ settings,settings
 人机验证凭证异常，请刷新页面后重试,人机验证凭证异常，请刷新页面后重试
 请求参数过长，请刷新页面后重试,请求参数过长，请刷新页面后重试
 上传参数异常，请刷新页面后重试,上传参数异常，请刷新页面后重试
-点击修改邮箱身份,点击修改邮箱身份
+点击修改邮箱身份,"Haz clic para editar la identidad de correo"
 当前登录身份,当前登录身份
 邮箱已绑定：%{1}，可以继续聊天,"Email bound: %{1}. You can continue chatting."
 邮箱已绑定，可以继续聊天,"Email bound. You can continue chatting."
@@ -223,7 +223,7 @@ settings,settings
 昨天,昨天
 客服新消息,客服新消息
 您有一条新的客服回复,您有一条新的客服回复
-请等待客服回复后再发送。验证邮箱后可跳过等待、连续发送消息。,请等待客服回复后再发送。验证邮箱后可跳过等待、连续发送消息。
+请等待客服回复后再发送。验证邮箱后可跳过等待、连续发送消息。,"Espere la respuesta del soporte antes de enviar de nuevo. Con el correo verificado puede omitir la espera y enviar mensajes seguidos."
 等待客服回复…,等待客服回复…
 客服服务,"Servicio al cliente"
 我的语言,"Mi idioma"
@@ -267,16 +267,6 @@ settings,settings
 会话未初始化，请刷新页面重试,"Sesión no inicializada"
 人机验证尚未就绪，正在刷新，请稍后重试,人机验证尚未就绪，正在刷新，请稍后重试
 验证邮件已发送，请查收您的邮箱,验证邮件已发送，请查收您的邮箱
-检测中...,Verificando...
-修改邮箱身份,修改邮箱身份
-验证邮箱,验证邮箱
-接收客服回复与优惠通知,接收客服回复与优惠通知
-留下邮箱后，客服可将本次咨询的回复、报价进展和可用优惠发送到您的邮箱。,留下邮箱后，客服可将本次咨询的回复、报价进展和可用优惠发送到您的邮箱。
-仅用于本次客服咨询相关通知，不是简报订阅。,仅用于本次客服咨询相关通知，不是简报订阅。
-接收通知的邮箱,接收通知的邮箱
-请输入用于接收客服通知的邮箱,请输入用于接收客服通知的邮箱
-稍后再说,稍后再说
-发送验证邮件,"Enviar email de verificación"
 此页面用于独立聊天界面，实际聊天功能通过右下角悬浮按钮使用。,"Use el botón flotante para chatear"
 邮箱绑定验证,"Verificación de email"
 验证成功,Verificado
@@ -419,6 +409,16 @@ settings,settings
 无效的附件消息,无效的附件消息
 图片：%{1},图片：%{1}
 文件：%{1},文件：%{1}
+检测中...,Verificando...
+修改邮箱身份,"Editar identidad de correo"
+验证邮箱,"Verificar correo"
+接收客服回复与优惠通知,接收客服回复与优惠通知
+留下邮箱后，客服可将本次咨询的回复、报价进展和可用优惠发送到您的邮箱。,留下邮箱后，客服可将本次咨询的回复、报价进展和可用优惠发送到您的邮箱。
+仅用于本次客服咨询相关通知，不是简报订阅。,仅用于本次客服咨询相关通知，不是简报订阅。
+接收通知的邮箱,接收通知的邮箱
+请输入用于接收客服通知的邮箱,请输入用于接收客服通知的邮箱
+稍后再说,稍后再说
+发送验证邮件,"Enviar email de verificación"
 "客服服务 - 邮箱绑定验证","Servicio al cliente - Verificación de email"
 绑定成功后，您将收到客服回复的邮件通知,"Reciba notificaciones después de vincular"
 无法截取所选区域，请改用图片上传或粘贴截图,无法截取所选区域，请改用图片上传或粘贴截图

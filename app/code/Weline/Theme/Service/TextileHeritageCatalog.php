@@ -20,8 +20,8 @@ final class TextileHeritageCatalog
     /**
      * @return list<array{
      *     slug:string,name:string,caption:string,caption_en:string,image:string,link:string,
-     *     object_title:string,creator:string,collection:string,source_url:string,
-     *     license:string,license_url:string,evidence_url:string
+     *     object_title:string,object_title_en:string,creator:string,creator_en:string,
+     *     collection:string,source_url:string,license:string,license_url:string,evidence_url:string
      * }>
      */
     public static function items(): array
@@ -37,7 +37,9 @@ final class TextileHeritageCatalog
                 'image' => $base . '/yunjin.jpg',
                 'link' => '/search?q=' . rawurlencode('云锦'),
                 'object_title' => '清乾隆黄地龙袍（云锦织造）',
+                'object_title_en' => 'Qing Qianlong yellow-ground dragon robe (Yunjin weaving)',
                 'creator' => 'Dr. Meierhofer',
+                'creator_en' => 'Dr. Meierhofer',
                 'collection' => 'Grassi Museum, Leipzig',
                 'source_url' => 'https://commons.wikimedia.org/wiki/File:Drachenrobe-Qianlong.JPG',
                 'license' => 'CC BY-SA 3.0',
@@ -52,7 +54,9 @@ final class TextileHeritageCatalog
                 'image' => $base . '/songjin.png',
                 'link' => '/search?q=' . rawurlencode('宋锦'),
                 'object_title' => '银线嵌入宋锦实物织样（论文图 13）',
+                'object_title_en' => 'Song brocade sample with silver-thread inlay (paper fig. 13)',
                 'creator' => 'Xiuling Zhang et al.',
+                'creator_en' => 'Xiuling Zhang et al.',
                 'collection' => 'Materials 14 (2021), 3779',
                 'source_url' => 'https://www.mdpi.com/1996-1944/14/14/3779',
                 'license' => 'CC BY 4.0',
@@ -67,7 +71,9 @@ final class TextileHeritageCatalog
                 'image' => $base . '/shujin.jpg',
                 'link' => '/search?q=' . rawurlencode('蜀锦'),
                 'object_title' => '唐代联珠对鸟纹蜀锦',
+                'object_title_en' => 'Tang dynasty Shu brocade with pearl roundel and paired birds',
                 'creator' => 'Unknown',
+                'creator_en' => 'Unknown',
                 'collection' => 'Chengdu Museum',
                 'source_url' => 'https://commons.wikimedia.org/wiki/File:Shu_brocade,_Chengdu_Museum.png',
                 'license' => 'Public Domain Mark 1.0',
@@ -82,7 +88,9 @@ final class TextileHeritageCatalog
                 'image' => $base . '/suxiu.jpg',
                 'link' => '/search?q=' . rawurlencode('苏绣'),
                 'object_title' => '清代苏绣《灵仙祝寿图》',
+                'object_title_en' => 'Qing dynasty Suzhou embroidery “Immortals Celebrating Longevity”',
                 'creator' => 'Unknown',
+                'creator_en' => 'Unknown',
                 'collection' => 'Shanghai Museum',
                 'source_url' => 'https://commons.wikimedia.org/wiki/File:苏绣灵仙祝寿图.jpg',
                 'license' => 'Public Domain Mark 1.0',
@@ -97,7 +105,9 @@ final class TextileHeritageCatalog
                 'image' => $base . '/zhuanghua.jpg',
                 'link' => '/search?q=' . rawurlencode('妆花'),
                 'object_title' => '明早期缠枝莲托八宝凤鸟纹妆花缎',
+                'object_title_en' => 'Early Ming zhuanghua satin with lotus scrolls, Eight Treasures and phoenix-bird motifs',
                 'creator' => 'Unknown',
+                'creator_en' => 'Unknown',
                 'collection' => 'The Metropolitan Museum of Art, 2001.471',
                 'source_url' => 'https://www.metmuseum.org/art/collection/search/62477',
                 'license' => 'CC0 1.0',
@@ -112,7 +122,9 @@ final class TextileHeritageCatalog
                 'image' => $base . '/hualuo.jpg',
                 'link' => '/search?q=' . rawurlencode('花罗'),
                 'object_title' => '南宋黄褐色如意山茶暗花罗',
+                'object_title_en' => 'Southern Song yellowish-brown patterned gauze with ruyi camellia motif',
                 'creator' => '三猎',
+                'creator_en' => 'Sanlie',
                 'collection' => 'China National Silk Museum',
                 'source_url' => 'https://commons.wikimedia.org/wiki/File:南宋黄褐色如意山茶暗花罗.jpg',
                 'license' => 'CC BY-SA 4.0',

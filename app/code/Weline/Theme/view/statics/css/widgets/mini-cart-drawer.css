@@ -718,6 +718,7 @@ a.header-cart .mini-cart-drawer__line-price-campaign:hover,
     margin: 0 0 var(--weline-space-4, 1rem);
     font-size: var(--weline-font-size-xs, 0.75rem);
     color: var(--amz-drawer-muted, var(--weline-theme-text-muted, #6b7280));
+    unicode-bidi: isolate;
 }
 
 .header-cart .mini-cart-drawer__actions {

@@ -23,6 +23,8 @@ final class DictionaryDecouplingContractTest extends TestCase
             dirname(__DIR__, 3) . '/Phrase/DictionaryCompiler.php',
         );
         self::assertStringContainsString('EVENT_DICTIONARY_COMPILE_AFTER', $source);
+        self::assertStringContainsString("'collected_words'", $source);
+        self::assertStringContainsString("'source_translations'", $source);
         self::assertStringNotContainsString('Weline\\I18n', $source);
     }
 

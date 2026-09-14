@@ -234,10 +234,14 @@ function store_music_snapshot(string $token): void
     // cannot permanently lose admin-configured tracks.
     $playlist = (string)($entries[StoreMusicSettings::KEY_PLAYLIST]['value'] ?? '');
     $track = (string)($entries[StoreMusicSettings::KEY_TRACK]['value'] ?? '');
+    $enabled = (string)($entries[StoreMusicSettings::KEY_ENABLED]['value'] ?? '');
     $isE2e = str_contains($playlist, 'store-music-e2e')
         || str_contains($playlist, 'E2E')
         || str_contains($track, 'store-music-e2e');
-    if (!$isE2e && ($playlist !== '' || $track !== '')) {
+    $isEmpty = ($playlist === '' || $playlist === '[]') && ($track === '');
+    $isDisabled = $enabled === '0' || $enabled === 'false';
+    // Never poison durable backup with gate-off / empty snapshots (CH1 disable).
+    if (!$isE2e && !$isEmpty && !$isDisabled) {
         file_put_contents(
             BP . '/var/tmp/store-music-last-real.json',
             (string)json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)

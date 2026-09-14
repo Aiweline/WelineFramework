@@ -1,5 +1,5 @@
 {
-    "version": "1.1.0",
+    "version": "1.2.0",
     "events": [
         {
             "weline_event": "page_view",
@@ -152,6 +152,272 @@
                 "checkout"
             ],
             "label_zh": "加入购物车"
+        },
+        {
+            "weline_event": "friend_help_pay",
+            "ga4_event": "friend_help_pay",
+            "google_recommended": false,
+            "event_family": "ecommerce",
+            "require_exact_marker": true,
+            "skip_gtm_push": false,
+            "required_params": [
+                "items",
+                "selected_options"
+            ],
+            "markers": {
+                "classes": [
+                    "weline-pixel::friend_help_pay"
+                ],
+                "attrs": [
+                    "data-pixel-event=friend_help_pay"
+                ]
+            },
+            "page_scopes": [
+                "checkout"
+            ],
+            "label_zh": "找朋友代付"
+        },
+        {
+            "weline_event": "selection_share",
+            "ga4_event": "share",
+            "google_recommended": true,
+            "event_family": "ecommerce",
+            "require_exact_marker": true,
+            "skip_gtm_push": false,
+            "required_params": [
+                "items",
+                "selected_options"
+            ],
+            "markers": {
+                "classes": [
+                    "weline-pixel::selection_share"
+                ],
+                "attrs": [
+                    "data-pixel-event=selection_share"
+                ]
+            },
+            "page_scopes": [
+                "checkout"
+            ],
+            "label_zh": "分享给朋友"
+        },
+        {
+            "weline_event": "quick_buy",
+            "ga4_event": "quick_buy",
+            "google_recommended": false,
+            "event_family": "ecommerce",
+            "require_exact_marker": true,
+            "skip_gtm_push": false,
+            "required_params": [
+                "items",
+                "currency",
+                "value",
+                "selected_options"
+            ],
+            "markers": {
+                "classes": [
+                    "weline-pixel::quick_buy"
+                ],
+                "attrs": [
+                    "data-pixel-event=quick_buy"
+                ]
+            },
+            "page_scopes": [
+                "checkout"
+            ],
+            "label_zh": "快捷购买"
+        },
+        {
+            "weline_event": "express_pay",
+            "ga4_event": "express_pay",
+            "google_recommended": false,
+            "event_family": "ecommerce",
+            "require_exact_marker": true,
+            "skip_gtm_push": false,
+            "required_params": [
+                "items",
+                "selected_options"
+            ],
+            "markers": {
+                "classes": [
+                    "weline-pixel::express_pay"
+                ],
+                "attrs": [
+                    "data-pixel-event=express_pay"
+                ]
+            },
+            "page_scopes": [
+                "checkout"
+            ],
+            "label_zh": "快捷支付"
+        },
+        {
+            "weline_event": "friend_help_pay_link_ready",
+            "ga4_event": "friend_help_pay_link_ready",
+            "google_recommended": false,
+            "event_family": "ecommerce",
+            "require_exact_marker": false,
+            "skip_gtm_push": false,
+            "required_params": [],
+            "markers": {
+                "classes": [
+                    "weline-pixel::friend_help_pay_link_ready"
+                ],
+                "attrs": [
+                    "data-pixel-event=friend_help_pay_link_ready"
+                ]
+            },
+            "page_scopes": [
+                "checkout"
+            ],
+            "label_zh": "代付链接已生成"
+        },
+        {
+            "weline_event": "selection_share_link_ready",
+            "ga4_event": "selection_share_link_ready",
+            "google_recommended": false,
+            "event_family": "ecommerce",
+            "require_exact_marker": false,
+            "skip_gtm_push": false,
+            "required_params": [],
+            "markers": {
+                "classes": [
+                    "weline-pixel::selection_share_link_ready"
+                ],
+                "attrs": [
+                    "data-pixel-event=selection_share_link_ready"
+                ]
+            },
+            "page_scopes": [
+                "checkout"
+            ],
+            "label_zh": "分享链接已生成"
+        },
+        {
+            "weline_event": "quick_buy_checkout_ready",
+            "ga4_event": "quick_buy_checkout_ready",
+            "google_recommended": false,
+            "event_family": "ecommerce",
+            "require_exact_marker": false,
+            "skip_gtm_push": false,
+            "required_params": [],
+            "markers": {
+                "classes": [
+                    "weline-pixel::quick_buy_checkout_ready"
+                ],
+                "attrs": [
+                    "data-pixel-event=quick_buy_checkout_ready"
+                ]
+            },
+            "page_scopes": [
+                "checkout"
+            ],
+            "label_zh": "快捷购买待支付"
+        },
+        {
+            "weline_event": "express_pay_started",
+            "ga4_event": "express_pay_started",
+            "google_recommended": false,
+            "event_family": "ecommerce",
+            "require_exact_marker": false,
+            "skip_gtm_push": false,
+            "required_params": [],
+            "markers": {
+                "classes": [
+                    "weline-pixel::express_pay_started"
+                ],
+                "attrs": [
+                    "data-pixel-event=express_pay_started"
+                ]
+            },
+            "page_scopes": [
+                "checkout"
+            ],
+            "label_zh": "快捷支付已拉起"
+        },
+        {
+            "weline_event": "friend_help_pay_checkout_success",
+            "ga4_event": "purchase",
+            "google_recommended": true,
+            "event_family": "ecommerce",
+            "require_exact_marker": false,
+            "skip_gtm_push": false,
+            "required_params": [],
+            "markers": {
+                "classes": [
+                    "weline-pixel::friend_help_pay_checkout_success"
+                ],
+                "attrs": [
+                    "data-pixel-event=friend_help_pay_checkout_success"
+                ]
+            },
+            "page_scopes": [
+                "checkout"
+            ],
+            "label_zh": "代付结账闭环"
+        },
+        {
+            "weline_event": "selection_share_checkout_success",
+            "ga4_event": "purchase",
+            "google_recommended": true,
+            "event_family": "ecommerce",
+            "require_exact_marker": false,
+            "skip_gtm_push": false,
+            "required_params": [],
+            "markers": {
+                "classes": [
+                    "weline-pixel::selection_share_checkout_success"
+                ],
+                "attrs": [
+                    "data-pixel-event=selection_share_checkout_success"
+                ]
+            },
+            "page_scopes": [
+                "checkout"
+            ],
+            "label_zh": "分享规格结账闭环"
+        },
+        {
+            "weline_event": "quick_buy_checkout_success",
+            "ga4_event": "purchase",
+            "google_recommended": true,
+            "event_family": "ecommerce",
+            "require_exact_marker": false,
+            "skip_gtm_push": false,
+            "required_params": [],
+            "markers": {
+                "classes": [
+                    "weline-pixel::quick_buy_checkout_success"
+                ],
+                "attrs": [
+                    "data-pixel-event=quick_buy_checkout_success"
+                ]
+            },
+            "page_scopes": [
+                "checkout"
+            ],
+            "label_zh": "快捷购买结账闭环"
+        },
+        {
+            "weline_event": "express_pay_checkout_success",
+            "ga4_event": "purchase",
+            "google_recommended": true,
+            "event_family": "ecommerce",
+            "require_exact_marker": false,
+            "skip_gtm_push": false,
+            "required_params": [],
+            "markers": {
+                "classes": [
+                    "weline-pixel::express_pay_checkout_success"
+                ],
+                "attrs": [
+                    "data-pixel-event=express_pay_checkout_success"
+                ]
+            },
+            "page_scopes": [
+                "checkout"
+            ],
+            "label_zh": "快捷支付结账闭环"
         },
         {
             "weline_event": "begin_checkout",

@@ -583,7 +583,8 @@ const CustomerServiceWidget = (function() {
      */
     function init(options) {
         config = Object.assign(config, options);
-        const defaultLocale = String(config.defaultCustomerLocale || 'zh_Hans_CN');
+        const storefrontLocale = String(config.storefrontLocale || '').trim();
+        const defaultLocale = storefrontLocale || String(config.defaultCustomerLocale || 'zh_Hans_CN');
         state.locale = defaultLocale;
         
         // 从 localStorage 恢复状态
@@ -592,7 +593,8 @@ const CustomerServiceWidget = (function() {
             try {
                 const parsed = JSON.parse(savedState);
                 state.sessionToken = parsed.sessionToken || null;
-                state.locale = parsed.locale || defaultLocale;
+                // Storefront path locale wins for chrome on /{locale}/ pages (Phrase/localStorage lag).
+                state.locale = storefrontLocale || parsed.locale || defaultLocale;
                 state.displayMode = parsed.displayMode || 'translated';
             } catch (e) {
                 console.error('Failed to load saved state:', e);

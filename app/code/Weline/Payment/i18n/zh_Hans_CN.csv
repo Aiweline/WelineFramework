@@ -497,6 +497,7 @@ More,更多的
 当前运行时配置摘要,当前运行时配置摘要
 交易ID,交易ID
 暂无支付记录,暂无支付记录
+未指定,未指定
 "Payment Webhook Inbox 消费","支付 Webhook 收件箱 消费"
 "消费已验签的 Payment webhook inbox，并原子提交支付、库存和后续 effect","消费已验签的 Payment webhook inbox，并原子提交支付、库存和后续 effect"
 "Payment 资产终态消费","Payment 资产终态消费"
@@ -527,11 +528,13 @@ More,更多的
 仅线上中继主机可注入连调探针事件。,仅线上中继主机可注入连调探针事件。
 "没有活跃的线上 Relay 会话；请先 pair。","没有活跃的线上 Relay 会话；请先 pair。"
 "注入 inbox 成功，但未能挂到活跃会话。","注入 inbox 成功，但未能挂到活跃会话。"
+货到付款,货到付款
 "当前环境不能作为线上 Webhook Relay 主机。","当前环境不能作为线上 Webhook Relay 主机。"
 "缺少 Authorization Bearer 用户 Token。","缺少 Authorization Bearer 用户 Token。"
 "用户 Token 无效或已过期。","用户 Token 无效或已过期。"
 无效的后台用户。,无效的后台用户。
 "无法创建用户 API Token。","无法创建用户 API Token。"
+失败,失败
 "Provider 未实现 %{action} 扩展入口。","Provider 未实现 %{action} 扩展入口。"
 商品小计,商品小计
 运费,运费
@@ -688,6 +691,7 @@ More,更多的
 "PayPal Developer Sandbox REST App Client ID","PayPal Developer Sandbox REST App Client ID"
 "PayPal Developer Sandbox REST App Secret","PayPal Developer Sandbox REST App Secret"
 仅检查平台沙箱凭据是否已就绪,仅检查平台沙箱凭据是否已就绪
+"""Payment Webhook Inbox 已接收""","Payment Webhook Inbox 已接收"
 当前已启用,当前已启用
 "使用 PayPal 快捷支付","使用 PayPal 快捷支付"
 "请确认购物车有商品后再试；批发信用抵扣的是本期现金应付（批发单一般为商品小计 30%）。","请确认购物车有商品后再试；批发信用抵扣的是本期现金应付（批发单一般为商品小计 30%）。"
@@ -717,7 +721,6 @@ login,login
 "PayPal %{1} 授权成功，凭据已保存，可开始沙箱测试。","PayPal %{1} 授权成功，凭据已保存，可开始沙箱测试。"
 正式,正式
 支付授权成功,支付授权成功
-"""Payment Webhook Inbox 已接收""","Payment Webhook Inbox 已接收"
 "此地址是支付模块统一浏览器回跳入口，已就绪。正常支付或 OAuth 授权会自动带回参数；直接打开本页不会完成支付。","此地址是支付模块统一浏览器回跳入口，已就绪。正常支付或 OAuth 授权会自动带回参数；直接打开本页不会完成支付。"
 支付回跳缺少授权码或交易令牌。,支付回跳缺少授权码或交易令牌。
 "PayPal 授权成功","PayPal 授权成功"

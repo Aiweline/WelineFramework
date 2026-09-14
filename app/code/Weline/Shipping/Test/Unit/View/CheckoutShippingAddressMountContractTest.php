@@ -15,7 +15,7 @@ final class CheckoutShippingAddressMountContractTest extends TestCase
     {
         $src = (string)file_get_contents(
             dirname(__DIR__, 3)
-            . '/view/statics/js/widgets/checkout-shipping-address.v20260914-quote-selected.js',
+            . '/view/statics/js/widgets/checkout-shipping-address.js',
         );
         self::assertStringContainsString('function mount(root)', $src);
         self::assertStringContainsString("data-shipping-mounted", $src);
@@ -24,6 +24,9 @@ final class CheckoutShippingAddressMountContractTest extends TestCase
             "document.querySelector('[data-shipping-checkout-address]')",
             $src,
         );
-        self::assertStringContainsString('20260914-quote-selected-mount', $src);
+        self::assertStringContainsString('20260914-picker-all-addr1', $src);
+        self::assertStringContainsString('list_all_addresses', $src);
+        self::assertStringContainsString('upsertLocalSavedAddress', $src);
+        self::assertStringContainsString('syncChangeAddressLabel', $src);
     }
 }

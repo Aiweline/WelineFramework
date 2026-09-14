@@ -34,6 +34,8 @@ final class OrderReadResult
         public readonly ?string $customerEmail = null,
         public readonly string $orderType = 'toc',
         public readonly array $typePayload = [],
+        public readonly string $paymentStatus = '',
+        public readonly string $checkoutEntry = 'unknown',
     ) {
     }
 
@@ -59,6 +61,8 @@ final class OrderReadResult
             'customer_email' => $this->customerEmail,
             'order_type' => $this->orderType,
             'type_payload' => $this->typePayload,
+            'payment_status' => $this->paymentStatus,
+            'checkout_entry' => $this->checkoutEntry,
         ];
     }
 }

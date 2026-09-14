@@ -1,7 +1,7 @@
 {
     "success": false,
     "code": "maintenance",
-    "message": "系统正在升级维护中，请稍后再试。",
+    "message": "Hệ thống đang nâng cấp bảo trì. Vui lòng thử lại sau.",
     "data": {
         "retry_after": 60,
         "lang": "vi_VN",

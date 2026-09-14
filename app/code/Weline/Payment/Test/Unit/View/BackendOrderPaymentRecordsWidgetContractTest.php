@@ -50,4 +50,29 @@ final class BackendOrderPaymentRecordsWidgetContractTest extends TestCase
         self::assertStringContainsString('@widget.default_injections', $source);
         self::assertStringContainsString('data-testid="backend-order-payment-records"', $source);
     }
+
+    public function testWidgetTemplateShowsMethodIconAndFourColorStatusChip(): void
+    {
+        $root = dirname(__DIR__, 3);
+        $source = (string)file_get_contents(
+            $root . '/view/templates/Backend/widgets/backend-order-payment-records.phtml'
+        );
+        $chip = (string)file_get_contents(
+            $root . '/view/templates/Backend/partials/outcome-chip.phtml'
+        );
+
+        self::assertStringContainsString('BackendPaymentOutcomeChip', $source);
+        self::assertStringContainsString('partials/outcome-chip.phtml', $source);
+        self::assertStringContainsString('payment-record-method-icon', $source);
+        self::assertStringContainsString('payment-record-status-chip', $source);
+        self::assertStringContainsString('method_icon_url', $source);
+        self::assertStringContainsString('method_label', $source);
+        self::assertStringNotContainsString(
+            'data-w-background="success"><?= $esc((string)($payment[\'status\'] ?? \'\'))',
+            $source
+        );
+
+        self::assertStringContainsString('data-tone=', $chip);
+        self::assertStringContainsString('check-circle', $chip);
+    }
 }

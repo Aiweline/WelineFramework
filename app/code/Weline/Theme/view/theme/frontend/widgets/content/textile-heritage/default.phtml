@@ -93,15 +93,26 @@ if ($brands === []) {
                 $canonical = $catalogByName[$name] ?? [];
                 $caption = trim((string)($brand['caption'] ?? ($canonical['caption'] ?? '')));
                 $captionEnglish = trim((string)($brand['caption_en'] ?? ($canonical['caption_en'] ?? $caption)));
-                if ($caption !== '' && ($caption === $name || $caption === (string)($canonical['caption'] ?? ''))) {
-                    $caption = $translateDefaultCopy($caption, $captionEnglish);
+                if ($name !== '') {
+                    $name = $translateDefaultCopy($name, $captionEnglish !== '' ? $captionEnglish : $name);
+                }
+                if ($caption !== '') {
+                    $caption = $translateDefaultCopy($caption, $captionEnglish !== '' ? $captionEnglish : $caption);
                 }
                 $image = LegacyMediaUrl::sanitize($brand['image'] ?? ($canonical['image'] ?? ''));
                 $link = LegacyMediaUrl::sanitize($brand['link'] ?? ($canonical['link'] ?? ''));
                 $sourceUrl = LegacyMediaUrl::sanitize($brand['source_url'] ?? ($canonical['source_url'] ?? ''));
                 $licenseUrl = LegacyMediaUrl::sanitize($brand['license_url'] ?? ($canonical['license_url'] ?? ''));
-                $objectTitle = trim((string)($brand['object_title'] ?? ($canonical['object_title'] ?? $name)));
-                $creator = trim((string)($brand['creator'] ?? ($canonical['creator'] ?? '')));
+                $objectTitleSource = trim((string)($brand['object_title'] ?? ($canonical['object_title'] ?? $name)));
+                $objectTitleEn = trim((string)($brand['object_title_en'] ?? ($canonical['object_title_en'] ?? $objectTitleSource)));
+                $objectTitle = $objectTitleSource !== ''
+                    ? $translateDefaultCopy($objectTitleSource, $objectTitleEn !== '' ? $objectTitleEn : $objectTitleSource)
+                    : '';
+                $creatorSource = trim((string)($brand['creator'] ?? ($canonical['creator'] ?? '')));
+                $creatorEn = trim((string)($brand['creator_en'] ?? ($canonical['creator_en'] ?? $creatorSource)));
+                $creator = $creatorSource !== ''
+                    ? $translateDefaultCopy($creatorSource, $creatorEn !== '' ? $creatorEn : $creatorSource)
+                    : '';
                 $collection = trim((string)($brand['collection'] ?? ($canonical['collection'] ?? '')));
                 $license = trim((string)($brand['license'] ?? ($canonical['license'] ?? '')));
                 if ($name === '' || $image === '') {

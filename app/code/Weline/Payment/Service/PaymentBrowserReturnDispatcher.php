@@ -246,6 +246,9 @@ final class PaymentBrowserReturnDispatcher
             $transaction->setData(PaymentTransaction::schema_fields_PAID_AT, date('Y-m-d H:i:s'));
         }
         $transaction->save();
+        if ($result->getStatus() === PaymentResult::STATUS_PAID) {
+            $this->ensureCaptureReader($transaction);
+        }
 
         try {
             /** @var \Weline\Payment\Api\PaymentExpressFacadeInterface $expressFacade */
@@ -279,6 +282,17 @@ final class PaymentBrowserReturnDispatcher
         $this->notifyOrderPaidFromTransaction($transaction);
 
         return $this->landingOrchestrator->decide($transaction);
+    }
+
+    private function ensureCaptureReader(PaymentTransaction $transaction): void
+    {
+        try {
+            /** @var PaymentCaptureReaderEnsureService $ensure */
+            $ensure = $this->objectManager->getInstance(PaymentCaptureReaderEnsureService::class);
+            $ensure->ensureFromTransaction($transaction);
+        } catch (\Throwable) {
+            // Reader 补写失败不得阻断已捕获支付。
+        }
     }
 
     private function notifyOrderPaidFromTransaction(PaymentTransaction $transaction): void

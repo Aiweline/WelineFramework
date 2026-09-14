@@ -33,6 +33,13 @@ moduleDescribe(test, MODULE, 'Weline_Order 后台订单管理富信息', () => {
       await expect(page).toHaveURL(new RegExp(`[?&]id=${ORDER_ID}\\b`));
       await expect(page.locator('body')).toContainText(/管理订单|订单摘要/);
 
+      await expect(page.getByTestId('order-status-flow')).toBeVisible({ timeout: 20000 });
+      await expect(page.getByTestId('order-status-flow-steps')).toBeVisible();
+      const flowBox = await page.getByTestId('order-status-flow').boundingBox();
+      const summaryBox = await page.getByTestId('order-edit-summary').boundingBox();
+      expect(flowBox && summaryBox).toBeTruthy();
+      expect(flowBox.y).toBeLessThan(summaryBox.y);
+
       await expect(page.getByTestId('order-edit-summary')).toBeVisible({ timeout: 20000 });
       await expect(page.getByTestId('order-edit-summary-grid')).toBeVisible();
       await expect(page.getByTestId('order-edit-totals')).toBeVisible();

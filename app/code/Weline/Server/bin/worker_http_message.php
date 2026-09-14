@@ -35,7 +35,7 @@ declare(strict_types=1);
 function wlsParseHttpRequestFrame(
     string $buffer,
     int $maxHeaderBytes = 65536,
-    int $maxBodyBytes = 16777216,
+    int $maxBodyBytes = 536870912,
 ): array {
     $bufferLength = \strlen($buffer);
     $maxHeaderBytes = \max(1024, $maxHeaderBytes);

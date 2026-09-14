@@ -16,6 +16,9 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 #[Table(comment: 'Checkout freeze session')]
 #[Index(name: 'uk_checkout_session_token', columns: ['quote_token'], type: 'UNIQUE')]
 #[Index(name: 'idx_checkout_session_state', columns: ['state', 'expires_at'])]
+#[Index(name: 'idx_checkout_session_fingerprint', columns: ['cart_fingerprint', 'state'])]
+#[Index(name: 'idx_checkout_session_error', columns: ['error_code'])]
+#[Index(name: 'idx_checkout_session_entry', columns: ['checkout_entry'])]
 class CheckoutSession extends Model
 {
     public const STATE_QUOTED = 'quoted';
@@ -62,6 +65,24 @@ class CheckoutSession extends Model
 
     #[Col(type: 'text', nullable: true, comment: 'Frozen JSON payload')]
     public const schema_fields_PAYLOAD_JSON = 'payload_json';
+
+    #[Col(type: 'varchar', length: 64, nullable: true, comment: 'Cart identity fingerprint')]
+    public const schema_fields_CART_FINGERPRINT = 'cart_fingerprint';
+
+    #[Col(type: 'varchar', length: 32, nullable: true, default: 'unknown', comment: 'Checkout entry: checkout|express|quick_buy|helppay')]
+    public const schema_fields_CHECKOUT_ENTRY = 'checkout_entry';
+
+    #[Col(type: 'varchar', length: 64, nullable: true, comment: 'Latest checkout error code')]
+    public const schema_fields_ERROR_CODE = 'error_code';
+
+    #[Col(type: 'varchar', length: 255, nullable: true, comment: 'Latest checkout error message')]
+    public const schema_fields_ERROR_MESSAGE = 'error_message';
+
+    #[Col(type: 'text', nullable: true, comment: 'Latest checkout error snapshot JSON')]
+    public const schema_fields_ERROR_SNAPSHOT_JSON = 'error_snapshot_json';
+
+    #[Col(type: 'datetime', nullable: true, comment: 'Latest checkout error time')]
+    public const schema_fields_ERROR_AT = 'error_at';
 
     #[Col(type: 'datetime', nullable: false, default: 'CURRENT_TIMESTAMP', comment: 'Created')]
     public const schema_fields_CREATED_AT = 'created_at';

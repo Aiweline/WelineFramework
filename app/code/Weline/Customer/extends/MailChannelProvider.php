@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Customer\Extends;
 
 use Weline\Smtp\Api\MailChannelProviderInterface;
+use Weline\Smtp\Service\MailTemplateDefaultLocales;
 
 class MailChannelProvider implements MailChannelProviderInterface
 {
@@ -20,18 +21,7 @@ class MailChannelProvider implements MailChannelProviderInterface
                     ['code' => 'reset_url', 'label' => __('重置链接'), 'sample' => 'https://example.com/reset?token=preview'],
                     ['code' => 'customer_email', 'label' => __('客户邮箱'), 'sample' => 'user@example.com'],
                 ],
-                'default_templates' => [
-                    [
-                        'locale' => 'zh_Hans_CN',
-                        'subject_file' => 'view/email/password_reset/zh_Hans_CN.subject.txt',
-                        'body_file' => 'view/email/password_reset/zh_Hans_CN.html',
-                    ],
-                    [
-                        'locale' => 'en_US',
-                        'subject_file' => 'view/email/password_reset/en_US.subject.txt',
-                        'body_file' => 'view/email/password_reset/en_US.html',
-                    ],
-                ],
+                'default_templates' => MailTemplateDefaultLocales::fileEntries('password_reset'),
             ],
         ];
     }

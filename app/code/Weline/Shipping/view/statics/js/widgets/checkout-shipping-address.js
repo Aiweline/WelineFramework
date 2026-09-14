@@ -6,7 +6,34 @@
         return null;
     }
     if (root.getAttribute('data-shipping-mounted') === '1') {
-        return window.WelineShippingCheckoutAddress || null;
+        var existingApi = window.WelineShippingCheckoutAddress;
+        if (existingApi && existingApi.root === root && typeof existingApi.syncChangeAddressLabel === 'function') {
+            existingApi.syncChangeAddressLabel(root.getAttribute('data-mode') || 'collapsed');
+            return existingApi;
+        }
+        // Fallback: isolation modal may set data-session-isolation after first mount.
+        var btn = root.querySelector('[data-change-address]');
+        var isolated = root.getAttribute('data-session-isolation') === '1'
+            || !!(root.closest && root.closest('[data-session-isolation="1"]'));
+        var hasSaved = root.getAttribute('data-has-saved') === '1'
+            || root.querySelectorAll('[data-address-card]').length > 0;
+        var picking = (root.getAttribute('data-mode') || '') === 'picking';
+        var multi = (parseInt(root.getAttribute('data-address-count') || '0', 10) || 0) > 1
+            || root.querySelectorAll('[data-address-card]').length > 1;
+        if (btn && (picking || multi || (isolated && hasSaved))) {
+            btn.hidden = false;
+            if (!picking) {
+                btn.textContent = (function () {
+                    try {
+                        var i18n = JSON.parse(root.getAttribute('data-i18n') || '{}') || {};
+                        return i18n.change_address || '更换地址';
+                    } catch (e) {
+                        return '更换地址';
+                    }
+                })();
+            }
+        }
+        return existingApi || null;
     }
     root.setAttribute('data-shipping-mounted', '1');
 
@@ -63,9 +90,11 @@
             return;
         }
         var picking = next === 'picking';
-        var multi = (parseInt(root.getAttribute('data-address-count') || '0', 10) || 0) > 1
-            || root.querySelectorAll('[data-address-card]').length > 1;
-        btn.hidden = !multi && !picking;
+        var hasSaved = text(root.getAttribute('data-has-saved')) === '1'
+            || root.querySelectorAll('[data-address-card]').length > 0;
+        // 有已存地址即可「更换地址」进入 picking 并拉全量列表（SSR 常只渲染已选卡）。
+        var showChange = picking || hasSaved;
+        btn.hidden = !showChange;
         btn.textContent = picking
             ? t('done_change', '收起地址列表')
             : t('change_address', '更换地址');
@@ -107,11 +136,59 @@
         setMode('collapsed');
     }
 
-    async function openAddressPicker() {
-        setMode('picking');
-        if (text(root.getAttribute('data-list-loaded')) === '1') {
+    function collectAddressesFromCards() {
+        var out = [];
+        root.querySelectorAll('[data-address-card]').forEach(function (card) {
+            var payload = {};
+            try {
+                payload = JSON.parse(card.getAttribute('data-address-json') || '{}') || {};
+            } catch (e) {
+                payload = {};
+            }
+            var id = text(payload.id || card.getAttribute('data-address-id'));
+            if (id === '') {
+                return;
+            }
+            payload.id = id;
+            payload.is_selected = card.classList.contains('is-selected');
+            out.push(payload);
+        });
+        return out;
+    }
+
+    function upsertLocalSavedAddress(localPayload) {
+        var id = text(localPayload && localPayload.id);
+        if (id === '') {
             return;
         }
+        var merged = collectAddressesFromCards();
+        var found = false;
+        merged.forEach(function (row) {
+            if (text(row.id) === id) {
+                Object.keys(localPayload).forEach(function (key) {
+                    row[key] = localPayload[key];
+                });
+                row.is_selected = true;
+                found = true;
+            } else {
+                row.is_selected = false;
+            }
+        });
+        if (!found) {
+            merged.push(Object.assign({}, localPayload, {is_selected: true}));
+        }
+        renderSavedAddresses({
+            addresses: merged,
+            selected: localPayload,
+            checkout_address: localPayload,
+        });
+        // 本地 upsert 后允许再点「更换地址」从服务端刷新完整地址簿（不污染结账会话）。
+        root.setAttribute('data-list-loaded', '0');
+        syncChangeAddressLabel(mode());
+    }
+
+    async function openAddressPicker() {
+        setMode('picking');
         var btn = root.querySelector('[data-change-address]');
         if (btn) {
             btn.disabled = true;
@@ -126,9 +203,23 @@
                 root.setAttribute('data-list-loaded', '1');
                 return;
             }
-            var result = await api.getDeliveryContext({}, {silent: true});
+            // 每次进入 picking 都拉全量地址簿（含其它国家），避免仅当前配送国 1 条时误以为「没有其它地址」。
+            var result = await api.getDeliveryContext({ list_all_addresses: true }, {silent: true});
             var ctx = (result && (result.data || result)) || {};
             if (Array.isArray(ctx.addresses) && ctx.addresses.length) {
+                // 隔离弹窗：合并本地未入库卡，避免「更换地址」刷新冲掉本单刚编辑的地址。
+                if (isSessionIsolated()) {
+                    var serverIds = {};
+                    ctx.addresses.forEach(function (row) {
+                        serverIds[text(row.id || row.delivery_address_id || '')] = true;
+                    });
+                    collectAddressesFromCards().forEach(function (local) {
+                        var lid = text(local.id);
+                        if (lid !== '' && !serverIds[lid] && lid.indexOf('local_') === 0) {
+                            ctx.addresses.push(Object.assign({}, local, {is_selected: false}));
+                        }
+                    });
+                }
                 renderSavedAddresses(ctx);
             }
             root.setAttribute('data-list-loaded', '1');
@@ -1085,14 +1176,8 @@
             };
             markSelected(localId);
             fillShipping(localPayload);
-            var cardsHost = savedBox && savedBox.querySelector('.w-shipping-checkout-address__cards');
-            if (cardsHost) {
-                renderSavedAddresses({
-                    addresses: [Object.assign({}, localPayload, {is_selected: true})],
-                    selected: localPayload,
-                    checkout_address: localPayload,
-                });
-            }
+            // Upsert into existing cards — do not wipe the book (that hid「更换地址」).
+            upsertLocalSavedAddress(Object.assign({}, localPayload, {is_selected: true}));
             if (savedBox) {
                 savedBox.hidden = false;
             }
@@ -1303,9 +1388,9 @@
         bootAddress();
     }
 
-    root.setAttribute('data-shipping-js-rev', '20260914-quote-selected-mount');
+    root.setAttribute('data-shipping-js-rev', '20260914-picker-all-addr1');
     var api = {
-        rev: '20260914-quote-selected-mount',
+        rev: '20260914-picker-all-addr1',
         root: root,
         mount: mount,
         applyFieldErrors: applyFieldErrors,
@@ -1317,13 +1402,14 @@
         collapseAddressList: collapseAddressList,
         resolveQuoteAddress: resolveQuoteAddress,
         syncFormFromSelectedCard: syncFormFromSelectedCard,
+        syncChangeAddressLabel: syncChangeAddressLabel,
     };
     window.WelineShippingCheckoutAddress = api;
     return api;
     }
 
     window.WelineShippingCheckoutAddress = {
-        rev: '20260914-quote-selected-mount',
+        rev: '20260914-picker-all-addr1',
         root: null,
         mount: mount,
         applyFieldErrors: function () {},
@@ -1335,6 +1421,7 @@
         collapseAddressList: function () {},
         resolveQuoteAddress: function () { return null; },
         syncFormFromSelectedCard: function () { return false; },
+        syncChangeAddressLabel: function () {},
     };
 
     var existing = document.querySelector('[data-shipping-checkout-address]');

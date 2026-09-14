@@ -1,0 +1,12 @@
+<?php
+/**
+ * Order 后台列表发货槽默认实现：委托配送发货工作台部件模板。
+ *
+ * @hook-priority 100
+ * @hook-sort-order 0
+ * @hook-solo true
+ */
+
+/** @var \Weline\Framework\View\Template $this */
+
+echo $this->fetch('Weline_Shipping::templates/Backend/widgets/backend-order-list-shipping.phtml');

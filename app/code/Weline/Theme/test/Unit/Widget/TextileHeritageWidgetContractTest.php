@@ -37,6 +37,8 @@ final class TextileHeritageWidgetContractTest extends TestCase
             self::assertMatchesRegularExpression('/\.(?:jpe?g|png|webp)$/i', $image);
             self::assertStringStartsWith('https://', (string)$item['source_url']);
             self::assertNotSame('', trim((string)$item['object_title']));
+            self::assertNotSame('', trim((string)($item['object_title_en'] ?? '')));
+            self::assertArrayHasKey('creator_en', $item);
             self::assertNotSame('', trim((string)$item['collection']));
             self::assertNotSame('', trim((string)$item['license']));
             self::assertStringStartsWith('https://', (string)$item['license_url']);
@@ -54,6 +56,8 @@ final class TextileHeritageWidgetContractTest extends TestCase
         self::assertStringContainsString('@widget.code {textile-heritage}', $template);
         self::assertStringContainsString('weline-code="<?= $esc($scope->code) ?>"', $template);
         self::assertStringContainsString('data-testid="textile-heritage"', $template);
+        self::assertStringContainsString('object_title_en', $template);
+        self::assertStringContainsString('creator_en', $template);
         self::assertStringContainsString('decoding="async"', $template);
         self::assertStringContainsString('heritage-source', $template);
         self::assertStringNotContainsString('<script', $template);

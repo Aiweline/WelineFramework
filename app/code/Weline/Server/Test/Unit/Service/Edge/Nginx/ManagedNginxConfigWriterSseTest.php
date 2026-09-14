@@ -50,6 +50,11 @@ final class ManagedNginxConfigWriterSseTest extends TestCase
             $config,
             'Reload recovery must preserve long-lived streams for the full drain window.',
         );
+        self::assertStringContainsString(
+            'client_max_body_size 512m;',
+            $config,
+            'Managed nginx must raise the default 1m body cap for MediaManager uploads.',
+        );
 
         $sseStart = \strpos($config, 'location = /api/framework/stream {');
         $genericStart = \strpos($config, 'location / {');

@@ -18,6 +18,7 @@
 
 use Weline\B2B\Service\B2BPaymentAssetPolicyProvider;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Theme\Helper\WidgetI18n;
 
 $creditEnabled = true;
 $minCashPercent = B2BPaymentAssetPolicyProvider::DEFAULT_MIN_CASH_DEPOSIT_PERCENT;
@@ -37,8 +38,9 @@ if (!$creditEnabled) {
 $minCashPercent = max(0, min(100, (int)$minCashPercent));
 $maxCreditPercent = max(0, 100 - $minCashPercent);
 
+$t = static fn (string $source): string => WidgetI18n::label($source);
 $rawTitle = trim((string)($this->getData('title') ?? ''));
-$title = $rawTitle !== '' ? (string)__($rawTitle) : (string)__('批发信用');
+$title = $rawTitle !== '' ? $t($rawTitle) : $t('批发信用');
 $surfaceRaw = strtolower(trim((string)($this->getData('surface') ?? 'checkout')));
 $surface = in_array($surfaceRaw, ['checkout', 'mini-cart', 'cart'], true) ? $surfaceRaw : 'checkout';
 $inputId = 'b2b-credit-apply-input-' . preg_replace('/[^a-z0-9\-]+/', '-', $surface);
@@ -53,16 +55,16 @@ $esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES,
      data-testid-credit="b2b-checkout-credit"
      data-weline-load="b2bCheckoutTob"
      data-mini-cart-tab-label="<?= $esc($title) ?>"
-     data-i18n-toc-unavailable="<?= $esc((string)__('当前是零售结账，批发信用只能在「批发车」使用。请先到购物车切换到批发车，再回来结账。')) ?>"
-     data-i18n-quote-missing="<?= $esc((string)__('暂时无法获取批发信用报价，请刷新后重试')) ?>"
-     data-i18n-quote-loading="<?= $esc((string)__('正在获取批发信用报价…')) ?>"
-     data-i18n-reason-disabled="<?= $esc((string)__('站点未开启批发信用额度')) ?>"
-     data-i18n-reason-no-balance="<?= $esc((string)__('额度不够：暂无可用批发信用余额')) ?>"
-     data-i18n-reason-fx="<?= $esc((string)__('暂无汇率，无法使用批发信用')) ?>"
-     data-i18n-reason-na="<?= $esc((string)__('暂无法估算本期定金，无法用批发信用抵扣')) ?>"
-     data-i18n-reason-login="<?= $esc((string)__('请先登录后再使用批发信用')) ?>"
-     data-i18n-reason-zero="<?= $esc((string)__('额度不够：本单可抵扣额度为 0')) ?>"
-     data-i18n-reason-quote-failed="<?= $esc((string)__('暂时无法获取批发信用报价，请刷新后重试')) ?>">
+     data-i18n-toc-unavailable="<?= $esc($t('当前是零售结账，批发信用只能在「批发车」使用。请先到购物车切换到批发车，再回来结账。')) ?>"
+     data-i18n-quote-missing="<?= $esc($t('暂时无法获取批发信用报价，请刷新后重试')) ?>"
+     data-i18n-quote-loading="<?= $esc($t('正在获取批发信用报价…')) ?>"
+     data-i18n-reason-disabled="<?= $esc($t('站点未开启批发信用额度')) ?>"
+     data-i18n-reason-no-balance="<?= $esc($t('额度不够：暂无可用批发信用余额')) ?>"
+     data-i18n-reason-fx="<?= $esc($t('暂无汇率，无法使用批发信用')) ?>"
+     data-i18n-reason-na="<?= $esc($t('暂无法估算本期定金，无法用批发信用抵扣')) ?>"
+     data-i18n-reason-login="<?= $esc($t('请先登录后再使用批发信用')) ?>"
+     data-i18n-reason-zero="<?= $esc($t('额度不够：本单可抵扣额度为 0')) ?>"
+     data-i18n-reason-quote-failed="<?= $esc($t('暂时无法获取批发信用报价，请刷新后重试')) ?>">
     <label class="w-b2b-checkout-credit__label" data-mini-cart-tab-label-source>
         <?= $esc($title) ?>
     </label>
@@ -74,25 +76,25 @@ $esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES,
                data-size="sm"
                data-testid="b2b-credit-blurb"
                style="--w-mb:var(--weline-space-2);">
-                <lang>只抵本期定金（约商品小计 30%），不抵尾款。现金定金须保留至少</lang>
+                <?= $esc($t('只抵本期定金（约商品小计 30%），不抵尾款。现金定金须保留至少')) ?>
                 <strong data-testid="b2b-credit-min-cash-percent"><?= $esc((string)$minCashPercent) ?>%</strong>
-                <lang>（信用最多可抵定金的</lang>
+                <?= $esc($t('（信用最多可抵定金的')) ?>
                 <strong><?= $esc((string)$maxCreditPercent) ?>%</strong>
-                <lang>）。额度用完同档不自动回补。</lang>
+                <?= $esc($t('）。额度用完同档不自动回补。')) ?>
             </p>
             <div class="w-b2b-checkout-credit__row">
                 <label class="w-b2b-checkout-credit__toggle">
                     <input type="checkbox"
                            data-b2b-credit-toggle
                            data-testid="b2b-credit-toggle">
-                    <span><lang>使用批发信用抵扣本期定金</lang></span>
+                    <span><?= $esc($t('使用批发信用抵扣本期定金')) ?></span>
                 </label>
                 <button type="button"
                         class="w-b2b-checkout-credit__help"
                         data-w-component="tooltip"
                         data-b2b-credit-help
                         data-testid="b2b-credit-help"
-                        aria-label="<?= $esc((string)__('批发信用说明')) ?>">?</button>
+                        aria-label="<?= $esc($t('批发信用说明')) ?>">?</button>
             </div>
             <?php /* 就地原因：勾选正下方；不可用时由 JS 写入，禁止藏到页签外 */ ?>
             <p class="w-text w-b2b-checkout-credit__reason"
@@ -110,7 +112,7 @@ $esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES,
                data-testid="b2b-credit-fx"
                hidden></p>
             <div class="w-b2b-checkout-credit__amount">
-                <label class="w-b2b-checkout-credit__amount-label" for="<?= $esc($inputId) ?>"><lang>抵扣额度</lang></label>
+                <label class="w-b2b-checkout-credit__amount-label" for="<?= $esc($inputId) ?>"><?= $esc($t('抵扣额度')) ?></label>
                 <div class="w-b2b-checkout-credit__amount-row">
                     <input id="<?= $esc($inputId) ?>"
                            type="text"
@@ -132,8 +134,8 @@ $esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES,
             <p class="w-text" data-tone="muted" data-b2b-credit-hint data-testid="b2b-credit-hint" hidden></p>
             <p class="w-text w-b2b-checkout-credit__cash" data-b2b-credit-cash data-testid="b2b-credit-cash" hidden></p>
             <div class="w-b2b-checkout-credit__links">
-                <a class="w-text" data-tone="muted" href="/cart" data-b2b-credit-switch-cart data-testid="b2b-credit-switch-cart" hidden><lang>去购物车切换批发车</lang></a>
-                <a class="w-text" data-tone="muted" href="/faq/b2b-wholesale" data-b2b-credit-faq data-testid="b2b-credit-faq"><lang>了解批发信用规则</lang></a>
+                <a class="w-text" data-tone="muted" href="/cart" data-b2b-credit-switch-cart data-testid="b2b-credit-switch-cart" hidden><?= $esc($t('去购物车切换批发车')) ?></a>
+                <a class="w-text" data-tone="muted" href="/faq/b2b-wholesale" data-b2b-credit-faq data-testid="b2b-credit-faq"><?= $esc($t('了解批发信用规则')) ?></a>
             </div>
             <template data-b2b-credit-tooltip-body></template>
         </div>

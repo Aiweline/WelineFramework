@@ -185,6 +185,9 @@ class FulfillmentService
             'order' => $order,
             'order_id' => $orderId,
             'shipment' => $shipment,
+            'notify_customer' => ($shipmentData['notify_customer'] ?? true) !== false,
+            'tracking_number' => (string) ($shipmentData['tracking_number'] ?? ''),
+            'carrier' => (string) ($shipmentData['carrier'] ?? ''),
         ]);
         
         return $shipment;

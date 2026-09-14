@@ -57,22 +57,24 @@ final class ShippingServiceProfileCatalogProvider implements StorefrontShippingP
             return null;
         }
         $code = trim($profileCode);
+        // Return Chinese source keys; PDP translates via WidgetI18n (path locale).
+        // Translating here with __() can bake zh_Hans_CN when Phrase lang lags /{locale}/.
         if ($code === '' || $code === ShippingProfile::SEED_GENERAL) {
             return [
                 'badge' => null,
-                'note' => (string)__('运费以结算页为准'),
+                'note' => '运费以结算页为准',
             ];
         }
         if ($code === ShippingProfile::SEED_HEAVY) {
             return [
-                'badge' => (string)__('重货'),
-                'note' => (string)__('本商品使用重货配送方案，运费以结算页为准'),
+                'badge' => '重货',
+                'note' => '本商品使用重货配送方案，运费以结算页为准',
             ];
         }
 
         return [
             'badge' => null,
-            'note' => (string)__('运费以结算页为准'),
+            'note' => '运费以结算页为准',
         ];
     }
 }

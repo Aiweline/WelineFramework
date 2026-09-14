@@ -50,6 +50,7 @@ final class CategoryAdminSurfaceContractTest extends TestCase
             'data-testid="catalog-category-banner"',
             'data-testid="catalog-category-summary"',
             'data-testid="catalog-category-description"',
+            'data-testid="catalog-category-description-local"',
             'name="image"',
             'name="banner"',
             'name="summary"',

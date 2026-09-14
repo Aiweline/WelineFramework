@@ -199,7 +199,10 @@ $renderVarButtons = static function (array $list) use ($h): void {
         </div>
         <script>
             (function () {
-                var localeRoot = document.getElementById('smtp-tpl-locale');
+                var localeBar = document.querySelector('[data-testid="smtp-template-edit-locale"]');
+                var localeRoot = (localeBar && localeBar.querySelector('[data-w-component="language-select"]'))
+                    || document.getElementById('smtp-tpl-locale_wrapper')
+                    || document.getElementById('smtp-tpl-locale');
                 var storageInput = document.getElementById('smtp-tpl-storage-scope');
                 function scopeField() {
                     var el = document.getElementById('smtp-template-edit-scope');
@@ -215,9 +218,10 @@ $renderVarButtons = static function (array $list) use ($h): void {
                     if (localeRoot.matches && (localeRoot.matches('input[name="locale"]') || localeRoot.matches('select[name="locale"]'))) {
                         return localeRoot;
                     }
-                    return localeRoot.querySelector('input[type="hidden"][name="locale"]')
-                        || localeRoot.querySelector('input[name="locale"]')
-                        || localeRoot.querySelector('select[name="locale"]');
+                    return localeRoot.querySelector('select[data-w-language-field]')
+                        || localeRoot.querySelector('select[name="locale"]')
+                        || localeRoot.querySelector('input[type="hidden"][name="locale"]')
+                        || localeRoot.querySelector('input[name="locale"]');
                 }
                 function syncStorageScope() {
                     var field = scopeField();
@@ -257,8 +261,12 @@ $renderVarButtons = static function (array $list) use ($h): void {
                 if (scopeInput) {
                     scopeInput.addEventListener('change', go);
                 }
+                // language:select 在内部 select 上 dispatch change（bubbles）；挂 wrapper 以免 id 仅命中 _wrapper/-field
+                if (localeRoot) {
+                    localeRoot.addEventListener('change', go);
+                }
                 var localeInput = localeField();
-                if (localeInput) {
+                if (localeInput && localeInput !== localeRoot) {
                     localeInput.addEventListener('change', go);
                 }
                 var saveForm = document.getElementById('smtp-template-save-form');

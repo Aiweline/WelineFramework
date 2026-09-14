@@ -286,10 +286,17 @@
           shipBlock.hidden = true;
         } else if (methods.length === 0) {
           shipBlock.hidden = false;
+          var emptyMsg = text(data.shipping_empty_message)
+            || (data.missing_weight
+              ? '购物车商品缺少重量，无法计算运费。请联系客服协助处理后再试。'
+              : '')
+            || text(data.embargo_message)
+            || '该地区暂不支持配送';
           if (shipEmpty) {
             shipEmpty.hidden = false;
+            shipEmpty.textContent = emptyMsg;
           }
-          setStatus(text(data.embargo_message) || '该地区暂不支持配送', true);
+          setStatus(emptyMsg, true);
         } else if (shipList) {
           shipBlock.hidden = false;
           if (shipEmpty) {

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Faq\Service;
 
+use Weline\Theme\Helper\WidgetI18n;
+
 final class FaqSeoFactsBuilder
 {
     public function __construct(
@@ -18,17 +20,17 @@ final class FaqSeoFactsBuilder
     {
         return [
             'page_type' => 'faq',
-            'title' => (string)__('帮助中心 | 订单物流退换与支付指南'),
-            'description' => (string)__('查找订单进度、物流配送、退换货、支付发票与账户问题的自助指南，快速解决汉服购物常见疑问，支持中英文浏览。'),
+            'title' => WidgetI18n::label('帮助中心 | 订单物流退换与支付指南'),
+            'description' => WidgetI18n::label('查找订单进度、物流配送、退换货、支付发票与账户问题的自助指南，快速解决汉服购物常见疑问，支持中英文浏览。'),
             'canonical_url' => $canonical,
             'robots' => 'index,follow',
             // Share card for FAQ hub; HeadRenderer emits og:image / twitter:image when set.
             'image' => '/pub/media/websites/default/default/brand/yunshang-logo-20260903.png',
-            'image_alt' => (string)__('帮助中心分享预览图'),
+            'image_alt' => WidgetI18n::label('帮助中心分享预览图'),
             'faqs' => $this->hub->seoFaqs(),
             'breadcrumbs' => [
-                ['name' => (string)__('首页'), 'url' => '/'],
-                ['name' => (string)__('帮助中心'), 'url' => $canonical],
+                ['name' => WidgetI18n::label('首页'), 'url' => '/'],
+                ['name' => WidgetI18n::label('帮助中心'), 'url' => $canonical],
             ],
             'sitemap' => [
                 'include' => true,
@@ -47,7 +49,7 @@ final class FaqSeoFactsBuilder
     {
         $title = trim((string)($page['title'] ?? ''));
         if ($title === '') {
-            $title = (string)__('帮助文章');
+            $title = WidgetI18n::label('帮助文章');
         }
 
         return [
@@ -57,8 +59,8 @@ final class FaqSeoFactsBuilder
             'canonical_url' => $canonical,
             'robots' => 'index,follow',
             'breadcrumbs' => [
-                ['name' => (string)__('首页'), 'url' => '/'],
-                ['name' => (string)__('帮助中心'), 'url' => '/faq'],
+                ['name' => WidgetI18n::label('首页'), 'url' => '/'],
+                ['name' => WidgetI18n::label('帮助中心'), 'url' => '/faq'],
                 ['name' => $title, 'url' => $canonical],
             ],
             'sitemap' => [

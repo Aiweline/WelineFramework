@@ -4309,7 +4309,19 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
     const headerMoreCategoriesLabel = <?= json_encode($headerLabel('更多分类'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
     const headerMoreLabel = <?= json_encode($headerLabel('更多'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
     const headerViewAllLabel = <?= json_encode($headerLabel('查看全部'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
-    const headerBrowseCategoryLabel = <?= json_encode($headerLabel('浏览相关商品与配件'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+    const headerBrowseCategoryPattern = <?= json_encode($headerLabel('浏览 %{1} 相关商品与配件'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+
+    function formatBrowseCategoryDesc(label) {
+        var pattern = String(headerBrowseCategoryPattern || '');
+        var safeLabel = String(label || '').trim();
+        if (pattern.indexOf('%{1}') !== -1) {
+            return pattern.split('%{1}').join(safeLabel);
+        }
+        if (pattern.indexOf('%s') !== -1) {
+            return pattern.replace('%s', safeLabel);
+        }
+        return safeLabel !== '' ? pattern : pattern;
+    }
 
     function escapeHeaderHtml(value) {
         return String(value).replace(/[&<>"']/g, function(match) {
@@ -4632,12 +4644,13 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
                     return '/Weline/Theme/view/statics/images/storefront-placeholder/default.svg';
                 }
 
-                function appendLeafTab(label, href) {
+                function appendLeafTab(label, href, description) {
                     const newPanelId = panelId + '-panel-' + tabIndex;
                     const newTabId = panelId + '-tab-' + tabIndex;
                     const isActive = tabIndex === 0;
                     const sidebarImage = headerDemoImage((tabIndex + 1) * 11);
                     const cardImage = headerDemoImage((tabIndex + 1) * 17);
+                    const descText = String(description || '').trim() || formatBrowseCategoryDesc(label);
 
                     const wrap = document.createElement('li');
                     wrap.className = 'mega-menu-sidebar-item-wrap';
@@ -4677,7 +4690,7 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
                         + '</span>'
                         + '<span class="mega-menu-card__body">'
                         + '<span class="mega-menu-card__title">' + escapeHeaderHtml(label) + '</span>'
-                        + '<span class="mega-menu-card__desc">' + escapeHeaderHtml(headerBrowseCategoryLabel) + '</span>'
+                        + '<span class="mega-menu-card__desc">' + escapeHeaderHtml(descText) + '</span>'
                         + '</span></a></li></ul>';
                     panels.appendChild(panel);
                     tabIndex += 1;
@@ -4772,16 +4785,17 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
                     const link = item.querySelector(':scope > .category-link, :scope > .category-link-wrapper > .category-link');
                     const label = ((link && link.textContent) || '').trim() || headerMoreLabel;
                     const href = (link && link.getAttribute('href')) || '#';
+                    const description = (link && (link.getAttribute('data-category-description') || link.getAttribute('data-description'))) || '';
                     const sourceMega = item.querySelector(':scope > [data-mega-menu], :scope > .header-category-panel[data-mega-menu]');
 
                     // More = 展开被隐藏的顶层分类（L1），不把二级摊进侧栏
                     if (!sourceMega) {
-                        appendLeafTab(label, href);
+                        appendLeafTab(label, href, description);
                         return;
                     }
                     const sourceTabs = Array.from(sourceMega.querySelectorAll('.mega-menu-sidebar [data-mega-tab]'));
                     if (!sourceTabs.length) {
-                        appendLeafTab(label, href);
+                        appendLeafTab(label, href, description);
                         return;
                     }
                     appendTopLevelTab(label, href, sourceMega);

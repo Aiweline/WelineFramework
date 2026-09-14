@@ -1,4 +1,5 @@
 <?php
+use Weline\Theme\Helper\WidgetI18n;
 /** @var \Weline\Framework\View\Template $this */
 $checkoutPageSubtitle = (string)($this->getData('checkout_page_subtitle') ?? '');
 $copy = [
@@ -161,15 +162,15 @@ $copy = [
                     <strong data-discount-amount="">0.00</strong>
                 </div>
                 <div role="listitem" data-checkout-deposit-row hidden>
-                    <span><?= __('批发定金') ?></span>
+                    <span><?= WidgetI18n::label('批发定金') ?></span>
                     <strong data-deposit-amount="">0.00</strong>
                 </div>
                 <div role="listitem" data-checkout-credit-row hidden>
-                    <span><?= __('批发信用抵扣') ?></span>
+                    <span><?= WidgetI18n::label('批发信用抵扣') ?></span>
                     <strong data-credit-amount="">0.00</strong>
                 </div>
                 <div role="listitem" data-checkout-cod-fee-row hidden>
-                    <span><?= __('货到付款手续费') ?></span>
+                    <span><?= WidgetI18n::label('货到付款手续费') ?></span>
                     <strong data-cod-fee-amount="">0.00</strong>
                 </div>
                 <div class="weline-checkout__grand" role="listitem">
@@ -473,6 +474,7 @@ $copy = [
         color: inherit;
         font-size: 0.95em;
         line-height: 1.45;
+        unicode-bidi: isolate;
     }
     .weline-checkout__panel.is-method-blocked {
         border-color: var(--weline-theme-warning, var(--color-warning));
@@ -544,18 +546,19 @@ $copy = [
         justify-items: start;
     }
     .weline-checkout__payment-intro-text {
-        display: -webkit-box;
-        -webkit-box-orient: vertical;
-        -webkit-line-clamp: 2;
+        /* Avoid -webkit-box line-clamp: it reorders RTL punctuation to the visual start. */
+        display: block;
         overflow: hidden;
         margin: 0;
         color: var(--checkout-text-secondary);
         font-size: 13px;
         line-height: 1.45;
+        max-height: calc(1.45em * 2);
+        unicode-bidi: isolate;
     }
     .weline-checkout__payment-intro.is-expanded .weline-checkout__payment-intro-text {
         display: block;
-        -webkit-line-clamp: unset;
+        max-height: none;
         overflow: visible;
     }
     .weline-checkout__payment-intro-toggle {
@@ -985,6 +988,28 @@ $copy = [
     let activePaymentRecovery = null;
     let customerAddressPrefilled = false;
     const guestTokenStorageKey = 'weline.cart.guest_token';
+    function quoteTokenStorageKey() {
+        const site = window.site || {};
+        const websiteId = String(site.website_id || site.websiteId || '0');
+        return 'weline_checkout_quote_token_w' + websiteId;
+    }
+    function readStoredQuoteToken() {
+        try {
+            return text(window.sessionStorage.getItem(quoteTokenStorageKey())).trim();
+        } catch (error) {
+            return '';
+        }
+    }
+    function persistQuoteToken(token) {
+        const value = text(token).trim();
+        if (!value) {
+            return;
+        }
+        try {
+            window.sessionStorage.setItem(quoteTokenStorageKey(), value);
+        } catch (error) {
+        }
+    }
     let checkoutState = {
         currency: 'CNY',
         cart: {},
@@ -1962,11 +1987,13 @@ $copy = [
             guest_token: await ensureGuestToken(),
             cart_type: sellingMode,
             selling_mode: sellingMode,
+            quote_token: readStoredQuoteToken(),
         };
         if (pendingCouponCode) {
             getDataParams.coupon_code = pendingCouponCode;
         }
         const data = await api.getData(getDataParams);
+        persistQuoteToken(text(data && (data.quote_token || (data.data && data.data.quote_token))));
         if (root && data && data.cart && data.cart.cart_type) {
             root.setAttribute('data-cart-type', String(data.cart.cart_type).toLowerCase());
         }
@@ -2184,6 +2211,7 @@ $copy = [
             service_code: shippingMethod,
             payment_method: paymentMethod,
             guest_token: guestToken(),
+            quote_token: readStoredQuoteToken(),
             cart_type: checkoutCartType(),
             selling_mode: checkoutCartType(),
         });
@@ -2203,6 +2231,7 @@ $copy = [
         if (!quoteToken) {
             throw new Error(copy.load_failed);
         }
+        persistQuoteToken(quoteToken);
         if (window.WelineB2BCheckoutTob && typeof window.WelineB2BCheckoutTob.syncFromFrozen === 'function') {
             window.WelineB2BCheckoutTob.syncFromFrozen(frozen);
         }

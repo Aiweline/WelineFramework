@@ -10,12 +10,12 @@
 
 /*
  * PDP 购买槽布局（有分享/快捷购买时）：
- * 主购买（加购/结账）全宽竖排 → 次级两钮并排 → quiet 代付链。
- * Slot 子节点为 .widget-wrapper，故用 :has(.product-native-detail__secondary)（非直接子代）。
+ * 主购买（加购/结账）通栏；次级钮按文案定宽、flex 换行（瀑布流），禁止等宽两列挤换行。
+ * Slot 子节点为 .widget-wrapper，故用 :has(.product-native-detail__secondary)。
  */
 .product-native-detail__actions:has(.product-native-detail__secondary) {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--weline-space-2, var(--space-2, 0.5rem));
   align-items: stretch;
 }
@@ -30,15 +30,18 @@
   > .widget-wrapper:has(.product-native-detail__cart),
 .product-native-detail__actions:has(.product-native-detail__secondary)
   > .widget-wrapper:has(.w-helppay-cta--quiet) {
-  grid-column: 1 / -1;
+  flex: 1 1 100%;
   inline-size: 100%;
-  min-inline-size: 0;
+  min-inline-size: 100%;
+  max-inline-size: 100%;
 }
 
 .product-native-detail__actions:has(.product-native-detail__secondary)
   > .widget-wrapper:has(.product-native-detail__secondary) {
+  flex: 0 1 auto;
+  inline-size: auto;
   min-inline-size: 0;
-  inline-size: 100%;
+  max-inline-size: 100%;
 }
 
 .product-native-detail__actions:has(.product-native-detail__secondary)
@@ -48,24 +51,23 @@
 .product-native-detail__actions:has(.product-native-detail__secondary)
   .product-native-detail__quote {
   inline-size: 100%;
-  justify-self: stretch;
 }
 
 /*
- * PDP：分享 / 快捷购买 = 同族胶囊、次级描边，并排各占一列。
+ * PDP：分享 / 快捷购买 = 同族胶囊、次级描边；宽度随文案，单行不折字。
  */
 .product-native-detail__actions > .product-native-detail__secondary,
 .product-native-detail__secondary {
   appearance: none;
   -webkit-appearance: none;
-  display: flex;
+  display: inline-flex;
   box-sizing: border-box;
   min-block-size: 32px;
   align-items: center;
   justify-content: center;
-  justify-self: stretch;
-  inline-size: 100%;
+  inline-size: auto;
   max-inline-size: 100%;
+  width: auto;
   margin: 0;
   padding: 0 var(--weline-space-3, var(--space-3, 0.75rem));
   border: var(--weline-border-width, 1px) solid var(--color-primary, var(--weline-theme-primary));
@@ -75,6 +77,7 @@
   font: inherit;
   font-size: var(--weline-font-size-sm, 0.8125rem);
   line-height: 1.2;
+  white-space: nowrap;
   text-decoration: none;
   cursor: pointer;
   box-shadow: var(--shadow-sm, var(--weline-shadow-sm, none));
@@ -165,6 +168,48 @@
   border-block-start: var(--weline-border-width, 1px) solid var(--color-border, var(--weline-theme-border));
 }
 
+.w-helppay-pay-summary {
+  gap: var(--weline-space-4, var(--space-4));
+}
+
+.w-helppay-pay-summary .w-helppay-share-result__spec {
+  margin: 0;
+}
+
+.w-helppay-pay-summary__ship-to {
+  display: grid;
+  gap: var(--weline-space-1, var(--space-1, 0.25rem));
+  padding-block-start: var(--weline-space-1, var(--space-1, 0.25rem));
+}
+
+.w-helppay-pay-summary__ship-primary,
+.w-helppay-pay-summary__ship-secondary {
+  margin: 0;
+}
+
+.w-helppay-pay-summary__money {
+  display: grid;
+  gap: var(--weline-space-2, var(--space-2));
+  padding-block-start: var(--weline-space-3, var(--space-3));
+  border-block-start: var(--weline-border-width, 1px) solid var(--color-border, var(--weline-theme-border));
+}
+
+.w-helppay-pay-summary__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--weline-space-3, var(--space-3));
+}
+
+.w-helppay-pay-summary__row--total {
+  padding-block-start: var(--weline-space-2, var(--space-2));
+  border-block-start: var(--weline-border-width, 1px) solid var(--color-border, var(--weline-theme-border));
+}
+
+.w-helppay-pay-summary__row--total .w-helppay-panel__amount {
+  font-size: var(--weline-font-size-lg, 1.125rem);
+}
+
 .w-helppay-dialog {
   position: fixed;
   inset: 0;
@@ -203,7 +248,8 @@ dialog:has(> .w-helppay-dialog) {
 }
 
 .w-helppay-dialog__panel:has(.w-helppay-share-result),
-.w-helppay-dialog__panel:has([data-helppay-step="address-pick"]:not([hidden])) {
+.w-helppay-dialog__panel:has([data-helppay-step="address-pick"]:not([hidden])),
+.w-helppay-dialog__panel:has([data-helppay-step="payment"]:not([hidden])) {
   inline-size: min(42rem, calc(100vw - 2rem));
   padding: var(--weline-space-6, var(--space-6, 1.5rem));
 }
@@ -365,14 +411,48 @@ dialog:has(> .w-helppay-dialog) {
 }
 
 .w-helppay-dialog__actions {
-  display: grid;
-  gap: var(--weline-space-2, var(--space-2));
-  margin-block-start: var(--weline-space-1, var(--space-1));
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: var(--weline-space-3, var(--space-3));
+  margin-block-start: var(--weline-space-2, var(--space-2));
 }
 
-.w-helppay-dialog__primary {
-  inline-size: 100%;
+.w-helppay-dialog__actions > .w-button {
+  flex: 1 1 9.5rem;
   justify-content: center;
+  min-inline-size: min(100%, 8rem);
+}
+
+.w-helppay-dialog__actions > .w-button[data-variant="outline"] {
+  flex: 0 1 auto;
+  min-inline-size: 6.5rem;
+  font-weight: 550;
+  /* theme.css 未分层 .w-button 会压过 foundation @layer outline，此处显式弱化返回 */
+  background: transparent;
+  background-image: none;
+  border: var(--weline-border-width, 1px) solid var(--color-border-strong, var(--weline-theme-border-strong, var(--color-border, var(--weline-theme-border))));
+  color: var(--color-text-secondary, var(--weline-theme-text-muted, var(--weline-theme-text)));
+  box-shadow: none;
+  transform: none;
+}
+
+.w-helppay-dialog__actions > .w-button[data-variant="outline"]:hover,
+.w-helppay-dialog__actions > .w-button[data-variant="outline"]:focus-visible {
+  background: var(--color-surface-hover, var(--weline-theme-surface-hover, var(--color-bg-secondary, var(--weline-theme-surface-muted))));
+  color: var(--color-text-primary, var(--weline-theme-text));
+  border-color: var(--color-border-strong, var(--weline-theme-border-strong, var(--color-border)));
+  box-shadow: none;
+  transform: none;
+}
+
+.w-helppay-dialog__actions > .w-helppay-dialog__primary {
+  flex: 1 1 11rem;
+}
+
+.w-helppay-dialog__actions > .w-button:only-child {
+  flex: 1 1 100%;
+  inline-size: 100%;
 }
 
 .w-helppay-address-pick__body {
@@ -409,6 +489,145 @@ dialog:has(> .w-helppay-dialog) {
 .w-helppay-payer__billing [data-shipping-checkout-address],
 .w-helppay-payer__billing [data-helppay-billing-host] {
   display: block;
+}
+
+.w-helppay-payer__methods.weline-checkout__options {
+  display: grid;
+  gap: var(--weline-space-2, var(--space-2));
+  margin-top: var(--weline-space-3, var(--space-3));
+}
+
+.w-helppay-payer .weline-checkout__option {
+  display: grid;
+  gap: var(--weline-space-2, var(--space-2));
+  margin: 0;
+  padding: var(--weline-space-3, var(--space-3));
+  border: 1px solid var(--color-border, var(--weline-theme-border));
+  border-radius: var(--weline-radius-md, var(--radius-md, 0.5rem));
+  background: var(--color-surface, var(--weline-theme-surface));
+  color: var(--color-text-primary, var(--weline-theme-text));
+  cursor: pointer;
+}
+
+.w-helppay-payer .weline-checkout__option--payment {
+  grid-template-columns: 1.25rem 2.5rem minmax(0, 1fr);
+  align-items: start;
+  gap: var(--weline-space-2, var(--space-2));
+  min-height: 0;
+}
+
+.w-helppay-payer .weline-checkout__option--payment > input[type="radio"] {
+  margin: 0.375rem 0 0;
+}
+
+.w-helppay-payer .weline-checkout__option--payment:has(input:checked) {
+  border-color: var(--color-primary, var(--weline-theme-primary));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-primary, var(--weline-theme-primary)) 35%, transparent);
+}
+
+.w-helppay-payer .weline-checkout__payment-logo {
+  width: 2.5rem;
+  height: 1.75rem;
+  margin-top: 0.25rem;
+  object-fit: contain;
+  object-position: left center;
+}
+
+.w-helppay-payer .weline-checkout__payment-logo--empty {
+  display: block;
+  background: transparent;
+}
+
+.w-helppay-payer .weline-checkout__payment-body {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.w-helppay-payer .weline-checkout__payment-title-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--weline-space-2, var(--space-2));
+  flex-wrap: wrap;
+}
+
+.w-helppay-payer .weline-checkout__payment-title-row strong {
+  margin: 0;
+}
+
+.w-helppay-payer .weline-checkout__payment-details {
+  color: var(--color-link, var(--weline-theme-link, var(--color-primary)));
+  font-size: var(--weline-font-size-xs, 0.75rem);
+  line-height: 1.4;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.w-helppay-payer .weline-checkout__payment-details:hover,
+.w-helppay-payer .weline-checkout__payment-details:focus {
+  text-decoration: underline;
+  color: var(--color-link-hover, var(--weline-theme-link-hover));
+}
+
+.w-helppay-payer .weline-checkout__payment-intro {
+  display: grid;
+  gap: 0.25rem;
+  justify-items: start;
+}
+
+.w-helppay-payer .weline-checkout__payment-intro-text {
+  display: block;
+  overflow: hidden;
+  margin: 0;
+  color: var(--color-text-secondary, var(--weline-theme-text-muted));
+  font-size: var(--weline-font-size-sm, 0.8125rem);
+  line-height: 1.45;
+  max-height: calc(1.45em * 2);
+  unicode-bidi: isolate;
+}
+
+.w-helppay-payer .weline-checkout__payment-intro.is-expanded .weline-checkout__payment-intro-text {
+  display: block;
+  max-height: none;
+  overflow: visible;
+}
+
+.w-helppay-payer .weline-checkout__payment-intro-toggle {
+  appearance: none;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--color-link, var(--weline-theme-link, var(--color-primary)));
+  font: inherit;
+  font-size: var(--weline-font-size-xs, 0.75rem);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.w-helppay-payer__method {
+  display: flex;
+  align-items: center;
+  gap: var(--weline-space-2, var(--space-2));
+  margin: 0;
+  padding: var(--weline-space-2, var(--space-2)) var(--weline-space-3, var(--space-3));
+  border: 1px solid var(--color-border, var(--weline-theme-border));
+  border-radius: var(--weline-radius-md, var(--radius-md, 0.5rem));
+  background: var(--color-surface, var(--weline-theme-surface, #fff));
+  cursor: pointer;
+}
+
+.w-helppay-payer__method:has(input:checked) {
+  border-color: var(--color-primary, var(--weline-theme-primary));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-primary, var(--weline-theme-primary)) 35%, transparent);
+}
+
+.w-helppay-payer__method input {
+  margin: 0;
+}
+
+[data-helppay-billing-panel][hidden] {
+  display: none !important;
 }
 
 [data-helppay-step="address-pick"] [data-helppay-confirm-quick] {
@@ -507,6 +726,33 @@ button[data-testid="product-quick-pay"][disabled] {
   border: var(--weline-border-width, 1px) solid var(--color-border, var(--weline-theme-border));
   border-radius: var(--radius-md, var(--weline-radius-md));
   background: var(--color-bg-secondary, var(--weline-theme-surface-subtle, var(--color-surface-subtle)));
+}
+
+.w-helppay-share-result__spec-main {
+  display: flex;
+  gap: var(--weline-space-3, var(--space-3, 0.75rem));
+  align-items: start;
+}
+
+.w-helppay-share-result__spec-media {
+  flex: none;
+}
+
+.w-helppay-share-result__spec-image {
+  display: block;
+  inline-size: 4.5rem;
+  block-size: 4.5rem;
+  object-fit: cover;
+  border-radius: var(--radius-sm, var(--weline-radius-sm, 0.375rem));
+  border: var(--weline-border-width, 1px) solid var(--color-border, var(--weline-theme-border));
+  background: var(--color-surface, var(--weline-theme-surface));
+}
+
+.w-helppay-share-result__spec-body {
+  display: grid;
+  gap: var(--weline-space-2, var(--space-2, 0.5rem));
+  min-inline-size: 0;
+  flex: 1 1 auto;
 }
 
 .w-helppay-share-result__spec-title {
@@ -672,9 +918,37 @@ button[data-testid="product-quick-pay"][disabled] {
 .w-helppay-quick,
 .w-helppay-selection,
 .w-helppay-invalid {
-  max-inline-size: 40rem;
+  max-inline-size: min(100%, var(--weline-layout-content-max-width, 72rem));
   margin-inline: auto;
   padding-block: var(--weline-space-5, var(--space-5));
+  padding-inline: var(--weline-layout-content-padding-inline, var(--weline-space-4, var(--space-4)));
+}
+
+.w-helppay-quick,
+.w-helppay-selection,
+.w-helppay-invalid {
+  max-inline-size: 40rem;
+}
+
+.w-helppay-payer {
+  display: grid;
+  gap: var(--weline-space-5, var(--space-5));
+}
+
+.w-helppay-payer__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(18rem, 22.5rem);
+  gap: var(--weline-space-5, var(--space-5));
+  align-items: start;
+}
+
+.w-helppay-payer__main {
+  min-inline-size: 0;
+}
+
+.w-helppay-payer__pay {
+  position: sticky;
+  top: var(--weline-space-6, var(--space-6, 1.5rem));
 }
 
 .w-helppay-quick__actions,
@@ -683,7 +957,21 @@ button[data-testid="product-quick-pay"][disabled] {
   gap: var(--weline-space-2, var(--space-2));
 }
 
+.w-helppay-payer__actions .w-button {
+  inline-size: 100%;
+}
+
 .w-helppay-payer__note {
   color: var(--color-text-secondary, var(--weline-theme-text-muted));
   font-size: var(--weline-font-size-sm, 0.925rem);
+}
+
+@media (max-width: 860px) {
+  .w-helppay-payer__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .w-helppay-payer__pay {
+    position: static;
+  }
 }

@@ -22,19 +22,20 @@ final class StorefrontAllMenuCategoryTreeService
         private readonly StorefrontScopeHotCache $hotCache,
         private readonly MenuTreeNormalizer $normalizer,
         private readonly Url $url,
+        private readonly ?ProductCategoryAttributeService $categoryAttributes = null,
     ) {
     }
 
     public static function logicalCacheKey(int $websiteId, string $locale = ''): string
     {
-        // v6 stores origin-free routes; absolute URLs are materialized per request.
+        // v7: empty category description is ensured into EAV/Local per locale (attribute i18n).
         // Keep the locale explicit when State has advanced ahead of the frozen key.
         $locale = trim(str_replace('-', '_', $locale));
         if ($locale === '') {
             $locale = 'zh_Hans_CN';
         }
 
-        return 'product.all_menu_category_tree.v6.' . max(0, $websiteId) . '.' . $locale;
+        return 'product.all_menu_category_tree.v7.' . max(0, $websiteId) . '.' . $locale;
     }
 
     public static function cachePool(): string
@@ -178,6 +179,16 @@ final class StorefrontAllMenuCategoryTreeService
             $banner = \trim((string)($row['banner'] ?? ''));
             $summary = \trim((string)($row['summary'] ?? ''));
             $description = \trim((string)($row['description'] ?? ''));
+            if ($description === '' && $name !== '') {
+                $attributes = $this->categoryAttributes;
+                if ($attributes instanceof ProductCategoryAttributeService) {
+                    try {
+                        $description = $attributes->ensureDescription($websiteId, $categoryId, $name, $locale);
+                    } catch (\Throwable) {
+                        $description = $attributes->composeDefaultDescription($name, $locale);
+                    }
+                }
+            }
             if ($image !== '' && !\str_starts_with($image, 'data:image/')) {
                 $node['image'] = $image;
             }

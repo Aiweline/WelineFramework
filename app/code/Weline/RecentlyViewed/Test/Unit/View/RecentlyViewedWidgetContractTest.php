@@ -56,6 +56,12 @@ final class RecentlyViewedWidgetContractTest extends TestCase
             $source,
             'Empty product list must render a shell, not bare return.',
         );
+
+        $hiCsv = dirname(__DIR__, 3) . '/i18n/hi_IN.csv';
+        self::assertFileExists($hiCsv);
+        $hi = (string)file_get_contents($hiCsv);
+        self::assertStringContainsString('Based on your recent browsing', $hi);
+        self::assertMatchesRegularExpression('/\\p{Devanagari}/u', $hi);
     }
 
     public function testSectionBackgroundIsTransparent(): void

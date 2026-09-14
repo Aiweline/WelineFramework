@@ -86,6 +86,21 @@ $listPresenter = new BackendOrderListPresenter();
                             </select>
                         </div>
                         <div style="--w-span-md:2;">
+                            <?php $checkoutEntryRows = is_array($this->getData('checkout_entry_rows') ?? null) ? $this->getData('checkout_entry_rows') : []; ?>
+                            <select name="checkout_entry" class="w-select" data-testid="order-checkout-entry-filter" aria-label="<?= __('结账来源') ?>">
+                                <option value=""><?= __('全部来源') ?></option>
+                                <?php foreach ($checkoutEntryRows as $row): ?>
+                                    <?php
+                                    $code = (string)($row['code'] ?? '');
+                                    if ($code === '') {
+                                        continue;
+                                    }
+                                    ?>
+                                    <option value="<?= htmlspecialchars($code) ?>" <?= ($filters['checkout_entry'] ?? '') === $code ? 'selected' : '' ?>><?= htmlspecialchars((string)($row['label'] ?? $code)) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div style="--w-span-md:2;">
                             <button type="submit" class="w-button" data-w-width="full" data-tone="primary">
                                 <w:icon name="search" size="sm"></w:icon> <?= __('搜索') ?>
                             </button>
@@ -98,12 +113,25 @@ $listPresenter = new BackendOrderListPresenter();
                     </div>
                 </w:form>
 
+                <w:slot id="backend-order-list-shipping"
+                        name="<?= __('订单列表发货') ?>"
+                        accept="backend-order-list-shipping,order-list-shipping,shipping"
+                        exclusive="true"
+                        multiple="false"
+                        position="content"
+                        class="backend-order-list-shipping-slot"
+                        weline-code="order.backend.order.list_shipping_slot"
+                        style="--w-mb:var(--weline-space-4);">
+                    <w:hook name="Weline_Order::backend::order::list::shipping"/>
+                </w:slot>
+
                 <div class="w-table-wrap">
                     <table class="w-table">
                         <thead>
                             <tr>
                                 <th><?= __('订单号') ?></th>
                                 <th><?= __('类型') ?></th>
+                                <th><?= __('来源') ?></th>
                                 <th><?= __('客户') ?></th>
                                 <th><?= __('订单总额') ?></th>
                                 <th><?= __('订单状态') ?></th>
@@ -116,7 +144,7 @@ $listPresenter = new BackendOrderListPresenter();
                         <tbody>
                             <?php if (empty($orders)): ?>
                                 <tr>
-                                    <td colspan="9" class="w-text" data-align="center"><?= __('暂无数据') ?></td>
+                                    <td colspan="10" class="w-text" data-align="center"><?= __('暂无数据') ?></td>
                                 </tr>
                             <?php else: ?>
                                 <?php foreach ($orders as $order): ?>
@@ -139,6 +167,12 @@ $listPresenter = new BackendOrderListPresenter();
                                     if ($rowTypeTone === 'muted') {
                                         $rowTypeTone = 'info';
                                     }
+                                    $rowEntry = strtolower(trim((string)($orderData[Order::schema_fields_CHECKOUT_ENTRY] ?? ''))) ?: 'unknown';
+                                    $rowEntryLabel = $listPresenter->checkoutEntryLabel($rowEntry);
+                                    $rowEntryTone = $listPresenter->checkoutEntryTone($rowEntry);
+                                    $statusTone = (string)($presented['status_tone'] ?? 'muted');
+                                    $paymentTone = (string)($presented['payment_status_tone'] ?? 'muted');
+                                    $fulfillmentTone = (string)($presented['fulfillment_status_tone'] ?? 'muted');
                                     ?>
                                     <tr>
                                         <td data-testid="order-list-order-number">
@@ -157,6 +191,12 @@ $listPresenter = new BackendOrderListPresenter();
                                                   data-order-type-code="<?= htmlspecialchars($rowOrderType) ?>"
                                                   data-testid="order-type-badge"><?= htmlspecialchars($rowTypeLabel) ?></span>
                                         </td>
+                                        <td>
+                                            <span class="w-badge"
+                                                  data-tone="<?= htmlspecialchars($rowEntryTone) ?>"
+                                                  data-checkout-entry="<?= htmlspecialchars($rowEntry) ?>"
+                                                  data-testid="order-list-checkout-entry"><?= htmlspecialchars($rowEntryLabel) ?></span>
+                                        </td>
                                         <td data-testid="order-list-customer">
                                             <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-1);">
                                                 <?php if ($presented['customer_name'] !== ''): ?>
@@ -167,7 +207,7 @@ $listPresenter = new BackendOrderListPresenter();
                                                     <span>—</span>
                                                 <?php endif; ?>
                                                 <?php if ($presented['is_anonymous'] && $presented['customer_name'] !== ''): ?>
-                                                    <span class="w-badge bg-secondary"><?= __('匿名') ?></span>
+                                                    <span class="w-badge" data-tone="muted"><?= __('匿名') ?></span>
                                                 <?php endif; ?>
                                             </div>
                                             <?php if ($presented['customer_email'] !== ''): ?>
@@ -178,36 +218,19 @@ $listPresenter = new BackendOrderListPresenter();
                                             <strong><?= htmlspecialchars($orderData[Order::schema_fields_CURRENCY] ?? 'CNY') ?> <?= number_format((float)($orderData[Order::schema_fields_GRAND_TOTAL] ?? 0), 2) ?></strong>
                                         </td>
                                         <td>
-                                            <?php
-                                            $statusText = \Weline\Order\Model\Order::getStatusLabel($status);
-                                            $statusClass = \Weline\Order\Model\Order::getStatusClassByCode($status);
-                                            ?>
-                                            <span class="w-badge bg-<?= $statusClass ?>"><?= $statusText ?></span>
+                                            <span class="w-badge"
+                                                  data-tone="<?= htmlspecialchars($statusTone) ?>"
+                                                  data-testid="order-list-status"><?= Order::getStatusLabel($status) ?></span>
                                         </td>
                                         <td>
-                                            <?php
-                                            $paymentClass = match($paymentStatus) {
-                                                'pending' => 'warning',
-                                                'paid' => 'success',
-                                                'partial' => 'info',
-                                                'refunded' => 'secondary',
-                                                default => 'secondary',
-                                            };
-                                            $paymentText = Order::getPaymentStatusLabel($paymentStatus);
-                                            ?>
-                                            <span class="w-badge bg-<?= $paymentClass ?>"><?= $paymentText ?></span>
+                                            <span class="w-badge"
+                                                  data-tone="<?= htmlspecialchars($paymentTone) ?>"
+                                                  data-testid="order-list-payment-status"><?= Order::getPaymentStatusLabel($paymentStatus) ?></span>
                                         </td>
                                         <td>
-                                            <?php
-                                            $fulfillmentClass = match($fulfillmentStatus) {
-                                                'pending' => 'warning',
-                                                'shipped' => 'info',
-                                                'delivered' => 'success',
-                                                default => 'secondary',
-                                            };
-                                            $fulfillmentText = Order::getFulfillmentStatusLabel($fulfillmentStatus);
-                                            ?>
-                                            <span class="w-badge bg-<?= $fulfillmentClass ?>"><?= $fulfillmentText ?></span>
+                                            <span class="w-badge"
+                                                  data-tone="<?= htmlspecialchars($fulfillmentTone) ?>"
+                                                  data-testid="order-list-fulfillment-status"><?= Order::getFulfillmentStatusLabel($fulfillmentStatus) ?></span>
                                         </td>
                                         <td data-testid="order-list-created-at"><?= htmlspecialchars($presented['created_at']) ?></td>
                                         <td>

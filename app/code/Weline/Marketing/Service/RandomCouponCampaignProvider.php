@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Marketing\Service;
 
+use Weline\Framework\DateTime\Timezone;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Marketing\Api\Coupon\RandomCouponCampaignProviderInterface;
 use Weline\Marketing\Api\Coupon\RandomCouponCampaignRequest;
@@ -42,7 +43,7 @@ final class RandomCouponCampaignProvider implements RandomCouponCampaignProvider
             $rule->clearData();
         }
 
-        $now = \date('Y-m-d H:i:s');
+        $now = Timezone::utcNowSql();
         $sourceKey = \trim($request->sourceKey);
         $name = \trim($request->displayName);
         if ($name === '') {
@@ -149,8 +150,8 @@ final class RandomCouponCampaignProvider implements RandomCouponCampaignProvider
             Coupon::schema_fields_USAGE_LIMIT => 1,
             Coupon::schema_fields_CUSTOMER_LIMIT => 1,
             Coupon::schema_fields_STATUS => Coupon::STATUS_ACTIVE,
-            Coupon::schema_fields_START_DATE => \date('Y-m-d H:i:s'),
-            Coupon::schema_fields_END_DATE => \date('Y-m-d H:i:s', \time() + 86400 * 30),
+            Coupon::schema_fields_START_DATE => Timezone::utcNowSql(),
+            Coupon::schema_fields_END_DATE => \gmdate('Y-m-d H:i:s', \time() + 86400 * 30),
             Coupon::schema_fields_SOURCE_MODULE => $source['source_module'],
             Coupon::schema_fields_SOURCE_TYPE => $source['source_type'],
             Coupon::schema_fields_SOURCE_ID => $source['source_id'],

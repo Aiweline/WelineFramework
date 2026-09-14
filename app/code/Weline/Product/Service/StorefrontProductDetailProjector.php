@@ -894,13 +894,13 @@ final class StorefrontProductDetailProjector
             return '';
         }
         if (is_scalar($value)) {
-            return trim((string)$value);
+            return \Weline\Product\Service\StorefrontEavLabelResolver::unwrapJsonScalarToken(trim((string)$value));
         }
         if (is_array($value)) {
             $values = [];
             foreach ($value as $item) {
                 if (is_scalar($item) && trim((string)$item) !== '') {
-                    $values[] = trim((string)$item);
+                    $values[] = \Weline\Product\Service\StorefrontEavLabelResolver::unwrapJsonScalarToken(trim((string)$item));
                 }
             }
             return implode(', ', $values);

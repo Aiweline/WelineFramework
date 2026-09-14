@@ -18,7 +18,7 @@
 - 首页 `/` 也是合法目标，并保留其 query 和 fragment。
 - 拒绝协议相对 URL、站外 URL、用户信息 URL、反斜杠、控制字符、`.` / `..` 路径段和 backend/API area 路径。
 - 为防止登录循环，登录、注册、忘记密码、两步验证、社媒 OAuth（`customer/account/social-login/*`）和退出路由不能成为最终回跳目标。
-- 社媒登录（OAuth start/callback、绑定选择、Google/Facebook 快捷 One Tap）与密码登录共用同一 Session 目标与 `formatAuthSuccessRedirect()`；登录页部件须把 `redirect_url` 传给 `account-social-login`，快捷引导须带当前页或已捕获的 `return_url`。
+- 社媒登录（OAuth start/callback、绑定选择、Google/Facebook 快捷 One Tap）与密码登录共用同一 Session 目标与 `formatAuthSuccessRedirect()`；登录页部件须把 `redirect_url` 传给 `account-social-login`，快捷引导须带当前页或已捕获的 `return_url`。OAuth `redirect_uri` 固定无语言/货币前缀；callback 用 `forceLocalizationPrefix` 还原 authorize 时的店面前缀后再跳转。
 - 认证路由检查必须使用 `State::resolveLocalizationFromPathSegments()` 的本地化前缀规则，覆盖单货币、单语言和任意顺序的双前缀；返回目标本身保留原货币/语言前缀、query 和 fragment。
 - `w_auth` 仅作前端一次性刷新信号，不得参与权限判定或 Session 写入。取值：`1`=认证成功，`0`=登出/失效。
 

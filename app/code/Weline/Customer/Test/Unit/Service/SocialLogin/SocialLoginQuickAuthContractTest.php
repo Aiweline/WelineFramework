@@ -52,6 +52,8 @@ final class SocialLoginQuickAuthContractTest extends TestCase
             $root . '/Service/SocialLogin/SocialLoginPresentationService.php'
         );
         self::assertStringContainsString("'oauth'", $presentation);
+        self::assertStringContainsString("'i18n'", $presentation);
+        self::assertStringContainsString("__('快捷登录')", $presentation);
         self::assertStringContainsString('startUrl(\'facebook\'', $presentation);
 
         $modules = (string) file_get_contents($root . '/view/statics/frontend/weline.modules.js');
@@ -85,7 +87,12 @@ final class SocialLoginQuickAuthContractTest extends TestCase
         self::assertStringContainsString('weline-social-quick-bar__btn--facebook', $js);
         self::assertStringContainsString('providerButtonHtml', $js);
         self::assertStringContainsString('providerIconSvg', $js);
-        self::assertStringContainsString('resolveOauthStart', $js);
+        self::assertStringContainsString('withStorefrontLocalePrefix', $js);
+        self::assertStringContainsString('cfg.locale_prefix', $js);
+        self::assertStringContainsString('stripStorefrontLocalePrefix', $js);
+        self::assertStringContainsString('pagePrefix', $js);
+        self::assertStringContainsString('resolveProviderOauthStart', $js);
+        self::assertStringContainsString("toLowerCase() === 'google'", $js);
         self::assertStringContainsString('align-items:stretch', $js);
         self::assertStringNotContainsString('accounts.id.renderButton', $js);
         self::assertStringNotContainsString('measureQuickBarActionWidth', $js);
@@ -97,6 +104,8 @@ final class SocialLoginQuickAuthContractTest extends TestCase
         self::assertStringContainsString("querySelector('[data-social-quick]')", $js);
         self::assertStringContainsString('social-login-quick-prompt', $js);
         self::assertStringContainsString('WelineSocialQuick', $js);
+        self::assertStringContainsString('i18nLabel', $js);
+        self::assertStringContainsString('cfg.i18n', $js);
         self::assertStringContainsString('startFromConfig', $js);
         self::assertStringContainsString('skipLoginCheck', $js);
         self::assertFileExists($root . '/view/hooks/Weline_Theme/frontend/layouts/homepage/body-end.phtml');

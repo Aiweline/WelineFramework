@@ -83,6 +83,14 @@ class Order extends BackendController
         } else {
             $orderTypeFilter = '';
         }
+
+        $checkoutEntryFilter = strtolower(trim((string)$this->request->getParam('checkout_entry', '')));
+        $checkoutEntryAllowed = ['checkout', 'express', 'quick_buy', 'helppay', 'unknown'];
+        if ($checkoutEntryFilter !== '' && \in_array($checkoutEntryFilter, $checkoutEntryAllowed, true)) {
+            $filters['checkout_entry'] = $checkoutEntryFilter;
+        } else {
+            $checkoutEntryFilter = '';
+        }
         
         if ($keyword = trim((string)$this->request->getParam('keyword'))) {
             $filters['keyword'] = $keyword;
@@ -128,6 +136,14 @@ class Order extends BackendController
         $this->assign('order_type', $orderTypeFilter);
         $this->assign('order_type_rows', $orderTypeRows);
         $this->assign('order_type_registry', $orderTypeRegistry);
+        $this->assign('checkout_entry', $checkoutEntryFilter);
+        $this->assign('checkout_entry_rows', [
+            ['code' => 'checkout', 'label' => (string)__('万能结账')],
+            ['code' => 'express', 'label' => (string)__('快捷支付')],
+            ['code' => 'quick_buy', 'label' => (string)__('快捷购买')],
+            ['code' => 'helppay', 'label' => (string)__('找朋友代付')],
+            ['code' => 'unknown', 'label' => (string)__('未标记')],
+        ]);
         $this->assign('order_action_grant_versions', $actionGrantVersions);
         
         return $this->fetch();
@@ -156,10 +172,7 @@ class Order extends BackendController
                 ->present($order, $items);
 
             // 支付记录由 Order 空槽 + Weline_Payment 部件/Hook 填充，禁止本控制器直灌。
-            
-            // 获取发货记录
-            $fulfillmentService = ObjectManager::getInstance(\Weline\Order\Service\FulfillmentService::class);
-            $shipments = $fulfillmentService->getShipments($orderId);
+            // 发货记录由 Order 空槽 + Weline_Shipping 部件/Hook 填充，禁止本控制器直灌。
             
             // 获取退款记录
             $refundService = ObjectManager::getInstance(\Weline\Order\Service\RefundService::class);
@@ -184,6 +197,8 @@ class Order extends BackendController
 
             $customerPresent = ObjectManager::getInstance(\Weline\Order\Service\BackendOrderListPresenter::class)
                 ->present($order);
+            $paymentChrome = ObjectManager::getInstance(\Weline\Order\Service\BackendOrderPaymentChromePresenter::class)
+                ->present($order);
 
             $orderTypeRegistry = ObjectManager::getInstance(\Weline\Order\Service\CommerceOrderTypeRegistry::class);
             $orderTypeCode = strtolower(trim((string)$order->getData(OrderModel::schema_fields_ORDER_TYPE)));
@@ -206,14 +221,15 @@ class Order extends BackendController
             $this->assign('order', $order);
             $this->assign('items', $displayItems);
             $this->assign('customer_present', $customerPresent);
+            $this->assign('payment_chrome', $paymentChrome);
             $this->assign('order_type', $orderTypeCode);
             $this->assign('order_type_label', $orderTypeRegistry->resolveLabel($orderTypeCode));
             $this->assign('order_type_tone', $orderTypeTone);
             $this->assign('type_payload', $typePayload);
-            $this->assign('shipments', $shipments);
             $this->assign('refunds', $refunds);
             $this->assign('invoices', $invoices);
             $this->assign('history', $history);
+            $this->assignStatusFlow($order, $history, $orderId);
             $this->assign('available_transitions', $availableTransitions);
             $this->assign('current_status', $currentStatus);
             $updateGrant = $this->objectAuthorizationGuard()->check(ObjectAction::UPDATE, $record['scope']);
@@ -331,6 +347,7 @@ class Order extends BackendController
             $this->assign('type_payload', $typePayload);
             $this->assign('shipments', $shipments);
             $this->assign('history', $history);
+            $this->assignStatusFlow($order, $history, $orderId, $paymentChrome);
             $this->assign('current_status', $currentStatus);
             $this->assign('available_transitions', $availableTransitions);
             $updateGrant = $this->objectAuthorizationGuard()->check(ObjectAction::UPDATE, $record['scope']);
@@ -345,6 +362,34 @@ class Order extends BackendController
             $this->getMessageManager()->addError($e->getMessage());
             $this->redirect('*/index');
         }
+    }
+
+    /**
+     * 顶栏状态轨：订单头 + 退款案例（无渠道 API）。
+     *
+     * @param list<mixed> $history
+     * @param array<string, mixed> $paymentChrome
+     */
+    private function assignStatusFlow(
+        OrderModel $order,
+        array $history,
+        int $orderId,
+        array $paymentChrome = [],
+    ): void {
+        if ($paymentChrome === []) {
+            $paymentChrome = ObjectManager::getInstance(
+                \Weline\Order\Service\BackendOrderPaymentChromePresenter::class,
+            )->present($order);
+        }
+        $cases = (new \Weline\Order\Service\BackendOrderOpsPanelPresenter(
+            ObjectManager::getInstance(\Weline\Order\Service\OrderTradeAdminCommandService::class),
+        ))->refundPanel($orderId)['cases'];
+        $this->assign(
+            'status_flow',
+            ObjectManager::getInstance(
+                \Weline\Order\Service\BackendOrderStatusFlowPresenter::class,
+            )->present($order, $history, $cases, $paymentChrome),
+        );
     }
 
     /**

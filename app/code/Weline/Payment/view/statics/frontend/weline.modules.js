@@ -16,7 +16,7 @@ Object.assign(window.WelineModulesConfig.modules, {
     },
     productExpressPay: {
         paths: [
-            "Weline_Payment::js/product-express-pay.js?v=20260912-pdp-express-popup1"
+            "Weline_Payment::js/product-express-pay.js?v=20260914-express-pixel1"
         ],
         globalVar: "WelineProductExpressPay",
         load: "lazy",

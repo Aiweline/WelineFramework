@@ -33,7 +33,7 @@ Object.assign(window.WelineModulesConfig.modules, {
     },
     customerSocialQuick: {
         paths: [
-            "Weline_Customer::js/account-social-quick.js?v=20260910-mount-fw2"
+            "Weline_Customer::js/account-social-quick.js?v=20260914-google-fixed-start-1"
         ],
         globalVar: "WelineSocialQuick",
         description: "未登录右下角社媒快捷登录条（由 account JS 动态拉起）"

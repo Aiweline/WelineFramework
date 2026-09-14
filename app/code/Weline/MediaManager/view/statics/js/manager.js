@@ -148,10 +148,8 @@
             var body = new FormData();
             body.append('form_key', String(CONFIG.connectorFormKey));
             Object.keys(params || {}).forEach(function(key) {
-                if (Object.prototype.hasOwnProperty.call(params, key)
-                    && params[key] !== undefined
-                    && params[key] !== null) {
-                    body.append(key, String(params[key]));
+                if (Object.prototype.hasOwnProperty.call(params, key)) {
+                    appendConnectorFormField(body, key, params[key]);
                 }
             });
             var xhr = new XMLHttpRequest();
@@ -181,6 +179,34 @@
             };
             xhr.send(body);
         });
+    }
+
+    /**
+     * FormData must preserve PHP array keys (targets[]). String(array) becomes
+     * "a,b,c" and ConnectorService.requiredTargetHashes then rejects as empty.
+     */
+    function appendConnectorFormField(body, key, value) {
+        if (value === undefined || value === null) {
+            return;
+        }
+        if (Array.isArray(value)) {
+            value.forEach(function(item, index) {
+                if (item === undefined || item === null) {
+                    return;
+                }
+                if (typeof item === 'object') {
+                    body.append(key + '[' + index + ']', JSON.stringify(item));
+                    return;
+                }
+                body.append(key + '[]', String(item));
+            });
+            return;
+        }
+        if (typeof value === 'object') {
+            body.append(key, JSON.stringify(value));
+            return;
+        }
+        body.append(key, String(value));
     }
 
     function mmResource(op, params) {
@@ -3448,10 +3474,7 @@
             body.append('cmd', command);
             body.append('form_key', String(CONFIG.connectorFormKey));
             Object.keys(fields || {}).forEach(function(key) {
-                var value = fields[key];
-                if (value !== undefined && value !== null) {
-                    body.append(key, String(value));
-                }
+                appendConnectorFormField(body, key, fields[key]);
             });
             if (filePart && filePart.blob) {
                 body.append(

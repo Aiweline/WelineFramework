@@ -9,13 +9,13 @@ use Weline\Order\Model\OrderItem;
 
 $order = $this->getData('order');
 $items = $this->getData('items') ?? [];
-$shipments = $this->getData('shipments') ?? [];
 $refunds = $this->getData('refunds') ?? [];
 $invoices = $this->getData('invoices') ?? [];
 $history = $this->getData('history') ?? [];
 $availableTransitions = $this->getData('available_transitions') ?? [];
 $currentStatus = $this->getData('current_status') ?? '';
 $customerPresent = $this->getData('customer_present') ?? [];
+$paymentChrome = is_array($this->getData('payment_chrome') ?? null) ? $this->getData('payment_chrome') : [];
 
 if (!$order) {
     return;
@@ -64,6 +64,7 @@ if ($orderTypeTone === 'muted') {
 
 <div class="w-grid">
     <div style="--w-span:12;">
+        <?= $this->fetch('Weline_Order::templates/Backend/Order/partial/status-flow.phtml') ?>
         <!-- Hook: 订单详情页之前 -->
         <w:hook name="Weline_Order::backend::order::view::before"/>
         
@@ -239,7 +240,30 @@ if ($orderTypeTone === 'muted') {
         <?php
         $viewNotes = trim((string)($customerPresent['notes'] ?? ($orderData[Order::schema_fields_NOTES] ?? '')));
         $viewPaymentMethod = trim((string)($customerPresent['payment_method'] ?? ($orderData[Order::schema_fields_PAYMENT_METHOD] ?? '')));
-        $viewShippingMethod = trim((string)($customerPresent['shipping_method'] ?? ($orderData[Order::schema_fields_SHIPPING_METHOD] ?? '')));
+        $viewPaymentMethodLabel = trim((string)($paymentChrome['payment_method_label'] ?? ''));
+        if ($viewPaymentMethodLabel === '') {
+            $viewPaymentMethodLabel = $viewPaymentMethod !== '' ? $viewPaymentMethod : '';
+        }
+        $viewShippingMethod = trim((string)($paymentChrome['shipping_method']
+            ?? $customerPresent['shipping_method']
+            ?? ($orderData[Order::schema_fields_SHIPPING_METHOD] ?? '')));
+        $viewShippingMethodLabel = trim((string)($paymentChrome['shipping_method_label'] ?? ''));
+        if ($viewShippingMethodLabel === '') {
+            $viewShippingMethodLabel = $viewShippingMethod !== ''
+                ? (string)__('配送服务')
+                : (string)__('未指定配送方式');
+        }
+        // Catalog miss often echoes the service_code — never promote SCREAMING_SNAKE as the human title.
+        $shippingLabelLooksLikeCode = $viewShippingMethod !== ''
+            && (
+                strcasecmp($viewShippingMethodLabel, $viewShippingMethod) === 0
+                || (bool)preg_match('/^[A-Z][A-Z0-9_]*$/', $viewShippingMethodLabel)
+            );
+        if ($shippingLabelLooksLikeCode) {
+            $viewShippingMethodLabel = (string)__('配送服务');
+        }
+        $showShippingCode = $viewShippingMethod !== ''
+            && strcasecmp($viewShippingMethodLabel, $viewShippingMethod) !== 0;
         ?>
         <div class="w-card" style="--w-mb:var(--weline-space-4);" data-testid="order-view-notes">
             <div class="w-card__header">
@@ -251,11 +275,36 @@ if ($orderTypeTone === 'muted') {
                         <table class="w-table">
                             <tr>
                                 <th width="150"><?= __('支付方式') ?>:</th>
-                                <td><?= $viewPaymentMethod !== '' ? htmlspecialchars($viewPaymentMethod) : '—' ?></td>
+                                <td data-testid="order-view-payment-method">
+                                    <?= $viewPaymentMethodLabel !== '' ? htmlspecialchars($viewPaymentMethodLabel) : '—' ?>
+                                </td>
                             </tr>
                             <tr>
                                 <th><?= __('配送方式') ?>:</th>
-                                <td><?= $viewShippingMethod !== '' ? htmlspecialchars($viewShippingMethod) : '—' ?></td>
+                                <td data-testid="order-view-shipping-method">
+                                    <?php if ($viewShippingMethod === '' && $viewShippingMethodLabel === ''): ?>
+                                        —
+                                    <?php else: ?>
+                                        <div class="w-stack" style="--w-gap:var(--weline-space-1);">
+                                            <span data-testid="order-view-shipping-method-label"><?= htmlspecialchars($viewShippingMethodLabel) ?></span>
+                                            <?php if ($showShippingCode || $shippingLabelLooksLikeCode): ?>
+                                                <div>
+                                                    <button type="button"
+                                                            class="w-text"
+                                                            data-tone="muted"
+                                                            data-size="sm"
+                                                            data-testid="order-view-shipping-method-code"
+                                                            data-copy-text="<?= htmlspecialchars($viewShippingMethod) ?>"
+                                                            title="<?= __('点击复制服务码') ?>"
+                                                            aria-label="<?= __('点击复制服务码') ?>"
+                                                            style="cursor:pointer;border:0;background:transparent;padding:0;font:inherit;text-align:start;">
+                                                        <code style="font-size:var(--weline-font-size-xs);font-weight:var(--weline-font-weight-regular, 400);"><?= htmlspecialchars($viewShippingMethod) ?></code>
+                                                    </button>
+                                                </div>
+                                            <?php endif; ?>
+                                        </div>
+                                    <?php endif; ?>
+                                </td>
                             </tr>
                         </table>
                     </div>
@@ -265,6 +314,64 @@ if ($orderTypeTone === 'muted') {
                     </div>
                 </div>
             </div>
+            <script>
+            (function () {
+                var root = document.querySelector('[data-testid="order-view-notes"]');
+                if (!root || root.getAttribute('data-shipping-code-copy-bound') === '1') {
+                    return;
+                }
+                root.setAttribute('data-shipping-code-copy-bound', '1');
+                root.addEventListener('click', function (event) {
+                    var btn = event.target && event.target.closest
+                        ? event.target.closest('[data-testid="order-view-shipping-method-code"]')
+                        : null;
+                    if (!btn) {
+                        return;
+                    }
+                    event.preventDefault();
+                    var text = String(btn.getAttribute('data-copy-text') || '').trim();
+                    if (!text) {
+                        return;
+                    }
+                    var okMsg = <?= json_encode((string)__('已复制服务码'), JSON_UNESCAPED_UNICODE) ?>;
+                    var failMsg = <?= json_encode((string)__('复制失败，请手动选择'), JSON_UNESCAPED_UNICODE) ?>;
+                    var toast = function (kind, message) {
+                        try {
+                            if (window.Weline && Weline.UI && Weline.UI.toast && typeof Weline.UI.toast[kind] === 'function') {
+                                Weline.UI.toast[kind](message);
+                                return;
+                            }
+                        } catch (e) {}
+                        if (kind === 'success') {
+                            btn.setAttribute('title', message);
+                        }
+                    };
+                    var fallback = function () {
+                        try {
+                            var ta = document.createElement('textarea');
+                            ta.value = text;
+                            ta.setAttribute('readonly', '');
+                            ta.style.position = 'fixed';
+                            ta.style.opacity = '0';
+                            document.body.appendChild(ta);
+                            ta.select();
+                            var ok = document.execCommand('copy');
+                            document.body.removeChild(ta);
+                            toast(ok ? 'success' : 'error', ok ? okMsg : failMsg);
+                        } catch (e) {
+                            toast('error', failMsg);
+                        }
+                    };
+                    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+                        navigator.clipboard.writeText(text).then(function () {
+                            toast('success', okMsg);
+                        }).catch(fallback);
+                        return;
+                    }
+                    fallback();
+                });
+            })();
+            </script>
         </div>
 
         <!-- 订单项：结账价格/活动快照只读 -->
@@ -393,6 +500,18 @@ if ($orderTypeTone === 'muted') {
             <w:hook name="Weline_Order::backend::order::view::payment-records"/>
         </w:slot>
 
+        <!-- 发货记录：订单只留空槽；配送模块经部件 default_injections / 槽内 Hook 默认填充 -->
+        <w:slot id="backend-order-shipments"
+                name="<?= __('订单发货记录') ?>"
+                accept="backend-order-shipments,order-shipments,shipping-shipments,shipping"
+                exclusive="true"
+                multiple="false"
+                position="content"
+                class="backend-order-shipments-slot"
+                weline-code="order.backend.order.shipments_slot">
+            <w:hook name="Weline_Order::backend::order::view::shipments"/>
+        </w:slot>
+
         <!-- 批发订单沟通：订单只留空槽；B2B 经部件 default_injections 默认填充 -->
         <w:slot id="backend-order-b2b-chat"
                 name="<?= __('批发订单沟通') ?>"
@@ -404,48 +523,6 @@ if ($orderTypeTone === 'muted') {
                 weline-code="order.backend.order.b2b_chat_slot">
             <w:hook name="Weline_Order::backend::order::view::wholesale-chat"/>
         </w:slot>
-
-        <!-- 发货记录 -->
-        <div class="w-card" style="--w-mb:var(--weline-space-4);">
-            <div class="w-card__header">
-                <h5 class="w-card__title" style="--w-mb:0;"><?= __('发货记录') ?></h5>
-            </div>
-            <div class="w-card__body">
-                <div class="w-table-wrap">
-                    <table class="w-table">
-                        <thead>
-                            <tr>
-                                <th><?= __('物流单号') ?></th>
-                                <th><?= __('承运商') ?></th>
-                                <th><?= __('状态') ?></th>
-                                <th><?= __('发货时间') ?></th>
-                                <th><?= __('送达时间') ?></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php if (empty($shipments)): ?>
-                                <tr>
-                                    <td colspan="5" class="w-text" data-align="center"><?= __('暂无发货记录') ?></td>
-                                </tr>
-                            <?php else: ?>
-                                <?php foreach ($shipments as $shipment): ?>
-                                    <?php
-                                    $shipmentData = is_object($shipment) ? $shipment->getData() : $shipment;
-                                    ?>
-                                    <tr>
-                                        <td><?= htmlspecialchars($shipmentData[\Weline\Order\Model\OrderShipment::schema_fields_TRACKING_NUMBER] ?? '') ?></td>
-                                        <td><?= htmlspecialchars($shipmentData[\Weline\Order\Model\OrderShipment::schema_fields_CARRIER] ?? '') ?></td>
-                                        <td><span class="w-badge" data-w-background="info"><?= htmlspecialchars($shipmentData[\Weline\Order\Model\OrderShipment::schema_fields_STATUS] ?? '') ?></span></td>
-                                        <td><?= $shipmentData[\Weline\Order\Model\OrderShipment::schema_fields_SHIPPED_AT] ?? '' ?></td>
-                                        <td><?= $shipmentData[\Weline\Order\Model\OrderShipment::schema_fields_DELIVERED_AT] ?? '' ?></td>
-                                    </tr>
-                                <?php endforeach; ?>
-                            <?php endif; ?>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
 
         <!-- 订单历史 -->
         <div class="w-card" style="--w-mb:var(--weline-space-4);">

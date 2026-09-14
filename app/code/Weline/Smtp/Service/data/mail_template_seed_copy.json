@@ -1,0 +1,794 @@
+{
+  "es_ES": {
+    "shell": {
+      "lang": "es",
+      "need_help": "¿Necesita ayuda?",
+      "visit": "Visite",
+      "support": "Soporte:",
+      "phone": "Teléfono:",
+      "hours": "Horario:",
+      "address": "Dirección:",
+      "auto_footer": "Este mensaje se envió automáticamente. No responda. Si no lo esperaba, puede ignorarlo."
+    },
+    "shared": {
+      "topic": "Tema",
+      "order_no": "N.º de pedido",
+      "order_uuid": "UUID del pedido",
+      "email": "Correo",
+      "status": "Estado",
+      "total": "Total",
+      "order": "Pedido",
+      "hello": "Hola {{var.customer_name}}:",
+      "placed_at": "Realizado el"
+    },
+    "password_reset": {
+      "subject": "Restablezca su contraseña · {{var.customer_email}}",
+      "preheader": "Restablezca su contraseña",
+      "title": "Restablezca la contraseña de su cuenta",
+      "p1": "Hemos recibido una solicitud para restablecer la contraseña de <strong style=\"color:#16333f;\">{{var.customer_email}}</strong>.",
+      "p2": "Haga clic en el botón para crear una nueva contraseña. Este enlace caduca pronto.",
+      "cta": "Restablecer contraseña",
+      "fallback": "Si el botón no funciona, copie este enlace en su navegador:"
+    },
+    "email_binding": {
+      "subject": "Verifique su correo vinculado · {{var.email}}",
+      "preheader": "Verifique su correo vinculado",
+      "title": "Verifique su correo vinculado",
+      "p1": "Está vinculando <strong>{{var.email}}</strong> a una sesión de atención al cliente.",
+      "p2": "Verifique la dirección para que podamos ayudarle de forma segura.",
+      "fallback": "Enlace alternativo:",
+      "cta": "Verificar correo"
+    },
+    "fulfillment_consolation": {
+      "subject": "Pedido no cumplible — reembolso iniciado · {{var.order_uuid}}",
+      "preheader": "Actualización del pedido y reembolso",
+      "title": "Actualización del pedido y reembolso",
+      "p1": "Lo sentimos: parte de su pedido no puede cumplirse. Se ha iniciado un reembolso por el método de pago original."
+    },
+    "unpaid_order_reminder": {
+      "subject": "Recordatorio de pedido sin pagar · {{var.order_number}}",
+      "preheader": "Su pedido sigue sin pagar",
+      "title": "Su pedido sigue sin pagar",
+      "p2": "El pedido <strong>{{var.order_number}}</strong> sigue pendiente de pago. Si aún lo desea, continúe con el enlace.",
+      "cta": "Continuar el pago"
+    },
+    "order_created": {
+      "subject": "Pedido confirmado · {{var.order_number}}",
+      "preheader": "Pedido confirmado",
+      "title": "Pedido confirmado",
+      "p2": "Gracias: su pedido se ha creado y se está preparando."
+    },
+    "order_paid": {
+      "subject": "Pago recibido · {{var.order_number}}",
+      "preheader": "Pago recibido",
+      "title": "Pago recibido",
+      "p2": "Hemos confirmado su pago. El cumplimiento continuará en breve."
+    },
+    "order_status_changed": {
+      "subject": "Estado del pedido actualizado · {{var.order_number}}",
+      "preheader": "Estado del pedido actualizado",
+      "title": "Estado del pedido actualizado",
+      "p2": "El estado de su pedido ha cambiado. Los detalles están abajo."
+    },
+    "order_shipped": {
+      "subject": "Pedido enviado · {{var.order_number}}",
+      "preheader": "Pedido enviado",
+      "title": "Pedido enviado",
+      "p2": "Buenas noticias: su pedido se ha enviado. Esté atento al seguimiento."
+    },
+    "order_refund": {
+      "subject": "Aviso de reembolso · {{var.order_number}}",
+      "preheader": "Aviso de reembolso",
+      "title": "Aviso de reembolso",
+      "p2": "Aquí están los detalles del reembolso de su pedido."
+    },
+    "product_update": {
+      "subject": "Actualización de producto",
+      "preheader": "Actualización de producto",
+      "title": "Actualización de producto",
+      "p1": "Hay una actualización de producto lista para revisar:"
+    },
+    "quote_reply": {
+      "subject": "Respuesta de cotización",
+      "preheader": "Respuesta de cotización",
+      "title": "Respuesta de cotización",
+      "p1": "Tiene una nueva respuesta de cotización:"
+    },
+    "notification": {
+      "subject": "[{{var.type_label}}] {{var.title}}"
+    }
+  },
+  "fr_FR": {
+    "shell": {
+      "lang": "fr",
+      "need_help": "Besoin d’aide ?",
+      "visit": "Visitez",
+      "support": "Support :",
+      "phone": "Téléphone :",
+      "hours": "Horaires :",
+      "address": "Adresse :",
+      "auto_footer": "Ce message a été envoyé automatiquement. Merci de ne pas y répondre. Si vous ne l’attendiez pas, ignorez-le."
+    },
+    "shared": {
+      "topic": "Sujet",
+      "order_no": "N° de commande",
+      "order_uuid": "UUID de commande",
+      "email": "E-mail",
+      "status": "Statut",
+      "total": "Total",
+      "order": "Commande",
+      "hello": "Bonjour {{var.customer_name}},",
+      "placed_at": "Passée le"
+    },
+    "password_reset": {
+      "subject": "Réinitialisez votre mot de passe · {{var.customer_email}}",
+      "preheader": "Réinitialisez votre mot de passe",
+      "title": "Réinitialisez le mot de passe de votre compte",
+      "p1": "Nous avons reçu une demande de réinitialisation pour <strong style=\"color:#16333f;\">{{var.customer_email}}</strong>.",
+      "p2": "Cliquez sur le bouton pour définir un nouveau mot de passe. Ce lien expire bientôt.",
+      "cta": "Réinitialiser le mot de passe",
+      "fallback": "Si le bouton ne fonctionne pas, copiez ce lien dans votre navigateur :"
+    },
+    "email_binding": {
+      "subject": "Vérifiez la liaison de votre e-mail · {{var.email}}",
+      "preheader": "Vérifiez la liaison de votre e-mail",
+      "title": "Vérifiez la liaison de votre e-mail",
+      "p1": "Vous liez <strong>{{var.email}}</strong> à une session du service client.",
+      "p2": "Veuillez vérifier l’adresse afin que nous puissions vous aider en toute sécurité.",
+      "fallback": "Lien de secours :",
+      "cta": "Vérifier l’e-mail"
+    },
+    "fulfillment_consolation": {
+      "subject": "Commande non exécutable — remboursement lancé · {{var.order_uuid}}",
+      "preheader": "Mise à jour de commande et remboursement",
+      "title": "Mise à jour de commande et remboursement",
+      "p1": "Nous sommes désolés : une partie de votre commande ne peut pas être honorée. Un remboursement a été lancé via votre moyen de paiement d’origine."
+    },
+    "unpaid_order_reminder": {
+      "subject": "Rappel de commande impayée · {{var.order_number}}",
+      "preheader": "Votre commande est encore impayée",
+      "title": "Votre commande est encore impayée",
+      "p2": "La commande <strong>{{var.order_number}}</strong> attend toujours le paiement. Si vous la souhaitez encore, continuez via le lien.",
+      "cta": "Continuer le paiement"
+    },
+    "order_created": {
+      "subject": "Commande confirmée · {{var.order_number}}",
+      "preheader": "Commande confirmée",
+      "title": "Commande confirmée",
+      "p2": "Merci — votre commande a été créée et est en préparation."
+    },
+    "order_paid": {
+      "subject": "Paiement reçu · {{var.order_number}}",
+      "preheader": "Paiement reçu",
+      "title": "Paiement reçu",
+      "p2": "Nous avons confirmé votre paiement. L’exécution se poursuivra sous peu."
+    },
+    "order_status_changed": {
+      "subject": "Statut de commande mis à jour · {{var.order_number}}",
+      "preheader": "Statut de commande mis à jour",
+      "title": "Statut de commande mis à jour",
+      "p2": "Le statut de votre commande a changé. Les détails sont ci-dessous."
+    },
+    "order_shipped": {
+      "subject": "Commande expédiée · {{var.order_number}}",
+      "preheader": "Commande expédiée",
+      "title": "Commande expédiée",
+      "p2": "Bonne nouvelle — votre commande a été expédiée. Surveillez le suivi."
+    },
+    "order_refund": {
+      "subject": "Avis de remboursement · {{var.order_number}}",
+      "preheader": "Avis de remboursement",
+      "title": "Avis de remboursement",
+      "p2": "Voici les détails du remboursement de votre commande."
+    },
+    "product_update": {
+      "subject": "Mise à jour produit",
+      "preheader": "Mise à jour produit",
+      "title": "Mise à jour produit",
+      "p1": "Une mise à jour produit est prête à être consultée :"
+    },
+    "quote_reply": {
+      "subject": "Réponse au devis",
+      "preheader": "Réponse au devis",
+      "title": "Réponse au devis",
+      "p1": "Vous avez une nouvelle réponse au devis :"
+    },
+    "notification": {
+      "subject": "[{{var.type_label}}] {{var.title}}"
+    }
+  },
+  "pt_BR": {
+    "shell": {
+      "lang": "pt",
+      "need_help": "Precisa de ajuda?",
+      "visit": "Visite",
+      "support": "Suporte:",
+      "phone": "Telefone:",
+      "hours": "Horário:",
+      "address": "Endereço:",
+      "auto_footer": "Esta mensagem foi enviada automaticamente. Não responda. Se você não a esperava, pode ignorá-la."
+    },
+    "shared": {
+      "topic": "Tópico",
+      "order_no": "Nº do pedido",
+      "order_uuid": "UUID do pedido",
+      "email": "E-mail",
+      "status": "Status",
+      "total": "Total",
+      "order": "Pedido",
+      "hello": "Olá {{var.customer_name}},",
+      "placed_at": "Feito em"
+    },
+    "password_reset": {
+      "subject": "Redefina sua senha · {{var.customer_email}}",
+      "preheader": "Redefina sua senha",
+      "title": "Redefina a senha da sua conta",
+      "p1": "Recebemos uma solicitação de redefinição de senha para <strong style=\"color:#16333f;\">{{var.customer_email}}</strong>.",
+      "p2": "Clique no botão abaixo para definir uma nova senha. Este link expira em breve.",
+      "cta": "Redefinir senha",
+      "fallback": "Se o botão não funcionar, copie este link no navegador:"
+    },
+    "email_binding": {
+      "subject": "Verifique o vínculo do e-mail · {{var.email}}",
+      "preheader": "Verifique o vínculo do e-mail",
+      "title": "Verifique o vínculo do e-mail",
+      "p1": "Você está vinculando <strong>{{var.email}}</strong> a uma sessão de atendimento.",
+      "p2": "Verifique o endereço para que possamos continuar ajudando com segurança.",
+      "fallback": "Link alternativo:",
+      "cta": "Verificar e-mail"
+    },
+    "fulfillment_consolation": {
+      "subject": "Pedido não pode ser atendido — reembolso iniciado · {{var.order_uuid}}",
+      "preheader": "Atualização do pedido e reembolso",
+      "title": "Atualização do pedido e reembolso",
+      "p1": "Lamentamos — parte do seu pedido não pode ser atendida. Um reembolso foi iniciado pelo método de pagamento original."
+    },
+    "unpaid_order_reminder": {
+      "subject": "Lembrete de pedido não pago · {{var.order_number}}",
+      "preheader": "Seu pedido ainda não foi pago",
+      "title": "Seu pedido ainda não foi pago",
+      "p2": "O pedido <strong>{{var.order_number}}</strong> ainda aguarda pagamento. Se ainda quiser os itens, continue pelo link.",
+      "cta": "Continuar pagamento"
+    },
+    "order_created": {
+      "subject": "Pedido confirmado · {{var.order_number}}",
+      "preheader": "Pedido confirmado",
+      "title": "Pedido confirmado",
+      "p2": "Obrigado — seu pedido foi criado e está sendo preparado."
+    },
+    "order_paid": {
+      "subject": "Pagamento recebido · {{var.order_number}}",
+      "preheader": "Pagamento recebido",
+      "title": "Pagamento recebido",
+      "p2": "Confirmamos seu pagamento. O atendimento seguirá em breve."
+    },
+    "order_status_changed": {
+      "subject": "Status do pedido atualizado · {{var.order_number}}",
+      "preheader": "Status do pedido atualizado",
+      "title": "Status do pedido atualizado",
+      "p2": "O status do seu pedido mudou. Os detalhes estão abaixo."
+    },
+    "order_shipped": {
+      "subject": "Pedido enviado · {{var.order_number}}",
+      "preheader": "Pedido enviado",
+      "title": "Pedido enviado",
+      "p2": "Boas notícias — seu pedido foi enviado. Acompanhe o rastreamento."
+    },
+    "order_refund": {
+      "subject": "Aviso de reembolso · {{var.order_number}}",
+      "preheader": "Aviso de reembolso",
+      "title": "Aviso de reembolso",
+      "p2": "Aqui estão os detalhes do reembolso do seu pedido."
+    },
+    "product_update": {
+      "subject": "Atualização de produto",
+      "preheader": "Atualização de produto",
+      "title": "Atualização de produto",
+      "p1": "Uma atualização de produto está pronta para revisão:"
+    },
+    "quote_reply": {
+      "subject": "Resposta de cotação",
+      "preheader": "Resposta de cotação",
+      "title": "Resposta de cotação",
+      "p1": "Você tem uma nova resposta de cotação:"
+    },
+    "notification": {
+      "subject": "[{{var.type_label}}] {{var.title}}"
+    }
+  },
+  "id_ID": {
+    "shell": {
+      "lang": "id",
+      "need_help": "Butuh bantuan?",
+      "visit": "Kunjungi",
+      "support": "Dukungan:",
+      "phone": "Telepon:",
+      "hours": "Jam layanan:",
+      "address": "Alamat:",
+      "auto_footer": "Pesan ini dikirim otomatis. Mohon jangan membalas. Jika Anda tidak mengharapkannya, abaikan saja."
+    },
+    "shared": {
+      "topic": "Topik",
+      "order_no": "No. pesanan",
+      "order_uuid": "UUID pesanan",
+      "email": "Email",
+      "status": "Status",
+      "total": "Total",
+      "order": "Pesanan",
+      "hello": "Halo {{var.customer_name}},",
+      "placed_at": "Dibuat pada"
+    },
+    "password_reset": {
+      "subject": "Atur ulang kata sandi Anda · {{var.customer_email}}",
+      "preheader": "Atur ulang kata sandi Anda",
+      "title": "Atur ulang kata sandi akun Anda",
+      "p1": "Kami menerima permintaan atur ulang kata sandi untuk <strong style=\"color:#16333f;\">{{var.customer_email}}</strong>.",
+      "p2": "Klik tombol di bawah untuk membuat kata sandi baru. Tautan ini segera kedaluwarsa.",
+      "cta": "Atur ulang kata sandi",
+      "fallback": "Jika tombol tidak berfungsi, salin tautan ini ke peramban:"
+    },
+    "email_binding": {
+      "subject": "Verifikasi pengikatan email · {{var.email}}",
+      "preheader": "Verifikasi pengikatan email",
+      "title": "Verifikasi pengikatan email",
+      "p1": "Anda mengikat <strong>{{var.email}}</strong> ke sesi layanan pelanggan.",
+      "p2": "Harap verifikasi alamat agar kami dapat membantu Anda dengan aman.",
+      "fallback": "Tautan cadangan:",
+      "cta": "Verifikasi email"
+    },
+    "fulfillment_consolation": {
+      "subject": "Pesanan tidak dapat dipenuhi — pengembalian dimulai · {{var.order_uuid}}",
+      "preheader": "Pembaruan pesanan dan pengembalian dana",
+      "title": "Pembaruan pesanan dan pengembalian dana",
+      "p1": "Maaf — sebagian pesanan Anda tidak dapat dipenuhi. Pengembalian dana telah dimulai melalui metode pembayaran asli."
+    },
+    "unpaid_order_reminder": {
+      "subject": "Pengingat pesanan belum dibayar · {{var.order_number}}",
+      "preheader": "Pesanan Anda masih belum dibayar",
+      "title": "Pesanan Anda masih belum dibayar",
+      "p2": "Pesanan <strong>{{var.order_number}}</strong> masih menunggu pembayaran. Jika masih menginginkan barangnya, lanjutkan lewat tautan.",
+      "cta": "Lanjutkan pembayaran"
+    },
+    "order_created": {
+      "subject": "Pesanan dikonfirmasi · {{var.order_number}}",
+      "preheader": "Pesanan dikonfirmasi",
+      "title": "Pesanan dikonfirmasi",
+      "p2": "Terima kasih — pesanan Anda telah dibuat dan sedang disiapkan."
+    },
+    "order_paid": {
+      "subject": "Pembayaran diterima · {{var.order_number}}",
+      "preheader": "Pembayaran diterima",
+      "title": "Pembayaran diterima",
+      "p2": "Kami telah mengonfirmasi pembayaran Anda. Pemenuhan akan dilanjutkan segera."
+    },
+    "order_status_changed": {
+      "subject": "Status pesanan diperbarui · {{var.order_number}}",
+      "preheader": "Status pesanan diperbarui",
+      "title": "Status pesanan diperbarui",
+      "p2": "Status pesanan Anda telah berubah. Detail ada di bawah."
+    },
+    "order_shipped": {
+      "subject": "Pesanan telah dikirim · {{var.order_number}}",
+      "preheader": "Pesanan telah dikirim",
+      "title": "Pesanan telah dikirim",
+      "p2": "Kabar baik — pesanan Anda telah dikirim. Pantau pembaruan pelacakan."
+    },
+    "order_refund": {
+      "subject": "Pemberitahuan pengembalian dana · {{var.order_number}}",
+      "preheader": "Pemberitahuan pengembalian dana",
+      "title": "Pemberitahuan pengembalian dana",
+      "p2": "Berikut detail pengembalian dana pesanan Anda."
+    },
+    "product_update": {
+      "subject": "Pembaruan produk",
+      "preheader": "Pembaruan produk",
+      "title": "Pembaruan produk",
+      "p1": "Pembaruan produk siap untuk ditinjau:"
+    },
+    "quote_reply": {
+      "subject": "Balasan penawaran",
+      "preheader": "Balasan penawaran",
+      "title": "Balasan penawaran",
+      "p1": "Anda memiliki balasan penawaran baru:"
+    },
+    "notification": {
+      "subject": "[{{var.type_label}}] {{var.title}}"
+    }
+  },
+  "hi_IN": {
+    "shell": {
+      "lang": "hi",
+      "need_help": "मदद चाहिए?",
+      "visit": "देखें",
+      "support": "सहायता:",
+      "phone": "फ़ोन:",
+      "hours": "समय:",
+      "address": "पता:",
+      "auto_footer": "यह संदेश स्वचालित रूप से भेजा गया है। कृपया उत्तर न दें। यदि आप इसकी अपेक्षा नहीं कर रहे थे, तो अनदेखा कर सकते हैं।"
+    },
+    "shared": {
+      "topic": "विषय",
+      "order_no": "ऑर्डर नं.",
+      "order_uuid": "ऑर्डर UUID",
+      "email": "ईमेल",
+      "status": "स्थिति",
+      "total": "कुल",
+      "order": "ऑर्डर",
+      "hello": "नमस्ते {{var.customer_name}},",
+      "placed_at": "प्लेस किया गया"
+    },
+    "password_reset": {
+      "subject": "अपना पासवर्ड रीसेट करें · {{var.customer_email}}",
+      "preheader": "अपना पासवर्ड रीसेट करें",
+      "title": "अपने खाते का पासवर्ड रीसेट करें",
+      "p1": "हमें <strong style=\"color:#16333f;\">{{var.customer_email}}</strong> के लिए पासवर्ड रीसेट अनुरोध मिला है।",
+      "p2": "नया पासवर्ड सेट करने के लिए नीचे दिए बटन पर क्लिक करें। यह लिंक जल्द समाप्त हो जाएगा।",
+      "cta": "पासवर्ड रीसेट करें",
+      "fallback": "यदि बटन काम न करे, तो यह लिंक ब्राउज़र में कॉपी करें:"
+    },
+    "email_binding": {
+      "subject": "ईमेल बाइंडिंग सत्यापित करें · {{var.email}}",
+      "preheader": "ईमेल बाइंडिंग सत्यापित करें",
+      "title": "ईमेल बाइंडिंग सत्यापित करें",
+      "p1": "आप <strong>{{var.email}}</strong> को ग्राहक सेवा सत्र से बाँध रहे हैं।",
+      "p2": "कृपया पता सत्यापित करें ताकि हम सुरक्षित रूप से मदद जारी रख सकें।",
+      "fallback": "वैकल्पिक लिंक:",
+      "cta": "ईमेल सत्यापित करें"
+    },
+    "fulfillment_consolation": {
+      "subject": "ऑर्डर पूरा नहीं हो सकता — रिफंड शुरू · {{var.order_uuid}}",
+      "preheader": "ऑर्डर अपडेट और रिफंड सूचना",
+      "title": "ऑर्डर अपडेट और रिफंड सूचना",
+      "p1": "क्षमा करें — आपके ऑर्डर का कुछ भाग पूरा नहीं हो सकता। मूल भुगतान विधि से रिफंड शुरू कर दिया गया है।"
+    },
+    "unpaid_order_reminder": {
+      "subject": "अवैतनिक ऑर्डर अनुस्मारक · {{var.order_number}}",
+      "preheader": "आपका ऑर्डर अभी भी अवैतनिक है",
+      "title": "आपका ऑर्डर अभी भी अवैतनिक है",
+      "p2": "ऑर्डर <strong>{{var.order_number}}</strong> अभी भी भुगतान की प्रतीक्षा में है। यदि आप आइटम चाहते हैं, नीचे दिए लिंक से जारी रखें।",
+      "cta": "भुगतान जारी रखें"
+    },
+    "order_created": {
+      "subject": "आपका ऑर्डर पुष्टि हुआ · {{var.order_number}}",
+      "preheader": "आपका ऑर्डर पुष्टि हुआ",
+      "title": "आपका ऑर्डर पुष्टि हुआ",
+      "p2": "धन्यवाद — आपका ऑर्डर बन गया है और तैयारी हो रही है।"
+    },
+    "order_paid": {
+      "subject": "भुगतान प्राप्त · {{var.order_number}}",
+      "preheader": "भुगतान प्राप्त",
+      "title": "भुगतान प्राप्त",
+      "p2": "हमने आपका भुगतान पुष्टि कर लिया है। शीघ्र पूर्ति जारी रहेगी।"
+    },
+    "order_status_changed": {
+      "subject": "ऑर्डर स्थिति अपडेट · {{var.order_number}}",
+      "preheader": "ऑर्डर स्थिति अपडेट",
+      "title": "ऑर्डर स्थिति अपडेट",
+      "p2": "आपके ऑर्डर की स्थिति बदल गई है। विवरण नीचे हैं।"
+    },
+    "order_shipped": {
+      "subject": "आपका ऑर्डर भेज दिया गया · {{var.order_number}}",
+      "preheader": "आपका ऑर्डर भेज दिया गया",
+      "title": "आपका ऑर्डर भेज दिया गया",
+      "p2": "अच्छी खबर — आपका ऑर्डर भेज दिया गया है। ट्रैकिंग अपडेट देखें।"
+    },
+    "order_refund": {
+      "subject": "रिफंड सूचना · {{var.order_number}}",
+      "preheader": "रिफंड सूचना",
+      "title": "रिफंड सूचना",
+      "p2": "यहाँ आपके ऑर्डर रिफंड का विवरण है।"
+    },
+    "product_update": {
+      "subject": "उत्पाद अपडेट",
+      "preheader": "उत्पाद अपडेट",
+      "title": "उत्पाद अपडेट",
+      "p1": "समीक्षा के लिए एक उत्पाद अपडेट तैयार है:"
+    },
+    "quote_reply": {
+      "subject": "कोट उत्तर",
+      "preheader": "कोट उत्तर",
+      "title": "कोट उत्तर",
+      "p1": "आपके पास नया कोट उत्तर है:"
+    },
+    "notification": {
+      "subject": "[{{var.type_label}}] {{var.title}}"
+    }
+  },
+  "bn_BD": {
+    "shell": {
+      "lang": "bn",
+      "need_help": "সাহায্য প্রয়োজন?",
+      "visit": "দেখুন",
+      "support": "সহায়তা:",
+      "phone": "ফোন:",
+      "hours": "সময়:",
+      "address": "ঠিকানা:",
+      "auto_footer": "এই বার্তা স্বয়ংক্রিয়ভাবে পাঠানো হয়েছে। অনুগ্রহ করে উত্তর দেবেন না। যদি আপনি এটি আশা না করেন, উপেক্ষা করতে পারেন।"
+    },
+    "shared": {
+      "topic": "বিষয়",
+      "order_no": "অর্ডার নং",
+      "order_uuid": "অর্ডার UUID",
+      "email": "ইমেইল",
+      "status": "অবস্থা",
+      "total": "মোট",
+      "order": "অর্ডার",
+      "hello": "হ্যালো {{var.customer_name}},",
+      "placed_at": "অর্ডারের সময়"
+    },
+    "password_reset": {
+      "subject": "পাসওয়ার্ড রিসেট করুন · {{var.customer_email}}",
+      "preheader": "পাসওয়ার্ড রিসেট করুন",
+      "title": "আপনার অ্যাকাউন্টের পাসওয়ার্ড রিসেট করুন",
+      "p1": "আমরা <strong style=\"color:#16333f;\">{{var.customer_email}}</strong> এর জন্য পাসওয়ার্ড রিসেট অনুরোধ পেয়েছি।",
+      "p2": "নতুন পাসওয়ার্ড সেট করতে নিচের বোতামে ক্লিক করুন। এই লিঙ্ক শীঘ্রই মেয়াদোত্তীর্ণ হবে।",
+      "cta": "পাসওয়ার্ড রিসেট",
+      "fallback": "বোতাম কাজ না করলে ব্রাউজারে এই লিঙ্কটি কপি করুন:"
+    },
+    "email_binding": {
+      "subject": "ইমেইল বাইন্ডিং যাচাই করুন · {{var.email}}",
+      "preheader": "ইমেইল বাইন্ডিং যাচাই করুন",
+      "title": "ইমেইল বাইন্ডিং যাচাই করুন",
+      "p1": "আপনি <strong>{{var.email}}</strong> কে কাস্টমার-সার্ভিস সেশনের সাথে বাঁধছেন।",
+      "p2": "নিরাপদে সাহায্য চালিয়ে যেতে ঠিকানাটি যাচাই করুন।",
+      "fallback": "বিকল্প লিঙ্ক:",
+      "cta": "ইমেইল যাচাই"
+    },
+    "fulfillment_consolation": {
+      "subject": "অর্ডার পূরণ করা যায়নি — রিফান্ড শুরু · {{var.order_uuid}}",
+      "preheader": "অর্ডার আপডেট ও রিফান্ড নোটিশ",
+      "title": "অর্ডার আপডেট ও রিফান্ড নোটিশ",
+      "p1": "দুঃখিত — আপনার অর্ডারের কিছু অংশ পূরণ করা যায়নি। মূল পেমেন্ট পদ্ধতিতে রিফান্ড শুরু হয়েছে।"
+    },
+    "unpaid_order_reminder": {
+      "subject": "অপরিশোধিত অর্ডার অনুস্মারক · {{var.order_number}}",
+      "preheader": "আপনার অর্ডার এখনও অপরিশোধিত",
+      "title": "আপনার অর্ডার এখনও অপরিশোধিত",
+      "p2": "অর্ডার <strong>{{var.order_number}}</strong> এখনও পেমেন্টের অপেক্ষায়। চাইলে নিচের লিঙ্ক দিয়ে চালিয়ে যান।",
+      "cta": "পেমেন্ট চালিয়ে যান"
+    },
+    "order_created": {
+      "subject": "আপনার অর্ডার নিশ্চিত · {{var.order_number}}",
+      "preheader": "আপনার অর্ডার নিশ্চিত",
+      "title": "আপনার অর্ডার নিশ্চিত",
+      "p2": "ধন্যবাদ — আপনার অর্ডার তৈরি হয়েছে এবং প্রস্তুত হচ্ছে।"
+    },
+    "order_paid": {
+      "subject": "পেমেন্ট গৃহীত · {{var.order_number}}",
+      "preheader": "পেমেন্ট গৃহীত",
+      "title": "পেমেন্ট গৃহীত",
+      "p2": "আমরা আপনার পেমেন্ট নিশ্চিত করেছি। শীঘ্রই পূরণ চলবে।"
+    },
+    "order_status_changed": {
+      "subject": "অর্ডার স্ট্যাটাস আপডেট · {{var.order_number}}",
+      "preheader": "অর্ডার স্ট্যাটাস আপডেট",
+      "title": "অর্ডার স্ট্যাটাস আপডেট",
+      "p2": "আপনার অর্ডারের অবস্থা বদলেছে। বিস্তারিত নিচে।"
+    },
+    "order_shipped": {
+      "subject": "আপনার অর্ডার পাঠানো হয়েছে · {{var.order_number}}",
+      "preheader": "আপনার অর্ডার পাঠানো হয়েছে",
+      "title": "আপনার অর্ডার পাঠানো হয়েছে",
+      "p2": "শুভ সংবাদ — আপনার অর্ডার পাঠানো হয়েছে। ট্র্যাকিং আপডেট দেখুন।"
+    },
+    "order_refund": {
+      "subject": "রিফান্ড নোটিশ · {{var.order_number}}",
+      "preheader": "রিফান্ড নোটিশ",
+      "title": "রিফান্ড নোটিশ",
+      "p2": "এখানে আপনার অর্ডার রিফান্ডের বিবরণ আছে।"
+    },
+    "product_update": {
+      "subject": "পণ্য আপডেট",
+      "preheader": "পণ্য আপডেট",
+      "title": "পণ্য আপডেট",
+      "p1": "পর্যালোচনার জন্য একটি পণ্য আপডেট প্রস্তুত:"
+    },
+    "quote_reply": {
+      "subject": "কোট উত্তর",
+      "preheader": "কোট উত্তর",
+      "title": "কোট উত্তর",
+      "p1": "আপনার একটি নতুন কোট উত্তর আছে:"
+    },
+    "notification": {
+      "subject": "[{{var.type_label}}] {{var.title}}"
+    }
+  },
+  "ar_SA": {
+    "shell": {
+      "lang": "ar",
+      "need_help": "هل تحتاج مساعدة؟",
+      "visit": "زيارة",
+      "support": "الدعم:",
+      "phone": "الهاتف:",
+      "hours": "ساعات العمل:",
+      "address": "العنوان:",
+      "auto_footer": "أُرسلت هذه الرسالة تلقائيًا. يُرجى عدم الرد. إذا لم تكن تتوقعها، يمكنك تجاهلها."
+    },
+    "shared": {
+      "topic": "الموضوع",
+      "order_no": "رقم الطلب",
+      "order_uuid": "معرّف الطلب UUID",
+      "email": "البريد",
+      "status": "الحالة",
+      "total": "الإجمالي",
+      "order": "الطلب",
+      "hello": "مرحبًا {{var.customer_name}}،",
+      "placed_at": "تاريخ الطلب"
+    },
+    "password_reset": {
+      "subject": "أعد تعيين كلمة المرور · {{var.customer_email}}",
+      "preheader": "أعد تعيين كلمة المرور",
+      "title": "أعد تعيين كلمة مرور حسابك",
+      "p1": "تلقّينا طلبًا لإعادة تعيين كلمة المرور لـ <strong style=\"color:#16333f;\">{{var.customer_email}}</strong>.",
+      "p2": "انقر الزر أدناه لتعيين كلمة مرور جديدة. ينتهي صلاحية هذا الرابط قريبًا.",
+      "cta": "إعادة تعيين كلمة المرور",
+      "fallback": "إذا لم يعمل الزر، انسخ هذا الرابط إلى المتصفح:"
+    },
+    "email_binding": {
+      "subject": "تحقق من ربط بريدك · {{var.email}}",
+      "preheader": "تحقق من ربط بريدك",
+      "title": "تحقق من ربط بريدك",
+      "p1": "أنت تربط <strong>{{var.email}}</strong> بجلسة خدمة العملاء.",
+      "p2": "يرجى التحقق من العنوان لنتمكن من مواصلة مساعدتك بأمان.",
+      "fallback": "رابط بديل:",
+      "cta": "تحقق من البريد"
+    },
+    "fulfillment_consolation": {
+      "subject": "تعذّر تنفيذ الطلب — بدأ الاسترداد · {{var.order_uuid}}",
+      "preheader": "تحديث الطلب وإشعار الاسترداد",
+      "title": "تحديث الطلب وإشعار الاسترداد",
+      "p1": "نأسف — لا يمكن تنفيذ جزء من طلبك. بدأ استرداد عبر وسيلة الدفع الأصلية."
+    },
+    "unpaid_order_reminder": {
+      "subject": "تذكير بطلب غير مدفوع · {{var.order_number}}",
+      "preheader": "طلبك ما زال غير مدفوع",
+      "title": "طلبك ما زال غير مدفوع",
+      "p2": "الطلب <strong>{{var.order_number}}</strong> ما زال بانتظار الدفع. إن رغبت بالمنتجات فأكمل عبر الرابط.",
+      "cta": "متابعة الدفع"
+    },
+    "order_created": {
+      "subject": "تم تأكيد طلبك · {{var.order_number}}",
+      "preheader": "تم تأكيد طلبك",
+      "title": "تم تأكيد طلبك",
+      "p2": "شكرًا لك — تم إنشاء طلبك وهو قيد التحضير."
+    },
+    "order_paid": {
+      "subject": "تم استلام الدفع · {{var.order_number}}",
+      "preheader": "تم استلام الدفع",
+      "title": "تم استلام الدفع",
+      "p2": "أكدنا دفعتك. سيستمر التنفيذ قريبًا."
+    },
+    "order_status_changed": {
+      "subject": "تم تحديث حالة الطلب · {{var.order_number}}",
+      "preheader": "تم تحديث حالة الطلب",
+      "title": "تم تحديث حالة الطلب",
+      "p2": "تغيّرت حالة طلبك. التفاصيل أدناه."
+    },
+    "order_shipped": {
+      "subject": "تم شحن طلبك · {{var.order_number}}",
+      "preheader": "تم شحن طلبك",
+      "title": "تم شحن طلبك",
+      "p2": "خبر سار — تم شحن طلبك. تابع تحديثات التتبع."
+    },
+    "order_refund": {
+      "subject": "إشعار استرداد · {{var.order_number}}",
+      "preheader": "إشعار استرداد",
+      "title": "إشعار استرداد",
+      "p2": "إليك تفاصيل استرداد طلبك."
+    },
+    "product_update": {
+      "subject": "تحديث المنتج",
+      "preheader": "تحديث المنتج",
+      "title": "تحديث المنتج",
+      "p1": "هناك تحديث للمنتج جاهز للمراجعة:"
+    },
+    "quote_reply": {
+      "subject": "رد على عرض السعر",
+      "preheader": "رد على عرض السعر",
+      "title": "رد على عرض السعر",
+      "p1": "لديك رد جديد على عرض السعر:"
+    },
+    "notification": {
+      "subject": "[{{var.type_label}}] {{var.title}}"
+    }
+  },
+  "ur_PK": {
+    "shell": {
+      "lang": "ur",
+      "need_help": "مدد درکار ہے؟",
+      "visit": "وزٹ کریں",
+      "support": "سپورٹ:",
+      "phone": "فون:",
+      "hours": "اوقات:",
+      "address": "پتہ:",
+      "auto_footer": "یہ پیغام خود بخود بھیجا گیا ہے۔ براہ کرم جواب نہ دیں۔ اگر آپ نے اس کی توقع نہیں کی تو نظر انداز کر سکتے ہیں۔"
+    },
+    "shared": {
+      "topic": "موضوع",
+      "order_no": "آرڈر نمبر",
+      "order_uuid": "آرڈر UUID",
+      "email": "ای میل",
+      "status": "حیثیت",
+      "total": "کل",
+      "order": "آرڈر",
+      "hello": "سلام {{var.customer_name}}،",
+      "placed_at": "آرڈر کا وقت"
+    },
+    "password_reset": {
+      "subject": "اپنا پاس ورڈ ری سیٹ کریں · {{var.customer_email}}",
+      "preheader": "اپنا پاس ورڈ ری سیٹ کریں",
+      "title": "اپنے اکاؤنٹ کا پاس ورڈ ری سیٹ کریں",
+      "p1": "ہمیں <strong style=\"color:#16333f;\">{{var.customer_email}}</strong> کے لیے پاس ورڈ ری سیٹ کی درخواست ملی ہے۔",
+      "p2": "نیا پاس ورڈ سیٹ کرنے کے لیے نیچے والے بٹن پر کلک کریں۔ یہ لنک جلد ختم ہو جائے گا۔",
+      "cta": "پاس ورڈ ری سیٹ کریں",
+      "fallback": "اگر بٹن کام نہ کرے تو یہ لنک براؤزر میں کاپی کریں:"
+    },
+    "email_binding": {
+      "subject": "ای میل بائنڈنگ تصدیق کریں · {{var.email}}",
+      "preheader": "ای میل بائنڈنگ تصدیق کریں",
+      "title": "ای میل بائنڈنگ تصدیق کریں",
+      "p1": "آپ <strong>{{var.email}}</strong> کو کسٹمر سروس سیشن سے منسلک کر رہے ہیں۔",
+      "p2": "براہ کرم پتہ تصدیق کریں تاکہ ہم محفوظ طریقے سے مدد جاری رکھ سکیں۔",
+      "fallback": "متبادل لنک:",
+      "cta": "ای میل تصدیق کریں"
+    },
+    "fulfillment_consolation": {
+      "subject": "آرڈر پورا نہیں ہو سکتا — ریفنڈ شروع · {{var.order_uuid}}",
+      "preheader": "آرڈر اپ ڈیٹ اور ریفنڈ نوٹس",
+      "title": "آرڈر اپ ڈیٹ اور ریفنڈ نوٹس",
+      "p1": "معذرت — آپ کے آرڈر کا کچھ حصہ پورا نہیں ہو سکتا۔ اصل ادائیگی کے طریقے سے ریفنڈ شروع کر دیا گیا ہے۔"
+    },
+    "unpaid_order_reminder": {
+      "subject": "غیر ادا شدہ آرڈر یاد دہانی · {{var.order_number}}",
+      "preheader": "آپ کا آرڈر ابھی غیر ادا شدہ ہے",
+      "title": "آپ کا آرڈر ابھی غیر ادا شدہ ہے",
+      "p2": "آرڈر <strong>{{var.order_number}}</strong> ابھی ادائیگی کا منتظر ہے۔ اگر آپ آئٹمز چاہتے ہیں تو لنک سے جاری رکھیں۔",
+      "cta": "ادائیگی جاری رکھیں"
+    },
+    "order_created": {
+      "subject": "آپ کا آرڈر تصدیق ہو گیا · {{var.order_number}}",
+      "preheader": "آپ کا آرڈر تصدیق ہو گیا",
+      "title": "آپ کا آرڈر تصدیق ہو گیا",
+      "p2": "شکریہ — آپ کا آرڈر بن گیا ہے اور تیاری جاری ہے۔"
+    },
+    "order_paid": {
+      "subject": "ادائیگی موصول · {{var.order_number}}",
+      "preheader": "ادائیگی موصول",
+      "title": "ادائیگی موصول",
+      "p2": "ہم نے آپ کی ادائیگی تصدیق کر لی ہے۔ جلد تکمیل جاری رہے گی۔"
+    },
+    "order_status_changed": {
+      "subject": "آرڈر کی حیثیت اپ ڈیٹ · {{var.order_number}}",
+      "preheader": "آرڈر کی حیثیت اپ ڈیٹ",
+      "title": "آرڈر کی حیثیت اپ ڈیٹ",
+      "p2": "آپ کے آرڈر کی حیثیت بدل گئی ہے۔ تفصیل نیچے ہے۔"
+    },
+    "order_shipped": {
+      "subject": "آپ کا آرڈر بھیج دیا گیا · {{var.order_number}}",
+      "preheader": "آپ کا آرڈر بھیج دیا گیا",
+      "title": "آپ کا آرڈر بھیج دیا گیا",
+      "p2": "اچھی خبر — آپ کا آرڈر بھیج دیا گیا ہے۔ ٹریکنگ اپ ڈیٹ دیکھیں۔"
+    },
+    "order_refund": {
+      "subject": "ریفنڈ نوٹس · {{var.order_number}}",
+      "preheader": "ریفنڈ نوٹس",
+      "title": "ریفنڈ نوٹس",
+      "p2": "یہاں آپ کے آرڈر ریفنڈ کی تفصیل ہے۔"
+    },
+    "product_update": {
+      "subject": "پروڈکٹ اپ ڈیٹ",
+      "preheader": "پروڈکٹ اپ ڈیٹ",
+      "title": "پروڈکٹ اپ ڈیٹ",
+      "p1": "جائزے کے لیے ایک پروڈکٹ اپ ڈیٹ تیار ہے:"
+    },
+    "quote_reply": {
+      "subject": "کوٹ جواب",
+      "preheader": "کوٹ جواب",
+      "title": "کوٹ جواب",
+      "p1": "آپ کے پاس نیا کوٹ جواب ہے:"
+    },
+    "notification": {
+      "subject": "[{{var.type_label}}] {{var.title}}"
+    }
+  }
+}

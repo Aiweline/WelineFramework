@@ -157,17 +157,20 @@ abstract class AbstractSocialLoginProvider implements SocialLoginProviderInterfa
         curl_close($ch);
         if ($errno !== 0 || !is_string($raw)) {
             $detail = $error !== '' ? $error : 'network';
+            error_log('Weline_Customer social OAuth HTTP failed: errno=' . $errno . ' ' . $detail);
             if ($errno === CURLE_OPERATION_TIMEDOUT
                 || $errno === CURLE_COULDNT_CONNECT
                 || stripos($detail, 'timed out') !== false
                 || stripos($detail, 'timeout') !== false
+                || stripos($detail, 'Could not connect') !== false
             ) {
-                throw new \RuntimeException((string) __(
-                    '社媒 OAuth 请求失败：无法连通提供商接口（%{1}）。若服务器无法直连 Google/Meta，请在「顾客社媒登录 → 出站代理」配置 HTTP/SOCKS 代理，或设置 HTTPS_PROXY。',
-                    [$detail]
-                ));
+                // Keep msgid untranslated: callback URL has no locale prefix; controller
+                // translates after restoring storefront language.
+                throw new \RuntimeException(
+                    '无法连接 Google 或 Facebook 登录服务。请确认本机出站代理已启动，或在「顾客社媒登录 → 出站代理」填写可用代理。'
+                );
             }
-            throw new \RuntimeException((string) __('社媒 OAuth 请求失败：%{1}', [$detail]));
+            throw new \RuntimeException('社媒登录暂时失败，请稍后重试。');
         }
         $json = json_decode($raw, true);
         if (!is_array($json)) {

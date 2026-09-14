@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Marketing\Service;
 
+use Weline\Framework\DateTime\Timezone;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Marketing\Api\Deal\ExternalDealDiscountProviderInterface;
 use Weline\Marketing\Api\Deal\ExternalDealDiscountRequest;
@@ -43,7 +44,7 @@ final class ExternalDealDiscountProvider implements ExternalDealDiscountProvider
             $rule->clearData();
         }
 
-        $now = date('Y-m-d H:i:s');
+        $now = Timezone::utcNowSql();
         $sourceKey = trim($request->sourceKey);
         $name = trim($request->displayName);
         if ($name === '') {
@@ -59,6 +60,8 @@ final class ExternalDealDiscountProvider implements ExternalDealDiscountProvider
         );
         $rule->setData(Rule::schema_fields_PRIORITY, max(0, $request->priority));
         $rule->setData(Rule::schema_fields_IS_STOP_PROCESSING, 0);
+        $rule->setData(Rule::schema_fields_START_DATE, $request->startsAtUtc);
+        $rule->setData(Rule::schema_fields_END_DATE, $request->endsAtUtc);
         $rule->setData(Rule::schema_fields_UPDATED_AT, $now);
         if (!$rule->getId()) {
             $rule->setData(Rule::schema_fields_CREATED_AT, $now);

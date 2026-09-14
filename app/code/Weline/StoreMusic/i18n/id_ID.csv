@@ -1,0 +1,46 @@
+﻿进店音乐,"Musik toko"
+settings,settings
+进店音乐与氛围播放配置,"Pengaturan musik dan suasana toko"
+查看进店音乐配置,"Lihat pengaturan musik toko"
+查看进店音乐曲目与播放配置,"Lihat trek dan pengaturan pemutaran"
+播放控制,"Kontrol pemutaran"
+上一首,Sebelumnya
+播放,Putar
+停止,Berhenti
+停止播放,"Hentikan pemutaran"
+下一首,Berikutnya
+"请先同意营销 Cookie 后再播放","Setujui cookie pemasaran sebelum memutar"
+点击开启音乐,"Ketuk untuk memutar musik"
+点击开启声音,"Ketuk untuk menyalakan suara"
+波形不可用,"Gelombang tidak tersedia"
+开启波形,"Aktifkan gelombang"
+关闭波形,"Nonaktifkan gelombang"
+播放中,Memutar
+当前浏览器暂不支持此音频格式,"Browser ini tidak mendukung format audio ini"
+音频加载失败，请换一首曲目或格式,"Audio gagal dimuat. Coba trek atau format lain."
+已关闭自动播放，点击播放可重新开启,"Putar otomatis mati. Tekan putar untuk lanjut."
+已在其他页面播放,"Sedang diputar di halaman lain"
+播放列表,"Daftar putar"
+"共 {n} 首","{n} trek"
+点开选曲,"Buka pemilih trek"
+选择曲目聆听,"Pilih trek untuk didengar"
+音量,Volume
+配置写入当前作用范围；可多选曲目、拖拽排序，并为简介按语言填写。启用且至少一首曲目后，店面左下角显示进店音乐浮层。,"Pengaturan berlaku untuk cakupan saat ini. Pilih banyak trek, seret untuk mengurutkan, dan isi intro per bahasa. Jika aktif dengan minimal satu trek, widget muncul di kiri bawah toko."
+在统一配置中心打开,"Buka di pusat konfigurasi terpadu"
+作用范围,Cakupan
+进店曲目,"Trek masuk toko"
+"可多选 mp3 / wav / ogg / m4a / aac / flac / opus / wma 等，单文件最大约 20MB。拖动手柄调整顺序；简介按下方语言分别填写。变更后自动写入当前范围。","Pilih banyak mp3 / wav / ogg / m4a / aac / flac / opus / wma, dll. Maks ≈20MB per file. Seret untuk mengurutkan; isi intro per bahasa di bawah. Perubahan tersimpan otomatis ke cakupan saat ini."
+简介编辑语言,"Bahasa edit intro"
+切换语言后可为每首曲目填写对应简介；店面按访客语言展示。,"Setelah ganti bahasa, isi intro tiap trek; toko menampilkan bahasa pengunjung."
+尚未选择曲目。请用上方媒体库添加多首进店音乐。,"Belum ada trek. Tambahkan musik masuk lewat pustaka media di atas."
+拖拽排序,"Seret untuk mengurutkan"
+曲名,Judul
+简介,Intro
+选择进店音乐（可多选）,"Pilih musik masuk (multi)"
+选择作用范围,"Pilih cakupan"
+搜索作用范围,"Cari cakupan"
+折叠,Ciutkan
+展开,Perluas
+未找到匹配作用范围,"Tidak ada cakupan yang cocok"
+进店氛围音乐,"Musik suasana toko"
+关闭选曲,"Tutup pemilih trek"

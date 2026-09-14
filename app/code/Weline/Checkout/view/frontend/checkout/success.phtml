@@ -61,7 +61,13 @@ $shippingAddress = is_array($shipping['address'] ?? null) ? $shipping['address']
 $shippingName = trim((string)($shippingAddress['name'] ?? ''));
 $shippingPhone = trim((string)($shippingAddress['phone'] ?? ''));
 $shippingEmail = trim((string)($shippingAddress['email'] ?? ''));
-$shippingMethod = trim((string)($shipping['method'] ?? $shipping['method_label'] ?? ''));
+$shippingMethod = trim((string)($this->getData('shipping_method_label') ?? ''));
+if ($shippingMethod === '') {
+    $shippingMethod = trim((string)($shipping['method_label'] ?? ''));
+}
+if ($shippingMethod === '') {
+    $shippingMethod = trim((string)($shipping['method'] ?? ''));
+}
 $shippingLines = array_values(array_filter([
     trim((string)($shippingAddress['address'] ?? '')),
     trim((string)($shippingAddress['address1'] ?? '')),
@@ -74,7 +80,11 @@ $shippingLines = array_values(array_filter([
     ], static fn(string $v): bool => $v !== '')),
     trim((string)($shippingAddress['country_code'] ?? '')),
 ], static fn(string $v): bool => $v !== ''));
-$orderItems = is_array($orderV2) && is_array($orderV2['items'] ?? null) ? $orderV2['items'] : [];
+$orderItemsRaw = is_array($orderV2) && is_array($orderV2['items'] ?? null) ? $orderV2['items'] : [];
+$orderItemsDisplay = $this->getData('order_v2_items_display');
+$orderItems = is_array($orderItemsDisplay) && $orderItemsDisplay !== []
+    ? $orderItemsDisplay
+    : $orderItemsRaw;
 $money = is_array($orderV2) && is_array($orderV2['money'] ?? null) ? $orderV2['money'] : [];
 $totalsLines = [];
 if ($orderCurrency !== '' && $money !== []) {
@@ -83,7 +93,7 @@ if ($orderCurrency !== '' && $money !== []) {
         ['key' => 'shipping_amount_minor', 'label' => (string) __('运费')],
         ['key' => 'tax_amount_minor', 'label' => (string) __('税费')],
         ['key' => 'discount_amount_minor', 'label' => (string) __('优惠'), 'negate' => true],
-        ['key' => 'cod_fee_amount_minor', 'label' => (string) __('货到付款手续费')],
+        ['key' => 'cod_fee_amount_minor', 'label' => (string) \Weline\Theme\Helper\WidgetI18n::label('货到付款手续费')],
         ['key' => 'grand_total_minor', 'label' => (string) __('订单总额'), 'emphasis' => true],
     ];
     foreach ($map as $row) {

@@ -1,7 +1,7 @@
 {
     "success": false,
     "code": "maintenance",
-    "message": "系统正在升级维护中，请稍后再试。",
+    "message": "सिस्टम अपग्रेड रखरखाव चल रहा है। कृपया बाद में पुनः प्रयास करें।",
     "data": {
         "retry_after": 60,
         "lang": "hi_IN",

@@ -2,6 +2,8 @@
 /** @var list<array<string,mixed>> $candidates */
 /** @var list<array<string,mixed>> $cases */
 /** @var string $returnUrl */
+use Weline\Order\Service\BackendOrderOutcomeChip;
+
 $candidates = is_array($candidates ?? null) ? $candidates : [];
 $cases = is_array($cases ?? null) ? $cases : [];
 $returnUrl = (string)($returnUrl ?? '');
@@ -50,15 +52,53 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
   </div>
   <?php if ($cases !== []): ?>
   <div class="w-table-wrap">
-    <table class="w-table">
-      <thead><tr><th><?= __('案例') ?></th><th><?= __('金额') ?></th><th><?= __('状态') ?></th><th><?= __('顾客视图') ?></th></tr></thead>
+    <table class="w-table" data-testid="order-edit-refund-history">
+      <thead>
+        <tr>
+          <th><?= __('案例') ?></th>
+          <th><?= __('金额') ?></th>
+          <th><?= __('支付方式') ?></th>
+          <th><?= __('渠道退款号') ?></th>
+          <th><?= __('原因') ?></th>
+          <th><?= __('状态') ?></th>
+          <th><?= __('顾客视图') ?></th>
+        </tr>
+      </thead>
       <tbody>
         <?php foreach ($cases as $row): ?>
           <tr data-testid="refund-case-row">
             <td><code><?= $escape($row['refund_case_uuid'] ?? '') ?></code></td>
-            <td><?= (int)($row['amount_minor'] ?? 0) ?></td>
-            <td><?= $escape($row['status'] ?? '') ?></td>
-            <td><?= $escape($row['customer_view'] ?? '') ?></td>
+            <td><?= $escape(($row['currency'] ?? '') . ' ' . number_format(((int)($row['amount_minor'] ?? 0)) / 100, 2, '.', '')) ?></td>
+            <td><?= $escape($row['payment_method'] ?? '') ?></td>
+            <td>
+              <code><?= $escape($row['provider_refund_id'] ?? '') ?></code>
+              <?php if (trim((string)($row['payment_refund_code'] ?? '')) !== ''): ?>
+                <div class="w-text" data-size="sm" data-tone="muted"><?= $escape($row['payment_refund_code'] ?? '') ?></div>
+              <?php endif; ?>
+            </td>
+            <td><?= $escape($row['reason'] ?? '') ?></td>
+            <td>
+              <div class="w-cluster" style="--w-gap:var(--weline-space-1);" data-testid="order-edit-refund-status">
+                <?php foreach (BackendOrderOutcomeChip::presentMany(
+                    (string)($row['status'] ?? ''),
+                    (string)($row['channel_status'] ?? ''),
+                ) as $outcomeChip): ?>
+                  <?= $this->fetch('Weline_Order::templates/Backend/Order/partial/outcome-chip.phtml', [
+                      'chip' => $outcomeChip,
+                      'testid' => 'order-edit-refund-status-chip',
+                  ]) ?>
+                <?php endforeach; ?>
+              </div>
+            </td>
+            <td data-testid="order-edit-refund-customer-view">
+              <?php
+              $customerChip = BackendOrderOutcomeChip::present((string)($row['customer_view'] ?? ''));
+              echo $this->fetch('Weline_Order::templates/Backend/Order/partial/outcome-chip.phtml', [
+                  'chip' => $customerChip,
+                  'testid' => 'order-edit-refund-customer-view-chip',
+              ]);
+              ?>
+            </td>
           </tr>
         <?php endforeach; ?>
       </tbody>

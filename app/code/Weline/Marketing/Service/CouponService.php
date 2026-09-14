@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Weline\Marketing\Service;
 
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\DateTime\Timezone;
 use Weline\Marketing\Model\Coupon\Coupon;
 use Weline\Marketing\Model\Rule\Rule;
 use Weline\Marketing\Model\RuleUsage\RuleUsage;
@@ -63,8 +64,10 @@ class CouponService
         $data[Coupon::schema_fields_TYPE] = $type;
         $data[Coupon::schema_fields_STATUS] = $status;
         $data[Coupon::schema_fields_CODE] = strtoupper(trim((string)($data[Coupon::schema_fields_CODE] ?? '')));
-        $data[Coupon::schema_fields_CREATED_AT] = $data[Coupon::schema_fields_CREATED_AT] ?? date('Y-m-d H:i:s');
-        $data[Coupon::schema_fields_UPDATED_AT] = date('Y-m-d H:i:s');
+        $nowUtc = Timezone::utcNowSql();
+        $data[Coupon::schema_fields_CREATED_AT] = $data[Coupon::schema_fields_CREATED_AT] ?? $nowUtc;
+        $data[Coupon::schema_fields_UPDATED_AT] = $nowUtc;
+        $this->normalizeCouponWindowFields($data);
 
         $sourceType = trim((string)($data[Coupon::schema_fields_SOURCE_TYPE] ?? ''));
         $sourceModule = trim((string)($data[Coupon::schema_fields_SOURCE_MODULE] ?? ''));
@@ -167,8 +170,14 @@ class CouponService
             Coupon::schema_fields_MIN_AMOUNT => (float)($data[Coupon::schema_fields_MIN_AMOUNT] ?? 0),
             Coupon::schema_fields_USAGE_LIMIT => (int)($data[Coupon::schema_fields_USAGE_LIMIT] ?? 0),
             Coupon::schema_fields_CUSTOMER_LIMIT => (int)($data[Coupon::schema_fields_CUSTOMER_LIMIT] ?? 1),
-            Coupon::schema_fields_UPDATED_AT => date('Y-m-d H:i:s'),
+            Coupon::schema_fields_UPDATED_AT => Timezone::utcNowSql(),
         ]);
+        $this->normalizeCouponWindowFields($data);
+        foreach ([Coupon::schema_fields_START_DATE, Coupon::schema_fields_END_DATE] as $windowField) {
+            if (array_key_exists($windowField, $data)) {
+                $coupon->setData($windowField, $data[$windowField]);
+            }
+        }
         // 来源只在显式传入时更新，避免后台编辑抹掉系统发券归因
         foreach ([
             Coupon::schema_fields_SOURCE_MODULE,
@@ -395,5 +404,28 @@ class CouponService
             'total_usage' => $totalUsage,
             'total_discount' => $totalDiscount ?? 0,
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    private function normalizeCouponWindowFields(array &$data): void
+    {
+        foreach ([Coupon::schema_fields_START_DATE, Coupon::schema_fields_END_DATE] as $field) {
+            if (!array_key_exists($field, $data)) {
+                continue;
+            }
+            $raw = trim((string)$data[$field]);
+            if ($raw === '') {
+                $data[$field] = null;
+                continue;
+            }
+            // Programmatic UTC SQL writers (e.g. RandomCoupon) already store Y-m-d H:i:s without T.
+            if (preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/D', $raw) === 1) {
+                $data[$field] = $raw;
+                continue;
+            }
+            $data[$field] = Timezone::localInputToUtcSql($raw);
+        }
     }
 }

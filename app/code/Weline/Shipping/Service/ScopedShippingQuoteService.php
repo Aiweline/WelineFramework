@@ -83,7 +83,7 @@ final class ScopedShippingQuoteService implements ShippingQuoteServiceInterface
             }
             $options[] = [
                 'service_code' => $code,
-                'label' => (string)($rate['label'] ?? $code),
+                'label' => (string)__((string)($rate['label'] ?? $code)),
                 'amount_minor' => (int)$rate['amount_minor'],
                 'currency' => $request->currency,
                 'incoterm' => (string)($rate['incoterm'] ?? ''),

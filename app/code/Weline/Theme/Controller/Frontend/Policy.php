@@ -80,10 +80,10 @@ class Policy extends FrontendController
 
         $title = trim((string)$this->request->getParam('theme_page_title', ''));
         if ($title !== '') {
-            $this->assign('title', __($title));
+            $this->assign('title', \Weline\Theme\Helper\WidgetI18n::label($title));
         }
         $this->assignThemeShellSeo(
-            $title !== '' ? (string)__($title) : '',
+            $title !== '' ? \Weline\Theme\Helper\WidgetI18n::label($title) : '',
             (string)$layoutType,
         );
 

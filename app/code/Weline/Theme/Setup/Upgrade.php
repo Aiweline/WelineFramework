@@ -22,7 +22,7 @@ use Weline\Theme\Service\SharedChromeService;
 
 class Upgrade implements UpgradeInterface
 {
-    public const VERSION = '2.2.326';
+    public const VERSION = '2.2.327';
 
     public function setup(Data\Setup $setup, Data\Context $context): void
     {

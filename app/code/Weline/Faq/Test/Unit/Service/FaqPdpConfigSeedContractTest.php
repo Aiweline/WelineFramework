@@ -26,8 +26,12 @@ final class FaqPdpConfigSeedContractTest extends TestCase
     public function testTemplateSeedServiceHasFourPacks(): void
     {
         $source = (string)file_get_contents(dirname(__DIR__, 3) . '/Service/FaqTemplateSeedService.php');
-        foreach (['RETAIL', 'CROSS_BORDER', 'VIRTUAL', 'B2B', 'shipping', 'faq_key', 'TYPE_CODE', 'zh_Hans_CN', 'en_US', 'How long does delivery take?'] as $needle) {
+        foreach (['FaqTemplatePacks', 'FaqSeedCopyCatalog', 'FaqSeedLocaleResolver', 'TYPE_CODE', 'zh_Hans_CN', 'en_US'] as $needle) {
             self::assertStringContainsString($needle, $source);
+        }
+        $catalog = (string)file_get_contents(dirname(__DIR__, 3) . '/Service/FaqSeedCopyCatalog.php');
+        foreach (['RETAIL', 'CROSS_BORDER', 'VIRTUAL', 'B2B', 'shipping', 'faq_key', 'How long does delivery take?', 'كم يستغرق التوصيل؟', 'hi_IN', 'ar_SA'] as $needle) {
+            self::assertStringContainsString($needle, $catalog);
         }
     }
 
@@ -37,7 +41,7 @@ final class FaqPdpConfigSeedContractTest extends TestCase
         self::assertStringContainsString('FaqTemplateSeedService', $upgrade);
         self::assertStringContainsString('migrateEmptyLocaleToZhHans', $upgrade);
         $module = include dirname(__DIR__, 3) . '/etc/module.php';
-        self::assertSame('1.0.6', $module['version'] ?? null);
+        self::assertSame('1.0.11', $module['version'] ?? null);
         self::assertArrayHasKey('Weline_SystemConfig', $module['optional'] ?? []);
     }
 

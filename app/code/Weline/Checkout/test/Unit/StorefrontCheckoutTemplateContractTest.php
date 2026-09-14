@@ -16,7 +16,8 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
         self::assertStringContainsString('const successPageUrl =', $template);
         self::assertStringNotContainsString("window.location.href = '/checkout/success", $template);
         self::assertStringContainsString("successUrl.searchParams.set('checkout_token', checkoutToken);", $template);
-        self::assertStringContainsString('invalidateAfterCheckout', $template);
+        self::assertStringContainsString('weline_checkout_quote_token_w', $template);
+        self::assertStringContainsString('quote_token: readStoredQuoteToken()', $template);
         self::assertStringContainsString('weline:checkout:success', $template);
         self::assertStringNotContainsString('checkout/success-page', $template);
         $controllerRoot = dirname(__DIR__, 6) . '/app/code/Weline/Checkout/Controller';
@@ -268,6 +269,8 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
         self::assertStringContainsString('$escape = static fn', $template);
         self::assertStringNotContainsString('$this->escapeHtml(', $template);
         self::assertStringContainsString("__('感谢您的订购！')", $template);
+        self::assertStringContainsString("__('您的订单已支付成功，我们正在为您准备发货。')", $template);
+        self::assertStringContainsString("__('确认信息将发送至')", $template);
         self::assertStringContainsString('<w:slot id="checkout-success-guest-account"', $template);
         self::assertStringContainsString('weline-code="checkout.success.guest_account"', $template);
         self::assertStringContainsString('name="checkout-success-guest-convert"', $template);
@@ -296,12 +299,23 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
         $controller = $this->read('app/code/Weline/Checkout/Controller/Success.php');
         self::assertStringContainsString("number_format(((int)(\$order->money['grand_total_minor'] ?? 0)) / 100, 2, '.', ',')", $controller);
         self::assertStringContainsString('CheckoutSessionAccessService', $controller);
+        self::assertStringContainsString('CheckoutSuccessPresentationService', $controller);
+        self::assertStringContainsString('order_v2_items_display', $controller);
+        self::assertStringContainsString('shipping_method_label', $controller);
         self::assertStringContainsString("getParam('checkout_token'", $controller);
         self::assertStringContainsString('canAccess(', $controller);
         self::assertStringContainsString('canReadOrder(', $controller);
         self::assertStringContainsString(
             "setHeader('Cache-Control', 'private, no-store, max-age=0, must-revalidate')",
             $controller,
+        );
+
+        self::assertStringContainsString('order_v2_items_display', $template);
+        self::assertStringContainsString("getData('shipping_method_label')", $template);
+        self::assertStringContainsString("\$shipping['method_label']", $template);
+        self::assertStringNotContainsString(
+            "\$shipping['method'] ?? \$shipping['method_label']",
+            $template,
         );
     }
 

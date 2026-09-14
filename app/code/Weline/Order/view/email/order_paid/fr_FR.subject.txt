@@ -1,0 +1,1 @@
+Paiement reçu · {{var.order_number}}

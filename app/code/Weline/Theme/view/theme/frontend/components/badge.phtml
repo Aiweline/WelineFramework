@@ -26,7 +26,7 @@ $type = strtolower(trim((string)($this->getData('type') ?? $this->getData('meta.
 $class = trim((string)($this->getData('class') ?? $this->getData('meta.class') ?? ''));
 $id = trim((string)($this->getData('id') ?? $this->getData('meta.id') ?? ''));
 
-$allowedTypes = ['primary', 'secondary', 'success', 'danger', 'warning', 'info'];
+$allowedTypes = ['primary', 'secondary', 'success', 'danger', 'warning', 'info', 'muted'];
 if (!in_array($type, $allowedTypes, true)) {
     $type = 'primary';
 }
@@ -55,9 +55,14 @@ $rootClass = trim($wc . ' w-badge w-badge-' . $type . ($class !== '' ? ' ' . $cl
     color: var(--weline-theme-primary);
 }
 
+.<?= $wc ?>[data-tone="primary"] {
+    background: var(--weline-theme-primary-surface);
+    color: var(--weline-theme-primary);
+}
+
 .<?= $wc ?>[data-tone="secondary"] {
-    background: var(--weline-theme-surface-muted);
-    color: var(--weline-theme-text-muted);
+    background: var(--weline-theme-secondary-surface);
+    color: var(--weline-theme-secondary-emphasis, var(--weline-theme-secondary));
 }
 
 .<?= $wc ?>[data-tone="success"] {
@@ -78,5 +83,10 @@ $rootClass = trim($wc . ' w-badge w-badge-' . $type . ($class !== '' ? ' ' . $cl
 .<?= $wc ?>[data-tone="info"] {
     background: var(--weline-theme-info-surface);
     color: var(--weline-theme-info);
+}
+
+.<?= $wc ?>[data-tone="muted"] {
+    background: var(--weline-theme-surface-muted);
+    color: var(--weline-theme-text-muted);
 }
 </style>

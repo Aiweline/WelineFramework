@@ -13,6 +13,7 @@ use Weline\Blog\Service\BlogSeoFactsBuilder;
 use Weline\Blog\Service\CmsBlogPageRenderBridge;
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Theme\Helper\WidgetI18n;
 
 /** Blog detail: /blog/{slug} — Theme layout blog (Amazon-style article). */
 final class View extends FrontendController
@@ -57,7 +58,7 @@ final class View extends FrontendController
         $this->assign('seo', $this->seoFacts->buildDetailProfile($article, $canonical));
         RequestContext::set('blog.seo.canonical.v1', $canonical);
         $this->assign('blog_rss_url', BlogNamespace::rssPublicPath());
-        $this->assign('blog_rss_label', (string)__('订阅博客 RSS'));
+        $this->assign('blog_rss_label', WidgetI18n::label('订阅博客 RSS'));
 
         if ($article->contentKind === BlogArticle::KIND_CMS) {
             return $this->cmsRenderBridge->render($this, $article);

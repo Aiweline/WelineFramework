@@ -53,6 +53,7 @@ final class QuickPay extends FrontendController
         $this->assign('page_title', (string) __('快捷购买'));
         $this->assign('bill', $row);
         $this->assign('shipping', $shipping);
+        $this->assign('token', $token);
         $path = '/' . ltrim((string) ($row['path'] ?? ('q/' . $token)), '/');
         $this->assign('share_url', $path);
         $this->assign('share_title', (string) __('跨设备支付'));

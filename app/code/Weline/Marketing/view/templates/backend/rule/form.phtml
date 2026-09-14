@@ -73,6 +73,22 @@ $escape = static fn(mixed $v): string => htmlspecialchars((string)$v, ENT_QUOTES
                             <input id="marketing-rule-priority" class="w-input" type="number" name="priority" min="0" value="<?= (int)($ruleData['priority'] ?? 0) ?>" <?= $externalManaged ? 'readonly' : '' ?>>
                         </div>
                     </div>
+                    <?php
+                    $websiteTz = \Weline\Framework\DateTime\Timezone::resolveWebsiteTimezone();
+                    $ruleStart = \Weline\Framework\DateTime\Timezone::utcSqlToLocalInput((string)($ruleData['start_date'] ?? ''), $websiteTz);
+                    $ruleEnd = \Weline\Framework\DateTime\Timezone::utcSqlToLocalInput((string)($ruleData['end_date'] ?? ''), $websiteTz);
+                    ?>
+                    <div class="w-grid">
+                        <div style="--w-span-md:6;--w-mb:var(--weline-space-4);">
+                            <label class="w-field__label" for="marketing-rule-start"><?= __('开始时间') ?></label>
+                            <input id="marketing-rule-start" data-testid="marketing-rule-start" class="w-input" type="datetime-local" name="start_date" value="<?= $escape($ruleStart) ?>" <?= $externalManaged ? 'readonly' : '' ?>>
+                            <p class="w-field__help"><?= __('按站点时区 %{1} 录入（可空=不限制），系统以 UTC 存储与判定。', $websiteTz) ?></p>
+                        </div>
+                        <div style="--w-span-md:6;--w-mb:var(--weline-space-4);">
+                            <label class="w-field__label" for="marketing-rule-end"><?= __('结束时间') ?></label>
+                            <input id="marketing-rule-end" data-testid="marketing-rule-end" class="w-input" type="datetime-local" name="end_date" value="<?= $escape($ruleEnd) ?>" <?= $externalManaged ? 'readonly' : '' ?>>
+                        </div>
+                    </div>
                     <?php if (!$externalManaged): ?>
                         <button data-testid="marketing-rule-submit" class="w-button" type="submit" data-tone="primary">
                             <?= __('保存规则') ?>

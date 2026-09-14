@@ -394,6 +394,14 @@ class OrderService
             }
         }
 
+        if (isset($filters['checkout_entry']) && $filters['checkout_entry']) {
+            $entry = strtolower(trim((string)$filters['checkout_entry']));
+            $allowed = ['checkout', 'express', 'quick_buy', 'helppay', 'unknown'];
+            if ($entry !== '' && \in_array($entry, $allowed, true)) {
+                $model->where(Order::schema_fields_CHECKOUT_ENTRY, $entry);
+            }
+        }
+
         if (isset($filters['source_app']) && $filters['source_app']) {
             $model->where(Order::schema_fields_SOURCE_APP, $filters['source_app']);
         }

@@ -1,7 +1,7 @@
 {
     "success": false,
     "code": "maintenance",
-    "message": "系统正在升级维护中，请稍后再试。",
+    "message": "سسٹم اپ گریڈ کی دیکھ بھال جاری ہے۔ براہ کرم بعد میں دوبارہ کوشش کریں۔",
     "data": {
         "retry_after": 60,
         "lang": "ur_PK",

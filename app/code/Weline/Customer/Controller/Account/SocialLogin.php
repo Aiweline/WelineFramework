@@ -7,6 +7,7 @@ namespace Weline\Customer\Controller\Account;
 use Weline\Customer\Api\Auth\CustomerAccountFacadeInterface;
 use Weline\Customer\Service\CustomerAuthReturnUrlService;
 use Weline\Customer\Service\SocialLogin\SocialLoginAccountLinker;
+use Weline\Customer\Service\SocialLogin\SocialLoginOAuthFailedException;
 use Weline\Customer\Service\SocialLogin\SocialLoginOAuthService;
 use Weline\Customer\Service\SocialLogin\SocialLoginQuickAuthService;
 use Weline\Framework\App\Controller\FrontendController;
@@ -66,6 +67,7 @@ class SocialLogin extends FrontendController
             $started = $oauth->start($provider, $captured, [
                 'intent' => $intent,
                 'customer_id' => $current?->getId() ?? 0,
+                'locale_hint_url' => (string) $this->request->getReferer(),
             ]);
 
             throw new RedirectException((string) $started['authorization_url'], 302);
@@ -101,6 +103,7 @@ class SocialLogin extends FrontendController
                 'error' => (string) ($this->request->getParam('error') ?? ''),
                 'error_description' => (string) ($this->request->getParam('error_description') ?? ''),
             ]);
+            $authReturn->forceLocalizationPrefix((string) ($profile['locale_prefix'] ?? ''));
 
             $intent = (string) ($profile['intent'] ?? SocialLoginOAuthService::INTENT_LOGIN);
             if ($intent === SocialLoginOAuthService::INTENT_BIND) {
@@ -112,7 +115,9 @@ class SocialLogin extends FrontendController
                 $linker->bindProfileToCustomer($profile, $current->getId());
                 MessageManager::success((string) __('社媒账户已绑定'));
 
-                return $this->redirect('/customer/account/index#social-login');
+                return $this->redirect(
+                    $authReturn->formatInternalNavigation('/customer/account/index#social-login')
+                );
             }
 
             $bound = $linker->findBoundIdentity($profile);
@@ -130,17 +135,22 @@ class SocialLogin extends FrontendController
             $token = $oauth->storePending($profile);
 
             return $this->redirect(
-                $this->getUrl('customer/account/social-login/choose', ['token' => $token])
+                $authReturn->buildAuthPageUrl('customer/account/social-login/choose', '', [
+                    'token' => $token,
+                ])
             );
         } catch (ResponseTerminateException $terminate) {
             throw $terminate;
         } catch (\Throwable $e) {
+            if ($e instanceof SocialLoginOAuthFailedException) {
+                $authReturn->forceLocalizationPrefix($e->getLocalePrefix());
+            }
             MessageManager::error($e->getMessage());
             $fallback = $authReturn->resolve($this->session);
 
-            return $this->redirect($this->getUrl('customer/account/login', $fallback !== '' ? [
-                'redirect_url' => $fallback,
-            ] : []));
+            return $this->redirect(
+                $authReturn->buildAuthPageUrl('customer/account/login', $fallback)
+            );
         }
     }
 

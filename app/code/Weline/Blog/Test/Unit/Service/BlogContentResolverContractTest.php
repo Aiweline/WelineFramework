@@ -38,8 +38,8 @@ final class BlogContentResolverContractTest extends TestCase
 
         self::assertStringContainsString('storageSlugForLocale', $source);
         self::assertStringContainsString('public function publicSlugForLocale', $source);
-        self::assertStringContainsString("return \$slug . '-en';", $source);
-        self::assertStringContainsString("substr(\$slug, 0, -3)", $source);
+        self::assertStringContainsString('localeSlugSuffixMap', $source);
+        self::assertStringContainsString("return \$slug . '-' . \$suffix;", $source);
         self::assertStringContainsString("'storage_slug' => \$storageSlug", $source);
         self::assertStringContainsString('if (!is_array($row)', $source);
         self::assertStringContainsString('$row === []', $source);
@@ -50,5 +50,13 @@ final class BlogContentResolverContractTest extends TestCase
         );
         self::assertStringContainsString('$this->resolver->publicSlugForLocale', $indexBuilder);
         self::assertStringContainsString("'storage_slug' => \$storageSlug", $indexBuilder);
+        self::assertStringContainsString('locale: trim($article->locale)', $indexBuilder);
+        self::assertStringNotContainsString("locale: ''", $indexBuilder);
+        self::assertStringContainsString('contentLocaleCandidates', $source);
+        self::assertStringContainsString('defaultContentLocale', $source);
+        self::assertStringContainsString('content_fallback_v2', $source);
+        self::assertStringContainsString('contentIdentityKey', $source);
+        self::assertStringContainsString('localeSlugSuffixMap', $source);
+        self::assertStringContainsString("'hi_IN' => 'hi'", $source);
     }
 }

@@ -265,6 +265,9 @@ http {
     access_log    off;
     sendfile      on;
     server_tokens off;
+    # Default nginx is 1m — that rejects MediaManager / StoreMusic uploads (UI allows up to 512M)
+    # while the picker still shows「允许的文件大小：20 MB」. Align with WLS + MediaAssetUploadService.
+    client_max_body_size 512m;
     tcp_nopush    on;
     tcp_nodelay   on;
     keepalive_timeout  65;

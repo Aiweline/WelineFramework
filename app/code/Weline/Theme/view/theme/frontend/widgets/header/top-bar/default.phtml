@@ -15,12 +15,12 @@
  * @widget.supports {["notice","layout-header-notice","layout-header-announcement","top-bar","site-notice","announcement"]}
  * @widget.exclusive {false}
  *
- * @param text {default="欢迎光临 · 精选好物上新",type="string",label="通知文案"}
- * @param link_text {default="",type="string",label="链接文字"}
- * @param link_url {default="",type="string",label="链接地址"}
- * @param show_icon {default=true,type="bool",label="显示喇叭图标"}
- * @param closeable {default=false,type="bool",label="允许关闭"}
- * @param text_color {default="",type="color",label="文字色"}
+ * @param text {default="欢迎光临 · 精选好物上新",type="string",label="通知文案",i18n=true}
+ * @param link_text {default="",type="string",label="链接文字",i18n=true}
+ * @param link_url {default="",type="string",label="链接地址",i18n=false}
+ * @param show_icon {default=true,type="bool",label="显示喇叭图标",i18n=false}
+ * @param closeable {default=false,type="bool",label="允许关闭",i18n=false}
+ * @param text_color {default="",type="color",label="文字色",i18n=false}
  */
 
 use Weline\Theme\Helper\ThemeUiColor;
@@ -32,6 +32,8 @@ $wc = $scope->cssClass;
 $esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
 
 $isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
+// text/link_text：布局存中文源串；SlotRenderer 已按 locale 合并部件 meta 译文。
+// WidgetI18n 仅兜底仍为中文源串、且无 meta 覆盖时的 CSV 翻译。
 $text = WidgetI18n::label(trim((string)($this->getData('text') ?? '')), '欢迎光临 · 精选好物上新');
 $linkText = WidgetI18n::label(trim((string)($this->getData('link_text') ?? '')), '');
 $linkUrl = \Weline\Theme\Helper\LegacyMediaUrl::sanitize((string)($this->getData('link_url') ?? ''));

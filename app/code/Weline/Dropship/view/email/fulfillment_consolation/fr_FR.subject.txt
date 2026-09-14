@@ -1,0 +1,1 @@
+Commande non exécutable — remboursement lancé · {{var.order_uuid}}

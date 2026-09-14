@@ -5,4 +5,5 @@
     <menu source="Weline_Marketing::commerce:marketing:rules_index" name="rule_list" title="万能优惠规则" action="marketing/backend/rule/index" parent="Weline_Backend::marketing_group" icon="list" order="10"/>
     <menu source="Weline_Marketing::commerce:marketing:coupons_index" name="coupon_list" title="万能优惠券" action="marketing/backend/coupon/index" parent="Weline_Backend::marketing_group" icon="circle" order="20"/>
     <menu source="Weline_Marketing::commerce:marketing:campaigns_index" name="campaign_list" title="万能促销活动" action="marketing/backend/campaign/index" parent="Weline_Backend::marketing_group" icon="circle" order="30"/>
+    <menu source="Weline_Marketing::commerce:marketing:winback_index" name="winback_list" title="挽回活动" action="marketing/backend/winback/index" parent="Weline_Backend::marketing_group" icon="mail" order="40"/>
 </menus>

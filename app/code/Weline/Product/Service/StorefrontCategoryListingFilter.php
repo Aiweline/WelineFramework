@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Product\Service;
 
+use Weline\Theme\Helper\WidgetI18n;
+
 /**
  * Category storefront listing: price buckets + sort applied to offer rows.
  */
@@ -26,19 +28,19 @@ final class StorefrontCategoryListingFilter
         return [
             [
                 'code' => self::PRICE_0_99,
-                'label' => (string)__('0 - 99 元'),
+                'label' => WidgetI18n::label('0 - 99 元'),
                 'min' => 0,
                 'max' => 9900,
             ],
             [
                 'code' => self::PRICE_100_299,
-                'label' => (string)__('100 - 299 元'),
+                'label' => WidgetI18n::label('100 - 299 元'),
                 'min' => 10000,
                 'max' => 29900,
             ],
             [
                 'code' => self::PRICE_300_UP,
-                'label' => (string)__('300 元以上'),
+                'label' => WidgetI18n::label('300 元以上'),
                 'min' => 30000,
                 'max' => null,
             ],

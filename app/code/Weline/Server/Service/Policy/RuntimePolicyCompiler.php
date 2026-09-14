@@ -176,7 +176,7 @@ final class RuntimePolicyCompiler
                     'type' => 'request_limits',
                     'max_uri_bytes' => (int)($requestLimits['max_uri_bytes'] ?? 8192),
                     'max_header_bytes' => (int)($requestLimits['max_header_bytes'] ?? 65536),
-                    'max_body_bytes' => (int)($requestLimits['max_body_bytes'] ?? 16 * 1024 * 1024),
+                    'max_body_bytes' => (int)($requestLimits['max_body_bytes'] ?? 536870912),
                     'normalize_path' => true,
                 ],
                 action: ['type' => 'reject', 'status' => 400],

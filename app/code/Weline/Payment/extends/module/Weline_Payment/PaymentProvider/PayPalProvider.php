@@ -547,11 +547,16 @@ final class PayPalProvider implements ProviderInterface, ProviderConnectInterfac
             $context = $request->getContext();
             $reference = trim((string) ($request->getProviderReference() ?? $request->getTransactionCode() ?? ''));
             $captureId = $this->getApiClient()->resolveCaptureId($config, $reference, $context);
+            [$paypalCurrency, $paypalAmountMinor] = $this->resolvePayPalOrderMoney(
+                $request->getCurrencyCode(),
+                $request->getAmountMinor(),
+                $config,
+            );
             $refund = $this->getApiClient()->refundCapture(
                 $config,
                 $captureId,
-                $request->getCurrencyCode(),
-                $request->getAmountMinor(),
+                $paypalCurrency,
+                $paypalAmountMinor,
                 (string) ($request->getIdempotencyKey() ?? $request->getRefundCode() ?? $captureId),
             );
             $status = strtoupper(trim((string) ($refund['raw']['status'] ?? '')));

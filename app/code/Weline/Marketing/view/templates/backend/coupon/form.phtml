@@ -266,6 +266,30 @@ if (!is_array($couponSource)) {
                     </div>
                 </section>
 
+                <?php
+                $websiteTz = \Weline\Framework\DateTime\Timezone::resolveWebsiteTimezone();
+                $couponStart = \Weline\Framework\DateTime\Timezone::utcSqlToLocalInput($value('start_date'), $websiteTz);
+                $couponEnd = \Weline\Framework\DateTime\Timezone::utcSqlToLocalInput($value('end_date'), $websiteTz);
+                ?>
+                <section class="w-stack marketing-coupon-form__section" style="--w-gap:var(--weline-space-3);" data-testid="marketing-coupon-section-window">
+                    <h2 class="w-heading marketing-coupon-form__section-title" data-level="5"><?= __('有效期') ?></h2>
+                    <div class="w-grid">
+                        <div style="--w-span-md:6;">
+                            <div class="w-field" data-label-layout="stacked">
+                                <label class="w-field__label" for="marketing-coupon-start"><?= __('开始时间') ?></label>
+                                <input id="marketing-coupon-start" data-testid="marketing-coupon-start" class="w-input" type="datetime-local" name="start_date" value="<?= $escapeHtml($couponStart) ?>">
+                                <p class="w-field__help"><?= __('按站点时区 %{1} 录入（可空=不限制），系统以 UTC 存储与判定。', $websiteTz) ?></p>
+                            </div>
+                        </div>
+                        <div style="--w-span-md:6;">
+                            <div class="w-field" data-label-layout="stacked">
+                                <label class="w-field__label" for="marketing-coupon-end"><?= __('结束时间') ?></label>
+                                <input id="marketing-coupon-end" data-testid="marketing-coupon-end" class="w-input" type="datetime-local" name="end_date" value="<?= $escapeHtml($couponEnd) ?>">
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
                 <div class="w-cluster">
                     <button data-testid="marketing-coupon-submit" class="w-button" type="submit" data-tone="primary">
                         <?= $isEdit ? __('更新优惠券') : __('保存优惠券') ?>

@@ -1,0 +1,1 @@
+تم تأكيد طلبك · {{var.order_number}}

@@ -77,6 +77,22 @@ $pageTitle = ((int)$val('id', 0) > 0) ? (string)__('编辑活动主题') : (stri
                             </select>
                         </div>
                     </div>
+                    <?php
+                    $websiteTz = \Weline\Framework\DateTime\Timezone::resolveWebsiteTimezone();
+                    $startsLocal = \Weline\Framework\DateTime\Timezone::utcSqlToLocalInput((string)$val('starts_at'), $websiteTz);
+                    $endsLocal = \Weline\Framework\DateTime\Timezone::utcSqlToLocalInput((string)$val('ends_at'), $websiteTz);
+                    ?>
+                    <div class="w-grid">
+                        <div style="--w-span-md:6;--w-mb:var(--weline-space-4);">
+                            <label class="w-field__label" for="promotion-theme-starts-at"><?= __('开始时间') ?></label>
+                            <input id="promotion-theme-starts-at" data-testid="promotion-theme-starts-at" class="w-input" type="datetime-local" name="starts_at" value="<?= $escape($startsLocal) ?>">
+                            <p class="w-field__help"><?= __('按站点时区 %{1} 录入（可空=不限制），系统以 UTC 存储与判定。', $websiteTz) ?></p>
+                        </div>
+                        <div style="--w-span-md:6;--w-mb:var(--weline-space-4);">
+                            <label class="w-field__label" for="promotion-theme-ends-at"><?= __('结束时间') ?></label>
+                            <input id="promotion-theme-ends-at" data-testid="promotion-theme-ends-at" class="w-input" type="datetime-local" name="ends_at" value="<?= $escape($endsLocal) ?>">
+                        </div>
+                    </div>
                     <div class="w-grid">
                         <div style="--w-span-md:3;--w-mb:var(--weline-space-4);">
                             <label class="w-field__label" for="promotion-theme-website"><?= __('Website') ?></label>
@@ -359,6 +375,8 @@ $pageTitle = ((int)$val('id', 0) > 0) ? (string)__('编辑活动主题') : (stri
 </div>
 <?php
 $filterPreviewJson = (string)($this->getData('filterPreviewJson') ?? '{}');
+// 前端 fillTemplate 需要字面双花括号占位；Taglib 会编译源码中的双花括号变量，故用 [[…]] + 拼接还原。
+$ms = static fn (string $name): string => '{' . '{' . $name . '}' . '}';
 $productConfig = [
     'pickMode' => $pickMode,
     'searchUrl' => (string)($this->getData('promotionThemeProductSearchUrl') ?? ''),
@@ -370,9 +388,16 @@ $productConfig = [
         'scopeRequired' => (string)__('活动主题必须指定 Website（一站一活动；0 为默认网站）。'),
         'previewFailed' => (string)__('预览请求失败，请刷新页面后重试。'),
         'loading' => (string)__('正在加载命中商品…'),
-        // 使用 {{total}} 避免 __() 无参时吞掉 %{1}
-        'previewSummary' => (string)__('共 {{total}} 条命中（前台最多展示 {{limit}} 条）'),
-        'pageInfo' => (string)__('第 {{page}} / {{page_count}} 页'),
+        'previewSummary' => (string)str_replace(
+            ['[[total]]', '[[limit]]'],
+            [$ms('total'), $ms('limit')],
+            (string)__('共 [[total]] 条命中（前台最多展示 [[limit]] 条）'),
+        ),
+        'pageInfo' => (string)str_replace(
+            ['[[page]]', '[[page_count]]'],
+            [$ms('page'), $ms('page_count')],
+            (string)__('第 [[page]] / [[page_count]] 页'),
+        ),
         'prevPage' => (string)__('上一页'),
         'nextPage' => (string)__('下一页'),
         'image' => (string)__('图片'),
@@ -465,7 +490,7 @@ function promotionThemeReloadScope(level) {
                 return;
             }
             if (data.success) {
-                window.location.href = '@admin-url{\'promotion/backend/theme/index\'}';
+                window.location.href = "@admin-url('promotion/backend/theme/index')";
                 return;
             }
             window.alert(data.message || '保存失败。');

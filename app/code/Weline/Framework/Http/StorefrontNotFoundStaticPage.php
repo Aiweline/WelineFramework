@@ -48,6 +48,24 @@ final class StorefrontNotFoundStaticPage
             }
         }
 
+        // Path locale may already be stripped from request.path; prefer request-scoped mirror.
+        try {
+            if (\class_exists(\Weline\Framework\Env\WelineEnv::class, false)
+                || \class_exists(\Weline\Framework\Env\WelineEnv::class)) {
+                $mirror = self::normalizeLangCode(
+                    (string)\Weline\Framework\Env\WelineEnv::server('WELINE_USER_LANG', '')
+                );
+                if ($mirror !== '') {
+                    return $mirror;
+                }
+            }
+        } catch (\Throwable) {
+        }
+        $mirror = self::normalizeLangCode((string)($_SERVER['WELINE_USER_LANG'] ?? ''));
+        if ($mirror !== '') {
+            return $mirror;
+        }
+
         // $cookieHeader retained for call-site compatibility; language cookies are ignored.
         unset($cookieHeader);
 

@@ -110,6 +110,9 @@ final class MailTemplateUiSendContractTest extends TestCase
         self::assertStringContainsString('searchParams.set(\'target_scope\'', $edit);
         self::assertStringContainsString('searchParams.delete(\'template_id\')', $edit);
         self::assertStringContainsString('searchParams.delete(\'website_code\')', $edit);
+        self::assertStringContainsString('smtp-tpl-locale_wrapper', $edit);
+        self::assertStringContainsString('data-w-component="language-select"', $edit);
+        self::assertStringContainsString('window.location.assign', $edit);
         self::assertStringContainsString('el.matches(\'input[name="target_scope"]\')', $edit);
         self::assertStringNotContainsString('<code class="w-text" data-size="sm"><?= $h($selectedScope) ?></code>', $edit);
         self::assertStringContainsString('data-testid="smtp-template-edit-workspace"', $edit);
@@ -130,8 +133,10 @@ final class MailTemplateUiSendContractTest extends TestCase
         self::assertStringContainsString('preview_shell_html', $controllerSrc);
         self::assertStringContainsString('preview_samples', $controllerSrc);
         self::assertStringContainsString('buildPreviewSamples', $controllerSrc);
+        self::assertStringContainsString('buildPreviewSamples($mergedVars, $editScope, $editLocale)', $controllerSrc);
         $brandSrc = (string)file_get_contents($root . '/Service/MailBrandContextService.php');
         self::assertStringContainsString('function buildPreviewSamples', $brandSrc);
+        self::assertStringContainsString('localizePreviewText', $brandSrc);
         self::assertStringContainsString('scopeLockPreviewSample', $brandSrc);
         self::assertStringContainsString('renderPreview', $edit);
         self::assertStringContainsString("'{' + '{MAIL_BODY}}'", $edit);
@@ -157,6 +162,7 @@ final class MailTemplateUiSendContractTest extends TestCase
         self::assertStringContainsString('override_content', $provider);
         self::assertStringContainsString("'__template_id'", $provider);
         self::assertStringContainsString("'__locale'", $provider);
+        self::assertStringContainsString('mergeInto($vars, $storageScope, $resolvedLocale', $provider);
         self::assertStringContainsString("'locale'", $provider);
         self::assertStringContainsString("'scope'", $provider);
         self::assertStringContainsString("'channel'", $provider);

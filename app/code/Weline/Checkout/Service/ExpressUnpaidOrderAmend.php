@@ -236,9 +236,7 @@ final class ExpressUnpaidOrderAmend
                 'qty_minor' => max(1, (int) ($item['qty_minor'] ?? $item['qty'] ?? 1)),
                 'unit_price_minor' => (int) ($item['unit_price_minor'] ?? 0),
                 'row_total_minor' => (int) ($item['row_total_minor'] ?? 0),
-                'weight_minor' => max(0, (int) ($item['weight_minor'] ?? 0)) > 0
-                    ? (int) $item['weight_minor']
-                    : 500, // 0.5kg catalog fallback when offer weight is missing (weight_table fail-closed)
+                'weight_minor' => (new CheckoutQuoteLineWeightResolver())->resolveLineWeightMinor($item),
                 'volume_minor' => (int) ($item['volume_minor'] ?? 0),
                 'sku' => (string) ($item['sku'] ?? ''),
                 'name' => (string) ($item['name'] ?? ''),

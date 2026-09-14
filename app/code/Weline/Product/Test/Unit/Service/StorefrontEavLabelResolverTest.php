@@ -776,6 +776,87 @@ final class StorefrontEavLabelResolverTest extends TestCase
         self::assertSame('【花间令】白色全套', StorefrontEavLabelResolver::displayOptionToken($encoded));
     }
 
+    public function testSplitMultiOptionValueParsesJoinedAndJsonLists(): void
+    {
+        self::assertSame(
+            ['涤纶（聚酯纤维）', '雪纺', '90%（不含）-95%（含）'],
+            StorefrontEavLabelResolver::splitMultiOptionValue('涤纶（聚酯纤维）, 雪纺, 90%（不含）-95%（含）'),
+        );
+        self::assertSame(
+            ['涤纶（聚酯纤维）', '雪纺', '90%（不含）-95%（含）'],
+            StorefrontEavLabelResolver::splitMultiOptionValue('["涤纶（聚酯纤维）","雪纺","90%（不含）-95%（含）"]'),
+        );
+        self::assertSame(['cotton'], StorefrontEavLabelResolver::splitMultiOptionValue('cotton'));
+        self::assertSame(['明制'], StorefrontEavLabelResolver::splitMultiOptionValue('"明制"'));
+        self::assertSame('明制', StorefrontEavLabelResolver::unwrapJsonScalarToken('"明制"'));
+    }
+
+    public function testResolveJoinsLocalizedMultiselectLabels(): void
+    {
+        [, $entity] = $this->metadata();
+        $poly = new AttributeOptionMetadata(
+            id: 89,
+            value: '涤纶（聚酯纤维）',
+            code: 'polyester-pet',
+            label: 'Polyester (PET fiber)',
+            sortOrder: 1,
+        );
+        $chiffon = new AttributeOptionMetadata(
+            id: 244,
+            value: '雪纺',
+            code: 'chiffon',
+            label: 'Chiffon',
+            sortOrder: 2,
+        );
+        $pct = new AttributeOptionMetadata(
+            id: 1658,
+            value: '90%（不含）-95%（含）',
+            code: 'pct-90-95',
+            label: '90% (excl.)–95% (incl.)',
+            sortOrder: 3,
+        );
+        $attribute = new AttributeMetadata(
+            id: 25,
+            entityId: 1,
+            code: 'material',
+            name: 'Material',
+            typeCode: 'varchar',
+            fieldType: 'multiselect',
+            element: 'select',
+            setId: 1,
+            groupId: 1,
+            required: false,
+            multiple: true,
+            enabled: true,
+            hasOption: true,
+            sortOrder: 1,
+            options: [$poly, $chiffon, $pct],
+        );
+        $set = new AttributeSetMetadata(
+            id: 1,
+            entityId: 1,
+            code: 'hanfu',
+            name: 'Hanfu',
+            sortOrder: 1,
+            groups: [new AttributeGroupMetadata(
+                id: 1,
+                entityId: 1,
+                setId: 1,
+                code: 'basics',
+                name: 'Basics',
+                sortOrder: 1,
+                attributes: [$attribute],
+            )],
+        );
+        $metadata = $this->createMock(AttributeMetadataCatalogInterface::class);
+        $metadata->method('catalogForProduct')->willReturn([$set]);
+        $labels = (new StorefrontEavLabelResolver($metadata, $entity))->forProduct(188);
+        self::assertSame(
+            'Polyester (PET fiber), Chiffon, 90% (excl.)–95% (incl.)',
+            $labels->resolve('material', '涤纶（聚酯纤维）, 雪纺, 90%（不含）-95%（含）'),
+        );
+    }
+
     public function testUsableOptionLabelRejectsPercentEncodedLocal(): void
     {
         $encoded = '[%E5%85%A5%E5%9F%8E%E8%A5%90]%E6%A1%B6%E8%8E%9C';

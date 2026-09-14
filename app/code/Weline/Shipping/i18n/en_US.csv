@@ -1,7 +1,4 @@
-﻿运费以结算页为准,"Shipping calculated at checkout"
-重货,重货
-本商品使用重货配送方案，运费以结算页为准,本商品使用重货配送方案，运费以结算页为准
-请先登录,"Please log in first"
+﻿请先登录,"Please log in first"
 发货地址已保存,"Shipping address saved."
 发货地址ID不能为空,"Shipping address ID is required."
 发货地址已删除,"Shipping address removed."
@@ -351,12 +348,12 @@ grid,grid
 编辑收货地址,"Edit shipping address"
 例如：家、公司、学校等,"e.g., Home, Company, School, etc."
 收货人姓名,"Recipient Name"
+选择收货地址,"Select a shipping address"
 China,China
 使用新地址,"Use a new address"
 保存此地址,"Save this address"
 账单地址与收货地址相同,"Billing address same as shipping address"
 账单地址,"Billing address"
-选择收货地址,"Select a shipping address"
 更换地址,"Change address"
 收起地址列表,"Hide address list"
 地址列表加载失败，请稍后重试。,"Failed to load addresses. Please try again."
@@ -638,6 +635,13 @@ API配置信息，JSON格式,"API configuration information, JSON format"
 配置本作用域可售国家/州省/区县（白名单）。为空时不限制，仅按承运商覆盖与禁运匹配；配置后须与承运商覆盖求交。,"Sellable destinations whitelist for this scope. Empty means unrestricted (carrier coverage + embargo only); when set, intersect with carrier coverage."
 请先保存主体，再配置可售目的地。,请先保存主体，再配置可售目的地。
 尚未选择，请搜索后添加,尚未选择，请搜索后添加
+已支付待发货,已支付待发货
+打开发货管理,打开发货管理
+只看待发货,只看待发货
+办理发货,办理发货
+发货时间,发货时间
+送达时间,送达时间
+暂无发货记录,暂无发货记录
 店铺,店铺
 渠道,渠道
 网站,网站
@@ -647,6 +651,10 @@ API配置信息，JSON格式,"API configuration information, JSON format"
 配送报价小计溢出,"Delivery quote subtotal overflow"
 免邮金额格式非法,"Free shipping amount format is illegal"
 免邮金额溢出,"Free shipping amount exceeds"
+已发货,已发货
+已取消,已取消
+发货失败,发货失败
+未知,未知
 美国,"United States"
 中国香港,"Hong Kong"
 中国澳门,Macao
@@ -659,7 +667,6 @@ API配置信息，JSON格式,"API configuration information, JSON format"
 加拿大,Canada
 德国,Germany
 法国,France
-未知,未知
 运费配置版本已变更，请重新报价,"The freight configuration version has been changed, please re-quote."
 无可用配送模板（币种/区域）,"No shipping template available (currency/region)"
 "service_code 不能为空","service_code cannot be empty"
@@ -711,6 +718,9 @@ API配置信息，JSON格式,"API configuration information, JSON format"
 商品配送档案与仓航线无交集，无法报价,商品配送档案与仓航线无交集，无法报价
 方案家族无可报价服务：%{1},方案家族无可报价服务：%{1}
 无法完成多仓履约规划,无法完成多仓履约规划
+运费以结算页为准,"Shipping calculated at checkout"
+重货,重货
+本商品使用重货配送方案，运费以结算页为准,"This item uses heavy-goods shipping; fee calculated at checkout"
 选择作用范围,选择作用范围
 搜索作用范围,搜索作用范围
 折叠,折叠
@@ -813,3 +823,11 @@ globe,globe
 新增区县代码（可选）,"New district code (optional)"
 特殊领土（无常驻人口或特殊辖区）,"Special territory (uninhabited / special jurisdiction)"
 制裁或贸易限制,"Sanctions or trade restrictions"
+美洲,Americas
+亚太,"Asia Pacific"
+欧洲,Europe
+大洋洲,Oceania
+拉美,"Latin America"
+中东非洲,"Middle East & Africa"
+港澳台,"HK / MO / TW"
+其他可达市场,"Other reachable markets"

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service;
 
+use Weline\Framework\DateTime\Timezone;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\SystemConfig\Api\Scope\ScopedConfigData;
 use Weline\Theme\Model\ThemeLayoutSchedule;
@@ -43,12 +44,11 @@ final class ProductLayoutScheduleService
         if ($scope === '') {
             $scope = ScopedConfigData::SCOPE_GLOBAL;
         }
-        $timezone = trim((string)($input['timezone'] ?? date_default_timezone_get() ?: 'UTC'));
-        if ($timezone === '') {
-            $timezone = 'UTC';
-        }
-        $startsAt = $this->normalizeDateTime((string)($input['starts_at'] ?? ''));
-        $endsAt = $this->normalizeDateTime((string)($input['ends_at'] ?? ''));
+        $timezone = Timezone::resolveWebsiteTimezone(
+            trim((string)($input['timezone'] ?? '')) !== '' ? (string)$input['timezone'] : null,
+        );
+        $startsAt = Timezone::localInputToUtcSql((string)($input['starts_at'] ?? ''), $timezone);
+        $endsAt = Timezone::localInputToUtcSql((string)($input['ends_at'] ?? ''), $timezone);
         $priority = (int)($input['priority'] ?? 0);
         $status = strtolower(trim((string)($input['status'] ?? ThemeLayoutSchedule::STATUS_ENABLED)));
         if (!in_array($status, [ThemeLayoutSchedule::STATUS_ENABLED, ThemeLayoutSchedule::STATUS_DISABLED], true)) {
@@ -77,6 +77,7 @@ final class ProductLayoutScheduleService
         $model = ObjectManager::getInstance(ThemeLayoutSchedule::class);
         $model = clone $model;
         $model->clear()->clearQuery();
+        $nowUtc = Timezone::utcNowSql();
         if ($scheduleId > 0) {
             $model->load($scheduleId);
             if (!(int)$model->getId()) {
@@ -84,7 +85,7 @@ final class ProductLayoutScheduleService
             }
         } else {
             $model->clearData();
-            $model->setData(ThemeLayoutSchedule::schema_fields_CREATE_TIME, date('Y-m-d H:i:s'));
+            $model->setData(ThemeLayoutSchedule::schema_fields_CREATE_TIME, $nowUtc);
             if ($createdBy !== null) {
                 $model->setData(ThemeLayoutSchedule::schema_fields_CREATED_BY, $createdBy);
             }
@@ -103,7 +104,7 @@ final class ProductLayoutScheduleService
             ThemeLayoutSchedule::schema_fields_PRIORITY => $priority,
             ThemeLayoutSchedule::schema_fields_STATUS => $status,
             ThemeLayoutSchedule::schema_fields_WEBSITE_ID => $websiteId,
-            ThemeLayoutSchedule::schema_fields_UPDATE_TIME => date('Y-m-d H:i:s'),
+            ThemeLayoutSchedule::schema_fields_UPDATE_TIME => $nowUtc,
         ])->save();
 
         $id = (int)$model->getId();
@@ -205,9 +206,9 @@ final class ProductLayoutScheduleService
             return null;
         }
         $nowDt = $now instanceof \DateTimeInterface
-            ? \DateTimeImmutable::createFromInterface($now)
-            : new \DateTimeImmutable('now');
-        $nowSql = $nowDt->format('Y-m-d H:i:s');
+            ? \DateTimeImmutable::createFromInterface($now)->setTimezone(new \DateTimeZone('UTC'))
+            : new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
+        $nowSql = $nowDt->format(Timezone::SQL_FORMAT);
 
         /** @var ThemeLayoutSchedule $model */
         $model = ObjectManager::getInstance(ThemeLayoutSchedule::class);
@@ -264,10 +265,10 @@ final class ProductLayoutScheduleService
      */
     public function processBoundariesNear(\DateTimeInterface $now, int $lookbackSeconds = 120): array
     {
-        $nowDt = \DateTimeImmutable::createFromInterface($now);
-        $from = $nowDt->modify('-' . max(1, $lookbackSeconds) . ' seconds')->format('Y-m-d H:i:s');
-        $to = $nowDt->modify('+' . max(1, $lookbackSeconds) . ' seconds')->format('Y-m-d H:i:s');
-        $nowSql = $nowDt->format('Y-m-d H:i:s');
+        $nowDt = \DateTimeImmutable::createFromInterface($now)->setTimezone(new \DateTimeZone('UTC'));
+        $from = $nowDt->modify('-' . max(1, $lookbackSeconds) . ' seconds')->format(Timezone::SQL_FORMAT);
+        $to = $nowDt->modify('+' . max(1, $lookbackSeconds) . ' seconds')->format(Timezone::SQL_FORMAT);
+        $nowSql = $nowDt->format(Timezone::SQL_FORMAT);
 
         /** @var ThemeLayoutSchedule $model */
         $model = ObjectManager::getInstance(ThemeLayoutSchedule::class);
@@ -318,6 +319,10 @@ final class ProductLayoutScheduleService
      */
     private function rowToArray(array $row): array
     {
+        $tz = (string)($row[ThemeLayoutSchedule::schema_fields_TIMEZONE] ?? Timezone::resolveWebsiteTimezone());
+        $startsUtc = (string)($row[ThemeLayoutSchedule::schema_fields_STARTS_AT] ?? '');
+        $endsUtc = (string)($row[ThemeLayoutSchedule::schema_fields_ENDS_AT] ?? '');
+
         return [
             'schedule_id' => (int)($row[ThemeLayoutSchedule::schema_fields_ID] ?? 0),
             'name' => (string)($row[ThemeLayoutSchedule::schema_fields_NAME] ?? ''),
@@ -326,9 +331,11 @@ final class ProductLayoutScheduleService
             'target_type' => (string)($row[ThemeLayoutSchedule::schema_fields_TARGET_TYPE] ?? ''),
             'target_id' => (int)($row[ThemeLayoutSchedule::schema_fields_TARGET_ID] ?? 0),
             'scope' => (string)($row[ThemeLayoutSchedule::schema_fields_SCOPE] ?? ''),
-            'timezone' => (string)($row[ThemeLayoutSchedule::schema_fields_TIMEZONE] ?? 'UTC'),
-            'starts_at' => (string)($row[ThemeLayoutSchedule::schema_fields_STARTS_AT] ?? ''),
-            'ends_at' => (string)($row[ThemeLayoutSchedule::schema_fields_ENDS_AT] ?? ''),
+            'timezone' => $tz !== '' ? $tz : Timezone::FALLBACK_TIMEZONE,
+            'starts_at' => $startsUtc,
+            'ends_at' => $endsUtc,
+            'starts_at_local' => Timezone::utcSqlToLocalInput($startsUtc, $tz),
+            'ends_at_local' => Timezone::utcSqlToLocalInput($endsUtc, $tz),
             'priority' => (int)($row[ThemeLayoutSchedule::schema_fields_PRIORITY] ?? 0),
             'status' => (string)($row[ThemeLayoutSchedule::schema_fields_STATUS] ?? ThemeLayoutSchedule::STATUS_ENABLED),
             'website_id' => (int)($row[ThemeLayoutSchedule::schema_fields_WEBSITE_ID] ?? 0),
@@ -338,20 +345,5 @@ final class ProductLayoutScheduleService
             'create_time' => (string)($row[ThemeLayoutSchedule::schema_fields_CREATE_TIME] ?? ''),
             'update_time' => (string)($row[ThemeLayoutSchedule::schema_fields_UPDATE_TIME] ?? ''),
         ];
-    }
-
-    private function normalizeDateTime(string $value): ?string
-    {
-        $value = trim($value);
-        if ($value === '') {
-            return null;
-        }
-        try {
-            $dt = new \DateTimeImmutable($value);
-
-            return $dt->format('Y-m-d H:i:s');
-        } catch (\Throwable) {
-            return null;
-        }
     }
 }

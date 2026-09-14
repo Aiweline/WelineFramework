@@ -18,16 +18,17 @@
  */
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Helper\SiteContactInfo;
+use Weline\Theme\Helper\WidgetI18n;
 
 $meta = $this->getData('meta') ?? [];
 $escape = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 
 $contact = [
     'site_name' => '云裳汉服 · Hanfu Atelier',
-    'site_description' => (string)__('精选明制、宋制、唐制汉服与马面裙，服务日常、节庆与礼仪场景。'),
+    'site_description' => (string)WidgetI18n::label('精选明制、宋制、唐制汉服与马面裙，服务日常、节庆与礼仪场景。'),
     'contact_email' => 'support@example.com',
     'contact_phone' => '',
-    'service_hours' => (string)__('周一至周五 9:00 - 18:00（法定节假日除外）'),
+    'service_hours' => (string)WidgetI18n::label('周一至周五 9:00 - 18:00（法定节假日除外）'),
     'contact_address' => '',
 ];
 try {
@@ -42,50 +43,52 @@ $siteName = (string)$contact['site_name'];
 if (in_array(trim($siteName), ['', 'Weline', 'Weline Framework', '韦林', '微线框架', '默认网站', 'Default Website'], true)) {
     $siteName = '云裳汉服 · Hanfu Atelier';
 }
-$title = (string)($meta['title'] ?? __('关于我们'));
+$title = WidgetI18n::label(trim((string)($meta['title'] ?? '')) !== '' ? (string)$meta['title'] : '关于我们');
 $subtitle = trim((string)($meta['subtitle'] ?? ''));
-if ($subtitle === '' || $subtitle === (string)__('官方商城帮助与客户服务')) {
-    $subtitle = (string)$contact['site_description'];
-    if ($subtitle === '' || $subtitle === (string)__('官方商城帮助与客户服务')) {
-        $subtitle = (string)__('精选明制、宋制、唐制汉服与马面裙，服务日常、节庆与礼仪场景。');
-    }
+if ($subtitle === '' || $subtitle === '官方商城帮助与客户服务') {
+    $subtitle = trim((string)($contact['site_description'] ?? ''));
 }
+if ($subtitle === '' || $subtitle === '官方商城帮助与客户服务') {
+    $subtitle = '精选明制、宋制、唐制汉服与马面裙，服务日常、节庆与礼仪场景。';
+}
+$subtitle = WidgetI18n::label($subtitle);
 $mission = trim((string)($meta['mission'] ?? ''));
 if ($mission === '') {
-    $mission = (string)__('我们以形制为准绳、以织造为根基，把可穿的传统美学带给全球穿搭者。');
+    $mission = '我们以形制为准绳、以织造为根基，把可穿的传统美学带给全球穿搭者。';
 }
+$mission = WidgetI18n::label($mission);
 
 $stats = [
-    ['value' => __('明·宋·唐'), 'label' => __('形制谱系')],
-    ['value' => __('马面裙'), 'label' => __('高频爆款')],
-    ['value' => __('7×24'), 'label' => __('客户支持')],
-    ['value' => __('全球'), 'label' => __('国际直邮')],
+    ['value' => WidgetI18n::label('明·宋·唐'), 'label' => WidgetI18n::label('形制谱系')],
+    ['value' => WidgetI18n::label('马面裙'), 'label' => WidgetI18n::label('高频爆款')],
+    ['value' => __('7×24'), 'label' => WidgetI18n::label('客户支持')],
+    ['value' => WidgetI18n::label('全球'), 'label' => WidgetI18n::label('国际直邮')],
 ];
 
 $values = [
     [
-        'title' => __('形制为本'),
-        'desc' => __('先辨明制、宋制、唐制与穿法，再谈款式与场景，让选购有据可依。'),
+        'title' => WidgetI18n::label('形制为本'),
+        'desc' => WidgetI18n::label('先辨明制、宋制、唐制与穿法，再谈款式与场景，让选购有据可依。'),
     ],
     [
-        'title' => __('织艺可感'),
-        'desc' => __('云锦、宋锦、妆花与苏绣不是标签堆砌，而是可看见、可触碰的材质表达。'),
+        'title' => WidgetI18n::label('织艺可感'),
+        'desc' => WidgetI18n::label('云锦、宋锦、妆花与苏绣不是标签堆砌，而是可看见、可触碰的材质表达。'),
     ],
     [
-        'title' => __('可穿日常'),
-        'desc' => __('礼仪与出游兼顾：从入门襦裙到成套明制，覆盖通勤到节庆。'),
+        'title' => WidgetI18n::label('可穿日常'),
+        'desc' => WidgetI18n::label('礼仪与出游兼顾：从入门襦裙到成套明制，覆盖通勤到节庆。'),
     ],
     [
-        'title' => __('全球履约'),
-        'desc' => __('独立站多语言与跨境履约并行，让海外穿搭者也能安心下单。'),
+        'title' => WidgetI18n::label('全球履约'),
+        'desc' => WidgetI18n::label('独立站多语言与跨境履约并行，让海外穿搭者也能安心下单。'),
     ],
 ];
 
 $milestones = [
-    ['year' => '2019', 'text' => __('从形制科普起步，建立汉服入门选购标准。')],
-    ['year' => '2021', 'text' => __('扩展马面裙、袄裙与配饰矩阵，覆盖更多日常场景。')],
-    ['year' => '2023', 'text' => __('完善尺码、养护与退换指引，服务海外独立站顾客。')],
-    ['year' => '2026', 'text' => __('上线水墨中国风主题与国际化店面，打磨可上线的汉服商城体验。')],
+    ['year' => '2019', 'text' => WidgetI18n::label('从形制科普起步，建立汉服入门选购标准。')],
+    ['year' => '2021', 'text' => WidgetI18n::label('扩展马面裙、袄裙与配饰矩阵，覆盖更多日常场景。')],
+    ['year' => '2023', 'text' => WidgetI18n::label('完善尺码、养护与退换指引，服务海外独立站顾客。')],
+    ['year' => '2026', 'text' => WidgetI18n::label('上线水墨中国风主题与国际化店面，打磨可上线的汉服商城体验。')],
 ];
 ?>
 <!DOCTYPE html>
@@ -499,16 +502,16 @@ $milestones = [
                                     <p class="amazon-about__hero-mission"><?= $escape($mission) ?></p>
                                     <div class="amazon-about__hero-actions">
                                         <a class="amazon-about__btn amazon-about__btn--primary amazon-about__shop-link" href="@url{'products'}">
-                                            <?= $escape(__('浏览汉服')) ?>
+                                            <?= $escape(WidgetI18n::label('浏览汉服')) ?>
                                         </a>
                                         <a class="amazon-about__btn amazon-about__btn--ghost" href="@url{'contact'}">
-                                            <?= $escape(__('联系我们')) ?>
+                                            <?= $escape(WidgetI18n::label('联系我们')) ?>
                                         </a>
                                     </div>
                                 </div>
                                 <aside class="amazon-about__hero-card">
-                                    <h2><?= $escape(__('我们的承诺')) ?></h2>
-                                    <p><?= $escape(__('形制清晰、尺码可依、养护有指引——让每一次穿汉服都踏实从容。')) ?></p>
+                                    <h2><?= $escape(WidgetI18n::label('我们的承诺')) ?></h2>
+                                    <p><?= $escape(WidgetI18n::label('形制清晰、尺码可依、养护有指引——让每一次穿汉服都踏实从容。')) ?></p>
                                 </aside>
                             </div>
                         </section>
@@ -525,7 +528,7 @@ $milestones = [
                     <w:hook>
                         Weline_Theme::frontend::layouts::about::stats
                         <else/>
-                        <section class="amazon-about__stats" aria-label="<?= $escape(__('品牌概览')) ?>" weline-code="theme.about.stats">
+                        <section class="amazon-about__stats" aria-label="<?= $escape(WidgetI18n::label('品牌概览')) ?>" weline-code="theme.about.stats">
                             <div class="amazon-about__stats-grid">
                                 <?php foreach ($stats as $stat): ?>
                                     <div class="amazon-about__stat">
@@ -541,8 +544,8 @@ $milestones = [
                 <section class="amazon-about__section" weline-code="theme.about.story">
                     <div class="amazon-about__inner">
                         <div class="amazon-about__section-head">
-                            <h2><?= $escape(__('我们的故事')) ?></h2>
-                            <p><?= $escape(__('从形制科普到可穿日常，我们把顾客对汉服的疑问，沉淀成更清晰的选购路径与更可靠的履约体验。')) ?></p>
+                            <h2><?= $escape(WidgetI18n::label('我们的故事')) ?></h2>
+                            <p><?= $escape(WidgetI18n::label('从形制科普到可穿日常，我们把顾客对汉服的疑问，沉淀成更清晰的选购路径与更可靠的履约体验。')) ?></p>
                         </div>
                         <div class="amazon-about__story-grid">
                             <w:slot id="about-story"
@@ -556,9 +559,9 @@ $milestones = [
                                     Weline_Theme::frontend::layouts::about::story
                                     <else/>
                                     <article class="amazon-about__panel">
-                                        <h3><?= $escape(__('为什么选择云裳')) ?></h3>
-                                        <p><?= $escape(__('好的汉服体验不靠运气：形制标注清楚、面料说明可信、尺码有据、物流可追踪。')) ?></p>
-                                        <p><?= $escape($siteName) ?> <?= $escape(__('团队围绕「可穿的传统美学」打磨每一个关键路径——从首页发现到订单完成。')) ?></p>
+                                        <h3><?= $escape(WidgetI18n::label('为什么选择云裳')) ?></h3>
+                                        <p><?= $escape(WidgetI18n::label('好的汉服体验不靠运气：形制标注清楚、面料说明可信、尺码有据、物流可追踪。')) ?></p>
+                                        <p><?= $escape($siteName) ?> <?= $escape(WidgetI18n::label('团队围绕「可穿的传统美学」打磨每一个关键路径——从首页发现到订单完成。')) ?></p>
                                     </article>
                                 </w:hook>
                             </w:slot>
@@ -574,11 +577,11 @@ $milestones = [
                                     Weline_Theme::frontend::layouts::about::sidebar
                                     <else/>
                                     <aside class="amazon-about__panel">
-                                        <h3><?= $escape(__('快捷入口')) ?></h3>
-                                        <p><a href="@url{'faq'}"><?= $escape(__('帮助中心')) ?></a></p>
-                                        <p><a href="@url{'customer/account/index'}#orders"><?= $escape(__('订单跟踪')) ?></a></p>
-                                        <p><a href="@url{'careers'}"><?= $escape(__('加入我们')) ?></a></p>
-                                        <p><a href="@url{'privacy'}"><?= $escape(__('隐私政策')) ?></a></p>
+                                        <h3><?= $escape(WidgetI18n::label('快捷入口')) ?></h3>
+                                        <p><a href="@url{'faq'}"><?= $escape(WidgetI18n::label('帮助中心')) ?></a></p>
+                                        <p><a href="@url{'customer/account/index'}#orders"><?= $escape(WidgetI18n::label('订单跟踪')) ?></a></p>
+                                        <p><a href="@url{'careers'}"><?= $escape(WidgetI18n::label('加入我们')) ?></a></p>
+                                        <p><a href="@url{'privacy'}"><?= $escape(WidgetI18n::label('隐私政策')) ?></a></p>
                                     </aside>
                                 </w:hook>
                             </w:slot>
@@ -589,8 +592,8 @@ $milestones = [
                 <section class="amazon-about__section amazon-about__section--muted" weline-code="theme.about.values">
                     <div class="amazon-about__inner">
                         <div class="amazon-about__section-head">
-                            <h2><?= $escape(__('我们的价值观')) ?></h2>
-                            <p><?= $escape(__('这些原则指导我们如何做形制选品、如何服务穿搭者，以及如何持续打磨独立站体验。')) ?></p>
+                            <h2><?= $escape(WidgetI18n::label('我们的价值观')) ?></h2>
+                            <p><?= $escape(WidgetI18n::label('这些原则指导我们如何做形制选品、如何服务穿搭者，以及如何持续打磨独立站体验。')) ?></p>
                         </div>
                         <w:slot id="about-values"
                                 name="价值观"
@@ -618,8 +621,8 @@ $milestones = [
                 <section class="amazon-about__section" weline-code="theme.about.timeline">
                     <div class="amazon-about__inner">
                         <div class="amazon-about__section-head">
-                            <h2><?= $escape(__('发展历程')) ?></h2>
-                            <p><?= $escape(__('关键节点记录我们如何把汉服从兴趣走进可上线的国际化商城。')) ?></p>
+                            <h2><?= $escape(WidgetI18n::label('发展历程')) ?></h2>
+                            <p><?= $escape(WidgetI18n::label('关键节点记录我们如何把汉服从兴趣走进可上线的国际化商城。')) ?></p>
                         </div>
                         <w:slot id="about-timeline"
                                 name="发展历程"
@@ -669,15 +672,15 @@ $milestones = [
                         <section class="amazon-about__cta" aria-labelledby="about-cta-title" weline-code="theme.about.cta">
                             <div class="amazon-about__cta-inner">
                                 <div>
-                                    <h2 id="about-cta-title"><?= $escape(__('准备好穿上第一套汉服了吗？')) ?></h2>
-                                    <p><?= $escape(__('从明制马面裙到唐风襦裙，挑选适合你的形制，或联系我们了解尺码与养护。')) ?></p>
+                                    <h2 id="about-cta-title"><?= $escape(WidgetI18n::label('准备好穿上第一套汉服了吗？')) ?></h2>
+                                    <p><?= $escape(WidgetI18n::label('从明制马面裙到唐风襦裙，挑选适合你的形制，或联系我们了解尺码与养护。')) ?></p>
                                 </div>
                                 <div class="amazon-about__cta-actions">
                                     <a class="amazon-about__btn amazon-about__btn--primary" href="@url{'products'}">
-                                        <?= $escape(__('浏览汉服')) ?>
+                                        <?= $escape(WidgetI18n::label('浏览汉服')) ?>
                                     </a>
                                     <a class="amazon-about__btn amazon-about__btn--ghost" href="@url{'faq'}">
-                                        <?= $escape(__('前往帮助中心')) ?>
+                                        <?= $escape(WidgetI18n::label('前往帮助中心')) ?>
                                     </a>
                                 </div>
                             </div>

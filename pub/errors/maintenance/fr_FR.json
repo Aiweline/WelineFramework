@@ -1,7 +1,7 @@
 {
     "success": false,
     "code": "maintenance",
-    "message": "系统正在升级维护中，请稍后再试。",
+    "message": "Le système est en maintenance pour mise à niveau. Veuillez réessayer plus tard.",
     "data": {
         "retry_after": 60,
         "lang": "fr_FR",

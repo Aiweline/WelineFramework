@@ -1,10 +1,19 @@
 <?php
 /** @var \Weline\Framework\View\Template $this */
+use Weline\Product\Helper\StorefrontOfferResolver;
+
 $enabled = filter_var($this->getData('enabled') ?? true, FILTER_VALIDATE_BOOLEAN);
 $escape = static fn ($v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
 if (!$enabled) {
     return;
 }
+$offer = [];
+try {
+    $offer = StorefrontOfferResolver::resolve($this);
+} catch (\Throwable) {
+    $offer = [];
+}
+$productId = max(0, (int) ($offer['product_id'] ?? $this->getData('card_product_id') ?? 0));
 $i18nJson = \Weline\HelpPay\Service\ShareModalI18n::json();
 ?>
 <div class="w-helppay-cta w-helppay-cta--quiet"
@@ -14,10 +23,12 @@ $i18nJson = \Weline\HelpPay\Service\ShareModalI18n::json();
      data-weline-load="helpPayShare"
      data-helppay-i18n="<?= $escape($i18nJson) ?>">
     <button type="button"
-            class="w-helppay-cta__link"
+            class="w-helppay-cta__link weline-pixel::friend_help_pay"
             data-testid="help-pay-open"
+            data-pixel-event="friend_help_pay"
             data-helppay-open="1"
-            data-helppay-product-help-pay="1">
+            data-helppay-product-help-pay="1"
+            data-product-id="<?= (int) $productId ?>">
         <?= $escape(__('找朋友代付')) ?>
     </button>
 </div>

@@ -49,7 +49,10 @@ final class ManagerJsBinQueryContractTest extends TestCase
         self::assertStringContainsString('!response || !Array.isArray(response.added) || response.added.length !== files.length', $source);
         self::assertStringContainsString("t('uploadResponseMismatch')", $source);
         self::assertStringContainsString('function connectorNativeRequest(params)', $source);
-        self::assertStringContainsString('IFRAME_MODE && op === \'connector\'', $source);
+        self::assertStringContainsString('function appendConnectorFormField(body, key, value)', $source);
+        self::assertStringContainsString("body.append(key + '[]', String(item))", $source);
+        self::assertStringContainsString('if (IFRAME_MODE)', $source);
+        self::assertStringContainsString("op === 'connector'", $source);
         self::assertSame(3, substr_count($source, 'new XMLHttpRequest()'));
         self::assertStringNotContainsString('upload_base64', $source);
         self::assertStringNotContainsString('formDataToConnectorPayload', $source);
@@ -406,7 +409,7 @@ final class ManagerJsBinQueryContractTest extends TestCase
         }
         self::assertNotNull($connector);
         $names = array_column($connector['params'], 'name');
-        foreach (['cmd', 'target', 'path', 'storage', 'init', 'tree', 'startPath', 'upload_base64', 'upload_metadata'] as $required) {
+        foreach (['cmd', 'target', 'path', 'storage', 'init', 'tree', 'startPath', 'upload_base64', 'upload_metadata', 'lockPath', 'lockRoot'] as $required) {
             self::assertContains($required, $names, 'connector must declare FE payload key: ' . $required);
         }
         $params = array_column($connector['params'], null, 'name');
@@ -436,7 +439,17 @@ final class ManagerJsBinQueryContractTest extends TestCase
         $source = (string)file_get_contents(
             BP . '/app/code/Weline/MediaManager/extends/module/Weline_Framework/Query/MediaManagerQueryProvider.php'
         );
-        foreach (['locale_code', 'asset_revision', 'display_name', 'default_alt', 'description'] as $required) {
+        foreach ([
+            'locale_code',
+            'asset_revision',
+            'display_name',
+            'default_alt',
+            'description',
+            'lockPath',
+            'lockRoot',
+            'lock_path',
+            'lock_root',
+        ] as $required) {
             self::assertStringContainsString(
                 "['name' => '" . $required . "'",
                 $source,

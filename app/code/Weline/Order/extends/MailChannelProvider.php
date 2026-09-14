@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Order\Extends;
 
 use Weline\Smtp\Api\MailChannelProviderInterface;
+use Weline\Smtp\Service\MailTemplateDefaultLocales;
 
 class MailChannelProvider implements MailChannelProviderInterface
 {
@@ -36,18 +37,7 @@ class MailChannelProvider implements MailChannelProviderInterface
             $out[] = array_merge($ch, [
                 'module' => 'Weline_Order',
                 'variables' => $variables,
-                'default_templates' => [
-                    [
-                        'locale' => 'zh_Hans_CN',
-                        'subject_file' => "view/email/{$dir}/zh_Hans_CN.subject.txt",
-                        'body_file' => "view/email/{$dir}/zh_Hans_CN.html",
-                    ],
-                    [
-                        'locale' => 'en_US',
-                        'subject_file' => "view/email/{$dir}/en_US.subject.txt",
-                        'body_file' => "view/email/{$dir}/en_US.html",
-                    ],
-                ],
+                'default_templates' => MailTemplateDefaultLocales::fileEntries($dir),
             ]);
         }
 

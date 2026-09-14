@@ -69,12 +69,20 @@ final class StorefrontNotFoundStaticGenerator
     public function buildHtml(string $lang): string
     {
         State::setRequestLanguageOverride($lang);
+        $previousUri = $_SERVER['REQUEST_URI'] ?? null;
+        // WidgetI18n prefers path locale over RequestContext; seed a locale-shaped URI for generation.
+        $_SERVER['REQUEST_URI'] = '/' . $lang . '/';
         try {
             return $this->renderThemedNotFoundPage();
         } catch (\Throwable) {
             return $this->fallbackShellHtml();
         } finally {
             State::setRequestLanguageOverride('');
+            if ($previousUri === null) {
+                unset($_SERVER['REQUEST_URI']);
+            } else {
+                $_SERVER['REQUEST_URI'] = $previousUri;
+            }
         }
     }
 
@@ -89,16 +97,19 @@ final class StorefrontNotFoundStaticGenerator
 
         $themeId = (int)$theme->getId();
         $catalog = ErrorPageRenderer::catalogEntry(404);
+        $title = \Weline\Theme\Helper\WidgetI18n::label((string)$catalog['title']);
+        $lead = \Weline\Theme\Helper\WidgetI18n::label((string)$catalog['lead']);
+        $hint = \Weline\Theme\Helper\WidgetI18n::label((string)$catalog['hint']);
 
         $this->request->setGet('layout_type', self::LAYOUT_TYPE);
         $this->request->setGet('layout_option', self::LAYOUT_OPTION);
         $this->request->setGet('page_type', self::PAGE_TYPE);
 
         $meta = [
-            'title' => (string)__($catalog['title']),
-            'pageTitle' => (string)__($catalog['title']),
-            'pageLead' => (string)__($catalog['lead']),
-            'pageHint' => (string)__($catalog['hint']),
+            'title' => $title,
+            'pageTitle' => $title,
+            'pageLead' => $lead,
+            'pageHint' => $hint,
             'homeHref' => '/',
             'statusCode' => 404,
         ];

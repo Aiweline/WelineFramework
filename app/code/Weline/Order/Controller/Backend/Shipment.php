@@ -59,16 +59,32 @@ final class Shipment extends BackendController
                 (int)$this->request->getPost('qty_minor', 0),
                 (int)$this->request->getPost('expected_version', -1),
                 (string)$this->request->getPost('idempotency_key', ''),
+                [
+                    'tracking_number' => (string)$this->request->getPost('tracking_number', ''),
+                    'carrier' => (string)$this->request->getPost('carrier', ''),
+                    'notify_customer' => $this->request->getPost('notify_customer') !== null
+                        && (string)$this->request->getPost('notify_customer') !== '0'
+                        && (string)$this->request->getPost('notify_customer') !== '',
+                ],
             );
-            $this->getMessageManager()->addSuccess((string)__(
-                !empty($result['replayed']) ? '发货命令已幂等重放' : '发货进度已提交',
-            ));
+            $notified = !empty($result['logistics']['notify_customer']);
+            if (!empty($result['replayed'])) {
+                $this->getMessageManager()->addSuccess((string)__('发货命令已幂等重放'));
+            } elseif ($notified) {
+                $this->getMessageManager()->addSuccess(
+                    (string)__('发货已提交；已按勾选尝试发送「已发货」邮件给客户'),
+                );
+            } else {
+                $this->getMessageManager()->addSuccess(
+                    (string)__('发货已提交（未勾选通知客户，未发邮件）'),
+                );
+            }
         } catch (FrontendQueryException $exception) {
             $this->request->getResponse()->setCode(403);
 
             return $exception->getMessage();
         } catch (OrderTradeAdminCommandException $exception) {
-            $this->getMessageManager()->addError($exception->errorCode());
+            $this->getMessageManager()->addError($this->humanizeShipError($exception->errorCode()));
         } catch (\Throwable) {
             $this->getMessageManager()->addError((string)__('发货操作失败，请稍后重试。'));
         }
@@ -79,5 +95,15 @@ final class Shipment extends BackendController
         }
 
         return $this->redirect('order/backend/shipment/index');
+    }
+
+    private function humanizeShipError(string $code): string
+    {
+        return match ($code) {
+            'shipment_tracking_required' => (string)__('请填写平台物流单号后再发货'),
+            'shipment_tracking_too_long' => (string)__('物流单号过长，请控制在 100 字以内'),
+            'shipment_carrier_too_long' => (string)__('承运商名称过长，请控制在 100 字以内'),
+            default => $code !== '' ? $code : (string)__('发货操作失败，请稍后重试。'),
+        };
     }
 }

@@ -103,6 +103,12 @@ final class PromotionStorefrontActiveDealResolver
             if ($type === PromotionThemeDealDiscountSyncService::DISCOUNT_NONE || $value <= 0) {
                 continue;
             }
+            if (!\Weline\Framework\DateTime\Timezone::isWithinUtcWindow(
+                ($theme['starts_at'] ?? '') !== '' ? (string)$theme['starts_at'] : null,
+                ($theme['ends_at'] ?? '') !== '' ? (string)$theme['ends_at'] : null,
+            )) {
+                continue;
+            }
 
             $themeId = (int)($theme['id'] ?? 0);
             $productIds = $themeId > 0

@@ -6,6 +6,7 @@ namespace Weline\Blog\Service;
 
 use Weline\Blog\Api\Data\BlogArticle;
 use Weline\Blog\Api\Uri\BlogNamespace;
+use Weline\Theme\Helper\WidgetI18n;
 
 final class BlogSeoFactsBuilder
 {
@@ -32,8 +33,8 @@ final class BlogSeoFactsBuilder
         }
 
         $breadcrumbs = [
-            ['name' => (string)__('首页'), 'url' => $this->localeAwarePath('/', $canonical)],
-            ['name' => (string)__('博客'), 'url' => $this->localeAwarePath('/blog', $canonical)],
+            ['name' => WidgetI18n::label('首页'), 'url' => $this->localeAwarePath('/', $canonical)],
+            ['name' => WidgetI18n::label('博客'), 'url' => $this->localeAwarePath('/blog', $canonical)],
         ];
         $categoryUrl = trim((string)($article->sourceRef['category_url'] ?? ''));
         if ($section !== '' && $categoryUrl !== '') {
@@ -97,7 +98,7 @@ final class BlogSeoFactsBuilder
 
         $imageAlt = trim($article->title);
         if ($imageAlt === '') {
-            $imageAlt = (string)__('博客文章封面');
+            $imageAlt = WidgetI18n::label('博客文章封面');
         }
 
         return [
@@ -146,7 +147,7 @@ final class BlogSeoFactsBuilder
             }
         }
 
-        $title = (string)__('汉服博客');
+        $title = WidgetI18n::label('汉服博客');
         if ($shareImage === '') {
             // Stable storefront share asset when the list has no cover yet.
             $shareImage = '/pub/media/catalog/hanfu/r2/homepage/taoyuan-qingmeng.webp';
@@ -158,7 +159,7 @@ final class BlogSeoFactsBuilder
         return [
             'page_type' => 'blog_list',
             'title' => $title,
-            'description' => (string)__('阅读汉服穿搭灵感、形制科普与节日搭配指南，系统了解明制、宋制、唐制与马面裙的选购要点、穿着建议、保养提醒与礼仪场景搭配方法，帮助你更快做出更合适且更安心的选择。'),
+            'description' => WidgetI18n::label('阅读汉服穿搭灵感、形制科普与节日搭配指南，系统了解明制、宋制、唐制与马面裙的选购要点、穿着建议、保养提醒与礼仪场景搭配方法，帮助你更快做出更合适且更安心的选择。'),
             'canonical_url' => $listCanonical,
             'robots' => 'index,follow',
             'image' => $shareImage,
@@ -166,8 +167,8 @@ final class BlogSeoFactsBuilder
             'item_list' => $items,
             'feeds' => $this->siteFeeds($this->originFromUrl($listCanonical)),
             'breadcrumbs' => [
-                ['name' => (string)__('首页'), 'url' => $this->localeAwarePath('/', $listCanonical)],
-                ['name' => (string)__('博客'), 'url' => $this->localeAwarePath('/blog', $listCanonical)],
+                ['name' => WidgetI18n::label('首页'), 'url' => $this->localeAwarePath('/', $listCanonical)],
+                ['name' => WidgetI18n::label('博客'), 'url' => $this->localeAwarePath('/blog', $listCanonical)],
             ],
             'sitemap' => [
                 'include' => true,
@@ -185,7 +186,7 @@ final class BlogSeoFactsBuilder
     {
         return [[
             'type' => 'application/rss+xml',
-            'title' => (string)__('博客 RSS'),
+            'title' => WidgetI18n::label('博客 RSS'),
             'href' => $this->absoluteFeedHref(BlogNamespace::rssPublicPath(), $origin),
         ]];
     }
@@ -196,8 +197,8 @@ final class BlogSeoFactsBuilder
     public function categoryFeeds(string $categorySlug, string $origin = '', string $categoryTitle = ''): array
     {
         $title = $categoryTitle !== ''
-            ? (string)__('「%{1}」分类 RSS', [$categoryTitle])
-            : (string)__('博客分类 RSS');
+            ? WidgetI18n::label('「%{1}」分类 RSS', '', [$categoryTitle])
+            : WidgetI18n::label('博客分类 RSS');
 
         return [[
             'type' => 'application/rss+xml',
