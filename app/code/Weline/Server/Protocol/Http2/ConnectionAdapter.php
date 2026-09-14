@@ -13,7 +13,7 @@ final class ConnectionAdapter
 {
     public const MAX_CONCURRENT_STREAMS = 64;
     public const INITIAL_RECEIVE_WINDOW = 1048576;
-    public const MAX_REQUEST_BODY_BYTES = 16777216;
+    public const MAX_REQUEST_BODY_BYTES = 536870912;
 
     private const DEFAULT_FLOW_WINDOW = 65535;
     private const MAX_FLOW_WINDOW = 0x7fffffff;

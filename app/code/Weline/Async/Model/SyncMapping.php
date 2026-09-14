@@ -18,7 +18,6 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 #[Table(comment: '目录映射表')]
 #[Index(name: 'idx_host_id', columns: ['host_id'], comment: '主机ID索引')]
 #[Index(name: 'idx_status', columns: ['status'], comment: '状态索引')]
-#[Index(name: 'idx_local_path', columns: ['local_path'], comment: '本地路径索引')]
 class SyncMapping extends Model
 {
     public const schema_table = 'async_sync_mapping';

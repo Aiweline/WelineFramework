@@ -110,4 +110,27 @@ final class BackendOrderListPresenterTest extends TestCase
         self::assertContains('Bill User', $row['billing_address_lines']);
         self::assertContains('Billing Rd 9', $row['billing_address_lines']);
     }
+
+    public function testPresentExposesProgressiveStatusTones(): void
+    {
+        $presenter = new BackendOrderListPresenter();
+        $row = $presenter->present([
+            'status' => 'paid',
+            'payment_status' => 'paid',
+            'fulfillment_status' => 'pending',
+        ]);
+
+        self::assertSame('primary', $row['status_tone']);
+        self::assertSame('success', $row['payment_status_tone']);
+        self::assertSame('warning', $row['fulfillment_status_tone']);
+        self::assertSame('warning', $presenter->statusTone('pending'));
+        self::assertSame('success', $presenter->statusTone('completed'));
+        self::assertSame('danger', $presenter->statusTone('cancelled'));
+        self::assertSame('info', $presenter->paymentStatusTone('partial'));
+        self::assertSame('success', $presenter->fulfillmentStatusTone('delivered'));
+        self::assertSame('primary', $presenter->checkoutEntryTone('express'));
+        self::assertSame('info', $presenter->checkoutEntryTone('checkout'));
+        self::assertSame('success', $presenter->checkoutEntryTone('quick_buy'));
+        self::assertSame('warning', $presenter->checkoutEntryTone('helppay'));
+    }
 }

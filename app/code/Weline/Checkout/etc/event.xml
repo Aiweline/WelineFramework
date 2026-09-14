@@ -35,4 +35,13 @@
                   shared="true"
                   sort="10"/>
     </event>
+
+    <!-- Visitor 事件链收集：结账形态漏斗（代付/分享/快捷购买/快捷支付） -->
+    <event name="Weline_Visitor::event_chain_collect">
+        <observer name="Weline_Checkout::register_checkout_event_chains"
+                  instance="Weline\Checkout\Observer\RegisterCheckoutEventChainsObserver"
+                  disabled="false"
+                  shared="true"
+                  sort="50"/>
+    </event>
 </config>

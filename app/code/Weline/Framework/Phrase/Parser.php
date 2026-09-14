@@ -979,13 +979,15 @@ class Parser
         if (Runtime::isPersistent() && isset(DictionaryCacheNamespace::localCache(self::$workerModuleWordsCache, 2048, $locales)[$cacheKey])) {
             return DictionaryCacheNamespace::localCache(self::$workerModuleWordsCache, 2048, $locales)[$cacheKey];
         }
-        $words = [];
-                foreach (\array_reverse($locales) as $candidateLocale) {
-            $words = self::mergePreferTranslatedWords(
-                $words,
-                self::loadModuleWordsWithSharedCache($moduleName, $candidateLocale, $sharedModuleWords),
-            );
-        }
+        // 热路径只加载「目标语言」模块 CSV。
+        // 禁止把 en_US 等回退 locale 的模块 CSV 提前合并进 module_words：
+        // 否则 translationFromLoadedLayers 会在查 hi_IN/ar_SA 全局词典前就命中英文，
+        // 导致 AI 已译的 locale 文件/DB 词条被英文盖住（店面印地语/阿语漏译）。
+        // 缺译时仍由 locale_word_layers + loadGlobalDictionaryWord 按 LocaleFallbackChain 回退到 en_US。
+        $targetLocale = (string)($locales[0] ?? LocaleFallbackChain::normalize($lang));
+        $words = $targetLocale === ''
+            ? []
+            : self::loadModuleWordsWithSharedCache($moduleName, $targetLocale, $sharedModuleWords);
 
         return Runtime::isPersistent()
             ? DictionaryCacheNamespace::localCache(self::$workerModuleWordsCache, 2048, $locales)[$cacheKey] = $words

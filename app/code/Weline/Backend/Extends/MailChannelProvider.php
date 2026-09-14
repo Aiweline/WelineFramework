@@ -7,6 +7,7 @@ namespace Weline\Backend\Extends;
 use Weline\Backend\Service\TopicCollector;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Smtp\Api\MailChannelProviderInterface;
+use Weline\Smtp\Service\MailTemplateDefaultLocales;
 
 class MailChannelProvider implements MailChannelProviderInterface
 {
@@ -18,18 +19,7 @@ class MailChannelProvider implements MailChannelProviderInterface
             ['code' => 'type_label', 'label' => __('类型标签'), 'sample' => '信息'],
             ['code' => 'topic_code', 'label' => __('主题代码'), 'sample' => 'system_info'],
         ];
-        $templates = [
-            [
-                'locale' => 'zh_Hans_CN',
-                'subject_file' => 'view/email/notification/zh_Hans_CN.subject.txt',
-                'body_file' => 'view/email/notification/zh_Hans_CN.html',
-            ],
-            [
-                'locale' => 'en_US',
-                'subject_file' => 'view/email/notification/en_US.subject.txt',
-                'body_file' => 'view/email/notification/en_US.html',
-            ],
-        ];
+        $templates = MailTemplateDefaultLocales::fileEntries('notification');
 
         $byCode = [
             'Weline_Backend::notification_email' => [

@@ -98,7 +98,7 @@ final class StorefrontHeaderNavFragmentCache
         $structureFp = $this->navStructureFingerprint($item);
 
         return \sprintf(
-            'theme.header.mega_panel.v4.%s.%s.%s.%s.%s',
+            'theme.header.mega_panel.v6.%s.%s.%s.%s.%s',
             $this->storefrontLocaleSegment(),
             $drawerFlyout ? 'drawer' : 'top',
             $panelSlug,
@@ -112,7 +112,7 @@ final class StorefrontHeaderNavFragmentCache
      */
     public function sidebarNavLogicalKey(array $items): string
     {
-        return 'theme.header.sidebar_nav.v4.'
+        return 'theme.header.sidebar_nav.v6.'
             . $this->storefrontLocaleSegment()
             . '.'
             . $this->navListFingerprint($items);
@@ -126,8 +126,9 @@ final class StorefrontHeaderNavFragmentCache
             $locale = '';
         }
         $requestUri = (string)(\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '') ?: ($_SERVER['REQUEST_URI'] ?? ''));
-        if ($requestUri !== '' && \preg_match('#/(ar_SA|en_US|zh_Hans_CN|zh_CN)(?:/|$)#', $requestUri, $matches)) {
-            $locale = (string)$matches[1];
+        $pathLocale = \Weline\Theme\Helper\WidgetI18n::localeFromRequestUri($requestUri);
+        if ($pathLocale !== null) {
+            $locale = $pathLocale;
         }
 
         return $locale !== '' ? $locale : 'zh_Hans_CN';

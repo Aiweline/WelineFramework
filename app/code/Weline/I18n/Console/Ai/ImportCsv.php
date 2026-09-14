@@ -48,10 +48,10 @@ class ImportCsv implements CommandInterface
     {
         $this->printing->setup();
         
-        // 获取参数
-        $locale = $data['locale'] ?? $data['l'] ?? '';
-        $file = $data['file'] ?? $data['f'] ?? '';
-        $all = isset($data['all']) || isset($data['a']);
+        // CLI 参数在 $args（parseArgs）；$data 是命令注册元数据。
+        $locale = (string)($args['locale'] ?? $args['l'] ?? $data['locale'] ?? $data['l'] ?? '');
+        $file = (string)($args['file'] ?? $args['f'] ?? $data['file'] ?? $data['f'] ?? '');
+        $all = isset($args['all']) || isset($args['a']) || isset($data['all']) || isset($data['a']);
 
         if ($all) {
             // 导入所有模块的CSV文件

@@ -36,6 +36,7 @@ final class ConfigCenterShareUrlContractTest extends TestCase
         self::assertStringContainsString('w-system-config__adapter-callback', $tpl);
         self::assertStringContainsString('system-config-adapter-callback-url', $tpl);
         self::assertStringContainsString('adapterCallbackUrl', $tpl);
+        self::assertStringContainsString('withoutStorefrontLocalizationPrefix', $tpl);
         self::assertStringContainsString('callback-append-scope', $tpl);
         self::assertStringContainsString('$appendScope', $tpl);
         self::assertStringContainsString('callback-as-origin', $tpl);

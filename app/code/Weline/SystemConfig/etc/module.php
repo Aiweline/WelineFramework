@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_SystemConfig',
-    "version" => '1.3.49',
+    "version" => '1.3.50',
     "requires" => [
         'Weline_Acl' => '*',
         'Weline_Framework' => '*',

@@ -129,7 +129,7 @@ async function main() {
         qty,
         selling_mode: 'toc',
         cart_type: 'toc',
-      }, { silent: true });
+      }, { silent: true, requestTimeoutMs: 120000 });
       if (!addResult || addResult.success === false) {
         return addResult || { success: false, message: 'add_failed' };
       }
@@ -139,7 +139,7 @@ async function main() {
         guest_token: guestToken,
         cart_type: 'toc',
         selling_mode: 'toc',
-      });
+      }, { silent: true, requestTimeoutMs: 120000 });
     });
     result.steps.push('express_started');
     if (!started || started.success === false) {

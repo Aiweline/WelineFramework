@@ -22,6 +22,9 @@ use Weline\Payment\Service\PaymentBrowserReturnDispatcher;
  */
 final class ExpressCheckoutFlowService
 {
+    /** @var array<string, mixed> */
+    private array $lastListQuoteDiagnostics = [];
+
     public function __construct(
         private readonly ?ObjectManager $objectManager = null,
     ) {
@@ -66,6 +69,7 @@ final class ExpressCheckoutFlowService
             'cart_type' => $cartType,
             'selling_mode' => $cartType,
             'shipping_address' => is_array($params['address'] ?? null) ? $params['address'] : [],
+            'quote_token' => trim((string) ($params['quote_token'] ?? $params['checkout_token'] ?? '')),
         ]);
         $cart = is_array($data['cart'] ?? null) ? $data['cart'] : [];
         if (!empty($cart['is_empty'])) {
@@ -125,8 +129,10 @@ final class ExpressCheckoutFlowService
             'service_code' => $serviceCode,
             'payment_method' => $paymentMethod,
             'guest_token' => $guestToken,
+            'quote_token' => trim((string) ($data['quote_token'] ?? $params['quote_token'] ?? '')),
             'cart_type' => $cartType,
             'selling_mode' => $cartType,
+            'checkout_entry' => \Weline\Checkout\Service\CheckoutEntry::EXPRESS,
         ]);
         if (empty($frozen['success'])) {
             return [
@@ -301,6 +307,23 @@ final class ExpressCheckoutFlowService
             }
         }
         $embargo = $this->evaluateEmbargo($requiresShipping, $address);
+        $missingWeight = false;
+        $shippingEmptyMessage = '';
+        $quoteDiagnostics = $this->lastListQuoteDiagnostics;
+        if ($requiresShipping && $shippingMethods === []) {
+            $missingWeight = !empty($quoteDiagnostics['missing_weight']);
+            $shippingEmptyMessage = $missingWeight
+                ? (string) __('购物车商品缺少重量，无法计算运费。请联系客服协助处理后再试。')
+                : (string) __('该地区暂不支持配送');
+            $this->syncExpressFaultSnapshot(
+                $params,
+                $address,
+                $items,
+                $quoteDiagnostics,
+                $shippingMethods,
+                $shippingEmptyMessage,
+            );
+        }
         $missing = is_array($evaluation['missing_fields'] ?? null) ? $evaluation['missing_fields'] : [];
         $gapOnly = array_values(array_intersect($missing, ['contact_phone', 'phone', 'email']));
         $coreMissing = array_values(array_diff($missing, ['contact_phone', 'phone', 'email']));
@@ -334,6 +357,8 @@ final class ExpressCheckoutFlowService
                 'payer_email' => $payerEmail,
                 'embargo_blocked' => !empty($embargo['blocked']),
                 'embargo_message' => (string) ($embargo['message'] ?? ''),
+                'missing_weight' => $missingWeight,
+                'shipping_empty_message' => $shippingEmptyMessage,
                 'can_confirm' => $canConfirm,
                 'requires_shipping' => $requiresShipping,
                 'awaiting_confirm' => !empty($ctx['awaiting_confirm']),
@@ -1016,7 +1041,8 @@ final class ExpressCheckoutFlowService
                     'qty' => max(1, (int) ($item['qty'] ?? $item['qty_minor'] ?? 1)),
                     'unit_price_minor' => (int) ($item['unit_price_minor'] ?? 0),
                     'row_total_minor' => (int) ($item['row_total_minor'] ?? 0),
-                    'weight_minor' => $this->chargeableWeightMinor($item),
+                    // 真实重量：与结账同源 CheckoutQuoteLineWeightResolver（禁止静默 0.5kg）。
+                    'weight_minor' => $this->quoteLineWeight()->resolveLineWeightMinor($item),
                     'volume_minor' => (int) ($item['volume_minor'] ?? 0),
                     'offer_id' => (int) ($item['offer_id'] ?? 0),
                     'product_id' => (int) ($item['product_id'] ?? 0),
@@ -1035,8 +1061,15 @@ final class ExpressCheckoutFlowService
                 ],
             ]);
             if (!is_array($result) || empty($result['success'])) {
+                $this->lastListQuoteDiagnostics = is_array($result['data']['quote_diagnostics'] ?? null)
+                    ? $result['data']['quote_diagnostics']
+                    : [];
+
                 return [];
             }
+            $this->lastListQuoteDiagnostics = is_array($result['data']['quote_diagnostics'] ?? null)
+                ? $result['data']['quote_diagnostics']
+                : [];
             $options = is_array($result['data']['options'] ?? null) ? $result['data']['options'] : [];
             $out = [];
             foreach ($options as $option) {
@@ -1074,8 +1107,72 @@ final class ExpressCheckoutFlowService
                 $currency !== '' ? $currency : 'CNY',
             );
         } catch (\Throwable) {
+            $this->lastListQuoteDiagnostics = [];
+
             return [];
         }
+    }
+
+    /**
+     * Prefer line snapshot weight; if missing, catalog weight_kg via shared resolver.
+     * Still fail-closed at 0 — never invent 0.5kg.
+     *
+     * @deprecated Use quoteLineWeight(); kept for callers/tests that referenced resolveItemWeightMinor.
+     * @param array<string, mixed> $item
+     */
+    private function resolveItemWeightMinor(array $item): int
+    {
+        return $this->quoteLineWeight()->resolveLineWeightMinor($item);
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @param array<string, mixed> $address
+     * @param list<array<string, mixed>> $items
+     * @param array<string, mixed> $quoteDiagnostics
+     * @param list<array<string, mixed>> $shippingMethods
+     */
+    private function syncExpressFaultSnapshot(
+        array $params,
+        array $address,
+        array $items,
+        array $quoteDiagnostics,
+        array $shippingMethods,
+        string $emptyMessage,
+    ): void {
+        try {
+            $token = trim((string) ($params['checkout_token'] ?? $params['quote_token'] ?? ''));
+            if ($token === '') {
+                return;
+            }
+            $recorder = $this->om()->getInstance(CheckoutSessionFaultRecorder::class);
+            if (!$recorder instanceof CheckoutSessionFaultRecorder) {
+                return;
+            }
+            $recorder->syncLoad(
+                $token,
+                $address,
+                $items,
+                $quoteDiagnostics,
+                $shippingMethods,
+                false,
+                $emptyMessage,
+            );
+        } catch (\Throwable) {
+        }
+    }
+
+    private function quoteLineWeight(): CheckoutQuoteLineWeightResolver
+    {
+        try {
+            $resolved = $this->om()->getInstance(CheckoutQuoteLineWeightResolver::class);
+            if ($resolved instanceof CheckoutQuoteLineWeightResolver) {
+                return $resolved;
+            }
+        } catch (\Throwable) {
+        }
+
+        return new CheckoutQuoteLineWeightResolver();
     }
 
     /**
@@ -1446,16 +1543,4 @@ final class ExpressCheckoutFlowService
         return '';
     }
 
-    /**
-     * weight_table lanes reject weight_minor=0 as missing_weight. Catalog offers often omit
-     * weight; use 0.5kg so express re-quote (esp. PayPal US return) can still list lanes.
-     *
-     * @param array<string, mixed> $item
-     */
-    private function chargeableWeightMinor(array $item): int
-    {
-        $weightMinor = max(0, (int) ($item['weight_minor'] ?? 0));
-
-        return $weightMinor > 0 ? $weightMinor : 500;
-    }
 }

@@ -906,7 +906,7 @@ $lastMemoryCheck = $lastMemoryCheck ?? wlsWorkerMonotonicNow();
 $memoryWarningThreshold = $memoryWarningThreshold ?? 0.80;
 $memoryDrainThreshold = $memoryDrainThreshold ?? 0.88;
 $maxRequestHeaderBytes = $maxRequestHeaderBytes ?? 65536;
-$maxRequestBodyBytes = $maxRequestBodyBytes ?? (16 * 1024 * 1024);
+$maxRequestBodyBytes = $maxRequestBodyBytes ?? (536870912);
 $maxBufferedRequestBytes = $maxBufferedRequestBytes ?? ($maxRequestHeaderBytes + $maxRequestBodyBytes);
 $ipcRole = $isMaintenanceWorker
     ? \Weline\Server\IPC\ControlMessage::ROLE_MAINTENANCE
@@ -3416,7 +3416,7 @@ $maxRequests = $maxRequestsBase > 0
     ? $maxRequestsBase + (\max(0, $workerId - 1) * $recycleStaggerRequests)
     : 0;
 $maxRequestHeaderBytes = 65536;
-$maxRequestBodyBytes = 16 * 1024 * 1024;
+$maxRequestBodyBytes = 536870912;
 $maxBufferedRequestBytes = $maxRequestHeaderBytes + $maxRequestBodyBytes;
 
 // 如果启用了维护模式

@@ -75,9 +75,27 @@ final class HelpPayQueryProvider implements QueryProviderInterface
                         ['name' => 'service_label', 'type' => 'string', 'required' => false, 'description' => '配送可读名'],
                         ['name' => 'goods_amount_minor', 'type' => 'int', 'required' => false, 'description' => '商品 minor'],
                         ['name' => 'shipping_amount_minor', 'type' => 'int', 'required' => false, 'description' => '运费 minor'],
+                        ['name' => 'product_id', 'type' => 'int', 'required' => false, 'description' => '商品 ID（含运费时必填，服务端按真实重量复核）'],
+                        ['name' => 'qty', 'type' => 'int', 'required' => false, 'description' => '数量'],
                         ['name' => 'line_summary', 'type' => 'array', 'required' => false, 'description' => '行摘要'],
                         ['name' => 'public_origin', 'type' => 'string', 'required' => false, 'description' => '公网 origin'],
                         ['name' => 'ttl_seconds', 'type' => 'int', 'required' => false, 'description' => 'TTL 秒'],
+                    ],
+                ],
+                [
+                    'name' => 'listQuickShippingOptions',
+                    'frontend' => true,
+                    'external' => true,
+                    'mode' => 'read',
+                    'description' => '快捷购买物流报价（真实重量，对齐结账缺重门禁）',
+                    'params' => [
+                        ['name' => 'shipping_address', 'type' => 'array', 'required' => true, 'description' => '收货地址'],
+                        ['name' => 'address', 'type' => 'array', 'required' => false, 'description' => '地址别名'],
+                        ['name' => 'product_id', 'type' => 'int', 'required' => true, 'description' => '商品 ID'],
+                        ['name' => 'qty', 'type' => 'int', 'required' => false, 'description' => '数量'],
+                        ['name' => 'goods_amount_minor', 'type' => 'int', 'required' => false, 'description' => '商品 minor'],
+                        ['name' => 'currency_code', 'type' => 'string', 'required' => false, 'description' => '币种'],
+                        ['name' => 'cart_type', 'type' => 'string', 'required' => false, 'description' => 'toc|tob'],
                     ],
                 ],
                 [
@@ -111,6 +129,32 @@ final class HelpPayQueryProvider implements QueryProviderInterface
                         ['name' => 'token', 'type' => 'string', 'required' => true, 'description' => 'token'],
                     ],
                 ],
+                [
+                    'name' => 'startPayerPayment',
+                    'frontend' => true,
+                    'external' => true,
+                    'mode' => 'write',
+                    'description' => '代付人确认付款：创建支付交易并返回跳转 URL 或即时成功',
+                    'params' => [
+                        ['name' => 'token', 'type' => 'string', 'required' => true, 'description' => '帮我付 token'],
+                        ['name' => 'payment_method', 'type' => 'string', 'required' => true, 'description' => '支付方式 code'],
+                        ['name' => 'billing_address', 'type' => 'array', 'required' => false, 'description' => '卡支付账单地址'],
+                        ['name' => 'idempotency_key', 'type' => 'string', 'required' => false, 'description' => '幂等键'],
+                    ],
+                ],
+                [
+                    'name' => 'startQuickPayment',
+                    'frontend' => true,
+                    'external' => true,
+                    'mode' => 'write',
+                    'description' => '本人快捷购买确认付款：创建 PayPal 等交易并返回跳转 URL',
+                    'params' => [
+                        ['name' => 'token', 'type' => 'string', 'required' => true, 'description' => 'quick_pay token'],
+                        ['name' => 'payment_method', 'type' => 'string', 'required' => false, 'description' => '默认 paypal'],
+                        ['name' => 'billing_address', 'type' => 'array', 'required' => false, 'description' => '卡支付账单地址'],
+                        ['name' => 'idempotency_key', 'type' => 'string', 'required' => false, 'description' => '幂等键'],
+                    ],
+                ],
             ],
         ];
     }
@@ -121,9 +165,12 @@ final class HelpPayQueryProvider implements QueryProviderInterface
             'createHelpPay' => $this->orch()->createHelpPay($this->withOrigin($params)),
             'createSelectionShare' => $this->orch()->createSelectionShare($this->withOrigin($params)),
             'createQuickPay' => $this->orch()->createQuickPay($this->withOrigin($params)),
+            'listQuickShippingOptions' => $this->orch()->listQuickShippingOptions($params),
             'qrPng' => $this->qrPng($params),
             'revoke' => $this->revoke($params),
             'resolveHelpPay' => $this->orch()->resolveHelpPayForPayer((string) ($params['token'] ?? '')),
+            'startPayerPayment' => $this->orch()->startPayerPayment($params),
+            'startQuickPayment' => $this->orch()->startQuickPayment($params),
             default => throw new \InvalidArgumentException('helppay_operation_unsupported'),
         };
     }

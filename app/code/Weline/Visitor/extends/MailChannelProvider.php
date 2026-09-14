@@ -5,22 +5,10 @@ declare(strict_types=1);
 namespace Weline\Visitor\Extends;
 
 use Weline\Smtp\Api\MailChannelProviderInterface;
+use Weline\Smtp\Service\MailTemplateDefaultLocales;
 
 class MailChannelProvider implements MailChannelProviderInterface
 {
-    private const SHARED = [
-        [
-            'locale' => 'zh_Hans_CN',
-            'subject_file' => 'notification/zh_Hans_CN.subject.txt',
-            'body_file' => 'notification/zh_Hans_CN.html',
-        ],
-        [
-            'locale' => 'en_US',
-            'subject_file' => 'notification/en_US.subject.txt',
-            'body_file' => 'notification/en_US.html',
-        ],
-    ];
-
     public function getChannels(): array
     {
         $topics = [
@@ -41,6 +29,7 @@ class MailChannelProvider implements MailChannelProviderInterface
             ['code' => 'content', 'label' => __('正文'), 'sample' => 'Details'],
             ['code' => 'type_label', 'label' => __('类型'), 'sample' => 'Error'],
         ];
+        $templates = MailTemplateDefaultLocales::fileEntries('notification', 'short');
         $channels = [];
         foreach ($topics as $code => $name) {
             $channels[] = [
@@ -49,7 +38,7 @@ class MailChannelProvider implements MailChannelProviderInterface
                 'description' => __('站点错误监控主题 %{1} 的邮件渠道', [$code]),
                 'module' => 'Weline_Visitor',
                 'variables' => $variables,
-                'default_templates' => self::SHARED,
+                'default_templates' => $templates,
             ];
         }
 

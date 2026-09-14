@@ -68,8 +68,9 @@ if (!in_array($layout, ['grid', 'carousel'], true)) {
 // 兼容已发布布局中仍挂着空 brands 的 brand-logos：数据权威在 Theme TextileHeritageCatalog。
 if ($usesCraftDirectory && class_exists(\Weline\Theme\Service\TextileHeritageCatalog::class)) {
     foreach (\Weline\Theme\Service\TextileHeritageCatalog::items() as $item) {
+        $displayName = $translateDefaultCopy($item['name'], $item['caption_en']);
         $brands[] = [
-            'name' => $item['name'],
+            'name' => $displayName,
             'caption' => $translateDefaultCopy($item['caption'], $item['caption_en']),
             'image' => $item['image'],
             'link' => $item['link'],

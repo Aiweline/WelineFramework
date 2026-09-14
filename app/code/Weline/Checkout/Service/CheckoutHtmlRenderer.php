@@ -259,11 +259,19 @@ final class CheckoutHtmlRenderer
      * Payment method cards: logo + expandable intro + provider guide details link.
      *
      * @param list<array<string, mixed>> $methods
+     * @param array{
+     *   selected_index?: int,
+     *   selected_code?: string,
+     *   radio_name_attr?: string,
+     *   radio_boolean_attrs?: list<string>,
+     *   testid_prefix?: string,
+     * } $options
      */
     public function renderPaymentMethodOptions(
         array $methods,
         string $inputName = 'payment_method',
         string $emptyMessage = '',
+        array $options = [],
     ): string {
         if ($methods === []) {
             return $this->renderMethodEmptyAlert($inputName, $emptyMessage);
@@ -272,6 +280,14 @@ final class CheckoutHtmlRenderer
         $expandLabel = (string)__('展开简介');
         $collapseLabel = (string)__('收起');
         $detailsLabel = (string)__('查看详情');
+        $selectedIndex = array_key_exists('selected_index', $options) ? (int) $options['selected_index'] : 0;
+        $selectedCode = strtolower(trim((string) ($options['selected_code'] ?? '')));
+        $radioNameAttr = trim((string) ($options['radio_name_attr'] ?? ''));
+        /** @var list<string> $radioBooleanAttrs */
+        $radioBooleanAttrs = is_array($options['radio_boolean_attrs'] ?? null)
+            ? array_values(array_filter(array_map('strval', $options['radio_boolean_attrs'])))
+            : [];
+        $testidPrefix = trim((string) ($options['testid_prefix'] ?? ''));
         $html = '';
 
         foreach ($methods as $index => $method) {
@@ -283,7 +299,12 @@ final class CheckoutHtmlRenderer
             $hasGuide = array_key_exists('has_guide', $method)
                 ? (bool)$method['has_guide']
                 : ($guideUrl !== '');
-            $checked = $index === 0 ? ' checked' : '';
+            $checked = false;
+            if ($selectedCode !== '') {
+                $checked = strtolower($code) === $selectedCode;
+            } else {
+                $checked = $index === $selectedIndex;
+            }
 
             if ($guideUrl !== '' && !str_starts_with($guideUrl, '/') && !preg_match('#^https?://#i', $guideUrl)) {
                 $guideUrl = '/' . ltrim($guideUrl, '/');
@@ -302,8 +323,9 @@ final class CheckoutHtmlRenderer
 
             $introHtml = '';
             if ($desc !== '') {
+                $desc = (string)__($desc);
                 $introHtml = '<span class="weline-checkout__payment-intro" data-payment-intro>'
-                    . '<small class="weline-checkout__payment-intro-text">' . $this->e($desc) . '</small>'
+                    . '<small class="weline-checkout__payment-intro-text" dir="auto">' . $this->e($desc) . '</small>'
                     . '<button type="button" class="weline-checkout__payment-intro-toggle"'
                     . ' data-payment-intro-toggle'
                     . ' data-label-expand="' . $this->e($expandLabel) . '"'
@@ -312,9 +334,30 @@ final class CheckoutHtmlRenderer
                     . '</span>';
             }
 
+            $inputExtra = '';
+            if ($radioNameAttr !== '') {
+                $inputExtra .= ' ' . $radioNameAttr;
+            }
+            foreach ($radioBooleanAttrs as $attr) {
+                $attr = trim($attr);
+                if ($attr === '' || !preg_match('/^[a-zA-Z_][\w:-]*$/', $attr)) {
+                    continue;
+                }
+                $inputExtra .= ' ' . $attr;
+            }
+            if (array_key_exists('requires_billing', $method)) {
+                $inputExtra .= ' data-requires-billing="' . (!empty($method['requires_billing']) ? '1' : '0') . '"';
+            }
+            if ($testidPrefix !== '') {
+                $inputExtra .= ' data-testid="' . $this->e($testidPrefix . $code) . '"';
+            }
+
             $html .= '<label class="weline-checkout__option weline-checkout__option--payment"'
                 . ' data-payment-method="' . $this->e($code) . '">'
-                . '<input type="radio" name="' . $this->e($inputName) . '" value="' . $this->e($code) . '"' . $checked . '>'
+                . '<input type="radio" name="' . $this->e($inputName) . '" value="' . $this->e($code) . '"'
+                . ($checked ? ' checked' : '')
+                . $inputExtra
+                . '>'
                 . $logoHtml
                 . '<span class="weline-checkout__payment-body">'
                 . '<span class="weline-checkout__payment-title-row">'
@@ -340,6 +383,8 @@ final class CheckoutHtmlRenderer
             $msg = $inputName === 'payment_method'
                 ? (string)__('暂无可用支付方式。')
                 : (string)__('暂无可用配送方式。');
+        } else {
+            $msg = (string)__($msg);
         }
         $title = $inputName === 'payment_method'
             ? (string)__('暂无可用支付方式')
@@ -352,7 +397,7 @@ final class CheckoutHtmlRenderer
             . ' data-testid="checkout-method-empty-' . $this->e($inputName) . '">'
             . '<div class="w-alert__content">'
             . '<div class="w-alert__title">' . $this->e($title) . '</div>'
-            . '<p class="weline-checkout__method-alert-body">' . $this->e($msg) . '</p>'
+            . '<p class="weline-checkout__method-alert-body" dir="auto">' . $this->e($msg) . '</p>'
             . '</div>'
             . '</div>';
     }

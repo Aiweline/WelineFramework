@@ -46,8 +46,23 @@ final class BlogContentResolver
                 $post = $this->findPublishedPost($websiteId, $locale, $storageSlug);
             }
         }
+        if ($post === null) {
+            $baseSlug = self::stripKnownLocaleSlugSuffix($slug);
+            foreach ($this->contentLocaleCandidates($locale) as $candidate) {
+                if ($candidate === trim(str_replace('-', '_', $locale))) {
+                    continue;
+                }
+                $candidateStorage = $this->storageSlugForLocale($baseSlug, $candidate);
+                foreach (array_unique([$baseSlug, $candidateStorage]) as $trySlug) {
+                    $post = $this->findPublishedPost($websiteId, $candidate, $trySlug);
+                    if ($post !== null) {
+                        break 2;
+                    }
+                }
+            }
+        }
         if ($post !== null) {
-            return $this->postToArticle($post, $baseUrl);
+            return $this->postToArticle($post, $baseUrl, $locale);
         }
 
         $cmsPage = $this->cmsAdapter->getPublishedPage($websiteId, $slug);
@@ -201,7 +216,7 @@ final class BlogContentResolver
         $this->warmKeywordsForPosts($posts);
         foreach ($posts as $post) {
             $this->rememberPublishedPostRow($post);
-            $articles[] = $this->postToArticle($post, $baseUrl);
+            $articles[] = $this->postToArticle($post, $baseUrl, $locale);
         }
 
         if ($categoryId <= 0) {
@@ -228,7 +243,14 @@ final class BlogContentResolver
             }
         }
 
-        usort($articles, static function (BlogArticle $a, BlogArticle $b): int {
+        $requestLocale = trim(str_replace('-', '_', $locale));
+        usort($articles, static function (BlogArticle $a, BlogArticle $b) use ($requestLocale): int {
+            $aPreferred = ($requestLocale !== '' && $a->locale === $requestLocale) ? 0 : 1;
+            $bPreferred = ($requestLocale !== '' && $b->locale === $requestLocale) ? 0 : 1;
+            if ($aPreferred !== $bPreferred) {
+                return $aPreferred <=> $bPreferred;
+            }
+
             return strcmp((string)($b->publishedAt ?? ''), (string)($a->publishedAt ?? ''));
         });
 
@@ -237,20 +259,24 @@ final class BlogContentResolver
 
     private function storageSlugForLocale(string $slug, string $locale): string
     {
-        if (!$this->isEnglishLocale($locale) || str_ends_with($slug, '-en')) {
+        $slug = trim(strtolower($slug), '/ ');
+        $suffix = self::localeSlugSuffix($locale);
+        if ($suffix === '' || $slug === '' || str_ends_with($slug, '-' . $suffix)) {
             return $slug;
         }
 
-        return $slug . '-en';
+        return $slug . '-' . $suffix;
     }
 
     public function publicSlugForLocale(string $slug, string $locale): string
     {
-        if ($this->isEnglishLocale($locale) && str_ends_with($slug, '-en')) {
-            return substr($slug, 0, -3);
+        $slug = trim(strtolower($slug), '/ ');
+        $suffix = self::localeSlugSuffix($locale);
+        if ($suffix !== '' && str_ends_with($slug, '-' . $suffix)) {
+            return substr($slug, 0, -(strlen($suffix) + 1));
         }
 
-        return $slug;
+        return self::stripKnownLocaleSlugSuffix($slug);
     }
 
     private function isEnglishLocale(string $locale): bool
@@ -258,6 +284,79 @@ final class BlogContentResolver
         $locale = strtolower(str_replace('-', '_', trim($locale)));
 
         return $locale === 'en' || str_starts_with($locale, 'en_');
+    }
+
+    /** @return array<string, string> locale => storage slug suffix (without leading dash) */
+    public static function localeSlugSuffixMap(): array
+    {
+        return [
+            'en_US' => 'en',
+            'ar_SA' => 'ar',
+            'bn_BD' => 'bn',
+            'es_ES' => 'es',
+            'fr_FR' => 'fr',
+            'hi_IN' => 'hi',
+            'id_ID' => 'id',
+            'pt_BR' => 'pt',
+            'ur_PK' => 'ur',
+        ];
+    }
+
+    private static function localeSlugSuffix(string $locale): string
+    {
+        $locale = trim(str_replace('-', '_', $locale));
+
+        return self::localeSlugSuffixMap()[$locale] ?? '';
+    }
+
+    private static function stripKnownLocaleSlugSuffix(string $slug): string
+    {
+        foreach (self::localeSlugSuffixMap() as $suffix) {
+            $tail = '-' . $suffix;
+            if ($suffix !== '' && str_ends_with($slug, $tail)) {
+                return substr($slug, 0, -strlen($tail));
+            }
+        }
+
+        return $slug;
+    }
+
+    /** Site source / default content locale used when a storefront locale has no post rows. */
+    private function defaultContentLocale(): string
+    {
+        return 'zh_Hans_CN';
+    }
+
+    /**
+     * Prefer the request locale; fall back to default content locale when missing translations.
+     *
+     * @return list<string>
+     */
+    private function contentLocaleCandidates(string $locale): array
+    {
+        $locale = trim(str_replace('-', '_', $locale));
+        $candidates = [];
+        if ($locale !== '') {
+            $candidates[] = $locale;
+        }
+        $default = $this->defaultContentLocale();
+        if ($default !== '' && !in_array($default, $candidates, true)) {
+            $candidates[] = $default;
+        }
+
+        return $candidates;
+    }
+
+    /**
+     * Pair locale storage variants of the same article for listing dedupe.
+     *
+     * @param array<string, mixed> $row
+     */
+    private function contentIdentityKey(array $row): string
+    {
+        $slug = trim(strtolower((string)($row[Post::schema_fields_SLUG] ?? '')));
+
+        return self::stripKnownLocaleSlugSuffix($slug);
     }
 
     /**
@@ -289,7 +388,12 @@ final class BlogContentResolver
             if ($locale !== '') {
                 $query->where(Post::schema_fields_LOCALE, $locale);
             }
-            return $query->find()->fetchArray();
+            $hit = $query->find()->fetchArray();
+            if (is_array($hit) && $hit !== [] && (int)($hit[Post::schema_fields_ID] ?? 0) > 0) {
+                return $hit;
+            }
+
+            return [];
         });
         if (!is_array($row)
             || $row === []
@@ -339,17 +443,20 @@ final class BlogContentResolver
 
         sort($unknown, SORT_STRING);
         $rows = $this->cache()->remember($websiteId, $locale, 'post_slugs', $unknown, function () use ($websiteId, $locale, $unknown): mixed {
+            $candidates = $this->contentLocaleCandidates($locale);
             $query = clone $this->postModel;
             $query->clearData()->reset()
                 ->where(Post::schema_fields_WEBSITE_ID, BlogWebsiteScope::websiteIdsForQuery($websiteId), 'IN')
                 ->where(Post::schema_fields_SLUG, $unknown, 'IN')
                 ->where(Post::schema_fields_STATUS, Post::STATUS_PUBLISHED);
-            if ($locale !== '') {
-                $query->where(Post::schema_fields_LOCALE, $locale);
+            if ($candidates !== []) {
+                $query->where(Post::schema_fields_LOCALE, $candidates, 'IN');
             }
             return $query->select()->fetchArray();
         });
         $hitSlugs = [];
+        $priority = array_flip($this->contentLocaleCandidates($locale));
+        $bestBySlug = [];
         foreach (\is_array($rows) ? $rows : [] as $row) {
             if (!\is_array($row) || (int)($row[Post::schema_fields_ID] ?? 0) <= 0) {
                 continue;
@@ -358,6 +465,14 @@ final class BlogContentResolver
             if ($slug === '') {
                 continue;
             }
+            $rowLocale = (string)($row[Post::schema_fields_LOCALE] ?? '');
+            $rank = $priority[$rowLocale] ?? 1000;
+            if (!isset($bestBySlug[$slug]) || $rank < ($bestBySlug[$slug]['_rank'] ?? 1000)) {
+                $bestBySlug[$slug] = $row + ['_rank' => $rank];
+            }
+        }
+        foreach ($bestBySlug as $slug => $row) {
+            unset($row['_rank']);
             $this->rememberPublishedPostRow($row);
             RequestContext::set($this->postSlugContextKey($websiteId, $locale, $slug), $row);
             $found[$slug] = $row;
@@ -407,13 +522,14 @@ final class BlogContentResolver
      */
     private function warmCategoryMetaForPosts(array $posts, string $locale): void
     {
+        $displayLocale = trim(str_replace('-', '_', $locale));
         $groups = [];
         foreach ($posts as $post) {
             $id = (int)($post[Post::schema_fields_CATEGORY_ID] ?? 0);
             $websiteId = (int)($post[Post::schema_fields_WEBSITE_ID] ?? 0);
-            $rowLocale = (string)($post[Post::schema_fields_LOCALE] ?? $locale);
-            if ($id > 0 && !RequestContext::has(self::CTX_CATEGORY_META . $id . '.' . $websiteId . '.' . $rowLocale)) {
-                $groups[$websiteId][$rowLocale][$id] = $id;
+            $metaLocale = $displayLocale !== '' ? $displayLocale : (string)($post[Post::schema_fields_LOCALE] ?? '');
+            if ($id > 0 && !RequestContext::has(self::CTX_CATEGORY_META . $id . '.' . $websiteId . '.' . $metaLocale)) {
+                $groups[$websiteId][$metaLocale][$id] = $id;
             }
         }
         foreach ($groups as $websiteId => $locales) {
@@ -449,49 +565,84 @@ final class BlogContentResolver
      */
     private function listPublishedPosts(int $websiteId, string $locale, int $limit, int $categoryId = 0): array
     {
-        return $this->cache()->remember($websiteId, $locale, 'post_list', [$limit, $categoryId], function () use ($websiteId, $locale, $limit, $categoryId): array {
-            $query = clone $this->postModel;
-            $query->clearData()->reset()
-                ->where(Post::schema_fields_WEBSITE_ID, BlogWebsiteScope::websiteIdsForQuery($websiteId), 'IN')
-                ->where(Post::schema_fields_STATUS, Post::STATUS_PUBLISHED);
-            if ($locale !== '') {
-                $query->where(Post::schema_fields_LOCALE, $locale);
-            }
+        return $this->cache()->remember($websiteId, $locale, 'post_list', [$limit, $categoryId, 'content_fallback_v2'], function () use ($websiteId, $locale, $limit, $categoryId): array {
+            $candidates = $this->contentLocaleCandidates($locale);
+            $categoryIds = [];
             if ($categoryId > 0) {
                 $categoryIds = $this->categoryAdmin->selfAndDescendantIds($websiteId, $categoryId);
                 if ($categoryIds === []) {
                     $categoryIds = [$categoryId];
                 }
-                $query->where(Post::schema_fields_CATEGORY_ID, $categoryIds, 'IN');
             }
-            $rows = $query->order(Post::schema_fields_PUBLISHED_AT, 'DESC')
-                ->limit($limit)
-                ->select()
-                ->fetchArray();
 
-            return is_array($rows) ? array_values(array_filter($rows, static fn($row): bool => is_array($row))) : [];
+            $out = [];
+            $seen = [];
+            foreach ($candidates as $candidate) {
+                if (count($out) >= $limit) {
+                    break;
+                }
+                $need = $limit - count($out);
+                $query = clone $this->postModel;
+                $query->clearData()->reset()
+                    ->where(Post::schema_fields_WEBSITE_ID, BlogWebsiteScope::websiteIdsForQuery($websiteId), 'IN')
+                    ->where(Post::schema_fields_STATUS, Post::STATUS_PUBLISHED);
+                if ($candidate !== '') {
+                    $query->where(Post::schema_fields_LOCALE, $candidate);
+                }
+                if ($categoryIds !== []) {
+                    $query->where(Post::schema_fields_CATEGORY_ID, $categoryIds, 'IN');
+                }
+                $rows = $query->order(Post::schema_fields_PUBLISHED_AT, 'DESC')
+                    ->limit(max($need * 3, $need))
+                    ->select()
+                    ->fetchArray();
+                if (!is_array($rows)) {
+                    continue;
+                }
+                foreach ($rows as $row) {
+                    if (!is_array($row)) {
+                        continue;
+                    }
+                    $key = $this->contentIdentityKey($row);
+                    if ($key === '' || isset($seen[$key])) {
+                        continue;
+                    }
+                    $seen[$key] = true;
+                    $out[] = $row;
+                    if (count($out) >= $limit) {
+                        break;
+                    }
+                }
+            }
+
+            return $out;
         });
     }
 
     /**
      * @param array<string, mixed> $row
      */
-    private function postToArticle(array $row, string $baseUrl): BlogArticle
+    private function postToArticle(array $row, string $baseUrl, string $displayLocale = ''): BlogArticle
     {
-        $this->warmCategoryMetaForPosts([$row], (string)($row[Post::schema_fields_LOCALE] ?? ''));
+        $contentLocale = (string)($row[Post::schema_fields_LOCALE] ?? '');
+        $displayLocale = trim(str_replace('-', '_', $displayLocale !== '' ? $displayLocale : $contentLocale));
+        $this->warmCategoryMetaForPosts([$row], $displayLocale);
         $this->warmKeywordsForPosts([$row]);
         $storageSlug = (string)($row[Post::schema_fields_SLUG] ?? '');
-        $locale = (string)($row[Post::schema_fields_LOCALE] ?? '');
-        $slug = $this->publicSlugForLocale($storageSlug, $locale);
+        $slug = $this->publicSlugForLocale($storageSlug, $contentLocale);
         $path = BlogNamespace::publicPath($slug);
         $absolute = $this->absoluteUrl($path, $baseUrl);
         $categoryId = (int)($row[Post::schema_fields_CATEGORY_ID] ?? 0);
-        $categoryMeta = $this->resolveCategoryMeta($categoryId, (int)($row[Post::schema_fields_WEBSITE_ID] ?? 0), $locale);
+        $categoryMeta = $this->resolveCategoryMeta(
+            $categoryId,
+            (int)($row[Post::schema_fields_WEBSITE_ID] ?? 0),
+            $displayLocale !== '' ? $displayLocale : $contentLocale,
+        );
 
         return new BlogArticle(
             contentKind: BlogArticle::KIND_POST,
             websiteId: (int)($row[Post::schema_fields_WEBSITE_ID] ?? 0),
-            locale: $locale,
+            locale: $contentLocale,
             slug: $slug,
             identifier: BlogNamespace::identifierFromSlug($slug),
             title: (string)($row[Post::schema_fields_TITLE] ?? ''),
@@ -513,13 +664,13 @@ final class BlogContentResolver
             ],
             keywords: $this->resolveKeywords(
                 (int)($row[Post::schema_fields_ID] ?? 0),
-                $locale,
+                $displayLocale !== '' ? $displayLocale : $contentLocale,
                 (string)($row[Post::schema_fields_KEYWORDS] ?? ''),
             ),
-            authorUrl: $this->resolveAuthorUrl($row, $locale, $absolute !== '' ? $absolute : $baseUrl),
-            authorBio: $this->resolveAuthorBio($row, $locale),
-            authorJobTitle: $this->resolveAuthorJobTitle($row, $locale, $absolute !== '' ? $absolute : $baseUrl),
-            authorSameAs: $this->resolveAuthorSameAs($row, $locale, $absolute !== '' ? $absolute : $baseUrl),
+            authorUrl: $this->resolveAuthorUrl($row, $displayLocale !== '' ? $displayLocale : $contentLocale, $absolute !== '' ? $absolute : $baseUrl),
+            authorBio: $this->resolveAuthorBio($row, $displayLocale !== '' ? $displayLocale : $contentLocale),
+            authorJobTitle: $this->resolveAuthorJobTitle($row, $displayLocale !== '' ? $displayLocale : $contentLocale, $absolute !== '' ? $absolute : $baseUrl),
+            authorSameAs: $this->resolveAuthorSameAs($row, $displayLocale !== '' ? $displayLocale : $contentLocale, $absolute !== '' ? $absolute : $baseUrl),
         );
     }
 

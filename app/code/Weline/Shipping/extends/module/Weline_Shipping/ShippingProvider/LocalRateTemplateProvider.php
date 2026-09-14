@@ -75,7 +75,10 @@ final class LocalRateTemplateProvider extends AbstractShippingProvider
         return ShippingQuoteResult::ok(
             $priced['rates'],
             $priced['fx_skipped'],
-            ['provider' => 'local'],
+            [
+                'provider' => 'local',
+                'unavailable_reasons' => $priced['unavailable_reasons'] ?? [],
+            ],
         );
     }
 

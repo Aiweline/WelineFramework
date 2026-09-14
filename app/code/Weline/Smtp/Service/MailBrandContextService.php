@@ -6,6 +6,7 @@ namespace Weline\Smtp\Service;
 
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Asset\MediaUrl;
+use Weline\I18n\Api\Translation\TranslationResolverInterface;
 use Weline\SystemConfig\Api\Scope\ScopeIdentityCatalogInterface;
 use Weline\SystemConfig\Model\SystemConfig;
 use Weline\SystemConfig\Service\SystemConfigScopeResolver;
@@ -20,6 +21,7 @@ use Weline\Websites\Model\WebsiteDomain;
 /**
  * 按站店渠 scope 解析邮件品牌/信任上下文（logo、站名、店铺名、联系方式）。
  * 仅读取公开 Helper/实体，不写 Theme / SystemConfig。
+ * 传入邮件 locale 时，可译字段与预览样本经 TranslationResolver 对齐该语种（避免后台 UI 语种串台）。
  */
 class MailBrandContextService
 {
@@ -99,7 +101,7 @@ class MailBrandContextService
     /**
      * @return array<string, string>
      */
-    public function resolve(string $storageScope): array
+    public function resolve(string $storageScope, string $locale = ''): array
     {
         $contact = $this->resolveContact();
         $names = $this->resolveScopeNames($storageScope);
@@ -122,7 +124,7 @@ class MailBrandContextService
         }
         $description = trim((string)$contact['site_description']);
         if ($description === '') {
-            $description = (string)__('官方商城客户服务');
+            $description = '官方商城客户服务';
         }
 
         $logoImg = '';
@@ -136,7 +138,7 @@ class MailBrandContextService
         $palette = $this->resolvePalette($storageScope);
         $contactEmail = $this->normalizeContactEmail((string)$contact['contact_email'], $siteUrl);
 
-        return array_merge([
+        $brand = array_merge([
             'site_name' => $siteName,
             'store_name' => $storeName,
             'channel_name' => $channelName,
@@ -150,6 +152,8 @@ class MailBrandContextService
             'contact_address' => (string)$contact['contact_address'],
             'service_hours' => (string)$contact['service_hours'],
         ], $palette);
+
+        return $this->localizeBrandStrings($brand, $locale);
     }
 
     /**
@@ -296,22 +300,23 @@ class MailBrandContextService
      * @param array<string, mixed> $vars
      * @return array<string, mixed>
      */
-    public function mergeInto(array $vars, string $storageScope): array
+    public function mergeInto(array $vars, string $storageScope, string $locale = ''): array
     {
-        $brand = $this->resolve($storageScope);
-        // 调用方显式传入的同名变量优先
+        $brand = $this->resolve($storageScope, $locale);
+        // 调用方显式传入的同名变量优先（调用方亦可自带已按 locale 译好的文案）
         return array_merge($brand, $vars);
     }
 
     /**
      * 后台编辑页实时预览样本：站店渠已解析值优先；渠道 sample 中的占位主机（example.com）改写为当前范围 site_url。
+     * 传入邮件 locale 时，渠道 sample 文案与可译品牌字段按该语种译写。
      *
      * @param list<array{code?:string,sample?:string}> $variables
      * @return array<string, string>
      */
-    public function buildPreviewSamples(array $variables, string $storageScope): array
+    public function buildPreviewSamples(array $variables, string $storageScope, string $locale = ''): array
     {
-        $brand = $this->resolve($storageScope);
+        $brand = $this->resolve($storageScope, $locale);
         $siteUrl = rtrim((string)($brand['site_url'] ?? ''), '/');
         $samples = [];
         foreach ($variables as $var) {
@@ -327,10 +332,86 @@ class MailBrandContextService
                 continue;
             }
             $sample = (string)($var['sample'] ?? '');
-            $samples[$code] = $this->scopeLockPreviewSample($sample, $siteUrl, $brand);
+            $samples[$code] = $this->localizePreviewText(
+                $this->scopeLockPreviewSample($sample, $siteUrl, $brand),
+                $locale
+            );
         }
 
         return $samples;
+    }
+
+    /**
+     * @param array<string, string> $brand
+     * @return array<string, string>
+     */
+    private function localizeBrandStrings(array $brand, string $locale): array
+    {
+        $locale = trim($locale);
+        if ($locale === '') {
+            return $brand;
+        }
+        foreach (['site_name', 'store_name', 'channel_name', 'site_description', 'service_hours', 'contact_address'] as $key) {
+            if (!isset($brand[$key]) || !is_string($brand[$key])) {
+                continue;
+            }
+            $brand[$key] = $this->localizePreviewText((string)$brand[$key], $locale);
+        }
+
+        return $brand;
+    }
+
+    private function localizePreviewText(string $text, string $locale): string
+    {
+        $text = trim($text);
+        $locale = trim($locale);
+        if ($text === '' || $locale === '') {
+            return $text;
+        }
+        // URL / 邮箱 / 色值 / 纯代码不走词典
+        if (preg_match('#^(https?://|mailto:|/)#i', $text) === 1
+            || str_contains($text, '@')
+            || preg_match('/^#[0-9a-fA-F]{3,8}$/', $text) === 1
+            || preg_match('/^[a-z][a-z0-9_]{2,64}$/i', $text) === 1
+        ) {
+            return $text;
+        }
+        // 复合站店名里常夹着「默认网站」「默认店铺」
+        foreach (['默认网站', '默认店铺', '默认渠道'] as $phrase) {
+            if (!str_contains($text, $phrase)) {
+                continue;
+            }
+            $part = $this->translateMailPhrase($phrase, $locale);
+            if ($part !== '' && $part !== $phrase) {
+                $text = str_replace($phrase, $part, $text);
+            }
+        }
+
+        return $this->translateMailPhrase($text, $locale);
+    }
+
+    private function translateMailPhrase(string $text, string $locale): string
+    {
+        $text = trim($text);
+        if ($text === '') {
+            return '';
+        }
+        try {
+            /** @var TranslationResolverInterface $resolver */
+            $resolver = ObjectManager::getInstance(TranslationResolverInterface::class);
+            $translated = trim($resolver->translate(
+                $text,
+                $locale,
+                ['Weline_Smtp', 'Weline_Backend', 'Weline_Websites', 'Weline_Framework', 'Weline_Theme']
+            ));
+            if ($translated !== '') {
+                return $translated;
+            }
+        } catch (\Throwable) {
+            // CLI/单测无容器时保留源文
+        }
+
+        return $text;
     }
 
     /**

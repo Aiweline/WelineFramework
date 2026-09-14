@@ -196,7 +196,14 @@ final class WarehouseFulfillmentService
                     $warehouseId = (int) $unit->getData(
                         FulfillmentUnit::schema_fields_WAREHOUSE_ID,
                     );
-                    if ($warehouseId <= 0) {
+                    $warehouseSource = strtolower(trim((string) $unit->getData(
+                        FulfillmentUnit::schema_fields_WAREHOUSE_SOURCE,
+                    )));
+                    // Platform / legacy units may ship without a bound warehouse id.
+                    if ($warehouseId <= 0
+                        && $warehouseSource !== ''
+                        && $warehouseSource !== self::SOURCE_LEGACY_DEFAULT
+                    ) {
                         throw new WarehouseFulfillmentConflictException(
                             self::ERROR_WAREHOUSE_MISSING,
                             __('FulfillmentUnit 缺少 Warehouse'),

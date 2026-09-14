@@ -49,7 +49,7 @@ $configJson = $esc((string)json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_U
 $defaultVol = (int)$payload['default_volume'];
 ?>
 <link rel="stylesheet"
-      href="@static(Weline_StoreMusic::css/store-music.css)&v=20260914-storemusic5"
+      href="@static(Weline_StoreMusic::css/store-music.css)&v=20260914-storemusic11"
       data-no-extract="true"
       data-weline-store-music="1">
 <canvas id="weline-store-music-wave"
@@ -66,6 +66,8 @@ $defaultVol = (int)$payload['default_volume'];
        data-store-id="<?= $esc($storeId) ?>"
        data-testid="store-music-widget">
     <span class="w-store-music__sr" data-store-music-i18n-need-consent hidden><lang>请先同意营销 Cookie 后再播放</lang></span>
+    <span class="w-store-music__sr" data-store-music-i18n-tap-to-play hidden><lang>点击开启音乐</lang></span>
+    <span class="w-store-music__sr" data-store-music-i18n-tap-to-unmute hidden><lang>点击开启声音</lang></span>
     <span class="w-store-music__sr" data-store-music-i18n-wave-unavailable hidden><lang>波形不可用</lang></span>
     <span class="w-store-music__sr" data-store-music-i18n-wave-on hidden><lang>开启波形</lang></span>
     <span class="w-store-music__sr" data-store-music-i18n-wave-off hidden><lang>关闭波形</lang></span>
@@ -76,6 +78,7 @@ $defaultVol = (int)$payload['default_volume'];
     <span class="w-store-music__sr" data-store-music-i18n-dismissed hidden><lang>已关闭自动播放，点击播放可重新开启</lang></span>
     <span class="w-store-music__sr" data-store-music-i18n-other-tab hidden><lang>已在其他页面播放</lang></span>
     <span class="w-store-music__sr" data-store-music-i18n-playlist hidden><lang>播放列表</lang></span>
+    <span class="w-store-music__sr" data-store-music-i18n-playlist-count hidden><lang>共 {n} 首</lang></span>
 
     <div class="w-store-music__shell" data-store-music-shell>
         <div class="w-store-music__entry">
@@ -127,30 +130,30 @@ $defaultVol = (int)$payload['default_volume'];
                         title="@lang(关闭选曲)">×</button>
             </div>
 
-            <div class="w-store-music__transport" role="group" aria-label="@lang(播放控制)">
+            <div class="w-store-music__transport" role="group" aria-label="<?= htmlspecialchars((string)__('播放控制'), ENT_QUOTES, 'UTF-8') ?>">
                 <button type="button"
                         class="w-store-music__btn w-store-music__btn--prev"
                         data-store-music-prev
                         data-testid="store-music-prev"
-                        aria-label="@lang(上一首)"
+                        aria-label="<?= htmlspecialchars((string)__('上一首'), ENT_QUOTES, 'UTF-8') ?>"
                         hidden>‹</button>
                 <button type="button"
                         class="w-store-music__btn w-store-music__btn--play"
                         data-store-music-play
                         data-testid="store-music-play"
-                        aria-label="@lang(播放)">▶</button>
+                        aria-label="<?= htmlspecialchars((string)__('播放'), ENT_QUOTES, 'UTF-8') ?>">▶</button>
                 <button type="button"
                         class="w-store-music__btn w-store-music__btn--pause"
                         data-store-music-pause
                         data-testid="store-music-pause"
-                        aria-label="@lang(停止)"
-                        title="@lang(停止播放)"
+                        aria-label="<?= htmlspecialchars((string)__('停止'), ENT_QUOTES, 'UTF-8') ?>"
+                        title="<?= htmlspecialchars((string)__('停止播放'), ENT_QUOTES, 'UTF-8') ?>"
                         hidden>❚❚</button>
                 <button type="button"
                         class="w-store-music__btn w-store-music__btn--next"
                         data-store-music-next
                         data-testid="store-music-next"
-                        aria-label="@lang(下一首)"
+                        aria-label="<?= htmlspecialchars((string)__('下一首'), ENT_QUOTES, 'UTF-8') ?>"
                         hidden>›</button>
             </div>
 

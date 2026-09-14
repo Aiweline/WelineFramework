@@ -10,6 +10,7 @@ use Weline\Faq\Service\FaqHubContent;
 use Weline\Faq\Service\FaqPageProviderRegistry;
 use Weline\Faq\Service\FaqScopeResolver;
 use Weline\Faq\Service\FaqSeoFactsBuilder;
+use Weline\Theme\Helper\WidgetI18n;
 use Weline\Theme\Model\ThemeLayout;
 
 final class Index extends FrontendController
@@ -27,7 +28,8 @@ final class Index extends FrontendController
 
     public function index(): string
     {
-        $title = (string)__('FAQ');
+        // Chinese source key + path-locale WidgetI18n; __('FAQ') can bake 常问问题 into non-zh pages.
+        $title = WidgetI18n::label('常问问题');
         $this->layoutType = ThemeLayout::PAGE_TYPE_FAQ;
         $this->request->setGet('page_type', 'faq');
         $this->request->setGet('theme_public_route', FaqNamespace::PREFIX);

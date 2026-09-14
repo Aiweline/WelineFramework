@@ -12,6 +12,7 @@ use Weline\Framework\App\Env;
 use Weline\Framework\App\State;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Session\SessionFactory;
+use Weline\Theme\Helper\WidgetI18n;
 
 $requestPathRaw = (string)($this->request->getPathInfo() ?: \w_env_request_uri());
 $requestPathParsed = parse_url($requestPathRaw, PHP_URL_PATH);
@@ -48,14 +49,22 @@ $bindCaptchaHtml = '';
 $widgetTranslationService = ObjectManager::getInstance(WidgetTranslationService::class);
 $supportedLocales = $widgetTranslationService->getSupportedLocales();
 $defaultCustomerLocale = $customerServiceSettings->defaultCustomerLocale();
-$currentLocale = State::getLangLocal() ?: $defaultCustomerLocale;
+$requestUriForLocale = (string)($this->request->getPathInfo() ?: \w_env_request_uri());
+$storefrontLocale = WidgetI18n::localeFromRequestUri($requestUriForLocale)
+    ?? WidgetI18n::localeFromRequestUri((string)(\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '') ?: ($_SERVER['REQUEST_URI'] ?? '')));
+$currentLocale = $storefrontLocale
+    ?: (State::getLangLocal() ?: $defaultCustomerLocale);
 $widgetLocaleCodes = array_column($supportedLocales, 'code');
 $widgetLocaleCodes[] = $currentLocale;
 $widgetLocaleCodes[] = $defaultCustomerLocale;
 $widgetLocaleCodes[] = 'zh_Hans_CN';
+if ($storefrontLocale !== null) {
+    $widgetLocaleCodes[] = $storefrontLocale;
+}
 $widgetTranslations = $widgetTranslationService->getWidgetTranslationsForLocales(
     array_values(array_unique($widgetLocaleCodes))
 );
+$cs = static fn (string $source): string => WidgetI18n::label($source);
 
 $customerServiceModule = Env::getInstance()->getModuleList()['Weline_CustomerService'] ?? [];
 $customerServiceStaticDir = rtrim((string)($customerServiceModule['base_path'] ?? ''), DIRECTORY_SEPARATOR)
@@ -94,21 +103,21 @@ $modernScreenshotHref = (string)$this->fetchTagSource('statics', 'Weline_Custome
                     <path d="M12 1c-4.97 0-9 4.03-9 9v7c0 1.66 1.34 3 3 3h3v-8H5v-2c0-3.87 3.13-7 7-7s7 3.13 7 7v2h-4v8h3c1.66 0 3-1.34 3-3v-7c0-4.97-4.03-9-9-9z"/>
                 </svg>
                 <div class="cs-chat-title-copy">
-                    <span id="cs-title-text"><?= __('客服服务') ?></span>
-                    <span id="cs-status-label" class="cs-status-label cs-status-offline"><?= __('检测中...') ?></span>
-                    <button type="button" id="cs-identity-chip" class="cs-identity-chip" hidden data-cs-edit-identity title="<?= __('修改邮箱身份') ?>">
+                    <span id="cs-title-text"><?= $cs('客服服务') ?></span>
+                    <span id="cs-status-label" class="cs-status-label cs-status-offline"><?= $cs('检测中...') ?></span>
+                    <button type="button" id="cs-identity-chip" class="cs-identity-chip" hidden data-cs-edit-identity title="<?= $cs('修改邮箱身份') ?>">
                         <img id="cs-identity-avatar" class="cs-identity-avatar" alt="" hidden>
                         <span id="cs-identity-label" class="cs-identity-label"></span>
                     </button>
                 </div>
             </div>
             <div class="cs-chat-actions">
-                <button type="button" class="w-button cs-btn-icon" data-tone="quiet" data-icon-only="true" data-size="sm" id="cs-settings-btn" data-cs-toggle-settings title="<?= __('设置') ?>">
+                <button type="button" class="w-button cs-btn-icon" data-tone="quiet" data-icon-only="true" data-size="sm" id="cs-settings-btn" data-cs-toggle-settings title="<?= $cs('设置') ?>">
                     <svg class="cs-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
                         <path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
                     </svg>
                 </button>
-                <button type="button" class="w-button cs-btn-icon" data-tone="quiet" data-icon-only="true" data-size="sm" id="cs-minimize-btn" data-cs-toggle-chat title="<?= __('收起') ?>">
+                <button type="button" class="w-button cs-btn-icon" data-tone="quiet" data-icon-only="true" data-size="sm" id="cs-minimize-btn" data-cs-toggle-chat title="<?= $cs('收起') ?>">
                     <svg class="cs-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
                         <path d="M6 19h12v2H6z"/>
                     </svg>
@@ -122,7 +131,7 @@ $modernScreenshotHref = (string)$this->fetchTagSource('statics', 'Weline_Custome
                     <svg class="cs-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
                         <path d="M12.87 15.07l-2.54-2.51.03-.03c1.74-1.94 2.98-4.17 3.71-6.53H17V4h-7V2H8v2H1v1.99h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7l1.62-4.33L19.12 17h-3.24z"/>
                     </svg>
-                    <span id="cs-locale-label-text"><?= __('我的语言') ?></span>
+                    <span id="cs-locale-label-text"><?= $cs('我的语言') ?></span>
                 </label>
                 <select id="cs-locale-select" class="w-select" data-size="sm">
                     <?php foreach ($supportedLocales as $locale): ?>
@@ -135,20 +144,20 @@ $modernScreenshotHref = (string)$this->fetchTagSource('statics', 'Weline_Custome
                     <svg class="cs-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
                         <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
                     </svg>
-                    <span id="cs-display-mode-label-text"><?= __('显示模式') ?></span>
+                    <span id="cs-display-mode-label-text"><?= $cs('显示模式') ?></span>
                 </label>
                 <select id="cs-display-mode" class="w-select" data-size="sm">
-                    <option value="translated"><?= __('仅显示译文') ?></option>
-                    <option value="both"><?= __('原文+译文') ?></option>
-                    <option value="original"><?= __('仅显示原文') ?></option>
+                    <option value="translated"><?= $cs('仅显示译文') ?></option>
+                    <option value="both"><?= $cs('原文+译文') ?></option>
+                    <option value="original"><?= $cs('仅显示原文') ?></option>
                 </select>
             </div>
         </div>
 
         <div class="cs-chat-body w-panel-body" id="cs-chat-messages">
             <div class="cs-welcome-message">
-                <p id="cs-welcome-title"><?= __('欢迎使用客服服务！') ?></p>
-                <p id="cs-welcome-copy"><?= __('请输入您的问题，我们的客服将尽快为您解答。') ?></p>
+                <p id="cs-welcome-title"><?= $cs('欢迎使用客服服务！') ?></p>
+                <p id="cs-welcome-copy"><?= $cs('请输入您的问题，我们的客服将尽快为您解答。') ?></p>
             </div>
         </div>
 
@@ -156,14 +165,14 @@ $modernScreenshotHref = (string)$this->fetchTagSource('statics', 'Weline_Custome
             <div id="cs-guest-send-gate" class="cs-guest-send-gate" hidden>
                 <p class="cs-guest-send-gate__text" id="cs-guest-send-gate-text"></p>
                 <button type="button" class="w-button cs-guest-send-gate__action" data-tone="primary" data-size="sm" data-cs-open-bind-email>
-                    <?= __('验证邮箱') ?>
+                    <?= $cs('验证邮箱') ?>
                 </button>
             </div>
-            <div class="cs-composer-toolbar" role="toolbar" aria-label="<?= __('聊天工具') ?>">
-                <button type="button" class="w-button cs-composer-tool" data-tone="neutral" data-variant="ghost" data-size="sm" data-cs-tool="emoji" title="<?= __('表情') ?>"><?= __('表情') ?></button>
-                <button type="button" class="w-button cs-composer-tool" data-tone="neutral" data-variant="ghost" data-size="sm" data-cs-tool="image" title="<?= __('图片') ?>"><?= __('图片') ?></button>
-                <button type="button" class="w-button cs-composer-tool" data-tone="neutral" data-variant="ghost" data-size="sm" data-cs-tool="file" title="<?= __('文件') ?>"><?= __('文件') ?></button>
-                <button type="button" class="w-button cs-composer-tool" data-tone="neutral" data-variant="ghost" data-size="sm" data-cs-tool="screenshot" title="<?= __('截图') ?>"><?= __('截图') ?></button>
+            <div class="cs-composer-toolbar" role="toolbar" aria-label="<?= $cs('聊天工具') ?>">
+                <button type="button" class="w-button cs-composer-tool" data-tone="neutral" data-variant="ghost" data-size="sm" data-cs-tool="emoji" title="<?= $cs('表情') ?>"><?= $cs('表情') ?></button>
+                <button type="button" class="w-button cs-composer-tool" data-tone="neutral" data-variant="ghost" data-size="sm" data-cs-tool="image" title="<?= $cs('图片') ?>"><?= $cs('图片') ?></button>
+                <button type="button" class="w-button cs-composer-tool" data-tone="neutral" data-variant="ghost" data-size="sm" data-cs-tool="file" title="<?= $cs('文件') ?>"><?= $cs('文件') ?></button>
+                <button type="button" class="w-button cs-composer-tool" data-tone="neutral" data-variant="ghost" data-size="sm" data-cs-tool="screenshot" title="<?= $cs('截图') ?>"><?= $cs('截图') ?></button>
                 <input type="file" id="cs-frontend-image-input" accept="image/jpeg,image/png,image/gif,image/webp" hidden />
                 <input type="file" id="cs-frontend-file-input" accept=".pdf,.txt,.zip,.doc,.docx,.xls,.xlsx,application/pdf,text/plain,application/zip" hidden />
             </div>
@@ -172,7 +181,7 @@ $modernScreenshotHref = (string)$this->fetchTagSource('statics', 'Weline_Custome
                 <textarea
                     id="cs-message-input"
                     class="w-textarea cs-message-input"
-                    placeholder="<?= __('输入消息...') ?>"
+                    placeholder="<?= $cs('输入消息...') ?>"
                     rows="2"></textarea>
                 <button type="button" class="w-button cs-send-button" data-icon-only="true" aria-label="@lang(发送)" data-cs-send-message>
                     <svg class="cs-icon" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
@@ -222,13 +231,13 @@ $bindModalHtml = <<<'BIND_MODAL_HTML'
 </div>
 BIND_MODAL_HTML;
 $bindModalHtml = strtr($bindModalHtml, [
-    '{{title}}' => __('接收客服回复与优惠通知'),
-    '{{copy}}' => __('留下邮箱后，客服可将本次咨询的回复、报价进展和可用优惠发送到您的邮箱。'),
-    '{{note}}' => __('仅用于本次客服咨询相关通知，不是简报订阅。'),
-    '{{email_label}}' => __('接收通知的邮箱'),
-    '{{email_placeholder}}' => __('请输入用于接收客服通知的邮箱'),
-    '{{later}}' => __('稍后再说'),
-    '{{send}}' => __('发送验证邮件'),
+    '{{title}}' => $cs('接收客服回复与优惠通知'),
+    '{{copy}}' => $cs('留下邮箱后，客服可将本次咨询的回复、报价进展和可用优惠发送到您的邮箱。'),
+    '{{note}}' => $cs('仅用于本次客服咨询相关通知，不是简报订阅。'),
+    '{{email_label}}' => $cs('接收通知的邮箱'),
+    '{{email_placeholder}}' => $cs('请输入用于接收客服通知的邮箱'),
+    '{{later}}' => $cs('稍后再说'),
+    '{{send}}' => $cs('发送验证邮件'),
     '{{captcha_slot}}' => $bindCaptchaHtml,
 ]);
 ?>
@@ -258,6 +267,7 @@ var customerServiceConfig = {
     isLoggedIn: <?= $isLoggedIn ? 'true' : 'false' ?>,
     showGuestBindPrompt: <?= $showGuestBindPrompt ? 'true' : 'false' ?>,
     defaultCustomerLocale: <?= json_encode($defaultCustomerLocale, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
+    storefrontLocale: <?= json_encode($currentLocale, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
     supportedLocales: <?= json_encode($supportedLocales, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
     widgetTranslations: <?= json_encode($widgetTranslations, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>
 };

@@ -397,6 +397,11 @@
   color: var(--w-store-music-muted);
 }
 
+/* Panel open = user is choosing here; never let cross-tab nag compete with the playlist. */
+.w-store-music.is-open .w-store-music__status {
+  display: none !important;
+}
+
 .w-store-music__sr {
   position: absolute;
   width: 1px;

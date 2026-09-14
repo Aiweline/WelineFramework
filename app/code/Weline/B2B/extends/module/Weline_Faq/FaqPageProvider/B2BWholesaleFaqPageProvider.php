@@ -8,6 +8,7 @@ use Weline\B2B\Service\SellingModePolicy;
 use Weline\Faq\Api\FaqPageProviderInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Theme\Helper\WidgetI18n;
 
 /** Wholesale identity / VIP / credit / deposit help page for /faq/b2b-wholesale. */
 final class B2BWholesaleFaqPageProvider implements FaqPageProviderInterface
@@ -29,12 +30,12 @@ final class B2BWholesaleFaqPageProvider implements FaqPageProviderInterface
 
     public function title(): string
     {
-        return (string)__('批发身份与信用说明');
+        return WidgetI18n::label('批发身份与信用说明');
     }
 
     public function summary(): string
     {
-        return (string)__('VIP 等级、批发信用额度、定金与汇率换算说明');
+        return WidgetI18n::label('VIP 等级、批发信用额度、定金与汇率换算说明');
     }
 
     public function sortOrder(): int
@@ -62,6 +63,6 @@ final class B2BWholesaleFaqPageProvider implements FaqPageProviderInterface
 
     public function group(): string
     {
-        return (string)__('批发');
+        return WidgetI18n::label('批发');
     }
 }

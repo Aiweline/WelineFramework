@@ -1205,11 +1205,13 @@
     }
 
     .w-badge { display: inline-flex; align-items: center; gap: var(--weline-space-1); padding: 0.2rem 0.55rem; border-radius: var(--weline-radius-round); background: var(--weline-theme-surface-muted); color: var(--weline-theme-text); font-size: var(--weline-font-size-xs); font-weight: 700; white-space: nowrap; flex-shrink: 0; }
+    .w-badge[data-tone="primary"] { background: var(--weline-theme-primary-surface); color: var(--weline-theme-primary); }
     .w-badge[data-tone="secondary"] { background: var(--weline-theme-secondary-surface); color: var(--weline-theme-secondary-emphasis, var(--weline-theme-secondary)); }
     .w-badge[data-tone="success"] { background: var(--weline-theme-success-surface); color: var(--weline-theme-success); }
     .w-badge[data-tone="warning"] { background: var(--weline-theme-warning-surface); color: var(--weline-theme-warning); }
     .w-badge[data-tone="danger"] { background: var(--weline-theme-danger-surface); color: var(--weline-theme-danger); }
     .w-badge[data-tone="info"] { background: var(--weline-theme-info-surface); color: var(--weline-theme-info); }
+    .w-badge[data-tone="muted"] { background: var(--weline-theme-surface-muted); color: var(--weline-theme-text-muted); }
     .w-product-labels { position: absolute; inset-block-start: var(--weline-space-3); inset-inline-start: var(--weline-space-3); z-index: 2; display: flex; flex-direction: column; align-items: flex-start; gap: var(--weline-space-1); max-inline-size: calc(100% - var(--weline-space-6)); pointer-events: none; }
     .w-product-label { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; inline-size: fit-content; max-inline-size: 100%; gap: var(--weline-space-1); padding-block: var(--weline-space-1); padding-inline: var(--weline-space-3); border-radius: var(--weline-radius-round); font-size: var(--weline-font-size-xs); font-weight: var(--weline-font-weight-semibold, 600); line-height: 1.25; letter-spacing: 0; white-space: nowrap; }
     .w-product-labels--bottom-start { inset-block-start: auto; inset-block-end: var(--weline-space-3); }

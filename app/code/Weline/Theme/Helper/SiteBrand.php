@@ -165,12 +165,13 @@ class SiteBrand
 
         $fromWebsite = $this->resolveWebsiteDisplayName();
         if ($fromWebsite !== '' && !$this->isGenericBrandPlaceholder($fromWebsite)) {
-            return $fromWebsite;
+            // Website identity may store Chinese source; resolve for current storefront locale.
+            return WidgetI18n::label($fromWebsite);
         }
 
         $fromBackend = trim($this->getRawConfig('site_name'));
         if ($fromBackend !== '' && !$this->isGenericBrandPlaceholder($fromBackend)) {
-            return $fromBackend;
+            return WidgetI18n::label($fromBackend);
         }
 
         $fallback = trim($themeFallback) !== '' ? trim($themeFallback) : '云裳汉服 · Hanfu Atelier';

@@ -1,0 +1,12 @@
+<?php
+/**
+ * Order 后台详情发货记录槽默认实现：委托配送发货部件模板。
+ *
+ * @hook-priority 100
+ * @hook-sort-order 0
+ * @hook-solo true
+ */
+
+/** @var \Weline\Framework\View\Template $this */
+
+echo $this->fetch('Weline_Shipping::templates/Backend/widgets/backend-order-shipments.phtml');

@@ -8,6 +8,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Data\Setup;
 use Weline\Framework\Setup\UpgradeInterface;
+use Weline\Smtp\Service\MailTemplateSeedCopyCatalog;
 use Weline\Smtp\Service\MailTemplateSeeder;
 use Weline\SystemConfig\Model\SystemConfig;
 
@@ -19,6 +20,7 @@ final class Upgrade implements UpgradeInterface
     public function setup(Setup $setup, Context $context): void
     {
         try {
+            MailTemplateSeedCopyCatalog::materializeFiles();
             /** @var MailTemplateSeeder $seeder */
             $seeder = ObjectManager::getInstance(MailTemplateSeeder::class);
             $seeder->syncAll(SystemConfig::SCOPE_GLOBAL);

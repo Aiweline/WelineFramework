@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 return [
     'name' => 'Weline_Catalog',
-    'version' => '1.0.17',
+    'version' => '1.0.18',
     'requires' => [
         'Weline_Backend' => '*',
         'Weline_Eav' => '*',

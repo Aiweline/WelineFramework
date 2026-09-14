@@ -29,6 +29,12 @@ final class SocialLoginOutboundProxyTest extends TestCase
         $resolved = SocialLoginOutboundProxy::normalize('  ', 'socks5');
         self::assertSame('', $resolved['proxy']);
         self::assertSame('http', $resolved['type']);
-        self::assertSame('', $resolved['userpwd']);
+        self::assertSame('', SocialLoginOutboundProxy::discardUnreachableLoopback([
+            'proxy' => 'http://127.0.0.1:1',
+            'type' => 'http',
+            'userpwd' => '',
+        ])['proxy']);
+        self::assertTrue(SocialLoginOutboundProxy::isLoopbackProxy('http://127.0.0.1:7892'));
+        self::assertFalse(SocialLoginOutboundProxy::isLoopbackProxy('http://proxy.example.test:8080'));
     }
 }

@@ -16,15 +16,6 @@ class Logout extends \Weline\Framework\App\Controller\FrontendController
 {
     protected ?string $layoutType = 'account.logout';
 
-    private CustomerAuthReturnUrlService $authReturnUrlService;
-
-    public function __construct(
-        ?CustomerAuthReturnUrlService $authReturnUrlService = null,
-    ) {
-        $this->authReturnUrlService = $authReturnUrlService
-            ?? ObjectManager::getInstance(CustomerAuthReturnUrlService::class);
-    }
-
     /**
      * 统一执行登出逻辑
      */
@@ -47,7 +38,11 @@ class Logout extends \Weline\Framework\App\Controller\FrontendController
 
     private function logoutRedirectTarget(): string
     {
-        return $this->authReturnUrlService->formatAuthInvalidRedirect('/customer/account/login');
+        // Url generator once — never hand a already-prefixed path to redirect(),
+        // which would call getFrontendUrl and duplicate /{locale}/.
+        return (string)$this->getUrl('customer/account/login', [
+            CustomerAuthReturnUrlService::AUTH_REFRESH_QUERY => CustomerAuthReturnUrlService::AUTH_REFRESH_LOGOUT_VALUE,
+        ]);
     }
 
     /**
@@ -56,7 +51,10 @@ class Logout extends \Weline\Framework\App\Controller\FrontendController
     public function getIndex()
     {
         $this->logoutUser();
-        $this->redirect($this->logoutRedirectTarget());
+        // Relative route (no leading "/") → PcController::redirect → getUrl once.
+        $this->redirect('customer/account/login', [
+            CustomerAuthReturnUrlService::AUTH_REFRESH_QUERY => CustomerAuthReturnUrlService::AUTH_REFRESH_LOGOUT_VALUE,
+        ]);
     }
 
     /**

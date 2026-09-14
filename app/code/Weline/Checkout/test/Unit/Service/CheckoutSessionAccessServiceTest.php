@@ -110,6 +110,24 @@ final class CheckoutSessionAccessServiceTest extends TestCase
             {
                 return false;
             }
+
+            public function findQuotedTokenByFingerprint(string $fingerprint): ?string
+            {
+                return null;
+            }
+
+            public function setErrorSnapshot(string $quoteToken, string $code, string $message, array $snapshot): void
+            {
+            }
+
+            public function clearErrorSnapshot(string $quoteToken): void
+            {
+            }
+
+            public function getErrorSnapshot(string $quoteToken): ?array
+            {
+                return null;
+            }
         };
     }
 }

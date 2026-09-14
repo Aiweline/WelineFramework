@@ -116,10 +116,12 @@ final class DatabaseSearchProviderIndexStore implements SearchProviderIndexStora
             );
         }
         if ($request->locale !== '') {
+            // Exact locale only. Matching '' here let zh_Hans_CN blog docs
+            // leak into en_US (and other) storefront searches after providers
+            // historically indexed with a neutral empty locale.
             $dbQuery->where(
                 SearchProviderDocument::schema_fields_LOCALE,
-                ['', $request->locale],
-                'IN',
+                $request->locale,
             );
         }
 
@@ -133,12 +135,23 @@ final class DatabaseSearchProviderIndexStore implements SearchProviderIndexStora
 
         $rows = $dbQuery
             ->order(SearchProviderDocument::schema_fields_UPDATED_AT, 'DESC')
-            ->limit(max(1, $expression->getLimit()))
+            ->limit(max(1, $expression->getLimit() * ($request->locale !== '' ? 4 : 1)))
             ->select()
             ->fetchArray();
 
         if (!is_array($rows)) {
             return [];
+        }
+
+        // The OR keyword group above can dissolve a prior AND locale filter in
+        // the query builder; enforce locale in PHP so storefront results stay
+        // language-isolated even when the SQL grouping regresses.
+        if ($request->locale !== '') {
+            $rows = array_values(array_filter(
+                $rows,
+                static fn (mixed $row): bool => is_array($row)
+                    && (string)($row[SearchProviderDocument::schema_fields_LOCALE] ?? '') === $request->locale,
+            ));
         }
 
         $normalized = [];

@@ -42,8 +42,14 @@ final class BackendOrderOpsPanelPresenter
         $orderId = max(0, $orderId);
 
         return [
-            'candidates' => $this->filterByOrderId($this->commands->refundCandidates(80), $orderId),
-            'cases' => $this->filterByOrderId($this->commands->refundCases(80), $orderId),
+            'candidates' => $this->filterByOrderId(
+                $this->commands->refundCandidates(80, $orderId),
+                $orderId,
+            ),
+            'cases' => $this->filterByOrderId(
+                $this->commands->refundCases(80, $orderId),
+                $orderId,
+            ),
         ];
     }
 

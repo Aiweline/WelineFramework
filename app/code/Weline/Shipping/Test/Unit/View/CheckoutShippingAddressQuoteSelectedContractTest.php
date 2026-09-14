@@ -12,7 +12,7 @@ final class CheckoutShippingAddressQuoteSelectedContractTest extends TestCase
     {
         $js = (string)file_get_contents(
             dirname(__DIR__, 3)
-            . '/view/statics/js/widgets/checkout-shipping-address.v20260914-quote-selected.js',
+            . '/view/statics/js/widgets/checkout-shipping-address.js',
         );
         $modules = (string)file_get_contents(
             dirname(__DIR__, 3) . '/view/statics/frontend/weline.modules.js',
@@ -22,7 +22,7 @@ final class CheckoutShippingAddressQuoteSelectedContractTest extends TestCase
         self::assertStringContainsString('syncFormFromSelectedCard', $js);
         self::assertStringContainsString('resolveQuoteAddress: resolveQuoteAddress', $js);
         self::assertStringContainsString(
-            'checkout-shipping-address.v20260914-quote-selected.js',
+            'checkout-shipping-address.js?v=20260914-picker-all-addr1',
             $modules,
         );
     }

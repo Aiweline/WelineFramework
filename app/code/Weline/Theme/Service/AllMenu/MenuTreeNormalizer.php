@@ -305,8 +305,9 @@ final class MenuTreeNormalizer
             $lang = '';
         }
         $requestUri = (string) (\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '') ?: ($_SERVER['REQUEST_URI'] ?? ''));
-        if ($requestUri !== '' && preg_match('#/(ar_SA|en_US|zh_Hans_CN|zh_CN)(?:/|$)#', $requestUri, $matches)) {
-            return (string) $matches[1];
+        $pathLocale = WidgetI18n::localeFromRequestUri($requestUri);
+        if ($pathLocale !== null) {
+            return $pathLocale;
         }
 
         return $lang !== '' ? $lang : 'zh_Hans_CN';

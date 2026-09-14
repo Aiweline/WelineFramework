@@ -27,5 +27,10 @@ final class DictionaryCollectCronContractTest extends TestCase
         );
         self::assertStringContainsString("ALIASES = ['i18n:collect']", $collect);
         self::assertStringContainsString('DictionaryCompiler', $collect);
+
+        $after = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/Observer/DictionaryCompileAfterObserver.php',
+        );
+        self::assertStringContainsString('persistCollectedWords', $after);
     }
 }

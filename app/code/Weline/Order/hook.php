@@ -24,6 +24,11 @@ return [
         'description' => \__('订单详情「支付记录」空槽内的默认扩展点；由万能支付模块注入 Attempt 记录，禁止 Order 直读 Payment 表。'),
         'doc' => 'backend/order/view/payment-records.md',
     ],
+    'Weline_Order::backend::order::view::shipments' => [
+        'name' => \__('订单详情发货记录槽'),
+        'description' => \__('订单详情「发货记录」空槽内的默认扩展点；由配送模块注入发货/物流记录，禁止 Order 硬编码发货表 UI。'),
+        'doc' => 'backend/order/view/shipments.md',
+    ],
     'Weline_Order::backend::order::view::wholesale-chat' => [
         'name' => \__('订单详情批发沟通槽'),
         'description' => \__('订单详情「批发订单沟通」空槽内的默认扩展点；由 B2B 部件注入商家侧协商消息，禁止 Order 直出聊天 UI。'),
@@ -33,6 +38,11 @@ return [
         'name' => \__('订单列表筛选器'),
         'description' => \__('在订单列表页面的筛选器区域注入内容，允许其他模块添加自定义筛选条件。'),
         'doc' => 'backend/order/list/filters.md',
+    ],
+    'Weline_Order::backend::order::list::shipping' => [
+        'name' => \__('订单列表发货槽'),
+        'description' => \__('订单列表页发货工作台空槽；由配送模块默认注入发货入口与待发货摘要，禁止 Order 硬编码配送运营 UI。'),
+        'doc' => 'backend/order/list/shipping.md',
     ],
     'Weline_Order::frontend::order::create::before' => [
         'name' => \__('前端订单创建前'),

@@ -55,9 +55,10 @@ final class ErrorPageRenderer
             'statusCode' => $statusCode,
             'statusText' => $statusText,
             'message' => $message,
-            'pageTitle' => $catalog['title'],
-            'pageLead' => $catalog['lead'],
-            'pageHint' => $catalog['hint'],
+            // Catalog copy is Chinese source; translate for storefront locales.
+            'pageTitle' => self::translateCatalogCopy((string)$catalog['title']),
+            'pageLead' => self::translateCatalogCopy((string)$catalog['lead']),
+            'pageHint' => self::translateCatalogCopy((string)$catalog['hint']),
             'homeHref' => self::resolveHomeHref($context),
             'requestId' => self::resolveRequestId($context),
             'detail' => (string)($context['detail'] ?? ''),
@@ -217,6 +218,33 @@ final class ErrorPageRenderer
         }
 
         return $statusCode;
+    }
+
+    private static function translateCatalogCopy(string $text): string
+    {
+        $text = \trim($text);
+        if ($text === '') {
+            return '';
+        }
+        try {
+            if (\class_exists(\Weline\Theme\Helper\WidgetI18n::class, false)
+                || \class_exists(\Weline\Theme\Helper\WidgetI18n::class)) {
+                $translated = \trim(\Weline\Theme\Helper\WidgetI18n::label($text));
+                if ($translated !== '') {
+                    return $translated;
+                }
+            }
+        } catch (\Throwable) {
+            // Fall through to Phrase __.
+        }
+        try {
+            if (\function_exists('__')) {
+                return (string)__($text);
+            }
+        } catch (\Throwable) {
+        }
+
+        return $text;
     }
 
     /**
@@ -506,6 +534,29 @@ HTML;
             $path = (string)($context['request_path'] ?? '');
             $query = (string)($context['request_query'] ?? '');
             $cookie = (string)($context['cookie_header'] ?? '');
+
+            // Prefer full REQUEST_URI so /{locale}/... still resolves after path-locale stripping.
+            $requestUri = '';
+            if (\class_exists(WelineEnv::class, false)) {
+                try {
+                    $requestUri = (string)WelineEnv::server('REQUEST_URI', '');
+                } catch (\Throwable) {
+                    $requestUri = '';
+                }
+            }
+            if ($requestUri === '') {
+                $requestUri = (string)($_SERVER['REQUEST_URI'] ?? '');
+            }
+            if ($requestUri !== '') {
+                $uriPath = (string)(\parse_url($requestUri, \PHP_URL_PATH) ?: '');
+                $uriQuery = (string)(\parse_url($requestUri, \PHP_URL_QUERY) ?: '');
+                if ($uriPath !== '') {
+                    $path = $uriPath;
+                }
+                if ($query === '' && $uriQuery !== '') {
+                    $query = $uriQuery;
+                }
+            }
 
             if ($path === '' && \function_exists('w_env')) {
                 $path = (string)\w_env('request.path', '/');

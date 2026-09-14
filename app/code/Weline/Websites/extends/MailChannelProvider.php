@@ -5,22 +5,10 @@ declare(strict_types=1);
 namespace Weline\Websites\Extends;
 
 use Weline\Smtp\Api\MailChannelProviderInterface;
+use Weline\Smtp\Service\MailTemplateDefaultLocales;
 
 class MailChannelProvider implements MailChannelProviderInterface
 {
-    private const SHARED = [
-        [
-            'locale' => 'zh_Hans_CN',
-            'subject_file' => 'notification/zh_Hans_CN.subject.txt',
-            'body_file' => 'notification/zh_Hans_CN.html',
-        ],
-        [
-            'locale' => 'en_US',
-            'subject_file' => 'notification/en_US.subject.txt',
-            'body_file' => 'notification/en_US.html',
-        ],
-    ];
-
     public function getChannels(): array
     {
         $variables = [
@@ -33,6 +21,7 @@ class MailChannelProvider implements MailChannelProviderInterface
             'notify_domain_transfer' => __('域名转移通知邮件'),
             'notify_domain_pool_resolve_off_local' => __('域名池解析偏离邮件'),
         ];
+        $templates = MailTemplateDefaultLocales::fileEntries('notification', 'short');
         $channels = [];
         foreach ($defs as $slug => $name) {
             $channels[] = [
@@ -41,7 +30,7 @@ class MailChannelProvider implements MailChannelProviderInterface
                 'description' => __('通知主题邮件渠道'),
                 'module' => 'Weline_Websites',
                 'variables' => $variables,
-                'default_templates' => self::SHARED,
+                'default_templates' => $templates,
             ];
         }
 

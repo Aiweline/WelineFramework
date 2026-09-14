@@ -23,8 +23,10 @@ final class MailTemplateMigrateContractTest extends TestCase
         self::assertStringContainsString('notification_email', $src);
         self::assertStringContainsString('default_templates', $src);
         self::assertStringContainsString('collectTopicRows', $src);
-        self::assertStringContainsString('view/email/notification', $src);
+        self::assertStringContainsString('MailTemplateDefaultLocales', $src);
         self::assertFileExists($root . '/app/code/Weline/Backend/view/email/notification/zh_Hans_CN.html');
+        self::assertFileExists($root . '/app/code/Weline/Backend/view/email/notification/fr_FR.html');
+        self::assertFileExists($root . '/app/code/Weline/Backend/view/email/notification/ar_SA.html');
     }
 
     public function testEmailAdapterKeepsChannelAndUsesVars(): void
@@ -127,7 +129,9 @@ final class MailTemplateMigrateContractTest extends TestCase
         $src = (string)file_get_contents($root . '/app/code/Weline/Smtp/Setup/Upgrade.php');
         self::assertStringContainsString('MailTemplateSeeder', $src);
         self::assertStringContainsString('syncAll', $src);
+        self::assertStringContainsString('MailTemplateSeedCopyCatalog', $src);
+        self::assertStringContainsString('materializeFiles', $src);
         $module = (string)file_get_contents($root . '/app/code/Weline/Smtp/etc/module.php');
-        self::assertStringContainsString('1.4.19', $module);
+        self::assertStringContainsString('1.4.25', $module);
     }
 }

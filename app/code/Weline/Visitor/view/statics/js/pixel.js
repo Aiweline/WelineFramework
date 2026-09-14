@@ -3350,7 +3350,7 @@
         if (!element || !element.closest) {
             return element || document;
         }
-        return element.closest('.product-detail-view, .product-detail, .product-main, .product-info, .product-info-section, .product-card, .cart-item, .cart-summary, .cart-summary-card, .mini-cart-drawer, .checkout-summary, .weshop-checkout-summary, .weshop-checkout-card, form')
+        return element.closest('.product-native-detail, [data-testid="storefront-product-detail"], .product-detail-view, .product-detail, .product-main, .product-info, .product-info-section, .product-card, .cart-item, .cart-summary, .cart-summary-card, .mini-cart-drawer, .checkout-summary, .weshop-checkout-summary, .weshop-checkout-card, form')
             || element.closest('[data-product-id], [data-item-id]')
             || element.closest('main, article, section, body')
             || document;
@@ -3410,6 +3410,34 @@
             var value = control.value || __firstAttr(control, ['data-option-value', 'data-value']) || __pixelText(control);
             if (value !== '') {
                 options[label] = String(value).trim();
+            }
+        }
+        // PDP 规格轴：当前选中的 data-variant-option
+        var axes = context.querySelectorAll('.product-native-detail__variant-axis');
+        for (var a = 0; a < axes.length; a++) {
+            var axisEl = axes[a];
+            var labelEl = axisEl.querySelector
+                ? axisEl.querySelector('.product-native-detail__variant-axis-label')
+                : null;
+            var axisLabel = labelEl
+                ? String(__pixelText(labelEl) || '').replace(/:\s*$/, '').replace(/\s+/g, ' ').trim()
+                : '';
+            var selected = axisEl.querySelector
+                ? axisEl.querySelector('[data-variant-option].is-selected, [data-variant-option][aria-current="true"]')
+                : null;
+            if (!selected || axisLabel === '') {
+                continue;
+            }
+            var axisValue = __firstAttr(selected, ['data-variant-label', 'aria-label', 'title']);
+            if (axisValue === '') {
+                var swatchLabel = selected.querySelector
+                    ? selected.querySelector('.product-native-detail__variant-swatch-label')
+                    : null;
+                axisValue = swatchLabel ? __pixelText(swatchLabel) : __pixelText(selected);
+            }
+            axisValue = String(axisValue || '').replace(/\s+/g, ' ').trim();
+            if (axisValue !== '') {
+                options[axisLabel] = axisValue;
             }
         }
         return options;
@@ -3550,7 +3578,7 @@
         if (normalized.indexOf('search_') === 0) {
             meta = Object.assign({}, __getSearchMeta(__findSearchInput(document), normalized), __getSearchResultMeta());
             required = normalized === 'search_result_view' ? ['query', 'result_count'] : ['query'];
-        } else if (['view_item', 'add_to_cart', 'buy_now', 'add_to_wishlist'].indexOf(normalized) > -1) {
+        } else if (['view_item', 'add_to_cart', 'buy_now', 'add_to_wishlist', 'friend_help_pay', 'selection_share', 'quick_buy', 'express_pay'].indexOf(normalized) > -1) {
             meta = __getProductMeta(normalized, element);
             required = ['product_id', 'name', 'price', 'value', 'items'];
         } else if (['view_cart'].indexOf(normalized) > -1) {
@@ -4506,6 +4534,10 @@
                 'add_to_cart',
                 'view_cart',
                 'buy_now',
+                'friend_help_pay',
+                'selection_share',
+                'quick_buy',
+                'express_pay',
                 'begin_checkout',
                 'place_order',
                 'checkout_success',

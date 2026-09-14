@@ -66,6 +66,8 @@ final class PromotionThemeDealDiscountSyncService
                 'theme_id' => $themeId,
                 'page_slug' => $pageSlug,
             ],
+            startsAtUtc: $this->nullableUtc((string)($themeRow[PromotionActivityTheme::schema_fields_STARTS_AT] ?? $themeRow['starts_at'] ?? '')),
+            endsAtUtc: $this->nullableUtc((string)($themeRow[PromotionActivityTheme::schema_fields_ENDS_AT] ?? $themeRow['ends_at'] ?? '')),
         ));
 
         $syncedId = max(0, $result->ruleId);
@@ -183,5 +185,12 @@ final class PromotionThemeDealDiscountSyncService
             'original_price' => $catalogPrice,
             'has_deal' => $dealPrice < $catalogPrice,
         ];
+    }
+
+    private function nullableUtc(string $raw): ?string
+    {
+        $raw = trim($raw);
+
+        return $raw !== '' ? $raw : null;
     }
 }

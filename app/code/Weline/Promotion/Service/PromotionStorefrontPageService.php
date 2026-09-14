@@ -52,8 +52,13 @@ final class PromotionStorefrontPageService
             'deal_discount_value' => (float)($themePage['deal_discount_value'] ?? 0),
         ];
         $themeId = max(0, (int)($themePage['theme_id'] ?? $themePage['id'] ?? 0));
+        $rawTitle = (string)($themePage['page_title'] ?? $themePage['title'] ?? $this->resolveTitle($pageType));
+        $pageTitle = $this->translateStorefrontChrome($rawTitle);
+        $heroLede = $this->translateStorefrontChrome(
+            (string)($themePage['hero_lede'] ?? $this->defaultHeroLede($pageType))
+        );
         $campaignFallback = [
-            'label' => (string)($themePage['page_title'] ?? $themePage['title'] ?? $this->resolveTitle($pageType)),
+            'label' => $pageTitle,
             'url' => $pageType !== 'index' ? $this->storefrontUrl($pageType) : '',
         ];
         $items = $this->applyStorefrontPricing($items, $deal, $campaignFallback, $themeId);
@@ -62,8 +67,8 @@ final class PromotionStorefrontPageService
         $slugUrls = $this->slugUrlsFromNavTabs($navTabs);
 
         $pageData = [
-            'title' => (string)($themePage['page_title'] ?? $themePage['title'] ?? $this->resolveTitle($pageType)),
-            'hero_lede' => (string)($themePage['hero_lede'] ?? $this->defaultHeroLede($pageType)),
+            'title' => $pageTitle,
+            'hero_lede' => $heroLede,
             'page_type' => $pageType,
             'items' => $items,
             'total' => count($items),
@@ -271,13 +276,30 @@ final class PromotionStorefrontPageService
     private function resolveTitle(string $pageType): string
     {
         return match ($pageType) {
-            'index' => (string)__('活动中心'),
-            'deals' => (string)__('今日特价专场'),
-            'sale' => (string)__('节令主题陈列'),
-            'weekend' => (string)__('出游常服专场'),
-            'wedding' => (string)__('婚嫁礼服陈列'),
-            default => (string)__('活动主题'),
+            'index' => $this->translateStorefrontChrome('活动中心'),
+            'deals' => $this->translateStorefrontChrome('今日特价专场'),
+            'sale' => $this->translateStorefrontChrome('节令主题陈列'),
+            'weekend' => $this->translateStorefrontChrome('出游常服专场'),
+            'wedding' => $this->translateStorefrontChrome('婚嫁礼服陈列'),
+            default => $this->translateStorefrontChrome('活动主题'),
         };
+    }
+
+    /**
+     * DB/local theme copy is Chinese source; translate for non-zh storefront locales.
+     */
+    private function translateStorefrontChrome(string $text): string
+    {
+        $text = trim($text);
+        if ($text === '') {
+            return '';
+        }
+        if (preg_match('/\p{Han}/u', $text) !== 1) {
+            return $text;
+        }
+        $translated = trim(\Weline\Theme\Helper\WidgetI18n::label($text));
+
+        return $translated !== '' ? $translated : $text;
     }
 
     private function defaultHeroLede(string $pageType): string

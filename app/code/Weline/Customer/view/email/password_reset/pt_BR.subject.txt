@@ -1,0 +1,1 @@
+Redefina sua senha · {{var.customer_email}}

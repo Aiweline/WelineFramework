@@ -6,6 +6,7 @@ namespace Weline\Faq\Service;
 
 use Weline\Faq\Model\FaqItem;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Phrase\LocaleFallbackChain;
 
 /**
  * Sole PDP/SEO FAQ resolution path: template pack cascade + product cascade + merge.
@@ -22,6 +23,8 @@ final class FaqPdpResolveService
 
     /** Exact locale match must beat website/store empty-locale inheritance. */
     private const SCORE_LOCALE_MATCH = 10000;
+    /** Distance between successive LocaleFallbackChain candidates. */
+    private const SCORE_LOCALE_STEP = 100;
 
     /**
      * @param array{
@@ -105,21 +108,22 @@ final class FaqPdpResolveService
     ): array {
         $storeCode = strtolower(trim($storeCode));
         $channelCode = strtolower(trim($channelCode));
-        $localeCode = trim($localeCode);
+        $localeCode = LocaleFallbackChain::normalize(trim($localeCode));
+        $localeCandidates = $this->localeCandidates($localeCode);
 
         $best = [];
         foreach ($rows as $row) {
             if (!is_array($row)) {
                 continue;
             }
-            if (!$this->rowApplies($row, $websiteId, $storeCode, $channelCode, $localeCode)) {
+            if (!$this->rowApplies($row, $websiteId, $storeCode, $channelCode, $localeCode, $localeCandidates)) {
                 continue;
             }
             $key = trim((string)($row['faq_key'] ?? ''));
             if ($key === '') {
                 $key = 'id:' . (int)($row['faq_id'] ?? 0);
             }
-            $score = $this->specificityScore($row, $websiteId, $storeCode, $channelCode, $localeCode);
+            $score = $this->specificityScore($row, $websiteId, $storeCode, $channelCode, $localeCode, $localeCandidates);
             $prev = $best[$key] ?? null;
             if ($prev !== null && (int)$prev['_score'] >= $score) {
                 continue;
@@ -186,9 +190,13 @@ final class FaqPdpResolveService
             if ($websiteId > 0) {
                 $query->where(FaqItem::schema_fields_WEBSITE_ID, [0, $websiteId], 'IN');
             }
-            $localeCode = trim($localeCode);
+            $localeCode = LocaleFallbackChain::normalize(trim($localeCode));
             if ($localeCode !== '') {
-                $query->where(FaqItem::schema_fields_LOCALE_CODE, ['', $localeCode], 'IN');
+                $query->where(
+                    FaqItem::schema_fields_LOCALE_CODE,
+                    $this->localeCandidates($localeCode),
+                    'IN'
+                );
             }
             $raw = $query
                 ->order(FaqItem::schema_fields_SORT_ORDER, 'ASC')
@@ -228,12 +236,17 @@ final class FaqPdpResolveService
     /**
      * @param array<string,mixed> $row
      */
+    /**
+     * @param array<string,mixed> $row
+     * @param list<string> $localeCandidates
+     */
     private function rowApplies(
         array $row,
         int $websiteId,
         string $storeCode,
         string $channelCode,
         string $localeCode,
+        array $localeCandidates,
     ): bool {
         $rowWebsite = (int)($row['website_id'] ?? 0);
         if ($websiteId > 0 && $rowWebsite !== 0 && $rowWebsite !== $websiteId) {
@@ -250,16 +263,17 @@ final class FaqPdpResolveService
                 return false;
             }
         }
-        $rowLocale = trim((string)($row['locale_code'] ?? ''));
-        if ($localeCode !== '' && $rowLocale !== '' && $rowLocale !== $localeCode) {
-            return false;
+        $rowLocale = LocaleFallbackChain::normalize(trim((string)($row['locale_code'] ?? '')));
+        if ($localeCode === '') {
+            return true;
         }
-
-        return true;
+        // Accept exact/fallback chain locales and legacy empty-locale rows.
+        return $rowLocale === '' || in_array($rowLocale, $localeCandidates, true);
     }
 
     /**
      * @param array<string,mixed> $row
+     * @param list<string> $localeCandidates
      */
     private function specificityScore(
         array $row,
@@ -267,6 +281,7 @@ final class FaqPdpResolveService
         string $storeCode,
         string $channelCode,
         string $localeCode,
+        array $localeCandidates,
     ): int {
         $score = 0;
         $rowWebsite = (int)($row['website_id'] ?? 0);
@@ -282,14 +297,40 @@ final class FaqPdpResolveService
         } elseif ($rowStore !== '' && $rowStore === $storeCode && $rowChannel === '') {
             $score += 500;
         }
-        $rowLocale = trim((string)($row['locale_code'] ?? ''));
-        if ($localeCode !== '' && $rowLocale === $localeCode) {
-            $score += self::SCORE_LOCALE_MATCH;
-        } elseif ($rowLocale === '') {
-            $score += 1;
+        $rowLocale = LocaleFallbackChain::normalize(trim((string)($row['locale_code'] ?? '')));
+        if ($localeCode !== '') {
+            $idx = array_search($rowLocale, $localeCandidates, true);
+            if ($idx !== false) {
+                $score += self::SCORE_LOCALE_MATCH - ((int)$idx * self::SCORE_LOCALE_STEP);
+            } elseif ($rowLocale === '') {
+                // Legacy empty locale: last resort after chain candidates.
+                $score += 1;
+            }
         }
 
         return $score;
+    }
+
+    /**
+     * Storefront FAQ locale chain: current → en_US (non-zh) → website default → empty legacy.
+     *
+     * @return list<string>
+     */
+    private function localeCandidates(string $localeCode): array
+    {
+        $localeCode = LocaleFallbackChain::normalize(trim($localeCode));
+        if ($localeCode === '') {
+            return [''];
+        }
+        $candidates = LocaleFallbackChain::candidates(
+            $localeCode,
+            LocaleFallbackChain::websiteDefaultLocale()
+        );
+        if (!in_array('', $candidates, true)) {
+            $candidates[] = '';
+        }
+
+        return $candidates;
     }
 
     private function resolveLocaleCode(string $localeCode): string

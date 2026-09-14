@@ -159,6 +159,7 @@ final class ProductCategoryAttributeService
         string $description,
         string $locale = '',
     ): void {
+        $description = \Weline\Catalog\Service\CategoryMediaConstraints::assertDescription($description);
         $this->attributes->writeExplicit(
             $websiteId,
             AttributeValue::WEBSITE_STORE_ID,
@@ -166,9 +167,70 @@ final class ProductCategoryAttributeService
             $categoryId,
             'description',
             $locale,
-            \Weline\Catalog\Service\CategoryMediaConstraints::assertDescription($description),
+            $description,
             false,
         );
+        // Keep <local> LocalModel in sync with EAV (skip when Local drawer is already writing).
+        if (!LocalDescription::isSyncing()) {
+            try {
+                LocalDescription::upsertQuiet($categoryId, $locale, [
+                    LocalDescription::schema_fields_DESCRIPTION => $description,
+                ]);
+            } catch (\Throwable) {
+                // Local table may lag setup:upgrade (new description column); EAV remains source of truth.
+            }
+        }
+    }
+
+    /**
+     * Compose a locale-aware default description for attribute storage (not Theme CSV).
+     */
+    public function composeDefaultDescription(string $name, string $locale = ''): string
+    {
+        $name = trim($name);
+        if ($name === '') {
+            return '';
+        }
+        $locale = self::normalizeLocaleKey($locale !== '' ? $locale : (string)State::getLangLocal());
+        if ($locale === '') {
+            $locale = 'zh_Hans_CN';
+        }
+        if (str_starts_with($locale, 'zh')) {
+            return '浏览' . $name . '相关商品与配件';
+        }
+
+        return 'Browse ' . $name . ' products and accessories';
+    }
+
+    /**
+     * Read description for locale; when empty, persist a default into EAV + Local and return it.
+     */
+    public function ensureDescription(
+        int $websiteId,
+        int $categoryId,
+        string $name,
+        string $locale = '',
+    ): string {
+        $categoryId = max(0, $categoryId);
+        $name = trim($name);
+        if ($categoryId <= 0 || $name === '') {
+            return '';
+        }
+        $locale = self::normalizeLocaleKey($locale !== '' ? $locale : (string)State::getLangLocal());
+        if ($locale === '') {
+            $locale = 'zh_Hans_CN';
+        }
+        $existing = trim((string)($this->readDescriptionMap($websiteId, [$categoryId], $locale)[$categoryId] ?? ''));
+        if ($existing !== '') {
+            return $existing;
+        }
+        $composed = $this->composeDefaultDescription($name, $locale);
+        if ($composed === '') {
+            return '';
+        }
+        $this->writeDescription($websiteId, $categoryId, $composed, $locale);
+
+        return $composed;
     }
 
     /**

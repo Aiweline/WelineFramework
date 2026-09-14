@@ -1,4 +1,4 @@
-﻿博客分类,"Blog Categories"
+博客分类,"Blog categories"
 "分类 ID 不能为空","分类 ID 不能为空"
 "博客文章 sitemap URL 提供器","博客文章 sitemap URL 提供器"
 博客,Blog
@@ -17,19 +17,6 @@
 邮箱格式不正确。,"The email address is invalid."
 游客,Guest
 已登录客户,"Signed-in customer"
-最新博客文章,"Latest blog posts"
-分类「%{1}」的最新文章,分类「%{1}」的最新文章
-"「%{1}」分类博客 · 穿搭与选购","「%{1}」分类博客 · 穿搭与选购"
-"汉服博客分类 · 穿搭灵感与选购指南","汉服博客分类 · 穿搭灵感与选购指南"
-浏览「%{1}」分类下的汉服穿搭、形制科普与选购避坑文章，帮助你更快做出合适选择。,浏览「%{1}」分类下的汉服穿搭、形制科普与选购避坑文章，帮助你更快做出合适选择。
-按分类浏览汉服穿搭灵感、形制科普与选购指南，快速找到适合日常与礼仪场合的内容。,按分类浏览汉服穿搭灵感、形制科普与选购指南，快速找到适合日常与礼仪场合的内容。
-阅读穿搭灵感、形制科普与选购避坑，帮助你更快做出合适选择。,阅读穿搭灵感、形制科普与选购避坑，帮助你更快做出合适选择。
-首页,Home
-"订阅本分类 RSS","订阅本分类 RSS"
-"订阅 RSS","订阅 RSS"
-"汉服博客 | 穿搭灵感与文化指南","Hanfu Blog | Outfit Inspiration & Cultural Guide"
-精选文章与分类阅读,"Selected articles and category reading"
-"订阅博客 RSS","订阅博客 RSS"
 编辑,Edit
 全部语言,全部语言
 博客文章已保存。,"Blog post saved."
@@ -49,24 +36,11 @@
 "AI 生成博客 Slug","AI 生成博客 Slug"
 "使用翻译 AI 生成博客 slug","使用翻译 AI 生成博客 slug"
 删除博客文章,"Delete Blog Post"
-作者,Author
-更新于,"Updated on"
-分钟阅读,"min read"
-相关文章,"Related Posts"
 关键词,Keywords
 面包屑,Breadcrumb
 文章,Article
-暂无文章,"No posts yet"
-返回博客,"Back to Blog"
-"共 %{1} 条","%{1} item(s) total"
-文章列表,"Article list"
-未命名文章,"Untitled Post"
-博客文章封面,博客文章封面
-页面,Page
-博客页面,"Blog Page"
-未命名页面,"Untitled Page"
-全部文章,"All Posts"
 展开/收起,展开/收起
+"订阅 RSS","Subscribe to RSS"
 正在加载评论...,"Loading reviews..."
 评论列表,"Review list"
 评论分页,评论分页
@@ -104,6 +78,20 @@
 "撰写图文 / 视频评论","Write a photo / video review"
 正在加载评论表单...,"Loading review form..."
 支持匿名或登录评论；媒体与扩展字段会和评论一起进入审核。,"Guest and signed-in reviews are supported; media and extra fields are moderated together."
+"共 %{1} 条","%{1} item(s) total"
+文章列表,"Article list"
+未命名文章,"Untitled Post"
+博客文章封面,博客文章封面
+作者,Author
+更新于,"Updated on"
+分钟阅读,"min read"
+相关文章,"Related Posts"
+暂无文章,"No posts yet"
+返回博客,"Back to Blog"
+页面,Page
+博客页面,"Blog Page"
+未命名页面,"Untitled Page"
+全部文章,"All Posts"
 管理当前网站下的博客文章与发布状态,管理当前网站下的博客文章与发布状态
 "万能分类 · 博客","万能分类 · 博客"
 新建文章,"New Post"
@@ -157,11 +145,6 @@ Slug,Slug
 "https 档案链接，逗号分隔","https 档案链接，逗号分隔"
 逗号分隔,"Comma separated"
 "Theme 可视化编辑","Theme visual editor"
-汉服博客,"Hanfu Blog"
-阅读汉服穿搭灵感、形制科普与节日搭配指南，系统了解明制、宋制、唐制与马面裙的选购要点、穿着建议、保养提醒与礼仪场景搭配方法，帮助你更快做出更合适且更安心的选择。,"Read Hanfu outfit inspiration, silhouette guides, and festival styling tips—covering Ming, Song, Tang styles and mamian skirts, with care notes—so you can choose with confidence."
-"博客 RSS","博客 RSS"
-"「%{1}」分类 RSS","「%{1}」分类 RSS"
-"博客分类 RSS","博客分类 RSS"
 分类名称不能为空,分类名称不能为空
 分类不存在,分类不存在
 不能将自己作为父分类,不能将自己作为父分类
@@ -178,6 +161,23 @@ Slug,Slug
 技术分享,"Tech Sharing"
 产品动态,"Product Updates"
 公司新闻,"Company News"
+最新博客文章,"Latest blog posts"
+分类「%{1}」的最新文章,"Latest articles in category ""%{1}"""
+"「%{1}」分类博客 · 穿搭与选购","""%{1}"" category blog · styling & buying"
+"汉服博客分类 · 穿搭灵感与选购指南","Hanfu blog categories · styling inspiration and buying guides"
+浏览「%{1}」分类下的汉服穿搭、形制科普与选购避坑文章，帮助你更快做出合适选择。,"Browse Hanfu styling, form explainers, and buying guides under ""%{1}"" to choose faster."
+按分类浏览汉服穿搭灵感、形制科普与选购指南，快速找到适合日常与礼仪场合的内容。,"Browse Hanfu styling inspiration, form explainers, and buying guides by category for daily and ceremonial looks."
+阅读穿搭灵感、形制科普与选购避坑，帮助你更快做出合适选择。,"Read styling tips, form explainers, and buying pitfalls to choose faster."
+首页,Home
+"订阅本分类 RSS","Subscribe to this category RSS"
+"汉服博客 | 穿搭灵感与文化指南","Hanfu Blog | Styling inspiration & cultural guides"
+精选文章与分类阅读,"Featured articles and category reading"
+"订阅博客 RSS","Subscribe to blog RSS"
+汉服博客,"Hanfu Blog"
+阅读汉服穿搭灵感、形制科普与节日搭配指南，系统了解明制、宋制、唐制与马面裙的选购要点、穿着建议、保养提醒与礼仪场景搭配方法，帮助你更快做出更合适且更安心的选择。,"Read Hanfu outfit inspiration, silhouette guides, and festival styling tips—covering Ming, Song, Tang styles and mamian skirts, with care notes—so you can choose with confidence."
+"博客 RSS","博客 RSS"
+"「%{1}」分类 RSS","「%{1}」分类 RSS"
+"博客分类 RSS","博客分类 RSS"
 浏览「%{1}」分类下的文章,"Browse posts in “%{1}”"
 按分类浏览博客文章,"Browse blog posts by category"
 正在加载更多评论...,"Loading more reviews..."
@@ -222,3 +222,4 @@ Slug,Slug
 页脚帮助中心链接,"Footer Help Center Link"
 "页脚帮助中心扩展槽：指向博客帮助中心分类；默认注入 footer-help-links。","Footer help extras: blog help category; default inject footer-help-links."
 "页脚帮助中心默认展示帮助中心（博客 help 分类）","Footer help center defaults to Help Center (blog help category)"
+"新品 RSS","New Arrivals RSS"

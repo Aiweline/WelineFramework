@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Marketing\Setup;
 
 use Weline\Framework\App\Exception;
+use Weline\Framework\DateTime\ScheduleWindowUtcMigrator;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Data\Setup;
@@ -29,6 +30,18 @@ class Upgrade implements UpgradeInterface
         $local->setup($modelSetup, $context);
 
         $this->seedCartCouponSlot();
+        $this->migrateScheduleWindowsToUtc();
+    }
+
+    private function migrateScheduleWindowsToUtc(): void
+    {
+        try {
+            /** @var ScheduleWindowUtcMigrator $migrator */
+            $migrator = ObjectManager::getInstance(ScheduleWindowUtcMigrator::class);
+            $migrator->migrate(false);
+        } catch (\Throwable) {
+            // Non-blocking: operator can re-run Marketing/scripts/migrate-schedule-windows-to-utc.php
+        }
     }
 
     private function seedCartCouponSlot(): void

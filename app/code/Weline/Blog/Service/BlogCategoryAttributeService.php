@@ -312,6 +312,17 @@ final class BlogCategoryAttributeService
             self::normalizeLocaleKey($locale),
         );
         BlogContentCache::clearRequestSnapshots();
+        // EAV-only writes skip Category model mutation; still bump storefront blog snapshots.
+        try {
+            $namespaces = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Framework\Cache\Contract\NamespaceGenerationInterface::class,
+            );
+            if ($namespaces instanceof \Weline\Framework\Cache\Contract\NamespaceGenerationInterface) {
+                $namespaces->bumpMany(BlogContentCache::changedPaths($websiteId, $websiteId));
+            }
+        } catch (\Throwable) {
+            // Durable EAV value is authoritative; namespace bump is an accelerator.
+        }
     }
 
     private function getAttribute(string $code): ?AttributeRecord

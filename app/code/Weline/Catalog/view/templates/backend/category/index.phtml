@@ -495,7 +495,14 @@ $renderTree = function (array $nodes) use (&$renderTree, $escape, $selectedId, $
                         </label>
 
                         <label class="w-field" data-testid="catalog-category-description">
-                            <span class="w-field__label"><?= $escape(__('分类描述')) ?></span>
+                            <div class="w-field__label-row w-catalog-local-label" data-align="center" data-justify="between" data-gap="sm">
+                                <span class="w-field__label"><?= $escape(__('分类描述')) ?></span>
+                                <?php if (!$isNew && $selectedId > 0 && $space === 'product'): ?>
+                                    <span class="w-catalog-local-label__trigger" style="--catalog-local-label: '<?= $localTriggerLabelEsc ?>'" data-testid="catalog-category-description-local">
+                                        <local model="Weline\Product\Model\Category\LocalDescription" field="description" id="selected_category_id"><?= $escape($categoryDescription) ?></local>
+                                    </span>
+                                <?php endif; ?>
+                            </div>
                             <textarea class="w-input" name="description" rows="5"
                                       placeholder="<?= $escape(__('详情页完整描述')) ?>"><?= $escape($categoryDescription) ?></textarea>
                         </label>

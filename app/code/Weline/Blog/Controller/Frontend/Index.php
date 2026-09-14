@@ -10,6 +10,7 @@ use Weline\Blog\Service\BlogScopeResolver;
 use Weline\Blog\Service\BlogSearchCategoryScopeService;
 use Weline\Blog\Service\BlogSeoFactsBuilder;
 use Weline\Framework\App\Controller\FrontendController;
+use Weline\Theme\Helper\WidgetI18n;
 
 /** Blog listing: /blog — Theme layout blog_category (Amazon-style card grid). */
 final class Index extends FrontendController
@@ -33,7 +34,7 @@ final class Index extends FrontendController
         $seo = $this->seoFacts->buildListProfile($articles, $this->getUrl('blog'));
         $title = trim((string)($seo['title'] ?? ''));
         if ($title === '') {
-            $title = (string)__('汉服博客 | 穿搭灵感与文化指南');
+            $title = WidgetI18n::label('汉服博客 | 穿搭灵感与文化指南');
         }
         $this->layoutType = 'blog_category';
         $this->request->setGet('page_type', 'blog_list');
@@ -42,7 +43,7 @@ final class Index extends FrontendController
         $this->assign('page_title', $title);
         $this->assign('title', $title);
         $this->assign('blog_page_heading', $title);
-        $this->assign('blog_page_subtitle', (string)__('精选文章与分类阅读'));
+        $this->assign('blog_page_subtitle', WidgetI18n::label('精选文章与分类阅读'));
         $this->assign('blog_active_category_id', 0);
         $this->assign('blog_active_category_slug', '');
         $this->assign('blog_categories', $categories);
@@ -56,7 +57,7 @@ final class Index extends FrontendController
             ];
         }, $articles));
         $this->assign('blog_rss_url', \Weline\Blog\Api\Uri\BlogNamespace::rssPublicPath());
-        $this->assign('blog_rss_label', (string)__('订阅 RSS'));
+        $this->assign('blog_rss_label', WidgetI18n::label('订阅 RSS'));
         $this->assign('seo', $seo);
 
         return (string)$this->fetch('Weline_Blog::templates/frontend/index.phtml');

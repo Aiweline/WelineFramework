@@ -5,38 +5,83 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
 ?>
 <div class="w-grid" data-testid="order-shipment-management" weline-code="order.backend.shipment.section_1">
   <div style="--w-span:12;">
-    <div class="w-backend-page__heading"><h4 class="w-backend-page__title"><w:icon name="truck" size="sm"></w:icon><?= __('订单发货管理') ?></h4></div>
+    <div class="w-backend-page__heading">
+      <h4 class="w-backend-page__title"><w:icon name="truck" size="sm"></w:icon><?= __('订单发货管理') ?></h4>
+    </div>
     <div><template>Weline_Component::message.phtml</template></div>
-    <div class="w-alert" data-tone="info"><?= __('发货动作写入仓维 FulfillmentUnit 与不可变进度账本；相同幂等键和载荷不会重复扣减可发数量。') ?></div>
-    <div class="w-card" style="--w-mb:var(--weline-space-4);"><div class="w-card__body">
-      <h5><?= __('待发货履约单元') ?></h5>
-      <div class="w-table-wrap"><table class="w-table" data-w-vertical="middle">
-        <thead><tr><th><?= __('订单') ?></th><th><?= __('履约单元') ?></th><th><?= __('仓库') ?></th><th><?= __('已发/总量') ?></th><th><?= __('CAS 版本') ?></th><th><?= __('提交发货') ?></th></tr></thead>
-        <tbody>
-        <?php if ($candidates === []): ?>
-          <tr><td colspan="6" class="w-text" data-align="center" data-tone="muted"><?= __('暂无可发货履约单元') ?></td></tr>
-        <?php else: foreach ($candidates as $row): ?>
-          <tr data-testid="shipment-candidate" data-unit-uuid="<?= $escape($row['fulfillment_unit_uuid'] ?? '') ?>">
-            <td><a href="@backend-url{'order/backend/order/view'|['id' => (int)($row['order_id'] ?? 0)]}"><?= $escape($row['order_number'] ?? '') ?></a></td>
-            <td><code><?= $escape($row['fulfillment_unit_uuid'] ?? '') ?></code></td>
-            <td><?= (int)($row['warehouse_id'] ?? 0) ?></td>
-            <td><?= (int)($row['fulfilled_qty_minor'] ?? 0) ?> / <?= (int)($row['qty_minor'] ?? 0) ?></td>
-            <td><?= (int)($row['fulfillment_version'] ?? 0) ?></td>
-            <td>
-              <w:form method="post" action="@backend-url{'order/backend/shipment/execute'}" class="w-grid" data-testid="shipment-command-form" style="--w-gap:var(--weline-space-2);">
-                <input type="hidden" name="fulfillment_unit_uuid" value="<?= $escape($row['fulfillment_unit_uuid'] ?? '') ?>">
-                <input type="hidden" name="expected_version" value="<?= (int)($row['fulfillment_version'] ?? 0) ?>">
-                <input type="hidden" name="expected_grant_version" value="<?= (int)($row['expected_grant_version'] ?? 0) ?>">
-                <div><input class="w-input" type="number" min="1" max="<?= max(1, (int)($row['remaining_qty_minor'] ?? 1)) ?>" name="qty_minor" value="<?= min(1, max(1, (int)($row['remaining_qty_minor'] ?? 1))) ?>" required aria-label="<?= __('发货数量') ?>" data-size="sm"></div>
-                <div><input class="w-input" type="text" maxlength="128" pattern="[A-Za-z0-9._:\-]+" name="idempotency_key" value="ship-ui-<?= bin2hex(random_bytes(12)) ?>" required aria-label="<?= __('幂等键') ?>" data-size="sm"></div>
-                <div><button class="w-button" type="submit" data-testid="shipment-submit" data-tone="primary" data-size="sm"><?= __('提交发货') ?></button></div>
-              </w:form>
-            </td>
-          </tr>
-        <?php endforeach; endif; ?>
-        </tbody>
-      </table></div>
-    </div></div>
+    <div class="w-alert" data-tone="info" style="--w-mb:var(--weline-space-4);">
+      <?= __('发货须填写平台物流单号；勾选通知时向客户发送「已发货」邮件。成功后写入发货记录、履约进度与不可变账本。') ?>
+    </div>
+
+    <div class="w-stack" style="--w-gap:var(--weline-space-4); --w-mb:var(--weline-space-4);">
+      <h5 class="w-text" style="--w-mb:0;"><?= __('待发货履约单元') ?></h5>
+      <?php if ($candidates === []): ?>
+        <div class="w-alert" data-tone="muted"><?= __('暂无可发货履约单元') ?></div>
+      <?php else: foreach ($candidates as $row):
+        $remaining = max(1, (int)($row['remaining_qty_minor'] ?? 1));
+        $unitShort = (string)($row['unit_short'] ?? '');
+        if ($unitShort === '') {
+          $uuid = (string)($row['fulfillment_unit_uuid'] ?? '');
+          $parts = explode('-', $uuid);
+          $unitShort = (string)end($parts);
+        }
+        ?>
+        <div class="w-card" data-testid="shipment-candidate" data-unit-uuid="<?= $escape($row['fulfillment_unit_uuid'] ?? '') ?>">
+          <div class="w-card__body">
+            <div class="w-cluster" data-justify="between" style="--w-gap:var(--weline-space-2);margin-bottom:var(--weline-space-3);">
+              <div class="w-stack" style="--w-gap:var(--weline-space-1);">
+                <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);">
+                  <a class="w-text" href="@backend-url{'order/backend/order/view'|['id' => (int)($row['order_id'] ?? 0)]}">
+                    <strong><?= $escape($row['order_number'] ?? '') ?></strong>
+                  </a>
+                  <span class="w-badge" data-tone="info"><?= __('包裹') ?> <?= $escape($unitShort) ?></span>
+                  <?php if (!empty($row['status_label'])): ?>
+                    <span class="w-badge" data-tone="warning"><?= $escape($row['status_label']) ?></span>
+                  <?php endif; ?>
+                </div>
+                <p class="w-text" data-tone="muted" data-size="sm" style="--w-mb:0;">
+                  <?= __('发货仓') ?>：<?= $escape($row['warehouse_label'] ?? __('平台履约（未绑仓库）')) ?>
+                  · <?= __('已发/总量') ?>：<?= (int)($row['fulfilled_qty_minor'] ?? 0) ?> / <?= (int)($row['qty_minor'] ?? 0) ?>
+                  · CAS <?= (int)($row['fulfillment_version'] ?? 0) ?>
+                </p>
+              </div>
+            </div>
+
+            <w:form method="post" action="@backend-url{'order/backend/shipment/execute'}" class="w-stack" style="--w-gap:var(--weline-space-3);" data-testid="shipment-command-form">
+              <input type="hidden" name="fulfillment_unit_uuid" value="<?= $escape($row['fulfillment_unit_uuid'] ?? '') ?>">
+              <input type="hidden" name="expected_version" value="<?= (int)($row['fulfillment_version'] ?? 0) ?>">
+              <input type="hidden" name="expected_grant_version" value="<?= (int)($row['expected_grant_version'] ?? 0) ?>">
+              <div class="w-grid" style="--w-gap:var(--weline-space-3);">
+                <div style="--w-span:4;">
+                  <label class="w-label"><?= __('承运商') ?></label>
+                  <input class="w-input" type="text" name="carrier" maxlength="100" placeholder="<?= __('例如：顺丰 / UPS') ?>" data-size="sm">
+                </div>
+                <div style="--w-span:5;">
+                  <label class="w-label"><?= __('平台物流单号') ?> <span class="w-text" data-tone="danger">*</span></label>
+                  <input class="w-input" type="text" name="tracking_number" maxlength="100" required placeholder="<?= __('运单号') ?>" data-size="sm" data-testid="shipment-tracking-number">
+                </div>
+                <div style="--w-span:3;">
+                  <label class="w-label"><?= __('数量') ?></label>
+                  <input class="w-input" type="number" min="1" max="<?= $remaining ?>" name="qty_minor" value="<?= min($remaining, max(1, (int)($row['remaining_qty_minor'] ?? 1))) ?>" required data-size="sm" aria-label="<?= __('发货数量') ?>">
+                </div>
+                <div style="--w-span:6;">
+                  <label class="w-label"><?= __('幂等键') ?></label>
+                  <input class="w-input" type="text" maxlength="128" pattern="[A-Za-z0-9._:\-]+" name="idempotency_key" value="ship-ui-<?= bin2hex(random_bytes(12)) ?>" required data-size="sm" aria-label="<?= __('幂等键') ?>">
+                </div>
+                <div style="--w-span:6;padding-top:1.5rem;--w-gap:var(--weline-space-3);" class="w-cluster" data-align="end" data-justify="between">
+                  <label class="w-check">
+                    <input type="checkbox" name="notify_customer" value="1" checked data-testid="shipment-notify-customer">
+                    <?= __('发送「已发货」邮件') ?>
+                  </label>
+                  <button class="w-button" type="submit" data-testid="shipment-submit" data-tone="primary" data-size="sm"><?= __('确认发货') ?></button>
+                </div>
+              </div>
+            </w:form>
+          </div>
+        </div>
+      <?php endforeach; endif; ?>
+    </div>
+
     <div class="w-card"><div class="w-card__body">
       <h5><?= __('仓维发货进度账本') ?></h5>
       <div class="w-table-wrap"><table class="w-table"><thead><tr><th><?= __('订单') ?></th><th><?= __('履约单元') ?></th><th><?= __('数量') ?></th><th><?= __('版本') ?></th><th><?= __('幂等键') ?></th><th><?= __('时间') ?></th></tr></thead><tbody>

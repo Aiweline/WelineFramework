@@ -23,12 +23,12 @@ final class SocialLoginOutboundProxy
      */
     public static function resolve(?ConfigReader $config = null): array
     {
-        $fromConfig = self::fromConfig($config);
+        $fromConfig = self::discardUnreachableLoopback(self::fromConfig($config));
         if ($fromConfig['proxy'] !== '') {
             return $fromConfig;
         }
 
-        return self::fromEnv();
+        return self::discardUnreachableLoopback(self::fromEnv());
     }
 
     /**
@@ -114,6 +114,54 @@ final class SocialLoginOutboundProxy
             'type' => $type,
             'userpwd' => $userpwd,
         ];
+    }
+
+    /**
+     * @param array{proxy:string,type:string,userpwd:string} $resolved
+     * @return array{proxy:string,type:string,userpwd:string}
+     */
+    public static function discardUnreachableLoopback(array $resolved): array
+    {
+        $proxy = trim((string) ($resolved['proxy'] ?? ''));
+        if ($proxy === '' || !self::isLoopbackProxy($proxy)) {
+            return $resolved;
+        }
+        if (self::isProxyListening($proxy)) {
+            return $resolved;
+        }
+
+        return self::empty();
+    }
+
+    public static function isLoopbackProxy(string $proxy): bool
+    {
+        $host = strtolower((string) (parse_url($proxy, PHP_URL_HOST) ?? ''));
+
+        return in_array($host, ['127.0.0.1', 'localhost', '::1'], true);
+    }
+
+    public static function isProxyListening(string $proxy): bool
+    {
+        $parts = parse_url($proxy);
+        if (!is_array($parts)) {
+            return false;
+        }
+        $host = (string) ($parts['host'] ?? '');
+        if ($host === '') {
+            return false;
+        }
+        $scheme = strtolower((string) ($parts['scheme'] ?? 'http'));
+        $port = (int) ($parts['port'] ?? 0);
+        if ($port <= 0) {
+            $port = str_starts_with($scheme, 'socks') ? 1080 : 80;
+        }
+        $fp = @stream_socket_client('tcp://' . $host . ':' . $port, $errno, $errstr, 0.2);
+        if ($fp === false) {
+            return false;
+        }
+        fclose($fp);
+
+        return true;
     }
 
     /**

@@ -88,6 +88,19 @@ class StorefrontEavLabelResolver
         if ($code === '' || $value === '') {
             return $value;
         }
+        $value = self::unwrapJsonScalarToken($value);
+
+        // Multiselect / joined listing specs arrive as JSON arrays or ", "-joined
+        // source tokens. Resolve each token so LocalDescription labels surface.
+        $parts = self::splitMultiOptionValue($value);
+        if (count($parts) > 1) {
+            $resolved = [];
+            foreach ($parts as $part) {
+                $resolved[] = $this->resolve($attributeCode, $part);
+            }
+
+            return implode(', ', $resolved);
+        }
 
         $indexed = $this->metadata instanceof \Weline\Eav\Api\Metadata\AttributeMetadataOptionTokenIndexInterface;
         $identityCatalog = $this->productId > 0
@@ -161,6 +174,76 @@ class StorefrontEavLabelResolver
     }
 
     /**
+     * Split joined/JSON multiselect display values into individual option tokens.
+     *
+     * @return list<string>
+     */
+    public static function splitMultiOptionValue(string $value): array
+    {
+        $value = self::unwrapJsonScalarToken(trim($value));
+        if ($value === '') {
+            return [];
+        }
+        if ($value[0] === '[') {
+            try {
+                $decoded = json_decode($value, true, 64, JSON_THROW_ON_ERROR);
+            } catch (\Throwable) {
+                $decoded = null;
+            }
+            if (is_array($decoded)) {
+                $parts = [];
+                foreach ($decoded as $item) {
+                    if (is_scalar($item) && trim((string)$item) !== '') {
+                        $parts[] = trim((string)$item);
+                    }
+                }
+
+                return $parts !== [] ? array_values($parts) : [$value];
+            }
+        }
+        if (!str_contains($value, ',')) {
+            return [$value];
+        }
+        $parts = preg_split('/\s*,\s*/u', $value) ?: [];
+        $parts = array_values(array_filter(
+            array_map(static fn(string $part): string => trim($part), $parts),
+            static fn(string $part): bool => $part !== '',
+        ));
+
+        return count($parts) > 1 ? $parts : [$value];
+    }
+
+    /**
+     * Select EAV rows often store JSON string scalars (\"明制\") in value_text/json.
+     */
+    public static function unwrapJsonScalarToken(string $token): string
+    {
+        $token = trim($token);
+        if ($token === '') {
+            return '';
+        }
+        if (
+            strlen($token) >= 2
+            && (($token[0] === '"' && str_ends_with($token, '"'))
+                || ($token[0] === "'" && str_ends_with($token, "'")))
+        ) {
+            try {
+                $decoded = json_decode($token, true, 8, JSON_THROW_ON_ERROR);
+                if (is_string($decoded)) {
+                    return trim($decoded);
+                }
+            } catch (\Throwable) {
+                $inner = substr($token, 1, -1);
+                if ($inner !== false && $inner !== '') {
+                    return trim(stripcslashes($inner));
+                }
+            }
+        }
+
+        return $token;
+    }
+
+    /**
      * Tokens to try when matching cart/URL option identities.
      * Percent-encoded Chinese values (from query strings) must decode before lookup.
      *
@@ -172,9 +255,13 @@ class StorefrontEavLabelResolver
         if ($token === '') {
             return [];
         }
+        $unwrapped = self::unwrapJsonScalarToken($token);
         $tokens = [$token];
-        $decoded = self::decodeOptionToken($token);
-        if ($decoded !== '' && $decoded !== $token) {
+        if ($unwrapped !== '' && $unwrapped !== $token) {
+            $tokens[] = $unwrapped;
+        }
+        $decoded = self::decodeOptionToken($unwrapped !== '' ? $unwrapped : $token);
+        if ($decoded !== '' && !in_array($decoded, $tokens, true)) {
             $tokens[] = $decoded;
         }
 

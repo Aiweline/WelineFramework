@@ -8,6 +8,8 @@ use Weline\Framework\Database\AbstractModel;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Order\Model\Order;
 use Weline\Payment\Model\PaymentAttempt;
+use Weline\Payment\Model\PaymentMethod;
+use Weline\Payment\Model\PaymentTransaction;
 
 /**
  * Backend order payment records from universal Payment Attempt rows.
@@ -24,6 +26,8 @@ final class BackendOrderPaymentRecordsService
     /**
      * @return list<array{
      *     payment_method: string,
+     *     method_label: string,
+     *     method_icon_url: string,
      *     amount: float,
      *     currency: string,
      *     transaction_id: string,
@@ -59,6 +63,8 @@ final class BackendOrderPaymentRecordsService
     /**
      * @return list<array{
      *     payment_method: string,
+     *     method_label: string,
+     *     method_icon_url: string,
      *     amount: float,
      *     currency: string,
      *     transaction_id: string,
@@ -75,6 +81,118 @@ final class BackendOrderPaymentRecordsService
             return [];
         }
 
+        try {
+            $this->objectManager->getInstance(PaymentCaptureReaderEnsureService::class)
+                ->ensureFromPayable($payableType, $payableId);
+        } catch (\Throwable) {
+        }
+
+        $rows = [];
+        $seen = [];
+        foreach (PaymentCaptureReaderEnsureService::payableTypeAliases($payableType) as $type) {
+            foreach ($this->attemptsForPayable($type, $payableId) as $row) {
+                $key = (string)($row['transaction_id'] ?? '') . '|' . (string)($row['status'] ?? '');
+                if (isset($seen[$key])) {
+                    continue;
+                }
+                $seen[$key] = true;
+                $rows[] = $this->withMethodChrome($row);
+            }
+        }
+        if ($rows !== []) {
+            return $rows;
+        }
+
+        $fallback = [];
+        foreach ($this->transactionsForPayable($payableId) as $row) {
+            $fallback[] = $this->withMethodChrome($row);
+        }
+
+        return $fallback;
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     * @return array<string, mixed>
+     */
+    private function withMethodChrome(array $row): array
+    {
+        $code = strtolower(trim((string)($row['payment_method'] ?? '')));
+        $chrome = $this->resolveMethodChrome($code);
+        $row['payment_method'] = $code;
+        $row['method_label'] = $chrome['label'];
+        $row['method_icon_url'] = $chrome['icon_url'];
+
+        return $row;
+    }
+
+    /**
+     * @return array{label: string, icon_url: string}
+     */
+    private function resolveMethodChrome(string $code): array
+    {
+        if ($code === '') {
+            return [
+                'label' => (string)\__('未指定'),
+                'icon_url' => '',
+            ];
+        }
+
+        $iconResolver = $this->objectManager->getInstance(PaymentMethodIconResolver::class);
+        try {
+            $methods = $this->objectManager->getInstance(PaymentMethodManager::class);
+            $method = $methods->getMethodByCode($code);
+            if ($method !== null) {
+                $display = $methods->getEffectiveDisplayMetadata($method);
+                $label = trim((string)$method->getData(PaymentMethod::schema_fields_NAME));
+                $icon = trim((string)($display['icon_url'] ?? ''));
+                if ($label === '') {
+                    $label = $this->fallbackMethodLabel($code);
+                }
+                if ($icon === '') {
+                    $icon = $iconResolver->toPublicUrl($this->fallbackMethodIconRaw($code));
+                }
+
+                return [
+                    'label' => $label,
+                    'icon_url' => $icon,
+                ];
+            }
+        } catch (\Throwable) {
+        }
+
+        return [
+            'label' => $this->fallbackMethodLabel($code),
+            'icon_url' => $iconResolver->toPublicUrl($this->fallbackMethodIconRaw($code)),
+        ];
+    }
+
+    private function fallbackMethodLabel(string $code): string
+    {
+        return match ($code) {
+            'paypal' => 'PayPal',
+            'stripe' => 'Stripe',
+            'fake_card' => (string)\__('本地测试支付'),
+            'cash_on_delivery', 'cod' => (string)\__('货到付款'),
+            default => $code,
+        };
+    }
+
+    private function fallbackMethodIconRaw(string $code): string
+    {
+        return match ($code) {
+            'paypal' => 'Weline_Payment::img/payment/paypal.svg',
+            'stripe' => 'Weline_Payment::img/payment/stripe.svg',
+            'fake_card' => 'Weline_Payment::img/payment/fake-card.svg',
+            default => '',
+        };
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function attemptsForPayable(string $payableType, string $payableId): array
+    {
         $attempts = $this->objectManager->getInstance(PaymentAttempt::class)
             ->clear()
             ->reset()
@@ -120,10 +238,48 @@ final class BackendOrderPaymentRecordsService
         return $rows;
     }
 
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function transactionsForPayable(string $payableId): array
+    {
+        $items = $this->objectManager->getInstance(PaymentTransaction::class)
+            ->clear()
+            ->reset()
+            ->where(PaymentTransaction::schema_fields_ORDER_ID, $payableId)
+            ->order(PaymentTransaction::schema_fields_ID, 'DESC')
+            ->select()
+            ->fetch()
+            ->getItems();
+        $rows = [];
+        foreach ($items as $item) {
+            $data = $item instanceof PaymentTransaction ? $item->getData() : (array)$item;
+            if (!\is_array($data)) {
+                continue;
+            }
+            $rows[] = [
+                'payment_method' => (string)($data[PaymentTransaction::schema_fields_METHOD_CODE] ?? ''),
+                'amount' => (float)($data[PaymentTransaction::schema_fields_AMOUNT] ?? 0),
+                'currency' => $this->firstNonEmpty(
+                    (string)($data[PaymentTransaction::schema_fields_CURRENCY] ?? ''),
+                    'CNY',
+                ),
+                'transaction_id' => trim((string)($data[PaymentTransaction::schema_fields_TRANSACTION_NO] ?? '')),
+                'status' => $this->mapStatus((string)($data[PaymentTransaction::schema_fields_STATUS] ?? '')),
+                'paid_at' => $this->formatDateTime(
+                    (string)($data[PaymentTransaction::schema_fields_PAID_AT] ?? ''),
+                ),
+                'source' => 'weline_payment_transaction',
+            ];
+        }
+
+        return $rows;
+    }
+
     private function mapStatus(string $status): string
     {
         return match (strtolower(trim($status))) {
-            'succeeded', 'captured', 'paid' => 'paid',
+            'succeeded', 'captured', 'paid', 'success' => 'paid',
             'failed', 'canceled', 'cancelled' => 'failed',
             'refunded' => 'refunded',
             'pending', 'requires_action', 'processing' => 'pending',

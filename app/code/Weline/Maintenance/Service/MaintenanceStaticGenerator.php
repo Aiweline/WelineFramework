@@ -229,60 +229,120 @@ final class MaintenanceStaticGenerator
 
     private function loadTranslations(string $lang): array
     {
-        $moduleFallbackTranslations = $this->loadModuleTranslations($lang);
+        $layers = [];
+        if (!$this->isChineseLocale($lang)) {
+            $layers[] = $this->readModuleCsv('en_US');
+        }
+        $layers[] = $this->loadGeneratedTranslations($lang);
+        $layers[] = $this->readModuleCsv($lang);
 
-        $generatedFile = BP . 'generated/language/' . $lang . '.php';
-        if (\is_file($generatedFile)) {
-            $allTranslations = @include $generatedFile;
-            if (\is_array($allTranslations)) {
-                if (isset($allTranslations['Weline_Maintenance']) && \is_array($allTranslations['Weline_Maintenance'])) {
-                    return \array_merge($allTranslations['Weline_Maintenance'], $moduleFallbackTranslations);
-                }
-
-                $merged = [];
-                foreach ($allTranslations as $generatedModuleTranslations) {
-                    if (\is_array($generatedModuleTranslations)) {
-                        $merged = \array_merge($merged, $generatedModuleTranslations);
-                    }
-                }
-                if ($merged !== []) {
-                    return \array_merge($merged, $moduleFallbackTranslations);
+        $merged = [];
+        foreach ($layers as $layer) {
+            foreach ($layer as $source => $translation) {
+                if ($this->isUsableTranslation((string)$source, (string)$translation, $lang)) {
+                    $merged[(string)$source] = (string)$translation;
                 }
             }
         }
 
-        return $moduleFallbackTranslations;
+        return $merged;
     }
 
-    private function loadModuleTranslations(string $lang): array
+    /**
+     * @return array<string, string>
+     */
+    private function readModuleCsv(string $lang): array
     {
-        $translations = [];
         $i18nFile = BP . 'app/code/Weline/Maintenance/i18n/' . $lang . '.csv';
-
         if (!\is_file($i18nFile)) {
-            $i18nFile = BP . 'app/code/Weline/Maintenance/i18n/' . self::DEFAULT_LANG . '.csv';
-        }
-        if (!\is_file($i18nFile)) {
-            $i18nFile = BP . 'app/code/Weline/Maintenance/i18n/en_US.csv';
-        }
-        if (!\is_file($i18nFile)) {
-            return $translations;
+            return [];
         }
 
         $handle = @\fopen($i18nFile, 'r');
         if ($handle === false) {
-            return $translations;
+            return [];
         }
 
+        $translations = [];
+        $bom = \fread($handle, 3);
+        if ($bom !== "\xEF\xBB\xBF") {
+            \rewind($handle);
+        }
         while (($data = \fgetcsv($handle, 100000, ',', '"', '\\')) !== false) {
-            if (isset($data[0], $data[1]) && !empty(\trim($data[0]))) {
-                $translations[\trim($data[0])] = \trim($data[1]);
+            if (isset($data[0], $data[1]) && \trim((string)$data[0]) !== '') {
+                $translations[\trim((string)$data[0])] = \trim((string)$data[1]);
             }
         }
-
         \fclose($handle);
 
         return $translations;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function loadGeneratedTranslations(string $lang): array
+    {
+        $generatedFile = BP . 'generated/language/' . $lang . '.php';
+        if (!\is_file($generatedFile)) {
+            return [];
+        }
+
+        $allTranslations = @include $generatedFile;
+        if (!\is_array($allTranslations)) {
+            return [];
+        }
+
+        $flat = [];
+        if (isset($allTranslations['Weline_Maintenance']) && \is_array($allTranslations['Weline_Maintenance'])) {
+            foreach ($allTranslations['Weline_Maintenance'] as $word => $translation) {
+                if (\is_string($word) && \is_string($translation) && $translation !== '') {
+                    $flat[$word] = $translation;
+                }
+            }
+        }
+
+        foreach ($allTranslations as $key => $value) {
+            if (\is_array($value)) {
+                foreach ($value as $word => $translation) {
+                    if (!\is_string($word) || !\is_string($translation) || $translation === '') {
+                        continue;
+                    }
+                    if (!isset($flat[$word]) || $flat[$word] === $word) {
+                        $flat[$word] = $translation;
+                    }
+                }
+                continue;
+            }
+            if (\is_string($key) && \is_string($value) && $value !== '') {
+                if (!isset($flat[$key]) || $flat[$key] === $key) {
+                    $flat[$key] = $value;
+                }
+            }
+        }
+
+        return $flat;
+    }
+
+    private function isUsableTranslation(string $source, string $translated, string $localeCode): bool
+    {
+        $translated = \trim($translated);
+        if ($translated === '') {
+            return false;
+        }
+        if ($translated !== $source) {
+            return true;
+        }
+        if ($this->isChineseLocale($localeCode)) {
+            return true;
+        }
+
+        return \preg_match('/[\x{4e00}-\x{9fff}]/u', $source) !== 1;
+    }
+
+    private function isChineseLocale(string $localeCode): bool
+    {
+        return \str_starts_with(\strtolower(\str_replace('-', '_', $localeCode)), 'zh');
     }
 
     private function translate(string $text, array $translations): string
@@ -422,6 +482,10 @@ final class MaintenanceStaticGenerator
             'ar_SA' => 'العربية',
             'th_TH' => 'ไทย',
             'vi_VN' => 'Tiếng Việt',
+            'bn_BD' => 'বাংলা',
+            'hi_IN' => 'हिन्दी',
+            'id_ID' => 'Bahasa Indonesia',
+            'ur_PK' => 'اردو',
         ];
 
         return $labels[$code] ?? \str_replace('_', ' ', $code);

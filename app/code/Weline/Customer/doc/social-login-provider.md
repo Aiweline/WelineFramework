@@ -64,7 +64,7 @@ namespace Vendor\WeChatLogin\Extends\Module\Weline_Customer\SocialLoginProvider;
 - `customer/social_login/{code}/enabled`
 - （可选共享）`customer/social_login/http_proxy`、`customer/social_login/http_proxy_type`：服务器无法直连提供商 token/userinfo 时使用
 
-回调白名单：`{base}/customer/account/social-login/callback`
+回调白名单：`{origin}/customer/account/social-login/callback`（**不得**含 `/USD`、`/en_US` 等语言或货币路径段；Google/Meta 精确匹配。语言与货币在 OAuth `state` 中传递，回站后再拼店面前缀。）
 
 内置 FacebookProvider OAuth scope 固定为 `email,public_profile`（授权弹窗对应「邮箱」「姓名和头像」）。商户配置指南与前台 `/guide/social-login/facebook` 须明示这两项；开发模式仅角色/测试用户可测，对普通顾客上线前须 Advanced Access / 登录审核并将应用切 Live。第三方 Provider 若请求额外权限，须在自家 guide 与 SystemConfig hint 中同样写清。
 

@@ -1,6 +1,4 @@
 ﻿批发价,批发价
-批发身份与信用说明,批发身份与信用说明
-"VIP 等级、批发信用额度、定金与汇率换算说明","VIP 等级、批发信用额度、定金与汇率换算说明"
 批发,Wholesale
 "B2B 接口不支持该操作：%{1}","B2B 接口不支持该操作：%{1}"
 请先登录后再提交批发身份申请,"Sign in before submitting a wholesale membership application"
@@ -151,17 +149,6 @@ settings,settings
 开通批发身份后可使用批发车,"Activate wholesale membership to use the wholesale cart"
 批发不可用,"Unavailable for wholesale"
 批发身份,"Wholesale membership"
-批发信用,批发信用
-当前是零售结账，批发信用只能在「批发车」使用。请先到购物车切换到批发车，再回来结账。,当前是零售结账，批发信用只能在「批发车」使用。请先到购物车切换到批发车，再回来结账。
-暂时无法获取批发信用报价，请刷新后重试,"Temporarily unable to get wholesale credit quote. Please refresh and try again."
-正在获取批发信用报价…,"Fetching wholesale credit quote…"
-站点未开启批发信用额度,"Wholesale credit is disabled for this site"
-额度不够：暂无可用批发信用余额,额度不够：暂无可用批发信用余额
-暂无汇率，无法使用批发信用,暂无汇率，无法使用批发信用
-暂无法估算本期定金，无法用批发信用抵扣,"Cannot estimate this period's deposit; wholesale credit cannot be applied"
-请先登录后再使用批发信用,请先登录后再使用批发信用
-"额度不够：本单可抵扣额度为 0","额度不够：本单可抵扣额度为 0"
-批发信用说明,批发信用说明
 暂时无法读取迁移状态。,暂时无法读取迁移状态。
 关闭（未启用）,关闭（未启用）
 影子对照（只对比，不算新价）,影子对照（只对比，不算新价）
@@ -359,15 +346,6 @@ settings,settings
 请输入密码,请输入密码
 登录失败，请检查用户名和密码,登录失败，请检查用户名和密码
 登录请求失败，请稍后重试,登录请求失败，请稍后重试
-"批发结账先付含税商品小计 30% 定金，尾款约 70%（含运费）待审批后再付；营销券与满减不可用。","批发结账先付含税商品小计 30% 定金，尾款约 70%（含运费）待审批后再付；营销券与满减不可用。"
-可用批发信用抵扣本期定金，但现金定金须保留至少,"Wholesale credit may reduce this period's deposit, but cash deposit must keep at least"
-"），不可将定金全部抵成 0；信用不抵尾款。","); deposit cannot be credited to zero; credit does not cover the balance."
-"只抵本期定金（约商品小计 30%），不抵尾款。现金定金须保留至少","Only reduces this period's deposit (~30% of goods subtotal), not the balance. Cash deposit must keep at least"
-）。额度用完同档不自动回补。,"of the deposit). Used quota is not auto-topped up within the same tier."
-使用批发信用抵扣本期定金,"Apply wholesale credit to this period's deposit"
-抵扣额度,抵扣额度
-去购物车切换批发车,去购物车切换批发车
-了解批发信用规则,"Learn wholesale credit rules"
 确认删除该身份申请记录？此操作不可恢复，不会自动撤销已生效的批发资格。,"Delete this membership application? This cannot be undone and does not revoke an active wholesale entitlement."
 只读诊断,"Read-only diagnostics"
 可管理,Manageable
@@ -550,7 +528,7 @@ settings,settings
 定金已结清,"Deposit settled"
 本单定金已付清，无需再支付,"Deposit already paid; no further payment needed"
 本单尾款已结清，无需再支付,"Balance already settled; no further payment needed"
-当前挂单状态为「%{1}」，无法继续支付,"Current hang status \"%{1}\" cannot continue payment"
+当前挂单状态为「%{1}」，无法继续支付,"Current hang status \%{1}\""" cannot continue payment"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 待商家确认,待商家确认
 请选择支付方式,请选择支付方式
 支付幂等键无效,支付幂等键无效
@@ -590,6 +568,28 @@ settings,settings
 "apply 输出的 checkpoint ID（verify/allowlist/rollback 必需）","Checkpoint ID returned by apply (required for verify, allowlist, and rollback)"
 "目标 Website ID；0 是合法系统默认站点","Target Website ID; 0 is the valid system default Website"
 显示本帮助,"Show this help"
+批发身份与信用说明,"Wholesale identity and credit guide"
+"VIP 等级、批发信用额度、定金与汇率换算说明","VIP tiers, wholesale credit limits, deposits and FX notes"
+"批发结账先付含税商品小计 30% 定金，尾款约 70%（含运费）待审批后再付；营销券与满减不可用。","Wholesale checkout: pay 30% deposit on tax-inclusive merchandise subtotal first; remaining ~70% (incl. shipping) after approval; coupons and threshold discounts unavailable."
+可用批发信用抵扣本期定金，但现金定金须保留至少,"Wholesale credit may reduce this period's deposit, but cash deposit must remain at least"
+"），不可将定金全部抵成 0；信用不抵尾款。","); deposit cannot be credited to zero; credit does not apply to the balance."
+批发信用,"Wholesale credit"
+当前是零售结账，批发信用只能在「批发车」使用。请先到购物车切换到批发车，再回来结账。,"This is a retail checkout. Wholesale credit only works in the wholesale cart. Switch to the wholesale cart, then return to checkout."
+暂时无法获取批发信用报价，请刷新后重试,"Unable to fetch wholesale credit quote. Refresh and try again."
+正在获取批发信用报价…,"Fetching wholesale credit quote…"
+站点未开启批发信用额度,"Wholesale credit is disabled for this site."
+额度不够：暂无可用批发信用余额,"Insufficient credit: no wholesale credit balance available."
+暂无汇率，无法使用批发信用,"No FX rate available; wholesale credit cannot be used."
+暂无法估算本期定金，无法用批发信用抵扣,"Cannot estimate this period’s deposit; wholesale credit cannot be applied."
+请先登录后再使用批发信用,"Please sign in to use wholesale credit."
+"额度不够：本单可抵扣额度为 0","Insufficient credit: deductible amount for this order is 0."
+"只抵本期定金（约商品小计 30%），不抵尾款。现金定金须保留至少","Only reduces this period's deposit (~30% of goods subtotal), not the balance. Cash deposit must keep at least"
+）。额度用完同档不自动回补。,"of the deposit). Used quota is not auto-topped up within the same tier."
+使用批发信用抵扣本期定金,"Apply wholesale credit to this period's deposit"
+批发信用说明,"Wholesale credit info"
+抵扣额度,"Credit to apply"
+去购物车切换批发车,"Go to cart and switch to wholesale cart"
+了解批发信用规则,"Learn wholesale credit rules"
 当前为零售购买方式，请选择要加入的购物车。,当前为零售购买方式，请选择要加入的购物车。
 添加到哪个购物车？,添加到哪个购物车？
 零售购物车,零售购物车
@@ -773,3 +773,6 @@ SKU,SKU
 相对成本最低毛利（基点）,"Min margin vs cost (basis points)"
 "VIP0–VIP12 默认档（JSON 同步）","VIP0–VIP12 default tiers (JSON sync)"
 折扣（基点）,"Discount (bps)"
+批发定金,"Wholesale deposit"
+批发信用抵扣,"Wholesale credit applied"
+暂时无法获取批发信用额度,"Unable to load wholesale credit quota right now"

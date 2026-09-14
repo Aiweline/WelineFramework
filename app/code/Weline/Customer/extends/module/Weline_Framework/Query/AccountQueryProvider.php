@@ -18,6 +18,7 @@ use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Request;
+use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Registry\Service\RegistryModulePresence;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
@@ -281,8 +282,14 @@ class AccountQueryProvider implements QueryProviderInterface
             Cookie::set('w_sandbox', '', -3600, ['path' => '/' . ltrim($adminPath, '/')]);
         }
 
+        /** @var Url $url */
+        $url = ObjectManager::getInstance(Url::class);
+
         return $this->success('Signed out successfully.', [
-            'redirect' => $this->authReturnUrlService->formatAuthInvalidRedirect('/customer/account/login'),
+            // Prefer Url::getUrl so logout redirect keeps storefront locale/currency.
+            'redirect' => $url->getUrl('customer/account/login', [
+                CustomerAuthReturnUrlService::AUTH_REFRESH_QUERY => CustomerAuthReturnUrlService::AUTH_REFRESH_LOGOUT_VALUE,
+            ]),
         ]);
     }
 
@@ -294,8 +301,11 @@ class AccountQueryProvider implements QueryProviderInterface
             (string)($params['redirect_url'] ?? $params['redirect'] ?? '')
         );
         if ($session->isLoggedIn()) {
+            /** @var Url $url */
+            $url = ObjectManager::getInstance(Url::class);
+
             return $this->success('Already signed in.', [
-                'redirect' => '/customer/account',
+                'redirect' => $url->getUrl('customer/account'),
             ]);
         }
 
@@ -371,8 +381,11 @@ class AccountQueryProvider implements QueryProviderInterface
     {
         $session = $this->sessionFactory->createFrontendSession();
         if ($session->isLoggedIn()) {
+            /** @var Url $url */
+            $url = ObjectManager::getInstance(Url::class);
+
             return $this->success('Already signed in.', [
-                'redirect' => '/customer/account',
+                'redirect' => $url->getUrl('customer/account'),
             ]);
         }
 

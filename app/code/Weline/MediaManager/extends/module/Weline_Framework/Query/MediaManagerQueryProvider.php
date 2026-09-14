@@ -126,6 +126,13 @@ final class MediaManagerQueryProvider implements QueryProviderInterface
                         ['name' => 'init', 'type' => 'string', 'required' => false, 'max_length' => 16],
                         ['name' => 'tree', 'type' => 'string', 'required' => false, 'max_length' => 16],
                         ['name' => 'reload', 'type' => 'string', 'required' => false, 'max_length' => 16],
+                        // FE api() always sends lockPath; lockRoot when path lock is on.
+                        // Missing these forced Unknown frontend worker param → native FormData
+                        // fallback that String()'d targets arrays and broke rm/move.
+                        ['name' => 'lockPath', 'type' => 'string', 'required' => false, 'max_length' => 16],
+                        ['name' => 'lockRoot', 'type' => 'string', 'required' => false, 'max_length' => 1024],
+                        ['name' => 'lock_path', 'type' => 'string', 'required' => false, 'max_length' => 16],
+                        ['name' => 'lock_root', 'type' => 'string', 'required' => false, 'max_length' => 1024],
                         ['name' => 'locale_code', 'type' => 'string', 'required' => false, 'max_length' => 16],
                         ['name' => 'asset_id', 'type' => 'string', 'required' => false, 'max_length' => 36],
                         ['name' => 'asset_revision', 'type' => 'int', 'required' => false, 'min' => 1],

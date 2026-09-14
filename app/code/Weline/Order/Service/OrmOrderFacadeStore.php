@@ -156,9 +156,23 @@ final class OrmOrderFacadeStore implements OrderFacadeStoreInterface
             Order::schema_fields_TYPE_PAYLOAD_JSON => $this->encode(
                 \is_array($row['type_payload'] ?? null) ? $row['type_payload'] : [],
             ),
+            Order::schema_fields_CHECKOUT_ENTRY => $this->normalizeCheckoutEntry(
+                (string)($row['checkout_entry'] ?? ''),
+            ),
         ])->save();
 
         $orderId = (int)$orderModel->getId();
+        if ($orderId <= 0) {
+            // PgSQL Model save 可能不回填自增主键；按 UUID 再读一次。
+            $reloaded = $this->order()
+                ->where(Order::schema_fields_ORDER_UUID, (string)$row['order_uuid'])
+                ->find()
+                ->fetch();
+            $orderId = $reloaded instanceof Order ? (int)$reloaded->getId() : 0;
+        }
+        if ($orderId <= 0) {
+            throw new \RuntimeException('order_persist_missing_id:' . (string)$row['order_uuid']);
+        }
         foreach (\is_array($row['items'] ?? null) ? $row['items'] : [] as $item) {
             $qtyMinor = (int)($item['qty_minor'] ?? 0);
             $unitMinor = (int)($item['unit_price_minor'] ?? 0);
@@ -261,6 +275,8 @@ final class OrmOrderFacadeStore implements OrderFacadeStoreInterface
             'order_uuid' => (string)$row->getData(Order::schema_fields_ORDER_UUID),
             'checkout_group_uuid' => (string)$row->getData(Order::schema_fields_CHECKOUT_GROUP_UUID),
             'status' => (string)$row->getData(Order::schema_fields_STATUS),
+            'payment_status' => (string)$row->getData(Order::schema_fields_PAYMENT_STATUS),
+            'payment_method' => (string)$row->getData(Order::schema_fields_PAYMENT_METHOD),
             'currency' => (string)$row->getData(Order::schema_fields_CURRENCY),
             'website_id' => (int)$row->getData(Order::schema_fields_WEBSITE_ID),
             'store_id' => (int)$row->getData(Order::schema_fields_STORE_ID),
@@ -286,6 +302,9 @@ final class OrmOrderFacadeStore implements OrderFacadeStoreInterface
             'display_number' => (string)$row->getData(Order::schema_fields_ORDER_NUMBER),
             'order_type' => strtolower(trim((string)($row->getData(Order::schema_fields_ORDER_TYPE) ?: 'toc'))) ?: 'toc',
             'type_payload' => $this->decode((string)$row->getData(Order::schema_fields_TYPE_PAYLOAD_JSON)),
+            'checkout_entry' => $this->normalizeCheckoutEntry(
+                (string)$row->getData(Order::schema_fields_CHECKOUT_ENTRY),
+            ),
         ];
     }
 
@@ -381,6 +400,17 @@ final class OrmOrderFacadeStore implements OrderFacadeStoreInterface
     }
 
     /** @return array<string, mixed> */
+    private function normalizeCheckoutEntry(string $code): string
+    {
+        $code = strtolower(trim($code));
+        $allowed = ['checkout', 'express', 'quick_buy', 'helppay', 'unknown'];
+        if ($code === '' || !\in_array($code, $allowed, true)) {
+            return 'unknown';
+        }
+
+        return $code;
+    }
+
     private function decode(string $json): array
     {
         $decoded = \json_decode($json, true);

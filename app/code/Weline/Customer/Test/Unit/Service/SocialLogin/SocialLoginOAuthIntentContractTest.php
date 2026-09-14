@@ -22,6 +22,12 @@ final class SocialLoginOAuthIntentContractTest extends TestCase
         self::assertStringContainsString('function consumePending', $src);
         self::assertStringContainsString('SocialLoginTransientStore', $src);
         self::assertStringContainsString("'intent' => \$intent", $src);
+        self::assertStringContainsString('getOriginUrl', $src);
+        self::assertStringContainsString('withoutStorefrontLocalizationPrefix', $src);
+        self::assertStringContainsString("\$provider === 'google'", $src);
+        self::assertStringContainsString("'locale_prefix'", $src);
+        self::assertStringContainsString('firstNonEmpty(', $src);
+        self::assertStringContainsString('$returnUrl', $src);
         self::assertSame(SocialLoginOAuthService::INTENT_LOGIN, 'login');
         self::assertSame(SocialLoginOAuthService::INTENT_BIND, 'bind');
     }

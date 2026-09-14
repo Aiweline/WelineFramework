@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="utf-8">
+  <title>PROTOTYPE 订单顶栏状态流转（可丢）</title>
+  <style>
+    :root {
+      --weline-space-2: 0.5rem;
+      --weline-space-3: 0.75rem;
+      --weline-theme-surface: #fff;
+      --weline-theme-surface-muted: #f3f4f6;
+      --weline-theme-text: #111;
+      --weline-theme-text-muted: #6b7280;
+      --weline-theme-warning: #b45309;
+      --weline-theme-warning-surface: #fef3c7;
+      --weline-theme-success: #047857;
+      --weline-theme-success-surface: #d1fae5;
+      --weline-theme-info: #1d4ed8;
+      --weline-theme-info-surface: #dbeafe;
+      --weline-font-size-xs: 0.75rem;
+      --weline-radius-round: 999px;
+    }
+    body { font-family: ui-sans-serif, system-ui; margin: 0; background: var(--weline-theme-surface-muted); color: var(--weline-theme-text); }
+    .page { max-width: 56rem; margin: 0 auto; padding: var(--weline-space-3); }
+    .heading { display: flex; justify-content: space-between; align-items: center; }
+    .cluster { display: flex; flex-wrap: wrap; align-items: center; gap: var(--weline-space-2); }
+    .badge { display: inline-flex; padding: 0.2rem 0.55rem; border-radius: var(--weline-radius-round); background: var(--weline-theme-surface-muted); font-size: var(--weline-font-size-xs); font-weight: 700; }
+    .badge[data-tone="success"] { background: var(--weline-theme-success-surface); color: var(--weline-theme-success); }
+    .badge[data-tone="warning"] { background: var(--weline-theme-warning-surface); color: var(--weline-theme-warning); }
+    .badge[data-tone="info"] { background: var(--weline-theme-info-surface); color: var(--weline-theme-info); }
+    .muted { color: var(--weline-theme-text-muted); font-size: var(--weline-font-size-xs); }
+    .card { background: var(--weline-theme-surface); padding: var(--weline-space-3); margin-top: var(--weline-space-3); }
+    .bar { position: fixed; left: 50%; bottom: var(--weline-space-3); transform: translateX(-50%); display: flex; gap: var(--weline-space-2); background: var(--weline-theme-surface); padding: var(--weline-space-2); }
+    [data-variant] { display: none; }
+    body[data-v="A"] [data-variant="A"],
+    body[data-v="B"] [data-variant="B"],
+    body[data-v="C"] [data-variant="C"] { display: block; }
+  </style>
+</head>
+<body data-v="A">
+  <div class="page">
+    <p class="muted">PROTOTYPE · 问题：退款/状态流转如何一眼可见。采纳 A。</p>
+    <div class="heading">
+      <strong>管理订单 0447019666</strong>
+      <span class="muted">面包屑</span>
+    </div>
+
+    <div data-variant="A">
+      <p class="muted">A 横向状态轨 + 退款第二行</p>
+      <div class="cluster">
+        <span class="badge" data-tone="success">待处理</span><span class="muted">→</span>
+        <span class="badge" data-tone="success">处理中</span><span class="muted">→</span>
+        <span class="badge" data-tone="success">已支付</span><span class="muted">→</span>
+        <span class="badge" data-tone="warning">已退款</span>
+      </div>
+      <div class="cluster" style="margin-top: var(--weline-space-2);">
+        <span class="badge" data-tone="info">PayPal</span>
+        <span class="badge" data-tone="warning">渠道已退款</span>
+        <code>8P2855227D736811T</code>
+      </div>
+    </div>
+
+    <div data-variant="B">
+      <p class="muted">B 只在标题挂三个大徽章</p>
+      <div class="cluster">
+        <span class="badge" data-tone="warning">订单 已退款</span>
+        <span class="badge" data-tone="warning">支付 已退款</span>
+        <span class="badge">发货 待发货</span>
+      </div>
+    </div>
+
+    <div data-variant="C">
+      <p class="muted">C 顶部竖向时间线</p>
+      <ol>
+        <li>已支付 · 昨天</li>
+        <li>已退款 · PayPal 8P2855… · 今天</li>
+      </ol>
+    </div>
+
+    <div class="card">订单摘要（对照：旧位置把状态埋在 KV 里）</div>
+  </div>
+  <div class="bar">
+    <button type="button" data-go="A">A 轨</button>
+    <button type="button" data-go="B">B 徽章</button>
+    <button type="button" data-go="C">C 时间线</button>
+  </div>
+  <script>
+    document.querySelectorAll('[data-go]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        document.body.setAttribute('data-v', btn.getAttribute('data-go'));
+      });
+    });
+  </script>
+</body>
+</html>

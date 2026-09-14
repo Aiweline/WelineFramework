@@ -20,6 +20,10 @@ class WidgetTranslationService
         ['code' => 'ar_SA', 'nativeLabel' => 'العربية', 'shortLabel' => 'AR'],
         ['code' => 'th_TH', 'nativeLabel' => 'ไทย', 'shortLabel' => 'TH'],
         ['code' => 'vi_VN', 'nativeLabel' => 'Tiếng Việt', 'shortLabel' => 'VI'],
+        ['code' => 'hi_IN', 'nativeLabel' => 'हिन्दी', 'shortLabel' => 'HI'],
+        ['code' => 'bn_BD', 'nativeLabel' => 'বাংলা', 'shortLabel' => 'BN'],
+        ['code' => 'id_ID', 'nativeLabel' => 'Bahasa Indonesia', 'shortLabel' => 'ID'],
+        ['code' => 'ur_PK', 'nativeLabel' => 'اردو', 'shortLabel' => 'UR'],
     ];
 
     private const WIDGET_KEYS = [

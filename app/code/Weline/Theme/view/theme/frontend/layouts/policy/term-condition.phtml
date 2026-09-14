@@ -12,6 +12,7 @@
  */
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Helper\SiteContactInfo;
+use Weline\Theme\Helper\WidgetI18n;
 
 $meta = $this->getData('meta') ?? [];
 $escape = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
@@ -26,19 +27,19 @@ try {
 } catch (\Throwable) {
 }
 $siteName = (string)$contact['site_name'];
-$title = (string)($meta['title'] ?? __('服务条款'));
+$title = (string)($meta['title'] ?? WidgetI18n::label('服务条款'));
 $updatedAt = date('Y-m-d');
-$ariaNav = (string)__('服务条款目录');
-$ariaArticle = (string)__('服务条款正文');
+$ariaNav = (string)WidgetI18n::label('服务条款目录');
+$ariaArticle = (string)WidgetI18n::label('服务条款正文');
 $toc = [
-    ['id' => 'tc-s1', 'label' => __('一、服务说明')],
-    ['id' => 'tc-s2', 'label' => __('二、用户账户')],
-    ['id' => 'tc-s3', 'label' => __('三、使用规范')],
-    ['id' => 'tc-s4', 'label' => __('四、商品与交易')],
-    ['id' => 'tc-s5', 'label' => __('五、知识产权')],
-    ['id' => 'tc-s6', 'label' => __('六、免责声明')],
-    ['id' => 'tc-s7', 'label' => __('七、争议解决')],
-    ['id' => 'tc-s8', 'label' => __('八、其他')],
+    ['id' => 'tc-s1', 'label' => WidgetI18n::label('一、服务说明')],
+    ['id' => 'tc-s2', 'label' => WidgetI18n::label('二、用户账户')],
+    ['id' => 'tc-s3', 'label' => WidgetI18n::label('三、使用规范')],
+    ['id' => 'tc-s4', 'label' => WidgetI18n::label('四、商品与交易')],
+    ['id' => 'tc-s5', 'label' => WidgetI18n::label('五、知识产权')],
+    ['id' => 'tc-s6', 'label' => WidgetI18n::label('六、免责声明')],
+    ['id' => 'tc-s7', 'label' => WidgetI18n::label('七、争议解决')],
+    ['id' => 'tc-s8', 'label' => WidgetI18n::label('八、其他')],
 ];
 ?>
 <!DOCTYPE html>
@@ -256,18 +257,18 @@ $toc = [
                         <header class="amazon-policy__hero" aria-labelledby="policy-term-condition-title" weline-code="theme.policy.hero">
                             
                                 <p class="amazon-policy__eyebrow"><?= $escape($siteName) ?></p>
-                                <h1 id="policy-term-condition-title"><?php if (!empty($meta['title'])): ?><?= $escape($title) ?><?php else: ?><lang>服务条款</lang><?php endif; ?></h1>
-                                <p class="amazon-policy__hero-lead"><lang>欢迎使用本网站服务。在使用本网站提供的服务前，请您仔细阅读本服务条款。使用本网站即表示您已充分理解并同意接受本条款的全部内容。</lang></p>
+                                <h1 id="policy-term-condition-title"><?php if (!empty($meta['title'])): ?><?= $escape($title) ?><?php else: ?><?= $escape(WidgetI18n::label('服务条款')) ?><?php endif; ?></h1>
+                                <p class="amazon-policy__hero-lead"><?= $escape(WidgetI18n::label('欢迎使用本网站服务。在使用本网站提供的服务前，请您仔细阅读本服务条款。使用本网站即表示您已充分理解并同意接受本条款的全部内容。')) ?></p>
                                 <div class="amazon-policy__meta">
-                                    <span><lang>最后更新：</lang><?= $escape($updatedAt) ?></span>
-                                    <a href="@url{'privacy'}"><lang>隐私政策</lang></a>
-                                    <a href="@url{'faq'}"><lang>帮助中心</lang></a>
+                                    <span><?= $escape(WidgetI18n::label('最后更新：')) ?><?= $escape($updatedAt) ?></span>
+                                    <a href="@url{'privacy'}"><?= $escape(WidgetI18n::label('隐私政策')) ?></a>
+                                    <a href="@url{'faq'}"><?= $escape(WidgetI18n::label('帮助中心')) ?></a>
                         </div>
                         </header>
 
                         <div class="amazon-policy__panel">
                                     <aside class="amazon-policy__toc" aria-label="<?= $escape($ariaNav) ?>">
-                                        <h2><lang>目录</lang></h2>
+                                        <h2><?= $escape(WidgetI18n::label('目录')) ?></h2>
                                         <nav>
                                             <?php foreach ($toc as $item): ?>
                                                 <a href="#<?= $escape($item['id']) ?>"><?= $escape($item['label']) ?></a>
@@ -276,78 +277,78 @@ $toc = [
                                     </aside>
 
                                     <article class="amazon-policy__article" aria-label="<?= $escape($ariaNav) ?>">
-                                        <p class="amazon-policy__intro"><lang>本服务条款构成您与本网站之间关于使用网站服务的协议。请完整阅读各章节；如有疑问，可通过帮助中心或联系方式与我们沟通。</lang></p>
+                                        <p class="amazon-policy__intro"><?= $escape(WidgetI18n::label('本服务条款构成您与本网站之间关于使用网站服务的协议。请完整阅读各章节；如有疑问，可通过帮助中心或联系方式与我们沟通。')) ?></p>
 
                                         <section class="amazon-policy__section" id="tc-s1" weline-code="theme.policy.section_2">
-                                            <h2><lang>一、服务说明</lang></h2>
-                                            <p><lang>1.1 本网站提供的服务包括但不限于：商品展示、在线交易、订单管理、客户服务、信息发布等。</lang></p>
-                                            <p><lang>1.2 我们有权根据业务发展需要，调整、变更或终止部分或全部服务，无需事先通知您。</lang></p>
-                                            <p><lang>1.3 您理解并同意，本网站可能因系统维护、升级等原因暂停服务，我们将尽力减少对您的影响。</lang></p>
+                                            <h2><?= $escape(WidgetI18n::label('一、服务说明')) ?></h2>
+                                            <p><?= $escape(WidgetI18n::label('1.1 本网站提供的服务包括但不限于：商品展示、在线交易、订单管理、客户服务、信息发布等。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('1.2 我们有权根据业务发展需要，调整、变更或终止部分或全部服务，无需事先通知您。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('1.3 您理解并同意，本网站可能因系统维护、升级等原因暂停服务，我们将尽力减少对您的影响。')) ?></p>
                                         </section>
 
                                         <section class="amazon-policy__section" id="tc-s2" weline-code="theme.policy.section_3">
-                                            <h2><lang>二、用户账户</lang></h2>
-                                            <p><lang>2.1 您需要注册账户才能使用本网站的某些服务。注册时，您应提供真实、准确、完整的个人信息。</lang></p>
-                                            <p><lang>2.2 您有责任妥善保管账户信息，不得将账户出借、转让或授权他人使用。因您保管不当导致的损失，由您自行承担。</lang></p>
-                                            <p><lang>2.3 如发现账户被盗用或存在安全风险，您应立即通知我们，我们将协助您采取相应措施。</lang></p>
+                                            <h2><?= $escape(WidgetI18n::label('二、用户账户')) ?></h2>
+                                            <p><?= $escape(WidgetI18n::label('2.1 您需要注册账户才能使用本网站的某些服务。注册时，您应提供真实、准确、完整的个人信息。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('2.2 您有责任妥善保管账户信息，不得将账户出借、转让或授权他人使用。因您保管不当导致的损失，由您自行承担。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('2.3 如发现账户被盗用或存在安全风险，您应立即通知我们，我们将协助您采取相应措施。')) ?></p>
                                         </section>
 
                                         <section class="amazon-policy__section" id="tc-s3" weline-code="theme.policy.section_4">
-                                            <h2><lang>三、使用规范</lang></h2>
-                                            <p><lang>3.1 您在使用本网站服务时，应遵守相关法律法规，不得利用本网站从事违法违规活动。</lang></p>
-                                            <p><lang>3.2 您不得从事以下行为：</lang></p>
+                                            <h2><?= $escape(WidgetI18n::label('三、使用规范')) ?></h2>
+                                            <p><?= $escape(WidgetI18n::label('3.1 您在使用本网站服务时，应遵守相关法律法规，不得利用本网站从事违法违规活动。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('3.2 您不得从事以下行为：')) ?></p>
                                             <ul>
-                                                <li><lang>（1）发布违法、虚假、侵权、骚扰、威胁、诽谤、色情、暴力等不当内容；</lang></li>
-                                                <li><lang>（2）侵犯他人知识产权、隐私权、名誉权等合法权益；</lang></li>
-                                                <li><lang>（3）干扰、破坏本网站的正常运行或安全；</lang></li>
-                                                <li><lang>（4）利用技术手段恶意注册、刷单、作弊等；</lang></li>
-                                                <li><lang>（5）其他违反法律法规或本条款的行为。</lang></li>
+                                                <li><?= $escape(WidgetI18n::label('（1）发布违法、虚假、侵权、骚扰、威胁、诽谤、色情、暴力等不当内容；')) ?></li>
+                                                <li><?= $escape(WidgetI18n::label('（2）侵犯他人知识产权、隐私权、名誉权等合法权益；')) ?></li>
+                                                <li><?= $escape(WidgetI18n::label('（3）干扰、破坏本网站的正常运行或安全；')) ?></li>
+                                                <li><?= $escape(WidgetI18n::label('（4）利用技术手段恶意注册、刷单、作弊等；')) ?></li>
+                                                <li><?= $escape(WidgetI18n::label('（5）其他违反法律法规或本条款的行为。')) ?></li>
                                             </ul>
-                                            <p><lang>3.3 如您违反上述规定，我们有权立即终止向您提供服务，并保留追究法律责任的权利。</lang></p>
+                                            <p><?= $escape(WidgetI18n::label('3.3 如您违反上述规定，我们有权立即终止向您提供服务，并保留追究法律责任的权利。')) ?></p>
                                         </section>
 
                                         <section class="amazon-policy__section" id="tc-s4" weline-code="theme.policy.section_5">
-                                            <h2><lang>四、商品与交易</lang></h2>
-                                            <p><lang>4.1 本网站展示的商品信息由商家提供，我们不对商品信息的真实性、准确性、完整性负责。</lang></p>
-                                            <p><lang>4.2 商品价格、库存等信息可能随时变动，以实际下单时的信息为准。</lang></p>
-                                            <p><lang>4.3 您在下单时，应仔细核对商品信息、价格、数量等，确认无误后再提交订单。</lang></p>
-                                            <p><lang>4.4 订单提交成功后，您应按照约定支付款项。如未在规定时间内支付，订单可能被自动取消。</lang></p>
+                                            <h2><?= $escape(WidgetI18n::label('四、商品与交易')) ?></h2>
+                                            <p><?= $escape(WidgetI18n::label('4.1 本网站展示的商品信息由商家提供，我们不对商品信息的真实性、准确性、完整性负责。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('4.2 商品价格、库存等信息可能随时变动，以实际下单时的信息为准。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('4.3 您在下单时，应仔细核对商品信息、价格、数量等，确认无误后再提交订单。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('4.4 订单提交成功后，您应按照约定支付款项。如未在规定时间内支付，订单可能被自动取消。')) ?></p>
                                         </section>
 
                                         <section class="amazon-policy__section" id="tc-s5" weline-code="theme.policy.section_6">
-                                            <h2><lang>五、知识产权</lang></h2>
-                                            <p><lang>5.1 本网站的所有内容，包括但不限于文字、图片、音频、视频、软件、程序、版面设计等，均受知识产权法律法规保护。</lang></p>
-                                            <p><lang>5.2 本网站的所有知识产权归我们或相关权利人所有，未经授权，任何人不得复制、传播、展示、镜像、上传、下载或以其他方式使用。</lang></p>
-                                            <p><lang>5.3 您在使用本网站服务时上传、发布的内容，您应保证拥有相应的知识产权或已获得合法授权。</lang></p>
+                                            <h2><?= $escape(WidgetI18n::label('五、知识产权')) ?></h2>
+                                            <p><?= $escape(WidgetI18n::label('5.1 本网站的所有内容，包括但不限于文字、图片、音频、视频、软件、程序、版面设计等，均受知识产权法律法规保护。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('5.2 本网站的所有知识产权归我们或相关权利人所有，未经授权，任何人不得复制、传播、展示、镜像、上传、下载或以其他方式使用。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('5.3 您在使用本网站服务时上传、发布的内容，您应保证拥有相应的知识产权或已获得合法授权。')) ?></p>
                                         </section>
 
                                         <section class="amazon-policy__section" id="tc-s6" weline-code="theme.policy.section_7">
-                                            <h2><lang>六、免责声明</lang></h2>
-                                            <p><lang>6.1 本网站不对因不可抗力、网络故障、系统维护等原因导致的服务中断或数据丢失承担责任。</lang></p>
-                                            <p><lang>6.2 本网站不对用户发布的信息的真实性、准确性、完整性负责，用户应自行判断并承担相应风险。</lang></p>
-                                            <p><lang>6.3 本网站不对第三方网站的内容、服务或链接负责，您访问第三方网站的风险由您自行承担。</lang></p>
+                                            <h2><?= $escape(WidgetI18n::label('六、免责声明')) ?></h2>
+                                            <p><?= $escape(WidgetI18n::label('6.1 本网站不对因不可抗力、网络故障、系统维护等原因导致的服务中断或数据丢失承担责任。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('6.2 本网站不对用户发布的信息的真实性、准确性、完整性负责，用户应自行判断并承担相应风险。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('6.3 本网站不对第三方网站的内容、服务或链接负责，您访问第三方网站的风险由您自行承担。')) ?></p>
                                         </section>
 
                                         <section class="amazon-policy__section" id="tc-s7" weline-code="theme.policy.section_8">
-                                            <h2><lang>七、争议解决</lang></h2>
-                                            <p><lang>7.1 因本条款引起的或与本条款有关的任何争议，双方应友好协商解决。</lang></p>
-                                            <p><lang>7.2 如协商不成，任何一方均可向本网站所在地有管辖权的人民法院提起诉讼。</lang></p>
+                                            <h2><?= $escape(WidgetI18n::label('七、争议解决')) ?></h2>
+                                            <p><?= $escape(WidgetI18n::label('7.1 因本条款引起的或与本条款有关的任何争议，双方应友好协商解决。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('7.2 如协商不成，任何一方均可向本网站所在地有管辖权的人民法院提起诉讼。')) ?></p>
                                         </section>
 
                                         <section class="amazon-policy__section" id="tc-s8" weline-code="theme.policy.section_9">
-                                            <h2><lang>八、其他</lang></h2>
-                                            <p><lang>8.1 本条款自发布之日起生效，并持续有效，直至被修订或终止。</lang></p>
-                                            <p><lang>8.2 如本条款的任何条款被认定为无效或不可执行，不影响其他条款的效力。</lang></p>
-                                            <p><lang>8.3 我们保留对本条款的最终解释权，并有权根据法律法规和业务发展需要对本条款进行修订。</lang></p>
+                                            <h2><?= $escape(WidgetI18n::label('八、其他')) ?></h2>
+                                            <p><?= $escape(WidgetI18n::label('8.1 本条款自发布之日起生效，并持续有效，直至被修订或终止。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('8.2 如本条款的任何条款被认定为无效或不可执行，不影响其他条款的效力。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('8.3 我们保留对本条款的最终解释权，并有权根据法律法规和业务发展需要对本条款进行修订。')) ?></p>
                                         </section>
 
                                         <div class="amazon-policy__footer-note">
-                                            <p><lang>如对本条款有疑问，请先查阅帮助中心，或通过联系我们与支持团队沟通。</lang></p>
+                                            <p><?= $escape(WidgetI18n::label('如对本条款有疑问，请先查阅帮助中心，或通过联系我们与支持团队沟通。')) ?></p>
                                             <div class="amazon-policy__related">
-                                                <a href="@url{'privacy'}"><lang>隐私政策</lang></a>
-                                                <a href="@url{'cookies'}"><lang>Cookie 政策</lang></a>
-                                                <a href="@url{'refund'}"><lang>退款政策</lang></a>
-                                                <a href="@url{'faq'}"><lang>帮助中心</lang></a>
+                                                <a href="@url{'privacy'}"><?= $escape(WidgetI18n::label('隐私政策')) ?></a>
+                                                <a href="@url{'cookies'}"><?= $escape(WidgetI18n::label('Cookie 政策')) ?></a>
+                                                <a href="@url{'refund'}"><?= $escape(WidgetI18n::label('退款政策')) ?></a>
+                                                <a href="@url{'faq'}"><?= $escape(WidgetI18n::label('帮助中心')) ?></a>
                                             </div>
                                         </div>
                                     </article>

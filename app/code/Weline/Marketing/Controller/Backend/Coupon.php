@@ -182,6 +182,8 @@ class Coupon extends BackendController
             CouponModel::schema_fields_USAGE_LIMIT => (int)$this->request->getPost('usage_limit', 0),
             CouponModel::schema_fields_CUSTOMER_LIMIT => (int)$this->request->getPost('customer_limit', 1),
             CouponModel::schema_fields_STATUS => trim((string)$this->request->getPost('status', CouponModel::STATUS_ACTIVE)),
+            CouponModel::schema_fields_START_DATE => trim((string)$this->request->getPost('start_date', '')),
+            CouponModel::schema_fields_END_DATE => trim((string)$this->request->getPost('end_date', '')),
         ];
 
         try {

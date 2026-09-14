@@ -92,10 +92,50 @@ class DictionaryCompiler
         $afterPayload = [
             'module' => $moduleName,
             'locale_count' => count($localsWords),
+            'source_translations' => $sourceTranslations,
+            'collected_words' => $this->flattenSourceCollectedWords($localsWords, $sourceTranslations),
         ];
         $this->eventsManager->dispatch(DictionaryEvents::EVENT_DICTIONARY_COMPILE_AFTER, $afterPayload);
 
         return $localsWords;
+    }
+
+    /**
+     * Source-locale (zh_Hans_CN) keys from CSV + source scan, for I18n DB persist.
+     *
+     * @param array<string, array<string, string>> $localsWords
+     * @param array<string, string> $sourceTranslations
+     * @return array<string, string>
+     */
+    private function flattenSourceCollectedWords(array $localsWords, array $sourceTranslations): array
+    {
+        $collected = [];
+        foreach ($sourceTranslations as $word => $translate) {
+            if (!is_string($word) && !is_int($word)) {
+                continue;
+            }
+            $word = trim((string)$word);
+            if ($word === '') {
+                continue;
+            }
+            $collected[$word] = is_scalar($translate) ? (string)$translate : $word;
+        }
+        $defaultLocale = Env::default_LANGUAGE_CODE;
+        $defaultWords = $localsWords[$defaultLocale] ?? [];
+        if (is_array($defaultWords)) {
+            foreach ($defaultWords as $word => $translate) {
+                if (!is_string($word) && !is_int($word)) {
+                    continue;
+                }
+                $word = trim((string)$word);
+                if ($word === '') {
+                    continue;
+                }
+                $collected[$word] = is_scalar($translate) ? (string)$translate : $word;
+            }
+        }
+
+        return $collected;
     }
 
     public static function clearTranslationCaches(): void

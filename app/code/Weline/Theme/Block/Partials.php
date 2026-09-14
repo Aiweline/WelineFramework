@@ -444,8 +444,9 @@ class Partials extends Block
             return KeyBuilder::environmentHash([
                 // v9: language-switcher SSR no longer inlines flags; bust stale SVG chrome.
                 // v12：账户与购物车共享中性首屏，旧编译时固化的购物车摘要必须失效。
+                // v13：CJK identity 不再挡住词典后，旧 header/footer 中文壳必须失效。
                 // Frontend header chrome is always guest-SSR; auth no longer splits the bucket.
-                'schema' => 'chrome-partial-v12-guest-chrome',
+                'schema' => 'chrome-partial-v13-guest-chrome',
                 'nested_widgets' => ($area === 'frontend' && $type === 'header')
                     ? $this->frontendHeaderNestedChromeFingerprint()
                     : '',

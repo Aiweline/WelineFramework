@@ -1,49 +1,48 @@
 # 规格：代付页付款账单地址（结账同款）
 
 slug: `helppay-payer-billing-address`  
-模块：`Weline_HelpPay`（代付页）+ `Weline_Shipping`（结账地址部件）+ `Weline_Checkout`（可选上下文）
+模块：`Weline_HelpPay`（代付页）+ `Weline_Shipping`（结账地址部件）+ `Weline_Checkout`（`CheckoutPaymentMethodsProvider` / `CheckoutHtmlRenderer`）+ `Weline_Payment`（`getCheckoutPaymentMethods`）
 
 ## work_kind
 
-`feature`（代付人卡支付账单地址：单行输入 → 结账同款选/改/增）
+`feature`（代付人账单地址：仅卡等需账单的支付方式展示结账同款选/改/增；支付方式与结账统一）
 
 ## plan_skip
 
-复用已落地的 `checkout-shipping-address` + HelpPay 弹层地址挂载模式；无新架构面，跳过宿主 Plan Mode。
+复用万能结账支付目录 + HtmlRenderer + 结账地址部件；无新架构面。
 
 ## FE / BE 范围
 
 | 面 | 范围 |
 |---|---|
-| FE | `/h/` 支付区 SSR/挂载结账地址部件；标题「付款账单地址」；隐藏「账单同收货」嵌套区；`session-isolation`；确认付款前 `resolveQuoteAddress` 校验 |
-| BE | Payer 控制器渲染部件 HTML；**不**写回 payment_link shipping；billing 仅前端收集（支付网关闭环后续） |
+| FE | `/h/` 支付方式卡片（图标+标题+简介）与结账同款；仅 `requires_billing=1` 展示账单；确认付款按门禁校验 |
+| BE | Payer 经 `CheckoutPaymentMethodsProvider` 取列表（禁止自扫 Provider / 硬编码兜底）；`CheckoutHtmlRenderer` 出 HTML |
 
 ## EARS
 
-1. When 代付人打开有效 `/h/{token}`，the system shall 在「付款账单地址」展示结账同款地址部件（选择 / 更换 / 新地址 / 编辑），不得仅展示单行 `billing_line1`。
-2. When 部件挂载，the system shall 设置 `data-session-isolation=1`，选择/保存仅作用于本页账单，不得改写发起人收货或万能结账配送会话。
-3. When 部件渲染，the system shall 隐藏 `data-billing-section`（结账「账单同收货」），避免与代付账单语义冲突。
-4. When 代付人点击「确认付款」且账单地址不完整，the system shall 就地提示并阻止进入支付；完整时将结构化账单写入本页状态（不写回 shipping）。
-5. The system shall 继续 `shipping_redacted`：本页不展示发起人收货详情。
+1. When 代付人打开有效 `/h/{token}`，the system shall 展示与万能结账同源的支付方式列表（含 `icon_url` 图标）；空列表展示「暂无可用支付方式」，**不**伪造 PayPal/银行卡。
+2. When 所选支付方式 `requires_billing=0`（如 PayPal），the system shall **不**展示「付款账单地址」表单，确认付款不得因账单缺失失败。
+3. When 所选支付方式 `requires_billing=1`（卡 / `fake_card` / 能力声明），the system shall 展示结账同款地址部件（选/换/增），`session-isolation`，不得写回收货。
+4. When 需账单且地址不完整时点「确认付款」，the system shall 就地提示并阻止；不需账单时跳过账单校验。
+5. The system shall 继续 `shipping_redacted`。
+6. The system shall 支付方式 UI 使用结账同类名（`weline-checkout__option--payment` / `weline-checkout__payment-logo`）。
 
 ## 用例
 
-### UC1 访客代付人填新账单地址
+### UC1 选 PayPal
 
-1. 打开 `/h/` → 支付区见地址表单（new）→ 填写 → 保存此地址 → 确认付款通过校验。
+1. 打开 `/h/` → 选 PayPal → 无账单表单 → 确认付款不拦账单。
 
-### UC2 登录代付人选用已存地址
+### UC2 选银行卡 / 测试卡
 
-1. 登录 B 打开 `/h/` → 见 B 的已存地址卡 → 选择/更换/新地址 → 确认付款。
+1. 选卡类方式 → 见结账同款账单地址 → 填完整 → 确认付款通过账单校验。
 
 ## 非目标
 
 - 本期不做真实支付网关代付闭环
-- 不改 Shipping 地址部件内核校验逻辑（仅消费 `title` / `saved_heading`）
-- 不展示发起人 shipping
+- 不改 Shipping 内核
 
 ## 验收
 
-- 契约 UT：`payer.phtml` 含 `data-shipping-checkout-address` / `data-session-isolation`；无 `billing_line1` 主路径
-- e2e 或 Browser：`/h/` 可见选/改/增控件；`data-billing-section` 不可见
-- 汇审 + 交付地址
+- 契约：`payer.phtml` 含 `data-helppay-payment-method` / `data-requires-billing`；账单区可 `hidden`
+- Browser：默认非卡方式时账单不可见；切到卡后可见

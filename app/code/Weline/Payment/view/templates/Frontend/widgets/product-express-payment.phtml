@@ -127,10 +127,12 @@ if ($logoFileHtml === '' && $logoRaw === '') {
             $isPaypal = $code === 'paypal';
             ?>
         <button type="button"
-                class="w-payment-express__btn<?= $isPaypal ? ' w-payment-express__paypal' : '' ?>"
+                class="w-payment-express__btn<?= $isPaypal ? ' w-payment-express__paypal' : '' ?> weline-pixel::express_pay"
                 data-express-pay
                 data-product-express-pay
+                data-pixel-event="express_pay"
                 data-method-code="<?= $esc($code) ?>"
+                data-product-id="<?= (int) $productId ?>"
                 data-testid="product-express-<?= $esc($code) ?>"
                 aria-label="<?= $esc((string) __('使用 %{1} 快捷支付', [$label])) ?>"
                 <?= ($sellable || $isPreviewMode) ? '' : 'disabled' ?>>

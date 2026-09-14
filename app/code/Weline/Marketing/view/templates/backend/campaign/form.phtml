@@ -50,11 +50,27 @@ $rules = $rules ?? [];
                     <div class="w-grid">
                         <div style="--w-span-md:6;--w-mb:var(--weline-space-4);">
                             <label class="w-field__label" for="marketing-campaign-start"><?= __('开始时间') ?></label>
-                            <input id="marketing-campaign-start" data-testid="marketing-campaign-start" class="w-input" type="datetime-local" name="start_date" required>
+                            <?php
+                            $websiteTz = \Weline\Framework\DateTime\Timezone::resolveWebsiteTimezone();
+                            $startValue = '';
+                            $endValue = '';
+                            if (isset($campaign) && is_object($campaign) && method_exists($campaign, 'getData')) {
+                                $startValue = \Weline\Framework\DateTime\Timezone::utcSqlToLocalInput(
+                                    (string)$campaign->getData('start_date'),
+                                    $websiteTz,
+                                );
+                                $endValue = \Weline\Framework\DateTime\Timezone::utcSqlToLocalInput(
+                                    (string)$campaign->getData('end_date'),
+                                    $websiteTz,
+                                );
+                            }
+                            ?>
+                            <input id="marketing-campaign-start" data-testid="marketing-campaign-start" class="w-input" type="datetime-local" name="start_date" required value="<?= htmlspecialchars($startValue, ENT_QUOTES, 'UTF-8') ?>">
+                            <p class="w-field__help"><?= __('按站点时区 %{1} 录入，系统以 UTC 存储与判定。', $websiteTz) ?></p>
                         </div>
                         <div style="--w-span-md:6;--w-mb:var(--weline-space-4);">
                             <label class="w-field__label" for="marketing-campaign-end"><?= __('结束时间') ?></label>
-                            <input id="marketing-campaign-end" data-testid="marketing-campaign-end" class="w-input" type="datetime-local" name="end_date" required>
+                            <input id="marketing-campaign-end" data-testid="marketing-campaign-end" class="w-input" type="datetime-local" name="end_date" required value="<?= htmlspecialchars($endValue, ENT_QUOTES, 'UTF-8') ?>">
                         </div>
                     </div>
                     <button data-testid="marketing-campaign-submit" class="w-button" type="submit" data-tone="primary">

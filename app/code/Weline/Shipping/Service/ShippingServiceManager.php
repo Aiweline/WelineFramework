@@ -302,6 +302,7 @@ class ShippingServiceManager
         /** @var ShippingCapabilityGate $capabilityGate */
         $capabilityGate = $this->objectManager->getInstance(ShippingCapabilityGate::class);
         $fxSkipped = [];
+        $unavailableReasons = [];
         /** @var list<array<string, array<string, mixed>>> $perProfileRates */
         $perProfileRates = [];
         foreach ($profileGroups as $group) {
@@ -332,6 +333,15 @@ class ShippingServiceManager
                 $matchedSummaries[] = $summary;
             }
             if ($matchedSummaries === []) {
+                $this->lastQuoteDiagnostics = [
+                    'country_code' => $destAddress['country_code'],
+                    'currency' => $currency,
+                    'lane_count' => 0,
+                    'fx_skipped' => [],
+                    'missing_weight' => false,
+                    'unavailable_reasons' => ['no_matched_lane'],
+                    'profile_groups' => 0,
+                ];
                 throw new \RuntimeException('shipping_profile_conflict');
             }
             $byProvider = [];
@@ -402,8 +412,27 @@ class ShippingServiceManager
                 foreach ($quoteResult->fxSkipped as $skipped) {
                     $fxSkipped[] = $skipped;
                 }
+                $diagReasons = $quoteResult->diagnostics['unavailable_reasons'] ?? [];
+                if (\is_array($diagReasons)) {
+                    foreach ($diagReasons as $reason) {
+                        $reason = trim((string)$reason);
+                        if ($reason !== '') {
+                            $unavailableReasons[] = $reason;
+                        }
+                    }
+                }
             }
             if ($groupRates === []) {
+                $uniqueReasons = array_values(array_unique($unavailableReasons));
+                $this->lastQuoteDiagnostics = [
+                    'country_code' => $destAddress['country_code'],
+                    'currency' => $currency,
+                    'lane_count' => 0,
+                    'fx_skipped' => array_values(array_unique($fxSkipped)),
+                    'missing_weight' => \in_array('missing_weight', $uniqueReasons, true),
+                    'unavailable_reasons' => $uniqueReasons,
+                    'profile_groups' => 0,
+                ];
                 throw new \RuntimeException('shipping_profile_conflict');
             }
             $perProfileRates[] = $groupRates;
@@ -411,11 +440,14 @@ class ShippingServiceManager
 
         $rates = $this->mergeProfileGroupRates($perProfileRates);
         ksort($rates);
+        $uniqueReasons = array_values(array_unique($unavailableReasons));
         $this->lastQuoteDiagnostics = [
             'country_code' => $destAddress['country_code'],
             'currency' => $currency,
             'lane_count' => \count($rates),
             'fx_skipped' => array_values(array_unique($fxSkipped)),
+            'missing_weight' => \in_array('missing_weight', $uniqueReasons, true),
+            'unavailable_reasons' => $uniqueReasons,
             'profile_groups' => count($perProfileRates),
         ];
 

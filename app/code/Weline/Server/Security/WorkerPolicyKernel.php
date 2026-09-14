@@ -116,7 +116,7 @@ final class WorkerPolicyKernel
 
     private int $maxRequestHeaderBytes = 65536;
 
-    private int $maxRequestBodyBytes = 16777216;
+    private int $maxRequestBodyBytes = 536870912;
 
     /**
      * Request-path cache execution facts compiled once from the active bundle.
@@ -512,7 +512,7 @@ final class WorkerPolicyKernel
         $trusted = [];
         $whitelist = [];
         $maxHeaderBytes = 65536;
-        $maxBodyBytes = 16 * 1024 * 1024;
+        $maxBodyBytes = 536870912;
         $cachePolicyFlags = 0;
         foreach ($bundle->descriptors as $descriptor) {
             if ($descriptor->stage === PolicyStage::CONNECTION
@@ -527,7 +527,7 @@ final class WorkerPolicyKernel
             }
             if (($descriptor->matcher['type'] ?? '') === 'request_limits') {
                 $maxHeaderBytes = \max(1024, (int)($descriptor->matcher['max_header_bytes'] ?? 65536));
-                $maxBodyBytes = \max(0, (int)($descriptor->matcher['max_body_bytes'] ?? 16 * 1024 * 1024));
+                $maxBodyBytes = \max(0, (int)($descriptor->matcher['max_body_bytes'] ?? 536870912));
             }
             if ($descriptor->stage !== PolicyStage::CACHE
                 || !\in_array($this->topology, $descriptor->supportedTopologies, true)
@@ -618,7 +618,7 @@ final class WorkerPolicyKernel
             case 'request_limits':
                 $maxUri = \max(256, (int)($descriptor->matcher['max_uri_bytes'] ?? 8192));
                 $maxHeader = \max(1024, (int)($descriptor->matcher['max_header_bytes'] ?? 65536));
-                $maxBody = \max(0, (int)($descriptor->matcher['max_body_bytes'] ?? 16 * 1024 * 1024));
+                $maxBody = \max(0, (int)($descriptor->matcher['max_body_bytes'] ?? 536870912));
                 if (\strlen($parsed['target']) > $maxUri
                     || $parsed['header_bytes'] > $maxHeader
                     || \strlen($parsed['body']) > $maxBody
