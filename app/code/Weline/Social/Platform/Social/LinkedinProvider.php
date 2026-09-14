@@ -31,6 +31,26 @@ class LinkedinProvider extends DocumentedSocialPlatformProvider
         'status' => 'live_publish_enabled',
     ];
 
+    /**
+     * @return array<string, list<string>>
+     */
+    public function cspDirectives(): array
+    {
+        return [
+            'script-src' => [
+                'https://platform.linkedin.com',
+            ],
+            'frame-src' => [
+                'https://www.linkedin.com',
+                'https://platform.linkedin.com',
+            ],
+            'connect-src' => [
+                'https://www.linkedin.com',
+                'https://api.linkedin.com',
+            ],
+        ];
+    }
+
     public function buildAuthorizationUrl(array $accountContext, string $redirectUri, string $state): ?string
     {
         $clientId = $this->appConfig()->get('linkedin', 'client_id');

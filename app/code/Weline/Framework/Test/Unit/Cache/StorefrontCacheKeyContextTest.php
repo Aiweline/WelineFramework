@@ -26,6 +26,42 @@ final class StorefrontCacheKeyContextTest extends TestCase
         Runtime::resetModeCache();
     }
 
+
+    public function testTranslationFallbackSnapshotOnlyFollowsRelevantLocaleGenerations(): void
+    {
+        $originalDefault = \Weline\Framework\App\Env::get('website.language', '');
+        $authority = new TestNamespaceGenerationAuthority();
+        $resolver = new StorefrontCacheKeyContextResolver($authority, new NamespacePath());
+        try {
+            \Weline\Framework\App\Env::set('website.language', 'fr_FR');
+            $this->enterScope('shop_a', 'retail', 'web', ScopeIdentity::MODE_NORMAL);
+            RequestContext::setWelineUserLang('de_DE');
+            $first = $resolver->freezeCurrent();
+            self::assertSame('fr_FR', $first->defaultLocale);
+            self::assertSame(['de_DE', 'en_US', 'fr_FR'], $first->translationLocales);
+
+            $authority->bump('global/i18n/ja_JP');
+            $this->enterScope('shop_a', 'retail', 'web', ScopeIdentity::MODE_NORMAL);
+            RequestContext::setWelineUserLang('de_DE');
+            $unrelated = $resolver->freezeCurrent();
+            self::assertSame($first->namespaceFingerprint, $unrelated->namespaceFingerprint);
+            $authority->bump('global/i18n/fr_FR');
+            self::assertSame($unrelated, $resolver->freezeCurrent(), 'The active request keeps its vector.');
+            $this->enterScope('shop_a', 'retail', 'web', ScopeIdentity::MODE_NORMAL);
+            RequestContext::setWelineUserLang('de_DE');
+            self::assertNotSame($first->namespaceFingerprint, $resolver->freezeCurrent()->namespaceFingerprint);
+
+            \Weline\Framework\App\Env::set('website.language', 'it_IT');
+            $changedDefault = $resolver->freezeCurrent();
+            self::assertSame(['de_DE', 'en_US', 'it_IT'], $changedDefault->translationLocales);
+            self::assertSame('it_IT', $changedDefault->keyDimensions()['default_locale']);
+            RequestContext::setWelineUserLang('zh_Hans_CN');
+            self::assertSame(['zh_Hans_CN'], $resolver->freezeCurrent()->translationLocales);
+        } finally {
+            \Weline\Framework\App\Env::set('website.language', $originalDefault);
+        }
+    }
+
     public function testScopeAndVersionAreFrozenOnceAndSharedByAllKeyBuilders(): void
     {
         $authority = new TestNamespaceGenerationAuthority();

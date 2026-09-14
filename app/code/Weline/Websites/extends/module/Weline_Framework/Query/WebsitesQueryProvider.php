@@ -1302,7 +1302,6 @@ class WebsitesQueryProvider implements QueryProviderInterface
 
     private function getWebsiteList(array $params): array
     {
-        $this->defaultWebsiteService->ensureDefaultWebsite(false);
         $website = clone $this->websiteModel;
         $website->clearQuery();
         $items = $website->select()->fetchArray();

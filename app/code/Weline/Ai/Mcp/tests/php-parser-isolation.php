@@ -180,34 +180,17 @@ try {
             'id' => 2,
             'method' => 'tools/call',
             'params' => [
-                'name' => 'get_edit_bundle',
+                'name' => 'project_index_status',
                 'arguments' => [
                     'repository' => $temporary . '/project',
-                    'task' => 'Read the exact parser isolation fixture without modifying it.',
-                    'paths' => ['src/Large.php'],
-                    'include_docs' => false,
-                    'include_skills' => false,
-                    'max_regions' => 4,
-                    'max_chunks_per_file' => 1,
-                    'token_budget' => 2_000,
-                    'task_contract' => [
-                        'goal' => 'Verify parser failure isolation at the MCP transport boundary.',
-                        'known_paths' => ['src/Large.php'],
-                        'requirements' => ['Read only.'],
-                        'allowed_scope' => ['src/Large.php'],
-                        'forbidden_scope' => ['All writes.'],
-                        'authorized_actions' => ['Read-only indexing.'],
-                        'acceptance_criteria' => ['The MCP process remains available.'],
-                        'validation_expectations' => ['A subsequent resources/read succeeds.'],
-                    ],
                 ],
             ],
         ], JSON_THROW_ON_ERROR),
         json_encode([
             'jsonrpc' => '2.0',
             'id' => 3,
-            'method' => 'resources/read',
-            'params' => ['uri' => 'ui://weline/execution-run-v1.html'],
+            'method' => 'tools/list',
+            'params' => (object) [],
         ], JSON_THROW_ON_ERROR),
     ]) . "\n";
     $protocol = $runner->run(
@@ -234,11 +217,11 @@ try {
         }
     }
     if (!isset($responses[2])) {
-        throw new RuntimeException('MCP tool call returned no response before resources/read');
+        throw new RuntimeException('MCP tool call returned no response before tools/list');
     }
-    $resourceHtml = $responses[3]['result']['contents'][0]['text'] ?? '';
-    if (!is_string($resourceHtml) || !str_contains($resourceHtml, '<!doctype html>')) {
-        throw new RuntimeException('MCP resources/read failed after parser resource failure');
+    $toolNames = array_column($responses[3]['result']['tools'] ?? [], 'name');
+    if (!in_array('health', $toolNames, true)) {
+        throw new RuntimeException('MCP tools/list failed after parser resource failure');
     }
 
     fwrite(STDOUT, json_encode([
@@ -255,7 +238,7 @@ try {
         'errors' => count($result['errors'] ?? []),
         'previous_hash_retained' => true,
         'transport_survived' => true,
-        'resource_bytes' => strlen($resourceHtml),
+        'resource_bytes' => count($toolNames),
         'peak_bytes' => memory_get_peak_usage(true),
     ], JSON_THROW_ON_ERROR) . "\n");
 } finally {

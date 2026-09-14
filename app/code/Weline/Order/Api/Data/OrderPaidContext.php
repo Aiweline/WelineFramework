@@ -88,6 +88,7 @@ final class OrderPaidContext
             $this->money->shippingAmountMinor,
             $this->money->taxAmountMinor,
             $this->money->discountAmountMinor,
+            $this->money->codFeeAmountMinor,
             $this->money->grandTotalMinor,
         ];
         foreach ($amounts as $amount) {
@@ -102,6 +103,7 @@ final class OrderPaidContext
             ),
             $this->money->taxAmountMinor,
         );
+        $gross = $this->safeAdd($gross, $this->money->codFeeAmountMinor);
         if ($this->money->discountAmountMinor > $gross
             || $gross - $this->money->discountAmountMinor !== $this->money->grandTotalMinor
         ) {

@@ -5,11 +5,13 @@ $escape = static fn ($v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'U
 if (!$enabled) {
     return;
 }
+$i18nJson = \Weline\HelpPay\Service\ShareModalI18n::json();
 ?>
 <button type="button"
-        class="w-button w-button--secondary"
+        class="product-native-detail__secondary"
         data-testid="product-selection-share"
         data-helppay-selection-share="1"
+        data-helppay-i18n="<?= $escape($i18nJson) ?>"
         data-weline-load="helpPayShare">
     <?= $escape(__('分享给朋友')) ?>
 </button>

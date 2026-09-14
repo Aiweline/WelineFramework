@@ -67,7 +67,7 @@ final class StorefrontHeaderNavFragmentCacheTest extends TestCase
 
         self::assertSame('channel', $policy->scope);
         self::assertSame(['currency', 'lang'], $policy->vary);
-        self::assertSame(['catalog', 'config', 'theme'], $policy->dependencies);
+        self::assertSame(['catalog', 'config', 'global/i18n', 'theme'], $policy->dependencies);
         self::assertSame(StorefrontHeaderNavFragmentCache::cachePool(), $policy->pool);
     }
 
@@ -79,7 +79,7 @@ final class StorefrontHeaderNavFragmentCacheTest extends TestCase
         self::assertSame(StorefrontThemeCacheCoordinator::STOREFRONT_CHROME_POOL, $policy->pool);
         self::assertSame('channel', $policy->scope);
         self::assertSame(['currency', 'lang'], $policy->vary);
-        self::assertSame(['catalog', 'config', 'theme'], $policy->dependencies);
+        self::assertSame(['catalog', 'config', 'global/i18n', 'theme'], $policy->dependencies);
         self::assertSame(45, $policy->freshTtlSeconds);
         self::assertSame(600, $policy->staleTtlSeconds);
     }
@@ -91,7 +91,8 @@ final class StorefrontHeaderNavFragmentCacheTest extends TestCase
         self::assertSame('theme.header_search_types', $policy->resource);
         self::assertSame(StorefrontThemeCacheCoordinator::HEADER_NAV_POOL, $policy->pool);
         self::assertSame('channel', $policy->scope);
-        self::assertSame(['currency', 'lang'], $policy->vary);
-        self::assertSame(['config'], $policy->dependencies);
+        // Labels need lang; search types carry no prices — currency must stay out.
+        self::assertSame(['lang'], $policy->vary);
+        self::assertSame(['config', 'global/i18n'], $policy->dependencies);
     }
 }

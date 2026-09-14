@@ -398,7 +398,8 @@ final class StorefrontVariantSelectionService
     private function preferAxisDisplayLabel(string $candidate, string $code, array $offers): string
     {
         $candidate = trim($candidate);
-        if ($candidate !== '' && strcasecmp($candidate, $code) !== 0) {
+        // Keep real labels such as "Size"/"Color"; only ignore an exact code echo.
+        if ($candidate !== '' && $candidate !== $code) {
             return $candidate;
         }
         foreach ($offers as $offer) {
@@ -413,7 +414,7 @@ final class StorefrontVariantSelectionService
                     continue;
                 }
                 $label = trim((string)($axisRow['label'] ?? ''));
-                if ($label !== '' && strcasecmp($label, $code) !== 0) {
+                if ($label !== '' && $label !== $code) {
                     return $label;
                 }
             }

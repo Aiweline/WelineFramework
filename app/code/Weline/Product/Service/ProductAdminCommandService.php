@@ -83,6 +83,7 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
                 ProductAdminCommand::ACTION_PUBLISH => $this->publish($command),
                 ProductAdminCommand::ACTION_DISABLE => $this->transition($command, 'disabled'),
                 ProductAdminCommand::ACTION_ARCHIVE => $this->transition($command, 'archived'),
+                ProductAdminCommand::ACTION_RESTORE => $this->transition($command, 'draft'),
                 ProductAdminCommand::ACTION_CHANGE_TYPE => $this->changeType($command),
                 ProductAdminCommand::ACTION_SHARE => $this->share($command),
                 ProductAdminCommand::ACTION_TRANSFER_INITIATE => $this->initiateTransfer($command),
@@ -245,6 +246,7 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
 
                 $localOffers = [];
                 $shippingProfileCode = $this->normalizeShippingProfileCode($payload);
+                $shippingHazardClass = $this->normalizeShippingHazardClass($payload);
                 foreach ($offerSpecs as $index => $spec) {
                     $offerIdentity = $offerIdentities[$index];
                     $offerData = [
@@ -258,6 +260,9 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
                     ];
                     if ($shippingProfileCode !== null) {
                         $offerData[Offer::schema_fields_SHIPPING_PROFILE_CODE] = $shippingProfileCode;
+                    }
+                    if ($shippingHazardClass !== null) {
+                        $offerData[Offer::schema_fields_SHIPPING_HAZARD_CLASS] = $shippingHazardClass;
                     }
                     $configuration = is_array($spec['configuration'] ?? null)
                         ? $spec['configuration']
@@ -537,6 +542,7 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
                         );
                     $this->writePrices($command->websiteId, $productId, $payload);
                     $this->writeOfferShippingProfiles($command->websiteId, $productId, $payload);
+                    $this->writeOfferShippingHazards($command->websiteId, $productId, $payload);
                     $this->writeTaxonomyAndMedia($command->websiteId, $productId, $payload);
                     if (array_key_exists('store_ids', $payload)) {
                         $selected = $this->selectedStoreIds($command->websiteId, $payload);
@@ -997,7 +1003,8 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
             'draft' => ['published', 'archived'],
             'published' => ['disabled'],
             'disabled' => ['published', 'archived'],
-            'archived' => [],
+            // Official restore: archived catalog can return to draft, then publish.
+            'archived' => ['draft'],
         ];
         if (in_array($targetStatus, $allowed[$currentStatus] ?? [], true)) {
             return [$targetStatus];
@@ -1463,6 +1470,22 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
             );
         }
 
+        $requiresShipping = !array_key_exists('requires_shipping', $payload)
+            || (bool)$payload['requires_shipping'];
+        if ($requiresShipping) {
+            $weight = isset($payload['weight']) && is_numeric($payload['weight']) ? (float)$payload['weight'] : 0.0;
+            $length = isset($payload['length']) && is_numeric($payload['length']) ? (float)$payload['length'] : 0.0;
+            $width = isset($payload['width']) && is_numeric($payload['width']) ? (float)$payload['width'] : 0.0;
+            $height = isset($payload['height']) && is_numeric($payload['height']) ? (float)$payload['height'] : 0.0;
+            if ($weight <= 0 || $length <= 0 || $width <= 0 || $height <= 0) {
+                throw new \InvalidArgumentException('product_shipping_dims_required');
+            }
+            $profile = trim((string)($payload['shipping_profile_code'] ?? ''));
+            if ($weight > 30.0 && ($profile === '' || $profile === 'SEED_PROFILE_GENERAL')) {
+                throw new \InvalidArgumentException('product_shipping_profile_heavy_required');
+            }
+        }
+
         if (array_key_exists('quote_only', $payload)) {
             $quoteOnly = $payload['quote_only'];
             $enabled = $quoteOnly === true
@@ -1543,6 +1566,27 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
     }
 
     /**
+     * Empty = general cargo. Null = field absent.
+     *
+     * @param array<string, mixed> $payload
+     */
+    private function normalizeShippingHazardClass(array $payload): ?string
+    {
+        if (!array_key_exists('shipping_hazard_class', $payload)) {
+            return null;
+        }
+        $code = strtolower(trim((string)$payload['shipping_hazard_class']));
+        if ($code === '' || $code === 'none' || $code === 'general') {
+            return '';
+        }
+        if (!preg_match('/^[a-z0-9_]{1,64}$/', $code)) {
+            throw new \InvalidArgumentException('shipping_hazard_class_invalid');
+        }
+
+        return $code;
+    }
+
+    /**
      * @param array<string, mixed> $payload
      */
     private function writeOfferShippingProfiles(int $websiteId, int $productId, array $payload): void
@@ -1566,6 +1610,34 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
                 $offerId,
                 $version,
                 [Offer::schema_fields_SHIPPING_PROFILE_CODE => $code],
+            );
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function writeOfferShippingHazards(int $websiteId, int $productId, array $payload): void
+    {
+        $code = $this->normalizeShippingHazardClass($payload);
+        if ($code === null) {
+            return;
+        }
+        $offers = $this->offers->listByProductIds($websiteId, [$productId]);
+        foreach ($offers as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $offerId = (int)($row['offer_id'] ?? $row['id'] ?? 0);
+            $version = (int)($row['publish_version'] ?? $row['offer_version'] ?? 0);
+            if ($offerId <= 0) {
+                continue;
+            }
+            $this->offers->updateVersioned(
+                $websiteId,
+                $offerId,
+                $version,
+                [Offer::schema_fields_SHIPPING_HAZARD_CLASS => $code],
             );
         }
     }

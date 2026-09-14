@@ -1,0 +1,1 @@
+Your order has shipped · {{var.order_number}}

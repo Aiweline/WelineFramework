@@ -311,7 +311,7 @@ class TranslationService
                 $strategy,
             );
         } catch (\Exception $e) {
-            if ($this->concurrencyGate->isBusyMarker($e->getMessage())) {
+            if ($this->concurrencyGate->isBusy($e)) {
                 throw $e;
             }
             if (count($texts) > 1) {
@@ -332,7 +332,7 @@ class TranslationService
             try {
                 return [$this->translate($texts[0], $originalTargetLocale, $sourceLocale, $strategy, $concurrencyLane)];
             } catch (\Exception $ex) {
-                if ($this->concurrencyGate->isBusyMarker($ex->getMessage())) {
+                if ($this->concurrencyGate->isBusy($ex)) {
                     throw $ex;
                 }
 

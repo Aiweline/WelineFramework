@@ -47,6 +47,9 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         self::assertStringContainsString('<lang>购买方式</lang>', $switcherContent);
         self::assertStringContainsString('<lang>零售</lang>', $switcherContent);
         self::assertStringContainsString('<lang>批发</lang>', $switcherContent);
+        self::assertStringNotContainsString('data-testid="b2b-cart-type-chooser"', $switcherContent);
+        self::assertStringNotContainsString('data-b2b-cart-chooser-pick', $switcherContent);
+        self::assertStringNotContainsString('添加到哪个购物车？', $switcherContent);
         self::assertStringContainsString('data-b2b-apply-form', $switcherContent);
         self::assertStringContainsString('data-b2b-apply-form-wrap', $switcherContent);
         self::assertStringContainsString('data-b2b-apply-drawer', $switcherContent);
@@ -86,15 +89,18 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         self::assertStringContainsString('weline_b2b_qty_by_mode', $jsContent);
         self::assertStringContainsString('rememberQty', $jsContent);
         self::assertStringContainsString('recallQty', $jsContent);
-        $enCsv = self::bp('app/code/Weline/B2B/i18n/en_US.csv');
-        self::assertFileExists($enCsv);
-        $en = (string)file_get_contents($enCsv);
-        self::assertStringContainsString('Retail cart', $en);
-        self::assertStringContainsString('Wholesale cart', $en);
+        self::assertStringNotContainsString('confirmCartTypeForAdd', $jsContent);
+        self::assertStringNotContainsString('openCartTypeChooser', $jsContent);
+        self::assertStringNotContainsString('productHasDualSellingMode', $jsContent);
+        self::assertStringNotContainsString('syncDualModeAddGate', $jsContent);
         self::assertStringContainsString('refresh({ forceNetwork: false })', $jsContent);
         // membership-active may forceNetwork; MutationObserver path must not storm cart.getCart
         self::assertStringContainsString('enhanceMiniCarts({ refresh: false })', $jsContent);
         self::assertStringContainsString('Do NOT forceNetwork here', $jsContent);
+        self::assertStringContainsString(
+            "var mode = String(detail.cart_type || detail.selling_mode || preferredMode(null)).toLowerCase();",
+            $jsContent,
+        );
 
         $accountNav = self::bp('app/code/Weline/B2B/view/hooks/account.sidebar.group.commerce.phtml');
         $accountContent = self::bp('app/code/Weline/B2B/view/hooks/account.sidebar.content.phtml');
@@ -105,11 +111,11 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         self::assertStringContainsString('data-section="b2b-identity"', $nav);
         self::assertStringContainsString('<lang>批发身份</lang>', $nav);
         self::assertStringContainsString('@hook-sort-order 11', $nav);
-        self::assertStringContainsString('B2B 等级、申请状态与联系信息', $nav);
+        self::assertStringContainsString('等级、挂单跟进与订单沟通', $nav);
         self::assertStringContainsString("AccountSidebarContentGate::accepts('b2b-identity')", $content);
-        self::assertStringContainsString('data-section="<?= htmlspecialchars($chatSection', $nav);
-        self::assertStringContainsString('data-testid="account-nav-b2b-order-chat"', $nav);
-        self::assertStringContainsString('data-testid="account-b2b-order-chat-section"', $content);
+        self::assertStringContainsString('data-account-menu-signal', $nav);
+        self::assertStringContainsString('account-identity-hub.phtml', $content);
+        self::assertStringContainsString('data-b2b-order-chat-redirect', $content);
         self::assertStringContainsString('AccountSidebarProjectionProviderInterface', $content);
         self::assertStringContainsString('AccountMembershipTierPresenter', $content);
 
@@ -144,7 +150,7 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         self::assertStringContainsString('<lang>批发等级</lang>', $content);
         self::assertStringContainsString('<lang>当前优惠与权益</lang>', $content);
         self::assertStringContainsString('<lang>下一档</lang>', $content);
-        self::assertStringContainsString('查看当前站点的批发等级、优惠要点与下一档升级信息', $content);
+        self::assertStringContainsString('等级权益、挂单跟进、尾款与订单协商', $content);
         self::assertStringNotContainsString('<lang>客户 ID</lang>', $content);
         self::assertStringNotContainsString('<lang>网站</lang>', $content);
         self::assertStringNotContainsString('groupId', $content);
@@ -158,6 +164,7 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         self::assertStringContainsString('data-testid="header-account-b2b-identity"', $header);
         self::assertStringContainsString('data-account-menu-auth="signed-in"', $header);
         self::assertStringContainsString("__('批发身份')", $header);
+        self::assertStringContainsString('data-account-menu-signal', $header);
         self::assertStringContainsString('data-account-section="b2b-identity"', $content);
         self::assertStringContainsString('latestForCustomer', $content);
         self::assertStringContainsString('<lang>公司名称</lang>', $content);
@@ -289,12 +296,25 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         self::assertStringContainsString('.b2b-mini-cart-type-seg', $cssContent);
         self::assertStringContainsString('--amz-drawer-cta-bg', $cssContent);
         self::assertStringContainsString('.b2b-hang-payment', $cssContent);
+        self::assertStringContainsString('b2b-hang-payment__columns', $cssContent);
+        self::assertStringContainsString('minmax(0, 1.4fr)', $cssContent);
+        self::assertStringNotContainsString('b2b-hang-layout-switcher', $cssContent);
+        self::assertStringNotContainsString('is-hang-layout-center', $cssContent);
         self::assertStringContainsString('禁止走 tertiary muted', $cssContent);
         self::assertStringContainsString('.w-b2b-checkout-credit__fx', $cssContent);
         self::assertStringContainsString('--weline-theme-text', $cssContent);
         self::assertStringContainsString('.w-dialog.w-product-purchase-panel', $cssContent);
         self::assertStringContainsString('min-height: 0', $cssContent);
         self::assertStringContainsString('product-native-detail--quick-add', $cssContent);
+        // Affiliate 需求：列表「快捷规格加购」弹窗须展示分销分享；禁止 CSS 整块隐藏。
+        self::assertStringNotContainsString(
+            '.w-product-purchase-panel .affiliate-share-panel',
+            $cssContent
+        );
+        self::assertStringNotContainsString(
+            '.product-native-detail--quick-add [data-affiliate-share-root]',
+            $cssContent
+        );
         self::assertStringContainsString('is-tob-unavailable', $cssContent);
         self::assertStringContainsString('display: flex !important', $cssContent);
         self::assertStringContainsString('opacity: 0.55', $cssContent);
@@ -318,6 +338,23 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         $qtyTiersContent = (string)file_get_contents($qtyTiers);
         self::assertStringContainsString('createFrontendSession', $qtyTiersContent);
         self::assertStringNotContainsString('SessionFactory::class)->create()', $qtyTiersContent);
+        self::assertStringContainsString('data-b2b-qty-ladder', $qtyTiersContent);
+        self::assertStringContainsString('b2b-qty-tiers__save', $qtyTiersContent);
+        self::assertStringContainsString('b2b-qty-tiers__delta', $qtyTiersContent);
+        self::assertStringContainsString('data-total-save-minor', $qtyTiersContent);
+        self::assertStringContainsString('省 %{1} %{2}', $qtyTiersContent);
+        self::assertStringContainsString('每件低 %{1} %{2}', $qtyTiersContent);
+        self::assertStringContainsString('--weline-theme-success', $cssContent);
+        self::assertStringContainsString("'CNY', 'RMB' => '¥'", $qtyTiersContent);
+        self::assertStringContainsString('data-unit-save-minor', $qtyTiersContent);
+        self::assertStringContainsString('起订 %{1} · 步进 %{2}', $qtyTiersContent);
+
+        $qtyTiersCss = (string)file_get_contents(self::bp('app/code/Weline/B2B/view/statics/css/b2b-storefront.css'));
+        self::assertStringContainsString('.b2b-qty-tiers__list.is-ladder', $qtyTiersCss);
+        self::assertStringContainsString('.b2b-qty-tiers__save', $qtyTiersCss);
+        self::assertStringContainsString('.b2b-qty-tiers__delta', $qtyTiersCss);
+        self::assertStringContainsString('.b2b-hang-payment.is-hang-completed', $qtyTiersCss);
+        self::assertStringContainsString('.b2b-hang-payment__status[data-tone="success"]', $qtyTiersCss);
 
         $checkoutTobJs = self::bp('app/code/Weline/B2B/view/statics/js/checkout-tob.js');
         self::assertFileExists($checkoutTobJs);
@@ -326,7 +363,25 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         self::assertStringContainsString("hang.startPayment", $checkoutTob);
         self::assertStringContainsString("hang.paymentContext", $checkoutTob);
         self::assertStringContainsString('renderHangPaymentMethods', $checkoutTob);
+        self::assertStringContainsString('renderHangOrderSummary', $checkoutTob);
         self::assertStringContainsString('data-b2b-hang-methods', $checkoutTob);
+        self::assertStringContainsString('data-b2b-hang-order', $checkoutTob);
+        self::assertStringContainsString('b2b-hang-order-lines', $checkoutTob);
+        self::assertStringContainsString('b2b-hang-order-thumb', $checkoutTob);
+        self::assertStringContainsString('image_url', $checkoutTob);
+        self::assertStringContainsString('can_pay', $checkoutTob);
+        self::assertStringContainsString('ctx.can_pay !== false', $checkoutTob);
+        self::assertStringContainsString('applyHangNonPayableUi', $checkoutTob);
+        self::assertStringContainsString('view_state', $checkoutTob);
+        self::assertStringContainsString('is-hang-completed', $checkoutTob);
+        self::assertStringContainsString('已付尾款', $checkoutTob);
+        self::assertStringContainsString('本单尾款已结清，无需再支付', $checkoutTob);
+        self::assertStringContainsString('b2b-hang-payment__columns', $checkoutTob);
+        self::assertStringNotContainsString('ensureHangLayoutSwitcher', $checkoutTob);
+        self::assertStringNotContainsString('hangLayoutFromLocation', $checkoutTob);
+        self::assertStringNotContainsString('b2b-hang-layout-switcher', $checkoutTob);
+        self::assertStringContainsString('order_summary', $checkoutTob);
+        self::assertStringContainsString('返回批发身份', $checkoutTob);
         self::assertStringContainsString("hang_' + hang.purpose + '_' + hang.orderUuid", $checkoutTob);
         self::assertStringContainsString('hangRedirectUrl', $checkoutTob);
         self::assertStringContainsString('请选择支付方式', $checkoutTob);
@@ -367,11 +422,13 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         self::assertStringContainsString('refreshCreditQuote', $checkoutTob);
         self::assertStringContainsString('ensureCreditQuote', $checkoutTob);
         self::assertStringContainsString("credit.quote", $checkoutTob);
-        // 购物车/迷你车：按商品小计估算本期应付（=挂单定金基数）；取摘要最大小计，禁止误取顶栏迷你车小额。
+        // 购物车/迷你车：按商品小计估算本期应付（=挂单定金基数）；优先 data-cart-goods-subtotal-major，避免隐藏过期小计。
         self::assertStringContainsString('data-cart-goods-subtotal', $checkoutTob);
+        self::assertStringContainsString('data-cart-goods-subtotal-major', $checkoutTob);
         self::assertStringContainsString('readGoodsSubtotalMajor', $checkoutTob);
         self::assertStringContainsString('pickLargestMoneyMajor', $checkoutTob);
-        self::assertStringContainsString('[data-weline-cart] [data-cart-goods-subtotal]', $checkoutTob);
+        self::assertStringContainsString('readGoodsMajorFromAttrHosts', $checkoutTob);
+        self::assertStringContainsString('[data-weline-cart]', $checkoutTob);
         self::assertStringContainsString('暂无法估算本期定金', $checkoutTob);
         self::assertStringNotContainsString('当前订单无定金，无法用批发信用抵扣', $checkoutTob);
         self::assertStringContainsString('本期定金', $checkoutTob);

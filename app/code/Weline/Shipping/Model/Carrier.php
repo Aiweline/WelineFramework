@@ -28,6 +28,8 @@ class Carrier extends AbstractModel
     public const schema_fields_CARRIER_NAME = 'carrier_name';
     #[Col('varchar', 20, nullable: false, comment: '类型')]
     public const schema_fields_CARRIER_TYPE = 'carrier_type';
+    #[Col('varchar', 64, nullable: false, default: 'local', comment: '配送 Provider 代码')]
+    public const schema_fields_PROVIDER_CODE = 'provider_code';
     #[Col('text', comment: 'API配置JSON')]
     public const schema_fields_API_CONFIG = 'api_config';
     #[Col('varchar', 500, nullable: false, comment: '物流跟踪URL模板')]

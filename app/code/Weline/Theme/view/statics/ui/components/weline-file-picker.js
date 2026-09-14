@@ -25,6 +25,27 @@ function normalizePreviewSource(rawSource, fallbackSource = '') {
     return relative === '' ? '' : `/pub/media/${relative}`;
 }
 
+const IMAGE_PREVIEW_EXTENSIONS = [
+    'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'ico', 'avif', 'heic', 'heif', 'svg',
+];
+const AUDIO_PREVIEW_EXTENSIONS = [
+    'mp3', 'wav', 'ogg', 'oga', 'm4a', 'aac', 'flac', 'opus', 'wma', 'weba',
+];
+
+function extensionOfPath(path) {
+    const clean = String(path || '').split('?')[0].split('#')[0];
+    const base = clean.split('/').pop() || '';
+    const dot = base.lastIndexOf('.');
+    return dot >= 0 ? base.slice(dot + 1).toLowerCase() : '';
+}
+
+function previewKindFromPath(path) {
+    const ext = extensionOfPath(path);
+    if (AUDIO_PREVIEW_EXTENSIONS.indexOf(ext) >= 0) return 'audio';
+    if (IMAGE_PREVIEW_EXTENSIONS.indexOf(ext) >= 0) return 'image';
+    return 'file';
+}
+
 function clearPreviewImage(previewImage) {
     if (!(previewImage instanceof HTMLImageElement)) return;
     previewImage.onerror = null;
@@ -33,6 +54,12 @@ function clearPreviewImage(previewImage) {
 }
 
 function openPreview(root, sourceElement, componentUI) {
+    const item = sourceElement?.closest?.('[data-w-file-item]');
+    const kind = item?.dataset?.kind || previewKindFromPath(sourceElement?.dataset?.path || item?.dataset?.path || '');
+    if (kind !== 'image') {
+        componentUI.toast.warning(root.dataset.wEmptyMessage || 'No preview is available.');
+        return false;
+    }
     const dialog = root.querySelector('[data-w-file-preview-dialog]');
     const previewImage = dialog?.querySelector('[data-w-file-preview-image]');
     const image = sourceElement?.querySelector('img') || (sourceElement instanceof HTMLImageElement ? sourceElement : null);
@@ -131,10 +158,12 @@ function registerFilePicker(UI) {
             const rawPath = String(file?.path || file?.url || file?.name || '');
             const path = rawPath.replace(/^\/pub\/media\//, '').replace(/^pub\/media\//, '');
             if (path === '') return null;
+            const kind = previewKindFromPath(path);
             const item = document.createElement('div');
-            item.className = 'w-file-preview__item';
+            item.className = 'w-file-preview__item' + (kind !== 'image' ? ` w-file-preview__item--${kind}` : '');
             item.dataset.wFileItem = '';
             item.dataset.path = path;
+            item.dataset.kind = kind;
             item.draggable = true;
 
             const thumbnail = document.createElement('button');
@@ -142,12 +171,33 @@ function registerFilePicker(UI) {
             thumbnail.className = 'w-file-preview__thumbnail';
             thumbnail.dataset.wFileOpen = '';
             thumbnail.setAttribute('aria-label', String(file?.name || path));
-            const image = document.createElement('img');
-            image.dataset.src = path;
-            image.src = normalizePreviewSource(file?.thumb || file?.url || file?.path || '') || normalizePreviewSource(path);
-            image.alt = String(file?.name || '');
-            image.draggable = false;
-            thumbnail.append(image);
+            if (kind === 'image') {
+                const image = document.createElement('img');
+                image.dataset.src = path;
+                image.src = normalizePreviewSource(file?.thumb || file?.url || file?.path || '') || normalizePreviewSource(path);
+                image.alt = String(file?.name || '');
+                image.draggable = false;
+                image.onerror = () => {
+                    image.onerror = null;
+                    image.remove();
+                    const glyph = document.createElement('span');
+                    glyph.className = 'w-file-preview__glyph';
+                    glyph.dataset.kind = 'file';
+                    glyph.setAttribute('aria-hidden', 'true');
+                    glyph.textContent = '📄';
+                    thumbnail.append(glyph);
+                    item.dataset.kind = 'file';
+                    item.classList.add('w-file-preview__item--file');
+                };
+                thumbnail.append(image);
+            } else {
+                const glyph = document.createElement('span');
+                glyph.className = 'w-file-preview__glyph';
+                glyph.dataset.kind = kind;
+                glyph.setAttribute('aria-hidden', 'true');
+                glyph.textContent = kind === 'audio' ? '♪' : '📄';
+                thumbnail.append(glyph);
+            }
 
             const actions = document.createElement('span');
             actions.className = 'w-file-preview__actions';
@@ -242,6 +292,44 @@ function registerFilePicker(UI) {
             });
         }
         listen(window, 'message', receive);
+
+        // Upgrade SSR / legacy image thumbnails for audio & non-image paths.
+        items().forEach((item) => {
+            const path = item.dataset.path || '';
+            const kind = previewKindFromPath(path) || item.dataset.kind || 'file';
+            item.dataset.kind = kind;
+            item.classList.toggle('w-file-preview__item--audio', kind === 'audio');
+            item.classList.toggle('w-file-preview__item--file', kind === 'file');
+            const thumb = item.querySelector('.w-file-preview__thumbnail');
+            if (!(thumb instanceof HTMLElement)) return;
+            if (kind === 'image') {
+                const image = item.querySelector('img');
+                if (image instanceof HTMLImageElement) {
+                    image.onerror = () => {
+                        image.onerror = null;
+                        image.remove();
+                        const glyph = document.createElement('span');
+                        glyph.className = 'w-file-preview__glyph';
+                        glyph.dataset.kind = 'file';
+                        glyph.setAttribute('aria-hidden', 'true');
+                        glyph.textContent = '📄';
+                        thumb.append(glyph);
+                        item.dataset.kind = 'file';
+                    };
+                }
+                return;
+            }
+            thumb.querySelector('img')?.remove();
+            let glyph = thumb.querySelector('.w-file-preview__glyph');
+            if (!(glyph instanceof HTMLElement)) {
+                glyph = document.createElement('span');
+                glyph.className = 'w-file-preview__glyph';
+                glyph.setAttribute('aria-hidden', 'true');
+                thumb.append(glyph);
+            }
+            glyph.dataset.kind = kind;
+            glyph.textContent = kind === 'audio' ? '♪' : '📄';
+        });
 
         return { open, close, sync: syncTarget, element, previewDialog };
     });

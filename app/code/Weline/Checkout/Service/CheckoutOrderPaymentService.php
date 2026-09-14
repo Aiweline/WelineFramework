@@ -81,6 +81,7 @@ final class CheckoutOrderPaymentService
                     $order->orderUuid,
                     $hangPurpose,
                     $idempotencyKey,
+                    $methodCode,
                 );
                 $transactions[] = [
                     'order_uuid' => $order->orderUuid,
@@ -136,7 +137,11 @@ final class CheckoutOrderPaymentService
             // Zero cash deposit: credit covered the deposit — skip PSP, mark deposit paid.
             if ($hangPurpose === 'deposit' && $amountMinor <= 0) {
                 $lastPurpose = $hangPurpose;
-                $this->notifyHangDepositPaid($order->orderUuid, 'b2b_credit_zero_cash_' . $order->orderUuid);
+                $this->notifyHangDepositPaid(
+                    $order->orderUuid,
+                    'b2b_credit_zero_cash_' . $order->orderUuid,
+                    $methodCode !== '' ? $methodCode : 'b2b_credit',
+                );
                 $transactions[] = [
                     'order_uuid' => $order->orderUuid,
                     'transaction_id' => null,
@@ -268,6 +273,7 @@ final class CheckoutOrderPaymentService
                 $this->releaseB2bCreditForDeposit($order->orderUuid, $typePayload, $idempotencyKey);
                 throw new \RuntimeException('checkout_payment_method_unavailable');
             }
+            $this->rememberOrderPaymentMethod($order->orderUuid, (string)$transaction->methodCode);
 
             if ($expressCheckout && trim((string) $transaction->transactionNumber) !== '') {
                 // Prefer landing with transaction_no so popup return can open review directly.
@@ -322,6 +328,7 @@ final class CheckoutOrderPaymentService
                         $this->notifyHangDepositPaid(
                             $order->orderUuid,
                             (string)$transaction->transactionNumber,
+                            (string)$transaction->methodCode,
                         );
                         $hasPartial = true;
                     } elseif ($hangPurpose === 'balance') {
@@ -431,7 +438,7 @@ final class CheckoutOrderPaymentService
         ];
     }
 
-    private function notifyHangDepositPaid(string $orderUuid, string $intentCode): void
+    private function notifyHangDepositPaid(string $orderUuid, string $intentCode, string $methodCode = ''): void
     {
         if (!interface_exists(\Weline\B2B\Api\B2BHangPaymentBridgeInterface::class)) {
             return;
@@ -442,7 +449,7 @@ final class CheckoutOrderPaymentService
                 return;
             }
             $bridge->onDepositPaid($orderUuid, $intentCode !== '' ? $intentCode : 'deposit_' . $orderUuid);
-            $this->markOrderPaymentPartial($orderUuid);
+            $this->markOrderPaymentPartial($orderUuid, $methodCode);
         } catch (\Throwable) {
             // Hang row may be absent in unit fixtures; payment amount path still stands.
         }
@@ -453,6 +460,7 @@ final class CheckoutOrderPaymentService
         string $orderUuid,
         string $hangPurpose,
         string $idempotencyKey,
+        string $methodCode = '',
     ): bool {
         if ($hangPurpose !== 'deposit' && $hangPurpose !== 'balance') {
             return false;
@@ -469,7 +477,7 @@ final class CheckoutOrderPaymentService
             $before = $bridge->getHangByOrderRef($orderUuid);
             $bridge->reconcilePaymentSuccess($orderUuid, $hangPurpose, $intent);
             if ($hangPurpose === 'deposit') {
-                $this->markOrderPaymentPartial($orderUuid);
+                $this->markOrderPaymentPartial($orderUuid, $methodCode);
             }
             $after = $bridge->getHangByOrderRef($orderUuid);
 
@@ -484,9 +492,10 @@ final class CheckoutOrderPaymentService
         }
     }
 
-    private function markOrderPaymentPartial(string $orderUuid): void
+    private function markOrderPaymentPartial(string $orderUuid, string $methodCode = ''): void
     {
         $orderUuid = trim($orderUuid);
+        $methodCode = strtolower(trim($methodCode));
         if ($orderUuid === '') {
             return;
         }
@@ -511,13 +520,43 @@ final class CheckoutOrderPaymentService
                 return;
             }
             $current = strtolower(trim((string)$model->getData(\Weline\Order\Model\Order::schema_fields_PAYMENT_STATUS)));
-            if ($current === \Weline\Order\Model\Order::PAYMENT_STATUS_PAID) {
+            if ($current !== \Weline\Order\Model\Order::PAYMENT_STATUS_PAID) {
+                $model->setData(
+                    \Weline\Order\Model\Order::schema_fields_PAYMENT_STATUS,
+                    \Weline\Order\Model\Order::PAYMENT_STATUS_PARTIAL,
+                );
+            }
+            if ($methodCode !== '') {
+                $existingMethod = trim((string)$model->getData(\Weline\Order\Model\Order::schema_fields_PAYMENT_METHOD));
+                if ($existingMethod === '') {
+                    $model->setData(\Weline\Order\Model\Order::schema_fields_PAYMENT_METHOD, $methodCode);
+                }
+            }
+            $model->save();
+        } catch (\Throwable) {
+            // Soft-fail DB write.
+        }
+    }
+
+    private function rememberOrderPaymentMethod(string $orderUuid, string $methodCode): void
+    {
+        $orderUuid = trim($orderUuid);
+        $methodCode = strtolower(trim($methodCode));
+        if ($orderUuid === '' || $methodCode === '' || !class_exists(\Weline\Order\Model\Order::class)) {
+            return;
+        }
+        try {
+            /** @var \Weline\Order\Model\Order $model */
+            $model = ObjectManager::getInstance(\Weline\Order\Model\Order::class);
+            $model->reset()->load(\Weline\Order\Model\Order::schema_fields_ORDER_UUID, $orderUuid);
+            if (!(int)$model->getId()) {
                 return;
             }
-            $model->setData(
-                \Weline\Order\Model\Order::schema_fields_PAYMENT_STATUS,
-                \Weline\Order\Model\Order::PAYMENT_STATUS_PARTIAL,
-            )->save();
+            $existingMethod = trim((string)$model->getData(\Weline\Order\Model\Order::schema_fields_PAYMENT_METHOD));
+            if ($existingMethod !== '') {
+                return;
+            }
+            $model->setData(\Weline\Order\Model\Order::schema_fields_PAYMENT_METHOD, $methodCode)->save();
         } catch (\Throwable) {
             // Soft-fail DB write.
         }

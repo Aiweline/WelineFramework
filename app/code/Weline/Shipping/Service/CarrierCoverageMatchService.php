@@ -106,6 +106,12 @@ final class CarrierCoverageMatchService
                     'is_free_shipping' => $service->getData(ShippingService::schema_fields_IS_FREE_SHIPPING),
                     'scope_type' => $service->getData(ShippingService::schema_fields_SCOPE_TYPE),
                     'scope_id' => $service->getData(ShippingService::schema_fields_SCOPE_ID),
+                    'allowed_point_types' => (string)$service->getData(
+                        ShippingService::schema_fields_ALLOWED_POINT_TYPES,
+                    ),
+                    'accepted_hazard_classes' => (string)$service->getData(
+                        ShippingService::schema_fields_ACCEPTED_HAZARD_CLASSES,
+                    ),
                 ];
             }
         }

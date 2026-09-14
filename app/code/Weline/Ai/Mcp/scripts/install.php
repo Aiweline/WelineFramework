@@ -163,7 +163,7 @@ function welineMcpMain(array $argv): int
 
     echo "Runtime: PHP " . PHP_VERSION . "; " . trim($gitOutput) . "\n";
     echo "Installed Codex plugin: " . $targetId . "\n";
-    echo "MCP App: live execution runs open from get_edit_bundle/apply_compact_edit; historical edit reports remain available.\n";
+    echo "MCP App: index/code-map tools (prepare_project, resolve_task_context, search/skills).\n";
     echo "Start a new Codex task to load the updated plugin.\n";
     return 0;
 }
@@ -192,15 +192,15 @@ function welineMcpWriteMarketplace(string $root, string $config, string $marketp
         'author' => ['name' => 'Weline'],
         'interface' => [
             'displayName' => 'Weline Project Intelligence',
-            'shortDescription' => 'Single-generation project context, safe edits, and visible change reports.',
-            'longDescription' => 'Uses the one shared host STDIO registration maintained by project bootstrap, while the plugin contributes lifecycle hooks and task guardrails without declaring a duplicate MCP server.',
+            'shortDescription' => 'Project index, code map, skills, and hard-rule guidance.',
+            'longDescription' => 'Uses the one shared host STDIO registration maintained by project bootstrap, while the plugin contributes lifecycle hooks without declaring a duplicate MCP server.',
             'developerName' => 'Weline',
             'category' => 'Productivity',
             'capabilities' => ['Hooks', 'Code Intelligence', 'Local Learning'],
             'defaultPrompt' => [
-                'Call prepare_project first; only dev is allowed. Continue when ready and pass readiness_id to every later Weline tool.',
-                'Use resolve_task_context for bounded framework guidance; static development Skills are not authoritative.',
-                'Use get_edit_bundle and one guarded apply; review all returned diffs before delivery.',
+                'Call prepare_project first on branch dev; pass readiness_id to later Weline tools.',
+                'Use resolve_task_context / search_project_knowledge for indexed docs and code map.',
+                'Use resolve_skill / get_skill for MCP-served engineering skills.',
             ],
         ],
     ];
@@ -208,7 +208,7 @@ function welineMcpWriteMarketplace(string $root, string $config, string $marketp
         'mcpServers' => [
             WELINE_MCP_PLUGIN => [
                 'title' => 'Weline Project Intelligence',
-                'description' => 'Project-scoped architecture discovery, batched context, transactional edits, MCP App reports, and evidence-backed learning.',
+                'description' => 'Project-scoped index, code map, skills, and knowledge retrieval.',
                 'command' => PHP_BINARY,
                 'args' => [$root . DIRECTORY_SEPARATOR . 'bin' . DIRECTORY_SEPARATOR . 'learning-mcp', '--config', $config],
                 'startup_timeout_sec' => 20,
@@ -216,25 +216,12 @@ function welineMcpWriteMarketplace(string $root, string $config, string $marketp
                 'enabled_tools' => [
                     'prepare_project',
                     'repair_project_docs',
-                    'set_session_directives',
-                    'submit_task_plan',
-                    'get_task_plan',
-                    'update_task_plan_progress',
-                    'review_task_plan',
-                    'resolve_deploy_plan',
                     'project_index_status',
                     'resolve_task_context',
                     'resolve_skill',
                     'get_skill',
                     'search_project_knowledge',
                     'get_indexed_document',
-                    'get_edit_bundle',
-                    'apply_compact_edit',
-                    'get_edit_status',
-                    'get_run_status',
-                    'get_run_trace',
-                    'validate_change',
-                    'rollback_edit',
                     'health',
                 ],
             ],

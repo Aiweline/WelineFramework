@@ -30,10 +30,18 @@ $esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES,
 $isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
 $showQuantity = (bool)($this->getData('show_quantity') ?? true);
 $showSubtotal = (bool)($this->getData('show_subtotal') ?? true);
-// Header chrome stays live in theme editor: never skip cart APIs for demo placeholders.
+// 共享编译只保留中性摘要；前台与编辑器都由现有 miniCartIcon 私有接口恢复真实购物车。
 $isDemoChrome = false;
 
-$cart = HeaderCommerceData::resolveCartSummary(false, 20);
+$currency = (string)w_env('user.currency', 'CNY');
+$cart = [
+    'cart_count' => 0,
+    'subtotal_formatted' => HeaderCommerceData::formatMoney(0, $currency),
+    'currency' => $currency,
+    'items' => [],
+    'is_empty' => true,
+    'is_demo' => false,
+];
 $cartQuantity = (int)$cart['cart_count'];
 $cartSubtotal = (string)$cart['subtotal_formatted'];
 $cartItems = $cart['items'];
@@ -122,9 +130,15 @@ $renderLine = static function (array $item) use ($esc, $placeholder, $cart): str
                     <?php foreach ($optionRows as $optionRow): ?>
                         <li class="mini-cart-drawer__line-option">
                             <?php if ($optionRow['swatch_image'] !== ''): ?>
-                                <img class="mini-cart-drawer__line-option-swatch"
-                                     src="<?= $esc($optionRow['swatch_image']) ?>"
-                                     alt="">
+                                <button type="button"
+                                        class="mini-cart-drawer__line-option-swatch-btn"
+                                        data-mini-cart-swatch-trigger
+                                        data-mini-cart-swatch-src="<?= $esc($optionRow['swatch_image']) ?>"
+                                        aria-label="<?= $esc(__('查看规格图')) ?>">
+                                    <img class="mini-cart-drawer__line-option-swatch"
+                                         src="<?= $esc($optionRow['swatch_image']) ?>"
+                                         alt="">
+                                </button>
                             <?php elseif ($optionRow['swatch_color'] !== ''): ?>
                                 <span class="mini-cart-drawer__line-option-swatch mini-cart-drawer__line-option-swatch--color"
                                       style="background-color: <?= $esc($optionRow['swatch_color']) ?>"
@@ -181,7 +195,7 @@ $renderLine = static function (array $item) use ($esc, $placeholder, $cart): str
 };
 ?>
 <link rel="stylesheet"
-      href="@static(Weline_Theme::css/widgets/mini-cart-drawer.css)&v=20260908-theme-minicart-generic"
+      href="@static(Weline_Theme::css/widgets/mini-cart-drawer.css)&v=20260914-swatch-zoom"
       data-no-extract="true"
       data-weline-mini-cart-drawer="1">
 <section class="header-cart header-action-item <?= $esc($wc) ?><?= $isEmpty ? ' is-empty' : '' ?>"
@@ -208,6 +222,8 @@ $renderLine = static function (array $item) use ($esc, $placeholder, $cart): str
          data-i18n-increase="<?= $esc(__('增加数量')) ?>"
          data-i18n-loading="<?= $esc(__('正在加载购物车...')) ?>"
          data-i18n-updating="<?= $esc(__('正在更新购物车...')) ?>"
+         data-i18n-swatch-preview="<?= $esc(__('查看规格图')) ?>"
+         data-i18n-swatch-preview-close="<?= $esc(__('关闭')) ?>"
          data-i18n-goods-subtotal="<?= $esc(__('商品小计')) ?>"
          data-i18n-discount-coupon="<?= $esc(__('优惠券')) ?>"
          data-i18n-discount-stack="<?= $esc(__('叠加优惠')) ?>"

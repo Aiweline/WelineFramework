@@ -19,6 +19,7 @@ final class PostResponseTaskQueue
         }
 
         $context = null;
+        $memoryBeforeCapture = \memory_get_usage(true);
         if (Runtime::isPersistent()) {
             try {
                 $context = WlsFiberContext::capture();
@@ -32,6 +33,18 @@ final class PostResponseTaskQueue
             'context' => $context,
             'not_before' => max(0.0, $notBefore),
         ];
+        if ((string)\getenv('WELINE_DIAG_MEMORY') === '1') {
+            \error_log('[MemoryProbe] ' . \json_encode([
+                'component' => 'PostResponseTaskQueue',
+                'phase' => 'enqueue',
+                'key' => \substr($key, 0, 120),
+                'pending' => \count(self::$tasks),
+                'context_captured' => $context instanceof WlsFiberContext,
+                'capture_delta' => \memory_get_usage(true) - $memoryBeforeCapture,
+                'usage' => \memory_get_usage(true),
+                'peak' => \memory_get_peak_usage(true),
+            ], \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE));
+        }
     }
 
     public static function drain(float $budgetMs = 8.0, ?int $maxTasks = null): int
@@ -42,6 +55,7 @@ final class PostResponseTaskQueue
 
         self::$draining = true;
         try {
+            self::memoryProbe('drain_start', null, null);
             $startedAt = \microtime(true);
             $slowTaskMs = (float)(Env::get('wls.post_response_task_slow_ms', \max(25.0, $budgetMs)) ?: \max(25.0, $budgetMs));
             $taskLimit = $maxTasks === null ? PHP_INT_MAX : \max(1, $maxTasks);
@@ -57,6 +71,7 @@ final class PostResponseTaskQueue
                 }
 
                 try {
+                    self::memoryProbe('task_start', $key, \count(self::$tasks));
                     $context = $task['context'] ?? null;
                     if ($context instanceof WlsFiberContext) {
                         $context->restore(false);
@@ -64,6 +79,7 @@ final class PostResponseTaskQueue
                     $taskStartedAt = \microtime(true);
                     ($task['task'])();
                     $taskElapsedMs = (\microtime(true) - $taskStartedAt) * 1000;
+                    self::memoryProbe('task_after_callable', $key, \count(self::$tasks));
                     if ($slowTaskMs > 0 && $taskElapsedMs >= $slowTaskMs) {
                         Env::log_warning(
                             'runtime/post_response_task',
@@ -76,6 +92,7 @@ final class PostResponseTaskQueue
                 } finally {
                     $processed++;
                     self::cleanupRestoredContext();
+                    self::memoryProbe('task_after_cleanup', $key, \count(self::$tasks));
                 }
 
                 if ($processed >= $taskLimit) {
@@ -87,16 +104,64 @@ final class PostResponseTaskQueue
                 }
             }
 
+            self::memoryProbe('drain_end', null, \count(self::$tasks));
             return $processed;
         } finally {
             self::$draining = false;
         }
     }
 
+    private static function memoryProbe(string $phase, ?string $key, ?int $pending): void
+    {
+        if ((string)\getenv('WELINE_DIAG_MEMORY') !== '1') {
+            return;
+        }
+
+        \error_log('[MemoryProbe] ' . \json_encode([
+            'component' => 'PostResponseTaskQueue',
+            'phase' => $phase,
+            'key' => $key === null ? null : \substr($key, 0, 120),
+            'pending' => $pending,
+            'usage' => \memory_get_usage(true),
+            'peak' => \memory_get_peak_usage(true),
+        ], \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE));
+    }
+
     public static function pendingCount(): int
     {
         return \count(self::$tasks);
     }
+    /**
+     * 只读汇总到期状态，不暴露任务键、回调或请求上下文。
+     *
+     * next_due_ms：空队列为 null；已有到期任务为 0；否则为最近到期的剩余毫秒。
+     * @return array{pending:int,ready:int,delayed:int,next_due_ms:?float,draining:bool}
+     */
+    public static function getRuntimeDiagnostics(): array
+    {
+        $now = \microtime(true);
+        $ready = 0;
+        $delayed = 0;
+        $nextDue = null;
+        foreach (self::$tasks as $task) {
+            $notBefore = (float)($task['not_before'] ?? 0.0);
+            if ($notBefore > $now) {
+                $delayed++;
+            } else {
+                $ready++;
+            }
+            $nextDue = $nextDue === null ? $notBefore : \min($nextDue, $notBefore);
+        }
+
+        return [
+            'pending' => \count(self::$tasks),
+            'ready' => $ready,
+            'delayed' => $delayed,
+            'next_due_ms' => $nextDue === null ? null : \round(\max(0.0, ($nextDue - $now) * 1000), 3),
+            'draining' => self::$draining,
+        ];
+    }
+
 
     /**
      * Report whether the queue is currently executing post-response work.

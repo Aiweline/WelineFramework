@@ -30,8 +30,12 @@ final class CartQueryProviderDiscountPreviewRecursionContractTest extends TestCa
             'buildDiscountPreview($params, $summary)',
             $source
         );
-        self::assertStringContainsString(
-            "private function enrichSummaryWithDiscountPreview(array \$summary, array \$params = []): array\n    {\n        \$preview = \$this->buildDiscountPreview(\$params, \$summary);",
+        self::assertStringContainsString('enrichSummaryWithDiscountPreview', $source);
+        self::assertStringContainsString('try {', $source);
+        // getCart must accept coupon_code so MiniCart can request discount_preview without session lag.
+        self::assertStringContainsString("'name' => 'getCart'", $source);
+        self::assertMatchesRegularExpression(
+            "/'name'\\s*=>\\s*'getCart'[\\s\\S]*?'coupon_code'\\s*=>\\s*\\['type'\\s*=>\\s*'string'/",
             $source
         );
     }

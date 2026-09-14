@@ -2,7 +2,7 @@
 
 ## 开发前先读
 
-先完成 `prepare_project` 并调用 `resolve_task_context`，再按返回来源阅读：
+可选：可完成 `prepare_project` 并调用 `resolve_task_context` 检索后再按返回来源阅读（编码不强制）：
 
 1. `app/code/Weline/Backend/doc/menu-acl-and-backend-entry-conventions.md`
 2. 命中 hook 时，再读 `app/code/Weline/Backend/doc/hook/*`

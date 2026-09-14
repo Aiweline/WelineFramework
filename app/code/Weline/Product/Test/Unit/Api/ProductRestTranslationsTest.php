@@ -97,4 +97,36 @@ final class ProductRestTranslationsTest extends TestCase
         self::assertSame(3, $command->payload['translations']['en_US']['store_id']);
         self::assertSame('Store translation', $command->payload['translations']['en_US']['name']);
     }
+
+    public function testBrowserLocaleAliasPreservesLanguagePreference(): void
+    {
+        self::assertSame('zh_Hans_CN', ProductRestTranslations::normalizeLocale('zh-CN'));
+        self::assertSame('zh_Hans_CN', ProductRestTranslations::normalizeLocale('zh_cn'));
+        self::assertSame('en_US', ProductRestTranslations::normalizeLocale('en-US'));
+        self::assertSame('zh_Hans_CN', ProductRestTranslations::negotiateLocale('zh-CN,zh;q=0.9', 'en_US'));
+        self::assertSame('en_US', ProductRestTranslations::negotiateLocale('zh-CN;q=0,en-US;q=0.8', 'zh_Hans_CN'));
+        self::assertSame('en_US', ProductRestTranslations::negotiateLocale('xx-YY,en-US;q=0.8', 'zh_Hans_CN'));
+    }
+
+    public function testUnsupportedLocaleNeverFallsBackToAnotherLanguageOrRegion(): void
+    {
+        foreach (['xx_YY', 'zh_XX', 'zh_Hant_CN', 'en'] as $locale) {
+            try {
+                ProductRestTranslations::normalizeLocale($locale);
+                self::fail('不支持的语言不能回退为另一语言：' . $locale);
+            } catch (\InvalidArgumentException $exception) {
+                self::assertSame('product_api_locale_unsupported', $exception->getMessage());
+            }
+        }
+    }
+
+    public function testDemoBatchEditCarriesCurrentLocale(): void
+    {
+        $descriptor = \Weline\Product\Service\ProductApiDemoDescriptor::describe();
+        $actions = array_column($descriptor['actions'], null, 'id');
+        self::assertSame(
+            ['$field' => 'locale'],
+            $actions['edit_translations']['steps'][0]['request']['locale'] ?? null,
+        );
+    }
 }

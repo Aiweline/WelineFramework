@@ -28,7 +28,7 @@ final class ProjectRoutingGuard
         return [
             'hookSpecificOutput' => [
                 'hookEventName' => 'UserPromptSubmit',
-                'additionalContext' => 'Step 0: run `php app/code/Weline/Ai/Mcp/scripts/ensure-project-guidance.php` and auto-repair host guidance when status is not ready; do not send the user to Settings. On ready, git switch dev if needed, call prepare_project, carry readiness_id, and resolve task guidance through the MCP.',
+                'additionalContext' => 'Step 0 (MANDATORY for engineering): run `php app/code/Weline/Ai/Mcp/scripts/ensure-project-guidance.php` and auto-repair host guidance when status is not ready; do not send the user to Settings. On ready, git switch dev if needed, MUST call prepare_project, obey hard_constraints, carry readiness_id, then resolve task guidance through the MCP before edits.',
             ],
         ];
     }

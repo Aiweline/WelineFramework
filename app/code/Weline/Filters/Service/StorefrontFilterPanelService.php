@@ -170,6 +170,10 @@ final class StorefrontFilterPanelService
             return [];
         }
 
+        // Cache may have been built before label/locale fixes. Always re-bind
+        // facet chrome to the current request locale before Phrase prefetch.
+        $panel = $this->localizePanelLabels($panel);
+
         // A shared panel can be warm while this Worker's phrase cache is cold.
         // Prefetch the final dynamic labels after either cache/build path; the
         // template's __() calls still apply request/module/global precedence.
@@ -184,6 +188,64 @@ final class StorefrontFilterPanelService
             }
         }
         Parser::prefetchWords($words);
+
+        return $panel;
+    }
+
+    /**
+     * @param array<string, mixed> $panel
+     * @return array<string, mixed>
+     */
+    private function localizePanelLabels(array $panel): array
+    {
+        if (isset($panel['attributes']) && is_array($panel['attributes'])) {
+            foreach ($panel['attributes'] as $index => $group) {
+                if (!is_array($group)) {
+                    continue;
+                }
+                $code = (string)($group['code'] ?? '');
+                $localizedName = $code !== '' ? trim($this->eavLabels->attributeLabel($code)) : '';
+                $name = $localizedName !== '' ? $localizedName : (string)($group['name'] ?? '');
+                $panel['attributes'][$index]['name'] = $this->facetTranslator->translate($name);
+                if (!isset($group['options']) || !is_array($group['options'])) {
+                    continue;
+                }
+                foreach ($group['options'] as $optionIndex => $option) {
+                    if (!is_array($option)) {
+                        continue;
+                    }
+                    $value = (string)($option['value'] ?? '');
+                    $existing = (string)($option['label'] ?? '');
+                    $resolved = ($code !== '' && $value !== '')
+                        ? trim($this->eavLabels->resolve($code, $value))
+                        : '';
+                    // resolve() falls back to the raw value token on misses; keep the
+                    // already-built panel label in that case so cache rebind does not
+                    // erase humanized option chrome.
+                    $valueToken = StorefrontEavLabelResolver::displayOptionToken($value);
+                    if ($resolved !== '' && strcasecmp($resolved, $valueToken) !== 0) {
+                        $label = $resolved;
+                    } elseif ($existing !== '') {
+                        $label = $existing;
+                    } else {
+                        $label = $resolved !== '' ? $resolved : $value;
+                    }
+                    $panel['attributes'][$index]['options'][$optionIndex]['label'] = $this->facetTranslator->translate($label);
+                }
+            }
+        }
+
+        if (isset($panel['price']) && is_array($panel['price'])) {
+            foreach ($panel['price'] as $index => $option) {
+                if (!is_array($option)) {
+                    continue;
+                }
+                $label = (string)($option['label'] ?? '');
+                if ($label !== '') {
+                    $panel['price'][$index]['label'] = $this->facetTranslator->translate($label);
+                }
+            }
+        }
 
         return $panel;
     }

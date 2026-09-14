@@ -2,11 +2,13 @@
 
 return [
     "name" => 'Weline_Smtp',
-    "version" => '1.3.9',
+    "version" => '1.4.19',
     "requires" => [
         'Weline_Admin' => '*',
         'Weline_Backend' => '*',
         'Weline_SystemConfig' => '*',
+        'Weline_EditorManager' => '*',
+        'Weline_CKEditorEditorManager' => '*',
     ],
     "optional" => [
     ],

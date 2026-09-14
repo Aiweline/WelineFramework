@@ -94,11 +94,25 @@ final class PaymentBrowserReturnLandingOrchestrator
         return [
             'decision' => self::DECISION_EXPRESS_REVIEW,
             'redirect_path' => 'checkout/express-review',
-            'redirect_params' => $transactionNo !== ''
-                ? ['transaction_no' => $transactionNo]
-                : [],
+            'redirect_params' => array_filter([
+                'transaction_no' => $transactionNo !== '' ? $transactionNo : null,
+                'checkout_group_uuid' => $this->expressCheckoutGroupUuid($transaction),
+            ], static fn ($v) => $v !== null && $v !== ''),
             'absolute' => false,
         ];
+    }
+
+    private function expressCheckoutGroupUuid(?PaymentTransaction $transaction): string
+    {
+        if ($transaction === null || !$transaction->getId()) {
+            return '';
+        }
+        $request = $transaction->getRequestData();
+        if (!is_array($request)) {
+            return '';
+        }
+
+        return trim((string) ($request['checkout_group_uuid'] ?? ''));
     }
 
     /**

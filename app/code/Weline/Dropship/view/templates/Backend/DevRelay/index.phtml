@@ -16,13 +16,37 @@ $onlineBase = (string)($online_base ?? 'https://www.aiweline.com');
 $enabled = !empty($gate_config['enabled']);
 $allowProd = !empty($gate_config['allow_on_production']);
 ?>
-<div class="w-page">
+<div class="w-page" data-testid="dropship-dev-relay-page">
     <header class="w-page__header">
         <h1 class="w-page__title"><?= __('货源 Webhook 中继') ?></h1>
-        <p class="w-page__lead"><?= __('不另建中继：CJ/万能货源回调走支付 DevRelay 同一套会话与本机静默 worker。') ?></p>
+        <p class="w-page__lead"><?= __('不另建中继：CJ/万能货源回调走支付 DevRelay 同一套会话与本机静默 worker。开关与启停只在支付控制台操作。') ?></p>
     </header>
 
-    <section class="w-card" style="margin-bottom:1rem;padding:1rem;">
+    <section class="w-card" data-testid="dropship-dev-relay-guide" style="margin-bottom:1rem;padding:1rem;">
+        <h2 class="w-card__title"><?= __('何时开启 · 怎么用') ?></h2>
+        <div class="w-alert" role="note" data-tone="info" style="margin-bottom:1rem;" data-testid="dropship-dev-relay-guide-when">
+            <strong style="display:block;margin-bottom:.35rem;"><?= __('何时开启') ?></strong>
+            <ul style="margin:0;padding-inline-start:1.25rem;">
+                <li><?= __('本机调试万能货源 / CJ Webhook（履约状态、异常回调等），但 CJ 只能打到公网生产站时。') ?></li>
+                <li><?= __('与支付共用中继：只要本机要收「生产收到的」货源回调，就开启支付 DevRelay（本页只说明，不另开开关）。') ?></li>
+                <li><?= __('不需要开：仅用本机 Mock、或 CJ 已能直达本机公网入口时。') ?></li>
+            </ul>
+        </div>
+        <div data-testid="dropship-dev-relay-guide-how">
+            <strong style="display:block;margin-bottom:.35rem;"><?= __('怎么用（万能货源）') ?></strong>
+            <ol style="margin:0;padding-inline-start:1.25rem;">
+                <li><?= __('生产站打开「支付 → 开发 Webhook 转发」：启用 + 允许生产中转 → 保存。') ?></li>
+                <li><?= __('本机同一支付控制台：启用并保存 → 填线上站点（如 https://www.aiweline.com）与用户 Token → 开启静默中继至「运行中」。') ?></li>
+                <li><?= __('把下方 CJ 生产回调 URL 登记到 CJ 开发者后台（沙盒/正式各一条）。勿填本机 *.test.weline.com。') ?></li>
+                <li><?= __('触发 CJ 回调：生产 inbox 落库并桥接进支付中继；本机 worker 直接 POST 到本机 dropship notify。') ?></li>
+            </ol>
+        </div>
+        <p class="w-muted" style="margin-top:1rem;margin-bottom:0;" data-testid="dropship-dev-relay-guide-payment-note">
+            <?= __('支付 Provider Webhook 也走同一中继；步骤见支付 DevRelay 页「支付怎么用」。') ?>
+        </p>
+    </section>
+
+    <section class="w-card" style="margin-bottom:1rem;padding:1rem;" data-testid="dropship-dev-relay-status">
         <h2 class="w-card__title"><?= __('状态') ?></h2>
         <ul class="w-list">
             <li><?= __('支付中继开关') ?>：<?= $enabled ? __('已启用') : __('未启用') ?></li>
@@ -31,26 +55,26 @@ $allowProd = !empty($gate_config['allow_on_production']);
             <li><?= __('线上基址') ?>：<code><?= htmlspecialchars($onlineBase, ENT_QUOTES, 'UTF-8') ?></code></li>
         </ul>
         <p>
-            <a class="w-btn w-btn--primary" href="<?= htmlspecialchars($paymentRelayUrl, ENT_QUOTES, 'UTF-8') ?>">
+            <a class="w-btn w-btn--primary" href="<?= htmlspecialchars($paymentRelayUrl, ENT_QUOTES, 'UTF-8') ?>" data-testid="dropship-dev-relay-open-payment">
                 <?= __('打开支付 DevRelay 控制台') ?>
             </a>
         </p>
     </section>
 
-    <section class="w-card" style="margin-bottom:1rem;padding:1rem;">
+    <section class="w-card" style="margin-bottom:1rem;padding:1rem;" data-testid="dropship-dev-relay-cj-hooks">
         <h2 class="w-card__title"><?= __('CJ 登记到官方的回调（生产 URL）') ?></h2>
-        <p class="w-muted"><?= __('勿填本机 *.test.weline.com；生产开启中继后，本机 worker 会重放到本地 notify。') ?></p>
+        <p class="w-muted"><?= __('勿填本机 *.test.weline.com；生产开启中继且本机 worker 运行后，会重放到本地 notify。') ?></p>
         <label class="w-field__label"><?= __('CJ 沙盒') ?></label>
         <input class="w-input" type="text" readonly value="<?= htmlspecialchars($cjSandbox, ENT_QUOTES, 'UTF-8') ?>" onclick="this.select()"/>
         <label class="w-field__label" style="margin-top:.75rem;"><?= __('CJ 正式') ?></label>
         <input class="w-input" type="text" readonly value="<?= htmlspecialchars($cjLive, ENT_QUOTES, 'UTF-8') ?>" onclick="this.select()"/>
     </section>
 
-    <section class="w-card" style="padding:1rem;">
-        <h2 class="w-card__title"><?= __('本机步骤') ?></h2>
+    <section class="w-card" style="padding:1rem;" data-testid="dropship-dev-relay-steps">
+        <h2 class="w-card__title"><?= __('检查清单') ?></h2>
         <ol>
             <li><?= __('生产站：支付 DevRelay → 启用 + 允许生产中转 → 保存') ?></li>
-            <li><?= __('本机：同一控制台开启静默中继（挂 online=https://www.aiweline.com）') ?></li>
+            <li><?= __('本机：同一控制台开启静默中继（挂 online=生产基址）') ?></li>
             <li><?= __('CJ 开发者后台粘贴上方生产回调 URL') ?></li>
             <li><?= __('推单失败升 dead 时，本站自动退款+安慰邮件（货源设置开关，默认开）') ?></li>
         </ol>

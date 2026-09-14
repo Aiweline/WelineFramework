@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\B2B\Controller\Backend;
 
+use Weline\B2B\Model\B2BOrderHangRecord;
 use Weline\B2B\Model\B2BOrderPriceSnapshotRecord;
 use Weline\B2B\Model\B2BQuoteTokenRecord;
 use Weline\B2B\Model\CustomerGroupMembershipRecord;
@@ -12,6 +13,7 @@ use Weline\B2B\Model\MembershipApplicationRecord;
 use Weline\B2B\Model\PriceListItemRecord;
 use Weline\B2B\Model\PriceListRecord;
 use Weline\B2B\Service\B2BAdminService;
+use Weline\B2B\Service\B2BHangAdminListPresenter;
 use Weline\B2B\Service\B2BRolloutGate;
 use Weline\B2B\Service\B2BService;
 use Weline\B2B\Service\CustomerGroupStore;
@@ -108,7 +110,7 @@ final class ControlCenter extends BackendController
     public function hangOrders(): string
     {
         return $this->renderWorkspace('hang-orders', '定金挂单', [
-            '定金挂单' => [\Weline\B2B\Model\B2BOrderHangRecord::class, [
+            '定金挂单' => [B2BOrderHangRecord::class, [
                 'hang_id',
                 'order_ref',
                 'customer_id',
@@ -300,7 +302,19 @@ final class ControlCenter extends BackendController
         $filterChannelId = $scope['filter_channel_id'];
 
         $datasets = [];
+        $hangTab = 'awaiting';
+        $hangTabCounts = [];
         foreach ($sources as $label => [$modelClass, $fields]) {
+            if (($form['kind'] ?? '') === 'hang-order' && $modelClass === B2BOrderHangRecord::class) {
+                $hangTab = $this->resolveHangTab();
+                $statusFilter = $this->hangTabToStatus($hangTab);
+                $dataset = $this->loadHangRows($label, $fields, $statusFilter, $filterWebsiteId);
+                $hangTabCounts = $this->hangTabCounts($filterWebsiteId);
+                $dataset['rows'] = ObjectManager::getInstance(B2BHangAdminListPresenter::class)
+                    ->enrich((array)($dataset['rows'] ?? []));
+                $datasets[] = $dataset;
+                continue;
+            }
             $dataset = $this->loadRows($label, $modelClass, $fields);
             $dataset['rows'] = $this->filterRowsByB2bScope(
                 (array)($dataset['rows'] ?? []),
@@ -331,6 +345,11 @@ final class ControlCenter extends BackendController
         $this->assign('storefront_base_url', $storefrontBase);
         $this->assign('group_options', $groupOptions);
         $this->assign('admin_groups', $adminGroups);
+        if (($form['kind'] ?? '') === 'hang-order') {
+            $this->assign('hang_tab', $hangTab);
+            $this->assign('hang_tab_counts', $hangTabCounts);
+            $this->assign('hang_tab_query_base', $this->b2bScopeQuery($scope));
+        }
         if (($form['kind'] ?? '') === 'group') {
             $this->assign(
                 'base_currency',
@@ -418,6 +437,106 @@ final class ControlCenter extends BackendController
             'error' => $message !== '' ? $message : (string)__('加载失败'),
             'reference' => $reference,
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
+    /** @param list<string> $fields */
+    private function loadHangRows(string $label, array $fields, ?string $statusFilter, ?int $filterWebsiteId): array
+    {
+        try {
+            /** @var B2BOrderHangRecord $model */
+            $model = ObjectManager::getInstance(B2BOrderHangRecord::class);
+            $model->reset();
+            if ($statusFilter !== null && $statusFilter !== '') {
+                $model->where(B2BOrderHangRecord::schema_fields_HANG_STATUS, $statusFilter);
+            }
+            if ($filterWebsiteId !== null) {
+                $model->where(B2BOrderHangRecord::schema_fields_WEBSITE_ID, $filterWebsiteId);
+            }
+            $rows = $model
+                ->order(B2BOrderHangRecord::schema_fields_UPDATED_AT_EPOCH, 'DESC')
+                ->limit(50)
+                ->select()
+                ->fetchArray();
+            $safeRows = [];
+            foreach (is_array($rows) ? $rows : [] as $row) {
+                if (is_array($row)) {
+                    $safeRows[] = array_intersect_key($row, array_flip($fields));
+                }
+            }
+
+            return ['label' => __($label), 'rows' => $safeRows, 'error' => ''];
+        } catch (\Throwable $throwable) {
+            $reference = $this->reportFailure($throwable, 'load:hang');
+            return ['label' => __($label), 'rows' => [], 'error' => (string)__('数据暂时无法加载。参考编号：%{1}', [$reference])];
+        }
+    }
+
+    private function resolveHangTab(): string
+    {
+        $tab = strtolower(trim((string)$this->request->getGet('hang_tab', 'awaiting')));
+        $allowed = ['awaiting', 'deposit', 'balance', 'completed', 'rejected', 'expired', 'all'];
+        if (!in_array($tab, $allowed, true)) {
+            return 'awaiting';
+        }
+
+        return $tab;
+    }
+
+    private function hangTabToStatus(string $tab): ?string
+    {
+        return match ($tab) {
+            'awaiting' => 'awaiting_merchant_approval',
+            'deposit' => 'awaiting_deposit',
+            'balance' => 'awaiting_balance',
+            'completed' => 'completed',
+            'rejected' => 'rejected',
+            'expired' => 'expired',
+            default => null,
+        };
+    }
+
+    /**
+     * @return array<string,int>
+     */
+    private function hangTabCounts(?int $filterWebsiteId): array
+    {
+        $map = [
+            'awaiting' => 'awaiting_merchant_approval',
+            'deposit' => 'awaiting_deposit',
+            'balance' => 'awaiting_balance',
+            'completed' => 'completed',
+            'rejected' => 'rejected',
+            'expired' => 'expired',
+        ];
+        $counts = ['all' => 0];
+        foreach ($map as $tab => $status) {
+            $counts[$tab] = 0;
+        }
+        try {
+            /** @var B2BOrderHangRecord $model */
+            $model = ObjectManager::getInstance(B2BOrderHangRecord::class);
+            $model->reset();
+            if ($filterWebsiteId !== null) {
+                $model->where(B2BOrderHangRecord::schema_fields_WEBSITE_ID, $filterWebsiteId);
+            }
+            $rows = $model->select()->fetchArray();
+            foreach (is_array($rows) ? $rows : [] as $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+                $counts['all']++;
+                $status = strtolower(trim((string)($row['hang_status'] ?? '')));
+                foreach ($map as $tab => $want) {
+                    if ($status === $want) {
+                        $counts[$tab]++;
+                    }
+                }
+            }
+        } catch (\Throwable) {
+            // keep zeros
+        }
+
+        return $counts;
     }
 
     /** @param class-string $modelClass @param list<string> $fields */

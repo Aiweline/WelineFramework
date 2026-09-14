@@ -20,6 +20,9 @@ final class DevRelayTemplateContractTest extends TestCase
         self::assertStringContainsString('payment/backend/dev-relay', $ctrl);
         self::assertStringContainsString('cj.sandbox.default', $ctrl);
         self::assertStringContainsString('打开支付 DevRelay 控制台', $tpl);
+        self::assertStringContainsString('何时开启', $tpl);
+        self::assertStringContainsString('怎么用（万能货源）', $tpl);
+        self::assertStringContainsString('dropship-dev-relay-guide', $tpl);
         self::assertStringContainsString('dropship/backend/dev-relay', $menu);
     }
 }

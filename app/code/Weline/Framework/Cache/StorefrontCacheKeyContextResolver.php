@@ -28,12 +28,16 @@ final class StorefrontCacheKeyContextResolver
 
         $lang = trim(RequestContext::getWelineUserLang());
         $currency = trim(RequestContext::getWelineUserCurrency());
+        $defaultLocale = \Weline\Framework\Phrase\LocaleFallbackChain::websiteDefaultLocale();
+        $translationLocales = \Weline\Framework\Phrase\LocaleFallbackChain::candidates($lang, $defaultLocale);
         $existing = StorefrontCacheKeyContext::current();
         if ($existing instanceof StorefrontCacheKeyContext
             && $existing->cacheable
             && $existing->scopeIdentity?->equals($identity)
             && $existing->lang === ($lang !== '' ? $lang : 'zh_Hans_CN')
             && $existing->currency === ($currency !== '' ? $currency : 'CNY')
+            && $existing->defaultLocale === $defaultLocale
+            && $existing->translationLocales === $translationLocales
         ) {
             return $existing;
         }
@@ -43,6 +47,8 @@ final class StorefrontCacheKeyContextResolver
             && $existing->scopeIdentity?->equals($identity)
             && $existing->lang === ($lang !== '' ? $lang : 'zh_Hans_CN')
             && $existing->currency === ($currency !== '' ? $currency : 'CNY')
+            && $existing->defaultLocale === $defaultLocale
+            && $existing->translationLocales === $translationLocales
         ) {
             return $existing;
         }
@@ -56,14 +62,17 @@ final class StorefrontCacheKeyContextResolver
         StorefrontCacheKeyContext::install($provisional);
 
         try {
-            $fingerprint = $this->fingerprintForIdentity($identity);
+            $fingerprint = $this->fingerprintForIdentity($identity, $provisional->translationLocales);
             $resolved = new StorefrontCacheKeyContext(
                 $identity,
                 $provisional->lang,
                 $provisional->currency,
                 $fingerprint,
-                $fingerprint,
+                $this->translationKeyFingerprint($fingerprint, $provisional),
                 true,
+                '',
+                $provisional->defaultLocale,
+                $provisional->translationLocales,
             );
             StorefrontCacheKeyContext::install($resolved);
             return $resolved;
@@ -76,6 +85,8 @@ final class StorefrontCacheKeyContextResolver
                 $provisional->cacheKeyFingerprint,
                 false,
                 'storefront_namespace_unavailable',
+                $provisional->defaultLocale,
+                $provisional->translationLocales,
             );
             StorefrontCacheKeyContext::install($failed);
             return $failed;
@@ -97,14 +108,17 @@ final class StorefrontCacheKeyContextResolver
         $provisional = $this->requestFence($identity, $lang, $currency, 'legacy_namespace_pending');
         StorefrontCacheKeyContext::install($provisional);
         try {
-            $fingerprint = $this->fingerprintForIdentity($identity);
+            $fingerprint = $this->fingerprintForIdentity($identity, $provisional->translationLocales);
             $resolved = new StorefrontCacheKeyContext(
                 $identity,
                 $provisional->lang,
                 $provisional->currency,
                 $fingerprint,
-                $fingerprint,
+                $this->translationKeyFingerprint($fingerprint, $provisional),
                 true,
+                '',
+                $provisional->defaultLocale,
+                $provisional->translationLocales,
             );
             StorefrontCacheKeyContext::install($resolved);
             return $resolved;
@@ -114,13 +128,23 @@ final class StorefrontCacheKeyContextResolver
     }
 
     /** 复用权威请求快照核对已冻结回执；不信任广播更新的进程向量。 */
-    public function fingerprintForIdentity(ScopeIdentity $identity): string
+    public function fingerprintForIdentity(ScopeIdentity $identity, array $translationLocales = []): string
     {
-        return $this->generations->fingerprint($this->namespacePathsForIdentity($identity));
+        return $this->generations->fingerprint($this->namespacePathsForIdentity($identity, $translationLocales));
+    }
+
+    private function translationKeyFingerprint(string $fingerprint, StorefrontCacheKeyContext $context): string
+    {
+        return hash('sha256', json_encode([
+            'namespace' => $fingerprint,
+            'lang' => $context->lang,
+            'default_locale' => $context->defaultLocale,
+            'translation_locales' => $context->translationLocales,
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '');
     }
 
     /** @return list<string> */
-    public function namespacePaths(string $websiteCode): array
+    public function namespacePaths(string $websiteCode, array $translationLocales = []): array
     {
         $websiteCode = trim($websiteCode);
         if ($websiteCode === '') {
@@ -129,6 +153,7 @@ final class StorefrontCacheKeyContextResolver
 
         return [
             $this->namespacePath->global('i18n'),
+            ...\Weline\Framework\Phrase\DictionaryCacheNamespace::namespacePaths($translationLocales),
             $this->namespacePath->global('storefront', ['config']),
             $this->namespacePath->global('storefront', ['price']),
             $this->namespacePath->global('storefront', ['theme']),
@@ -148,7 +173,7 @@ final class StorefrontCacheKeyContextResolver
      *
      * @return list<string>
      */
-    public function namespacePathsForIdentity(ScopeIdentity $identity): array
+    public function namespacePathsForIdentity(ScopeIdentity $identity, array $translationLocales = []): array
     {
         if (!$this->isCompleteChannelIdentity($identity)) {
             throw new \InvalidArgumentException(__('Storefront 缓存版本缺少完整 Channel Scope'));
@@ -160,7 +185,7 @@ final class StorefrontCacheKeyContextResolver
         $storeMode = (string)$identity->storeMode;
 
         return [
-            ...$this->namespacePaths($websiteCode),
+            ...$this->namespacePaths($websiteCode, $translationLocales),
             $this->namespacePath->website($websiteCode, ['theme', 'store', $storeCode, $storeMode]),
             $this->namespacePath->website(
                 $websiteCode,

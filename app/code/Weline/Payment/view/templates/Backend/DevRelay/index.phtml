@@ -27,6 +27,55 @@ $escape = static fn (mixed $value): string => htmlspecialchars((string) $value, 
         <lang>在此统一开启中继；无需改 app/etc/env.php。本机填写线上站点完整地址与用户 Token 后后台挂接 SSE。</lang>
     </p>
 
+    <div
+        class="w-card"
+        data-testid="payment-dev-relay-guide"
+        style="--w-mb:var(--weline-space-4);"
+    >
+        <div class="w-card__header">
+            <h4 class="w-card__title" style="--w-mb:0;">
+                <w:icon name="help-circle" size="sm"></w:icon>
+                <lang>何时开启 · 怎么用</lang>
+            </h4>
+        </div>
+        <div class="w-card__body">
+            <div class="w-stack" style="--w-gap:var(--weline-space-3);">
+                <div class="w-alert" role="note" data-tone="info" style="--w-mb:0;" data-testid="payment-dev-relay-guide-when">
+                    <strong class="w-text" style="--w-mb:var(--weline-space-1);display:block;"><lang>何时开启</lang></strong>
+                    <ul class="w-text" style="--w-mb:0;padding-inline-start:1.25rem;">
+                        <li><lang>本机开发要收支付 Provider（如 PayPal）Webhook，但对方只能打到公网生产站时。</lang></li>
+                        <li><lang>本机开发要收万能货源 / CJ 回调时：开关仍在本页（货源不另建中继）。</lang></li>
+                        <li><lang>不需要开：纯 Mock、或 Provider/CJ 已能直达本机公网入口时。</lang></li>
+                    </ul>
+                </div>
+
+                <div data-testid="payment-dev-relay-guide-payment">
+                    <strong class="w-text" style="--w-mb:var(--weline-space-1);display:block;"><lang>支付怎么用</lang></strong>
+                    <ol class="w-text" style="--w-mb:0;padding-inline-start:1.25rem;">
+                        <li><lang>生产站：勾选「启用」+「允许本生产站作为线上中转主机」→ 保存；复制站点地址与用户 API Token。</lang></li>
+                        <li><lang>本机：勾选启用并保存（可预填线上地址）→ 下方填线上地址与 Token → 点「开启中继」，徽章变为运行中。</lang></li>
+                        <li><lang>把 Provider Webhook 登记为生产官方回调（如 /payment/frontend/callback/notify?endpoint_code=…）。勿填本机 *.test.weline.com，勿填 /payment/dev-relay/*。</lang></li>
+                        <li><lang>在沙盒/正式触发支付事件：线上 inbox 先落库，本机 worker 拉取后重放到本机官方 inbound。</lang></li>
+                    </ol>
+                </div>
+
+                <div data-testid="payment-dev-relay-guide-dropship">
+                    <strong class="w-text" style="--w-mb:var(--weline-space-1);display:block;"><lang>万能货源怎么用</lang></strong>
+                    <ol class="w-text" style="--w-mb:0;padding-inline-start:1.25rem;">
+                        <li><lang>与支付共用同一套开关与本机静默 worker；先按上面步骤在生产+本机把中继跑起来。</lang></li>
+                        <li><lang>到「货源 Webhook 中继」页复制 CJ 生产回调 URL（/dropship/frontend/callback/notify?endpoint_code=…），登记到 CJ，勿填本机域名。</lang></li>
+                        <li><lang>CJ 推送后：生产 inbox 入队并以 dropship:{id} 进入同一中继；本机 worker 直接 POST 到本机 notify。</lang></li>
+                    </ol>
+                </div>
+
+                <p class="w-text" data-tone="muted" style="--w-mb:0;" data-testid="payment-dev-relay-guide-doc">
+                    <lang>详细说明见模块文档</lang>
+                    <code>doc/dev-webhook-relay.md</code>。
+                </p>
+            </div>
+        </div>
+    </div>
+
     <div class="w-stack" style="--w-gap:var(--weline-space-4);">
         <div class="w-card" data-role="settings-panel" data-testid="payment-dev-relay-settings">
             <div class="w-card__header w-cluster" data-align="center" data-justify="between">

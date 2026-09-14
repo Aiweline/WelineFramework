@@ -38,6 +38,16 @@ interface ProviderInterface
     public function getCapabilities(): array;
 
     /**
+     * CSP sources this payment vendor needs (collected by Payment Extends into app defaults).
+     *
+     * Declare script/frame/connect/img hosts required by hosted fields, SDK, approve redirect,
+     * or iframe checkout. Empty when the method is fully first-party (e.g. fake card).
+     *
+     * @return array<string, list<string>> directive => absolute https hosts / keywords
+     */
+    public function cspDirectives(): array;
+
+    /**
      * Display metadata for admin and checkout.
      *
      * Required keys:

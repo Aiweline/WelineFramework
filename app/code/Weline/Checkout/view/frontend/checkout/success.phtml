@@ -21,6 +21,7 @@ $requestCheckoutGroupUuid = trim((string)$this->request->getParam('checkout_grou
 $requestOutcome = strtolower(trim((string)$this->request->getParam('outcome')));
 $paymentCancelled = !empty($this->getData('checkout_payment_cancelled'))
     || $requestOutcome === 'cancel';
+$paidAck = !empty($this->getData('checkout_paid_ack'));
 $escape = static fn(mixed $value): string => htmlspecialchars(
     (string)$value,
     ENT_QUOTES | ENT_SUBSTITUTE,
@@ -82,6 +83,7 @@ if ($orderCurrency !== '' && $money !== []) {
         ['key' => 'shipping_amount_minor', 'label' => (string) __('运费')],
         ['key' => 'tax_amount_minor', 'label' => (string) __('税费')],
         ['key' => 'discount_amount_minor', 'label' => (string) __('优惠'), 'negate' => true],
+        ['key' => 'cod_fee_amount_minor', 'label' => (string) __('货到付款手续费')],
         ['key' => 'grand_total_minor', 'label' => (string) __('订单总额'), 'emphasis' => true],
     ];
     foreach ($map as $row) {
@@ -131,6 +133,9 @@ if ($orderCurrency !== '' && $money !== []) {
                         <h1><?= $escape(__('已取消成功')) ?></h1>
                         <p><?= $escape(__('支付已取消成功，订单尚未完成付款。可返回结账页重新选择支付方式。')) ?></p>
                     <?php endif; ?>
+                <?php elseif ($paidAck): ?>
+                    <h1><?= $escape(__('订单已支付')) ?></h1>
+                    <p><?= $escape(__('该笔订单已完成扣款，无需再次付款。')) ?></p>
                 <?php else: ?>
                     <h1><?= $escape(__('感谢您的订购！')) ?></h1>
                     <p><?= $escape(__('您的订单已支付成功，我们正在为您准备发货。')) ?></p>
@@ -332,52 +337,64 @@ if ($orderCurrency !== '' && $money !== []) {
         <w:widget type="content" name="checkout-success-guest-convert" />
     </w:slot>
 
-    <nav class="amz-order-confirm__actions order-actions">
+    <nav class="amz-order-confirm__actions order-actions" aria-label="<?= $escape(__('订单操作')) ?>">
         <?php if ($paymentCancelled): ?>
-        <a href="@url{'checkout'}" class="amz-order-confirm__btn amz-order-confirm__btn--primary w-button" data-tone="primary">
+        <a href="@url{'checkout'}"
+           class="amz-order-confirm__btn amz-order-confirm__btn--primary w-button"
+           data-tone="primary">
             <?= $escape(__('返回结账')) ?>
         </a>
-        <?php elseif ($requestOrderUuid !== ''): ?>
-        <a href="<?php if ($requestOrderUuid !== ''): ?>@url{'customer/account/index'|['order_uuid' => $requestOrderUuid]}#orders<?php else: ?>@url{'customer/account/index'}#orders<?php endif; ?>"
-           class="amz-order-confirm__btn amz-order-confirm__btn--primary w-button weline-pixel::view_order"
+        <a href="@url{'products'}"
+           class="amz-order-confirm__btn amz-order-confirm__btn--secondary w-button weline-pixel::continue_shopping"
+           data-tone="neutral">
+            <?= $escape(__('继续购物')) ?>
+        </a>
+        <a href="@url{'customer/account/index'}#orders"
+           class="amz-order-confirm__btn amz-order-confirm__btn--link weline-pixel::view_orders">
+            <?= $escape(__('返回订单列表')) ?>
+        </a>
+        <?php else: ?>
+        <a href="@url{'products'}"
+           class="amz-order-confirm__btn amz-order-confirm__btn--primary w-button weline-pixel::continue_shopping"
            data-tone="primary">
+            <?= $escape(__('继续购物')) ?>
+        </a>
+        <?php if ($requestOrderUuid !== ''): ?>
+        <a href="@url{'customer/account/index'|['order_uuid' => $requestOrderUuid]}#orders"
+           class="amz-order-confirm__btn amz-order-confirm__btn--secondary w-button weline-pixel::view_order"
+           data-tone="neutral">
             <?= $escape(__('查看订单详情')) ?>
         </a>
         <?php endif; ?>
         <a href="@url{'customer/account/index'}#orders"
-           class="amz-order-confirm__btn amz-order-confirm__btn--secondary w-button weline-pixel::view_orders"
-           data-tone="neutral">
+           class="amz-order-confirm__btn amz-order-confirm__btn--link weline-pixel::view_orders">
             <?= $escape(__('返回订单列表')) ?>
         </a>
-        <a href="@url{'products'}"
-           class="amz-order-confirm__btn amz-order-confirm__btn--link w-button weline-pixel::continue_shopping"
-           data-tone="neutral">
-            <?= $escape(__('继续购物')) ?>
-        </a>
+        <?php endif; ?>
     </nav>
 </main>
 
 <style>
 .amz-order-confirm {
-    --amz-text: #0f1111;
-    --amz-muted: #565959;
-    --amz-border: #d5d9d9;
-    --amz-panel-bg: #fff;
-    --amz-banner-bg: #f7fafa;
-    --amz-success: #067d62;
+    --amz-text: var(--color-text, #0f1111);
+    --amz-muted: var(--color-text-muted, #565959);
+    --amz-border: var(--color-border, #d5d9d9);
+    --amz-panel-bg: var(--color-surface, #fff);
+    --amz-banner-bg: var(--color-surface-subtle, #f7fafa);
+    --amz-success: var(--color-success, #067d62);
     --amz-link: var(--color-link);
     --amz-btn-primary-bg: var(--color-primary, #b84a3c);
     --amz-btn-primary-border: var(--color-primary-dark, #963b30);
     --amz-btn-primary-hover: var(--color-primary-hover, #963b30);
+    --amz-btn-primary-fg: var(--color-on-primary, #fff);
     box-sizing: border-box;
     width: min(100%, var(--weline-layout-content-max-width));
     max-width: 100%;
     min-width: 0;
     margin: 0 auto;
-    padding: 24px var(--weline-layout-content-padding-inline) 48px;
+    padding: var(--weline-space-5, 24px) var(--weline-layout-content-padding-inline) var(--weline-space-8, 48px);
     color: var(--amz-text);
-    font-family: "Amazon Ember", "Helvetica Neue", Arial, sans-serif;
-    font-size: 14px;
+    font-size: var(--weline-font-size-sm, 14px);
     line-height: 1.5;
 }
 .amz-order-confirm__banner {
@@ -605,38 +622,40 @@ if ($orderCurrency !== '' && $money !== []) {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 12px 18px;
-    margin-top: 8px;
+    gap: var(--weline-space-3, 12px) var(--weline-space-4, 16px);
+    margin-top: var(--weline-space-4, 16px);
+    padding-top: var(--weline-space-4, 16px);
+    border-top: 1px solid var(--amz-border);
 }
 .amz-order-confirm__btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-height: 32px;
-    padding: 0 16px;
-    border-radius: 8px;
-    font-size: 13px;
-    font-weight: 500;
+    min-height: 2.5rem;
+    padding: 0 var(--weline-space-4, 16px);
+    border-radius: var(--weline-radius-md, 8px);
+    font-size: var(--weline-font-size-sm, 13px);
+    font-weight: 600;
     text-decoration: none;
     cursor: pointer;
-    box-shadow: 0 2px 5px rgba(15, 17, 17, .08);
+    box-shadow: none;
 }
 .amz-order-confirm__btn--primary {
     background: var(--amz-btn-primary-bg);
     border: 1px solid var(--amz-btn-primary-border);
-    color: var(--amz-text);
+    color: var(--amz-btn-primary-fg);
 }
 .amz-order-confirm__btn--primary:hover {
     background: var(--amz-btn-primary-hover);
-    color: var(--amz-text);
+    color: var(--amz-btn-primary-fg);
 }
 .amz-order-confirm__btn--secondary {
-    background: #fff;
-    border: 1px solid #d5d9d9;
+    background: var(--amz-panel-bg);
+    border: 1px solid var(--amz-border);
     color: var(--amz-text);
 }
 .amz-order-confirm__btn--secondary:hover {
-    background: #f7fafa;
+    background: var(--amz-banner-bg);
     color: var(--amz-text);
 }
 .amz-order-confirm__btn--link {
@@ -644,11 +663,13 @@ if ($orderCurrency !== '' && $money !== []) {
     border: none;
     box-shadow: none;
     color: var(--amz-link);
-    padding: 0;
-    min-height: auto;
+    padding: 0 var(--weline-space-1, 4px);
+    min-height: 2.5rem;
+    font-weight: 500;
+    margin-inline-start: auto;
 }
 .amz-order-confirm__btn--link:hover {
-    color: #c7511f;
+    color: var(--color-link-hover, var(--amz-link));
     text-decoration: underline;
 }
 @media (max-width: 720px) {
@@ -656,8 +677,17 @@ if ($orderCurrency !== '' && $money !== []) {
     .amz-order-confirm__item { grid-template-columns: 64px minmax(0, 1fr); }
     .amz-order-confirm__item-price { grid-column: 2; padding-top: 0; }
     .amz-order-confirm__item-media { width: 64px; height: 64px; }
-    .amz-order-confirm__actions { flex-direction: column; align-items: stretch; }
+    .amz-order-confirm__actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
     .amz-order-confirm__btn--primary,
     .amz-order-confirm__btn--secondary { width: 100%; }
+    .amz-order-confirm__btn--link {
+        margin-inline-start: 0;
+        justify-content: center;
+        min-height: auto;
+        padding-block: var(--weline-space-2, 8px);
+    }
 }
 </style>

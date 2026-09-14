@@ -1,0 +1,595 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+$template = $this->getData('template');
+$variables = $this->getData('variables') ?? [];
+$locale = (string)($this->getData('locale') ?? 'zh_Hans_CN');
+$selectedScope = (string)($this->getData('selected_scope') ?? 'default.default.default');
+$channelMeta = $this->getData('channel_meta') ?? [];
+$previewShellHtml = (string)($this->getData('preview_shell_html') ?? '');
+$previewSamples = is_array($this->getData('preview_samples') ?? null) ? $this->getData('preview_samples') : [];
+$h = static fn($v) => htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$channel = (string)$template->getData('channel_code');
+$templateId = (int)$template->getId();
+$listingReturn = is_array($this->getData('listing_return') ?? null) ? $this->getData('listing_return') : [];
+$returnQ = trim((string)($listingReturn['q'] ?? ''));
+$returnLocales = trim((string)($listingReturn['locales'] ?? ''));
+$returnFocusLocale = trim((string)($listingReturn['focus_locale'] ?? $locale));
+$saveUrl = $this->getBackendUrl('smtp/backend/template/post-save');
+$resetUrl = $this->getBackendUrl('smtp/backend/template/post-reset');
+$copyUrl = $this->getBackendUrl('smtp/backend/template/post-copy');
+$listingUrlParams = [
+    'target_scope' => $selectedScope,
+    'channel' => $channel,
+];
+if ($returnQ !== '') {
+    $listingUrlParams['q'] = $returnQ;
+}
+if ($returnLocales !== '') {
+    $listingUrlParams['locales'] = $returnLocales;
+}
+if ($returnFocusLocale !== '') {
+    $listingUrlParams['focus_locale'] = $returnFocusLocale;
+}
+$listingUrl = $this->getBackendUrl('smtp/backend/template/listing', $listingUrlParams);
+$bodyHtml = (string)$template->getData('body_html');
+$jsonFlags = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT;
+if (defined('JSON_INVALID_UTF8_SUBSTITUTE')) {
+    $jsonFlags |= JSON_INVALID_UTF8_SUBSTITUTE;
+}
+$previewShellJson = json_encode($previewShellHtml, $jsonFlags);
+$previewSamplesJson = json_encode($previewSamples, $jsonFlags);
+if (!is_string($previewShellJson)) {
+    $previewShellJson = '""';
+}
+if (!is_string($previewSamplesJson)) {
+    $previewSamplesJson = '{}';
+}
+
+$varsContent = [];
+$varsIdentity = [];
+$varsTone = [];
+foreach ($variables as $var) {
+    $code = trim((string)($var['code'] ?? ''));
+    if ($code === '') {
+        continue;
+    }
+    if ($code === 'brand_display_name'
+        || str_starts_with($code, 'site_')
+        || str_starts_with($code, 'store_')
+        || str_starts_with($code, 'channel_')
+        || str_starts_with($code, 'contact_')
+        || $code === 'service_hours'
+    ) {
+        $varsIdentity[] = $var;
+    } elseif (str_starts_with($code, 'brand_')) {
+        $varsTone[] = $var;
+    } else {
+        $varsContent[] = $var;
+    }
+}
+
+$renderVarButtons = static function (array $list) use ($h): void {
+    foreach ($list as $var) {
+        $code = (string)$var['code'];
+        echo '<button type="button" class="w-button" data-tone="neutral" data-variant="outline" data-size="sm"'
+            . ' data-var-code="' . $h($code) . '"'
+            . ' data-testid="smtp-template-var-' . $h($code) . '">'
+            . $h('{{var.' . $code . '}}')
+            . ' <span class="w-text" data-tone="muted" data-size="sm">— ' . $h((string)($var['label'] ?? $code)) . '</span>'
+            . '</button>';
+    }
+};
+?>
+<style>
+.w-smtp-edit-workspace {
+    display: grid;
+    gap: var(--weline-space-4, 1rem);
+}
+.w-smtp-edit-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: var(--weline-space-3, 0.75rem);
+    padding-block-end: var(--weline-space-3, 0.75rem);
+    border-block-end: 1px solid var(--weline-theme-border, var(--color-border-default, #d4cfc5));
+}
+.w-smtp-edit-main {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(18rem, 0.95fr);
+    gap: var(--weline-space-4, 1rem);
+    align-items: start;
+}
+@media (max-width: 1100px) {
+    .w-smtp-edit-main {
+        grid-template-columns: 1fr;
+    }
+    .w-smtp-edit-preview {
+        position: static !important;
+    }
+}
+.w-smtp-edit-preview {
+    position: sticky;
+    inset-block-start: var(--weline-space-3, 0.75rem);
+    display: grid;
+    gap: var(--weline-space-2, 0.5rem);
+}
+.w-smtp-edit-preview-frame {
+    border: 1px solid var(--weline-theme-border, var(--color-border-default, #d4cfc5));
+    background: var(--weline-theme-surface-muted, var(--color-bg-secondary, #ede9e1));
+    border-radius: var(--weline-radius-md, 8px);
+    padding: var(--weline-space-3, 0.75rem);
+    min-block-size: 28rem;
+}
+.w-smtp-edit-preview-frame iframe {
+    display: block;
+    width: 100%;
+    min-block-size: 32rem;
+    border: 0;
+    background: transparent;
+    border-radius: var(--weline-radius-sm, 4px);
+}
+.w-smtp-edit-vars {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--weline-space-2, 0.5rem);
+}
+.w-smtp-edit-panel {
+    border: 1px solid var(--weline-theme-border, var(--color-border-default, #d4cfc5));
+    border-radius: var(--weline-radius-md, 8px);
+    background: var(--weline-theme-surface, var(--color-bg-primary, #fffefa));
+    padding: var(--weline-space-3, 0.75rem);
+}
+.w-smtp-edit-panel > summary {
+    cursor: pointer;
+    font-weight: 600;
+    list-style: none;
+}
+.w-smtp-edit-panel > summary::-webkit-details-marker { display: none; }
+.w-smtp-template-editor {
+    min-block-size: 22rem;
+}
+</style>
+
+<div class="w-smtp-edit-workspace" data-testid="smtp-template-edit">
+    <div class="w-smtp-edit-toolbar" data-testid="smtp-template-edit-toolbar">
+        <div class="w-stack" style="--w-gap:var(--weline-space-1);">
+            <p class="w-text" data-size="sm">
+                <a class="w-link" href="<?= $h($listingUrl) ?>" data-testid="smtp-template-back-listing"><?= __('← 返回渠道管理') ?></a>
+            </p>
+            <h1 class="w-heading" data-level="2"><?= __('编辑邮件模板') ?> · <?= $h((string)($channelMeta['name'] ?? $channel)) ?></h1>
+            <p class="w-text" data-tone="muted" data-size="sm"><code><?= $h($channel) ?></code></p>
+        </div>
+        <div class="w-cluster" data-gap="2" data-align="center">
+            <button type="submit" form="smtp-template-save-form" class="w-button" data-tone="primary" data-testid="smtp-template-save"><?= __('保存') ?></button>
+            <button type="button" class="w-button" data-tone="neutral" data-variant="outline" data-size="sm" id="smtp-tpl-preview-refresh" data-testid="smtp-template-preview-refresh"><?= __('刷新预览') ?></button>
+            <button type="submit" form="smtp-template-reset-form" class="w-button" data-tone="neutral" data-variant="outline" data-testid="smtp-template-reset"><?= __('重置为默认') ?></button>
+        </div>
+    </div>
+
+    <form id="smtp-template-save-form" method="post" action="<?= $h($saveUrl) ?>" class="w-stack" style="--w-gap:var(--weline-space-4);" data-testid="smtp-template-save-form">
+        <input type="hidden" name="template_id" value="<?= $templateId ?>"/>
+        <input type="hidden" name="channel_code" value="<?= $h($channel) ?>"/>
+        <input type="hidden" name="storage_scope" id="smtp-tpl-storage-scope" value="<?= $h($selectedScope) ?>"/>
+        <input type="hidden" name="q" value="<?= $h($returnQ) ?>" data-testid="smtp-template-return-q"/>
+        <input type="hidden" name="locales" value="<?= $h($returnLocales) ?>" data-testid="smtp-template-return-locales"/>
+        <input type="hidden" name="focus_locale" value="<?= $h($returnFocusLocale) ?>" data-testid="smtp-template-return-focus-locale"/>
+
+        <div class="w-cluster" data-gap="3" data-align="end" data-testid="smtp-template-edit-scope-bar">
+            <div class="w-field" style="--w-min-inline-size:14rem; --w-mb:0;" data-testid="smtp-template-edit-locale">
+                <label class="w-field__label" for="smtp-tpl-locale"><?= __('语言') ?></label>
+                <w:i18n:language:select
+                    id="smtp-tpl-locale"
+                    name="locale"
+                    value="locale"
+                    catalog="installed"
+                    data-w-width="full"
+                />
+            </div>
+            <div class="w-field" style="--w-min-inline-size:16rem; --w-mb:0;" data-testid="smtp-template-edit-scope">
+                <label class="w-field__label" for="smtp-template-edit-scope"><?= __('作用范围') ?></label>
+                <w:scope
+                    id="smtp-template-edit-scope"
+                    name="target_scope"
+                    value="selected_scope"
+                    placeholder="@lang(选择网站范围)"
+                    search-placeholder="@lang(搜索作用范围)"
+                />
+            </div>
+        </div>
+        <script>
+            (function () {
+                var localeRoot = document.getElementById('smtp-tpl-locale');
+                var storageInput = document.getElementById('smtp-tpl-storage-scope');
+                function scopeField() {
+                    var el = document.getElementById('smtp-template-edit-scope');
+                    if (!el) { return null; }
+                    if (el.matches && el.matches('input[name="target_scope"]')) {
+                        return el;
+                    }
+                    return el.querySelector('input[type="hidden"][name="target_scope"]')
+                        || el.querySelector('input[name="target_scope"]');
+                }
+                function localeField() {
+                    if (!localeRoot) { return null; }
+                    if (localeRoot.matches && (localeRoot.matches('input[name="locale"]') || localeRoot.matches('select[name="locale"]'))) {
+                        return localeRoot;
+                    }
+                    return localeRoot.querySelector('input[type="hidden"][name="locale"]')
+                        || localeRoot.querySelector('input[name="locale"]')
+                        || localeRoot.querySelector('select[name="locale"]');
+                }
+                function syncStorageScope() {
+                    var field = scopeField();
+                    if (storageInput && field && field.value) {
+                        storageInput.value = String(field.value || '').trim();
+                    }
+                }
+                function go() {
+                    var field = scopeField();
+                    var localeInput = localeField();
+                    var url = new URL(window.location.href);
+                    syncStorageScope();
+                    if (field && field.value) {
+                        var next = String(field.value || '').trim();
+                        url.searchParams.set('target_scope', next);
+                        // 仅用完整 target_scope；勿写分段键，否则空 website 会覆盖显式范围
+                        url.searchParams.delete('website_code');
+                        url.searchParams.delete('store_code');
+                        url.searchParams.delete('channel_code');
+                        url.searchParams.delete('scope_kind');
+                    }
+                    if (localeInput && localeInput.value) {
+                        url.searchParams.set('locale', String(localeInput.value || '').trim());
+                    }
+                    var channelInput = document.querySelector('#smtp-template-save-form input[name="channel_code"]');
+                    var channel = channelInput && channelInput.value
+                        ? String(channelInput.value || '').trim()
+                        : (url.searchParams.get('channel') || '');
+                    if (channel) {
+                        url.searchParams.set('channel', channel);
+                    }
+                    // 按 channel+scope+locale 重载，避免锁死旧范围的 template_id
+                    url.searchParams.delete('template_id');
+                    window.location.assign(url.toString());
+                }
+                var scopeInput = scopeField();
+                if (scopeInput) {
+                    scopeInput.addEventListener('change', go);
+                }
+                var localeInput = localeField();
+                if (localeInput) {
+                    localeInput.addEventListener('change', go);
+                }
+                var saveForm = document.getElementById('smtp-template-save-form');
+                if (saveForm) {
+                    saveForm.addEventListener('submit', syncStorageScope);
+                }
+            })();
+        </script>
+
+        <div class="w-field" style="--w-mb:0;">
+            <label class="w-field__label" for="smtp-tpl-subject"><?= __('主题') ?></label>
+            <input class="w-input" id="smtp-tpl-subject" name="subject" value="<?= $h((string)$template->getData('subject')) ?>" data-testid="smtp-template-subject"/>
+        </div>
+
+        <section class="w-stack" style="--w-gap:var(--weline-space-2);" data-testid="smtp-template-vars">
+            <div class="w-text" data-weight="semibold"><?= __('插入变量') ?></div>
+            <p class="w-text" data-tone="muted" data-size="sm" data-testid="smtp-template-shell-hint">
+                <?= __('页头/页尾由系统固定注入；正文只插业务变量。实时预览链接按当前作用范围站点地址填充（非 example.com 样例）。品牌色变量仅预览壳使用。') ?>
+            </p>
+            <?php if ($varsContent !== []): ?>
+                <div class="w-smtp-edit-vars" data-testid="smtp-template-vars-content">
+                    <?php $renderVarButtons($varsContent); ?>
+                </div>
+            <?php endif; ?>
+            <?php if ($varsIdentity !== []): ?>
+                <details class="w-smtp-edit-panel" data-testid="smtp-template-vars-identity">
+                    <summary><?= __('站店渠 / 联系信息') ?> (<?= count($varsIdentity) ?>)</summary>
+                    <div class="w-smtp-edit-vars" style="margin-block-start:var(--weline-space-2, 0.5rem);">
+                        <?php $renderVarButtons($varsIdentity); ?>
+                    </div>
+                </details>
+            <?php endif; ?>
+            <?php if ($varsTone !== []): ?>
+                <details class="w-smtp-edit-panel" data-testid="smtp-template-vars-tone">
+                    <summary><?= __('品牌色（壳用）') ?> (<?= count($varsTone) ?>)</summary>
+                    <div class="w-smtp-edit-vars" style="margin-block-start:var(--weline-space-2, 0.5rem);">
+                        <?php $renderVarButtons($varsTone); ?>
+                    </div>
+                </details>
+            <?php endif; ?>
+            <?php if ($variables === []): ?>
+                <p class="w-text" data-tone="muted" data-size="sm"><?= __('此渠道未声明变量') ?></p>
+            <?php endif; ?>
+        </section>
+
+        <div class="w-smtp-edit-main" data-testid="smtp-template-edit-workspace">
+            <section class="w-stack" style="--w-gap:var(--weline-space-2);" data-testid="smtp-template-editor-column">
+                <label class="w-field__label" for="smtp-tpl-body"><?= __('正文') ?></label>
+                <div class="w-smtp-template-editor w-smtp-edit-panel" data-testid="smtp-template-editor-shell">
+                    <textarea class="w-input" id="smtp-tpl-body" name="body_html" rows="16" editor data-testid="smtp-template-body"><?= $h($bodyHtml) ?></textarea>
+                    <w:editor-manager container-id="smtp-tpl-body"/>
+                </div>
+            </section>
+
+            <aside class="w-smtp-edit-preview" data-testid="smtp-template-live-preview">
+                <div class="w-cluster" data-justify="between" data-align="center">
+                    <div class="w-stack" style="--w-gap:var(--weline-space-1);">
+                        <h2 class="w-heading" data-level="3"><?= __('实时预览') ?></h2>
+                        <p class="w-text" data-tone="muted" data-size="sm"><?= __('含固定页头/页尾；编辑后自动刷新。') ?></p>
+                    </div>
+                </div>
+                <div class="w-smtp-edit-preview-frame">
+                    <iframe id="smtp-tpl-preview" title="<?= $h(__('邮件实时预览')) ?>" data-testid="smtp-template-preview-iframe"
+                            sandbox="allow-same-origin"></iframe>
+                </div>
+            </aside>
+        </div>
+
+        <details class="w-smtp-edit-panel" data-testid="smtp-template-advanced">
+            <summary><?= __('高级：纯文本') ?></summary>
+            <div class="w-field" style="margin-block-start:var(--weline-space-2, 0.5rem);">
+                <label class="w-field__label" for="smtp-tpl-text"><?= __('纯文本（可选）') ?></label>
+                <textarea class="w-input" id="smtp-tpl-text" name="body_text" rows="4"><?= $h((string)$template->getData('body_text')) ?></textarea>
+            </div>
+        </details>
+    </form>
+
+    <form id="smtp-template-reset-form" method="post" action="<?= $h($resetUrl) ?>" data-testid="smtp-template-reset-form" hidden>
+        <input type="hidden" name="channel_code" value="<?= $h($channel) ?>"/>
+        <input type="hidden" name="locale" value="<?= $h($locale) ?>"/>
+        <input type="hidden" name="storage_scope" value="<?= $h($selectedScope) ?>"/>
+        <input type="hidden" name="target_scope" value="<?= $h($selectedScope) ?>"/>
+        <input type="hidden" name="q" value="<?= $h($returnQ) ?>"/>
+        <input type="hidden" name="locales" value="<?= $h($returnLocales) ?>"/>
+        <input type="hidden" name="focus_locale" value="<?= $h($returnFocusLocale) ?>"/>
+    </form>
+
+    <details class="w-smtp-edit-panel" data-testid="smtp-template-copy-panel">
+        <summary><?= __('复制到其他范围 / 语言') ?></summary>
+        <form method="post" action="<?= $h($copyUrl) ?>" class="w-cluster" data-gap="2" data-align="end" style="margin-block-start:var(--weline-space-2, 0.5rem);" data-testid="smtp-template-copy-form">
+            <input type="hidden" name="template_id" value="<?= $templateId ?>"/>
+            <input type="hidden" name="target_scope" value="<?= $h($selectedScope) ?>"/>
+            <div class="w-field" style="--w-mb:0;">
+                <label class="w-field__label"><?= __('复制到范围') ?></label>
+                <input class="w-input" name="target_storage_scope" value="<?= $h($selectedScope) ?>" data-testid="smtp-template-copy-scope"/>
+            </div>
+            <div class="w-field" style="--w-mb:0;">
+                <label class="w-field__label"><?= __('复制到语言') ?></label>
+                <input class="w-input" name="target_locale" value="en_US" data-testid="smtp-template-copy-locale"/>
+            </div>
+            <button type="submit" class="w-button" data-tone="neutral" data-variant="outline" data-testid="smtp-template-copy"><?= __('复制') ?></button>
+        </form>
+    </details>
+</div>
+<script>
+(function () {
+    var body = document.getElementById('smtp-tpl-body');
+    var subjectEl = document.getElementById('smtp-tpl-subject');
+    var frame = document.getElementById('smtp-tpl-preview');
+    var shellHtml = <?= $previewShellJson ?>;
+    var samples = <?= $previewSamplesJson ?> || {};
+    var timer = null;
+
+    function insertToken(token) {
+        var editable = document.querySelector('.w-smtp-template-editor .ck-editor__editable, .ck-editor__editable');
+        var editor = editable && editable.ckeditorInstance;
+        if (editor && editor.model) {
+            editor.editing.view.focus();
+            editor.model.change(function (writer) {
+                editor.model.insertContent(writer.createText(token));
+            });
+            schedulePreview();
+            return;
+        }
+        if (!body) return;
+        body.focus();
+        var start = body.selectionStart || body.value.length;
+        var end = body.selectionEnd || start;
+        body.value = body.value.slice(0, start) + token + body.value.slice(end);
+        body.dispatchEvent(new Event('input', {bubbles: true}));
+        schedulePreview();
+    }
+
+    function getEditorHtml() {
+        var editable = document.querySelector('.w-smtp-template-editor .ck-editor__editable, .ck-editor__editable');
+        var editor = editable && editable.ckeditorInstance;
+        if (editor && editor.getData) {
+            return String(editor.getData() || '');
+        }
+        return body ? String(body.value || '') : '';
+    }
+
+    function stripScripts(html) {
+        return String(html || '')
+            .replace(/<script[\s\S]*?<\/script>/gi, '')
+            .replace(/\son\w+\s*=\s*(['"]).*?\1/gi, '')
+            .replace(/\shref\s*=\s*(['"])\s*javascript:[^'"]*\1/gi, ' href="#"');
+    }
+
+    function parseStyleMap(style) {
+        var map = {};
+        String(style || '').split(';').forEach(function (part) {
+            part = String(part || '').trim();
+            if (!part || part.indexOf(':') < 0) return;
+            var i = part.indexOf(':');
+            var k = part.slice(0, i).trim().toLowerCase();
+            var v = part.slice(i + 1).trim();
+            if (k && v) map[k] = v;
+        });
+        return map;
+    }
+
+    function styleMapToString(map) {
+        return Object.keys(map).map(function (k) { return k + ':' + map[k]; }).join(';');
+    }
+
+    function expandHex(hex) {
+        hex = String(hex || '').replace(/^#/, '').toLowerCase();
+        if (hex.length === 3) {
+            hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+        }
+        return hex.length === 6 ? '#' + hex : '';
+    }
+
+    function contrastTextColor(bgHex) {
+        var hex = expandHex(bgHex).replace(/^#/, '');
+        if (hex.length !== 6) return '#16333f';
+        var r = parseInt(hex.slice(0, 2), 16);
+        var g = parseInt(hex.slice(2, 4), 16);
+        var b = parseInt(hex.slice(4, 6), 16);
+        var luma = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+        return luma > 0.55 ? '#16333f' : '#f7f4ef';
+    }
+
+    function extractTdBackground(td) {
+        var bg = expandHex(td.getAttribute('bgcolor') || '');
+        if (bg) return bg;
+        var style = String(td.getAttribute('style') || '');
+        var m = style.match(/background(?:-color)?\s*:\s*(#[0-9a-fA-F]{3,8})\b/i);
+        return m ? expandHex(m[1]) : '';
+    }
+
+    function ensureCtaAnchorStyle(anchor, bgHex) {
+        var map = parseStyleMap(anchor.getAttribute('style') || '');
+        map.display = map.display || 'inline-block';
+        map.padding = map.padding || '14px 26px';
+        map['font-family'] = map['font-family'] || 'Arial,Helvetica,sans-serif';
+        map['font-size'] = map['font-size'] || '15px';
+        map['font-weight'] = map['font-weight'] || '700';
+        map.color = contrastTextColor(bgHex) + ' !important';
+        map['text-decoration'] = 'none !important';
+        map.border = map.border || '0';
+        map['text-decoration-line'] = 'none';
+        anchor.setAttribute('style', styleMapToString(map));
+    }
+
+    /** CKEditor 常把邮件按钮收成裸 a；预览侧补回邮件安全内联样式。 */
+    function normalizeEmailBody(html) {
+        var raw = stripScripts(html);
+        if (!raw) return '';
+        try {
+            var tokens = [];
+            var protectedHtml = String(raw).replace(/\{\{\s*[^}]+\}\}/g, function (m) {
+                var key = 'WELINEMAILTOK' + tokens.length + 'X';
+                tokens.push({ key: key, value: m });
+                return key;
+            });
+            var doc = new DOMParser().parseFromString('<div id="weline-mail-normalize-root">' + protectedHtml + '</div>', 'text/html');
+            var root = doc.getElementById('weline-mail-normalize-root');
+            if (!root) return raw;
+            Array.prototype.slice.call(root.querySelectorAll('figure.table')).forEach(function (figure) {
+                var parent = figure.parentNode;
+                if (!parent) return;
+                while (figure.firstChild) parent.insertBefore(figure.firstChild, figure);
+                parent.removeChild(figure);
+            });
+            Array.prototype.slice.call(root.querySelectorAll('td')).forEach(function (td) {
+                var bg = extractTdBackground(td);
+                if (!bg) return;
+                if (!td.getAttribute('bgcolor')) td.setAttribute('bgcolor', bg);
+                var tdStyle = String(td.getAttribute('style') || '');
+                if (!/background(-color)?\s*:/i.test(tdStyle)) {
+                    td.setAttribute('style', (tdStyle ? tdStyle.replace(/;?\s*$/, ';') : '') + 'background:' + bg + ';');
+                }
+                Array.prototype.slice.call(td.querySelectorAll('a')).forEach(function (a) {
+                    ensureCtaAnchorStyle(a, bg);
+                });
+            });
+            var out = root.innerHTML;
+            tokens.forEach(function (item) {
+                out = out.split(item.key).join(item.value);
+            });
+            return out;
+        } catch (e) {
+            return raw;
+        }
+    }
+
+    function applySamples(html) {
+        var out = String(html || '');
+        Object.keys(samples).forEach(function (code) {
+            var value = samples[code] == null ? '' : String(samples[code]);
+            var reRaw = new RegExp('\\{\\{\\s*var\\.' + code.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*\\|\\s*raw\\s*\\}\\}', 'g');
+            var rePlain = new RegExp('\\{\\{\\s*var\\.' + code.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*\\}\\}', 'g');
+            out = out.replace(reRaw, value);
+            out = out.replace(rePlain, value);
+        });
+        return out;
+    }
+
+    function renderPreview() {
+        if (!frame) return;
+        var subject = subjectEl ? String(subjectEl.value || '') : '';
+        var bodyHtml = normalizeEmailBody(getEditorHtml());
+        var html = String(shellHtml || '');
+        html = html.split('{' + '{MAIL_BODY}}').join(bodyHtml);
+        html = html.split('{' + '{PREHEADER}}').join(subject.replace(/[<>&]/g, function (c) {
+            return ({'<': '&lt;', '>': '&gt;', '&': '&amp;'})[c] || c;
+        }));
+        html = applySamples(html);
+        html = stripScripts(html);
+        var doc = frame.contentDocument;
+        if (!doc) return;
+        doc.open();
+        doc.write(html);
+        doc.close();
+    }
+
+    function schedulePreview() {
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(renderPreview, 220);
+    }
+
+    document.querySelectorAll('[data-var-code]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var code = btn.getAttribute('data-var-code') || '';
+            insertToken('{' + '{var.' + code + '}}');
+        });
+    });
+
+    if (subjectEl) {
+        subjectEl.addEventListener('input', schedulePreview);
+    }
+    if (body) {
+        body.addEventListener('input', schedulePreview);
+    }
+    var refreshBtn = document.getElementById('smtp-tpl-preview-refresh');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', function () {
+            renderPreview();
+        });
+    }
+
+    function bindEditor() {
+        var editable = document.querySelector('.w-smtp-template-editor .ck-editor__editable, .ck-editor__editable');
+        var editor = editable && editable.ckeditorInstance;
+        if (!editor || !editor.model || editor.__smtpPreviewBound) {
+            return !!editor;
+        }
+        editor.__smtpPreviewBound = true;
+        editor.model.document.on('change:data', schedulePreview);
+        schedulePreview();
+        return true;
+    }
+
+    var tries = 0;
+    (function waitEditor() {
+        if (bindEditor() || tries++ > 40) {
+            schedulePreview();
+            return;
+        }
+        setTimeout(waitEditor, 250);
+    })();
+
+    var saveForm = document.getElementById('smtp-template-save-form');
+    if (saveForm) {
+        saveForm.addEventListener('submit', function () {
+            if (!body) return;
+            var html = normalizeEmailBody(getEditorHtml());
+            body.value = html;
+        });
+    }
+})();
+</script>

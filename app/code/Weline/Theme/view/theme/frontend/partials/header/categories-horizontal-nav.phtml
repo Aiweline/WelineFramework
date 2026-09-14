@@ -109,9 +109,11 @@ $headerLocalizeUrl = static function (string $url): string {
 /** @var \Weline\Framework\View\Template $template */
 $template = $this;
 
+$usedMegaPanelIds = [];
 $renderMenuItem = null;
 $renderMenuItem = static function ($item, $level = 1) use (
     &$renderMenuItem,
+    &$usedMegaPanelIds,
     $defaultEsc,
     $defaultEscDesc,
     $headerLocalizeUrl,
@@ -136,11 +138,8 @@ $renderMenuItem = static function ($item, $level = 1) use (
     endif;
 
     if ($level === 1):
-        $panelId = 'mega-menu-' . preg_replace('/[^a-z0-9_-]+/i', '-', strtolower($text));
-        $panelId = trim((string)$panelId, '-');
-        if ($panelId === '' || $panelId === 'mega-menu') {
-            $panelId = 'mega-menu-' . substr(md5($text . '|' . $url), 0, 10);
-        }
+        $identity = trim((string)($item['id'] ?? $item['category_id'] ?? $item['code'] ?? ''));
+        $panelId = HeaderNavFragment::allocateMegaPanelId($text, $url, $usedMegaPanelIds, $identity);
         ?>
         <li class="category-item has-children category-item--mega"
             data-w-component="popover"

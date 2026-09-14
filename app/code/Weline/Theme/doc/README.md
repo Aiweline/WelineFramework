@@ -2,7 +2,7 @@
 
 ## 当前有效入口
 
-如果要开发主题、页面、布局、slot、widget、Theme.js 或主题覆盖，先完成 `prepare_project`，调用 `resolve_task_context` 获取当前任务命中的 Theme 文档，然后按需阅读：
+如果要开发主题、页面、布局、slot、widget、Theme.js 或主题覆盖，可选调用 `prepare_project` / `resolve_task_context` 获取 Theme 文档，然后按需阅读（编码用宿主原生编辑）：
 
 1. [`需求.md`](./需求.md)
 2. [`开发日志.md`](./开发日志.md)
@@ -18,6 +18,7 @@
    - **语义色重要程度矩阵**：[`theme-semantic-color-matrix.md`](./theme-semantic-color-matrix.md) — 角色×强度、Foundation 桥接、`data-tone` 用法、外观盘分组
    - **Surface / Text 语义（反色顶栏）**：[`theme-surface-text-roles.md`](./theme-surface-text-roles.md) — `data-surface` + `.w-text*`，禁止裸 span 黑底黑字
    - Slot：[`widget-slot-attributes.md`](./widget-slot-attributes.md)
+   - **布局/Slot 结构缓存键（MCP）**：[`layout-slot-cache-keys.md`](./layout-slot-cache-keys.md) — 结构键排除语言/货币/request_id，须用 `w_cache` Custom / `KeyBuilder` / `CachePolicy`
    - Theme.js：[`Theme.js使用指南.md`](./Theme.js使用指南.md)
    - WLS 视图预热贡献：[`worker-view-warmup-contributions.md`](./worker-view-warmup-contributions.md)
    - 浏览器请求：[`../../Frontend/doc/Weline.Api使用指南.md`](../../Frontend/doc/Weline.Api使用指南.md)

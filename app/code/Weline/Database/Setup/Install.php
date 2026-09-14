@@ -19,7 +19,7 @@ use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Data\Setup;
 use Weline\Framework\Setup\Db\ModelSetup;
 
-class Install
+class Install implements \Weline\Framework\Setup\InstallInterface
 {
     public function setup(Setup $setup, Context $context): void
     {

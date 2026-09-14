@@ -1,0 +1,11 @@
+<?php
+/**
+ * Backend order view: wholesale chat via B2B widget (slot fallback).
+ *
+ * Hook: Weline_Order::backend::order::view::wholesale-chat
+ *
+ * @hook-priority 100
+ * @hook-sort-order 10
+ */
+
+echo $this->fetch('Weline_B2B::templates/Backend/widgets/backend-order-chat.phtml');

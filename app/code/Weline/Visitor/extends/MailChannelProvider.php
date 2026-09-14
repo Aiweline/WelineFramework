@@ -8,6 +8,19 @@ use Weline\Smtp\Api\MailChannelProviderInterface;
 
 class MailChannelProvider implements MailChannelProviderInterface
 {
+    private const SHARED = [
+        [
+            'locale' => 'zh_Hans_CN',
+            'subject_file' => 'notification/zh_Hans_CN.subject.txt',
+            'body_file' => 'notification/zh_Hans_CN.html',
+        ],
+        [
+            'locale' => 'en_US',
+            'subject_file' => 'notification/en_US.subject.txt',
+            'body_file' => 'notification/en_US.html',
+        ],
+    ];
+
     public function getChannels(): array
     {
         $topics = [
@@ -23,6 +36,11 @@ class MailChannelProvider implements MailChannelProviderInterface
             'pixel_incident_auth' => __('登录鉴权失败邮件'),
             'pixel_incident_business' => __('其他业务拒绝邮件'),
         ];
+        $variables = [
+            ['code' => 'title', 'label' => __('标题'), 'sample' => 'Incident'],
+            ['code' => 'content', 'label' => __('正文'), 'sample' => 'Details'],
+            ['code' => 'type_label', 'label' => __('类型'), 'sample' => 'Error'],
+        ];
         $channels = [];
         foreach ($topics as $code => $name) {
             $channels[] = [
@@ -30,6 +48,8 @@ class MailChannelProvider implements MailChannelProviderInterface
                 'name' => $name,
                 'description' => __('站点错误监控主题 %{1} 的邮件渠道', [$code]),
                 'module' => 'Weline_Visitor',
+                'variables' => $variables,
+                'default_templates' => self::SHARED,
             ];
         }
 

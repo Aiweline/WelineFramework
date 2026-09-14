@@ -21,6 +21,7 @@
 
 - `ensureDefaults()`：`setup:upgrade` 时全站补种（`Websites/Setup/Upgrade.php`）。
 - `ensureDefaultsForWebsite()`：`Website::save_after` 新站点即时补种。
+- 默认站点已存在时，初始化只维护 `website_id=0` / `code=default` 身份，保留管理员设置的 URL、名称、默认语言/货币、时区和业务 scope；`http://localhost` 等安装值只用于缺失记录的首次插入，不是每次升级或读取时的覆盖值。网站列表与活动证书域名查询只读取现有数据，不调用默认站点补种。
 - `DefaultWebsiteService::ensureDefaultWebsite()` 只在 Install/Upgrade 控制面同一受管事务内确保 `website_id=0`，随后补齐它的默认 Store/Channel；直接 prepared SQL 使用 Model 解析后的物理表名。运行时 Catalog、QueryProvider 与证书域名读取不得调用该修复入口，缺失不变量必须回到升级流程处理，不能让 read 操作夹带写入。
 - 补种根边界使用 `WriteIntentTransactionCoordinatorInterface::runWrite()`；SQLite 在首次读取前取得 `BEGIN IMMEDIATE`，已有受管 owner 时直接复用且拒绝从普通 SQLite 事务中途升级。缺失项只在 savepoint 内执行普通 INSERT，Store/Channel Model 在已有 owner/savepoint 内不再重复开启事务。
 - 已有 owner 内的 Website/Store/Channel/Seeder/默认站/墓碑失败会先把 owner 标记为 rollback-only 再上抛；即使外层 callback 错误捕获异常，最终也只能物理回滚。显式 savepoint 的预期竞争仍只回滚该保存点并恢复 owner 快照。

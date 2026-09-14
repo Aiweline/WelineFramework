@@ -23,4 +23,15 @@
                   shared="false"
                   sort="200"/>
     </event>
+    <event name="Weline_Framework::resource_changed"
+           schema_version="1"
+           async_mapper="Weline\Framework\Event\ResourceChange\ResourceChangePayloadMapper"
+           data_contract="resource_change.v1">
+        <observer name="Weline_B2B::default_wholesale_policy_config_resource_changed"
+                  instance="Weline\B2B\Observer\DefaultWholesalePolicyConfigResourceChanged"
+                  delivery="sync"
+                  disabled="false"
+                  shared="true"
+                  sort="130"/>
+    </event>
 </config>

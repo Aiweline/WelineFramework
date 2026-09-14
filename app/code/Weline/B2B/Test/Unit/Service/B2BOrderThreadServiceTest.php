@@ -18,6 +18,8 @@ final class B2BOrderThreadServiceTest extends TestCase
         $svc = B2BOrderThreadService::forTesting(static fn (): int => 1_700_000_300);
         $thread = $svc->openOrCreate('ord-chat-1', '9', 1);
         self::assertNotSame('', $thread['thread_id'] ?? '');
+        self::assertSame($thread['thread_id'], $svc->getByOrderRef('ord-chat-1')['thread_id'] ?? null);
+        self::assertSame($thread['thread_id'], $svc->openOrCreateForMerchant('ord-chat-1', '9', 1)['thread_id'] ?? null);
         $svc->send($thread['thread_id'], B2BOrderMessageRecord::ROLE_MERCHANT, 'hello buyer');
         self::assertSame(1, $svc->countUnreadForCustomer(9, 1));
         $svc->markSeen($thread['thread_id'], B2BOrderMessageRecord::ROLE_CUSTOMER, '9');
@@ -40,6 +42,8 @@ final class B2BOrderThreadServiceTest extends TestCase
         self::assertStringContainsString("'orderChat.messages'", $query);
         self::assertStringContainsString("'orderChat.send'", $query);
         self::assertStringContainsString("'orderChat.markSeen'", $query);
+        self::assertStringContainsString('openOrCreateForMerchant', $query);
+        self::assertStringContainsString('isBackendAdmin', $query);
 
         $sidebar = (string) file_get_contents(dirname(__DIR__, 3) . '/view/hooks/account.sidebar.group.commerce.phtml');
         $header = (string) file_get_contents(dirname(__DIR__, 3) . '/view/hooks/header-account-links.phtml');

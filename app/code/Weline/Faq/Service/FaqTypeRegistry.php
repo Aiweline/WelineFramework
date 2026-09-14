@@ -19,9 +19,11 @@ final class FaqTypeRegistry
         private readonly ObjectManager $objectManager,
         ProductFaqTypeProvider $product,
         SiteFaqTypeProvider $site,
+        TemplateFaqTypeProvider $template,
     ) {
         $this->register($product);
         $this->register($site);
+        $this->register($template);
     }
 
     public function register(FaqTypeProviderInterface $provider): void

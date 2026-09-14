@@ -517,6 +517,74 @@ final class StorefrontProductDetailProjectorTest extends TestCase
         self::assertSame('/media/zhugeliang.jpg', $byValue['诸葛亮']['swatch_image'] ?? null);
     }
 
+    public function testTranslatedHanSpecificationFactsSurviveListingAndBulkProjection(): void
+    {
+        $metadata = new class implements \Weline\Eav\Api\Metadata\AttributeMetadataCatalogInterface {
+            public function catalog(\Weline\Eav\Api\Entity\EntityDefinitionInterface $entity): array
+            {
+                return [new \Weline\Eav\Api\Metadata\AttributeSetMetadata(10, 4, 'base', 'Base', 10, [
+                    new \Weline\Eav\Api\Metadata\AttributeGroupMetadata(20, 4, 10, 'details', 'Details', 20, [
+                        new \Weline\Eav\Api\Metadata\AttributeMetadata(30, 4, 'hanfu_chao_dai', 'Dynasty', 'varchar', 'select', 'select', 10, 20, false, false, true, true, 30, [
+                            new \Weline\Eav\Api\Metadata\AttributeOptionMetadata(476, '明制', 'ming', 'Ming Style', 476),
+                        ]),
+                        new \Weline\Eav\Api\Metadata\AttributeMetadata(31, 4, 'craft', '工艺', 'varchar', 'select', 'select', 10, 20, false, false, true, true, 31, [
+                            new \Weline\Eav\Api\Metadata\AttributeOptionMetadata(477, '压花', 'emboss', '压花', 477),
+                        ]),
+                    ]),
+                ])];
+            }
+
+            public function catalogForProduct(
+                \Weline\Eav\Api\Entity\EntityDefinitionInterface $entity,
+                int $productId,
+                string $freeSetCode = '__product_free',
+            ): array {
+                return $this->catalog($entity);
+            }
+
+            public function attributeIndexByEntityCode(string $entityCode): array
+            {
+                return [];
+            }
+        };
+        $entity = (new \ReflectionClass(\Weline\Product\Model\ProductCatalogAttributeEntity::class))
+            ->newInstanceWithoutConstructor();
+        $labels = new StorefrontEavLabelResolver($metadata, $entity);
+        $axes = new \Weline\Product\Service\StorefrontVariantAxisResolver($metadata, $entity, $labels);
+        $projector = new StorefrontProductDetailProjector(new CatalogOverlayResolver(), $labels, $axes);
+        $filter = new \Weline\Filters\Service\StorefrontAttributeListingFilter();
+        $offer = ['product_id' => 182, 'offer_id' => 901, 'name' => 'Sample', 'image' => ''];
+        $expected = [
+            ['code' => 'craft', 'label' => '工艺', 'value' => '压花'],
+            ['code' => 'hanfu_chao_dai', 'label' => 'Dynasty', 'value' => 'Ming Style'],
+        ];
+
+        // The live fixture has 104 products storing the legacy source value 明制.
+        // Numeric IDs and canonical codes must retain the same translated match.
+        foreach (['明制', 'ming', '476'] as $value) {
+            $rows = [
+                $this->attribute(0, 'hanfu_chao_dai', '', $value, false, 'select'),
+                $this->attribute(0, 'craft', '', '压花', false, 'select'),
+                $this->attribute(0, 'name', '', '中文商品名'),
+                $this->attribute(0, 'name', 'en_US', 'English product'),
+                $this->attribute(0, 'description', '', '无英文说明'),
+                $this->attribute(0, 'source_catalog', '', '内部导入数据'),
+                $this->attribute(0, 'spec_import_id', '', 'machine-123'),
+                $this->attribute(0, 'product_type', '', 'configurable'),
+            ];
+            $listing = $projector->projectListing($offer, $rows, 0, 'en_US');
+            self::assertSame($expected, $listing['specifications'], $value);
+            self::assertCount(1, $filter->apply([$listing], ['hanfu_chao_dai' => 'Ming Style']));
+            self::assertSame('English product', $listing['name']);
+            self::assertSame('', $listing['description']);
+            self::assertArrayNotHasKey('source_catalog', $listing);
+
+            $many = $projector->projectMany([$offer, array_replace($offer, ['offer_id' => 902])], $rows, [], 0, 'en_US');
+            self::assertSame($expected, $many[0]['specifications']);
+            self::assertSame($expected, $many[1]['specifications']);
+        }
+    }
+
     public function testItKeepsDefaultChineseSpecificationValuesOnEnglishLocale(): void
     {
         $labels = new class extends StorefrontEavLabelResolver {
@@ -575,8 +643,8 @@ final class StorefrontProductDetailProjectorTest extends TestCase
 
     public function testMetadataPrefetchFailureKeepsLabelFallbackAndRecordsPhaseError(): void
     {
-        $previousTrace = \Weline\Framework\App\Env::get('wls.debug.request_trace', false);
-        \Weline\Framework\App\Env::getInstance()->applyRuntimeConfig(['wls' => ['debug' => ['request_trace' => true]]]);
+        $previousTraceArmed = \Weline\Framework\Runtime\RequestLifecycleTrace::isPanelTraceArmed();
+        \Weline\Framework\Runtime\RequestLifecycleTrace::installPanelTraceOn();
         \Weline\Framework\Runtime\Runtime::setMode(\Weline\Framework\Runtime\RuntimeInterface::MODE_WLS);
         if (\Weline\Framework\Context::hasCurrent()) {
             \Weline\Framework\Context::leave();
@@ -671,9 +739,11 @@ final class StorefrontProductDetailProjectorTest extends TestCase
             self::assertSame([['code' => 'color', 'label' => 'Paint color', 'value' => 'English red']], $freshProduct['specifications']);
         } finally {
             \Weline\Framework\Runtime\RequestLifecycleTrace::reset();
+            if (!$previousTraceArmed) {
+                \Weline\Framework\Runtime\RequestLifecycleTrace::clearPanelTrace();
+            }
             \Weline\Framework\Context::leave();
             \Weline\Framework\Runtime\Runtime::resetModeCache();
-            \Weline\Framework\App\Env::getInstance()->applyRuntimeConfig(['wls' => ['debug' => ['request_trace' => $previousTrace]]]);
         }
     }
 
@@ -698,6 +768,38 @@ final class StorefrontProductDetailProjectorTest extends TestCase
             'is_required' => false,
         ];
     }
+    public function testProductResolverMapsResetWhenRequestIdChanges(): void
+    {
+        $previous = \Weline\Framework\Context::getCurrent();
+        if ($previous !== null) {
+            \Weline\Framework\Context::leave();
+        }
+        $projector = $this->projector();
+        $labels = new \ReflectionProperty(StorefrontProductDetailProjector::class, 'labelsByProductId');
+        $labels->setAccessible(true);
+
+        try {
+            \Weline\Framework\Context::enter(new \Weline\Framework\Context());
+            \Weline\Framework\Runtime\RequestContext::setId('projector-request-a');
+            $offer = ['product_id' => 101, 'name' => 'Sample', 'image' => ''];
+            $attributes = [$this->attribute(0, 'color', '', 'red')];
+            $projector->projectListing($offer, $attributes, 0, 'en_US');
+            $first = $labels->getValue($projector)[101];
+            $projector->projectListing($offer, $attributes, 0, 'en_US');
+            self::assertSame($first, $labels->getValue($projector)[101]);
+
+            \Weline\Framework\Runtime\RequestContext::setId('projector-request-b');
+            $projector->projectListing($offer, $attributes, 0, 'en_US');
+            $second = $labels->getValue($projector)[101];
+            self::assertNotSame($first, $second);
+        } finally {
+            \Weline\Framework\Context::leave();
+            if ($previous !== null) {
+                \Weline\Framework\Context::enter($previous);
+            }
+        }
+    }
+
     private function projector(?StorefrontEavLabelResolver $labels = null): StorefrontProductDetailProjector
     {
         return new StorefrontProductDetailProjector(

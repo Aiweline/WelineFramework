@@ -78,6 +78,30 @@ final class WorkerFullPageCacheFastPathTest extends TestCase
         return new FullPageCacheCoordinator(cachePool: $pool, storefrontCacheKeyContextResolver: $this->receiptResolver);
     }
 
+    /**
+     * @param array<string, mixed> $overrides
+     * @return array<string, mixed>
+     */
+    private function exactHomepageReceipt(string $cacheKey, array $overrides = []): array
+    {
+        $context = StorefrontCacheKeyContext::current();
+        self::assertInstanceOf(StorefrontCacheKeyContext::class, $context);
+
+        return $overrides + [
+            'version' => 2,
+            'full_uri' => 'https://example.test/',
+            'method' => 'GET',
+            'cookie_header' => '',
+            'identity_digest' => \hash('sha256', $cacheKey),
+            'cache_key' => $cacheKey,
+            'scope_identity' => $context->scopeIdentity->toArray(),
+            'namespace_fingerprint' => $context->namespaceFingerprint,
+            'lang' => $context->lang,
+            'default_locale' => $context->defaultLocale,
+            'translation_locales' => $context->translationLocales,
+        ];
+    }
+
     public function testMissedTranslationBroadcastRejectsWarmReceiptAtNextAuthorityClock(): void
     {
         $authority = new WorkerReceiptSqliteAuthority();
@@ -332,6 +356,65 @@ final class WorkerFullPageCacheFastPathTest extends TestCase
         }
     }
 
+    public function testAnonymousRootWithoutReceiptFallsBackToFormattedFullUriPath(): void
+    {
+        FullPageCacheCoordinator::clearProcessCache();
+        $pool = new WorkerFastPathCountingCachePool();
+
+        try {
+            $coordinator = $this->coordinator($pool);
+            $cacheKey = '24680ace13579bdf';
+            // Receipt stored with explicit default HTTPS port; live Host omits :443.
+            $receiptUri = 'https://example.test:443/';
+            $body = '<html><body>' . \str_repeat('root-port-alias-formatted', 80) . '</body></html>';
+            $setPayload = new \ReflectionMethod($coordinator, 'setProcessCachedPayload');
+            $setPayload->invoke($coordinator, $cacheKey, [
+                KeyBuilder::UNIFIED_CACHE_STATUS_KEY => 200,
+                KeyBuilder::UNIFIED_CACHE_FPC_KEY => $body,
+                KeyBuilder::UNIFIED_CACHE_HEADERS_KEY => ['Content-Type: text/html; charset=utf-8'],
+                'fpc_variant' => ['lang' => 'zh_Hans_CN', 'currency' => 'CNY'],
+                'fpc_html_urls_validated' => true,
+                'fpc_expires_at' => \microtime(true) + 60.0,
+            ]);
+            $register = new \ReflectionMethod($coordinator, 'registerRootHomepageProcessReceipt');
+            $register->invoke(
+                $coordinator,
+                $receiptUri,
+                ['lang' => 'zh_Hans_CN', 'currency' => 'CNY'],
+                $cacheKey,
+            );
+
+            $decision = WorkerPolicyDecision::allow(
+                '127.0.0.1',
+                'GET',
+                'HTTP/1.1',
+                '/',
+                '/',
+                [
+                    'host' => 'example.test',
+                    'accept' => 'text/html',
+                    'accept-encoding' => 'gzip',
+                    'connection' => 'keep-alive',
+                ],
+                '',
+                \str_repeat('f', 64),
+                false,
+                WorkerPolicyDecision::CACHE_FPC_PROCESS_L1
+                    | WorkerPolicyDecision::CACHE_FPC_SHARED_L2,
+            );
+            $fastPath = new WorkerFullPageCacheFastPath($coordinator, new WlsRuntime(), true);
+            $hit = $fastPath->lookup($decision, 'https');
+            self::assertIsArray($hit);
+            self::assertSame('process-formatted', $hit['source']);
+            self::assertStringContainsString('root-port-alias-formatted', \gzdecode(
+                \substr($hit['response'], (int)\strpos($hit['response'], "\r\n\r\n") + 4),
+            ));
+            self::assertMatchesRegularExpression('/X-Wls-Performance-Fpc-Source:\\s*process-formatted/i', $hit['response']);
+        } finally {
+            FullPageCacheCoordinator::clearProcessCache();
+        }
+    }
+
     public function testAnonymousHomepageConsumesTheExactReadyReceiptWithoutEnteringRouter(): void
     {
         FullPageCacheCoordinator::clearProcessCache();
@@ -339,16 +422,7 @@ final class WorkerFullPageCacheFastPathTest extends TestCase
         try {
             $cacheKey = '0123456789abcdef';
             $body = '<html><body>' . \str_repeat('cached-homepage-', 128) . '</body></html>';
-            $receipt = [
-                'version' => 2,
-                'full_uri' => 'https://example.test/',
-                'method' => 'GET',
-                'cookie_header' => '',
-                'identity_digest' => \hash('sha256', $cacheKey),
-                'cache_key' => $cacheKey,
-                'scope_identity' => StorefrontCacheKeyContext::current()->scopeIdentity->toArray(),
-                'namespace_fingerprint' => StorefrontCacheKeyContext::current()->namespaceFingerprint,
-            ];
+            $receipt = $this->exactHomepageReceipt($cacheKey);
 
             $runtime = new WlsRuntime();
             $runtimeReceipt = new \ReflectionProperty($runtime, 'homepageCacheWarmupReceipt');
@@ -617,16 +691,7 @@ final class WorkerFullPageCacheFastPathTest extends TestCase
         try {
             $coordinator = $this->coordinator();
             $cacheKey = '1234567890abcdef';
-            $receipt = [
-                'version' => 2,
-                'full_uri' => 'https://example.test/',
-                'method' => 'GET',
-                'cookie_header' => '',
-                'identity_digest' => \hash('sha256', $cacheKey),
-                'cache_key' => $cacheKey,
-                'scope_identity' => StorefrontCacheKeyContext::current()->scopeIdentity->toArray(),
-                'namespace_fingerprint' => StorefrontCacheKeyContext::current()->namespaceFingerprint,
-            ];
+            $receipt = $this->exactHomepageReceipt($cacheKey);
             $expiresAt = \microtime(true) + 30.0;
             $setPayload = new \ReflectionMethod($coordinator, 'setProcessCachedPayload');
             $payload = static fn(string $marker): array => [
@@ -682,16 +747,7 @@ final class WorkerFullPageCacheFastPathTest extends TestCase
         try {
             $coordinator = $this->coordinator();
             $cacheKey = '0f0e0d0c0b0a0908';
-            $receipt = [
-                'version' => 2,
-                'full_uri' => 'https://example.test/',
-                'method' => 'GET',
-                'cookie_header' => '',
-                'identity_digest' => \hash('sha256', $cacheKey),
-                'cache_key' => $cacheKey,
-                'scope_identity' => StorefrontCacheKeyContext::current()->scopeIdentity->toArray(),
-                'namespace_fingerprint' => StorefrontCacheKeyContext::current()->namespaceFingerprint,
-            ];
+            $receipt = $this->exactHomepageReceipt($cacheKey);
             $setPayload = new \ReflectionMethod($coordinator, 'setProcessCachedPayload');
             $setPayload->invoke($coordinator, $cacheKey, [
                 KeyBuilder::UNIFIED_CACHE_STATUS_KEY => 200,
@@ -731,16 +787,7 @@ final class WorkerFullPageCacheFastPathTest extends TestCase
         try {
             $coordinator = $this->coordinator();
             $cacheKey = '1029384756abcdef';
-            $receipt = [
-                'version' => 2,
-                'full_uri' => 'https://example.test/',
-                'method' => 'GET',
-                'cookie_header' => '',
-                'identity_digest' => \hash('sha256', $cacheKey),
-                'cache_key' => $cacheKey,
-                'scope_identity' => StorefrontCacheKeyContext::current()->scopeIdentity->toArray(),
-                'namespace_fingerprint' => StorefrontCacheKeyContext::current()->namespaceFingerprint,
-            ];
+            $receipt = $this->exactHomepageReceipt($cacheKey);
             $setPayload = new \ReflectionMethod($coordinator, 'setProcessCachedPayload');
             $setPayload->invoke($coordinator, $cacheKey, [
                 KeyBuilder::UNIFIED_CACHE_STATUS_KEY => 200,
@@ -756,11 +803,53 @@ final class WorkerFullPageCacheFastPathTest extends TestCase
                 true,
                 'GET',
                 'text/html',
-                'gzip;q=0, *;q=1',
+                'br;q=0, gzip;q=0',
             );
             self::assertIsArray($result);
             self::assertStringNotContainsString("Content-Encoding: gzip\r\n", $result['response']);
+            self::assertStringNotContainsString("Content-Encoding: br\r\n", $result['response']);
             self::assertStringContainsString('identity-body', $result['response']);
+        } finally {
+            FullPageCacheCoordinator::clearProcessCache();
+        }
+    }
+
+    public function testExactReceiptServesBrotliWhenAcceptsBrAndPayloadIsBrotliOnly(): void
+    {
+        if (!\function_exists('brotli_compress') || !\function_exists('brotli_uncompress')) {
+            self::markTestSkipped('brotli extension is not loaded');
+        }
+
+        FullPageCacheCoordinator::clearProcessCache();
+        try {
+            $coordinator = $this->coordinator();
+            $cacheKey = 'abcdef1029384756';
+            $plain = '<html><body>' . \str_repeat('br-only-fastpath', 128) . '</body></html>';
+            $br = \brotli_compress($plain, \Weline\Framework\Http\ContentEncodingNegotiator::BROTLI_QUALITY);
+            self::assertIsString($br);
+            $receipt = $this->exactHomepageReceipt($cacheKey);
+            $setPayload = new \ReflectionMethod($coordinator, 'setProcessCachedPayload');
+            $setPayload->invoke($coordinator, $cacheKey, [
+                KeyBuilder::UNIFIED_CACHE_STATUS_KEY => 200,
+                'fpc_br_b64' => \base64_encode($br),
+                KeyBuilder::UNIFIED_CACHE_HEADERS_KEY => ['Content-Type: text/html; charset=utf-8'],
+                'fpc_variant' => ['lang' => 'zh_Hans_CN', 'currency' => 'CNY'],
+                'fpc_html_urls_validated' => true,
+                'fpc_expires_at' => \microtime(true) + 30.0,
+            ]);
+
+            $result = $coordinator->getFormattedProcessCachedResponseForInternalReceipt(
+                $receipt,
+                true,
+                'GET',
+                'text/html',
+                'br, gzip',
+            );
+            self::assertIsArray($result);
+            self::assertSame('process-formatted', $result['source']);
+            self::assertStringContainsString("Content-Encoding: br\r\n", $result['response']);
+            $wire = \substr($result['response'], (int)\strpos($result['response'], "\r\n\r\n") + 4);
+            self::assertSame($plain, \brotli_uncompress($wire));
         } finally {
             FullPageCacheCoordinator::clearProcessCache();
         }

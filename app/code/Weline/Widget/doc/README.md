@@ -5,7 +5,7 @@
 - [需求基线](./需求.md)
 - [开发日志](./开发日志.md)
 
-开发或修改 Widget、可视化编辑器部件、`w:widget`、slot 注入、部件查询事件前，先完成 `prepare_project`，调用 `resolve_task_context` 获取 Widget 与 Theme 的任务上下文，再读：
+开发或修改 Widget、可视化编辑器部件、`w:widget`、slot 注入、部件查询事件前，可选调用 `prepare_project` / `resolve_task_context` 获取 Widget 与 Theme 任务上下文，再读（编码用宿主原生编辑）：
 
 1. [../Theme/doc/theme-inheritance-and-file-conventions.md](../../Theme/doc/theme-inheritance-and-file-conventions.md)
 2. [../Theme/doc/部件开发指南.md](../../Theme/doc/部件开发指南.md)

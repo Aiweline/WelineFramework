@@ -722,6 +722,9 @@ class CartQueryProvider implements QueryProviderInterface
                     'cost' => 1,
                     'params' => [
                         'guest_token' => ['type' => 'string', 'max_length' => 64],
+                        // Optional: coupon widget may pass the just-applied code so discount_preview
+                        // does not depend solely on Marketing session stickiness across workers.
+                        'coupon_code' => ['type' => 'string', 'max_length' => 64],
                         'website_id' => ['type' => 'int', 'min' => 0],
                         'website_code' => ['type' => 'string', 'max_length' => 64],
                         'store_code' => ['type' => 'string', 'max_length' => 64],

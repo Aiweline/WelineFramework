@@ -1,0 +1,62 @@
+/**
+ * 优惠券新建/编辑表单
+ * Token-only；禁止私造色板。
+ */
+
+.marketing-coupon-form {
+    --w-gap: var(--weline-space-4);
+}
+
+.marketing-coupon-form__section {
+    padding-block-end: var(--weline-space-2);
+    border-block-end: 1px solid var(--weline-theme-border, var(--backend-theme-border));
+}
+
+.marketing-coupon-form__section:last-of-type {
+    border-block-end: 0;
+    padding-block-end: 0;
+}
+
+.marketing-coupon-form__section-title {
+    margin: 0;
+    color: var(--weline-theme-text, var(--backend-theme-text));
+    font-size: var(--weline-font-size-base);
+    font-weight: 700;
+}
+
+.marketing-coupon-form__currency-badge {
+    inline-size: 5.5rem;
+    max-inline-size: 5.5rem;
+    text-align: center;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    background: var(--weline-theme-surface-muted);
+    color: var(--weline-theme-text);
+    cursor: default;
+}
+
+.marketing-coupon-form__currency-badge:focus {
+    box-shadow: none;
+    border-color: var(--weline-theme-border-strong);
+}
+
+.marketing-coupon-form .w-field__help {
+    margin: 0;
+    color: var(--weline-theme-text-muted);
+    font-size: var(--weline-font-size-xs);
+    line-height: 1.45;
+}
+
+/* 金额/百分比输入与单位 addon 同排贴合，避免超宽输入把单位甩到远端 */
+.marketing-coupon-form .w-field__control {
+    flex-wrap: nowrap;
+}
+
+.marketing-coupon-form .w-field__control > .w-input {
+    flex: 1 1 auto;
+    min-inline-size: 0;
+}
+
+.marketing-coupon-form .w-field__control > .w-field__addon {
+    flex: 0 0 auto;
+}

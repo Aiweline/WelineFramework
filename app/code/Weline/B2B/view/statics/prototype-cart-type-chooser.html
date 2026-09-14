@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<!-- PROTOTYPE throwaway: dual-mode add-to-cart cart chooser. Do not ship. -->
+<html lang="zh-Hans">
+<head>
+  <meta charset="utf-8" />
+  <title>PROTOTYPE · 加购选车</title>
+  <style>
+    :root {
+      --bg: #f7f4ef;
+      --surface: #fff;
+      --border: #e8e2d8;
+      --text: #1a1814;
+      --primary: #b84a3c;
+      --muted: #6b655c;
+      --radius: 8px;
+    }
+    body { font: 14px/1.45 system-ui, sans-serif; background: #eee; color: var(--text); padding: 1.5rem; }
+    .wrap { max-width: 360px; margin: 0 auto; padding: 1rem; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); }
+    button { font: inherit; cursor: pointer; }
+    .add { width: 100%; padding: 0.65rem 1rem; border: 1px solid var(--primary); color: var(--primary); background: transparent; border-radius: 6px; font-weight: 600; }
+    dialog { border: 1px solid var(--border); border-radius: var(--radius); padding: 0; width: min(22rem, 92vw); }
+    dialog::backdrop { background: rgba(26,24,20,.45); }
+    .hd { padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); font-weight: 700; }
+    .bd { padding: 1rem; }
+    .hint { margin: 0 0 0.75rem; color: var(--muted); font-size: 0.875rem; }
+    .acts { display: grid; gap: 0.5rem; }
+    .acts button { padding: 0.6rem; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); }
+    .acts button.primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+    .ft { padding: 0.75rem 1rem; border-top: 1px solid var(--border); text-align: right; }
+    .ft button { border: 0; background: transparent; color: var(--muted); }
+    #log { margin-top: 1rem; font-size: 12px; color: var(--muted); }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <p>原型：零售模式下点「加入购物车」→ 选零售车或批发车</p>
+  <button type="button" class="add" id="add">加入购物车</button>
+  <p id="log"></p>
+</div>
+<dialog id="dlg">
+  <div class="hd">添加到哪个购物车？</div>
+  <div class="bd">
+    <p class="hint">当前为零售购买方式，请选择要加入的购物车。</p>
+    <div class="acts">
+      <button type="button" data-pick="toc">零售购物车</button>
+      <button type="button" class="primary" data-pick="tob">批发购物车</button>
+    </div>
+  </div>
+  <div class="ft"><button type="button" data-cancel>取消</button></div>
+</dialog>
+<script>
+  const dlg = document.getElementById('dlg');
+  const log = document.getElementById('log');
+  document.getElementById('add').onclick = () => dlg.showModal();
+  dlg.querySelectorAll('[data-pick]').forEach((btn) => {
+    btn.onclick = () => { log.textContent = '已选：' + btn.getAttribute('data-pick'); dlg.close(); };
+  });
+  dlg.querySelector('[data-cancel]').onclick = () => { log.textContent = '已取消'; dlg.close(); };
+</script>
+</body>
+</html>

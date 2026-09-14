@@ -141,6 +141,7 @@ final class OrmOrderFacadeStore implements OrderFacadeStoreInterface
             Order::schema_fields_TAX_AMOUNT => $this->minorToMajor((int)($money['tax_amount_minor'] ?? 0)),
             Order::schema_fields_GRAND_TOTAL => $this->minorToMajor((int)($money['grand_total_minor'] ?? 0)),
             Order::schema_fields_SOURCE_MODULE => 'Weline_Order',
+            Order::schema_fields_PAYMENT_METHOD => strtolower(trim((string)($row['payment_method'] ?? ''))),
             Order::schema_fields_SHIPPING_METHOD => (string)($shipping['method'] ?? ''),
             Order::schema_fields_SHIPPING_ADDRESS => $this->encode($shipping['address'] ?? []),
             Order::schema_fields_MONEY_SNAPSHOT_JSON => $this->encode($money),

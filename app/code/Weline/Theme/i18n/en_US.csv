@@ -472,8 +472,14 @@
 在产品推荐区渲染相关产品内容。,"Render relevant product content in the product recommendation area."
 热销产品,"Hot products"
 在产品推荐区渲染热销产品内容。,"Render popular product content in the product recommendation area."
+个性化推荐之前,个性化推荐之前
+在商品详情常显猜你喜欢/最近浏览区域之前触发。,在商品详情常显猜你喜欢/最近浏览区域之前触发。
+猜你喜欢,"Recommended for You"
+"在商品详情常显区渲染猜你喜欢内容。默认由 Weline_Product you-may-like 经 default_injections 注入 product-you-may-like。","在商品详情常显区渲染猜你喜欢内容。默认由 Weline_Product you-may-like 经 default_injections 注入 product-you-may-like。"
 最近浏览,"Recently viewed"
-在产品推荐区渲染最近浏览内容。,"Render recently viewed content in the product recommendation area."
+在商品详情常显区渲染最近浏览内容。,在商品详情常显区渲染最近浏览内容。
+个性化推荐之后,个性化推荐之后
+在商品详情常显猜你喜欢/最近浏览区域之后触发。,在商品详情常显猜你喜欢/最近浏览区域之后触发。
 交叉销售,cross-sell
 在产品推荐区渲染搭配或交叉销售内容。,"Render tie-in or cross-sell content in the product recommendation area."
 产品推荐之后,"After product recommendation"
@@ -1000,6 +1006,49 @@ FAQ/常见问题,FAQ/常见问题
 参数配置,"Parameter configuration"
 参数保存成功,"Parameters saved successfully"
 参数保存失败,"Failed to save parameters"
+"Weline 默认页面","Weline default page"
+该页面尚未提供内容。,"Content is not yet available for this page."
+返回首页,"Return to home page"
+面包屑,"bread crumbs"
+搜索汉服、形制与配饰...,"Search Hanfu, garment forms, and accessories..."
+分类,Classification
+查看全部,"View all"
+汉服分类展示图,"Hanfu category showcase image"
+"浏览 %{1} 相关商品与配件","Browse %{1} products and accessories"
+回到顶部,"Back to top"
+站点偏好,"Site preferences"
+法律与政策,"Law and Policy"
+商品,Products
+查看规格图,查看规格图
+减少数量,"Decrease quantity"
+数量,Quantity
+增加数量,"Increase quantity"
+购物车是空的,"Shopping cart is empty"
+继续购物,"Continue shopping"
+小计,Subtotal
+去结算,"Proceed to Checkout"
+正在前往结算...,"Proceeding to checkout..."
+查看购物车,"View cart"
+税费与运费将在结算时计算,"Taxes and shipping calculated at checkout"
+正在加载购物车...,"Loading cart..."
+正在更新购物车...,"Updating cart..."
+商品小计,"Goods subtotal"
+优惠券,Coupon
+叠加优惠,"Stacked discount"
+自动优惠,"Automatic discount"
+关闭通知,"Close notification"
+安全支付,"Secure payment"
+SSL加密保护,"SSL encryption protection"
+无忧退款,"Worry-Free Refund"
+30天无理由退货,"30 days no reason to return"
+免费配送,"Free Shipping"
+满额包邮,"Free shipping for orders over the threshold"
+全天候客服,"24/7 Customer Support"
+7×24小时在线,"7×24 hours online"
+SSL安全,"SSL security"
+数据加密传输,"Encrypted Data Transmission"
+认证商家,"Certified Merchant"
+正品保证,"Genuine product guarantee"
 "近 7 日访问量 +18%","Number of visits in the past 7 days +18%"
 卡片内容,"Card content"
 拖入表单、表格、文本或按钮,"Drag in a form, table, text or button"
@@ -1072,7 +1121,6 @@ NEW,NEW
 订单提交成功！,"Order submitted successfully!"
 订单号：,"Order number:"
 查看订单,"View Orders"
-继续购物,"Continue shopping"
 拖拽部件或容器到此处,"Drag a component or container here"
 "空白布局不会渲染 header、footer 或面包屑","Empty layout will not render header, footer or breadcrumbs"
 "Weline 首页","Weline Home Page"
@@ -1099,7 +1147,6 @@ Category,Category
 "分类产品区域 - 展示该分类下的产品","Category Product Area - Display products under this category"
 筛选条件,"Screening criteria"
 关闭筛选,"Close filter"
-分类,Classification
 Pagination,Pagination
 Previous,Previous
 "Page %{1} of %{2}","Page %{1} of %{2}"
@@ -1180,9 +1227,6 @@ SORRY,SORRY
 前往首页继续购物,"Continue shopping on the home page"
 返回上一页,返回上一页
 推荐产品,"Recommended product"
-"Weline 默认页面","Weline default page"
-该页面尚未提供内容。,"Content is not yet available for this page."
-返回首页,"Return to home page"
 问答,问答
 选购答疑,选购答疑
 商品问答,商品问答
@@ -1250,7 +1294,6 @@ Product,Product
 支付与订单确认,"Payment and order confirmation"
 订单摘要,"Order summary"
 "摘要 slot，可由结账模块写入真实商品行与金额。","Summary slot, the real product line and amount can be written by the checkout module."
-商品,Products
 配送,Delivery
 合计,total
 您已退出登录,"You are logged out"
@@ -1275,7 +1318,6 @@ Product,Product
 "工具栏区域 - 拖拽排序/视图部件到此处","Toolbar area - Drag and drop/view widgets here"
 "产品网格区域 - 控制器渲染产品列表","Product Grid Area - Controller Renders Product List"
 "分页区域 - 控制器渲染分页组件","Pagination area - Controller renders pagination component"
-购物车是空的,"Shopping cart is empty"
 您的购物车是空的,"Your shopping cart is empty"
 个人中心,"Personal center"
 登录页工具,"Login page tools"
@@ -1526,7 +1568,6 @@ Product,Product
 加入收藏,"Add to Favorites"
 加入对比,"Add to Compare"
 快速查看,"Quick View"
-面包屑,"bread crumbs"
 跳转到主要内容,"Skip to main content"
 展开搜索,"Expand search"
 我的,mine
@@ -1540,15 +1581,11 @@ Product,Product
 退货,"Return the goods"
 与我的订单,"With my order"
 关闭菜单,"Close menu"
-搜索汉服、形制与配饰...,"Search Hanfu, garment forms, and accessories..."
 Weline,Weline
 网站Logo,"Site Logo"
 搜索商品...,"Search products..."
 切换语言,"Switch Language"
 切换货币,"Switch Currency"
-"浏览 %{1} 相关商品与配件","Browse %{1} products and accessories"
-查看全部,"View all"
-汉服分类展示图,"Hanfu category showcase image"
 导航菜单,"Navigation menu"
 我的账户,"My Account"
 我的收藏,"My Favorites"
@@ -1560,9 +1597,6 @@ Weline,Weline
 "示例商品 3","Example Item 3"
 去购物,"Go Shopping"
 删除,delete
-小计,Subtotal
-查看购物车,"View cart"
-去结算,"Proceed to Checkout"
 关注我们,"Follow Us"
 微信扫码关注,"Scan WeChat to follow"
 微信二维码,"WeChat QR code"
@@ -1644,18 +1678,6 @@ Weline,Weline
 秒,Second
 内容标题,"Section title"
 请选择真实图片,"Choose an authentic image"
-安全支付,"Secure payment"
-SSL加密保护,"SSL encryption protection"
-无忧退款,"Worry-Free Refund"
-30天无理由退货,"30 days no reason to return"
-免费配送,"Free Shipping"
-满额包邮,"Free shipping for orders over the threshold"
-全天候客服,"24/7 Customer Support"
-7×24小时在线,"7×24 hours online"
-SSL安全,"SSL security"
-数据加密传输,"Encrypted Data Transmission"
-认证商家,"Certified Merchant"
-正品保证,"Genuine product guarantee"
 图文标题,"Image and text"
 在这里介绍内容、服务或品牌故事。,"Introduce your content, services or brand story here."
 查看地图,"View map"
@@ -1665,8 +1687,6 @@ SSL安全,"SSL security"
 您可能还喜欢,"You may also like"
 更大容量,"Larger capacity"
 更多功能,"More features"
-猜你喜欢,"Recommended for You"
-根据您的浏览记录推荐,"Recommended based on your browsing history"
 经常一起购买,"Frequently bought together"
 总价,"Total Price"
 全部加入购物车,"Add All to Cart"
@@ -1676,9 +1696,6 @@ SSL安全,"SSL security"
 限时抢购，错过不再,"Flash Sale, Don't Miss Out"
 距离结束,"Ends in"
 精选轮播,"Featured Carousel"
-回到顶部,"Back to top"
-站点偏好,"Site preferences"
-法律与政策,"Law and Policy"
 "Hero 轮播区域","Hero Carousel Area"
 拖放轮播图或促销横幅到此处,"Drag and drop carousel or promotion banner here"
 推荐区域,"Recommended Area"
@@ -1702,18 +1719,6 @@ Logo,Logo
 面包屑导航,Breadcrumbs
 请输入您的邮箱,"Enter your email"
 我们不会向您发送垃圾邮件,"We will not send you spam"
-减少数量,"Decrease quantity"
-数量,Quantity
-增加数量,"Increase quantity"
-正在前往结算...,"Proceeding to checkout..."
-税费与运费将在结算时计算,"Taxes and shipping calculated at checkout"
-正在加载购物车...,"Loading cart..."
-正在更新购物车...,"Updating cart..."
-商品小计,"Goods subtotal"
-优惠券,Coupon
-叠加优惠,"Stacked discount"
-自动优惠,"Automatic discount"
-关闭通知,"Close notification"
 东方衣冠，全球配送,"Traditional elegance, delivered worldwide"
 收藏,Favorite
 热门形制,"Popular Hanfu Styles"
@@ -2794,6 +2799,9 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 静态文件：weline.modules.js编译文件！,"Static Files: weline.modules.js compiled file!"
 "编译 Weline UI 2.0 静态资源包！","Compile Weline UI 2.0 static resource package!"
 编译主题资源（less、weline.modules.js等）,"Compile Theme Resources (less, weline.modules.js, etc.)"
+"在商品详情常显区渲染猜你喜欢内容。默认由 Theme you-may-like 经 default_injections 注入 product-you-may-like。","在商品详情常显区渲染猜你喜欢内容。默认由 Theme you-may-like 经 default_injections 注入 product-you-may-like。"
+根据您的浏览记录推荐,"Recommended based on your browsing history"
+在产品推荐区渲染最近浏览内容。,"Render recently viewed content in the product recommendation area."
 选择作用范围,"Select scope."
 搜索作用范围,"Search scope."
 未找到匹配作用范围,"No matching scope found."
@@ -3801,3 +3809,7 @@ Chiffon,Chiffon
 左栏,"Left column"
 右栏,"Right column"
 "欢迎光临 · 精选好物上新","Welcome · Selected new arrivals"
+"Steering Covers","Steering Covers"
+"Home Storage","Home Storage"
+"Home Office Storage","Home Office Storage"
+"Home, Garden & Furniture","Home, Garden & Furniture"

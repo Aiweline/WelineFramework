@@ -105,11 +105,17 @@ final class CarrierCoverageAdminService
     }
 
     /**
-     * Apply merged Provider defaults (replace existing).
+     * Apply Provider defaults for a carrier.
+     * When $providerCode is set (e.g. yanwen), only that provider's catalog is used.
      */
-    public function applyProviderDefaults(int $carrierId): int
+    public function applyProviderDefaults(int $carrierId, ?string $providerCode = null): int
     {
-        return $this->replaceForCarrier($carrierId, $this->providers->mergedDefaultCoverage());
+        $code = $providerCode !== null ? $providerCode : 'default';
+
+        return $this->replaceForCarrier(
+            $carrierId,
+            $this->providers->defaultCoverageForCode($code),
+        );
     }
 
     /**

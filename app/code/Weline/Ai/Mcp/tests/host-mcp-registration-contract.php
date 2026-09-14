@@ -51,8 +51,15 @@ $checks['guidance includes registration spec'] = is_array($install['registration
 $agentsPath = ($repoRoot ?? getcwd()) . '/AGENTS.md';
 $checks['AGENTS is sole MCP bootstrap entry'] = str_contains($agents, 'weline_project_intelligence')
     && str_contains($agents, 'ensure-project-guidance.php');
+$checks['AGENTS mandates prepare_project for engineering'] = str_contains($agents, '强制')
+    && str_contains($agents, 'prepare_project')
+    && str_contains($agents, 'hard_constraints');
+$checks['AGENTS documents host_editor_rules coldstart'] = str_contains($agents, 'weline-mcp-coldstart.mdc')
+    || str_contains($agents, 'host_editor_rules');
 $checks['no duplicate CLAUDE bootstrap file'] = !is_file(($repoRoot ?? getcwd()) . '/CLAUDE.md');
 $checks['no .cursorrules duplicate bootstrap'] = !is_file(($repoRoot ?? getcwd()) . '/.cursorrules');
+$checks['ensure syncs host editor rules'] = str_contains($guidance, 'welineGuidanceSyncHostEditorRules')
+    && str_contains($guidance, 'host_editor_rules');
 
 $gitignore = (string) file_get_contents(($repoRoot ?? getcwd()) . '/.gitignore');
 foreach (['.codex/', 'CLAUDE.md', '.mcp.json', '.cursorrules', '.cursorignore'] as $pattern) {

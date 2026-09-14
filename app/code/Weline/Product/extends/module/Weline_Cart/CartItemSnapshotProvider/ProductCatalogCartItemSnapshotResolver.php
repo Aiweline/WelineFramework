@@ -214,10 +214,15 @@ final class ProductCatalogCartItemSnapshotResolver
 
         $productType = $this->productType($websiteId, $storeId, $productId, $locale);
         $requiresShipping = (bool)$offer->getData(Offer::schema_fields_REQUIRES_SHIPPING);
+        $weightMinor = $this->weightMinorFromCatalog($websiteId, $storeId, $productId, $locale);
         $shippingProfileCode = trim((string)$offer->getData(Offer::schema_fields_SHIPPING_PROFILE_CODE));
+        $shippingHazardClass = trim((string)$offer->getData(Offer::schema_fields_SHIPPING_HAZARD_CLASS));
         $fulfillmentMetadata = [];
         if ($shippingProfileCode !== '') {
             $fulfillmentMetadata['shipping_profile_code'] = $shippingProfileCode;
+        }
+        if ($shippingHazardClass !== '' && $shippingHazardClass !== 'none' && $shippingHazardClass !== 'general') {
+            $fulfillmentMetadata['shipping_hazard_class'] = strtolower($shippingHazardClass);
         }
         if ($productType === 'downloadable') {
             if ($this->currentCustomerId() <= 0) {
@@ -276,6 +281,7 @@ final class ProductCatalogCartItemSnapshotResolver
                 compareAtMinor: $compareAtMinor,
                 campaignLabel: $campaignLabel,
                 campaignUrl: $campaignUrl,
+                weightMinor: $weightMinor,
             );
         }
 
@@ -296,6 +302,7 @@ final class ProductCatalogCartItemSnapshotResolver
             offerId: $offerId,
             productId: $productId,
             requiresShipping: $requiresShipping,
+            weightMinor: $weightMinor,
             fulfillmentMetadata: $fulfillmentMetadata,
             options: $this->buildOptions($websiteId, $productId, $selection, $scope, $locale, $campaignLabel),
             compareAtMinor: $compareAtMinor,
@@ -401,8 +408,9 @@ final class ProductCatalogCartItemSnapshotResolver
         $overlay = new CatalogOverlayResolver();
 
         $attributeRowsByProductAndCode = [];
-        // Callers that pass [] (instead of null) must still get a name/type load;
-        // otherwise product.sku factory codes leak onto storefront card titles.
+        // Callers that pass [] (instead of null) must still get a name/type/slug load;
+        // otherwise product.sku factory codes leak onto storefront card titles and
+        // summary cards fall back to /product/{id} instead of /product/{slug}.
         if ($attributeRows === []) {
             $attributeRows = null;
         }
@@ -413,7 +421,7 @@ final class ProductCatalogCartItemSnapshotResolver
         foreach ($attributeRows as $attributeRow) {
             $productId = (int)($attributeRow['entity_id'] ?? 0);
             $code = strtolower(trim((string)($attributeRow['attribute_code'] ?? '')));
-            if ($productId > 0 && in_array($code, ['name', 'product_type', 'quote_only'], true)) {
+            if ($productId > 0 && in_array($code, ['name', 'product_type', 'quote_only', 'slug', 'source_slug'], true)) {
                 $attributeRowsByProductAndCode[$productId][$code][] = $attributeRow;
             }
         }
@@ -436,14 +444,32 @@ final class ProductCatalogCartItemSnapshotResolver
                 $locale,
                 [''],
             );
+            $slugRows = $attributeRowsByProductAndCode[$productId]['source_slug'] ?? [];
+            if ($slugRows === []) {
+                $slugRows = $attributeRowsByProductAndCode[$productId]['slug'] ?? [];
+            }
+            $resolvedSlug = $overlay->resolveAttribute(
+                $slugRows,
+                $storeId,
+                $locale,
+                [''],
+            );
             $productSku = trim((string)($productRow[Product::schema_fields_SKU] ?? ''));
             $nameValue = $name->isExplicit() ? trim((string)$name->value) : '';
             $typeValue = $type->isExplicit() ? strtolower(trim((string)$type->value)) : '';
+            $slugValue = '';
+            if ($resolvedSlug->isExplicit()) {
+                $candidate = strtolower(trim((string)$resolvedSlug->value));
+                if ($candidate !== '' && preg_match('#^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$#D', $candidate) === 1) {
+                    $slugValue = $candidate;
+                }
+            }
             $productFacts[$productId] = [
                 'row' => $productRow,
                 'name' => $nameValue !== '' ? $nameValue : ($productSku !== '' ? $productSku : (string)__('商品')),
                 'sku' => $productSku,
                 'type' => $typeValue !== '' ? $typeValue : 'simple',
+                'slug' => $slugValue,
             ];
         }
 
@@ -508,28 +534,9 @@ final class ProductCatalogCartItemSnapshotResolver
             );
         }
 
-        $imagesByProduct = [];
-        if ($includeMedia) {
-            $firstMediaByProduct = [];
-            $mediaRows ??= \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
-                'product.catalog.snapshot.media_rows',
-                fn() => $this->media->listByProductIds($websiteId, $productIds),
-            );
-            foreach ($mediaRows as $mediaRow) {
-                $productId = (int)($mediaRow[Media::schema_fields_PRODUCT_ID] ?? 0);
-                if ($productId > 0 && !isset($firstMediaByProduct[$productId])) {
-                    $firstMediaByProduct[$productId] = trim((string)($mediaRow[Media::schema_fields_PATH] ?? ''));
-                }
-            }
-            $imageReferences = [];
-            foreach ($productIds as $productId) {
-                $imageReferences[$productId] = $firstMediaByProduct[$productId] ?? '';
-            }
-            $imagesByProduct = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
-                'product.catalog.snapshot.media_url',
-                fn() => $this->resolveImageReferences($imageReferences, $scope, $locale),
-            );
-        }
+        $imagesByProduct = $includeMedia
+            ? $this->resolveCatalogImages($productIds, $scope, $mediaRows)
+            : [];
 
         $availabilityByOffer = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
             'product.catalog.snapshot.availability',
@@ -655,10 +662,53 @@ final class ProductCatalogCartItemSnapshotResolver
                 offerId: $offerId,
                 productId: $productId,
                 options: $options,
+                slug: (string)($facts['slug'] ?? ''),
             );
         }
 
         return $snapshots;
+    }
+
+    /**
+     * Reuse the catalog snapshot's first-image selection without price or product reads.
+     * MediaRepository keeps the same product/store/position/id ordering as before.
+     *
+     * @param list<int> $productIds
+     * @param list<array<string, mixed>>|null $mediaRows
+     * @return array<int, string>
+     */
+    public function resolveCatalogImages(array $productIds, ScopeIdentity $scope, ?array $mediaRows = null): array
+    {
+        $productIds = array_values(array_unique(array_filter(
+            array_map('intval', $productIds),
+            static fn(int $id): bool => $id > 0,
+        )));
+        if ($productIds === [] || $scope->isGlobal() || $scope->websiteId === null) {
+            return [];
+        }
+
+        $websiteId = $scope->websiteId;
+        $locale = $this->locale();
+        $firstMediaByProduct = [];
+        $mediaRows ??= \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
+            'product.catalog.snapshot.media_rows',
+            fn() => $this->media->listByProductIds($websiteId, $productIds),
+        );
+        foreach ($mediaRows as $mediaRow) {
+            $productId = (int)($mediaRow[Media::schema_fields_PRODUCT_ID] ?? 0);
+            if ($productId > 0 && !isset($firstMediaByProduct[$productId])) {
+                $firstMediaByProduct[$productId] = trim((string)($mediaRow[Media::schema_fields_PATH] ?? ''));
+            }
+        }
+        $imageReferences = [];
+        foreach ($productIds as $productId) {
+            $imageReferences[$productId] = $firstMediaByProduct[$productId] ?? '';
+        }
+
+        return \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
+            'product.catalog.snapshot.media_url',
+            fn() => $this->resolveImageReferences($imageReferences, $scope, $locale),
+        );
     }
 
     /**
@@ -1068,6 +1118,35 @@ final class ProductCatalogCartItemSnapshotResolver
         $raw = strtolower(trim((string)$value->value));
 
         return $raw === '1' || $raw === 'true' || $raw === 'yes';
+    }
+
+    /**
+     * Catalog EAV weight_kg (major kg) → cart weight_minor (1/1000 kg).
+     */
+    private function weightMinorFromCatalog(int $websiteId, int $storeId, int $productId, string $locale): int
+    {
+        try {
+            $value = $this->attributes->read(
+                $websiteId,
+                $storeId,
+                'product',
+                $productId,
+                'weight_kg',
+                $locale,
+                [''],
+            );
+            if ($value->isCleared() || !is_numeric($value->value)) {
+                return 0;
+            }
+            $kg = (float)$value->value;
+            if ($kg <= 0) {
+                return 0;
+            }
+
+            return (int)max(1, (int)round($kg * 1000));
+        } catch (\Throwable) {
+            return 0;
+        }
     }
 
     /**

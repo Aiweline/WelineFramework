@@ -35,6 +35,10 @@ moduleDescribe(test, MODULE, 'DevRelay 后台 UI', () => {
 
     expect(opened, `dev-relay not opened; body=${lastBody.slice(0, 400)}`).toBeTruthy();
     await expect(page.getByTestId('payment-dev-relay-management')).toBeVisible({ timeout: 30000 });
+    await expect(page.getByTestId('payment-dev-relay-guide')).toBeVisible();
+    await expect(page.getByTestId('payment-dev-relay-guide-when')).toContainText(/何时开启/);
+    await expect(page.getByTestId('payment-dev-relay-guide-payment')).toContainText(/支付怎么用/);
+    await expect(page.getByTestId('payment-dev-relay-guide-dropship')).toContainText(/万能货源怎么用/);
     await expect(page.getByTestId('payment-dev-relay-settings')).toBeVisible();
     await expect(page.getByTestId('payment-dev-relay-save-settings')).toBeVisible();
     await expect(page.locator('.payment-dev-relay .w-card').first()).toBeVisible();
@@ -60,9 +64,13 @@ moduleDescribe(test, MODULE, 'DevRelay 后台 UI', () => {
       await startBtn.click();
       const feedback = page.getByTestId('payment-dev-relay-local-feedback');
       await expect(feedback).toBeVisible({ timeout: 15000 });
-      await expect(feedback).toContainText(/请填写线上用户 API Token|Silent worker|请提供|Token/i);
-      await expect(page.getByTestId('payment-dev-relay-log')).toContainText(/请填写线上用户 API Token|Silent worker|请提供|Token/i, { timeout: 15000 });
-      await expect(page.locator('#dev-relay-user-token')).toHaveAttribute('aria-invalid', 'true');
+      // 首次无凭证 → 告警必填；本机已记住 Token → 可直接开启成功。
+      await expect(feedback).toContainText(/请填写线上用户 API Token|静默中继已开启|Silent worker|请提供|Token/i);
+      const feedbackText = await feedback.innerText();
+      if (/请填写线上用户 API Token/.test(feedbackText)) {
+        await expect(page.getByTestId('payment-dev-relay-log')).toContainText(/请填写线上用户 API Token/i, { timeout: 15000 });
+        await expect(page.locator('#dev-relay-user-token')).toHaveAttribute('aria-invalid', 'true');
+      }
     }
 
     guards.assertClean();

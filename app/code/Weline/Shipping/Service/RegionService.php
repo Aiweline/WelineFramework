@@ -269,12 +269,17 @@ class RegionService
             ->fetch()
             ->getItems();
         $supported = $this->websiteSupportedCountryCodes();
+        $countrySortRanks = $this->countrySortRanks();
         /** @var EmbargoService $embargo */
         $embargo = $this->objectManager->getInstance(EmbargoService::class);
         $seen = [];
         foreach ($rows as $row) {
             $cc = strtoupper(trim((string)$row->getData(\Weline\Shipping\Model\PostalPlace::schema_fields_COUNTRY_CODE)));
-            if ($cc === '' || !preg_match('/^[A-Z]{2}$/', $cc) || isset($seen[$cc])) {
+            if ($cc === '' || !preg_match('/^[A-Z]{2}$/', $cc)) {
+                continue;
+            }
+            $cascadeRank = $this->postalPlaceCascadeRank($row);
+            if (isset($seen[$cc]) && $cascadeRank >= (int)($seen[$cc]['_cascade_rank'] ?? 99)) {
                 continue;
             }
             $placeName = trim((string)$row->getData(\Weline\Shipping\Model\PostalPlace::schema_fields_PLACE_NAME));
@@ -291,24 +296,223 @@ class RegionService
             $seen[$cc] = [
                 'country_code' => $cc,
                 'country_name' => $this->localizedCountryName($cc, $cc),
-                'place_name' => $placeName,
+                'place_name' => $placeName !== ''
+                    ? $placeName
+                    : (string)($seen[$cc]['place_name'] ?? ''),
                 'supported' => isset($supported[$cc]),
                 'embargoed' => $isEmbargoed,
+                'sort_order' => (int)($countrySortRanks[$cc] ?? 9000),
+                '_cascade_rank' => $cascadeRank,
             ];
         }
         $out = array_values($seen);
         usort($out, static function (array $a, array $b): int {
-            // 可配送（支持且非禁运）排前；禁运国仍保留在列表末段
+            // 1) deliverable; 2) Region.sort_order（热门位次，越小越前）; 3) cascade; 4) alpha
             $aOk = !empty($a['supported']) && empty($a['embargoed']);
             $bOk = !empty($b['supported']) && empty($b['embargoed']);
             if ($aOk !== $bOk) {
                 return $aOk ? -1 : 1;
+            }
+            $aSort = (int)($a['sort_order'] ?? 9000);
+            $bSort = (int)($b['sort_order'] ?? 9000);
+            if ($aSort !== $bSort) {
+                return $aSort <=> $bSort;
+            }
+            $aCascade = (int)($a['_cascade_rank'] ?? 99);
+            $bCascade = (int)($b['_cascade_rank'] ?? 99);
+            if ($aCascade !== $bCascade) {
+                return $aCascade <=> $bCascade;
+            }
+
+            return strcmp($a['country_code'], $b['country_code']);
+        });
+        foreach ($out as &$row) {
+            unset($row['_cascade_rank']);
+        }
+        unset($row);
+
+        return $out;
+    }
+
+    /**
+     * Lower is better: city/district with codes = 0, province = 1, bare = 2.
+     */
+    private function postalPlaceCascadeRank(object $row): int
+    {
+        $level = strtolower(trim((string)$row->getData(\Weline\Shipping\Model\PostalPlace::schema_fields_ATTACH_LEVEL)));
+        $cityCode = trim((string)$row->getData(\Weline\Shipping\Model\PostalPlace::schema_fields_CITY_CODE));
+        $cityId = (int)$row->getData(\Weline\Shipping\Model\PostalPlace::schema_fields_CITY_REGION_ID);
+        $districtCode = trim((string)$row->getData(\Weline\Shipping\Model\PostalPlace::schema_fields_DISTRICT_CODE));
+        $districtId = (int)$row->getData(\Weline\Shipping\Model\PostalPlace::schema_fields_DISTRICT_REGION_ID);
+        if (
+            $level === 'city'
+            || $level === 'district'
+            || $cityCode !== ''
+            || $cityId > 0
+            || $districtCode !== ''
+            || $districtId > 0
+        ) {
+            return 0;
+        }
+        $provinceCode = trim((string)$row->getData(\Weline\Shipping\Model\PostalPlace::schema_fields_PROVINCE_CODE));
+        $provinceId = (int)$row->getData(\Weline\Shipping\Model\PostalPlace::schema_fields_PROVINCE_REGION_ID);
+        if ($level === 'province' || $provinceCode !== '' || $provinceId > 0) {
+            return 1;
+        }
+
+        return 2;
+    }
+
+    /**
+     * Region TYPE_COUNTRY.sort_order — admin-tunable hot position (lower = earlier).
+     *
+     * @return array<string, int>
+     */
+    public function countrySortRanks(): array
+    {
+        $ranks = [];
+        foreach ($this->getCountries() as $region) {
+            $cc = strtoupper(trim((string)($region['country_code'] ?? $region['region_code'] ?? '')));
+            if ($cc === '' || !preg_match('/^[A-Z]{2}$/', $cc)) {
+                continue;
+            }
+            $ranks[$cc] = max(0, (int)($region['sort_order'] ?? 0));
+        }
+
+        return $ranks;
+    }
+
+    /**
+     * Seed country sort_order from default-markets/countries.tsv (explicit sort_order or index×10).
+     * Non-market countries get 9000+ when still at 0. Preserves non-zero admin edits when $onlyWhenZero.
+     *
+     * @return array{updated:int,skipped:int}
+     */
+    public function seedCountrySortFromDefaultMarkets(bool $onlyWhenZero = true): array
+    {
+        $marketSort = $this->defaultMarketCountrySortOrders();
+        /** @var Region $model */
+        $model = $this->objectManager->getInstance(Region::class);
+        $items = $model->reset()
+            ->where(Region::schema_fields_REGION_TYPE, Region::TYPE_COUNTRY)
+            ->select()
+            ->fetch()
+            ->getItems();
+        $updated = 0;
+        $skipped = 0;
+        $nonMarketBase = 9000;
+        foreach ($items as $item) {
+            $cc = strtoupper(trim((string)$item->getData(Region::schema_fields_COUNTRY_CODE)));
+            if ($cc === '' || !preg_match('/^[A-Z]{2}$/', $cc)) {
+                continue;
+            }
+            $current = (int)$item->getData(Region::schema_fields_SORT_ORDER);
+            if ($onlyWhenZero && $current !== 0) {
+                $skipped++;
+                continue;
+            }
+            if (array_key_exists($cc, $marketSort)) {
+                $next = max(0, (int)$marketSort[$cc]);
+            } else {
+                // Stable non-market band so hot markets stay ahead.
+                $next = $nonMarketBase + (ord($cc[0]) * 100 + ord($cc[1]));
+            }
+            if ($current === $next) {
+                $skipped++;
+                continue;
+            }
+            $item->setData(Region::schema_fields_SORT_ORDER, $next)->save();
+            $updated++;
+        }
+
+        return ['updated' => $updated, 'skipped' => $skipped];
+    }
+
+    /**
+     * @return list<array{country_code:string,country_name:string,sort_order:int,in_default_markets:bool}>
+     */
+    public function listCountrySortEditorRows(): array
+    {
+        $marketRanks = $this->defaultMarketCountrySortOrders();
+        $out = [];
+        foreach ($this->getCountries() as $region) {
+            $cc = strtoupper(trim((string)($region['country_code'] ?? $region['region_code'] ?? '')));
+            if ($cc === '' || !preg_match('/^[A-Z]{2}$/', $cc)) {
+                continue;
+            }
+            $inMarket = array_key_exists($cc, $marketRanks);
+            $sort = max(0, (int)($region['sort_order'] ?? 0));
+            // Editor focuses on default markets + any already customized (<9000).
+            if (!$inMarket && $sort >= 9000) {
+                continue;
+            }
+            $out[] = [
+                'country_code' => $cc,
+                'country_name' => (string)($region['region_name'] ?? $cc),
+                'sort_order' => $sort,
+                'in_default_markets' => $inMarket,
+            ];
+        }
+        usort($out, static function (array $a, array $b): int {
+            if ($a['sort_order'] !== $b['sort_order']) {
+                return $a['sort_order'] <=> $b['sort_order'];
             }
 
             return strcmp($a['country_code'], $b['country_code']);
         });
 
         return $out;
+    }
+
+    /**
+     * @return array<string, int> ISO country_code => sort_order from default-markets/countries.tsv
+     */
+    private function defaultMarketCountrySortOrders(): array
+    {
+        static $ranks = null;
+        if (is_array($ranks)) {
+            return $ranks;
+        }
+        $ranks = [];
+        $path = BP . 'app/code/Weline/Shipping/data/default-markets/countries.tsv';
+        if (!is_file($path)) {
+            return $ranks;
+        }
+        $fh = fopen($path, 'rb');
+        if ($fh === false) {
+            return $ranks;
+        }
+        $idx = 0;
+        $header = null;
+        while (($line = fgets($fh)) !== false) {
+            $line = trim($line);
+            if ($line === '' || str_starts_with($line, '#')) {
+                continue;
+            }
+            $parts = preg_split("/\t+/", $line) ?: [];
+            if ($header === null && str_starts_with($line, 'country_code')) {
+                $header = array_map('strtolower', $parts);
+                continue;
+            }
+            $cc = strtoupper(trim((string)($parts[0] ?? '')));
+            if ($cc === '' || !preg_match('/^[A-Z]{2}$/', $cc) || isset($ranks[$cc])) {
+                continue;
+            }
+            $sortCol = null;
+            if (is_array($header)) {
+                $sortIdx = array_search('sort_order', $header, true);
+                if ($sortIdx !== false && isset($parts[$sortIdx]) && trim((string)$parts[$sortIdx]) !== '') {
+                    $sortCol = max(0, (int)$parts[$sortIdx]);
+                }
+            } elseif (isset($parts[2]) && trim((string)$parts[2]) !== '' && ctype_digit(trim((string)$parts[2]))) {
+                $sortCol = max(0, (int)$parts[2]);
+            }
+            $ranks[$cc] = $sortCol !== null ? $sortCol : ($idx * 10);
+            $idx++;
+        }
+        fclose($fh);
+
+        return $ranks;
     }
 
     /**
@@ -434,12 +638,74 @@ class RegionService
     /** @return list<array<string, mixed>> */
     private function applyGlobalCountryCatalog(array $regions): array
     {
-        $subdivisions = array_values(array_filter(
-            $regions,
-            static fn(array $region): bool => ($region['region_type'] ?? '') !== Region::TYPE_COUNTRY
-        ));
+        $dbCountries = [];
+        $subdivisions = [];
+        foreach ($regions as $region) {
+            if (($region['region_type'] ?? '') === Region::TYPE_COUNTRY) {
+                $cc = strtoupper(trim((string)($region['country_code'] ?? $region['region_code'] ?? '')));
+                if ($cc !== '' && preg_match('/^[A-Z]{2}$/', $cc)) {
+                    $dbCountries[$cc] = $region;
+                }
+                continue;
+            }
+            $subdivisions[] = $region;
+        }
 
-        return array_merge($this->getGlobalCountriesAsRegions(), $subdivisions);
+        $marketSort = $this->defaultMarketCountrySortOrders();
+        $merged = [];
+        $seen = [];
+        foreach ($this->getGlobalCountriesAsRegions() as $row) {
+            $cc = strtoupper(trim((string)($row['country_code'] ?? '')));
+            if ($cc === '' || !preg_match('/^[A-Z]{2}$/', $cc)) {
+                continue;
+            }
+            if (isset($dbCountries[$cc])) {
+                $db = $dbCountries[$cc];
+                $row['region_id'] = (int)($db['region_id'] ?? 0);
+                $dbSort = max(0, (int)($db['sort_order'] ?? 0));
+                if ($dbSort > 0) {
+                    $row['sort_order'] = $dbSort;
+                } elseif (array_key_exists($cc, $marketSort)) {
+                    $row['sort_order'] = max(0, (int)$marketSort[$cc]);
+                } else {
+                    $row['sort_order'] = 9000 + (ord($cc[0]) * 100 + ord($cc[1]));
+                }
+                $dbName = trim((string)($db['region_name'] ?? ''));
+                if ($dbName !== '') {
+                    $row['region_name'] = $dbName;
+                }
+                $row['is_active'] = (int)($db['is_active'] ?? 1);
+                unset($dbCountries[$cc]);
+            } else {
+                $row['sort_order'] = array_key_exists($cc, $marketSort)
+                    ? max(0, (int)$marketSort[$cc])
+                    : (9000 + (ord($cc[0]) * 100 + ord($cc[1])));
+            }
+            $merged[] = $row;
+            $seen[$cc] = true;
+        }
+        foreach ($dbCountries as $cc => $db) {
+            if (isset($seen[$cc])) {
+                continue;
+            }
+            if (!isset($db['sort_order'])) {
+                $db['sort_order'] = array_key_exists($cc, $marketSort)
+                    ? max(0, (int)$marketSort[$cc])
+                    : 9000;
+            }
+            $merged[] = $db;
+        }
+        usort($merged, static function (array $a, array $b): int {
+            $sa = (int)($a['sort_order'] ?? 9000);
+            $sb = (int)($b['sort_order'] ?? 9000);
+            if ($sa !== $sb) {
+                return $sa <=> $sb;
+            }
+
+            return strcmp((string)($a['region_name'] ?? ''), (string)($b['region_name'] ?? ''));
+        });
+
+        return array_merge($merged, $subdivisions);
     }
 
     /** @return list<array<string, mixed>> */
@@ -466,10 +732,10 @@ class RegionService
                 'region_type' => Region::TYPE_COUNTRY,
                 'postal_code_pattern' => '',
                 'postal_code' => '',
+                'is_active' => 1,
+                'sort_order' => 9000,
             ];
         }
-
-        usort($result, static fn(array $a, array $b): int => strcmp((string)$a['region_name'], (string)$b['region_name']));
 
         return $result;
     }
@@ -712,6 +978,8 @@ class RegionService
                 'region_type' => $regionType,
                 'postal_code_pattern' => (string)$region->getData(Region::schema_fields_POSTAL_CODE_PATTERN),
                 'postal_code' => (string)$region->getData(Region::schema_fields_POSTAL_CODE),
+                'is_active' => (int)$region->getData(Region::schema_fields_IS_ACTIVE),
+                'sort_order' => (int)$region->getData(Region::schema_fields_SORT_ORDER),
             ];
         }
 

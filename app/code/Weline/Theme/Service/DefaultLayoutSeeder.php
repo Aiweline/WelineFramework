@@ -311,7 +311,22 @@ class DefaultLayoutSeeder
                     ],
                     'sort_order' => 0,
                 ],
-                // 最近浏览（Weline_RecentlyViewed default_injections）
+                // 猜你喜欢（Weline_Product you-may-like default_injections → 常显槽）
+                [
+                    'area' => ThemeLayout::AREA_CONTENT,
+                    'slot_id' => 'product-you-may-like',
+                    'widget_code' => 'you-may-like',
+                    'widget_module' => 'Weline_Product',
+                    'widget_type' => 'product',
+                    'config' => [
+                        'title' => '猜你喜欢',
+                        'limit' => 8,
+                        'columns' => 4,
+                        'layout' => 'grid',
+                    ],
+                    'sort_order' => 0,
+                ],
+                // 最近浏览（Weline_RecentlyViewed default_injections → 常显槽）
                 [
                     'area' => ThemeLayout::AREA_CONTENT,
                     'slot_id' => 'product-recently-viewed',

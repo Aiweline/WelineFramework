@@ -147,4 +147,30 @@ final class SharedSidecarInspectorTest extends TestCase
             $method->invoke($inspector, '--name=weline-wls-memory-default-' . $scope)
         );
     }
+    public function testIndexedShortNameReadsTheActualProcessCommandLine(): void
+    {
+        $inspector = new SharedSidecarInspector();
+        $method = new \ReflectionMethod($inspector, 'resolveIndexedCommandLine');
+        $actual = \Weline\Framework\System\Process\Processer::getProcessCommandLine(\getmypid());
+        self::assertNotSame('', $actual);
+
+        self::assertSame($actual, $method->invoke(
+            $inspector,
+            \getmypid(),
+            '--name=weline-wls-memory-p05113ef3-shared-26278 --launch-id=sidecar-test',
+        ));
+        self::assertSame('', $method->invoke($inspector, 0, '--name=weline-wls-memory-p05113ef3-shared-26278'));
+    }
+
+    public function testCompleteIndexedIdentityDoesNotNeedAProcessLookup(): void
+    {
+        $inspector = new SharedSidecarInspector();
+        $method = new \ReflectionMethod($inspector, 'resolveIndexedCommandLine');
+        $command = 'php session_server.php 127.0.0.1 26278 shared-memory-test '
+            . '--instance-name=shared-memory-test --role=memory_server '
+            . '--token-file-name=memory_server.custom.token --shared-service=1';
+
+        self::assertSame($command, $method->invoke($inspector, 0, $command));
+    }
+
 }

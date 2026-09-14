@@ -64,12 +64,9 @@ try {
 }
 $freeShareUrl = '';
 try {
-    $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
-        || ((string)($_SERVER['SERVER_PORT'] ?? '') === '443');
-    $host = trim((string)($_SERVER['HTTP_HOST'] ?? ''));
-    $uri = (string)($_SERVER['REQUEST_URI'] ?? '');
-    if ($host !== '' && $uri !== '') {
-        $freeShareUrl = ($https ? 'https' : 'http') . '://' . $host . $uri;
+    $slug = strtolower(trim((string) ($offer['slug'] ?? $product['url_key'] ?? $product['slug'] ?? '')));
+    if ($slug !== '') {
+        $freeShareUrl = (string) $this->getUrl('product/' . $slug);
     }
 } catch (\Throwable) {
     $freeShareUrl = '';
@@ -81,6 +78,7 @@ if ($freeShareUrl === '') {
         $freeShareUrl = '/product/' . $productId;
     }
 }
+// Prefer published product path; API purchase-panel URIs are not shareable targets.
 $encodedFreeShareUrl = rawurlencode($freeShareUrl);
 $platformSvg = [
     'facebook' => '<svg class="affiliate-share-platform__mark" viewBox="0 0 24 24" width="18" height="18" focusable="false" aria-hidden="true"><path fill="#1877F2" d="M24 12.073C24 5.405 18.627 0 12 0S0 5.405 0 12.073C0 18.1 4.388 23.094 10.125 24v-8.437H7.078v-3.49h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.49h-2.796V24C19.612 23.094 24 18.1 24 12.073z"/></svg>',

@@ -83,4 +83,39 @@ return [
             ],
         ],
     ],
+    'b2b-backend-order-chat' => [
+        'name' => '批发订单沟通',
+        'description' => '订单后台详情：B2B 定金/尾款协商消息；默认注入 backend-order-b2b-chat。',
+        'type' => 'content',
+        'code' => 'b2b-backend-order-chat',
+        'area' => 'backend',
+        'template' => 'Weline_B2B::templates/Backend/widgets/backend-order-chat.phtml',
+        'page_layouts' => ['backend-order-view'],
+        'position' => ['content'],
+        'slot' => 'backend-order-b2b-chat',
+        'supports' => [
+            'backend-order-b2b-chat',
+            'b2b-order-chat',
+            'b2b',
+        ],
+        'default_injections' => [[
+            'layout_type' => 'backend-order-view',
+            'layout_option' => 'default',
+            'slot' => 'backend-order-b2b-chat',
+            'area' => 'content',
+            'sort_order' => 20,
+            'required' => true,
+            'reason' => '批发/挂单订单详情默认展示商家侧订单沟通',
+            'config' => [
+                'title' => '订单沟通',
+            ],
+        ]],
+        'params' => [
+            'title' => [
+                'default' => '订单沟通',
+                'type' => 'string',
+                'label' => '标题',
+            ],
+        ],
+    ],
 ];

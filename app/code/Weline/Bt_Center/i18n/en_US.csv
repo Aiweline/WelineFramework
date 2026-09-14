@@ -50,10 +50,10 @@ HTTP：%{1},HTTP：%{1}
 变化：%{1},变化：%{1}
 编辑,Edit
 删除,Delete
-确认删除,确认删除
+确认删除,"Confirm deletion"
 确定要删除这个服务器吗？,"Are you sure you want to delete this server?"
-确定删除,确定删除
-取消,取消
+确定删除,"Confirm delete"
+取消,Cancel
 纭畾瑕佸垹闄よ繖涓湇鍔″櫒鍚楋紵,纭畾瑕佸垹闄よ繖涓湇鍔″櫒鍚楋紵
 纭鍒犻櫎,纭鍒犻櫎
 纭畾鍒犻櫎,纭畾鍒犻櫎

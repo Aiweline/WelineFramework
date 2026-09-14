@@ -27,14 +27,14 @@ final class StorefrontAllMenuCategoryTreeService
 
     public static function logicalCacheKey(int $websiteId, string $locale = ''): string
     {
-        // v4: embed resolved storefront locale in the logical key so EN pages
-        // cannot reuse a ZH tree when KeyBuilder lang lags behind State.
+        // v6 stores origin-free routes; absolute URLs are materialized per request.
+        // Keep the locale explicit when State has advanced ahead of the frozen key.
         $locale = trim(str_replace('-', '_', $locale));
         if ($locale === '') {
             $locale = 'zh_Hans_CN';
         }
 
-        return 'product.all_menu_category_tree.v5.' . max(0, $websiteId) . '.' . $locale;
+        return 'product.all_menu_category_tree.v6.' . max(0, $websiteId) . '.' . $locale;
     }
 
     public static function cachePool(): string
@@ -58,12 +58,43 @@ final class StorefrontAllMenuCategoryTreeService
             $locale = 'zh_Hans_CN';
         }
 
-        /** @var list<array<string, mixed>> $tree */
-        $tree = $this->hotCache->rememberPolicy(
-            StorefrontCatalogCacheCoordinator::categoryMenuPolicy(),
-            self::logicalCacheKey($websiteId, $locale),
-            fn(): array => $this->build($websiteId, $locale),
+        $logicalKey = self::logicalCacheKey($websiteId, $locale);
+        // The public tree carries URLs; only its raw routes belong in the shared cache.
+        $requestKey = $logicalKey . '|' . KeyBuilder::environmentHash(
+            ['resource' => 'product.category_menu.urls', 'locale' => $locale],
+            ['area_route' => false],
         );
+
+        return $this->hotCache->rememberForRequest(
+            'product.category_menu.urls',
+            $requestKey,
+            function () use ($websiteId, $locale, $logicalKey): array {
+                $tree = $this->hotCache->rememberPolicy(
+                    StorefrontCatalogCacheCoordinator::categoryMenuPolicy(),
+                    $logicalKey,
+                    fn(): array => $this->build($websiteId, $locale),
+                );
+
+                return $this->materializeUrls($tree);
+            },
+        );
+    }
+
+    /**
+     * Copy shared nodes into the current request without changing their public shape.
+     *
+     * @param list<array<string, mixed>> $tree
+     * @return list<array<string, mixed>>
+     */
+    private function materializeUrls(array $tree): array
+    {
+        foreach ($tree as $index => $node) {
+            $node['url'] = $this->url->getFrontendUrl((string)$node['url']);
+            if ($node['children'] !== []) {
+                $node['children'] = $this->materializeUrls($node['children']);
+            }
+            $tree[$index] = $node;
+        }
 
         return $tree;
     }
@@ -133,7 +164,7 @@ final class StorefrontAllMenuCategoryTreeService
                 'id' => 'category_' . ($uuid !== '' ? \preg_replace('/[^a-zA-Z0-9_-]+/', '_', $uuid) : (string)$categoryId),
                 'tag' => MenuTreeNormalizer::TAG_CATEGORY,
                 'name' => $name,
-                'url' => $this->url->getFrontendUrl($path !== '' ? 'category/' . $path : 'categories'),
+                'url' => $path !== '' ? 'category/' . $path : 'categories',
                 'ref' => $uuid !== '' ? 'category:' . $uuid : 'category:' . $categoryId,
                 'meta' => [
                     'category_id' => $categoryId,

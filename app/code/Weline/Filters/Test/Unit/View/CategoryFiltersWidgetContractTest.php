@@ -89,8 +89,10 @@ final class CategoryFiltersWidgetContractTest extends TestCase
         self::assertStringContainsString('w-filters__more', $template);
         self::assertStringContainsString('$visibleOptionLimit = 6', $template);
         self::assertStringContainsString('<lang>查看更多</lang>', $template);
-        self::assertStringContainsString('__($group[\'name\'])', $template);
-        self::assertStringContainsString('__($opt[\'label\'])', $template);
+        self::assertStringContainsString('$escape((string)($group[\'name\'] ?? \'\'))', $template);
+        self::assertStringContainsString('$escape((string)($opt[\'label\'] ?? \'\'))', $template);
+        self::assertStringNotContainsString('__($group[\'name\'])', $template);
+        self::assertStringNotContainsString('__($opt[\'label\'])', $template);
     }
 
     public function testWidgetTemplateResolvesFilterQueryFromRequestParams(): void

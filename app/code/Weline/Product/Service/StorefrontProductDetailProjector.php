@@ -161,6 +161,9 @@ final class StorefrontProductDetailProjector
             ));
         }
 
+        $this->prepareRequestScopedResolverCaches();
+        // A failed preparation must not leave a prior request's bulk context on the long-lived projector.
+        $this->bulkProjectionContext = null;
         $this->bulkProjectionContext = $this->prepareBulkProjectionContext(
             $offers[0],
             $attributeRows,
@@ -351,6 +354,7 @@ final class StorefrontProductDetailProjector
         array $localeFallbacks,
         bool $includeVariantAxes,
     ): array {
+        $this->prepareRequestScopedResolverCaches();
         $bulk = $this->bulkProjectionContext;
         if (is_array($bulk)) {
             $resolved = $this->mergeOfferCombination(
@@ -375,11 +379,14 @@ final class StorefrontProductDetailProjector
 
             $resolved = [];
             foreach ($byCode as $code => $rows) {
+                // Public specification values are EAV identities, including legacy
+                // Han source values. Resolve their labels before any display policy.
                 $value = $this->resolvePresentableAttribute(
                     $rows,
                     $storeId,
                     $locale,
                     $localeFallbacks,
+                    $this->isPublicSpecificationCode($code),
                 );
                 if (!$value->isExplicit()) {
                     continue;
@@ -653,7 +660,13 @@ final class StorefrontProductDetailProjector
 
         $resolvedBase = [];
         foreach ($byCode as $code => $rows) {
-            $value = $this->resolvePresentableAttribute($rows, $storeId, $locale, $localeFallbacks);
+            $value = $this->resolvePresentableAttribute(
+                $rows,
+                $storeId,
+                $locale,
+                $localeFallbacks,
+                $this->isPublicSpecificationCode($code),
+            );
             if (!$value->isExplicit()) {
                 continue;
             }
@@ -962,6 +975,31 @@ final class StorefrontProductDetailProjector
             ??= $this->variantAxes ?? ObjectManager::getInstance(StorefrontVariantAxisResolver::class);
     }
 
+    /**
+     * Resolver instances are request-local: the WLS worker reuses this projector
+     * across requests, while product-bound resolvers retain metadata and option
+     * projections. Clear both maps when the framework request boundary changes.
+     */
+    private function prepareRequestScopedResolverCaches(): void
+    {
+        $requestId = \Weline\Framework\Runtime\RequestContext::getRequestId();
+        if ($requestId === null) {
+            $this->labelsByProductId = [];
+            $this->axesByProductId = [];
+            return;
+        }
+
+        $markerKey = 'product.detail.projector.resolver_request_id';
+        if (\Weline\Framework\Runtime\RequestContext::get($markerKey) === $requestId) {
+            return;
+        }
+
+        $this->labelsByProductId = [];
+        $this->axesByProductId = [];
+        $this->bulkProjectionContext = null;
+        \Weline\Framework\Runtime\RequestContext::set($markerKey, $requestId);
+    }
+
     private function labels(): StorefrontEavLabelResolver
     {
         return $this->eavLabels ??= ObjectManager::getInstance(StorefrontEavLabelResolver::class);
@@ -969,6 +1007,7 @@ final class StorefrontProductDetailProjector
 
     private function labelsForProduct(int $productId): StorefrontEavLabelResolver
     {
+        $this->prepareRequestScopedResolverCaches();
         $productId = max(0, $productId);
         return $this->labelsByProductId[$productId]
             ??= $this->labels()->forProduct($productId);
@@ -976,6 +1015,7 @@ final class StorefrontProductDetailProjector
 
     private function axesForProduct(int $productId): StorefrontVariantAxisResolver
     {
+        $this->prepareRequestScopedResolverCaches();
         $productId = max(0, $productId);
         return $this->axesByProductId[$productId]
             ??= $this->variantAxisResolver()->forProduct($productId);

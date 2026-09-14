@@ -98,7 +98,8 @@
     // E-commerce continent buckets (ISO 3166-1 alpha-2). popular is UX-only and may overlap continents.
     var commerceContinentOrder = ['popular', 'asia', 'europe', 'north_america', 'south_america', 'oceania', 'africa', 'other'];
     var commerceContinentCodes = {
-        popular: ['CN', 'HK', 'MO', 'TW', 'US', 'JP', 'KR', 'SG', 'MY', 'TH', 'VN', 'ID', 'PH', 'AU', 'NZ', 'GB', 'DE', 'FR', 'IT', 'ES', 'NL', 'CA', 'BR', 'IN', 'RU', 'AE'],
+        // Align with Shipping default-markets sort_order (hot first).
+        popular: ['CN', 'HK', 'MO', 'TW', 'US', 'CA', 'GB', 'DE', 'JP', 'AU', 'FR', 'KR', 'SG', 'MY', 'TH', 'VN', 'ID', 'PH', 'IN', 'MX', 'BR', 'IT', 'ES', 'NL', 'NZ', 'AE', 'RU'],
         asia: ['AE', 'AF', 'AM', 'AZ', 'BD', 'BH', 'BN', 'BT', 'CN', 'CY', 'GE', 'HK', 'ID', 'IL', 'IN', 'IO', 'IQ', 'IR', 'JO', 'JP', 'KG', 'KH', 'KP', 'KR', 'KW', 'KZ', 'LA', 'LB', 'LK', 'MM', 'MN', 'MO', 'MV', 'MY', 'NP', 'OM', 'PH', 'PK', 'PS', 'QA', 'SA', 'SG', 'SY', 'TH', 'TJ', 'TL', 'TM', 'TR', 'TW', 'UZ', 'VN', 'YE'],
         europe: ['AD', 'AL', 'AT', 'AX', 'BA', 'BE', 'BG', 'BY', 'CH', 'CZ', 'DE', 'DK', 'EE', 'ES', 'FI', 'FO', 'FR', 'GB', 'GG', 'GI', 'GR', 'HR', 'HU', 'IE', 'IM', 'IS', 'IT', 'JE', 'LI', 'LT', 'LU', 'LV', 'MC', 'MD', 'ME', 'MK', 'MT', 'NL', 'NO', 'PL', 'PT', 'RO', 'RS', 'RU', 'SE', 'SI', 'SJ', 'SK', 'SM', 'UA', 'VA'],
         north_america: ['AG', 'AI', 'AW', 'BB', 'BL', 'BM', 'BQ', 'BS', 'BZ', 'CA', 'CR', 'CU', 'CW', 'DM', 'DO', 'GD', 'GL', 'GP', 'GT', 'HN', 'HT', 'JM', 'KN', 'KY', 'LC', 'MF', 'MQ', 'MS', 'MX', 'NI', 'PA', 'PM', 'PR', 'SV', 'SX', 'TC', 'TT', 'UM', 'US', 'VC', 'VG', 'VI'],
@@ -177,6 +178,33 @@
         return text(hit.label || hit.region_name || hit.region_code || hit.country_code || '');
     }
 
+    function regionHotSortOrder(regionOrHit) {
+        var region = regionOrHit;
+        if (regionOrHit && regionOrHit.hit) {
+            region = regionOrHit.hit.region || regionOrHit.hit;
+        } else if (regionOrHit && regionOrHit.region) {
+            region = regionOrHit.region;
+        }
+        if (!region) {
+            return 9000;
+        }
+        var raw = region.sort_order;
+        if (raw === undefined || raw === null || raw === '') {
+            return 9000;
+        }
+        var n = Number(raw);
+        return isFinite(n) ? Math.max(0, n) : 9000;
+    }
+
+    function compareCountryEntriesByHotSort(a, b) {
+        var sa = regionHotSortOrder(a);
+        var sb = regionHotSortOrder(b);
+        if (sa !== sb) {
+            return sa - sb;
+        }
+        return countryDisplayNameFromEntry(a).localeCompare(countryDisplayNameFromEntry(b), 'zh');
+    }
+
     /**
      * Group country menu entries by commerce continent.
      * When includePopular=true (empty browse), show 热门 first and omit those codes from later continents.
@@ -203,9 +231,19 @@
                 popularSeen[cc] = true;
             });
             buckets.popular.sort(function (a, b) {
+                var sa = regionHotSortOrder(a);
+                var sb = regionHotSortOrder(b);
+                if (sa !== sb) {
+                    return sa - sb;
+                }
                 var ca = countryCodeFromMenuHit(a.hit || a);
                 var cb = countryCodeFromMenuHit(b.hit || b);
-                return (popularRank[ca] || 0) - (popularRank[cb] || 0);
+                var ra = Object.prototype.hasOwnProperty.call(popularRank, ca) ? popularRank[ca] : 999;
+                var rb = Object.prototype.hasOwnProperty.call(popularRank, cb) ? popularRank[cb] : 999;
+                if (ra !== rb) {
+                    return ra - rb;
+                }
+                return compareCountryEntriesByHotSort(a, b);
             });
         }
         (entries || []).forEach(function (entry) {
@@ -220,9 +258,7 @@
             if (key === 'popular' || !buckets[key].length) {
                 return;
             }
-            buckets[key].sort(function (a, b) {
-                return countryDisplayNameFromEntry(a).localeCompare(countryDisplayNameFromEntry(b), 'zh');
-            });
+            buckets[key].sort(compareCountryEntriesByHotSort);
         });
         var out = [];
         commerceContinentOrder.forEach(function (key) {
@@ -1620,12 +1656,17 @@
                         rest.push(region);
                     }
                 });
+                rest.sort(function (a, b) {
+                    return regionHotSortOrder(a) - regionHotSortOrder(b);
+                });
                 return pinned.concat(rest);
             }
             return countries.filter(function (region) {
                 return !filter.length || filter.some(function (item) {
                     return matchesValue(region, item);
                 });
+            }).sort(function (a, b) {
+                return regionHotSortOrder(a) - regionHotSortOrder(b);
             });
         }
 
@@ -2092,6 +2133,17 @@
             });
         }
 
+        if (level === 'country') {
+            hits.sort(function (a, b) {
+                var sa = regionHotSortOrder(a);
+                var sb = regionHotSortOrder(b);
+                if (sa !== sb) {
+                    return sa - sb;
+                }
+                return text(labelOf(a.region)).localeCompare(text(labelOf(b.region)), 'zh');
+            });
+        }
+
         return hits.slice(0, level === 'country' && !needle ? 400 : 50);
     }
 
@@ -2346,7 +2398,7 @@
                             postal: true
                         });
                     }
-                    groupCountryEntriesByContinent(restEntries, labels, {includePopular: !needle}).forEach(function (section) {
+                    groupCountryEntriesByContinent(restEntries, labels, {includePopular: true}).forEach(function (section) {
                         sections.push(section);
                     });
                 } else {
@@ -2355,7 +2407,7 @@
                             return {hit: hit, index: index};
                         }),
                         labels,
-                        {includePopular: !needle}
+                        {includePopular: true}
                     );
                 }
                 sections = assignGroupAnchors(sections);
@@ -3157,7 +3209,8 @@
                 region_name: text(region.region_name || region.name || ''),
                 label: text(region.region_name || region.name || region.region_code || country),
                 street_id: null,
-                parent_region_id: Number(region.parent_region_id || 0) || 0
+                parent_region_id: Number(region.parent_region_id || 0) || 0,
+                sort_order: Number(region.sort_order || 0) || 0
             };
         }
 
@@ -3267,7 +3320,7 @@
                         return {hit: hit, index: index};
                     }),
                     labels,
-                    {includePopular: !text(query).trim()}
+                    {includePopular: true}
                 );
             }
             if (level !== 'province' && level !== 'district' && level !== 'city') {
@@ -3605,6 +3658,14 @@
                         keyRank[key] = idx;
                     });
                     items.sort(function (a, b) {
+                        var sa = Number(a.sort_order || 0) || 0;
+                        var sb = Number(b.sort_order || 0) || 0;
+                        // Non-hot countries stay after seeded hot ranks (<9000).
+                        var aHot = sa > 0 && sa < 9000 ? sa : 9000 + sa;
+                        var bHot = sb > 0 && sb < 9000 ? sb : 9000 + sb;
+                        if (aHot !== bHot) {
+                            return aHot - bHot;
+                        }
                         var ra = keyRank[a.continent_key] || 99;
                         var rb = keyRank[b.continent_key] || 99;
                         if (ra !== rb) {

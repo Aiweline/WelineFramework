@@ -2,7 +2,7 @@
 
 ## 开发前先读
 
-先完成 `prepare_project` 并调用 `resolve_task_context`，再按返回来源阅读：
+可选：可完成 `prepare_project` 并调用 `resolve_task_context` 检索后再按返回来源阅读（编码不强制）：
 
 1. `app/code/Weline/Api/doc/framework-api-and-auth-contract.md`
 2. 涉及浏览器交互时，让同一 Guidance Bundle 同时检索 Frontend 请求规范

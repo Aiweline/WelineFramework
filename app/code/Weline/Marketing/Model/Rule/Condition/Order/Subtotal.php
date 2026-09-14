@@ -11,7 +11,9 @@ declare(strict_types=1);
 
 namespace Weline\Marketing\Model\Rule\Condition\Order;
 
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Marketing\Model\Rule\Condition\AbstractCondition;
+use Weline\Marketing\Service\MarketingBaseCurrencyAmount;
 
 /**
  * 订单金额条件
@@ -32,7 +34,7 @@ class Subtotal extends AbstractCondition
 
     public function getDescription(): string
     {
-        return __('根据订单小计金额进行条件判断');
+        return __('根据订单小计金额进行条件判断（门槛金额为站点基准货币）');
     }
 
     public function validate(array $condition, array $context): bool
@@ -47,11 +49,20 @@ class Subtotal extends AbstractCondition
             return false;
         }
 
-        return $this->compare($subtotal, $operator, (float)$value);
+        $fx = ObjectManager::getInstance(MarketingBaseCurrencyAmount::class);
+        $checkoutCurrency = $fx->checkoutCurrencyFromContext($context);
+        $threshold = $fx->convertBaseMajorToCheckout((float)$value, $checkoutCurrency);
+        if ($threshold === null) {
+            return false;
+        }
+
+        return $this->compare($subtotal, $operator, $threshold);
     }
 
     public function getFormFields(): array
     {
+        $base = ObjectManager::getInstance(MarketingBaseCurrencyAmount::class)->baseCurrency();
+
         return [
             [
                 'name' => 'operator',
@@ -67,10 +78,11 @@ class Subtotal extends AbstractCondition
             ],
             [
                 'name' => 'value',
-                'label' => __('金额'),
+                'label' => __('金额（%{1}）', $base),
                 'type' => 'number',
                 'step' => '0.01',
                 'required' => true,
+                'hint' => __('门槛按站点基准货币录入；结账时按汇率换算后与订单小计比较。'),
             ],
         ];
     }

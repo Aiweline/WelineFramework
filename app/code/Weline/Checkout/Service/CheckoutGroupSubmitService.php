@@ -23,6 +23,7 @@ use Weline\Order\Api\Data\CreateCheckoutGroupResult;
 use Weline\Order\Api\OrderFacadeInterface;
 use Weline\Shipping\Api\Quote\ShippingQuoteRequest;
 use Weline\Shipping\Api\Quote\ShippingQuoteServiceInterface;
+use Weline\Shipping\Api\Quote\SplitShippingQuoteServiceInterface;
 use Weline\Shipping\Service\ShippingQuoteConflictException;
 use Weline\Tax\Api\CheckoutTaxAdvisorInterface;
 use Weline\Tax\Api\TaxConflictException;
@@ -51,6 +52,7 @@ final class CheckoutGroupSubmitService
     private ?DefaultWarehouseResolverInterface $defaultWarehouseResolver;
     private ?WarehouseInventoryCapabilityInterface $warehouseInventory;
     private ?DiscountQuoteServiceInterface $discountQuotes;
+    private ?SplitShippingQuoteServiceInterface $splitShippingQuotes;
 
     public function __construct(
         private readonly ShippingQuoteServiceInterface $shippingQuotes,
@@ -66,11 +68,14 @@ final class CheckoutGroupSubmitService
         private readonly bool $resolveRuntimeInventory = true,
         ?DiscountQuoteServiceInterface $discountQuotes = null,
         private readonly bool $resolveRuntimeDiscount = true,
+        ?SplitShippingQuoteServiceInterface $splitShippingQuotes = null,
+        private readonly bool $resolveRuntimeSplitShipping = true,
     ) {
         $this->inventory = $inventory;
         $this->defaultWarehouseResolver = $defaultWarehouseResolver;
         $this->warehouseInventory = $warehouseInventory;
         $this->discountQuotes = $discountQuotes;
+        $this->splitShippingQuotes = $splitShippingQuotes;
     }
 
     public static function forTesting(
@@ -82,6 +87,7 @@ final class CheckoutGroupSubmitService
         ?DefaultWarehouseResolverInterface $defaultWarehouseResolver = null,
         ?WarehouseInventoryCapabilityInterface $warehouseInventory = null,
         ?DiscountQuoteServiceInterface $discountQuotes = null,
+        ?SplitShippingQuoteServiceInterface $splitShippingQuotes = null,
     ): self {
         return new self(
             $shippingQuotes,
@@ -95,6 +101,8 @@ final class CheckoutGroupSubmitService
             resolveRuntimeInventory: false,
             discountQuotes: $discountQuotes,
             resolveRuntimeDiscount: false,
+            splitShippingQuotes: $splitShippingQuotes,
+            resolveRuntimeSplitShipping: false,
         );
     }
 
@@ -153,6 +161,7 @@ final class CheckoutGroupSubmitService
         }
         $configVersion = $activeConfigVersion;
 
+        $lines = $this->applyFulfillmentSplitKeys($lines, $scope);
         $orders = $this->bucketBySplitKey($lines);
         $this->allocation->assertCompatible($orders);
 
@@ -172,14 +181,139 @@ final class CheckoutGroupSubmitService
             serviceCode: $serviceCode,
         );
 
+        $splitPackages = [];
+        $quoteArray = null;
+        $amountMinor = 0;
+        $requestHash = '';
         try {
             $this->quoteCalls++;
-            $quote = $this->shippingQuotes->quote($req, $serviceCode);
+            $splitQuotes = $this->splitShippingQuotes();
+            if ($splitQuotes !== null && $shippableLines !== []) {
+                $split = $splitQuotes->quoteSplit($req, $serviceCode);
+                $clientHash = trim((string)($clientHints['shipping_request_hash'] ?? $clientHints['request_hash'] ?? ''));
+                if ($clientHash !== '' && !hash_equals($split->requestHash, $clientHash)) {
+                    throw new CheckoutV2ConflictException(
+                        self::ERROR_QUOTE_TOKEN,
+                        __('运费报价已被篡改，请重新选择配送方案'),
+                        [
+                            'expected_hash_prefix' => substr($split->requestHash, 0, 12),
+                        ],
+                    );
+                }
+                $amountMinor = $split->totalAmountMinor;
+                $requestHash = $split->requestHash;
+                $splitPackages = $split->packages;
+                $quoteArray = $split->toArray();
+                // 兼容旧 allocate/会话字段形状
+                $quote = new \Weline\Shipping\Api\Quote\ShippingQuote(
+                    quoteId: $split->quoteId !== '' ? $split->quoteId : ('sq_' . bin2hex(random_bytes(6))),
+                    serviceCode: $split->familyCode,
+                    amountMinor: $split->totalAmountMinor,
+                    currency: $split->currency,
+                    currencyPrecision: $split->currencyPrecision,
+                    configVersion: $split->configVersion,
+                    requestHash: $split->requestHash,
+                    isFree: $split->isFree,
+                    freeReason: $split->freeReason,
+                    expiresAt: gmdate('c', time() + 1800),
+                );
+            } else {
+                $quote = $this->shippingQuotes->quote($req, $serviceCode);
+                $amountMinor = $quote->amountMinor;
+                $requestHash = $quote->requestHash;
+                $quoteArray = $quote->toArray();
+            }
         } catch (ShippingQuoteConflictException $e) {
             throw new CheckoutV2ConflictException($e->errorCode(), $e->getMessage(), $e->context(), $e);
         }
 
-        $alloc = $this->allocation->allocate($orders, $quote->amountMinor);
+        $quoteArray = is_array($quoteArray) ? $quoteArray : $quote->toArray();
+        try {
+            $rateMeta = $this->shippingQuotes->listOptions(new ShippingQuoteRequest(
+                scope: $scope,
+                address: $address,
+                lines: $shippableLines,
+                currency: $currency,
+                configVersion: '',
+                serviceCode: $serviceCode,
+            ));
+            foreach ($rateMeta as $opt) {
+                if (!is_array($opt)) {
+                    continue;
+                }
+                if (trim((string)($opt['service_code'] ?? '')) !== $serviceCode) {
+                    continue;
+                }
+                foreach (['incoterm', 'duty_notice'] as $k) {
+                    if (!empty($opt[$k])) {
+                        $quoteArray[$k] = $opt[$k];
+                    }
+                }
+                break;
+            }
+        } catch (\Throwable) {
+            // soft: commerce notice optional
+        }
+
+        $overlay = [
+            'lines' => $lines,
+            'address' => $address,
+            'scope' => $scope,
+            'currency' => $currency,
+            'service_code' => $serviceCode,
+            'amount_minor' => $amountMinor,
+            'request_hash' => $requestHash,
+            'quote_array' => is_array($quoteArray) ? $quoteArray : $quote->toArray(),
+            'split_packages' => $splitPackages,
+            'error' => null,
+            'applied' => false,
+        ];
+        $overlayEvents = $this->events();
+        if ($overlayEvents !== null) {
+            $overlayEvents->dispatch('Weline_Checkout::checkout::shipping_quote::overlay', $overlay);
+        }
+        if (!empty($overlay['error'])) {
+            throw new CheckoutV2ConflictException(
+                self::ERROR_QUOTE_TOKEN,
+                __('货源运费暂不可用，请稍后重试'),
+                [
+                    'error' => (string)$overlay['error'],
+                    'failure_mode' => (string)($overlay['failure_mode'] ?? 'block_checkout'),
+                ],
+            );
+        }
+        if (!empty($overlay['degraded'])) {
+            $quoteArray = is_array($overlay['quote_array'] ?? null)
+                ? $overlay['quote_array']
+                : (is_array($quoteArray) ? $quoteArray : $quote->toArray());
+            $quoteArray['dropship_freight_degraded'] = true;
+            $quoteArray['dropship_freight_degrade_reason'] = (string)($overlay['degrade_reason'] ?? 'dropship_freight_unavailable');
+        }
+        if (!empty($overlay['applied'])) {
+            $amountMinor = max(0, (int)$overlay['amount_minor']);
+            $splitPackages = is_array($overlay['split_packages'] ?? null)
+                ? $overlay['split_packages']
+                : $splitPackages;
+            $quoteArray = is_array($overlay['quote_array'] ?? null)
+                ? $overlay['quote_array']
+                : $quoteArray;
+            $quote = new \Weline\Shipping\Api\Quote\ShippingQuote(
+                quoteId: $quote->quoteId,
+                serviceCode: $quote->serviceCode,
+                amountMinor: $amountMinor,
+                currency: $quote->currency,
+                currencyPrecision: $quote->currencyPrecision,
+                configVersion: $quote->configVersion,
+                requestHash: $quote->requestHash,
+                isFree: $amountMinor === 0 ? $quote->isFree : false,
+                freeReason: $amountMinor === 0 ? $quote->freeReason : '',
+                expiresAt: $quote->expiresAt,
+                scopeVersion: $quote->scopeVersion,
+                ruleVersion: $quote->ruleVersion,
+            );
+        }
+
+        $alloc = $this->allocation->allocate($orders, $amountMinor);
         try {
             $tax = $this->taxAdvisor !== null
                 ? $this->taxAdvisor->quoteTax($orders, $scope, $address, $currency)
@@ -225,6 +359,22 @@ final class CheckoutGroupSubmitService
         $goodsSubtotal = $this->ordersSubtotalMinor($orders);
         $taxMinor = (int)($tax['tax_amount_minor'] ?? 0);
         $goodsSubtotalTaxed = $goodsSubtotal + $taxMinor;
+        $discountMinorPreview = is_array($discountPayload)
+            ? (int)($discountPayload['amount_minor'] ?? 0)
+            : 0;
+        $baseBeforeCod = max(
+            0,
+            $goodsSubtotal + $amountMinor + $taxMinor - $discountMinorPreview,
+        );
+        $codFeeMinor = $this->resolveCodFeeMinor(
+            trim((string)($paymentMethod ?? '')),
+            $baseBeforeCod,
+        );
+        $shippingCommerce = $this->buildShippingCommerceSnapshot(
+            $amountMinor,
+            is_array($quoteArray) ? $quoteArray : $quote->toArray(),
+            $scope,
+        );
         $depositRatioBps = 3000;
         $depositAmountMinor = $discountsBanned
             ? intdiv($goodsSubtotalTaxed * $depositRatioBps, 10000)
@@ -251,7 +401,23 @@ final class CheckoutGroupSubmitService
             'lines' => $lines,
             'orders' => $orders,
             'allocation' => $alloc,
-            'quote' => $quote->toArray(),
+            'quote' => array_merge(is_array($quoteArray) ? $quoteArray : $quote->toArray(), [
+                // Split quote exposes total_amount_minor; discount validateToken reads amount_minor.
+                'amount_minor' => $amountMinor,
+                'packages' => $splitPackages,
+                'family_code' => is_array($quoteArray) ? (string)($quoteArray['family_code'] ?? $serviceCode) : $serviceCode,
+            ]),
+            'shipping_packages' => $splitPackages,
+            'shipping_commerce' => $shippingCommerce,
+            'cod_fee_amount_minor' => $codFeeMinor,
+            'totals' => [
+                'subtotal_minor' => $goodsSubtotal,
+                'shipping_amount_minor' => $amountMinor,
+                'tax_amount_minor' => $taxMinor,
+                'discount_amount_minor' => $discountMinorPreview,
+                'cod_fee_amount_minor' => $codFeeMinor,
+                'grand_total_minor' => $baseBeforeCod + $codFeeMinor,
+            ],
             'tax' => $tax,
             'discount' => $discountPayload,
             'coupon_code' => $discountsBanned ? '' : strtoupper(trim((string)($couponCode ?? ''))),
@@ -431,6 +597,10 @@ final class CheckoutGroupSubmitService
 
         $session['state'] = \Weline\Checkout\Model\CheckoutSession::STATE_SUBMITTING;
         $session['idempotency_key'] = $idempotencyKey;
+        $resolvedPaymentMethod = strtolower(trim((string)($paymentMethod ?? $session['payment_method'] ?? '')));
+        if ($resolvedPaymentMethod !== '') {
+            $session['payment_method'] = $resolvedPaymentMethod;
+        }
         $this->putSession($token, $session);
 
         $websiteId = (int) ($session['scope']['website_id'] ?? 0);
@@ -444,7 +614,7 @@ final class CheckoutGroupSubmitService
         foreach ($session['orders'] as $order) {
             $split = (string) $order['split_key'];
             foreach ($order['items'] as $item) {
-                $line = [
+                $line = array_merge([
                     'line_uuid' => (string)($item['line_uuid'] ?? ''),
                     'name' => (string) $item['name'],
                     'sku' => (string) ($item['sku'] ?? ''),
@@ -455,7 +625,7 @@ final class CheckoutGroupSubmitService
                     'offer_id' => $item['offer_id'] ?? null,
                     'product_id' => $item['product_id'] ?? null,
                     'tax_class_code' => $item['tax_class_code'] ?? 'standard',
-                ];
+                ], $this->pricingChromeFromLine($item));
                 if ((bool)($item['requires_shipping'] ?? true)) {
                     $offerId = (int)($item['offer_id'] ?? 0);
                     if ($offerId <= 0 && $inventory !== null) {
@@ -571,6 +741,11 @@ final class CheckoutGroupSubmitService
                 'discounts_banned' => $discountsBanned,
                 'deposit' => $deposit,
                 'defer_inventory' => $deferInventory,
+                'payment_method' => $resolvedPaymentMethod,
+                'cod_fee_amount_minor' => max(0, (int)($session['cod_fee_amount_minor'] ?? 0)),
+                'shipping_commerce' => is_array($session['shipping_commerce'] ?? null)
+                    ? $session['shipping_commerce']
+                    : [],
                 'type_payload' => is_array($session['b2b_credit_type_payload'] ?? null)
                     ? $session['b2b_credit_type_payload']
                     : [],
@@ -592,7 +767,9 @@ final class CheckoutGroupSubmitService
                     orders: $session['orders'],
                     currency: (string)$session['currency'],
                     customerId: $customerId,
-                    shippingAmountMinor: (int)($session['quote']['amount_minor'] ?? 0),
+                    shippingAmountMinor: (int)($session['quote']['amount_minor']
+                        ?? $session['quote']['total_amount_minor']
+                        ?? 0),
                     couponCode: $couponCode,
                     cartHash: (string)($session['cart_hash'] ?? ''),
                 );
@@ -883,6 +1060,140 @@ final class CheckoutGroupSubmitService
     }
 
     /**
+     * Preserve Cart freeze deal chrome into order/session line snapshots.
+     *
+     * @param array<string, mixed> $line
+     * @return array<string, mixed>
+     */
+    private function pricingChromeFromLine(array $line): array
+    {
+        $unit = max(0, (int)($line['unit_price_minor'] ?? 0));
+        $compare = max(0, (int)($line['compare_at_minor'] ?? 0));
+        $label = trim((string)($line['campaign_label'] ?? ''));
+        $url = trim((string)($line['campaign_url'] ?? ''));
+        $hasDeal = !empty($line['has_deal']) || ($compare > $unit && $unit > 0);
+        $out = [];
+        if ($compare > 0) {
+            $out['compare_at_minor'] = $compare;
+        }
+        if ($hasDeal) {
+            $out['has_deal'] = true;
+        }
+        if ($label !== '') {
+            $out['campaign_label'] = $label;
+        }
+        if ($url !== '') {
+            $out['campaign_url'] = $url;
+        }
+        $options = $line['options'] ?? null;
+        if (\is_array($options) && $options !== []) {
+            $out['options'] = $options;
+        }
+        $image = trim((string)($line['image'] ?? $line['image_url'] ?? $line['image_src'] ?? ''));
+        if ($image !== '') {
+            $out['image'] = $image;
+        }
+
+        return $out;
+    }
+
+    /**
+     * Inventory 只读分仓：给可发货行打上 split_key=wh:{id}（确定性）。
+     *
+     * @param list<array<string, mixed>> $lines
+     * @param array<string, mixed> $scope
+     * @return list<array<string, mixed>>
+     */
+    private function applyFulfillmentSplitKeys(array $lines, array $scope): array
+    {
+        if (!$this->resolveRuntimeInventory && $this->splitShippingQuotes === null) {
+            // 单测默认不触发真实 Inventory 规划，避免污染既有 forTesting 路径
+            return $lines;
+        }
+        if (!interface_exists(\Weline\Inventory\Api\FulfillmentSplitPlanInterface::class)) {
+            return $lines;
+        }
+        try {
+            /** @var \Weline\Inventory\Api\FulfillmentSplitPlanInterface $plan */
+            $plan = ObjectManager::getInstance(\Weline\Inventory\Api\FulfillmentSplitPlanInterface::class);
+            $packages = $plan->planPackages(
+                (int)($scope['website_id'] ?? 0),
+                (int)($scope['store_id'] ?? 0),
+                $lines,
+            );
+        } catch (\Throwable) {
+            return $lines;
+        }
+        if ($packages === []) {
+            return $lines;
+        }
+        $byUuid = [];
+        $bySkuOffer = [];
+        foreach ($packages as $pkg) {
+            if (!is_array($pkg)) {
+                continue;
+            }
+            $splitKey = (string)($pkg['split_key'] ?? '');
+            if ($splitKey === '') {
+                continue;
+            }
+            foreach (($pkg['lines'] ?? []) as $pkgLine) {
+                if (!is_array($pkgLine)) {
+                    continue;
+                }
+                $uuid = trim((string)($pkgLine['line_uuid'] ?? ''));
+                if ($uuid !== '') {
+                    $byUuid[$uuid] = $splitKey;
+                }
+                $sku = trim((string)($pkgLine['sku'] ?? ''));
+                $offer = (int)($pkgLine['offer_id'] ?? $pkgLine['product_offer_id'] ?? 0);
+                $bySkuOffer[$sku . '|' . $offer] = $splitKey;
+            }
+        }
+        $out = [];
+        foreach ($lines as $line) {
+            if (!is_array($line)) {
+                continue;
+            }
+            if (!(bool)($line['requires_shipping'] ?? true)) {
+                $out[] = $line;
+                continue;
+            }
+            $uuid = trim((string)($line['line_uuid'] ?? ''));
+            $sku = trim((string)($line['sku'] ?? ''));
+            $offer = (int)($line['offer_id'] ?? $line['product_offer_id'] ?? 0);
+            if ($uuid !== '' && isset($byUuid[$uuid])) {
+                $line['split_key'] = $byUuid[$uuid];
+            } elseif (isset($bySkuOffer[$sku . '|' . $offer])) {
+                $line['split_key'] = $bySkuOffer[$sku . '|' . $offer];
+            }
+            $out[] = $line;
+        }
+
+        return $out;
+    }
+
+    private function splitShippingQuotes(): ?SplitShippingQuoteServiceInterface
+    {
+        if ($this->splitShippingQuotes instanceof SplitShippingQuoteServiceInterface) {
+            return $this->splitShippingQuotes;
+        }
+        if (!$this->resolveRuntimeSplitShipping) {
+            return null;
+        }
+        if (!interface_exists(SplitShippingQuoteServiceInterface::class)) {
+            return null;
+        }
+        try {
+            $svc = ObjectManager::getInstance(SplitShippingQuoteServiceInterface::class);
+
+            return $svc instanceof SplitShippingQuoteServiceInterface ? $svc : null;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
      * @param list<array<string, mixed>> $lines
      * @return list<array<string, mixed>>
      */
@@ -906,7 +1217,7 @@ final class CheckoutGroupSubmitService
             $row = $qty * $unit;
             $requires = (bool) ($line['requires_shipping'] ?? true);
             $uuid = (string) ($line['line_uuid'] ?? ('line-' . $split . '-' . $i));
-            $buckets[$split]['items'][] = [
+            $buckets[$split]['items'][] = array_merge([
                 'line_uuid' => $uuid,
                 'name' => (string) ($line['name'] ?? $uuid),
                 'sku' => (string) ($line['sku'] ?? ''),
@@ -917,7 +1228,7 @@ final class CheckoutGroupSubmitService
                 'offer_id' => $line['offer_id'] ?? null,
                 'product_id' => $line['product_id'] ?? null,
                 'tax_class_code' => (string) ($line['tax_class_code'] ?? 'standard'),
-            ];
+            ], $this->pricingChromeFromLine($line));
             $buckets[$split]['subtotal_minor'] += $row;
             if ($requires) {
                 $buckets[$split]['requires_shipping'] = true;
@@ -1014,7 +1325,9 @@ final class CheckoutGroupSubmitService
             orders: $session['orders'],
             currency: (string)$session['currency'],
             customerId: isset($session['customer_id']) ? (int)$session['customer_id'] : null,
-            shippingAmountMinor: (int)($session['quote']['amount_minor'] ?? 0),
+            shippingAmountMinor: (int)($session['quote']['amount_minor']
+                ?? $session['quote']['total_amount_minor']
+                ?? 0),
             couponCode: $couponCode !== '' ? $couponCode : null,
             paymentMethod: $frozenPaymentMethod,
             cartHash: (string)($session['cart_hash'] ?? ''),
@@ -1097,5 +1410,39 @@ final class CheckoutGroupSubmitService
         }
 
         return false;
+    }
+
+    private function resolveCodFeeMinor(string $paymentMethod, int $baseBeforeCod): int
+    {
+        return (new CheckoutCodFeeApplier())->apply($paymentMethod, $baseBeforeCod)['cod_fee_amount_minor'];
+    }
+
+    /**
+     * @param array<string, mixed> $quoteArray
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function buildShippingCommerceSnapshot(int $amountMinor, array $quoteArray, array $scope): array
+    {
+        $out = [];
+        try {
+            /** @var \Weline\Shipping\Service\SplitShipmentShippingService $splitSvc */
+            $splitSvc = ObjectManager::getInstance(\Weline\Shipping\Service\SplitShipmentShippingService::class);
+            $out = $splitSvc->buildCheckoutSnapshot($amountMinor, [
+                'website_id' => (int)($scope['website_id'] ?? 0),
+                'scope_type' => 'website',
+                'scope_id' => (int)($scope['website_id'] ?? 0),
+            ]);
+        } catch (\Throwable) {
+            $out = [];
+        }
+        foreach (['incoterm', 'duty_notice'] as $key) {
+            $val = trim((string)($quoteArray[$key] ?? ''));
+            if ($val !== '') {
+                $out[$key] = $val;
+            }
+        }
+
+        return $out;
     }
 }

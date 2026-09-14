@@ -14,7 +14,7 @@
 
 - 使用当前已配置 dev 工作区；保留共享脏改动，不提交，不改 generated/。
 - 保留 slug、category_id、全部文章、既有英文翻译及 cleared 覆盖。
-- 当前 MCP ready，但新回合 ensure 重试后宿主仍缺 4 个计划接口，记 HOST_MCP_NOT_ATTACHED；仅精确路径原生回退。
+- 宿主原生编辑。
 - PHPUnit/HTTP 内容检查不能替代 Browser 点击、主题保存发布和多断点视觉验收。
 - 本计划是主目标内的一组小修复，不构成商城可上线声明。
 

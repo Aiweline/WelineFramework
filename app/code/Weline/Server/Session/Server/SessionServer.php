@@ -591,6 +591,7 @@ final class SessionServer
             'socket' => $clientSocket,
             'buffer' => '',
             'write_buffer' => '',
+            'write_offset' => 0,
             'addr' => $peerName ?? 'unknown',
             'authenticated' => $this->authToken === null,
             'tls_cache_channel' => false,
@@ -976,12 +977,22 @@ final class SessionServer
             return false;
         }
 
-        $this->clients[$clientId]['write_buffer'] = (string)($this->clients[$clientId]['write_buffer'] ?? '') . $message;
-        if (\strlen((string)$this->clients[$clientId]['write_buffer']) > self::MAX_WRITE_BUFFER_BYTES) {
+        $offset = (int)($this->clients[$clientId]['write_offset'] ?? 0);
+        $pendingBytes = \strlen((string)($this->clients[$clientId]['write_buffer'] ?? '')) - $offset;
+        // Reject before concatenation: an already overloaded connection must
+        // not allocate another complete copy just to discover it is too large.
+        if (\strlen($message) > self::MAX_WRITE_BUFFER_BYTES - $pendingBytes) {
             $this->log("Client write buffer exceeded limit; disconnecting id={$clientId}");
             $this->disconnectClient($clientId);
             return false;
         }
+
+        if ($offset > 0) {
+            // Compact only when another response is queued, never per chunk.
+            $this->clients[$clientId]['write_buffer'] = \substr($this->clients[$clientId]['write_buffer'], $offset);
+            $this->clients[$clientId]['write_offset'] = 0;
+        }
+        $this->clients[$clientId]['write_buffer'] .= $message;
         return $this->flushClientWriteBuffer($clientId);
     }
 
@@ -998,21 +1009,24 @@ final class SessionServer
         }
 
         $buffer = (string)($this->clients[$clientId]['write_buffer'] ?? '');
-        while ($buffer !== '') {
-            $written = @\fwrite($socket, \substr($buffer, 0, 65536));
+        $offset = (int)($this->clients[$clientId]['write_offset'] ?? 0);
+        $length = \strlen($buffer);
+        while ($offset < $length) {
+            $written = @\fwrite($socket, \substr($buffer, $offset, 65536));
             if ($written === false) {
                 $this->disconnectClient($clientId);
                 return false;
             }
             if ($written === 0) {
-                $this->clients[$clientId]['write_buffer'] = $buffer;
                 return true;
             }
 
-            $buffer = (string)\substr($buffer, $written);
+            $offset += $written;
+            $this->clients[$clientId]['write_offset'] = $offset;
         }
 
         $this->clients[$clientId]['write_buffer'] = '';
+        $this->clients[$clientId]['write_offset'] = 0;
         return true;
     }
 

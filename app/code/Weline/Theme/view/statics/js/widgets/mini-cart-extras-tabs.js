@@ -1,19 +1,33 @@
 (function () {
     'use strict';
 
+    function isHidden(el) {
+        return !!(el && (el.hidden || el.getAttribute('hidden') !== null));
+    }
+
     function tabLabel(el) {
+        if (!el || el.nodeType !== 1) {
+            return '';
+        }
         var label = String(el.getAttribute('data-mini-cart-tab-label') || '').trim();
         if (label) {
             return label;
         }
         var nested = el.querySelector('[data-mini-cart-tab-label]');
-        if (nested && nested !== el) {
+        if (nested && nested !== el && !isHidden(nested)) {
             label = String(nested.getAttribute('data-mini-cart-tab-label') || '').trim();
             if (label) {
                 return label;
             }
         }
         var source = el.querySelector('[data-mini-cart-tab-label-source]');
+        if (source && !isHidden(source)) {
+            label = String(source.textContent || '').trim();
+            if (label) {
+                return label;
+            }
+        }
+        // 隐藏的 source（迷你车订单留言）仍可作为标签源。
         if (source) {
             label = String(source.textContent || '').trim();
             if (label) {
@@ -24,7 +38,50 @@
         if (label) {
             return label;
         }
+        var wrapper = el.querySelector('[data-widget-name]');
+        if (wrapper) {
+            label = String(wrapper.getAttribute('data-widget-name') || '').trim();
+            if (label) {
+                return label;
+            }
+        }
         return '';
+    }
+
+    /**
+     * 空槽（如未注入的帮我付）或整棵部件已 hidden 时不得生成无文案胶囊页签。
+     */
+    function isExtrasTabCandidate(node) {
+        if (!node || node.nodeType !== 1) {
+            return false;
+        }
+        if (node.matches('[data-mini-cart-extras-tabs]')) {
+            return false;
+        }
+        if (isHidden(node)) {
+            return false;
+        }
+
+        var roots = node.querySelectorAll(
+            '[data-mini-cart-tab-label], [data-b2b-checkout-credit], [data-marketing-checkout-coupon],'
+            + ' [data-order-notice-surface], [data-helppay-placement], [data-testid="order-notice-widget"],'
+            + ' [data-testid="marketing-checkout-coupon"], [data-testid="checkout-summary-help-pay"],'
+            + ' [data-testid="cart-summary-help-pay"]'
+        );
+        if (roots.length) {
+            var anyVisible = false;
+            for (var i = 0; i < roots.length; i += 1) {
+                if (!isHidden(roots[i])) {
+                    anyVisible = true;
+                    break;
+                }
+            }
+            if (!anyVisible) {
+                return false;
+            }
+        }
+
+        return tabLabel(node) !== '';
     }
 
     function activateTab(shell, index) {
@@ -85,12 +142,7 @@
             return;
         }
 
-        var widgets = Array.prototype.filter.call(extras.children, function (node) {
-            // 跳过已 hidden 的槽（例：零售结账隐藏批发信用），避免仍生成对应页签按钮。
-            return node.nodeType === 1
-                && !node.matches('[data-mini-cart-extras-tabs]')
-                && !node.hidden;
-        });
+        var widgets = Array.prototype.filter.call(extras.children, isExtrasTabCandidate);
         if (!widgets.length) {
             return;
         }

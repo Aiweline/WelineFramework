@@ -1,5 +1,5 @@
 {
   "schema_version": 1,
   "keys": [],
-  "note": "Release engineering injects enabled Ed25519 public keys before a production WLS Gateway release is marked ready. Private keys never enter this repository or package."
+  "note": "Release engineering injects enabled Ed25519 public keys before a production WLS Gateway release is marked ready. Private keys never enter this repository or package. CDN package fetch (server:gateway:package:fetch / package_fetch=true) refuses to download when this inventory has no enabled key; trust keys are never fetched from the network."
 }

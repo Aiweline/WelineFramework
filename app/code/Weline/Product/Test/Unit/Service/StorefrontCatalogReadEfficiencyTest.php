@@ -225,6 +225,257 @@ final class StorefrontCatalogReadEfficiencyTest extends TestCase
         }
     }
 
+public function testListingCandidatesDeferMediaUntilAfterWholeCatalogFiltersAndPagination(): void
+    {
+        $pdo = $this->connection->getConnector()->getWrappedConnection()->getPdo();
+        $pdo->exec('CREATE TABLE product_ws_0_product (product_id INTEGER PRIMARY KEY, status TEXT, sku TEXT)');
+        $pdo->exec('CREATE TABLE product_ws_0_offer (offer_id INTEGER PRIMARY KEY, product_id INTEGER, global_offer_uuid TEXT, status TEXT, sku TEXT)');
+        $pdo->exec('CREATE TABLE product_ws_0_price (price_id INTEGER PRIMARY KEY, offer_id INTEGER, store_id INTEGER, currency TEXT, amount_minor INTEGER, scope_state TEXT, cleared INTEGER, version INTEGER)');
+        $pdo->exec('CREATE TABLE product_ws_0_attribute_value (value_id INTEGER PRIMARY KEY, store_id INTEGER, entity_type TEXT, entity_id INTEGER, attribute_code TEXT, locale TEXT, value_type TEXT, value_string TEXT, scope_state TEXT, cleared INTEGER, is_required INTEGER)');
+        $pdo->exec('CREATE TABLE catalog_media_source (media_id INTEGER PRIMARY KEY, product_id INTEGER, store_id INTEGER, position INTEGER, path TEXT)');
+        $mediaReadIds = [];
+        $pdo->sqliteCreateFunction('catalog_media_read', static function (int $id, string $path) use (&$mediaReadIds): string {
+            $mediaReadIds[] = $id;
+            return $path;
+        }, 2);
+        $pdo->exec('CREATE VIEW product_ws_0_media AS SELECT media_id, product_id, store_id, position, catalog_media_read(product_id,path) AS path FROM catalog_media_source');
+        $attributeInsert = $pdo->prepare("INSERT INTO product_ws_0_attribute_value (store_id,entity_type,entity_id,attribute_code,locale,value_type,value_string,scope_state,cleared,is_required) VALUES (0,'product',?,?,'en_US','string',?,'explicit',0,0)");
+        foreach ([1 => 5000, 2 => 35000, 3 => 12000, 4 => 22000, 5 => 9000] as $id => $minor) {
+            $pdo->exec("INSERT INTO product_ws_0_product VALUES ($id,'published','SKU-$id')");
+            $uuid = '00000000-0000-4000-8000-' . sprintf('%012d', $id);
+            $pdo->exec("INSERT INTO product_ws_0_offer VALUES ($id,$id,'$uuid','published','SKU-$id')");
+            $pdo->exec("INSERT INTO product_ws_0_price VALUES ($id,$id,0,'USD',$minor,'explicit',0,1)");
+            $pdo->exec("INSERT INTO catalog_media_source VALUES ($id,$id,0,0,'/product-$id.jpg')");
+            $attributeInsert->execute([$id, 'name', 'Product ' . $id]);
+            $attributeInsert->execute([$id, 'brand', in_array($id, [1, 3, 4], true) ? 'Brand A' : 'Brand B']);
+        }
+        $attributeInsert->execute([5, 'quote_only', '1']);
+        $productReads = 0;
+        $priceReads = 0;
+        $products = new ProductRepository($this->provisioner, function (int $id) use (&$productReads): Product {
+            ++$productReads;
+            return $this->model(Product::class, $id);
+        });
+        $offers = new OfferRepository($this->provisioner, fn(int $id): Offer => $this->model(Offer::class, $id));
+        $attributeReads = 0;
+        $attributes = new AttributeValueRepository($this->provisioner, new CatalogOverlayResolver(), function (int $id) use (&$attributeReads): AttributeValue {
+            ++$attributeReads;
+            return $this->model(AttributeValue::class, $id);
+        });
+        $prices = new PriceRepository($this->provisioner, modelFactory: function (int $id) use (&$priceReads): Price {
+            ++$priceReads;
+            return $this->model(Price::class, $id);
+        });
+        $media = new MediaRepository($this->provisioner, $this->connection,
+            $this->createStub(\Weline\Framework\Database\Service\DatabaseTransactionRunnerInterface::class),
+            fn(int $id): Media => $this->model(Media::class, $id));
+        $mediaUrls = new StorefrontProductMediaUrlResolver($this->createStub(\Weline\FileManager\Api\FileAssetManagerInterface::class));
+        $snapshots = new ProductCatalogCartItemSnapshotResolver($offers, $products, $attributes, $prices, $media,
+            new StoreOfferRepository($this->provisioner),
+            $this->createStub(\Weline\Websites\Api\Catalog\StoreCatalogInterface::class),
+            static fn(): string => 'USD', static fn(): string => 'en_US', static fn(): array => [], mediaUrls: $mediaUrls);
+        $manager = $this->getMockBuilder(CacheManager::class)->disableOriginalConstructor()->onlyMethods(['pool'])->getMock();
+        $manager->method('pool')->willReturn(new CachePool('listing_candidates_fixture', new CatalogReadMemoryAdapter(), jitterRatio: 0.0));
+        $revision = 1;
+        $generations = $this->createStub(NamespaceGenerationInterface::class);
+        $generations->method('fingerprint')->willReturnCallback(static function () use (&$revision): string {
+            return hash('sha256', 'catalog:' . $revision);
+        });
+        $flight = $this->createStub(SingleFlightInterface::class);
+        $flight->method('acquire')->willReturn(null);
+        $cache = new StorefrontScopeHotCache($manager, $generations, $flight);
+        $catalog = (new \ReflectionClass(StorefrontCatalogViewService::class))->newInstanceWithoutConstructor();
+        foreach (['products' => $products, 'offers' => $offers, 'snapshots' => $snapshots,
+            'attributeValues' => $attributes, 'media' => $media,
+            'detailProjector' => new StorefrontProductDetailProjector(),
+            'mediaUrls' => $mediaUrls, 'hotCache' => $cache,
+            'catalogCache' => (new \ReflectionClass(\Weline\Product\Service\StorefrontCatalogCacheCoordinator::class))->newInstanceWithoutConstructor(),
+        ] as $property => $value) {
+            (new \ReflectionProperty($catalog, $property))->setValue($catalog, $value);
+        }
+        $previous = Context::getCurrent();
+        \Weline\Framework\Manager\ObjectManager::setInstance(CacheManager::class, $manager);
+        \Weline\Framework\Manager\ObjectManager::setInstance(StorefrontScopeHotCache::class, $cache);
+        $phrasePool = new \ReflectionProperty(\Weline\Framework\Phrase\Parser::class, 'sharedPhraseCachePool');
+        $oldPhrasePool = $phrasePool->getValue();
+        $phrasePool->setValue(null, new CachePool('candidate_phrase_fixture', new CatalogReadMemoryAdapter(), jitterRatio: 0.0));
+        $oldLang = $_SERVER['WELINE_USER_LANG'] ?? null;
+        $oldCurrency = $_SERVER['WELINE_USER_CURRENCY'] ?? null;
+        $enter = static function (): void {
+            Context::enter(new Context());
+            \Weline\Framework\Runtime\RequestContext::setWelineUserLang('en_US');
+            \Weline\Framework\Runtime\RequestContext::setWelineUserCurrency('USD');
+            StorefrontCacheKeyContext::install(new StorefrontCacheKeyContext(
+                ScopeIdentity::channel(0, 'default', 'fixture', 'web', 'normal'), 'en_US', 'USD',
+                hash('sha256', 'namespaces'), hash('sha256', 'context'), true,
+            ));
+        };
+        try {
+            $enter();
+            $attributeGetter = new \ReflectionMethod($catalog, 'requestAttributeRows');
+            $prefetchedAttributes = $attributeGetter->invoke($catalog, 0, [5, 3, 1, 4, 2, 1], [0]);
+            self::assertSame(1, $attributeReads);
+            $candidates = (new \ReflectionMethod($catalog, 'buildPublishedOffers'))->invoke(
+                $catalog, 0, ScopeIdentity::website(0, 'default'), [], true, true, null, null, false,
+            );
+            self::assertSame(1, $attributeReads, 'The catalog builder must consume attributes already attached by another request consumer.');
+            self::assertSame($prefetchedAttributes, $attributeGetter->invoke($catalog, 0, [1, 2, 3, 4, 5], [0, 0]));
+            self::assertSame([], $mediaReadIds, 'Candidate construction must not read images for products that will be filtered or paginated out.');
+            self::assertSame([1, 2, 3, 4, 5], array_column($candidates, 'product_id'));
+            self::assertSame([5000, 35000, 12000, 22000, 9000], array_column($candidates, 'unit_price_minor'));
+            $listing = new \Weline\Product\Service\StorefrontCategoryListingFilter();
+            $facets = new \Weline\Filters\Service\StorefrontAttributeListingFilter();
+            self::assertSame([1, 2, 1], array_column($listing->priceBucketsWithCounts($candidates), 'count'), 'Quote-only rows stay excluded from price statistics.');
+            $filtered = $facets->apply($listing->apply($candidates, '100-299', 'price_desc'), ['brand' => 'Brand A']);
+            self::assertSame([4, 3], array_column($filtered, 'product_id'));
+            $paged = $listing->paginate($filtered, 2, 1);
+            self::assertSame(2, $paged['total']);
+            self::assertSame(2, $paged['total_pages']);
+            self::assertSame([3], array_column($paged['items'], 'product_id'));
+            $readsBeforeMedia = [$productReads, $priceReads];
+            $cards = $catalog->hydrateListingMedia($paged['items']);
+            self::assertSame([3], $mediaReadIds, 'Only the selected page reaches the media repository.');
+            self::assertSame('/product-3.jpg', $cards[0]['image']);
+            self::assertSame(['/product-3.jpg'], $cards[0]['images']);
+            self::assertSame(12000, $cards[0]['unit_price_minor']);
+            self::assertSame($readsBeforeMedia, [$productReads, $priceReads], 'Media hydration must not repeat snapshots or price reads.');
+            self::assertSame($cards, $catalog->hydrateListingMedia($paged['items']));
+            self::assertSame([3], $mediaReadIds, 'Repeated page consumers reuse scope media.');
+
+            $shared = $catalog->publishedListingCandidates(1000, true);
+            self::assertSame($candidates, $shared);
+            $readsAfterCandidates = [$productReads, $priceReads];
+            StorefrontScopeHotCache::resetProcessCache();
+            $enter();
+            self::assertSame($shared, $catalog->publishedListingCandidates(1000, true));
+            self::assertSame($readsAfterCandidates, [$productReads, $priceReads], 'Another request reuses candidate facts.');
+            self::assertSame($cards, $catalog->hydrateListingMedia($paged['items']));
+            self::assertSame([3], $mediaReadIds, 'Another request reuses the media batch.');
+            self::assertFalse(\Weline\Framework\Runtime\RequestContext::has('product.catalog.full_rows.request'), 'Image-less candidates must not masquerade as complete card projections.');
+            $full = $catalog->publishedOffers(1000, true);
+            self::assertSame(['/product-1.jpg', '/product-2.jpg', '/product-3.jpg', '/product-4.jpg', '/product-5.jpg'], array_column($full, 'image'), 'The existing public API keeps complete media.');
+            self::assertSame($cards, $listing->paginate($facets->apply($listing->apply($full, '100-299', 'price_desc'), ['brand' => 'Brand A']), 2, 1)['items']);
+
+            $pdo->exec("UPDATE catalog_media_source SET path='/updated-3.jpg' WHERE product_id=3");
+            $pdo->exec('UPDATE product_ws_0_price SET amount_minor=13000 WHERE offer_id=3');
+            ++$revision;
+            $enter();
+            $updated = $catalog->publishedListingCandidates(1000, true);
+            self::assertSame(13000, $updated[2]['unit_price_minor']);
+            self::assertSame('/updated-3.jpg', $catalog->hydrateListingMedia([$updated[2]])[0]['image']);
+
+            $readsBeforeMissing = $attributeReads;
+            self::assertSame([], $attributeGetter->invoke($catalog, 0, [999], [0]));
+            self::assertSame([], $attributeGetter->invoke($catalog, 0, [999, 999], [0, 0]));
+            self::assertSame($readsBeforeMissing + 1, $attributeReads, 'Known empty attribute sets must also be reused.');
+            self::assertSame([], $attributeGetter->invoke($catalog, 0, [999], [7, 0]));
+            self::assertSame($readsBeforeMissing + 2, $attributeReads, 'A different store set must not reuse another scope.');
+            $pdo->exec('CREATE TABLE product_ws_7_attribute_value AS SELECT * FROM product_ws_0_attribute_value WHERE 0');
+            self::assertSame([], $attributeGetter->invoke($catalog, 7, [999], [0]));
+            self::assertSame($readsBeforeMissing + 3, $attributeReads, 'A different website must not reuse another scope.');
+            $enter();
+            self::assertSame([], $attributeGetter->invoke($catalog, 0, [999], [0]));
+            self::assertSame($readsBeforeMissing + 4, $attributeReads, 'A new request starts with its own attached attribute rows.');
+        } finally {
+            Context::leave();
+            if ($previous !== null) { Context::enter($previous); }
+            $phrasePool->setValue(null, $oldPhrasePool);
+            if ($oldLang === null) { unset($_SERVER['WELINE_USER_LANG']); } else { $_SERVER['WELINE_USER_LANG'] = $oldLang; }
+            if ($oldCurrency === null) { unset($_SERVER['WELINE_USER_CURRENCY']); } else { $_SERVER['WELINE_USER_CURRENCY'] = $oldCurrency; }
+            \Weline\Framework\Manager\ObjectManager::clearInstances();
+            StorefrontScopeHotCache::resetProcessCache();
+        }
+    }
+
+
+
+    public function testSiteContentChangesUseOneOwnerMutationWithTheRepositoryConnection(): void
+    {
+        $calls = [];
+        $attributes = $this->attributeWriteFixture($calls);
+        $service = new \Weline\Product\Service\ProductSiteContentAdminService($attributes);
+        $service->save(0, 0, 11, 'Name', 'en_US', ' Website title ', true);
+        $service->save(0, 7, 11, 'name', 'en_US', ' Store title ', true);
+
+        self::assertSame([
+            [0, 'product', 11, null],
+            [0, 'store_product', 11, 7],
+        ], $calls, 'Each independent content save must enter the existing product changed owner once.');
+        $rows = $attributes->listExplicitRows(0, 'product', [11], [0, 7]);
+        self::assertSame(['Website title', 'Store title'], array_column($rows, 'value'));
+        self::assertSame([0, 7], array_map('intval', array_column($rows, 'store_id')));
+    }
+
+    public function testAutomaticTranslationGroupsAttributeWritesByProductMutation(): void
+    {
+        $calls = [];
+        $attributes = $this->attributeWriteFixture($calls);
+        $localClass = \Weline\Product\Model\Product\LocalDescription::class;
+        $pending = new \ReflectionProperty($localClass, 'pendingEavSync');
+        $syncing = new \ReflectionProperty($localClass, 'syncing');
+        $previousRows = $pending->getValue();
+        $previousSyncing = $syncing->getValue();
+        $previousWebsite = $_SERVER['WELINE_WEBSITE_ID'] ?? null;
+        $_SERVER['WELINE_WEBSITE_ID'] = 0;
+        \Weline\Framework\Manager\ObjectManager::setInstance(AttributeValueRepository::class, $attributes);
+        try {
+            $pending->setValue(null, [
+                ['product_id' => 11, 'local_code' => 'en_US', 'name' => ' First ', 'description' => ' Description '],
+                ['product_id' => 12, 'local_code' => 'en_US', 'name' => ' Second '],
+                ['product_id' => 11, 'local_code' => 'fr_FR', 'name' => ' Premier '],
+                ['product_id' => 13, 'local_code' => 'en_US', 'name' => ' '],
+            ]);
+            $syncing->setValue(null, false);
+            $local = $this->getMockBuilder($localClass)->disableOriginalConstructor()
+                ->onlyMethods(['getIsInsert'])->getMock();
+            $local->method('getIsInsert')->willReturn(true);
+            $local->fetch_after();
+
+            self::assertSame([[0, 'product', 11, null], [0, 'product', 12, null]], $calls,
+                'A translation batch must publish one owner mutation per product, not per field or locale.');
+            $rows = $attributes->listExplicitRows(0, 'product', [11, 12, 13], [0]);
+            $actual = [];
+            foreach ($rows as $row) {
+                $actual[$row['entity_id'] . ':' . $row['attribute_code'] . ':' . $row['locale']] = $row['value'];
+            }
+            $expected = [
+                '11:name:en_US' => 'First', '11:name:' => 'Premier',
+                '11:description:en_US' => 'Description', '11:description:' => 'Description',
+                '12:name:en_US' => 'Second', '12:name:' => 'Second', '11:name:fr_FR' => 'Premier',
+            ];
+            ksort($expected); ksort($actual);
+            self::assertSame($expected, $actual, 'Localized values and the last default-locale mirror must stay unchanged.');
+            self::assertSame([], $pending->getValue());
+            self::assertFalse($localClass::isSyncing());
+        } finally {
+            $pending->setValue(null, $previousRows);
+            $syncing->setValue(null, $previousSyncing);
+            if ($previousWebsite === null) { unset($_SERVER['WELINE_WEBSITE_ID']); }
+            else { $_SERVER['WELINE_WEBSITE_ID'] = $previousWebsite; }
+            \Weline\Framework\Manager\ObjectManager::clearInstances();
+        }
+    }
+
+    private function attributeWriteFixture(array &$calls): AttributeValueRepository
+    {
+        $pdo = $this->connection->getConnector()->getWrappedConnection()->getPdo();
+        $pdo->exec('CREATE TABLE product_ws_0_attribute_value (value_id INTEGER PRIMARY KEY AUTOINCREMENT, store_id INTEGER, entity_type TEXT, entity_id INTEGER, attribute_code TEXT, locale TEXT, value_text TEXT, value_type TEXT, value_string TEXT, value_number TEXT, value_boolean INTEGER, value_date TEXT, value_json TEXT, scope_state TEXT, cleared INTEGER, is_required INTEGER)');
+        $coordinator = $this->createMock(\Weline\Product\Api\ProductSearchProjectionMutationCoordinatorInterface::class);
+        $coordinator->method('execute')->willReturnCallback(function (
+            ConnectionFactory $connection, int $websiteId, string $targetType,
+            int $targetId, ?int $storeId, callable $mutation,
+        ) use (&$calls): mixed {
+            self::assertSame($this->connection, $connection, 'Use the attribute repository connection, including custom factories.');
+            $calls[] = [$websiteId, $targetType, $targetId, $storeId];
+            return $mutation();
+        });
+        return new AttributeValueRepository(
+            $this->provisioner, new CatalogOverlayResolver(),
+            fn(int $websiteId): AttributeValue => $this->model(AttributeValue::class, $websiteId),
+            $coordinator,
+        );
+    }
+
     protected function setUp(): void
     {
         $this->databasePath = sys_get_temp_dir() . '/weline_catalog_read_' . bin2hex(random_bytes(8)) . '.sqlite';

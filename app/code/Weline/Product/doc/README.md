@@ -325,3 +325,9 @@ FileManager；未实现该能力的第三方 manager 继续原单项路径。
 - 2026-08-26 数据库证据：完整 `setup:upgrade` 退出 0；V2 身份切换最终 26/26、0 冲突；Product 创建原子回滚 1/10、跨站复制 PostgreSQL 4/88；Product 全量 205/1485（1 skip、1 PHPUnit deprecation）。用于复制矩阵的临时 full clone 和随机测试 schema 均已清理。
 - 当前运行阻断：独立 WLS Worker 因 managed-child Master lease owner evidence 不可观察而退出，HTTP/TLS reset/timeout；因此后台 ACL/CSRF、五类真实前后台路径和 375/768/1024 Browser 仍未验收。
 - 完成状态以计划 M6 的 PostgreSQL、真实 HTTP/ACL/CSRF、独立 WLS Browser 和数据库断言为准；未全过不得标记 ACCEPTED。
+
+## EAV 标签的属性码索引
+
+`StorefrontEavLabelResolver` 优先使用 EAV 的可选 `AttributeMetadataCodeIndexInterface`，从已经获取的商品目录按 code 取只读属性引用；同一 resolver 的属性名和选项解析复用这些引用。未实现接口的提供者保留目录遍历兼容路径。商品 clone 与语言变化沿既有清理流程清空本地引用，私有项不写入公共范围；选项仍按参与的规格码惰性处理及 DTO 身份去重，不复制整库选项别名。
+
+335 商品 × 48 规格码、240 公共属性挂载的真实 resolver fixture 中，属性节点访问从 3,939,600 降为 240；未插计数时 CPU 约 228.43→57.80ms，保留 resolver 的内存增量约 14.80→18.05MB，峰值约 21.43→22.65MB。增加的内存用于参与规格的 DTO 引用列表；这是可归因的定向基准，不是 HTTP 冷请求达标证据。`StorefrontEavMetadataIndexTest` 覆盖引用/挂载顺序、商品隔离、语言/新目录、WeakMap 不滞留属性集；真实站点由统一编译与运行验收核对。

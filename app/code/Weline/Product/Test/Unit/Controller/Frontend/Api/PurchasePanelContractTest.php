@@ -30,6 +30,9 @@ final class PurchasePanelContractTest extends TestCase
         self::assertStringContainsString('data-open-purchase-panel', $cardSrc);
         self::assertStringContainsString('openPurchasePanel', $jsSrc);
         self::assertStringContainsString('shouldOpenPurchasePanel', $jsSrc);
+        self::assertStringContainsString('loadInjectedAttributeModules', $jsSrc);
+        self::assertStringContainsString('helpPayShare', $jsSrc);
+        self::assertStringContainsString('WelineAffiliateProductShare', $jsSrc);
         self::assertStringContainsString('applyIdentity', $jsSrc);
         self::assertStringContainsString('identity', $controllerSrc);
         self::assertStringContainsString('resolveB2bIdentity', $controllerSrc);

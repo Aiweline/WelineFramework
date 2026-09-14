@@ -130,7 +130,7 @@ final class CheckoutDeliveryContextService
         }
 
         $match = null;
-        foreach ($this->listAddresses($this->currentCountryCode()) as $address) {
+        foreach ($this->listAddresses('') as $address) {
             if ((string)$address['id'] === $addressId) {
                 $match = $address;
                 break;
@@ -228,6 +228,9 @@ final class CheckoutDeliveryContextService
             'address1' => $street,
             'street_id' => (string)(int)($address['street_id'] ?? 0),
             'postal_code' => trim((string)($address['postal_code'] ?? '')),
+            'delivery_point_type' => strtolower(trim((string)($address['delivery_point_type']
+                ?? $address['point_type']
+                ?? 'residential'))) ?: 'residential',
         ];
     }
 

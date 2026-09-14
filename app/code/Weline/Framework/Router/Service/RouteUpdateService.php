@@ -148,7 +148,7 @@ class RouteUpdateService
                 throw new Exception(__('路由更新验证失败：%{1}', [$errorMsg]));
             }
             
-            $this->printing->note(__('   - 正在写入路由文件...'));
+            $this->printing->note(__('   - 正在写入 ACL 与路由文件...'));
             $this->routeStage->commit();
             $this->printing->success(__('✓ 路由文件写入完成！'));
         } catch (Exception $exception) {

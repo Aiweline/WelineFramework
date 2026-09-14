@@ -18,12 +18,12 @@ final class TocCommerceOrderType implements CommerceOrderTypeInterface
 
     public function getLabel(): string
     {
-        return (string)__('零售');
+        return (string)__('零售订单');
     }
 
     public function getBadgeTone(): string
     {
-        return 'muted';
+        return 'info';
     }
 
     public function requiresCustomerLogin(): bool

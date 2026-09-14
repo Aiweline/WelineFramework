@@ -54,7 +54,7 @@ final class Catalog extends FrontendController
                 break;
             }
         }
-        $offers = $this->catalog->publishedOffers(1000, $includeListingDetails);
+        $offers = $this->catalog->publishedListingCandidates(1000, $includeListingDetails);
         StorefrontPageContext::setListingOffers($offers);
         $priceBucket = $this->listingFilter->normalizePriceBucket((string)$this->request->getParam('price', ''));
         $sort = $this->listingFilter->normalizeSort((string)$this->request->getParam('sort', ''));
@@ -98,7 +98,7 @@ final class Catalog extends FrontendController
             $page,
             $isInternalStorefrontChainWarmup ? 1 : null,
         );
-        $pageOffers = $paged['items'];
+        $pageOffers = $this->catalog->hydrateListingMedia($paged['items']);
         $sortOptions = [];
         foreach ([
             StorefrontCategoryListingFilter::SORT_DEFAULT => __('默认排序'),

@@ -118,21 +118,63 @@ final class HelpPayOrchestrator
         $shipping = is_array($input['shipping_address'] ?? null) ? $input['shipping_address'] : [];
         $this->redaction->assertCompleteShipping($shipping);
 
+        $serviceCode = trim((string) ($input['service_code'] ?? $shipping['service_code'] ?? ''));
+        $serviceLabel = trim((string) ($input['service_label'] ?? $shipping['service_label'] ?? $shipping['label'] ?? ''));
+        $shippingMinor = max(0, (int) ($input['shipping_amount_minor'] ?? $shipping['shipping_amount_minor'] ?? 0));
+        $amountMinor = max(0, (int) ($input['amount_minor'] ?? 0));
+        if (array_key_exists('goods_amount_minor', $input) || array_key_exists('goods_amount_minor', $shipping)) {
+            $goodsMinor = max(0, (int) ($input['goods_amount_minor'] ?? $shipping['goods_amount_minor'] ?? 0));
+            if (!array_key_exists('amount_minor', $input)) {
+                $amountMinor = $goodsMinor + $shippingMinor;
+            }
+        } else {
+            $goodsMinor = max(0, $amountMinor - $shippingMinor);
+        }
+
+        $snapshot = $shipping;
+        if ($serviceCode !== '') {
+            $snapshot['service_code'] = $serviceCode;
+        }
+        if ($serviceLabel !== '') {
+            $snapshot['service_label'] = $serviceLabel;
+            $snapshot['label'] = $serviceLabel;
+        }
+        if ($shippingMinor > 0 || array_key_exists('shipping_amount_minor', $input) || array_key_exists('shipping_amount_minor', $shipping)) {
+            $snapshot['shipping_amount_minor'] = $shippingMinor;
+        }
+
         $created = $this->links->create([
             'kind' => PaymentLinkServiceInterface::KIND_QUICK_PAY,
             'payable_type' => (string) ($input['payable_type'] ?? 'order'),
             'payable_id' => (string) ($input['payable_id'] ?? ''),
             'owner_customer_id' => isset($input['owner_customer_id']) ? (int) $input['owner_customer_id'] : null,
-            'amount_minor' => (int) ($input['amount_minor'] ?? 0),
+            'amount_minor' => $amountMinor,
             'currency_code' => (string) ($input['currency_code'] ?? 'USD'),
-            'shipping_locked' => false,
-            'shipping_snapshot' => $shipping,
-            'meta' => ['mode' => 'quick_pay_self'],
+            // Popup checkout locks address + selected lane; does not write universal checkout session.
+            'shipping_locked' => true,
+            'shipping_snapshot' => $snapshot,
+            'meta' => [
+                'mode' => 'quick_pay_self',
+                'session_isolation' => true,
+                'service_code' => $serviceCode,
+                'service_label' => $serviceLabel,
+                'goods_amount_minor' => $goodsMinor,
+                'shipping_amount_minor' => $shippingMinor,
+                'line_summary' => $input['line_summary'] ?? [],
+            ],
             // Align with help_pay default (7d): 1h TTL made验收/跨设备短链过早「链接不可用」。
             'ttl_seconds' => (int) ($input['ttl_seconds'] ?? 86400 * 7),
         ], (string) ($input['public_origin'] ?? ''));
 
-        return $this->shareDeliveryPayload($created);
+        $payload = $this->shareDeliveryPayload($created);
+        $payload['session_isolation'] = true;
+        $payload['amount_minor'] = $amountMinor;
+        $payload['goods_amount_minor'] = $goodsMinor;
+        $payload['shipping_amount_minor'] = $shippingMinor;
+        $payload['service_code'] = $serviceCode;
+        $payload['service_label'] = $serviceLabel;
+
+        return $payload;
     }
 
     /**

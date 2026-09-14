@@ -66,6 +66,19 @@ class CouponService
         $data[Coupon::schema_fields_CREATED_AT] = $data[Coupon::schema_fields_CREATED_AT] ?? date('Y-m-d H:i:s');
         $data[Coupon::schema_fields_UPDATED_AT] = date('Y-m-d H:i:s');
 
+        $sourceType = trim((string)($data[Coupon::schema_fields_SOURCE_TYPE] ?? ''));
+        $sourceModule = trim((string)($data[Coupon::schema_fields_SOURCE_MODULE] ?? ''));
+        if ($sourceType === '') {
+            $sourceType = Coupon::SOURCE_TYPE_MANUAL;
+        }
+        if ($sourceModule === '' && $sourceType === Coupon::SOURCE_TYPE_MANUAL) {
+            $sourceModule = Coupon::SOURCE_MODULE_MARKETING;
+        }
+        $data[Coupon::schema_fields_SOURCE_TYPE] = $sourceType;
+        $data[Coupon::schema_fields_SOURCE_MODULE] = $sourceModule;
+        $data[Coupon::schema_fields_SOURCE_ID] = trim((string)($data[Coupon::schema_fields_SOURCE_ID] ?? ''));
+        $data[Coupon::schema_fields_SOURCE_KEY] = trim((string)($data[Coupon::schema_fields_SOURCE_KEY] ?? ''));
+
         /** @var Coupon $coupon */
         $coupon = ObjectManager::getInstance(Coupon::class);
         
@@ -156,6 +169,17 @@ class CouponService
             Coupon::schema_fields_CUSTOMER_LIMIT => (int)($data[Coupon::schema_fields_CUSTOMER_LIMIT] ?? 1),
             Coupon::schema_fields_UPDATED_AT => date('Y-m-d H:i:s'),
         ]);
+        // 来源只在显式传入时更新，避免后台编辑抹掉系统发券归因
+        foreach ([
+            Coupon::schema_fields_SOURCE_MODULE,
+            Coupon::schema_fields_SOURCE_TYPE,
+            Coupon::schema_fields_SOURCE_ID,
+            Coupon::schema_fields_SOURCE_KEY,
+        ] as $sourceField) {
+            if (array_key_exists($sourceField, $data)) {
+                $coupon->setData($sourceField, trim((string)$data[$sourceField]));
+            }
+        }
         $coupon->save();
 
         return $coupon;
@@ -220,11 +244,15 @@ class CouponService
             }
         }
 
-        // 检查最小订单金额
+        // 检查最小订单金额（券表 min_amount 按站点基准货币录入）
         $minAmount = $coupon->getData(Coupon::schema_fields_MIN_AMOUNT);
         if ($minAmount) {
             $subtotal = (float)($context['subtotal'] ?? $context['order']['subtotal'] ?? 0);
-            if ($subtotal < $minAmount) {
+            /** @var MarketingBaseCurrencyAmount $fx */
+            $fx = ObjectManager::getInstance(MarketingBaseCurrencyAmount::class);
+            $checkoutCurrency = $fx->checkoutCurrencyFromContext($context);
+            $threshold = $fx->convertBaseMajorToCheckout((float)$minAmount, $checkoutCurrency);
+            if ($threshold === null || $subtotal < $threshold) {
                 return null;
             }
         }

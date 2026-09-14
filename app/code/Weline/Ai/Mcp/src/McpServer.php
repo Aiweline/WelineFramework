@@ -107,216 +107,9 @@ final class McpServer
     }
 
     /** @return array<string, mixed> */
-
-    /**
-     * Add stable closed-loop state to every primary response without another repository read.
-     *
-     * @param array<string, mixed> $result
-     * @return array<string, mixed>
-     */
-    private function decorateClosedLoopResult(string $tool, array $result, bool $isError): array
-    {
-        $projectId = trim((string) ($result['project_id'] ?? ''));
-        $revision = (int) ($result['project_revision'] ?? $result['index_revision'] ?? 0);
-
-        if ($tool === 'get_edit_bundle' && !$isError) {
-            $taskDigest = (string) ($result['task_digest'] ?? Ids::hash(''));
-            $result['task_id'] = (string) ($result['task_id'] ?? (
-                'task-' . substr(hash('sha256', $projectId . "\0" . $taskDigest), 0, 24)
-            ));
-            $result['bundle_id'] = (string) ($result['bundle_id'] ?? (
-                'bundle-' . substr(hash('sha256', $projectId . "\0" . $revision . "\0" . $taskDigest), 0, 24)
-            ));
-            $result['project_revision'] = $revision;
-            $result['workflow_budget'] = array_replace([
-                'get_edit_bundle' => 1,
-                'successful_apply_compact_edit' => 1,
-                'conflict_replans_max' => 2,
-                'impact_expansion_depth_max' => 2,
-                'validation_repairs_max' => 2,
-                'same_error_stop_count' => 3,
-                'native_source_reads' => 0,
-                'direct_writes' => 0,
-                'intermediate_user_inquiries' => 0,
-            ], is_array($result['workflow_budget'] ?? null) ? $result['workflow_budget'] : []);
-            $result['validation_plan'] = is_array($result['validation_plan'] ?? null)
-                ? $result['validation_plan']
-                : [
-                    'fixed_checks_in_apply' => ['syntax', 'diff_check', 'server_approved_regression', 'targeted_reindex'],
-                    'regression_entry' => 'apply_compact_edit:server_approved_batch',
-                    'regression_runs_max' => 1,
-                    'runtime_entry_runs_max' => 1,
-                ];
-        }
-
-        if ($tool === 'apply_compact_edit' && !$isError) {
-            $reportFiles = $result['change_report']['files'] ?? $result['files'] ?? [];
-            $changedPaths = [];
-            if (is_array($reportFiles)) {
-                foreach ($reportFiles as $file) {
-                    if (!is_array($file)) {
-                        continue;
-                    }
-                    $path = trim((string) ($file['path'] ?? ''));
-                    if ($path !== '') {
-                        $changedPaths[$path] = true;
-                    }
-                }
-            }
-            $impactDelta = array_replace([
-                'requires_followup' => false,
-                'new_affected_paths' => [],
-                'new_affected_symbols' => [],
-                'reason' => 'Apply did not return post-index impact evidence.',
-                'related_regions' => [],
-                'changed_paths' => array_keys($changedPaths),
-                'depth' => 0,
-                'max_depth' => 2,
-                'status' => 'unavailable',
-                'next_state_when_required' => 'IMPACT_EXPANSION',
-            ], is_array($result['impact_delta'] ?? null) ? $result['impact_delta'] : []);
-            $result['impact_delta'] = $impactDelta;
-            $runState = is_array($result['execution_run'] ?? null)
-                ? strtoupper(trim((string) ($result['execution_run']['workflow_state'] ?? '')))
-                : '';
-            $result['workflow_state'] = $runState !== ''
-                ? $runState
-                : ((bool) ($impactDelta['requires_followup'] ?? false) ? 'IMPACT_EXPANSION' : 'COMPLETED');
-            $reviewContract = is_array($result['review_contract'] ?? null)
-                ? $result['review_contract']
-                : (is_array($result['change_report']['review_contract'] ?? null)
-                    ? $result['change_report']['review_contract']
-                    : []);
-            $hasMoreReviewPages = (bool) ($reviewContract['has_more'] ?? false);
-            $result['review_contract'] = array_replace([
-                'single_logical_read_only_pass' => true,
-                'single_read_only_pass' => !$hasMoreReviewPages,
-                'source' => 'change_report.files[].diff',
-                'all_changed_files_required' => true,
-            ], $reviewContract);
-        }
-
-        if ($tool === 'get_edit_status' && !$isError) {
-            $reviewContract = is_array($result['review_contract'] ?? null)
-                ? $result['review_contract']
-                : (is_array($result['change_report']['review_contract'] ?? null)
-                    ? $result['change_report']['review_contract']
-                    : []);
-            $result['review_contract'] = array_replace([
-                'single_logical_read_only_pass' => true,
-                'single_read_only_pass' => !(bool) ($reviewContract['has_more'] ?? false),
-                'source' => 'change_report.files[].diff',
-                'all_changed_files_required' => true,
-            ], $reviewContract);
-        }
-
-        if ($tool === 'validate_change' && !$isError) {
-            $status = strtolower(trim((string) (
-                $result['validation']['status'] ?? $result['status'] ?? 'passed'
-            )));
-            $passed = !in_array($status, ['failed', 'error', 'invalid'], true);
-            $result['workflow_state'] = $passed ? 'VALIDATED' : 'VALIDATION_REPAIR';
-            $result['validation_envelope'] = [
-                'passed' => $passed,
-                'failed_stage' => $passed ? null : (string) ($result['failed_stage'] ?? 'regression'),
-                'evidence' => $result['evidence'] ?? $result['checks'] ?? $result['validation'] ?? [],
-                'related_regions' => $result['related_regions'] ?? [],
-                'suggested_scope' => $passed ? [] : ($result['suggested_scope'] ?? ['failed validation targets']),
-                'repair_attempts_max' => 2,
-            ];
-        }
-
-        if (!$isError) {
-            return $result;
-        }
-
-        $nested = is_array($result['error'] ?? null);
-        $error = $nested ? $result['error'] : $result;
-        $code = strtoupper(trim((string) ($error['code'] ?? $result['code'] ?? '')));
-        $details = is_array($error['details'] ?? null) ? $error['details'] : [];
-
-        if ($code === 'EDIT_REPLAN_REQUIRED') {
-            $failed = $details['failed_operations'] ?? [];
-            if (!is_array($failed) || $failed === []) {
-                $failed = isset($details['failed_operation']) ? [$details['failed_operation']] : [];
-            }
-            $details['workflow_state'] = 'CONFLICT_REPLAN';
-            $details['failed_operations'] = array_values($failed);
-            $details['unchanged_operations'] = is_array($details['unchanged_operations'] ?? null)
-                ? array_values($details['unchanged_operations'])
-                : [];
-            $details['semantic_diff_from_bundle'] = $details['semantic_diff_from_bundle'] ?? [
-                'latest_region_count' => is_array($details['latest_regions'] ?? null)
-                    ? count($details['latest_regions'])
-                    : 0,
-                'project_revision' => (int) ($details['project_revision'] ?? $revision),
-            ];
-            $details['project_revision'] = (int) ($details['project_revision'] ?? $revision);
-            $details['retry_budget'] = [
-                'max_replans' => 2,
-                'same_conflict_stop_count' => 3,
-                'preserve_unchanged_operations' => true,
-            ];
-        } elseif (str_contains($code, 'VALIDATION')) {
-            $details['workflow_state'] = 'VALIDATION_REPAIR';
-            $details['failed_stage'] = (string) ($details['failed_stage'] ?? 'fixed_validation');
-            $details['evidence'] = $details['evidence'] ?? $details['validation'] ?? [];
-            $details['related_regions'] = $details['related_regions'] ?? [];
-            $details['suggested_scope'] = $details['suggested_scope'] ?? ['validation failure targets'];
-            $details['repair_attempts_max'] = 2;
-        } elseif (in_array($code, ['INDEX_NOT_READY', 'INDEX_SYMBOL_QUERY_FAILED', 'INDEX_SYMBOL_REFRESH_FAILED'], true)) {
-            $details['workflow_state'] = 'CONTEXT_INDEX_RETRY';
-            $details['model_continuation_allowed'] = true;
-        } elseif (in_array($code, ['CONTEXT_INCOMPLETE', 'CONTEXT_TARGET_AMBIGUOUS', 'CONTEXT_TARGET_UNAVAILABLE'], true)) {
-            $details['workflow_state'] = $code;
-            $details['model_continuation_allowed'] = false;
-        }
-
-        $error['details'] = $details;
-        if ($nested) {
-            $result['error'] = $error;
-        } else {
-            $result = $error;
-        }
-        foreach (['project_id', 'project_revision', 'task_id', 'bundle_id', 'workflow_state'] as $key) {
-            if (array_key_exists($key, $details)) {
-                $result[$key] = $details[$key];
-            }
-        }
-        if (!isset($result['task_digest']) && is_scalar($details['original_task'] ?? null)) {
-            $result['task_digest'] = Ids::hash((string) $details['original_task']);
-        }
-
-        return $result;
-    }
-
     private function listResources(): array
     {
-        $ui = [
-            'prefersBorder' => true,
-            'csp' => ['connectDomains' => [], 'resourceDomains' => []],
-        ];
-
-        return [
-            'resources' => [
-                [
-                    'uri' => ToolService::EXECUTION_RUN_RESOURCE_URI,
-                    'name' => 'weline-execution-run',
-                    'title' => 'Weline execution run',
-                    'description' => 'Compact live task timeline with clickable candidate files, exact regions, validation, rollback and bounded diffs.',
-                    'mimeType' => self::MCP_APP_MIME,
-                    '_meta' => ['ui' => $ui],
-                ],
-                [
-                    'uri' => ToolService::EDIT_REPORT_RESOURCE_URI,
-                    'name' => 'weline-edit-report',
-                    'title' => 'Weline change report',
-                    'description' => 'Compatibility change report for historical edit transactions.',
-                    'mimeType' => self::MCP_APP_MIME,
-                    '_meta' => ['ui' => $ui],
-                ],
-            ],
-        ];
+        return ['resources' => []];
     }
 
     /** @param array<string, mixed> $params
@@ -325,32 +118,7 @@ final class McpServer
     private function readResource(array $params): array
     {
         $uri = trim((string) ($params['uri'] ?? ''));
-        $resources = [
-            ToolService::EXECUTION_RUN_RESOURCE_URI => 'execution-run-v1.html',
-            ToolService::EDIT_REPORT_RESOURCE_URI => 'edit-report-v2.html',
-        ];
-        if (!isset($resources[$uri])) {
-            throw new JsonRpcException(-32602, 'Unknown resource URI', ['uri' => $uri]);
-        }
-        $path = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'ui' . DIRECTORY_SEPARATOR . $resources[$uri];
-        $html = @file_get_contents($path);
-        if (!is_string($html) || $html === '') {
-            throw new JsonRpcException(-32603, 'MCP App resource is unavailable');
-        }
-
-        return [
-            'contents' => [[
-                'uri' => $uri,
-                'mimeType' => self::MCP_APP_MIME,
-                'text' => $html,
-                '_meta' => [
-                    'ui' => [
-                        'prefersBorder' => true,
-                        'csp' => ['connectDomains' => [], 'resourceDomains' => []],
-                    ],
-                ],
-            ]],
-        ];
+        throw new JsonRpcException(-32602, 'Unknown resource URI', ['uri' => $uri]);
     }
 
     /** @param array<string, mixed> $params */
@@ -382,118 +150,16 @@ final class McpServer
     private function toolResponse(string $tool, array $result, bool $isError): array
     {
         $receiptId = Ids::make('weline-mcp');
-        $result = $this->decorateClosedLoopResult($tool, $result, $isError);
-        // Structured content is the normal full carrier. Only explicitly configured
-        // legacy hosts receive a second copy for wrappers that discard that field.
         $mirrorFullResultInContent = getenv('WELINE_MCP_RESPONSE_FORMAT') === 'legacy_mirror';
-        if (!$mirrorFullResultInContent && $tool === 'get_edit_bundle'
-            && isset($result['exact_regions'], $result['regions'])
-            && $result['exact_regions'] === $result['regions']) {
-            unset($result['regions']);
-        }
 
-        static $workflowAuditByProject = [];
         $projectId = trim((string) ($result['project_id'] ?? ''));
-        $auditKey = $projectId !== '' ? $projectId : '__unscoped__';
-        if ($auditKey === '__unscoped__' && count($workflowAuditByProject) === 1) {
-            $auditKey = (string) array_key_first($workflowAuditByProject);
-            if ($auditKey !== '__unscoped__') {
-                $projectId = $auditKey;
-            }
-        }
-        if ($tool === 'get_edit_bundle') {
-            $workflowAuditByProject[$auditKey] = [
-                'task_digest' => (string) ($result['task_digest'] ?? ''),
-                'get_edit_bundle_calls' => 1,
-                'apply_compact_edit_calls' => 0,
-                'native_file_read_fallback_count' => 0,
-                'intermediate_user_inquiry_count' => 0,
-                'automatic_rollback_count' => 0,
-                'validate_change_calls' => 0,
-                'runtime_validation_calls' => 0,
-                'recursion_counts' => [
-                    'CONFLICT_REPLAN' => 0,
-                    'IMPACT_EXPANSION' => 0,
-                    'VALIDATION_REPAIR' => 0,
-                    'USER_SCOPE_CHANGE' => 0,
-                ],
-                'writer_mode' => 'single_writer',
-                'observation_scope' => 'mcp_tools_and_routing_guard',
-            ];
-        } elseif (!isset($workflowAuditByProject[$auditKey])) {
-            $workflowAuditByProject[$auditKey] = [
-                'task_digest' => '',
-                'get_edit_bundle_calls' => 0,
-                'apply_compact_edit_calls' => 0,
-                'native_file_read_fallback_count' => 0,
-                'intermediate_user_inquiry_count' => 0,
-                'automatic_rollback_count' => 0,
-                'validate_change_calls' => 0,
-                'runtime_validation_calls' => 0,
-                'recursion_counts' => [
-                    'CONFLICT_REPLAN' => 0,
-                    'IMPACT_EXPANSION' => 0,
-                    'VALIDATION_REPAIR' => 0,
-                    'USER_SCOPE_CHANGE' => 0,
-                ],
-                'writer_mode' => 'single_writer',
-                'observation_scope' => 'mcp_tools_and_routing_guard',
-            ];
-        }
-        if ($tool === 'validate_change') {
-            $workflowAuditByProject[$auditKey]['validate_change_calls'] =
-                (int) ($workflowAuditByProject[$auditKey]['validate_change_calls'] ?? 0) + 1;
-        }
-        $workflowState = strtoupper(trim((string) ($result['workflow_state'] ?? '')));
-        if (isset($workflowAuditByProject[$auditKey]['recursion_counts'][$workflowState])) {
-            $workflowAuditByProject[$auditKey]['recursion_counts'][$workflowState]++;
-        }
-
         $resultIndexRevision = (int) ($result['index_revision'] ?? $result['project_revision'] ?? 0);
-        if ($resultIndexRevision > 0) {
-            $workflowAuditByProject[$auditKey]['index_revision'] = $resultIndexRevision;
-        }
-        if ($tool === 'apply_compact_edit') {
-            $workflowAuditByProject[$auditKey]['apply_compact_edit_calls']++;
-        }
-        $validation = is_array($result['validation'] ?? null) ? $result['validation'] : [];
-        $rollback = is_array($result['rollback'] ?? null) ? $result['rollback'] : [];
-        $automaticRollback = (bool) ($result['rolled_back'] ?? false)
-            || (bool) ($validation['rolled_back'] ?? false)
-            || (bool) ($rollback['performed'] ?? false);
-        if ($automaticRollback) {
-            $workflowAuditByProject[$auditKey]['automatic_rollback_count']++;
-        }
-        $audit = $workflowAuditByProject[$auditKey];
         $result['workflow_audit'] = [
             'receipt_id' => $receiptId,
             'mcp_called' => true,
             'project_id' => $projectId,
-            'index_revision' => $resultIndexRevision > 0
-                ? $resultIndexRevision
-                : (int) ($audit['index_revision'] ?? 0),
-            'task_digest' => $audit['task_digest'],
-            'get_edit_bundle_calls' => $audit['get_edit_bundle_calls'],
-            'apply_compact_edit_calls' => $audit['apply_compact_edit_calls'],
-            'native_file_read_fallback' => $audit['native_file_read_fallback_count'] > 0,
-            'native_file_read_fallback_count' => $audit['native_file_read_fallback_count'],
-            'intermediate_user_inquiry' => $audit['intermediate_user_inquiry_count'] > 0,
-            'intermediate_user_inquiry_count' => $audit['intermediate_user_inquiry_count'],
-            'automatic_rollback' => $automaticRollback,
-            'automatic_rollback_count' => $audit['automatic_rollback_count'],
-            'validate_change_calls' => (int) ($audit['validate_change_calls'] ?? 0),
-            'runtime_validation_calls' => (int) ($audit['runtime_validation_calls'] ?? 0),
-            'recursion_counts' => is_array($audit['recursion_counts'] ?? null)
-                ? $audit['recursion_counts']
-                : [],
-            'writer_mode' => (string) ($audit['writer_mode'] ?? 'single_writer'),
-            'task_id' => (string) ($result['task_id'] ?? ''),
-            'bundle_id' => (string) ($result['bundle_id'] ?? ''),
-            'run_id' => (string) ($result['run_id'] ?? $result['execution_run']['run_id'] ?? ''),
-            'trace_id' => (string) ($result['trace_id'] ?? $result['execution_run']['trace_id'] ?? ''),
-            'durable_storage' => 'sqlite',
-            'project_revision' => (int) ($result['project_revision'] ?? $resultIndexRevision),
-            'observation_scope' => (string) ($audit['observation_scope'] ?? 'mcp_process_and_routing_guard'),
+            'index_revision' => $resultIndexRevision,
+            'observation_scope' => 'mcp_index_and_skills',
             'host_only_events_observable' => false,
         ];
 
@@ -511,9 +177,7 @@ final class McpServer
             'is_error' => $isError,
             'response_format' => 'structuredContent',
             'legacy_content' => $mirrorFullResultInContent
-                ? ($isError
-                    ? 'full_error_mirror'
-                    : ($tool === 'get_edit_bundle' ? 'full_bundle_mirror' : 'full_result_mirror'))
+                ? ($isError ? 'full_error_mirror' : 'full_result_mirror')
                 : 'summary_only',
             'usage_line' => $usageLine,
             'response_prefix' => self::RESPONSE_PREFIX,
@@ -586,16 +250,6 @@ final class McpServer
                     ? 'fragments=' . count($result['guidance_bundle']['fragments'] ?? [])
                     : '',
             ]),
-            'get_edit_bundle' => $this->joinUsageHighlightParts([
-                array_key_exists('ready_for_edit', $result)
-                    ? 'ready_for_edit=' . (($result['ready_for_edit'] ?? false) ? 'true' : 'false')
-                    : '',
-                isset($result['state']) ? 'state=' . (string) $result['state'] : '',
-            ]),
-            'apply_compact_edit' => $this->joinUsageHighlightParts([
-                isset($result['state']) ? 'state=' . (string) $result['state'] : '',
-                !empty($result['rolled_back']) ? 'rolled_back=true' : '',
-            ]),
             'health' => $status !== '' ? 'status=' . $status : 'ok',
             default => $status !== '' ? 'status=' . $status : 'ok',
         };
@@ -620,7 +274,7 @@ final class McpServer
             'receipt_id' => $receiptId,
             'use' => 'structuredContent',
         ];
-        foreach (['request_id', 'query_id', 'edit_id', 'state', 'region_count', 'impact_risk', 'index_revision'] as $key) {
+        foreach (['request_id', 'query_id', 'state', 'region_count', 'impact_risk', 'index_revision'] as $key) {
             if (isset($result[$key]) && (is_scalar($result[$key]) || $result[$key] === null)) {
                 $summary[$key] = $result[$key];
             }

@@ -2,9 +2,10 @@
 
 return [
     "name" => 'Weline_Shipping',
-    "version" => '2.4.81',
+    "version" => '2.9.0',
     "requires" => [
         'Weline_Backend' => '*',
+        'Weline_Currency' => '*',
         'Weline_Customer' => '*',
         'Weline_Framework' => '*',
         'Weline_I18n' => '*',
@@ -12,6 +13,8 @@ return [
     ],
     "optional" => [
         'Weline_Frontend' => '*',
+        'Weline_Inventory' => '*',
+        'Weline_Order' => '*',
         'Weline_Product' => '*',
         'Weline_Theme' => '*',
     ],
@@ -20,6 +23,12 @@ return [
         'view_warmup_contribution.Weline_Shipping' => \Weline\Shipping\Api\View\ViewWarmupContributionProvider::class,
         \Weline\Shipping\Api\Quote\ShippingQuoteServiceInterface::class
             => \Weline\Shipping\Service\ScopedShippingQuoteService::class,
+        \Weline\Shipping\Api\Quote\SplitShippingQuoteServiceInterface::class
+            => \Weline\Shipping\Service\SplitShippingQuoteService::class,
+        \Weline\Shipping\Api\WarehouseShippingOriginInterface::class
+            => \Weline\Shipping\Service\WarehouseShippingOriginService::class,
         'shipping.carrier_coverage.default' => \Weline\Shipping\Service\DefaultCarrierCoverageProvider::class,
+        \Weline\Order\Api\OrderShippingMethodCatalogInterface::class
+            => \Weline\Shipping\Integration\Order\OrderShippingMethodCatalog::class,
     ],
 ];

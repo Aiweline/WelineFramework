@@ -459,6 +459,11 @@ class Taglib
             $this->sourceMap->setSourceFile($fileName);
         }
 
+        // 内联展开前预取；滚动更新时旧 Worker 可能尚未加载新 Parser API。
+        if (\method_exists(\Weline\Framework\Phrase\Parser::class, 'prefetchTemplateWords')) {
+            \Weline\Framework\Phrase\Parser::prefetchTemplateWords($this->collectTranslationWords($content));
+        }
+
         // 阶段 0: 内联标签预展开（在 PHP 提取前把 @tag{...}/@tag(...) 替换为 PHP 代码）
         $content = $this->expandInlineTags($content, $template, $fileName);
         
@@ -513,6 +518,8 @@ class Taglib
             // 恢复 PHP 占位符
             $result = $extractor->restore($result);
             
+            $result = \Weline\Framework\View\Taglib\TemplateTranslationWords::withRuntimePrefetch($result);
+
             // 缓存结果（写入所有缓存层）
             $cache->set($template, $fileName, $content, $result);
             
@@ -523,6 +530,26 @@ class Taglib
                 $this->resetCompileScopedTagState();
             }
         }
+    }
+
+    private function collectTranslationWords(string $content): array
+    {
+        $words = \array_merge(
+            \Weline\Framework\View\Taglib\TemplateTranslationWords::phpWords($content),
+            \Weline\Framework\View\Taglib\TemplateTranslationWords::pairedWords($content),
+        );
+        $offset = 0;
+        while (($position = \strpos($content, '@', $offset)) !== false) {
+            $token = $this->tryParseInlineTagToken($content, $position, 1, 1);
+            $offset = $position + ($token === null ? 1 : \strlen($token->value));
+            if ($token !== null && \in_array($token->meta['name'] ?? '', ['lang', 'w:lang'], true)) {
+                $word = \Weline\Framework\View\Taglib\TemplateTranslationWords::inlineWord((string)($token->meta['value'] ?? ''));
+                if ($word !== null) {
+                    $words[] = $word;
+                }
+            }
+        }
+        return \array_values(\array_unique($words));
     }
 
     /**

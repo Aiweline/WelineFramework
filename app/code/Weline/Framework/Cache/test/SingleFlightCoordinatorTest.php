@@ -55,4 +55,27 @@ class SingleFlightCoordinatorTest extends TestCase
 
         $coordinator->release('sf_wrong_token_key', $token);
     }
+
+    public function testPersistentAcquireSkipsRemoteCasForSameProcessHolder(): void
+    {
+        $casCalls = 0;
+        $adapter = $this->createMock(\Weline\Framework\Cache\Contract\AtomicCacheAdapterInterface::class);
+        $adapter->expects($this->exactly(2))
+            ->method('compareAndSet')
+            ->willReturnCallback(static function () use (&$casCalls): bool {
+                $casCalls++;
+                return $casCalls === 1;
+            });
+
+        $coordinator = new SingleFlightCoordinator();
+        $property = new \ReflectionProperty($coordinator, 'atomicAdapter');
+        $property->setAccessible(true);
+        $property->setValue($coordinator, $adapter);
+
+        $token = $coordinator->acquire('sf_atomic_local', timeoutMs: 0, ttlSeconds: 5);
+        $this->assertNotNull($token);
+        $this->assertNull($coordinator->acquire('sf_atomic_local', timeoutMs: 0, ttlSeconds: 5));
+        $coordinator->release('sf_atomic_local', $token);
+        $this->assertSame(2, $casCalls, 'same-process duplicate must not issue a second acquire CAS');
+    }
 }

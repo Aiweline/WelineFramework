@@ -4,7 +4,7 @@
 
 ## 入口
 
-`prepare_project` → `resolve_task_context`。菜单：**货源代发**。
+可选检索：`prepare_project` / `resolve_task_context`（编码原生）。菜单：**货源代发**。
 
 ## 定位
 

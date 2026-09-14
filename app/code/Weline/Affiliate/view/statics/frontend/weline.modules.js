@@ -15,7 +15,7 @@ Object.assign(window.WelineModulesConfig.modules, {
     },
     affiliateProductShare: {
         paths: [
-            "Weline_Affiliate::js/affiliate-product-share.js?v=20260909-default-icons2"
+            "Weline_Affiliate::js/affiliate-product-share.js?v=20260914-panel-share-url"
         ],
         globalVar: "WelineAffiliateProductShare",
         description: "商品详情/加购弹窗分销分享（等账户会话后异步水合）"

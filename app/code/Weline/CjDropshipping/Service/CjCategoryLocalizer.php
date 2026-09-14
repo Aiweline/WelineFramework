@@ -25,6 +25,19 @@ final class CjCategoryLocalizer
     }
 
     /**
+     * Translate a single CJ English label for the given locale.
+     */
+    public static function translateLabel(string $label, string $locale): string
+    {
+        $label = trim($label);
+        if ($label === '' || !self::localePrefersZh($locale)) {
+            return $label;
+        }
+
+        return self::translatePart($label, self::zhMap());
+    }
+
+    /**
      * @param list<array{id:string,name:string,parent_id?:string,level?:int,path?:string}> $nodes
      * @return list<array{id:string,name:string,parent_id?:string,level?:int,path?:string}>
      */

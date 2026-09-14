@@ -35,7 +35,10 @@ module.exports = defineConfig({
   use: {
     baseURL,
     ignoreHTTPSErrors: true,
-    headless: process.env.CI ? true : false,
+    // 默认 headless；调试可设 PLAYWRIGHT_HEADED=1。
+    headless: process.env.PLAYWRIGHT_HEADED === '1'
+      ? false
+      : process.env.PLAYWRIGHT_HEADLESS !== '0',
     trace: 'off',
     screenshot: 'only-on-failure',
   },

@@ -69,6 +69,22 @@ class AiWidget extends Model
 
     public array $_unit_primary_keys = [self::schema_fields_ID];
 
+    /** 注册定义写入与 changed 代次在同一事务提交。 */
+    public function save(string|array|bool|\Weline\Framework\Database\AbstractModel $data = [], string|array $sequence = ''): bool|int
+    {
+        $identity = array_replace((array)$this->getData(), $data instanceof \Weline\Framework\Database\AbstractModel ? $data->getModelData() : (is_array($data) ? $data : []));
+        return \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Widget\Service\AiWidgetRegistryMutation::class)->run(
+            $this, $identity, fn(): bool|int => parent::save($data, $sequence),
+        );
+    }
+
+    public function delete(): static
+    {
+        return \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Widget\Service\AiWidgetRegistryMutation::class)->run(
+            $this, (array)$this->getData(), fn(): static => parent::delete(), true,
+        );
+    }
+
     public function getId(mixed $default = 0): int
     {
         return (int)($this->getData(self::schema_fields_ID) ?: $default);

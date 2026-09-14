@@ -4,7 +4,7 @@
 
 ## 当前入口
 
-开发前先完成 `prepare_project` 并调用 `resolve_task_context`，再读：
+可选：可完成 `prepare_project` 并调用 `resolve_task_context` 检索后再读（编码不强制）：
 
 1. `AGENTS.md` 与 `app/code/Weline/Ai/doc/AI开发治理.md`
 2. `app/code/Weline/SessionManager/doc/需求.md`

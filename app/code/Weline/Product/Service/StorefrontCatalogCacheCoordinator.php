@@ -83,6 +83,7 @@ final class StorefrontCatalogCacheCoordinator
             dependencies: ['catalog', 'price', 'config', 'global/i18n'],
             freshTtlSeconds: 300,
             staleTtlSeconds: 1800,
+            singleFlightWaitMs: 0,
         );
     }
 
@@ -97,6 +98,7 @@ final class StorefrontCatalogCacheCoordinator
             dependencies: ['catalog', 'price', 'config', 'global/i18n'],
             freshTtlSeconds: 300,
             staleTtlSeconds: 1800,
+            singleFlightWaitMs: 0,
         );
     }
 
@@ -111,6 +113,7 @@ final class StorefrontCatalogCacheCoordinator
             dependencies: ['catalog', 'price', 'config', 'global/i18n'],
             freshTtlSeconds: 300,
             staleTtlSeconds: 1800,
+            singleFlightWaitMs: 0,
         );
     }
 
@@ -125,6 +128,7 @@ final class StorefrontCatalogCacheCoordinator
             dependencies: ['catalog', 'price', 'config'],
             freshTtlSeconds: 120,
             staleTtlSeconds: 900,
+            singleFlightWaitMs: 1200,
         );
     }
 
@@ -199,14 +203,12 @@ final class StorefrontCatalogCacheCoordinator
         $this->categoryTree->invalidate($websiteId);
         $this->categoryLinkIndex->invalidate($websiteId);
         $this->allMenuCategoryTree->invalidate($websiteId);
-        $this->hotCache->forgetPolicy(
-            self::catalogOffersPolicy(),
-            $this->catalogOffersLogicalKey($websiteId),
-        );
-        $this->hotCache->forgetPolicy(
-            self::catalogOffersPolicy(),
-            $this->catalogOffersLogicalKey($websiteId, 'summary'),
-        );
+        foreach (['full', 'summary', 'candidates-full', 'candidates-summary'] as $projection) {
+            $this->hotCache->forgetPolicy(
+                self::catalogOffersPolicy(),
+                $this->catalogOffersLogicalKey($websiteId, $projection),
+            );
+        }
         $this->hotCache->forgetPolicy(
             self::catalogSummaryOffersPolicy(),
             $this->catalogSummaryOffersLogicalKey($websiteId, 48),
@@ -223,8 +225,11 @@ final class StorefrontCatalogCacheCoordinator
 
     public function catalogOffersLogicalKey(int $websiteId, string $projection = 'full'): string
     {
-        $key = 'product.catalog_offers.listing.v3.' . max(0, $websiteId);
         $projection = strtolower(trim($projection));
+        // Retire absolute campaign URLs in every shared catalog projection.
+        // Detailed projections also retain EAV source identities.
+        $version = in_array($projection, ['', 'full', 'candidates-full'], true) ? 'v5' : 'v4';
+        $key = 'product.catalog_offers.listing.' . $version . '.' . max(0, $websiteId);
 
         return $projection !== '' && $projection !== 'full'
             ? $key . '.' . preg_replace('/[^a-z0-9_-]/', '', $projection)
@@ -233,7 +238,7 @@ final class StorefrontCatalogCacheCoordinator
 
     public function catalogSummaryOffersLogicalKey(int $websiteId, int $limit = 48): string
     {
-        return 'product.catalog_offers.summary.v2.'
+        return 'product.catalog_offers.summary.v3.'
             . max(0, $websiteId)
             . '.'
             . max(1, min(2000, $limit));
@@ -253,7 +258,7 @@ final class StorefrontCatalogCacheCoordinator
         )));
         sort($ids);
 
-        return 'product.catalog_offers.targeted.v1.'
+        return 'product.catalog_offers.targeted.' . ($includeListingDetails ? 'v3.' : 'v2.')
             . max(0, $websiteId)
             . '.'
             . ($includeListingDetails ? 'full' : 'summary')

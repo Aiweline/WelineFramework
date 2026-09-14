@@ -13,6 +13,7 @@ final class Category extends AbstractWebsiteShardModel
     public const schema_fields_PATH = 'path';
     public const schema_fields_POSITION = 'position';
     public const schema_fields_STATUS = 'status';
+    public const schema_fields_SHIPPING_PROFILE_CODE = 'shipping_profile_code';
 
     public static function entityCode(): string
     {

@@ -1,0 +1,1 @@
+Your order is confirmed · {{var.order_number}}

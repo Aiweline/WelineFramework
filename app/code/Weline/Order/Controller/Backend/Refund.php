@@ -75,6 +75,11 @@ final class Refund extends BackendController
             $this->getMessageManager()->addError((string)__('退款操作失败，请稍后重试。'));
         }
 
+        $returnUrl = trim((string)$this->request->getPost('return_url', ''));
+        if ($returnUrl !== '' && preg_match('#^order/backend/order/edit\?id=[1-9][0-9]*(?:&|$)#', $returnUrl) === 1) {
+            return $this->redirect($returnUrl);
+        }
+
         return $this->redirect('order/backend/refund/index');
     }
 }

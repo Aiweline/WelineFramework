@@ -4,13 +4,16 @@ namespace Weline\FileManager\Api;
 
 class Image
 {
-    /**
-     * 将value值中的图片地址替换为图片预览地址数据
-     * @param string $value
-     * @param int $width
-     * @param int $height
-     * @return array
-     */
+    /** @var list<string> */
+    private const IMAGE_EXTENSIONS = [
+        'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'ico', 'avif', 'heic', 'heif', 'svg',
+    ];
+
+    /** @var list<string> */
+    private const AUDIO_EXTENSIONS = [
+        'mp3', 'wav', 'ogg', 'oga', 'm4a', 'aac', 'flac', 'opus', 'wma', 'weba',
+    ];
+
     /**
      * 将存储的路径转为 media 相对路径（供 /media/image/ 使用）
      */
@@ -25,6 +28,66 @@ class Image
         return ltrim($value, '/');
     }
 
+    public static function extensionOf(string $relativePath): string
+    {
+        return strtolower((string)pathinfo($relativePath, PATHINFO_EXTENSION));
+    }
+
+    public static function isImageExtension(string $ext): bool
+    {
+        return in_array(strtolower($ext), self::IMAGE_EXTENSIONS, true);
+    }
+
+    public static function isAudioExtension(string $ext): bool
+    {
+        return in_array(strtolower($ext), self::AUDIO_EXTENSIONS, true);
+    }
+
+    /**
+     * @return 'image'|'audio'|'file'
+     */
+    public static function previewKindForPath(string $relativePath): string
+    {
+        $ext = self::extensionOf($relativePath);
+        if (self::isAudioExtension($ext)) {
+            return 'audio';
+        }
+        if (self::isImageExtension($ext)) {
+            return 'image';
+        }
+
+        return 'file';
+    }
+
+    /**
+     * @return array{path:string,name:string,url:string,kind:string,is_image:bool,pathInfo:array<string,string>}
+     */
+    private static function buildPreviewItem(string $relativePath, int $width, int $height): array
+    {
+        $relativePath = self::normalizeMediaPath($relativePath);
+        $kind = self::previewKindForPath($relativePath);
+        $ext = self::extensionOf($relativePath);
+        if ($kind === 'image') {
+            if ($ext === 'svg') {
+                $url = '/pub/media/' . ltrim($relativePath, '/');
+            } else {
+                $url = '/media/image/' . ltrim($relativePath, '/') . '?w=' . $width . '&h=' . $height;
+            }
+        } else {
+            // Non-images must not go through the image resize endpoint (broken <img>).
+            $url = '/media/' . ltrim($relativePath, '/');
+        }
+
+        return [
+            'path' => $relativePath,
+            'name' => basename($relativePath),
+            'url' => $url,
+            'kind' => $kind,
+            'is_image' => $kind === 'image',
+            'pathInfo' => pathinfo(PUB . DS . 'media' . DS . $relativePath),
+        ];
+    }
+
     public static function processImagesValuePreviewData(string $value, int $width, int $height): array
     {
         // 确保 value 是字符串类型
@@ -35,50 +98,21 @@ class Image
         }
 
         $value = self::normalizeMediaPath($value);
-
-        $process = '?w=' . $width . '&h=' . $height;
         $value_items = [];
-        if ($value) {
-            if (str_contains($value, ',')) {
-                $values = array_map(self::normalizeMediaPath(...), explode(',', $value));
-                foreach ($values as $val) {
-                    $pre_fix = '/media/image/';
-                    $ext = strtolower(pathinfo(PUB.'media/' .$val, PATHINFO_EXTENSION));
-                    if ($ext === 'svg') {
-                        $url = '/pub/media/' . ltrim($val, '/');
-                    } else {
-                        $url = $val . $process;
-                        if (!str_starts_with($url, $pre_fix)) {
-                            $url = $pre_fix . $url;
-                        }
-                    }
-                    $value_items[] = [
-                        'path' => $val,
-                        'name' => basename($val),
-                        'url' => $url,
-                        'pathInfo' => pathinfo(PUB . DS . 'media' . DS . $val)
-                    ];
-                }
-            } else {
-                $pre_fix = '/media/image/';
-                $svg_fix = '/pub/media/';
-                $ext = strtolower(pathinfo(PUB.'media/' .$value, PATHINFO_EXTENSION));
-                if ($ext === 'svg') {
-                    $url = $svg_fix . ltrim($value, '/');
-                } else {
-                    $url = $value . $process;
-                    if (!str_starts_with($url, $pre_fix)) {
-                        $url = $pre_fix . $url;
-                    }
-                }
-                $value_items[] = [
-                    'path' => $value,
-                    'name' => basename($value),
-                    'url' => $url,
-                    'pathInfo' => pathinfo(PUB . DS . 'media' . DS . $value)
-                ];
-            }
+        if ($value === '') {
+            return $value_items;
         }
+        $parts = str_contains($value, ',')
+            ? array_map(self::normalizeMediaPath(...), explode(',', $value))
+            : [$value];
+        foreach ($parts as $part) {
+            $part = trim((string)$part);
+            if ($part === '') {
+                continue;
+            }
+            $value_items[] = self::buildPreviewItem($part, $width, $height);
+        }
+
         return $value_items;
     }
 
@@ -105,7 +139,11 @@ class Image
         if ($relative === '') {
             return $path;
         }
-        $ext = strtolower(pathinfo(PUB . 'media' . DIRECTORY_SEPARATOR . $relative, PATHINFO_EXTENSION));
+        $kind = self::previewKindForPath($relative);
+        if ($kind !== 'image') {
+            return '/media/' . ltrim($relative, '/');
+        }
+        $ext = self::extensionOf($relative);
         if ($ext === 'svg') {
             return '/pub/media/' . ltrim($relative, '/');
         }

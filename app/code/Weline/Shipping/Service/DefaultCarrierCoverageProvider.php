@@ -27,7 +27,7 @@ final class DefaultCarrierCoverageProvider implements CarrierCoverageProviderInt
             if (is_array($raw)) {
                 foreach ($raw as $i => $line) {
                     $line = trim((string)$line);
-                    if ($line === '' || str_starts_with($line, '#') || ($i === 0 && str_contains($line, 'country_code'))) {
+                    if ($line === '' || str_starts_with($line, '#') || str_starts_with($line, 'country_code')) {
                         continue;
                     }
                     $parts = preg_split("/\t|,\s*/", $line) ?: [];

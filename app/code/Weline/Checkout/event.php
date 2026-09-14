@@ -30,6 +30,20 @@ return [
         'doc' => 'checkout/计算订单总额后.md',
     ],
 
+    // V2 冻结报价：Shipping 报价后、分摊/折扣前，允许货源等扩展覆盖运费段
+    'Weline_Checkout::checkout::shipping_quote::overlay' => [
+        'name' => __('运费报价覆盖'),
+        'description' => __('freezeAndQuote 在本站 Shipping 报价成功后触发；Observer 按货源 Provider 策略改写运费。失败策略由各供应商配置（回退本站 / 阻断结账）。'),
+        'doc' => 'checkout/shipping-quote-overlay.md',
+    ],
+
+    // 配送方式列表富集（与 freeze overlay 同源规则）
+    'Weline_Checkout::checkout::shipping_methods::enrich' => [
+        'name' => __('配送方式列表富集'),
+        'description' => __('listQuoteOptions 结果映射为结账 methods 后触发；Observer 可改写 amount_minor。'),
+        'doc' => 'checkout/shipping-methods-enrich.md',
+    ],
+
     // V2 冻结报价富集：业务模块贡献资产信用等，Payment 只提供策略不写额度
     'Weline_Checkout::checkout::freeze_quote::enrich' => [
         'name' => __('冻结报价富集'),

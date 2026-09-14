@@ -9,6 +9,7 @@ use Weline\DeveloperWorkspace\Api\DevToolRestController;
 use Weline\DeveloperWorkspace\Service\DevToolPayloadStore;
 use Weline\DeveloperWorkspace\Service\PanelAccessService;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestLifecycleTrace;
 
 class Trace extends DevToolRestController
 {
@@ -20,6 +21,63 @@ class Trace extends DevToolRestController
     {
         parent::__construct();
         $this->payloadStore = $payloadStore ?? new DevToolPayloadStore();
+    }
+
+    /**
+     * POST /dev/tool/rest/v1/trace/panel — arm/disarm request tracing with the panel open/close state.
+     * Body: { "enabled": true|false }
+     */
+    public function postPanel()
+    {
+        if (!$this->isAllowed()) {
+            return $this->error('dev tool trace panel switch is not allowed', [], 403);
+        }
+
+        $enabled = $this->resolvePanelEnabledFlag();
+        RequestLifecycleTrace::issuePanelTraceCookie($this->request->getResponse(), $enabled);
+
+        return $this->success($enabled ? 'request trace armed' : 'request trace disarmed', [
+            'enabled' => $enabled,
+            'cookie' => RequestLifecycleTrace::panelTraceCookieName(),
+        ]);
+    }
+
+    private function resolvePanelEnabledFlag(): bool
+    {
+        $body = $this->request->getBodyParams(true);
+        if (!\is_array($body)) {
+            $raw = $this->request->getBodyParams(false);
+            if (\is_string($raw) && \trim($raw) !== '') {
+                $decoded = \json_decode($raw, true);
+                $body = \is_array($decoded) ? $decoded : [];
+            } else {
+                $body = [];
+            }
+        }
+
+        if (\array_key_exists('enabled', $body)) {
+            return $this->truthy($body['enabled']);
+        }
+        if (\array_key_exists('open', $body)) {
+            return $this->truthy($body['open']);
+        }
+
+        return true;
+    }
+
+    private function truthy(mixed $value): bool
+    {
+        if (\is_bool($value)) {
+            return $value;
+        }
+        if (\is_int($value) || \is_float($value)) {
+            return (bool)$value;
+        }
+        if (\is_string($value)) {
+            return \in_array(\strtolower(\trim($value)), ['1', 'true', 'yes', 'on'], true);
+        }
+
+        return false;
     }
 
     public function getIndex()

@@ -102,7 +102,10 @@ class ThemeLayoutService
     /** @return list<string> */
     private function localeReadCandidates(string $localeCode): array
     {
-        return $localeCode === '' ? [''] : [$localeCode, ''];
+        // Structure rows are language-neutral; always address the empty-locale identity.
+        unset($localeCode);
+
+        return [''];
     }
 
     /**
@@ -1532,7 +1535,8 @@ class ThemeLayoutService
             $pageType,
             $status,
             $this->resolveRuntimeLayoutArea($pageType),
-            $this->normalizeLayoutIdentity($identity),
+            // 空身份由运行时统一读取已安装的 LayoutIdentity；显式身份保留原有规范化。
+            $identity === [] ? [] : $this->normalizeLayoutIdentity($identity),
         );
     }
 

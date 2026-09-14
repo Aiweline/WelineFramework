@@ -8,7 +8,7 @@ Register::register(
     Register::MODULE,
     'Weline_HelpPay',
     __DIR__,
-    '1.0.0',
+    '1.0.2',
     '帮我付 / 纯分享 / 快捷购买编排：Slot 注入、短链代付、出链双形态（链接+二维码）',
     [
         'Weline_Framework',

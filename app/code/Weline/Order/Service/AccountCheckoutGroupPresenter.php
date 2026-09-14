@@ -60,6 +60,9 @@ final class AccountCheckoutGroupPresenter
             }
         }
 
+        $trackingSummary = $this->trackingSummaryForGroup($orders);
+        $orderType = $this->resolveGroupOrderType($orders);
+
         return [
             'view' => $view,
             'partial' => $partial,
@@ -76,7 +79,10 @@ final class AccountCheckoutGroupPresenter
             'refund_semantics' => array_values(array_unique($refundLabels)),
             'invoice_semantics' => array_values(array_unique($invoiceLabels)),
             'fulfillment_semantics' => array_values(array_unique($fulfillmentLabels)),
-            'tracking_summary' => $this->trackingSummaryForGroup($orders),
+            'tracking_summary' => $trackingSummary,
+            'order_type' => $orderType['code'],
+            'order_type_label' => $orderType['label'],
+            'order_type_tone' => $orderType['tone'],
             'hang' => $this->primaryHang($orders),
             'orders' => $partial
                 ? array_map(fn (array $order): array => $this->mapOrder($order, $currency), $orders)
@@ -151,6 +157,7 @@ final class AccountCheckoutGroupPresenter
     {
         $status = (string)($order['status'] ?? '');
         $currency = strtoupper(trim((string)($order['currency'] ?? $groupCurrency))) ?: 'CNY';
+        $type = $this->presentOrderType((string) ($order['order_type'] ?? 'toc'));
 
         return [
             'order_uuid' => (string) ($order['order_uuid'] ?? ''),
@@ -164,9 +171,67 @@ final class AccountCheckoutGroupPresenter
             'invoice_label' => $this->customerInvoiceLabel((string) ($order['invoice_status'] ?? 'none')),
             'fulfillment_label' => $this->customerFulfillmentLabel((string) ($order['fulfillment_status'] ?? 'none')),
             'tracking_summary' => $this->trackingSummaryForFulfillment((string) ($order['fulfillment_status'] ?? ''), $status),
-            'order_type' => strtolower(trim((string)($order['order_type'] ?? 'toc'))) ?: 'toc',
+            'order_type' => $type['code'],
+            'order_type_label' => $type['label'],
+            'order_type_tone' => $type['tone'],
             'hang' => is_array($order['hang'] ?? null) ? $order['hang'] : null,
         ];
+    }
+
+    /**
+     * @param list<array<string, mixed>> $orders
+     * @return array{code:string,label:string,tone:string}
+     */
+    private function resolveGroupOrderType(array $orders): array
+    {
+        $codes = [];
+        foreach ($orders as $order) {
+            if (!is_array($order)) {
+                continue;
+            }
+            $code = strtolower(trim((string) ($order['order_type'] ?? 'toc'))) ?: 'toc';
+            $codes[$code] = true;
+        }
+        if ($codes === []) {
+            return $this->presentOrderType('toc');
+        }
+        if (count($codes) > 1) {
+            return [
+                'code' => 'mixed',
+                'label' => (string) \__('混合类型'),
+                'tone' => 'secondary',
+            ];
+        }
+
+        return $this->presentOrderType((string) array_key_first($codes));
+    }
+
+    /**
+     * @return array{code:string,label:string,tone:string}
+     */
+    private function presentOrderType(string $code): array
+    {
+        $code = strtolower(trim($code)) ?: 'toc';
+        try {
+            /** @var CommerceOrderTypeRegistry $registry */
+            $registry = \Weline\Framework\Manager\ObjectManager::getInstance(CommerceOrderTypeRegistry::class);
+            $tone = $registry->resolveBadgeTone($code);
+            if ($tone === 'muted') {
+                $tone = 'info';
+            }
+
+            return [
+                'code' => $code,
+                'label' => $registry->resolveLabel($code),
+                'tone' => $tone,
+            ];
+        } catch (\Throwable) {
+            return [
+                'code' => $code,
+                'label' => $code === 'tob' ? (string) \__('批发订单') : (string) \__('零售订单'),
+                'tone' => $code === 'tob' ? 'warning' : 'info',
+            ];
+        }
     }
 
     /**

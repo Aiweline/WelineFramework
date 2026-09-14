@@ -5,13 +5,13 @@
 ## 适用对象
 
 - Codex、Cursor 及其他通过 `weline_project_intelligence` MCP 接入的客户端。
-- **非编码**（闲聊、概念解释、与本仓实现无关说明）：**禁止**调用 MCP（含 ensure / `prepare_project` / 计划门禁）。
+- **非编码**（闲聊、概念解释、与本仓实现无关说明）：通常跳过 MCP（含 ensure / `prepare_project`）。
 - **编码/工程**（改代码、修 bug、补测试、模块文档、诊断/评审、部署规划、验收结论）：必须遵循本文完整工作流。
 
 ## 核心原则（Vibe Coding 工程化）
 
 1. **先定义问题，再写代码**——目标、非目标、成功标准不明时不执行。
-2. **先计划，再执行**——`plan.md` / `task.md` 或 TaskContract 先于 `apply_compact_edit`。
+2. **先计划，再执行**——先有需求拆解 / 架构映射 / 验收项，再用宿主原生工具改代码。
 3. **每步可验证**——「看起来对」不算完成；要有测试、命令或 WebUI 证据。
 4. **AI 不能自证正确**——只信可复现命令、测试输出、diff 与 Browser 结果。
 5. **规范代码化**——能写成 lint/test/schema/CI 的，不只用自然语言提醒。
@@ -19,32 +19,34 @@
 ## 强制阶段
 
 ```text
-0 引导与 ready     ensure-project-guidance → prepare_project
-1 定位与需求确认   需求.md / 用户确认 / set_session_directives（临时）
+0 会话引导（工程必做） ensure-project-guidance → prepare_project → 遵守 hard_constraints
+1 定位与需求确认   需求.md / 用户确认 / 会话笔记（临时）
+1b 澄清与用例规格  doc/开发/spec/{slug}.md（EARS + UC；feature 硬）
+1c 宿主计划模式    默认 Plan Mode；**简单可 skip**（仍须验收）
 2 扩展点选型       扩展点选型.md → 文档索引 / doc/event / Query / Hook
-3 计划拆解         plan.md + task.md（或 TaskContract）
-4 实现             get_edit_bundle → apply_compact_edit（授权范围内）
+3 计划拆解         plan.md + task.md（或任务笔记；仍在 Plan Mode）
+4 实现             用户批准后切回 Agent；宿主原生编辑 + TDD
 5 三维复审         架构 / 缺陷 / 安全
 6 分层测试         单测 → 运行时 → WebUI（按变更表面）
 7 收口             文档对齐（README/需求/开发日志）+ 门禁表 + 交付证据
 ```
 
-### 0. 引导与 ready
+### 0. 会话引导（索引 / 规则 / 技能）
 
-- 运行 `php app/code/Weline/Ai/Mcp/scripts/ensure-project-guidance.php`。
-- 调用 `prepare_project`；仅 `status=ready` 且在 `dev` 分支继续。
-- **硬约束在 MCP 内**：立即阅读 `agent_guidance.hard_constraints`（`hard-constraints.v1`，由 [AI硬规则索引](./AI硬规则索引.md) 编译）。`session_startup_notices` 只指路，不展开 Theme/Taglib/i18n 等框架细则。
+- 工程任务：运行 `php app/code/Weline/Ai/Mcp/scripts/ensure-project-guidance.php`（写出 MCP 生成的冷启动 `.mdc`），再 **必须** `prepare_project`，阅读并遵守 `agent_guidance.hard_constraints`（`hard-constraints.v1`，由 [AI硬规则索引](./AI硬规则索引.md) 编译）。
+- **编码仍用宿主原生编辑**；MCP 无写仓工具。MCP 挂不上时宿主 Read 权威文档继续，不得编造规则。
+- `session_startup_notices` 只指路。
 - 交付 URL 机器契约：`agent_guidance.feature_delivery_urls`、`closeout_delivery_reminder`。
-- 任务细则：`resolve_task_context` → `workflow_contract.v1` surfaces（如 `frontend_development`）。
-- MCP 不可用 / 容量物化失败时的受限原生回退：见 `hard_constraints.mcp_operational` 与 [AGENTS.md](../../../AGENTS.md)；禁止借此绕过 `blocked`。
-- 后续工具携带 `readiness_id` + `client_session_id`。
+- 任务细则：按需 `resolve_task_context` → `workflow_contract.v1` surfaces。
+- 后续 MCP 工具携带 `readiness_id` + `client_session_id`。禁止借 MCP 状态绕过 `blocked` / `dev` 分支 / 验收。
 
 ### 1. 定位与需求确认
 
 - 对照归属模块 `doc/需求.md`（REQ-ID、范围、验收、待确认项）。
-- 用户已确认的需求优先于文档推断；临时决定用 `set_session_directives`，**不自动写入** `需求.md`。
-- 用 `resolve_task_context` 取有界证据；禁止凭通用框架经验发明需求或事件名。
-- **每条可执行编码/工程用户需求（硬门槛，`user_requirement_full_workflow` + `requirement_feature_kind_gate` + `requirement_implicit_analysis_skill_decision` + `feature_add_requires_current_ui_review` + `feature_ui_keep_simple_top_tabs` + `requirement_framework_scrutiny` + `architecture_first_for_requirements` + `framework_decoupled_only`）**：提出后须**立即**分析当前环境**隐形需求**（已有 Taglib/API/Model/Provider 表、映射页、拉取/同步、耦合风险等）写入 `implicit_requirements`，并判定 `work_kind=feature|non_feature`。再据分析设 `ui_skill_decision=participate|skip`：**禁止凡 feature 一律强制原型+UI**。`participate`（有布局/交互/CSS 重设计）时须让 `prototype`+`frontend-design` 参与并规划 `type=shentu`；`skip` 须写 `ui_skill_rationale`（≥24 字，如纯标签/API/Provider 接线）。**若功能落在既有 Web UI 表面加功能**：设计前必须先打开/截取**当前页**并按 [审图](../../../../../dev/ai-command/theme/审图.md) 审现图再定位置；若现页已乱，须连同现页一并重设计（`feature_add_requires_current_ui_review`），禁止在混乱信息架构上硬塞控件。**功能页一页宜简**：一屏一个主职责；进度总览与配置/操作、列表与设置等不同职责不得默认堆同一长页，能分段的用**顶部 Tab**切换（`feature_ui_keep_simple_top_tabs`）。再理解意图/范围/非目标/成功标准，并按**框架信息审视**合理性：若字面需求不合理（耦合写法、有 Taglib 仍手写控件、发明事件、错误分层、过度设计等），**禁止原样照做**，须给出更合理做法并写入 `plan.requirement_scrutiny`，同时将 `plan.requirements` 改为纠偏后方案（合理则写「合理」/「无调整」）；再 `submit_task_plan` 建立从**需求分析到验收**的完整会话工作流（`plan.requirements` ≥1 + **`plan.requirement_scrutiny` 必填** + **`plan.architecture` 必填**（按**框架信息**将每条需求映射为**解耦方案**：扩展点/机制、归属模块边界、关键路径/分层；≥40 字；`trivial` 亦必填）+ **`plan.coupling_findings` 必填**（无耦合写「无」/「无耦合」）+ `acceptance` ≥1 + 任务拆解）；**禁止**耦合写法与从需求直接跳到补丁。过程中发现耦合须更新 `coupling_findings`，并向用户汇报时包含「**耦合提示**」小节；有纠偏须包含「**需求纠偏**」小节。**不得**等到写码或 `PLAN_REQUIRED` 才补计划。需求不明时先澄清，禁止边写边猜。非编码任务不进入本阶段。
+- 用户已确认的需求优先于文档推断；临时决定记在会话笔记，**不自动写入** `需求.md`。
+- 可用 `resolve_task_context` 取有界证据；禁止凭通用框架经验发明需求或事件名。
+- **需求澄清与用例规格（硬门槛，`requirement_clarify_use_case_spec`）**：在架构映射/写码前，必须执行 MCP 指令 [需求澄清与用例规格](../../../../../dev/ai-command/ai/需求澄清与用例规格.md)（或 `get_skill(requirement_clarify_use_case|weline-req-clarify)`）。`work_kind=feature`：落盘归属模块 `doc/开发/spec/{feature-slug}.md`，含澄清记录、用户故事、≥2 条 EARS（WHEN/IF…SHALL）、≥1 用例（主成功路径可映射 `type=e2e` / Browser WB-OP），`status` 升至 `ready-for-plan` 后才进入审视与架构。`non_feature` 可 `clarify_status=skipped` + ≥24 字理由。禁止一句话需求直接改 PHP/phtml。
+- **每条可执行编码/工程用户需求（硬门槛，需求完整工作流（工程行为） + `requirement_feature_kind_gate` + `requirement_clarify_use_case_spec` + `requirement_implicit_analysis_skill_decision` + `requirement_cross_layer_impact_gate` + `feature_add_requires_current_ui_review` + `feature_ui_keep_simple_top_tabs` + `requirement_framework_scrutiny` + `architecture_first_for_requirements` + `architecture_design_structured` + `framework_decoupled_only`）**：提出后须**立即**先完成上款澄清/用例规格，再分析当前环境**隐形需求**（已有 Taglib/API/Model/Provider 表、映射页、拉取/同步、耦合风险等）写入 `implicit_requirements`，并判定 `work_kind=feature|non_feature`。**若 goal/requirements 命中实体+字段+变更信号**（如「给订单增加类型」）：须填 `plan.impact_surfaces`（`subject` + `layers`：`schema_model`/`service_api`/`admin_ui`/`storefront_ui`/`i18n`/`tests_e2e` 等；`schema_model` 与至少一侧 UI 须 `in_scope`；禁止仅写「无」式隐形需求；`in_scope` 层须在 `dev_tasks` 对齐），优先勾选 `resolve_task_context.framework_candidates.impact_candidates`（`requirement_cross_layer_impact_gate`）。再据分析设 `ui_skill_decision=participate|skip`：**有页面/布局/CSS/主题/.phtml 等视觉信号时 MCP 强制 `participate`（`ui_skill_surface_signal_gate`），禁止错误 skip**；勿把纯后端误判为必须原型。`participate` 时须让 `prototype`+`frontend-design`+`weline-theme-development` 参与并规划 `type=shentu`；`skip` 仅无视觉信号且须写 `ui_skill_rationale`（≥24 字，如纯标签/API/Provider 接线）。**若功能落在既有 Web UI 表面加功能**：设计前必须先打开/截取**当前页**并按 [审图](../../../../../dev/ai-command/theme/审图.md) 审现图再定位置；若现页已乱，须连同现页一并重设计（`feature_add_requires_current_ui_review`），禁止在混乱信息架构上硬塞控件。**功能页一页宜简 / 顶部 Tab**：所有页面分组默认**顶部 Tab**（一屏一个主职责）；进度与配置、列表与字典/设置、表单与列表等不得堆同一长页。原型默认出顶部 Tab IA；仍需同页出现的次要块用**点击展开卡片**（默认收起）。不符合的密页须同需求改成 Tab（`feature_ui_keep_simple_top_tabs`）。再理解意图/范围/非目标/成功标准，并按**框架信息**与 `resolve_task_context.framework_candidates` **审视**合理性：若字面需求不合理（耦合写法、有 Taglib 仍手写控件、发明事件、错误分层、过度设计等），**禁止原样照做**，须给出更合理做法并写入 `plan.requirement_scrutiny`，同时将 `plan.requirements` 改为纠偏后方案（合理则写「合理」/「无调整」）；**即使合理也须填 `plan.scrutiny_basis`**（`checklist`≥2 + `doc_paths`≥1）。再 工程计划记录 建立从**需求分析到验收**的完整会话工作流（`plan.requirements` ≥1 + **`plan.requirement_scrutiny` 必填** + **`plan.scrutiny_basis` 必填** + **`plan.architecture_design` 必填**（`mechanism`/`owning_module`/`reuse`/`invent`/`not_to_do`/`req_map`，优先从 `framework_candidates` 选型）+ **`plan.architecture` 必填**（可由 design 派生；≥40 字；`trivial` 亦必填）+ **`plan.coupling_findings` 必填**（无耦合写「无」/「无耦合」）+ `acceptance` ≥1 + 任务拆解）；**禁止**耦合写法与从需求直接跳到补丁。过程中发现耦合须更新 `coupling_findings`，并向用户汇报时包含「**耦合提示**」小节；有纠偏须包含「**需求纠偏**」小节。**不得**等到写码或 须先完成需求分析与架构映射 才补计划。需求不明时先澄清，禁止边写边猜。非编码任务不进入本阶段。
 
 ### 2. 扩展点选型（写代码前硬关）
 
@@ -66,15 +68,20 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 
 ### 3. 计划拆解
 
+- **宿主计划模式（硬门槛，`host_plan_mode_for_planning`）**：进入本阶段（澄清规格 `ready-for-plan` 之后、扩展点选型/架构映射/分章计划期间）**默认必须启用宿主 Plan Mode**。Cursor：立即 `SwitchMode` → `target_mode_id=plan`，在 Plan Mode 内完成 `architecture_design`、扩展点、章节/`dev_tasks`、`acceptance`；**禁止**在仍处于计划阶段时改业务 PHP/phtml/CSS。用户明确批准实现后，再 `SwitchMode` → `agent` 进入 §4。
+- **简单需求可跳过计划**：同时满足时可记 `plan_complexity=simple` + `plan_skip_rationale`≥24 字并跳过 Plan Mode——单模块、无新建扩展点发明、无多章计划、约 ≤2 小时/单表面、前后端架构无歧义。**跳过计划 ≠ 跳过验收**（`requirement_acceptance_always`）。
+- **前后端范围（硬，`requirement_fe_be_scope_analysis`）**：每条需求须分析并记录 `fe_be_scope=frontend|backend|both|na` 及各侧要点；禁止只做一侧却漏该做的另一侧。
+- **验收不可省（硬，`requirement_acceptance_always`）**：宣称完成前必须有真实验收证据。触及 Web/UI 时，即使不做 Playwright e2e（仅 simple 豁免），也必须本机 Browser **WB-OP**：视觉（可截图则 WB-VIS）+ 真机点选逻辑；curl/CDP 不能替代。
+- **布局/人性化/吐槽/审图**：命中时 `ui_skill_decision=participate`，**原型 + frontend-design 必须参与并调整**（禁止只点评）。
 - 模块级：`doc/开发/plan.md`（阶段、范围、完成标准）+ `doc/开发/task.md`（可勾选任务）。
-- **MCP 会话计划（硬门槛）**：用户每提出可执行需求即须 `submit_task_plan` 提交 `task-plan.v1`（**`requirements`≥1**、`goal`、`extension_point`、**`requirement_scrutiny` 必填**（`requirement_framework_scrutiny`：合理写「合理」/「无调整」；不合理须写问题+更合理做法并改写 requirements）、**`architecture` 必填**（`architecture_first_for_requirements` + `framework_decoupled_only`：按框架/扩展点选型映射为解耦方案；≥40 字；含 `trivial`）、**`coupling_findings` 必填**（≥1；无则「无」/「无耦合」）、`dev_tasks`、≥1 条 `acceptance` 且**至少 1 条 `type=unit`**；可选 `scope_paths` / `forbidden` / `risk` / `workflow_phase`）。未提交或缺少有效 `requirement_scrutiny`/`architecture`/`coupling_findings` 则 `get_edit_bundle` / `apply_compact_edit` 返回 **`PLAN_REQUIRED`**（硬约束 `user_requirement_full_workflow` / `requirement_framework_scrutiny` / `architecture_first_for_requirements` / `framework_decoupled_only` / `task_plan_before_edit` / `plan_then_tdd_required`），响应内带 **`plan_workflow`**（需求分析→**框架审视纠偏**→**框架解耦架构**→…→**TDD 红绿**→实际跑测→审查→收口）——代理须**立即**补计划并 `submit_task_plan`，不得当作完成。实现须 **TDD**：先失败测试再最小实现至绿，再亲自执行测试命令；`unit` 的 `passed` evidence 须像真实跑测输出（含 phpunit/PASS 等），否则 `closeout_allowed=false`。收口汇报须含「**需求纠偏**」（无调整/合理或逐条列出）与「**耦合提示**」（无耦合或逐条列出）。`risk=trivial` 仍须计划与 `requirements` 与 `requirement_scrutiny` 与 `architecture` 与 `coupling_findings` 与 unit，且 `scope_paths` ≤3。计划仅存当前 MCP 进程会话，不写仓库。
-- **计划合规审核（硬门槛，`task_plan_compliance_review`）**：`submit_task_plan` / `review_task_plan` 须从以下维度判定计划是否合规——**(1) 架构层映射**、**(2) 解耦**、**(3) 电商合规**（触及站店渠/商品/结账/支付等时须写合规要点；非电商可 N/A）、**(4) 原型设计**（`ui_skill_decision`；participate→prototype+frontend-design+shentu）、**(5) e2e 用例完整性**（feature→**每章独立完整功能通路 `type=e2e`** + **计划级 `e2e-plan-suite` 组套件**；Agent 自动跑测自行闭环，禁止甩人；收口前须组测整条功能链路 PASS）、**(6) 计划体量是否过大**（单次宜 2–4 小时；过大须拆章节/child）、**(7) 逻辑是否严谨闭环**。原则上 `dev_tasks` **须有章节细节**（id/title 含 `chN`/`章节`/`chapter`）；**每一章必须硬绑定 `acceptance_ids`** 到具体 acceptance（feature 章须含**互不共用**的通路 `type=e2e`；组套件单独一条）；多需求章节计划须 `covers_requirements` 覆盖全部 requirements；**仅当绑定验收全部 `passed`+evidence 后**才允许该章 `done` 并开下一章（至多一个 `in_progress`）；**全部章完成后统一跑计划组套件 e2e 才可 closeout**。`review_task_plan` 返回 `compliance_dimensions` + gaps。
-- MCP 写码：`get_edit_bundle` 携带完整 **TaskContract**（goal、requirements、known_paths、known_symbols）。
+- **工程计划（行为要求）**：用户每提出可执行需求即须记录工程计划（**`requirements`≥1**、`goal`、`extension_point`、**`requirement_scrutiny` 必填**（`requirement_framework_scrutiny`：合理写「合理」/「无调整」；不合理须写问题+更合理做法并改写 requirements）、**`scrutiny_basis` 必填**（checklist≥2 + doc_paths≥1；仅写「合理」不够）、**`architecture_design` 必填**（`architecture_design_structured`：mechanism/owning_module/reuse/invent/not_to_do/req_map；优先 `resolve_task_context.framework_candidates`）、**`architecture` 必填**（`architecture_first_for_requirements` + `framework_decoupled_only`：按框架/扩展点选型映射为解耦方案；≥40 字；可由 design 派生；含 `trivial`）、**`coupling_findings` 必填**（≥1；无则「无」/「无耦合」）、`dev_tasks`、≥1 条 `acceptance` 且**至少 1 条 `type=unit`**；可选 `scope_paths` / `forbidden` / `risk` / `workflow_phase`）。缺少有效审视/架构字段时须先完成需求分析与架构映射再动手（硬约束 `requirement_framework_scrutiny` / `architecture_first_for_requirements` / `architecture_design_structured` / `framework_decoupled_only`），工作流：需求分析→框架审视纠偏→框架解耦架构→…→TDD 红绿→实际跑测→审查→收口。实现须 **TDD**：先失败测试再最小实现至绿，再亲自执行测试命令；`unit` 的 `passed` evidence 须像真实跑测输出（含 phpunit/PASS 等），否则不可宣称完成。收口汇报须含「**需求纠偏**」（无调整/合理或逐条列出）与「**耦合提示**」（无耦合或逐条列出）。`risk=trivial` 仍须计划与上述必填字段与 unit，且 `scope_paths` ≤3。计划写在模块 `doc/开发/plan.md` / 会话笔记；编码用宿主原生编辑。
+- **计划合规自检（工程行为）**：工程计划记录 / 收口自检 须从以下维度判定计划是否合规——**(1) 架构层映射**、**(2) 解耦**、**(3) 电商合规**（触及站店渠/商品/结账/支付等时须写合规要点；非电商可 N/A）、**(4) 原型设计**（`ui_skill_decision`；participate→prototype+frontend-design+weline-theme-development+shentu；视觉信号强制 participate）、**(5) e2e 用例完整性**（feature→**每章独立完整功能通路 `type=e2e`** + **计划级 `e2e-plan-suite` 组套件**；Agent 自动跑测自行闭环，禁止甩人；收口前须组测整条功能链路 PASS）、**(6) 计划体量是否过大**（单次宜 2–4 小时；过大须拆章节/child）、**(7) 逻辑是否严谨闭环**。原则上 `dev_tasks` **须有章节细节**（id/title 含 `chN`/`章节`/`chapter`）；**每一章必须硬绑定 `acceptance_ids`** 到具体 acceptance（feature 章须含**互不共用**的通路 `type=e2e`；组套件单独一条）；多需求章节计划须 `covers_requirements` 覆盖全部 requirements；**仅当绑定验收全部 `passed`+evidence 后**才允许该章 `done` 并开下一章（至多一个 `in_progress`）；**全部章完成后统一跑计划组套件 e2e 才可 closeout**。收口自检 返回 `compliance_dimensions` + gaps。
+- 写码：宿主原生编辑；动手前明确 goal、requirements、known_paths、known_symbols。
 - 原子任务：单次变更宜 2–4 小时可验收；过大则拆 child_requests。
 
 ### 4. 实现
 
-- 先有已接受的会话计划，再 `get_edit_bundle` → `apply_compact_edit`（`ready_for_edit=true` 时）。
+- 先有需求拆解与架构映射，再宿主原生编辑。
 - 只改任务授权范围；保留用户无关工作区改动。
 
 ### 5. 三维复审
@@ -85,7 +92,7 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 
 ### 6. 分层测试与验收
 
-**自行验证（硬门槛，`agent_self_verify_before_done` + `plan_then_tdd_required` + `acceptance_phase_requires_shentu`）**：需求须先 `submit_task_plan`；实现按 **TDD**（红→绿→重构）；结束后 Agent **必须亲自执行**测试命令并按验收层级验证，再标 acceptance / 向用户宣称完成。禁止「只改代码就收口」。`unit` 的 `passed` evidence 须含可识别的真实跑测输出；否则 `review_task_plan.closeout_allowed=false`。未完成只能报告「代码已改，TDD/测试未跑通」。
+**自行验证（硬门槛，`agent_self_verify_before_done` + `acceptance_phase_requires_shentu`）**：动手前完成需求拆解与架构映射；实现按 **TDD**（红→绿→重构）；结束后 Agent **必须亲自执行**测试命令并按验收层级验证，再标 acceptance / 向用户宣称完成。禁止「只改代码就收口」。`unit` 的 `passed` evidence 须含可识别的真实跑测输出；否则不可宣称完成。未完成只能报告「代码已改，TDD/测试未跑通」。
 
 | 变更表面 | 最低证据 |
 |----------|----------|
@@ -96,13 +103,13 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 | 页面 / 交互 / SSE | 真实 WLS + **当前宿主可用的真实 Browser** 操作员路径（**WB-OP**）；**须截图 + 对照模块 `doc/原型设计.md` 视觉清单（WB-VIS）**；多断点 375 / ≈768 / ≥1024 |
 | 文档 / 规则 | Diff、链接、渲染检查；**与实现对照无漂移** |
 
-**分章计划**：原则上每章硬绑定 `acceptance_ids` 对应**一个可完整验收的功能通路闭环**（feature 为独立 e2e，覆盖该章前后端/整体逻辑；Agent 自动跑 Playwright 自行闭环）；绑定验收全部 passed+evidence 且 **UT → RT → WB → DL** 四段全 pass 才开下一章（`task_plan_compliance_review` + `chapter_ut_rt_wb_dl` + `plan_full_pathway_e2e_suite`）；须先 `update_task_plan_progress` 标进度再开下一章。含 Web 的章：**WB = WB-OP + WB-VIS**；截图存 `doc/evidence/ch{N}/`；禁止 curl/单测/纯文字替代 Browser 视觉证据。**全部章节完成后**：必须再跑计划级 `e2e-plan-suite` 统一组测整条功能链路；组套件未 PASS 禁止宣称计划完成。禁止只完成一部分不测就汇报，禁止请用户手动测用例闭环。
+**分章计划**：原则上每章硬绑定 `acceptance_ids` 对应**一个可完整验收的功能通路闭环**（feature 为独立 e2e，覆盖该章前后端/整体逻辑；Agent 自动跑 Playwright 自行闭环）；绑定验收全部 passed+evidence 且 **UT → RT → WB → DL** 四段全 pass 才开下一章（计划合规自检（工程行为） + `chapter_ut_rt_wb_dl` + `plan_full_pathway_e2e_suite`）；须先 进度自检 标进度再开下一章。含 Web 的章：**WB = WB-OP + WB-VIS**；截图存 `doc/evidence/ch{N}/`；禁止 curl/单测/纯文字替代 Browser 视觉证据。**全部章节完成后**：必须再跑计划级 `e2e-plan-suite` 统一组测整条功能链路；组套件未 PASS 禁止宣称计划完成。禁止只完成一部分不测就汇报，禁止请用户手动测用例闭环。
 
 未完成对应层级时，只能报告「代码已改，测试未完成」或「WebUI 验收未完成」。
 
-**验收阶段审图（硬门槛，`acceptance_phase_requires_shentu`）**：`ui_skill_decision=participate` 或含视觉 Browser/UI 验收时，verify 阶段必须对验收截图执行 [审图](../../../../../dev/ai-command/theme/审图.md)（线稿→原型→UI→主题），`acceptance` 须含 `type=shentu` 且 passed evidence 含审图/线稿/checklist 信号；弱证据则 `closeout_allowed=false`。非功能且无 UI 可省略或 `na` 并写明原因。
+**验收阶段审图（硬门槛，`acceptance_phase_requires_shentu`）**：`ui_skill_decision=participate` 或含视觉 Browser/UI 验收时，verify 阶段必须对验收截图执行 [审图](../../../../../dev/ai-command/theme/审图.md)（线稿→原型→UI→主题），`acceptance` 须含 `type=shentu` 且 passed evidence 含审图/线稿/checklist 信号；弱证据则 `不可宣称完成`。非功能且无 UI 可省略或 `na` 并写明原因。
 
-**结束汇审（硬门槛，`closeout_requires_huishen`）**：宣称完成前必须写 `huishen_notes`（含「汇审」），对照需求/架构/验收/(功能时)原型·UI·审图结论；用户汇报须含「**汇审**」小节。缺汇审则 `review_task_plan.closeout_allowed=false`。
+**结束汇审（硬门槛，`closeout_requires_huishen`）**：宣称完成前必须写 `huishen_notes`（含「汇审」），对照需求/架构/验收/(功能时)原型·UI·审图结论；用户汇报须含「**汇审**」小节。缺汇审则 `收口自检.不可宣称完成`。
 
 **收口高压线（凡含页面/UI）**：
 
@@ -113,7 +120,7 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 
 ### 前端开发规范（MCP 写死表面 `frontend_development`）
 
-编辑 `*.phtml`、Theme 部件、布局、partial 时，`resolve_task_context` / `get_edit_bundle` 的 `workflow_contract.v1` 会附带 **`frontend_development`（前端开发规范）**表面。这是一套 Theme/前端规范，**不是**名为 `weline-code` 的独立技能；section 身份属性只是其中一条硬约束。
+编辑 `*.phtml`、Theme 部件、布局、partial 时，可选 `resolve_task_context` 的 `workflow_contract.v1` 会附带 **`frontend_development`（前端开发规范）**表面。这是一套 Theme/前端规范，**不是**名为 `weline-code` 的独立技能；section 身份属性只是其中一条硬约束。
 
 **【高压线 · 自研主题 UI】** 所有前台/后台可视化界面**必须**使用 Weline 自研主题体系（**Weline UI 2.0**）：组件类名（`w-field` / `w-input` / `w-button` / `w-select` 等）+ 主题 CSS 变量 Token（`--color-*` / `--weline-theme-*` / spacing·radius·shadow）。**禁止** Bootstrap / Element / Ant Design 等第三方 UI；**禁止**硬编码 `#hex` / `rgb()` / 随意 `px` 间距；地址/地区级联**必须**用 `<w:theme:address>`，禁止手写国家/省/市 input。权威：`Theme开发总指南.md`、`theme-css-variables-only.md`、`Taglib/场景映射表.md`。本条由 MCP `hard-constraints.v1`（`weline_ui_theme_first`）与 `frontend_development` surface 强制下发，不在宿主引导中复述。
 
@@ -143,7 +150,7 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 
 ### 7. 收口
 
-- **规划 + TDD（硬门槛，`plan_then_tdd_required`）**：先 `submit_task_plan`（含 ≥1 `unit`）；红→绿→实际跑测 PASS evidence 才算完。
+- **规划 + TDD（工程行为）**：先完成需求拆解与 ≥1 `unit` 验收项；红→绿→实际跑测 PASS evidence 才算完。
 - **自行验证（硬门槛，`agent_self_verify_before_done`）**：实现后须亲自跑 UT/RT/WB（按表面）；acceptance 无 evidence 不得标 passed，亦不得宣称完成。
 - **计划 / todo 诚实收口（硬门槛，`plan_todo_evidence_closeout`）**：多 todo 计划不得在未逐项举证时宣称「已完成 / done / 主链路完成」。每个 todo 须有可复核证据（代码路径、DB 行数/表状态、命令输出、Browser）。部分完成必须明确报告「部分完成」并附**未完成清单**；同步写入归属模块 `doc/开发日志.md`（禁止把 Cursor todo 无证据标为 completed）。虚报完成属硬违规。
 - **汇审（硬门槛，`closeout_requires_huishen`）**：收口前写 `huishen_notes` 并在用户汇报含「汇审」小节；缺则不得宣称完成。
@@ -163,17 +170,16 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 
 ## MCP 工具映射
 
-| 阶段 | MCP 工具 |
+| 阶段 | MCP 工具 / 宿主动作 |
 |------|----------|
-| 0 | `prepare_project` |
-| 1–2 | `resolve_task_context`、`search_project_knowledge`、`get_indexed_document` |
-| 3 | `submit_task_plan`、`get_task_plan`、`update_task_plan_progress`、`review_task_plan`（无计划则 PLAN_REQUIRED + plan_workflow；收口须 closeout_allowed） |
-| 3–4 | `get_edit_bundle`、`apply_compact_edit` |
-| 临时决定 | `set_session_directives` |
-| 部署计划（只读） | `resolve_deploy_plan` |
-| MCP 确认不可用 | 记录 `HOST_MCP_NOT_ATTACHED` / `MCP_TARGET_UNAVAILABLE`，按“0. 引导与 ready”的受限原生回退执行 |
+| 0 | **必须** `prepare_project`（工程任务；刷新 hard_constraints） |
+| 1–2 | 按需 `resolve_task_context`、`search_project_knowledge`、`get_indexed_document` |
+| 3 | 工程计划自检（需求/架构/验收项记录于任务笔记或模块文档） |
+| 3–4 | **宿主原生编辑**（按需 MCP 只读检索） |
+| 部署计划 | 宿主直接调用 `Weline_Deploy` CLI / 运维文档（MCP 不再提供 deploy 工具） |
+| MCP 未挂载 | 宿主 Read `AI硬规则索引.md` 与原生编辑；不得假装已遵守 MCP |
 
-`resolve_task_context` 与 `get_edit_bundle` 返回的 `workflow_contract.v1` 为本流程的**机器可读摘要**；`pinned_fragments` 为固定附带的规范切片。
+`resolve_task_context` 返回的 `workflow_contract.v1` 为本流程的**机器可读摘要**。编码用宿主原生工具，但工程任务仍须先完成阶段 0。
 
 ## 文档索引
 

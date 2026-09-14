@@ -21,13 +21,13 @@ return [
     ],
     'Weline_Order::backend::order::view::payment-records' => [
         'name' => \__('订单详情支付记录槽'),
-        'description' => \__('订单详情支付记录空槽内的默认扩展点；由万能支付模块注入 Attempt 记录，禁止 Order 直读支付表拼表。'),
-        'doc' => 'backend/order/view/payment-records.md',
-    ],
-    'Weline_Order::backend::order::view::payment-records' => [
-        'name' => \__('订单详情支付记录槽'),
         'description' => \__('订单详情「支付记录」空槽内的默认扩展点；由万能支付模块注入 Attempt 记录，禁止 Order 直读 Payment 表。'),
         'doc' => 'backend/order/view/payment-records.md',
+    ],
+    'Weline_Order::backend::order::view::wholesale-chat' => [
+        'name' => \__('订单详情批发沟通槽'),
+        'description' => \__('订单详情「批发订单沟通」空槽内的默认扩展点；由 B2B 部件注入商家侧协商消息，禁止 Order 直出聊天 UI。'),
+        'doc' => 'backend/order/view/wholesale-chat.md',
     ],
     'Weline_Order::backend::order::list::filters' => [
         'name' => \__('订单列表筛选器'),

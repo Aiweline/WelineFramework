@@ -45,6 +45,8 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
         self::assertStringContainsString('syncCartState', $source);
         self::assertStringContainsString('scheduleCartSync', $source);
         self::assertStringContainsString('applyCachedSummary', $source);
+        self::assertStringContainsString('data-cart-goods-subtotal-major', $source);
+        self::assertStringContainsString('Always refresh goods node text', $source);
         self::assertStringContainsString('readSummaryCache', $source);
         self::assertStringContainsString('rememberSummaryCache', $source);
         self::assertStringContainsString('forceNetwork', $source);
@@ -60,6 +62,10 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
         self::assertStringContainsString('summary.refresh === true', $source);
         self::assertStringContainsString('forceRefresh', $source);
         self::assertStringContainsString('!forceRefresh && applyCachedSummaryToRoots()', $source);
+        self::assertStringContainsString('pendingCouponCode', $source);
+        self::assertStringContainsString('pendingDiscountPreview', $source);
+        self::assertStringContainsString('mergeDiscountPreviewIntoSummary', $source);
+        self::assertStringContainsString('params.coupon_code', $source);
         self::assertStringContainsString('preview.amount_minor', $source);
         self::assertStringContainsString("getCachedSummary({ cartType: mode, requireTokenMatch: true })", $source);
         self::assertStringContainsString('Ghost-cart gate: no matching guest_token', $source);
@@ -91,6 +97,8 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
         self::assertStringContainsString('__booted', $source);
         self::assertStringContainsString('isDisplayableImageUrl', $source);
         self::assertStringContainsString('appendMiniCartOptions', $source);
+        self::assertStringContainsString('openMiniCartSwatchPreview', $source);
+        self::assertStringContainsString('data-mini-cart-swatch-trigger', $source);
         self::assertStringContainsString('mini-cart-drawer__line-options', $source);
         self::assertStringContainsString('option.swatch_image', $source);
         self::assertMatchesRegularExpression('#asset:\\\\?/\\\\?/#', $source);
@@ -107,8 +115,11 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
 
         self::assertStringContainsString('mini-cart-drawer__line-options', $source);
         self::assertStringContainsString('mini-cart-drawer__line-option-swatch', $source);
+        self::assertStringContainsString('data-mini-cart-swatch-trigger', $source);
         self::assertStringContainsString("swatch_image", $source);
         self::assertStringContainsString('mini-cart-drawer__line-option-swatch', $styles);
+        self::assertStringContainsString('mini-cart-drawer__line-option-swatch-btn', $styles);
+        self::assertStringContainsString('mini-cart-drawer__swatch-preview', $styles);
     }
 
     public function testMiniCartExtrasTabsScriptBuildsHorizontalSwitcher(): void
@@ -119,6 +130,9 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
 
         self::assertStringContainsString('mini-cart-drawer__extras-tablist', $source);
         self::assertStringContainsString('data-mini-cart-tab-label', $source);
+        self::assertStringContainsString('isExtrasTabCandidate', $source);
+        self::assertStringContainsString('tabLabel(node) !== \'\'', $source);
+        self::assertStringContainsString('data-helppay-placement', $source);
         self::assertStringContainsString('shellUid', $source);
         self::assertStringContainsString('bindSwipe', $source);
         self::assertStringContainsString('weshop:mini-cart:open', $source);

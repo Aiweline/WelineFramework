@@ -101,6 +101,9 @@ $status = trim((string)($order['status'] ?? ''));
             <div class="total-row"><span><?= __('商品小计') ?></span><span><?= $escape($money((int)($moneyData['subtotal_minor'] ?? 0), $currency)) ?></span></div>
             <div class="total-row"><span><?= __('运费') ?></span><span><?= $escape($money((int)($moneyData['shipping_amount_minor'] ?? 0), $currency)) ?></span></div>
             <div class="total-row"><span><?= __('税费') ?></span><span><?= $escape($money((int)($moneyData['tax_amount_minor'] ?? 0), $currency)) ?></span></div>
+            <?php if ((int)($moneyData['cod_fee_amount_minor'] ?? 0) > 0): ?>
+            <div class="total-row"><span><?= __('货到付款手续费') ?></span><span><?= $escape($money((int)$moneyData['cod_fee_amount_minor'], $currency)) ?></span></div>
+            <?php endif; ?>
             <div class="total-row total"><span><?= __('订单总额') ?></span><strong><?= $escape($money((int)($moneyData['grand_total_minor'] ?? 0), $currency)) ?></strong></div>
         </div>
     </section>

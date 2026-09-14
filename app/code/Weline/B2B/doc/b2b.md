@@ -6,7 +6,8 @@
 - **双注册**：B2B 启用后自动向 Cart **与** Order 注册 `tob`；卸载后 Registry 无 `tob`，零售继续，历史 tob 单只读 fail-soft。
 - **热路径**：未装/卸载后加车、列表价、结账 **零** B2B 类探测与 miss 重试税。
 - **SellingModePolicy**（`2.4.0` / 产品旗标水合 `2.6.58` / 显示门禁 `2.6.69`）：Website/Store ConfigStore 键 `selling_mode_toc_enabled` / `selling_mode_tob_enabled`（默认 true）；商品 EAV `selling_mode_tob` fail-soft（`ProductSellingModeFlags`）；会话仅偏好；MOQ/step 默认 5。
-- **批发显示门禁（`2.6.69`）**：`ProductWholesaleEligibility` 要求产品 tob 允许 + SKU 本站生效价目档才渲染 PDP 批发段/阶梯价；否则当正常品。无资格仍可进 tob 车（零售价，跳过 moq）；有资格仍走 moq/step + 价目。
+- **批发显示门禁（`2.6.69`+ / 加购路由 `2.6.77`）**：`ProductWholesaleEligibility` 要求产品 tob 允许 + **SKU 本站生效价目档**才渲染 PDP 批发段/阶梯价；站点默认 VIP 模板单独存在不放行展示。否则当正常品。**无资格加购进 toc（零售车）**（`B2BCartOfferRouting` remap）；有资格仍走 tob + moq/step + 价目。
+- **默认批发模板与护栏（`2.6.73`）**：website 配置 VIP0–12 起订/折扣模板 + `max_discount_bps`（默认 2000）/ `min_margin_bps`（默认 0）；无显式价目时运行时继承；改模板不回刷 PriceList/订单；写路径与配置保存拒超折扣；模板保存清店面 FPC。
 - **PDP 阶梯价说明（`2.6.58`/`2.6.69`/`2.6.70`）**：有资格时 `qty-tiers` 零售 SSR 仍输出 DOM（`hidden`），切批发即时 unhide；无资格/关批发则不渲染。后台：`edit::offers-after` 内嵌启用批发与 SKU 阶梯编辑（website 级价目 copy-forward）；`basic-after` 为镜像开关；创建仅 basic 开关。
 - **商品阶梯写入（`2.6.70`/`2.6.71`）**：`ProductSkuQtyTierAdminService::upsertSkuQtyTiers`；`save-product-sku-tiers`；ControlCenter 单档兼容 + 可选附加档；商品 Hook 深链/保存 URL 用 `getBackendUrl('b2b/backend/…')`（`2.6.71` 修 Product 宿主前缀 404）。
 - **批发配置页（`2.6.15`）**：菜单「批发配置」→ `Controller/Backend/Config`；Extends 声明同上二键；本页 `<w:config:embed>` 快捷启停（参照客服配置）；范围走 URL `target_scope`。

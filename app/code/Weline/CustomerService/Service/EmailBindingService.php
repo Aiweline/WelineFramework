@@ -62,8 +62,7 @@ class EmailBindingService
 
         $verificationToken = $this->generateVerificationToken($email, $sessionToken);
         $verificationUrl = $this->buildVerificationUrl($verificationToken);
-        $subject = (string) __('客服服务 - 邮箱绑定验证');
-        $content = $this->buildVerificationEmailContent($email, $verificationUrl);
+        $this->lastVerificationUrl = $verificationUrl;
 
         $module = $this->resolveSmtpModule();
         if ($module === null) {
@@ -80,13 +79,30 @@ class EmailBindingService
         }
 
         try {
-            $result = w_query('smtp', 'send', [
+            $params = [
                 'module' => $module,
                 'channel' => 'Weline_CustomerService::email_binding',
                 'to' => ['email' => $email, 'name' => $email],
-                'subject' => $subject,
-                'content' => $content,
-            ]);
+                'vars' => [
+                    'email' => $email,
+                    'verification_url' => $verificationUrl,
+                ],
+            ];
+            try {
+                $identity = \Weline\Framework\Runtime\RequestContext::scopeIdentity();
+                if ($identity instanceof \Weline\Framework\Runtime\ScopeIdentity && !$identity->isGlobal()) {
+                    $code = trim((string)($identity->websiteCode ?? ''));
+                    if ($code !== '') {
+                        $params['website_code'] = $code;
+                    }
+                }
+                $lang = trim((string)\Weline\Framework\Runtime\RequestContext::getWelineUserLang());
+                if ($lang !== '' && $lang !== 'default') {
+                    $params['locale'] = $lang;
+                }
+            } catch (\Throwable) {
+            }
+            $result = w_query('smtp', 'send', $params);
 
             if (is_array($result) && !empty($result['success'])) {
                 return true;

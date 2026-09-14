@@ -8,7 +8,12 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\Smtp\Helper\Data;
 use Weline\Smtp\Helper\SmtpSender;
+use Weline\Smtp\Model\SmtpMailTemplate;
 use Weline\Smtp\Model\SmtpSendLog;
+use Weline\Smtp\Service\MailChannelCollector;
+use Weline\Smtp\Service\MailTemplateRenderer;
+use Weline\Smtp\Service\MailTemplateResolver;
+use Weline\Smtp\Service\MailTemplateSendContext;
 
 /**
  * SMTP 统一查询器
@@ -150,18 +155,92 @@ class SmtpQueryProvider implements QueryProviderInterface
         $attachment = $params['attachment'] ?? '';
         $cc = $params['cc'] ?? '';
         $bcc = $params['bcc'] ?? '';
+        $templateId = 0;
+        $resolvedLocale = '';
+        $useTemplate = !array_key_exists('use_template', $params) || filter_var($params['use_template'], FILTER_VALIDATE_BOOLEAN);
 
         if (empty($to)) {
             return ['success' => false, 'message' => __('收件人不能为空')];
-        }
-        if ($subject === '') {
-            return ['success' => false, 'message' => __('邮件主题不能为空')];
         }
 
         /** @var Data $data */
         $data = ObjectManager::getInstance(Data::class);
         /** @var SmtpSender $sender */
         $sender = ObjectManager::getInstance(SmtpSender::class);
+
+        if ($channel !== '' && $useTemplate) {
+            /** @var MailTemplateSendContext $ctxService */
+            $ctxService = ObjectManager::getInstance(MailTemplateSendContext::class);
+            $ctx = $ctxService->resolve($params);
+            if (!$ctx['ok']) {
+                return ['success' => false, 'message' => $ctx['message']];
+            }
+            /** @var MailTemplateResolver $resolver */
+            $resolver = ObjectManager::getInstance(MailTemplateResolver::class);
+            $hit = $resolver->resolve($channel, $ctx['storage_scope'], $ctx['locale'], $ctx['website_default']);
+            if ($hit === null) {
+                return ['success' => false, 'message' => __('发信渠道 %{1} 未找到可用邮件模板', [$channel])];
+            }
+            /** @var SmtpMailTemplate $tpl */
+            $tpl = $hit['template'];
+            $templateId = (int)$tpl->getId();
+            $resolvedLocale = (string)$hit['locale'];
+            $storageScope = (string)$hit['storage_scope'];
+
+            $allowed = [];
+            /** @var MailChannelCollector $collector */
+            $collector = ObjectManager::getInstance(MailChannelCollector::class);
+            $meta = $collector->getByCode($channel) ?? [];
+            foreach ($meta['variables'] ?? [] as $var) {
+                $code = trim((string)($var['code'] ?? ''));
+                if ($code !== '') {
+                    $allowed[] = $code;
+                }
+            }
+            $vars = is_array($params['vars'] ?? null) ? $params['vars'] : [];
+            /** @var MailBrandContextService $brandContext */
+            $brandContext = ObjectManager::getInstance(MailBrandContextService::class);
+            $vars = $brandContext->mergeInto($vars, $storageScope);
+            $allowed = array_values(array_unique(array_merge(
+                $allowed,
+                MailBrandContextService::variableCodes()
+            )));
+            /** @var MailTemplateRenderer $renderer */
+            $renderer = ObjectManager::getInstance(MailTemplateRenderer::class);
+            $subjectTpl = (string)$tpl->getData(SmtpMailTemplate::schema_fields_SUBJECT);
+            $bodyTpl = (string)$tpl->getData(SmtpMailTemplate::schema_fields_BODY_HTML);
+            $altTpl = (string)$tpl->getData(SmtpMailTemplate::schema_fields_BODY_TEXT);
+            /** @var MailTemplateShellComposer $shellComposer */
+            $shellComposer = ObjectManager::getInstance(MailTemplateShellComposer::class);
+            $bodyTpl = $shellComposer->extractBodyFragment($bodyTpl);
+            $subject = $renderer->render($subjectTpl, $vars, $allowed);
+            $content = $renderer->render($bodyTpl, $vars, $allowed);
+            $content = $shellComposer->wrap($content, $resolvedLocale !== '' ? $resolvedLocale : $ctx['locale'], [
+                'preheader' => $subject,
+            ]);
+            // 壳内还有 {{var.site_*}} 等品牌变量，再渲染一次
+            $content = $renderer->render($content, $vars, $allowed);
+            if ($altTpl !== '') {
+                $alt = $renderer->render($altTpl, $vars, $allowed);
+            } elseif ($alt === '') {
+                $alt = $renderer->htmlToText($content);
+            }
+            $overrideSubject = trim((string)($params['override_subject'] ?? ''));
+            $overrideContent = (string)($params['override_content'] ?? '');
+            if ($overrideSubject !== '') {
+                $subject = $overrideSubject;
+            }
+            if ($overrideContent !== '') {
+                $content = $overrideContent;
+            }
+            $params['scope'] = $storageScope;
+            $params['locale'] = $resolvedLocale;
+        }
+
+        if ($subject === '') {
+            return ['success' => false, 'message' => __('邮件主题不能为空')];
+        }
+
         $scope = $this->resolveScopeParam($params);
         $storageScope = $data->resolveScope($scope);
 
@@ -173,6 +252,11 @@ class SmtpQueryProvider implements QueryProviderInterface
             $senderCode = $bound;
         }
 
+        $templateMeta = [
+            '__template_id' => $templateId,
+            '__locale' => $resolvedLocale,
+        ];
+
         if ($senderCode !== null && $senderCode !== '') {
             $senderConfig = $data->getSenderByCode((string) $senderCode, $module, $scope);
             if (!$senderConfig) {
@@ -180,7 +264,7 @@ class SmtpQueryProvider implements QueryProviderInterface
             }
             if ((string)($senderConfig['source_type'] ?? 'external') === 'mail_account') {
                 return $this->sendWithMailAccountSender(
-                    $senderConfig,
+                    array_merge($senderConfig, $templateMeta),
                     $from,
                     $to,
                     $subject,
@@ -209,6 +293,7 @@ class SmtpQueryProvider implements QueryProviderInterface
                 $senderConfig['__channel'] = $channel;
                 $senderConfig['__sender_code'] = (string)$senderCode;
                 $senderConfig['__storage_scope'] = $storageScope;
+                $senderConfig = array_merge($senderConfig, $templateMeta);
                 $ok = $sender->sendWithConfig(
                     $fromResolved,
                     $to,
@@ -248,6 +333,8 @@ class SmtpQueryProvider implements QueryProviderInterface
             '__channel' => $channel,
             '__sender_code' => is_scalar($senderCode) ? (string)$senderCode : '',
             '__storage_scope' => $storageScope,
+            '__template_id' => $templateId,
+            '__locale' => $resolvedLocale,
         ];
         try {
             $ok = $sender->sendWithConfig(
@@ -326,7 +413,9 @@ class SmtpQueryProvider implements QueryProviderInterface
                         $module,
                         $channel,
                         $senderCode !== '' ? $senderCode : (string)($senderConfig['code'] ?? ''),
-                        $storageScope
+                        $storageScope,
+                        (int)($senderConfig['__template_id'] ?? 0),
+                        (string)($senderConfig['__locale'] ?? '')
                     );
                     return ['success' => true, 'message' => __('发送成功')];
                 }
@@ -347,6 +436,8 @@ class SmtpQueryProvider implements QueryProviderInterface
             '__channel' => $channel,
             '__sender_code' => $senderCode !== '' ? $senderCode : (string)($senderConfig['code'] ?? ''),
             '__storage_scope' => $storageScope,
+            '__template_id' => (int)($senderConfig['__template_id'] ?? 0),
+            '__locale' => (string)($senderConfig['__locale'] ?? ''),
         ]);
 
         /** @var SmtpSender $sender */
@@ -401,7 +492,9 @@ class SmtpQueryProvider implements QueryProviderInterface
         string $module,
         string $channel = '',
         string $senderCode = '',
-        string $storageScope = ''
+        string $storageScope = '',
+        int $templateId = 0,
+        string $locale = ''
     ): void {
         /** @var SmtpSendLog $sendLog */
         $sendLog = ObjectManager::getInstance(SmtpSendLog::class);
@@ -423,8 +516,14 @@ class SmtpQueryProvider implements QueryProviderInterface
                 ->setData(SmtpSendLog::schema_fields_MODULE, $module)
                 ->setData(SmtpSendLog::schema_fields_CHANNEL, $channel)
                 ->setData(SmtpSendLog::schema_fields_SENDER_CODE, $senderCode)
-                ->setData(SmtpSendLog::schema_fields_STORAGE_SCOPE, $storageScope)
-                ->save();
+                ->setData(SmtpSendLog::schema_fields_STORAGE_SCOPE, $storageScope);
+            if (defined(SmtpSendLog::class . '::schema_fields_TEMPLATE_ID')) {
+                $sendLog->setData(SmtpSendLog::schema_fields_TEMPLATE_ID, $templateId);
+            }
+            if (defined(SmtpSendLog::class . '::schema_fields_LOCALE')) {
+                $sendLog->setData(SmtpSendLog::schema_fields_LOCALE, $locale);
+            }
+            $sendLog->save();
         } catch (\Throwable) {
         }
     }
@@ -504,12 +603,19 @@ class SmtpQueryProvider implements QueryProviderInterface
                     'description' => __('发送邮件'),
                     'params' => [
                         ['name' => 'to', 'type' => 'string|array', 'required' => true, 'description' => __('收件人')],
-                        ['name' => 'subject', 'type' => 'string', 'required' => true, 'description' => __('主题')],
-                        ['name' => 'content', 'type' => 'string', 'required' => true, 'description' => __('HTML 正文')],
+                        ['name' => 'subject', 'type' => 'string', 'required' => false, 'description' => __('主题（无 channel 模板时必填）')],
+                        ['name' => 'content', 'type' => 'string', 'required' => false, 'description' => __('HTML 正文（无 channel 模板时建议填写）')],
+                        ['name' => 'channel', 'type' => 'string', 'required' => false, 'description' => __('发信渠道 code，有则走模板')],
+                        ['name' => 'vars', 'type' => 'array', 'required' => false, 'description' => __('模板变量')],
+                        ['name' => 'locale', 'type' => 'string', 'required' => false, 'description' => __('模板语言')],
+                        ['name' => 'use_template', 'type' => 'bool', 'required' => false, 'description' => __('是否使用模板，默认 true')],
+                        ['name' => 'override_subject', 'type' => 'string', 'required' => false, 'description' => __('覆盖模板主题')],
+                        ['name' => 'override_content', 'type' => 'string', 'required' => false, 'description' => __('覆盖模板正文')],
                         ['name' => 'from', 'type' => 'string|array|null', 'required' => false, 'description' => __('发件人，空则用配置')],
                         ['name' => 'module', 'type' => 'string', 'required' => false, 'description' => __('使用哪一模块的 SMTP 配置')],
                         ['name' => 'scope', 'type' => 'string', 'required' => false, 'description' => __('SystemConfig storage_scope，如 website.default.default')],
                         ['name' => 'website_code', 'type' => 'string', 'required' => false, 'description' => __('网站 code，可推导 website 级 scope')],
+                        ['name' => 'sender_code', 'type' => 'string', 'required' => false, 'description' => __('传输账户 code（无 channel 时）')],
                         ['name' => 'alt', 'type' => 'string', 'required' => false],
                         ['name' => 'attachment', 'type' => 'string|array', 'required' => false],
                         ['name' => 'cc', 'type' => 'string|array', 'required' => false],

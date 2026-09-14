@@ -347,11 +347,12 @@ WelineFramework 提供了完整的自动化测试解决方案：
 - 模块详情支持逐行“运行此用例”、复选框批量运行及“运行整个模块”；未选择用例时“运行选中”会阻止提交，避免误跑整个模块
 - 固化 E2E：`Test/E2E/backend/Framework-test-management.spec.js`（case `FW-TEST-MGMT-001`…`008`）；断言 UI 与 `runE2e` 入参范围，不对被测模块最终结果做 pass 断言（stub 拦截入队，避免嵌套 Playwright）；`007` 覆盖「总览开 UI → 行内直跑 ui_enabled=true」；`008` 覆盖「开关写入系统配置后刷新仍保持」
 
-运行该套件：
+运行该套件（默认无头；调试可加 `--headed`）：
 
 ```bash
 PLAYWRIGHT_INSTANCE_NAME=ai-test-{your-instance} \
-  php bin/w e2e:run --module=Weline_Framework --case-id=FW-TEST-MGMT --headless --project=chromium
+  php bin/w e2e:run --module=Weline_Framework --case-id=FW-TEST-MGMT --project=chromium
 ```
 
+`php bin/w e2e:run` **默认无头**（不再自动追加 `--headed`）；仅显式 `--headed` / `--ui` 或后台「UI 测试」开启时才弹浏览器。
 基础设施目录：`app/code/Weline/Framework/Test/`（原 `UnitTest/` 已迁入此处，命名空间 `Weline\Framework\Test`）。

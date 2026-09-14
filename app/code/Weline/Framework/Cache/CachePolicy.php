@@ -24,6 +24,7 @@ final readonly class CachePolicy
         array $dependencies = [],
         public int $freshTtlSeconds = 300,
         public int $staleTtlSeconds = 1800,
+        public int $singleFlightWaitMs = 0,
     ) {
         if (trim($resource) === '' || trim($pool) === '') {
             throw new \InvalidArgumentException('Cache policy resource and pool must not be empty.');
@@ -38,6 +39,9 @@ final readonly class CachePolicy
         if ($freshTtlSeconds < 1 || $staleTtlSeconds < 0) {
             throw new \InvalidArgumentException('Cache policy requires a positive fresh TTL and a non-negative stale TTL.');
         }
+        if ($singleFlightWaitMs < 0 || $singleFlightWaitMs > 5000) {
+            throw new \InvalidArgumentException('Cache policy single-flight wait must be between 0 and 5000 milliseconds.');
+        }
         $vary = array_values(array_unique($vary));
         $dependencies = array_values(array_unique($dependencies));
         sort($vary, SORT_STRING);
@@ -47,7 +51,7 @@ final readonly class CachePolicy
     }
 
     /** @return list<string> */
-    public function namespacePaths(?ScopeIdentity $identity): array
+    public function namespacePaths(?ScopeIdentity $identity, array $translationLocales = []): array
     {
         $path = new NamespacePath();
         $paths = [];
@@ -56,7 +60,15 @@ final readonly class CachePolicy
             // dictionary. Keep its authority global instead of manufacturing
             // a storefront/website copy of the dependency.
             if (str_starts_with($domain, 'global/')) {
-                $paths[] = $path->canonicalize($domain);
+                $namespace = $path->canonicalize($domain);
+                if ($namespace === \Weline\Framework\Phrase\DictionaryCacheNamespace::NAMESPACE) {
+                    // The same frozen language chain drives both the key and its dependencies.
+                    // Unspecified/all-language readers keep the aggregate content dependency.
+                    $locales = in_array('lang', $this->vary, true) ? $translationLocales : [];
+                    array_push($paths, ...\Weline\Framework\Phrase\DictionaryCacheNamespace::namespacePaths($locales));
+                } else {
+                    $paths[] = $namespace;
+                }
                 continue;
             }
             $segments = explode('/', $domain);
@@ -96,6 +108,7 @@ final readonly class CachePolicy
             'dependencies' => $this->dependencies,
             'fresh_ttl' => $this->freshTtlSeconds,
             'stale_ttl' => $this->staleTtlSeconds,
+            'single_flight_wait_ms' => $this->singleFlightWaitMs,
         ];
     }
 }

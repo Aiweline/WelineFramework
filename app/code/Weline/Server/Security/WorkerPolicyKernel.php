@@ -64,6 +64,8 @@ final class WorkerPolicyKernel
         'js' => true,
         'map' => true,
         'mjs' => true,
+        'm4a' => true,
+        'aac' => true,
         'mp3' => true,
         'mp4' => true,
         'ogg' => true,

@@ -72,14 +72,30 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
             }
         }
 
-        $published = $this->publishedState($context, $allowRequestCache);
-        $snapshot = [
-            'payload' => $published['payload'],
-            'release_id' => $published['release_id'],
-            'source_scope' => $published['source_scope'],
-        ];
+        $readSnapshot = function () use ($context, $allowRequestCache): array {
+            $published = $this->publishedState($context, $allowRequestCache);
+            return [
+                'payload' => $published['payload'],
+                'release_id' => $published['release_id'],
+                'source_scope' => $published['source_scope'],
+            ];
+        };
+        $shareSnapshot = $allowRequestCache && \in_array($context->resourceType, [
+            ThemeEditorContext::RESOURCE_LAYOUT,
+            ThemeEditorContext::RESOURCE_META,
+            ThemeEditorContext::RESOURCE_APPEARANCE,
+            ThemeEditorContext::RESOURCE_I18N,
+        ], true);
+        // 完整资源身份独立于访问者上下文；事务和绑定投影继续使用原读取链。
+        $snapshot = $shareSnapshot
+            ? ObjectManager::getInstance(\Weline\Framework\Cache\Service\StorefrontScopeHotCache::class)->rememberPolicy(
+                \Weline\Theme\Service\StorefrontThemeCacheCoordinator::publishedSnapshotPolicy(),
+                $context->identityHash(),
+                $readSnapshot,
+            )
+            : $readSnapshot();
         if ($allowRequestCache) {
-            // 复用工作区原有请求缓存及写入口的清理追踪，不缓存模型或编辑器溯源数据。
+            // 挂回当前请求，并保留工作区写入口的清理追踪；共享层只保存原始快照。
             $this->rememberRequestLoad($cacheKey, $snapshot);
         }
 
@@ -911,14 +927,8 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
 
     private function shouldInheritDefaultLocalePublished(ThemeEditorContext $context): bool
     {
-        if ($context->locale === 'default') {
-            return false;
-        }
-
-        return \in_array($context->resourceType, [
-            ThemeEditorContext::RESOURCE_LAYOUT,
-            ThemeEditorContext::RESOURCE_META,
-        ], true);
+        // LAYOUT/META identity is always default; I18N keeps its own locale and must not inherit.
+        return false;
     }
 
     /** @return array{payload:array<string,mixed>,release_id:?int,source_scope:string,release:?ThemeScopeRelease} */
@@ -1212,7 +1222,7 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
             ThemeScopeReleaseBatch::schema_fields_THEME_ID => $context->themeId,
             ThemeScopeReleaseBatch::schema_fields_LAYOUT_TYPE => $context->layoutType,
             ThemeScopeReleaseBatch::schema_fields_LAYOUT_OPTION => $context->layoutOption,
-            ThemeScopeReleaseBatch::schema_fields_LOCALE => $context->locale,
+            ThemeScopeReleaseBatch::schema_fields_LOCALE => $context->identityLocale(),
             ThemeScopeReleaseBatch::schema_fields_TARGET_TYPE => $context->targetType,
             ThemeScopeReleaseBatch::schema_fields_TARGET_ID => $context->targetId,
             ThemeScopeReleaseBatch::schema_fields_STATE => ThemeScopeReleaseBatch::STATE_PREPARING,
@@ -1416,7 +1426,7 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
             ThemeScopeReleaseBatch::schema_fields_THEME_ID => $context->themeId,
             ThemeScopeReleaseBatch::schema_fields_LAYOUT_TYPE => $context->layoutType,
             ThemeScopeReleaseBatch::schema_fields_LAYOUT_OPTION => $context->layoutOption,
-            ThemeScopeReleaseBatch::schema_fields_LOCALE => $context->locale,
+            ThemeScopeReleaseBatch::schema_fields_LOCALE => $context->identityLocale(),
             ThemeScopeReleaseBatch::schema_fields_TARGET_TYPE => $context->targetType,
             ThemeScopeReleaseBatch::schema_fields_TARGET_ID => $context->targetId,
             ThemeScopeReleaseBatch::schema_fields_STATE => ThemeScopeReleaseBatch::STATE_PREPARING,

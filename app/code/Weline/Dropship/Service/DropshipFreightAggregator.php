@@ -30,10 +30,18 @@ class DropshipFreightAggregator
             if (!$p instanceof DropshipFreightProviderInterface) {
                 continue;
             }
+            $best = null;
             foreach ($p->quoteFreight($request) as $opt) {
-                $segments[] = array_merge($opt, ['provider_code' => $code]);
-                $total += (int)($opt['amount_minor'] ?? 0);
-                $currency = (string)($opt['currency'] ?? $currency);
+                $seg = array_merge($opt, ['provider_code' => $code]);
+                $segments[] = $seg;
+                $amount = (int)($opt['amount_minor'] ?? 0);
+                if ($best === null || $amount < $best) {
+                    $best = $amount;
+                    $currency = (string)($opt['currency'] ?? $currency);
+                }
+            }
+            if ($best !== null) {
+                $total += $best;
             }
         }
 

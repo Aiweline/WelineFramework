@@ -37,6 +37,15 @@ interface SocialLoginProviderInterface
     /** Lower sorts first among discovered providers. */
     public function getSortOrder(): int;
 
+    /**
+     * CSP sources this social-login vendor needs (collected by Customer Extends into app defaults).
+     *
+     * Declare script/frame/connect hosts for GSI, OAuth authorize, or SDK prompts.
+     *
+     * @return array<string, list<string>> directive => absolute https hosts / keywords
+     */
+    public function cspDirectives(): array;
+
     /** Customer guide page title. */
     public function getGuideTitle(): string;
 

@@ -1,0 +1,75 @@
+<?php
+/**
+ * Shared order-chat accordion (customer account + backend order view).
+ *
+ * @var string $orderRef
+ * @var string $chatRole customer|merchant
+ * @var string|null $customerIdHint
+ */
+$orderRef = trim((string)($orderRef ?? ''));
+if ($orderRef === '') {
+    return;
+}
+$chatRole = strtolower(trim((string)($chatRole ?? 'customer'))) === 'merchant' ? 'merchant' : 'customer';
+$customerIdHint = trim((string)($customerIdHint ?? ''));
+$chatUnread = max(0, (int)($chatUnread ?? $unread ?? 0));
+$chatOpen = !empty($chatOpen) || $chatUnread > 0;
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$panelId = 'b2b-order-chat-' . substr(hash('sha256', $orderRef . ':' . $chatRole), 0, 12);
+?>
+<div class="b2b-order-chat"
+     data-b2b-order-chat-accordion="1"
+     data-order-ref="<?= $escape($orderRef) ?>"
+     data-chat-role="<?= $escape($chatRole) ?>"
+     <?php if ($customerIdHint !== ''): ?>data-customer-id="<?= $escape($customerIdHint) ?>"<?php endif; ?>
+     <?php if ($chatOpen): ?>data-open="1"<?php endif; ?>
+     data-testid="b2b-order-chat-accordion">
+    <div class="b2b-order-chat__toolbar">
+        <button type="button"
+                class="w-button"
+                data-variant="secondary"
+                data-size="sm"
+                data-b2b-order-chat-toggle
+                data-testid="b2b-order-chat-toggle"
+                aria-expanded="false"
+                aria-controls="<?= $escape($panelId) ?>">
+            <span class="b2b-order-chat__toggle-closed"><lang>订单沟通</lang></span>
+            <span class="b2b-order-chat__toggle-open" hidden><lang>收起沟通</lang></span>
+            <?php if ($chatUnread > 0): ?>
+                <span class="account-menu-signal-badge b2b-order-chat__unread"
+                      data-account-menu-signal-badge="1"
+                      data-testid="b2b-order-chat-unread"
+                      aria-label="<?= $escape(__('未读消息')) ?>">
+                    <?= $escape((string)$chatUnread) ?>
+                </span>
+            <?php endif; ?>
+        </button>
+    </div>
+    <div class="b2b-order-chat__panel"
+         id="<?= $escape($panelId) ?>"
+         hidden
+         data-b2b-order-chat-panel
+         data-testid="b2b-order-chat-panel">
+        <div class="b2b-order-chat__status" data-b2b-order-chat-status hidden aria-live="polite"></div>
+        <ul class="b2b-order-chat__messages" data-b2b-order-chat-messages role="log" aria-live="polite"></ul>
+        <form class="b2b-order-chat__composer" data-b2b-order-chat-form>
+            <label class="w-field">
+                <span class="w-field__label"><lang>留言</lang></span>
+                <textarea class="w-textarea"
+                          rows="3"
+                          maxlength="4000"
+                          data-b2b-order-chat-input
+                          placeholder="<?= $escape(__('输入与商家/客户的沟通内容')) ?>"
+                          required></textarea>
+            </label>
+            <button type="submit"
+                    class="w-button"
+                    data-variant="primary"
+                    data-size="sm"
+                    data-b2b-order-chat-send
+                    data-testid="b2b-order-chat-send">
+                <lang>发送</lang>
+            </button>
+        </form>
+    </div>
+</div>

@@ -4,7 +4,7 @@
 
 ## 当前入口
 
-开发前先完成 `prepare_project` 并调用 `resolve_task_context`，再读：
+可选：可完成 `prepare_project` 并调用 `resolve_task_context` 检索后再读（编码不强制）：
 
 1. `app/code/Weline/Index/doc/需求.md`
 2. `app/code/Weline/Index/doc/开发日志.md`

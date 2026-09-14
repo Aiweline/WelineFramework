@@ -443,8 +443,9 @@ class Partials extends Block
 
             return KeyBuilder::environmentHash([
                 // v9: language-switcher SSR no longer inlines flags; bust stale SVG chrome.
-                // v11: frontend header chrome is always guest-SSR; auth no longer splits the bucket.
-                'schema' => 'chrome-partial-v11-guest-header',
+                // v12：账户与购物车共享中性首屏，旧编译时固化的购物车摘要必须失效。
+                // Frontend header chrome is always guest-SSR; auth no longer splits the bucket.
+                'schema' => 'chrome-partial-v12-guest-chrome',
                 'nested_widgets' => ($area === 'frontend' && $type === 'header')
                     ? $this->frontendHeaderNestedChromeFingerprint()
                     : '',
@@ -481,15 +482,11 @@ class Partials extends Block
                 'layout_option' => (string)($themeData['layoutOption'] ?? ''),
                 'data' => $this->resolveChromePartialCacheDataContext($area, $type, $data),
             ], [
-                // Chrome identity is intentionally narrower than a request:
-                // website + language + currency + explicit theme/auth data.
-                // Route, host aliases and request-derived base URLs are page
-                // transport concerns and must not split reusable shell output.
+                // Reuse chrome across routes, but retain KeyBuilder's existing
+                // website_url/host/base_url dimensions: rendered HTML contains
+                // absolute links and cannot cross the actual URL origin.
                 'area' => false,
                 'area_route' => false,
-                'website_url' => false,
-                'host' => false,
-                'base_url' => false,
             ]);
         } catch (\Throwable) {
             return null;
@@ -504,6 +501,7 @@ class Partials extends Block
     {
         $files = [
             \dirname(__DIR__) . '/view/theme/frontend/widgets/header/account/default.phtml',
+            \dirname(__DIR__) . '/view/theme/frontend/widgets/header/mini-cart-icon/default.phtml',
             \dirname(__DIR__) . '/view/theme/frontend/partials/header/categories-horizontal-nav.phtml',
             \dirname(__DIR__) . '/view/theme/frontend/partials/header/categories-sidebar-nav.phtml',
             \dirname(__DIR__) . '/view/theme/frontend/partials/header/mega-menu-panel.phtml',
@@ -1111,6 +1109,15 @@ class Partials extends Block
                         fn() => $this->parsePartialsMetaFromFile($path, $area, $type, $defaultOption)
                     );
                 }
+                // 文件默认 meta 之上叠加 Scope 已存 param.*（如 website 配置的 logoHeight）
+                if (is_array($partialsMeta) && $partialsMeta !== []) {
+                    $partialsMeta = $this->overlayStoredPartialsParamOverrides(
+                        $partialsMeta,
+                        $metaIdentify,
+                        $scope,
+                        $area,
+                    );
+                }
                 self::rememberBounded(
                     self::$partialsMetaCache,
                     $cacheKey,
@@ -1257,6 +1264,73 @@ class Partials extends Block
         return $ctx->resolveCurrentScope($ctx->normalizeArea($area));
     }
     
+    /**
+     * Overlay Scope-stored partials param.* values onto file defaults.
+     * Enables website-scoped logoHeight etc. when getFileParams definitions are empty.
+     *
+     * @param array<string, mixed> $partialsMeta
+     * @return array<string, mixed>
+     */
+    private function overlayStoredPartialsParamOverrides(
+        array $partialsMeta,
+        string $metaIdentify,
+        string $scope,
+        string $area,
+    ): array {
+        try {
+            $theme = ObjectManager::getInstance(WelineTheme::class);
+            $theme->clearData()->clearQuery()->getActiveTheme($area === 'backend' ? 'backend' : 'frontend');
+            $themeId = (string)($theme->getId() ?? '');
+            if ($themeId === '' || $themeId === '0') {
+                return $partialsMeta;
+            }
+
+            $repo = ObjectManager::getInstance(\Weline\Meta\Api\MetaConfigRepositoryInterface::class);
+            $normalizedArea = $area === 'backend' ? 'backend' : 'frontend';
+            $identities = [];
+            $keys = [];
+            foreach (array_keys($partialsMeta) as $paramName) {
+                $paramName = (string)$paramName;
+                if ($paramName === '') {
+                    continue;
+                }
+                $keys[] = $paramName;
+                $identities[] = new \Weline\Meta\Api\Data\MetaConfigIdentity(
+                    namespace: 'theme.' . $normalizedArea,
+                    configKey: $metaIdentify . '.param.' . $paramName,
+                    scope: $scope,
+                    locale: null,
+                    identifyId: $themeId,
+                );
+            }
+            if ($identities === []) {
+                return $partialsMeta;
+            }
+            $records = $repo->resolveBatch($identities);
+            foreach ($keys as $i => $paramName) {
+                $record = $records[$i] ?? null;
+                if (!$record instanceof \Weline\Meta\Api\Data\MetaConfigRecord) {
+                    continue;
+                }
+                $value = $record->value;
+                if ($value === null || $value === '') {
+                    continue;
+                }
+                if (is_numeric($value) && isset($partialsMeta[$paramName]) && is_numeric($partialsMeta[$paramName])) {
+                    $partialsMeta[$paramName] = str_contains((string)$value, '.')
+                        ? (float)$value
+                        : (int)$value;
+                } else {
+                    $partialsMeta[$paramName] = $value;
+                }
+            }
+        } catch (\Throwable) {
+            return $partialsMeta;
+        }
+
+        return $partialsMeta;
+    }
+
     /**
      * 从文件解析 partials 的 meta 数据
      * 

@@ -68,17 +68,31 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
             }
         }
         
-        // 事件收到的就是某个模块下的全部路由信息，一次性处理落库
         if (empty($eventDataArray)) {
             return;
         }
-        
-        // 获取模块名（所有事件数据应该属于同一个模块）
-        $module = $eventDataArray[0]->getData('module');
-        if (empty($module)) {
-            return;
+
+        // 支持跨模块一次派发：按 module 分组后逐个落库（setup:upgrade 路由收集 defer 场景）
+        $byModule = [];
+        foreach ($eventDataArray as $eventData) {
+            $module = (string)$eventData->getData('module');
+            if ($module === '') {
+                continue;
+            }
+            $byModule[$module][] = $eventData;
         }
-        
+        $eventDataArray = [];
+
+        foreach ($byModule as $module => $moduleEvents) {
+            $this->processModuleControllerAttributes($module, $moduleEvents);
+        }
+    }
+
+    /**
+     * @param list<\Weline\Framework\DataObject\DataObject> $eventDataArray
+     */
+    private function processModuleControllerAttributes(string $module, array $eventDataArray): void
+    {
         // 初始化模块状态
         if (!isset($this->loaded_controller_acl_names[$module])) {
             $this->loaded_controller_acl_names[$module] = [];
@@ -131,8 +145,7 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
 
         // 该模块已全部落库，释放本模块在内存中的缓存，避免 setup:upgrade 路由收集阶段随模块数线性增长导致内存溢出
         unset($this->loaded_controller_acl_names[$module], $this->pending_method_acls[$module]);
-    }
-    
+    } 
 
     /**
      * 收集类级别权限

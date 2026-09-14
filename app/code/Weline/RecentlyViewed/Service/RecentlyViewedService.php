@@ -106,13 +106,19 @@ final class RecentlyViewedService
         $originalPrice = $originalMinor > 0
             ? $originalMinor / 100
             : (float)($offer['original_price'] ?? 0);
-        $slug = trim((string)($offer['slug'] ?? ''));
+        // Prefer catalog slug (source_slug falls back) so cards match /products
+        // listing links; numeric id is last-resort when EAV slug is missing.
+        $slug = strtolower(trim((string)($offer['slug'] ?? $offer['source_slug'] ?? '')));
+        if ($slug !== '' && preg_match('#^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$#D', $slug) !== 1) {
+            $slug = '';
+        }
         $url = $slug !== '' ? 'product/' . $slug : 'product/' . $productId;
 
         return [
             'id' => $productId,
             'product_id' => $productId,
             'name' => (string)($offer['name'] ?? ''),
+            'slug' => $slug,
             'url' => $url,
             'image' => (string)($offer['image'] ?? $offer['thumbnail'] ?? ''),
             'price' => $price,

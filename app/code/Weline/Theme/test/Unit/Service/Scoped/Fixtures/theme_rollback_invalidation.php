@@ -169,20 +169,93 @@ namespace {
         public function projectDraft(ThemeEditorContext $context, array $payload): void {}
     }
 
+    /** Test storage only: real StorefrontScopeHotCache owns keying, envelopes, L1 and L2 flow. */
+    final class FixturePublishedPool implements \Weline\Framework\Cache\Contract\CachePoolInterface
+    {
+        public array $values = [];
+        public int $reads = 0;
+        public int $writes = 0;
+        public function getIdentity(): string { return 'fixture_theme_published'; }
+        public function getTip(): string { return 'isolated snapshot fixture'; }
+        public function isPermanent(): bool { return false; }
+        public function get(string $key): mixed { ++$this->reads; return $this->values[$key] ?? null; }
+        public function set(string $key, mixed $value, int $ttl = 0): bool { ++$this->writes; $this->values[$key] = $value; return true; }
+        public function delete(string $key): bool { unset($this->values[$key]); return true; }
+        public function clear(): bool { $this->values = []; return true; }
+        public function has(string $key): bool { return array_key_exists($key, $this->values); }
+        public function getMultiple(array $keys): array { $out = []; foreach ($keys as $key) { $out[$key] = $this->get($key); } return $out; }
+        public function setMultiple(array $values, int $ttl = 0): bool { foreach ($values as $key => $value) { $this->set($key, $value, $ttl); } return true; }
+        public function deleteMultiple(array $keys): bool { foreach ($keys as $key) { $this->delete($key); } return true; }
+        public function getStats(): array { return ['reads' => $this->reads, 'writes' => $this->writes]; }
+        public function getCustom(string $key, bool $website = false, bool $lang = false, bool $currency = false): mixed { return $this->get($key); }
+        public function setCustom(string $key, mixed $value, int $ttl = 0, bool $website = false, bool $lang = false, bool $currency = false): bool { return $this->set($key, $value, $ttl); }
+        public function deleteCustom(string $key, bool $website = false, bool $lang = false, bool $currency = false): bool { return $this->delete($key); }
+        public function hasCustom(string $key, bool $website = false, bool $lang = false, bool $currency = false): bool { return $this->has($key); }
+    }
+    final class FixturePublishedCacheManager extends \Weline\Framework\Cache\CacheManager
+    {
+        public function __construct(private FixturePublishedPool $fixturePool) {}
+        public function pool(string $identity): \Weline\Framework\Cache\Contract\CachePoolInterface { return $this->fixturePool; }
+    }
+    final class FixturePublishedGenerations implements \Weline\Framework\Cache\Contract\NamespaceGenerationInterface
+    {
+        public function fingerprint(array $namespaces): string
+        {
+            sort($namespaces, SORT_STRING);
+            // Same SQLite row modified transactionally by this fixture's existing w_changed().
+            return hash('sha256', json_encode([$namespaces, (int)Model::$pdo->query('SELECT generation FROM generations')->fetchColumn()]));
+        }
+        public function bumpMany(array $namespaces): array { throw new \LogicException('Use the existing transactional fixture changed entry.'); }
+        public function bump(string $namespace): array { throw new \LogicException('Use the existing transactional fixture changed entry.'); }
+    }
+    final class FixturePublishedFlight implements \Weline\Framework\Cache\Contract\SingleFlightInterface
+    {
+        public function acquire(string $key, int $timeoutMs = 1500, int $ttlSeconds = 30): ?string { return 'fixture-token'; }
+        public function release(string $key, string $token): void {}
+    }
+    function installPublishedFixtureCarrier(ScopeIdentity $identity): void
+    {
+        \Weline\Framework\Runtime\RequestContext::setWelineArea('cli');
+        \Weline\Framework\Runtime\RequestContext::setWelineUserLang('en_US');
+        \Weline\Framework\Runtime\RequestContext::setWelineUserCurrency('CNY');
+        \Weline\Framework\Cache\StorefrontCacheKeyContext::install(new \Weline\Framework\Cache\StorefrontCacheKeyContext(
+            $identity, 'en_US', 'CNY', hash('sha256', 'fixture-frozen'), hash('sha256', $identity->canonicalKey()), true,
+        ));
+    }
+    function nextPublishedFixtureRequest(string $id, ?ScopeIdentity $ambient = null): void
+    {
+        \Weline\Framework\Context::enter(new \Weline\Framework\Context(['meta' => ['type' => 'request', 'mode' => 'cli']]));
+        \Weline\Framework\Runtime\RequestContext::setId($id);
+        installPublishedFixtureCarrier($ambient ?? ScopeIdentity::channel(7, 'shop', 'cn', 'web', ScopeIdentity::MODE_NORMAL));
+    }
+
     function remainingPointers(): int
     {
         return count(array_filter((new ThemeScopeWorkspace())->fetchArray(), static fn(array $row): bool => (int)($row['published_release_id'] ?? 0) > 0));
     }
     function seedPublished(ThemeEditorContext $item, array $payload): void
     {
+        $hash = $item->identityHash();
+        // Structure identity is locale-neutral: re-seeds must replace the same hash, not fork by locale.
+        foreach ([ThemeScopeWorkspace::class, ThemeScopeRelease::class] as $kind) {
+            $query = Model::$pdo->prepare('SELECT id, payload FROM records WHERE kind = ?');
+            $query->execute([$kind]);
+            while ($row = $query->fetch(\PDO::FETCH_ASSOC)) {
+                $decoded = json_decode((string)$row['payload'], true);
+                if (($decoded['identity_hash'] ?? null) === $hash) {
+                    $delete = Model::$pdo->prepare('DELETE FROM records WHERE kind = ? AND id = ?');
+                    $delete->execute([$kind, (int)$row['id']]);
+                }
+            }
+        }
         $release = new ThemeScopeRelease();
         $release->setData([
-            'identity_hash' => $item->identityHash(), 'resource_type' => $item->resourceType,
+            'identity_hash' => $hash, 'resource_type' => $item->resourceType,
             'scope' => $item->scope->storageScope, 'revision_id' => 1,
             'effective_payload_json' => json_encode($payload),
         ])->save();
         (new ThemeScopeWorkspace())->setData([
-            'identity_hash' => $item->identityHash(), 'scope' => $item->scope->storageScope,
+            'identity_hash' => $hash, 'scope' => $item->scope->storageScope,
             'scope_kind' => $item->scope->identity->scopeKind, 'website_id' => 7, 'store_mode' => ScopeIdentity::MODE_NORMAL,
             'area' => $item->area, 'resource_type' => $item->resourceType, 'theme_id' => $item->identityThemeId(),
             'layout_type' => $item->identityLayoutType(), 'layout_option' => $item->identityLayoutOption(),
@@ -223,7 +296,9 @@ namespace {
         $parent = $context->withResource($resource);
         $child = $parent->withScope($scopes->contextFromIdentity(ScopeIdentity::store(7, 'shop', 'cn', ScopeIdentity::MODE_NORMAL)));
         foreach ([$parent, $child] as $item) {
-            seedPublished($item, ['nodes' => [], 'brand' => ['favicon' => '/' . $item->scope->storageScope . '.png']]);
+            $seedPayload = ['nodes' => [], 'brand' => ['favicon' => '/' . $item->scope->storageScope . '.png']];
+            if ($GLOBALS['mode'] === 'snapshot') { $seedPayload['resource_marker'] = $resource; }
+            seedPublished($item, $seedPayload);
         }
         $sourceResources[] = [
             'resource_type' => $resource, 'identity_hash' => $parent->identityHash(), 'scope' => $parent->scope->storageScope,
@@ -260,6 +335,14 @@ namespace {
     \Weline\Framework\Runtime\RequestContext::setWelineUserCurrency('CNY');
     $error = null;
     if ($GLOBALS['mode'] === 'snapshot') {
+        $publishedPool = new FixturePublishedPool();
+        $publishedGenerations = new FixturePublishedGenerations();
+        $publishedCacheManager = new FixturePublishedCacheManager($publishedPool);
+        $publishedCache = new \Weline\Framework\Cache\Service\StorefrontScopeHotCache(
+            $publishedCacheManager, $publishedGenerations, new FixturePublishedFlight(),
+        );
+        ObjectManager::setInstance(\Weline\Framework\Cache\Service\StorefrontScopeHotCache::class, $publishedCache);
+        installPublishedFixtureCarrier(ScopeIdentity::channel(7, 'shop', 'cn', 'web', ScopeIdentity::MODE_NORMAL));
         // 同一生产服务、SQLite 事务：轻量读取、请求复用、事务内更新与回滚后读取。
         $brandContext = $context->withResource(ThemeEditorContext::RESOURCE_APPEARANCE)
             ->withScope($scopes->contextFromIdentity(ScopeIdentity::store(7, 'shop', 'cn', ScopeIdentity::MODE_NORMAL)));
@@ -293,17 +376,41 @@ namespace {
         }
         $afterRollback = $read($brandContext);
         $unrelatedRetained = \Weline\Framework\Runtime\RequestContext::get('theme.scoped.workspace.load.v1.unrelated-fixture') === ['keep' => true];
-        \Weline\Framework\Context::enter(new \Weline\Framework\Context(['meta' => ['type' => 'request', 'mode' => 'cli']]));
-        \Weline\Framework\Runtime\RequestContext::setId('theme-snapshot-second-request');
+        nextPublishedFixtureRequest('theme-snapshot-second-request');
         $beforeNewRequest = array_sum(Model::$reads);
         $newRequest = $read($brandContext);
         $newRequestReads = array_sum(Model::$reads) - $beforeNewRequest;
+        \Weline\Framework\Cache\Service\StorefrontScopeHotCache::resetProcessCache();
+        nextPublishedFixtureRequest('theme-snapshot-l2-request');
+        $beforeL2 = array_sum(Model::$reads);
+        $beforePoolReads = $publishedPool->reads;
+        $fromShared = $read($brandContext);
+        $l2Reads = array_sum(Model::$reads) - $beforeL2;
+        $l2PoolReads = $publishedPool->reads - $beforePoolReads;
+        nextPublishedFixtureRequest('theme-snapshot-other-ambient', ScopeIdentity::channel(90, 'other', 'store-x', 'mobile', ScopeIdentity::MODE_NORMAL));
+        $beforeAmbient = array_sum(Model::$reads);
+        $otherAmbient = $read($brandContext);
+        $ambientReads = array_sum(Model::$reads) - $beforeAmbient;
+        $scopePayloads = [$payload($read($context->withResource(ThemeEditorContext::RESOURCE_APPEARANCE))), $payload($read($brandContext))];
+        $resourcePayloads = [];
+        foreach ([ThemeEditorContext::RESOURCE_LAYOUT, ThemeEditorContext::RESOURCE_META, ThemeEditorContext::RESOURCE_APPEARANCE, ThemeEditorContext::RESOURCE_I18N] as $resource) {
+            $resourcePayloads[$resource] = $payload($read($context->withResource($resource)->withScope($brandContext->scope)));
+        }
+        $bindingContext = $brandContext->withResource(ThemeEditorContext::RESOURCE_THEME_BINDING);
+        $bindingFirst = $read($bindingContext);
+        nextPublishedFixtureRequest('theme-snapshot-binding-next');
+        $beforeBinding = array_sum(Model::$reads);
+        $bindingNext = $read($bindingContext);
+        $bindingNextReads = array_sum(Model::$reads) - $beforeBinding;
+        $generationBeforePublish = (int)Model::$pdo->query('SELECT generation FROM generations')->fetchColumn();
         $workspace->rollbackReleaseBatch(1, $context, 'test:rollback');
         $afterPublish = $read($brandContext);
+        $generationAfterPublish = (int)Model::$pdo->query('SELECT generation FROM generations')->fetchColumn();
+        nextPublishedFixtureRequest('theme-snapshot-after-publish-next');
+        $afterPublishNext = $read($brandContext);
 
         // 新请求中的夹具种子，验证同范围默认语言与业务目标不会因轻读而改变。
-        \Weline\Framework\Context::enter(new \Weline\Framework\Context(['meta' => ['type' => 'request', 'mode' => 'cli']]));
-        \Weline\Framework\Runtime\RequestContext::setId('theme-snapshot-locale-target');
+        nextPublishedFixtureRequest('theme-snapshot-locale-target');
         $layoutDefault = $context->withResource(ThemeEditorContext::RESOURCE_LAYOUT)->withLocale('default');
         seedPublished($layoutDefault, ['marker' => 'scope-default-locale']);
         $targetDefault = new ThemeEditorContext($context->scope, 'frontend', ThemeEditorContext::RESOURCE_LAYOUT, 19, locale: 'default', targetType: 'product', targetId: 99);
@@ -311,7 +418,21 @@ namespace {
         $defaultLocale = $read($layoutDefault->withLocale('fr_FR'));
         $targetLocale = $read($targetDefault->withLocale('fr_FR'));
         $missingTarget = $read(new ThemeEditorContext($context->scope, 'frontend', ThemeEditorContext::RESOURCE_LAYOUT, 19, locale: 'fr_FR', targetType: 'product', targetId: 100));
+        nextPublishedFixtureRequest('theme-snapshot-locale-target-repeat');
+        $beforeIsolatedRepeat = array_sum(Model::$reads);
+        $missingTargetAgain = $read(new ThemeEditorContext($context->scope, 'frontend', ThemeEditorContext::RESOURCE_LAYOUT, 19, locale: 'fr_FR', targetType: 'product', targetId: 100));
+        $targetLocaleAgain = $read($targetDefault->withLocale('fr_FR'));
+        $defaultLocaleAgain = $read($layoutDefault->withLocale('fr_FR'));
+        $isolatedRepeatReads = array_sum(Model::$reads) - $beforeIsolatedRepeat;
         echo json_encode([
+            'shared' => $payload($fromShared), 'shared_reads' => $l2Reads, 'shared_pool_reads' => $l2PoolReads,
+            'other_ambient' => $payload($otherAmbient), 'other_ambient_reads' => $ambientReads,
+            'scope_payloads' => $scopePayloads, 'resource_payloads' => $resourcePayloads,
+            'binding_first' => $payload($bindingFirst), 'binding_next' => $payload($bindingNext), 'binding_next_reads' => $bindingNextReads,
+            'generation_before_publish' => $generationBeforePublish, 'generation_after_publish' => $generationAfterPublish,
+            'after_publish_next' => $payload($afterPublishNext),
+            'default_locale_again' => $payload($defaultLocaleAgain), 'target_locale_again' => $payload($targetLocaleAgain), 'missing_target_again' => $payload($missingTargetAgain),
+            'isolated_repeat_reads' => $isolatedRepeatReads,
             'keys' => array_keys($first), 'first' => $payload($first), 'second' => $payload($second),
             'first_reads' => $firstReads, 'repeat_reads' => $repeatReads,
             'inside' => $payload($inside), 'after_rollback' => $payload($afterRollback),

@@ -24,11 +24,13 @@ final class EventObserverTraceTest extends TestCase
             'runtime' => ['request_context' => ['initialized' => true]],
         ]));
         RequestLifecycleTrace::reset();
+        RequestLifecycleTrace::installPanelTraceOn();
         ObjectManager::clearInstances();
     }
 
     protected function tearDown(): void
     {
+        RequestLifecycleTrace::clearPanelTrace();
         RequestLifecycleTrace::reset();
         ObjectManager::clearInstances();
         if (Context::hasCurrent()) {

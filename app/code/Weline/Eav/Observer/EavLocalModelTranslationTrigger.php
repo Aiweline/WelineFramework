@@ -29,6 +29,18 @@ final class EavLocalModelTranslationTrigger implements ObserverInterface
 
     public function execute(Event &$event): void
     {
+        $data = $event->getData('data');
+        $model = $data instanceof \Weline\Framework\DataObject\DataObject ? $data->getData('model') : null;
+        // 仅处理事件配置中登记的五类 EAV 元数据模型。
+        if (!($model instanceof \Weline\Eav\Model\EavEntity)
+            && !($model instanceof \Weline\Eav\Model\EavAttribute)
+            && !($model instanceof \Weline\Eav\Model\EavAttribute\Set)
+            && !($model instanceof \Weline\Eav\Model\EavAttribute\Group)
+            && !($model instanceof \Weline\Eav\Model\EavAttribute\Option)
+        ) {
+            return;
+        }
+
         if (Context::hasCurrent() && RequestContext::has(self::REQUEST_MEMO_KEY)) {
             return;
         }

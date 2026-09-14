@@ -41,7 +41,7 @@ retrieval:
   include_candidates: false
 
 guidance:
-  # Bounded slices always merged into resolve_task_context / get_edit_bundle.
+  # Bounded slices always merged into resolve_task_context.
   pinned_token_budget: 1200
   pinned_documents:
     - app/code/Weline/Ai/doc/AI工程交付流程.md
@@ -65,7 +65,6 @@ privacy:
   tombstone_ttl: 14d
   terminal_job_ttl: 14d
   query_log_ttl: 14d
-  execution_run_ttl: 14d
   sweep_interval: 1h
   sweep_batch_size: 50
   final_learning_timeout: 30s
@@ -213,40 +212,7 @@ index:
     - nbproject/**
     - .nyc_output/**
 
-# Compact writes keep the two-phase boundary locally: apply_compact_edit seals, applies, validates, reindexes, and can roll back without returning the one-time token to the model.
-editing:
-  enabled: true
-  ticket_ttl: 10m
-  # Lock files persist as reusable flock carriers. Ownership is kernel state,
-  # while this bounded wait and poll interval prevent a live hung owner from blocking forever.
-  lock_timeout_ms: 30000
-  lock_poll_interval_ms: 50
-  max_files: 20
-  max_file_bytes: 1048576
-  max_total_bytes: 4194304
-  # Repository root is the default policy boundary. Each run is narrowed again
-  # by selected bundle files and TaskContract.allowed_scope before apply.
-  # Replace this list only when an installation needs a stricter repository subset.
-  allowed_roots:
-    - "."
-  denied_paths:
-    - .git/**
-    - .codex/**
-    - .agents/**
-    - .gitnexus/**
-    - vendor/**
-    - **/vendor/**
-    - generated/**
-    - var/**
-    - pub/static/**
-    - pub/media/**
-    - **/view/tpl/**
-    - **/.env
-    - **/.env.*
-    - **/auth.json
-    - **/*.pem
-    - **/*.key
-    - app/etc/env.php
+# MCP 仅索引/技能/规则检索；未知/遗留配置键会被忽略。
 
 knowledge:
   # Framework guidance comes directly from Framework/doc and app/code/*/*/doc.

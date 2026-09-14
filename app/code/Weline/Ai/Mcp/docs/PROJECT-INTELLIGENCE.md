@@ -1,5 +1,7 @@
 # Project Intelligence contracts
 
+MCP is an optional knowledge plane: project index, code map, skills, and domain hard-rule delivery. Coding uses host-native editors.
+
 ## `project-readiness.v1`
 
 `prepare_project(repository, client_session_id)` returns:
@@ -8,7 +10,7 @@
 - `needs_repair`: retained only for compatibility receipts; current servers auto-repair and return `ready` with a `repair` section instead.
 - `blocked`: project identity, index refresh, document conflict, Git branch policy, or safety validation failed. Framework repositories with a `dev` branch require `git switch dev` before development (`GIT_BRANCH_FORBIDDEN` on `master` or other branches).
 
-The receipt contains project ID, revision, module count, inventory Hash and document Hash. Every guarded knowledge/edit tool requires `repository`, `client_session_id`, and `readiness_id`.
+The receipt contains project ID, revision, module count, inventory Hash and document Hash. Every guarded knowledge/index tool requires `repository`, `client_session_id`, and `readiness_id`.
 
 ## `guidance-bundle.v1`
 
@@ -16,8 +18,7 @@ The receipt contains project ID, revision, module count, inventory Hash and docu
 
 - bounded rule summaries and document fragments;
 - source paths, content Hashes and index revision;
-- relevant code/edit regions when requested;
-- temporary session directives;
+- temporary session notes (process memory);
 - explicit truncation and token-budget metadata;
 - **`workflow_contract.v1`**: mandatory phase order, extension-point matrix, acceptance tiers;
 - **`pinned_fragments`**: bounded slices from AI工程交付流程, 扩展点选型, and 文档索引.
@@ -30,12 +31,8 @@ The repair Bundle contains only missing `doc/README.md`, `doc/需求.md`, and `d
 
 ## Freshness
 
-External edits are compared before the next guarded tool call. A changed required document invalidates readiness; a non-contract source/topic edit is incrementally indexed before the result is read. MCP writes reindex before returning success.
+External edits are compared before the next guarded tool call. A changed required document invalidates readiness; a non-contract source/topic edit is incrementally indexed before the result is read.
 
-## Session directives
+## Tool surface
 
-`set_session_directives` replaces or appends bounded temporary decisions for the current client session. Directives are redacted, credential-shaped input is rejected, and values disappear when the MCP process ends. They are never promoted into module documents or long-term experience automatically.
-
-## Compact editing
-
-`get_edit_bundle` returns exact indexed regions and guards. `apply_compact_edit` accepts one `edit-plan.v1`, seals it, acquires ordered per-file locks, applies fixed operations, runs server-selected validation, performs targeted reindex, and emits a bounded diff/impact receipt. Recovery uses `get_edit_status` and `rollback_edit`.
+Nine index/knowledge tools: `prepare_project`, `repair_project_docs`, `project_index_status`, `resolve_task_context`, `search_project_knowledge`, `get_indexed_document`, `resolve_skill`, `get_skill`, `health`.

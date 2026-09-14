@@ -20,6 +20,93 @@ use Weline\Product\Service\StorefrontVariantAxisResolver;
 
 final class StorefrontEavLabelResolverTest extends TestCase
 {
+
+
+    public function testCompleteProductIdentityMissDoesNotUseLegacyStore(): void
+    {
+        [, $entity] = $this->metadata();
+        $metadata = $this->createMockForIntersectionOfInterfaces([
+            AttributeMetadataCatalogInterface::class,
+            \Weline\Eav\Api\Metadata\AttributeProductOptionIdentityCatalogInterface::class,
+        ]);
+        $metadata->method('catalogForProduct')->willReturn([]);
+        $metadata->expects(self::once())->method('productOptionIdentity')
+            ->with($entity, 77, '777')->willReturn(null);
+        $store = $this->createMock(AttributeOptionStoreInterface::class);
+        $store->expects(self::never())->method('assertUsableByInstance');
+        $labels = (new StorefrontEavLabelResolver($metadata, $entity, $store))->forProduct(77);
+        self::assertSame('777', $labels->resolve('unplaced', '777'));
+    }
+
+    public function testFailedProductIdentityUsesLegacyFallbackAndRetriesTheCapability(): void
+    {
+        [, $entity] = $this->metadata();
+        $metadata = $this->createMockForIntersectionOfInterfaces([
+            AttributeMetadataCatalogInterface::class,
+            \Weline\Eav\Api\Metadata\AttributeProductOptionIdentityCatalogInterface::class,
+        ]);
+        $metadata->method('catalogForProduct')->willReturn([]);
+        $attempts = 0;
+        $metadata->expects(self::exactly(4))->method('productOptionIdentity')
+            ->willReturnCallback(static function () use (&$attempts): AttributeOptionMetadata {
+                if (++$attempts === 1) {
+                    throw new \RuntimeException('temporary metadata failure');
+                }
+                return new AttributeOptionMetadata(777, 'Source', 'legacy-code', 'Translated', 0);
+            });
+        $store = $this->createMock(AttributeOptionStoreInterface::class);
+        $store->expects(self::once())->method('assertUsableByInstance')->with(777, 77)
+            ->willReturn(new \Weline\Eav\Api\Attribute\Option\AttributeOptionRecord(
+                id: 777, attributeId: 9, code: 'legacy-code', value: 'Legacy fallback', scopeInstanceId: 77,
+            ));
+        $labels = (new StorefrontEavLabelResolver($metadata, $entity, $store))->forProduct(77);
+        self::assertSame('Legacy fallback', $labels->resolve('unplaced', '777'));
+        self::assertSame('Translated', $labels->resolve('unplaced', '777'));
+        self::assertSame('777', $labels->canonicalOptionId('unplaced', 'legacy-code'));
+        self::assertSame('legacy-code', $labels->publicOptionCode('unplaced', '777'));
+    }
+
+    public function testRepeatedPlacementsKeepProductLabelProjectionMemoryBounded(): void
+    {
+        [, $entity] = $this->metadata();
+        $options = [];
+        for ($id = 1; $id <= 256; ++$id) {
+            $options[] = new AttributeOptionMetadata($id, 'source-' . $id, 'code-' . $id, 'label-' . $id, $id);
+        }
+        $attribute = new AttributeMetadata(
+            id: 7, entityId: 1, code: 'color', name: 'Color', typeCode: 'varchar',
+            fieldType: 'multiselect', element: 'select', setId: 1, groupId: 1,
+            required: false, multiple: true, enabled: true, hasOption: true,
+            sortOrder: 1, options: $options,
+        );
+        $sets = [];
+        foreach ([1, 2] as $id) {
+            $sets[] = new AttributeSetMetadata(
+                id: $id, entityId: 1, code: 'set-' . $id, name: 'Set', sortOrder: $id,
+                groups: [new AttributeGroupMetadata(
+                    id: $id, entityId: 1, setId: $id, code: 'group-' . $id,
+                    name: 'Group', sortOrder: $id, attributes: [$attribute],
+                )],
+            );
+        }
+        $metadata = $this->createMock(AttributeMetadataCatalogInterface::class);
+        $metadata->method('catalogForProduct')->willReturn($sets);
+        $labels = new StorefrontEavLabelResolver($metadata, $entity);
+        $resolvers = [];
+        $before = memory_get_usage(false);
+        for ($productId = 1; $productId <= 32; ++$productId) {
+            $resolver = $labels->forProduct($productId);
+            self::assertSame('label-256', $resolver->resolve('color', 'code-256'));
+            self::assertSame('256', $resolver->canonicalOptionId('color', 'code-256'));
+            $resolvers[] = $resolver;
+        }
+        self::assertLessThan(
+            3 * 1024 * 1024,
+            memory_get_usage(false) - $before,
+            'Repeated placements must not copy every option and alias array into every product resolver.',
+        );
+    }
+
     public function testPublicQueryBatchesOnlyParticipatingAxesWithoutReadingDisplayCatalog(): void
     {
         $metadata = $this->createMockForIntersectionOfInterfaces([
@@ -136,6 +223,68 @@ final class StorefrontEavLabelResolverTest extends TestCase
         self::assertSame('颜色', $resolver->attributeLabel('color'));
         self::assertSame('颜色', $resolver->attributeLabel('Color'));
         self::assertSame('', $resolver->attributeLabel('missing_attr'));
+    }
+
+    public function testAttributeLabelKeepsEnglishNamesThatOnlyDifferByCaseFromCode(): void
+    {
+        [, $entity] = $this->metadata();
+        $size = new AttributeMetadata(
+            id: 34,
+            entityId: 1,
+            code: 'size',
+            name: 'Size',
+            typeCode: 'varchar',
+            fieldType: 'select',
+            element: 'select',
+            setId: 1,
+            groupId: 1,
+            required: false,
+            multiple: false,
+            enabled: true,
+            hasOption: true,
+            sortOrder: 1,
+            options: [],
+        );
+        $material = new AttributeMetadata(
+            id: 25,
+            entityId: 1,
+            code: 'material',
+            name: 'Material',
+            typeCode: 'varchar',
+            fieldType: 'select',
+            element: 'select',
+            setId: 1,
+            groupId: 1,
+            required: false,
+            multiple: false,
+            enabled: true,
+            hasOption: true,
+            sortOrder: 2,
+            options: [],
+        );
+        $sets = [new AttributeSetMetadata(
+            id: 1,
+            entityId: 1,
+            code: 'hanfu',
+            name: 'Hanfu',
+            sortOrder: 1,
+            groups: [new AttributeGroupMetadata(
+                id: 1,
+                entityId: 1,
+                setId: 1,
+                code: 'specs',
+                name: 'Specs',
+                sortOrder: 1,
+                attributes: [$size, $material],
+            )],
+        )];
+        $metadata = $this->createMock(AttributeMetadataCatalogInterface::class);
+        $metadata->method('catalog')->willReturn($sets);
+        $metadata->method('catalogForProduct')->willReturn($sets);
+        $resolver = new StorefrontEavLabelResolver($metadata, $entity);
+
+        self::assertSame('Size', $resolver->attributeLabel('size'));
+        self::assertSame('Material', $resolver->attributeLabel('material'));
     }
 
     public function testPublicUrlPrefersOptionCodeAndCanonicalizesBackToId(): void

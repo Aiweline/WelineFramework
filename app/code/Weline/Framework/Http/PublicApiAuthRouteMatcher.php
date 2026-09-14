@@ -55,6 +55,7 @@ class PublicApiAuthRouteMatcher
 
     private const DEMO_PATH_PATTERNS = [
         'dev/tool/rest/v1/trace',
+        'dev/tool/rest/v1/trace/panel',
         'dev/tool/rest/v1/panel',
         'dev/tool/rest/v1/panel/session',
         'dev/tool/rest/v1/routes',
@@ -111,6 +112,16 @@ class PublicApiAuthRouteMatcher
         'framework/stream',
     ];
 
+    /**
+     * Cacheable CSP policy document — public read, no API token.
+     */
+    private const WORKER_CSP_POLICY_PATH_PATTERNS = [
+        'api/framework/csp-policy',
+        'api/framework/csppolicy',
+        'framework/csp-policy',
+        'framework/csppolicy',
+    ];
+
     private const AUTH_CONTROLLERS = ['Auth', 'Challenge'];
 
     private const AUTH_ACTIONS = [
@@ -131,7 +142,11 @@ class PublicApiAuthRouteMatcher
 
     public function matches(Request $request): bool
     {
-        if ($this->matchesWorkerQueryBinRoute($request) || $this->matchesWorkerStreamRoute($request)) {
+        if (
+            $this->matchesWorkerQueryBinRoute($request)
+            || $this->matchesWorkerStreamRoute($request)
+            || $this->matchesWorkerCspPolicyRoute($request)
+        ) {
             return true;
         }
 
@@ -223,6 +238,35 @@ class PublicApiAuthRouteMatcher
 
         foreach ($paths as $path) {
             if ($this->matchesPath((string) $path, self::WORKER_STREAM_PATH_PATTERNS)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function matchesWorkerCspPolicyRoute(Request $request): bool
+    {
+        $controllerClass = (string) ($request->getRouterData('controller') ?? '');
+        if (
+            $controllerClass !== ''
+            && class_exists($controllerClass)
+            && (
+                $controllerClass === \Weline\Framework\Controller\Api\CspPolicy::class
+                || is_subclass_of($controllerClass, \Weline\Framework\Controller\Api\CspPolicy::class)
+            )
+        ) {
+            return true;
+        }
+
+        $paths = array_filter([
+            $request->getRouteUrlPath(),
+            $request->getPath(),
+            (string) ($request->getRouterData('module_path') ?? ''),
+        ]);
+
+        foreach ($paths as $path) {
+            if ($this->matchesPath((string) $path, self::WORKER_CSP_POLICY_PATH_PATTERNS)) {
                 return true;
             }
         }

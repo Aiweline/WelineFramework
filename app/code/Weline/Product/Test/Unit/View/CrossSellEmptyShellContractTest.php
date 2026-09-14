@@ -6,10 +6,7 @@ namespace Weline\Product\Test\Unit\View;
 
 use PHPUnit\Framework\TestCase;
 
-/**
- * MCP_TARGET_UNAVAILABLE: sealed create of this new path was not materializable;
- * native exact-path create after apply_compact_edit on existing targets.
- */
+/** Cross-sell empty-state shell contract (hidden empty markup when <2 products). */
 final class CrossSellEmptyShellContractTest extends TestCase
 {
     public function testCrossSellEmitsHiddenEmptyShellInsteadOfBlankHtml(): void

@@ -75,6 +75,9 @@ final class AddressTaglibMultiSelectionContractTest extends TestCore
         self::assertStringContainsString('continentEurope', $js);
         self::assertStringContainsString('continentNorthAmerica', $js);
         self::assertStringContainsString('includePopular', $js);
+        self::assertStringContainsString('regionHotSortOrder', $js);
+        self::assertStringContainsString('compareCountryEntriesByHotSort', $js);
+        self::assertStringContainsString("'CN', 'HK', 'MO', 'TW', 'US', 'CA', 'GB', 'DE', 'JP'", $js);
     }
 
     public function testAddressMenusSupportGroupJumpChips(): void

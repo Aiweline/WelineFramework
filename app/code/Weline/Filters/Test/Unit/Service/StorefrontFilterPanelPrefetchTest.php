@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use ReflectionMethod;
 use ReflectionProperty;
+use Weline\Filters\Service\StorefrontFacetTranslator;
 use Weline\Filters\Service\StorefrontFilterPanelService;
 use Weline\Framework\Cache\CacheManager;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
@@ -20,6 +21,7 @@ use Weline\Framework\Phrase\GlobalDictionaryProviderInterface;
 use Weline\Framework\Phrase\Parser;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\ScopeIdentity;
+use Weline\Product\Service\StorefrontEavLabelResolver;
 
 final class StorefrontFilterPanelPrefetchTest extends TestCase
 {
@@ -147,9 +149,19 @@ final class StorefrontFilterPanelPrefetchTest extends TestCase
         $generations = $this->createMock(NamespaceGenerationInterface::class);
         $generations->method('fingerprint')->willReturn('stable-generation');
         $hotCache = new StorefrontScopeHotCache($manager, $generations);
-        // A cache-hit read must not need any of the panel's DB builder dependencies.
+        // Cache-hit skips DB builders, but still rebinds facet chrome to the
+        // current locale via eavLabels + facetTranslator before Phrase prefetch.
         $service = (new ReflectionClass(StorefrontFilterPanelService::class))->newInstanceWithoutConstructor();
         (new ReflectionProperty(StorefrontFilterPanelService::class, 'hotCache'))->setValue($service, $hotCache);
+        $metadata = $this->createMock(\Weline\Eav\Api\Metadata\AttributeMetadataCatalogInterface::class);
+        $metadata->method('catalog')->willReturn([]);
+        $metadata->method('catalogForProduct')->willReturn([]);
+        $entity = (new ReflectionClass(\Weline\Product\Model\ProductCatalogAttributeEntity::class))
+            ->newInstanceWithoutConstructor();
+        $eavLabels = new StorefrontEavLabelResolver($metadata, $entity);
+        (new ReflectionProperty(StorefrontFilterPanelService::class, 'eavLabels'))->setValue($service, $eavLabels);
+        (new ReflectionProperty(StorefrontFilterPanelService::class, 'facetTranslator'))
+            ->setValue($service, new StorefrontFacetTranslator());
         return $service;
     }
 

@@ -45,4 +45,46 @@ final class ProductLayoutReviewsSlotContractTest extends TestCase
         self::assertStringContainsString('condition="meta.showRelatedProducts"', $source);
         self::assertDoesNotMatchRegularExpression('/bestsellers<else\/>[\s\S]*name="bestsellers"/', $source);
     }
+
+    public function testProductLayoutAlwaysShowsYouMayLikeAndRecentlyViewedSlotsOutsideRelatedGate(): void
+    {
+        $path = dirname(__DIR__, 4) . '/view/theme/frontend/layouts/product/default.phtml';
+        $source = (string)file_get_contents($path);
+
+        self::assertStringContainsString('id="product-you-may-like"', $source);
+        self::assertStringContainsString('accept="you-may-like,product-carousel"', $source);
+        self::assertStringContainsString('Weline_Theme::frontend::layouts::product::you-may-like', $source);
+        self::assertStringContainsString('id="product-recently-viewed"', $source);
+        self::assertStringContainsString('product-detail-layout__personalization', $source);
+        self::assertStringContainsString('.product-detail-layout__personalization-container', $source);
+        self::assertStringContainsString('--weline-layout-content-max-width', $source);
+        self::assertDoesNotMatchRegularExpression(
+            '/<w:widget[^>]*(you-may-like|recently-viewed)/i',
+            $source,
+            'Layout must not hardcode you-may-like or recently-viewed widgets.',
+        );
+
+        self::assertMatchesRegularExpression(
+            '/product-detail-layout__personalization[\s\S]*id="product-you-may-like"[\s\S]*id="product-recently-viewed"/',
+            $source,
+        );
+
+        // Gated related stack must not still own recently-viewed (avoid duplicate slot ids).
+        if (preg_match(
+            '/condition="meta\.showRelatedProducts"[\s\S]*?<\/if>/',
+            $source,
+            $gateMatch
+        ) === 1) {
+            self::assertStringNotContainsString(
+                'id="product-recently-viewed"',
+                $gateMatch[0],
+                'product-recently-viewed must live outside showRelatedProducts gate.',
+            );
+            self::assertStringNotContainsString(
+                'id="product-you-may-like"',
+                $gateMatch[0],
+                'product-you-may-like must live outside showRelatedProducts gate.',
+            );
+        }
+    }
 }

@@ -33,4 +33,12 @@ interface PixelEventVendorInterface
      * @return array<string, mixed>
      */
     public function getCapabilities(): array;
+
+    /**
+     * Browser CSP sources this vendor SDK needs (collected into Framework app defaults).
+     * New vendors (Meta Pixel, TikTok Pixel, etc.) must declare hosts here — do not hardcode in Visitor shell.
+     *
+     * @return array<string, list<string>> directive => absolute https hosts / keywords
+     */
+    public function cspDirectives(): array;
 }

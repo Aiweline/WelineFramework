@@ -7,7 +7,6 @@ namespace Weline\Framework\Test\Unit\Database\Connection\Adapter\Pgsql;
 use PDO;
 use PDOStatement;
 use PHPUnit\Framework\TestCase;
-use Weline\Framework\App\Env;
 use Weline\Framework\Context;
 use Weline\Framework\Database\Connection\Adapter\Pgsql\Query;
 use Weline\Framework\Runtime\RequestContext;
@@ -18,12 +17,9 @@ use Weline\Framework\Runtime\RuntimeInterface;
 final class QueryIteratorTraceTest extends TestCase
 {
     private PDO $pdo;
-    private mixed $previousTrace;
 
     protected function setUp(): void
     {
-        $this->previousTrace = Env::get('wls.debug.request_trace', false);
-        Env::getInstance()->applyRuntimeConfig(['wls' => ['debug' => ['request_trace' => true]]]);
         Runtime::setMode(RuntimeInterface::MODE_WLS);
         if (Context::hasCurrent()) {
             Context::leave();
@@ -33,6 +29,7 @@ final class QueryIteratorTraceTest extends TestCase
             'runtime' => ['request_context' => ['initialized' => true, 'request_id' => uniqid('iterator-trace-', true)]],
         ]));
         self::assertTrue(RequestContext::isInitialized());
+        RequestLifecycleTrace::installPanelTraceOn();
         $this->pdo = new PDO('sqlite::memory:', options: [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
         $this->pdo->exec('CREATE TABLE trace_fixture (id INTEGER, label TEXT)');
         $insert = $this->pdo->prepare('INSERT INTO trace_fixture VALUES (?, ?)');
@@ -43,10 +40,10 @@ final class QueryIteratorTraceTest extends TestCase
 
     protected function tearDown(): void
     {
+        RequestLifecycleTrace::clearPanelTrace();
         RequestLifecycleTrace::reset();
         Context::leave();
         Runtime::resetModeCache();
-        Env::getInstance()->applyRuntimeConfig(['wls' => ['debug' => ['request_trace' => $this->previousTrace]]]);
     }
 
     public function testOneSqlProducesOneSpanWithBoundPlaceholdersAndExcludesConsumerTime(): void

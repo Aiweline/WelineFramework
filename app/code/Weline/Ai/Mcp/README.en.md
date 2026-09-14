@@ -1,18 +1,22 @@
-# Weline Project Intelligence MCP 0.13.0
+# Weline Project Intelligence MCP
 
-This is the dependency-free local project-intelligence MCP embedded in `Weline_Ai`. It runs on PHP 8.2+ and SQLite over STDIO and does not depend on WLS, Weline DI, an application database, or a network service.
+Local, dependency-free project-intelligence MCP shipped inside `Weline_Ai` (PHP 8.2+ / SQLite / STDIO).
 
-Long-term knowledge comes only from `Weline_Ai/doc`, `Weline_Framework/doc`, and each module `doc` directory. Every knowledge unit must provide `README.md`, `需求.md`, and `开发日志.md`; derived indexes and hashes live only in project-isolated SQLite. Repository skill projection is retired. `resolve_skill` and `get_skill` are dynamic aliases for task guidance.
+## Role (2026-09-13)
 
-Required flow:
+MCP is an **optional knowledge plane**:
 
-1. Start `bin/learning-mcp`.
-2. Call `prepare_project` with the repository and a unique `client_session_id`.
-3. Continue only when `project-readiness.v1.status` is `ready`.
-4. Missing module documents are auto-repaired during `prepare_project`; `repair_project_docs` remains a compatibility replay entry.
-5. Call `resolve_task_context` and pass the returned `readiness_id` to every guarded tool.
-6. Store temporary user decisions with `set_session_directives`; they remain process-memory only.
+- Skill/doc index (`resolve_skill` / `get_skill`)
+- Code map + knowledge search (`resolve_task_context` / `search_project_knowledge`)
+- Domain hard-rule delivery (`prepare_project.agent_guidance.hard_constraints`)
 
-Run `php bin/learningctl doctor`, `php tests/run.php --quick`, and `php tests/project-readiness.php` for local verification. See [project contracts](docs/PROJECT-INTELLIGENCE.md), [operations](docs/OPERATIONS.md), and [security](docs/SECURITY.md).
+**Coding uses host-native editors.** MCP is not a mandatory write-code path and does not require a full tool catalog / ready gate before development.
 
-`app/code/Weline/Ai/Mcp` is the sole source from 0.13.0 onward. The standalone repository is a release snapshot and is frozen after 0.13.0. Licensed under Apache-2.0.
+## Optional retrieval
+
+1. Optionally start `bin/learning-mcp` (or `ensure-project-guidance.php`).
+2. Optionally call `prepare_project` to refresh the index and hard constraints.
+3. Optionally call `resolve_task_context` / `get_skill` for docs and skills.
+4. **Edit with host-native tools**; obey domain rules (Theme / Taglib / Payment / e2e, etc.).
+
+See [PROJECT-INTELLIGENCE.md](docs/PROJECT-INTELLIGENCE.md) and [OPERATIONS.md](docs/OPERATIONS.md).

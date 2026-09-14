@@ -71,40 +71,91 @@ final class CarrierCoverageProviderRegistry
     }
 
     /**
+     * Default coverage for a provider_code.
+     * Prefers ShippingProviderInterface::defaultCoverageRegions(); falls back to
+     * shipping.carrier_coverage.{code}; local/empty → default markets provider.
+     *
+     * @return list<array{region_type:string,country_code:string,region_id:?int,region_code:string,street_id:?int}>
+     */
+    public function defaultCoverageForCode(string $providerCode): array
+    {
+        $code = strtolower(trim($providerCode));
+        if ($code === '' || $code === 'local') {
+            $code = 'default';
+        }
+
+        if ($code !== 'default') {
+            try {
+                /** @var ShippingProviderManager $manager */
+                $manager = $this->objectManager->getInstance(ShippingProviderManager::class);
+                $shippingProvider = $manager->getProvider($code);
+                if ($shippingProvider !== null) {
+                    $fromProvider = $this->normalizeCoverageRows($shippingProvider->defaultCoverageRegions());
+                    if ($fromProvider !== []) {
+                        return $fromProvider;
+                    }
+                }
+            } catch (\Throwable) {
+                // Fall through to SPI / default.
+            }
+        }
+
+        foreach ($this->all() as $provider) {
+            if ($provider->providerCode() === $code) {
+                return $this->normalizeCoverageRows($provider->defaultCoverage());
+            }
+        }
+
+        if ($code !== 'default') {
+            return $this->defaultCoverageForCode('default');
+        }
+
+        return [];
+    }
+
+    /**
      * @return list<array{region_type:string,country_code:string,region_id:?int,region_code:string,street_id:?int}>
      */
     public function mergedDefaultCoverage(): array
     {
-        $rows = [];
+        // Legacy name: default markets only (do not merge vendor-specific catalogs).
+        return $this->defaultCoverageForCode('default');
+    }
+
+    /**
+     * @param list<array<string, mixed>> $rows
+     * @return list<array{region_type:string,country_code:string,region_id:?int,region_code:string,street_id:?int}>
+     */
+    private function normalizeCoverageRows(array $rows): array
+    {
+        $out = [];
         $seen = [];
-        foreach ($this->all() as $provider) {
-            foreach ($provider->defaultCoverage() as $row) {
-                if (!is_array($row)) {
-                    continue;
-                }
-                $type = strtolower(trim((string)($row['region_type'] ?? '')));
-                $country = strtoupper(trim((string)($row['country_code'] ?? '')));
-                if ($type === '' || $country === '') {
-                    continue;
-                }
-                $regionId = (int)($row['region_id'] ?? 0);
-                $regionCode = trim((string)($row['region_code'] ?? ''));
-                $streetId = (int)($row['street_id'] ?? 0);
-                $key = $type . '|' . $country . '|' . $regionId . '|' . strtoupper($regionCode) . '|' . $streetId;
-                if (isset($seen[$key])) {
-                    continue;
-                }
-                $seen[$key] = true;
-                $rows[] = [
-                    'region_type' => $type,
-                    'country_code' => $country,
-                    'region_id' => $regionId > 0 ? $regionId : null,
-                    'region_code' => $regionCode !== '' ? $regionCode : ($type === 'country' ? $country : ''),
-                    'street_id' => $streetId > 0 ? $streetId : null,
-                ];
+        foreach ($rows as $row) {
+            if (!\is_array($row)) {
+                continue;
             }
+            $type = strtolower(trim((string)($row['region_type'] ?? '')));
+            $country = strtoupper(trim((string)($row['country_code'] ?? '')));
+            if ($type === '' || $country === '') {
+                continue;
+            }
+            $regionId = (int)($row['region_id'] ?? 0);
+            $regionCode = trim((string)($row['region_code'] ?? ''));
+            $streetId = (int)($row['street_id'] ?? 0);
+            $key = $type . '|' . $country . '|' . $regionId . '|' . strtoupper($regionCode) . '|' . $streetId;
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $out[] = [
+                'region_type' => $type,
+                'country_code' => $country,
+                'region_id' => $regionId > 0 ? $regionId : null,
+                'region_code' => $regionCode !== '' ? $regionCode : ($type === 'country' ? $country : ''),
+                'street_id' => $streetId > 0 ? $streetId : null,
+            ];
         }
 
-        return $rows;
+        return $out;
     }
 }
