@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Weline\Marketing\Service;
 
+use Weline\Framework\DateTime\Timezone;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Marketing\Model\Campaign\Campaign;
 use Weline\Marketing\Model\Rule\Rule;
@@ -52,9 +53,9 @@ class CampaignService
             throw new \InvalidArgumentException((string)__('活动状态无效'));
         }
 
-        $startDate = $this->normaliseDate((string)($data[Campaign::schema_fields_START_DATE] ?? ''));
-        $endDate = $this->normaliseDate((string)($data[Campaign::schema_fields_END_DATE] ?? ''));
-        if ($startDate === '' || $endDate === '' || strtotime($endDate) <= strtotime($startDate)) {
+        $startDate = Timezone::localInputToUtcSql((string)($data[Campaign::schema_fields_START_DATE] ?? ''));
+        $endDate = Timezone::localInputToUtcSql((string)($data[Campaign::schema_fields_END_DATE] ?? ''));
+        if ($startDate === null || $endDate === null || $endDate <= $startDate) {
             throw new \InvalidArgumentException((string)__('活动结束时间必须晚于开始时间'));
         }
 
@@ -69,8 +70,9 @@ class CampaignService
         $data[Campaign::schema_fields_START_DATE] = $startDate;
         $data[Campaign::schema_fields_END_DATE] = $endDate;
         $data[Campaign::schema_fields_BUDGET] = $budget;
-        $data[Campaign::schema_fields_CREATED_AT] = $data[Campaign::schema_fields_CREATED_AT] ?? date('Y-m-d H:i:s');
-        $data[Campaign::schema_fields_UPDATED_AT] = date('Y-m-d H:i:s');
+        $nowUtc = Timezone::utcNowSql();
+        $data[Campaign::schema_fields_CREATED_AT] = $data[Campaign::schema_fields_CREATED_AT] ?? $nowUtc;
+        $data[Campaign::schema_fields_UPDATED_AT] = $nowUtc;
 
         /** @var Campaign $campaign */
         $campaign = ObjectManager::getInstance(Campaign::class);
@@ -78,16 +80,6 @@ class CampaignService
         $campaign->save();
 
         return $campaign;
-    }
-
-    private function normaliseDate(string $value): string
-    {
-        $value = trim(str_replace('T', ' ', $value));
-        if (preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/D', $value) === 1) {
-            return $value . ':00';
-        }
-
-        return $value;
     }
 
     /**

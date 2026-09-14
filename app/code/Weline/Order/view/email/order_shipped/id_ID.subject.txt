@@ -1,0 +1,1 @@
+Pesanan telah dikirim · {{var.order_number}}

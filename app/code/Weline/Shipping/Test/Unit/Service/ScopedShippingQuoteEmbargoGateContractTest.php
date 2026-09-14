@@ -29,5 +29,6 @@ final class ScopedShippingQuoteEmbargoGateContractTest extends TestCase
             $src,
         );
         self::assertStringContainsString('if ($this->useMemory || ShippingQuoteHarnessCatalog::load() !== null)', $src);
+        self::assertStringContainsString("(string)__((string)(\$rate['label'] ?? \$code))", $src);
     }
 }

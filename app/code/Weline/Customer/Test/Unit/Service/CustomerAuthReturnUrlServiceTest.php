@@ -35,8 +35,12 @@ final class CustomerAuthReturnUrlServiceTest extends TestCase
         $service = $this->serviceForCurrentUrl('http://127.0.0.1:9514/USD/customer/account/login');
 
         self::assertSame(
-            '/USD/customer/account/index',
+            '/USD/customer/account',
             $service->formatRedirect('/USD/customer/account/index')
+        );
+        self::assertSame(
+            '/USD/products/demo',
+            $service->formatRedirect('/USD/products/demo')
         );
     }
 
@@ -85,6 +89,36 @@ final class CustomerAuthReturnUrlServiceTest extends TestCase
         );
     }
 
+    public function testFormatAuthSuccessRedirectRewritesStaleLocaleToCurrentStorefront(): void
+    {
+        // Shopper is on Arabic login; session still holds a Hindi account target.
+        $service = $this->serviceForCurrentUrl(
+            'http://127.0.0.1:9514/ar_SA/customer/account/login'
+        );
+
+        self::assertSame(
+            '/ar_SA/customer/account?w_auth=1',
+            $service->formatAuthSuccessRedirect('/hi_IN/customer/account')
+        );
+        self::assertSame(
+            '/ar_SA/customer/account?w_auth=1',
+            $service->formatAuthSuccessRedirect('hi_IN/customer/account/index')
+        );
+    }
+
+    public function testFormatAuthSuccessRedirectUsesRefererWhenQueryHasNoLocale(): void
+    {
+        $service = $this->serviceForCurrentUrl(
+            'http://127.0.0.1:9514/api/framework/query-bin',
+            'http://127.0.0.1:9514/ar_SA/'
+        );
+
+        self::assertSame(
+            '/ar_SA/customer/account?w_auth=1',
+            $service->formatAuthSuccessRedirect('/hi_IN/customer/account')
+        );
+    }
+
     public function testFormatAuthSuccessRedirectAppendsAuthRefreshSignal(): void
     {
         $service = $this->serviceForCurrentUrl('http://127.0.0.1:9514/USD/customer/account/login');
@@ -96,6 +130,32 @@ final class CustomerAuthReturnUrlServiceTest extends TestCase
         self::assertSame(
             '/USD/customer/account?w_auth=1',
             $service->formatAuthSuccessRedirect('customer/account/index')
+        );
+    }
+
+    public function testWithAuthRefreshSignalPreservesAbsoluteOrigin(): void
+    {
+        $service = $this->serviceForCurrentUrl('http://127.0.0.1:9514/customer/account/logout');
+
+        self::assertSame(
+            'https://shop.test:9555/ar_SA/customer/account/login?w_auth=0',
+            $service->withAuthRefreshSignal(
+                'https://shop.test:9555/ar_SA/customer/account/login',
+                CustomerAuthReturnUrlService::AUTH_REFRESH_LOGOUT_VALUE
+            )
+        );
+    }
+
+    public function testFormatAuthInvalidRedirectUsesRefererLocaleWhenRequestHasNone(): void
+    {
+        $service = $this->serviceForCurrentUrl(
+            'http://127.0.0.1:9514/customer/account/logout',
+            'http://127.0.0.1:9514/ar_SA/products/demo'
+        );
+
+        self::assertSame(
+            '/ar_SA/customer/account/login?w_auth=0',
+            $service->formatAuthInvalidRedirect('/customer/account/login')
         );
     }
 
@@ -127,6 +187,54 @@ final class CustomerAuthReturnUrlServiceTest extends TestCase
         );
     }
 
+    public function testForceLocalizationPrefixAppliesWhenCallbackHasNoPathPrefix(): void
+    {
+        $service = $this->serviceForCurrentUrl(
+            'http://127.0.0.1:9514/customer/account/social-login/callback'
+        );
+        $service->forceLocalizationPrefix('/USD/en_US');
+
+        self::assertSame(
+            '/USD/en_US/customer/account',
+            $service->formatInternalNavigation('')
+        );
+        self::assertSame(
+            '/USD/en_US/customer/account/index#social-login',
+            $service->formatInternalNavigation('/customer/account/index#social-login')
+        );
+        self::assertSame(
+            '/USD/en_US/products/demo?w_auth=1',
+            $service->formatAuthSuccessRedirect('products/demo')
+        );
+    }
+
+    public function testForceLocalizationPrefixRewritesWrongReturnUrlLocale(): void
+    {
+        $service = $this->serviceForCurrentUrl(
+            'http://127.0.0.1:9514/customer/account/social-login/callback'
+        );
+        $service->forceLocalizationPrefix('/ar_SA');
+
+        self::assertSame(
+            '/ar_SA/products/demo?w_auth=1',
+            $service->formatAuthSuccessRedirect('/hi_IN/products/demo')
+        );
+        self::assertSame(
+            '/ar_SA/customer/account',
+            $service->formatInternalNavigation('/hi_IN/customer/account')
+        );
+    }
+
+    public function testForceLocalizationPrefixEmptyKeepsDefaultLocale(): void
+    {
+        $service = $this->serviceForCurrentUrl(
+            'http://127.0.0.1:9514/customer/account/social-login/callback'
+        );
+        $service->forceLocalizationPrefix('');
+
+        self::assertSame('/customer/account', $service->formatInternalNavigation(''));
+    }
+
     public function testNormalizeTargetBlocksSocialLoginRoutes(): void
     {
         $service = $this->serviceForCurrentUrl('http://127.0.0.1:9514/products/demo');
@@ -136,13 +244,14 @@ final class CustomerAuthReturnUrlServiceTest extends TestCase
         self::assertSame('products/demo', $service->normalizeTarget('/products/demo'));
     }
 
-    private function serviceForCurrentUrl(string $currentUrl): CustomerAuthReturnUrlService
+    private function serviceForCurrentUrl(string $currentUrl, string $referer = ''): CustomerAuthReturnUrlService
     {
         $url = $this->createMock(Url::class);
         $url->method('getCurrentUrl')->willReturn($currentUrl);
 
         $request = $this->createMock(Request::class);
         $request->method('getUrlBuilder')->willReturn($url);
+        $request->method('getReferer')->willReturn($referer);
 
         return new CustomerAuthReturnUrlService($request);
     }

@@ -13,7 +13,12 @@ $esc = static fn (string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8'
 $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT;
 
 $title = trim((string)($this->getData('title') ?? ''));
-$title = $title === '' ? (string)__('收货地址') : (string)__($title);
+// 忽略 Template 单例泄漏的模块名标题（如 Weline_Framework / Weline_Checkout）
+if ($title === '' || preg_match('/^Weline_[A-Za-z][A-Za-z0-9]*$/', $title) === 1) {
+    $title = (string)__('收货地址');
+} else {
+    $title = (string)__($title);
+}
 $savedHeading = trim((string)($this->getData('saved_heading') ?? ''));
 $savedHeading = $savedHeading === '' ? (string)__('选择收货地址') : (string)__($savedHeading);
 $hideBillingSame = !empty($this->getData('hide_billing_same'));
@@ -144,7 +149,7 @@ $ui = [
                         class="w-shipping-checkout-address__link-btn"
                         data-change-address
                         aria-expanded="false"
-                        <?= $addressCount > 1 ? '' : 'hidden' ?>>
+                        <?= $hasSaved ? '' : 'hidden' ?>>
                     <?= $esc($ui['change_address']) ?>
                 </button>
             </div>
@@ -294,6 +299,7 @@ $ui = [
         </div>
     </div>
 
+    <?php if (!$hideBillingSame): ?>
     <div class="w-shipping-checkout-address__section w-shipping-checkout-address__section--billing" data-billing-section>
         <h3 class="w-shipping-checkout-address__heading"><?= $esc($ui['billing_title']) ?></h3>
         <label class="w-shipping-checkout-address__same">
@@ -342,6 +348,7 @@ $ui = [
             </div>
         </div>
     </div>
+    <?php endif; ?>
 </section>
 <link rel="stylesheet" href="@static(Weline_Shipping::css/widgets/checkout-shipping-address.css)?v=20260910-csa-embargo1">
 <?php // shippingCheckoutAddress：由部件根 data-weline-load 声明，禁止 @static 直引 ?>

@@ -46,11 +46,11 @@ final class CheckoutShippingAddressWidgetContractTest extends TestCase
         self::assertStringContainsString('name="address1"', $template);
         self::assertStringContainsString('name="postal_code"', $template);
         self::assertStringContainsString('data-weline-load="shippingCheckoutAddress"', $template);
-        self::assertStringContainsString('checkout-shipping-address.v20260914-quote-selected.js', $modules);
+        self::assertStringContainsString('checkout-shipping-address.js?v=20260914-picker-all-addr1', $modules);
         self::assertStringContainsString('WelineShippingCheckoutAddress', $modules);
         self::assertStringContainsString('data-field-error-for="phone"', $template);
         self::assertStringContainsString("'err_name'", $template);
-        self::assertStringContainsString('checkout-shipping-address.css)?v=20260909-csa-add2', $template);
+        self::assertStringContainsString('checkout-shipping-address.css)?v=20260910-csa-embargo1', $template);
         self::assertStringNotContainsString('name="country_code" type="text"', $template);
         self::assertStringNotContainsString('<input name="province"', $template);
         self::assertStringNotContainsString('<input name="city"', $template);
@@ -100,6 +100,10 @@ final class CheckoutShippingAddressWidgetContractTest extends TestCase
         self::assertStringContainsString('refreshGuestCaptchaOnOpen', $js);
         self::assertStringContainsString('openAddressPicker', $js);
         self::assertStringContainsString('collapseAddressList', $js);
+        self::assertStringContainsString('list_all_addresses', $js);
+        self::assertStringContainsString('upsertLocalSavedAddress', $js);
+        self::assertStringContainsString('collectAddressesFromCards', $js);
+        self::assertStringContainsString('var showChange = picking || hasSaved', $js);
         self::assertStringContainsString("picking", $js);
         self::assertStringContainsString('getDeliveryContext', $js);
         self::assertStringContainsString('weline:checkout:address-updated', $js);

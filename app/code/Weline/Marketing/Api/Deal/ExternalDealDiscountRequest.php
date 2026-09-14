@@ -32,6 +32,8 @@ final class ExternalDealDiscountRequest
         public readonly int $existingRuleId = 0,
         public readonly int $priority = 80,
         public readonly array $metadata = [],
+        public readonly ?string $startsAtUtc = null,
+        public readonly ?string $endsAtUtc = null,
     ) {
     }
 }

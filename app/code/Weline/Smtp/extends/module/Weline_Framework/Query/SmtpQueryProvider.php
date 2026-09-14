@@ -10,10 +10,12 @@ use Weline\Smtp\Helper\Data;
 use Weline\Smtp\Helper\SmtpSender;
 use Weline\Smtp\Model\SmtpMailTemplate;
 use Weline\Smtp\Model\SmtpSendLog;
+use Weline\Smtp\Service\MailBrandContextService;
 use Weline\Smtp\Service\MailChannelCollector;
 use Weline\Smtp\Service\MailTemplateRenderer;
 use Weline\Smtp\Service\MailTemplateResolver;
 use Weline\Smtp\Service\MailTemplateSendContext;
+use Weline\Smtp\Service\MailTemplateShellComposer;
 
 /**
  * SMTP 统一查询器
@@ -200,7 +202,7 @@ class SmtpQueryProvider implements QueryProviderInterface
             $vars = is_array($params['vars'] ?? null) ? $params['vars'] : [];
             /** @var MailBrandContextService $brandContext */
             $brandContext = ObjectManager::getInstance(MailBrandContextService::class);
-            $vars = $brandContext->mergeInto($vars, $storageScope);
+            $vars = $brandContext->mergeInto($vars, $storageScope, $resolvedLocale !== '' ? $resolvedLocale : $ctx['locale']);
             $allowed = array_values(array_unique(array_merge(
                 $allowed,
                 MailBrandContextService::variableCodes()
@@ -246,6 +248,10 @@ class SmtpQueryProvider implements QueryProviderInterface
 
         if ($channel !== '') {
             $bound = $data->resolveTransportIdForChannel($channel, $module, $scope);
+            if ($bound === '' && $module !== 'Weline_Smtp') {
+                // 传输账户绑定统一维护在 Weline_Smtp；业务模块仅声明 channel。
+                $bound = $data->resolveTransportIdForChannel($channel, 'Weline_Smtp', $scope);
+            }
             if ($bound === '') {
                 return ['success' => false, 'message' => __('发信渠道 %{1} 未绑定传输账户', [$channel])];
             }
@@ -259,6 +265,9 @@ class SmtpQueryProvider implements QueryProviderInterface
 
         if ($senderCode !== null && $senderCode !== '') {
             $senderConfig = $data->getSenderByCode((string) $senderCode, $module, $scope);
+            if (!$senderConfig && $module !== 'Weline_Smtp') {
+                $senderConfig = $data->getSenderByCode((string) $senderCode, 'Weline_Smtp', $scope);
+            }
             if (!$senderConfig) {
                 return ['success' => false, 'message' => __('发件人 %{1} 未配置或配置不完整', [$senderCode])];
             }

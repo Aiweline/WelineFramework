@@ -11,6 +11,7 @@ use Weline\Smtp\Model\SmtpMailTemplate;
 use Weline\Smtp\Service\MailChannelCollector;
 use Weline\Smtp\Service\MailTemplateRenderer;
 use Weline\Smtp\Service\MailTemplateResolver;
+use Weline\Smtp\Service\MailTemplateSeedCopyCatalog;
 use Weline\Smtp\Service\MailTemplateSeeder;
 use Weline\SystemConfig\Model\SystemConfig;
 use Weline\SystemConfig\Service\SystemConfigTargetScopeService;
@@ -30,6 +31,7 @@ class Template extends BackendController
         $workScope = $this->resolveWorkScope(true);
         $storageScope = (string)$workScope['storage_scope'];
 
+        MailTemplateSeedCopyCatalog::materializeFiles();
         /** @var MailTemplateSeeder $seeder */
         $seeder = ObjectManager::getInstance(MailTemplateSeeder::class);
         $seeder->syncAll(SystemConfig::SCOPE_GLOBAL);
@@ -205,7 +207,7 @@ class Template extends BackendController
         $editScope = $storageScope;
         /** @var \Weline\Smtp\Service\MailBrandContextService $brandCtx */
         $brandCtx = ObjectManager::getInstance(\Weline\Smtp\Service\MailBrandContextService::class);
-        $previewSamples = $brandCtx->buildPreviewSamples($mergedVars, $editScope);
+        $previewSamples = $brandCtx->buildPreviewSamples($mergedVars, $editScope, $editLocale);
 
         $returnState = $this->listingReturnState(false);
         if ($returnState['focus_locale'] === '') {

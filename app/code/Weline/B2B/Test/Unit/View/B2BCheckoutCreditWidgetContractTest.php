@@ -116,7 +116,10 @@ final class B2BCheckoutCreditWidgetContractTest extends TestCase
             dirname(__DIR__, 3) . '/view/templates/frontend/widgets/checkout-tob-order-note.phtml'
         );
         self::assertStringContainsString('data-b2b-deposit-note', $orderNote);
-        self::assertStringContainsString('<lang>批发订单</lang>', $orderNote);
+        self::assertStringContainsString("WidgetI18n::label(\$source)", $orderNote);
+        self::assertStringContainsString("\$t('批发订单')", $orderNote);
+        self::assertStringNotContainsString("__('批发订单')", $orderNote);
+        self::assertStringNotContainsString('<lang>批发订单</lang>', $orderNote);
         self::assertStringContainsString('30%', $orderNote);
         self::assertStringContainsString('现金定金须保留至少', $orderNote);
         self::assertStringContainsString('不抵尾款', $orderNote);

@@ -144,6 +144,21 @@ final class SocialLoginPresentationServiceTest extends TestCase
             {
                 return '/start/' . $provider;
             }
+
+            public function quickGoogleUrl(): string
+            {
+                return '/quick/google';
+            }
+
+            public function quickFacebookUrl(): string
+            {
+                return '/quick/facebook';
+            }
+
+            public function currentStorefrontLocalePrefix(): string
+            {
+                return '/en_US';
+            }
         };
     }
 }

@@ -32,9 +32,15 @@ final class TranslationResolver implements TranslationResolverInterface
 
         foreach (\array_values(\array_unique($preferredModules)) as $moduleName) {
             $words = $this->moduleWords((string)$moduleName, $localeCode);
-            // Identity mappings (Hanfu,Hanfu) are intentional: keep source and stop.
-            if (isset($words[$source]) && $words[$source] !== '') {
-                return $words[$source];
+            if (!isset($words[$source]) || $words[$source] === '') {
+                continue;
+            }
+            $translated = $words[$source];
+            // Latin identity (Hanfu,Hanfu) is an explicit same-text translation.
+            // CJK identity in a non-zh locale is an untranslated collect placeholder
+            // and must not mask later modules or the public dictionary.
+            if ($this->isUsableModuleTranslation($source, $translated, $localeCode)) {
+                return $translated;
             }
         }
 
@@ -43,7 +49,10 @@ final class TranslationResolver implements TranslationResolverInterface
             $entry = $dictionary->getEntry($source, $localeCode);
             if ($entry !== null) {
                 $translated = \trim((string)$entry->translation);
-                if ($translated !== '') {
+                if ($translated !== '' && $this->isUsableModuleTranslation($source, $translated, $localeCode)) {
+                    return $translated;
+                }
+                if ($translated !== '' && $translated !== $source) {
                     return $translated;
                 }
             }
@@ -75,7 +84,10 @@ final class TranslationResolver implements TranslationResolverInterface
             lookup: function (string $word, string $locale) use ($preferredModules): ?string {
                 foreach (\array_values(\array_unique($preferredModules)) as $moduleName) {
                     $words = $this->moduleWords((string)$moduleName, $locale);
-                    if (isset($words[$word]) && $words[$word] !== '' && $words[$word] !== $word) {
+                    if (!isset($words[$word]) || $words[$word] === '') {
+                        continue;
+                    }
+                    if ($this->isUsableModuleTranslation($word, $words[$word], $locale)) {
                         return $words[$word];
                     }
                 }
@@ -141,6 +153,32 @@ final class TranslationResolver implements TranslationResolverInterface
         }
 
         return DictionaryCacheNamespace::localCache($this->moduleWords, 2048)[$cacheKey] = $words;
+    }
+
+    private function isUsableModuleTranslation(string $source, string $translated, string $localeCode): bool
+    {
+        $translated = \trim($translated);
+        if ($translated === '') {
+            return false;
+        }
+        if ($translated !== $source) {
+            return true;
+        }
+        if ($this->isChineseLocale($localeCode)) {
+            return true;
+        }
+
+        return !$this->containsCjk($source);
+    }
+
+    private function isChineseLocale(string $localeCode): bool
+    {
+        return \str_starts_with(\strtolower(\str_replace('-', '_', $localeCode)), 'zh');
+    }
+
+    private function containsCjk(string $text): bool
+    {
+        return \preg_match('/[\x{4e00}-\x{9fff}]/u', $text) === 1;
     }
 
     private function getPhraseScopeResolver(): PhraseScopeResolver

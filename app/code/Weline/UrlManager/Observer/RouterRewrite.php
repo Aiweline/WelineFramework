@@ -217,6 +217,11 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
             }
         }
         if (is_array($rewriteData) && isset($rewriteData['path'])) {
+            if ($this->shouldSkipStalePageBuilderShellRewrite($lookupUri, (string)$rewriteData['path'])) {
+                $this->setProcessCache($cacheKey, 'not_found');
+                $cache->set($cacheKey, 'not_found');
+                return;
+            }
             $this->applyRewrite(
                 $event,
                 $rewriteData['path'],
@@ -237,7 +242,12 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
         }
         
         if ($rewrite->getId()) {
-            $path = $rewrite->getData('path');
+            $path = (string)$rewrite->getData('path');
+            if ($this->shouldSkipStalePageBuilderShellRewrite($lookupUri, $path)) {
+                $this->setProcessCache($cacheKey, 'not_found');
+                $cache->set($cacheKey, 'not_found');
+                return;
+            }
             $rewriteData = [
                 'path' => $path,
                 'url_id' => (string)($rewrite->getData(UrlRewrite::schema_fields_URL_ID) ?? ''),
@@ -262,7 +272,12 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
             }
 
             if ($rewrite->getId()) {
-                $rewritePath = $rewrite->getData('path');
+                $rewritePath = (string)$rewrite->getData('path');
+                if ($this->shouldSkipStalePageBuilderShellRewrite($lookupUri, $rewritePath)) {
+                    $this->setProcessCache($cacheKey, 'not_found');
+                    $cache->set($cacheKey, 'not_found');
+                    return;
+                }
                 $rewriteData = [
                     'path' => $rewritePath,
                     'url_id' => (string)($rewrite->getData(UrlRewrite::schema_fields_URL_ID) ?? ''),
@@ -283,6 +298,39 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
                 $cache->set($cacheKey, 'not_found');
             }
         }
+    }
+
+    /**
+     * Default Theme storefronts own /privacy|/about|/terms|/contact shell pages.
+     * Stale PageBuilder pretty rewrites (missing CMS pages) must not steal them.
+     * PageBuilder / AI-site scopes keep their rewrites via Theme::prefersShellPublicAlias().
+     */
+    private function shouldSkipStalePageBuilderShellRewrite(string $prettyPath, string $targetPath): bool
+    {
+        $target = \strtolower(\ltrim($targetPath, '/'));
+        if (!\str_starts_with($target, 'pagebuilder/frontend/page')) {
+            return false;
+        }
+
+        $alias = \strtolower(\trim($prettyPath, '/'));
+        if ($alias === '') {
+            return false;
+        }
+
+        if (\class_exists(\Weline\Theme\Controller\Router::class)
+            && \Weline\Theme\Controller\Router::prefersShellPublicAlias($alias)
+        ) {
+            return true;
+        }
+
+        // Blog module owns /blog; do not keep dead PageBuilder seeds.
+        if (\class_exists(\Weline\Blog\Controller\Router::class)
+            && ($alias === 'blog' || \str_starts_with($alias, 'blog/'))
+        ) {
+            return true;
+        }
+
+        return false;
     }
     
     /**

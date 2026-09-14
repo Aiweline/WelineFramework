@@ -51,7 +51,7 @@
 - 一语言一套；listing 按渠道聚合当前 scope 下全部语言；发送 Resolver 就近向上
 - 通知域：`Module::notify_*` 回退 `Weline_Backend::notification_email`
 - **硬规则：邮件正文禁止 JavaScript**（无 `<script>` / 事件处理器 / `javascript:`）；仅 table + 内联样式
-- **固定页头/页尾**：`Smtp/view/email/shell/{locale}.html`（Theme `brand_*` 色调）；业务 `view/email/**` 只写正文；发信时组装
+- **固定页头/页尾**：`Smtp/view/email/shell.phtml`（`<lang>` + Theme `brand_*`）；业务 `view/email/**` 只写正文；发信按 locale 组装
 - **编辑工作区**：顶栏 CTA；变量分组；左编辑右 sticky 实时预览；**预览站址取 WebsiteDomain；Logo 上溯 Website appearance brand（`/pub/media/websites/...`，非 Theme 默认标）**
 - 发信自动注入站店渠信任变量：`site_name` / `store_name` / `channel_name` / `site_logo_img` / `contact_*` / `brand_primary` 等（`MailBrandContextService`）
 

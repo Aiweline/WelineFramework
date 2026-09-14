@@ -1,7 +1,7 @@
 {
     "success": false,
     "code": "maintenance",
-    "message": "系统正在升级维护中，请稍后再试。",
+    "message": "Sistem sedang dalam pemeliharaan peningkatan. Silakan coba lagi nanti.",
     "data": {
         "retry_after": 60,
         "lang": "id_ID",

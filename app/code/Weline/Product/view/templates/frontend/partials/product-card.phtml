@@ -7,6 +7,7 @@
 
 use Weline\Theme\Helper\ProductCardAddToCartParams;
 use Weline\Theme\Helper\ProductCardShopperActionParams;
+use Weline\Theme\Helper\WidgetI18n;
 use Weline\Product\Service\ProductCardRenderer;
 
 $product = $this->getData('product');
@@ -50,7 +51,7 @@ $isDemo = !empty($product['is_demo']);
 $sellable = !empty($product['sellable']);
 $quoteOnly = !empty($product['quote_only']);
 $offerUuid = trim((string)($product['global_offer_uuid'] ?? ''));
-$campaignLabel = trim((string)($product['campaign_label'] ?? ''));
+$campaignLabel = WidgetI18n::label(trim((string)($product['campaign_label'] ?? '')));
 $campaignUrl = trim((string)($product['campaign_url'] ?? ''));
 $imageLoading = ProductCardRenderer::imageLoadingAttributes($product);
 

@@ -12,9 +12,10 @@ declare(strict_types=1);
 namespace Weline\Marketing\Controller\Backend;
 
 use Weline\Framework\App\Controller\BackendController;
-use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Manager\Message;
 use Weline\Framework\Acl\Acl;
+use Weline\Framework\DateTime\Timezone;
+use Weline\Framework\Manager\Message;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Marketing\Model\Rule\LocalDescription;
 use Weline\Marketing\Model\Rule\Rule as RuleModel;
 use Weline\Marketing\Service\ExternalManagedRuleOwnership;
@@ -199,7 +200,13 @@ class Rule extends BackendController
             ], true)) {
                 throw new \InvalidArgumentException((string)__('规则状态无效'));
             }
-            $now = date('Y-m-d H:i:s');
+            $data[RuleModel::schema_fields_START_DATE] = $this->optionalLocalToUtc(
+                (string)($data[RuleModel::schema_fields_START_DATE] ?? ''),
+            );
+            $data[RuleModel::schema_fields_END_DATE] = $this->optionalLocalToUtc(
+                (string)($data[RuleModel::schema_fields_END_DATE] ?? ''),
+            );
+            $now = Timezone::utcNowSql();
             $data[RuleModel::schema_fields_UPDATED_AT] = $now;
             
             /** @var RuleModel $rule */
@@ -218,7 +225,7 @@ class Rule extends BackendController
             
             // 处理条件和动作
             if ($conditions !== null) {
-                $rule->setConditions($conditions);
+                $rule->setConditions($this->normalizeConditionWindows($conditions));
             }
             if ($actions !== null) {
                 $rule->setActions($actions);
@@ -272,5 +279,49 @@ class Rule extends BackendController
         }
 
         return $this->redirect('marketing/backend/rule/index');
+    }
+
+    private function optionalLocalToUtc(string $input): ?string
+    {
+        $input = trim($input);
+        if ($input === '') {
+            return null;
+        }
+
+        return Timezone::localInputToUtcSql($input);
+    }
+
+    /**
+     * @param array<string, mixed> $conditions
+     * @return array<string, mixed>
+     */
+    private function normalizeConditionWindows(array $conditions): array
+    {
+        $type = strtolower(trim((string)($conditions['type'] ?? '')));
+        if ($type === 'date_range') {
+            foreach (['start_date', 'end_date'] as $key) {
+                if (!isset($conditions[$key])) {
+                    continue;
+                }
+                $raw = trim((string)$conditions[$key]);
+                if ($raw === '') {
+                    $conditions[$key] = null;
+                    continue;
+                }
+                $utc = Timezone::localInputToUtcSql($raw);
+                if ($utc !== null) {
+                    $conditions[$key] = $utc;
+                }
+            }
+        }
+        if (isset($conditions['conditions']) && is_array($conditions['conditions'])) {
+            foreach ($conditions['conditions'] as $idx => $child) {
+                if (is_array($child)) {
+                    $conditions['conditions'][$idx] = $this->normalizeConditionWindows($child);
+                }
+            }
+        }
+
+        return $conditions;
     }
 }

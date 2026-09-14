@@ -137,7 +137,7 @@ final class CheckoutHtmlRendererTest extends TestCase
             [],
             'shipping_method',
             'CNY',
-            '当前地址下所选配送方案不可用，请调整收货地址或商品后再试。',
+            '当前地址下所选配送方案不可用，请调整收货地址或商品，或联系客服协助处理。',
             true,
         );
         self::assertStringContainsString('w-alert', $html);
@@ -146,6 +146,9 @@ final class CheckoutHtmlRendererTest extends TestCase
         self::assertStringContainsString('data-checkout-method-empty="shipping_method"', $html);
         self::assertStringContainsString('暂无可用配送方式', $html);
         self::assertStringContainsString('当前地址下所选配送方案不可用', $html);
+        self::assertStringContainsString('联系客服', $html);
+        self::assertStringContainsString('dir="auto"', $html);
+        self::assertStringContainsString('weline-checkout__method-alert-body', $html);
         self::assertStringNotContainsString('weline-checkout__empty', $html);
     }
 
@@ -175,12 +178,55 @@ final class CheckoutHtmlRendererTest extends TestCase
         self::assertStringContainsString('weline-checkout__payment-logo', $html);
         self::assertStringContainsString('/Weline/Payment/view/statics/img/payment/paypal.svg', $html);
         self::assertStringContainsString('data-payment-intro-toggle', $html);
+        self::assertStringContainsString('dir="auto"', $html);
+        self::assertStringContainsString('weline-checkout__payment-intro-text', $html);
         self::assertStringContainsString('data-payment-details', $html);
         self::assertStringContainsString('href="/guide/payment/paypal"', $html);
         self::assertStringContainsString('&lt;script&gt;', $html);
         self::assertStringNotContainsString('<script>alert', $html);
         self::assertStringContainsString('name="payment_method"', $html);
         self::assertStringContainsString('value="paypal"', $html);
+    }
+
+    public function testPaymentMethodOptionsSupportSelectedIndexAndHelpPayAttrs(): void
+    {
+        $r = new CheckoutHtmlRenderer();
+        $html = $r->renderPaymentMethodOptions(
+            [
+                [
+                    'code' => 'fake_card',
+                    'label' => '本地测试支付',
+                    'icon_url' => '/Weline/Payment/view/statics/img/payment/fake-card.svg',
+                    'requires_billing' => true,
+                ],
+                [
+                    'code' => 'paypal',
+                    'label' => 'PayPal',
+                    'icon_url' => '/Weline/Payment/view/statics/img/payment/paypal.svg',
+                    'requires_billing' => false,
+                ],
+            ],
+            'helppay_payment_method',
+            '',
+            [
+                'selected_index' => 1,
+                'radio_boolean_attrs' => ['data-helppay-payment-method'],
+                'testid_prefix' => 'help-pay-method-',
+            ]
+        );
+        self::assertStringContainsString('weline-checkout__payment-logo', $html);
+        self::assertStringContainsString('data-helppay-payment-method', $html);
+        self::assertStringContainsString('data-requires-billing="0"', $html);
+        self::assertStringContainsString('data-requires-billing="1"', $html);
+        self::assertStringContainsString('data-testid="help-pay-method-paypal"', $html);
+        self::assertMatchesRegularExpression(
+            '/value="paypal"[^>]*checked|checked[^>]*value="paypal"/',
+            $html
+        );
+        self::assertDoesNotMatchRegularExpression(
+            '/value="fake_card"[^>]*checked|checked[^>]*value="fake_card"/',
+            $html
+        );
     }
 
     public function testCheckoutIndexPhtmlDoesNotCreateElementForItems(): void
@@ -190,6 +236,10 @@ final class CheckoutHtmlRendererTest extends TestCase
         $src = (string)file_get_contents($path);
         self::assertStringContainsString('applyServerHtml', $src);
         self::assertStringContainsString('enhancePaymentMethodIntros', $src);
+        self::assertMatchesRegularExpression(
+            '/payment-intro-text\s*\{[^}]*unicode-bidi:\s*isolate/s',
+            $src
+        );
         self::assertStringContainsString('data-checkout-swatch-preview', $src);
         self::assertStringContainsString('data-checkout-swatch-trigger', $src);
         self::assertStringContainsString('frontend/checkout/partials/items.phtml', $src);
@@ -212,8 +262,15 @@ final class CheckoutHtmlRendererTest extends TestCase
         self::assertFileExists($path);
         $src = (string)file_get_contents($path);
         self::assertStringContainsString('renderPaymentMethodOptions', $src);
-        self::assertStringContainsString("'icon_url'", $src);
-        self::assertStringContainsString("'guide_url'", $src);
-        self::assertStringContainsString('/guide/payment/', $src);
+        self::assertStringContainsString('CheckoutPaymentMethodsProvider', $src);
+
+        $providerPath = dirname(__DIR__, 3) . '/Service/CheckoutPaymentMethodsProvider.php';
+        self::assertFileExists($providerPath);
+        $providerSrc = (string)file_get_contents($providerPath);
+        self::assertStringContainsString("'icon_url'", $providerSrc);
+        self::assertStringContainsString("'guide_url'", $providerSrc);
+        self::assertStringContainsString('/guide/payment/', $providerSrc);
+        self::assertStringContainsString('getCheckoutPaymentMethods', $providerSrc);
+        self::assertStringContainsString('requires_billing', $providerSrc);
     }
 }

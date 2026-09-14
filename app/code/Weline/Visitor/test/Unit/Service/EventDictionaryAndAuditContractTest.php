@@ -105,6 +105,17 @@ HTML;
             }
         }
         $this->assertArrayHasKey('add_to_cart', $byName);
+        $this->assertArrayHasKey('friend_help_pay', $byName);
+        $this->assertArrayHasKey('selection_share', $byName);
+        $this->assertArrayHasKey('quick_buy', $byName);
+        $this->assertArrayHasKey('express_pay', $byName);
+        $this->assertArrayHasKey('express_pay_checkout_success', $byName);
+        $this->assertSame('找朋友代付', $byName['friend_help_pay']['label_zh'] ?? null);
+        $this->assertSame('分享给朋友', $byName['selection_share']['label_zh'] ?? null);
+        $this->assertSame('快捷购买', $byName['quick_buy']['label_zh'] ?? null);
+        $this->assertSame('快捷支付', $byName['express_pay']['label_zh'] ?? null);
+        $this->assertSame('share', $byName['selection_share']['ga4_event'] ?? null);
+        $this->assertSame('purchase', $byName['express_pay_checkout_success']['ga4_event'] ?? null);
         $this->assertSame(['checkout'], $byName['add_to_cart']['page_scopes'] ?? null);
         $this->assertSame(['checkout'], $byName['view_item']['page_scopes'] ?? null);
         $this->assertSame(['checkout'], $byName['begin_checkout']['page_scopes'] ?? null);

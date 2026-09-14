@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Promotion\Service;
 
 use Weline\Framework\Database\Transaction\WriteIntentTransactionCoordinatorInterface;
+use Weline\Framework\DateTime\Timezone;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
@@ -332,6 +333,13 @@ final class PromotionActivityThemeService
         $model->setData(PromotionActivityTheme::schema_fields_PRODUCT_PICK_MODE, $pickMode);
         $model->setData(PromotionActivityTheme::schema_fields_DEAL_DISCOUNT_TYPE, $dealType);
         $model->setData(PromotionActivityTheme::schema_fields_DEAL_DISCOUNT_VALUE, $dealValue);
+        $startsAtUtc = $this->optionalLocalWindowToUtc((string)($data['starts_at'] ?? $data['start_date'] ?? ''));
+        $endsAtUtc = $this->optionalLocalWindowToUtc((string)($data['ends_at'] ?? $data['end_date'] ?? ''));
+        if ($startsAtUtc !== null && $endsAtUtc !== null && $endsAtUtc <= $startsAtUtc) {
+            return ['success' => false, 'message' => (string)__('活动结束时间必须晚于开始时间。')];
+        }
+        $model->setData(PromotionActivityTheme::schema_fields_STARTS_AT, $startsAtUtc);
+        $model->setData(PromotionActivityTheme::schema_fields_ENDS_AT, $endsAtUtc);
         $model->setData(
             PromotionActivityTheme::schema_fields_PRODUCT_FILTER_JSON,
             $pickMode === PromotionThemeProductService::PICK_MODE_FILTER
@@ -761,14 +769,32 @@ final class PromotionActivityThemeService
         $pageTitle = trim($pageTitle);
         foreach ([$navLabel, $pageTitle] as $candidate) {
             if ($candidate !== '' && ($slug === '' || strcasecmp($candidate, $slug) !== 0)) {
-                return $candidate;
+                return $this->translateStorefrontCampaignLabel($candidate);
             }
         }
         if ($slug !== '') {
-            return $this->defaultNavLabel($slug);
+            return $this->translateStorefrontCampaignLabel($this->defaultNavLabel($slug));
         }
 
-        return $pageTitle !== '' ? $pageTitle : $navLabel;
+        return $this->translateStorefrontCampaignLabel($pageTitle !== '' ? $pageTitle : $navLabel);
+    }
+
+    /**
+     * DB/local seeds store Chinese source keys; translate for non-zh storefront locales.
+     */
+    private function translateStorefrontCampaignLabel(string $label): string
+    {
+        $label = trim($label);
+        if ($label === '') {
+            return '';
+        }
+        if (preg_match('/\p{Han}/u', $label) !== 1) {
+            return $label;
+        }
+        // Path locale can lag behind Phrase/__; use Theme WidgetI18n (preferred modules include Promotion).
+        $translated = trim(\Weline\Theme\Helper\WidgetI18n::label($label));
+
+        return $translated !== '' ? $translated : $label;
     }
 
     /** @param array{website_id:int,store_code:string,channel_code:string} $scope */
@@ -1141,7 +1167,22 @@ final class PromotionActivityThemeService
             'deal_discount_type' => (string)($data[PromotionActivityTheme::schema_fields_DEAL_DISCOUNT_TYPE] ?? PromotionThemeDealDiscountSyncService::DISCOUNT_NONE),
             'deal_discount_value' => (float)($data[PromotionActivityTheme::schema_fields_DEAL_DISCOUNT_VALUE] ?? 0),
             'marketing_rule_id' => (int)($data[PromotionActivityTheme::schema_fields_MARKETING_RULE_ID] ?? 0),
+            'starts_at' => (string)($data[PromotionActivityTheme::schema_fields_STARTS_AT] ?? ''),
+            'ends_at' => (string)($data[PromotionActivityTheme::schema_fields_ENDS_AT] ?? ''),
             'storefront_url' => $this->storefrontUrl((string)($data[PromotionActivityTheme::schema_fields_PAGE_SLUG] ?? '')),
         ];
+    }
+
+    private function optionalLocalWindowToUtc(string $input): ?string
+    {
+        $input = trim($input);
+        if ($input === '') {
+            return null;
+        }
+        if (preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/D', $input) === 1) {
+            return $input;
+        }
+
+        return Timezone::localInputToUtcSql($input);
     }
 }

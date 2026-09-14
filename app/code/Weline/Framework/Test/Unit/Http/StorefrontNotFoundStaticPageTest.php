@@ -11,27 +11,40 @@ final class StorefrontNotFoundStaticPageTest extends TestCase
 {
     public function testResolveLangFromQueryAndPathOnly(): void
     {
-        self::assertSame('en_US', StorefrontNotFoundStaticPage::resolveLang('/', 'lang=en_US'));
-        self::assertSame('en_US', StorefrontNotFoundStaticPage::resolveLang('/en_US/products'));
-        // Path beats query when both are present.
-        self::assertSame(
-            'en_US',
-            StorefrontNotFoundStaticPage::resolveLang('/en_US/products', 'lang=ja_JP')
-        );
-        // Language cookies are ignored (path/query only).
-        self::assertSame(
-            'zh_Hans_CN',
-            StorefrontNotFoundStaticPage::resolveLang('/', '', 'foo=bar; WELINE_USER_LANG=ja_JP')
-        );
-        self::assertSame('zh_Hans_CN', StorefrontNotFoundStaticPage::resolveLang('/products'));
-        self::assertSame(
-            'en_US',
-            StorefrontNotFoundStaticPage::resolveLang('/pub/errors/storefront-not-found/en_US.html')
-        );
-        self::assertSame(
-            '/pub/errors/storefront-not-found/en_US.html',
-            StorefrontNotFoundStaticPage::publicHtmlUrl('en_US')
-        );
+        $previousMirror = $_SERVER['WELINE_USER_LANG'] ?? null;
+        unset($_SERVER['WELINE_USER_LANG']);
+        try {
+            self::assertSame('en_US', StorefrontNotFoundStaticPage::resolveLang('/', 'lang=en_US'));
+            self::assertSame('en_US', StorefrontNotFoundStaticPage::resolveLang('/en_US/products'));
+            // Path beats query when both are present.
+            self::assertSame(
+                'en_US',
+                StorefrontNotFoundStaticPage::resolveLang('/en_US/products', 'lang=ja_JP')
+            );
+            // Language cookies are ignored (path/query/request-server mirror only).
+            self::assertSame(
+                'zh_Hans_CN',
+                StorefrontNotFoundStaticPage::resolveLang('/', '', 'foo=bar; WELINE_USER_LANG=ja_JP')
+            );
+            self::assertSame('zh_Hans_CN', StorefrontNotFoundStaticPage::resolveLang('/products'));
+            $_SERVER['WELINE_USER_LANG'] = 'en_US';
+            self::assertSame('en_US', StorefrontNotFoundStaticPage::resolveLang('/products'));
+            unset($_SERVER['WELINE_USER_LANG']);
+            self::assertSame(
+                'en_US',
+                StorefrontNotFoundStaticPage::resolveLang('/pub/errors/storefront-not-found/en_US.html')
+            );
+            self::assertSame(
+                '/pub/errors/storefront-not-found/en_US.html',
+                StorefrontNotFoundStaticPage::publicHtmlUrl('en_US')
+            );
+        } finally {
+            if ($previousMirror === null) {
+                unset($_SERVER['WELINE_USER_LANG']);
+            } else {
+                $_SERVER['WELINE_USER_LANG'] = $previousMirror;
+            }
+        }
     }
 
     public function testLoadHtmlReadsPublishedSnapshot(): void

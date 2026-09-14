@@ -23,7 +23,7 @@ final class HelpPayQueryFrontendExposureContractTest extends TestCase
             $byName[(string) $op['name']] = $op;
         }
 
-        foreach (['createHelpPay', 'createSelectionShare', 'createQuickPay', 'qrPng', 'revoke', 'resolveHelpPay'] as $name) {
+        foreach (['createHelpPay', 'createSelectionShare', 'createQuickPay', 'listQuickShippingOptions', 'qrPng', 'revoke', 'resolveHelpPay', 'startPayerPayment', 'startQuickPayment'] as $name) {
             self::assertArrayHasKey($name, $byName, $name . ' missing');
             $op = $byName[$name];
             self::assertTrue(($op['frontend'] ?? false) === true, $name . ' must set frontend=true');
@@ -32,6 +32,9 @@ final class HelpPayQueryFrontendExposureContractTest extends TestCase
         }
 
         self::assertSame('write', $byName['createQuickPay']['mode']);
+        self::assertSame('read', $byName['listQuickShippingOptions']['mode']);
+        self::assertSame('write', $byName['startPayerPayment']['mode']);
+        self::assertSame('write', $byName['startQuickPayment']['mode']);
         self::assertSame('read', $byName['qrPng']['mode']);
         self::assertSame('read', $byName['resolveHelpPay']['mode']);
 
@@ -49,6 +52,34 @@ final class HelpPayQueryFrontendExposureContractTest extends TestCase
             $byName['createHelpPay']['params'] ?? []
         );
         self::assertContains('currency_code', $helpPayParams);
-        self::assertContains('line_summary', $helpPayParams);
+        $quickParams = array_map(
+            static fn ($p) => \is_array($p) ? (string) ($p['name'] ?? '') : '',
+            $byName['createQuickPay']['params'] ?? []
+        );
+        self::assertContains('product_id', $quickParams);
+        self::assertContains('service_code', $quickParams);
+        self::assertContains('shipping_amount_minor', $quickParams);
+
+        $registryFile = null;
+        $walk = __DIR__;
+        for ($i = 0; $i < 10; $i++) {
+            $walk = dirname($walk);
+            $candidate = $walk . '/generated/framework/query_providers.php';
+            if (is_file($candidate)) {
+                $registryFile = $candidate;
+                break;
+            }
+        }
+        self::assertNotNull($registryFile, 'expected compiled query_providers.php after framework:compile');
+        /** @var array<string,mixed> $registry */
+        $registry = require $registryFile;
+        $compiled = $registry['operations']['helpPay']['startPayerPayment'] ?? null;
+        self::assertIsArray($compiled, 'framework:compile must register helpPay.startPayerPayment');
+        self::assertTrue(($compiled['frontend'] ?? false) === true);
+        self::assertSame('write', (string) ($compiled['mode'] ?? ''));
+        $compiledQuickShip = $registry['operations']['helpPay']['listQuickShippingOptions'] ?? null;
+        self::assertIsArray($compiledQuickShip, 'framework:compile must register helpPay.listQuickShippingOptions');
+        self::assertTrue(($compiledQuickShip['frontend'] ?? false) === true);
+        self::assertSame('read', (string) ($compiledQuickShip['mode'] ?? ''));
     }
 }

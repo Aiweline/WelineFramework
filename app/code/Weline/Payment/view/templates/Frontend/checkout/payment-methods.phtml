@@ -218,7 +218,7 @@ if ($isFakeMode) {
                                     <?php endif; ?>
                                 </span>
                                 <?php if ($description !== ''): ?>
-                                    <span class="payment-method-description"><?= $esc(__($description)) ?></span>
+                                    <span class="payment-method-description" dir="auto"><?= $esc(__($description)) ?></span>
                                 <?php endif; ?>
                                 <?php if (!$isAvailable): ?>
                                     <span class="payment-method-card__reason">
@@ -431,6 +431,7 @@ document.addEventListener('DOMContentLoaded', function() {
     color: #4b5563;
     font-size: 13px;
     line-height: 1.45;
+    unicode-bidi: isolate;
 }
 
 .payment-methods__grid,

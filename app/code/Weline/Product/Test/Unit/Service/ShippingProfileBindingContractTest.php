@@ -55,6 +55,8 @@ final class ShippingProfileBindingContractTest extends TestCase
         self::assertStringContainsString('product-edit-shipping-hazard', $edit);
         self::assertStringContainsString('product-shipping-hint', $pdp);
         self::assertStringContainsString('previewHint', $pdp);
+        self::assertStringContainsString('WidgetI18n::label((string)$shippingHint[\'note\'])', $pdp);
+        self::assertStringContainsString('WidgetI18n::label((string)$shippingHint[\'badge\'])', $pdp);
         self::assertStringContainsString('normalizeShippingProfileCode', $cmd);
         self::assertStringContainsString('normalizeShippingHazardClass', $cmd);
         self::assertStringContainsString('shipping_profile_code', $snap);

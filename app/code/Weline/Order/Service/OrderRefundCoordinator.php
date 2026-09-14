@@ -6,11 +6,13 @@ namespace Weline\Order\Service;
 
 use Weline\Framework\Database\Model;
 use Weline\Framework\Database\Transaction\WriteIntentTransactionCoordinatorInterface;
+use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Inventory\Api\InventoryRefundCapabilityInterface;
 use Weline\Inventory\Api\WarehouseInventoryCapabilityInterface;
 use Weline\Order\Api\RefundAssetReturnCapabilityInterface;
 use Weline\Order\Model\Order;
+use Weline\Order\Model\OrderHistory;
 use Weline\Order\Model\OrderItem;
 use Weline\Order\Model\RefundCase;
 use Weline\Order\Model\RefundOutbox;
@@ -912,6 +914,7 @@ final class OrderRefundCoordinator
                             RefundCase::schema_fields_UPDATED_AT,
                             date('Y-m-d H:i:s'),
                         )->save();
+                        $this->syncPersistedRefundProgress($case, null);
                     }
 
                     return [
@@ -1211,6 +1214,9 @@ final class OrderRefundCoordinator
             )
             ->setData(RefundCase::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'))
             ->save();
+        if ($status === RefundCase::STATUS_SUCCEEDED) {
+            $this->syncPersistedRefundProgress($case, $payment);
+        }
     }
 
     private function createPostCashOutboxes(
@@ -2011,6 +2017,235 @@ final class OrderRefundCoordinator
         return $this->transactions ??= $this->objectManager()->get(
             WriteIntentTransactionCoordinatorInterface::class,
         );
+    }
+
+    /**
+     * 渠道退款成功后：回写行 qty_refunded、订单头、时间线。失败不回滚已成功的渠道结果。
+     */
+    public function syncPersistedRefundProgress(
+        RefundCase $case,
+        ?RefundOperationResult $payment = null,
+    ): void {
+        if ($this->isolated) {
+            return;
+        }
+        $orderUuid = trim((string)$case->getData(RefundCase::schema_fields_ORDER_UUID));
+        if ($orderUuid === '') {
+            return;
+        }
+        try {
+            $order = $this->newModel(Order::class)
+                ->where(Order::schema_fields_ORDER_UUID, $orderUuid)
+                ->find()
+                ->fetch();
+            if (!$order instanceof Order || !$order->getId()) {
+                return;
+            }
+            $orderId = (int)$order->getId();
+            $facts = $this->persistentOccupiedFacts($orderUuid);
+            $itemRemaining = false;
+            $items = $this->newModel(OrderItem::class)
+                ->where(OrderItem::schema_fields_ORDER_UUID, $orderUuid)
+                ->select()
+                ->fetch();
+            foreach ($this->modelItems($items, OrderItem::class) as $item) {
+                $itemUuid = (string)$item->getData(OrderItem::schema_fields_ITEM_UUID);
+                $orderedQty = (int)$item->getData(OrderItem::schema_fields_QTY_MINOR);
+                if ($orderedQty <= 0) {
+                    $orderedQty = (int)$item->getData(OrderItem::schema_fields_QTY_ORDERED);
+                }
+                $occupiedQty = (int)($facts['items'][$itemUuid]['qty_minor'] ?? 0);
+                $item->setData(OrderItem::schema_fields_QTY_REFUNDED, $occupiedQty)->save();
+                if ($orderedQty - $occupiedQty > 0) {
+                    $itemRemaining = true;
+                }
+            }
+            $grandMinor = (int)round(((float)$order->getData(Order::schema_fields_GRAND_TOTAL)) * 100);
+            $occupiedMinor = (int)($facts['amount_minor'] ?? 0);
+            $fullyRefunded = !$itemRemaining && $occupiedMinor >= $grandMinor && $grandMinor > 0;
+            if ($fullyRefunded) {
+                $order->setData(
+                    Order::schema_fields_PAYMENT_STATUS,
+                    Order::PAYMENT_STATUS_REFUNDED,
+                )->save();
+                $this->transitionOrderRefunded(
+                    $orderId,
+                    $this->refundHistoryComment($order, $case, $payment),
+                    $order,
+                    $case,
+                    $payment,
+                );
+            } else {
+                $this->appendRefundHistory($order, $case, $payment, false);
+            }
+        } catch (\Throwable $throwable) {
+            if (\function_exists('w_log_error')) {
+                w_log_error(
+                    '[OrderRefundCoordinator] sync refund progress failed',
+                    [
+                        'order_uuid' => $orderUuid,
+                        'refund_case_uuid' => (string)$case->getData(
+                            RefundCase::schema_fields_REFUND_CASE_UUID,
+                        ),
+                        'error' => $throwable->getMessage(),
+                    ],
+                    'order',
+                );
+            }
+        }
+    }
+
+    private function appendRefundHistory(
+        Order $order,
+        RefundCase $case,
+        ?RefundOperationResult $payment,
+        bool $fullyRefunded,
+    ): void {
+        $orderId = (int)$order->getId();
+        $caseUuid = (string)$case->getData(RefundCase::schema_fields_REFUND_CASE_UUID);
+        if ($orderId <= 0 || $caseUuid === '' || $this->refundHistoryExists($orderId, $caseUuid)) {
+            return;
+        }
+        $comment = $this->refundHistoryComment($order, $case, $payment);
+        $status = $fullyRefunded
+            ? Order::STATUS_REFUNDED
+            : (string)$order->getData(Order::schema_fields_STATUS);
+        $history = $this->newModel(OrderHistory::class);
+        $history->setData(OrderHistory::schema_fields_ORDER_ID, $orderId)
+            ->setData(OrderHistory::schema_fields_STATUS, $status !== '' ? $status : Order::STATUS_PAID)
+            ->setData(OrderHistory::schema_fields_COMMENT, $comment)
+            ->setData(OrderHistory::schema_fields_IS_CUSTOMER_NOTIFIED, 0)
+            ->save();
+    }
+
+    private function refundHistoryExists(int $orderId, string $caseUuid): bool
+    {
+        $rows = $this->newModel(OrderHistory::class)
+            ->where(OrderHistory::schema_fields_ORDER_ID, $orderId)
+            ->select()
+            ->fetchArray();
+        if (!\is_array($rows)) {
+            return false;
+        }
+        foreach ($rows as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            if (str_contains((string)($row[OrderHistory::schema_fields_COMMENT] ?? ''), $caseUuid)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function refundHistoryComment(
+        Order $order,
+        RefundCase $case,
+        ?RefundOperationResult $payment,
+    ): string {
+        $method = trim((string)$order->getData(Order::schema_fields_PAYMENT_METHOD));
+        $currency = strtoupper(trim((string)$case->getData(RefundCase::schema_fields_CURRENCY)));
+        if ($currency === '') {
+            $currency = 'CNY';
+        }
+        $amount = number_format(
+            ((int)$case->getData(RefundCase::schema_fields_AMOUNT_MINOR)) / 100,
+            2,
+            '.',
+            '',
+        );
+        $providerId = trim((string)($payment?->getProviderRefundId() ?? ''));
+        if ($providerId === '') {
+            $found = $this->paymentRefunds()->findByRefundCaseUuid(
+                (string)$case->getData(RefundCase::schema_fields_REFUND_CASE_UUID),
+            );
+            if ($found instanceof RefundOperationResult) {
+                $providerId = trim((string)($found->getProviderRefundId() ?? ''));
+            }
+        }
+        $refundCode = trim((string)$case->getData(RefundCase::schema_fields_PAYMENT_REFUND_CODE));
+        $caseUuid = (string)$case->getData(RefundCase::schema_fields_REFUND_CASE_UUID);
+        $reason = trim((string)$case->getData(RefundCase::schema_fields_REASON));
+        $parts = ['退款成功'];
+        if ($method !== '') {
+            $parts[0] .= '（' . $method . '）';
+        }
+        $parts[] = $currency . ' ' . $amount;
+        if ($providerId !== '') {
+            $parts[] = '渠道退款号 ' . $providerId;
+        }
+        if ($refundCode !== '') {
+            $parts[] = '支付退款号 ' . $refundCode;
+        }
+        $parts[] = '案例 ' . $caseUuid;
+        if ($reason !== '') {
+            $parts[] = '原因 ' . $reason;
+        }
+
+        return implode('，', $parts);
+    }
+
+    private function transitionOrderRefunded(
+        int $orderId,
+        string $comment,
+        Order $order,
+        RefundCase $case,
+        ?RefundOperationResult $payment,
+    ): void {
+        try {
+            /** @var OrderStateMachine $machine */
+            $machine = $this->objectManager()->getInstance(OrderStateMachine::class);
+            $machine->transition($orderId, Order::STATUS_REFUNDED, $comment, false);
+        } catch (\Throwable $throwable) {
+            $fresh = $this->newModel(Order::class)
+                ->where(Order::schema_fields_ID, $orderId)
+                ->find()
+                ->fetch();
+            if ($fresh instanceof Order && $fresh->getId()) {
+                $current = (string)$fresh->getData(Order::schema_fields_STATUS);
+                if ($current !== Order::STATUS_REFUNDED) {
+                    $fresh->setData(Order::schema_fields_STATUS, Order::STATUS_REFUNDED)->save();
+                }
+            }
+            if (\function_exists('w_log_error')) {
+                w_log_error(
+                    '[OrderRefundCoordinator] order status refunded transition failed',
+                    [
+                        'order_id' => $orderId,
+                        'error' => $throwable->getMessage(),
+                    ],
+                    'order',
+                );
+            }
+        }
+        if (!$this->refundHistoryExists(
+            $orderId,
+            (string)$case->getData(RefundCase::schema_fields_REFUND_CASE_UUID),
+        )) {
+            $this->appendRefundHistory($order, $case, $payment, true);
+        }
+        try {
+            $order = $this->newModel(Order::class)
+                ->where(Order::schema_fields_ID, $orderId)
+                ->find()
+                ->fetch();
+            if (!$order instanceof Order || !$order->getId()) {
+                return;
+            }
+            $eventData = [
+                'order' => $order,
+                'order_id' => $orderId,
+                'refund_amount' => (float)$order->getData(Order::schema_fields_GRAND_TOTAL),
+                'refund' => null,
+            ];
+            $eventData = OrderTypeEventEnvelope::append($eventData);
+            /** @var EventsManager $events */
+            $events = $this->objectManager()->getInstance(EventsManager::class);
+            $events->dispatch('Weline_Order::order_refunded', $eventData);
+        } catch (\Throwable) {
+            // 渠道结果已权威成功，事件失败不回滚。
+        }
     }
 
     private function objectManager(): ObjectManager

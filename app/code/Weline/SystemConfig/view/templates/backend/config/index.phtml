@@ -447,6 +447,9 @@ $adapterCallbackUrl = static function (array $adapter) use ($templateInstance, $
     }
 
     if (!$appendScope) {
+        // Fixed OAuth redirect_uri: never include storefront /CURRENCY/locale prefixes.
+        $base = \Weline\Framework\Http\Url::withoutStorefrontLocalizationPrefix($base);
+
         return $fragment !== '' ? ($base . '#' . $fragment) : $base;
     }
 

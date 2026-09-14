@@ -1,0 +1,1 @@
+Restablezca su contraseña · {{var.customer_email}}

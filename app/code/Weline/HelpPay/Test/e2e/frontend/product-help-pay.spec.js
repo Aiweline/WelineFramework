@@ -67,7 +67,19 @@ moduleDescribe(test, MODULE, 'product help-pay quiet CTA', () => {
         const dialogText = await dialog.innerText();
         expect(dialogText).not.toContain('请先到结账页完善');
         expect(dialogText).not.toContain('Operation is not exposed to frontend worker API');
+        expect(dialogText).not.toContain('Weline_Framework');
         expect(dialogText).toMatch(/代付|收货地址/);
+        const changeBtn = page.locator('[data-helppay-address-mount] [data-change-address]');
+        const hasCard = (await page.locator('[data-helppay-address-mount] [data-address-card]').count()) > 0;
+        if (hasCard) {
+          await expect(changeBtn).toBeVisible({ timeout: 5000 });
+          await changeBtn.click();
+          await page.waitForTimeout(800);
+          await expect(page.locator('[data-helppay-address-mount] [data-shipping-checkout-address]')).toHaveAttribute(
+            'data-mode',
+            'picking',
+          );
+        }
       }
     }
   );

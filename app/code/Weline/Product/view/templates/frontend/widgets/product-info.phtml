@@ -1,6 +1,7 @@
 <?php
 
 use Weline\Theme\Helper\StorefrontImagePlaceholder;
+use Weline\Theme\Helper\WidgetI18n;
 /**
  * Product-owned main information block for the PDP product-main slot.
  *
@@ -405,14 +406,14 @@ $interactiveVariantAxes = $hasInteractiveVariants
     ? array_values((array)$variantCatalog['axes'])
     : $variantAxes;
 $specificationLabel = static function (string $code, string $rawLabel = '') use ($specificationLabels): string {
-    if (array_key_exists($code, $specificationLabels)) {
-        return (string)$specificationLabels[$code];
-    }
     $rawLabel = trim($rawLabel);
     // EAV Attribute LocalDescription is authoritative for the current locale.
     // Do not wrap with __() — CSV reverse maps can turn English locals back to Chinese.
     if ($rawLabel !== '') {
         return $rawLabel;
+    }
+    if (array_key_exists($code, $specificationLabels)) {
+        return (string)$specificationLabels[$code];
     }
 
     return (string)__(ucwords(str_replace('_', ' ', $code)));
@@ -768,10 +769,10 @@ if ($productBreadcrumbs === []) {
                 <?php if (is_array($shippingHint)): ?>
                     <div class="product-native-detail__shipping-hint" data-testid="product-shipping-hint">
                         <?php if (!empty($shippingHint['badge'])): ?>
-                            <span class="product-native-detail__shipping-badge"><?= $escape((string)$shippingHint['badge']) ?></span>
+                            <span class="product-native-detail__shipping-badge"><?= $escape(WidgetI18n::label((string)$shippingHint['badge'])) ?></span>
                         <?php endif; ?>
                         <?php if (!empty($shippingHint['note'])): ?>
-                            <span class="product-native-detail__shipping-note"><?= $escape((string)$shippingHint['note']) ?></span>
+                            <span class="product-native-detail__shipping-note"><?= $escape(WidgetI18n::label((string)$shippingHint['note'])) ?></span>
                         <?php endif; ?>
                     </div>
                 <?php endif; ?>
@@ -793,15 +794,8 @@ if ($productBreadcrumbs === []) {
                             <?php
                             $axisCode = strtolower(trim((string)($axis['code'] ?? '')));
                             $rawAxisLabel = trim((string)($axis['label'] ?? ''));
-                            // 已知规格码优先走 specificationLabels（内含 __()）；否则对 EAV/种子原文 __()。
-                            // 避免 interactive catalog 回退 label=code（如 color）时英文仍显示小写 code。
-                            if (array_key_exists($axisCode, $specificationLabels)) {
-                                $axisLabel = $specificationLabel($axisCode);
-                            } elseif ($rawAxisLabel !== '') {
-                                $axisLabel = (string)__($rawAxisLabel);
-                            } else {
-                                $axisLabel = $specificationLabel($axisCode);
-                            }
+                            // Prefer EAV Attribute LocalDescription; then known __() map; then code.
+                            $axisLabel = $specificationLabel($axisCode, $rawAxisLabel);
                             $selectedValue = trim((string)(
                                 $hasInteractiveVariants
                                     ? ($variantCatalog['selected'][$axisCode] ?? ($axis['value'] ?? ''))
@@ -1196,7 +1190,7 @@ if ($productBreadcrumbs === []) {
             <button type="button" class="product-native-detail__quote-close" data-product-quote-close aria-label="<?= $escape(__('关闭')) ?>">×</button>
             <h2 id="product-quote-title-<?= (int)$productId ?>"><?= __('提交询价') ?></h2>
             <p class="product-native-detail__quote-context">
-                <span data-quote-field="sku-label"><?= __('SKU') ?>: <strong data-quote-field="sku"><?= $escape((string)($offer['sku'] ?? '')) ?></strong></span>
+                <span data-quote-field="sku-label"><?= $escape(WidgetI18n::label('SKU', 'SKU')) ?>: <strong data-quote-field="sku"><?= $escape((string)($offer['sku'] ?? '')) ?></strong></span>
                 <span data-quote-field="selection-wrap" hidden> · <span data-quote-field="selection"></span></span>
                 <span data-quote-field="price-wrap" <?= $minor > 0 ? '' : 'hidden' ?>> · <?= __('参考价') ?> <strong data-quote-field="price"><?= $escape(($offer['currency'] ?? 'CNY') . ' ' . number_format($minor / 100, 2)) ?></strong></span>
                 <span data-quote-field="campaign-wrap" <?= $campaignLabel !== '' ? '' : 'hidden' ?>> · <strong data-quote-field="campaign"><?= $escape($campaignLabel) ?></strong></span>
@@ -2043,8 +2037,11 @@ if ($productBreadcrumbs === []) {
         color: var(--amz-text);
     }
     .product-native-detail__secure {
-        color: #565959;
+        color: var(--color-text-secondary, #565959);
         font-size: 12px;
+    }
+    .product-native-detail__buybox > .product-native-detail__secure {
+        margin-top: var(--spacing-md, 1rem);
     }
     .product-native-detail__message {
         min-height: 20px;

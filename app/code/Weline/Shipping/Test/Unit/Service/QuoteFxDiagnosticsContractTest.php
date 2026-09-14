@@ -15,7 +15,8 @@ final class QuoteFxDiagnosticsContractTest extends TestCase
         );
         self::assertStringContainsString('getLastQuoteDiagnostics', $src);
         self::assertStringContainsString('fx_skipped', $src);
-        self::assertStringContainsString("\$fxSkipped[] = \$serviceCode", $src);
+        self::assertStringContainsString('$fxSkipped[] = $skipped', $src);
+        self::assertStringContainsString("'missing_weight'", $src);
     }
 
     public function testListQuoteOptionsReturnsDiagnostics(): void

@@ -293,4 +293,52 @@ final class PayPalProviderTest extends TestCase
         self::assertSame(\Weline\Payment\Api\Data\RefundResult::STATUS_REFUNDED, $result->getStatus());
         self::assertSame('REF-123', $result->getProviderReference());
     }
+
+    public function testSandboxCnyRefundConvertsToUsdCaptureAmount(): void
+    {
+        $provider = new PayPalProvider();
+        $provider->setApiClient(new PayPalApiClient(
+            static function (string $method, string $url, array $headers, ?string $body): array {
+                if (str_contains($url, '/v1/oauth2/token')) {
+                    return ['status' => 200, 'body' => json_encode(['access_token' => 'token-123']) ?: '{}'];
+                }
+                if (str_contains($url, '/v2/payments/captures/CAP-CNY/refund')) {
+                    self::assertSame('POST', $method);
+                    $payload = json_decode((string)$body, true);
+                    self::assertIsArray($payload);
+                    self::assertSame('USD', $payload['amount']['currency_code'] ?? null);
+                    self::assertSame('26.90', $payload['amount']['value'] ?? null);
+
+                    return [
+                        'status' => 201,
+                        'body' => json_encode(['id' => 'REF-CNY', 'status' => 'COMPLETED']) ?: '{}',
+                    ];
+                }
+
+                throw new \RuntimeException('Unexpected PayPal URL: ' . $url);
+            }
+        ));
+
+        $result = $provider->refund(\Weline\Payment\Api\Data\RefundRequest::fromArray([
+            'refund_code' => 'RF-CNY',
+            'transaction_code' => 'CAP-CNY',
+            'method_code' => 'paypal',
+            'amount_minor' => 19370,
+            'currency_code' => 'CNY',
+            'provider_reference' => 'CAP-CNY',
+            'context' => [
+                'environment' => 'sandbox',
+                'capture_id' => 'CAP-CNY',
+                'runtime_config' => [
+                    'sandbox_client_id' => 'sb-client',
+                    'sandbox_client_secret' => 'sb-secret',
+                    'return_url' => 'https://example.test/payment/return',
+                    'cancel_url' => 'https://example.test/payment/cancel',
+                ],
+            ],
+        ]));
+
+        self::assertSame(\Weline\Payment\Api\Data\RefundResult::STATUS_REFUNDED, $result->getStatus());
+        self::assertSame('REF-CNY', $result->getProviderReference());
+    }
 }

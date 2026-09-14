@@ -12,6 +12,7 @@
  */
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Helper\SiteContactInfo;
+use Weline\Theme\Helper\WidgetI18n;
 
 $meta = $this->getData('meta') ?? [];
 $escape = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
@@ -26,21 +27,21 @@ try {
 } catch (\Throwable) {
 }
 $siteName = (string)$contact['site_name'];
-$title = (string)($meta['title'] ?? __('隐私政策'));
+$title = (string)($meta['title'] ?? WidgetI18n::label('隐私政策'));
 $updatedAt = date('Y-m-d');
-$ariaNav = (string)__('隐私政策目录');
-$ariaArticle = (string)__('隐私政策正文');
+$ariaNav = (string)WidgetI18n::label('隐私政策目录');
+$ariaArticle = (string)WidgetI18n::label('隐私政策正文');
 $toc = [
-    ['id' => 'privacy-s1', 'label' => __('一、信息收集')],
-    ['id' => 'privacy-s2', 'label' => __('二、信息使用')],
-    ['id' => 'privacy-s3', 'label' => __('三、信息共享与披露')],
-    ['id' => 'privacy-s4', 'label' => __('四、信息存储与安全')],
-    ['id' => 'privacy-s5', 'label' => __('五、您的权利')],
-    ['id' => 'privacy-s6', 'label' => __('六、未成年人保护')],
-    ['id' => 'privacy-s7', 'label' => __('七、Cookie 与同类技术')],
-    ['id' => 'privacy-s8', 'label' => __('八、第三方服务')],
-    ['id' => 'privacy-s9', 'label' => __('九、政策更新')],
-    ['id' => 'privacy-s10', 'label' => __('十、联系我们')],
+    ['id' => 'privacy-s1', 'label' => WidgetI18n::label('一、信息收集')],
+    ['id' => 'privacy-s2', 'label' => WidgetI18n::label('二、信息使用')],
+    ['id' => 'privacy-s3', 'label' => WidgetI18n::label('三、信息共享与披露')],
+    ['id' => 'privacy-s4', 'label' => WidgetI18n::label('四、信息存储与安全')],
+    ['id' => 'privacy-s5', 'label' => WidgetI18n::label('五、您的权利')],
+    ['id' => 'privacy-s6', 'label' => WidgetI18n::label('六、未成年人保护')],
+    ['id' => 'privacy-s7', 'label' => WidgetI18n::label('七、Cookie 与同类技术')],
+    ['id' => 'privacy-s8', 'label' => WidgetI18n::label('八、第三方服务')],
+    ['id' => 'privacy-s9', 'label' => WidgetI18n::label('九、政策更新')],
+    ['id' => 'privacy-s10', 'label' => WidgetI18n::label('十、联系我们')],
 ];
 ?>
 <!DOCTYPE html>
@@ -258,19 +259,19 @@ $toc = [
                         <header class="amazon-policy__hero" aria-labelledby="policy-privacy-title" weline-code="theme.policy.hero">
                             
                                 <p class="amazon-policy__eyebrow"><?= $escape($siteName) ?></p>
-                                <h1 id="policy-privacy-title"><?php if (!empty($meta['title'])): ?><?= $escape($title) ?><?php else: ?><lang>隐私政策</lang><?php endif; ?></h1>
-                                <p class="amazon-policy__hero-lead"><lang>我们非常重视您的隐私保护。本隐私政策说明我们如何收集、使用、存储和保护您的个人信息。请仔细阅读，以了解我们对个人信息的处理方式。</lang></p>
+                                <h1 id="policy-privacy-title"><?php if (!empty($meta['title'])): ?><?= $escape($title) ?><?php else: ?><?= $escape(WidgetI18n::label('隐私政策')) ?><?php endif; ?></h1>
+                                <p class="amazon-policy__hero-lead"><?= $escape(WidgetI18n::label('我们非常重视您的隐私保护。本隐私政策说明我们如何收集、使用、存储和保护您的个人信息。请仔细阅读，以了解我们对个人信息的处理方式。')) ?></p>
                                 <div class="amazon-policy__meta">
-                                    <span><lang>最后更新：</lang><?= $escape($updatedAt) ?></span>
-                                    <a href="@url{'terms'}"><lang>服务条款</lang></a>
-                                    <a href="@url{'cookies'}"><lang>Cookie 政策</lang></a>
-                                    <a href="@url{'faq'}"><lang>帮助中心</lang></a>
+                                    <span><?= $escape(WidgetI18n::label('最后更新：')) ?><?= $escape($updatedAt) ?></span>
+                                    <a href="@url{'terms'}"><?= $escape(WidgetI18n::label('服务条款')) ?></a>
+                                    <a href="@url{'cookies'}"><?= $escape(WidgetI18n::label('Cookie 政策')) ?></a>
+                                    <a href="@url{'faq'}"><?= $escape(WidgetI18n::label('帮助中心')) ?></a>
                         </div>
                         </header>
 
                         <div class="amazon-policy__panel">
                                     <aside class="amazon-policy__toc" aria-label="<?= $escape($ariaNav) ?>">
-                                        <h2><lang>目录</lang></h2>
+                                        <h2><?= $escape(WidgetI18n::label('目录')) ?></h2>
                                         <nav>
                                             <?php foreach ($toc as $item): ?>
                                                 <a href="#<?= $escape($item['id']) ?>"><?= $escape($item['label']) ?></a>
@@ -279,103 +280,103 @@ $toc = [
                                     </aside>
 
                                     <article class="amazon-policy__article" aria-label="<?= $escape($ariaNav) ?>">
-                                        <p class="amazon-policy__intro"><lang>本政策构成您与本网站之间关于个人信息处理的重要说明。请结合目录逐章阅读；如有疑问，可通过帮助中心或联系入口与我们沟通。</lang></p>
+                                        <p class="amazon-policy__intro"><?= $escape(WidgetI18n::label('本政策构成您与本网站之间关于个人信息处理的重要说明。请结合目录逐章阅读；如有疑问，可通过帮助中心或联系入口与我们沟通。')) ?></p>
 
                                         <section class="amazon-policy__section" id="privacy-s1" weline-code="theme.policy.section_2">
-                                            <h2><lang>一、信息收集</lang></h2>
-                                            <p><lang>1.1 我们会在合法、正当、必要的前提下收集您的个人信息。我们可能收集的信息包括：</lang></p>
+                                            <h2><?= $escape(WidgetI18n::label('一、信息收集')) ?></h2>
+                                            <p><?= $escape(WidgetI18n::label('1.1 我们会在合法、正当、必要的前提下收集您的个人信息。我们可能收集的信息包括：')) ?></p>
                                             <ul>
-                                                <li><lang>（1）账户信息：用户名、密码、邮箱地址、手机号码、实名认证信息等；</lang></li>
-                                                <li><lang>（2）交易信息：订单信息、支付信息、收货地址、发票信息等；</lang></li>
-                                                <li><lang>（3）设备信息：设备型号、操作系统、浏览器类型、IP地址、设备标识符等；</lang></li>
-                                                <li><lang>（4）日志信息：访问时间、访问页面、搜索关键词、点击记录等；</lang></li>
-                                                <li><lang>（5）位置信息：在您授权的情况下，我们可能收集您的地理位置信息；</lang></li>
-                                                <li><lang>（6）其他信息：您主动提供的其他个人信息。</lang></li>
+                                                <li><?= $escape(WidgetI18n::label('（1）账户信息：用户名、密码、邮箱地址、手机号码、实名认证信息等；')) ?></li>
+                                                <li><?= $escape(WidgetI18n::label('（2）交易信息：订单信息、支付信息、收货地址、发票信息等；')) ?></li>
+                                                <li><?= $escape(WidgetI18n::label('（3）设备信息：设备型号、操作系统、浏览器类型、IP地址、设备标识符等；')) ?></li>
+                                                <li><?= $escape(WidgetI18n::label('（4）日志信息：访问时间、访问页面、搜索关键词、点击记录等；')) ?></li>
+                                                <li><?= $escape(WidgetI18n::label('（5）位置信息：在您授权的情况下，我们可能收集您的地理位置信息；')) ?></li>
+                                                <li><?= $escape(WidgetI18n::label('（6）其他信息：您主动提供的其他个人信息。')) ?></li>
                                             </ul>
                                         </section>
 
                                         <section class="amazon-policy__section" id="privacy-s2" weline-code="theme.policy.section_3">
-                                            <h2><lang>二、信息使用</lang></h2>
-                                            <p><lang>2.1 我们收集信息的目的包括：</lang></p>
+                                            <h2><?= $escape(WidgetI18n::label('二、信息使用')) ?></h2>
+                                            <p><?= $escape(WidgetI18n::label('2.1 我们收集信息的目的包括：')) ?></p>
                                             <ul>
-                                                <li><lang>（1）提供、维护和改进服务：处理您的订单、提供客户支持、优化用户体验；</lang></li>
-                                                <li><lang>（2）身份验证与安全：验证您的身份、保障账户安全、防范欺诈行为；</lang></li>
-                                                <li><lang>（3）个性化服务：根据您的偏好提供个性化内容和推荐；</lang></li>
-                                                <li><lang>（4）营销与推广：向您发送促销信息、活动通知（您可随时退订）；</lang></li>
-                                                <li><lang>（5）数据分析：进行统计分析，改进产品和服务质量；</lang></li>
-                                                <li><lang>（6）法律合规：遵守法律法规要求，配合监管机构调查。</lang></li>
+                                                <li><?= $escape(WidgetI18n::label('（1）提供、维护和改进服务：处理您的订单、提供客户支持、优化用户体验；')) ?></li>
+                                                <li><?= $escape(WidgetI18n::label('（2）身份验证与安全：验证您的身份、保障账户安全、防范欺诈行为；')) ?></li>
+                                                <li><?= $escape(WidgetI18n::label('（3）个性化服务：根据您的偏好提供个性化内容和推荐；')) ?></li>
+                                                <li><?= $escape(WidgetI18n::label('（4）营销与推广：向您发送促销信息、活动通知（您可随时退订）；')) ?></li>
+                                                <li><?= $escape(WidgetI18n::label('（5）数据分析：进行统计分析，改进产品和服务质量；')) ?></li>
+                                                <li><?= $escape(WidgetI18n::label('（6）法律合规：遵守法律法规要求，配合监管机构调查。')) ?></li>
                                             </ul>
                                         </section>
 
                                         <section class="amazon-policy__section" id="privacy-s3" weline-code="theme.policy.section_4">
-                                            <h2><lang>三、信息共享与披露</lang></h2>
-                                            <p><lang>3.1 我们不会向第三方出售、出租或以其他方式披露您的个人信息，除非：</lang></p>
+                                            <h2><?= $escape(WidgetI18n::label('三、信息共享与披露')) ?></h2>
+                                            <p><?= $escape(WidgetI18n::label('3.1 我们不会向第三方出售、出租或以其他方式披露您的个人信息，除非：')) ?></p>
                                             <ul>
-                                                <li><lang>（1）获得您的明确同意；</lang></li>
-                                                <li><lang>（2）法律法规规定或司法机关、行政机关依法要求提供；</lang></li>
-                                                <li><lang>（3）为履行服务协议或提供服务所必需，向我们的关联公司、合作伙伴或服务提供商共享（我们要求其承担保密义务）；</lang></li>
-                                                <li><lang>（4）在紧急情况下，为保护用户或公众的生命、财产安全；</lang></li>
-                                                <li><lang>（5）其他符合法律法规规定的情形。</lang></li>
+                                                <li><?= $escape(WidgetI18n::label('（1）获得您的明确同意；')) ?></li>
+                                                <li><?= $escape(WidgetI18n::label('（2）法律法规规定或司法机关、行政机关依法要求提供；')) ?></li>
+                                                <li><?= $escape(WidgetI18n::label('（3）为履行服务协议或提供服务所必需，向我们的关联公司、合作伙伴或服务提供商共享（我们要求其承担保密义务）；')) ?></li>
+                                                <li><?= $escape(WidgetI18n::label('（4）在紧急情况下，为保护用户或公众的生命、财产安全；')) ?></li>
+                                                <li><?= $escape(WidgetI18n::label('（5）其他符合法律法规规定的情形。')) ?></li>
                                             </ul>
                                         </section>
 
                                         <section class="amazon-policy__section" id="privacy-s4" weline-code="theme.policy.section_5">
-                                            <h2><lang>四、信息存储与安全</lang></h2>
-                                            <p><lang>4.1 我们采用行业标准的安全措施保护您的个人信息，包括但不限于数据加密、访问控制、安全审计等。</lang></p>
-                                            <p><lang>4.2 您的个人信息将存储在中华人民共和国境内。如需跨境传输，我们将依法进行安全评估并获得您的同意。</lang></p>
-                                            <p><lang>4.3 我们仅在实现本政策所述目的所必需的期间内保留您的个人信息。超出保留期限后，我们将删除或匿名化处理您的个人信息。</lang></p>
+                                            <h2><?= $escape(WidgetI18n::label('四、信息存储与安全')) ?></h2>
+                                            <p><?= $escape(WidgetI18n::label('4.1 我们采用行业标准的安全措施保护您的个人信息，包括但不限于数据加密、访问控制、安全审计等。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('4.2 您的个人信息将存储在中华人民共和国境内。如需跨境传输，我们将依法进行安全评估并获得您的同意。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('4.3 我们仅在实现本政策所述目的所必需的期间内保留您的个人信息。超出保留期限后，我们将删除或匿名化处理您的个人信息。')) ?></p>
                                         </section>
 
                                         <section class="amazon-policy__section" id="privacy-s5" weline-code="theme.policy.section_6">
-                                            <h2><lang>五、您的权利</lang></h2>
-                                            <p><lang>根据相关法律法规，您享有以下权利：</lang></p>
+                                            <h2><?= $escape(WidgetI18n::label('五、您的权利')) ?></h2>
+                                            <p><?= $escape(WidgetI18n::label('根据相关法律法规，您享有以下权利：')) ?></p>
                                             <ul>
-                                                <li><lang>（1）查询权：您有权查询我们收集的您的个人信息；</lang></li>
-                                                <li><lang>（2）更正权：您有权要求我们更正不准确的个人信息；</lang></li>
-                                                <li><lang>（3）删除权：在符合法律法规规定的情况下，您有权要求我们删除您的个人信息；</lang></li>
-                                                <li><lang>（4）撤回同意权：您有权撤回对个人信息处理的同意；</lang></li>
-                                                <li><lang>（5）复制权：您有权获取您的个人信息副本；</lang></li>
-                                                <li><lang>（6）投诉举报权：您有权向相关监管部门投诉举报我们的个人信息处理行为。</lang></li>
+                                                <li><?= $escape(WidgetI18n::label('（1）查询权：您有权查询我们收集的您的个人信息；')) ?></li>
+                                                <li><?= $escape(WidgetI18n::label('（2）更正权：您有权要求我们更正不准确的个人信息；')) ?></li>
+                                                <li><?= $escape(WidgetI18n::label('（3）删除权：在符合法律法规规定的情况下，您有权要求我们删除您的个人信息；')) ?></li>
+                                                <li><?= $escape(WidgetI18n::label('（4）撤回同意权：您有权撤回对个人信息处理的同意；')) ?></li>
+                                                <li><?= $escape(WidgetI18n::label('（5）复制权：您有权获取您的个人信息副本；')) ?></li>
+                                                <li><?= $escape(WidgetI18n::label('（6）投诉举报权：您有权向相关监管部门投诉举报我们的个人信息处理行为。')) ?></li>
                                             </ul>
-                                            <p><lang>您可以通过账户设置或联系我们行使上述权利。</lang></p>
+                                            <p><?= $escape(WidgetI18n::label('您可以通过账户设置或联系我们行使上述权利。')) ?></p>
                                         </section>
 
                                         <section class="amazon-policy__section" id="privacy-s6" weline-code="theme.policy.section_7">
-                                            <h2><lang>六、未成年人保护</lang></h2>
-                                            <p><lang>6.1 我们非常重视未成年人的个人信息保护。如果您是未满18周岁的未成年人，请在您的父母或监护人的陪同下阅读本政策，并在征得同意后使用我们的服务。</lang></p>
-                                            <p><lang>6.2 如果我们发现自己在未事先获得可证实的父母或监护人同意的情况下收集了未成年人的个人信息，我们会设法尽快删除相关数据。</lang></p>
+                                            <h2><?= $escape(WidgetI18n::label('六、未成年人保护')) ?></h2>
+                                            <p><?= $escape(WidgetI18n::label('6.1 我们非常重视未成年人的个人信息保护。如果您是未满18周岁的未成年人，请在您的父母或监护人的陪同下阅读本政策，并在征得同意后使用我们的服务。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('6.2 如果我们发现自己在未事先获得可证实的父母或监护人同意的情况下收集了未成年人的个人信息，我们会设法尽快删除相关数据。')) ?></p>
                                         </section>
 
                                         <section class="amazon-policy__section" id="privacy-s7" weline-code="theme.policy.section_8">
-                                            <h2><lang>七、Cookie 与同类技术</lang></h2>
-                                            <p><lang>7.1 我们可能使用 Cookie、本地存储等技术维持登录状态、记住语言与货币偏好、保障交易安全，并进行必要的访问统计。</lang></p>
-                                            <p><lang>7.2 您可通过浏览器设置管理 Cookie。完整说明请参阅本站「Cookie 政策」。禁用部分 Cookie 可能导致购物车、登录或结算功能异常。</lang></p>
+                                            <h2><?= $escape(WidgetI18n::label('七、Cookie 与同类技术')) ?></h2>
+                                            <p><?= $escape(WidgetI18n::label('7.1 我们可能使用 Cookie、本地存储等技术维持登录状态、记住语言与货币偏好、保障交易安全，并进行必要的访问统计。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('7.2 您可通过浏览器设置管理 Cookie。完整说明请参阅本站「Cookie 政策」。禁用部分 Cookie 可能导致购物车、登录或结算功能异常。')) ?></p>
                                         </section>
 
                                         <section class="amazon-policy__section" id="privacy-s8" weline-code="theme.policy.section_9">
-                                            <h2><lang>八、第三方服务</lang></h2>
-                                            <p><lang>8.1 为完成支付、物流跟踪、邮件通知、内容分发等，我们可能向经审慎选择的服务提供商提供必要信息，并要求其仅在委托目的范围内处理。</lang></p>
-                                            <p><lang>8.2 第三方支付或社交登录等服务受其自身隐私政策约束；跳转至第三方页面前请阅读其说明。</lang></p>
+                                            <h2><?= $escape(WidgetI18n::label('八、第三方服务')) ?></h2>
+                                            <p><?= $escape(WidgetI18n::label('8.1 为完成支付、物流跟踪、邮件通知、内容分发等，我们可能向经审慎选择的服务提供商提供必要信息，并要求其仅在委托目的范围内处理。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('8.2 第三方支付或社交登录等服务受其自身隐私政策约束；跳转至第三方页面前请阅读其说明。')) ?></p>
                                         </section>
 
                                         <section class="amazon-policy__section" id="privacy-s9" weline-code="theme.policy.section_10">
-                                            <h2><lang>九、政策更新</lang></h2>
-                                            <p><lang>9.1 我们可能会根据法律法规变化或业务需要对本隐私政策进行更新。更新后的内容将发布在本页面，并自公布之日起生效。</lang></p>
-                                            <p><lang>9.2 如发生重大变更，我们可能会通过显著方式（如网站公告、邮件通知等）向您告知。</lang></p>
+                                            <h2><?= $escape(WidgetI18n::label('九、政策更新')) ?></h2>
+                                            <p><?= $escape(WidgetI18n::label('9.1 我们可能会根据法律法规变化或业务需要对本隐私政策进行更新。更新后的内容将发布在本页面，并自公布之日起生效。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('9.2 如发生重大变更，我们可能会通过显著方式（如网站公告、邮件通知等）向您告知。')) ?></p>
                                         </section>
 
                                         <section class="amazon-policy__section" id="privacy-s10" weline-code="theme.policy.section_11">
-                                            <h2><lang>十、联系我们</lang></h2>
-                                            <p><lang>如您对本隐私政策有任何疑问、意见或建议，或需要行使您的权利，请通过本网站「帮助中心」「联系我们」或账户内支持入口与我们联系。我们将在合理期限内回复您的请求。</lang></p>
+                                            <h2><?= $escape(WidgetI18n::label('十、联系我们')) ?></h2>
+                                            <p><?= $escape(WidgetI18n::label('如您对本隐私政策有任何疑问、意见或建议，或需要行使您的权利，请通过本网站「帮助中心」「联系我们」或账户内支持入口与我们联系。我们将在合理期限内回复您的请求。')) ?></p>
                                         </section>
 
                                         <div class="amazon-policy__footer-note">
-                                            <p><lang>如对本隐私政策有疑问，或需行使查阅、更正、删除等权利，请通过帮助中心或联系我们与支持团队沟通。</lang></p>
+                                            <p><?= $escape(WidgetI18n::label('如对本隐私政策有疑问，或需行使查阅、更正、删除等权利，请通过帮助中心或联系我们与支持团队沟通。')) ?></p>
                                             <div class="amazon-policy__related">
-                                                <a href="@url{'cookies'}"><lang>Cookie 政策</lang></a>
-                                                <a href="@url{'terms'}"><lang>服务条款</lang></a>
-                                                <a href="@url{'refund'}"><lang>退款政策</lang></a>
-                                                <a href="@url{'faq'}"><lang>帮助中心</lang></a>
+                                                <a href="@url{'cookies'}"><?= $escape(WidgetI18n::label('Cookie 政策')) ?></a>
+                                                <a href="@url{'terms'}"><?= $escape(WidgetI18n::label('服务条款')) ?></a>
+                                                <a href="@url{'refund'}"><?= $escape(WidgetI18n::label('退款政策')) ?></a>
+                                                <a href="@url{'faq'}"><?= $escape(WidgetI18n::label('帮助中心')) ?></a>
                                             </div>
                                         </div>
                                     </article>

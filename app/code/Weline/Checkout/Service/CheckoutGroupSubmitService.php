@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Checkout\Service;
 
 use Weline\Checkout\Api\CheckoutSessionStoreInterface;
+use Weline\Checkout\Service\CheckoutEntry;
 use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Database\Service\DatabaseTransactionRunnerInterface;
 use Weline\Framework\Manager\ObjectManager;
@@ -137,8 +138,12 @@ final class CheckoutGroupSubmitService
         ?string $paymentMethod = null,
         ?array $billingAddress = null,
         string $cartType = 'toc',
+        ?string $existingQuoteToken = null,
+        string $cartFingerprint = '',
+        string $checkoutEntry = CheckoutEntry::CHECKOUT,
     ): array {
         $this->rejectClientAuthority($clientHints);
+        $checkoutEntry = CheckoutEntry::normalize($checkoutEntry, CheckoutEntry::CHECKOUT);
         if ($lines === []) {
             throw new CheckoutV2ConflictException(self::ERROR_EMPTY, __('结账行不能为空'));
         }
@@ -383,10 +388,12 @@ final class CheckoutGroupSubmitService
             ? max(0, $goodsSubtotalTaxed - $depositAmountMinor) + (int)($alloc['group_shipping_minor'] ?? 0)
             : 0;
 
-        $token = 'qt_' . bin2hex(random_bytes(12));
+        $token = $this->resolveFreezeToken($existingQuoteToken);
         $payload = [
             'quote_token' => $token,
             'state' => \Weline\Checkout\Model\CheckoutSession::STATE_QUOTED,
+            'cart_fingerprint' => $cartFingerprint,
+            'checkout_entry' => $checkoutEntry,
             'currency' => $currency,
             'config_version' => $configVersion,
             'cart_hash' => $cartHash,
@@ -625,6 +632,8 @@ final class CheckoutGroupSubmitService
                     'offer_id' => $item['offer_id'] ?? null,
                     'product_id' => $item['product_id'] ?? null,
                     'tax_class_code' => $item['tax_class_code'] ?? 'standard',
+                    'weight_minor' => max(0, (int) ($item['weight_minor'] ?? 0)),
+                    'volume_minor' => max(0, (int) ($item['volume_minor'] ?? 0)),
                 ], $this->pricingChromeFromLine($item));
                 if ((bool)($item['requires_shipping'] ?? true)) {
                     $offerId = (int)($item['offer_id'] ?? 0);
@@ -738,6 +747,10 @@ final class CheckoutGroupSubmitService
                     : $session['address'],
                 'cart_type' => $cartType,
                 'order_type' => $cartType,
+                'checkout_entry' => CheckoutEntry::normalize(
+                    (string)($session['checkout_entry'] ?? ''),
+                    CheckoutEntry::UNKNOWN,
+                ),
                 'discounts_banned' => $discountsBanned,
                 'deposit' => $deposit,
                 'defer_inventory' => $deferInventory,
@@ -878,6 +891,26 @@ final class CheckoutGroupSubmitService
     /**
      * @param array<string, mixed> $payload
      */
+    private function resolveFreezeToken(?string $existingQuoteToken): string
+    {
+        $token = trim((string)$existingQuoteToken);
+        if ($token === '') {
+            return 'qt_' . bin2hex(random_bytes(12));
+        }
+        $existing = $this->sessionStore->get($token);
+        if (!is_array($existing)) {
+            return $token;
+        }
+        $state = (string)($existing['state'] ?? \Weline\Checkout\Model\CheckoutSession::STATE_QUOTED);
+        if ($state === \Weline\Checkout\Model\CheckoutSession::STATE_SUBMITTED
+            || $state === \Weline\Checkout\Model\CheckoutSession::STATE_SUBMITTING
+        ) {
+            return 'qt_' . bin2hex(random_bytes(12));
+        }
+
+        return $token;
+    }
+
     private function putSession(string $token, array $payload): void
     {
         $this->sessionStore->put($token, $payload);
@@ -1228,6 +1261,8 @@ final class CheckoutGroupSubmitService
                 'offer_id' => $line['offer_id'] ?? null,
                 'product_id' => $line['product_id'] ?? null,
                 'tax_class_code' => (string) ($line['tax_class_code'] ?? 'standard'),
+                'weight_minor' => max(0, (int) ($line['weight_minor'] ?? 0)),
+                'volume_minor' => max(0, (int) ($line['volume_minor'] ?? 0)),
             ], $this->pricingChromeFromLine($line));
             $buckets[$split]['subtotal_minor'] += $row;
             if ($requires) {

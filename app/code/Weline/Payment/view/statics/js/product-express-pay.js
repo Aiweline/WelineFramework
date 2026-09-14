@@ -79,6 +79,17 @@
     return issued;
   }
 
+  function trackPixel(name, payload, element) {
+    try {
+      if (global.WelinePixel && typeof global.WelinePixel.track === 'function') {
+        global.WelinePixel.track(name, payload || {}, {
+          element: element || null,
+          keepalive: true,
+        });
+      }
+    } catch (e) {}
+  }
+
   function openProviderWindow(url) {
     var href = text(url);
     if (!href) {
@@ -120,10 +131,25 @@
     }
   }
 
+  function trackPixel(name, payload, el) {
+    try {
+      if (global.WelinePixel && typeof global.WelinePixel.track === 'function') {
+        global.WelinePixel.track(name, payload || {}, { element: el || null, keepalive: true });
+      }
+    } catch (e) {}
+  }
+
   async function startExpressFromSection(section, button) {
     var methodCode = text(button.getAttribute('data-method-code')
       || section.getAttribute('data-method-code')
       || 'paypal') || 'paypal';
+    trackPixel('express_pay', {
+      payment_method: methodCode,
+      product_id: Number(section.getAttribute('data-product-id') || 0) || 0,
+      selected_options: readEavSelection(section),
+      source: 'product_express_pay',
+      trigger: 'click',
+    }, button);
     var buyNow = findBuyNow(section);
     var productId = Number(
       (buyNow && buyNow.dataset.productId)
@@ -186,6 +212,12 @@
     if (!redirectUrl) {
       throw new Error((started && started.message) || 'express_redirect_missing');
     }
+    trackPixel('express_pay_started', {
+      payment_method: methodCode,
+      product_id: productId,
+      source: 'product_express_pay',
+      trigger: 'express_started',
+    }, button);
     openProviderWindow(redirectUrl);
     return started;
   }
@@ -204,6 +236,7 @@
       }
       event.preventDefault();
       event.stopPropagation();
+      // stopPropagation 会挡住声明式像素点击；起点/拉起在 startExpressFromSection 内 track
       setBusy(button, true);
       startExpressFromSection(section, button).catch(function (error) {
         var message = text(error && error.message) || 'express_failed';

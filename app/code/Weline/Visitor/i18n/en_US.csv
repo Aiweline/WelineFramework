@@ -1,5 +1,9 @@
 ﻿访客像素标签,"Visitor pixel tag"
 "在渲染访客像素标签时触发，允许其他模块控制像素启停和名称。出于安全原因，不执行 pixel_code 自定义脚本。","Fires when a guest pixel tag is rendered, allowing other modules to control pixel start, stop, and name. For security reasons, the pixel_code custom script is not executed."
+事件链收集,事件链收集
+"组装前台 eventChains 时触发；业务模块向 chains 追加漏斗定义（id/steps/complete_event）。亦支持 Extends EventChainProvider。","组装前台 eventChains 时触发；业务模块向 chains 追加漏斗定义（id/steps/complete_event）。亦支持 Extends EventChainProvider。"
+"网站 ID","网站 ID"
+可追加的事件链列表,可追加的事件链列表
 "前端 JS 异常邮件","前端 JS 异常邮件"
 "未处理 Promise 邮件","未处理 Promise 邮件"
 接口技术失败邮件,接口技术失败邮件

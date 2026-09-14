@@ -125,8 +125,8 @@
             description: "前台账户退出确认"
         },
         customerSocialQuick: {
-            origin_paths: ["app/code/Weline/Customer/view/statics/js/account-social-quick.js?v=20260910-mount-fw2"],
-            paths: ["/Weline/Customer/view/statics/js/account-social-quick.js?v=20260910-mount-fw2"],
+            origin_paths: ["app/code/Weline/Customer/view/statics/js/account-social-quick.js?v=20260914-google-fixed-start-1"],
+            paths: ["/Weline/Customer/view/statics/js/account-social-quick.js?v=20260914-google-fixed-start-1"],
             globalVar: "WelineSocialQuick",
             description: "未登录右下角社媒快捷登录条（由 account JS 动态拉起）"
         },
@@ -162,8 +162,8 @@
             description: "支付生命周期：weline:payment:* 统一事件"
         },
         productExpressPay: {
-            origin_paths: ["app/code/Weline/Payment/view/statics/js/product-express-pay.js?v=20260912-pdp-express-popup1"],
-            paths: ["/Weline/Payment/view/statics/js/product-express-pay.js?v=20260912-pdp-express-popup1"],
+            origin_paths: ["app/code/Weline/Payment/view/statics/js/product-express-pay.js?v=20260914-express-pixel1"],
+            paths: ["/Weline/Payment/view/statics/js/product-express-pay.js?v=20260914-express-pixel1"],
             globalVar: "WelineProductExpressPay",
             load: "lazy",
             description: "PDP 快捷智能支付：加车后 startExpressCheckout 并打开支付商窗体"
@@ -229,8 +229,8 @@
             description: "Geo定位模块（浏览器定位和IP定位）"
         },
         shippingCheckoutAddress: {
-            origin_paths: ["app/code/Weline/Shipping/view/statics/js/widgets/checkout-shipping-address.js?v=20260914-isolation1"],
-            paths: ["/Weline/Shipping/view/statics/js/widgets/checkout-shipping-address.js?v=20260914-isolation1"],
+            origin_paths: ["app/code/Weline/Shipping/view/statics/js/widgets/checkout-shipping-address.js?v=20260914-picker-all-addr1"],
+            paths: ["/Weline/Shipping/view/statics/js/widgets/checkout-shipping-address.js?v=20260914-picker-all-addr1"],
             globalVar: "WelineShippingCheckoutAddress",
             description: "结账收货地址部件"
         },
@@ -255,8 +255,8 @@
             description: "结账生命周期：weline:checkout:order-created / success"
         },
         checkoutExpressReview: {
-            origin_paths: ["app/code/Weline/Checkout/view/statics/js/express-review.js?v=20260914-express-review-label"],
-            paths: ["/Weline/Checkout/view/statics/js/express-review.js?v=20260914-express-review-label"],
+            origin_paths: ["app/code/Weline/Checkout/view/statics/js/express-review.js?v=20260914-weight-align1"],
+            paths: ["/Weline/Checkout/view/statics/js/express-review.js?v=20260914-weight-align1"],
             globalVar: "WelineCheckoutExpressReview",
             load: "lazy",
             description: "快捷支付回头确认页：摘要/缺口/确认收款"
@@ -311,8 +311,8 @@
             description: "商品详情/加购弹窗分销分享（等账户会话后异步水合）"
         },
         helpPayShare: {
-            origin_paths: ["app/code/Weline/HelpPay/view/statics/js/helppay-share.js?v=20260914-share-spec1"],
-            paths: ["/Weline/HelpPay/view/statics/js/helppay-share.js?v=20260914-share-spec1"],
+            origin_paths: ["app/code/Weline/HelpPay/view/statics/js/helppay-share.js?v=20260914-event-chain1"],
+            paths: ["/Weline/HelpPay/view/statics/js/helppay-share.js?v=20260914-event-chain1"],
             globalVar: "WelineModules.helpPayShare",
             load: "defer",
             description: "帮我付 / 纯分享 / 快捷购买 / 商品找朋友代付：规则确认、出链双形态复制（样式由脚本注入主题 Token CSS）"

@@ -34,5 +34,21 @@ final class YouMayLikeWidgetContractTest extends TestCase
         self::assertStringContainsString('WidgetI18n::label($titleSource', $source);
         self::assertStringNotContainsString("translate('根据当前商品为你推荐', 'zh_Hans_CN'", $source);
         self::assertStringNotContainsString('ThemeDemoCatalog::products($limit, 40)', $source);
+
+        $hiCsv = dirname(__DIR__, 3) . '/i18n/hi_IN.csv';
+        self::assertFileExists($hiCsv);
+        $hi = (string)file_get_contents($hiCsv);
+        self::assertStringContainsString('根据当前商品为你推荐', $hi);
+        self::assertStringContainsString('运费以结算页为准', $hi);
+        self::assertStringContainsString('शिपिंग शुल्क चेकआउट पर तय होगा', $hi);
+        self::assertStringContainsString('查看商品图片', $hi);
+        self::assertStringContainsString('提交询价', $hi);
+        $arCsv = dirname(__DIR__, 3) . '/i18n/ar_SA.csv';
+        self::assertFileExists($arCsv);
+        $ar = (string)file_get_contents($arCsv);
+        self::assertStringContainsString('根据当前商品为你推荐', $ar);
+        self::assertDoesNotMatchRegularExpression('/^根据当前商品为你推荐,根据当前商品为你推荐$/m', $ar);
+        self::assertStringContainsString('موصى به بناءً على هذا المنتج', $ar);
+        self::assertMatchesRegularExpression('/\\p{Arabic}/u', $ar);
     }
 }

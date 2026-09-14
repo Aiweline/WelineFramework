@@ -115,6 +115,7 @@ $orderCustomerSelectDisplay = (string)($this->getData('orderCustomerSelectDispla
 <?php if ($isEdit): ?>
 <div class="w-grid">
     <div style="--w-span:12;">
+        <?= $this->fetch('Weline_Order::templates/Backend/Order/partial/status-flow.phtml') ?>
         <!-- 摘要：紧凑多列 KV，减少横向空白 -->
         <div class="w-card" style="--w-mb:var(--weline-space-2);" data-testid="order-edit-summary">
             <div class="w-card__header">

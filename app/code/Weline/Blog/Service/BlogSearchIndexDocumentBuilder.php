@@ -143,8 +143,9 @@ final class BlogSearchIndexDocumentBuilder
             websiteId: max(0, $article->websiteId),
             storeId: 0,
             channelId: 0,
-            // Neutral locale so all storefront locales can hit the same document.
-            locale: '',
+            // Keep the article content locale so storefront search does not
+            // surface zh_Hans_CN posts under en_US (and other) queries.
+            locale: trim($article->locale),
             currency: '',
             title: $article->title,
             keywords: $keywords,

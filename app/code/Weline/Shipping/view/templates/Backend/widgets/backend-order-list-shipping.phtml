@@ -1,0 +1,68 @@
+<?php
+/**
+ * 后台订单列表：发货工作台摘要（Shipping 默认注入）。
+ *
+ * @var \Weline\Framework\View\Template $this
+ *
+ * @widget.code {backend-order-list-shipping}
+ * @widget.name {订单列表发货工作台}
+ * @widget.description {订单后台列表发货槽：待发货摘要与发货管理入口；默认注入 backend-order-list-shipping。}
+ * @widget.type {content}
+ * @widget.area {backend}
+ * @widget.position {["content"]}
+ * @widget.page_layouts {["backend-order-list"]}
+ * @widget.slot {backend-order-list-shipping}
+ * @widget.supports {["backend-order-list-shipping","order-list-shipping","shipping"]}
+ * @widget.default_injections {[{"layout_type":"backend-order-list","layout_option":"default","slot":"backend-order-list-shipping","area":"content","sort_order":10,"required":true,"reason":"订单列表默认由配送模块提供发货工作台入口","config":{"title":"发货工作台"}}]}
+ *
+ * @param title {default="发货工作台",type="string",label="标题"}
+ */
+
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Shipping\Service\BackendOrderShipmentsService;
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forWidget('backend-order-list-shipping');
+$wc = $scope->cssClass;
+$esc = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+$title = '发货工作台';
+$configuredTitle = trim((string)($this->getData('title') ?? ''));
+if ($configuredTitle !== '' && !str_starts_with($configuredTitle, 'Weline_')) {
+    $title = $configuredTitle;
+}
+
+/** @var BackendOrderShipmentsService $shipmentsService */
+$shipmentsService = ObjectManager::getInstance(BackendOrderShipmentsService::class);
+$summary = $shipmentsService->listSummary();
+$pending = (int)($summary['paid_awaiting_ship'] ?? 0);
+?>
+<div class="w-alert <?= $esc($wc) ?>"
+     data-tone="info"
+     weline-code="<?= $esc($scope->code) ?>"
+     data-uid="<?= $esc($scope->uid) ?>"
+     data-js-ns="<?= $esc($scope->jsNs) ?>"
+     data-testid="backend-order-list-shipping"
+     style="--w-mb:0;">
+    <div class="w-alert__content">
+        <div class="w-cluster" data-align="center" data-justify="between" style="--w-gap:var(--weline-space-3);">
+            <div class="w-stack" style="--w-gap:var(--weline-space-1);">
+                <strong><?= $esc($title) ?></strong>
+                <span class="w-text" data-size="sm" data-testid="backend-order-list-shipping-pending">
+                    <?= __('已支付待发货') ?>：<?= $pending ?>
+                </span>
+            </div>
+            <div class="w-cluster" style="--w-gap:var(--weline-space-2);">
+                <a class="w-button"
+                   data-tone="primary"
+                   data-size="sm"
+                   href="@backend-url{'order/backend/shipment/index'}"
+                   data-testid="backend-order-list-shipping-desk"><?= __('打开发货管理') ?></a>
+                <a class="w-button"
+                   data-tone="neutral"
+                   data-size="sm"
+                   href="@backend-url{'order/backend/order/index'}?payment_status=paid&fulfillment_status=pending"
+                   data-testid="backend-order-list-shipping-filter"><?= __('只看待发货') ?></a>
+            </div>
+        </div>
+    </div>
+</div>

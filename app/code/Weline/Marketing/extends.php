@@ -9,12 +9,18 @@ declare(strict_types=1);
  * 论坛：https://bbs.aiweline.com
  */
 
+use Weline\Marketing\Extends\MailChannelProvider;
+use Weline\Smtp\Api\MailChannelProviderInterface;
+
 /**
  * Weline_Marketing 模块扩展规约
- * 
+ *
  * 本文件定义了 Weline_Marketing 模块提供的扩展点，其他模块可以通过这些扩展点来扩展营销功能
  */
 return [
+    MailChannelProviderInterface::class => [
+        MailChannelProvider::class,
+    ],
     'type' => 'module', // module 或 theme
     'documentation' => 'doc/扩展开发文档.md', // 文档文件路径（相对于模块根目录）
     'extends' => [
@@ -34,4 +40,3 @@ return [
         ]
     ]
 ];
-

@@ -95,6 +95,7 @@ class FakeDropshipProvider implements
                     'role' => 'thumb',
                 ]],
                 'variants' => [],
+                'shipping' => ['weight_kg' => 0.35, 'length_cm' => 30.0, 'width_cm' => 20.0, 'height_cm' => 3.0],
                 'suggested_eav' => ['dropship_source' => 'fake'],
             ]),
             DropshipCatalogSnapshot::fromArray([
@@ -134,6 +135,7 @@ class FakeDropshipProvider implements
                         ],
                     ],
                 ],
+                'shipping' => ['weight_kg' => 0.4, 'length_cm' => 32.0, 'width_cm' => 22.0, 'height_cm' => 4.0],
                 'suggested_eav' => ['dropship_source' => 'fake'],
             ]),
             DropshipCatalogSnapshot::fromArray([
@@ -153,6 +155,7 @@ class FakeDropshipProvider implements
                     'type' => 'image',
                     'role' => 'thumb',
                 ]],
+                'shipping' => ['weight_kg' => 0.8, 'length_cm' => 40.0, 'width_cm' => 30.0, 'height_cm' => 10.0],
                 'suggested_eav' => ['dropship_source' => 'fake'],
             ]),
         ];

@@ -1,0 +1,1 @@
+Recordatorio de pedido sin pagar · {{var.order_number}}

@@ -28,7 +28,7 @@ final class MailBrandContextContractTest extends TestCase
         self::assertSame('site_name', $defs[0]['code']);
 
         $svc = new class extends MailBrandContextService {
-            public function resolve(string $storageScope): array
+            public function resolve(string $storageScope, string $locale = ''): array
             {
                 return [
                     'site_name' => 'FromBrand',
@@ -55,7 +55,7 @@ final class MailBrandContextContractTest extends TestCase
     public function testBuildPreviewSamplesLocksUrlsToScopeSite(): void
     {
         $svc = new class extends MailBrandContextService {
-            public function resolve(string $storageScope): array
+            public function resolve(string $storageScope, string $locale = ''): array
             {
                 return [
                     'site_name' => '默认网站',
@@ -97,6 +97,47 @@ final class MailBrandContextContractTest extends TestCase
             $samples['relative_path']
         );
         self::assertStringNotContainsString('example.com', $samples['reset_url']);
+    }
+
+    public function testBuildPreviewSamplesLocalizesChannelCopyByMailLocale(): void
+    {
+        $svc = new class extends MailBrandContextService {
+            public function resolve(string $storageScope, string $locale = ''): array
+            {
+                return [
+                    'site_name' => 'Store',
+                    'store_name' => 'Store',
+                    'channel_name' => '',
+                    'brand_display_name' => 'Store',
+                    'site_url' => 'https://p05113ef3.test.weline.com:9555',
+                    'site_logo_url' => '',
+                    'site_logo_img' => '',
+                    'site_description' => '官方商城客户服务',
+                    'contact_email' => 'support@shop.local',
+                    'contact_phone' => '',
+                    'contact_address' => '',
+                    'service_hours' => '周一至周五 9:00 - 18:00',
+                ];
+            }
+        };
+
+        $samples = $svc->buildPreviewSamples([
+            ['code' => 'title', 'sample' => '系统通知'],
+            ['code' => 'type_label', 'sample' => '信息'],
+            ['code' => 'content', 'sample' => '通知内容'],
+            ['code' => 'topic_code', 'sample' => 'system_info'],
+        ], 'default.default.default', 'en_US');
+
+        self::assertSame('System notification', $samples['title']);
+        self::assertSame('Information', $samples['type_label']);
+        self::assertSame('Notification content', $samples['content']);
+        self::assertSame('system_info', $samples['topic_code']);
+
+        $brandSrc = (string)file_get_contents(dirname(__DIR__, 2) . '/Service/MailBrandContextService.php');
+        self::assertStringContainsString('localizePreviewText', $brandSrc);
+        self::assertStringContainsString('buildPreviewSamples(array $variables, string $storageScope, string $locale', $brandSrc);
+        $controllerSrc = (string)file_get_contents(dirname(__DIR__, 2) . '/Controller/Backend/Template.php');
+        self::assertStringContainsString('buildPreviewSamples($mergedVars, $editScope, $editLocale)', $controllerSrc);
     }
 
     public function testPaletteResolvesThemeHexTokens(): void

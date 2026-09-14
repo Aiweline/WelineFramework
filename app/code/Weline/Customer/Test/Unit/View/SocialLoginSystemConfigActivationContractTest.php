@@ -54,6 +54,7 @@ final class SocialLoginSystemConfigActivationContractTest extends TestCase
         self::assertStringContainsString('callback-as-origin="true"', $src);
         self::assertStringContainsString('callback-path="customer/account/social-login/callback"', $src);
         self::assertStringContainsString('callback-append-scope="false"', $src);
+        self::assertStringContainsString('不得含语言/货币路径前缀', $src);
         self::assertStringContainsString('已获授权的 JavaScript 来源', $src);
         self::assertStringContainsString('已获授权的重定向 URI', $src);
         self::assertStringContainsString('console.cloud.google.com/apis/credentials', $src);

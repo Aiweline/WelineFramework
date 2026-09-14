@@ -19,6 +19,21 @@ final class WidgetI18n
     private const REQUEST_MEMO_LIMIT = 512;
 
     /**
+     * First-path-segment locales that must win over a lagging RequestContext.
+     * Keep in sync with default-site + installed storefront packs.
+     */
+    public const STOREFRONT_PATH_LOCALE_PATTERN = '#/(ar_SA|bn_BD|de_DE|en_US|es_ES|fr_FR|hi_IN|id_ID|ja_JP|ko_KR|pt_BR|ru_RU|th_TH|ur_PK|vi_VN|zh_Hans_CN|zh_Hant_TW|zh_CN)(?:/|$)#';
+
+    public static function localeFromRequestUri(string $requestUri): ?string
+    {
+        if ($requestUri !== '' && preg_match(self::STOREFRONT_PATH_LOCALE_PATTERN, $requestUri, $matches) === 1) {
+            return (string) $matches[1];
+        }
+
+        return null;
+    }
+
+    /**
      * Resolve configured/default storefront copy and expand framework-style positional placeholders.
      *
      * @param list<scalar|null> $args
@@ -44,8 +59,17 @@ final class WidgetI18n
             'Weline_Blog',
             'Weline_Review',
             'Weline_Product',
+            'Weline_Shipping',
             'Weline_Checkout',
+            'Weline_B2B',
+            'Weline_HelpPay',
+            'Weline_Cart',
+            'Weline_CustomerService',
+            'Weline_Promotion',
+            'Weline_Affiliate',
+            'Weline_StoreMusic',
             'Weline_RecentlyViewed',
+            'Weline_Faq',
             'WeShop_Product',
             'WeShop_Catalog',
         ];
@@ -119,8 +143,9 @@ final class WidgetI18n
     {
         // Path locale wins over RequestContext/KeyBuilder, which can lag on /{locale}/ pages.
         $requestUri = (string) (\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '') ?: ($_SERVER['REQUEST_URI'] ?? ''));
-        if ($requestUri !== '' && preg_match('#/(ar_SA|en_US|zh_Hans_CN|zh_CN)(?:/|$)#', $requestUri, $matches)) {
-            return (string) $matches[1];
+        $pathLocale = self::localeFromRequestUri($requestUri);
+        if ($pathLocale !== null) {
+            return $pathLocale;
         }
 
         try {

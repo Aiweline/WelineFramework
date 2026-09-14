@@ -1,4 +1,15 @@
-﻿营销报价服务不可用,营销报价服务不可用
+﻿"订单 UUID","订单 UUID"
+订单号,订单号
+客户姓名,客户姓名
+客户邮箱,客户邮箱
+订单金额,"Order Amount"
+货币,货币
+继续支付链接,继续支付链接
+下单时间,下单时间
+支付状态,支付状态
+未付订单催付,未付订单催付
+营销挽回：未支付订单定时催付邮件,营销挽回：未支付订单定时催付邮件
+营销报价服务不可用,营销报价服务不可用
 营销接口不支持操作：%{1},营销接口不支持操作：%{1}
 营销服务暂时不可用，请稍后再试。,营销服务暂时不可用，请稍后再试。
 万能优惠规则,万能优惠规则
@@ -51,6 +62,19 @@ save,save
 删除规则,"Delete rule"
 trash,trash
 删除营销规则,"Delete marketing rules"
+加载挽回活动失败：%{1},加载挽回活动失败：%{1}
+挽回活动不存在,挽回活动不存在
+请填写活动名称,请填写活动名称
+挽回活动已保存,挽回活动已保存
+保存失败：%{1},保存失败：%{1}
+挽回活动,挽回活动
+mail,mail
+未付订单挽回营销,未付订单挽回营销
+挽回活动列表,挽回活动列表
+查看挽回活动,查看挽回活动
+新建挽回活动,新建挽回活动
+编辑挽回活动,编辑挽回活动
+保存挽回活动,保存挽回活动
 加载优惠券列表失败：%{1},"Failed to load coupon list: %{1}"
 优惠券不存在,优惠券不存在
 加载优惠券表单失败：%{1},"Failed to load coupon form: %{1}"
@@ -118,7 +142,6 @@ trash,trash
 "商品数 =","Item Count ="
 配送方式,"Shipping Method"
 根据配送方式进行条件判断,"Condition based on shipping method"
-订单金额,"Order Amount"
 根据订单小计金额进行条件判断（门槛金额为站点基准货币）,根据订单小计金额进行条件判断（门槛金额为站点基准货币）
 "订单金额 >=","Order Amount >="
 "订单金额 <=","Order Amount <="
@@ -233,6 +256,27 @@ VIP等级,"VIP Level"
 当前暂无进行中的活动，请稍后再来看看。,"There are no active campaigns right now. Please check back later."
 优惠券代码,"Coupon Code"
 应用,Apply
+配置「下单后多久未付算遗弃」并定时催付。结账/订单只提供未付事实，时限由本页决定。,配置「下单后多久未付算遗弃」并定时催付。结账/订单只提供未付事实，时限由本页决定。
+ID,ID
+名称,名称
+状态,Status
+遗弃时限(小时),遗弃时限(小时)
+最大步数,最大步数
+网站,网站
+操作,Action
+还没有挽回活动,还没有挽回活动
+已启用,已启用
+已停用,已停用
+全部,全部
+编辑,Edit
+活动名称,"Campaign Name"
+遗弃时限（小时）,遗弃时限（小时）
+"下单后经过这么久仍未支付，才视为遗弃并发送第 1 步催付。由营销决定，订单模块不写遗弃状态。","下单后经过这么久仍未支付，才视为遗弃并发送第 1 步催付。由营销决定，订单模块不写遗弃状态。"
+步骤间隔（小时）,步骤间隔（小时）
+冷却（小时）,冷却（小时）
+"网站 ID（0=全部）","网站 ID（0=全部）"
+保存,保存
+返回,返回
 优惠券列表,"Coupon List"
 添加优惠券,"Add Coupon"
 无匹配结果，请调整筛选条件,无匹配结果，请调整筛选条件
@@ -250,16 +294,12 @@ VIP等级,"VIP Level"
 来源活动,来源活动
 全部来源,全部来源
 全部类型,全部类型
-状态,Status
 全部状态,全部状态
 筛选,筛选
 重置,重置
-ID,ID
 来源,来源
 "折扣值（基准货币 %{1}）","折扣值（基准货币 %{1}）"
 使用次数,"Usage Count"
-操作,Action
-编辑,Edit
 返回列表,"Return to list"
 "固定金额与最低订单金额一律按站点基准货币 %{1} 录入；结账时按汇率换算到顾客货币。勿把 USD 10 与 CNY 10 当作同一数字。","固定金额与最低订单金额一律按站点基准货币 %{1} 录入；结账时按汇率换算到顾客货币。勿把 USD 10 与 CNY 10 当作同一数字。"
 基础信息,基础信息
@@ -282,6 +322,10 @@ ID,ID
 "全站合计可用次数；0 表示不限制。","全站合计可用次数；0 表示不限制。"
 每客户次数,"times per customer"
 同一顾客最多可用次数。,同一顾客最多可用次数。
+有效期,有效期
+开始时间,"Start time"
+"按站点时区 %{1} 录入（可空=不限制），系统以 UTC 存储与判定。","按站点时区 %{1} 录入（可空=不限制），系统以 UTC 存储与判定。"
+结束时间,"End time"
 更新优惠券,更新优惠券
 保存优惠券,"Save Coupon"
 万能优惠规则列表与维护入口,万能优惠规则列表与维护入口
@@ -300,15 +344,13 @@ ID,ID
 自动规则,"Automated rules"
 促销活动列表,"Campaign List"
 添加活动,"Add Campaign"
-活动名称,"Campaign Name"
-开始时间,"Start time"
-结束时间,"End time"
 预算,Budget
 已花费,Spent
 新建促销活动,"Create new promotion"
 活动描述,"Activity description"
 草稿,draft
 暂停,pause
+"按站点时区 %{1} 录入，系统以 UTC 存储与判定。","按站点时区 %{1} 录入，系统以 UTC 存储与判定。"
 保存促销活动,"Save promotion"
 外部模块自动同步的折扣规则，请到来源模块管理活动以禁用；折扣模块不可删除。,"Externally synced discount rule. Disable it in the source module; Marketing cannot delete it."
 活动名称和有效营销规则不能为空,"Campaign name and active marketing rules cannot be empty"
@@ -324,12 +366,14 @@ ID,ID
 "优惠券 ID 无效","Invalid coupon ID"
 批发不可用,批发不可用
 优惠券已保存，将在结账报价时生效,"Coupon saved and will apply at checkout quote"
-此折扣由「%{1}」活动自动同步，请到该模块管理活动以禁用或调整；折扣模块不可删除。,"This discount is synced from \"%{1}\". Manage/disable the activity there; it cannot be deleted in Marketing."
+此折扣由「%{1}」活动自动同步，请到该模块管理活动以禁用或调整；折扣模块不可删除。,"This discount is synced from \%{1}\". Manage/disable the activity there; it cannot be deleted in Marketing."""""""
 无法保存该规则,"Unable to save this rule"
 无法删除该规则,"Unable to delete this rule"
-系统同步折扣不可在折扣模块修改。请到「%{1}」管理对应活动以禁用或调整。,"System-synced discounts cannot be edited in Marketing. Manage/disable the activity in \"%{1}\"."
-系统同步折扣不可在折扣模块删除。请到「%{1}」管理对应活动以禁用或调整。,"System-synced discounts cannot be deleted in Marketing. Manage/disable the activity in \"%{1}\"."
+系统同步折扣不可在折扣模块修改。请到「%{1}」管理对应活动以禁用或调整。,"System-synced discounts cannot be edited in Marketing. Manage/disable the activity in \%{1}\"."""""""
+系统同步折扣不可在折扣模块删除。请到「%{1}」管理对应活动以禁用或调整。,"System-synced discounts cannot be deleted in Marketing. Manage/disable the activity in \%{1}\"."""""""
 来源业务模块,"Source business module"
+营销未付订单挽回,营销未付订单挽回
+按挽回活动配置的遗弃时限扫描未付订单并发送催付邮件,按挽回活动配置的遗弃时限扫描未付订单并发送催付邮件
 "固定金额按站点基准货币 %{1} 录入，结账时按汇率换算。","固定金额按站点基准货币 %{1} 录入，结账时按汇率换算。"
 最低订单金额,"Minimum order amount"
 "按站点基准货币 %{1} 判定门槛；0 表示不限制。","按站点基准货币 %{1} 判定门槛；0 表示不限制。"
@@ -365,3 +409,4 @@ ID,ID
 查看优惠券列表,"View coupon list"
 打开优惠券新建表单,"Open the coupon creation form"
 "活动时间：%{1} — %{2}","Campaign period: %{1} — %{2}"
+促销,Promotion

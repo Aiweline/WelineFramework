@@ -28,7 +28,10 @@ final class BackendOrderListPresenter
      *     billing_address_lines: list<string>,
      *     notes: string,
      *     payment_method: string,
-     *     shipping_method: string
+     *     shipping_method: string,
+     *     status_tone: string,
+     *     payment_status_tone: string,
+     *     fulfillment_status_tone: string
      * }
      */
     public function present(Order|array $order): array
@@ -75,7 +78,84 @@ final class BackendOrderListPresenter
             'notes' => trim((string)($data[Order::schema_fields_NOTES] ?? '')),
             'payment_method' => trim((string)($data[Order::schema_fields_PAYMENT_METHOD] ?? '')),
             'shipping_method' => trim((string)($data[Order::schema_fields_SHIPPING_METHOD] ?? '')),
+            'status_tone' => $this->statusTone((string)($data[Order::schema_fields_STATUS] ?? '')),
+            'payment_status_tone' => $this->paymentStatusTone((string)($data[Order::schema_fields_PAYMENT_STATUS] ?? '')),
+            'fulfillment_status_tone' => $this->fulfillmentStatusTone((string)($data[Order::schema_fields_FULFILLMENT_STATUS] ?? '')),
         ];
+    }
+
+    /**
+     * Progressive tone for order lifecycle (pending → done / cancelled).
+     * Uses Weline badge data-tone tokens only.
+     */
+    public function statusTone(string $status): string
+    {
+        $status = strtolower(trim($status));
+
+        return match ($status) {
+            Order::STATUS_PENDING => 'warning',
+            Order::STATUS_PROCESSING => 'info',
+            Order::STATUS_PAID => 'primary',
+            Order::STATUS_FULFILLED => 'info',
+            Order::STATUS_COMPLETED => 'success',
+            Order::STATUS_CANCELLED => 'danger',
+            Order::STATUS_REFUNDED => 'secondary',
+            default => 'muted',
+        };
+    }
+
+    public function paymentStatusTone(string $status): string
+    {
+        $status = strtolower(trim($status));
+
+        return match ($status) {
+            'pending' => 'warning',
+            'paid' => 'success',
+            'partial' => 'info',
+            'refunded' => 'secondary',
+            'failed' => 'danger',
+            default => 'muted',
+        };
+    }
+
+    public function fulfillmentStatusTone(string $status): string
+    {
+        $status = strtolower(trim($status));
+
+        return match ($status) {
+            'pending' => 'warning',
+            'partial' => 'info',
+            'shipped' => 'info',
+            'delivered' => 'success',
+            'cancelled' => 'danger',
+            default => 'muted',
+        };
+    }
+
+    public function checkoutEntryTone(string $entry): string
+    {
+        $entry = strtolower(trim($entry));
+
+        return match ($entry) {
+            'checkout' => 'info',
+            'express' => 'primary',
+            'quick_buy' => 'success',
+            'helppay' => 'warning',
+            default => 'muted',
+        };
+    }
+
+    public function checkoutEntryLabel(string $entry): string
+    {
+        $entry = strtolower(trim($entry));
+
+        return match ($entry) {
+            'checkout' => (string) __('万能结账'),
+            'express' => (string) __('快捷支付'),
+            'quick_buy' => (string) __('快捷购买'),
+            'helppay' => (string) __('找朋友代付'),
+            default => (string) __('未标记'),
+        };
     }
 
     /**

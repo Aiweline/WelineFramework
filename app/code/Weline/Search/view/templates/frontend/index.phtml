@@ -48,15 +48,20 @@ if ($typeLabels === []) {
 }
 $resolveTypeLabel = static function (string $code) use ($typeLabels): string {
     $code = trim($code);
+    $raw = '';
     if ($code !== '' && isset($typeLabels[$code]) && $typeLabels[$code] !== '') {
-        return $typeLabels[$code];
+        $raw = (string)$typeLabels[$code];
+    } else {
+        $raw = match ($code) {
+            'all' => (string)__('全部'),
+            'product' => (string)__('商品'),
+            'faq' => 'FAQ',
+            'blog' => (string)__('博客'),
+            default => $code,
+        };
     }
 
-    return match ($code) {
-        'all' => (string)__('全部'),
-        'product' => (string)__('商品'),
-        default => $code,
-    };
+    return \Weline\Theme\Helper\WidgetI18n::label($raw, $raw !== '' ? $raw : $code);
 };
 $normalizeHit = static function (mixed $hit): ?array {
     if ($hit instanceof \Weline\Search\Dto\SearchHit) {

@@ -12,11 +12,11 @@ final class StorefrontAllMenuCategoryTreeServiceTest extends TestCase
     public function testLogicalCacheKeyIsWebsiteScoped(): void
     {
         self::assertSame(
-            'product.all_menu_category_tree.v6.3.en_US',
+            'product.all_menu_category_tree.v7.3.en_US',
             StorefrontAllMenuCategoryTreeService::logicalCacheKey(3, 'en_US'),
         );
         self::assertSame(
-            'product.all_menu_category_tree.v6.3.zh_Hans_CN',
+            'product.all_menu_category_tree.v7.3.zh_Hans_CN',
             StorefrontAllMenuCategoryTreeService::logicalCacheKey(3),
         );
         self::assertSame(

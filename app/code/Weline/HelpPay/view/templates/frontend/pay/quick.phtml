@@ -6,6 +6,7 @@ $shipping = is_array($this->getData('shipping')) ? $this->getData('shipping') : 
 $shareUrl = trim((string) ($this->getData('share_url') ?? ''));
 $shareTitle = (string) ($this->getData('share_title') ?? __('跨设备支付'));
 $shareHint = (string) ($this->getData('share_hint') ?? '');
+$token = trim((string) ($this->getData('token') ?? ($bill['token'] ?? '')));
 $amount = ((int) ($bill['amount_minor'] ?? 0)) / 100;
 $currency = (string) ($bill['currency_code'] ?? 'USD');
 $host = (string) ($_SERVER['HTTP_HOST'] ?? '');
@@ -49,7 +50,10 @@ if ($shareUrl !== '' && !str_starts_with($shareUrl, 'http') && $host !== '') {
         <button type="button"
                 class="w-button w-button--primary"
                 data-testid="quick-pay-submit"
-                data-helppay-pay>
+                data-helppay-pay
+                data-helppay-quick-self-pay="1"
+                data-payment-method="paypal"
+                data-token="<?= $escape($token) ?>">
             <?= $escape(__('立即支付')) ?>
         </button>
     </div>

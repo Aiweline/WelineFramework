@@ -19,9 +19,6 @@
 加入购物车失败。,加入购物车失败。
 加入购物车失败：%{1},加入购物车失败：%{1}
 "Direct browser cart API is deprecated. Use the frontend worker API.","Direct browser cart API is deprecated. Use the frontend worker API."
-购物车,购物车
-查看已选汉服商品、调整规格数量并进入结算。,查看已选汉服商品、调整规格数量并进入结算。
-您的购物车是空的,您的购物车是空的
 购物车检查,购物车检查
 购物车工作台,购物车工作台
 search,search
@@ -47,6 +44,7 @@ search,search
 无法创建游客购物车会话,无法创建游客购物车会话
 "小计（%1 件商品）","小计（%1 件商品）"
 单价,单价
+购物车,购物车
 浏览商品,浏览商品
 暂时无法加载购物车,暂时无法加载购物车
 重试,重试
@@ -146,6 +144,8 @@ Scope,Scope
 该商品暂不可售，请从购物车移除或稍后再试,该商品暂不可售，请从购物车移除或稍后再试
 "channel_code 必须与 store_code 同时提供","channel_code 必须与 store_code 同时提供"
 "购物车 Scope 与当前可信 Website/Store/Channel 请求不一致","购物车 Scope 与当前可信 Website/Store/Channel 请求不一致"
+查看已选汉服商品、调整规格数量并进入结算。,查看已选汉服商品、调整规格数量并进入结算。
+您的购物车是空的,您的购物车是空的
 "按 Scope 检查真实 Cart 持久库","按 Scope 检查真实 Cart 持久库"
 "Inspection 按 scope_key 查询该 Scope 下真实持久缓存结果，不是全局购物车列表；不支持跨 Scope 枚举。","Inspection 按 scope_key 查询该 Scope 下真实持久缓存结果，不是全局购物车列表；不支持跨 Scope 枚举。"
 "输入完整 scope key","输入完整 scope key"

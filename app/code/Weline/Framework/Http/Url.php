@@ -896,6 +896,64 @@ class Url implements UrlInterface
         return $scheme . $rest;
     }
 
+    /**
+     * Strip storefront currency/language path segments (OAuth redirect_uri must stay canonical).
+     */
+    public static function withoutStorefrontLocalizationPrefix(string $url): string
+    {
+        $url = trim($url);
+        if ($url === '') {
+            return '';
+        }
+        $parts = parse_url($url);
+        if (!is_array($parts)) {
+            return $url;
+        }
+        $path = (string)($parts['path'] ?? '');
+        if ($path === '' || $path === '/') {
+            return $url;
+        }
+        $segments = array_values(array_filter(
+            explode('/', trim($path, '/')),
+            static fn(string $segment): bool => $segment !== ''
+        ));
+        $loc = State::resolveLocalizationFromPathSegments($segments);
+        $consumed = (int)($loc['consumed'] ?? 0);
+        $offset = (int)($loc['area_offset'] ?? 0);
+        if ($consumed <= 0) {
+            return $url;
+        }
+        $kept = array_merge(
+            array_slice($segments, 0, $offset),
+            array_slice($segments, $offset + $consumed)
+        );
+        $newPath = $kept === [] ? '/' : '/' . implode('/', $kept);
+        $rebuilt = '';
+        if (!empty($parts['scheme'])) {
+            $rebuilt .= $parts['scheme'] . '://';
+            if (!empty($parts['user'])) {
+                $rebuilt .= $parts['user'];
+                if (isset($parts['pass'])) {
+                    $rebuilt .= ':' . $parts['pass'];
+                }
+                $rebuilt .= '@';
+            }
+            $rebuilt .= (string)($parts['host'] ?? '');
+            if (isset($parts['port'])) {
+                $rebuilt .= ':' . $parts['port'];
+            }
+        }
+        $rebuilt .= $newPath;
+        if (isset($parts['query']) && $parts['query'] !== '') {
+            $rebuilt .= '?' . $parts['query'];
+        }
+        if (isset($parts['fragment']) && $parts['fragment'] !== '') {
+            $rebuilt .= '#' . $parts['fragment'];
+        }
+
+        return $rebuilt;
+    }
+
     public function getBackendUrl(string $path = '', array $params = [], bool $merge_url_params = false): string
     {
         if ($path) {

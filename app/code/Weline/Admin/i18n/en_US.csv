@@ -149,6 +149,16 @@ AJAX分配角色,"AJAX assign role"
 删除成功,"Deletion successful"
 知道了,"Got it"
 主题模式切换失败,"Theme mode switch failed"
+"Weline 管理后台","Weline management background"
+后台主导航,"Backend main navigation"
+收起侧边栏,"Collapse sidebar"
+展开侧边栏,"Expand sidebar"
+搜索菜单,"Search menu"
+搜索菜单…,"Search menu…"
+没有匹配的菜单,"No matching menu"
+后台菜单,"Backend menu"
+关闭,closure
+系统维护,"System maintenance"
 网站维护,"Website Maintenance"
 网站正在维护中...,"Website is under maintenance..."
 请稍等片刻,"Please wait a moment"
@@ -304,22 +314,12 @@ Cms内容管理,"CMS Content Management"
 路由,Route
 版本,Version
 描述,Description
-后台主导航,"Backend main navigation"
-收起侧边栏,"Collapse sidebar"
-展开侧边栏,"Expand sidebar"
-搜索菜单,"Search menu"
-搜索菜单…,"Search menu…"
-没有匹配的菜单,"No matching menu"
-后台菜单,"Backend menu"
-"Weline 管理后台","Weline management background"
 加载中,loading
 "响应式 Bootstrap 5 管理后台","Responsive Bootstrap 5 Admin Dashboard"
 返回首页,"Return to Home"
 网站可能发生系统升级事件，或者大多数的内容发生变化，程序员们正在维护或者升级数据以提供更加优质的服务。,"The website may be undergoing system upgrades, or most of the content is being changed. Our developers are maintaining or upgrading data to provide better services."
 大部分的网站升级活动都只有几分钟甚至几秒钟的时间。,"Most website upgrade activities only take a few minutes or even seconds."
 如果你长期看到这个页面，对网站存在疑惑，请联系：,"If you see this page for a long time and have questions about the website, please contact:"
-关闭,closure
-系统维护,"System maintenance"
 面板,Dashboard
 后台,Backend
 概览,Overview

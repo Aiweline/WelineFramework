@@ -25,6 +25,7 @@ final class CheckoutRenderDeliveryAddressWidgetContractTest extends TestCase
             'Weline_Shipping::templates/frontend/widgets/checkout-shipping-address.phtml',
             $src,
         );
+        self::assertStringContainsString("'title' => (string) __('收货地址')", $src);
         self::assertStringContainsString('shipping_address_widget_unavailable', $src);
     }
 }

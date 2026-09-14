@@ -11,6 +11,7 @@ use Weline\Framework\Database\Model;
 use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
+use Weline\Framework\DateTime\Timezone;
 /** 优惠券模型 @package Weline_Marketing */
 #[Table(comment: '优惠券表')]
 #[Index(name: 'idx_code', columns: ['code'], type: 'UNIQUE')]
@@ -90,13 +91,12 @@ class Coupon extends Model
         if ($this->getData(self::schema_fields_STATUS) !== self::STATUS_ACTIVE) {
             return false;
         }
-        $now = date('Y-m-d H:i:s');
         $startDate = $this->getData(self::schema_fields_START_DATE);
         $endDate = $this->getData(self::schema_fields_END_DATE);
-        if ($startDate && $now < $startDate) {
-            return false;
-        }
-        if ($endDate && $now > $endDate) {
+        if (!Timezone::isWithinUtcWindow(
+            $startDate !== null && $startDate !== '' ? (string)$startDate : null,
+            $endDate !== null && $endDate !== '' ? (string)$endDate : null,
+        )) {
             return false;
         }
         $usageLimit = $this->getData(self::schema_fields_USAGE_LIMIT);

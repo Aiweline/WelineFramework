@@ -50,6 +50,10 @@ class PromotionActivityTheme extends Model
     public const schema_fields_DEAL_DISCOUNT_VALUE = 'deal_discount_value';
     #[Col(type: 'int', nullable: false, default: 0, comment: '同步的 Marketing 规则 ID')]
     public const schema_fields_MARKETING_RULE_ID = 'marketing_rule_id';
+    #[Col(type: 'datetime', nullable: true, comment: '开始时间（UTC）')]
+    public const schema_fields_STARTS_AT = 'starts_at';
+    #[Col(type: 'datetime', nullable: true, comment: '结束时间（UTC）')]
+    public const schema_fields_ENDS_AT = 'ends_at';
     #[Col(type: 'timestamp', nullable: false, default: 'CURRENT_TIMESTAMP', comment: '创建时间')]
     public const schema_fields_CREATED_AT = 'created_at';
     #[Col(type: 'timestamp', nullable: false, default: 'CURRENT_TIMESTAMP', comment: '更新时间')]

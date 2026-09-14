@@ -7,6 +7,7 @@ namespace Weline\Customer\Service;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\State;
 use Weline\Framework\Http\Request;
+use Weline\Framework\Http\Url;
 use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
 
 /**
@@ -15,6 +16,9 @@ use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
 final class CustomerAuthReturnUrlService
 {
     private const SESSION_KEY = 'login_referer';
+
+    /** When set (including ''), skip reading locale from the current request path. */
+    private ?string $forcedLocalizationPrefix = null;
 
     /** Storefront signal: header JS should re-check account.current once. */
     public const AUTH_REFRESH_QUERY = 'w_auth';
@@ -87,6 +91,29 @@ final class CustomerAuthReturnUrlService
         return $this->withCurrentLocalizationPrefix($path);
     }
 
+    /**
+     * OAuth callback has no locale path; restore the prefix captured at authorize time.
+     * Pass null to use the current request URL again. Empty string means default locale.
+     */
+    public function forceLocalizationPrefix(?string $prefix): void
+    {
+        if ($prefix === null) {
+            $this->forcedLocalizationPrefix = null;
+
+            return;
+        }
+        $prefix = trim($prefix);
+        if ($prefix === '' || $prefix === '/') {
+            $this->forcedLocalizationPrefix = '';
+
+            return;
+        }
+        if ($prefix[0] !== '/') {
+            $prefix = '/' . $prefix;
+        }
+        $this->forcedLocalizationPrefix = rtrim($prefix, '/');
+    }
+
     private function normalizeCandidate(string $candidate, bool $blockAuthRoutes): string
     {
         $candidate = $this->decodeTarget($candidate);
@@ -152,7 +179,11 @@ final class CustomerAuthReturnUrlService
             return $this->formatInternalNavigation('', '/customer/account');
         }
 
-        if ($target === 'customer/account/index') {
+        $bare = ltrim(
+            $this->stripLocalizationPrefixFromPath('/' . ltrim($target, '/')),
+            '/'
+        );
+        if ($bare === 'customer/account/index' || $bare === 'customer/account') {
             return $this->formatInternalNavigation('/customer/account');
         }
 
@@ -212,6 +243,17 @@ final class CustomerAuthReturnUrlService
             $built .= '#' . $parts['fragment'];
         }
 
+        // Preserve absolute getUrl() results so FrontendController::redirect() treats
+        // them as same-origin links and does not re-run getFrontendUrl (double prefix).
+        if (isset($parts['scheme'], $parts['host'])) {
+            $origin = $parts['scheme'] . '://' . $parts['host'];
+            if (isset($parts['port'])) {
+                $origin .= ':' . $parts['port'];
+            }
+
+            return $origin . $built;
+        }
+
         return $built;
     }
 
@@ -241,17 +283,77 @@ final class CustomerAuthReturnUrlService
     {
         $path = '/' . ltrim($path, '/');
         $prefix = $this->currentLocalizationPrefix();
-        if ($prefix === '' || $this->hasLocalizationPrefix($path)) {
+        if ($prefix === '') {
+            // No path/referer/state prefix (rare): keep whatever locale the target already has.
             return $path;
         }
+
+        // Current storefront context always wins. Stale login_referer / redirect_url may
+        // still carry /hi_IN/ after the shopper switched to /ar_SA/ (or OAuth Query stamp).
+        $path = $this->stripLocalizationPrefixFromPath($path);
 
         return $prefix . ($path === '/' ? '' : $path);
     }
 
+    private function stripLocalizationPrefixFromPath(string $path): string
+    {
+        $parts = parse_url($path);
+        if (!is_array($parts)) {
+            return $path;
+        }
+        $pathOnly = (string)($parts['path'] ?? '/');
+        if ($pathOnly === '') {
+            $pathOnly = '/';
+        }
+        $segments = array_values(array_filter(
+            explode('/', trim($pathOnly, '/')),
+            static fn(string $segment): bool => $segment !== ''
+        ));
+        if ($segments === []) {
+            $bare = '/';
+        } else {
+            $localization = State::resolveLocalizationFromPathSegments(array_slice($segments, 0, 3));
+            $consumed = (int)($localization['consumed'] ?? 0);
+            $offset = (int)($localization['area_offset'] ?? 0);
+            $rest = $consumed > 0
+                ? array_slice($segments, $offset + $consumed)
+                : $segments;
+            $bare = $rest === [] ? '/' : '/' . implode('/', $rest);
+        }
+        $query = isset($parts['query']) && $parts['query'] !== '' ? '?' . $parts['query'] : '';
+        $fragment = isset($parts['fragment']) && $parts['fragment'] !== '' ? '#' . $parts['fragment'] : '';
+
+        return $bare . $query . $fragment;
+    }
+
     private function currentLocalizationPrefix(): string
     {
-        $currentUrl = (string)$this->request->getUrlBuilder()->getCurrentUrl();
-        $path = parse_url($currentUrl, PHP_URL_PATH);
+        if ($this->forcedLocalizationPrefix !== null) {
+            return $this->forcedLocalizationPrefix;
+        }
+
+        $fromCurrent = $this->localizationPrefixFromUrl(
+            (string)$this->request->getUrlBuilder()->getCurrentUrl()
+        );
+        if ($fromCurrent !== '') {
+            return $fromCurrent;
+        }
+
+        // Logout/auth links that omit locale still leave the storefront Referer intact.
+        $fromReferer = $this->localizationPrefixFromUrl((string)$this->request->getReferer());
+        if ($fromReferer !== '') {
+            return $fromReferer;
+        }
+
+        // Last resort: State-backed Url::getPrefix() (path > preference > website).
+        $fromState = trim((string)Url::getPrefix());
+
+        return $fromState === '/' ? '' : $fromState;
+    }
+
+    private function localizationPrefixFromUrl(string $url): string
+    {
+        $path = parse_url($url, PHP_URL_PATH);
         if (!is_string($path) || $path === '') {
             return '';
         }
@@ -311,26 +413,6 @@ final class CustomerAuthReturnUrlService
             $prefix,
             $rest
         );
-    }
-
-    private function hasLocalizationPrefix(string $path): bool
-    {
-        $pathOnly = parse_url($path, PHP_URL_PATH);
-        if (!is_string($pathOnly)) {
-            return false;
-        }
-
-        $segments = array_values(array_filter(
-            explode('/', trim($pathOnly, '/')),
-            static fn(string $segment): bool => $segment !== ''
-        ));
-        if ($segments === []) {
-            return false;
-        }
-
-        $localization = State::resolveLocalizationFromPathSegments(array_slice($segments, 0, 2));
-
-        return (int)($localization['consumed'] ?? 0) > 0;
     }
 
     /**

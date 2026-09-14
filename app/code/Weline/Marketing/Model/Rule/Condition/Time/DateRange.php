@@ -11,11 +11,12 @@ declare(strict_types=1);
 
 namespace Weline\Marketing\Model\Rule\Condition\Time;
 
+use Weline\Framework\DateTime\Timezone;
 use Weline\Marketing\Model\Rule\Condition\AbstractCondition;
 
 /**
- * 日期范围条件
- * 
+ * 日期范围条件（库内 UTC 窗；录入经 Framework Timezone）
+ *
  * @package Weline_Marketing
  */
 class DateRange extends AbstractCondition
@@ -44,19 +45,10 @@ class DateRange extends AbstractCondition
             return false;
         }
 
-        $now = time();
-        $startTimestamp = $startDate ? strtotime($startDate) : null;
-        $endTimestamp = $endDate ? strtotime($endDate) : null;
-
-        if ($startTimestamp && $now < $startTimestamp) {
-            return false;
-        }
-
-        if ($endTimestamp && $now > $endTimestamp) {
-            return false;
-        }
-
-        return true;
+        return Timezone::isWithinUtcWindow(
+            $startDate !== null && $startDate !== '' ? (string)$startDate : null,
+            $endDate !== null && $endDate !== '' ? (string)$endDate : null,
+        );
     }
 
     public function getFormFields(): array
@@ -77,4 +69,3 @@ class DateRange extends AbstractCondition
         ];
     }
 }
-

@@ -189,6 +189,11 @@ class PaymentService
         if ($result->isSuccessful()) {
             $transaction->setData(PaymentTransaction::schema_fields_PAID_AT, date('Y-m-d H:i:s'))
                 ->save();
+            try {
+                $this->objectManager->getInstance(PaymentCaptureReaderEnsureService::class)
+                    ->ensureFromTransaction($transaction);
+            } catch (\Throwable) {
+            }
         }
 
         return $transaction;

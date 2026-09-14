@@ -52,7 +52,9 @@ final class CheckoutDeliveryContextService
             $this->ensureRegionCascade($countryCode);
             $countries = $this->listCountries();
             $countryName = $this->countryName($countryCode, $countries);
-            $addresses = $this->annotateEmbargoList($this->listAddresses($countryCode));
+            // 更换地址 picking：拉全量地址簿（含其它国家）；默认仍按当前配送国过滤。
+            $listAll = $this->wantsAllAddresses($params);
+            $addresses = $this->annotateEmbargoList($this->listAddresses($listAll ? '' : $countryCode));
             $selected = $this->selectedAddress($addresses, $countryCode, $countryName);
             if (\is_array($selected)) {
                 $selected = $this->annotateEmbargoOne($selected);
@@ -355,6 +357,19 @@ final class CheckoutDeliveryContextService
         }
 
         return $countryCode !== '' ? $countryCode : (string)__('选择国家/地址');
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     */
+    private function wantsAllAddresses(array $params): bool
+    {
+        $raw = $params['list_all_addresses'] ?? $params['for_picker'] ?? null;
+        if ($raw === true || $raw === 1 || $raw === '1' || $raw === 'true' || $raw === 'yes') {
+            return true;
+        }
+
+        return false;
     }
 
     /**

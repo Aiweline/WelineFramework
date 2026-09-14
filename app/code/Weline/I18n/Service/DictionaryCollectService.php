@@ -81,88 +81,9 @@ class DictionaryCollectService
                 55,
             );
 
-            $wordCountBefore = (int) $this->dictionary->reset()->count();
-            $defaultLocaleCountBefore = (int) $this->localeDictionary->reset()
-                ->where($this->localeDictionary::schema_fields_LOCALE_CODE, $defaultLanguageCode)
-                ->count();
-
-            $wordKeys = array_keys($words);
-            $existingRecords = [];
-            foreach (array_chunk($wordKeys, 200) as $wordChunk) {
-                $records = $this->dictionary->reset()
-                    ->where($this->dictionary::schema_fields_WORD, $wordChunk, 'IN')
-                    ->select()
-                    ->fetchArray();
-                foreach ((array) $records as $record) {
-                    $word = (string) ($record[$this->dictionary::schema_fields_WORD] ?? '');
-                    if ($word !== '') {
-                        $existingRecords[$word] = true;
-                    }
-                }
-            }
-
-            $insertData = [];
-            foreach ($words as $word => $translate) {
-                if (!isset($existingRecords[$word])) {
-                    $insertData[] = [
-                        $this->dictionary::schema_fields_WORD => $word,
-                        $this->dictionary::schema_fields_IS_BACKEND => 0,
-                        $this->dictionary::schema_fields_MODULE => '',
-                    ];
-                }
-            }
-
-            if ($insertData !== []) {
-                $this->report($onProgress, (string) __('批量插入新词条…'), 70);
-                foreach (array_chunk($insertData, 999) as $insertDataItem) {
-                    $this->dictionary->reset()
-                        ->insert($insertDataItem, $this->dictionary::schema_fields_WORD)
-                        ->fetch();
-                }
-            }
-
-            $this->report($onProgress, (string) __('同步默认语言译文…'), 85);
-            foreach (array_chunk($wordKeys, 200) as $wordChunk) {
-                $existingLocaleWords = [];
-                $localeRecords = $this->localeDictionary->reset()
-                    ->where($this->localeDictionary::schema_fields_LOCALE_CODE, $defaultLanguageCode)
-                    ->where($this->localeDictionary::schema_fields_WORD, $wordChunk, 'IN')
-                    ->select()
-                    ->fetchArray();
-                foreach ((array) $localeRecords as $record) {
-                    $word = (string) ($record[$this->localeDictionary::schema_fields_WORD] ?? '');
-                    if ($word !== '') {
-                        $existingLocaleWords[$word] = true;
-                    }
-                }
-
-                $defaultLocaleRows = [];
-                foreach ($wordChunk as $word) {
-                    if (isset($existingLocaleWords[$word])) {
-                        continue;
-                    }
-                    $defaultLocaleRows[] = [
-                        $this->localeDictionary::schema_fields_WORD => $word,
-                        $this->localeDictionary::schema_fields_LOCALE_CODE => $defaultLanguageCode,
-                        $this->localeDictionary::schema_fields_TRANSLATE => $words[$word] ?? $word,
-                        $this->localeDictionary::schema_fields_MD5 => $this->localeDictionary->getMd5($word, $defaultLanguageCode),
-                    ];
-                }
-
-                if ($defaultLocaleRows !== []) {
-                    $this->localeDictionary->reset()
-                        ->insert($defaultLocaleRows, $this->localeDictionary::schema_fields_MD5)
-                        ->fetch();
-                }
-            }
-
-            $collectedCount = max(0, (int) $this->dictionary->reset()->count() - $wordCountBefore);
-            $defaultLocaleCount = max(
-                0,
-                (int) $this->localeDictionary->reset()
-                    ->where($this->localeDictionary::schema_fields_LOCALE_CODE, $defaultLanguageCode)
-                    ->count() - $defaultLocaleCountBefore,
-            );
+            $persisted = $this->persistCollectedWords($words, '', $onProgress);
+            $collectedCount = (int) $persisted['count'];
+            $defaultLocaleCount = (int) $persisted['default_locale_count'];
 
             $queued = [];
             if ($collectedCount > 0) {
@@ -241,6 +162,116 @@ class DictionaryCollectService
         }
 
         $sse->complete($donePayload);
+    }
+
+    /**
+     * 把源语言词写入 i18n_dictionary + 默认 locale 词典（只插缺失，不覆盖已有译文）。
+     *
+     * @param array<string, string> $words
+     * @return array{count: int, default_locale_count: int}
+     */
+    public function persistCollectedWords(array $words, string $moduleName = '', ?callable $onProgress = null): array
+    {
+        $words = $this->normalizeCollectedWords($words);
+        $validatedWords = [];
+        foreach ($words as $word => $translate) {
+            try {
+                $validatedWords[WordDictionary::assertWord((string)$word)] = $translate;
+            } catch (\Throwable) {
+                continue;
+            }
+        }
+        $words = $validatedWords;
+        if ($words === []) {
+            return ['count' => 0, 'default_locale_count' => 0];
+        }
+
+        $defaultLanguageCode = Env::default_LANGUAGE_CODE;
+        $moduleName = trim($moduleName);
+        $wordCountBefore = (int) $this->dictionary->reset()->count();
+        $defaultLocaleCountBefore = (int) $this->localeDictionary->reset()
+            ->where($this->localeDictionary::schema_fields_LOCALE_CODE, $defaultLanguageCode)
+            ->count();
+
+        $wordKeys = array_keys($words);
+        $existingRecords = [];
+        foreach (array_chunk($wordKeys, 200) as $wordChunk) {
+            $records = $this->dictionary->reset()
+                ->where($this->dictionary::schema_fields_WORD, $wordChunk, 'IN')
+                ->select()
+                ->fetchArray();
+            foreach ((array) $records as $record) {
+                $word = (string) ($record[$this->dictionary::schema_fields_WORD] ?? '');
+                if ($word !== '') {
+                    $existingRecords[$word] = true;
+                }
+            }
+        }
+
+        $insertData = [];
+        foreach ($words as $word => $translate) {
+            if (!isset($existingRecords[$word])) {
+                $insertData[] = [
+                    $this->dictionary::schema_fields_WORD => $word,
+                    $this->dictionary::schema_fields_IS_BACKEND => 0,
+                    $this->dictionary::schema_fields_MODULE => $moduleName,
+                ];
+            }
+        }
+
+        if ($insertData !== []) {
+            $this->report($onProgress, (string) __('批量插入新词条…'), 70);
+            foreach (array_chunk($insertData, 999) as $insertDataItem) {
+                $this->dictionary->reset()
+                    ->insert($insertDataItem, $this->dictionary::schema_fields_WORD)
+                    ->fetch();
+            }
+        }
+
+        $this->report($onProgress, (string) __('同步默认语言译文…'), 85);
+        foreach (array_chunk($wordKeys, 200) as $wordChunk) {
+            $existingLocaleWords = [];
+            $localeRecords = $this->localeDictionary->reset()
+                ->where($this->localeDictionary::schema_fields_LOCALE_CODE, $defaultLanguageCode)
+                ->where($this->localeDictionary::schema_fields_WORD, $wordChunk, 'IN')
+                ->select()
+                ->fetchArray();
+            foreach ((array) $localeRecords as $record) {
+                $word = (string) ($record[$this->localeDictionary::schema_fields_WORD] ?? '');
+                if ($word !== '') {
+                    $existingLocaleWords[$word] = true;
+                }
+            }
+
+            $defaultLocaleRows = [];
+            foreach ($wordChunk as $word) {
+                if (isset($existingLocaleWords[$word])) {
+                    continue;
+                }
+                $defaultLocaleRows[] = [
+                    $this->localeDictionary::schema_fields_WORD => $word,
+                    $this->localeDictionary::schema_fields_LOCALE_CODE => $defaultLanguageCode,
+                    $this->localeDictionary::schema_fields_TRANSLATE => $words[$word] ?? $word,
+                    $this->localeDictionary::schema_fields_MD5 => $this->localeDictionary->getMd5($word, $defaultLanguageCode),
+                ];
+            }
+
+            if ($defaultLocaleRows !== []) {
+                $this->localeDictionary->reset()
+                    ->insert($defaultLocaleRows, $this->localeDictionary::schema_fields_MD5)
+                    ->fetch();
+            }
+        }
+
+        return [
+            'count' => max(0, (int) $this->dictionary->reset()->count() - $wordCountBefore),
+            'default_locale_count' => max(
+                0,
+                (int) $this->localeDictionary->reset()
+                    ->where($this->localeDictionary::schema_fields_LOCALE_CODE, $defaultLanguageCode)
+                    ->count() - $defaultLocaleCountBefore,
+            ),
+        ];
     }
 
     /**

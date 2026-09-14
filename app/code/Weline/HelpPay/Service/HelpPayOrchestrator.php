@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\HelpPay\Service;
 
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Payment\Api\PaymentLinkServiceInterface;
 
 /**
@@ -16,6 +17,7 @@ final class HelpPayOrchestrator
     public function __construct(
         private readonly PaymentLinkServiceInterface $links,
         private readonly ShippingRedactionService $redaction = new ShippingRedactionService(),
+        private readonly ?HelpPayQuickShippingQuoteService $quickShipping = null,
     ) {
     }
 
@@ -112,6 +114,32 @@ final class HelpPayOrchestrator
      * } $input
      * @return array<string,mixed>
      */
+    /**
+     * Quick-buy shipping options (real catalog weight; never silent 0.5kg).
+     *
+     * @param array<string,mixed> $input
+     * @return array<string,mixed>
+     */
+    public function listQuickShippingOptions(array $input): array
+    {
+        $this->assertTocOnly((string) ($input['cart_type'] ?? self::CART_TYPE_TOC));
+        $shipping = is_array($input['shipping_address'] ?? null) ? $input['shipping_address'] : [];
+        if ($shipping === [] && is_array($input['address'] ?? null)) {
+            $shipping = $input['address'];
+        }
+        $this->redaction->assertCompleteShipping($shipping);
+        $quoted = $this->quickShipping()->listOptions($input + [
+            'shipping_address' => $shipping,
+            'address' => $shipping,
+        ]);
+
+        return [
+            'options' => $quoted['options'],
+            'quote_diagnostics' => $quoted['quote_diagnostics'],
+            'missing_weight' => !empty($quoted['missing_weight']),
+        ];
+    }
+
     public function createQuickPay(array $input): array
     {
         $this->assertTocOnly((string) ($input['cart_type'] ?? self::CART_TYPE_TOC));
@@ -129,6 +157,38 @@ final class HelpPayOrchestrator
             }
         } else {
             $goodsMinor = max(0, $amountMinor - $shippingMinor);
+        }
+
+        // Align with checkout: when shipping is selected, re-quote with real weight (no client invent).
+        if ($serviceCode !== '' || $shippingMinor > 0) {
+            $productId = max(0, (int) ($input['product_id'] ?? $shipping['product_id'] ?? 0));
+            if ($productId <= 0 && is_array($input['line_summary'] ?? null)) {
+                foreach ($input['line_summary'] as $row) {
+                    if (!is_array($row)) {
+                        continue;
+                    }
+                    $productId = max(0, (int) ($row['product_id'] ?? $row['id'] ?? 0));
+                    if ($productId > 0) {
+                        break;
+                    }
+                }
+            }
+            if ($productId <= 0) {
+                throw new \InvalidArgumentException('helppay_product_required');
+            }
+            $this->quickShipping()->assertSelectedShipping(
+                [
+                    'product_id' => $productId,
+                    'qty' => max(1, (int) ($input['qty'] ?? $input['qty_minor'] ?? 1)),
+                    'goods_amount_minor' => $goodsMinor,
+                    'currency_code' => (string) ($input['currency_code'] ?? 'USD'),
+                    'shipping_address' => $shipping,
+                    'address' => $shipping,
+                    'line_summary' => $input['line_summary'] ?? [],
+                ],
+                $serviceCode,
+                $shippingMinor,
+            );
         }
 
         $snapshot = $shipping;
@@ -207,6 +267,180 @@ final class HelpPayOrchestrator
     }
 
     /**
+     * 本人快捷购买确认付款：与代付同编排，kind=quick_pay_self。
+     *
+     * @param array{token:string,payment_method?:string,billing_address?:array<string,mixed>,idempotency_key?:string} $input
+     * @return array<string,mixed>
+     */
+    public function startQuickPayment(array $input): array
+    {
+        $input['payment_method'] = strtolower(trim((string) ($input['payment_method'] ?? 'paypal'))) ?: 'paypal';
+
+        return $this->startLinkPayment($input, PaymentLinkServiceInterface::KIND_QUICK_PAY, 'quick_pay_self');
+    }
+
+    /**
+     * 代付人确认付款：创建 Payment 交易，返回 redirect_url（PayPal）或即时 paid（Fake）。
+     *
+     * @param array{
+     *   token:string,
+     *   payment_method:string,
+     *   billing_address?:array<string,mixed>,
+     *   idempotency_key?:string
+     * } $input
+     * @return array<string,mixed>
+     */
+    public function startPayerPayment(array $input): array
+    {
+        return $this->startLinkPayment($input, PaymentLinkServiceInterface::KIND_HELP_PAY, 'help_pay');
+    }
+
+    /**
+     * @param array{
+     *   token:string,
+     *   payment_method?:string,
+     *   billing_address?:array<string,mixed>,
+     *   idempotency_key?:string
+     * } $input
+     * @return array<string,mixed>
+     */
+    private function startLinkPayment(array $input, string $kind, string $mode): array
+    {
+        $token = trim((string) ($input['token'] ?? ''));
+        $method = strtolower(trim((string) ($input['payment_method'] ?? '')));
+        if ($token === '' || $method === '') {
+            throw new \InvalidArgumentException('helppay_payment_method_required');
+        }
+
+        if ($kind === PaymentLinkServiceInterface::KIND_HELP_PAY) {
+            // Raw link for payment (country / payable); redacted resolve only validates active link.
+            if ($this->resolveHelpPayForPayer($token) === null) {
+                throw new \InvalidArgumentException('helppay_link_invalid');
+            }
+        }
+        $row = $this->links->resolve($token, $kind);
+        if ($row === null) {
+            throw new \InvalidArgumentException($kind === PaymentLinkServiceInterface::KIND_QUICK_PAY
+                ? 'helppay_quick_link_invalid'
+                : 'helppay_link_invalid');
+        }
+
+        $amountMinor = max(0, (int) ($row['amount_minor'] ?? 0));
+        if ($amountMinor <= 0) {
+            throw new \InvalidArgumentException('helppay_amount_invalid');
+        }
+        $currency = strtoupper(trim((string) ($row['currency_code'] ?? 'USD')));
+        if ($currency === '') {
+            $currency = 'USD';
+        }
+
+        $billing = \is_array($input['billing_address'] ?? null) ? $input['billing_address'] : [];
+        if ($this->paymentMethodRequiresBilling($method, $amountMinor, $currency) && !$this->billingAddressComplete($billing)) {
+            throw new \InvalidArgumentException('helppay_billing_incomplete');
+        }
+
+        $payableId = trim((string) ($row['payable_id'] ?? ''));
+        if ($payableId === '') {
+            $payableId = trim((string) ($row['payment_link_code'] ?? $token));
+        }
+        $payableType = strtolower(trim((string) ($row['payable_type'] ?? '')));
+        if ($payableType === '' || $payableType === 'helppay') {
+            // Align with checkout / Payment eligibility defaults (order / weline_order).
+            $payableType = 'order';
+        }
+
+        $idempotency = trim((string) ($input['idempotency_key'] ?? ''));
+        if ($idempotency === '') {
+            $idempotency = ($mode === 'quick_pay_self' ? 'quickpay_' : 'helppay_')
+                . $token . '_' . $method . '_' . $amountMinor;
+        }
+
+        $customerId = $this->resolvePayerCustomerId();
+        $actorType = $customerId > 0 ? 'customer' : 'guest';
+        $actorId = $customerId > 0
+            ? (string) $customerId
+            : (($mode === 'quick_pay_self' ? 'quickpay:' : 'helppay:') . $token);
+
+        $ship = \is_array($row['shipping_snapshot'] ?? null) ? $row['shipping_snapshot'] : [];
+        $countryCode = strtoupper(trim((string) (
+            $billing['country_code']
+            ?? $billing['country']
+            ?? $ship['country_code']
+            ?? $ship['country']
+            ?? ''
+        )));
+        if (\strlen($countryCode) > 2) {
+            // shipping_snapshot may store display names; ISO-2 only when already short.
+            $countryCode = strtoupper(trim((string) ($ship['country_code'] ?? $billing['country_code'] ?? '')));
+        }
+
+        try {
+            /** @var \Weline\Payment\Api\PaymentFacadeInterface $facade */
+            $facade = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Payment\Api\PaymentFacadeInterface::class
+            );
+        } catch (\Throwable $e) {
+            throw new \RuntimeException('helppay_payment_unavailable', 0, $e);
+        }
+
+        $subject = $mode === 'quick_pay_self' ? (string) __('快捷购买') : (string) __('帮我付');
+        $description = $mode === 'quick_pay_self' ? (string) __('本人快捷购买') : (string) __('帮他人付款');
+        $tags = $mode === 'quick_pay_self' ? ['helppay', 'quick_pay_self'] : ['helppay', 'help_pay'];
+
+        try {
+            $tx = $facade->tryCreatePayment($method, [
+                'order_id' => $payableId,
+                'payable_type' => $payableType,
+                'payable_id' => $payableId,
+                'amount' => $amountMinor / 100.0,
+                'amount_minor' => $amountMinor,
+                'currency' => $currency,
+                'currency_code' => $currency,
+                'subject' => $subject,
+                'description' => $description,
+                'shipping_locked' => true,
+                'billing_address' => $billing,
+                'idempotency_key' => $idempotency,
+                'business_tags' => $tags,
+                'country_code' => $countryCode,
+                'actor_type' => $actorType,
+                'actor_id' => $actorId,
+                'payer_type' => $actorType,
+                'payer_id' => $actorId,
+                'customer_id' => $customerId > 0 ? $customerId : null,
+                'metadata' => [
+                    'helppay_token' => $token,
+                    'mode' => $mode,
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            throw new \RuntimeException('helppay_payment_start_failed', 0, $e);
+        }
+        if (!$tx instanceof \Weline\Payment\Api\Data\PaymentTransactionRecord) {
+            throw new \RuntimeException('helppay_payment_method_unavailable');
+        }
+
+        $response = \is_array($tx->response) ? $tx->response : [];
+        $redirect = $this->extractPaymentRedirectUrl($response);
+        $status = strtolower(trim((string) $tx->status));
+        $paidStatuses = ['paid', 'success', 'succeeded', 'completed', 'captured'];
+        $paid = $redirect === '' && \in_array($status, $paidStatuses, true);
+
+        return [
+            'ok' => true,
+            'success' => true,
+            'token' => $token,
+            'transaction_no' => $tx->transactionNumber,
+            'status' => $tx->status,
+            'method_code' => $tx->methodCode,
+            'redirect_url' => $redirect,
+            'approve_url' => $redirect,
+            'requires_action' => $redirect !== '',
+            'paid' => $paid,
+        ];
+    }
+
+    /**
      * @return array<string,mixed>|null
      */
     public function resolveSelectionShare(string $token): ?array
@@ -214,11 +448,130 @@ final class HelpPayOrchestrator
         return $this->links->resolve($token, PaymentLinkServiceInterface::KIND_SELECTION_SHARE);
     }
 
+    private function resolvePayerCustomerId(): int
+    {
+        try {
+            if (\function_exists('w_session')) {
+                $direct = (int) (w_session('customer_id') ?? 0);
+                if ($direct > 0) {
+                    return $direct;
+                }
+                $bag = w_session('customer');
+                if (\is_array($bag)) {
+                    $fromBag = (int) ($bag['id'] ?? $bag['customer_id'] ?? 0);
+                    if ($fromBag > 0) {
+                        return $fromBag;
+                    }
+                }
+            }
+        } catch (\Throwable) {
+            // Guest payer is the default for friend-pay links.
+        }
+
+        return 0;
+    }
+
+    private function paymentMethodRequiresBilling(string $methodCode, int $amountMinor, string $currency): bool
+    {
+        try {
+            /** @var \Weline\Checkout\Service\CheckoutPaymentMethodsProvider $provider */
+            $provider = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Checkout\Service\CheckoutPaymentMethodsProvider::class
+            );
+            foreach ($provider->listMethods([
+                'currency' => $currency,
+                'amount' => $amountMinor / 100.0,
+                'amount_minor' => $amountMinor,
+                'payable_type' => 'helppay',
+            ]) as $method) {
+                if (!\is_array($method)) {
+                    continue;
+                }
+                if (strtolower(trim((string) ($method['code'] ?? ''))) !== $methodCode) {
+                    continue;
+                }
+
+                return !empty($method['requires_billing']);
+            }
+        } catch (\Throwable) {
+            // Fall through to code heuristic.
+        }
+
+        return str_contains($methodCode, 'card') || str_contains($methodCode, 'stripe');
+    }
+
+    /**
+     * @param array<string,mixed> $billing
+     */
+    private function billingAddressComplete(array $billing): bool
+    {
+        $name = trim((string) ($billing['name'] ?? ''));
+        $phone = trim((string) ($billing['phone'] ?? ''));
+        $line1 = trim((string) ($billing['line1'] ?? $billing['address1'] ?? ''));
+        $country = trim((string) ($billing['country_code'] ?? $billing['country'] ?? ''));
+
+        return $name !== '' && $phone !== '' && $line1 !== '' && $country !== '';
+    }
+
+    /**
+     * @param array<string,mixed> $response
+     */
+    private function extractPaymentRedirectUrl(array $response): string
+    {
+        foreach (['redirect_url', 'approve_url', 'redirect', 'url'] as $key) {
+            $candidate = trim((string) ($response[$key] ?? ''));
+            if ($this->isSafePaymentRedirectUrl($candidate)) {
+                return $candidate;
+            }
+        }
+        foreach (['payload', 'gateway_response', 'response', 'next_action'] as $key) {
+            $nested = $response[$key] ?? null;
+            if (\is_array($nested)) {
+                $candidate = $this->extractPaymentRedirectUrl($nested);
+                if ($candidate !== '') {
+                    return $candidate;
+                }
+            }
+        }
+
+        return '';
+    }
+
+    private function isSafePaymentRedirectUrl(string $url): bool
+    {
+        if ($url === '') {
+            return false;
+        }
+        if (str_starts_with($url, '/') && !str_starts_with($url, '//')) {
+            return true;
+        }
+        $scheme = strtolower((string) parse_url($url, PHP_URL_SCHEME));
+
+        return \in_array($scheme, ['http', 'https'], true)
+            && filter_var($url, FILTER_VALIDATE_URL) !== false;
+    }
+
     private function assertTocOnly(string $cartType): void
     {
         if (strtolower(trim($cartType)) !== self::CART_TYPE_TOC) {
             throw new \InvalidArgumentException('helppay_toc_only');
         }
+    }
+
+    private function quickShipping(): HelpPayQuickShippingQuoteService
+    {
+        if ($this->quickShipping instanceof HelpPayQuickShippingQuoteService) {
+            return $this->quickShipping;
+        }
+        try {
+            $resolved = ObjectManager::getInstance(HelpPayQuickShippingQuoteService::class);
+            if ($resolved instanceof HelpPayQuickShippingQuoteService) {
+                return $resolved;
+            }
+        } catch (\Throwable) {
+        }
+
+        return new HelpPayQuickShippingQuoteService();
     }
 
     /**

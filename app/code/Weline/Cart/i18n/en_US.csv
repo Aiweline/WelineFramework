@@ -19,9 +19,6 @@
 加入购物车失败。,"Failed to add to cart."
 加入购物车失败：%{1},"Failed to add to cart: %{1}"
 "Direct browser cart API is deprecated. Use the frontend worker API.","Direct browser cart API is deprecated. Use the frontend worker API."
-购物车,"Shopping cart"
-查看已选汉服商品、调整规格数量并进入结算。,查看已选汉服商品、调整规格数量并进入结算。
-您的购物车是空的,"Your cart is empty"
 购物车检查,"Cart inspection"
 购物车工作台,"Cart workspace"
 search,search
@@ -47,6 +44,7 @@ search,search
 无法创建游客购物车会话,"Unable to create a guest cart session"
 "小计（%1 件商品）","Subtotal (%1 items)"
 单价,"Unit price"
+购物车,"Shopping cart"
 浏览商品,"Browse products"
 暂时无法加载购物车,"Unable to load cart right now"
 重试,Retry
@@ -146,6 +144,8 @@ Scope,Scope
 该商品暂不可售，请从购物车移除或稍后再试,该商品暂不可售，请从购物车移除或稍后再试
 "channel_code 必须与 store_code 同时提供","channel_code 必须与 store_code 同时提供"
 "购物车 Scope 与当前可信 Website/Store/Channel 请求不一致","购物车 Scope 与当前可信 Website/Store/Channel 请求不一致"
+查看已选汉服商品、调整规格数量并进入结算。,"Review selected Hanfu items, adjust options and quantities, then check out."
+您的购物车是空的,"Your cart is empty"
 "按 Scope 检查真实 Cart 持久库","按 Scope 检查真实 Cart 持久库"
 "Inspection 按 scope_key 查询该 Scope 下真实持久缓存结果，不是全局购物车列表；不支持跨 Scope 枚举。","Inspection queries real persistent cache results for one scope_key; it is not a global cart list and cannot enumerate across scopes."
 "输入完整 scope key","输入完整 scope key"

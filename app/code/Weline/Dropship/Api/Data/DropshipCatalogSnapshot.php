@@ -17,6 +17,7 @@ final class DropshipCatalogSnapshot
      * @param array<string, mixed> $media
      * @param array<string, string|int|float|bool|null> $suggestedEav
      * @param list<array<string, mixed>> $attributes ProductAdmin attribute rows (attribute_code/value)
+     * @param array{weight_kg?:float|int|string,length_cm?:float|int|string,width_cm?:float|int|string,height_cm?:float|int|string} $shipping
      * @param array<string, mixed> $raw
      */
     public function __construct(
@@ -37,6 +38,7 @@ final class DropshipCatalogSnapshot
         public readonly string $categoryPath = '',
         public readonly string $description = '',
         public readonly array $attributes = [],
+        public readonly array $shipping = [],
         public readonly array $raw = [],
     ) {
     }
@@ -71,8 +73,34 @@ final class DropshipCatalogSnapshot
             categoryPath: (string)($data['category_path'] ?? ''),
             description: (string)($data['description'] ?? ''),
             attributes: $attributes,
+            shipping: self::normalizeShipping((array)($data['shipping'] ?? [])),
             raw: (array)($data['raw'] ?? []),
         );
+    }
+
+    /**
+     * @param array<string, mixed> $shipping
+     * @return array{weight_kg:float,length_cm:float,width_cm:float,height_cm:float}
+     */
+    public static function normalizeShipping(array $shipping): array
+    {
+        $out = [
+            'weight_kg' => 0.0,
+            'length_cm' => 0.0,
+            'width_cm' => 0.0,
+            'height_cm' => 0.0,
+        ];
+        foreach (array_keys($out) as $key) {
+            if (!array_key_exists($key, $shipping) || !is_numeric($shipping[$key])) {
+                continue;
+            }
+            $n = (float)$shipping[$key];
+            if ($n > 0) {
+                $out[$key] = $n;
+            }
+        }
+
+        return $out;
     }
 
     /**
@@ -98,7 +126,18 @@ final class DropshipCatalogSnapshot
             'category_path' => $this->categoryPath,
             'description' => $this->description,
             'attributes' => $this->attributes,
+            'shipping' => self::normalizeShipping($this->shipping),
             'raw' => $this->raw,
         ];
+    }
+
+    public function hasShippingDims(): bool
+    {
+        $s = self::normalizeShipping($this->shipping);
+
+        return $s['weight_kg'] > 0
+            && $s['length_cm'] > 0
+            && $s['width_cm'] > 0
+            && $s['height_cm'] > 0;
     }
 }

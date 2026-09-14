@@ -14,7 +14,7 @@ final class MailTemplateBeautyContractTest extends TestCase
     public function testCustomerFacingTemplatesHaveBrandShellAndCta(): void
     {
         $root = dirname(__DIR__, 6);
-        $shell = (string)file_get_contents($root . '/app/code/Weline/Smtp/view/email/shell/zh_Hans_CN.html');
+        $shell = (string)file_get_contents($root . '/app/code/Weline/Smtp/view/email/shell.phtml');
         self::assertStringContainsString('{{var.brand_header_bg}}', $shell);
         self::assertStringContainsString('{{var.brand_accent}}', $shell);
         self::assertStringContainsString('{{var.brand_canvas}}', $shell);
@@ -23,6 +23,7 @@ final class MailTemplateBeautyContractTest extends TestCase
         self::assertStringContainsString('{{var.site_logo_img|raw}}', $shell);
         self::assertStringContainsString('{{var.contact_email}}', $shell);
         self::assertStringContainsString('{{MAIL_BODY}}', $shell);
+        self::assertStringContainsString('<lang>需要帮助？</lang>', $shell);
 
         $files = [
             $root . '/app/code/Weline/Customer/view/email/password_reset/zh_Hans_CN.html',

@@ -451,10 +451,11 @@ final class HanfuStorefrontLocaleContractTest extends TestCase
 
         self::assertStringContainsString('$source = $localized;', $source);
         self::assertStringContainsString('return WidgetI18n::label($source);', $source);
-        self::assertStringContainsString(
-            "#/(ar_SA|en_US|zh_Hans_CN|zh_CN)(?:/|$)#",
-            $source,
-        );
+        self::assertStringContainsString('WidgetI18n::localeFromRequestUri', $source);
+        self::assertStringContainsString('hi_IN', \Weline\Theme\Helper\WidgetI18n::STOREFRONT_PATH_LOCALE_PATTERN);
+        self::assertSame('hi_IN', \Weline\Theme\Helper\WidgetI18n::localeFromRequestUri('/hi_IN/product/demo'));
+        $widgetI18n = (string)file_get_contents(dirname(__DIR__, 3) . '/Helper/WidgetI18n.php');
+        self::assertStringContainsString("'Weline_Faq'", $widgetI18n);
         self::assertStringNotContainsString('return $localized;', $source);
     }
 
@@ -550,6 +551,59 @@ final class HanfuStorefrontLocaleContractTest extends TestCase
         }
     }
 
+    public function testHindiLaunchCatalogTranslatesDefaultStorefrontChrome(): void
+    {
+        $hi = $this->loadLocale('hi_IN');
+        $needDevanagari = [
+            '云裳志' => 'हमारी कार्यशाला',
+            '定制与合作' => 'कस्टम और साझेदारी',
+            '支付与账户' => 'भुगतान और खाता',
+            '社媒登录' => 'सोशल लॉगिन',
+            '我要推广' => 'अभी प्रचार करें',
+            '帮助中心' => 'सहायता केंद्र',
+            '常见问题' => 'अक्सर पूछे जाने वाले प्रश्न',
+            '猜你喜欢' => 'आपको यह भी पसंद आ सकता है',
+            '最近浏览' => 'हाल ही में देखे गए',
+            '关于我们' => 'हमारे बारे में',
+            '支付方式' => 'भुगतान विधि',
+            '我的账户' => 'मेरा खाता',
+            '我的订单' => 'मेरे ऑर्डर',
+            '配送说明' => 'शिपिंग सूचना',
+            '退换政策' => 'रिटर्न और एक्सचेंज',
+            '联系客服' => 'ग्राहक सेवा से संपर्क करें',
+        ];
+        foreach ($needDevanagari as $source => $hindi) {
+            self::assertArrayHasKey($source, $hi, "Missing hi_IN source: {$source}");
+            self::assertSame($hindi, $hi[$source], "Unexpected hi_IN translation: {$source}");
+            self::assertMatchesRegularExpression('/\\p{Devanagari}/u', $hi[$source]);
+        }
+    }
+
+    public function testBengaliLaunchCatalogTranslatesDefaultStorefrontChrome(): void
+    {
+        $bn = $this->loadLocale('bn_BD');
+        $needBengali = [
+            '云裳志' => 'আমাদের কর্মশালা',
+            '定制与合作' => 'কাস্টম ও অংশীদারিত্ব',
+            '支付与账户' => 'পেমেন্ট ও অ্যাকাউন্ট',
+            '社媒登录' => 'সোশ্যাল লগইন',
+            '我要推广' => 'এখনই প্রচার করুন',
+            '帮助中心' => 'সহায়তা কেন্দ্র',
+            '关于我们' => 'আমাদের সম্পর্কে',
+            '支付方式' => 'পেমেন্ট পদ্ধতি',
+            '我的账户' => 'আমার অ্যাকাউন্ট',
+            '我的订单' => 'আমার অর্ডার',
+            '配送说明' => 'শিপিং তথ্য',
+            '退换政策' => 'ফেরত ও বিনিময়',
+            '联系客服' => 'কাস্টমার সার্ভিসে যোগাযোগ করুন',
+        ];
+        foreach ($needBengali as $source => $bengali) {
+            self::assertArrayHasKey($source, $bn, "Missing bn_BD source: {$source}");
+            self::assertSame($bengali, $bn[$source], "Unexpected bn_BD translation: {$source}");
+            self::assertMatchesRegularExpression('/\\p{Bengali}/u', $bn[$source]);
+        }
+    }
+
     public function testArabicLaunchCatalogCoversEveryDefaultStorefrontPhrase(): void
     {
         $zh = $this->loadLocale('zh_Hans_CN');
@@ -563,6 +617,22 @@ final class HanfuStorefrontLocaleContractTest extends TestCase
             self::assertNotSame('', trim($ar[$source]), "Empty ar_SA translation: {$source}");
             self::assertNotSame($source, $ar[$source], "Untranslated ar_SA source: {$source}");
             self::assertMatchesRegularExpression('/\\p{Arabic}/u', $ar[$source], "Non-Arabic ar_SA translation: {$source}");
+        }
+    }
+
+    public function testArabicLaunchCatalogTranslatesPdpAndFooterChrome(): void
+    {
+        $ar = $this->loadLocale('ar_SA');
+        $needArabic = [
+            '常见问题' => 'الأسئلة الشائعة',
+            '猜你喜欢' => 'قد يعجبك أيضًا',
+            '最近浏览' => 'تمت مشاهدتها مؤخرًا',
+            '支付方式' => 'طرق الدفع',
+        ];
+        foreach ($needArabic as $source => $arabic) {
+            self::assertArrayHasKey($source, $ar, "Missing ar_SA source: {$source}");
+            self::assertSame($arabic, $ar[$source], "Unexpected ar_SA translation: {$source}");
+            self::assertMatchesRegularExpression('/\\p{Arabic}/u', $ar[$source]);
         }
     }
 

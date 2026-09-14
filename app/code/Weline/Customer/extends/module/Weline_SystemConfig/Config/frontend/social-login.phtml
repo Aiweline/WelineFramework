@@ -74,7 +74,7 @@
     <w:config:adapter
         code="customer.social_login.google.callback"
         label="授权重定向 URI"
-        description="填到 Google「已获授权的重定向 URI」：须与店面 OAuth redirect_uri 完全一致。"
+        description="填到 Google「已获授权的重定向 URI」：须与店面 OAuth redirect_uri 完全一致，且不得含语言/货币路径前缀。"
         callback-path="customer/account/social-login/callback"
         callback-append-scope="false"
         callback-label="登记到 Google「已获授权的重定向 URI」" />

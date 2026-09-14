@@ -8,7 +8,10 @@ use Weline\Cart\Api\CartScopeResolverInterface;
 use Weline\Cart\Api\CheckoutCartSnapshotInterface;
 use Weline\Cart\Service\CartConflictException;
 use Weline\Cart\Service\CartService;
+use Weline\Checkout\Service\CheckoutSessionFaultRecorder;
 use Weline\Checkout\Service\CheckoutDeliveryContextService;
+use Weline\Checkout\Service\CheckoutEntry;
+use Weline\Checkout\Service\CheckoutQuoteLineWeightResolver;
 use Weline\Checkout\Service\CheckoutShippingAddressResolver;
 use Weline\Checkout\Service\ExpressCheckoutFlowService;
 use Weline\Checkout\Service\CheckoutGroupSubmitService;
@@ -148,16 +151,28 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 paymentMethod: trim((string)($params['payment_method'] ?? '')) ?: null,
                 billingAddress: \is_array($params['billing_address'] ?? null) ? $params['billing_address'] : null,
                 cartType: strtolower(trim((string)($cart['cart_type'] ?? $cartType))) ?: $cartType,
+                existingQuoteToken: trim((string)($params['quote_token'] ?? '')),
+                cartFingerprint: $this->checkoutFingerprint($params),
+                checkoutEntry: $this->resolveCheckoutEntry($params),
             );
+            $frozenToken = (string)($payload['quote_token'] ?? '');
+            $this->recordCheckoutFaultSafe(function () use ($frozenToken): void {
+                $this->faultRecorder()->clear($frozenToken);
+            });
 
             return [
                 'success' => true,
-                'quote_token' => (string)($payload['quote_token'] ?? ''),
+                'quote_token' => $frozenToken,
                 'config_version' => (string)($payload['config_version'] ?? ''),
                 'currency' => (string)($payload['currency'] ?? ''),
                 'data' => $payload,
             ];
         } catch (CartConflictException|CheckoutV2ConflictException $e) {
+            $this->recordNamedFault(
+                $params,
+                'freeze_failed',
+                $e->getMessage(),
+            );
             return [
                 'success' => false,
                 'message' => $e->getMessage(),
@@ -165,6 +180,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 'context' => $e->context(),
             ];
         } catch (\Throwable $e) {
+            $this->recordNamedFault($params, 'freeze_failed', $e->getMessage());
             return [
                 'success' => false,
                 'message' => $e->getMessage(),
@@ -270,6 +286,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
             return $this->createdCheckoutResponse($result, $quoteToken, $payment);
         } catch (CheckoutV2ConflictException $e) {
             $this->reportCheckoutPixelIncident($e->errorCode(), $e->getMessage());
+            $this->recordNamedFault($params, 'submit_failed', $e->getMessage());
             return [
                 'success' => false,
                 'message' => $e->getMessage(),
@@ -279,6 +296,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
         } catch (\Weline\Order\Api\OrderFacadeConflictException $e) {
             // OrderFacade 冲突（idempotency hash / writer gate 等）原样透出错误码
             $this->reportCheckoutPixelIncident($e->errorCode(), $e->getMessage());
+            $this->recordNamedFault($params, 'submit_failed', $e->getMessage());
             return [
                 'success' => false,
                 'message' => $e->getMessage(),
@@ -287,6 +305,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
             ];
         } catch (\Weline\Inventory\Api\InventoryConflictException $e) {
             $this->reportCheckoutPixelIncident($e->errorCode(), $e->getMessage());
+            $this->recordNamedFault($params, 'submit_failed', $e->getMessage());
             return [
                 'success' => false,
                 'message' => $e->getMessage(),
@@ -295,6 +314,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
             ];
         } catch (\Throwable $e) {
             $this->reportCheckoutPixelIncident('checkout_submit_v2_failed', $e->getMessage());
+            $this->recordNamedFault($params, 'submit_failed', $e->getMessage());
             return [
                 'success' => false,
                 'message' => $e->getMessage(),
@@ -521,6 +541,24 @@ class CheckoutQueryProvider implements QueryProviderInterface
         return $sessionCode !== '' ? $sessionCode : null;
     }
 
+    /**
+     * Server-owned entry attribution. Whitelist only; default 万能结账.
+     *
+     * @param array<string, mixed> $params
+     */
+    private function resolveCheckoutEntry(array $params): string
+    {
+        $raw = trim((string)($params['checkout_entry'] ?? ''));
+        if ($raw !== '') {
+            return CheckoutEntry::normalize($raw, CheckoutEntry::CHECKOUT);
+        }
+        if (!empty($params['express_checkout'])) {
+            return CheckoutEntry::EXPRESS;
+        }
+
+        return CheckoutEntry::CHECKOUT;
+    }
+
     private function currentScope(): ScopeIdentity
     {
         $scope = RequestContext::scopeIdentity();
@@ -602,38 +640,53 @@ class CheckoutQueryProvider implements QueryProviderInterface
             $blockingMessage = (string)__('购物车中有不可结算的商品，请移除后重试');
         }
         $shippingAddress = $this->shippingAddressResolver->resolve($shippingAddress, $params);
-        $shippingMethods = $checkoutBlocked
-            ? []
+        $shippingQuoted = $checkoutBlocked
+            ? ['methods' => [], 'quote_diagnostics' => []]
             : $this->loadShippingMethods($shippingAddress, $items, $currency);
+        $shippingMethods = \is_array($shippingQuoted['methods'] ?? null) ? $shippingQuoted['methods'] : [];
+        $quoteDiagnostics = \is_array($shippingQuoted['quote_diagnostics'] ?? null)
+            ? $shippingQuoted['quote_diagnostics']
+            : [];
         $shippingEmptyMessage = $checkoutBlocked
             ? $blockingMessage
-            : (string)__('当前地址下所选配送方案不可用，请调整收货地址或商品后再试。');
-        $quoteDiagnostics = [];
-        try {
-            $quoteDiagnostics = ObjectManager::getInstance(
-                \Weline\Shipping\Service\ShippingServiceManager::class,
-            )->getLastQuoteDiagnostics();
-            if (
-                !$checkoutBlocked
-                && $shippingMethods === []
-                && !empty($quoteDiagnostics['fx_skipped'])
-            ) {
-                $shippingEmptyMessage = (string)__(
-                    '当前币种缺少运费汇率，部分配送暂不可用。请切换币种或稍后重试。',
-                );
-            }
-        } catch (\Throwable) {
-            $quoteDiagnostics = [];
+            : (string)__('当前地址下所选配送方案不可用，请调整收货地址或商品，或联系客服协助处理。');
+        if (
+            !$checkoutBlocked
+            && $shippingMethods === []
+            && !empty($quoteDiagnostics['fx_skipped'])
+        ) {
+            $shippingEmptyMessage = (string)__(
+                '当前币种缺少运费汇率，部分配送暂不可用。请切换币种或联系客服协助处理。',
+            );
+        } elseif (
+            !$checkoutBlocked
+            && $shippingMethods === []
+            && !empty($quoteDiagnostics['missing_weight'])
+        ) {
+            $shippingEmptyMessage = (string)__(
+                '购物车商品缺少重量，无法计算运费。请联系客服协助处理后再试。',
+            );
         }
         $paymentMethods = $checkoutBlocked ? [] : $this->loadPaymentMethods($params + [
             'currency' => $currency,
             'amount' => (float)($cart['grand_total'] ?? $cart['subtotal'] ?? 0),
         ]);
         $html = $this->htmlRenderer();
+        $quoteToken = $this->syncBrowseSession(
+            $params,
+            $shippingAddress,
+            $items,
+            $quoteDiagnostics,
+            $shippingMethods,
+            $checkoutBlocked,
+            $shippingEmptyMessage,
+            $currency,
+        );
 
         return $this->ok(
             $checkoutBlocked ? $blockingMessage : (string)__('结账信息已加载'),
             [
+            'quote_token' => $quoteToken,
             'currency' => $currency,
             'identity' => [
                 'checkout_mode' => (string)($identity['checkout_mode'] ?? 'guest'),
@@ -824,6 +877,12 @@ class CheckoutQueryProvider implements QueryProviderInterface
         try {
             /** @var \Weline\Framework\View\Template $template */
             $template = ObjectManager::getInstance(\Weline\Framework\View\Template::class);
+            // Template 单例会把 title 默认设为当前模块名（Query 下常为 Weline_Framework），
+            // 若不显式覆盖，地址部件标题会泄漏成「Weline_Framework」。
+            $template->assign([
+                'title' => (string) __('收货地址'),
+                'saved_heading' => (string) __('选择收货地址'),
+            ]);
             $inner = trim((string)$template->fetch(
                 'Weline_Shipping::templates/frontend/widgets/checkout-shipping-address.phtml'
             ));
@@ -929,6 +988,19 @@ class CheckoutQueryProvider implements QueryProviderInterface
         return \Weline\Framework\Manager\ObjectManager::getInstance(
             \Weline\Checkout\Service\CheckoutHtmlRenderer::class
         );
+    }
+
+    private function quoteLineWeight(): CheckoutQuoteLineWeightResolver
+    {
+        try {
+            $resolved = ObjectManager::getInstance(CheckoutQuoteLineWeightResolver::class);
+            if ($resolved instanceof CheckoutQuoteLineWeightResolver) {
+                return $resolved;
+            }
+        } catch (\Throwable) {
+        }
+
+        return new CheckoutQuoteLineWeightResolver();
     }
 
     /**
@@ -1209,7 +1281,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
     /**
      * @param array<string, mixed> $shippingAddress
      * @param list<array<string, mixed>> $cartItems
-     * @return list<array<string, mixed>>
+     * @return array{methods: list<array<string, mixed>>, quote_diagnostics: array<string, mixed>}
      */
     private function loadShippingMethods(array $shippingAddress, array $cartItems = [], string $currency = 'CNY'): array
     {
@@ -1225,7 +1297,8 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 'qty' => max(1, (int)($item['qty'] ?? $item['qty_minor'] ?? 1)),
                 'unit_price_minor' => (int)($item['unit_price_minor'] ?? 0),
                 'row_total_minor' => (int)($item['row_total_minor'] ?? 0),
-                'weight_minor' => (int)($item['weight_minor'] ?? 0),
+                // 真实重量：行重优先，否则目录 weight_kg（与 Express/HelpPay 同源解析；禁止静默 0.5kg）。
+                'weight_minor' => $this->quoteLineWeight()->resolveLineWeightMinor($item),
                 'volume_minor' => (int)($item['volume_minor'] ?? 0),
                 'offer_id' => (int)($item['offer_id'] ?? 0),
                 'product_id' => (int)($item['product_id'] ?? $item['id'] ?? 0),
@@ -1286,15 +1359,19 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 'channel_id' => (int)RequestContext::getWelineChannelId(),
             ]);
         } catch (\Throwable) {
-            return [];
+            return ['methods' => [], 'quote_diagnostics' => []];
         }
 
         if (!\is_array($result) || empty($result['success'])) {
-            return [];
+            $failPayload = \is_array($result['data'] ?? null) ? $result['data'] : [];
+            $failDiag = \is_array($failPayload['quote_diagnostics'] ?? null) ? $failPayload['quote_diagnostics'] : [];
+
+            return ['methods' => [], 'quote_diagnostics' => $failDiag];
         }
 
         $payload = \is_array($result['data'] ?? null) ? $result['data'] : [];
         $options = \is_array($payload['options'] ?? null) ? $payload['options'] : [];
+        $quoteDiagnostics = \is_array($payload['quote_diagnostics'] ?? null) ? $payload['quote_diagnostics'] : [];
         $methods = [];
         foreach ($options as $option) {
             if (!\is_array($option)) {
@@ -1331,7 +1408,8 @@ class CheckoutQueryProvider implements QueryProviderInterface
             ];
         }
 
-        return $this->enrichShippingMethods(
+        return [
+            'methods' => $this->enrichShippingMethods(
             $methods,
             $lines,
             $shippingAddress,
@@ -1341,7 +1419,9 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 'channel_id' => (int)RequestContext::getWelineChannelId(),
             ],
             $currency !== '' ? $currency : 'CNY',
-        );
+            ),
+            'quote_diagnostics' => $quoteDiagnostics,
+        ];
     }
 
     /**
@@ -1392,89 +1472,12 @@ class CheckoutQueryProvider implements QueryProviderInterface
     private function loadPaymentMethods(array $params): array
     {
         try {
-            $result = w_query('payment', 'getCheckoutPaymentMethods', $params);
+            /** @var \Weline\Checkout\Service\CheckoutPaymentMethodsProvider $provider */
+            $provider = ObjectManager::getInstance(\Weline\Checkout\Service\CheckoutPaymentMethodsProvider::class);
+
+            return $provider->listMethods($params);
         } catch (\Throwable) {
             return [];
-        }
-
-        $methods = [];
-        if (\is_array($result)) {
-            $list = \is_array($result['data'] ?? null) ? $result['data'] : $result;
-            if (\array_is_list($list) || (isset($list[0]) && \is_array($list[0]))) {
-                $methods = $list;
-            }
-        }
-
-        $normalized = [];
-        foreach ($methods as $method) {
-            if (!\is_array($method)) {
-                continue;
-            }
-            $code = trim((string)($method['code'] ?? ''));
-            if ($code === '') {
-                continue;
-            }
-            if (\array_key_exists('enabled', $method) && !$method['enabled']) {
-                continue;
-            }
-            $display = \is_array($method['display_metadata'] ?? null) ? $method['display_metadata'] : [];
-            $iconUrl = trim((string)($method['icon_url'] ?? $display['icon_url'] ?? $display['icon'] ?? ''));
-            $guideUrl = trim((string)($method['guide_url'] ?? ''));
-            if ($guideUrl === '') {
-                $guideRoute = trim((string)($method['guide_route'] ?? ''));
-                if ($guideRoute !== '') {
-                    $guideUrl = '/' . ltrim($guideRoute, '/');
-                } else {
-                    $guideUrl = '/guide/payment/' . rawurlencode($code);
-                }
-            } elseif (!str_starts_with($guideUrl, '/') && !preg_match('#^https?://#i', $guideUrl)) {
-                $guideUrl = '/' . ltrim($guideUrl, '/');
-            }
-            $normalized[] = [
-                'code' => $code,
-                'label' => (string)($method['label'] ?? $method['title'] ?? $method['name'] ?? $code),
-                'title' => (string)($method['title'] ?? $method['label'] ?? $code),
-                'description' => (string)($method['description'] ?? ''),
-                'icon_url' => $iconUrl,
-                'guide_url' => $guideUrl,
-                'has_guide' => array_key_exists('has_guide', $method)
-                    ? (bool)$method['has_guide']
-                    : true,
-                'cod_fee_amount_minor' => $this->resolvePaymentCodFeeMinor(
-                    $code,
-                    $method,
-                    (float)($params['amount'] ?? 0),
-                ),
-                'source' => (string)($method['source'] ?? 'Weline_Payment'),
-            ];
-        }
-
-        return $normalized;
-    }
-
-    /**
-     * @param array<string, mixed> $method
-     */
-    private function resolvePaymentCodFeeMinor(string $code, array $method, float $amountMajor): int
-    {
-        $explicit = max(0, (int)($method['cod_fee_amount_minor'] ?? $method['fee_amount_minor'] ?? 0));
-        if ($explicit > 0) {
-            return $explicit;
-        }
-        try {
-            if (!class_exists(\Weline\Payment\Service\CodFeeCalculator::class)) {
-                return 0;
-            }
-            /** @var \Weline\Payment\Service\CodFeeCalculator $calc */
-            $calc = ObjectManager::getInstance(\Weline\Payment\Service\CodFeeCalculator::class);
-            if (!$calc->isCodMethod($code)) {
-                return 0;
-            }
-            $baseMinor = (int)round(max(0.0, $amountMajor) * 100);
-
-            return $calc->forMethodCode($code, $baseMinor, 2);
-        } catch (\Throwable) {
-            return 0;
         }
     }
 
@@ -1621,6 +1624,145 @@ class CheckoutQueryProvider implements QueryProviderInterface
         ] + $data;
     }
 
+    /**
+     * @param array<string, mixed> $params
+     * @param array<string, mixed> $address
+     * @param list<array<string, mixed>> $items
+     * @param array<string, mixed> $quoteDiagnostics
+     * @param list<array<string, mixed>> $shippingMethods
+     */
+    private function syncBrowseSession(
+        array $params,
+        array $address,
+        array $items,
+        array $quoteDiagnostics,
+        array $shippingMethods,
+        bool $checkoutBlocked,
+        string $emptyMessage,
+        string $currency,
+    ): string {
+        $token = '';
+        $this->recordCheckoutFaultSafe(function () use (
+            $params,
+            $address,
+            $items,
+            $quoteDiagnostics,
+            $shippingMethods,
+            $checkoutBlocked,
+            $emptyMessage,
+            $currency,
+            &$token,
+        ): void {
+            $recorder = $this->faultRecorder();
+            $fingerprint = $this->checkoutFingerprint($params);
+            $guestToken = trim((string)($params['guest_token'] ?? ''));
+            if ($guestToken === '') {
+                $guestToken = trim((string)Cookie::get(CartService::GUEST_TOKEN_COOKIE));
+            }
+            $token = $recorder->ensureSession(
+                trim((string)($params['quote_token'] ?? '')),
+                $fingerprint,
+                [
+                    'currency' => $currency,
+                    'scope' => [
+                        'website_id' => (int)RequestContext::getWelineWebsiteId(),
+                        'store_id' => (int)RequestContext::getWelineStoreId(),
+                    ],
+                    'address' => [
+                        'country_code' => strtoupper(trim((string)($address['country_code'] ?? $address['country'] ?? ''))),
+                        'province' => (string)($address['province'] ?? ''),
+                        'city' => (string)($address['city'] ?? ''),
+                        'postal_code' => (string)($address['postal_code'] ?? ''),
+                    ],
+                    'lines' => array_map(static function (array $item): array {
+                        return [
+                            'sku' => (string)($item['sku'] ?? ''),
+                            'product_id' => (int)($item['product_id'] ?? $item['id'] ?? 0),
+                            'weight_minor' => (int)($item['weight_minor'] ?? 0),
+                            'qty' => max(1, (int)($item['qty'] ?? $item['qty_minor'] ?? 1)),
+                        ];
+                    }, array_values(array_filter($items, 'is_array'))),
+                    'guest_token' => $guestToken,
+                    'customer_id' => $this->currentCustomerId(),
+                    'cart_type' => $this->resolveCartTypePreference($params),
+                ],
+            );
+            $recorder->syncLoad(
+                $token,
+                $address,
+                $items,
+                $quoteDiagnostics,
+                $shippingMethods,
+                $checkoutBlocked,
+                $emptyMessage,
+            );
+        });
+
+        return $token;
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     */
+    private function checkoutFingerprint(array $params): string
+    {
+        $guestToken = trim((string)($params['guest_token'] ?? ''));
+        if ($guestToken === '') {
+            $guestToken = trim((string)Cookie::get(CartService::GUEST_TOKEN_COOKIE));
+        }
+
+        return CheckoutSessionFaultRecorder::fingerprint(
+            \is_array($params['shipping_address'] ?? null) ? $params['shipping_address'] : [],
+            $this->currentCustomerId(),
+            $guestToken,
+            $this->resolveCartTypePreference($params),
+            (int)RequestContext::getWelineWebsiteId(),
+            (int)RequestContext::getWelineStoreId(),
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     */
+    private function recordNamedFault(array $params, string $code, string $message): void
+    {
+        $this->recordCheckoutFaultSafe(function () use ($params, $code, $message): void {
+            $token = trim((string)($params['quote_token'] ?? ''));
+            if ($token === '') {
+                return;
+            }
+            $mapped = $code;
+            if ($mapped !== CheckoutSessionFaultRecorder::CODE_FREEZE_FAILED
+                && $mapped !== CheckoutSessionFaultRecorder::CODE_SUBMIT_FAILED
+            ) {
+                $mapped = str_contains($code, 'freeze')
+                    ? CheckoutSessionFaultRecorder::CODE_FREEZE_FAILED
+                    : CheckoutSessionFaultRecorder::CODE_SUBMIT_FAILED;
+            }
+            $this->faultRecorder()->recordCode($token, $mapped, $message);
+        });
+    }
+
+    private function recordCheckoutFaultSafe(callable $work): void
+    {
+        try {
+            $work();
+        } catch (\Throwable) {
+        }
+    }
+
+    private function faultRecorder(): CheckoutSessionFaultRecorder
+    {
+        $resolved = ObjectManager::getInstance(CheckoutSessionFaultRecorder::class);
+        if ($resolved instanceof CheckoutSessionFaultRecorder) {
+            return $resolved;
+        }
+
+        return new CheckoutSessionFaultRecorder(
+            ObjectManager::getInstance(\Weline\Checkout\Api\CheckoutSessionStoreInterface::class),
+        );
+    }
+
     public function getDescriptor(): array
     {
         return [
@@ -1640,6 +1782,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
                     'params' => [
                         'shipping_address' => ['type' => 'array', 'required' => false],
                         'guest_token' => ['type' => 'string', 'required' => false, 'max_length' => 64],
+                        'quote_token' => ['type' => 'string', 'required' => false, 'max_length' => 64],
                         'cart_type' => ['type' => 'string', 'required' => false, 'max_length' => 16],
                         'selling_mode' => ['type' => 'string', 'required' => false, 'max_length' => 16],
                         'coupon_code' => ['type' => 'string', 'required' => false, 'max_length' => 64],
@@ -1657,6 +1800,8 @@ class CheckoutQueryProvider implements QueryProviderInterface
                     'cost' => 2,
                     'params' => [
                         'country_code' => ['type' => 'string', 'required' => false, 'max_length' => 8],
+                        'list_all_addresses' => ['type' => 'boolean', 'required' => false],
+                        'for_picker' => ['type' => 'boolean', 'required' => false],
                     ],
                     'returns' => ['type' => 'array'],
                     'summary' => 'Load header delivery country and addresses',
@@ -1788,8 +1933,10 @@ class CheckoutQueryProvider implements QueryProviderInterface
                         'payment_method' => ['type' => 'string', 'required' => false, 'max_length' => 64],
                         'client_hints' => ['type' => 'array', 'required' => false],
                         'guest_token' => ['type' => 'string', 'required' => false, 'max_length' => 64],
+                        'quote_token' => ['type' => 'string', 'required' => false, 'max_length' => 64],
                         'cart_type' => ['type' => 'string', 'required' => false, 'max_length' => 16],
                         'selling_mode' => ['type' => 'string', 'required' => false, 'max_length' => 16],
+                        'checkout_entry' => ['type' => 'string', 'required' => false, 'max_length' => 32],
                     ],
                     'returns' => ['type' => 'array'],
                     'summary' => 'Freeze the server-owned current Cart and create one Shipping Quote session',

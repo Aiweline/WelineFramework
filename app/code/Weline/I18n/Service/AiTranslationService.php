@@ -764,6 +764,15 @@ class AiTranslationService
                     $skipped++;
                     continue;
                 }
+                // Collect placeholders copy CJK source into non-zh CSV; importing
+                // them as "translations" blocks AI and masks real dictionary copy.
+                if ($word === $translation
+                    && !str_starts_with(strtolower($localeCode), 'zh')
+                    && preg_match('/[\x{4e00}-\x{9fff}]/u', $word) === 1
+                ) {
+                    $skipped++;
+                    continue;
+                }
 
                 try {
                     if ($this->translationExists($word, $localeCode)) {

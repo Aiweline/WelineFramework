@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Marketing\Controller\Frontend;
 
 use Weline\Framework\App\Controller\FrontendController;
+use Weline\Framework\DateTime\Timezone;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Marketing\Model\Campaign\Campaign;
 
@@ -16,7 +17,7 @@ final class Campaigns extends FrontendController
         $title = (string)__('活动');
         /** @var Campaign $campaign */
         $campaign = ObjectManager::getInstance(Campaign::class);
-        $now = date('Y-m-d H:i:s');
+        $now = Timezone::utcNowSql();
         $items = $campaign->clear()
             ->where(Campaign::schema_fields_STATUS, Campaign::STATUS_ACTIVE)
             ->where(Campaign::schema_fields_START_DATE, $now, '<=')

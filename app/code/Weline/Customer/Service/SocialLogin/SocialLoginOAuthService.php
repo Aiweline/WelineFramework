@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Customer\Service\SocialLogin;
 
+use Weline\Framework\App\State;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Session\SessionFactory;
 
@@ -39,11 +40,16 @@ class SocialLoginOAuthService
 
     public function callbackUrl(): string
     {
-        return $this->url->getUrl('customer/account/social-login/callback');
+        // Google/Meta match redirect_uri exactly. Locale/currency path prefixes
+        // must not appear here; they are restored after callback via OAuth state.
+        return Url::withoutStorefrontLocalizationPrefix(
+            $this->url->getOriginUrl('customer/account/social-login/callback')
+        );
     }
 
     public function startUrl(string $provider, string $returnUrl = '', string $intent = self::INTENT_LOGIN): string
     {
+        $provider = strtolower(trim($provider));
         $params = ['provider' => $provider];
         if ($returnUrl !== '') {
             $params['return_url'] = $returnUrl;
@@ -51,6 +57,15 @@ class SocialLoginOAuthService
         $intent = strtolower(trim($intent));
         if ($intent !== '' && $intent !== self::INTENT_LOGIN) {
             $params['intent'] = $intent;
+        }
+
+        // Google OAuth requires exact redirect_uri match. Keep the storefront *start*
+        // entry fixed (no /{locale}/ or /{CURRENCY}/) so authorize always uses the same
+        // callbackUrl(); language/currency ride in return_url + OAuth state.
+        if ($provider === 'google') {
+            return Url::withoutStorefrontLocalizationPrefix(
+                $this->url->getOriginUrl('customer/account/social-login/start', $params)
+            );
         }
 
         return $this->url->getUrl('customer/account/social-login/start', $params);
@@ -92,12 +107,23 @@ class SocialLoginOAuthService
 
         $state = bin2hex(random_bytes(24));
         $redirectUri = $this->callbackUrl();
+        $localeHint = (string) ($options['locale_hint_url'] ?? '');
+        // Prefer return_url / Referer over the start request path: QueryBin may have
+        // stamped a wrong locale onto oauth.start URLs (worker path has no /{locale}/).
+        $localePrefix = SocialLoginStorefrontLocale::firstNonEmpty(
+            $returnUrl,
+            $localeHint,
+            $this->currentStorefrontLocalePrefix(),
+        );
         $payload = [
             'provider' => $provider,
             'return_url' => $returnUrl,
             'redirect_uri' => $redirectUri,
             'intent' => $intent,
             'customer_id' => $customerId,
+            'locale_prefix' => $localePrefix,
+            'lang' => State::getLang(),
+            'currency' => State::getCurrency(),
             'created_at' => time(),
         ];
         $this->transientStore->put(self::STATE_KIND, $state, $payload, self::STATE_TTL);
@@ -115,40 +141,69 @@ class SocialLoginOAuthService
 
     /**
      * @param array<string, mixed> $params
-     * @return array{provider:string,subject:string,email:string,display_name:string,avatar_url:string,return_url:string,intent:string,customer_id:int}
+     * @return array{provider:string,subject:string,email:string,display_name:string,avatar_url:string,return_url:string,intent:string,customer_id:int,locale_prefix:string,lang:string,currency:string}
      */
     public function complete(array $params): array
     {
         $state = trim((string) ($params['state'] ?? ''));
         $payload = $this->consumeState($state);
         if ($payload === null) {
-            throw new \RuntimeException((string) __('社媒登录状态无效或已过期，请重试'));
+            throw new SocialLoginOAuthFailedException((string) __('社媒登录状态无效或已过期，请重试'));
+        }
+
+        $localePrefix = SocialLoginStorefrontLocale::firstNonEmpty(
+            (string) ($payload['locale_prefix'] ?? ''),
+            (string) ($payload['return_url'] ?? ''),
+        );
+        $lang = SocialLoginStorefrontLocale::languageFromPrefix($localePrefix);
+        if ($lang === '') {
+            $lang = trim((string) ($payload['lang'] ?? ''));
+        }
+        if ($lang !== '') {
+            State::setRequestLanguageOverride($lang);
         }
 
         $error = trim((string) ($params['error'] ?? ''));
         if ($error !== '') {
             $description = trim((string) ($params['error_description'] ?? $error));
-            throw new \RuntimeException((string) __('社媒授权失败：%{1}', [$description]));
+            throw new SocialLoginOAuthFailedException(
+                (string) __('社媒授权失败：%{1}', [$description]),
+                $localePrefix
+            );
         }
 
         $code = trim((string) ($params['code'] ?? ''));
         if ($code === '') {
-            throw new \RuntimeException((string) __('社媒授权回调缺少授权码'));
+            throw new SocialLoginOAuthFailedException((string) __('社媒授权回调缺少授权码'), $localePrefix);
         }
 
         $provider = (string) ($payload['provider'] ?? '');
         $providerInstance = $this->catalog->get($provider);
         if ($providerInstance === null) {
-            throw new \RuntimeException((string) __('不支持的社媒登录提供方'));
+            throw new SocialLoginOAuthFailedException((string) __('不支持的社媒登录提供方'), $localePrefix);
         }
 
         $redirectUri = (string) ($payload['redirect_uri'] ?? $this->callbackUrl());
-        $profile = $providerInstance->exchangeAndFetchProfile(
-            $this->config->clientId($provider),
-            $this->config->clientSecret($provider),
-            $code,
-            $redirectUri
-        );
+        try {
+            $profile = $providerInstance->exchangeAndFetchProfile(
+                $this->config->clientId($provider),
+                $this->config->clientSecret($provider),
+                $code,
+                $redirectUri
+            );
+        } catch (SocialLoginOAuthFailedException $e) {
+            throw new SocialLoginOAuthFailedException(
+                (string) __($e->getMessage()),
+                $localePrefix !== '' ? $localePrefix : $e->getLocalePrefix(),
+                $e
+            );
+        } catch (\Throwable $e) {
+            throw new SocialLoginOAuthFailedException(
+                (string) __($e->getMessage()),
+                $localePrefix,
+                $e
+            );
+        }
 
         return [
             'provider' => $provider,
@@ -159,7 +214,20 @@ class SocialLoginOAuthService
             'return_url' => (string) ($payload['return_url'] ?? ''),
             'intent' => (string) ($payload['intent'] ?? self::INTENT_LOGIN),
             'customer_id' => (int) ($payload['customer_id'] ?? 0),
+            'locale_prefix' => $localePrefix,
+            'lang' => (string) ($payload['lang'] ?? ''),
+            'currency' => (string) ($payload['currency'] ?? ''),
         ];
+    }
+
+    public function currentStorefrontLocalePrefix(): string
+    {
+        return SocialLoginStorefrontLocale::currentPrefix();
+    }
+
+    public function normalizeLocalePrefix(string $prefix): string
+    {
+        return SocialLoginStorefrontLocale::normalize($prefix);
     }
 
     /**

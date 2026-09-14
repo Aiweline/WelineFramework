@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Order',
-    "version" => '2.13.24',
+    "version" => '2.13.32',
     "requires" => [
         'Weline_Acl' => '*',
         'Weline_Backend' => '*',

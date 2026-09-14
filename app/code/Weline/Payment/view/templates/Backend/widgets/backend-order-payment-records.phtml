@@ -21,6 +21,7 @@
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Order\Model\Order;
 use Weline\Payment\Service\BackendOrderPaymentRecordsService;
+use Weline\Payment\Service\BackendPaymentOutcomeChip;
 use Weline\Theme\Helper\WidgetUiScope;
 
 $scope = WidgetUiScope::forWidget('backend-order-payment-records');
@@ -74,11 +75,41 @@ $payments = $recordsService->listForOrderId($orderId);
                         </tr>
                     <?php else: ?>
                         <?php foreach ($payments as $payment): ?>
-                            <tr>
-                                <td><?= $esc((string)($payment['payment_method'] ?? '')) ?></td>
+                            <?php
+                            $methodCode = (string)($payment['payment_method'] ?? '');
+                            $methodLabel = trim((string)($payment['method_label'] ?? ''));
+                            if ($methodLabel === '') {
+                                $methodLabel = $methodCode !== '' ? $methodCode : (string)__('未指定');
+                            }
+                            $methodIcon = trim((string)($payment['method_icon_url'] ?? ''));
+                            $statusChip = BackendPaymentOutcomeChip::present((string)($payment['status'] ?? ''));
+                            ?>
+                            <tr data-testid="payment-record-row"
+                                data-method="<?= $esc($methodCode) ?>"
+                                data-status="<?= $esc((string)($payment['status'] ?? '')) ?>">
+                                <td>
+                                    <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);"
+                                         data-testid="payment-record-method">
+                                        <?php if ($methodIcon !== ''): ?>
+                                            <img src="<?= $esc($methodIcon) ?>"
+                                                 alt="<?= $esc($methodLabel) ?>"
+                                                 width="20"
+                                                 height="20"
+                                                 style="object-fit:contain;inline-size:20px;block-size:20px;flex-shrink:0;"
+                                                 data-testid="payment-record-method-icon"
+                                                 data-method-code="<?= $esc($methodCode) ?>">
+                                        <?php endif; ?>
+                                        <span data-testid="payment-record-method-label"><?= $esc($methodLabel) ?></span>
+                                    </div>
+                                </td>
                                 <td><?= $esc((string)($payment['currency'] ?? 'CNY')) ?> <?= number_format((float)($payment['amount'] ?? 0), 2) ?></td>
                                 <td><?= $esc((string)($payment['transaction_id'] ?? '')) ?></td>
-                                <td><span class="w-badge" data-w-background="success"><?= $esc((string)($payment['status'] ?? '')) ?></span></td>
+                                <td data-testid="payment-record-status">
+                                    <?= $this->fetch('Weline_Payment::templates/Backend/partials/outcome-chip.phtml', [
+                                        'chip' => $statusChip,
+                                        'testid' => 'payment-record-status-chip',
+                                    ]) ?>
+                                </td>
                                 <td><?= $esc((string)($payment['paid_at'] ?? '')) ?></td>
                             </tr>
                         <?php endforeach; ?>

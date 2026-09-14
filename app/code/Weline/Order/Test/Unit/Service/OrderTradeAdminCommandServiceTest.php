@@ -38,14 +38,32 @@ final class OrderTradeAdminCommandServiceTest extends TestCase
             },
         );
         $uuid = '00000000-0000-4000-8000-000000000101';
-        $first = $service->ship($uuid, 1, 0, 'ship-idem-101');
-        $replay = $service->ship($uuid, 1, 0, 'ship-idem-101');
+        $logistics = [
+            'tracking_number' => 'SF1234567890',
+            'carrier' => 'SF',
+            'notify_customer' => true,
+        ];
+        $first = $service->ship($uuid, 1, 0, 'ship-idem-101', $logistics);
+        $replay = $service->ship($uuid, 1, 0, 'ship-idem-101', $logistics);
 
         self::assertFalse($first['replayed']);
         self::assertTrue($replay['replayed']);
         self::assertSame($seen[0]['requestHash'], $seen[1]['requestHash']);
         self::assertSame($first['request_hash'], $replay['request_hash']);
         self::assertSame(64, strlen($first['request_hash']));
+    }
+
+    public function testShipmentRequiresTrackingNumber(): void
+    {
+        $service = new OrderTradeAdminCommandService(
+            shipmentCommand: static fn(): array => ['ok' => true, 'replayed' => false],
+        );
+        try {
+            $service->ship('00000000-0000-4000-8000-000000000101', 1, 0, 'ship-idem-empty');
+            self::fail('Missing tracking must fail closed.');
+        } catch (OrderTradeAdminCommandException $exception) {
+            self::assertSame('shipment_tracking_required', $exception->errorCode());
+        }
     }
 
     public function testRefundCommandForwardsOnlyCanonicalItemQuantity(): void

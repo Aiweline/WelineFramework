@@ -59,7 +59,7 @@ When generating PageBuilder site plans, block contracts, HTML fragments, or comp
 
 ## Recommended Event Names
 
-- Use existing commerce/funnel names when they apply: `view_item`, `add_to_cart`, `buy_now`, `add_to_wishlist`, `view_cart`, `begin_checkout`, `place_order`, `checkout_success`, `checkout_failure`, `search_focus`, `search_input`, `search_submit`, `search_suggestion_click`, `route_click`.
+- Use existing commerce/funnel names when they apply: `view_item`, `add_to_cart`, `buy_now`, `add_to_wishlist`, `friend_help_pay`, `selection_share`, `quick_buy`, `express_pay`, `view_cart`, `begin_checkout`, `place_order`, `checkout_success`, `checkout_failure`, `search_focus`, `search_input`, `search_submit`, `search_suggestion_click`, `route_click`.
 - For PageBuilder marketing blocks, use specific conversion names: `hero_cta_click`, `pricing_cta_click`, `lead_submit`, `signup_click`, `contact_click`, `download_click`, `booking_click`, `demo_request_click`, `whatsapp_click`, `newsletter_submit`.
 - Avoid vague names such as `click`, `button_click`, `section_click`, or `ai_event` for meaningful conversions.
 

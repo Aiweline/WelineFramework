@@ -56,11 +56,14 @@ class AiTranslationPublisher
                     $mode = fileperms($filename) & 0777;
                 }
                 $words = $this->readExistingWords($localeCode);
-                $rows = (clone $this->localeDictionary)->clear()->reset()
+                // 词典常 >10000 行：禁止无界 fetchArray（否则 Unbounded SELECT，publish 失败，locale 文件停更）。
+                $query = (clone $this->localeDictionary)->clear()->reset()
                     ->where(LocaleDictionary::schema_fields_LOCALE_CODE, $localeCode)
-                    ->select()
-                    ->fetchArray();
-                foreach ((array)$rows as $row) {
+                    ->select();
+                foreach ($query->fetchIterator() as $row) {
+                    if (!\is_array($row)) {
+                        continue;
+                    }
                     $word = (string)($row[LocaleDictionary::schema_fields_WORD] ?? '');
                     $translate = (string)($row[LocaleDictionary::schema_fields_TRANSLATE] ?? '');
                     if ($word !== '' && $translate !== '') {

@@ -1,0 +1,14 @@
+<!-- mail:preheader: Redefina sua senha -->
+<h1 style="margin:0 0 14px;font-size:22px;line-height:1.35;font-weight:700;color:#16333f;">Redefina a senha da sua conta</h1>
+            <p style="margin:0 0 12px;font-size:15px;line-height:1.7;color:#33434c;">Recebemos uma solicitação de redefinição de senha para <strong style="color:#16333f;">{{var.customer_email}}</strong>.</p>
+            <p style="margin:0 0 12px;font-size:15px;line-height:1.7;color:#33434c;">Clique no botão abaixo para definir uma nova senha. Este link expira em breve.</p>
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:22px 0 10px;">
+              <tr>
+                <td align="center" bgcolor="#e8a14a" style="background:#e8a14a;border:1px solid #d48f3a;">
+                  <a href="{{var.reset_url}}" target="_blank" style="display:inline-block;padding:14px 26px;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:700;color:#16333f !important;color:#16333f;text-decoration:none;border:0;">Redefinir senha</a>
+                </td>
+              </tr>
+            </table>
+            <p style="margin:16px 0 0;font-size:12px;line-height:1.6;color:#6a7a84;">Se o botão não funcionar, copie este link no navegador:<br>
+              <a href="{{var.reset_url}}" style="color:#16333f;text-decoration:underline;word-break:break-all;">{{var.reset_url}}</a>
+            </p>

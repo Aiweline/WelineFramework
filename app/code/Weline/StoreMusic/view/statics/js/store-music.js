@@ -6,8 +6,84 @@
     'use strict';
 
     var ROOT_SEL = '[data-store-music]';
-    var CHANNEL_NAME = 'weline.storeMusic.audio';
+    var PAGE_HOST = String((global.location && global.location.host) || '');
+    var CHANNEL_NAME = 'weline.storeMusic.audio.' + PAGE_HOST;
     var TAB_ID = 't' + String(Date.now()) + '-' + String(Math.random()).slice(2, 8);
+    var ORIGIN_TAB_TTL_MS = 15000;
+
+    function audioRegistry() {
+        if (!global.__WelineStoreMusicAudioRegistry) {
+            global.__WelineStoreMusicAudioRegistry = [];
+        }
+        return global.__WelineStoreMusicAudioRegistry;
+    }
+
+    function registerStoreAudio(audio) {
+        if (!audio) {
+            return;
+        }
+        var list = audioRegistry();
+        if (list.indexOf(audio) === -1) {
+            list.push(audio);
+        }
+    }
+
+    /**
+     * Silence every MediaElement in this browsing context except optional keep.
+     * Prevents 高山流水+孤城 (or zombie Audio) dual-play when switching tracks.
+     */
+    function silenceMediaElement(el) {
+        if (!el) {
+            return;
+        }
+        try {
+            el.pause();
+        } catch (e) {
+            // ignore
+        }
+        try {
+            el.removeAttribute('src');
+            el.removeAttribute('data-store-music-src');
+            el.src = '';
+            el.load();
+        } catch (e2) {
+            // ignore
+        }
+    }
+
+    function killRivalAudioElements(keep) {
+        var list = audioRegistry().slice();
+        for (var i = 0; i < list.length; i++) {
+            if (list[i] && list[i] !== keep) {
+                silenceMediaElement(list[i]);
+            }
+        }
+        try {
+            var nodes = document.querySelectorAll('audio, video');
+            for (var j = 0; j < nodes.length; j++) {
+                if (nodes[j] !== keep) {
+                    silenceMediaElement(nodes[j]);
+                }
+            }
+        } catch (e3) {
+            // ignore
+        }
+        var shared = global.__WelineStoreMusicSharedAudio;
+        if (shared && shared !== keep) {
+            silenceMediaElement(shared);
+            if (!keep) {
+                global.__WelineStoreMusicSharedAudio = null;
+            }
+        }
+        // Drop dead refs from registry.
+        global.__WelineStoreMusicAudioRegistry = audioRegistry().filter(function (a) {
+            return a && a === keep;
+        });
+        if (keep) {
+            registerStoreAudio(keep);
+            global.__WelineStoreMusicSharedAudio = keep;
+        }
+    }
 
     function parseConfig(root) {
         try {
@@ -261,6 +337,11 @@
         return Promise.reject(new Error('Weline.Api unavailable'));
     }
 
+    /**
+     * Soft Consent status — kept for diagnostics only.
+     * Entrance BGM is storefront UX, NOT a marketing pixel: never block soft autoplay
+     * on Cookie banner / marketing grant (that made 无痕「等很久也不播」).
+     */
     function marketingAllowed() {
         return resolveApi().then(function (api) {
             return Promise.resolve(api.resource('consent')).then(function (consent) {
@@ -283,6 +364,11 @@
         }).catch(function () {
             return true;
         });
+    }
+
+    /** Always true for StoreMusic playback gates (see marketingAllowed note). */
+    function storeMusicPlaybackAllowed() {
+        return Promise.resolve(true);
     }
 
     function whenWindowLoaded() {
@@ -382,17 +468,34 @@
         this.channel = null;
         this._progressTimer = 0;
         this._pendingSeek = null;
+        this._lastGoodProgressTime = 0;
         this._blobUrl = null;
         this._loadToken = 0;
         this._leaderBeat = 0;
         this._leaderClaimedAt = 0;
         this._lastUserActionAt = 0;
+        this._lastGestureAt = 0;
+        // Cold autoplay / resume awaiting browser gesture or Cookie consent accept.
+        this._autoplayPending = false;
+        this._awaitingConsent = false;
+        this._awaitingUnmute = false;
+        this._pageGestureUnlock = null;
+        this._consentRetryBound = false;
+        this._scheduleGen = 0;
+        this._scheduleInFlight = false;
+        this._peerRetryArmed = false;
         // Document lifecycle: leave-page sets false so residual webviews cannot keep decoding.
         this._docAlive = true;
+        this._tearingDown = false;
         // Only continue while hidden if we already started audibly while this document was visible.
         // Prevents prerender/zombie/hidden restores from autoplaying with no open tab UI.
         this._heardWhileVisible = false;
         this._ghostWatch = 0;
+        this._orphanWatch = 0;
+        this._leaveHammer = 0;
+        this._originTabWatch = 0;
+        this._audioMutating = false;
+        this._collapsedHits = 0;
 
         this.waveCanvas = document.querySelector('[data-store-music-wave]');
         this.mascot = root.querySelector('[data-testid="store-music-mascot"]')
@@ -446,8 +549,10 @@
         this.syncTrackMeta(false);
         this.bindChannel();
         this.bind();
+        this.bindConsentAutoplayRetry();
         this.syncHintVisibility();
         this.warmAudioCache();
+        this.startOriginTabWatch();
         // Hidden/prerender boot must not autoplay (Cursor may keep detached webviews).
         if (document.visibilityState === 'hidden') {
             this.killAllPageAudio();
@@ -472,6 +577,15 @@
         }
     };
 
+    /** True only after explicit ❚❚ / dismiss — not after navigation / domain-empty races. */
+    StoreMusic.prototype.isUserStopped = function () {
+        return !!readPref(this.root, 'user_stopped', false);
+    };
+
+    StoreMusic.prototype.setUserStopped = function (on) {
+        writePref(this.root, 'user_stopped', on ? '1' : '0');
+    };
+
     StoreMusic.prototype.wantsPlay = function () {
         return this.playIntent() === 'play';
     };
@@ -480,7 +594,27 @@
         writePref(this.root, 'want_play', on ? '1' : '0');
         if (on) {
             this.setDismissed(false);
+            this.setUserStopped(false);
         }
+    };
+
+    /**
+     * Legacy leave/domain_empty wrote want_play=0 without a user stop. That permanently
+     * disabled try_autoplay. Clear the poison when there is no explicit user_stopped flag.
+     */
+    StoreMusic.prototype.clearLegacyStopPoison = function () {
+        if (this.playIntent() !== 'stop') {
+            return false;
+        }
+        if (this.isUserStopped() || this.isDismissed()) {
+            return false;
+        }
+        try {
+            global.localStorage.removeItem(storageKey(this.root, 'want_play'));
+        } catch (e) {
+            writePref(this.root, 'want_play', '');
+        }
+        return true;
     };
 
     StoreMusic.prototype.isDismissed = function () {
@@ -521,6 +655,7 @@
         // Resume unfinished position (not only >1s) so page switches feel continuous.
         if (Number.isFinite(t) && t >= 0.25) {
             this._pendingSeek = t;
+            this._lastGoodProgressTime = t;
         }
         return restored;
     };
@@ -564,11 +699,25 @@
         if (!track) {
             return;
         }
-        var t = 0;
+        var t = null;
         if (this.audio) {
-            t = Number(this.audio.currentTime) || 0;
-        } else if (this._pendingSeek != null) {
-            t = Number(this._pendingSeek) || 0;
+            var live = Number(this.audio.currentTime);
+            if (Number.isFinite(live) && live >= 0) {
+                t = live;
+                if (live >= 0.25) {
+                    this._lastGoodProgressTime = live;
+                }
+            }
+        } else if (this._pendingSeek != null && Number.isFinite(Number(this._pendingSeek))) {
+            t = Number(this._pendingSeek);
+        }
+        // After tearDown the MediaElement is gone — a second pagehide/unload must NOT
+        // persist time=0 over the snap we just saved (YouTube-like refresh resume).
+        if (t === null) {
+            return;
+        }
+        if (t < 0.25 && Number(this._lastGoodProgressTime) >= 0.25) {
+            t = Number(this._lastGoodProgressTime);
         }
         this.persistSelection(t);
     };
@@ -583,8 +732,78 @@
                     if (!msg || msg.tabId === TAB_ID) {
                         return;
                     }
+                    if (msg.host && msg.host !== PAGE_HOST) {
+                        return;
+                    }
+                    if (msg.type === 'domain_empty') {
+                        // Race: a leaving tab may broadcast empty while peers still live.
+                        if (self.isRealOriginTab()) {
+                            self.touchOriginTab();
+                            return;
+                        }
+                        if (self.hasLiveOriginTab()) {
+                            return;
+                        }
+                        // Silence zombies only — never write want_play=0 here.
+                        // Navigation has a census gap; poisoning stop would kill try_autoplay
+                        // and page-gesture unlock on the next page (无痕进店「秒数到了不播」).
+                        self.silenceForOtherTab(false, true);
+                        self.hardSilenceMedia(true);
+                        self.killAllPageAudio();
+                        self.syncPlayingUi(false);
+                        return;
+                    }
+                    if (msg.type === 'tab_dead') {
+                        global.setTimeout(function () {
+                            if (!self.hasLiveOriginTab()) {
+                                self.hardSilenceMedia(true);
+                                self.killAllPageAudio();
+                                self.syncPlayingUi(false);
+                            }
+                        }, 80);
+                    }
                     if (msg.type === 'playing') {
+                        // Real claims (track switch / takeover) must update selection AND
+                        // stop stale audio. Heartbeats only keep soft tabs quiet / UI in sync.
+                        var isHeartbeat = !!msg.heartbeat;
+                        var selectionChanged = self.selectionDiffersFromMessage(msg);
+                        if (isHeartbeat) {
+                            if (selectionChanged) {
+                                // Peer leader advanced the playlist — mirror UI; do not dual-play.
+                                self.applyRemoteSelection(msg);
+                                if (self.isLeader || (self.audio && !self.audio.paused)) {
+                                    if (self.isRemoteNewer(msg) || !self.isLatestOperator()) {
+                                        self.silenceForOtherTab(false, true);
+                                    } else {
+                                        // We still own playback but UI drifted — force audible follow.
+                                        self.reconcileAudibleSelection(true);
+                                    }
+                                }
+                            }
+                            if (self.isUserOperating() || self.isLatestOperator()) {
+                                var owningPlay = !!(self.isLeader || (self.audio && !self.audio.paused));
+                                if (owningPlay && self.canAudiblyStart(true) && self.playIntent() === 'play') {
+                                    self.claimLeadership(true);
+                                    self.reconcileAudibleSelection(false);
+                                }
+                                setStatus(self.root, '');
+                                return;
+                            }
+                            self.yieldToOtherTab(msg);
+                            return;
+                        }
+                        // Non-heartbeat = authoritative play/claim (last user op).
+                        if (self.canRefuseYield(msg) && !self.isRemoteNewer(msg)) {
+                            self.claimLeadership(true);
+                            self.reconcileAudibleSelection(true);
+                            setStatus(self.root, '');
+                            return;
+                        }
                         self.yieldToOtherTab(msg);
+                        // After yield, if we are still the latest operator (race), take over with the new track.
+                        if (self.isLatestOperator() && self.playIntent() === 'play' && self.canAudiblyStart(true)) {
+                            self.reconcileAudibleSelection(true);
+                        }
                         return;
                     }
                     if (msg.type === 'released') {
@@ -600,12 +819,15 @@
                         if (msg.url || msg.index != null) {
                             self.applyRemoteSelection(msg);
                         }
-                        setStatus(
-                            self.root,
-                            msg.clearWantPlay
-                                ? ''
-                                : textOf(self.root, '[data-store-music-i18n-other-tab]', '已在其他页面播放')
-                        );
+                        if (msg.clearWantPlay || !self.shouldShowOtherTabStatus()) {
+                            setStatus(self.root, '');
+                        } else {
+                            setStatus(
+                                self.root,
+                                textOf(self.root, '[data-store-music-i18n-other-tab]', '已在其他页面播放')
+                            );
+                        }
+                        return;
                     }
                 };
             } catch (e) {
@@ -621,15 +843,29 @@
             var lockKey = storageKey(self.root, 'leader_lock');
             var opKey = storageKey(self.root, 'operator');
             if (ev.key === opKey) {
-                var opRaw = String(ev.newValue || '');
-                if (!opRaw || opRaw.indexOf(TAB_ID + '|') === 0) {
-                    return;
+                // Operator stamp alone must NOT silence peers — opening a panel on another
+                // page only updates who last interacted. Playback handoff is lock / force_stop.
+                return;
+            }
+            var progressKey = storageKey(self.root, 'progress');
+            if (ev.key === progressKey) {
+                // Cross-tab playlist row sync from persistSelection — UI must move with the
+                // shared progress snap; audible follow only when we still own playback.
+                try {
+                    var snap = ev.newValue ? JSON.parse(String(ev.newValue)) : null;
+                    if (snap && (snap.url || snap.index != null)) {
+                        var changed = self.applyRemoteSelection(snap);
+                        if (changed && (self.isLeader || (self.audio && !self.audio.paused))) {
+                            if (self.isLatestOperator()) {
+                                self.reconcileAudibleSelection(true);
+                            } else {
+                                self.silenceForOtherTab(false, true);
+                            }
+                        }
+                    }
+                } catch (eProg) {
+                    // ignore
                 }
-                var opParts = opRaw.split('|');
-                self.yieldToOtherTab({
-                    tabId: opParts[0] || '',
-                    at: Number(opParts[1] || '') || 0
-                });
                 return;
             }
             if (ev.key !== lockKey) {
@@ -652,9 +888,12 @@
                 opNow = '';
             }
             if (opNow && opNow.indexOf(TAB_ID + '|') === 0) {
-                // We are still the latest operator — reclaim if focused.
-                if (self.canRefuseYield({ at: Number(String(opNow.split('|')[1] || '')) || 0 })) {
+                // Latest *playback* operator may reclaim — but browsing (open panel /
+                // volume UI) must never steal a peer's lock just because we stamped operator.
+                var owningHere = !!(self.isLeader || (self.audio && !self.audio.paused));
+                if (owningHere && self.canRefuseYield({ at: Number(String(opNow.split('|')[1] || '')) || 0 })) {
                     self.claimLeadership(true);
+                    self.reconcileAudibleSelection(true);
                 }
                 return;
             }
@@ -672,67 +911,83 @@
         });
 
         var onLeave = function (ev) {
-            // Flush resume intent + position BEFORE killing audio so the next page can continue.
-            if (self.audio && !self.audio.paused) {
-                self.setWantPlay(true);
-                self.saveProgress();
-            } else {
-                self.saveProgress();
-            }
-            self._docAlive = false;
-            self._heardWhileVisible = false;
-            self.stopGhostWatch();
-            // Release lock only — do NOT force_stop peers (would mute a still-open tab until re-entry).
-            self.releaseLeadership();
-            // Always tear down MediaElement on leave. Pause-only is not enough: Cursor/Chrome
-            // may keep a detached webview decoding after the tab UI disappears.
-            self.hardSilenceMedia(true);
-            self.killAllPageAudio();
-            self.syncPlayingUi(false);
-            // If this is a real tab close (not bfcache), also clear leader lock leftovers.
+            self.saveProgress();
+            // bfcache (Chrome back/forward, many in-site navigations): keep the MediaElement
+            // alive like YouTube — hard tearDown would stop audio and force a cold restart.
             if (ev && ev.type === 'pagehide' && ev.persisted) {
-                // bfcache: keep want_play for pageshow resume; audio already stopped.
+                self.stopLeaderHeartbeat();
+                self.stopOriginTabWatch();
+                self.stopGhostWatch();
+                self.stopOrphanWatch();
+                // Stay in census as hidden so a soft-loaded peer does not think the domain is empty.
+                self.touchOriginTab();
                 return;
             }
+            // Hard leave / full refresh: document will be destroyed — drop census + silence.
+            self.dropOriginTab();
+            // Do NOT broadcastForceStop here. A refresh successor often boots within ~200ms;
+            // a late force_stop from the dying document would silence the new page mid-resume.
+            // Local tearDown + releaseLeadership('released') is enough; live peers reclaim.
+            self.tearDownForLeave(ev && ev.type ? String(ev.type) : 'leave');
         };
-        global.addEventListener('pagehide', onLeave);
-        global.addEventListener('beforeunload', onLeave);
-        global.addEventListener('unload', onLeave);
+        // Capture phase: Cursor/Electron guest teardown may skip bubble listeners.
+        // Prefer pagehide; beforeunload/unload are backup for hosts that skip pagehide.
+        global.addEventListener('pagehide', onLeave, true);
+        global.addEventListener('beforeunload', function (ev) {
+            // beforeunload is not bfcache-safe — only snapshot progress; pagehide does teardown.
+            self.saveProgress();
+        }, true);
+        global.addEventListener('unload', function (ev) {
+            self.saveProgress();
+            if (self._docAlive) {
+                self.tearDownForLeave('unload');
+            }
+        }, true);
         if (typeof document.addEventListener === 'function') {
             document.addEventListener('freeze', function () {
-                self._docAlive = false;
-                self._heardWhileVisible = false;
-                self.hardSilenceMedia(true);
-                self.killAllPageAudio();
-            });
+                self.tearDownForLeave('freeze');
+            }, true);
         }
+        self.bindMediaSessionStopHandlers();
         global.addEventListener('pageshow', function (ev) {
+            self.stopLeaveHammer();
+            self.stopOrphanWatch();
             self._docAlive = true;
-            // bfcache back-navigation only: never fight a newer page that already claimed the lock.
-            if (!(ev && ev.persisted) || self.playIntent() !== 'play') {
-                return;
-            }
-            if (document.visibilityState === 'hidden') {
-                return;
-            }
-            if (!self.acquireLeaderLock()) {
-                self.yieldToOtherTab();
-                return;
-            }
-            global.setTimeout(function () {
-                if (!self._docAlive || self.playIntent() !== 'play') {
+            self._tearingDown = false;
+            self._collapsedHits = 0;
+            self.startGhostWatch();
+            self.startOriginTabWatch();
+            self.touchOriginTab();
+            // bfcache restore: MediaElement often still playing — reclaim lock, do not remount@0.
+            if (ev && ev.persisted) {
+                if (self.audio && !self.audio.paused) {
+                    self.markHeardWhileVisible();
+                    self.setWantPlay(true);
+                    self.claimLeadership(false);
+                    self.syncPlayingUi(true);
+                    self.startLeaderHeartbeat();
+                    setStatus(self.root, '');
+                    return;
+                }
+                if (self.playIntent() !== 'play' && !self.hasResumeSnap()) {
                     return;
                 }
                 if (document.visibilityState === 'hidden') {
                     return;
                 }
-                if (!self.acquireLeaderLock()) {
-                    self.yieldToOtherTab();
-                    return;
-                }
-                self.restoreProgressIndex();
-                self.tryPlay({ force: false });
-            }, 30);
+                global.setTimeout(function () {
+                    if (!self._docAlive) {
+                        return;
+                    }
+                    if (self.audio && !self.audio.paused) {
+                        self.syncPlayingUi(true);
+                        return;
+                    }
+                    self.restoreProgressIndex();
+                    self.scheduleStart({ force: true });
+                }, 30);
+                return;
+            }
         });
     };
 
@@ -741,40 +996,116 @@
      * Used on leave and hidden cold-boot so detached Cursor webviews cannot keep singing.
      */
     StoreMusic.prototype.killAllPageAudio = function () {
+        killRivalAudioElements(null);
+        this.audio = null;
+        this.audioReady = false;
+        this.waveConnected = false;
+        this.source = null;
+        this.analyser = null;
+        this.clearMediaSession();
+    };
+
+    StoreMusic.prototype.clearMediaSession = function () {
         try {
-            var nodes = document.querySelectorAll('audio, video');
-            for (var i = 0; i < nodes.length; i++) {
-                var el = nodes[i];
+            if (!global.navigator || !global.navigator.mediaSession) {
+                return;
+            }
+            // Drop action handlers BEFORE pausing/tearing down — some engines invoke
+            // pause/stop handlers on programmatic pause and would call stopPlayback(),
+            // poisoning want_play/user_stopped so refresh never resumes.
+            if (typeof global.navigator.mediaSession.setActionHandler === 'function') {
                 try {
-                    el.pause();
-                    el.removeAttribute('src');
-                    el.src = '';
-                    el.load();
-                } catch (e) {
+                    global.navigator.mediaSession.setActionHandler('pause', null);
+                } catch (ePause) {
+                    // ignore
+                }
+                try {
+                    global.navigator.mediaSession.setActionHandler('stop', null);
+                } catch (eStop) {
                     // ignore
                 }
             }
-        } catch (e2) {
-            // ignore
-        }
-        var shared = global.__WelineStoreMusicSharedAudio;
-        if (shared) {
+            global.navigator.mediaSession.playbackState = 'none';
             try {
-                shared.pause();
-                shared.removeAttribute('src');
-                shared.src = '';
-                shared.load();
-            } catch (e3) {
+                global.navigator.mediaSession.metadata = null;
+            } catch (eMeta) {
                 // ignore
             }
-            global.__WelineStoreMusicSharedAudio = null;
-        }
-        try {
-            if (global.navigator && global.navigator.mediaSession) {
-                global.navigator.mediaSession.playbackState = 'none';
-            }
-        } catch (e4) {
+        } catch (e) {
             // ignore
+        }
+    };
+
+    /**
+     * OS media controls (and some embedded browsers) can keep decoding after the tab UI is gone.
+     * Wire stop/pause to explicit user stop — never during document teardown/refresh.
+     */
+    StoreMusic.prototype.bindMediaSessionStopHandlers = function () {
+        var self = this;
+        try {
+            if (!global.navigator || !global.navigator.mediaSession || typeof global.navigator.mediaSession.setActionHandler !== 'function') {
+                return;
+            }
+            var stop = function () {
+                if (self._audioMutating || self._tearingDown || !self._docAlive) {
+                    return;
+                }
+                self.stopPlayback();
+            };
+            global.navigator.mediaSession.setActionHandler('pause', stop);
+            global.navigator.mediaSession.setActionHandler('stop', stop);
+        } catch (e) {
+            // ignore unsupported actions
+        }
+    };
+
+    /**
+     * Hard leave teardown: mark dead, drop leadership, destroy MediaElement, hammer residuals.
+     * Covers Cursor/Electron closing the Browser panel without a reliable pagehide.
+     * Must NOT write user_stopped / want_play=0 — refresh must still resume.
+     */
+    StoreMusic.prototype.tearDownForLeave = function (reason) {
+        this._tearingDown = true;
+        this._docAlive = false;
+        this._heardWhileVisible = false;
+        this._autoplayPending = false;
+        this._awaitingUnmute = false;
+        this.disarmPageGestureUnlock();
+        // Clear MediaSession handlers before pause/src clear (see clearMediaSession).
+        this.clearMediaSession();
+        this.stopOrphanWatch();
+        this.stopGhostWatch();
+        this.stopOriginTabWatch();
+        this.dropOriginTab();
+        // Release lock only — do NOT force_stop peers (would mute a still-open / successor tab).
+        this.releaseLeadership();
+        this.hardSilenceMedia(true);
+        this.killAllPageAudio();
+        this.syncPlayingUi(false);
+        this.startLeaveHammer(reason || 'leave');
+    };
+
+    /**
+     * After leave, keep silencing briefly: some hosts re-kick decode right after pause/src clear.
+     */
+    StoreMusic.prototype.startLeaveHammer = function () {
+        var self = this;
+        this.stopLeaveHammer();
+        var n = 0;
+        this._leaveHammer = global.setInterval(function () {
+            self.hardSilenceMedia(true);
+            self.killAllPageAudio();
+            n += 1;
+            if (n >= 12) {
+                self.stopLeaveHammer();
+            }
+        }, 120);
+    };
+
+    StoreMusic.prototype.stopLeaveHammer = function () {
+        if (this._leaveHammer) {
+            global.clearInterval(this._leaveHammer);
+            this._leaveHammer = 0;
         }
     };
 
@@ -790,15 +1121,12 @@
             }
             try {
                 if (!document.documentElement || !document.documentElement.isConnected) {
-                    self._docAlive = false;
-                    self.hardSilenceMedia(true);
-                    self.killAllPageAudio();
-                    self.stopGhostWatch();
+                    self.tearDownForLeave('ghost-disconnected');
                 }
             } catch (e) {
                 // ignore
             }
-        }, 1500);
+        }, 800);
     };
 
     StoreMusic.prototype.stopGhostWatch = function () {
@@ -809,15 +1137,236 @@
     };
 
     /**
-     * Soft autoplay/resume is allowed only when this document is visible, or we already
-     * started audibly while visible (user switched away but tab still exists).
+     * Background BGM is allowed while the tab still exists. When the host tears down the
+     * webview without pagehide (Cursor Browser close), DOM often disconnects or the window
+     * collapses to 0×0 — then we must hard-stop so audio cannot outlive the UI.
      */
-    StoreMusic.prototype.canAudiblyStart = function (forceUser) {
+    StoreMusic.prototype.startOrphanWatch = function () {
+        var self = this;
+        this.stopOrphanWatch();
+        this._collapsedHits = 0;
+        this._orphanWatch = global.setInterval(function () {
+            if (!self._docAlive) {
+                self.hardSilenceMedia(true);
+                self.killAllPageAudio();
+                self.stopOrphanWatch();
+                return;
+            }
+            try {
+                var disconnected = !document.documentElement || !document.documentElement.isConnected;
+                var collapsed = self.isCollapsedDetachedView();
+                if (disconnected || collapsed) {
+                    self._collapsedHits = (Number(self._collapsedHits) || 0) + 1;
+                    if (self._collapsedHits < 4) {
+                        return;
+                    }
+                    self.tearDownForLeave(disconnected ? 'orphan-disconnected' : 'orphan-collapsed');
+                    return;
+                }
+                self._collapsedHits = 0;
+                // Still a real hidden tab of this domain — keep census alive.
+                self.touchOriginTab();
+            } catch (e) {
+                // ignore
+            }
+        }, 500);
+    };
+
+    StoreMusic.prototype.stopOrphanWatch = function () {
+        if (this._orphanWatch) {
+            global.clearInterval(this._orphanWatch);
+            this._orphanWatch = 0;
+        }
+    };
+
+    StoreMusic.prototype.pageHost = function () {
+        return PAGE_HOST;
+    };
+
+    StoreMusic.prototype.originTabsKey = function () {
+        return storageKey(this.root, 'origin_tabs.' + PAGE_HOST);
+    };
+
+    /** Detached/closed host webview — not a real browser tab of this domain.
+     * Hidden (switched to another tab) is NOT collapsed: outer/inner size often stays normal.
+     * Only treat as detached when the document is gone or the window is truly 0×0 while hidden.
+     */
+    StoreMusic.prototype.isCollapsedDetachedView = function () {
+        try {
+            if (!document.documentElement || !document.documentElement.isConnected) {
+                return true;
+            }
+            // Visible tabs are always "real" — never drop them from the domain census.
+            if (document.visibilityState === 'visible') {
+                return false;
+            }
+            var ow = Number(global.outerWidth) || 0;
+            var oh = Number(global.outerHeight) || 0;
+            // Hidden but still a real tab: keep counting. Only 0×0 chrome (zombie webview) drops.
+            return ow === 0 && oh === 0;
+        } catch (e) {
+            return true;
+        }
+    };
+
+    /**
+     * A live tab of THIS domain (location.host). Hidden is OK (user switched tab/app);
+     * collapsed/disconnected/dead documents do not count.
+     */
+    StoreMusic.prototype.isRealOriginTab = function () {
         if (!this._docAlive) {
             return false;
         }
+        return !this.isCollapsedDetachedView();
+    };
+
+    StoreMusic.prototype.readOriginTabs = function () {
+        var map = {};
+        try {
+            var raw = global.localStorage.getItem(this.originTabsKey());
+            map = raw ? JSON.parse(raw) : {};
+        } catch (e) {
+            map = {};
+        }
+        if (!map || typeof map !== 'object') {
+            map = {};
+        }
+        var now = Date.now();
+        var kept = {};
+        Object.keys(map).forEach(function (id) {
+            var row = map[id];
+            var at = row && Number(row.at) ? Number(row.at) : 0;
+            if (id && at && (now - at) < ORIGIN_TAB_TTL_MS) {
+                kept[id] = { at: at, host: row.host || PAGE_HOST };
+            }
+        });
+        return kept;
+    };
+
+    StoreMusic.prototype.writeOriginTabs = function (map) {
+        try {
+            global.localStorage.setItem(this.originTabsKey(), JSON.stringify(map || {}));
+        } catch (e) {
+            // ignore
+        }
+    };
+
+    StoreMusic.prototype.touchOriginTab = function () {
+        if (!this.isRealOriginTab()) {
+            this.dropOriginTab();
+            return;
+        }
+        var map = this.readOriginTabs();
+        map[TAB_ID] = { at: Date.now(), host: PAGE_HOST, visible: document.visibilityState === 'visible' };
+        this.writeOriginTabs(map);
+        if (this.channel) {
+            try {
+                this.channel.postMessage({ type: 'tab_alive', tabId: TAB_ID, host: PAGE_HOST, at: Date.now() });
+            } catch (e2) {
+                // ignore
+            }
+        }
+    };
+
+    StoreMusic.prototype.dropOriginTab = function () {
+        var map = this.readOriginTabs();
+        if (map[TAB_ID]) {
+            delete map[TAB_ID];
+            this.writeOriginTabs(map);
+        }
+        if (this.channel) {
+            try {
+                this.channel.postMessage({ type: 'tab_dead', tabId: TAB_ID, host: PAGE_HOST, at: Date.now() });
+            } catch (e) {
+                // ignore
+            }
+        }
+    };
+
+    StoreMusic.prototype.countLiveOriginTabs = function () {
+        return Object.keys(this.readOriginTabs()).length;
+    };
+
+    StoreMusic.prototype.hasLiveOriginTab = function () {
+        return this.countLiveOriginTabs() > 0;
+    };
+
+    /**
+     * Last tab of this domain is gone → every leftover context (zombie webview) must silence.
+     */
+    StoreMusic.prototype.silenceIfOriginEmpty = function () {
+        if (this.isRealOriginTab()) {
+            this.touchOriginTab();
+        }
+        if (this.hasLiveOriginTab()) {
+            return false;
+        }
+        // Hard-silence leftovers only. Clearing want_play here races with full navigation
+        // and permanently disables try_autoplay (intent becomes stop).
+        this.broadcastForceStop(false);
+        if (this.channel) {
+            try {
+                this.channel.postMessage({
+                    type: 'domain_empty',
+                    tabId: TAB_ID,
+                    host: PAGE_HOST,
+                    at: Date.now()
+                });
+            } catch (e) {
+                // ignore
+            }
+        }
+        this.tearDownForLeave('domain-empty');
+        return true;
+    };
+
+    StoreMusic.prototype.startOriginTabWatch = function () {
+        var self = this;
+        this.stopOriginTabWatch();
+        this.touchOriginTab();
+        this._originTabWatch = global.setInterval(function () {
+            if (self.isRealOriginTab()) {
+                self._collapsedHits = 0;
+                self.touchOriginTab();
+                return;
+            }
+            // Require several consecutive "not a real tab" samples before dropping —
+            // a single false 0×0 reading must not wipe the domain census / stop every page.
+            self._collapsedHits = (Number(self._collapsedHits) || 0) + 1;
+            if (self._collapsedHits < 4) {
+                return;
+            }
+            self.dropOriginTab();
+            if (!self.hasLiveOriginTab()) {
+                self.hardSilenceMedia(true);
+                self.killAllPageAudio();
+                self.syncPlayingUi(false);
+                self.tearDownForLeave('origin-tabs-empty');
+            }
+        }, 1000);
+    };
+
+    StoreMusic.prototype.stopOriginTabWatch = function () {
+        if (this._originTabWatch) {
+            global.clearInterval(this._originTabWatch);
+            this._originTabWatch = 0;
+        }
+    };
+
+    /**
+     * Soft autoplay/resume: need a live tab of this domain. User gesture always wins.
+     */
+    StoreMusic.prototype.canAudiblyStart = function (forceUser) {
         if (forceUser) {
-            return document.visibilityState !== 'hidden';
+            this._docAlive = true;
+            this.touchOriginTab();
+            return true;
+        }
+        if (!this._docAlive) {
+            return false;
+        }
+        if (!this.hasLiveOriginTab()) {
+            return false;
         }
         if (document.visibilityState === 'hidden') {
             return !!this._heardWhileVisible;
@@ -858,9 +1407,8 @@
     StoreMusic.prototype.acquireLeaderLock = function (force) {
         var now = Date.now();
         if (!force) {
-            var cur = this.readLeaderLock();
-            // Soft autoplay/resume: another tab is actively leading → stay quiet here.
-            if (cur && cur.tabId && cur.tabId !== TAB_ID && (now - cur.at) < 2500) {
+            // Soft autoplay/resume: another *live* tab is actively leading → stay quiet here.
+            if (this.hasActivePeerLeader()) {
                 return false;
             }
         }
@@ -891,7 +1439,7 @@
             } catch (e) {
                 // ignore
             }
-            self.broadcastLeaderState('playing');
+            self.broadcastLeaderState('playing', true);
         }, 1000);
     };
 
@@ -902,17 +1450,29 @@
         }
     };
 
-    StoreMusic.prototype.broadcastLeaderState = function (type) {
+    /**
+     * @param {string} [type]
+     * @param {boolean} [asHeartbeat] true only for the 1s leader pulse — never for track switch / takeover
+     */
+    StoreMusic.prototype.broadcastLeaderState = function (type, asHeartbeat) {
         if (!this.channel) {
             return;
         }
         var track = this.currentTrack();
-        // Heartbeat must NOT bump `at` with Date.now() — that would outrank a newer user op on another page.
-        var at = this.localOperatorAt() || Date.now();
+        // Heartbeat must NEVER use Date.now() — a fresh stamp would outrank a newer user op
+        // on another page and block takeover (sticky「已在其他页面播放」).
+        var at = this.localOperatorAt();
+        if (!at) {
+            at = Number(this._leaderClaimedAt) || 1;
+        }
+        var kind = type || 'playing';
+        var heartbeat = kind === 'playing' ? !!asHeartbeat : false;
         try {
             this.channel.postMessage({
-                type: type || 'playing',
+                type: kind,
+                heartbeat: heartbeat,
                 tabId: TAB_ID,
+                host: PAGE_HOST,
                 at: at,
                 url: track ? track.url : '',
                 index: this.trackIndex,
@@ -922,6 +1482,124 @@
         } catch (e) {
             // ignore
         }
+    };
+
+    /**
+     * Count other tabs that report visibilityState=visible in the origin census.
+     * Hidden/dying documents (refresh race) must not count as live peers.
+     */
+    StoreMusic.prototype.countVisiblePeerTabs = function () {
+        var tabs = this.readOriginTabs();
+        var n = 0;
+        Object.keys(tabs).forEach(function (id) {
+            if (id === TAB_ID) {
+                return;
+            }
+            if (tabs[id] && tabs[id].visible === true) {
+                n += 1;
+            }
+        });
+        return n;
+    };
+
+    /**
+     * Refresh / same-tab resume: clear leftover leader_lock when no other VISIBLE tab exists.
+     * Hard F5 races leave a lock + census entry for ~1s; that must not block soft tryPlay.
+     */
+    StoreMusic.prototype.clearStaleLeaderForSoloResume = function () {
+        if (this.playIntent() !== 'play' && !this.hasResumeSnap()) {
+            return;
+        }
+        if (this.countVisiblePeerTabs() > 0) {
+            return;
+        }
+        try {
+            global.localStorage.removeItem(this.leaderLockKey());
+        } catch (e) {
+            // ignore
+        }
+    };
+
+    /** True when another *live* tab refreshed the leader lock recently (soft autoplay stays quiet). */
+    StoreMusic.prototype.hasActivePeerLeader = function () {
+        var cur = this.readLeaderLock();
+        if (!cur || !cur.tabId || cur.tabId === TAB_ID) {
+            return false;
+        }
+        if ((Date.now() - (Number(cur.at) || 0)) >= 2500) {
+            return false;
+        }
+        // Full navigation leaves a lock for up to 2.5s while the old TAB_ID is already
+        // dropped from origin_tabs. Treating that as a peer made cold 无痕 autoplay bail
+        // out forever (status「已在其他页面播放」) even though this is the only tab.
+        var tabs = this.readOriginTabs();
+        if (!tabs[cur.tabId]) {
+            try {
+                global.localStorage.removeItem(this.leaderLockKey());
+            } catch (e) {
+                // ignore
+            }
+            return false;
+        }
+        // Refresh successor: lock holder still in census but not visible → not a live peer.
+        if (tabs[cur.tabId].visible !== true && this.countVisiblePeerTabs() === 0) {
+            try {
+                global.localStorage.removeItem(this.leaderLockKey());
+            } catch (e2) {
+                // ignore
+            }
+            return false;
+        }
+        return true;
+    };
+
+    /** Cold autoplay blocked by a live peer — retry once after lock TTL. */
+    StoreMusic.prototype.armPeerLeaderRetry = function () {
+        var self = this;
+        if (this._peerRetryArmed) {
+            return;
+        }
+        this._peerRetryArmed = true;
+        global.setTimeout(function () {
+            self._peerRetryArmed = false;
+            if (!self._docAlive) {
+                return;
+            }
+            if (self.audio && !self.audio.paused) {
+                return;
+            }
+            if (self.playIntent() === 'stop' && self.isUserStopped()) {
+                return;
+            }
+            if (self.hasActivePeerLeader()) {
+                return;
+            }
+            self.scheduleStart({ force: true });
+        }, 2800);
+    };
+
+    /** True when localStorage operator stamp still points at this tab. */
+    StoreMusic.prototype.isLatestOperator = function () {
+        try {
+            var raw = String(global.localStorage.getItem(storageKey(this.root, 'operator')) || '');
+            return !!raw && raw.indexOf(TAB_ID + '|') === 0;
+        } catch (e) {
+            return false;
+        }
+    };
+
+    /** Cross-tab nag only when the panel is closed and the user is not mid-gesture. */
+    StoreMusic.prototype.shouldShowOtherTabStatus = function () {
+        if (this.panelOpen) {
+            return false;
+        }
+        if (this.isUserOperating()) {
+            return false;
+        }
+        if (document.hasFocus && document.hasFocus()) {
+            return false;
+        }
+        return true;
     };
 
     /**
@@ -937,7 +1615,8 @@
         this.isLeader = true;
         this._leaderClaimedAt = Date.now();
         this.startLeaderHeartbeat();
-        this.broadcastLeaderState('playing');
+        // Claim / takeover is never a heartbeat — peers must treat this as a real track claim.
+        this.broadcastLeaderState('playing', false);
         // Explicitly tell other pages to silence residual MediaElements (latest operator wins).
         if (force) {
             this.broadcastForceStop(false);
@@ -955,12 +1634,19 @@
             return;
         }
         var at = Math.max(Date.now(), Number(this._lastUserActionAt) || 0, Number(this._leaderClaimedAt) || 0);
+        var track = this.currentTrack();
         try {
             this.channel.postMessage({
                 type: 'force_stop',
                 tabId: TAB_ID,
+                host: PAGE_HOST,
                 at: at,
-                clearWantPlay: !!clearWantPlay
+                clearWantPlay: !!clearWantPlay,
+                // Carry selection so peers can sync the playlist UI even if the following
+                // playing message is dropped or treated as a soft heartbeat.
+                url: track ? track.url : '',
+                index: this.trackIndex,
+                time: this.audio ? (Number(this.audio.currentTime) || 0) : (Number(this._pendingSeek) || 0)
             });
         } catch (e) {
             // ignore
@@ -997,7 +1683,13 @@
 
     StoreMusic.prototype.applyRemoteSelection = function (msg) {
         if (!msg) {
-            return;
+            return false;
+        }
+        var before = this.trackIndex;
+        var beforeUrl = '';
+        var beforeTrack = this.currentTrack();
+        if (beforeTrack && beforeTrack.url) {
+            beforeUrl = String(beforeTrack.url);
         }
         var idx = Number(msg.index);
         if (Number.isFinite(idx) && idx >= 0 && idx < this.tracks.length) {
@@ -1016,28 +1708,70 @@
         }
         this.syncPlaylistActive();
         this.syncTrackMeta(false);
+        var afterTrack = this.currentTrack();
+        var afterUrl = afterTrack && afterTrack.url ? String(afterTrack.url) : '';
+        return before !== this.trackIndex || !trackUrlsEqual(beforeUrl, afterUrl);
+    };
+
+    /** True when msg points at a different playlist row than this page currently shows. */
+    StoreMusic.prototype.selectionDiffersFromMessage = function (msg) {
+        if (!msg) {
+            return false;
+        }
+        var idx = Number(msg.index);
+        if (Number.isFinite(idx) && idx >= 0 && idx < this.tracks.length && idx !== this.trackIndex) {
+            return true;
+        }
+        if (msg.url) {
+            var cur = this.currentTrack();
+            if (!cur || !trackUrlsEqual(cur.url, msg.url)) {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    /** True when the live MediaElement src matches the selected playlist row. */
+    StoreMusic.prototype.audioMatchesSelection = function () {
+        var track = this.currentTrack();
+        if (!track || !track.url) {
+            return true;
+        }
+        if (!this.audio) {
+            return false;
+        }
+        var src = this.audio.getAttribute('data-store-music-src') || this.audio.currentSrc || this.audio.src || '';
+        return trackUrlsEqual(src, track.url);
+    };
+
+    /**
+     * Playlist UI and audible MediaElement must stay one state.
+     * @param {boolean} [forcePlay] switch even when currently paused (user/op takeover)
+     */
+    StoreMusic.prototype.reconcileAudibleSelection = function (forcePlay) {
+        if (!this._docAlive || this.playIntent() !== 'play') {
+            return;
+        }
+        if (!this.canAudiblyStart(!!forcePlay)) {
+            return;
+        }
+        var audible = !!(this.audio && !this.audio.paused);
+        if (!forcePlay && !audible && !this.isLeader) {
+            return;
+        }
+        if (this.audioMatchesSelection() && audible) {
+            return;
+        }
+        this.playCurrentTrackNow();
     };
 
     StoreMusic.prototype.yieldToOtherTab = function (msg) {
         // Latest user operation wins. Only refuse if WE are still newer than the remote claim.
         if (this.canRefuseYield(msg)) {
             this.claimLeadership(true);
+            // If the remote carried a newer selection we refused, still follow OUR selection audibly.
+            this.reconcileAudibleSelection(true);
             setStatus(this.root, '');
-            if (this.playIntent() === 'play' && this.audio && this.audio.paused) {
-                var self = this;
-                try {
-                    var p = this.audio.play();
-                    if (p && typeof p.then === 'function') {
-                        p.then(function () {
-                            self.syncPlayingUi(true);
-                        }).catch(function () {
-                            // Gesture may be required; UI stays operable.
-                        });
-                    }
-                } catch (e) {
-                    // ignore
-                }
-            }
             return;
         }
         // Remote is authoritative (or we are background): hard-drop residual MediaElement.
@@ -1045,7 +1779,12 @@
         if (msg) {
             this.applyRemoteSelection(msg);
         }
-        setStatus(this.root, textOf(this.root, '[data-store-music-i18n-other-tab]', '已在其他页面播放'));
+        // Soft load / open panel: never sticky-nag — user can press ▶ to take over (last op wins).
+        if (this.shouldShowOtherTabStatus()) {
+            setStatus(this.root, textOf(this.root, '[data-store-music-i18n-other-tab]', '已在其他页面播放'));
+        } else {
+            setStatus(this.root, '');
+        }
     };
 
     /**
@@ -1070,7 +1809,7 @@
             if (self.audio && !self.audio.paused) {
                 return;
             }
-            if (!self.acquireLeaderLock(false)) {
+            if (!self.acquireLeaderLock(false) || self.hasActivePeerLeader()) {
                 return;
             }
             setStatus(self.root, '');
@@ -1127,7 +1866,12 @@
             this.compartmentEl.hidden = !multi;
         }
         if (this.playlistCountEl) {
-            this.playlistCountEl.textContent = multi ? ('共 ' + this.tracks.length + ' 首') : '';
+            if (multi) {
+                var countTpl = textOf(this.root, '[data-store-music-i18n-playlist-count]', '共 {n} 首');
+                this.playlistCountEl.textContent = String(countTpl).split('{n}').join(String(this.tracks.length));
+            } else {
+                this.playlistCountEl.textContent = '';
+            }
         }
         this.playlistEl.textContent = '';
         if (!multi) {
@@ -1228,6 +1972,42 @@
         // CRITICAL: play inside the click stack (no IndexedDB await) so the browser
         // still treats this as a user gesture — otherwise other pages stay silent.
         this.playCurrentTrackNow();
+        // Belt-and-suspenders: if a race left UI ahead of MediaElement, force follow.
+        if (!this.audioMatchesSelection()) {
+            this.reconcileAudibleSelection(true);
+        }
+    };
+
+    /**
+     * Discard current MediaElement + AudioContext.
+     * After createMediaElementSource(), closing the context bricks that element — reuse
+     * makes “换歌不生效” while an older decode path can keep audible.
+     */
+    StoreMusic.prototype.discardAudioElement = function () {
+        if (this.ctx && typeof this.ctx.close === 'function') {
+            try {
+                this.ctx.close();
+            } catch (e) {
+                // ignore
+            }
+        }
+        this.ctx = null;
+        this.source = null;
+        this.analyser = null;
+        this.waveConnected = false;
+        if (this.audio) {
+            silenceMediaElement(this.audio);
+        }
+        if (this._blobUrl) {
+            try {
+                URL.revokeObjectURL(this._blobUrl);
+            } catch (e2) {
+                // ignore
+            }
+            this._blobUrl = null;
+        }
+        this.audio = null;
+        this.audioReady = false;
     };
 
     /**
@@ -1241,66 +2021,49 @@
         if (!url) {
             return Promise.reject(new Error('no track'));
         }
+        this._docAlive = true;
+        this.stopLeaveHammer();
+        this.touchOriginTab();
         if (!this._docAlive || !this.canAudiblyStart(true)) {
             return Promise.resolve(null);
         }
+        this._audioMutating = true;
         this.markUserOperating();
         this.claimLeadership(true);
         setStatus(this.root, '');
+        // Hard reset: kill every rival Audio (multi-source overlay) then use a fresh element.
+        // Reusing an element that was wired to createMediaElementSource after ctx.close()
+        // is what made track switches appear to do nothing while the previous song kept playing.
+        this.stopWaveLoop();
+        this.discardAudioElement();
+        killRivalAudioElements(null);
+        // Never reuse a silenced singleton for track switches — stale decode buffers
+        // can keep the previous song audible while the playlist UI already moved on.
+        global.__WelineStoreMusicSharedAudio = null;
         var audio = this.mountAudioElement();
         audio.__welineStoreMusicOwner = this;
+        registerStoreAudio(audio);
+        global.__WelineStoreMusicSharedAudio = audio;
         var multi = this.tracks.length > 1;
         var loopOne = !multi && !(this.cfg.loop === false || this.cfg.loop === 0 || this.cfg.loop === '0');
         audio.loop = !!loopOne;
         var vol = this.volume ? Number(this.volume.value) : Number(this.cfg.default_volume || 12);
         audio.volume = Math.max(0, Math.min(1, vol / 100));
-        // Hard-stop previous decode path before swapping src (prevents 高山流水+孤城叠播).
-        try {
-            audio.pause();
-        } catch (e) {
-            // ignore
-        }
-        if (this._blobUrl) {
-            try {
-                URL.revokeObjectURL(this._blobUrl);
-            } catch (e2) {
-                // ignore
-            }
-            this._blobUrl = null;
-        }
-        this.waveConnected = false;
-        this.source = null;
-        this.analyser = null;
-        if (this.ctx && typeof this.ctx.close === 'function') {
-            try {
-                this.ctx.close();
-            } catch (eCtx) {
-                // ignore
-            }
-            this.ctx = null;
-        }
+        audio.muted = false;
+        this._awaitingUnmute = false;
         // Direct URL — do not wait for IDB/fetch (keeps user activation).
         audio.setAttribute('data-store-music-src', url);
         audio.src = url;
         this.audioReady = true;
         this.syncTrackMeta(true);
-        // Ensure only this element is audible in this browsing context.
-        var shared = global.__WelineStoreMusicSharedAudio;
-        if (shared && shared !== audio) {
-            try {
-                shared.pause();
-                shared.removeAttribute('src');
-                shared.src = '';
-                shared.load();
-            } catch (e3) {
-                // ignore
-            }
-            global.__WelineStoreMusicSharedAudio = audio;
-        }
+        this.syncPlaylistActive();
+        // Gesture play must still honor resume snap (refresh / cross-page).
+        this.applyPendingSeek();
         var playResult = null;
         try {
             playResult = audio.play();
         } catch (err) {
+            this._audioMutating = false;
             this.setNeedGesture(true);
             return Promise.reject(err);
         }
@@ -1310,15 +2073,20 @@
             this.setWantPlay(true);
             this.markHeardWhileVisible();
             this.syncPlayingUi(true);
-            this.broadcastLeaderState('playing');
+            this.broadcastLeaderState('playing', false);
+            this.broadcastForceStop(false);
+            this._audioMutating = false;
             return Promise.resolve(audio);
         }
         return playResult.then(function () {
+            // Re-assert single audible source after async play (host may resurrect orphans).
+            killRivalAudioElements(audio);
             self.setWantPlay(true);
             self.needGesture = false;
             self.markHeardWhileVisible();
             self.syncPlayingUi(true);
-            self.broadcastLeaderState('playing');
+            self.broadcastLeaderState('playing', false);
+            self.broadcastForceStop(false);
             setStatus(self.root, '');
             return audio;
         }).catch(function (err) {
@@ -1329,6 +2097,9 @@
                 setStatus(self.root, textOf(self.root, '[data-store-music-i18n-play-error]', '音频加载失败，请换一首曲目或格式'));
             }
             return audio;
+        }).then(function (out) {
+            self._audioMutating = false;
+            return out;
         });
     };
 
@@ -1361,9 +2132,14 @@
     StoreMusic.prototype.mountAudioElement = function () {
         var audio = this.audio;
         if (!audio) {
-            if (global.__WelineStoreMusicSharedAudio) {
+            if (global.__WelineStoreMusicSharedAudio
+                && !global.__WelineStoreMusicSharedAudio.__welineMediaGraphBound) {
                 audio = global.__WelineStoreMusicSharedAudio;
             } else {
+                // Never reuse an element that already had createMediaElementSource().
+                if (global.__WelineStoreMusicSharedAudio) {
+                    silenceMediaElement(global.__WelineStoreMusicSharedAudio);
+                }
                 audio = new Audio();
                 global.__WelineStoreMusicSharedAudio = audio;
             }
@@ -1371,6 +2147,7 @@
             this.audio = audio;
         }
         audio.__welineStoreMusicOwner = this;
+        registerStoreAudio(audio);
         this.bindAudioElementEvents(audio);
         return audio;
     };
@@ -1410,6 +2187,19 @@
             }
             var force = !!owner.isUserOperating();
             if (!owner.claimLeadership(force)) {
+                // Mid-gesture / open panel: force-steal so "where the user switches" always wins.
+                if (force || owner.panelOpen || owner.isLatestOperator()) {
+                    if (owner.claimLeadership(true)) {
+                        owner.markHeardWhileVisible();
+                        owner.setWantPlay(true);
+                        owner.syncPlayingUi(true);
+                        setStatus(owner.root, '');
+                        owner.ensureAnalyser();
+                        owner.updateWaveLoop();
+                        owner.startProgressWatch();
+                        return;
+                    }
+                }
                 try {
                     audio.pause();
                 } catch (e) {
@@ -1417,10 +2207,14 @@
                 }
                 owner.hardSilenceMedia(false);
                 owner.syncPlayingUi(false);
-                setStatus(
-                    owner.root,
-                    textOf(owner.root, '[data-store-music-i18n-other-tab]', '已在其他页面播放')
-                );
+                if (owner.shouldShowOtherTabStatus()) {
+                    setStatus(
+                        owner.root,
+                        textOf(owner.root, '[data-store-music-i18n-other-tab]', '已在其他页面播放')
+                    );
+                } else {
+                    setStatus(owner.root, '');
+                }
                 return;
             }
             owner.markHeardWhileVisible();
@@ -1433,6 +2227,11 @@
         });
         audio.addEventListener('pause', function () {
             var owner = audio.__welineStoreMusicOwner || self;
+            // pagehide teardown pauses/clears src after the intentional saveProgress —
+            // must not overwrite the snap with currentTime=0 (refresh「从头播」根因).
+            if (!owner._docAlive || owner._audioMutating) {
+                return;
+            }
             owner.saveProgress();
             owner.syncPlayingUi(false);
             owner.stopWaveLoop();
@@ -1440,15 +2239,24 @@
         });
         audio.addEventListener('timeupdate', function () {
             var owner = audio.__welineStoreMusicOwner || self;
+            if (!owner._docAlive) {
+                return;
+            }
             if (!owner._progressTimer) {
                 owner._progressTimer = global.setTimeout(function () {
                     owner._progressTimer = 0;
+                    if (!owner._docAlive) {
+                        return;
+                    }
                     owner.saveProgress();
-                }, 2000);
+                }, 1000);
             }
         });
         audio.addEventListener('ended', function () {
             var owner = audio.__welineStoreMusicOwner || self;
+            if (!owner._docAlive) {
+                return;
+            }
             owner.saveProgress();
             owner.onTrackEnded();
         });
@@ -1467,6 +2275,12 @@
         audio.addEventListener('loadedmetadata', function () {
             var owner = audio.__welineStoreMusicOwner || self;
             owner.applyPendingSeek();
+        });
+        audio.addEventListener('canplay', function () {
+            var owner = audio.__welineStoreMusicOwner || self;
+            if (owner._pendingSeek != null) {
+                owner.applyPendingSeek();
+            }
         });
     };
 
@@ -1497,11 +2311,10 @@
 
     StoreMusic.prototype.bind = function () {
         var self = this;
-        // Any pointer on the widget = this page is the operator; keep UI clickable.
+        // Pointer on the widget = local gesture only. Do NOT steal leadership until ▶ / 选曲.
         if (this.root) {
             this.root.addEventListener('pointerdown', function () {
-                self.markUserOperating();
-                // Prime Audio element during the gesture so later play() is allowed.
+                self.markUserGesture();
                 try {
                     self.mountAudioElement();
                 } catch (e) {
@@ -1513,21 +2326,29 @@
             Array.prototype.forEach.call(this.toggleBtns, function (btn) {
                 btn.addEventListener('click', function (ev) {
                     ev.preventDefault();
-                    self.markUserOperating();
+                    // Opening the panel = browse playlist only. Do NOT steal the peer's audio yet —
+                    // soft-loaded tabs must stay quiet until ▶ / 选曲 (last explicit op wins).
+                    var wasOpen = !!self.panelOpen;
                     self.togglePanel();
-                    // Opening the panel must always work; play is separate unless gesture needed.
-                    if (self.needGesture || self.playIntent() === 'play') {
-                        self.userPlay();
+                    if (!wasOpen && self.panelOpen) {
+                        setStatus(self.root, '');
+                        // Gesture unlock only when autoplay was blocked; never auto-takeover on open.
+                        if (self.needGesture && !self.hasActivePeerLeader()) {
+                            self.userPlay();
+                        }
                     }
                 });
             });
         } else if (this.mascot) {
             this.mascot.addEventListener('click', function (ev) {
                 ev.preventDefault();
-                self.markUserOperating();
+                var wasOpen = !!self.panelOpen;
                 self.togglePanel();
-                if (self.needGesture || self.playIntent() === 'play') {
-                    self.userPlay();
+                if (!wasOpen && self.panelOpen) {
+                    setStatus(self.root, '');
+                    if (self.needGesture && !self.hasActivePeerLeader()) {
+                        self.userPlay();
+                    }
                 }
             });
         }
@@ -1562,7 +2383,8 @@
         if (this.closeBtn) {
             this.closeBtn.addEventListener('click', function (ev) {
                 ev.preventDefault();
-                self.markUserOperating();
+                // Close panel only — must NOT steal leadership / force-stop peers.
+                self.markUserGesture();
                 // Force-close even if panelOpen desynced from DOM (e2e / tooling).
                 if (self.panel && !self.panel.hidden) {
                     self.panelOpen = true;
@@ -1581,49 +2403,67 @@
         }
         if (this.volume) {
             this.volume.addEventListener('input', function () {
-                self.markUserOperating();
+                // Volume prefs are local UI; only touch the live element if WE are playing.
+                // Never acquireLeaderLock here — that used to silence every other page.
+                self.markUserGesture();
                 var v = Number(self.volume.value) || 0;
                 writePref(self.root, 'volume', v);
                 self.syncVolumePct(v);
-                if (self.audio) {
+                if (self.audio && (self.isLeader || !self.audio.paused)) {
                     self.audio.volume = Math.max(0, Math.min(1, v / 100));
                 }
             });
         }
         if (this.waveToggle) {
             this.waveToggle.addEventListener('change', function () {
-                self.markUserOperating();
+                self.markUserGesture();
                 writePref(self.root, 'wave', self.waveToggle.checked ? '1' : '0');
                 self.syncWaveLabel();
-                self.updateWaveLoop();
+                if (self.isLeader || (self.audio && !self.audio.paused)) {
+                    self.updateWaveLoop();
+                }
             });
         }
         document.addEventListener('visibilitychange', function () {
             // visibility hidden ≠ leave page. Keep BGM only if we already started while visible.
             // Multi-tab handoff stays on pagehide hardStop + force-steal / yieldToOtherTab.
+            // Cursor Browser close often skips pagehide — orphanWatch covers disconnected/collapsed hosts.
             if (document.hidden) {
                 // Drop "recent operator" so a hidden page cannot refuse yield and leave a residual track.
                 self._lastUserActionAt = 0;
                 self.saveProgress();
                 self.stopWaveLoop();
+                // Keep this tab in the domain census while it still exists (background OK).
+                self.touchOriginTab();
                 // Never-started hidden docs (prerender/zombie) must stay silent.
                 if (!self._heardWhileVisible) {
                     self.hardSilenceMedia(false);
                     self.killAllPageAudio();
                     self.syncPlayingUi(false);
+                    self.stopOrphanWatch();
+                    return;
                 }
+                self.startOrphanWatch();
                 return;
             }
+            self._collapsedHits = 0;
+            self.stopOrphanWatch();
+            self.stopLeaveHammer();
             self._docAlive = true;
+            self.startGhostWatch();
+            self.startOriginTabWatch();
+            self.touchOriginTab();
             self.updateWaveLoop();
+            // Focused return: drop stale "已在其他页面播放" so the real playlist stays readable.
+            setStatus(self.root, '');
             if (self.audio && !self.audio.paused) {
                 self.markHeardWhileVisible();
-                setStatus(self.root, '');
                 self.syncPlayingUi(true);
                 return;
             }
-            // Soft resume / delayed schedule only when actually visible.
-            if (self.playIntent() === 'play' || self.playIntent() === 'unset') {
+            // Soft resume only when this page still wants play AND no peer is leading.
+            // Never auto-steal just because the user focused this tab.
+            if (self.playIntent() === 'play') {
                 global.setTimeout(function () {
                     if (document.visibilityState !== 'visible' || !self._docAlive) {
                         return;
@@ -1631,19 +2471,22 @@
                     if (self.audio && !self.audio.paused) {
                         return;
                     }
-                    if (self.playIntent() === 'stop') {
+                    if (self.playIntent() !== 'play') {
                         return;
                     }
-                    if (!self.acquireLeaderLock(false)) {
-                        self.yieldToOtherTab();
+                    if (!self.acquireLeaderLock(false) || self.hasActivePeerLeader()) {
+                        setStatus(self.root, '');
+                        self.setNeedGesture(true);
                         return;
                     }
-                    if (self.playIntent() === 'play') {
-                        self.tryPlay({ force: false });
-                    } else {
-                        self.scheduleStart();
-                    }
+                    self.tryPlay({ force: false });
                 }, 40);
+            } else if (self.playIntent() === 'stop') {
+                self.setNeedGesture(true);
+            } else {
+                // Cold visit / try_autoplay: boot may have skipped scheduleStart while hidden
+                // (prerender / background). Re-run entrance delay when first shown.
+                self.scheduleStart();
             }
         });
     };
@@ -1662,12 +2505,14 @@
 
     /**
      * True when remote is equal-or-newer than this page's last user/leader stamp.
-     * Equal timestamps prefer silence (no residual dual-play). Missing at → remote wins.
+     * Equal timestamps prefer silence (no residual dual-play). Missing at → remote wins
+     * only for non-heartbeat claims; heartbeats with missing/stale at never outrank a
+     * local user gesture.
      */
     StoreMusic.prototype.isRemoteNewer = function (msg) {
         var remote = this.remoteActionAt(msg);
         if (!remote) {
-            return true;
+            return !(msg && msg.heartbeat);
         }
         return remote >= this.localOperatorAt();
     };
@@ -1730,6 +2575,7 @@
             }
             this.ctx = null;
         }
+        this.clearMediaSession();
         this.waveConnected = false;
         this.source = null;
         this.analyser = null;
@@ -1767,7 +2613,12 @@
      */
     StoreMusic.prototype.silenceForOtherTab = function (clearWantPlay, hard) {
         this.isLeader = false;
-        this._lastUserActionAt = 0;
+        // Keep recent user-gesture stamp so a late peer heartbeat cannot wipe takeover intent.
+        if (!this.isUserOperating() && !this.isLatestOperator()) {
+            this._lastUserActionAt = 0;
+        }
+        // Yielding must leave this page operable — never mark the document dead.
+        this._docAlive = true;
         if (clearWantPlay) {
             this.setWantPlay(false);
         }
@@ -1790,27 +2641,46 @@
             }
             this.syncPlayingUi(false);
             this.stopWaveLoop();
+            this.setNeedGesture(true);
             return;
         }
         this.hardSilenceMedia(false);
         this.syncPlayingUi(false);
+        this.setNeedGesture(true);
+        setStatus(this.root, '');
     };
 
     /**
-     * Mark this document as the operator page (latest user action wins).
+     * Local browse gesture only (open panel / pointer / volume UI).
+     * Must NOT write the cross-tab operator stamp or steal the lock — that made peer
+     * heartbeats treat this tab as playback owner and force-stop the page that was playing.
+     */
+    StoreMusic.prototype.markUserGesture = function () {
+        this._lastGestureAt = Date.now();
+        this._docAlive = true;
+        this.setDismissed(false);
+        setStatus(this.root, '');
+        this.touchOriginTab();
+    };
+
+    /**
+     * Mark this document as the playback operator AND take leadership (▶ / 选曲 / 切歌 / ❚❚).
      */
     StoreMusic.prototype.markUserOperating = function () {
         var at = Date.now();
+        this._lastGestureAt = at;
         this._lastUserActionAt = at;
         this._leaderClaimedAt = at;
+        this._docAlive = true;
         this.setDismissed(false);
         setStatus(this.root, '');
-        this.acquireLeaderLock(true);
+        this.touchOriginTab();
         try {
             global.localStorage.setItem(storageKey(this.root, 'operator'), TAB_ID + '|' + at);
         } catch (e) {
             // ignore
         }
+        this.acquireLeaderLock(true);
     };
 
     StoreMusic.prototype.syncWaveLabel = function () {
@@ -1836,11 +2706,18 @@
 
     StoreMusic.prototype.togglePanel = function () {
         this.panelOpen = !this.panelOpen;
+        if (this.panelOpen) {
+            // Opening the panel = user is looking here; clear sticky nag, but do NOT steal
+            // leadership until ▶ / 选曲 (avoids stopping peer + multi-tab auto-takeover).
+            setStatus(this.root, '');
+        }
         if (this.panel) {
             this.panel.hidden = !this.panelOpen;
             // Clear leftover inline hide styles (e.g. tooling that forces
             // opacity:0.001 / pointer-events:none on [hidden] nodes).
             if (this.panelOpen) {
+                this.panel.style.display = '';
+                this.panel.style.visibility = '';
                 this.panel.style.opacity = '';
                 this.panel.style.pointerEvents = '';
                 this.panel.removeAttribute('aria-hidden');
@@ -1879,11 +2756,146 @@
         if (this.mascot) {
             this.mascot.classList.toggle('is-need-gesture', this.needGesture && !prefersReducedMotion());
         }
+        if (this.hint && this.needGesture && (this._autoplayPending || this._awaitingUnmute)) {
+            this.hint.textContent = textOf(
+                this.root,
+                this._awaitingUnmute
+                    ? '[data-store-music-i18n-tap-to-unmute]'
+                    : '[data-store-music-i18n-tap-to-play]',
+                this._awaitingUnmute ? '点击开启声音' : '点击开启音乐'
+            );
+        }
         this.syncHintVisibility();
+        if (this.needGesture && (this._autoplayPending || this._awaitingUnmute)) {
+            this.armPageGestureUnlock();
+        }
     };
 
-    StoreMusic.prototype.scheduleStart = function () {
+    /**
+     * Chrome/Safari 无痕禁止「无手势有声自播」，但允许 muted autoplay。
+     * Soft path: 先试有声 → NotAllowed 则静音开播，等首次手势开声。
+     */
+    StoreMusic.prototype.unmuteAudible = function () {
+        this._awaitingUnmute = false;
+        this._autoplayPending = false;
+        if (this.audio) {
+            try {
+                this.audio.muted = false;
+            } catch (e) {
+                // ignore
+            }
+            var vol = this.volume ? Number(this.volume.value) : Number(this.cfg.default_volume || 12);
+            try {
+                this.audio.volume = Math.max(0, Math.min(1, vol / 100));
+            } catch (e2) {
+                // ignore
+            }
+        }
+        this.needGesture = false;
+        if (this.mascot) {
+            this.mascot.classList.remove('is-need-gesture');
+        }
+        this.disarmPageGestureUnlock();
+        setStatus(this.root, '');
+        this.syncPlayingUi(true);
+    };
+
+    /**
+     * Incognito / strict browsers block unmuted autoplay. After delay fails with
+     * NotAllowedError we may already be muted-playing (_awaitingUnmute) — first
+     * gesture unmutes. Otherwise start via userPlay.
+     */
+    StoreMusic.prototype.armPageGestureUnlock = function () {
         var self = this;
+        if (this._pageGestureUnlock) {
+            return;
+        }
+        var unlock = function (ev) {
+            if (!self._docAlive) {
+                return;
+            }
+            var t = ev && ev.target ? ev.target : null;
+            if (t && t.closest && t.closest('[data-consent-dismiss]')) {
+                return;
+            }
+            // Muted soft-autoplay already running: first real gesture opens sound.
+            if (self._awaitingUnmute) {
+                self.unmuteAudible();
+                return;
+            }
+            if (!self.needGesture || !self._autoplayPending) {
+                return;
+            }
+            if (self.isDismissed()) {
+                return;
+            }
+            if (self.playIntent() === 'stop') {
+                if (self.isUserStopped()) {
+                    return;
+                }
+                self.clearLegacyStopPoison();
+            }
+            if (self.hasActivePeerLeader()) {
+                return;
+            }
+            // Cookie accept is handled by bindConsentAutoplayRetry (async grant).
+            if (t && t.closest && (
+                t.closest('[data-consent-accept]')
+                || t.closest('#weline-consent-banner')
+                || t.closest('.w-consent-banner')
+            )) {
+                return;
+            }
+            self.userPlay();
+        };
+        this._pageGestureUnlock = unlock;
+        document.addEventListener('pointerdown', unlock, true);
+        document.addEventListener('keydown', unlock, true);
+    };
+
+    StoreMusic.prototype.disarmPageGestureUnlock = function () {
+        if (!this._pageGestureUnlock) {
+            return;
+        }
+        document.removeEventListener('pointerdown', this._pageGestureUnlock, true);
+        document.removeEventListener('keydown', this._pageGestureUnlock, true);
+        this._pageGestureUnlock = null;
+    };
+
+    /**
+     * Cookie「同意」后强制重跑一次（旧版曾被 marketing 卡住；现主要用于开声/补枪）。
+     */
+    StoreMusic.prototype.bindConsentAutoplayRetry = function () {
+        var self = this;
+        if (this._consentRetryBound) {
+            return;
+        }
+        this._consentRetryBound = true;
+        document.addEventListener('click', function (ev) {
+            var t = ev && ev.target ? ev.target : null;
+            if (!t || !t.closest || !t.closest('[data-consent-accept]')) {
+                return;
+            }
+            // Accept is a user activation — unmute if already soft-playing muted.
+            global.setTimeout(function () {
+                if (!self._docAlive) {
+                    return;
+                }
+                if (self._awaitingUnmute) {
+                    self.unmuteAudible();
+                    return;
+                }
+                self.scheduleStart({ force: true });
+            }, 0);
+        }, false);
+    };
+
+    /**
+     * @param {{force?: boolean}} [opts] force=true cancels in-flight delay and restarts
+     */
+    StoreMusic.prototype.scheduleStart = function (opts) {
+        var self = this;
+        var force = !!(opts && opts.force);
         if (!this._docAlive) {
             return;
         }
@@ -1891,6 +2903,13 @@
             // Wait until this document is actually shown (no ghost autoplay).
             return;
         }
+        // Prevent visibility/consent/boot from stacking delays that cancel each other
+        // via _scheduleGen — that looked like「等很久也不播」.
+        if (this._scheduleInFlight && !force) {
+            return;
+        }
+        // Repair sessions poisoned by old leave/domain_empty want_play=0 writes.
+        this.clearLegacyStopPoison();
         var intent = this.playIntent();
         if (this.isDismissed() && intent !== 'play') {
             this.setNeedGesture(false);
@@ -1898,11 +2917,16 @@
             setStatus(this.root, textOf(this.root, '[data-store-music-i18n-dismissed]', '已关闭自动播放，点击播放可重新开启'));
             return;
         }
-        if (intent === 'stop') {
+        if (intent === 'stop' && this.isUserStopped()) {
             // User explicitly stopped — do not honor try_autoplay until they press play again.
             this.setNeedGesture(true);
             this.syncHintVisibility();
             return;
+        }
+        if (intent === 'stop') {
+            // Non-user stop residue — treat as unset for entrance autoplay.
+            this.clearLegacyStopPoison();
+            intent = this.playIntent();
         }
         // Re-apply snap in case boot raced; ensures we never fall back to track 0 while
         // progress still points at 孤城 (or any unfinished selection).
@@ -1912,29 +2936,48 @@
         var delaySec = Math.max(1, Math.min(15, Number(this.cfg.delay_seconds) || 3));
         // Cross-page / refresh resume: start ASAP on the saved track. Cold first visit keeps delay.
         var waitMs = resume ? 0 : delaySec * 1000;
+        if (force && this._awaitingConsent) {
+            waitMs = 0;
+        }
+        this._awaitingConsent = false;
+        this._scheduleInFlight = true;
+        var gen = (this._scheduleGen = (Number(this._scheduleGen) || 0) + 1);
         whenWindowLoaded().then(function () {
             return delay(waitMs);
         }).then(function () {
-            if (self.playIntent() === 'stop') {
+            if (gen !== self._scheduleGen) {
+                return;
+            }
+            self.clearLegacyStopPoison();
+            if (self.playIntent() === 'stop' && self.isUserStopped()) {
                 return;
             }
             if (self.isDismissed() && self.playIntent() !== 'play') {
                 return;
             }
-            return marketingAllowed();
+            // Do NOT gate on marketing Cookie — entrance BGM must start after delay
+            // even when the consent banner is still visible (无痕首次进店).
+            return storeMusicPlaybackAllowed();
         }).then(function (allowed) {
             if (allowed === undefined) {
                 return;
             }
+            if (gen !== self._scheduleGen) {
+                return;
+            }
             if (!allowed) {
-                setStatus(self.root, textOf(self.root, '[data-store-music-i18n-need-consent]', '请先同意营销 Cookie 后再播放'));
+                self._autoplayPending = true;
                 self.setNeedGesture(true);
                 return;
             }
+            self.clearLegacyStopPoison();
             var latest = self.playIntent();
-            if (latest === 'stop') {
+            if (latest === 'stop' && self.isUserStopped()) {
                 self.setNeedGesture(true);
                 return;
+            }
+            if (latest === 'stop') {
+                latest = 'unset';
             }
             self.restoreProgressIndex();
             var snapAgain = self.hasResumeSnap();
@@ -1952,15 +2995,43 @@
                 self.setNeedGesture(true);
                 return;
             }
+            self._autoplayPending = true;
+            // Refresh/resume: drop stale lock from the document we just unloaded (solo tab).
+            self.clearStaleLeaderForSoloResume();
+            // New / soft-loaded tab: if another page is already leading, stay quiet.
+            // Do not sticky-nag; user can ▶ / 选曲 here to take over (last op wins).
+            if (self.hasActivePeerLeader()) {
+                self._autoplayPending = true;
+                self.setNeedGesture(true);
+                self.armPeerLeaderRetry();
+                setStatus(self.root, '');
+                return;
+            }
             if (!self.canAudiblyStart(false)) {
                 self.setNeedGesture(true);
                 return;
             }
             return self.ensureAudio().then(function () {
-                return self.tryPlay();
+                if (gen !== self._scheduleGen) {
+                    return;
+                }
+                self.clearStaleLeaderForSoloResume();
+                if (self.hasActivePeerLeader()) {
+                    self._autoplayPending = true;
+                    self.setNeedGesture(true);
+                    self.armPeerLeaderRetry();
+                    setStatus(self.root, '');
+                    return;
+                }
+                return self.tryPlay({ force: false });
             });
         }).catch(function () {
+            self._autoplayPending = true;
             self.setNeedGesture(true);
+        }).then(function () {
+            if (gen === self._scheduleGen) {
+                self._scheduleInFlight = false;
+            }
         });
     };
 
@@ -2006,40 +3077,19 @@
         if (!url) {
             return Promise.reject(new Error('no track'));
         }
-        if (this.audioReady && this.audio && this.audio.getAttribute('data-store-music-src') === url) {
+        if (this.audioReady && this.audio && this.audio.getAttribute('data-store-music-src') === url
+            && !this.audio.__welineMediaGraphBound) {
             this.syncTrackMeta(!!(this.audio && !this.audio.paused));
             return Promise.resolve(this.audio);
         }
-        // Switching track: pause first so the previous src cannot keep audible while the next loads.
-        if (this.audio && this.audio.getAttribute('data-store-music-src') !== url) {
-            try {
-                this.audio.pause();
-            } catch (e) {
-                // ignore
-            }
-            this.waveConnected = false;
-            this.source = null;
-            this.analyser = null;
-            this.audioReady = false;
+        // Switching track or graph-bound element: discard and remount fresh (no dual-decode).
+        if (this.audio && (this.audio.getAttribute('data-store-music-src') !== url || this.audio.__welineMediaGraphBound)) {
+            this.discardAudioElement();
+            killRivalAudioElements(null);
         }
-        var audio = this.audio;
-        if (!audio) {
-            // Process-wide singleton: prevents accidental double Audio if the module boots twice.
-            if (global.__WelineStoreMusicSharedAudio) {
-                audio = global.__WelineStoreMusicSharedAudio;
-                try {
-                    audio.pause();
-                } catch (e) {
-                    // ignore
-                }
-            } else {
-                audio = new Audio();
-                global.__WelineStoreMusicSharedAudio = audio;
-            }
-            // Prefer metadata (not auto) so resume seek works without full preload bandwidth.
-            audio.preload = 'metadata';
-            this.audio = audio;
-        }
+        var audio = this.mountAudioElement();
+        registerStoreAudio(audio);
+        global.__WelineStoreMusicSharedAudio = audio;
         audio.__welineStoreMusicOwner = this;
         this.bindAudioElementEvents(audio);
         var multi = this.tracks.length > 1;
@@ -2093,21 +3143,26 @@
 
     StoreMusic.prototype.applyPendingSeek = function () {
         if (!this.audio || this._pendingSeek === null || this._pendingSeek === undefined) {
-            return;
+            return false;
         }
         var t = Number(this._pendingSeek);
-        this._pendingSeek = null;
-        if (!Number.isFinite(t) || t < 1) {
-            return;
+        if (!Number.isFinite(t) || t < 0.25) {
+            this._pendingSeek = null;
+            return false;
         }
         try {
             var dur = Number(this.audio.duration);
-            if (Number.isFinite(dur) && dur > 2) {
-                t = Math.min(t, Math.max(0, dur - 1));
+            // Metadata not ready yet — keep pending for loadedmetadata (do NOT clear).
+            if (!Number.isFinite(dur) || dur <= 0) {
+                return false;
             }
+            t = Math.min(t, Math.max(0, dur - 0.25));
             this.audio.currentTime = t;
+            this._pendingSeek = null;
+            return true;
         } catch (e) {
-            // ignore seek errors
+            // Keep pending so loadedmetadata / canplay can retry.
+            return false;
         }
     };
 
@@ -2167,10 +3222,37 @@
         }
         if (this.root) {
             this.root.classList.toggle('is-playing', !!playing);
+            this.root.classList.toggle('is-awaiting-unmute', !!(playing && this._awaitingUnmute));
         }
         this.syncTrackMeta(!!playing);
+        if (playing && this._awaitingUnmute) {
+            // Soft muted autoplay succeeded — keep gesture arm for first unmute click.
+            this.needGesture = true;
+            this._autoplayPending = true;
+            if (this.mascot) {
+                this.mascot.classList.add('is-need-gesture');
+            }
+            setStatus(
+                this.root,
+                textOf(this.root, '[data-store-music-i18n-tap-to-unmute]', '点击开启声音')
+            );
+            if (this.hint) {
+                this.hint.textContent = textOf(
+                    this.root,
+                    '[data-store-music-i18n-tap-to-unmute]',
+                    '点击开启声音'
+                );
+            }
+            this.armPageGestureUnlock();
+            this.syncHintVisibility();
+            return;
+        }
         if (playing) {
             this.needGesture = false;
+            this._autoplayPending = false;
+            this._awaitingConsent = false;
+            this._awaitingUnmute = false;
+            this.disarmPageGestureUnlock();
             if (this.mascot) {
                 this.mascot.classList.remove('is-need-gesture');
             }
@@ -2191,8 +3273,15 @@
         if (!this.canAudiblyStart(false)) {
             return Promise.resolve();
         }
-        if (!this.acquireLeaderLock(false)) {
-            this.yieldToOtherTab();
+        this.clearStaleLeaderForSoloResume();
+        if (this.hasActivePeerLeader() || !this.acquireLeaderLock(false)) {
+            // Soft path: peer already playing — stay silent without sticky nag.
+            if (this.shouldShowOtherTabStatus()) {
+                this.yieldToOtherTab();
+            } else {
+                this.silenceForOtherTab(false, true);
+                setStatus(this.root, '');
+            }
             return Promise.resolve();
         }
         setStatus(this.root, '');
@@ -2200,80 +3289,122 @@
             if (!self._docAlive || !self.canAudiblyStart(false)) {
                 return;
             }
+            if (self.hasActivePeerLeader()) {
+                self.silenceForOtherTab(false, true);
+                setStatus(self.root, '');
+                return;
+            }
             audio.__welineStoreMusicOwner = self;
             if (!self.acquireLeaderLock(false)) {
-                self.yieldToOtherTab();
+                if (self.shouldShowOtherTabStatus()) {
+                    self.yieldToOtherTab();
+                } else {
+                    self.silenceForOtherTab(false, true);
+                    setStatus(self.root, '');
+                }
                 return;
             }
             self.applyPendingSeek();
             if (!self.claimLeadership(false)) {
                 return;
             }
-            var p = audio.play();
-            if (!p || typeof p.then !== 'function') {
+            var markPlaying = function (mutedSoft) {
+                self._awaitingUnmute = !!mutedSoft;
                 self.setWantPlay(true);
                 self.markHeardWhileVisible();
                 self.syncPlayingUi(true);
+                self.broadcastLeaderState('playing', false);
+            };
+            // Try unmuted first (refresh/MEI often allows sound). Only mute on NotAllowedError.
+            // Do NOT pre-mute when !userActivation — that made F5 look like「不播放了」(silent).
+            try {
+                audio.muted = false;
+            } catch (eMute) {
+                // ignore
+            }
+            var p = audio.play();
+            if (!p || typeof p.then !== 'function') {
+                markPlaying(!!audio.muted);
                 return;
             }
             return p.then(function () {
-                if (!self._docAlive || !self.acquireLeaderLock(false)) {
+                if (!self._docAlive || self.hasActivePeerLeader() || !self.acquireLeaderLock(false)) {
                     try {
                         audio.pause();
                     } catch (e) {
                         // ignore
                     }
-                    self.yieldToOtherTab();
+                    self.silenceForOtherTab(false, true);
+                    setStatus(self.root, '');
                     return;
                 }
-                self.setWantPlay(true);
-                self.markHeardWhileVisible();
-                self.syncPlayingUi(true);
-                self.broadcastLeaderState('playing');
+                markPlaying(!!audio.muted);
             }).catch(function (err) {
                 var name = err && err.name ? String(err.name) : '';
-                if (name === 'NotAllowedError' || name === 'NotSupportedError') {
-                    self.setNeedGesture(true);
-                    return;
+                if (name === 'NotAllowedError' && !audio.muted) {
+                    try {
+                        audio.muted = true;
+                    } catch (e2) {
+                        // ignore
+                    }
+                    var mutedPlay = audio.play();
+                    if (!mutedPlay || typeof mutedPlay.then !== 'function') {
+                        markPlaying(true);
+                        return;
+                    }
+                    return mutedPlay.then(function () {
+                        if (!self._docAlive) {
+                            return;
+                        }
+                        markPlaying(true);
+                    }).catch(function () {
+                        self._awaitingUnmute = false;
+                        self._autoplayPending = true;
+                        self.setNeedGesture(true);
+                    });
                 }
+                self._awaitingUnmute = false;
+                self._autoplayPending = true;
                 self.setNeedGesture(true);
             });
         });
     };
 
     StoreMusic.prototype.userPlay = function () {
-        var self = this;
         this.markUserOperating();
         this.setDismissed(false);
+        this.setUserStopped(false);
         this.setWantPlay(true);
+        this._awaitingUnmute = false;
+        this._awaitingConsent = false;
         setStatus(this.root, '');
-        // Play inside this click first; consent is soft and must not delay gesture play.
-        var playing = this.playCurrentTrackNow();
-        marketingAllowed().then(function (allowed) {
-            if (!allowed) {
-                try {
-                    if (self.audio) {
-                        self.audio.pause();
-                    }
-                } catch (e) {
-                    // ignore
-                }
-                setStatus(self.root, textOf(self.root, '[data-store-music-i18n-need-consent]', '请先同意营销 Cookie 后再播放'));
-                self.setNeedGesture(true);
-                self.syncPlayingUi(false);
-            }
-        });
-        return playing;
+        // Play inside this click — do not gate on marketing Cookie (entrance BGM ≠ tracking).
+        return this.playCurrentTrackNow();
     };
 
-    /** Explicit stop: pause + clear resume-across-refresh intent. Closing the panel must NOT call this. */
+    /** Explicit stop on THIS page. Closing the panel must NOT call this. */
     StoreMusic.prototype.stopPlayback = function () {
+        // Teardown/refresh programmatic pause must never look like a user stop.
+        if (this._tearingDown || !this._docAlive) {
+            try {
+                if (this.audio) {
+                    this.audio.pause();
+                }
+            } catch (e) {
+                // ignore
+            }
+            return;
+        }
         this.markUserOperating();
+        this.setUserStopped(true);
         this.setWantPlay(false);
         this.pause();
-        this.broadcastForceStop(true);
+        // Tell peers to silence residual audio, but do not clear their want_play /
+        // destroy their UI — they stay operable and can ▶ to take over.
+        this.broadcastForceStop(false);
         this.broadcastLeaderState('stop');
         this.releaseLeadership();
+        this.setNeedGesture(true);
         setStatus(this.root, '');
     };
 
@@ -2286,6 +3417,7 @@
     };
 
     StoreMusic.prototype.dismiss = function () {
+        this.setUserStopped(true);
         this.setWantPlay(false);
         this.setDismissed(true);
         this.setNeedGesture(false);
@@ -2347,6 +3479,7 @@
             this.analyser.fftSize = 256;
             this.source.connect(this.analyser);
             this.analyser.connect(this.ctx.destination);
+            this.audio.__welineMediaGraphBound = true;
             this.waveConnected = true;
             this.waveMode = 'analyser';
             this.waveFailed = false;

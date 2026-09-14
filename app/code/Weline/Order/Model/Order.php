@@ -22,6 +22,7 @@ use Weline\Framework\DataObject\DataObject;
 #[Index(name: 'idx_source_app', columns: ['source_app'])]
 #[Index(name: 'idx_source_module', columns: ['source_module'])]
 #[Index(name: 'idx_business_code', columns: ['business_code'])]
+#[Index(name: 'idx_checkout_entry', columns: ['checkout_entry'])]
 #[Index(name: 'idx_created_at', columns: ['created_at'])]
 #[Index(name: 'uk_order_uuid', columns: ['order_uuid'], type: 'UNIQUE')]
 #[Index(name: 'idx_order_checkout_group_uuid', columns: ['checkout_group_uuid'])]
@@ -115,6 +116,8 @@ class Order extends Model
     public const schema_fields_ORDER_TYPE = 'order_type';
     #[Col('text', nullable: true, comment: 'Commerce type payload JSON (tob hang/credit/FX)')]
     public const schema_fields_TYPE_PAYLOAD_JSON = 'type_payload_json';
+    #[Col('varchar', 32, nullable: true, default: 'unknown', comment: '结账入口 checkout|express|quick_buy|helppay')]
+    public const schema_fields_CHECKOUT_ENTRY = 'checkout_entry';
     
     // 订单状态常量
     public const STATUS_PENDING = 'pending';

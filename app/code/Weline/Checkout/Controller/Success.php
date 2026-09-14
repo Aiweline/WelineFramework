@@ -6,6 +6,7 @@ namespace Weline\Checkout\Controller;
 
 use Weline\Checkout\Service\OrderService;
 use Weline\Checkout\Service\CheckoutSessionAccessService;
+use Weline\Checkout\Service\CheckoutSuccessPresentationService;
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Order\Api\OrderFacadeInterface;
 
@@ -21,6 +22,7 @@ class Success extends FrontendController
         private readonly OrderService $orderService,
         private readonly OrderFacadeInterface $orders,
         private readonly CheckoutSessionAccessService $checkoutAccess,
+        private readonly CheckoutSuccessPresentationService $successPresentation,
     ) {
     }
 
@@ -145,7 +147,20 @@ class Success extends FrontendController
         $this->assign('page_title', $title);
         $this->assign('title', $title);
         $this->assign('order', null);
-        $this->assign('order_v2', $order->toArray());
+        $orderArr = $order->toArray();
+        $presentation = $this->successPresentation->present(
+            items: is_array($order->items) ? $order->items : [],
+            shippingMethodCode: (string)($order->shipping['method'] ?? ''),
+            websiteId: (int)$order->websiteId,
+            storeId: (int)$order->storeId,
+        );
+        $shippingLabel = (string)($presentation['shipping_method_label'] ?? '');
+        if ($shippingLabel !== '' && is_array($orderArr['shipping'] ?? null)) {
+            $orderArr['shipping']['method_label'] = $shippingLabel;
+        }
+        $this->assign('order_v2', $orderArr);
+        $this->assign('order_v2_items_display', $presentation['items_display'] ?? []);
+        $this->assign('shipping_method_label', $shippingLabel);
         $this->assign('order_v2_display_number', $order->displayNumber ?: $order->orderUuid);
         $this->assign('order_v2_status', $order->status);
         $this->assign(

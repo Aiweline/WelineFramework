@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Marketing',
-    "version" => '1.2.8',
+    "version" => '1.2.11',
     "requires" => [
         'Weline_Backend' => '*',
         'Weline_Currency' => '*',
@@ -12,6 +12,9 @@ return [
     "optional" => [
         'Weline_Theme' => '*',
         'Weline_Widget' => '*',
+        'Weline_Order' => '*',
+        'Weline_Smtp' => '*',
+        'Weline_Cron' => '*',
     ],
     "provides" => [
         \Weline\Marketing\Api\Rule\ActionCatalogInterface::class => \Weline\Marketing\Service\ActionCatalog::class,

@@ -176,7 +176,7 @@
 "参数 %{1} 须为规范整数","Parameter %{1} must be a canonical integer"
 "参数 %{1} 须为布尔值","Parameter %{1} must be a Boolean value"
 "参数 %{1} 须为数组","Parameter %{1} must be an array"
-"新品 RSS","新品 RSS"
+"新品 RSS","New Arrivals RSS"
 首页,Home
 商品分类,"Product classification"
 id属性不能为空,id属性不能为空
@@ -371,21 +371,21 @@ SKU,SKU
 当前筛选条件下暂无商品，请调整筛选。,"No products match the current filters."
 该分类下暂无已发布商品。,该分类下暂无已发布商品。
 分页,分页
-全部商品,全部商品
+全部商品,"All products"
 浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。
 "第 %{1}–%{2} 件，共 %{3} 件商品","%{1}–%{2} of %{3} products"
 "0 件商品","0 products"
 当前网站暂无已发布商品。,"There are currently no products published on the website."
 查看购物车,"View cart"
 新作入藏,"New to the Collection"
-"订阅 RSS","订阅 RSS"
+"订阅 RSS","Subscribe to RSS"
 甄选近期上架的汉服、马面裙与传统配饰，循时序发现新的东方衣冠。,"Discover newly listed Hanfu, mamian skirts, and traditional accessories in arrival order."
 "共 %{1} 件新品","%{1} new arrivals"
 新品汉服,"New Hanfu Arrivals"
 新品,New
 查看商品,"View product"
 新品正在整理,"New arrivals are being curated"
-浏览全部商品,"Shop all Hanfu"
+浏览全部商品,"Browse all products"
 本站人气排行,"Store popularity ranking"
 按店面热度排序的热销商品，帮你快速找到大家都在买的好物。,"Ranked by storefront popularity so you can quickly find what shoppers buy most."
 暂无热销商品,"No best sellers yet"
@@ -504,7 +504,7 @@ DPI,DPI
 备注,Notes
 请至少填写邮箱或手机号。提交后我们会尽快联系您。,"Provide at least an email or phone number. We will contact you after submission."
 取消,Cancel
-选规格,选规格
+选规格,"Select options"
 查看商品视频,查看商品视频
 查看商品图片,查看商品图片
 请填写邮箱或手机号,"Please provide an email or phone number"
@@ -1125,9 +1125,6 @@ SKU：%{1},SKU：%{1}
 "Product shard provision 返回未声明表：%{1}","Product shard provision returns undeclared table: %{1}"
 "Product shard provision ready 未返回完整声明表集合","Product shard provision ready did not return the complete set of declaration tables"
 "Product shard provision ready 指纹不能为空","Product shard provision ready fingerprint cannot be empty"
-"0 - 99 元","¥0 - ¥99"
-"100 - 299 元","¥100 - ¥299"
-"300 元以上",¥300+
 "entity_id 必须是正整数","entity_id must be a positive integer"
 "attribute_code 仅允许小写字母、数字和下划线","attribute_code only allows lowercase letters, numbers and underscores"
 "locale 格式无效","Invalid locale format"
@@ -1258,6 +1255,9 @@ SKU（每次新建使用唯一值）,"SKU (use a unique value for each new produ
 "必须与当前 env 配置一致的 mig_clone_* 数据库","必须与当前 env 配置一致的 mig_clone_* 数据库"
 "cutover/rollback 必填的切换状态版本","cutover/rollback 必填的切换状态版本"
 "rollback 目标：dual_read（默认）或 legacy","rollback 目标：dual_read（默认）或 legacy"
+"0 - 99 元","0 - 99 yuan"
+"100 - 299 元","100 - 299 yuan"
+"300 元以上","More than 300 yuan"
 优惠主题,"Promotion theme"
 "Offer 不存在","Offer does not exist"
 已标记为已处理,"Marked as processed"
@@ -1476,3 +1476,10 @@ AI翻译,"AI Translation"
 本配送方案为服务级免邮，具体以结算页为准,"This shipping profile includes free shipping; final cost shown at checkout"
 猜你喜欢,"Recommended for You"
 根据当前商品为你推荐,"Recommended for you based on this product"
+您可能还需要,"You may also need"
+经常一起购买,"Frequently bought together"
+存货单位,SKU
+存货单位:,SKU:
+大小,Size
+大小:,Size:
+类型:,Type:
