@@ -16,6 +16,7 @@ $title = trim((string)($this->getData('title') ?? ''));
 $title = $title === '' ? (string)__('收货地址') : (string)__($title);
 $savedHeading = trim((string)($this->getData('saved_heading') ?? ''));
 $savedHeading = $savedHeading === '' ? (string)__('选择收货地址') : (string)__($savedHeading);
+$hideBillingSame = !empty($this->getData('hide_billing_same'));
 
 $context = [
     'country_code' => 'CN',
