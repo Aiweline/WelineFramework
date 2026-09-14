@@ -27,7 +27,7 @@ skillCheck(($policy['provider'] ?? '') === 'mcp', 'policy provider is mcp');
 skillCheck(($policy['static_skill_files'] ?? true) === false, 'policy forbids static skill files');
 skillCheck(($policy['fetch']['discover'] ?? '') === 'resolve_skill', 'policy discover tool is resolve_skill');
 skillCheck(($policy['fetch']['load'] ?? '') === 'get_skill', 'policy load tool is get_skill');
-skillCheck(is_array($policy['catalog'] ?? null) && count($policy['catalog']) >= 8, 'policy catalog lists surfaces');
+skillCheck(is_array($policy['catalog'] ?? null) && count($policy['catalog']) >= 9, 'policy catalog lists surfaces');
 skillCheck(($policy['catalog_mode'] ?? '') === 'index_only', 'policy catalog_mode is index_only');
 $catalogRow = is_array($policy['catalog'][0] ?? null) ? $policy['catalog'][0] : [];
 skillCheck(
@@ -51,6 +51,15 @@ skillCheck(($theme['static_skill_files'] ?? true) === false, 'theme skill static
 $browser = McpSkillCatalog::get('local-browser-urls', true);
 skillCheck(is_array($browser), 'get by host alias local-browser-urls');
 skillCheck(($browser['skill_id'] ?? '') === GuidanceWorkflowCatalog::SURFACE_WEBUI_BROWSER_CLOSEOUT, 'browser alias maps to webui surface');
+
+$clarify = McpSkillCatalog::get('weline-req-clarify', true);
+skillCheck(is_array($clarify), 'get by host alias weline-req-clarify');
+skillCheck(($clarify['skill_id'] ?? '') === GuidanceWorkflowCatalog::SURFACE_REQUIREMENT_CLARIFY_USE_CASE, 'clarify alias maps to requirement_clarify_use_case');
+skillCheck(
+    is_string($clarify['content'] ?? null)
+    && (str_contains((string) $clarify['content'], 'EARS') || str_contains((string) $clarify['content'], '澄清')),
+    'clarify skill body mentions EARS or 澄清'
+);
 
 $taglib = McpSkillCatalog::get(GuidanceWorkflowCatalog::SURFACE_TAGLIB_UI_CONTROL, true);
 skillCheck(is_array($taglib), 'get by canonical surface id');
@@ -76,6 +85,8 @@ skillCheck(is_array($bundle['required'] ?? null) && count($bundle['required']) =
 
 $featureBundle = $policy['feature_skill_bundle'] ?? [];
 skillCheck(($featureBundle['rule_id'] ?? '') === 'requirement_implicit_analysis_skill_decision', 'policy exposes feature_skill_bundle');
+skillCheck(($featureBundle['clarify_rule_id'] ?? '') === 'requirement_clarify_use_case_spec', 'feature bundle links clarify rule');
+skillCheck(($featureBundle['clarify_skill_id'] ?? '') === GuidanceWorkflowCatalog::SURFACE_REQUIREMENT_CLARIFY_USE_CASE, 'feature bundle links clarify skill');
 skillCheck(($featureBundle['required_when'] ?? '') === 'ui_skill_decision=participate', 'feature bundle gated by ui_skill_decision');
 skillCheck(($featureBundle['also_require_acceptance_type'] ?? '') === 'shentu', 'feature bundle requires shentu acceptance');
 skillCheck(is_array($featureBundle['required'] ?? null) && count($featureBundle['required']) === 2, 'feature bundle lists prototype+UI');

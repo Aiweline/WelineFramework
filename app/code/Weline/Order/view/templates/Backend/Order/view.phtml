@@ -29,9 +29,10 @@ $customerPhone = (string)($customerPresent['customer_phone'] ?? ($orderData[Orde
 $createdAt = (string)($customerPresent['created_at'] ?? ($orderData[Order::schema_fields_CREATED_AT] ?? ''));
 $isAnonymous = !empty($customerPresent['is_anonymous']);
 $orderTypeLabel = (string)($this->getData('order_type_label') ?? '');
-$orderTypeTone = (string)($this->getData('order_type_tone') ?? 'secondary');
+$orderTypeTone = (string)($this->getData('order_type_tone') ?? 'info');
+$orderTypeCode = strtolower(trim((string)($this->getData('order_type') ?? 'toc'))) ?: 'toc';
 if ($orderTypeTone === 'muted') {
-    $orderTypeTone = 'secondary';
+    $orderTypeTone = 'info';
 }
 ?>
 <div class="w-grid">
@@ -40,7 +41,10 @@ if ($orderTypeTone === 'muted') {
             <h4 class="w-cluster" data-align="center" style="--w-mb-sm:0;--w-gap:var(--weline-space-2);">
                 <?= __('订单详情') ?> - <?= htmlspecialchars($orderData[Order::schema_fields_ORDER_NUMBER] ?? '') ?>
                 <?php if ($orderTypeLabel !== ''): ?>
-                    <span class="w-badge bg-<?= htmlspecialchars($orderTypeTone) ?>" data-testid="order-type-header-badge"><?= htmlspecialchars($orderTypeLabel) ?></span>
+                    <span class="w-badge"
+                          data-tone="<?= htmlspecialchars($orderTypeTone) ?>"
+                          data-order-type-code="<?= htmlspecialchars($orderTypeCode) ?>"
+                          data-testid="order-type-header-badge"><?= htmlspecialchars($orderTypeLabel) ?></span>
                 <?php endif; ?>
             </h4>
             <div class="w-cluster">
@@ -182,39 +186,192 @@ if ($orderTypeTone === 'muted') {
             </div>
         </div>
 
-        <!-- 订单项 -->
-        <div class="w-card" style="--w-mb:var(--weline-space-4);">
+        <!-- 收货 / 账单地址 -->
+        <div class="w-grid" style="--w-mb:var(--weline-space-4);" data-testid="order-view-addresses">
+            <div style="--w-span-md:6;">
+                <div class="w-card" style="height:100%;">
+                    <div class="w-card__header">
+                        <h5 class="w-card__title" style="--w-mb:0;"><?= __('收货地址') ?></h5>
+                    </div>
+                    <div class="w-card__body">
+                        <?php
+                        $shippingLines = is_array($customerPresent['shipping_address_lines'] ?? null)
+                            ? $customerPresent['shipping_address_lines']
+                            : [];
+                        ?>
+                        <?php if ($shippingLines === []): ?>
+                            <p class="w-text" data-tone="muted"><?= __('暂无收货地址') ?></p>
+                        <?php else: ?>
+                            <address class="w-text" style="font-style:normal;" data-testid="order-view-shipping-address">
+                                <?php foreach ($shippingLines as $line): ?>
+                                    <div><?= htmlspecialchars((string)$line) ?></div>
+                                <?php endforeach; ?>
+                            </address>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+            <div style="--w-span-md:6;">
+                <div class="w-card" style="height:100%;">
+                    <div class="w-card__header">
+                        <h5 class="w-card__title" style="--w-mb:0;"><?= __('账单地址') ?></h5>
+                    </div>
+                    <div class="w-card__body">
+                        <?php
+                        $billingLines = is_array($customerPresent['billing_address_lines'] ?? null)
+                            ? $customerPresent['billing_address_lines']
+                            : [];
+                        ?>
+                        <?php if ($billingLines === []): ?>
+                            <p class="w-text" data-tone="muted"><?= __('暂无账单地址') ?></p>
+                        <?php else: ?>
+                            <address class="w-text" style="font-style:normal;" data-testid="order-view-billing-address">
+                                <?php foreach ($billingLines as $line): ?>
+                                    <div><?= htmlspecialchars((string)$line) ?></div>
+                                <?php endforeach; ?>
+                            </address>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <?php
+        $viewNotes = trim((string)($customerPresent['notes'] ?? ($orderData[Order::schema_fields_NOTES] ?? '')));
+        $viewPaymentMethod = trim((string)($customerPresent['payment_method'] ?? ($orderData[Order::schema_fields_PAYMENT_METHOD] ?? '')));
+        $viewShippingMethod = trim((string)($customerPresent['shipping_method'] ?? ($orderData[Order::schema_fields_SHIPPING_METHOD] ?? '')));
+        ?>
+        <div class="w-card" style="--w-mb:var(--weline-space-4);" data-testid="order-view-notes">
             <div class="w-card__header">
+                <h5 class="w-card__title" style="--w-mb:0;"><?= __('备注与履约方式') ?></h5>
+            </div>
+            <div class="w-card__body">
+                <div class="w-grid">
+                    <div style="--w-span-md:6;">
+                        <table class="w-table">
+                            <tr>
+                                <th width="150"><?= __('支付方式') ?>:</th>
+                                <td><?= $viewPaymentMethod !== '' ? htmlspecialchars($viewPaymentMethod) : '—' ?></td>
+                            </tr>
+                            <tr>
+                                <th><?= __('配送方式') ?>:</th>
+                                <td><?= $viewShippingMethod !== '' ? htmlspecialchars($viewShippingMethod) : '—' ?></td>
+                            </tr>
+                        </table>
+                    </div>
+                    <div style="--w-span-md:6;">
+                        <div class="w-text" data-tone="muted" data-size="sm"><?= __('订单备注') ?></div>
+                        <div style="--w-mt:var(--weline-space-1); white-space:pre-wrap;"><?= $viewNotes !== '' ? htmlspecialchars($viewNotes) : __('（无备注）') ?></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 订单项：结账价格/活动快照只读 -->
+        <div class="w-card" style="--w-mb:var(--weline-space-4);" data-testid="order-view-items">
+            <div class="w-card__header w-cluster" data-align="center" data-justify="between">
                 <h5 class="w-card__title" style="--w-mb:0;"><?= __('订单项') ?></h5>
+                <span class="w-text" data-tone="muted" data-size="sm"><?= __('结账快照') ?></span>
             </div>
             <div class="w-card__body">
                 <div class="w-table-wrap">
                     <table class="w-table">
                         <thead>
                             <tr>
-                                <th><?= __('商品名称') ?></th>
+                                <th><?= __('商品') ?></th>
                                 <th><?= __('SKU') ?></th>
                                 <th><?= __('数量') ?></th>
-                                <th><?= __('单价') ?></th>
+                                <th><?= __('价格快照') ?></th>
+                                <th><?= __('行优惠') ?></th>
                                 <th><?= __('行总计') ?></th>
+                                <th><?= __('活动') ?></th>
                             </tr>
                         </thead>
                         <tbody>
                             <?php if (empty($items)): ?>
                                 <tr>
-                                    <td colspan="5" class="w-text" data-align="center"><?= __('暂无订单项') ?></td>
+                                    <td colspan="7" class="w-text" data-align="center"><?= __('暂无订单项') ?></td>
                                 </tr>
                             <?php else: ?>
-                                <?php foreach ($items as $item): ?>
-                                    <?php
+                                <?php
+                                $viewCurrency = (string)($orderData[Order::schema_fields_CURRENCY] ?? 'CNY');
+                                foreach ($items as $item):
                                     $itemData = is_object($item) ? $item->getData() : $item;
-                                    ?>
-                                    <tr>
-                                        <td><?= htmlspecialchars($itemData[OrderItem::schema_fields_PRODUCT_NAME] ?? '') ?></td>
-                                        <td><?= htmlspecialchars($itemData[OrderItem::schema_fields_PRODUCT_SKU] ?? '') ?></td>
+                                    $dealPrice = (float)($itemData[OrderItem::schema_fields_PRICE] ?? 0);
+                                    $compareAt = (float)($itemData['compare_at'] ?? 0);
+                                    $hasDeal = !empty($itemData['has_deal']);
+                                    $lineDiscount = (float)($itemData[OrderItem::schema_fields_DISCOUNT_AMOUNT] ?? 0);
+                                    $campaignLabel = trim((string)($itemData['campaign_label'] ?? ''));
+                                    $options = is_array($itemData['options'] ?? null) ? $itemData['options'] : [];
+                                    $imageSrc = trim((string)($itemData['image_src'] ?? $itemData['image'] ?? ''));
+                                ?>
+                                    <tr data-testid="order-view-item-row">
+                                        <td>
+                                            <div class="w-cluster" data-align="start" data-gap="2" style="--w-flex-wrap:nowrap;">
+                                                <?php if ($imageSrc !== ''): ?>
+                                                    <img
+                                                        src="<?= htmlspecialchars($imageSrc) ?>"
+                                                        alt=""
+                                                        width="40"
+                                                        height="40"
+                                                        loading="lazy"
+                                                        data-testid="order-view-item-image"
+                                                        style="width:2.5rem;height:2.5rem;object-fit:cover;border-radius:var(--weline-radius-sm,0.25rem);background:var(--backend-color-bg-muted,transparent);flex-shrink:0;"
+                                                    >
+                                                <?php else: ?>
+                                                    <span
+                                                        data-testid="order-view-item-image-empty"
+                                                        aria-hidden="true"
+                                                        style="display:inline-block;width:2.5rem;height:2.5rem;border-radius:var(--weline-radius-sm,0.25rem);background:var(--backend-color-bg-muted,transparent);border:1px solid var(--backend-color-border-default,transparent);flex-shrink:0;"
+                                                    ></span>
+                                                <?php endif; ?>
+                                                <div style="min-width:0;">
+                                                    <div><?= htmlspecialchars((string)($itemData[OrderItem::schema_fields_PRODUCT_NAME] ?? '')) ?></div>
+                                                    <?php if ($options !== []): ?>
+                                                        <div class="w-text" data-tone="muted" data-size="sm">
+                                                            <?php foreach ($options as $opt): ?>
+                                                                <div><?= htmlspecialchars((string)($opt['label'] ?? '')) ?>: <?= htmlspecialchars((string)($opt['value'] ?? '')) ?></div>
+                                                            <?php endforeach; ?>
+                                                        </div>
+                                                    <?php endif; ?>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td><?= htmlspecialchars((string)($itemData[OrderItem::schema_fields_PRODUCT_SKU] ?? '')) ?></td>
                                         <td><?= number_format((float)($itemData[OrderItem::schema_fields_QTY_ORDERED] ?? 0), 2) ?></td>
-                                        <td><?= htmlspecialchars($orderData[Order::schema_fields_CURRENCY] ?? 'CNY') ?> <?= number_format((float)($itemData[OrderItem::schema_fields_PRICE] ?? 0), 2) ?></td>
-                                        <td><?= htmlspecialchars($orderData[Order::schema_fields_CURRENCY] ?? 'CNY') ?> <?= number_format((float)($itemData[OrderItem::schema_fields_ROW_TOTAL] ?? 0), 2) ?></td>
+                                        <td>
+                                            <div>
+                                                <span class="w-text" data-size="sm" data-tone="muted"><?= __('成交') ?></span>
+                                                <?= htmlspecialchars($viewCurrency) ?> <?= number_format($dealPrice, 2) ?>
+                                            </div>
+                                            <?php if ($compareAt > $dealPrice + 0.0001): ?>
+                                                <div class="w-text" data-tone="muted" data-size="sm">
+                                                    <span><?= __('原价') ?></span>
+                                                    <s><?= htmlspecialchars($viewCurrency) ?> <?= number_format($compareAt, 2) ?></s>
+                                                </div>
+                                            <?php elseif ($compareAt > 0): ?>
+                                                <div class="w-text" data-tone="muted" data-size="sm"><?= __('原价') ?> <?= htmlspecialchars($viewCurrency) ?> <?= number_format($compareAt, 2) ?></div>
+                                            <?php else: ?>
+                                                <div class="w-text" data-tone="muted" data-size="sm"><?= __('原价未记录') ?></div>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td>
+                                            <?php if ($lineDiscount > 0.0001): ?>
+                                                −<?= htmlspecialchars($viewCurrency) ?> <?= number_format($lineDiscount, 2) ?>
+                                            <?php else: ?>
+                                                <span class="w-text" data-tone="muted">—</span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td><?= htmlspecialchars($viewCurrency) ?> <?= number_format((float)($itemData[OrderItem::schema_fields_ROW_TOTAL] ?? 0), 2) ?></td>
+                                        <td>
+                                            <?php if ($campaignLabel !== ''): ?>
+                                                <span class="w-badge" data-tone="<?= $hasDeal ? 'warning' : 'info' ?>"><?= htmlspecialchars($campaignLabel) ?></span>
+                                            <?php elseif ($hasDeal): ?>
+                                                <span class="w-badge" data-tone="warning"><?= __('活动价') ?></span>
+                                            <?php else: ?>
+                                                <span class="w-text" data-tone="muted" data-size="sm"><?= __('无活动记录') ?></span>
+                                            <?php endif; ?>
+                                        </td>
                                     </tr>
                                 <?php endforeach; ?>
                             <?php endif; ?>
@@ -234,6 +391,18 @@ if ($orderTypeTone === 'muted') {
                 class="backend-order-payment-records-slot"
                 weline-code="order.backend.order.payment_records_slot">
             <w:hook name="Weline_Order::backend::order::view::payment-records"/>
+        </w:slot>
+
+        <!-- 批发订单沟通：订单只留空槽；B2B 经部件 default_injections 默认填充 -->
+        <w:slot id="backend-order-b2b-chat"
+                name="<?= __('批发订单沟通') ?>"
+                accept="backend-order-b2b-chat,b2b-order-chat,b2b"
+                exclusive="true"
+                multiple="false"
+                position="content"
+                class="backend-order-b2b-chat-slot"
+                weline-code="order.backend.order.b2b_chat_slot">
+            <w:hook name="Weline_Order::backend::order::view::wholesale-chat"/>
         </w:slot>
 
         <!-- 发货记录 -->

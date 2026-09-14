@@ -106,7 +106,11 @@ class Carrier extends BackendController
         /** @var \Weline\Shipping\Service\CarrierCoverageAdminService $coverageAdminForLabels */
         $coverageAdminForLabels = ObjectManager::getInstance(\Weline\Shipping\Service\CarrierCoverageAdminService::class);
         $coverageDefaults = ObjectManager::getInstance(\Weline\Shipping\Service\CarrierCoverageProviderRegistry::class)
-            ->mergedDefaultCoverage();
+            ->defaultCoverageForCode(
+                $carrier && $carrier->getId()
+                    ? (string)$carrier->getData(\Weline\Shipping\Model\Carrier::schema_fields_PROVIDER_CODE)
+                    : 'default'
+            );
         $this->assign('carrier', $carrier);
         $this->assign('coverage_rows', $coverageRows);
         $this->assign(
@@ -136,6 +140,7 @@ class Carrier extends BackendController
             $isActive = (int)$this->request->getParam('is_active', 1);
             $sortOrder = (int)$this->request->getParam('sort_order', 0);
             $apiConfig = $this->request->getParam('api_config', '');
+            $providerCodeParam = strtolower(trim((string)$this->request->getParam('provider_code', '')));
 
             // 验证必填字段
             if (empty($carrierCode)) {
@@ -169,6 +174,14 @@ class Carrier extends BackendController
             $carrier->setData(CarrierModel::schema_fields_CARRIER_CODE, $carrierCode);
             $carrier->setData(CarrierModel::schema_fields_CARRIER_NAME, $carrierName);
             $carrier->setData(CarrierModel::schema_fields_CARRIER_TYPE, $carrierType);
+            $providerCode = $providerCodeParam;
+            if ($providerCode === '') {
+                $providerCode = strtolower(trim((string)$carrier->getData(CarrierModel::schema_fields_PROVIDER_CODE)));
+            }
+            if ($providerCode === '') {
+                $providerCode = 'local';
+            }
+            $carrier->setData(CarrierModel::schema_fields_PROVIDER_CODE, $providerCode);
             $carrier->setData(CarrierModel::schema_fields_TRACKING_URL_TEMPLATE, $trackingUrlTemplate);
             $carrier->setData(CarrierModel::schema_fields_TRACKING_API_ENDPOINT, $trackingApiEndpoint ?: null);
             $carrier->setData(CarrierModel::schema_fields_TRACKING_API_METHOD, $trackingApiMethod);
@@ -196,7 +209,7 @@ class Carrier extends BackendController
             $carrierId = (int)$carrier->getId();
 
             if (!$keepCurrent) {
-                $coverageAdmin->applyProviderDefaults($carrierId);
+                $coverageAdmin->applyProviderDefaults($carrierId, $providerCode);
             } elseif ($coverageRaw !== null) {
                 $coverageAdmin->replaceForCarrier($carrierId, $coverageAdmin->rowsFromPayload($coverageRaw));
             }

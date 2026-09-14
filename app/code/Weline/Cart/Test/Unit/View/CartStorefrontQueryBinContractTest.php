@@ -132,6 +132,8 @@ final class CartStorefrontQueryBinContractTest extends TestCase
         self::assertStringContainsString('function appendLineOptions(details, item)', $template);
         self::assertStringContainsString("weline-cart-shell__line-options", $template);
         self::assertStringContainsString('weline-cart-shell__line-option-swatch', $template);
+        self::assertStringContainsString('data-cart-swatch-trigger', $template);
+        self::assertStringContainsString('ensureCartSwatchPreview', $template);
         self::assertStringContainsString('option.swatch_image', $template);
         self::assertStringContainsString('option.value_label || option.value', $template);
         self::assertMatchesRegularExpression(
@@ -140,6 +142,14 @@ final class CartStorefrontQueryBinContractTest extends TestCase
         );
         self::assertMatchesRegularExpression(
             '/\\.weline-cart-shell--amazon \\.weline-cart-shell__line-option-swatch\\s*\\{/',
+            $css,
+        );
+        self::assertMatchesRegularExpression(
+            '/\\.weline-cart-shell--amazon \\.weline-cart-shell__line-option-swatch-btn\\s*\\{/',
+            $css,
+        );
+        self::assertMatchesRegularExpression(
+            '/\\.weline-cart-shell--amazon \\.weline-cart-shell__swatch-preview\\s*\\{/',
             $css,
         );
     }

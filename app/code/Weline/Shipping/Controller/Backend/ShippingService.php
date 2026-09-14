@@ -125,4 +125,68 @@ class ShippingService extends BackendController
 
         return $this->redirect('shipping/backend/shippingservice/index', $this->shippingScopeQuery($target));
     }
+
+    #[Acl('Weline_Shipping::shipping_service_save', '更新贸易术语', 'save', '更新配送航线 Incoterm')]
+    public function saveIncoterm()
+    {
+        $target = $this->assignShippingWorkScope(true);
+        try {
+            if (!$this->request->isPost()) {
+                throw new \InvalidArgumentException((string)__('仅允许 POST 请求。'));
+            }
+            $post = (array)$this->request->getPost();
+            $post['scope_type'] = $target['scope_type'];
+            $post['scope_id'] = $target['scope_id'];
+            $post['target_scope'] = $target['storage_scope'];
+            $this->adminService->updateShippingServiceIncoterm($post);
+            $this->getMessageManager()->addSuccess(__('贸易术语已更新。'));
+        } catch (\Throwable $throwable) {
+            $this->getMessageManager()->addError($throwable->getMessage());
+        }
+
+        return $this->redirect('shipping/backend/shippingservice/index', $this->shippingScopeQuery($target));
+    }
+
+    #[Acl('Weline_Shipping::shipping_service_save', '绑定仓发货地址', 'save', '绑定仓库与发货地址')]
+    public function bindWarehouseOrigin()
+    {
+        $target = $this->assignShippingWorkScope(true);
+        try {
+            if (!$this->request->isPost()) {
+                throw new \InvalidArgumentException((string)__('仅允许 POST 请求。'));
+            }
+            $websiteId = (int)$this->request->getPost('website_id');
+            $warehouseId = (int)$this->request->getPost('warehouse_id');
+            $addressId = (int)$this->request->getPost('shipping_address_id');
+            /** @var \Weline\Shipping\Api\WarehouseShippingOriginInterface $origins */
+            $origins = $this->objectManager->getInstance(\Weline\Shipping\Api\WarehouseShippingOriginInterface::class);
+            $origins->bind($websiteId, $warehouseId, $addressId, true);
+            $this->getMessageManager()->addSuccess(__('仓与发货地址已绑定。'));
+        } catch (\Throwable $throwable) {
+            $this->getMessageManager()->addError($throwable->getMessage());
+        }
+
+        return $this->redirect('shipping/backend/shippingservice/index', $this->shippingScopeQuery($target));
+    }
+
+    #[Acl('Weline_Shipping::shipping_service_save', '复制默认站航线', 'save', '复制默认站航线到发货锚点')]
+    public function copyDefaultLanes()
+    {
+        $target = $this->assignShippingWorkScope(true);
+        try {
+            if (!$this->request->isPost()) {
+                throw new \InvalidArgumentException((string)__('仅允许 POST 请求。'));
+            }
+            $websiteId = (int)$this->request->getPost('website_id');
+            $addressId = (int)$this->request->getPost('shipping_address_id');
+            /** @var \Weline\Shipping\Service\WarehouseLaneCopyService $copier */
+            $copier = $this->objectManager->getInstance(\Weline\Shipping\Service\WarehouseLaneCopyService::class);
+            $n = $copier->copyDefaultLanesToOrigin($websiteId, $addressId);
+            $this->getMessageManager()->addSuccess(__('已复制 %{1} 条默认站航线到目标发货地址。', [$n]));
+        } catch (\Throwable $throwable) {
+            $this->getMessageManager()->addError($throwable->getMessage());
+        }
+
+        return $this->redirect('shipping/backend/shippingservice/index', $this->shippingScopeQuery($target));
+    }
 }

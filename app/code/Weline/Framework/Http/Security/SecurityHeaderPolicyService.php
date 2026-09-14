@@ -44,7 +44,10 @@ final class SecurityHeaderPolicyService
         $moduleFragment = $this->moduleCspFragment();
         if ($moduleFragment !== '') {
             $cspBase = $this->cspNormalizer->union($cspBase, $moduleFragment);
-            $reportBase = $this->cspNormalizer->union($reportBase, $moduleFragment);
+            // Report-Only 关闭（空）时不要被模块 fragment 重新撑开，否则会与强制 CSP 重复占头。
+            if ($reportBase !== '') {
+                $reportBase = $this->cspNormalizer->union($reportBase, $moduleFragment);
+            }
         }
 
         return [
@@ -128,7 +131,9 @@ final class SecurityHeaderPolicyService
             );
         if ($floor !== '') {
             $csp = $this->cspNormalizer->union($csp, $floor);
-            $report = $this->cspNormalizer->union($report, $floor);
+            if ($report !== '') {
+                $report = $this->cspNormalizer->union($report, $floor);
+            }
         }
 
         return [
@@ -174,10 +179,19 @@ final class SecurityHeaderPolicyService
      * DEV/DEBUG 时若 Env `security.headers.csp_developer_tooling` 非空，则 union 进当次响应；
      * 不进入 baselineFromEnv / appDefaultCsp / LKG。
      *
+     * CSP 交付：
+     * - `csp_delivery=meta`（默认）：不把大 CSP 写入 HTTP 头，改由 HTML meta（见 ensureDocumentCspMeta）
+     * - `csp_delivery=header`：写入 Content-Security-Policy；与强制 CSP 相同的 Report-Only 会被省略
+     * - `$includeDocumentCsp=false`：API/REST 等非文档响应跳过 CSP 头
+     *
      * @param bool|null $developerToolingEnabled null = 按 DEV||DEBUG 自动检测；单测可显式传入
      * @return array<string, string>
      */
-    public function resolveCurrentResponseHeaders(?string $requestOrigin = null, ?bool $developerToolingEnabled = null): array
+    public function resolveCurrentResponseHeaders(
+        ?string $requestOrigin = null,
+        ?bool $developerToolingEnabled = null,
+        ?bool $includeDocumentCsp = null,
+    ): array
     {
         $policy = $this->withDeveloperToolingCsp(
             $this->resolveCurrentEffective(),
@@ -189,11 +203,18 @@ final class SecurityHeaderPolicyService
             'X-XSS-Protection' => '1; mode=block',
         ];
 
-        if ($policy['csp_report_only'] !== '') {
-            $headers['Content-Security-Policy-Report-Only'] = $policy['csp_report_only'];
-        }
-        if ($policy['csp'] !== '') {
-            $headers['Content-Security-Policy'] = $policy['csp'];
+        $includeCsp = $includeDocumentCsp ?? true;
+        $delivery = $this->cspDelivery();
+        if ($includeCsp && $delivery === SecurityHeaderDefaults::CSP_DELIVERY_HEADER) {
+            $csp = $this->cspNormalizer->compactForWire((string)$policy['csp']);
+            $report = $this->cspNormalizer->compactForWire((string)$policy['csp_report_only']);
+            // 与强制 CSP 完全相同时省略 Report-Only，避免响应头体积翻倍。
+            if ($report !== '' && $report !== $csp) {
+                $headers['Content-Security-Policy-Report-Only'] = $report;
+            }
+            if ($csp !== '') {
+                $headers['Content-Security-Policy'] = $csp;
+            }
         }
 
         $cors = \trim((string)$policy['cors_origins']);
@@ -211,6 +232,84 @@ final class SecurityHeaderPolicyService
         }
 
         return $headers;
+    }
+
+    /**
+     * Current CSP delivery mode (`header` | `meta`).
+     */
+    public function cspDelivery(): string
+    {
+        $configured = \strtolower(\trim((string)Env::get(
+            'security.headers.csp_delivery',
+            SecurityHeaderDefaults::CSP_DELIVERY
+        )));
+        if ($configured === SecurityHeaderDefaults::CSP_DELIVERY_HEADER) {
+            return SecurityHeaderDefaults::CSP_DELIVERY_HEADER;
+        }
+
+        return SecurityHeaderDefaults::CSP_DELIVERY_META;
+    }
+
+    public function isMetaDelivery(): bool
+    {
+        return $this->cspDelivery() === SecurityHeaderDefaults::CSP_DELIVERY_META;
+    }
+
+    /**
+     * Wire-ready enforcing CSP (compacted), including DEV tooling when enabled.
+     */
+    public function resolveCurrentDocumentCsp(?bool $developerToolingEnabled = null): string
+    {
+        $policy = $this->withDeveloperToolingCsp(
+            $this->resolveCurrentEffective(),
+            $developerToolingEnabled ?? self::isDeveloperToolingEnabled(),
+        );
+
+        return $this->cspNormalizer->compactForWire((string)$policy['csp']);
+    }
+
+    /**
+     * FPC formatted-cache variant material: must include document CSP even in meta
+     * delivery, otherwise policy changes would not bust precompressed bodies.
+     */
+    public function securityVariantMaterial(?bool $developerToolingEnabled = null): string
+    {
+        $headers = $this->resolveCurrentResponseHeaders(null, $developerToolingEnabled);
+        \ksort($headers, \SORT_STRING);
+
+        return \serialize($headers) . "\0" . $this->resolveCurrentDocumentCsp($developerToolingEnabled);
+    }
+
+    /**
+     * Ensure HTML carries a single Weline CSP meta tag (meta delivery).
+     * Idempotent: replaces any prior `data-weline-csp="1"` meta.
+     */
+    public function ensureDocumentCspMeta(string $html): string
+    {
+        if (!$this->isMetaDelivery() || $html === '') {
+            return $html;
+        }
+        $csp = $this->resolveCurrentDocumentCsp();
+        if ($csp === '') {
+            return $html;
+        }
+
+        $html = \preg_replace(
+            '/<meta\b[^>]*\bdata-weline-csp\s*=\s*(["\'])1\1[^>]*>\s*/i',
+            '',
+            $html
+        ) ?? $html;
+
+        $content = \htmlspecialchars($csp, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
+        $tag = '<meta http-equiv="Content-Security-Policy" content="' . $content . '" data-weline-csp="1">';
+
+        if (\preg_match('/<head\b[^>]*>/i', $html, $match, \PREG_OFFSET_CAPTURE) === 1) {
+            $insertAt = (int)$match[0][1] + \strlen($match[0][0]);
+
+            return \substr($html, 0, $insertAt) . "\n" . $tag . \substr($html, $insertAt);
+        }
+
+        return $tag . "\n" . $html;
     }
 
     /**

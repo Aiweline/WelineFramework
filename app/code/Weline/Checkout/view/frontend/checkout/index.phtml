@@ -152,14 +152,6 @@ $copy = [
                         class="weline-checkout__credit-slot"
                         weline-code="checkout.checkout.credit_slot">
                 </w:slot>
-                <w:slot id="checkout-summary-help-pay"
-                        name="<?= __('结账帮我付') ?>"
-                        accept="checkout-summary-help-pay,help-pay,helppay"
-                        multiple="false"
-                        position="content"
-                        class="weline-checkout__help-pay-slot"
-                        weline-code="checkout.checkout.help_pay_slot">
-                </w:slot>
             </div>
             <link rel="stylesheet" href="@static(Weline_Theme::css/widgets/mini-cart-drawer.css)?v=20260907-price-header-layout">
             <div class="weline-checkout__totals weline-checkout__totals--tail" role="list">
@@ -176,6 +168,10 @@ $copy = [
                     <span><?= __('批发信用抵扣') ?></span>
                     <strong data-credit-amount="">0.00</strong>
                 </div>
+                <div role="listitem" data-checkout-cod-fee-row hidden>
+                    <span><?= __('货到付款手续费') ?></span>
+                    <strong data-cod-fee-amount="">0.00</strong>
+                </div>
                 <div class="weline-checkout__grand" role="listitem">
                     <span data-grand-total-label><?= __('应付合计') ?></span>
                     <strong data-grand-total="">0.00</strong>
@@ -184,6 +180,14 @@ $copy = [
             <button class="weline-checkout__submit" type="submit" data-submit>
                 <?= htmlspecialchars($copy['submit'], ENT_QUOTES, 'UTF-8') ?>
             </button>
+            <w:slot id="checkout-summary-help-pay"
+                    name="<?= __('结账帮我付') ?>"
+                    accept="checkout-summary-help-pay,help-pay,helppay"
+                    multiple="false"
+                    position="content"
+                    class="weline-checkout__help-pay-slot"
+                    weline-code="checkout.checkout.help_pay_slot">
+            </w:slot>
             <w:hook>Weline_Checkout::frontend::layouts::checkout::place-order-button-after</w:hook>
             <w:hook>Weline_Checkout::frontend::layouts::checkout::summary-after</w:hook>
         </aside>
@@ -457,6 +461,22 @@ $copy = [
         display: grid;
         gap: 10px;
         margin-top: 16px;
+    }
+    .weline-checkout__method-alert {
+        margin: 0;
+    }
+    .weline-checkout__method-alert .w-alert__title {
+        color: inherit;
+    }
+    .weline-checkout__method-alert-body {
+        margin: 0;
+        color: inherit;
+        font-size: 0.95em;
+        line-height: 1.45;
+    }
+    .weline-checkout__panel.is-method-blocked {
+        border-color: var(--weline-theme-warning, var(--color-warning));
+        box-shadow: 0 0 0 1px var(--weline-theme-warning-border, var(--weline-theme-warning));
     }
     .weline-checkout__shipping-address-slot {
         display: block;
@@ -892,6 +912,11 @@ $copy = [
         opacity: .55;
         cursor: not-allowed;
     }
+    /* 帮我付：提交订单下方弱入口，不进 extras 页签、不抢主 CTA */
+    .weline-checkout__help-pay-slot {
+        margin-block-start: var(--weline-space-3, var(--space-3));
+        text-align: center;
+    }
     @media (max-width: 860px) {
         .weline-checkout {
             width: min(100%, var(--weline-layout-content-max-width));
@@ -947,6 +972,8 @@ $copy = [
     const depositAmountNode = root.querySelector('[data-deposit-amount]');
     const creditRowNode = root.querySelector('[data-checkout-credit-row]');
     const creditAmountNode = root.querySelector('[data-credit-amount]');
+    const codFeeRowNode = root.querySelector('[data-checkout-cod-fee-row]');
+    const codFeeAmountNode = root.querySelector('[data-cod-fee-amount]');
     const grandTotalLabelNode = root.querySelector('[data-grand-total-label]');
     const grandTotalNode = root.querySelector('[data-grand-total]');
     const grandTotalLabelDefault = grandTotalLabelNode
@@ -970,6 +997,73 @@ $copy = [
             requires_guest_email: true,
         },
     };
+    // Mirror mini-cart: keep Marketing coupon preview across getData races / worker lag.
+    let pendingDiscountPreview = null;
+    let pendingCouponCode = '';
+
+    function mergeDiscountPreviewIntoCart(cart, preview, clearDiscount) {
+        const next = cart && typeof cart === 'object' ? Object.assign({}, cart) : {};
+        if (clearDiscount) {
+            delete next.discount_preview;
+            return next;
+        }
+        if (preview && typeof preview === 'object' && Number(preview.amount_minor || 0) > 0) {
+            next.discount_preview = preview;
+        }
+        return next;
+    }
+
+    function resolveEventDiscountPreview(detail) {
+        if (!detail || typeof detail !== 'object') {
+            return null;
+        }
+        if (detail.clear_discount === true) {
+            return null;
+        }
+        if (detail.discount_preview && typeof detail.discount_preview === 'object'
+            && Number(detail.discount_preview.amount_minor || 0) > 0) {
+            return detail.discount_preview;
+        }
+        return null;
+    }
+
+    function rememberPendingDiscount(detail) {
+        if (!detail || typeof detail !== 'object') {
+            return;
+        }
+        if (detail.clear_discount === true) {
+            pendingDiscountPreview = null;
+            pendingCouponCode = '';
+            return;
+        }
+        const preview = resolveEventDiscountPreview(detail);
+        if (preview) {
+            pendingDiscountPreview = preview;
+            const code = String(preview.coupon_code || detail.coupon_code || '').trim().toUpperCase();
+            if (code) {
+                pendingCouponCode = code;
+            }
+            return;
+        }
+        const code = String(detail.coupon_code || '').trim().toUpperCase();
+        if (code) {
+            pendingCouponCode = code;
+        }
+    }
+
+    function applyPendingDiscountToCart(cart) {
+        let next = cart && typeof cart === 'object' ? cart : {};
+        if ((!next.discount_preview || Number(next.discount_preview.amount_minor || 0) <= 0)
+            && pendingDiscountPreview) {
+            next = mergeDiscountPreviewIntoCart(next, pendingDiscountPreview, false);
+        } else if (next.discount_preview && Number(next.discount_preview.amount_minor || 0) > 0) {
+            pendingDiscountPreview = next.discount_preview;
+            if (next.discount_preview.coupon_code) {
+                pendingCouponCode = String(next.discount_preview.coupon_code).trim().toUpperCase();
+            }
+        }
+        return next;
+    }
 
     function text(value) {
         return value == null ? '' : String(value);
@@ -1001,6 +1095,35 @@ $copy = [
     }
 
     function formAddress() {
+        const widget = window.WelineShippingCheckoutAddress;
+        if (widget && typeof widget.resolveQuoteAddress === 'function') {
+            const resolved = widget.resolveQuoteAddress();
+            if (resolved && typeof resolved === 'object' && text(resolved.country_code).trim()) {
+                return {
+                    name: text(resolved.name).trim(),
+                    phone: text(resolved.phone).trim(),
+                    email: text(resolved.email).trim(),
+                    country_code: text(resolved.country_code).trim().toUpperCase(),
+                    country: text(resolved.country).trim(),
+                    province: text(resolved.province).trim(),
+                    province_code: text(resolved.province_code).trim(),
+                    province_region_id: text(resolved.province_region_id).trim(),
+                    city: text(resolved.city).trim(),
+                    city_code: text(resolved.city_code).trim(),
+                    city_region_id: text(resolved.city_region_id).trim(),
+                    district: text(resolved.district).trim(),
+                    district_code: text(resolved.district_code).trim(),
+                    district_region_id: text(resolved.district_region_id).trim(),
+                    street: text(resolved.street || resolved.address1).trim(),
+                    street_id: text(resolved.street_id).trim(),
+                    street_code: text(resolved.street_code).trim(),
+                    address1: text(resolved.address1 || resolved.street).trim(),
+                    postal_code: text(resolved.postal_code).trim(),
+                    address_id: text(resolved.address_id || resolved.shipping_address_id).trim(),
+                    shipping_address_id: text(resolved.shipping_address_id || resolved.address_id).trim(),
+                };
+            }
+        }
         const data = new FormData(form);
         return {
             name: text(data.get('name')).trim(),
@@ -1022,6 +1145,8 @@ $copy = [
             street_code: text(data.get('street_code')).trim(),
             address1: text(data.get('address1') || data.get('street')).trim(),
             postal_code: text(data.get('postal_code')).trim(),
+            address_id: text(data.get('shipping_address_id') || data.get('address_id')).trim(),
+            shipping_address_id: text(data.get('shipping_address_id') || data.get('address_id')).trim(),
         };
     }
 
@@ -1029,15 +1154,19 @@ $copy = [
         const data = new FormData(form);
         const sameBox = form.querySelector('[data-billing-same]');
         const same = sameBox ? !!sameBox.checked : true;
+        const shipping = shippingAddress || formAddress();
         if (same) {
-            return Object.assign({}, shippingAddress || formAddress());
+            return Object.assign({}, shipping);
         }
+        const billingCountry = text(data.get('billing_country_code')).trim().toUpperCase()
+            || text(shipping.country_code).trim().toUpperCase()
+            || '';
         return {
-            name: text(data.get('billing_name')).trim(),
-            phone: text(data.get('billing_phone')).trim(),
-            email: text(data.get('billing_email')).trim(),
-            country_code: text(data.get('billing_country_code')).trim().toUpperCase() || 'CN',
-            country: text(data.get('billing_country')).trim(),
+            name: text(data.get('billing_name')).trim() || text(shipping.name).trim(),
+            phone: text(data.get('billing_phone')).trim() || text(shipping.phone).trim(),
+            email: text(data.get('billing_email')).trim() || text(shipping.email).trim(),
+            country_code: billingCountry,
+            country: text(data.get('billing_country')).trim() || text(shipping.country).trim(),
             province: text(data.get('billing_province')).trim(),
             province_code: text(data.get('billing_province_code')).trim(),
             province_region_id: text(data.get('billing_province_region_id')).trim(),
@@ -1397,6 +1526,21 @@ $copy = [
         return method ? Number(method.amount || method.fee || 0) : 0;
     }
 
+    function selectedCodFeeAmount() {
+        const code = selectedValue('payment_method');
+        const method = checkoutState.paymentMethods.find(function (entry) {
+            return entry && entry.code === code;
+        });
+        if (!method) {
+            return 0;
+        }
+        const minor = Number(method.cod_fee_amount_minor || 0);
+        if (minor > 0) {
+            return minor / 100;
+        }
+        return Number(method.cod_fee || method.fee_major || 0) || 0;
+    }
+
     /**
      * P2E-003：只注入服务端 HTML，禁止 createElement 拼商品/选项 DOM。
      */
@@ -1641,6 +1785,16 @@ $copy = [
                 setText(creditAmountNode, money(0));
             }
         }
+        const codFee = tob ? 0 : selectedCodFeeAmount();
+        if (codFeeRowNode && codFeeAmountNode) {
+            if (codFee > 0) {
+                codFeeRowNode.hidden = false;
+                setText(codFeeAmountNode, money(codFee));
+            } else {
+                codFeeRowNode.hidden = true;
+                setText(codFeeAmountNode, money(0));
+            }
+        }
         if (grandTotalLabelNode) {
             setText(
                 grandTotalLabelNode,
@@ -1649,7 +1803,7 @@ $copy = [
         }
         const payable = tob
             ? Math.max(0, cashDepositMajor == null ? depositMajor : cashDepositMajor)
-            : Math.max(0, subtotal + shipping - discount);
+            : Math.max(0, subtotal + shipping - discount + codFee);
         setText(grandTotalNode, money(payable));
         syncLifecycleDomFields({ amount: payable.toFixed(2) });
     }
@@ -1663,7 +1817,7 @@ $copy = [
         }
         applyDefaultShippingAddress(data.default_shipping_address);
         checkoutState.currency = text(data.currency || data.cart && data.cart.currency || 'CNY') || 'CNY';
-        checkoutState.cart = data.cart || {};
+        checkoutState.cart = applyPendingDiscountToCart(data.cart || {});
         checkoutState.shippingMethods = Array.isArray(data.shipping_methods) ? data.shipping_methods : [];
         checkoutState.paymentMethods = Array.isArray(data.payment_methods) ? data.payment_methods : [];
         checkoutState.identity = data.identity || checkoutState.identity || {
@@ -1722,6 +1876,7 @@ $copy = [
         applyServerHtml(itemsBox, data.items_html);
         applyServerHtml(shippingBox, data.shipping_methods_html);
         applyServerHtml(paymentBox, data.payment_methods_html);
+        syncMethodBlockPanels();
         renderTotals();
         if (submitButton) {
             submitButton.disabled = hangPurpose
@@ -1737,8 +1892,55 @@ $copy = [
         } else if (checkoutBlocked) {
             setMessage(blockingMessage || '<?= __('购物车中有不可结算的商品，请返回购物车移除后重试') ?>', 'error');
         } else {
-            setMessage('<?= __('请确认收货信息、配送方式和支付方式。') ?>', 'success');
+            const methodBlockMessage = readMethodBlockMessage();
+            if (methodBlockMessage) {
+                // Surface shipping/payment unavailability in the page notice so users
+                // do not miss the in-panel alert and wonder why submit stays disabled.
+                setMessage(methodBlockMessage, 'error');
+            } else {
+                setMessage('<?= __('请确认收货信息、配送方式和支付方式。') ?>', 'success');
+            }
         }
+    }
+
+    function syncMethodBlockPanels() {
+        document.querySelectorAll('.weline-checkout__panel').forEach(function (panel) {
+            panel.classList.remove('is-method-blocked');
+        });
+        if (shippingBox) {
+            const shippingPanel = shippingBox.closest('.weline-checkout__panel');
+            if (shippingPanel) {
+                shippingPanel.classList.toggle(
+                    'is-method-blocked',
+                    Boolean(shippingBox.querySelector('[data-checkout-method-empty="shipping_method"]'))
+                );
+            }
+        }
+        if (paymentBox) {
+            const paymentPanel = paymentBox.closest('.weline-checkout__panel');
+            if (paymentPanel) {
+                paymentPanel.classList.toggle(
+                    'is-method-blocked',
+                    Boolean(paymentBox.querySelector('[data-checkout-method-empty="payment_method"]'))
+                );
+            }
+        }
+    }
+
+    function readMethodBlockMessage() {
+        const shippingAlert = shippingBox
+            ? shippingBox.querySelector('[data-checkout-method-empty="shipping_method"] .weline-checkout__method-alert-body')
+            : null;
+        if (shippingAlert && text(shippingAlert.textContent).trim()) {
+            return text(shippingAlert.textContent).trim();
+        }
+        const paymentAlert = paymentBox
+            ? paymentBox.querySelector('[data-checkout-method-empty="payment_method"] .weline-checkout__method-alert-body')
+            : null;
+        if (paymentAlert && text(paymentAlert.textContent).trim()) {
+            return text(paymentAlert.textContent).trim();
+        }
+        return '';
     }
 
     async function getApi() {
@@ -1755,12 +1957,16 @@ $copy = [
     async function loadCheckout() {
         const api = await getApi();
         let sellingMode = checkoutCartType();
-        const data = await api.getData({
+        const getDataParams = {
             shipping_address: formAddress(),
             guest_token: await ensureGuestToken(),
             cart_type: sellingMode,
             selling_mode: sellingMode,
-        });
+        };
+        if (pendingCouponCode) {
+            getDataParams.coupon_code = pendingCouponCode;
+        }
+        const data = await api.getData(getDataParams);
         if (root && data && data.cart && data.cart.cart_type) {
             root.setAttribute('data-cart-type', String(data.cart.cart_type).toLowerCase());
         }
@@ -2040,6 +2246,10 @@ $copy = [
                 renderTotals();
                 return;
             }
+            if (event.target && event.target.name === 'payment_method') {
+                renderTotals();
+                return;
+            }
             if (event.target && ['country_code', 'province', 'city', 'district', 'postal_code'].indexOf(event.target.name) !== -1) {
                 scheduleReload();
             }
@@ -2131,6 +2341,9 @@ $copy = [
     if (shippingBox) {
         shippingBox.addEventListener('change', renderTotals);
     }
+    if (paymentBox) {
+        paymentBox.addEventListener('change', renderTotals);
+    }
 
     // tob 信用勾选/输入变更后刷新摘要抵扣行与本次应付定金。
     window.addEventListener('weline:b2b-credit-changed', function () {
@@ -2147,10 +2360,26 @@ $copy = [
     // Soft-reload the checkout summary so line items/totals stay matched; never
     // swallow failures (stale summary after qty/remove is worse than a hard refresh).
     // Ignore self-emitted checkout-empty invalidation or loadCheckout↔cart-updated storms.
+    // Coupon apply may race getData before Marketing session sticks — merge discount_preview
+    // immediately (same as mini-cart pendingDiscountPreview) then reload when requested.
     window.addEventListener('weline:cart-updated', function (event) {
         const detail = event && event.detail && typeof event.detail === 'object' ? event.detail : {};
         const source = String(detail.source || detail.reason || '').trim();
         if (source === 'checkout-empty') {
+            return;
+        }
+        rememberPendingDiscount(detail);
+        if (detail.clear_discount === true) {
+            checkoutState.cart = mergeDiscountPreviewIntoCart(checkoutState.cart, null, true);
+            renderTotals();
+        } else {
+            const preview = resolveEventDiscountPreview(detail);
+            if (preview) {
+                checkoutState.cart = mergeDiscountPreviewIntoCart(checkoutState.cart, preview, false);
+                renderTotals();
+            }
+        }
+        if (detail.refresh === false) {
             return;
         }
         scheduleReload({ hardOnFailure: true });

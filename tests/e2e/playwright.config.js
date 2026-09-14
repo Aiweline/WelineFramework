@@ -337,8 +337,10 @@ module.exports = defineConfig({
   use: {
     baseURL: process.env.PLAYWRIGHT_DISABLE_PROXY === '1' ? runtimeInfo.runtime.target_origin : baseURL,
     ignoreHTTPSErrors: true,
-    // CI 默认 headless；本地默认 headed。无显示环境可设 PLAYWRIGHT_HEADLESS=1。
-    headless: Boolean(process.env.CI) || process.env.PLAYWRIGHT_HEADLESS === '1',
+    // 默认 headless，避免本机/Agent 跑 e2e 时弹窗；调试可设 PLAYWRIGHT_HEADED=1 或 CLI --headed。
+    headless: process.env.PLAYWRIGHT_HEADED === '1'
+      ? false
+      : process.env.PLAYWRIGHT_HEADLESS !== '0',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure'
   },

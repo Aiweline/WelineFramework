@@ -4,6 +4,7 @@
 /** @var \Weline\Marketing\Model\Coupon\Coupon|null $coupon */
 $rules = $rules ?? [];
 $coupon = $coupon ?? null;
+$baseCurrency = strtoupper(trim((string)($this->getData('base_currency') ?? 'CNY'))) ?: 'CNY';
 $isEdit = $coupon !== null && (int)$coupon->getId() > 0;
 $escapeHtml = static fn(mixed $value): string => htmlspecialchars(
     (string)$value,
@@ -20,78 +21,257 @@ $value = static function (string $field, mixed $default = '') use ($coupon): str
 $selected = static function (string $field, string $option, string $default = '') use ($value): string {
     return $value($field, $default) === $option ? ' selected' : '';
 };
+$currentType = $value('type', 'percentage');
+$needsAmountUnit = $currentType === 'fixed_amount';
+$needsPercentUnit = $currentType === 'percentage';
+$needsDiscountValue = !in_array($currentType, ['free_shipping', 'gift'], true);
+$couponSource = $this->getData('coupon_source');
+if (!is_array($couponSource)) {
+    $couponSource = [
+        'label' => (string)__('后台手工'),
+        'tone' => 'neutral',
+        'source_type' => 'manual',
+    ];
+}
 ?>
-<div class="w-grid" data-testid="marketing-coupon-form">
-    <div style="--w-span:12;">
-        <div class="w-cluster" data-align="center" data-justify="end" style="--w-mb:var(--weline-space-4);">
-            <a class="w-button" href="@backend-url{'marketing/backend/coupon/index'}" data-tone="neutral">
-                <?= __('返回列表') ?>
-            </a>
-        </div>
-        <div class="w-card">
-            <div class="w-card__body">
-                <w:form method="post" action="@backend-url{'marketing/backend/coupon/save'}">
-                    <?php if ($isEdit): ?>
-                        <input type="hidden" name="id" value="<?= (int)$coupon->getId() ?>">
-                    <?php endif; ?>
+<link rel="stylesheet" href="@static(Weline_Marketing::css/coupon-form.css)">
+
+<div
+    class="w-stack marketing-coupon-form"
+    data-testid="marketing-coupon-form"
+    data-weline-load="marketingCouponForm"
+    data-base-currency="<?= $escapeHtml($baseCurrency) ?>"
+>
+    <div class="w-cluster" data-align="center" data-justify="end">
+        <a class="w-button" href="@backend-url{'marketing/backend/coupon/index'}" data-tone="neutral">
+            <?= __('返回列表') ?>
+        </a>
+    </div>
+
+    <div class="w-alert" data-tone="info" data-testid="marketing-coupon-base-currency-hint">
+        <span><?= __('固定金额与最低订单金额一律按站点基准货币 %{1} 录入；结账时按汇率换算到顾客货币。勿把 USD 10 与 CNY 10 当作同一数字。', $baseCurrency) ?></span>
+    </div>
+
+    <div class="w-card">
+        <div class="w-card__body">
+            <w:form method="post" action="@backend-url{'marketing/backend/coupon/save'}" class="w-stack" style="--w-gap:var(--weline-space-6);">
+                <?php if ($isEdit): ?>
+                    <input type="hidden" name="id" value="<?= (int)$coupon->getId() ?>">
+                <?php endif; ?>
+
+                <section class="w-stack marketing-coupon-form__section" style="--w-gap:var(--weline-space-3);" data-testid="marketing-coupon-section-basics">
+                    <div class="w-cluster" data-align="center" data-justify="between">
+                        <h2 class="w-heading marketing-coupon-form__section-title" data-level="5"><?= __('基础信息') ?></h2>
+                        <span
+                            class="w-badge"
+                            data-tone="<?= $escapeHtml(($couponSource['tone'] ?? '') === 'info' ? 'info' : 'secondary') ?>"
+                            data-testid="marketing-coupon-source"
+                        ><?= $escapeHtml((string)($couponSource['label'] ?? __('后台手工'))) ?></span>
+                    </div>
                     <div class="w-grid">
-                        <div style="--w-span-md:6;--w-mb:var(--weline-space-4);">
-                            <label class="w-field__label" for="marketing-coupon-rule"><?= __('营销规则') ?></label>
-                            <select id="marketing-coupon-rule" data-testid="marketing-coupon-rule" class="w-select" name="rule_id" required>
-                                <option value=""><?= __('请选择') ?></option>
-                                <?php foreach ($rules as $rule): ?>
-                                    <option value="<?= (int)$rule->getId() ?>"<?= $selected('rule_id', (string)(int)$rule->getId()) ?>>
-                                        <?= $escapeHtml($rule->getData('name')) ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
+                        <div style="--w-span-md:5;">
+                            <div class="w-field" data-label-layout="stacked">
+                                <label class="w-field__label" for="marketing-coupon-rule"><?= __('营销规则') ?></label>
+                                <select id="marketing-coupon-rule" data-testid="marketing-coupon-rule" class="w-select" name="rule_id" required>
+                                    <option value=""><?= __('请选择') ?></option>
+                                    <?php foreach ($rules as $rule): ?>
+                                        <option value="<?= (int)$rule->getId() ?>"<?= $selected('rule_id', (string)(int)$rule->getId()) ?>>
+                                            <?= $escapeHtml($rule->getData('name')) ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
                         </div>
-                        <div style="--w-span-md:6;--w-mb:var(--weline-space-4);">
-                            <label class="w-field__label" for="marketing-coupon-code"><?= __('优惠券代码') ?></label>
-                            <input id="marketing-coupon-code" data-testid="marketing-coupon-code" class="w-input" type="text" name="code" required maxlength="100" value="<?= $escapeHtml($value('code')) ?>">
+                        <div style="--w-span-md:4;">
+                            <div class="w-field" data-label-layout="stacked">
+                                <label class="w-field__label" for="marketing-coupon-code"><?= __('优惠券代码') ?></label>
+                                <input
+                                    id="marketing-coupon-code"
+                                    data-testid="marketing-coupon-code"
+                                    class="w-input"
+                                    type="text"
+                                    name="code"
+                                    required
+                                    maxlength="100"
+                                    autocomplete="off"
+                                    placeholder="<?= $escapeHtml(__('例如 SAVE10')) ?>"
+                                    value="<?= $escapeHtml($value('code')) ?>"
+                                >
+                                <p class="w-field__help"><?= __('顾客结账时输入的代码，建议大写字母与数字。') ?></p>
+                            </div>
+                        </div>
+                        <div style="--w-span-md:3;">
+                            <div class="w-field" data-label-layout="stacked">
+                                <label class="w-field__label" for="marketing-coupon-status"><?= __('状态') ?></label>
+                                <select id="marketing-coupon-status" class="w-select" name="status">
+                                    <option value="active"<?= $selected('status', 'active', 'active') ?>><?= __('启用') ?></option>
+                                    <option value="inactive"<?= $selected('status', 'inactive') ?>><?= __('禁用') ?></option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="w-stack marketing-coupon-form__section" style="--w-gap:var(--weline-space-3);" data-testid="marketing-coupon-section-discount">
+                    <div class="w-cluster" data-align="center" data-justify="between">
+                        <h2 class="w-heading marketing-coupon-form__section-title" data-level="5"><?= __('优惠设置') ?></h2>
+                        <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);">
+                            <span class="w-text" data-tone="muted" data-size="sm"><?= __('站点基准货币') ?></span>
+                            <input
+                                id="marketing-coupon-base-currency"
+                                class="w-input marketing-coupon-form__currency-badge"
+                                type="text"
+                                value="<?= $escapeHtml($baseCurrency) ?>"
+                                readonly
+                                data-testid="marketing-coupon-base-currency"
+                                aria-readonly="true"
+                                aria-label="<?= $escapeHtml(__('站点基准货币')) ?>"
+                            >
                         </div>
                     </div>
                     <div class="w-grid">
-                        <div style="--w-span-md:4;--w-mb:var(--weline-space-4);">
-                            <label class="w-field__label" for="marketing-coupon-type"><?= __('优惠类型') ?></label>
-                            <select id="marketing-coupon-type" data-testid="marketing-coupon-type" class="w-select" name="type" required>
-                                <option value="percentage"<?= $selected('type', 'percentage', 'percentage') ?>><?= __('百分比折扣') ?></option>
-                                <option value="fixed_amount"<?= $selected('type', 'fixed_amount') ?>><?= __('固定金额') ?></option>
-                                <option value="free_shipping"<?= $selected('type', 'free_shipping') ?>><?= __('免运费') ?></option>
-                                <option value="gift"<?= $selected('type', 'gift') ?>><?= __('赠品') ?></option>
-                            </select>
+                        <div style="--w-span-md:4;">
+                            <div class="w-field" data-label-layout="stacked">
+                                <label class="w-field__label" for="marketing-coupon-type"><?= __('优惠类型') ?></label>
+                                <select id="marketing-coupon-type" data-testid="marketing-coupon-type" class="w-select" name="type" required>
+                                    <option value="percentage"<?= $selected('type', 'percentage', 'percentage') ?>><?= __('百分比折扣') ?></option>
+                                    <option value="fixed_amount"<?= $selected('type', 'fixed_amount') ?>><?= __('固定金额') ?></option>
+                                    <option value="free_shipping"<?= $selected('type', 'free_shipping') ?>><?= __('免运费') ?></option>
+                                    <option value="gift"<?= $selected('type', 'gift') ?>><?= __('赠品') ?></option>
+                                </select>
+                            </div>
                         </div>
-                        <div style="--w-span-md:4;--w-mb:var(--weline-space-4);">
-                            <label class="w-field__label" for="marketing-coupon-value"><?= __('折扣值') ?></label>
-                            <input id="marketing-coupon-value" data-testid="marketing-coupon-value" class="w-input" type="number" name="discount_value" min="0" step="0.0001" value="<?= $escapeHtml($value('discount_value', '10')) ?>">
-                        </div>
-                        <div style="--w-span-md:4;--w-mb:var(--weline-space-4);">
-                            <label class="w-field__label" for="marketing-coupon-status"><?= __('状态') ?></label>
-                            <select id="marketing-coupon-status" class="w-select" name="status">
-                                <option value="active"<?= $selected('status', 'active', 'active') ?>><?= __('启用') ?></option>
-                                <option value="inactive"<?= $selected('status', 'inactive') ?>><?= __('禁用') ?></option>
-                            </select>
+                        <div
+                            style="--w-span-md:4;"
+                            class="marketing-coupon-form__value-wrap"
+                            data-testid="marketing-coupon-value-wrap"
+                            <?= $needsDiscountValue ? '' : 'hidden' ?>
+                        >
+                            <div class="w-field" data-label-layout="stacked">
+                                <label
+                                    class="w-field__label"
+                                    for="marketing-coupon-value"
+                                    data-role="discount-label"
+                                    data-label-percent="<?= $escapeHtml(__('折扣值（%）')) ?>"
+                                    data-label-fixed="<?= $escapeHtml(__('折扣值（基准货币 %{1}）', $baseCurrency)) ?>"
+                                    data-label-none="<?= $escapeHtml(__('折扣值')) ?>"
+                                >
+                                    <?php if ($needsAmountUnit): ?>
+                                        <?= __('折扣值（基准货币 %{1}）', $baseCurrency) ?>
+                                    <?php elseif ($needsPercentUnit): ?>
+                                        <?= __('折扣值（%）') ?>
+                                    <?php else: ?>
+                                        <?= __('折扣值') ?>
+                                    <?php endif; ?>
+                                </label>
+                                <div class="w-field__control">
+                                    <input
+                                        id="marketing-coupon-value"
+                                        data-testid="marketing-coupon-value"
+                                        class="w-input"
+                                        type="number"
+                                        name="discount_value"
+                                        min="0"
+                                        step="0.0001"
+                                        value="<?= $escapeHtml($value('discount_value', '10')) ?>"
+                                    >
+                                    <span
+                                        class="w-field__addon"
+                                        data-testid="marketing-coupon-value-unit-percent"
+                                        data-unit-for="percentage"
+                                        <?= $needsPercentUnit ? '' : 'hidden' ?>
+                                    >%</span>
+                                    <span
+                                        class="w-field__addon"
+                                        data-testid="marketing-coupon-value-unit"
+                                        data-unit-for="fixed_amount"
+                                        <?= $needsAmountUnit ? '' : 'hidden' ?>
+                                    ><?= $escapeHtml($baseCurrency) ?></span>
+                                </div>
+                                <p
+                                    class="w-field__help"
+                                    data-testid="marketing-coupon-value-help-percent"
+                                    data-help-for="percentage"
+                                    <?= $needsPercentUnit ? '' : 'hidden' ?>
+                                ><?= __('百分比折扣不带货币单位；例如 10 表示减免 10%。') ?></p>
+                                <p
+                                    class="w-field__help"
+                                    data-testid="marketing-coupon-value-help"
+                                    data-help-for="fixed_amount"
+                                    <?= $needsAmountUnit ? '' : 'hidden' ?>
+                                ><?= __('此数字按站点基准货币 %{1} 配置；结账时按汇率换算到顾客货币。', $baseCurrency) ?></p>
+                                <p
+                                    class="w-field__help"
+                                    data-testid="marketing-coupon-value-help-none"
+                                    data-help-for="none"
+                                    <?= $needsDiscountValue ? 'hidden' : '' ?>
+                                ><?= __('当前类型无需填写折扣数值。') ?></p>
+                            </div>
                         </div>
                     </div>
+                </section>
+
+                <section class="w-stack marketing-coupon-form__section" style="--w-gap:var(--weline-space-3);" data-testid="marketing-coupon-section-limits">
+                    <h2 class="w-heading marketing-coupon-form__section-title" data-level="5"><?= __('使用限制') ?></h2>
                     <div class="w-grid">
-                        <div style="--w-span-md:4;--w-mb:var(--weline-space-4);">
-                            <label class="w-field__label" for="marketing-coupon-minimum"><?= __('最低订单金额') ?></label>
-                            <input id="marketing-coupon-minimum" class="w-input" type="number" name="min_amount" min="0" step="0.0001" value="<?= $escapeHtml($value('min_amount', '0')) ?>">
+                        <div style="--w-span-md:4;">
+                            <div class="w-field" data-label-layout="stacked">
+                                <label class="w-field__label" for="marketing-coupon-minimum"><?= __('最低订单金额（基准货币 %{1}）', $baseCurrency) ?></label>
+                                <div class="w-field__control">
+                                    <input
+                                        id="marketing-coupon-minimum"
+                                        class="w-input"
+                                        type="number"
+                                        name="min_amount"
+                                        min="0"
+                                        step="0.0001"
+                                        value="<?= $escapeHtml($value('min_amount', '0')) ?>"
+                                        aria-describedby="marketing-coupon-minimum-help"
+                                    >
+                                    <span class="w-field__addon" aria-hidden="true"><?= $escapeHtml($baseCurrency) ?></span>
+                                </div>
+                                <p id="marketing-coupon-minimum-help" class="w-field__help" data-testid="marketing-coupon-minimum-help">
+                                    <?= __('此金额按站点基准货币 %{1} 配置门槛；结账币种会按汇率换算后比较。0 表示不限制。', $baseCurrency) ?>
+                                </p>
+                            </div>
                         </div>
-                        <div style="--w-span-md:4;--w-mb:var(--weline-space-4);">
-                            <label class="w-field__label" for="marketing-coupon-limit"><?= __('总使用次数') ?></label>
-                            <input id="marketing-coupon-limit" class="w-input" type="number" name="usage_limit" min="0" value="<?= $escapeHtml($value('usage_limit', '100')) ?>">
+                        <div style="--w-span-md:4;">
+                            <div class="w-field" data-label-layout="stacked">
+                                <label class="w-field__label" for="marketing-coupon-limit"><?= __('总使用次数') ?></label>
+                                <input
+                                    id="marketing-coupon-limit"
+                                    class="w-input"
+                                    type="number"
+                                    name="usage_limit"
+                                    min="0"
+                                    value="<?= $escapeHtml($value('usage_limit', '100')) ?>"
+                                >
+                                <p class="w-field__help"><?= __('全站合计可用次数；0 表示不限制。') ?></p>
+                            </div>
                         </div>
-                        <div style="--w-span-md:4;--w-mb:var(--weline-space-4);">
-                            <label class="w-field__label" for="marketing-coupon-customer-limit"><?= __('每客户次数') ?></label>
-                            <input id="marketing-coupon-customer-limit" class="w-input" type="number" name="customer_limit" min="1" value="<?= $escapeHtml($value('customer_limit', '1')) ?>">
+                        <div style="--w-span-md:4;">
+                            <div class="w-field" data-label-layout="stacked">
+                                <label class="w-field__label" for="marketing-coupon-customer-limit"><?= __('每客户次数') ?></label>
+                                <input
+                                    id="marketing-coupon-customer-limit"
+                                    class="w-input"
+                                    type="number"
+                                    name="customer_limit"
+                                    min="1"
+                                    value="<?= $escapeHtml($value('customer_limit', '1')) ?>"
+                                >
+                                <p class="w-field__help"><?= __('同一顾客最多可用次数。') ?></p>
+                            </div>
                         </div>
                     </div>
+                </section>
+
+                <div class="w-cluster">
                     <button data-testid="marketing-coupon-submit" class="w-button" type="submit" data-tone="primary">
                         <?= $isEdit ? __('更新优惠券') : __('保存优惠券') ?>
                     </button>
-                </w:form>
-            </div>
+                </div>
+            </w:form>
         </div>
     </div>
 </div>

@@ -16,12 +16,13 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 #[Index(name: 'idx_code', columns: ['code'], type: 'UNIQUE')]
 #[Index(name: 'idx_rule', columns: ['rule_id'])]
 #[Index(name: 'idx_status', columns: ['status', 'start_date', 'end_date'])]
+#[Index(name: 'idx_source_type', columns: ['source_type'])]
 class Coupon extends Model
 {
     public const schema_table = 'weline_marketing_coupon';
     public const schema_primary_key = 'id';
     public array $_unit_primary_keys = ['id'];
-    public array $_index_sort_keys = ['id', 'code', 'rule_id', 'status'];
+    public array $_index_sort_keys = ['id', 'code', 'rule_id', 'status', 'source_type'];
     #[Col('int', primaryKey: true, autoIncrement: true, nullable: false, comment: '优惠券ID')]
     public const schema_fields_ID = 'id';
     #[Col('int', nullable: false, comment: '关联规则ID')]
@@ -44,6 +45,14 @@ class Coupon extends Model
     public const schema_fields_CUSTOMER_LIMIT = 'customer_limit';
     #[Col('varchar', 20, nullable: false, default: 'active', comment: '状态')]
     public const schema_fields_STATUS = 'status';
+    #[Col('varchar', 64, nullable: false, default: '', comment: '来源模块')]
+    public const schema_fields_SOURCE_MODULE = 'source_module';
+    #[Col('varchar', 64, nullable: false, default: 'manual', comment: '来源类型')]
+    public const schema_fields_SOURCE_TYPE = 'source_type';
+    #[Col('varchar', 64, nullable: false, default: '', comment: '来源业务ID')]
+    public const schema_fields_SOURCE_ID = 'source_id';
+    #[Col('varchar', 64, nullable: false, default: '', comment: '来源键')]
+    public const schema_fields_SOURCE_KEY = 'source_key';
     #[Col('datetime', comment: '开始时间')]
     public const schema_fields_START_DATE = 'start_date';
     #[Col('datetime', comment: '结束时间')]
@@ -52,6 +61,11 @@ class Coupon extends Model
     public const schema_fields_CREATED_AT = 'created_at';
     #[Col('timestamp', nullable: false, default: 'CURRENT_TIMESTAMP', comment: '更新时间')]
     public const schema_fields_UPDATED_AT = 'updated_at';
+
+    public const SOURCE_TYPE_MANUAL = 'manual';
+    public const SOURCE_MODULE_MARKETING = 'Weline_Marketing';
+    public const SOURCE_TYPE_MAINTENANCE_WAIT_GIFT = 'maintenance_wait_gift';
+    public const SOURCE_MODULE_MAINTENANCE = 'Weline_Maintenance';
     /**
      * Type constants
      */

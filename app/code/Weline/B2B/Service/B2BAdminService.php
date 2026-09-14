@@ -391,6 +391,39 @@ final class B2BAdminService
             $listId = 'pl-' . bin2hex(random_bytes(6));
         }
         $skuAmounts = $this->normalizeCreatePriceListAmounts($input);
+        $retail = (int) ($input['retail_amount_minor'] ?? -1);
+        if ($retail >= 0) {
+            $policy = DefaultWholesalePolicy::forTesting();
+            try {
+                $resolved = \Weline\Framework\Manager\ObjectManager::getInstance(DefaultWholesalePolicy::class);
+                if ($resolved instanceof DefaultWholesalePolicy) {
+                    $policy = $resolved;
+                }
+            } catch (\Throwable) {
+            }
+            $guard = new WholesalePricingGuard();
+            foreach ($skuAmounts as $sku => $byMin) {
+                if (!is_array($byMin)) {
+                    $guard->assertAmountAllowed(
+                        $retail,
+                        (int) $byMin,
+                        $policy->maxDiscountBps($websiteId),
+                        $policy->minMarginBps($websiteId),
+                        null,
+                    );
+                    continue;
+                }
+                foreach ($byMin as $amount) {
+                    $guard->assertAmountAllowed(
+                        $retail,
+                        (int) $amount,
+                        $policy->maxDiscountBps($websiteId),
+                        $policy->minMarginBps($websiteId),
+                        null,
+                    );
+                }
+            }
+        }
         return $this->service->seedPriceList(
             $listId,
             trim((string)($input['group_id'] ?? '')),

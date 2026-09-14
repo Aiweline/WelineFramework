@@ -96,7 +96,22 @@ final class HelpPayOrchestratorTest extends TestCase
         ]);
         self::assertStringContainsString('/q/', $quick['url']);
         self::assertTrue($quick['share_delivery']['copy_qr_image']);
+        self::assertTrue($quick['session_isolation'] ?? false);
         self::assertGreaterThanOrEqual(time() + 86400 * 6, (int) ($quick['expires_at'] ?? 0));
+
+        $withShip = $orch->createQuickPay([
+            'goods_amount_minor' => 1000,
+            'shipping_amount_minor' => 200,
+            'service_code' => 'SEED_LANE_AMERICAS',
+            'service_label' => '美洲',
+            'shipping_address' => [
+                'name' => 'Bob', 'line1' => 'St', 'phone' => '1', 'country' => 'US',
+            ],
+            'public_origin' => 'https://demo.test.weline.com',
+        ]);
+        self::assertSame(1200, (int) ($withShip['amount_minor'] ?? 0));
+        self::assertSame('SEED_LANE_AMERICAS', (string) ($withShip['service_code'] ?? ''));
+        self::assertSame('美洲', (string) ($withShip['service_label'] ?? ''));
     }
 
     public function testShippingRedactionStripsOwnerFacingFields(): void

@@ -199,9 +199,12 @@ final class NamespaceGenerationRepository implements NamespaceGenerationInterfac
      * always include every ancestor in their vector.
      *
      * @param list<string> $namespaces
+     * @param array<string,callable(int,array<string,int>):void> $committedCallbacks
+     *        Named notifications run once after owner commit with its complete
+     *        vector; repeated names keep the first callback. Rollback drops them.
      * @return array{authority_clock:int,changes:array<string,int>}
      */
-    public function bumpMany(array $namespaces): array
+    public function bumpMany(array $namespaces, array $committedCallbacks = []): array
     {
         $canonical = $this->path->canonicalizeMany($namespaces);
         $connection = $this->generationModel->getConnection();
@@ -209,11 +212,18 @@ final class NamespaceGenerationRepository implements NamespaceGenerationInterfac
 
         return $transactions->run(
             $connection,
-            function () use ($canonical, $connection, $transactions): array {
+            function () use ($canonical, $connection, $transactions, $committedCallbacks): array {
                 $connectionKey = self::connectionKey($connection);
                 $state = self::transactionState($connectionKey);
                 $this->registerTransactionCallbacks($connection, $connectionKey, $state, $transactions);
                 $state = self::transactionState($connectionKey);
+
+                if ($committedCallbacks !== []) {
+                    // Publication callbacks use the final transaction vector,
+                    // never the subset returned by an intermediate bump.
+                    $state['committed_callbacks'] += $committedCallbacks;
+                    self::storeTransactionState($connectionKey, $state);
+                }
 
                 $pending = array_values(array_diff($canonical, array_keys($state['changes'])));
                 if ($pending !== []) {
@@ -431,7 +441,7 @@ final class NamespaceGenerationRepository implements NamespaceGenerationInterfac
     }
 
     /**
-     * @param array{authority_clock:?int,changes:array<string,int>,callbacks_registered:bool} $state
+     * @param array{authority_clock:?int,changes:array<string,int>,committed_callbacks:array<string,callable>,callbacks_registered:bool} $state
      */
     private function registerTransactionCallbacks(
         ConnectionFactory $connection,
@@ -458,10 +468,13 @@ final class NamespaceGenerationRepository implements NamespaceGenerationInterfac
             'cache_namespace_generation_snapshot',
             static function () use ($connectionKey, $snapshot): void {
                 $committed = self::transactionState($connectionKey);
+                self::forgetTransactionState($connectionKey);
                 if ($committed['authority_clock'] !== null && $committed['changes'] !== []) {
                     $snapshot->advance($committed['authority_clock'], $committed['changes']);
+                    foreach ($committed['committed_callbacks'] as $callback) {
+                        $callback($committed['authority_clock'], $committed['changes']);
+                    }
                 }
-                self::forgetTransactionState($connectionKey);
             }
         );
     }
@@ -490,7 +503,7 @@ final class NamespaceGenerationRepository implements NamespaceGenerationInterfac
         return TransactionContext::logicalConnectionKey($connection->getConnector());
     }
 
-    /** @return array{authority_clock:?int,changes:array<string,int>,callbacks_registered:bool} */
+    /** @return array{authority_clock:?int,changes:array<string,int>,committed_callbacks:array<string,callable>,callbacks_registered:bool} */
     private static function transactionState(string $connectionKey): array
     {
         $all = RequestContext::get(self::TRANSACTION_STATE_KEY, []);
@@ -501,11 +514,14 @@ final class NamespaceGenerationRepository implements NamespaceGenerationInterfac
                 ? $state['authority_clock']
                 : null,
             'changes' => $changes,
+            'committed_callbacks' => is_array($state['committed_callbacks'] ?? null)
+                ? $state['committed_callbacks']
+                : [],
             'callbacks_registered' => (bool)($state['callbacks_registered'] ?? false),
         ];
     }
 
-    /** @param array{authority_clock:?int,changes:array<string,int>,callbacks_registered:bool} $state */
+    /** @param array{authority_clock:?int,changes:array<string,int>,committed_callbacks:array<string,callable>,callbacks_registered:bool} $state */
     private static function storeTransactionState(string $connectionKey, array $state): void
     {
         $all = RequestContext::get(self::TRANSACTION_STATE_KEY, []);

@@ -94,6 +94,17 @@ final class ManagerJsBinQueryContractTest extends TestCase
         self::assertStringContainsString('total > limit', $js);
         self::assertStringContainsString('function findDisallowedUploadFile(fileList)', $js);
         self::assertStringContainsString('SAFE_UPLOAD_EXTENSIONS', $js);
+        self::assertStringContainsString('BLOCKED_UPLOAD_EXTENSIONS', $js);
+        self::assertStringContainsString('re-intersect with SAFE_UPLOAD_EXTENSIONS', $js);
+        self::assertStringContainsString('upload-ext-contract:v2', $js);
+        self::assertStringContainsString("'m4a'", $js);
+        self::assertStringContainsString("'flac'", $js);
+        self::assertStringContainsString("'aac'", $js);
+        // Regression: never re-filter explicit ext= against SAFE (would drop m4a).
+        self::assertDoesNotMatchRegularExpression(
+            '/configuredUploadExtensions\(\)\s*\{[\s\S]{0,800}SAFE_UPLOAD_EXTENSIONS\.indexOf/',
+            $js
+        );
         self::assertStringContainsString("t('fileSizeExceeded'", $js);
         self::assertMatchesRegularExpression(
             '/findOversizedUploadFile\(fileList\)[\s\S]*resolveUploadNameConflicts\(files, targetHash\)[\s\S]*requestUploadMetadata\(resolvedFiles\)/',

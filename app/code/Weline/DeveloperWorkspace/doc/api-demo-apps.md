@@ -138,6 +138,10 @@ Product 声明对应 `Weline\Product\Api\Rest\V1\Products`，使用 `postCreate`
 | detail | `product_id` | `data.product.product_id` |
 | detail | `storefront_urls` | `data.storefront_urls` |
 
+实际使用 Product Demo：先在 API 文档顶部通过普通 API 用户登录，填写唯一 SKU、当前语言名称及译文 JSON，再点击「创建并发布」。管理已有产品时填写 UUID 并先「回读产品」，让 Demo 回填当前版本；「保存当前语言并回读」只更新当前语言，「保存多语言译文并回读」提交译文 JSON 中的各语言。版本冲突后先回读并核对内容，不盲目重复写入。店面链接是服务端返回的产品地址，可能只提供默认语言；查看其他语言时使用店面已有语言菜单。自动翻译需要先配置翻译服务。
+
+目录初始收起，以免浮动面板遮挡 Demo 操作；需要导航时点击「显示目录」。
+
 下面是 Product detail 的最小绑定例子。它展示如何取回真实版本和店面链接；完整创建、编辑及发布声明由 Product 模块注册。
 
 ```json

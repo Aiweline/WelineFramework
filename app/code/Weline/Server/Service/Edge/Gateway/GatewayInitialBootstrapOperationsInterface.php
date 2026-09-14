@@ -10,6 +10,14 @@ interface GatewayInitialBootstrapOperationsInterface
     /** @return array<string,mixed> */
     public function resolveProjectReleasePackage(): array;
 
+    /**
+     * Resolve the project package, optionally fetching from CDN outside the
+     * host bootstrap lock when package_fetch is enabled.
+     *
+     * @return array<string,mixed>
+     */
+    public function ensureProjectReleasePackage(?float $fetchDeadlineMonotonic = null): array;
+
     /** @return array<string,mixed> */
     public function preflightProjectReleasePackage(
         string $packageDirectory,

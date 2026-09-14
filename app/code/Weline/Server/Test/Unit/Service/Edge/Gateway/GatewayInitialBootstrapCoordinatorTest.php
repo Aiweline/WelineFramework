@@ -409,6 +409,12 @@ final class FakeInitialBootstrapOperations implements GatewayInitialBootstrapOpe
         return $this->package;
     }
 
+    public function ensureProjectReleasePackage(?float $fetchDeadlineMonotonic = null): array
+    {
+        unset($fetchDeadlineMonotonic);
+        return $this->resolveProjectReleasePackage();
+    }
+
     public function synchronized(\Closure $callback, float $deadlineMonotonic): mixed
     {
         ++$this->lockCalls;

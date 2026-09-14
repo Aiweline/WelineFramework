@@ -353,12 +353,19 @@ class StateManager
             RequestResetException::append($failures, 'object_manager:request_scope', $e);
         }
         
-        // 5. 重置 HeaderCollector
+        // 5. 重置 HeaderCollector + CookieScope 请求级策略缓存
         if (!$skipHeaderCollectorReset && \class_exists(\Weline\Framework\Http\HeaderCollector::class, false)) {
             try {
                 \Weline\Framework\Http\HeaderCollector::reset();
             } catch (\Throwable $e) {
                 RequestResetException::append($failures, 'header_collector', $e);
+            }
+        }
+        if (\class_exists(\Weline\Framework\Http\CookieScope::class, false)) {
+            try {
+                \Weline\Framework\Http\CookieScope::resetRequestState();
+            } catch (\Throwable $e) {
+                RequestResetException::append($failures, 'cookie_scope', $e);
             }
         }
 

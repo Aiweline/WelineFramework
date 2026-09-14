@@ -27,17 +27,24 @@ final class CheckoutCouponScriptContractTest extends TestCase
         self::assertStringContainsString('is-loading', $source);
         self::assertStringContainsString('notifyCartDiscountChanged', $source);
         self::assertStringContainsString('buildQuotePayload', $source);
+        self::assertStringContainsString('discountPreviewFromQuote', $source);
+        self::assertStringContainsString('discount_preview', $source);
+        self::assertStringContainsString("sku: String(item.sku || '').trim()", $source);
+        self::assertStringContainsString('product_id', $source);
         self::assertStringContainsString('amount_minor', $source);
-        self::assertStringContainsString('withCartType(root, { coupon_code: normalized })', $source);
+        self::assertStringContainsString('client.applyCoupon(payload', $source);
         self::assertStringContainsString('resolveCartType', $source);
         self::assertStringContainsString('hydrateForCurrentType', $source);
         self::assertStringContainsString('restoreOnly', $source);
-        self::assertStringContainsString('freezeQuote still applies discount_fixed_amount', $source);
-        self::assertStringContainsString('syncAppliedState(code, null)', $source);
+        self::assertStringContainsString('refresh: false', $source);
+        self::assertStringContainsString('Zero-amount ghost coupons', $source);
+        self::assertStringContainsString('cartResponse.data.items', $source);
+        self::assertStringContainsString('payload.guest_token = token', $source);
         self::assertStringContainsString('forcedType', $source);
         self::assertStringContainsString('weline:selling-mode-changed', $source);
         self::assertStringContainsString("function i18n(attr, fallback)", $source);
         self::assertStringContainsString("i18n('data-i18n-invalid-limit'", $source);
         self::assertStringContainsString("i18n('data-i18n-enter-code'", $source);
+        self::assertStringContainsString("return '-' + code + ' ' + formatAmount(", $source);
     }
 }

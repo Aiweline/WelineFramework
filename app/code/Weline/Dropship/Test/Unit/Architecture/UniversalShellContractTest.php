@@ -19,6 +19,9 @@ final class UniversalShellContractTest extends TestCase
         $doc = (string)$ref->getDocComment();
         self::assertStringContainsString('external_order_id', $doc);
         self::assertStringContainsString('fulfillment', $doc);
+        self::assertStringContainsString('topic', $doc);
+        self::assertStringContainsString('catalog', $doc);
+        self::assertStringContainsString('webhook_order', $doc);
     }
 
     public function testShellServicesDoNotReadCjPayloadKeys(): void
@@ -54,6 +57,19 @@ final class UniversalShellContractTest extends TestCase
                 );
             }
         }
+    }
+
+    public function testInboxServiceReparsesEmptyFulfillmentViaProviderRawBody(): void
+    {
+        $file = dirname(__DIR__, 3) . '/Service/DropshipWebhookInboxService.php';
+        $src = (string)file_get_contents($file);
+        self::assertStringContainsString('fulfillmentNeedsReparse', $src);
+        self::assertStringContainsString('reparseEnvelope', $src);
+        self::assertStringContainsString("envelope['raw_body']", $src);
+        self::assertStringContainsString('DropshipWebhookProviderInterface', $src);
+        self::assertStringContainsString('parseWebhook', $src);
+        self::assertStringContainsString('enqueueCatalogFollow', $src);
+        self::assertStringNotContainsString('cjOrderId', $src);
     }
 
     public function testWarehouseTemplateUsesGenericRemoteFields(): void

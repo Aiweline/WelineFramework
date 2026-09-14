@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 /**
  * Host-visible MCP tools that every attached Cursor/Codex session must expose.
- * Missing plan tools cause PLAN_REQUIRED dead-ends that look like "MCP ready".
+ * Index/code-map + skill tools; missing tools look like "MCP ready" but cannot guide.
  *
  * @return list<string>
  */
@@ -12,13 +12,13 @@ function welineGuidanceRequiredMcpTools(): array
 {
     return [
         'prepare_project',
+        'repair_project_docs',
         'resolve_task_context',
-        'submit_task_plan',
-        'get_task_plan',
-        'update_task_plan_progress',
-        'review_task_plan',
-        'get_edit_bundle',
-        'apply_compact_edit',
+        'search_project_knowledge',
+        'get_indexed_document',
+        'resolve_skill',
+        'get_skill',
+        'project_index_status',
         'health',
     ];
 }

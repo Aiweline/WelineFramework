@@ -11,7 +11,7 @@
 - 覆盖默认主题
 - 新增 widget / slot / partial / component
 
-请先完成 `prepare_project`，调用 `resolve_task_context` 获取 Frontend 与 Theme 的任务上下文，再按命中结果阅读：
+可选：可调用 `prepare_project` / `resolve_task_context` 获取 Frontend 与 Theme 任务上下文，再按命中结果阅读（编码不强制）：
 
 1. [`../../Theme/doc/theme-inheritance-and-file-conventions.md`](../../Theme/doc/theme-inheritance-and-file-conventions.md)
 2. [`../../Theme/doc/开发/Theme开发总指南.md`](../../Theme/doc/开发/Theme开发总指南.md)
@@ -64,7 +64,7 @@
 
 ## 推荐阅读顺序
 
-1. AI 入口：`prepare_project` 就绪后调用 `resolve_task_context`
+1. AI 入口（可选）：可 `prepare_project` 后调用 `resolve_task_context` 检索；编码用宿主原生编辑
 2. Theme 约束：由同一 Guidance Bundle 返回命中的 Theme 文档与 Hash
 3. Theme 总指南：[`../../Theme/doc/开发/Theme开发总指南.md`](../../Theme/doc/开发/Theme开发总指南.md)
 4. 浏览器请求：[`Weline.Api使用指南.md`](./Weline.Api使用指南.md)

@@ -27,6 +27,10 @@ final class SecurityHeaderPolicyServiceTest extends TestCase
         $this->service = new SecurityHeaderPolicyService(
             lkgGate: new SecurityPolicyLkgGate(new InMemorySecurityPolicyLkgRepository()),
             overrideProvider: new EmptySecurityHeaderPolicyOverrideProvider(),
+            // 非空 list 触发 forced 路径；空 contribution 使聚合结果为空，隔离 Extends 噪声。
+            cspContributions: new CspSourceContributionRegistry(
+                forcedContributions: [new CspSourceContribution([])],
+            ),
         );
         $this->service->lkgGate()->clear();
         Env::getInstance()->reload();
@@ -173,8 +177,9 @@ final class SecurityHeaderPolicyServiceTest extends TestCase
         Env::getInstance()->applyRuntimeConfig([
             'security' => [
                 'headers' => [
+                    'csp_delivery' => 'header',
                     'csp' => "default-src 'self'; connect-src 'self'",
-                    'csp_report_only' => "default-src 'self'; connect-src 'self'",
+                    'csp_report_only' => "default-src 'self'; connect-src 'self'; report-uri /csp-report",
                     'csp_developer_tooling' => 'connect-src http://127.0.0.1:7277 http://localhost:7277',
                 ],
             ],
@@ -198,8 +203,9 @@ final class SecurityHeaderPolicyServiceTest extends TestCase
         Env::getInstance()->applyRuntimeConfig([
             'security' => [
                 'headers' => [
+                    'csp_delivery' => 'header',
                     'csp' => "default-src 'self'; connect-src 'self'",
-                    'csp_report_only' => "default-src 'self'; connect-src 'self'",
+                    'csp_report_only' => '',
                     'csp_developer_tooling' => 'connect-src http://127.0.0.1:7277 http://localhost:7277',
                 ],
             ],
@@ -221,8 +227,9 @@ final class SecurityHeaderPolicyServiceTest extends TestCase
         Env::getInstance()->applyRuntimeConfig([
             'security' => [
                 'headers' => [
+                    'csp_delivery' => 'header',
                     'csp' => "default-src 'self'; connect-src 'self'",
-                    'csp_report_only' => "default-src 'self'; connect-src 'self'",
+                    'csp_report_only' => '',
                     'csp_developer_tooling' => '',
                 ],
             ],
@@ -232,6 +239,46 @@ final class SecurityHeaderPolicyServiceTest extends TestCase
         self::assertStringNotContainsString(
             '127.0.0.1:7277',
             $headers['Content-Security-Policy'] ?? ''
+        );
+    }
+
+    public function testMetaDeliveryOmitsCspHeadersButBuildsDocumentMeta(): void
+    {
+        Env::getInstance()->applyRuntimeConfig([
+            'security' => [
+                'headers' => [
+                    'csp_delivery' => 'meta',
+                    'csp' => "default-src 'self'; img-src 'self' https: https://cdn.example",
+                    'csp_report_only' => '',
+                    'csp_developer_tooling' => '',
+                ],
+            ],
+        ]);
+
+        $headers = $this->service->resolveCurrentResponseHeaders(null, false);
+        self::assertArrayNotHasKey('Content-Security-Policy', $headers);
+        self::assertArrayNotHasKey('Content-Security-Policy-Report-Only', $headers);
+
+        $wire = $this->service->resolveCurrentDocumentCsp(false);
+        self::assertStringContainsString("img-src 'self' https:", $wire);
+        self::assertStringNotContainsString('https://cdn.example', $wire);
+
+        $html = $this->service->ensureDocumentCspMeta('<html><head></head><body>x</body></html>');
+        self::assertStringContainsString('data-weline-csp="1"', $html);
+        self::assertStringContainsString('http-equiv="Content-Security-Policy"', $html);
+        self::assertStringContainsString('img-src', $html);
+        self::assertStringNotContainsString('cdn.example', $html);
+    }
+
+    public function testCompactForWireDropsHostsCoveredByHttpsScheme(): void
+    {
+        $n = new ContentSecurityPolicyNormalizer();
+        $compact = $n->compactForWire(
+            "img-src 'self' https: https://a.example https://b.example; script-src 'self' https://cdn.example"
+        );
+        self::assertSame(
+            "img-src 'self' https:; script-src 'self' https://cdn.example",
+            $compact
         );
     }
 }

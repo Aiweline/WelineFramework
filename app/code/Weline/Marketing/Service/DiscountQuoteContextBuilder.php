@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Marketing\Service;
 
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Marketing\Api\Quote\DiscountQuoteRequest;
 
 /**
@@ -54,9 +55,17 @@ final class DiscountQuoteContextBuilder
         $subtotalMajor = $subtotalMinor / $divisor;
         $shippingMajor = $request->shippingAmountMinor / $divisor;
 
+        $baseCurrency = 'CNY';
+        try {
+            $baseCurrency = ObjectManager::getInstance(MarketingBaseCurrencyAmount::class)->baseCurrency();
+        } catch (\Throwable) {
+            $baseCurrency = 'CNY';
+        }
+
         return [
             'customer_id' => $request->customerId,
             'currency' => strtoupper(trim($request->currency)),
+            'base_currency' => $baseCurrency,
             'subtotal' => $subtotalMajor,
             'shipping_amount' => $shippingMajor,
             'payment_method' => trim((string)($request->paymentMethod ?? '')),

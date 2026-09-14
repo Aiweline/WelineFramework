@@ -10,7 +10,7 @@ use Weline\Theme\Helper\StorefrontImagePlaceholder;
  * @widget.name {产品主要信息}
  * @widget.description {商品详情主信息：图库、标题、SKU、价格、购买操作槽与规格详情}
  * @widget.is_container {true}
- * @widget.slots {"product-purchase-actions":{"name":"购买操作","accepts":["product","cart","checkout"],"slot_type":"layout-product-purchase-actions","max":5},"product-express-payment":{"name":"快捷支付","accepts":["payment","express-checkout","express-payment","product-express-payment"],"slot_type":"layout-product-express-payment","max":3},"product-selling-mode":{"name":"售卖模式","accepts":["product","b2b","selling-mode"],"slot_type":"layout-product-selling-mode","max":3}}
+ * @widget.slots {"product-purchase-actions":{"name":"购买操作","accepts":["product","cart","checkout"],"slot_type":"layout-product-purchase-actions","max":6},"product-express-payment":{"name":"快捷支付","accepts":["payment","express-checkout","express-payment","product-express-payment"],"slot_type":"layout-product-express-payment","max":3},"product-selling-mode":{"name":"售卖模式","accepts":["product","b2b","selling-mode"],"slot_type":"layout-product-selling-mode","max":3}}
  * @widget.type {product}
  * @widget.area {frontend}
  * @widget.position {["content"]}
@@ -501,6 +501,7 @@ if ($productBreadcrumbs === []) {
          data-deal-value="<?= $escape((string)$dealDiscountValue) ?>"
          data-promotion-theme-id="<?= (int)$selectedCampaignThemeId ?>"
          data-catalog-price-minor="<?= (int)$catalogPriceMinor ?>"
+         data-offer-price-minor="<?= (int)$minor ?>"
          data-quick-add="<?= $quickAdd ? '1' : '0' ?>"
          data-widget-module="Weline_Product"
          data-widget-code="product-info"
@@ -1242,6 +1243,78 @@ if ($productBreadcrumbs === []) {
             </form>
         </div>
     </div>
+
+    <?php if (!$quickAdd && !$quoteOnly && !$isPreviewMode): ?>
+        <?php
+        // Sticky dock proxies live Cart/Checkout CTAs — no second commerce source.
+        $stickyAddLabel = ($sellable && $offerUuid !== '') ? __('加入购物车') : __('暂不可售');
+        ?>
+        <div class="product-native-detail__sticky-purchase"
+             data-testid="product-sticky-purchase"
+             data-sticky-purchase="1"
+             data-weline-load="productStickyPurchase"
+             data-widget-module="Weline_Product"
+             data-widget-code="product-info-sticky-purchase"
+             hidden
+             aria-hidden="true">
+            <div class="product-native-detail__sticky-purchase-inner">
+                <?php /* Identity left (media + title/price); specs + CTA right. */ ?>
+                <div class="product-native-detail__sticky-purchase-media"
+                     data-sticky-media
+                     data-testid="product-sticky-media"
+                     <?= trim((string)($offer['image'] ?? ($images[0] ?? ''))) === '' ? 'hidden' : '' ?>>
+                    <img class="product-native-detail__sticky-purchase-primary"
+                         data-sticky-primary-image
+                         data-testid="product-sticky-primary-image"
+                         src="<?= $escape((string)($offer['image'] ?? ($images[0] ?? ''))) ?>"
+                         alt="<?= $escape($name) ?>"
+                         width="64"
+                         height="64"
+                         loading="lazy">
+                </div>
+                <div class="product-native-detail__sticky-purchase-main">
+                    <div class="product-native-detail__sticky-purchase-meta">
+                        <span class="product-native-detail__sticky-purchase-title"><?= $escape($name) ?></span>
+                        <span class="product-native-detail__sticky-purchase-price"
+                              data-sticky-price
+                              aria-live="polite">
+                            <span class="product-native-detail__price-symbol"><?= $escape($currencySymbol) ?></span>
+                            <span class="product-native-detail__price-whole"><?= $priceWhole ?></span>
+                            <span class="product-native-detail__price-fraction">.<?= $priceFraction ?></span>
+                        </span>
+                    </div>
+                    <div class="product-native-detail__sticky-purchase-specs"
+                         data-sticky-specs
+                         data-testid="product-sticky-specs"
+                         aria-live="polite"></div>
+                    <button type="button"
+                            class="product-native-detail__sticky-purchase-jump"
+                            data-sticky-jump-variants
+                            data-testid="product-sticky-jump-variants"
+                            data-empty-label="<?= $escape(__('请选择规格')) ?>"
+                            <?= $interactiveVariantAxes === [] ? 'hidden' : '' ?>>
+                        <?= __('选规格') ?>
+                    </button>
+                    <div class="product-native-detail__sticky-purchase-actions">
+                        <button type="button"
+                                class="product-native-detail__add"
+                                data-sticky-proxy="add"
+                                data-testid="product-sticky-add-to-cart"
+                                data-default-label="<?= $escape($stickyAddLabel) ?>">
+                            <?= $escape($stickyAddLabel) ?>
+                        </button>
+                        <button type="button"
+                                class="product-native-detail__buy-now"
+                                data-sticky-proxy="buy-now"
+                                data-testid="product-sticky-buy-now"
+                                data-default-label="<?= $escape(__('立即结账')) ?>">
+                            <?= __('立即结账') ?>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    <?php endif; ?>
 
 </section>
 
@@ -2376,6 +2449,227 @@ if ($productBreadcrumbs === []) {
         background: var(--amz-btn-buy, var(--color-primary, #b84a3c));
         color: var(--color-on-primary, #f7f4ef);
     }
+
+    /* Sticky purchase dock: appears after primary actions leave the viewport. */
+    .product-native-detail__sticky-purchase {
+        position: fixed;
+        inset-inline: 0;
+        bottom: 0;
+        z-index: calc(var(--weline-z-sticky-header, 100) + 20);
+        padding: var(--spacing-sm, 0.5rem) var(--spacing-md, 1rem)
+            calc(var(--spacing-sm, 0.5rem) + env(safe-area-inset-bottom, 0px));
+        background: color-mix(in srgb, var(--color-bg-primary, #fff) 92%, transparent);
+        backdrop-filter: blur(8px);
+        border-top: 1px solid var(--color-border-default, var(--amz-border, #d4cfc5));
+        box-shadow: 0 -8px 24px color-mix(in srgb, var(--color-text-primary, #1c1c1c) 12%, transparent);
+    }
+    .product-native-detail__sticky-purchase[hidden] {
+        display: none !important;
+    }
+    .product-native-detail__sticky-purchase-inner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--spacing-md, 1rem);
+        width: min(100%, var(--weline-layout-content-max-width, 1200px));
+        margin-inline: auto;
+    }
+    .product-native-detail__sticky-purchase-main {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm, 0.5rem) var(--spacing-md, 1rem);
+        min-width: 0;
+        flex: 1 1 auto;
+        flex-wrap: wrap;
+    }
+    .product-native-detail__sticky-purchase-specs {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        min-width: 0;
+        max-width: min(42vw, 22rem);
+        margin-inline-start: auto;
+        overflow-x: auto;
+        scrollbar-width: thin;
+    }
+    .product-native-detail__sticky-purchase-specs[hidden] {
+        display: none !important;
+    }
+    .product-native-detail__sticky-purchase-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        max-width: 9.5rem;
+        padding: 0.15rem 0.45rem 0.15rem 0.15rem;
+        border: 1px solid var(--color-border-default, var(--amz-border, #d4cfc5));
+        border-radius: 999px;
+        background: var(--color-bg-secondary, var(--amz-bg-soft, #ede9e1));
+        color: var(--color-text-primary, var(--amz-text, #1c1c1c));
+        font-size: 0.75rem;
+        line-height: 1.2;
+        white-space: nowrap;
+    }
+    .product-native-detail__sticky-purchase-chip-img {
+        width: 1.75rem;
+        height: 1.75rem;
+        border-radius: 999px;
+        object-fit: cover;
+        flex: 0 0 auto;
+        background: var(--color-bg-primary, #fff);
+    }
+    .product-native-detail__sticky-purchase-chip-swatch {
+        width: 1.1rem;
+        height: 1.1rem;
+        border-radius: 999px;
+        border: 1px solid var(--color-border-default, #d4cfc5);
+        background: var(--variant-swatch, transparent);
+        flex: 0 0 auto;
+    }
+    .product-native-detail__sticky-purchase-chip-text {
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .product-native-detail__sticky-purchase-chip-empty {
+        font-size: 0.75rem;
+        color: var(--color-text-secondary, #565959);
+        white-space: nowrap;
+    }
+    .product-native-detail__sticky-purchase-jump {
+        flex: 0 0 auto;
+        min-height: 2rem;
+        padding: 0 0.75rem;
+        border: 1px solid var(--color-border-default, var(--amz-border, #d4cfc5));
+        border-radius: 999px;
+        background: var(--color-bg-primary, #fff);
+        color: var(--color-link, var(--amz-link, #3d6b78));
+        font: inherit;
+        font-size: 0.8125rem;
+        cursor: pointer;
+        white-space: nowrap;
+    }
+    .product-native-detail__sticky-purchase-jump:hover {
+        background: var(--color-bg-secondary, var(--amz-bg-soft, #ede9e1));
+    }
+    .product-native-detail__sticky-purchase-jump[hidden] {
+        display: none !important;
+    }
+    .product-native-detail__sticky-purchase-meta {
+        display: grid;
+        gap: 0.15rem;
+        min-width: 0;
+        flex: 1 1 8rem;
+    }
+    .product-native-detail__sticky-purchase-title {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 0.75rem;
+        color: var(--color-text-secondary, #565959);
+        line-height: 1.3;
+    }
+    .product-native-detail__sticky-purchase-price {
+        display: inline-flex;
+        align-items: baseline;
+        gap: 0.05em;
+        color: var(--amz-price, var(--color-primary, #b84a3c));
+        font-weight: 700;
+        font-size: 1.0625rem;
+        line-height: 1.2;
+    }
+    .product-native-detail__sticky-purchase-price .product-native-detail__price-fraction {
+        font-size: 0.75em;
+    }
+    .product-native-detail__sticky-purchase-actions {
+        display: flex;
+        flex: 0 0 auto;
+        gap: var(--spacing-sm, 0.5rem);
+        align-items: center;
+    }
+    .product-native-detail__sticky-purchase-actions .product-native-detail__add,
+    .product-native-detail__sticky-purchase-actions .product-native-detail__buy-now {
+        min-width: 6.5rem;
+        margin: 0;
+    }
+    .product-native-detail__sticky-purchase-media {
+        flex: 0 0 auto;
+        width: 3.5rem;
+        height: 3.5rem;
+        border-radius: var(--radius-sm, 0.375rem);
+        overflow: hidden;
+        border: 1px solid var(--color-border-default, var(--amz-border, #d4cfc5));
+        background: var(--color-bg-secondary, var(--amz-bg-soft, #ede9e1));
+    }
+    .product-native-detail__sticky-purchase-media[hidden] {
+        display: none !important;
+    }
+    .product-native-detail__sticky-purchase-primary {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    .product-native-detail__sticky-purchase-primary[hidden] {
+        display: none !important;
+    }
+    .product-native-detail__variant-axes {
+        scroll-margin-top: 5.5rem;
+        scroll-margin-bottom: calc(6.5rem + env(safe-area-inset-bottom, 0px));
+    }
+    /* Clearance token for storefront floats (StoreMusic / CustomerService consume; no cross-module class coupling). */
+    html.has-product-sticky-purchase {
+        --weline-product-sticky-purchase-clearance: 6.5rem;
+        scroll-padding-bottom: calc(var(--weline-product-sticky-purchase-clearance) + env(safe-area-inset-bottom, 0px));
+    }
+    html.has-product-sticky-purchase body {
+        padding-bottom: calc(var(--weline-product-sticky-purchase-clearance) + env(safe-area-inset-bottom, 0px));
+    }
+    @media (max-width: 640px) {
+        .product-native-detail__sticky-purchase-inner {
+            align-items: center;
+            gap: var(--spacing-sm, 0.5rem);
+        }
+        .product-native-detail__sticky-purchase-main {
+            flex: 1 1 auto;
+        }
+        .product-native-detail__sticky-purchase-meta {
+            order: 1;
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+        .product-native-detail__sticky-purchase-specs {
+            order: 2;
+            max-width: none;
+            margin-inline-start: 0;
+            flex: 1 1 auto;
+        }
+        .product-native-detail__sticky-purchase-jump {
+            order: 3;
+        }
+        .product-native-detail__sticky-purchase-actions {
+            order: 4;
+            width: 100%;
+            flex: 1 1 100%;
+        }
+        .product-native-detail__sticky-purchase-actions .product-native-detail__add,
+        .product-native-detail__sticky-purchase-actions .product-native-detail__buy-now {
+            flex: 1 1 0;
+            min-width: 0;
+        }
+        .product-native-detail__sticky-purchase-title {
+            display: none;
+        }
+        .product-native-detail__sticky-purchase-media {
+            align-self: center;
+            width: 3rem;
+            height: 3rem;
+        }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .product-native-detail__sticky-purchase {
+            backdrop-filter: none;
+            background: var(--color-bg-primary, #fff);
+        }
+    }
 </style>
 
 <script>
@@ -3062,6 +3356,14 @@ if ($productBreadcrumbs === []) {
         const whole = Math.floor(Math.max(0, Number(priced.minor) || 0) / 100);
         const fraction = String(Math.max(0, Number(priced.minor) || 0) % 100).padStart(2, '0');
         const symbol = currencySymbol(displayCurrency);
+        // HelpPay 快捷购买等读 data-offer-price-minor（须与现价同步）。
+        root.setAttribute('data-offer-price-minor', String(Math.max(0, Number(priced.minor) || 0)));
+        if (offerOrMinor && typeof offerOrMinor === 'object') {
+            const catalog = Math.max(0, Number(offerOrMinor.catalog_price_minor) || 0);
+            if (catalog > 0) {
+                root.setAttribute('data-catalog-price-minor', String(catalog));
+            }
+        }
         root.querySelectorAll('.product-native-detail__price-symbol').forEach(function (node) {
             if (node.closest('.product-native-detail__price-original')) {
                 return;
@@ -3267,6 +3569,24 @@ if ($productBreadcrumbs === []) {
 
     function resolveSelectionGallery(current) {
         const selected = normalizeSelection(current);
+        const exactOffer = findExactOffer(selected);
+        if (exactOffer) {
+            const exactImages = [];
+            const seenExactImages = {};
+            function pushExactImage(src) {
+                src = String(src || '').trim();
+                if (src === '' || seenExactImages[src]) {
+                    return;
+                }
+                seenExactImages[src] = true;
+                exactImages.push(src);
+            }
+            pushExactImage(exactOffer.image || '');
+            (Array.isArray(exactOffer.images) ? exactOffer.images : []).forEach(pushExactImage);
+            if (exactImages.length > 0) {
+                return exactImages;
+            }
+        }
         const styleType = String(selected.style_type || '').trim();
         let images = [];
         axes.forEach(function (axis) {

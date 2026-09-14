@@ -43,4 +43,18 @@ final class MimeTypesTest extends TestCase
         self::assertContains('text/plain', MimeTypes::getMimeTypes('csv'));
         self::assertContains('text/plain', MimeTypes::getMimeTypes('json'));
     }
+
+    public function testM4aAllowsCommonFileinfoContainerAliases(): void
+    {
+        $mimes = MimeTypes::getMimeTypes('m4a');
+        self::assertContains('audio/mp4', $mimes);
+        self::assertContains('audio/x-m4a', $mimes);
+        // Real-world AAC-in-MP4 downloads are frequently sniffed as video/mp4.
+        self::assertContains('video/mp4', $mimes);
+        self::assertContains('application/mp4', $mimes);
+
+        $allowed = MimeTypes::collectMimes('mp3,wav,ogg,oga,m4a,aac,flac,opus,wma,weba');
+        self::assertContains('video/mp4', $allowed);
+        self::assertContains('audio/mp4', $allowed);
+    }
 }

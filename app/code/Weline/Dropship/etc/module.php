@@ -2,7 +2,7 @@
 
 return [
     'name' => 'Weline_Dropship',
-    'version' => '1.0.75',
+    'version' => '1.0.87',
     'requires' => [
         'Weline_SystemConfig',
         'Weline_Product',
@@ -20,6 +20,7 @@ return [
         'Weline_Dashboard',
         'Weline_Widget',
         'Weline_Shipping',
+        'Weline_Checkout',
         'Weline_Smtp',
         'Weline_Payment',
     ],

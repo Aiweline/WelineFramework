@@ -1,0 +1,1 @@
+订单已发货 · {{var.order_number}}

@@ -33,6 +33,28 @@ final class GoogleProvider extends AbstractSocialLoginProvider
         return 10;
     }
 
+    /**
+     * @return array<string, list<string>>
+     */
+    public function cspDirectives(): array
+    {
+        // Google Identity Services (gsi/client) + OAuth authorize/token/userinfo.
+        return [
+            'script-src' => [
+                'https://accounts.google.com',
+                'https://apis.google.com',
+            ],
+            'frame-src' => [
+                'https://accounts.google.com',
+            ],
+            'connect-src' => [
+                'https://accounts.google.com',
+                'https://oauth2.googleapis.com',
+                'https://openidconnect.googleapis.com',
+            ],
+        ];
+    }
+
     public function getIconSvgMarkup(): string
     {
         return '<svg class="account-social-login__mark" viewBox="0 0 24 24" width="22" height="22" focusable="false" aria-hidden="true">'

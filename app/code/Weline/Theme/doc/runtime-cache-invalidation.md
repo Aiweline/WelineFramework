@@ -14,7 +14,7 @@
   3. `wls_shared_fpc_full` — 经 WLS adapter 清共享 FPC/router
   4. `wls_worker_broadcast_all` — `cacheClear(null)` 广播全部 WLS 实例
   5. `cdn_full_page_purge` — 若存在 `Weline_Cdn`，对启用域名 `everything`（失败则 `hosts`）全页 purge
-- `clearAllThemeRelatedCaches` 亦含 framework 非全局池、generated theme cache、ThemeData、Partials、storefront chrome、SlotRenderer、编译模板、`view/tpl`、taglib/view、进程 FPC、theme_runtime 与 router-fpc-payloads。
+- `clearAllThemeRelatedCaches` 亦含 framework 非全局池、generated theme cache、ThemeData、Partials、storefront chrome、SlotRenderer、编译模板、`view/tpl`、taglib/view、进程 FPC、theme_runtime 与 router-fpc-payloads（外置权威为 `.br`，兼容遗留 `.html`）。
 - storefront chrome / header-nav CachePolicy 依赖必须含 `theme`，否则只 bump theme 代际不会让 chrome 信封失效。
 - `clearScopedCaches` / `clearNonGlobalCaches` 必须清理编译模板缓存（`TemplateCacheManager`）、模块本地 `view/tpl/**` 编译产物，以及 `taglib`/`view` 池：`@static`/`<css>`/`<js>` 会在编译期把带 `?v=` 的 URL 写进这些产物，仅 bump generation 或只清 `var/cache/template` 无法让前台立刻吃到新 `theme_static_version`。
 - `theme_static_version` 由 `Env::setConfig` 写盘后，WLS Worker 须在 `cache_clear` 中 `Env::reloadPersistentConfigFromDisk()`，否则其它 Worker 进程仍持有旧 Env，重编译会再次 bake 旧 `?v=`。

@@ -32,6 +32,8 @@ final readonly class StorefrontPriceAdjustment
         public string $exclusiveGroup = self::GROUP_UNIT,
         public string $url = '',
         public string $badge = '',
+        // Internal frontend route; empty preserves an explicit provider URL.
+        public string $frontendRoute = '',
     ) {
     }
 

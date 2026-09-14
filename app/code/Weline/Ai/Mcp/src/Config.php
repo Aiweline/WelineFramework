@@ -229,7 +229,6 @@ final class Config
                 'tombstone_ttl' => '14d',
                 'terminal_job_ttl' => '14d',
                 'query_log_ttl' => '14d',
-                'execution_run_ttl' => '14d',
                 'sweep_interval' => '1h',
                 'sweep_batch_size' => 50,
                 'final_learning_timeout' => '30s',
@@ -286,21 +285,6 @@ final class Config
                     '.idea/**', '.vscode/**', 'coverage/**', '.cache/**', '**/.phpunit.result.cache',
                     'dist/**', 'out/**', 'log/**', 'logs/**', 'tmp_cache/**', 'vendor-bin/**',
                     '.scannerwork/**', 'build-cache/**', 'nbproject/**', '.nyc_output/**',
-                ],
-            ],
-            'editing' => [
-                'enabled' => true,
-                'ticket_ttl' => '10m',
-                'lock_timeout_ms' => 30_000,
-                'lock_poll_interval_ms' => 50,
-                'max_files' => 20,
-                'max_file_bytes' => 1_048_576,
-                'max_total_bytes' => 4_194_304,
-                'allowed_roots' => ['.'],
-                'denied_paths' => [
-                    '.git/**', '.codex/**', '.agents/**', '.gitnexus/**', 'vendor/**', '**/vendor/**',
-                    'generated/**', 'var/**', 'pub/static/**', 'pub/media/**', '**/view/tpl/**',
-                    '**/.env', '**/.env.*', '**/auth.json', '**/*.pem', '**/*.key', 'app/etc/env.php',
                 ],
             ],
             'knowledge' => [
@@ -378,7 +362,6 @@ final class Config
                 'tombstone_ttl' => true,
                 'terminal_job_ttl' => true,
                 'query_log_ttl' => true,
-                'execution_run_ttl' => true,
                 'sweep_interval' => true,
                 'sweep_batch_size' => true,
                 'final_learning_timeout' => true,
@@ -418,17 +401,6 @@ final class Config
                 'allowed_extensions' => true,
                 'excluded_paths' => true,
             ],
-            'editing' => [
-                'enabled' => true,
-                'ticket_ttl' => true,
-                'lock_timeout_ms' => true,
-                'lock_poll_interval_ms' => true,
-                'max_files' => true,
-                'max_file_bytes' => true,
-                'max_total_bytes' => true,
-                'allowed_roots' => true,
-                'denied_paths' => true,
-            ],
             'knowledge' => [
                 'auto_generate_skills' => true,
                 'auto_doc_sync' => true,
@@ -461,8 +433,9 @@ final class Config
     private static function assertKnown(array $provided, array $shape, string $prefix = ''): void
     {
         foreach ($provided as $key => $value) {
+            // Ignore unknown/legacy privacy and other config keys so older config.yaml still loads.
             if (!is_string($key) || !array_key_exists($key, $shape)) {
-                throw new RuntimeException('Unknown config field: ' . $prefix . (string) $key);
+                continue;
             }
             if (is_array($shape[$key]) && is_array($value)) {
                 if (array_is_list($value)) {
@@ -480,7 +453,11 @@ final class Config
     private static function merge(array $defaults, array $provided): array
     {
         foreach ($provided as $key => $value) {
-            if (isset($defaults[$key]) && is_array($defaults[$key]) && is_array($value)
+            // Drop unknown/legacy keys instead of retaining them.
+            if (!array_key_exists($key, $defaults)) {
+                continue;
+            }
+            if (is_array($defaults[$key]) && is_array($value)
                 && !array_is_list($defaults[$key]) && !array_is_list($value)) {
                 $defaults[$key] = self::merge($defaults[$key], $value);
             } else {
@@ -526,7 +503,7 @@ final class Config
             'privacy.redact_before_model', 'scheduler.auto_process_on_stop',
             'index.enabled', 'index.auto_refresh', 'index.sidecar_enabled', 'index.include_tests',
             'index.gc.enabled', 'index.gc.purge_unbound',
-            'editing.enabled', 'knowledge.auto_generate_skills', 'knowledge.auto_doc_sync',
+            'knowledge.auto_generate_skills', 'knowledge.auto_doc_sync',
             'knowledge.learning_skills.enabled', 'knowledge.learning_skills.inject_on_prompt',
             'knowledge.codex.enabled',
         ] as $boolean) {
@@ -553,12 +530,11 @@ final class Config
         foreach ([
             'analysis.request_timeout', 'privacy.raw_retention', 'privacy.raw_session_ttl',
             'privacy.tombstone_ttl', 'privacy.terminal_job_ttl', 'privacy.query_log_ttl',
-            'privacy.execution_run_ttl',
             'privacy.sweep_interval', 'privacy.final_learning_timeout', 'scheduler.poll_interval',
             'scheduler.session_idle_after', 'scheduler.launchd_interval', 'scheduler.lease',
             'index.refresh_interval', 'index.gc.retention', 'index.gc.dry_run_period',
             'index.gc.quarantine_period', 'index.gc.sweep_interval',
-            'editing.ticket_ttl', 'knowledge.codex.timeout',
+            'knowledge.codex.timeout',
         ] as $duration) {
             self::durationSeconds((string) self::nested($values, $duration));
         }
@@ -580,11 +556,6 @@ final class Config
             'index.sqlite_mmap_bytes' => [0, 2_147_418_112],
             'index.sqlite_cache_kib' => [1_024, 262_144],
             'index.gc.max_generations' => [1, 10_000],
-            'editing.lock_timeout_ms' => [100, 300_000],
-            'editing.lock_poll_interval_ms' => [5, 1_000],
-            'editing.max_files' => [1, 200],
-            'editing.max_file_bytes' => [1_024, 16_777_216],
-            'editing.max_total_bytes' => [1_024, 67_108_864],
             'knowledge.codex.max_context_chars' => [1_024, 1_000_000],
             'knowledge.learning_skills.max_experiences' => [1, 100],
             'knowledge.learning_skills.max_skills' => [1, 24],
@@ -626,7 +597,7 @@ final class Config
         if (!is_array($targets) || $targets === [] || !array_is_list($targets)) {
             throw new RuntimeException('promotion.allowed_targets must be a non-empty list');
         }
-        foreach (['index.allowed_extensions', 'index.excluded_paths', 'editing.allowed_roots', 'editing.denied_paths'] as $listPath) {
+        foreach (['index.allowed_extensions', 'index.excluded_paths'] as $listPath) {
             $items = self::nested($values, $listPath);
             if (!is_array($items) || !array_is_list($items) || $items === []) {
                 throw new RuntimeException($listPath . ' must be a non-empty list');

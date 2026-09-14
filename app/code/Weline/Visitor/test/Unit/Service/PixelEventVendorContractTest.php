@@ -33,6 +33,9 @@ final class PixelEventVendorContractTest extends TestCase
         self::assertArrayHasKey('measurement_id', $ga4->getConfigSchema());
         self::assertArrayHasKey('container_id', $gtm->getConfigSchema());
         self::assertTrue(!empty($system->getCapabilities()['system_native']));
+        self::assertNotEmpty($ga4->cspDirectives()['script-src'] ?? []);
+        self::assertNotEmpty($gtm->cspDirectives()['frame-src'] ?? []);
+        self::assertSame([], $system->cspDirectives());
     }
 
     public function testSystemVendorAlwaysEnabledAndLocked(): void

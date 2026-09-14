@@ -1010,7 +1010,7 @@ class AiTranslationService
             if ($written === false) {
                 throw new \RuntimeException(__('词典翻译写入失败'));
             }
-            $publisher->publishAction('dictionary-ai-save', ['word' => $word, 'locale_code' => $localeCode]);
+            $publisher->publishAction('dictionary-ai-save', ['word' => $word, 'locale_code' => $localeCode], $localeCode);
             $transactions->afterCommit($connection, 'i18n.ai-word-index.' . $md5, function () use ($localeCode, $word): void {
                 $this->localeTranslatedWordIndex[$localeCode][$word] = true;
             });

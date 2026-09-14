@@ -1,1 +1,1 @@
-Order cannot be fulfilled — refund started
+Order cannot be fulfilled — refund started · {{var.order_uuid}}

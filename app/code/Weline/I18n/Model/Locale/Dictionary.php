@@ -22,6 +22,7 @@ use Weline\I18n\Api\Translation\DictionaryRepositoryInterface;
 use Weline\I18n\Service\I18nResourceChangePublisher;
 #[Table(comment: '地区词典')]
 #[Index(name: 'idx_code', columns: ['locale_code'], comment: '区码索引')]
+#[Index(name: 'idx_locale_module', columns: ['locale_code', 'source_module'], comment: '地区模块词典索引')]
 class Dictionary extends Model implements DictionaryRepositoryInterface
 {
     public const schema_table = 'i18n_locale_dictionary';
@@ -173,7 +174,7 @@ class Dictionary extends Model implements DictionaryRepositoryInterface
         return $transactions->run($connection, static function () use ($mutation, $publisher, $action, $word, $localeCode): bool {
             $changed = $mutation();
             if ($changed) {
-                $publisher->publishAction($action, ['word' => $word, 'locale_code' => $localeCode]);
+                $publisher->publishAction($action, ['word' => $word, 'locale_code' => $localeCode], $localeCode);
             }
             return $changed;
         });

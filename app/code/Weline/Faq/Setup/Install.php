@@ -26,6 +26,9 @@ final class Install implements InstallInterface
         $item->setup($modelSetup, $context);
 
         ObjectManager::getInstance(FaqService::class)->seedSiteHubFaqs(0, '');
+        $templateSeed = ObjectManager::getInstance(\Weline\Faq\Service\FaqTemplateSeedService::class);
+        $templateSeed->migrateEmptyLocaleToZhHans();
+        $templateSeed->seedAll();
         $this->migrateHelpPathGroupToFaq();
         $this->ensureProductFaqPublished();
         $this->rebuildFaqSearchIndex();
@@ -143,16 +146,29 @@ final class Install implements InstallInterface
                 return;
             }
 
-            $identity = [
-                'layout_option' => 'default',
-                'scope' => 'default',
-                'locale_code' => '',
-                'target_type' => 'global',
-                'target_id' => 0,
+            $scopes = [
+                'default.__store__.__channel__',
+                'default.__store__.default',
+                'default.__website__.default',
+                'default.default.default',
+                'default',
             ];
 
-            ObjectManager::getInstance(\Weline\Theme\Service\WidgetDefaultInjectionService::class)
-                ->applyRequiredMissingForIdentity(
+            $injection = ObjectManager::getInstance(\Weline\Theme\Service\WidgetDefaultInjectionService::class);
+            $layoutService = ObjectManager::getInstance(\Weline\Theme\Service\ThemeLayoutService::class);
+
+            foreach ($scopes as $scope) {
+                $identity = [
+                    'layout_option' => 'default',
+                    'scope' => $scope,
+                    'locale_code' => '',
+                    'target_type' => 'global',
+                    'target_id' => 0,
+                ];
+
+                $this->purgeIdentityLessDraftWidgets($themeId, $identity);
+
+                $injection->applyRequiredMissingForIdentity(
                     $themeId,
                     \Weline\Theme\Model\ThemeLayout::PAGE_TYPE_PRODUCT,
                     $identity,
@@ -160,16 +176,79 @@ final class Install implements InstallInterface
                     \Weline\Theme\Model\ThemeLayout::STATUS_DRAFT,
                 );
 
-            ObjectManager::getInstance(\Weline\Theme\Service\ThemeLayoutService::class)
-                ->publishLayout(
-                    $themeId,
-                    \Weline\Theme\Model\ThemeLayout::PAGE_TYPE_PRODUCT,
-                    $identity,
-                    false,
-                    ['reason' => 'product-faq storefront publish'],
-                );
+                try {
+                    $layoutService->publishLayout(
+                        $themeId,
+                        \Weline\Theme\Model\ThemeLayout::PAGE_TYPE_PRODUCT,
+                        $identity,
+                        false,
+                        ['reason' => 'product-faq storefront publish'],
+                    );
+                } catch (\Throwable) {
+                    // Other scopes may still succeed; keep trying.
+                }
+            }
         } catch (\Throwable) {
             // Theme optional at install time.
+        }
+    }
+
+    /**
+     * Draft nodes missing widget_module/widget_code block Theme publish validators.
+     *
+     * @param array{layout_option?:string,scope?:string,locale_code?:string,target_type?:string,target_id?:int} $identity
+     */
+    private function purgeIdentityLessDraftWidgets(int $themeId, array $identity): void
+    {
+        if ($themeId <= 0
+            || !class_exists(\Weline\Theme\Service\ThemeRuntimeLayoutResolver::class)
+            || !class_exists(\Weline\Theme\Service\Scoped\ThemeScopedLayoutWriteService::class)
+        ) {
+            return;
+        }
+
+        try {
+            /** @var \Weline\Theme\Service\ThemeLayoutService $layoutService */
+            $layoutService = ObjectManager::getInstance(\Weline\Theme\Service\ThemeLayoutService::class);
+            $draft = $layoutService->getDraftLayout(
+                $themeId,
+                \Weline\Theme\Model\ThemeLayout::PAGE_TYPE_PRODUCT,
+                $identity,
+            );
+            if ($draft === []) {
+                return;
+            }
+
+            /** @var \Weline\Theme\Service\ThemeRuntimeLayoutResolver $runtime */
+            $runtime = ObjectManager::getInstance(\Weline\Theme\Service\ThemeRuntimeLayoutResolver::class);
+            $context = $runtime->buildContext(
+                $themeId,
+                \Weline\Theme\Model\ThemeLayout::PAGE_TYPE_PRODUCT,
+                \Weline\Theme\Service\PreviewContextService::AREA_FRONTEND,
+                $identity,
+            );
+            /** @var \Weline\Theme\Service\Scoped\ThemeScopedLayoutWriteService $writer */
+            $writer = ObjectManager::getInstance(\Weline\Theme\Service\Scoped\ThemeScopedLayoutWriteService::class);
+
+            foreach (['header', 'banner', 'left_sidebar', 'content', 'right_sidebar', 'footer'] as $area) {
+                $widgets = $draft[$area]['widgets'] ?? null;
+                if (!\is_array($widgets)) {
+                    continue;
+                }
+                foreach ($widgets as $widget) {
+                    if (!\is_array($widget)) {
+                        continue;
+                    }
+                    $module = \trim((string)($widget['widget_module'] ?? ''));
+                    $code = \trim((string)($widget['widget_code'] ?? ''));
+                    $nodeUid = \strtolower(\trim((string)($widget['node_uid'] ?? '')));
+                    if (($module === '' || $code === '') && $nodeUid !== '') {
+                        $writer->removeWidget($context, $nodeUid, 'system:faq-setup', 'faq identity heal');
+                    }
+                }
+            }
+        } catch (\Throwable) {
+            // Best-effort heal; publish may still fail for other reasons.
         }
     }
 

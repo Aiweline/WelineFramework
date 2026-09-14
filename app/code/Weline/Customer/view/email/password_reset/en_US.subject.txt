@@ -1,0 +1,1 @@
+Reset your password · {{var.customer_email}}

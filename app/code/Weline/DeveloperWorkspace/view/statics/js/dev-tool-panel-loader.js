@@ -80,6 +80,7 @@
     var panelReadyCallbacks = [];
     var restoreAttempted = false;
     var panelStateKey = 'dev-panel-state';
+    var settingTraceRecording = false;
 
     window.__WELINE_PANEL_CONFIG__ = Object.assign({}, window.__WELINE_PANEL_CONFIG__ || {}, {
         apiBase: apiBase,
@@ -455,6 +456,27 @@
         });
     }
 
+    /**
+     * Arm/disarm request lifecycle tracing with the Weline panel open/close state.
+     */
+    function setTraceRecording(enabled) {
+        if (settingTraceRecording) {
+            return Promise.resolve(null);
+        }
+        settingTraceRecording = true;
+        return apiFetch('trace/panel', {
+            method: 'POST',
+            body: { enabled: !!enabled }
+        }).catch(function (error) {
+            if (window.console && console.warn) {
+                console.warn('[WelinePanel] request-trace panel switch failed:', error);
+            }
+            return null;
+        }).finally(function () {
+            settingTraceRecording = false;
+        });
+    }
+
     function openLoadedPanel() {
         var panel = document.getElementById('dev-tool-panel');
         if (!panel) {
@@ -463,6 +485,7 @@
         if (window.DevToolPanel && typeof window.DevToolPanel.toggle === 'function' && panel.classList.contains('collapsed')) {
             window.DevToolPanel.toggle();
         }
+        setTraceRecording(true);
         return window.WelinePanel;
     }
 
@@ -726,6 +749,7 @@
         api.__isWelinePanelBridge = true;
         api.open = openPanel;
         api.activateTab = activateTab;
+        api.setTraceRecording = setTraceRecording;
         api.report = buildReport;
         api.publish = publishReport;
         api.apiUrl = apiUrl;

@@ -33,6 +33,9 @@ class Region extends BackendController
         $selectedCountryCodes = $this->resolveSelectedCountryCodesFromRequest();
         $this->assign('current_country_code', $selectedCountryCodes[0] ?? '');
         $this->assign('current_country_codes', $selectedCountryCodes);
+        /** @var \Weline\Shipping\Service\RegionService $regionService */
+        $regionService = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Shipping\Service\RegionService::class);
+        $this->assign('country_sort_rows', $regionService->listCountrySortEditorRows());
         $this->assignShippingEmbedLayout();
         return $this->fetch();
     }
@@ -71,6 +74,37 @@ class Region extends BackendController
     {
         Message::warning(__('地区编辑功能暂未开放，请通过数据库或后续版本管理。'));
         $this->redirect('*/index');
+    }
+
+    #[Acl('Weline_Shipping::region_save', '保存地区', 'save', '创建地区')]
+    public function saveCountrySort()
+    {
+        $embed = $this->request->getPost('embed') === '1' || $this->request->getPost('embed') === 1;
+        try {
+            if (!$this->request->isPost()) {
+                throw new \InvalidArgumentException((string)__('仅允许 POST 请求。'));
+            }
+            $codes = $this->request->getPost('country_code', []);
+            $sorts = $this->request->getPost('sort_order', []);
+            if (!is_array($codes) || !is_array($sorts)) {
+                throw new \InvalidArgumentException((string)__('排序提交格式无效。'));
+            }
+            $map = [];
+            foreach ($codes as $i => $code) {
+                $map[(string)$code] = $sorts[$i] ?? 0;
+            }
+            $updated = $this->adminService->updateCountrySortOrders($map);
+            $this->getMessageManager()->addSuccess(__('已更新 %{1} 个国家的热门排序。', [$updated]));
+        } catch (\Throwable $throwable) {
+            $this->getMessageManager()->addError($throwable->getMessage());
+        }
+
+        $params = [];
+        if ($embed) {
+            $params['embed'] = 1;
+        }
+
+        return $this->redirect('shipping/backend/region/index', $params);
     }
 
     #[Acl('Weline_Shipping::region_save', '保存地区', 'save', '创建地区')]

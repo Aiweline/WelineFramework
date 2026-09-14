@@ -71,15 +71,22 @@ final class ProductSiteContentAdminService
             throw new \InvalidArgumentException(__('文案不能为空且最多 65535 字节'));
         }
 
-        $this->attributeValues->writeExplicit(
+        $this->attributeValues->mutateProductAttributes(
             $websiteId,
-            $storeId,
-            'product',
             $entityId,
-            $attributeCode,
-            $locale,
-            $value,
-            $isRequired,
+            $storeId,
+            function () use ($websiteId, $storeId, $entityId, $attributeCode, $locale, $value, $isRequired): void {
+                $this->attributeValues->writeExplicit(
+                    $websiteId,
+                    $storeId,
+                    'product',
+                    $entityId,
+                    $attributeCode,
+                    $locale,
+                    $value,
+                    $isRequired,
+                );
+            },
         );
     }
 

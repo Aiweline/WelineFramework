@@ -1,0 +1,16 @@
+<!-- mail:preheader: 验证您的邮箱绑定 -->
+<h1 style="margin:0 0 16px;font-family:Georgia,'Iowan Old Style',Palatino,'Palatino Linotype',serif;font-size:26px;line-height:1.25;font-weight:600;color:#16333f;">验证您的邮箱绑定</h1>
+            <div style="font-size:15px;line-height:1.7;color:#33434c;">
+<p style="margin:0 0 12px;">您好，您正在将邮箱 <strong>{{var.email}}</strong> 绑定到客服会话。</p>
+<p style="margin:0 0 12px;">完成验证后，我们才能通过该邮箱为您提供后续服务与通知。</p>
+<p style="margin:16px 0 0;font-size:12px;color:#5c6b74;word-break:break-all;">备用链接：{{var.verification_url}}</p>
+            </div>
+
+
+              <table role="presentation" cellpadding="0" cellspacing="0" style="margin:28px 0 8px;">
+                <tr>
+                  <td style="border-radius:999px;background:#e8a14a;">
+                    <a href="{{var.verification_url}}" style="display:inline-block;padding:14px 28px;color:#16333f;text-decoration:none;font-weight:700;font-size:15px;letter-spacing:0.02em;">验证邮箱</a>
+                  </td>
+                </tr>
+              </table>

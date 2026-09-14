@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<!--
+  PROTOTYPE throwaway — 定金挂单界面重设计（勿当生产）
+  Question: What should hang-orders look like for merchant approve + chat?
+  Three structurally different variants via ?variant=a|b|c
+-->
+<html lang="zh-Hans">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PROTOTYPE · 定金挂单 · 三变体</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --surface: #171d25;
+      --surface-2: #1c2430;
+      --border: #2a3340;
+      --text: #e7ecf1;
+      --muted: #8b98a8;
+      --primary: #3b82f6;
+      --danger: #f87171;
+      --success: #34d399;
+      --warn: #fbbf24;
+      --radius: 10px;
+      --space: 12px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font: 14px/1.45 "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 24px 24px 88px;
+    }
+    h1 { font-size: 1.15rem; margin: 0 0 6px; font-weight: 650; }
+    .lede { color: var(--muted); margin: 0 0 20px; max-width: 52rem; }
+    .hint {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: #1e293b;
+      color: #93c5fd;
+      font-size: 12px;
+      margin-bottom: 16px;
+    }
+    .bar {
+      position: fixed; left: 0; right: 0; bottom: 0;
+      display: flex; gap: 8px; justify-content: center; align-items: center;
+      padding: 12px; background: #05070a; border-top: 1px solid var(--border); z-index: 20;
+    }
+    .bar a {
+      color: #fff; text-decoration: none; padding: 8px 14px; border-radius: 999px;
+      background: #222933; font-size: 12px; font-weight: 600;
+    }
+    .bar a.on { background: var(--primary); }
+    .bar button {
+      border: 0; background: #333b48; color: #fff; width: 36px; height: 36px;
+      border-radius: 999px; cursor: pointer; font-size: 16px;
+    }
+    .hidden { display: none !important; }
+
+    /* ===== Variant A: queue cards ===== */
+    .filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+    .chip {
+      border: 1px solid var(--border); background: var(--surface);
+      color: var(--text); border-radius: 999px; padding: 6px 12px; cursor: pointer; font-size: 12px;
+    }
+    .chip.on { border-color: var(--primary); color: #93c5fd; background: #152033; }
+    .cards { display: grid; gap: 12px; max-width: 720px; }
+    .card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 14px 16px; display: grid; gap: 12px;
+    }
+    .card__top { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+    .card__id { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: var(--muted); }
+    .badge {
+      display: inline-flex; align-items: center; border-radius: 999px; padding: 3px 10px;
+      font-size: 12px; font-weight: 650;
+    }
+    .badge.warn { background: #3a2e14; color: var(--warn); }
+    .badge.ok { background: #123528; color: var(--success); }
+    .badge.mute { background: #243041; color: var(--muted); }
+    .amounts { display: flex; gap: 18px; flex-wrap: wrap; }
+    .amounts b { display: block; font-size: 1.05rem; }
+    .amounts span { color: var(--muted); font-size: 12px; }
+    .card__actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .btn {
+      border: 0; border-radius: 8px; padding: 8px 12px; cursor: pointer; font-weight: 650; font-size: 13px;
+    }
+    .btn.primary { background: var(--primary); color: #fff; }
+    .btn.danger { background: #5a2a2a; color: #fecaca; }
+    .btn.ghost { background: transparent; color: #93c5fd; border: 1px solid #334155; }
+    .chat-panel {
+      display: none; border-top: 1px solid var(--border); padding-top: 12px; margin-top: 4px;
+    }
+    .card.open .chat-panel { display: block; }
+    .bubble {
+      background: var(--surface-2); border-radius: 8px; padding: 8px 10px; margin-bottom: 8px;
+      color: var(--muted); font-size: 13px;
+    }
+
+    /* ===== Variant B: master-detail ===== */
+    .split {
+      display: grid; grid-template-columns: minmax(240px, 320px) 1fr; gap: 14px;
+      min-height: 420px; max-width: 980px;
+    }
+    .rail, .detail {
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    }
+    .rail { overflow: auto; }
+    .rail-item {
+      padding: 12px 14px; border-bottom: 1px solid var(--border); cursor: pointer;
+    }
+    .rail-item:hover, .rail-item.on { background: #152033; }
+    .rail-item strong { display: block; margin: 4px 0; }
+    .detail { padding: 18px; display: grid; gap: 14px; align-content: start; }
+    .detail h2 { margin: 0; font-size: 1rem; }
+    .meta { color: var(--muted); font-size: 12px; font-family: ui-monospace, monospace; }
+    .detail .chat-panel { display: block; border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin: 0; }
+
+    /* ===== Variant C: human table ===== */
+    .table-wrap { overflow: auto; border: 1px solid var(--border); border-radius: var(--radius); max-width: 980px; }
+    table { width: 100%; border-collapse: collapse; background: var(--surface); }
+    th, td { padding: 12px 10px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+    th { color: var(--muted); font-size: 12px; font-weight: 650; background: var(--surface-2); }
+    td.mono { font-family: ui-monospace, monospace; font-size: 12px; color: var(--muted); }
+    .ops { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; min-width: 9rem; }
+    .ops-btns { display: flex; gap: 8px; }
+  </style>
+</head>
+<body>
+  <p class="hint">PROTOTYPE · 勿提交 · 箭头键切换变体</p>
+  <h1>定金挂单 · 界面重设计</h1>
+  <p class="lede" id="caption"></p>
+
+  <section id="variant-a" class="hidden">
+    <div class="filters">
+      <button class="chip on" type="button">待审批 4</button>
+      <button class="chip" type="button">待定金 0</button>
+      <button class="chip" type="button">待尾款 0</button>
+      <button class="chip" type="button">已完成 1</button>
+      <button class="chip" type="button">全部</button>
+    </div>
+    <div class="cards" id="cards"></div>
+  </section>
+
+  <section id="variant-b" class="hidden">
+    <div class="split">
+      <aside class="rail" id="rail"></aside>
+      <div class="detail" id="detail"></div>
+    </div>
+  </section>
+
+  <section id="variant-c" class="hidden">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>挂单</th>
+            <th>订单</th>
+            <th>状态</th>
+            <th>定金</th>
+            <th>尾款</th>
+            <th>支付</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <nav class="bar">
+    <button type="button" id="prev" aria-label="上一个">←</button>
+    <a href="?variant=a" id="a">A 审批工作台</a>
+    <a href="?variant=b" id="b">B 主从详情</a>
+    <a href="?variant=c" id="c">C 人读表格</a>
+    <button type="button" id="next" aria-label="下一个">→</button>
+  </nav>
+
+  <script>
+    const rows = [
+      { hang: 'hang_0e3c222707e7fa1f886158dd', order: '80219477-065e-48a1-ad32-c9682db0a989', status: 'awaiting_merchant_approval', deposit: 16200, balance: 37800, unread: 0 },
+      { hang: 'hang_b14391c1f9d8456fa85e368b', order: 'b14391c1-f9d8-456f-a85e-368bc904b138', status: 'awaiting_merchant_approval', deposit: 10800, balance: 25200, unread: 1 },
+      { hang: 'hang_e7cf7a151dec498d8ebb2d31', order: 'e7cf7a15-1dec-498d-8ebb-2d3144ffbefa', status: 'completed', deposit: 6582, balance: 15358, unread: 0 },
+    ];
+    const statusLabel = {
+      awaiting_merchant_approval: '待商家审批',
+      awaiting_deposit: '待付定金',
+      awaiting_balance: '待付尾款',
+      completed: '已完成',
+      rejected: '已驳回',
+      expired: '已过期',
+    };
+    const statusTone = (s) => s === 'completed' ? 'ok' : (s.includes('awaiting') ? 'warn' : 'mute');
+    const money = (minor) => 'CNY ' + (Number(minor) / 100).toFixed(2);
+    const short = (s, n = 10) => s.slice(0, n) + '…';
+
+    const captions = {
+      a: 'A 审批工作台：卡片队列 + 状态筛选；金额用元；批准/驳回主 CTA；沟通在卡内展开。适合「先批再聊」。',
+      b: 'B 主从详情：左侧挂单轨，右侧详情+常驻沟通。适合高频来回协商改价。',
+      c: 'C 人读表格：保留表结构但去掉机器字段名/分单位；状态徽标；沟通仍在操作列内。最贴近现有 ControlCenter。',
+    };
+
+    const order = ['a', 'b', 'c'];
+    let variant = new URLSearchParams(location.search).get('variant') || 'a';
+    if (!order.includes(variant)) variant = 'a';
+
+    function setVariant(v) {
+      variant = v;
+      const url = new URL(location.href);
+      url.searchParams.set('variant', v);
+      history.replaceState(null, '', url);
+      render();
+    }
+
+    function render() {
+      order.forEach((k) => {
+        document.getElementById('variant-' + k).classList.toggle('hidden', k !== variant);
+        document.getElementById(k).classList.toggle('on', k === variant);
+      });
+      document.getElementById('caption').textContent = captions[variant];
+      if (variant === 'a') renderA();
+      if (variant === 'b') renderB();
+      if (variant === 'c') renderC();
+    }
+
+    function renderA() {
+      const root = document.getElementById('cards');
+      root.innerHTML = rows.map((r, i) => `
+        <article class="card" data-i="${i}">
+          <div class="card__top">
+            <div>
+              <div class="card__id">${r.hang}</div>
+              <div class="meta" style="margin-top:4px">订单 ${short(r.order, 13)}</div>
+            </div>
+            <span class="badge ${statusTone(r.status)}">${statusLabel[r.status] || r.status}</span>
+          </div>
+          <div class="amounts">
+            <div><span>定金</span><b>${money(r.deposit)}</b></div>
+            <div><span>尾款</span><b>${money(r.balance)}</b></div>
+          </div>
+          <div class="card__actions">
+            ${r.status === 'awaiting_merchant_approval' ? '<button class="btn primary" type="button">批准</button><button class="btn danger" type="button">驳回</button>' : ''}
+            <button class="btn ghost" type="button" data-toggle>订单沟通${r.unread ? ' · ' + r.unread : ''}</button>
+          </div>
+          <div class="chat-panel">
+            <div class="bubble">客户：尾款能否再议一点？</div>
+            <div class="bubble">商家：（在此回复）</div>
+          </div>
+        </article>`).join('');
+      root.querySelectorAll('[data-toggle]').forEach((btn) => {
+        btn.addEventListener('click', () => btn.closest('.card').classList.toggle('open'));
+      });
+    }
+
+    let selected = 0;
+    function renderB() {
+      const rail = document.getElementById('rail');
+      rail.innerHTML = rows.map((r, i) => `
+        <div class="rail-item ${i === selected ? 'on' : ''}" data-i="${i}">
+          <span class="badge ${statusTone(r.status)}">${statusLabel[r.status]}</span>
+          <strong>${money(r.deposit)} + ${money(r.balance)}</strong>
+          <div class="meta">${short(r.hang, 14)}</div>
+        </div>`).join('');
+      rail.querySelectorAll('.rail-item').forEach((el) => {
+        el.addEventListener('click', () => { selected = Number(el.dataset.i); renderB(); });
+      });
+      const r = rows[selected];
+      document.getElementById('detail').innerHTML = `
+        <h2>${statusLabel[r.status]}</h2>
+        <div class="meta">${r.hang}<br>${r.order}</div>
+        <div class="amounts">
+          <div><span>定金</span><b>${money(r.deposit)}</b></div>
+          <div><span>尾款</span><b>${money(r.balance)}</b></div>
+        </div>
+        <div class="card__actions">
+          ${r.status === 'awaiting_merchant_approval' ? '<button class="btn primary" type="button">批准</button><button class="btn danger" type="button">驳回</button>' : '<span class="badge ok">无需审批</span>'}
+        </div>
+        <div class="chat-panel">
+          <strong style="display:block;margin-bottom:8px">订单沟通</strong>
+          <div class="bubble">客户：货期能否确认？</div>
+          <div class="bubble">商家：可以，确认后即可付尾款。</div>
+        </div>`;
+    }
+
+    function renderC() {
+      document.getElementById('tbody').innerHTML = rows.map((r) => `
+        <tr>
+          <td class="mono" title="${r.hang}">${short(r.hang, 12)}</td>
+          <td class="mono" title="${r.order}">${short(r.order, 13)}</td>
+          <td><span class="badge ${statusTone(r.status)}">${statusLabel[r.status]}</span></td>
+          <td><b>${money(r.deposit)}</b></td>
+          <td><b>${money(r.balance)}</b></td>
+          <td style="color:var(--muted)">—</td>
+          <td>
+            <div class="ops">
+              <div class="ops-btns">
+                ${r.status === 'awaiting_merchant_approval' ? '<button class="btn primary" type="button">批准</button><button class="btn danger" type="button">驳回</button>' : ''}
+              </div>
+              <button class="btn ghost" type="button">订单沟通${r.unread ? ' ' + r.unread : ''}</button>
+            </div>
+          </td>
+        </tr>`).join('');
+    }
+
+    document.getElementById('prev').onclick = () => setVariant(order[(order.indexOf(variant) + 2) % 3]);
+    document.getElementById('next').onclick = () => setVariant(order[(order.indexOf(variant) + 1) % 3]);
+    document.addEventListener('keydown', (e) => {
+      const t = e.target;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      if (e.key === 'ArrowLeft') setVariant(order[(order.indexOf(variant) + 2) % 3]);
+      if (e.key === 'ArrowRight') setVariant(order[(order.indexOf(variant) + 1) % 3]);
+    });
+    render();
+  </script>
+</body>
+</html>

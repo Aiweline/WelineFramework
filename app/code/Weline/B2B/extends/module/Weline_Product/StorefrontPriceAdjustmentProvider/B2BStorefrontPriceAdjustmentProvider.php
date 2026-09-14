@@ -6,6 +6,8 @@ namespace Weline\B2B\Extends\Module\Weline_Product\StorefrontPriceAdjustmentProv
 
 use Weline\B2B\Api\B2BPriceCandidateInterface;
 use Weline\B2B\Service\B2BPriceEngine;
+use Weline\B2B\Service\DefaultWholesalePolicy;
+use Weline\B2B\Service\SellingModePolicy;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Product\Api\Data\StorefrontPriceAdjustment;
 use Weline\Product\Api\Data\StorefrontPriceContext;
@@ -55,12 +57,25 @@ final class B2BStorefrontPriceAdjustmentProvider implements StorefrontPriceAdjus
         }
 
         try {
+            $moqQty = 1;
+            try {
+                $policy = ObjectManager::getInstance(DefaultWholesalePolicy::class);
+                if ($policy instanceof DefaultWholesalePolicy) {
+                    // Prefer template MOQ for unit price when inheriting; explicit lists still work at qty=1 if they have min_qty=1.
+                    $moqQty = max(1, $policy->lowestMinQty($policy->allTiers(max(0, $context->websiteId))));
+                }
+            } catch (\Throwable) {
+            }
             $result = $engine->resolve([
                 'customer_id' => $customerId,
                 'website_id' => max(0, $context->websiteId),
                 'sku' => $sku,
-                'qty' => 1,
+                'qty' => $moqQty,
                 'retail_amount_minor' => max(0, $context->catalogPriceMinor),
+                'product_flags' => [
+                    SellingModePolicy::PRODUCT_FLAG_TOB => true,
+                ],
+                'selling_mode_tob' => true,
             ]);
         } catch (\Throwable) {
             return [];
@@ -70,7 +85,11 @@ final class B2BStorefrontPriceAdjustmentProvider implements StorefrontPriceAdjus
             return [];
         }
         $source = (string)($result['source'] ?? '');
-        if (!in_array($source, [B2BPriceEngine::SOURCE_B2B_WEBSITE, B2BPriceEngine::SOURCE_B2B_CHANNEL], true)) {
+        if (!in_array($source, [
+            B2BPriceEngine::SOURCE_B2B_WEBSITE,
+            B2BPriceEngine::SOURCE_B2B_CHANNEL,
+            B2BPriceEngine::SOURCE_B2B_DEFAULT_POLICY,
+        ], true)) {
             return [];
         }
         $amount = (int)($result['amount_minor'] ?? -1);
@@ -87,7 +106,7 @@ final class B2BStorefrontPriceAdjustmentProvider implements StorefrontPriceAdjus
             new StorefrontPriceAdjustment(
                 code: 'b2b_list:' . $listId,
                 sourceModule: 'Weline_B2B',
-                sourceType: 'b2b_price_list',
+                sourceType: $source === B2BPriceEngine::SOURCE_B2B_DEFAULT_POLICY ? 'b2b_default_policy' : 'b2b_price_list',
                 sourceId: $listId,
                 label: (string)__('批发价'),
                 type: StorefrontPriceAdjustment::TYPE_ABSOLUTE_MINOR,

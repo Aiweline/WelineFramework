@@ -16,7 +16,7 @@ Object.assign(window.WelineModulesConfig.modules, {
     },
     checkoutExpressReview: {
         paths: [
-            "Weline_Checkout::js/express-review.js?v=20260912-express-review2"
+            "Weline_Checkout::js/express-review.js?v=20260914-express-review-label"
         ],
         globalVar: "WelineCheckoutExpressReview",
         load: "lazy",

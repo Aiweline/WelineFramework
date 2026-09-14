@@ -17,8 +17,39 @@ final class CookieScopeTest extends TestCase
     protected function tearDown(): void
     {
         CookieScope::setPolicyResolverOverride(null);
+        CookieScope::resetRequestState();
         HeaderCollector::reset();
         parent::tearDown();
+    }
+
+    public function testGetCookieDuringResolveDoesNotRecurse(): void
+    {
+        $depth = 0;
+        $maxDepth = 0;
+        CookieScope::setPolicyResolverOverride(static function () use (&$depth, &$maxDepth): array {
+            $depth++;
+            $maxDepth = \max($maxDepth, $depth);
+            try {
+                // Production risk: Env::getCookie → qualifyName → resolve again.
+                \Weline\Framework\Env\WelineEnv::getCookie('WELINE_WEBSITE_ID', null);
+                return [
+                    'active' => true,
+                    'name_suffix' => '_w0',
+                    'name_suffix_pattern' => '/_w\d+$/D',
+                    'mount_path' => '/',
+                    'expire_unscoped_aliases' => true,
+                    'revision' => 'reentry-guard',
+                ];
+            } finally {
+                $depth--;
+            }
+        });
+
+        self::assertSame('WELINE_SESSID_w0', CookieScope::qualifyName('WELINE_SESSID'));
+        self::assertSame(1, $maxDepth, 'resolve must not re-enter the resolver');
+        // Memoized: second call must not invoke override again.
+        self::assertSame('WELINE_SESSID_w0', CookieScope::qualifyName('WELINE_SESSID'));
+        self::assertSame(1, $maxDepth);
     }
 
     public function testProtocolHostCookieIsNotQualified(): void

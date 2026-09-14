@@ -32,6 +32,26 @@ class TiktokProvider extends DocumentedSocialPlatformProvider
         'status' => 'live_publish_enabled',
     ];
 
+    /**
+     * @return array<string, list<string>>
+     */
+    public function cspDirectives(): array
+    {
+        return [
+            'script-src' => [
+                'https://www.tiktok.com',
+            ],
+            'frame-src' => [
+                'https://www.tiktok.com',
+            ],
+            'connect-src' => [
+                'https://www.tiktok.com',
+                'https://api.tiktok.com',
+                'https://open.tiktokapis.com',
+            ],
+        ];
+    }
+
     public function buildAuthorizationUrl(array $accountContext, string $redirectUri, string $state): ?string
     {
         $clientKey = $this->appConfig()->get('tiktok', 'client_key');

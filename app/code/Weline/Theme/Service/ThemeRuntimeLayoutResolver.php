@@ -50,7 +50,7 @@ final class ThemeRuntimeLayoutResolver
     ): array {
         $context = $this->buildContext($themeId, $pageType, $area, $identity);
         try {
-            return $this->previewResolver->resolveLayout(
+            return $this->previewResolver->resolveStructureLayout(
                 $context,
                 $status === ThemeLayout::STATUS_PUBLISHED
                     ? ThemeLayout::STATUS_PUBLISHED
@@ -59,6 +59,51 @@ final class ThemeRuntimeLayoutResolver
         } catch (\Throwable) {
             return [];
         }
+    }
+
+    /**
+     * Structure layout plus request/editor locale I18N overlay (not structure-cacheable).
+     *
+     * @param array<string,mixed> $identity
+     * @return array<string,mixed>
+     */
+    public function resolveLayoutForRender(
+        int $themeId,
+        string $pageType,
+        string $status = ThemeLayout::STATUS_PUBLISHED,
+        string $area = 'frontend',
+        array $identity = [],
+        ?string $overlayLocale = null,
+    ): array {
+        $layout = $this->resolveLayout($themeId, $pageType, $status, $area, $identity);
+        if ($layout === []) {
+            return [];
+        }
+        $locale = \trim((string)($overlayLocale ?? ''));
+        if ($locale === '') {
+            $locale = \trim((string)($identity['locale_code'] ?? $identity['locale'] ?? ''));
+        }
+        if ($locale === '') {
+            try {
+                $locale = \trim((string)(RequestContext::locale() ?? ''));
+            } catch (\Throwable) {
+                $locale = '';
+            }
+        }
+        if ($locale === '' || \strcasecmp($locale, 'default') === 0) {
+            return $layout;
+        }
+
+        $context = $this->buildContext($themeId, $pageType, $area, $identity)
+            ->withLocale($locale);
+
+        return $this->previewResolver->applyLayoutLocaleOverlay(
+            $layout,
+            $context,
+            $status === ThemeLayout::STATUS_PUBLISHED
+                ? ThemeLayout::STATUS_PUBLISHED
+                : ThemeLayout::STATUS_DRAFT,
+        );
     }
 
     /**
@@ -74,8 +119,6 @@ final class ThemeRuntimeLayoutResolver
         $scopeIdentity = $this->scopeNormalizer->identityFromEncodedScope((string)$identity['scope']);
         $authoritative = $this->catalog->authoritativeIdentity($scopeIdentity);
         $scopeContext = $this->scopes->contextFromClaims($authoritative->toArray(), $authoritative);
-        $locale = \trim((string)$identity['locale_code']);
-
         return new ThemeEditorContext(
             scope: $scopeContext,
             area: $area === 'backend' ? 'backend' : 'frontend',
@@ -83,7 +126,7 @@ final class ThemeRuntimeLayoutResolver
             themeId: $themeId,
             layoutType: $pageType,
             layoutOption: (string)$identity['layout_option'],
-            locale: $locale !== '' ? $locale : 'default',
+            locale: 'default',
             targetType: (string)$identity['target_type'],
             targetId: (int)$identity['target_id'],
         );

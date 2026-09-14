@@ -103,7 +103,7 @@ final class CachePolicyTest extends TestCase
         $context = $this->context('site_a', 'retail', 'web');
         $policy = new CachePolicy('search.types', 'view', 'channel', ['lang'], ['catalog', 'global/i18n']);
         $namespaces = $policy->namespacePaths($context->scopeIdentity);
-        self::assertContains('global/i18n', $namespaces);
+        self::assertContains('global/i18n/content', $namespaces);
         self::assertNotContains('global/storefront/global/i18n', $namespaces);
         self::assertNotContains('website/site_a/global/i18n/store/retail/normal/channel/web', $namespaces);
         self::assertCount(3, $namespaces);
@@ -126,6 +126,51 @@ final class CachePolicyTest extends TestCase
         self::assertNotSame(KeyBuilder::policyKey($policy, 'root', 'v1', $a), KeyBuilder::policyKey($policy, 'root', 'v1', $c));
         self::assertSame(['global/storefront/catalog', 'website/site_a/catalog/store/retail/normal'], $policy->namespacePaths($a->scopeIdentity));
     }
+    public function testTranslatedResourceDependsOnItsLanguagesAcrossStorefrontScopes(): void
+    {
+        $policy = new CachePolicy('product.translated_labels', 'product', 'channel', ['lang'], ['global/i18n']);
+        $first = $this->context('site_a', 'retail', 'web');
+        $second = $this->context('site_b', 'wholesale', 'app');
+        $languages = ['fr-FR', 'en_US', 'zh_Hans_CN', 'fr_FR'];
+        $expected = ['global/i18n/en_US', 'global/i18n/fr_FR', 'global/i18n/zh_Hans_CN'];
+
+        self::assertSame($expected, $policy->namespacePaths($first->scopeIdentity, $languages));
+        self::assertSame($expected, $policy->namespacePaths($second->scopeIdentity, $languages));
+        self::assertNotSame(
+            $policy->namespacePaths($first->scopeIdentity, ['fr_FR', 'en_US', 'de_DE']),
+            $policy->namespacePaths($first->scopeIdentity, $languages),
+            'A different fallback language must change the invalidation dependency set.',
+        );
+    }
+
+    public function testUnspecifiedTranslationLanguagesRetainGlobalInvalidation(): void
+    {
+        $policy = new CachePolicy('product.translated_labels', 'product', 'channel', ['lang'], ['global/i18n']);
+        $context = $this->context('site_a', 'retail', 'web');
+        self::assertSame(['global/i18n/content'], $policy->namespacePaths($context->scopeIdentity));
+    }
+
+    public function testGlobalTranslatedResourceKeyIncludesOrderedFallbackChain(): void
+    {
+        $policy = new CachePolicy('global.translated_labels', 'i18n', 'global', ['lang'], ['global/i18n']);
+        $first = new StorefrontCacheKeyContext(null, 'fr_FR', 'EUR', null, str_repeat('a', 64), false, '', 'zh_Hans_CN', ['fr_FR', 'en_US', 'zh_Hans_CN']);
+        $same = new StorefrontCacheKeyContext(null, 'fr_FR', 'EUR', null, str_repeat('b', 64), false, '', 'zh_Hans_CN', ['fr_FR', 'en_US', 'zh_Hans_CN']);
+        $otherDefault = new StorefrontCacheKeyContext(null, 'fr_FR', 'EUR', null, str_repeat('c', 64), false, '', 'de_DE', ['fr_FR', 'en_US', 'de_DE']);
+        $otherOrder = new StorefrontCacheKeyContext(null, 'fr_FR', 'EUR', null, str_repeat('d', 64), false, '', 'zh_Hans_CN', ['fr_FR', 'zh_Hans_CN', 'en_US']);
+
+        $key = KeyBuilder::policyKey($policy, 'labels', 'same-authority', $first);
+        self::assertSame($key, KeyBuilder::policyKey($policy, 'labels', 'same-authority', $same));
+        self::assertNotSame($key, KeyBuilder::policyKey($policy, 'labels', 'same-authority', $otherDefault));
+        self::assertNotSame($key, KeyBuilder::policyKey($policy, 'labels', 'same-authority', $otherOrder));
+
+        $structural = new CachePolicy('global.structural_data', 'i18n', 'global', [], ['catalog']);
+        self::assertSame(
+            KeyBuilder::policyKey($structural, 'data', 'same-authority', $first),
+            KeyBuilder::policyKey($structural, 'data', 'same-authority', $otherDefault),
+        );
+    }
+
+
 
     public function testUnresolvedResourceStaysBehindRequestFenceWithoutInventingDefaultTenant(): void
     {
@@ -348,7 +393,8 @@ final class PolicyGenerations implements NamespaceGenerationInterface
     public function fingerprint(array $namespaces): string
     {
         $this->lastNamespaces = $namespaces;
-        $changes = array_intersect_key($this->domainVersions, array_fill_keys($namespaces, true));
+        $expanded = (new \Weline\Framework\Cache\Namespace\NamespacePath())->expandAncestors($namespaces);
+        $changes = array_intersect_key($this->domainVersions, array_fill_keys($expanded, true));
         ksort($changes, SORT_STRING);
         return $this->version . ($changes === [] ? '' : serialize($changes));
     }

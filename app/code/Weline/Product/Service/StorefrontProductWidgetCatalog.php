@@ -10,6 +10,7 @@ use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\ScopeIdentity;
+use Weline\Framework\Runtime\StorefrontPageContext;
 use Weline\Product\Helper\StorefrontOfferResolver;
 use Weline\Product\Repository\ProductRepository;
 use Weline\Review\Api\ReviewSeoFactsInterface;
@@ -47,10 +48,12 @@ final class StorefrontProductWidgetCatalog
     {
         $limit = max(1, min(24, $limit));
         $fetchLimit = max($limit * 3, 24);
-        // Filtered listing pages already built the full projection in the
-        // controller. Reuse that cache entry in the recommendation Fiber so
-        // the widget does not rebuild the same catalog as a summary view.
-        if ($this->shouldUseListingProjection()) {
+        // Controllers publish unfiltered candidates before pagination. Reuse
+        // those facts and defer media until the recommendation selection is final.
+        $listingOffers = StorefrontPageContext::listingOffers();
+        if ($listingOffers !== null) {
+            $offers = array_slice($listingOffers, 0, $fetchLimit);
+        } elseif ($this->shouldUseListingProjection()) {
             $offers = $this->catalog->publishedOffers($fetchLimit, true);
         } else {
             $offers = $this->catalog->publishedOfferSummaries($fetchLimit);
@@ -61,7 +64,7 @@ final class StorefrontProductWidgetCatalog
                 <=> (int)($left['product_id'] ?? 0),
         );
 
-        $cards = [];
+        $selectedOffers = [];
         $seenProductIds = [];
         foreach ($offers as $offer) {
             if (!$this->isHanfuOffer($offer)) {
@@ -72,9 +75,9 @@ final class StorefrontProductWidgetCatalog
                 continue;
             }
             $seenProductIds[$productId] = true;
-            $cards[] = $this->mapOffer($offer, count($cards));
-            if (count($cards) >= $limit) {
-                return $this->withReviewAggregates($cards);
+            $selectedOffers[] = $offer;
+            if (count($selectedOffers) >= $limit) {
+                break;
             }
         }
 
@@ -82,15 +85,23 @@ final class StorefrontProductWidgetCatalog
         // Preserve Hanfu-first ordering, then fill remaining slots from all
         // published offers so customer-facing collections never collapse empty.
         foreach ($offers as $offer) {
+            if (count($selectedOffers) >= $limit) {
+                break;
+            }
             $fallbackProductId = max(0, (int)($offer['product_id'] ?? 0));
             if ($fallbackProductId <= 0 || isset($seenProductIds[$fallbackProductId])) {
                 continue;
             }
             $seenProductIds[$fallbackProductId] = true;
+            $selectedOffers[] = $offer;
+        }
+
+        if ($listingOffers !== null && $selectedOffers !== []) {
+            $selectedOffers = $this->catalog->hydrateListingMedia($selectedOffers);
+        }
+        $cards = [];
+        foreach ($selectedOffers as $offer) {
             $cards[] = $this->mapOffer($offer, count($cards));
-            if (count($cards) >= $limit) {
-                break;
-            }
         }
 
         return $this->withReviewAggregates($cards);
@@ -300,12 +311,174 @@ final class StorefrontProductWidgetCatalog
             $seenProductIds[$productId] = true;
             $cards[] = $this->mapOffer($offer, count($cards));
             if (count($cards) >= $limit) {
+                return $this->withReviewAggregates($cards);
+            }
+        }
+
+        // Related / you-may-like fill: preserve Hanfu-first ordering, then fill from
+        // all published offers so PDP personalization never collapses empty when
+        // the optional HF-* SKU convention is absent.
+        foreach ($offers as $offer) {
+            $fallbackProductId = max(0, (int)($offer['product_id'] ?? 0));
+            if ($excludeProductId > 0 && $fallbackProductId === $excludeProductId) {
+                continue;
+            }
+            if ($fallbackProductId <= 0 || isset($seenProductIds[$fallbackProductId])) {
+                continue;
+            }
+            $seenProductIds[$fallbackProductId] = true;
+            $cards[] = $this->mapOffer($offer, count($cards));
+            if (count($cards) >= $limit) {
                 break;
             }
         }
 
         return $this->withReviewAggregates($cards);
     }
+
+    /**
+     * "You may like" PDP recommendations: prefer same-category companions, then related fill.
+     *
+     * @return list<array{
+     *     id:int,
+     *     product_id:int,
+     *     name:string,
+     *     url:string,
+     *     image:string,
+     *     price:float,
+     *     original_price:float,
+     *     rating:float,
+     *     review_count:int,
+     *     global_offer_uuid:string,
+     *     sellable:bool
+     * }>
+     */
+    public function youMayLikeCards(int $excludeProductId = 0, int $limit = 8): array
+    {
+        $limit = max(1, min(24, $limit));
+        $excludeProductId = max(0, $excludeProductId);
+        $cards = [];
+        $seenProductIds = [];
+
+        foreach ($this->sameCategoryCompanionOffers($excludeProductId, max($limit * 3, 12)) as $offer) {
+            if (!$this->isHanfuOffer($offer)) {
+                continue;
+            }
+            $productId = max(0, (int)($offer['product_id'] ?? 0));
+            if ($productId <= 0 || isset($seenProductIds[$productId])) {
+                continue;
+            }
+            if ($excludeProductId > 0 && $productId === $excludeProductId) {
+                continue;
+            }
+            $seenProductIds[$productId] = true;
+            $cards[] = $this->mapOffer($offer, count($cards));
+            if (count($cards) >= $limit) {
+                return $this->withReviewAggregates($cards);
+            }
+        }
+
+        foreach ($this->sameCategoryCompanionOffers($excludeProductId, max($limit * 3, 12)) as $offer) {
+            $productId = max(0, (int)($offer['product_id'] ?? 0));
+            if ($productId <= 0 || isset($seenProductIds[$productId])) {
+                continue;
+            }
+            if ($excludeProductId > 0 && $productId === $excludeProductId) {
+                continue;
+            }
+            $seenProductIds[$productId] = true;
+            $cards[] = $this->mapOffer($offer, count($cards));
+            if (count($cards) >= $limit) {
+                return $this->withReviewAggregates($cards);
+            }
+        }
+
+        foreach ($this->relatedCards($excludeProductId, $limit) as $card) {
+            $productId = max(0, (int)($card['product_id'] ?? $card['id'] ?? 0));
+            if ($productId <= 0 || isset($seenProductIds[$productId])) {
+                continue;
+            }
+            $seenProductIds[$productId] = true;
+            $cards[] = $card;
+            if (count($cards) >= $limit) {
+                break;
+            }
+        }
+
+        return $this->withReviewAggregates($cards);
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function sameCategoryCompanionOffers(int $seedProductId, int $limit): array
+    {
+        $seedProductId = max(0, $seedProductId);
+        $limit = max(1, min(48, $limit));
+        if ($seedProductId <= 0) {
+            return [];
+        }
+
+        try {
+            $websiteId = max(0, RequestContext::getWelineWebsiteId());
+            if ($websiteId <= 0) {
+                $scope = RequestContext::scopeIdentity();
+                if ($scope instanceof ScopeIdentity && $scope->websiteId !== null) {
+                    $websiteId = max(0, (int)$scope->websiteId);
+                }
+            }
+            if ($websiteId <= 0) {
+                return [];
+            }
+
+            /** @var \Weline\Product\Repository\CategoryLinkRepository $links */
+            $links = ObjectManager::getInstance(\Weline\Product\Repository\CategoryLinkRepository::class);
+            $categoryIds = [];
+            foreach ($links->listByProductIdsAnyStore($websiteId, [$seedProductId]) as $row) {
+                $categoryId = max(0, (int)($row['category_id'] ?? 0));
+                if ($categoryId > 0) {
+                    $categoryIds[$categoryId] = $categoryId;
+                }
+            }
+            if ($categoryIds === []) {
+                return [];
+            }
+
+            $companionIds = [];
+            foreach ($links->listByCategoryIdsAnyStore($websiteId, array_values($categoryIds)) as $row) {
+                $productId = max(0, (int)($row['product_id'] ?? 0));
+                if ($productId <= 0 || $productId === $seedProductId) {
+                    continue;
+                }
+                $companionIds[$productId] = $productId;
+                if (count($companionIds) >= $limit) {
+                    break;
+                }
+            }
+            if ($companionIds === []) {
+                return [];
+            }
+
+            $offers = [];
+            $seen = [];
+            foreach ($this->catalog->publishedOffersForProductIds(array_values($companionIds), max($limit * 2, 16), false) as $offer) {
+                $productId = max(0, (int)($offer['product_id'] ?? 0));
+                if ($productId <= 0 || isset($seen[$productId]) || $productId === $seedProductId) {
+                    continue;
+                }
+                $seen[$productId] = true;
+                $offers[] = $offer;
+                if (count($offers) >= $limit) {
+                    break;
+                }
+            }
+
+            return $offers;
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
     /**
      * Frequently-bought-together bundle: seed product first, then companions.
      *

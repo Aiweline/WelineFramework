@@ -1,16 +1,16 @@
 # AI 硬规则索引
 
-> 任何 Weline **开发（编码/工程）**任务的**第一层路由**。非编码任务（闲聊、概念问答、与本仓实现无关说明）**禁止**调用 MCP。编码/工程任务在 `prepare_project` ready 后必须先遵守 MCP 下发的 `hard-constraints.v1`，再按本表定位必读文档。规范正文以链接文件为准；MCP `workflow_contract.v1` 为机器可读摘要。
+> 任何 Weline **开发（编码/工程）**任务的**第一层路由**。MCP 提供技能索引、代码地图与**领域硬规则下发**；**编码用宿主原生编辑**（MCP 无写仓工具）。非编码任务通常跳过 MCP。**工程任务在 MCP 已挂载/可挂载时必须先 `prepare_project` 并遵守 `hard-constraints.v1`**，再按本表定位必读文档。规范正文以链接文件为准；MCP `workflow_contract.v1` 为任务匹配的机器可读摘要。
 
 ## MCP 调用范围（`mcp_call_scope`）
 
 | 类别 | 示例 | 是否调用 MCP |
 |------|------|--------------|
-| 非编码 | 闲聊、身份/概念问答、纯口头建议、与本仓改码无关 | **禁止**（含 ensure / `prepare_project` / `submit_task_plan`） |
-| 打招呼 `hi`/`你好`/`hello`（无编码任务）或指令「提取技能」 | 可 `prepare_project` / `resolve_skill(list_all)` **仅列** MCP 技能+指令；禁止密封编辑 / `submit_task_plan` |
-| 编码/工程 | 改代码或模块文档、诊断/评审、部署规划、项目知识检索、功能验收收口 | **必须** ensure → `prepare_project` → 既有工作流 |
+| 非编码 | 闲聊、身份/概念问答、纯口头建议、与本仓改码无关 | **通常跳过** |
+| 打招呼 `hi`/`你好`/`hello`（无编码任务）或指令「提取技能」 | 可 `prepare_project` / `resolve_skill(list_all)` **仅列** MCP 技能+指令；不开始写码 |
+| 编码/工程 | 改代码或模块文档、诊断/评审、部署规划、功能验收收口 | **强制** ensure（若需）→ `prepare_project` → 读并遵守 `hard_constraints` → 宿主原生编辑；按需 `resolve_task_context` / `search_project_knowledge` / `get_skill`。MCP 挂不上则宿主 Read 本索引，不得编造规则 |
 
-宿主 `AGENTS.md` 只作指针；细则以本表与 `HardConstraintsCatalog::mcpOperationalRules()` 为准。
+宿主 `AGENTS.md` 与 MCP 生成的 `.cursor/rules/weline-mcp-coldstart.mdc` 只作指针；细则以本表与 `HardConstraintsCatalog::mcpOperationalRules()` 为准。
 
 ## 运行/状态查询默认本机（`runtime_status_query_local_first`，强制）
 
@@ -26,7 +26,7 @@
 | 允许 | 禁止 |
 |------|------|
 | 规则权威维护在 MCP `hard-constraints.v1` 与 `Ai/Framework/模块 doc/` | Agent **手写/直接编辑** `.cursor/rules/*.mdc`、`.cursorrules`、`CLAUDE.md`、`.codex/*`、`.github/copilot-instructions.md` 等作为规则源 |
-| 由 **MCP**（ensure/install/guidance 生成器）在有专用生成路径时写出宿主编辑器规则产物 | 把编辑器私有规则文件当成高于 `prepare_project.hard_constraints` 的权威 |
+| 由 **MCP**（ensure / `HostEditorRulesGenerator`）写出宿主编辑器规则产物（含 `.cursor/rules/weline-mcp-coldstart.mdc`） | 把编辑器私有规则文件当成高于 `prepare_project.hard_constraints` 的权威 |
 | `AGENTS.md` 仅作 MCP 接通指针 | 换项目后仍依赖本机/他仓残留的 Cursor/Codex 私有规则 |
 
 原因：换项目后编辑器私有规则会丢失或分叉；只有 MCP + 仓库文档可随项目带走。
@@ -64,9 +64,9 @@
 
 ## 工作区不可丢弃规则（`preserve_dirty_workspace`，严重）
 
-MCP 的自愈、宿主重载、插件代次刷新、密封编辑、验证回滚和崩溃恢复必须保留任务开始前已经存在的 tracked、staged、untracked 与 ignored 脏改。
+MCP 的自愈、宿主重载、插件代次刷新、验证回滚和崩溃恢复，以及普通宿主编辑，都必须保留任务开始前已经存在的 tracked、staged、untracked 与 ignored 脏改。
 
-**宿主 Agent / Shell 同等禁止（硬）**：不得为「方便 MCP 密封 / get_edit_bundle 对齐 HEAD / 重做 apply」而对工作区执行 `git checkout -- <path>`、`git restore`、`git reset`、`git clean`、`git stash` 或任何等价擦脏。密封编辑必须**脏改加载**：以当前磁盘文件的精确哈希做 `expected_file_sha256`，在脏改上合并 apply；Hash 漂移只能 fail-closed 保留现场，禁止拿 HEAD、索引、旧 journal 快照或「先恢复再改」覆盖当前文件。丢代码风险优先于密封便利。
+**宿主 Agent / Shell 同等禁止（硬）**：不得为「对齐 HEAD / 清场 / 方便重做编辑」而对工作区执行 `git checkout -- <path>`、`git restore`、`git reset`、`git clean`、`git stash` 或任何等价擦脏。应在当前脏改上继续编辑；Hash 漂移只能 fail-closed 保留现场，禁止拿 HEAD、索引或旧快照覆盖当前文件。丢代码风险优先于操作便利。
 
 MCP 子进程只允许只读 Git 检查，禁止上述全部 Git 写操作，禁止 config/helper/pager 命令注入及 force/discard 变体。分支切换只能由工作区所有者显式执行。
 
@@ -74,6 +74,8 @@ MCP 子进程只允许只读 Git 检查，禁止上述全部 Git 写操作，禁
 
 | 任务关键词 | 必须先读 | 禁止 | 验证 |
 |-----------|---------|------|------|
+| **需求澄清、用例规格、EARS、clarify、use case、用户故事、规格澄清** | [需求澄清与用例规格.md](../../../../../dev/ai-command/ai/需求澄清与用例规格.md)；MCP `requirement_clarify_use_case_spec` / skill `requirement_clarify_use_case`（`weline-req-clarify`） | feature 无 `doc/开发/spec/{slug}.md` 就写码；散文验收无 EARS；跳过澄清直接改 PHP | 规格 `status=ready-for-plan`；含澄清记录 + 用户故事 + EARS + UC |
+| **计划、架构方案、Plan Mode、SwitchMode、计划模式、简单跳过计划** | [AI工程交付流程.md](./AI工程交付流程.md) §1c/§3；MCP `host_plan_mode_for_planning` / `requirement_acceptance_always` / `requirement_fe_be_scope_analysis` | 非简单却不切 Plan Mode；**跳过计划却不做验收**；有 Web 却无本机 Browser WB-OP；布局/吐槽/审图跳过原型+UI | 默认 `SwitchMode`→`plan`；simple+理由可 skip；Web→WB-OP 视觉+逻辑；审图强制原型+UI 调整 |
 | 规格修复、技术细节补全、listing 规格缺失、PDP 只有尺码/类型 | [dev/ai-command/product/规格修复.md](../../../../../dev/ai-command/product/规格修复.md)；`Product/scripts/remediate-product-listing-spec-attrs.php` | 只口头解释不扫库；无快照伪造属性；改 combination_key/轴矩阵冒充补全；**修完不报明细、不给每品交付地址** | `php app/code/Weline/Product/scripts/remediate-product-listing-spec-attrs.php --scan --dry-run` → `--apply`；汇报含修复表 + 每品 Markdown URL；Browser PDP 技术细节 |
 | **壳+Provider、万能支付、货源代发、对接供应商/支付方式、业务写在 Controller** | [Payment/payment-shell.md](../Payment/doc/payment-shell.md)、[Payment/provider-development.md](../Payment/doc/provider-development.md)、[Dropship/dropship-shell.md](../Dropship/doc/dropship-shell.md)、[Dropship/provider-development.md](../Dropship/doc/provider-development.md)；MCP `shell_provider_business_isomorph`（**强制**） | 在壳 Controller/Service **重写**某供应商 API/凭证解析/履约/目录/支付生命周期；为每个供应商新写一套业务控制器；绕过 Provider 接口硬编码网关 | Extends Provider 一文件按能力接口实现；壳只编排；对接交付=Provider+配置模板 |
 | `.phtml`、模板、Taglib、`<w:` | [Taglib/doc/README.md](../Taglib/doc/README.md)、[场景映射表.md](../Taglib/doc/场景映射表.md)、[如何自定义Tag.md](../Taglib/doc/如何自定义Tag.md) | 手写领域 select/input；`w:*` 属性内 `<?=` / `<?php`；**Taglib callback 返回 HTML 里写裸 `@static(...)`** | — |
@@ -96,20 +98,20 @@ MCP 子进程只允许只读 Git 检查，禁止上述全部 Git 写操作，禁
 | section、`weline-code` | [frontend-section-weline-code.md](../Theme/doc/frontend-section-weline-code.md) | 缺/空 `weline-code`；无语义名如 `section1`；同文件重复 code | `php bin/w frontend:check-section-code` |
 | 前台文案、翻译、i18n | [Theme开发总指南.md §i18n](../Theme/doc/开发/Theme开发总指南.md)、[01-lang标签](../Framework/doc/4-内置标签/01-lang标签使用指南.md) | `.phtml` HTML 正文/属性内 `<?= __('...') ?>` | — |
 | **定时翻译进度、队列/cron 是否在跑、翻译记录有没有新增、运行状态查询** | 本文 `runtime_status_query_local_first`；MCP `hard_constraints.mcp_operational` | **未明示就查生产/SSH weline**；把 SSH 默认 profile 当默认查线上；「翻译特例必须查生产」 | 默认查本机 DB/进程；仅用户说线上/生产/ssh weline/aiweline.com 才查远端 |
-| i18n CSV、中英翻译、collect | [模块翻译CSV规范.md](../I18n/doc/模块翻译CSV规范.md) | 只改 CSV 不 `i18n:collect`；缺 en_US 或前后台词条不对齐 | `php bin/w i18n:collect Weline_Module` |
+| i18n CSV、中英翻译、collect | [模块翻译CSV规范.md](../I18n/doc/模块翻译CSV规范.md)；MCP `module_i18n_csv_collect` / surface `module_i18n_csv` | 只改 CSV 不 `i18n:collect`；缺 en_US；**en_US 第二列仍为中文 source 占位**；前后台词条不对齐 | `php bin/w i18n:collect Weline_Module`；交付前抽检 en_US 用户可见词条为英文 |
 | 新建 Hook、`view/hooks` | [Hook创建规范.md](../Hook/doc/Hook创建规范.md)、[Hook使用指南.md](../Theme/doc/Hook使用指南.md) | 只有 `.phtml` 无 `hook.php` + `doc/hook/*.md`；**type 段发明 `theme-editor`/`checkout` 等功能名**（须 `partials` 或 `layouts`） | `php bin/w setup:upgrade --route` |
 | 新建 Event、Observer、`event.xml` | [事件命名与注册规范.md](../Framework/doc/3-开发/事件命名与注册规范.md)、[event/README.md](../Framework/doc/event/README.md) | 发明未文档化事件名；跨模块直调 Service | 检索 `doc/event/` 与 dispatch 一致 |
 | 跨模块读/写 | [扩展点选型.md](../Framework/doc/3-开发/扩展点选型.md) | 跨模块 `new` 对方 Service/Model | — |
 | 浏览器 AJAX、表单提交 | [Weline.Api使用指南.md](../Frontend/doc/Weline.Api使用指南.md) | raw `fetch` / `axios` / `$.ajax` | — |
 | 后台页面、Toast、Confirm | [开发标准与验收.md](../Framework/doc/3-开发/开发标准与验收.md)；**MCP** `no_native_js_dialogs`（独立高压线，勿埋进 `no_generated_no_routes_xml`） | JS `alert` / `confirm` / `prompt`；业务页用原生对话框代替 `Weline.UI.toast` / `Weline.UI.dialog.confirm` / `Theme.Notice` | 契约断言模板/脚本无 `window.alert(` / `window.confirm(` / `window.prompt(` |
 | 缓存、HotCache、WLS、CachePool、进程内 memo、清理不同步 | [统一缓存范围与性能优化.md](../Framework/doc/统一缓存范围与性能优化.md)、[开发标准与验收.md](../Framework/doc/3-开发/开发标准与验收.md) | **业务类再自做一层进程内缓存**（绕开 CachePool/Adapter）；读写/清理 **key 不一致**；清理只清驱动不清进程内（或反之）；可变 Model/个性化 HTML/草稿/未提交事务读进共享缓存 | 可缓存事实走 Framework **缓存类**：进程内存储 → 驱动存储；**同 key** 读写与清理同步；单次读命中进程内则不再打驱动。`cache_lookup_tier_process_shared_db` **已取消**（勿再当 MCP 硬规则要求业务类自做三层） |
-| ORM、Model、Schema | [模块版本与升级门禁.md](../Framework/doc/3-开发/模块版本与升级门禁.md)、[模块开发完整指南.md](../Framework/doc/3-开发/模块开发完整指南.md) | 改 Model/Controller 不 bump `etc/module.php` version；密封编辑缺 bump → `EDIT_MODULE_VERSION_REQUIRED` | `php bin/w setup:upgrade -m Weline_Module` |
+| ORM、Model、Schema | [模块版本与升级门禁.md](../Framework/doc/3-开发/模块版本与升级门禁.md)、[模块开发完整指南.md](../Framework/doc/3-开发/模块开发完整指南.md) | 改 Model/Controller 不 bump `etc/module.php` version | `php bin/w setup:upgrade -m Weline_Module` |
 | 新建 Controller、路由、后台链接 | 同上 §控制器；**URL 动作为 `edit`/`add`/`save`，禁止写成 `getEdit`/`getAdd`/`postSave`** | 把 `get*`/`post*` 方法前缀拼进 URL | `php bin/w setup:upgrade --route`；对照 [03-自定义控制器.md §HTTP方法](../Framework/doc/2-快速开始/03-自定义控制器.md) |
-| 交付、验收 URL、Browser 自测、**自行验证**、**功能 e2e**、**章通路+计划组套件**、**禁止甩测给用户** | [WebUI浏览器验收与交付地址门禁.md](../Framework/doc/3-开发/WebUI浏览器验收与交付地址门禁.md)、[开发标准与验收.md](../Framework/doc/3-开发/开发标准与验收.md)、[AI工程交付流程.md](./AI工程交付流程.md) §6–§7；MCP `agent_self_verify_before_done` / `browser_operator_self_test` / **`ui_feature_requires_e2e`** / **`plan_full_pathway_e2e_suite`** / **`forbid_user_manual_test_handoff`** / `feature_delivery_urls` / `closeout_delivery_reminder` / `browser_cache_disabled_on_open` / `browser_release_after_delivery` | **只改代码不跑 UT/RT/WB**；无 evidence 标 acceptance passed；单测/curl/**仅 CDP** 冒充 e2e 完成；**请用户测试/刷新再试**；**只做部分章节不测就汇报完成**；省略「交付地址」；臆造路由；写死某一 IDE Browser；**主 Host 用 `*.weline.test` 或在有 `*.test.weline.com` 时强行 `127.0.0.1`**；**带着默认缓存验本回合静态资源**；**写完交付地址仍不关验收 Browser**；**任何 feature 无章通路 `type=e2e` / 无 `e2e-plan-suite` / 未跑 `php bin/w e2e:run` PASS / 用 skipped 冒充** | 实现后 Agent **亲自**按验收层级验证；`passed/skipped/na` 须带 evidence；**feature 每章通路 e2e + 计划组套件必须 status=passed**；宿主可用真实 Browser：**打开即禁用缓存**后跑用例 + curl 探活；**任何 feature 须 Playwright 章 e2e + 收口组套件 PASS，禁止甩测给用户**；本机主链默认 `{project_hash}.test.weline.com`；汇报「交付地址」后立即关闭本回合验收标签 |
+| 交付、验收 URL、Browser 自测、**自行验证**、**功能 e2e**、**章通路+计划组套件**、**禁止甩测给用户**、**e2e 默认无头** | [WebUI浏览器验收与交付地址门禁.md](../Framework/doc/3-开发/WebUI浏览器验收与交付地址门禁.md)、[开发标准与验收.md](../Framework/doc/3-开发/开发标准与验收.md)、[AI工程交付流程.md](./AI工程交付流程.md) §6–§7；MCP `agent_self_verify_before_done` / `browser_operator_self_test` / **`ui_feature_requires_e2e`** / **`plan_full_pathway_e2e_suite`** / **`forbid_user_manual_test_handoff`** / **`e2e_playwright_headless_default`** / `feature_delivery_urls` / `closeout_delivery_reminder` / `browser_cache_disabled_on_open` / `browser_release_after_delivery` | **只改代码不跑 UT/RT/WB**；无 evidence 标 acceptance passed；单测/curl/**仅 CDP** 冒充 e2e 完成；**请用户测试/刷新再试**；**只做部分章节不测就汇报完成**；省略「交付地址」；臆造路由；写死某一 IDE Browser；**主 Host 用 `*.weline.test` 或在有 `*.test.weline.com` 时强行 `127.0.0.1`**；**带着默认缓存验本回合静态资源**；**写完交付地址仍不关验收 Browser**；**任何 feature 无章通路 `type=e2e` / 无 `e2e-plan-suite` / 未跑 `php bin/w e2e:run` PASS / 用 skipped 冒充**；**Agent 跑 e2e 默认 `--headed` 弹 Chromium 干扰桌面** | 实现后 Agent **亲自**按验收层级验证；`passed/skipped/na` 须带 evidence；**feature 每章通路 e2e + 计划组套件必须 status=passed**；**e2e 默认无头**（勿加 `--headed`/`--ui` 除非用户要求观看）；宿主可用真实 Browser：**打开即禁用缓存**后跑用例 + curl 探活；**任何 feature 须 Playwright 章 e2e + 收口组套件 PASS，禁止甩测给用户**；本机主链默认 `{project_hash}.test.weline.com`；汇报「交付地址」后立即关闭本回合验收标签 |
 | Cursor 调试 ingest、`127.0.0.1:7277`、`#region agent log`、CSP `connect-src` 拦截调试 | [安全响应头策略.md](../Framework/doc/3-开发/安全响应头策略.md)「开发态 CSP 工具链片段」；MCP `cursor_debug_csp_developer_tooling` | 把 Cursor localhost 写进 Framework `SecurityHeaderDefaults` / Extends `Security/Csp` 应用默认；生产基线永久放行 7277；依赖调试记录却不配 Env | 本机 `app/etc/env.php` → `security.headers.csp_developer_tooling` = `connect-src http://127.0.0.1:7277 http://localhost:7277`；仅 DEV/DEBUG 响应时 union；控制台不再 CSP 拦 ingest |
 | 多 todo 计划收口、进度汇报 | [AI工程交付流程.md](./AI工程交付流程.md) §7；MCP `plan_todo_evidence_closeout` | 计划未逐项举证就宣称「已完成」；Cursor todo 无证据标 completed；隐瞒未清库/未删代码/未跑 Factory Reset | 对每个 todo 给出路径/DB/命令/Browser 证据；部分完成须列「未完成清单」并写入 `doc/开发日志.md` |
-| 计划合规审核、章节 e2e 闭环、计划组套件、串行进度 | [AI工程交付流程.md](./AI工程交付流程.md) §3–§6；MCP `task_plan_compliance_review` / `chapter_ut_rt_wb_dl` / `plan_full_pathway_e2e_suite` | 计划不审架构/解耦/电商合规/原型/e2e/体量/闭环；多任务无章节；章节无 `acceptance_ids`；多章共用同一 e2e；缺 `e2e-plan-suite`；未完成绑定验收就标 done/开下一章；并行多个 in_progress；半截汇报/甩人测 | `dev_tasks.acceptance_ids` 硬绑定；feature 章独立通路 e2e + 收口组套件；passed+evidence 后才 done；`review_task_plan.compliance_dimensions` |
-| 密封编辑、写码前计划、`PLAN_REQUIRED`、每条编码需求完整工作流、**TDD**、**计划合规审核（架构/解耦/电商合规/原型/e2e/体量/闭环）**、**章节=e2e闭环**、**框架审视纠偏**、**功能判定/隐形需求分析/原型·UI 按分析决策**、**加功能先审当前图**、**功能页一页宜简顶部 Tab**、**验收审图**、**结束汇审**、**架构层映射需求**、**框架解耦/禁止耦合** | [AI工程交付流程.md](./AI工程交付流程.md) §1–§4 / §6–§7；[扩展点选型.md](../Framework/doc/3-开发/扩展点选型.md)；MCP `user_requirement_full_workflow` / `task_plan_compliance_review` / `requirement_framework_scrutiny` / `requirement_feature_kind_gate` / `requirement_implicit_analysis_skill_decision` / `feature_add_requires_current_ui_review` / `feature_ui_keep_simple_top_tabs` / `acceptance_phase_requires_shentu` / `closeout_requires_huishen` / `architecture_first_for_requirements` / `framework_decoupled_only` / `plan_then_tdd_required` / `mcp_call_scope` | 编码需求提出后不立即 `submit_task_plan`；**跳过 `work_kind`/`requirement_scrutiny`/`architecture`/`coupling_findings` 直接改码**；计划未按七维合规审核；多任务无章节细节；章节无 e2e 闭环；未标进度就开下一章；未写 `implicit_requirements`/`ui_skill_decision`；凡 feature 一律强制原型+UI；participate 却不让 `prototype`+`frontend-design` 参与；**既有页加功能却不截当前图/现页已乱仍硬塞控件**；**进度+配置等不同职责堆同一长页**；验收阶段不做审图；结束无汇审；**字面照做不合理需求**；**耦合写法**；计划无 `type=unit`；先堆业务代码后补测；**未实际跑测就宣称完成**；有纠偏却不在汇报「需求纠偏」列出；发现耦合却不在汇报「耦合提示」列出；非编码却强调 MCP；把 `PLAN_REQUIRED` 当完成 | `php app/code/Weline/Ai/Mcp/tests/task-plan-gate.php`；计划含 `work_kind` +（功能时）`skill_participation`+`type=shentu` + requirement_scrutiny + architecture + coupling_findings + unit；`review_task_plan` 含 `compliance_dimensions`；多任务章节化且每章闭环；验收含审图证据；收口含 `huishen_notes` 汇审；汇报含「需求纠偏」「耦合提示」「汇审」；红→绿→跑通并写 PASS evidence |
+| 计划合规审核、章节 e2e 闭环、计划组套件、串行进度 | [AI工程交付流程.md](./AI工程交付流程.md) §3–§6；MCP `task_plan_compliance_review` / `chapter_ut_rt_wb_dl` / `plan_full_pathway_e2e_suite` | 计划不审架构/解耦/电商合规/原型/e2e/体量/闭环；多任务无章节；章节无 `acceptance_ids`；多章共用同一 e2e；缺 `e2e-plan-suite`；未完成绑定验收就标 done/开下一章；并行多个 in_progress；半截汇报/甩人测 | `dev_tasks.acceptance_ids` 硬绑定；feature 章独立通路 e2e + 收口组套件；passed+evidence 后才 done；收口自检 `compliance_dimensions` |
+| 写码前计划、TDD、**需求澄清/用例规格(EARS+UC)**、**宿主 Plan Mode（简单可 skip）**、**需求必验收/本机 Browser**、**前后端范围分析**、框架审视纠偏、功能判定/隐形需求分析/横切触点清单/原型·UI 按分析决策、视觉 UI 信号强制 participate、加功能先审当前图、功能页分组强制顶部 Tab/展开卡片、验收审图、结束汇审、架构层映射需求、结构化 architecture_design、framework_candidates、框架解耦/禁止耦合 | [AI工程交付流程.md](./AI工程交付流程.md) §1–§4 / §6–§7；[需求澄清与用例规格.md](../../../../../dev/ai-command/ai/需求澄清与用例规格.md)；[扩展点选型.md](../Framework/doc/3-开发/扩展点选型.md)；MCP `requirement_clarify_use_case_spec` / `host_plan_mode_for_planning` / `requirement_acceptance_always` / `requirement_fe_be_scope_analysis` / `requirement_framework_scrutiny` / `requirement_feature_kind_gate` / `requirement_implicit_analysis_skill_decision` / `requirement_cross_layer_impact_gate` / `ui_skill_surface_signal_gate` / `architecture_first_for_requirements` / `architecture_design_structured` / `framework_decoupled_only` / `closeout_requires_huishen` / `agent_self_verify_before_done` / `ui_feature_requires_e2e` / `browser_operator_self_test` | 跳过澄清/用例规格直改代码；跳过计划却跳过验收；有 Web 无 Browser 真机验；布局/吐槽/审图不让原型+UI 调整；字面照做不合理需求；耦合写码；非简单 feature 无 e2e；跳过汇审 | 宿主原生编辑 + UT/RT/WB/e2e；文档收口 |
 
 ## 写 HTML / 模板前决策流（硬规则）
 
@@ -163,17 +165,16 @@ MCP 子进程只允许只读 Git 检查，禁止上述全部 Git 写操作，禁
 | 验收 Browser 未禁用缓存就验本回合 UI | [WebUI浏览器验收与交付地址门禁.md](../Framework/doc/3-开发/WebUI浏览器验收与交付地址门禁.md) 门禁 A WB-CACHE；MCP `browser_cache_disabled_on_open` |
 | 写完交付地址仍不关验收 Browser | [WebUI浏览器验收与交付地址门禁.md](../Framework/doc/3-开发/WebUI浏览器验收与交付地址门禁.md) 门禁 D；MCP `browser_release_after_delivery` |
 | 主验收 Host 写成 `*.weline.test` 或强行 `127.0.0.1` | 同上「本机默认 Host」；默认 `{project_hash}.test.weline.com` |
-| 未自行验证就宣称完成 / acceptance 无 evidence / 功能缺审图 / 缺汇审 | [开发标准与验收.md](../Framework/doc/3-开发/开发标准与验收.md)；MCP `agent_self_verify_before_done` / `acceptance_phase_requires_shentu` / `closeout_requires_huishen`；`review_task_plan` 缺 evidence/汇审 → closeout_allowed=false |
-| 未规划 / 未 TDD / unit 无真实跑测 evidence | [AI工程交付流程.md](./AI工程交付流程.md)；MCP `plan_then_tdd_required`（计划须含 unit；红→绿；PASS evidence） |
+| 未自行验证就宣称完成 / acceptance 无 evidence / 功能缺审图 / 缺汇审 | [开发标准与验收.md](../Framework/doc/3-开发/开发标准与验收.md)；MCP `agent_self_verify_before_done` / `acceptance_phase_requires_shentu` / `closeout_requires_huishen` |
+| 未规划 / 未 TDD / unit 无真实跑测 evidence | [AI工程交付流程.md](./AI工程交付流程.md)（先计划；红→绿；PASS evidence） |
 | 未 Browser 自测就宣称完成 | 同上；只能报「代码已改，WebUI 验收未完成」 |
-| 多 todo 计划未逐项举证就说「已完成」 | [AI工程交付流程.md](./AI工程交付流程.md) §7（`plan_todo_evidence_closeout`）；须报「部分完成」+ 未完成清单 | |
-| 计划未按七维合规审核 / 多任务无章节 e2e 闭环 / 未标进度就下一章 | [AI工程交付流程.md](./AI工程交付流程.md) §3（`task_plan_compliance_review`）；`review_task_plan.compliance_dimensions`；`dev_tasks.acceptance_ids` 硬绑定 | |
+| 多 todo 计划未逐项举证就说「已完成」 | [AI工程交付流程.md](./AI工程交付流程.md) §7；须报「部分完成」+ 未完成清单 |
+| 计划未按七维合规审核 / 多任务无章节 e2e 闭环 / 未标进度就下一章 | [AI工程交付流程.md](./AI工程交付流程.md) §3 |
 | 让用户手写 MCP Settings | [AGENTS.md](../../../AGENTS.md) |
 | 手写 `.cursor/rules` / Codex 私有规则当权威 | 本文 `host_editor_rules_mcp_generated_only`；仅允许 MCP 生成宿主规则产物 |
 | 查翻译/cron/队列状态默认去生产 / 把 SSH 默认 profile 当默认查线上 | 本文 `runtime_status_query_local_first`；无翻译特殊线上规定 |
-| 改 Model 字段不 bump 模块 version | [模块版本与升级门禁.md](../Framework/doc/3-开发/模块版本与升级门禁.md)（MCP 密封编辑强制 `EDIT_MODULE_VERSION_REQUIRED`） |
-| 无会话计划就密封编辑 | [AI工程交付流程.md](./AI工程交付流程.md)（`submit_task_plan` → `task-plan.v1` 含 `requirements`；否则 `PLAN_REQUIRED`） |
-| 用户提出需求后不建完整工作流 / 功能不标 work_kind / 验收无审图 / 结束无汇审 | 同上 §1–§7（`user_requirement_full_workflow` / `requirement_feature_kind_gate` / `acceptance_phase_requires_shentu` / `closeout_requires_huishen`） |
+| 改 Model 字段不 bump 模块 version | [模块版本与升级门禁.md](../Framework/doc/3-开发/模块版本与升级门禁.md) |
+| 用户提出需求后不澄清/不写用例规格 / 计划阶段不启用宿主 Plan Mode / 不分析 / 功能不标 work_kind / 验收无审图 / 结束无汇审 | [AI工程交付流程.md](./AI工程交付流程.md) §1–§7；[需求澄清与用例规格.md](../../../../../dev/ai-command/ai/需求澄清与用例规格.md)（`requirement_clarify_use_case_spec` / `host_plan_mode_for_planning` / `requirement_feature_kind_gate` / `acceptance_phase_requires_shentu` / `closeout_requires_huishen`） |
 | 新建 Controller 不 upgrade/route | 同上 |
 | URL 写成 `/getEdit`、`/getAdd`、`/postSave` | [03-自定义控制器.md §HTTP方法](../Framework/doc/2-快速开始/03-自定义控制器.md)：`getEdit()`→路径 `/edit`，`postSave()`→`/save`；前缀只约束请求方法 |
 | 改 CSV 不 collect / en_US 未译 | [模块翻译CSV规范.md](../I18n/doc/模块翻译CSV规范.md) |
@@ -190,7 +191,7 @@ get_indexed_document(path="app/code/Weline/Ai/doc/AI硬规则索引.md")
 
 会话完整硬约束由 `prepare_project.agent_guidance.hard_constraints` 提供。后续 `guidance-bundle.v1.workflow_contract`（`workflow-contract.v1`）只返回任务匹配的规范和权威文档入口；正常响应不再重复下发全量工作流、固定 `pinned_fragments` 或前端兼容别名。`rules` 可携带验证后的学习规则，`sources`、`pinned_fragments` 仅为可选旧版字段。
 
-`fragments` 自带路径、行号与来源 hash。`content_hash` 标识完整索引源片段，不是返回摘要的 hash；最终预算再次裁剪正文时标记 `content_truncated=true`，来源 hash 保持不变。编辑符号须使用 `get_edit_bundle` 的完整区域和编辑 guard。
+`fragments` 自带路径、行号与来源 hash。`content_hash` 标识完整索引源片段，不是返回摘要的 hash；最终预算再次裁剪正文时标记 `content_truncated=true`，来源 hash 保持不变。编辑符号时以当前磁盘源码为准，保留完整区域上下文。
 
 `token_usage.estimated` 按完整序列化工具响应的 Unicode 字符数除以 4 估算，包含封装；不是模型 tokenizer 实测。若预算小于必要约束和会话元数据的固定成本，返回真实估算及 `budget_exceeded=true`，不新增执行门禁。
 

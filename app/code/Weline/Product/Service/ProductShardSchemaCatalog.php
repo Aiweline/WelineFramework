@@ -16,7 +16,7 @@ use Weline\Product\Model\ProductShardKey;
 final class ProductShardSchemaCatalog
 {
     /** Schema generation for overlay/cleared/COW, media CAS, brand/supplier images. */
-    public const SCHEMA_VERSION = '4.7.0';
+    public const SCHEMA_VERSION = '4.9.0';
 
     /** @var list<string> */
     public const ENTITIES = ProductShardKey::ENTITY_CODES;
@@ -78,6 +78,7 @@ final class ProductShardSchemaCatalog
                     new ColumnDefinition('is_default', 'tinyint', 1, false, false, false, 0, 'Default Offer'),
                     new ColumnDefinition('requires_shipping', 'tinyint', 1, false, false, false, 1, 'Requires shipping'),
                     new ColumnDefinition('shipping_profile_code', 'varchar', 50, true, false, false, null, 'Opaque shipping service profile code'),
+                    new ColumnDefinition('shipping_hazard_class', 'varchar', 64, true, false, false, null, 'Hazard class for shipping capability gate'),
                     new ColumnDefinition('type_config_json', 'text', null, true, false, false, null, 'Provider Offer configuration JSON'),
                     new ColumnDefinition('status', 'varchar', 32, false, false, false, 'draft', 'Status'),
                     new ColumnDefinition('publish_version', 'int', 11, false, false, false, 0, 'Optimistic publish version'),
@@ -103,6 +104,7 @@ final class ProductShardSchemaCatalog
                     new ColumnDefinition('path', 'varchar', 512, false, false, false, '', 'Path'),
                     new ColumnDefinition('position', 'int', 11, false, false, false, 0, 'Sort position among siblings'),
                     new ColumnDefinition('status', 'varchar', 32, false, false, false, 'active', 'Status'),
+                    new ColumnDefinition('shipping_profile_code', 'varchar', 64, true, false, false, null, 'Shipping profile code'),
                 ],
                 indexes: [
                     new IndexDefinition('uk_global_category_uuid', ['global_category_uuid'], 'UNIQUE'),

@@ -22,6 +22,14 @@ abstract class AbstractSocialPlatformProvider implements SocialPlatformProviderI
         return (string)($this->getDefinition()['code'] ?? '');
     }
 
+    /**
+     * @return array<string, list<string>>
+     */
+    public function cspDirectives(): array
+    {
+        return [];
+    }
+
     public function getDefinition(): array
     {
         $definition = static::DEFINITION;

@@ -12,7 +12,8 @@
 | 可视化编辑 | Theme Editor，`layout_type=faq` |
 | 布局壳 | Theme `layouts/faq`；商品页仅空槽 `product-faq` |
 | SEO | Hub `FaqSeoProfileProvider`；商品 `ProductFaqSeoProfileProvider` |
-| 搜索 | `FaqSearchProvider`（site 条目 + CMS faq 页 + product 条目） |
+| 搜索 | `FaqSearchProvider`（site + product 条目 + CMS faq；跳过 template） |
+| PDP 解析 | `FaqPdpResolveService` + SystemConfig `faq/pdp/*` + 模板 pack 种子 |
 
 ## CMS PageKind
 

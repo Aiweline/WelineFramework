@@ -54,6 +54,7 @@ trash,trash
 加载优惠券列表失败：%{1},"Failed to load coupon list: %{1}"
 优惠券不存在,优惠券不存在
 加载优惠券表单失败：%{1},"Failed to load coupon form: %{1}"
+后台手工,后台手工
 优惠券更新成功,优惠券更新成功
 优惠券保存成功,"Coupon saved successfully"
 保存优惠券失败：%{1},"Failed to save coupon: %{1}"
@@ -71,27 +72,33 @@ trash,trash
 免除订单运费,"Free shipping for order"
 百分比折扣,"Percentage Discount"
 按百分比折扣，支持设置最大折扣金额,"Percentage discount with maximum discount amount support"
-"享受 %.2f%% 折扣，优惠 %.2f 元","Enjoy %.2f%% discount, save %.2f yuan"
+百分比封顶额换算失败：缺少基准货币到结账货币的汇率,百分比封顶额换算失败：缺少基准货币到结账货币的汇率
+"享受 %.2f%% 折扣，优惠 %s %.2f","享受 %.2f%% 折扣，优惠 %s %.2f"
 折扣百分比,"Discount Percentage"
-最大折扣金额,"Maximum Discount Amount"
+最大折扣金额（%{1}）,最大折扣金额（%{1}）
+封顶金额按站点基准货币录入；结账时按汇率换算。,封顶金额按站点基准货币录入；结账时按汇率换算。
 应用于,"Apply To"
 订单小计,"Order Subtotal"
 运费,Shipping
 匹配商品行,匹配商品行
 买X送Y,"Buy X Get Y"
 购买X件商品，赠送Y件商品（或折扣）,"Buy X items, get Y items (or discount)"
-"买 %d 送 %d，共赠送 %d 件商品，优惠 %.2f 元","Buy %d and get %d for free. A total of %d products will be given away, with a discount of %.2f yuan."
-"买 %d 送 %d，享受 %.2f%% 折扣，优惠 %.2f 元","Buy %d and get %d free, enjoy %.2f%% discount, %.2f yuan discount"
-"买 %d 送 %d，每次优惠 %.2f 元，共优惠 %.2f 元","Buy %d and get %d free, discount %.2f yuan each time, total discount %.2f yuan"
+"买 %d 送 %d，共赠送 %d 件商品，优惠 %s %.2f","买 %d 送 %d，共赠送 %d 件商品，优惠 %s %.2f"
+"买 %d 送 %d，享受 %.2f%% 折扣，优惠 %s %.2f","买 %d 送 %d，享受 %.2f%% 折扣，优惠 %s %.2f"
+买X送Y固定额换算失败：缺少基准货币到结账货币的汇率,买X送Y固定额换算失败：缺少基准货币到结账货币的汇率
+"买 %d 送 %d，每次优惠 %s %.2f，共优惠 %s %.2f","买 %d 送 %d，每次优惠 %s %.2f，共优惠 %s %.2f"
 购买数量（X）,"Buy Quantity (X)"
 赠送数量（Y）,"Get Quantity (Y)"
 赠送类型,"Gift Type"
 免费赠送,"Free Gift"
 固定金额折扣,"Fixed Amount Discount"
-折扣值（百分比或金额）,"Discount Value (Percentage or Amount)"
-按固定金额折扣,"Fixed amount discount"
-"优惠 %.2f 元","Discount %.2f yuan"
-折扣金额,"Discount Amount"
+"折扣值（百分比或金额；固定额为 %{1}）","折扣值（百分比或金额；固定额为 %{1}）"
+选择固定金额时按站点基准货币录入，结账按汇率换算。,选择固定金额时按站点基准货币录入，结账按汇率换算。
+按固定金额折扣（金额为站点基准货币，结账币种自动换算）,按固定金额折扣（金额为站点基准货币，结账币种自动换算）
+固定优惠换算失败：缺少基准货币到结账货币的汇率,固定优惠换算失败：缺少基准货币到结账货币的汇率
+"优惠 %s %.2f","优惠 %s %.2f"
+折扣金额（%{1}）,折扣金额（%{1}）
+"固定金额按站点基准货币录入；结账时按汇率换算到当前货币，禁止按数字 1:1 跨币种扣减。","固定金额按站点基准货币录入；结账时按汇率换算到当前货币，禁止按数字 1:1 跨币种扣减。"
 赠品产品,"Gift Product"
 赠送指定产品,"Gift specified product"
 "赠送产品 ID: %d，数量: %d","Free product ID: %d, quantity: %d"
@@ -112,12 +119,13 @@ trash,trash
 配送方式,"Shipping Method"
 根据配送方式进行条件判断,"Condition based on shipping method"
 订单金额,"Order Amount"
-根据订单小计金额进行条件判断,"Condition based on order subtotal"
+根据订单小计金额进行条件判断（门槛金额为站点基准货币）,根据订单小计金额进行条件判断（门槛金额为站点基准货币）
 "订单金额 >=","Order Amount >="
 "订单金额 <=","Order Amount <="
 "订单金额 >","Order Amount >"
 "订单金额 <","Order Amount <"
-金额,Amount
+金额（%{1}）,金额（%{1}）
+门槛按站点基准货币录入；结账时按汇率换算后与订单小计比较。,门槛按站点基准货币录入；结账时按汇率换算后与订单小计比较。
 产品分类,"Product Category"
 根据产品分类进行条件判断,"Condition based on product category"
 分类,Category
@@ -140,7 +148,8 @@ SKU,SKU
 "价格 <=","Price <="
 "价格 >","Price >"
 "价格 <","Price <"
-价格,Price
+价格（%{1}）,价格（%{1}）
+价格门槛按站点基准货币录入；结账时按汇率换算后与商品行价格比较。,价格门槛按站点基准货币录入；结账时按汇率换算后与商品行价格比较。
 匹配类型,"Match Type"
 任一产品,"Any Product"
 所有产品,"All Products"
@@ -200,6 +209,7 @@ VIP等级,"VIP Level"
 "累计消费 <=","Total Spent <="
 "累计消费 >","Total Spent >"
 "累计消费 <","Total Spent <"
+金额,Amount
 生日,Birthday
 根据客户生日进行条件判断（支持生日月、生日周、生日当天）,"Condition based on customer birthday (supports birthday month, week, and day)"
 类型,Type
@@ -211,9 +221,6 @@ VIP等级,"VIP Level"
 包含任一标签,"Contains Any Tag"
 不包含任一标签,"Not Contains Any Tag"
 标签,Tag
-当前暂无进行中的活动，请稍后再来看看。,"There are no active campaigns right now. Please check back later."
-优惠券代码,"Coupon Code"
-应用,Apply
 优惠券,Coupon
 请输入优惠券代码,"Please enter a coupon code"
 该优惠券已应用,"This coupon is already applied"
@@ -223,26 +230,58 @@ VIP等级,"VIP Level"
 已移除优惠券,"Coupon removed"
 输入优惠券代码,"Enter coupon code"
 应用中...,Applying...
+当前暂无进行中的活动，请稍后再来看看。,"There are no active campaigns right now. Please check back later."
+优惠券代码,"Coupon Code"
+应用,Apply
 优惠券列表,"Coupon List"
 添加优惠券,"Add Coupon"
+无匹配结果，请调整筛选条件,无匹配结果，请调整筛选条件
 暂无数据,"No data"
-ID,ID
-折扣值,"Discount Value"
+维护等待礼金,维护等待礼金
+促销活动主题,促销活动主题
+启用,Enable
+禁用,Disable
+已过期,Expired
+已用尽,已用尽
+固定金额,"fixed amount"
+赠品,giveaway
+搜索代码,搜索代码
+"优惠券代码，如 MW / SAVE","优惠券代码，如 MW / SAVE"
+来源活动,来源活动
+全部来源,全部来源
+全部类型,全部类型
 状态,Status
+全部状态,全部状态
+筛选,筛选
+重置,重置
+ID,ID
+来源,来源
+"折扣值（基准货币 %{1}）","折扣值（基准货币 %{1}）"
 使用次数,"Usage Count"
 操作,Action
 编辑,Edit
 返回列表,"Return to list"
+"固定金额与最低订单金额一律按站点基准货币 %{1} 录入；结账时按汇率换算到顾客货币。勿把 USD 10 与 CNY 10 当作同一数字。","固定金额与最低订单金额一律按站点基准货币 %{1} 录入；结账时按汇率换算到顾客货币。勿把 USD 10 与 CNY 10 当作同一数字。"
+基础信息,基础信息
 营销规则,"Marketing Rule"
 请选择,"Please select"
+"例如 SAVE10","例如 SAVE10"
+顾客结账时输入的代码，建议大写字母与数字。,顾客结账时输入的代码，建议大写字母与数字。
+优惠设置,优惠设置
+站点基准货币,站点基准货币
 优惠类型,"Offer type"
-固定金额,"fixed amount"
-赠品,giveaway
-启用,Enable
-禁用,Disable
-最低订单金额,"Minimum order amount"
+折扣值（%）,折扣值（%）
+折扣值,"Discount Value"
+"百分比折扣不带货币单位；例如 10 表示减免 10%。","百分比折扣不带货币单位；例如 10 表示减免 10%。"
+"此数字按站点基准货币 %{1} 配置；结账时按汇率换算到顾客货币。","此数字按站点基准货币 %{1} 配置；结账时按汇率换算到顾客货币。"
+当前类型无需填写折扣数值。,当前类型无需填写折扣数值。
+使用限制,使用限制
+"最低订单金额（基准货币 %{1}）","最低订单金额（基准货币 %{1}）"
+"此金额按站点基准货币 %{1} 配置门槛；结账币种会按汇率换算后比较。0 表示不限制。","此金额按站点基准货币 %{1} 配置门槛；结账币种会按汇率换算后比较。0 表示不限制。"
 总使用次数,"total number of uses"
+"全站合计可用次数；0 表示不限制。","全站合计可用次数；0 表示不限制。"
 每客户次数,"times per customer"
+同一顾客最多可用次数。,同一顾客最多可用次数。
 更新优惠券,更新优惠券
 保存优惠券,"Save Coupon"
 万能优惠规则列表与维护入口,万能优惠规则列表与维护入口
@@ -259,7 +298,6 @@ ID,ID
 规则类型,"Rule type"
 促销活动,Promotion
 自动规则,"Automated rules"
-已过期,Expired
 促销活动列表,"Campaign List"
 添加活动,"Add Campaign"
 活动名称,"Campaign Name"
@@ -277,6 +315,8 @@ ID,ID
 活动状态无效,"Activity status is invalid"
 活动结束时间必须晚于开始时间,"Event end time must be later than start time"
 活动预算不能为负数,"Campaign budget cannot be negative"
+%{1}（%{2}）,%{1}（%{2}）
+未知来源,未知来源
 优惠券必须绑定有效营销规则,"Coupons must be bound to valid marketing rules"
 优惠券类型无效,"Invalid coupon type"
 优惠券状态无效,"Coupon status is invalid"
@@ -290,6 +330,22 @@ ID,ID
 系统同步折扣不可在折扣模块修改。请到「%{1}」管理对应活动以禁用或调整。,"System-synced discounts cannot be edited in Marketing. Manage/disable the activity in \"%{1}\"."
 系统同步折扣不可在折扣模块删除。请到「%{1}」管理对应活动以禁用或调整。,"System-synced discounts cannot be deleted in Marketing. Manage/disable the activity in \"%{1}\"."
 来源业务模块,"Source business module"
+"固定金额按站点基准货币 %{1} 录入，结账时按汇率换算。","固定金额按站点基准货币 %{1} 录入，结账时按汇率换算。"
+最低订单金额,"Minimum order amount"
+"按站点基准货币 %{1} 判定门槛；0 表示不限制。","按站点基准货币 %{1} 判定门槛；0 表示不限制。"
+基准货币,基准货币
+最低订单金额（%{1}）,最低订单金额（%{1}）
+"享受 %.2f%% 折扣，优惠 %.2f 元","Enjoy %.2f%% discount, save %.2f yuan"
+最大折扣金额,"Maximum Discount Amount"
+"买 %d 送 %d，共赠送 %d 件商品，优惠 %.2f 元","Buy %d and get %d for free. A total of %d products will be given away, with a discount of %.2f yuan."
+"买 %d 送 %d，享受 %.2f%% 折扣，优惠 %.2f 元","Buy %d and get %d free, enjoy %.2f%% discount, %.2f yuan discount"
+"买 %d 送 %d，每次优惠 %.2f 元，共优惠 %.2f 元","Buy %d and get %d free, discount %.2f yuan each time, total discount %.2f yuan"
+折扣值（百分比或金额）,"Discount Value (Percentage or Amount)"
+按固定金额折扣,"Fixed amount discount"
+"优惠 %.2f 元","Discount %.2f yuan"
+折扣金额,"Discount Amount"
+根据订单小计金额进行条件判断,"Condition based on order subtotal"
+价格,Price
 优惠券无效或不可用,"Coupon is invalid or unavailable"
 后台,Background
 营销,Marketing

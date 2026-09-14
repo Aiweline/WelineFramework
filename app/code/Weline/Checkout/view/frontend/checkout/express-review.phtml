@@ -5,26 +5,79 @@
  * @var \Weline\Framework\View\Template $this
  */
 $transactionNo = trim((string) ($this->getData('transaction_no') ?? ''));
+$checkoutGroupUuid = trim((string) ($this->getData('checkout_group_uuid') ?? ''));
+$alreadyPaid = !empty($this->getData('already_paid'));
+$alreadyPaidMessage = trim((string) ($this->getData('already_paid_message') ?? ''));
+$alreadyPaidMethod = trim((string) ($this->getData('already_paid_method_label') ?? ''));
+$alreadyPaidRedirect = trim((string) ($this->getData('already_paid_redirect') ?? ''));
 $esc = static fn (string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8');
 ?>
-<section class="w-express-review"
+<section class="w-express-review<?= $alreadyPaid ? ' is-already-paid' : '' ?>"
          weline-code="checkout.express-review.root"
          data-testid="checkout-express-review"
          data-weline-checkout-express-review
          data-transaction-no="<?= $esc($transactionNo) ?>"
+         data-checkout-group-uuid="<?= $esc($checkoutGroupUuid) ?>"
+         data-already-paid="<?= $alreadyPaid ? '1' : '0' ?>"
+         data-already-paid-redirect="<?= $esc($alreadyPaidRedirect) ?>"
          data-weline-load="checkoutExpressReview">
     <header class="w-express-review__header">
-        <h1 class="w-express-review__title"><?= $esc((string) __('确认并付款')) ?></h1>
+        <h1 class="w-express-review__title">
+            <?= $esc((string) ($alreadyPaid ? __('订单已支付') : __('确认并付款'))) ?>
+        </h1>
         <p class="w-express-review__hint" data-express-copy-pending>
-            <?= $esc((string) __('尚未扣款，确认后向支付商收款')) ?>
+            <?php if ($alreadyPaid): ?>
+                <?= $esc($alreadyPaidMessage !== '' ? $alreadyPaidMessage : (string) __('该笔快捷支付已完成扣款')) ?>
+                <?php if ($alreadyPaidMethod !== ''): ?>
+                    <span class="w-express-review__paid-method">（<?= $esc($alreadyPaidMethod) ?>）</span>
+                <?php endif; ?>
+            <?php else: ?>
+                <?= $esc((string) __('尚未扣款，确认后向支付商收款')) ?>
+            <?php endif; ?>
         </p>
     </header>
 
-    <div class="w-express-review__status" data-express-status role="status" aria-live="polite"></div>
+    <div class="w-express-review__status<?= $alreadyPaid ? '' : '' ?>"
+         data-express-status
+         role="status"
+         aria-live="polite"><?php
+        if ($alreadyPaid) {
+            echo $esc((string) __('该笔订单已支付，无需再次确认'));
+        }
+    ?></div>
 
+    <?php if ($alreadyPaid): ?>
+    <div class="w-express-review__card w-express-review__card--paid" data-express-already-paid>
+        <p class="w-express-review__hint"><?= $esc((string) __('支付已完成，可返回首页或查看账户订单。')) ?></p>
+        <div class="w-express-review__actions">
+            <?php if ($alreadyPaidRedirect !== '' && $alreadyPaidRedirect !== '/'): ?>
+            <a class="w-btn w-btn--primary"
+               href="<?= $esc($alreadyPaidRedirect) ?>"
+               data-express-paid-continue><?= $esc((string) __('查看订单')) ?></a>
+            <?php endif; ?>
+            <a class="w-btn w-btn--ghost" href="/"><?= $esc((string) __('返回首页')) ?></a>
+        </div>
+    </div>
+    <?php else: ?>
+
+    <form class="w-express-review__form"
+          data-express-review-form
+          onsubmit="return false;"
+          weline-code="checkout.express-review.form">
     <section class="w-express-review__card" weline-code="checkout.express-review.address" data-express-address-block>
-        <h2 class="w-express-review__card-title"><?= $esc((string) __('收货地址（支付商带回，只读）')) ?></h2>
-        <div class="w-express-review__address" data-express-address-summary></div>
+        <h2 class="w-express-review__card-title"><?= $esc((string) __('收货地址')) ?></h2>
+        <p class="w-express-review__hint" data-express-address-hint>
+            <?= $esc((string) __('请确认收货地址；不对可更换或新增')) ?>
+        </p>
+        <w:slot id="checkout-shipping-address"
+                name="<?= $esc((string) __('结账收货地址')) ?>"
+                accept="checkout-shipping-address,shipping-address,delivery-address,address"
+                multiple="false"
+                position="content"
+                class="w-express-review__shipping-address-slot"
+                weline-code="checkout.express-review.shipping_address_slot">
+        </w:slot>
+        <div class="w-express-review__address" data-express-address-summary hidden></div>
         <p class="w-express-review__payer" data-express-payer-email hidden></p>
     </section>
 
@@ -43,6 +96,7 @@ $esc = static fn (string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8'
     <section class="w-express-review__card" weline-code="checkout.express-review.shipping" data-express-shipping-block hidden>
         <h2 class="w-express-review__card-title"><?= $esc((string) __('配送方式')) ?></h2>
         <div class="w-express-review__shipping-list" data-express-shipping-list role="radiogroup"></div>
+        <div class="w-express-review__shipping-packages" data-express-shipping-packages hidden data-testid="checkout-split-shipping-packages"></div>
         <p class="w-express-review__hint" data-express-shipping-empty hidden>
             <?= $esc((string) __('该地区暂不支持配送')) ?>
         </p>
@@ -72,6 +126,8 @@ $esc = static fn (string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8'
             <?= $esc((string) __('取消')) ?>
         </a>
     </div>
+    </form>
+    <?php endif; ?>
 </section>
 
 <style>
@@ -132,6 +188,17 @@ $esc = static fn (string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8'
     font-size: var(--font-size-sm, 0.875rem);
 }
 .w-express-review__status.is-error { color: var(--color-danger, #b12704); }
+.w-express-review.is-already-paid .w-express-review__status {
+    color: var(--color-success, #067d62);
+    margin-top: var(--weline-space-2, 0.5rem);
+}
+.w-express-review__card--paid {
+    border-color: color-mix(in srgb, var(--color-success, #067d62) 35%, var(--color-border-subtle, rgba(15, 17, 17, 0.12)));
+}
+.w-express-review__paid-method { white-space: nowrap; }
+.w-express-review__shipping-address-slot {
+    margin-top: var(--weline-space-2, 0.5rem);
+}
 .w-express-review__address { white-space: pre-line; font-size: var(--font-size-sm, 0.875rem); }
 </style>
 

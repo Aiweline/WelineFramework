@@ -13,6 +13,7 @@ use Weline\Dropship\Api\Data\DropshipCatalogSnapshot;
 use Weline\Dropship\Model\DropshipFulfillment;
 use Weline\Dropship\Interface\DropshipCatalogBrowseProviderInterface;
 use Weline\Dropship\Interface\DropshipCatalogProviderInterface;
+use Weline\Dropship\Interface\DropshipCategoryPathLocalizerInterface;
 use Weline\Dropship\Interface\DropshipFreightProviderInterface;
 use Weline\Dropship\Interface\DropshipFulfillmentProviderInterface;
 use Weline\Dropship\Interface\DropshipWarehouseProviderInterface;
@@ -22,6 +23,7 @@ use Weline\Framework\Manager\ObjectManager;
 class CjProvider implements
     DropshipCatalogBrowseProviderInterface,
     DropshipCatalogProviderInterface,
+    DropshipCategoryPathLocalizerInterface,
     DropshipFulfillmentProviderInterface,
     DropshipFreightProviderInterface,
     DropshipWebhookProviderInterface,
@@ -30,6 +32,19 @@ class CjProvider implements
     public function getCode(): string
     {
         return 'cj';
+    }
+
+    public function localizeCategoryPath(string $path, string $locale): string
+    {
+        $path = trim($path);
+        if ($path === '') {
+            return '';
+        }
+        $localized = CjCategoryLocalizer::localizeNodes([
+            ['id' => '_', 'name' => $path, 'path' => $path],
+        ], $locale);
+
+        return trim((string)($localized[0]['path'] ?? $path));
     }
 
     public function getCapabilities(): array
@@ -41,6 +56,14 @@ class CjProvider implements
             'fulfillment' => true,
             'freight' => true,
             'webhook' => true,
+            // 壳能力全开；CJ 沙盒真推边界见 doc/功能现状.md（纠纷沙盒不可用，勿因此关掉 capability）
+            'webhook_order' => true,
+            'webhook_product' => true,
+            'webhook_stock' => true,
+            'webhook_logistics' => true,
+            'webhook_makeup' => true,
+            'webhook_private_order' => true,
+            'webhook_dispute' => true,
             'warehouse' => true,
         ];
     }
@@ -58,16 +81,21 @@ class CjProvider implements
     public function getConfigSchema(): array
     {
         return [
-            'fields' => ['email', 'api_key', 'access_token', 'order_sandbox'],
+            'fields' => ['email', 'api_key', 'access_token', 'order_sandbox', 'freight_on_failure'],
             'config_center' => [
                 'module' => 'Weline_CjDropshipping',
                 'area' => 'backend',
                 'group' => 'dropship_channel_cj',
                 'guide_key' => 'dropship/channel/cj/email',
                 'guide_title' => 'CJ 凭证',
-                'guide_summary' => '填写 CJ Email 与 API Key 后可探活/拉品/推单；可开订单沙盒联调。',
+                'guide_summary' => '填写 CJ Email 与 API Key 后可探活/拉品/推单；可开订单沙盒；可配置运费试算失败策略。',
             ],
         ];
+    }
+
+    public function freightOnFailure(): string
+    {
+        return $this->client()->freightOnFailure();
     }
 
     public function probeConnection(array $context = []): array
@@ -1126,7 +1154,11 @@ class CjProvider implements
     public function quoteFreight(array $request): array
     {
         try {
-            $resp = $this->client()->post('/logistic/freightCalculate', $request);
+            $body = self::mapFreightCalculateRequest($request);
+            if ($body['products'] === []) {
+                return [];
+            }
+            $resp = $this->client()->post('/logistic/freightCalculate', $body);
             $list = $resp['data'] ?? [];
             $out = [];
             foreach ((array)$list as $i => $row) {
@@ -1148,6 +1180,61 @@ class CjProvider implements
         }
     }
 
+    /**
+     * Map shell-standard freight request (or already-CJ body) to freightCalculate payload.
+     *
+     * @param array<string, mixed> $request
+     * @return array{startCountryCode:string,endCountryCode:string,zip?:string,products:list<array{vid:string,quantity:int}>}
+     */
+    public static function mapFreightCalculateRequest(array $request): array
+    {
+        $start = strtoupper(trim((string)($request['startCountryCode']
+            ?? $request['start_country_code']
+            ?? 'CN'))) ?: 'CN';
+        $end = strtoupper(trim((string)($request['endCountryCode']
+            ?? $request['end_country_code']
+            ?? '')));
+        if ($end === '') {
+            $address = is_array($request['address'] ?? null) ? $request['address'] : [];
+            $end = strtoupper(trim((string)($address['country_code'] ?? $address['country'] ?? 'US'))) ?: 'US';
+        }
+        $zip = trim((string)($request['zip']
+            ?? $request['postal_code']
+            ?? (is_array($request['address'] ?? null)
+                ? ($request['address']['postal_code'] ?? $request['address']['postcode'] ?? '')
+                : '')));
+        $products = [];
+        foreach ((array)($request['products'] ?? []) as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $mapped = self::mapCreateOrderProductLine([
+                'qty' => (int)($row['quantity'] ?? $row['qty'] ?? 1),
+                'external_vid' => (string)($row['vid'] ?? $row['external_vid'] ?? ''),
+                'external_sku' => (string)($row['sku'] ?? $row['external_sku'] ?? ''),
+                'line_key' => (string)($row['line_key'] ?? ''),
+            ]);
+            $vid = trim((string)($mapped['vid'] ?? ''));
+            if ($vid === '') {
+                continue;
+            }
+            $products[] = [
+                'vid' => $vid,
+                'quantity' => max(1, (int)($mapped['quantity'] ?? 1)),
+            ];
+        }
+        $body = [
+            'startCountryCode' => $start,
+            'endCountryCode' => $end,
+            'products' => $products,
+        ];
+        if ($zip !== '') {
+            $body['zip'] = $zip;
+        }
+
+        return $body;
+    }
+
     public function verifyWebhook(array $headers, string $body): array
     {
         // CJ public hooks may omit signature; accept non-empty body. Extend with secret when configured.
@@ -1165,19 +1252,336 @@ class CjProvider implements
             $payload = [];
         }
 
-        $externalOrderId = (string)($payload['orderId'] ?? $payload['external_order_id'] ?? $payload['id'] ?? '');
-        $externalId = (string)($payload['id'] ?? $payload['orderId'] ?? ($body !== '' ? md5($body) : ''));
+        $params = \is_array($payload['params'] ?? null) ? $payload['params'] : [];
+        $type = strtoupper(trim((string)($payload['type'] ?? $payload['event'] ?? '')));
+        $messageType = strtoupper(trim((string)($payload['messageType'] ?? '')));
+        $externalId = (string)($payload['messageId']
+            ?? $params['messageId']
+            ?? $payload['id']
+            ?? ($body !== '' ? md5($body) : ''));
+        $event = (string)($payload['type'] ?? $payload['event'] ?? $payload['messageType'] ?? 'cj.event');
+
+        return match ($type) {
+            'PRODUCT', 'VARIANT' => $this->parseWebhookCatalog($payload, $params, $type, $event, $externalId, $messageType),
+            'STOCK' => $this->parseWebhookStock($payload, $params, $event, $externalId),
+            'LOGISTIC' => $this->parseWebhookLogistics($payload, $params, $event, $externalId),
+            'MAKEUP' => $this->parseWebhookMakeup($payload, $params, $event, $externalId, $messageType),
+            'PRIVATE_ORDER' => $this->parseWebhookPrivateOrder($payload, $params, $event, $externalId),
+            'DISPUTE', 'DISPUTES' => $this->parseWebhookDispute($payload, $params, $event, $externalId),
+            'ORDERSPLIT' => $this->parseWebhookOrderSplit($payload, $params, $event, $externalId),
+            'ORDER' => $this->parseWebhookOrder($payload, $params, $event, $externalId, $messageType),
+            default => $this->parseWebhookOrderLegacy($payload, $params, $event, $externalId),
+        };
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function parseWebhookCatalog(array $payload, array $params, string $type, string $event, string $externalId, string $messageType): array
+    {
+        $src = $params !== [] ? $params : $payload;
+        $spu = trim((string)($src['pid'] ?? $src['productId'] ?? $src['external_spu'] ?? ''));
+        $sku = trim((string)($src['productSku'] ?? $src['variantSku'] ?? $src['external_sku'] ?? $src['vid'] ?? ''));
+        $title = trim((string)($src['productNameEn'] ?? $src['productName'] ?? $src['variantName'] ?? $src['title'] ?? ''));
+        $price = $src['productSellPrice'] ?? $src['variantSellPrice'] ?? null;
+        $statusRaw = $src['productStatus'] ?? $src['variantStatus'] ?? null;
+        $shelf = 'active';
+        if ($messageType === 'DELETE') {
+            $shelf = 'delisted';
+        } elseif ($statusRaw !== null && $statusRaw !== '') {
+            $st = (int)$statusRaw;
+            // productStatus: 2=未在售 3=在售; variantStatus: 0=下架 1=在售
+            if ($type === 'VARIANT') {
+                $shelf = $st === 1 ? 'active' : 'delisted';
+            } else {
+                $shelf = $st === 3 ? 'active' : 'delisted';
+            }
+        }
 
         return [
             'ok' => true,
-            'event' => (string)($payload['type'] ?? $payload['event'] ?? 'cj.event'),
+            'event' => $event,
+            'topic' => 'product',
+            'external_id' => $externalId,
+            'catalog' => [
+                'external_spu' => $spu,
+                'external_sku' => $sku,
+                'qty' => null,
+                'shelf_status' => $shelf,
+                'origin_price_minor' => $price === null || $price === '' ? null : (int)round(((float)$price) * 100),
+                'origin_currency' => 'USD',
+                'title' => $title,
+            ],
+            'fulfillment' => [],
+            'payload' => $payload,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function parseWebhookStock(array $payload, array $params, string $event, string $externalId): array
+    {
+        $src = $params !== [] ? $params : $payload;
+        $spu = '';
+        $sku = '';
+        $qty = 0;
+        foreach ($src as $key => $rows) {
+            if (!\is_array($rows)) {
+                continue;
+            }
+            foreach ($rows as $row) {
+                if (!\is_array($row)) {
+                    continue;
+                }
+                if ($spu === '') {
+                    $spu = trim((string)($row['pid'] ?? ''));
+                }
+                if ($sku === '') {
+                    $sku = trim((string)($row['vid'] ?? $key));
+                }
+                $qty += (int)($row['storageNum'] ?? $row['qty'] ?? 0);
+            }
+        }
+        if ($spu === '') {
+            $spu = trim((string)($src['pid'] ?? $src['external_spu'] ?? ''));
+        }
+
+        return [
+            'ok' => true,
+            'event' => $event,
+            'topic' => 'stock',
+            'external_id' => $externalId,
+            'catalog' => [
+                'external_spu' => $spu,
+                'external_sku' => $sku,
+                'qty' => $qty,
+                'shelf_status' => $qty > 0 ? 'active' : 'delisted',
+                'origin_price_minor' => null,
+                'origin_currency' => 'USD',
+                'title' => '',
+            ],
+            'fulfillment' => [],
+            'payload' => $payload,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function parseWebhookLogistics(array $payload, array $params, string $event, string $externalId): array
+    {
+        $src = $params !== [] ? $params : $payload;
+        $orderId = trim((string)($src['orderId'] ?? $src['cjOrderId'] ?? $src['external_order_id'] ?? ''));
+        $storeOrders = $src['storeOrderNumbers'] ?? null;
+        $orderUuid = '';
+        if (\is_array($storeOrders) && $storeOrders !== []) {
+            $orderUuid = trim((string)$storeOrders[0]);
+        }
+
+        return [
+            'ok' => true,
+            'event' => $event,
+            'topic' => 'logistics',
+            'external_id' => $externalId,
+            'fulfillment' => [
+                'external_order_id' => $orderId,
+                'order_uuid' => $orderUuid,
+                'tracking_number' => (string)($src['trackingNumber'] ?? $src['trackNumber'] ?? $src['tracking_number'] ?? ''),
+                'carrier' => (string)($src['trackingProvider'] ?? $src['logisticName'] ?? $src['carrier'] ?? ''),
+                'status' => isset($src['trackingStatus']) ? ('track_' . (string)$src['trackingStatus']) : 'updated',
+            ],
+            'payload' => $payload,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function parseWebhookMakeup(array $payload, array $params, string $event, string $externalId, string $messageType): array
+    {
+        $src = $params !== [] ? $params : $payload;
+        $status = trim((string)($src['status'] ?? $messageType ?? 'UPDATED'));
+        $amount = $src['amount'] ?? null;
+
+        return [
+            'ok' => true,
+            'event' => $event,
+            'topic' => 'makeup',
+            'external_id' => $externalId,
+            'makeup' => [
+                'external_id' => trim((string)($src['orderId'] ?? $src['external_id'] ?? '')),
+                'related_external_order_id' => trim((string)($src['relationOrderId'] ?? $src['related_external_order_id'] ?? '')),
+                'status' => $status !== '' ? $status : 'UPDATED',
+                'amount_minor' => $amount === null || $amount === '' ? null : (int)round(((float)$amount) * 100),
+                'currency' => 'USD',
+            ],
+            'fulfillment' => [
+                'external_order_id' => trim((string)($src['relationOrderId'] ?? '')),
+                'order_uuid' => '',
+                'tracking_number' => '',
+                'carrier' => '',
+                'status' => 'makeup_' . strtolower($status !== '' ? $status : 'updated'),
+            ],
+            'payload' => $payload,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function parseWebhookPrivateOrder(array $payload, array $params, string $event, string $externalId): array
+    {
+        $src = $params !== [] ? $params : $payload;
+
+        return [
+            'ok' => true,
+            'event' => $event,
+            'topic' => 'private_order',
+            'external_id' => $externalId,
+            'fulfillment' => [
+                'external_order_id' => trim((string)($src['orderId'] ?? $src['cjOrderId'] ?? '')),
+                'order_uuid' => trim((string)($src['orderNumber'] ?? $src['orderNum'] ?? '')),
+                'tracking_number' => '',
+                'carrier' => '',
+                'status' => (string)($src['status'] ?? $src['orderStatus'] ?? 'updated'),
+            ],
+            'payload' => $payload,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function parseWebhookDispute(array $payload, array $params, string $event, string $externalId): array
+    {
+        $src = $params !== [] ? $params : $payload;
+        $st = trim((string)($src['status'] ?? '1'));
+
+        return [
+            'ok' => true,
+            'event' => $event,
+            'topic' => 'dispute',
+            'external_id' => $externalId,
+            'fulfillment' => [
+                'external_order_id' => trim((string)($src['orderId'] ?? $src['cjOrderId'] ?? '')),
+                'order_uuid' => '',
+                'tracking_number' => '',
+                'carrier' => '',
+                'status' => 'dispute_' . $st,
+            ],
+            'payload' => $payload,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function parseWebhookOrderSplit(array $payload, array $params, string $event, string $externalId): array
+    {
+        $src = $params !== [] ? $params : $payload;
+        $original = trim((string)($src['originalOrderId'] ?? ''));
+        $splits = \is_array($src['splitOrderList'] ?? null) ? $src['splitOrderList'] : [];
+        $first = \is_array($splits[0] ?? null) ? $splits[0] : [];
+        $child = trim((string)($first['orderCode'] ?? $first['cjOrderId'] ?? ''));
+
+        return [
+            'ok' => true,
+            'event' => $event,
+            'topic' => 'order',
+            'external_id' => $externalId,
+            'fulfillment' => [
+                'external_order_id' => $child !== '' ? $child : $original,
+                'order_uuid' => $original,
+                'tracking_number' => '',
+                'carrier' => '',
+                'status' => 'split',
+            ],
+            'payload' => $payload,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function parseWebhookOrder(array $payload, array $params, string $event, string $externalId, string $messageType): array
+    {
+        $src = $params !== [] ? $params : $payload;
+        $externalOrderId = (string)($src['cjOrderId']
+            ?? $src['orderId']
+            ?? $payload['orderId']
+            ?? $payload['external_order_id']
+            ?? '');
+        $track = $src['trackNumber'] ?? $src['tracking_number'] ?? $payload['trackNumber'] ?? null;
+        $carrier = $src['logisticName'] ?? $src['trackingProvider'] ?? $src['carrier'] ?? $payload['logisticName'] ?? null;
+        $status = $src['orderStatus'] ?? $src['status'] ?? $payload['orderStatus'] ?? $payload['status'] ?? 'updated';
+        $private = !empty($src['privateOutboundOrder']);
+        $topic = $private ? 'private_order' : 'order';
+        if ($messageType === 'INSERT' && $private) {
+            $topic = 'private_order';
+        }
+
+        return [
+            'ok' => true,
+            'event' => $event,
+            'topic' => $topic,
             'external_id' => $externalId,
             'fulfillment' => [
                 'external_order_id' => $externalOrderId,
-                'order_uuid' => (string)($payload['orderNumber'] ?? $payload['order_uuid'] ?? ''),
-                'tracking_number' => (string)($payload['trackNumber'] ?? $payload['tracking_number'] ?? ''),
-                'carrier' => (string)($payload['logisticName'] ?? $payload['carrier'] ?? ''),
-                'status' => (string)($payload['orderStatus'] ?? $payload['status'] ?? 'updated'),
+                'order_uuid' => (string)($src['orderNumber'] ?? $src['orderNum'] ?? $src['order_uuid'] ?? $payload['orderNumber'] ?? ''),
+                'tracking_number' => $track === null ? '' : (string)$track,
+                'carrier' => $carrier === null ? '' : (string)$carrier,
+                'status' => (string)$status,
+            ],
+            'payload' => $payload,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function parseWebhookOrderLegacy(array $payload, array $params, string $event, string $externalId): array
+    {
+        $src = $params !== [] ? $params : $payload;
+        $externalOrderId = (string)($src['cjOrderId']
+            ?? $src['orderId']
+            ?? $payload['orderId']
+            ?? $payload['external_order_id']
+            ?? $payload['id']
+            ?? '');
+        $track = $src['trackNumber'] ?? $src['tracking_number'] ?? $payload['trackNumber'] ?? null;
+        $carrier = $src['logisticName'] ?? $src['carrier'] ?? $payload['logisticName'] ?? null;
+        $status = $src['orderStatus'] ?? $src['status'] ?? $payload['orderStatus'] ?? $payload['status'] ?? 'updated';
+
+        return [
+            'ok' => true,
+            'event' => $event !== '' ? $event : 'cj.event',
+            'topic' => $externalOrderId !== '' ? 'order' : 'unknown',
+            'external_id' => $externalId,
+            'fulfillment' => [
+                'external_order_id' => $externalOrderId,
+                'order_uuid' => (string)($src['orderNumber'] ?? $src['orderNum'] ?? $src['order_uuid'] ?? $payload['orderNumber'] ?? ''),
+                'tracking_number' => $track === null ? '' : (string)$track,
+                'carrier' => $carrier === null ? '' : (string)$carrier,
+                'status' => (string)$status,
             ],
             'payload' => $payload,
         ];

@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Weline\Shipping\Service;
 
+use Weline\Currency\Service\CurrencyRateService;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Shipping\Model\CarrierRegion;
 use Weline\Shipping\Model\DestinationRegion;
@@ -37,6 +38,9 @@ class ShippingServiceManager
     /** @var array<string, string> request-local memo keyed by scope_type:scope_id */
     private array $quoteConfigVersionMemo = [];
 
+    /** @var array{country_code?:string,currency?:string,lane_count?:int,fx_skipped?:list<string>} */
+    private array $lastQuoteDiagnostics = [];
+
     public function __construct(
         ObjectManager $objectManager,
         RateCalculationService $rateCalculationService,
@@ -49,6 +53,14 @@ class ShippingServiceManager
         $this->freeShippingService = $freeShippingService;
         $this->coverageMatch = $coverageMatch;
         $this->laneMatch = $laneMatch;
+    }
+
+    /**
+     * @return array{country_code?:string,currency?:string,lane_count?:int,fx_skipped?:list<string>}
+     */
+    public function getLastQuoteDiagnostics(): array
+    {
+        return $this->lastQuoteDiagnostics;
     }
 
     /**
@@ -81,9 +93,10 @@ class ShippingServiceManager
         ?string $district = null,
         ?array $context = null,
         ?array $addressMeta = null,
+        ?int $originShippingAddressId = null,
     ): array {
         // 唯一路径：承运商覆盖 ∩ 可售白名单（可空）∩ 非禁运，按承运商 sort_order。
-        // 再按默认发货仓 + 航线目的地覆盖过滤（空覆盖=通配兼容旧配置）。
+        // 再按发货仓（默认或指定）+ 航线目的地覆盖过滤（空覆盖=通配兼容旧配置）。
         try {
             $address = [
                 'country_code' => strtoupper(trim($countryCode)) ?: 'CN',
@@ -103,7 +116,7 @@ class ShippingServiceManager
                 $address,
             );
 
-            return $this->laneMatch()->filterByOriginAndDest($services, $address);
+            return $this->laneMatch()->filterByOriginAndDest($services, $address, $originShippingAddressId);
         } catch (\Throwable) {
             return [];
         }
@@ -217,10 +230,27 @@ class ShippingServiceManager
         string $currency,
         int $currencyPrecision = 2,
         ?array $context = null,
+        ?int $originShippingAddressId = null,
+        ?int $freeShippingSubtotalMinor = null,
     ): array {
         $currency = strtoupper(trim($currency));
+        $rawCountry = strtoupper(trim((string)($address['country_code'] ?? '')));
+        if ($rawCountry === '') {
+            $rawCountry = strtoupper(trim((string)($address['country'] ?? '')));
+        }
+        // Only accept ISO-3166 alpha-2; never treat empty editor defaults as a reason to
+        // invent CN when a non-ISO label slipped in (currency-reload cascade bug).
+        if (!preg_match('/^[A-Z]{2}$/', $rawCountry)) {
+            $rawCountry = $rawCountry === '' ? 'CN' : '';
+        }
+        $pointType = strtolower(trim((string)($address['delivery_point_type']
+            ?? $address['point_type']
+            ?? '')));
+        if ($pointType === '') {
+            $pointType = ShippingCapabilityGate::POINT_RESIDENTIAL;
+        }
         $destAddress = [
-            'country_code' => strtoupper(trim((string)($address['country_code'] ?? $address['country'] ?? 'CN'))) ?: 'CN',
+            'country_code' => $rawCountry !== '' ? $rawCountry : 'CN',
             'province' => trim((string)($address['province'] ?? $address['region'] ?? '')),
             'city' => trim((string)($address['city'] ?? '')),
             'district' => trim((string)($address['district'] ?? '')),
@@ -230,7 +260,20 @@ class ShippingServiceManager
             'province_code' => trim((string)($address['province_code'] ?? '')),
             'city_code' => trim((string)($address['city_code'] ?? '')),
             'district_code' => trim((string)($address['district_code'] ?? '')),
+            'postcode' => trim((string)($address['postcode'] ?? $address['postal_code'] ?? '')),
+            'postal_code' => trim((string)($address['postal_code'] ?? $address['postcode'] ?? '')),
+            'delivery_point_type' => $pointType,
         ];
+        if ($rawCountry === '') {
+            $this->lastQuoteDiagnostics = [
+                'country_code' => '',
+                'currency' => $currency,
+                'lane_count' => 0,
+                'fx_skipped' => [],
+            ];
+
+            return [];
+        }
         $services = $this->getAvailableServices(
             $destAddress['country_code'],
             $destAddress['province'],
@@ -238,65 +281,280 @@ class ShippingServiceManager
             $destAddress['district'],
             $context,
             $destAddress,
+            $originShippingAddressId,
         );
-        $subtotalMinor = $this->subtotalMinor($lines);
-        $preferred = $this->preferredShippingProfileCodes($lines);
-        $rates = [];
-        foreach ($services as $summary) {
-            $serviceId = (int)($summary['service_id'] ?? 0);
-            $serviceCode = trim((string)($summary['service_code'] ?? ''));
-            if ($serviceId <= 0 || $serviceCode === '') {
-                continue;
-            }
-            if ($preferred !== [] && !isset($preferred[$serviceCode])) {
-                continue;
-            }
-            $service = $this->getModel()->load($serviceId);
-            if (!$service->getId()
-                || !(bool)$service->getData(ShippingService::schema_fields_IS_ACTIVE)
-            ) {
-                continue;
-            }
-            $freeReason = $this->freeReason($service, $subtotalMinor, $currencyPrecision, $destAddress);
-            if ($freeReason !== null) {
-                $rates[$serviceCode] = [
-                    'amount_minor' => 0,
-                    'label' => (string)$service->getData(ShippingService::schema_fields_SERVICE_NAME),
-                    'currencies' => [$currency],
-                    'free_reason' => $freeReason,
-                ];
-                continue;
-            }
-            $templateId = (int)$service->getData(ShippingService::schema_fields_RATE_TEMPLATE_ID);
-            if ($templateId <= 0) {
-                continue;
-            }
-            /** @var RateTemplate $template */
-            $template = $this->objectManager->getInstance(RateTemplate::class, [], false)->load($templateId);
-            if (!$template->getId()
-                || !(bool)$template->getData(RateTemplate::schema_fields_IS_ACTIVE)
-            ) {
-                continue;
-            }
-            $templateCurrency = strtoupper(trim((string)$template->getData(
-                RateTemplate::schema_fields_CURRENCY_CODE,
-            )));
-            if ($templateCurrency === '' || $templateCurrency !== $currency) {
-                continue;
-            }
-            $rates[$serviceCode] = [
-                'amount_minor' => $this->rateCalculationService->calculateTemplateMinor(
-                    $template,
-                    $lines,
-                    $currencyPrecision,
-                ),
-                'label' => (string)$service->getData(ShippingService::schema_fields_SERVICE_NAME),
-                'currencies' => [$templateCurrency],
+        /** @var ShippingProfileResolver $profileResolver */
+        $profileResolver = $this->objectManager->getInstance(ShippingProfileResolver::class);
+        $profileGroups = $profileResolver->groupLinesByProfile($lines, $context);
+        if ($profileGroups === []) {
+            $this->lastQuoteDiagnostics = [
+                'country_code' => $destAddress['country_code'],
+                'currency' => $currency,
+                'lane_count' => 0,
+                'fx_skipped' => [],
             ];
+
+            return [];
         }
+
+        /** @var ShippingProviderManager $providerManager */
+        $providerManager = $this->objectManager->getInstance(ShippingProviderManager::class);
+        /** @var ShippingCapabilityGate $capabilityGate */
+        $capabilityGate = $this->objectManager->getInstance(ShippingCapabilityGate::class);
+        $fxSkipped = [];
+        /** @var list<array<string, array<string, mixed>>> $perProfileRates */
+        $perProfileRates = [];
+        foreach ($profileGroups as $group) {
+            $allowedIds = [];
+            foreach ($group['service_ids'] as $sid) {
+                $allowedIds[(int)$sid] = true;
+            }
+            $groupHazards = $capabilityGate->collectLineHazards($group['lines']);
+            $matchedSummaries = [];
+            foreach ($services as $summary) {
+                $serviceId = (int)($summary['service_id'] ?? 0);
+                if ($allowedIds !== [] && !isset($allowedIds[$serviceId])) {
+                    continue;
+                }
+                $serviceCode = trim((string)($summary['service_code'] ?? ''));
+                if ($serviceCode === '') {
+                    continue;
+                }
+                $allowedPoints = $summary['allowed_point_types']
+                    ?? ShippingCapabilityGate::DEFAULT_ALLOWED_POINTS;
+                if (!$capabilityGate->allowsPointType($allowedPoints, $destAddress['delivery_point_type'])) {
+                    continue;
+                }
+                $acceptedHazards = $summary['accepted_hazard_classes'] ?? '';
+                if (!$capabilityGate->allowsHazards($acceptedHazards, $groupHazards)) {
+                    continue;
+                }
+                $matchedSummaries[] = $summary;
+            }
+            if ($matchedSummaries === []) {
+                throw new \RuntimeException('shipping_profile_conflict');
+            }
+            $byProvider = [];
+            foreach ($matchedSummaries as $summary) {
+                $carrierId = (int)($summary['carrier_id'] ?? 0);
+                $providerCode = ShippingProviderManager::DEFAULT_PROVIDER_CODE;
+                if ($carrierId > 0) {
+                    /** @var \Weline\Shipping\Model\Carrier $carrier */
+                    $carrier = $this->objectManager->getInstance(
+                        \Weline\Shipping\Model\Carrier::class,
+                        [],
+                        false,
+                    )->load($carrierId);
+                    if ($carrier->getId()) {
+                        $raw = (string)$carrier->getData(
+                            \Weline\Shipping\Model\Carrier::schema_fields_PROVIDER_CODE,
+                        );
+                        $providerCode = strtolower(trim($raw)) !== ''
+                            ? strtolower(trim($raw))
+                            : ShippingProviderManager::DEFAULT_PROVIDER_CODE;
+                    }
+                }
+                $summary['provider_code'] = $providerCode;
+                $byProvider[$providerCode][] = $summary;
+            }
+            $groupRates = [];
+            foreach ($byProvider as $providerCode => $matched) {
+                $provider = $providerManager->getProvider((string)$providerCode);
+                if ($provider === null) {
+                    continue;
+                }
+                $config = $providerManager->getProviderConfig((string)$providerCode);
+                $availability = $provider->checkAvailability(new \Weline\Shipping\Api\Data\Shipping\ShippingAvailabilityRequest(
+                    $destAddress,
+                    $context ?? [],
+                    $config,
+                    $currency,
+                ));
+                if (!$availability->available) {
+                    continue;
+                }
+                $addons = [];
+                if (isset($address['addons']) && is_array($address['addons'])) {
+                    $addons = $address['addons'];
+                } elseif (isset($context['addons']) && is_array($context['addons'])) {
+                    $addons = $context['addons'];
+                }
+                $quoteResult = $provider->quote(new \Weline\Shipping\Api\Data\Shipping\ShippingQuoteRequest(
+                    $destAddress,
+                    $group['lines'],
+                    $currency,
+                    $currencyPrecision,
+                    $matched,
+                    $context,
+                    $originShippingAddressId,
+                    $freeShippingSubtotalMinor,
+                    $config,
+                    $addons,
+                ));
+                if ($quoteResult->status !== \Weline\Shipping\Api\Data\Shipping\ShippingQuoteResult::STATUS_OK) {
+                    continue;
+                }
+                foreach ($quoteResult->rates as $code => $rate) {
+                    $rate['provider_code'] = (string)$providerCode;
+                    $rate['service_code'] = (string)$code;
+                    $groupRates[(string)$code] = $rate;
+                }
+                foreach ($quoteResult->fxSkipped as $skipped) {
+                    $fxSkipped[] = $skipped;
+                }
+            }
+            if ($groupRates === []) {
+                throw new \RuntimeException('shipping_profile_conflict');
+            }
+            $perProfileRates[] = $groupRates;
+        }
+
+        $rates = $this->mergeProfileGroupRates($perProfileRates);
         ksort($rates);
+        $this->lastQuoteDiagnostics = [
+            'country_code' => $destAddress['country_code'],
+            'currency' => $currency,
+            'lane_count' => \count($rates),
+            'fx_skipped' => array_values(array_unique($fxSkipped)),
+            'profile_groups' => count($perProfileRates),
+        ];
 
         return $rates;
+    }
+
+    /**
+     * @param list<array<string, array<string, mixed>>> $perProfileRates
+     * @return array<string, array<string, mixed>>
+     */
+    private function mergeProfileGroupRates(array $perProfileRates): array
+    {
+        if ($perProfileRates === []) {
+            return [];
+        }
+        if (count($perProfileRates) === 1) {
+            return $perProfileRates[0];
+        }
+
+        /** @var array<string, list<array{code:string,rate:array<string,mixed>}>> $byKey */
+        $byKey = [];
+        foreach ($perProfileRates as $groupRates) {
+            $seenKeys = [];
+            foreach ($groupRates as $code => $rate) {
+                $provider = strtolower(trim((string)($rate['provider_code'] ?? 'local')));
+                $label = mb_strtolower(trim((string)($rate['label'] ?? $code)));
+                $key = $provider . "\0" . $label;
+                $byKey[$key][] = ['code' => (string)$code, 'rate' => $rate];
+                $seenKeys[$key] = true;
+            }
+            // Mark keys missing in this group by not adding — intersection later
+            foreach (array_keys($byKey) as $key) {
+                if (!isset($seenKeys[$key])) {
+                    // leave gap; intersection check uses count === group count
+                }
+            }
+        }
+
+        $merged = [];
+        $groupCount = count($perProfileRates);
+        foreach ($byKey as $key => $entries) {
+            if (count($entries) !== $groupCount) {
+                continue;
+            }
+            $amount = 0;
+            $label = (string)($entries[0]['rate']['label'] ?? $entries[0]['code']);
+            $provider = (string)($entries[0]['rate']['provider_code'] ?? 'local');
+            $parts = [];
+            foreach ($entries as $entry) {
+                $amount += max(0, (int)($entry['rate']['amount_minor'] ?? 0));
+                $parts[] = [
+                    'service_code' => $entry['code'],
+                    'amount_minor' => (int)($entry['rate']['amount_minor'] ?? 0),
+                ];
+            }
+            $mergeCode = 'merged:' . sha1($key);
+            $merged[$mergeCode] = [
+                'amount_minor' => $amount,
+                'label' => $label,
+                'currencies' => $entries[0]['rate']['currencies'] ?? [],
+                'provider_code' => $provider,
+                'merge' => 'named',
+                'parts' => $parts,
+            ];
+        }
+
+        if ($merged !== []) {
+            return $merged;
+        }
+
+        // Synthetic: sum of each group's cheapest rate
+        $amount = 0;
+        $parts = [];
+        $label = (string)__('合并运费');
+        foreach ($perProfileRates as $groupRates) {
+            $bestCode = null;
+            $bestAmount = null;
+            $bestLabel = '';
+            foreach ($groupRates as $code => $rate) {
+                $a = max(0, (int)($rate['amount_minor'] ?? 0));
+                if ($bestAmount === null || $a < $bestAmount) {
+                    $bestAmount = $a;
+                    $bestCode = (string)$code;
+                    $bestLabel = (string)($rate['label'] ?? $code);
+                }
+            }
+            if ($bestAmount === null || $bestCode === null) {
+                throw new \RuntimeException('shipping_profile_conflict');
+            }
+            $amount += $bestAmount;
+            $parts[] = [
+                'service_code' => $bestCode,
+                'label' => $bestLabel,
+                'amount_minor' => $bestAmount,
+            ];
+        }
+
+        return [
+            'merged:synthetic_min_sum' => [
+                'amount_minor' => $amount,
+                'label' => $label,
+                'currencies' => [],
+                'merge' => 'synthetic_min_sum',
+                'parts' => $parts,
+            ],
+        ];
+    }
+
+    /**
+     * Convert shipping amount minors between currencies; null when FX unavailable.
+     */
+    private function convertShippingMinor(
+        int $minor,
+        string $fromCurrency,
+        string $toCurrency,
+        int $fromPrecision,
+        int $toPrecision,
+    ): ?int {
+        $from = strtoupper(trim($fromCurrency));
+        $to = strtoupper(trim($toCurrency));
+        if ($minor === 0 || $from === '' || $to === '' || $from === $to) {
+            return max(0, $minor);
+        }
+        $fromPrecision = max(0, min(6, $fromPrecision));
+        $toPrecision = max(0, min(6, $toPrecision));
+        try {
+            /** @var CurrencyRateService $rates */
+            $rates = $this->objectManager->getInstance(CurrencyRateService::class);
+            $scaleFrom = 10 ** $fromPrecision;
+            $major = $minor / $scaleFrom;
+            $convertedMajor = $rates->tryConvert($major, $from, $to);
+            if ($convertedMajor === null) {
+                return null;
+            }
+
+            return max(0, (int)round($convertedMajor * (10 ** $toPrecision)));
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**
@@ -384,6 +642,8 @@ class ShippingServiceManager
                     ShippingService::schema_fields_IS_FREE_SHIPPING,
                     ShippingService::schema_fields_IS_ACTIVE,
                     ShippingService::schema_fields_SORT_ORDER,
+                    ShippingService::schema_fields_ALLOWED_POINT_TYPES,
+                    ShippingService::schema_fields_ACCEPTED_HAZARD_CLASSES,
                 ]),
                 'template' => $template instanceof RateTemplate && $template->getId()
                     ? $this->pickFactFields((array)$template->getData(), [
@@ -399,6 +659,8 @@ class ShippingServiceManager
                         RateTemplate::schema_fields_VOLUME_RATE,
                         RateTemplate::schema_fields_QUANTITY_RATE,
                         RateTemplate::schema_fields_MIXED_CONFIG,
+                        RateTemplate::schema_fields_RATE_BRACKETS,
+                        RateTemplate::schema_fields_MAX_WEIGHT_KG,
                         RateTemplate::schema_fields_CURRENCY_CODE,
                         RateTemplate::schema_fields_IS_ACTIVE,
                     ])
@@ -430,11 +692,256 @@ class ShippingServiceManager
                     'scope_id' => (int)$layer['scope_id'],
                 ],
                 'services' => $facts,
+                'surcharges' => $this->surchargeConfigFacts($layer),
+                'packing' => $this->packingConfigFacts($layer),
+                'seasonal' => $this->seasonalConfigFacts($layer),
+                'checkout_addons' => $this->checkoutAddonConfigFacts($layer),
+                'commerce' => $this->commerceConfigFacts($layer),
                 'reachability' => $this->reachabilityConfigFacts($context, array_keys($serviceIds)),
             ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '',
         );
 
         return $this->quoteConfigVersionMemo[$memoKey] = $version;
+    }
+
+    /**
+     * @param array{scope_type:string,scope_id:int} $layer
+     * @return list<array<string, mixed>>
+     */
+    private function surchargeConfigFacts(array $layer): array
+    {
+        $facts = [];
+        try {
+            /** @var \Weline\Shipping\Model\ShippingSurchargeRule $model */
+            $model = $this->objectManager->getInstance(
+                \Weline\Shipping\Model\ShippingSurchargeRule::class,
+                [],
+                false,
+            );
+            $items = $model->reset()
+                ->where(
+                    \Weline\Shipping\Model\ShippingSurchargeRule::schema_fields_SCOPE_TYPE,
+                    (string)$layer['scope_type'],
+                )
+                ->where(
+                    \Weline\Shipping\Model\ShippingSurchargeRule::schema_fields_SCOPE_ID,
+                    (int)$layer['scope_id'],
+                )
+                ->where(\Weline\Shipping\Model\ShippingSurchargeRule::schema_fields_IS_ACTIVE, 1)
+                ->order(\Weline\Shipping\Model\ShippingSurchargeRule::schema_fields_ID, 'ASC')
+                ->select()
+                ->fetch()
+                ->getItems();
+            foreach (is_array($items) ? $items : [] as $item) {
+                if (!$item instanceof \Weline\Shipping\Model\ShippingSurchargeRule) {
+                    continue;
+                }
+                $facts[] = $this->pickFactFields((array)$item->getData(), [
+                    \Weline\Shipping\Model\ShippingSurchargeRule::schema_fields_ID,
+                    \Weline\Shipping\Model\ShippingSurchargeRule::schema_fields_SCOPE_TYPE,
+                    \Weline\Shipping\Model\ShippingSurchargeRule::schema_fields_SCOPE_ID,
+                    \Weline\Shipping\Model\ShippingSurchargeRule::schema_fields_RULE_CODE,
+                    \Weline\Shipping\Model\ShippingSurchargeRule::schema_fields_MATCH_TYPE,
+                    \Weline\Shipping\Model\ShippingSurchargeRule::schema_fields_COUNTRY_CODE,
+                    \Weline\Shipping\Model\ShippingSurchargeRule::schema_fields_MATCH_VALUE,
+                    \Weline\Shipping\Model\ShippingSurchargeRule::schema_fields_AMOUNT_TYPE,
+                    \Weline\Shipping\Model\ShippingSurchargeRule::schema_fields_AMOUNT_VALUE,
+                    \Weline\Shipping\Model\ShippingSurchargeRule::schema_fields_IS_ACTIVE,
+                    \Weline\Shipping\Model\ShippingSurchargeRule::schema_fields_PRIORITY,
+                ]);
+            }
+        } catch (\Throwable) {
+        }
+
+        return $facts;
+    }
+
+    /**
+     * @param array{scope_type:string,scope_id:int} $layer
+     * @return list<array<string, mixed>>
+     */
+    private function packingConfigFacts(array $layer): array
+    {
+        $facts = [];
+        try {
+            /** @var \Weline\Shipping\Model\ShippingPackingPolicy $model */
+            $model = $this->objectManager->getInstance(
+                \Weline\Shipping\Model\ShippingPackingPolicy::class,
+                [],
+                false,
+            );
+            $items = $model->reset()
+                ->where(
+                    \Weline\Shipping\Model\ShippingPackingPolicy::schema_fields_SCOPE_TYPE,
+                    (string)$layer['scope_type'],
+                )
+                ->where(
+                    \Weline\Shipping\Model\ShippingPackingPolicy::schema_fields_SCOPE_ID,
+                    (int)$layer['scope_id'],
+                )
+                ->where(\Weline\Shipping\Model\ShippingPackingPolicy::schema_fields_IS_ACTIVE, 1)
+                ->order(\Weline\Shipping\Model\ShippingPackingPolicy::schema_fields_ID, 'ASC')
+                ->select()
+                ->fetch()
+                ->getItems();
+            foreach (is_array($items) ? $items : [] as $item) {
+                if (!$item instanceof \Weline\Shipping\Model\ShippingPackingPolicy) {
+                    continue;
+                }
+                $facts[] = $this->pickFactFields((array)$item->getData(), [
+                    \Weline\Shipping\Model\ShippingPackingPolicy::schema_fields_ID,
+                    \Weline\Shipping\Model\ShippingPackingPolicy::schema_fields_POLICY_CODE,
+                    \Weline\Shipping\Model\ShippingPackingPolicy::schema_fields_MAX_WEIGHT_KG,
+                    \Weline\Shipping\Model\ShippingPackingPolicy::schema_fields_MAX_VOLUME_CM3,
+                    \Weline\Shipping\Model\ShippingPackingPolicy::schema_fields_IS_ACTIVE,
+                ]);
+            }
+        } catch (\Throwable) {
+        }
+
+        return $facts;
+    }
+
+    /**
+     * @param array{scope_type:string,scope_id:int} $layer
+     * @return list<array<string, mixed>>
+     */
+    private function seasonalConfigFacts(array $layer): array
+    {
+        $facts = [];
+        try {
+            /** @var \Weline\Shipping\Model\ShippingSeasonalRule $model */
+            $model = $this->objectManager->getInstance(
+                \Weline\Shipping\Model\ShippingSeasonalRule::class,
+                [],
+                false,
+            );
+            $items = $model->reset()
+                ->where(
+                    \Weline\Shipping\Model\ShippingSeasonalRule::schema_fields_SCOPE_TYPE,
+                    (string)$layer['scope_type'],
+                )
+                ->where(
+                    \Weline\Shipping\Model\ShippingSeasonalRule::schema_fields_SCOPE_ID,
+                    (int)$layer['scope_id'],
+                )
+                ->order(\Weline\Shipping\Model\ShippingSeasonalRule::schema_fields_ID, 'ASC')
+                ->select()
+                ->fetch()
+                ->getItems();
+            foreach (is_array($items) ? $items : [] as $item) {
+                if (!$item instanceof \Weline\Shipping\Model\ShippingSeasonalRule) {
+                    continue;
+                }
+                $facts[] = $this->pickFactFields((array)$item->getData(), [
+                    \Weline\Shipping\Model\ShippingSeasonalRule::schema_fields_ID,
+                    \Weline\Shipping\Model\ShippingSeasonalRule::schema_fields_RULE_CODE,
+                    \Weline\Shipping\Model\ShippingSeasonalRule::schema_fields_START_DATE,
+                    \Weline\Shipping\Model\ShippingSeasonalRule::schema_fields_END_DATE,
+                    \Weline\Shipping\Model\ShippingSeasonalRule::schema_fields_AMOUNT_TYPE,
+                    \Weline\Shipping\Model\ShippingSeasonalRule::schema_fields_AMOUNT_VALUE,
+                    \Weline\Shipping\Model\ShippingSeasonalRule::schema_fields_IS_ACTIVE,
+                ]);
+            }
+        } catch (\Throwable) {
+        }
+
+        return $facts;
+    }
+
+    /**
+     * @param array{scope_type:string,scope_id:int} $layer
+     * @return list<array<string, mixed>>
+     */
+    private function checkoutAddonConfigFacts(array $layer): array
+    {
+        $facts = [];
+        try {
+            /** @var \Weline\Shipping\Model\ShippingCheckoutAddon $model */
+            $model = $this->objectManager->getInstance(
+                \Weline\Shipping\Model\ShippingCheckoutAddon::class,
+                [],
+                false,
+            );
+            $items = $model->reset()
+                ->where(
+                    \Weline\Shipping\Model\ShippingCheckoutAddon::schema_fields_SCOPE_TYPE,
+                    (string)$layer['scope_type'],
+                )
+                ->where(
+                    \Weline\Shipping\Model\ShippingCheckoutAddon::schema_fields_SCOPE_ID,
+                    (int)$layer['scope_id'],
+                )
+                ->order(\Weline\Shipping\Model\ShippingCheckoutAddon::schema_fields_ID, 'ASC')
+                ->select()
+                ->fetch()
+                ->getItems();
+            foreach (is_array($items) ? $items : [] as $item) {
+                if (!$item instanceof \Weline\Shipping\Model\ShippingCheckoutAddon) {
+                    continue;
+                }
+                $facts[] = $this->pickFactFields((array)$item->getData(), [
+                    \Weline\Shipping\Model\ShippingCheckoutAddon::schema_fields_ID,
+                    \Weline\Shipping\Model\ShippingCheckoutAddon::schema_fields_ADDON_CODE,
+                    \Weline\Shipping\Model\ShippingCheckoutAddon::schema_fields_ADDON_TYPE,
+                    \Weline\Shipping\Model\ShippingCheckoutAddon::schema_fields_AMOUNT_TYPE,
+                    \Weline\Shipping\Model\ShippingCheckoutAddon::schema_fields_AMOUNT_VALUE,
+                    \Weline\Shipping\Model\ShippingCheckoutAddon::schema_fields_IS_ACTIVE,
+                ]);
+            }
+        } catch (\Throwable) {
+        }
+
+        return $facts;
+    }
+
+    /**
+     * @param array{scope_type:string,scope_id:int} $layer
+     * @return array<string, mixed>
+     */
+    private function commerceConfigFacts(array $layer): array
+    {
+        try {
+            /** @var ShippingCommercePolicyService $commerce */
+            $commerce = $this->objectManager->getInstance(ShippingCommercePolicyService::class);
+            $policy = $commerce->resolve([
+                'scope_type' => (string)$layer['scope_type'],
+                'scope_id' => (int)$layer['scope_id'],
+                'website_id' => (int)$layer['scope_id'],
+            ]);
+            $incoterms = [];
+            /** @var ShippingService $svcModel */
+            $svcModel = $this->objectManager->getInstance(ShippingService::class, [], false);
+            $items = $svcModel->reset()
+                ->where(ShippingService::schema_fields_SCOPE_TYPE, (string)$layer['scope_type'])
+                ->where(ShippingService::schema_fields_SCOPE_ID, (int)$layer['scope_id'])
+                ->where(ShippingService::schema_fields_IS_ACTIVE, 1)
+                ->select()
+                ->fetch()
+                ->getItems();
+            foreach (is_array($items) ? $items : [] as $item) {
+                if (!$item instanceof ShippingService) {
+                    continue;
+                }
+                $code = trim((string)$item->getData(ShippingService::schema_fields_SERVICE_CODE));
+                if ($code === '') {
+                    continue;
+                }
+                $incoterms[$code] = (string)$item->getData(ShippingService::schema_fields_INCOTERM);
+            }
+
+            return [
+                'return_policy' => $policy['return_policy'],
+                'split_shipment_shipping' => $policy['split_shipment_shipping'],
+                'incoterms' => $incoterms,
+            ];
+        } catch (\Throwable) {
+            return [
+                'return_policy' => \Weline\Shipping\Model\ShippingCommercePolicy::RETURN_BUYER,
+                'split_shipment_shipping' => \Weline\Shipping\Model\ShippingCommercePolicy::SPLIT_FIRST_ONLY,
+                'incoterms' => [],
+            ];
+        }
     }
 
     /**

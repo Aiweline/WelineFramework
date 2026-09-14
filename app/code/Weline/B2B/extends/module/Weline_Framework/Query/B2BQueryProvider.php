@@ -13,8 +13,10 @@ use Weline\B2B\Service\MembershipStatusProjection;
 use Weline\Customer\Api\Auth\CustomerAccountFacadeInterface;
 use Weline\Customer\Model\Customer;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
+use Weline\Framework\Service\Query\Value\FrontendWorkerExecutionContext;
 use Weline\Framework\Session\SessionFactory;
 
 /**
@@ -329,19 +331,34 @@ class B2BQueryProvider implements QueryProviderInterface
     private function orderChatOpen(array $params): array
     {
         try {
+            $orderRef = trim((string)($params['order_uuid'] ?? $params['order_ref'] ?? ''));
+            $websiteId = (int)($params['website_id'] ?? $this->currentWebsiteId());
+            if ($this->isBackendAdmin()) {
+                $customerId = $this->resolveOrderCustomerId($orderRef, $params);
+                if ($customerId === '') {
+                    return ['success' => false, 'ok' => false, 'error' => 'b2b_order_chat_customer_missing'];
+                }
+                $thread = $this->orderChat()->openOrCreateForMerchant(
+                    $orderRef,
+                    $customerId,
+                    $websiteId,
+                    isset($params['hang_id']) ? (string)$params['hang_id'] : null,
+                );
+
+                return ['success' => true, 'ok' => true, 'thread' => $thread, 'role' => 'merchant'];
+            }
             $customerId = $this->currentCustomerId();
             if ($customerId === null || $customerId <= 0) {
                 return ['success' => false, 'ok' => false, 'error' => 'auth_required'];
             }
-            $websiteId = (int)($params['website_id'] ?? $this->currentWebsiteId());
             $thread = $this->orderChat()->openOrCreate(
-                (string)($params['order_uuid'] ?? $params['order_ref'] ?? ''),
+                $orderRef,
                 (string)$customerId,
                 $websiteId,
                 isset($params['hang_id']) ? (string)$params['hang_id'] : null,
             );
 
-            return ['success' => true, 'ok' => true, 'thread' => $thread];
+            return ['success' => true, 'ok' => true, 'thread' => $thread, 'role' => 'customer'];
         } catch (B2BConflictException $e) {
             return ['success' => false, 'ok' => false, 'error' => $e->errorCode, 'message' => $e->getMessage()];
         } catch (\Throwable $e) {
@@ -356,8 +373,12 @@ class B2BQueryProvider implements QueryProviderInterface
     private function orderChatMessages(array $params): array
     {
         try {
+            $threadId = (string)($params['thread_id'] ?? '');
+            if (!$this->canAccessThread($threadId)) {
+                return ['success' => false, 'ok' => false, 'error' => 'b2b_order_chat_forbidden'];
+            }
             $messages = $this->orderChat()->listMessages(
-                (string)($params['thread_id'] ?? ''),
+                $threadId,
                 (int)($params['since_id'] ?? 0),
             );
 
@@ -376,18 +397,33 @@ class B2BQueryProvider implements QueryProviderInterface
     private function orderChatSend(array $params): array
     {
         try {
+            $threadId = (string)($params['thread_id'] ?? '');
+            $body = (string)($params['body'] ?? $params['body_text'] ?? '');
+            if ($this->isBackendAdmin()) {
+                if (!$this->canAccessThread($threadId)) {
+                    return ['success' => false, 'ok' => false, 'error' => 'b2b_order_chat_forbidden'];
+                }
+                $msg = $this->orderChat()->send(
+                    $threadId,
+                    \Weline\B2B\Model\B2BOrderMessageRecord::ROLE_MERCHANT,
+                    $body,
+                    '',
+                );
+
+                return ['success' => true, 'ok' => true, 'message' => $msg, 'role' => 'merchant'];
+            }
             $customerId = $this->currentCustomerId();
             if ($customerId === null || $customerId <= 0) {
                 return ['success' => false, 'ok' => false, 'error' => 'auth_required'];
             }
             $msg = $this->orderChat()->send(
-                (string)($params['thread_id'] ?? ''),
-                (string)($params['role'] ?? 'customer'),
-                (string)($params['body'] ?? $params['body_text'] ?? ''),
+                $threadId,
+                \Weline\B2B\Model\B2BOrderMessageRecord::ROLE_CUSTOMER,
+                $body,
                 (string)$customerId,
             );
 
-            return ['success' => true, 'ok' => true, 'message' => $msg];
+            return ['success' => true, 'ok' => true, 'message' => $msg, 'role' => 'customer'];
         } catch (B2BConflictException $e) {
             return ['success' => false, 'ok' => false, 'error' => $e->errorCode, 'message' => $e->getMessage()];
         } catch (\Throwable $e) {
@@ -402,17 +438,30 @@ class B2BQueryProvider implements QueryProviderInterface
     private function orderChatMarkSeen(array $params): array
     {
         try {
+            $threadId = (string)($params['thread_id'] ?? '');
+            if ($this->isBackendAdmin()) {
+                if (!$this->canAccessThread($threadId)) {
+                    return ['success' => false, 'ok' => false, 'error' => 'b2b_order_chat_forbidden'];
+                }
+                $thread = $this->orderChat()->markSeen(
+                    $threadId,
+                    \Weline\B2B\Model\B2BOrderMessageRecord::ROLE_MERCHANT,
+                    '',
+                );
+
+                return ['success' => true, 'ok' => true, 'thread' => $thread, 'role' => 'merchant'];
+            }
             $customerId = $this->currentCustomerId();
             if ($customerId === null || $customerId <= 0) {
                 return ['success' => false, 'ok' => false, 'error' => 'auth_required'];
             }
             $thread = $this->orderChat()->markSeen(
-                (string)($params['thread_id'] ?? ''),
-                (string)($params['role'] ?? 'customer'),
+                $threadId,
+                \Weline\B2B\Model\B2BOrderMessageRecord::ROLE_CUSTOMER,
                 (string)$customerId,
             );
 
-            return ['success' => true, 'ok' => true, 'thread' => $thread];
+            return ['success' => true, 'ok' => true, 'thread' => $thread, 'role' => 'customer'];
         } catch (B2BConflictException $e) {
             return ['success' => false, 'ok' => false, 'error' => $e->errorCode, 'message' => $e->getMessage()];
         } catch (\Throwable $e) {
@@ -448,6 +497,109 @@ class B2BQueryProvider implements QueryProviderInterface
         }
 
         return $service;
+    }
+
+    private function isBackendAdmin(): bool
+    {
+        try {
+            // 必须看 worker 执行区域：同浏览器可能同时有后台与前台 Cookie，
+            // 仅 createBackendSession()->isLoggedIn() 会把前台请求误判为商家。
+            $execution = RequestContext::get(FrontendWorkerExecutionContext::REQUEST_CONTEXT_KEY);
+            if (!$execution instanceof FrontendWorkerExecutionContext
+                || $execution->area !== FrontendWorkerExecutionContext::AREA_BACKEND) {
+                return false;
+            }
+            $session = ObjectManager::getInstance(SessionFactory::class)->createBackendSession();
+            return $session->isLoggedIn() && (int)($session->getUserId() ?? 0) > 0;
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function canAccessThread(string $threadId): bool
+    {
+        $threadId = trim($threadId);
+        if ($threadId === '') {
+            return false;
+        }
+        if ($this->isBackendAdmin()) {
+            return true;
+        }
+        $customerId = $this->currentCustomerId();
+        if ($customerId === null || $customerId <= 0) {
+            return false;
+        }
+        try {
+            $threads = $this->orderChat()->listThreadsForCustomer($customerId, $this->currentWebsiteId());
+            foreach ($threads as $thread) {
+                if ((string)($thread['thread_id'] ?? '') === $threadId) {
+                    return true;
+                }
+            }
+            // Also allow website_id=0 threads for this customer.
+            if ($this->currentWebsiteId() !== 0) {
+                foreach ($this->orderChat()->listThreadsForCustomer($customerId, 0) as $thread) {
+                    if ((string)($thread['thread_id'] ?? '') === $threadId) {
+                        return true;
+                    }
+                }
+            }
+        } catch (\Throwable) {
+            return false;
+        }
+
+        return false;
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     */
+    private function resolveOrderCustomerId(string $orderRef, array $params): string
+    {
+        $fromParam = trim((string)($params['customer_id'] ?? ''));
+        if ($fromParam !== '') {
+            return $fromParam;
+        }
+        $orderRef = trim($orderRef);
+        if ($orderRef === '') {
+            return '';
+        }
+        try {
+            $hang = ObjectManager::getInstance(\Weline\B2B\Service\B2BHangOrderService::class);
+            if ($hang instanceof \Weline\B2B\Service\B2BHangOrderService) {
+                $row = $hang->getByOrderRef($orderRef);
+                if ($row !== null && trim((string)$row->customerId) !== '') {
+                    return (string)$row->customerId;
+                }
+            }
+        } catch (\Throwable) {
+        }
+        try {
+            $existing = $this->orderChat()->getByOrderRef($orderRef);
+            if (is_array($existing) && trim((string)($existing['customer_id'] ?? '')) !== '') {
+                return (string)$existing['customer_id'];
+            }
+        } catch (\Throwable) {
+        }
+        try {
+            if (class_exists(\Weline\Order\Model\Order::class)) {
+                /** @var \Weline\Order\Model\Order $order */
+                $order = ObjectManager::create(\Weline\Order\Model\Order::class, [], false);
+                $found = $order->clear()
+                    ->where(\Weline\Order\Model\Order::schema_fields_ORDER_UUID, $orderRef)
+                    ->find()
+                    ->fetch();
+                if ($found->getId()) {
+                    $cid = (int)$found->getData(\Weline\Order\Model\Order::schema_fields_CUSTOMER_ID);
+                    if ($cid > 0) {
+                        return (string)$cid;
+                    }
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        return '';
     }
 
     private function currentWebsiteId(): int
@@ -597,14 +749,19 @@ class B2BQueryProvider implements QueryProviderInterface
                     'summary' => 'Start hang deposit or balance payment for tob order',
                 ],
                 [
+                    // auth=any：前台客户与后台商家共用 worker；鉴权在 isBackendAdmin/currentCustomerId。
+                    // auth=customer 会拒绝 backend area，后台手风琴永远 403。
                     'name' => 'orderChat.open',
                     'frontend' => true,
-                    'auth' => 'customer',
+                    'auth' => 'any',
                     'mode' => 'write',
                     'graph' => false,
                     'cost' => 2,
                     'params' => [
                         'order_uuid' => ['type' => 'string', 'required' => true, 'max_length' => 64],
+                        'order_ref' => ['type' => 'string', 'required' => false, 'max_length' => 64],
+                        'customer_id' => ['type' => 'string', 'required' => false, 'max_length' => 64],
+                        'hang_id' => ['type' => 'string', 'required' => false, 'max_length' => 64],
                         'website_id' => ['type' => 'int', 'required' => false, 'min' => 0],
                     ],
                     'returns' => ['type' => 'array'],
@@ -613,7 +770,7 @@ class B2BQueryProvider implements QueryProviderInterface
                 [
                     'name' => 'orderChat.messages',
                     'frontend' => true,
-                    'auth' => 'customer',
+                    'auth' => 'any',
                     'mode' => 'read',
                     'graph' => false,
                     'cost' => 1,
@@ -627,7 +784,7 @@ class B2BQueryProvider implements QueryProviderInterface
                 [
                     'name' => 'orderChat.send',
                     'frontend' => true,
-                    'auth' => 'customer',
+                    'auth' => 'any',
                     'mode' => 'write',
                     'graph' => false,
                     'cost' => 2,
@@ -642,7 +799,7 @@ class B2BQueryProvider implements QueryProviderInterface
                 [
                     'name' => 'orderChat.markSeen',
                     'frontend' => true,
-                    'auth' => 'customer',
+                    'auth' => 'any',
                     'mode' => 'write',
                     'graph' => false,
                     'cost' => 1,

@@ -59,4 +59,13 @@ final class SystemVendor implements PixelEventVendorInterface
             'system_native' => true,
         ];
     }
+
+    /**
+     * @return array<string, list<string>>
+     */
+    public function cspDirectives(): array
+    {
+        // First-party system pixel — no third-party SDK hosts.
+        return [];
+    }
 }

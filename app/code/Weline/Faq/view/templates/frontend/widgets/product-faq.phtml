@@ -17,7 +17,7 @@
  * @param title {default="常见问题",type="string",label="标题"}
  */
 
-use Weline\Faq\Service\FaqService;
+use Weline\Faq\Service\FaqPdpResolveService;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Helper\WidgetI18n;
 
@@ -47,26 +47,82 @@ foreach ([
 }
 
 $websiteId = 0;
+$storeCode = '';
+$channelCode = '';
+$locale = '';
 try {
     $websiteId = max(0, (int)($this->getRequest()->getWebsiteId() ?? 0));
 } catch (\Throwable) {
     $websiteId = 0;
 }
-$locale = '';
 try {
     $locale = trim((string)($this->getRequest()->getLocal() ?? ''));
 } catch (\Throwable) {
     $locale = '';
 }
+if ($locale === '') {
+    try {
+        $locale = trim((string)\Weline\Framework\App\State::getLangLocal());
+    } catch (\Throwable) {
+        $locale = '';
+    }
+}
+if ($locale === '') {
+    try {
+        $locale = trim((string)\Weline\Framework\App\State::getLang());
+    } catch (\Throwable) {
+        $locale = '';
+    }
+}
+if ($locale === '' && class_exists(\Weline\Framework\Runtime\RequestContext::class)) {
+    try {
+        $locale = trim((string)(\Weline\Framework\Runtime\RequestContext::locale() ?? ''));
+    } catch (\Throwable) {
+        $locale = '';
+    }
+}
+try {
+    if (method_exists($this->getRequest(), 'getStoreCode')) {
+        $storeCode = strtolower(trim((string)$this->getRequest()->getStoreCode()));
+    }
+} catch (\Throwable) {
+    $storeCode = '';
+}
+try {
+    if (method_exists($this->getRequest(), 'getChannelCode')) {
+        $channelCode = strtolower(trim((string)$this->getRequest()->getChannelCode()));
+    }
+} catch (\Throwable) {
+    $channelCode = '';
+}
+if ($storeCode === '' || $channelCode === '') {
+    try {
+        if (class_exists(\Weline\Framework\Runtime\RequestContext::class)) {
+            $meta = \Weline\Framework\Runtime\RequestContext::scopeMetadata();
+            if (is_array($meta)) {
+                if ($storeCode === '') {
+                    $storeCode = strtolower(trim((string)($meta['store_code'] ?? '')));
+                }
+                if ($channelCode === '') {
+                    $channelCode = strtolower(trim((string)($meta['channel_code'] ?? '')));
+                }
+            }
+        }
+    } catch (\Throwable) {
+    }
+}
 
 $faqs = [];
-if ($entityUuid !== '') {
-    try {
-        $faqs = ObjectManager::getInstance(FaqService::class)
-            ->listForEntity('product', $entityUuid, $websiteId, $locale, true);
-    } catch (\Throwable) {
-        $faqs = [];
-    }
+try {
+    $faqs = ObjectManager::getInstance(FaqPdpResolveService::class)->resolveForPdp([
+        'website_id' => $websiteId,
+        'store_code' => $storeCode,
+        'channel_code' => $channelCode,
+        'locale_code' => $locale,
+        'product_uuid' => $entityUuid,
+    ]);
+} catch (\Throwable) {
+    $faqs = [];
 }
 
 $isPreview = (bool)($this->getData('preview_mode') ?? false)
@@ -74,8 +130,15 @@ $isPreview = (bool)($this->getData('preview_mode') ?? false)
 if ($faqs === [] && !$isPreview) {
     return;
 }
+
+$sourceLabels = [
+    FaqPdpResolveService::SOURCE_WEBSITE => (string)__('站点'),
+    FaqPdpResolveService::SOURCE_STORE => (string)__('店铺'),
+    FaqPdpResolveService::SOURCE_CHANNEL => (string)__('渠道'),
+    FaqPdpResolveService::SOURCE_PRODUCT => (string)__('本商品'),
+];
 ?>
-<section class="weline-product-faq" data-widget="product-faq" aria-label="<?= $escape($widgetTitle) ?>" weline-code="faq.product.section_faq">
+<section class="weline-product-faq wc-theme_widget_product_faq" data-widget="product-faq" aria-label="<?= $escape($widgetTitle) ?>" weline-code="faq.product.section_faq">
     <h2 class="weline-product-faq__title"><?= $escape($widgetTitle) ?></h2>
     <?php if ($faqs === []): ?>
         <p class="weline-product-faq__empty"><?= $escape(__('暂无常见问题。')) ?></p>
@@ -83,8 +146,17 @@ if ($faqs === [] && !$isPreview) {
         <div class="weline-product-faq__list">
             <?php foreach ($faqs as $index => $faq): ?>
                 <?php if (!is_array($faq)) { continue; } ?>
-                <details class="weline-product-faq__item" <?= $index === 0 ? 'open' : '' ?>>
-                    <summary class="weline-product-faq__question"><?= $escape($faq['question'] ?? '') ?></summary>
+                <?php
+                $source = (string)($faq['source'] ?? '');
+                $sourceLabel = $sourceLabels[$source] ?? '';
+                ?>
+                <details class="weline-product-faq__item" <?= $index === 0 ? 'open' : '' ?> data-faq-source="<?= $escape($source) ?>">
+                    <summary class="weline-product-faq__question">
+                        <span class="weline-product-faq__question-text"><?= $escape($faq['question'] ?? '') ?></span>
+                        <?php if ($sourceLabel !== ''): ?>
+                            <span class="weline-product-faq__source" data-source="<?= $escape($source) ?>"><?= $escape($sourceLabel) ?></span>
+                        <?php endif; ?>
+                    </summary>
                     <div class="weline-product-faq__answer"><?= nl2br($escape($faq['answer'] ?? '')) ?></div>
                 </details>
             <?php endforeach; ?>
@@ -92,10 +164,21 @@ if ($faqs === [] && !$isPreview) {
     <?php endif; ?>
 </section>
 <style>
-.weline-product-faq { padding: var(--spacing-6, 1.5rem) 0; }
-.weline-product-faq__title { margin: 0 0 var(--spacing-4, 1rem); font-size: var(--font-size-xl, 1.25rem); }
-.weline-product-faq__item { border-bottom: 1px solid var(--weline-theme-border-color-subtle, #e5e7eb); padding: .75rem 0; }
-.weline-product-faq__question { cursor: pointer; font-weight: 600; }
+.weline-product-faq { padding: var(--spacing-6, var(--weline-space-6, 1.5rem)) 0; }
+.weline-product-faq__title { margin: 0 0 var(--spacing-4, var(--weline-space-4, 1rem)); font-size: var(--font-size-xl, 1.25rem); color: var(--color-text, var(--weline-theme-color-text, inherit)); }
+.weline-product-faq__item { border-bottom: 1px solid var(--weline-theme-border-color-subtle, var(--color-border-subtle, #e5e7eb)); padding: .75rem 0; }
+.weline-product-faq__question { cursor: pointer; font-weight: 600; display: flex; align-items: center; justify-content: space-between; gap: var(--weline-space-3, .75rem); color: var(--color-text, inherit); }
+.weline-product-faq__question-text { flex: 1 1 auto; }
+.weline-product-faq__source {
+    flex: 0 0 auto;
+    font-size: var(--font-size-xs, .75rem);
+    font-weight: 500;
+    color: var(--color-text-secondary, var(--weline-theme-color-text-secondary, #4b5563));
+    background: var(--color-surface-muted, var(--weline-theme-color-surface-muted, transparent));
+    border: 1px solid var(--weline-theme-border-color-subtle, var(--color-border-subtle, #e5e7eb));
+    border-radius: var(--radius-sm, var(--weline-radius-sm, .25rem));
+    padding: .125rem .5rem;
+}
 .weline-product-faq__answer { margin-top: .5rem; color: var(--color-text-secondary, #4b5563); line-height: 1.6; }
 .weline-product-faq__empty { color: var(--color-text-tertiary, #9ca3af); }
 </style>

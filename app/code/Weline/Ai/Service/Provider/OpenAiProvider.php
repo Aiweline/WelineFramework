@@ -12,6 +12,7 @@ declare(strict_types=1);
 
 namespace Weline\Ai\Service\Provider;
 
+use Weline\Ai\Exception\AiTransportException;
 use Weline\Ai\Model\AiModel;
 use Weline\Ai\Helper\ErrorMessageHelper;
 use Weline\Ai\Service\Agent\AgentGovernance;
@@ -1343,7 +1344,8 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
                     throw new Exception($this->getTimeoutErrorMessage($timeout));
                 }
                 if ($this->isNonRetryableTransportError($error)) {
-                    throw new Exception("API请求失败: {$error}");
+                    // Quiet exception: connect refused / DNS must not flood exception.log.
+                    throw new AiTransportException("API请求失败: {$error}");
                 }
                 throw new Exception("API请求失败: {$error}");
             }

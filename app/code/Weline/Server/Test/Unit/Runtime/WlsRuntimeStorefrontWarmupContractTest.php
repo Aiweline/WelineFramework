@@ -113,15 +113,30 @@ final class WlsRuntimeStorefrontWarmupContractTest extends TestCase
         self::assertIsString($envSource);
         self::assertStringContainsString('runReadyGateStorefrontFpcWarmup', $runtimeSource);
         self::assertStringContainsString(
-            "Env::get('wls.worker.storefront_ready_gate_enabled', '1')",
+            "Env::get('wls.worker.storefront_ready_gate_enabled', '0')",
             $runtimeSource,
         );
         self::assertStringContainsString(
             "Env::get('wls.worker.storefront_ready_gate_max_paths', 4)",
             $runtimeSource,
         );
-        self::assertStringContainsString("'storefront_ready_gate_enabled' => true", $envSource);
+        self::assertStringContainsString(
+            "Env::get('wls.worker.storefront_deferred_warmup_enabled', '0')",
+            $runtimeSource,
+        );
+        self::assertStringContainsString(
+            "Env::get('wls.worker.backend_deferred_warmup_enabled', '0')",
+            $runtimeSource,
+        );
+        self::assertStringContainsString(
+            "Env::get('wls.worker.dynamic_deferred_warmup_enabled', '0')",
+            $runtimeSource,
+        );
+        self::assertStringContainsString("'storefront_ready_gate_enabled' => false", $envSource);
         self::assertStringContainsString("'storefront_ready_gate_max_paths' => 4", $envSource);
+        self::assertStringContainsString("'storefront_deferred_warmup_enabled' => false", $envSource);
+        self::assertStringContainsString("'backend_deferred_warmup_enabled' => false", $envSource);
+        self::assertStringContainsString("'dynamic_deferred_warmup_enabled' => false", $envSource);
     }
 
     public function testReadyGateRuntimeTraceHonorsTheConfiguredWlsDebugFlag(): void

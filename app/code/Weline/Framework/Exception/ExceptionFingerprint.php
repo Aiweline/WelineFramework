@@ -61,6 +61,63 @@ class ExceptionFingerprint
     }
 
     /**
+     * Flood-control key: collapse wrap sites / variable digits so the same
+     * operational failure (Ollama down, translation BUSY, unbounded SELECT)
+     * shares one throttle bucket across Provider + AiService rethrows.
+     */
+    public static function generateFloodKey(\Throwable $exception): string
+    {
+        $root = $exception;
+        while ($root->getPrevious() !== null) {
+            $root = $root->getPrevious();
+        }
+
+        return md5(implode('|', [
+            self::normalizeFloodMessage($exception->getMessage()),
+            self::normalizeFloodMessage($root->getMessage()),
+        ]));
+    }
+
+    /**
+     * Normalize messages for flood bucketing (not for exact identity).
+     */
+    public static function normalizeFloodMessage(string $message): string
+    {
+        $message = trim($message);
+        if ($message === '') {
+            return '';
+        }
+
+        // Strip common AI wrapper prefixes repeatedly.
+        for ($i = 0; $i < 4; $i++) {
+            $next = preg_replace(
+                '/^(AI生成失败|API请求失败|API调用失败|流式API调用失败)[:：]\s*/u',
+                '',
+                $message
+            );
+            if (!is_string($next) || $next === $message) {
+                break;
+            }
+            $message = $next;
+        }
+
+        if (str_contains($message, 'AI_TRANSLATION_BUSY')) {
+            return 'AI_TRANSLATION_BUSY';
+        }
+        if (str_contains($message, 'Unbounded SELECT detected')) {
+            return 'Unbounded SELECT detected';
+        }
+        if (preg_match('/Failed to connect to ([^\s]+) port (\d+)/i', $message, $m)) {
+            return 'connect_failed:' . strtolower($m[1]) . ':' . $m[2];
+        }
+        if (preg_match('/Could not connect to server/i', $message)) {
+            return 'connect_failed:generic';
+        }
+
+        return self::normalizeMessage($message);
+    }
+
+    /**
      * 获取异常的详细指纹信息
      *
      * @param \Throwable $exception 异常对象

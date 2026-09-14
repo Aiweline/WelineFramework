@@ -54,6 +54,15 @@ class ShippingService extends AbstractModel
     public const schema_fields_IS_ACTIVE = 'is_active';
     #[Col('int', null, nullable: false, default: 0, comment: '排序')]
     public const schema_fields_SORT_ORDER = 'sort_order';
+    /** CSV: residential,commercial,pickup_point,pobox,military */
+    #[Col('varchar', 255, nullable: false, default: 'residential,commercial,pickup_point', comment: '允许的地址点类型')]
+    public const schema_fields_ALLOWED_POINT_TYPES = 'allowed_point_types';
+    /** CSV of hazard classes; empty = none (general cargo only) */
+    #[Col('varchar', 255, nullable: false, default: '', comment: '接受的危品类别')]
+    public const schema_fields_ACCEPTED_HAZARD_CLASSES = 'accepted_hazard_classes';
+    /** Incoterm: ddp|ddu|dap — affects duty_notice only, not Local amount */
+    #[Col('varchar', 8, nullable: false, default: 'ddu', comment: '贸易术语 ddp|ddu|dap')]
+    public const schema_fields_INCOTERM = 'incoterm';
     #[Col('datetime', comment: '创建时间')]
     public const schema_fields_CREATED_AT = 'created_at';
     #[Col('datetime', comment: '更新时间')]

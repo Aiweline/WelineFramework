@@ -58,6 +58,35 @@ final class PayPalProvider implements ProviderInterface, ProviderConnectInterfac
     }
 
     /**
+     * @return array<string, list<string>>
+     */
+    public function cspDirectives(): array
+    {
+        // PayPal JS SDK / approve redirect / REST API hosts (live + sandbox).
+        return [
+            'script-src' => [
+                'https://www.paypal.com',
+                'https://www.sandbox.paypal.com',
+                'https://www.paypalobjects.com',
+            ],
+            'frame-src' => [
+                'https://www.paypal.com',
+                'https://www.sandbox.paypal.com',
+            ],
+            'connect-src' => [
+                'https://www.paypal.com',
+                'https://www.sandbox.paypal.com',
+                'https://api-m.paypal.com',
+                'https://api-m.sandbox.paypal.com',
+            ],
+            'img-src' => [
+                'https://www.paypalobjects.com',
+                'https://www.paypal.com',
+            ],
+        ];
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function getCapabilities(): array

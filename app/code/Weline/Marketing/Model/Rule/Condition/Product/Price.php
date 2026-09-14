@@ -11,7 +11,9 @@ declare(strict_types=1);
 
 namespace Weline\Marketing\Model\Rule\Condition\Product;
 
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Marketing\Model\Rule\Condition\AbstractCondition;
+use Weline\Marketing\Service\MarketingBaseCurrencyAmount;
 
 /**
  * 产品价格条件
@@ -53,11 +55,18 @@ class Price extends AbstractCondition
             return false;
         }
 
+        $fx = ObjectManager::getInstance(MarketingBaseCurrencyAmount::class);
+        $checkoutCurrency = $fx->checkoutCurrencyFromContext($context);
+        $threshold = $fx->convertBaseMajorToCheckout((float)$value, $checkoutCurrency);
+        if ($threshold === null) {
+            return false;
+        }
+
         $matchType = $condition['match_type'] ?? 'any'; // any, all
 
         foreach ($products as $product) {
             $price = (float)($product['price'] ?? 0);
-            $result = $this->compare($price, $operator, (float)$value);
+            $result = $this->compare($price, $operator, $threshold);
 
             if ($matchType === 'any' && $result) {
                 return true;
@@ -72,6 +81,8 @@ class Price extends AbstractCondition
 
     public function getFormFields(): array
     {
+        $base = ObjectManager::getInstance(MarketingBaseCurrencyAmount::class)->baseCurrency();
+
         return [
             [
                 'name' => 'operator',
@@ -87,10 +98,11 @@ class Price extends AbstractCondition
             ],
             [
                 'name' => 'value',
-                'label' => __('价格'),
+                'label' => __('价格（%{1}）', $base),
                 'type' => 'number',
                 'step' => '0.01',
                 'required' => true,
+                'hint' => __('价格门槛按站点基准货币录入；结账时按汇率换算后与商品行价格比较。'),
             ],
             [
                 'name' => 'match_type',

@@ -155,16 +155,35 @@ final class ExpressUnpaidOrderAmend
      */
     private function mergeAddressReadOnlyCore(array $base, array $incoming): array
     {
-        $out = $base !== [] ? $base : $incoming;
-        foreach (['contact_name', 'name', 'street', 'address1', 'address2', 'country_code', 'province', 'city', 'district', 'postal_code'] as $key) {
-            $fromBase = trim((string) ($base[$key] ?? ''));
-            if ($fromBase !== '') {
-                $out[$key] = $fromBase;
-            } elseif (trim((string) ($incoming[$key] ?? '')) !== '') {
-                $out[$key] = trim((string) $incoming[$key]);
+        // Incoming (user-selected / gap form) wins for any non-empty field so buyers can
+        // replace the provider-prefilled streets; empty incoming keeps existing base.
+        $out = $base !== [] ? $base : [];
+        $keys = [
+            'contact_name', 'name', 'street', 'address1', 'address2',
+            'country_code', 'country', 'province', 'city', 'district', 'postal_code',
+            'province_code', 'city_code', 'district_code',
+        ];
+        foreach ($keys as $key) {
+            $fromIncoming = trim((string) ($incoming[$key] ?? ''));
+            if ($fromIncoming !== '') {
+                $out[$key] = $fromIncoming;
+            } elseif (!isset($out[$key]) && trim((string) ($base[$key] ?? '')) !== '') {
+                $out[$key] = trim((string) $base[$key]);
             }
         }
-        // Gaps only: phone / email may be filled from confirm form.
+        if (trim((string) ($out['street'] ?? '')) === '' && trim((string) ($out['address1'] ?? '')) !== '') {
+            $out['street'] = (string) $out['address1'];
+        }
+        if (trim((string) ($out['address1'] ?? '')) === '' && trim((string) ($out['street'] ?? '')) !== '') {
+            $out['address1'] = (string) $out['street'];
+        }
+        if (trim((string) ($out['contact_name'] ?? '')) === '' && trim((string) ($out['name'] ?? '')) !== '') {
+            $out['contact_name'] = (string) $out['name'];
+        }
+        if (trim((string) ($out['name'] ?? '')) === '' && trim((string) ($out['contact_name'] ?? '')) !== '') {
+            $out['name'] = (string) $out['contact_name'];
+        }
+
         $phone = trim((string) ($incoming['contact_phone'] ?? $incoming['phone'] ?? ''));
         if ($phone !== '') {
             $out['contact_phone'] = $phone;
@@ -217,7 +236,9 @@ final class ExpressUnpaidOrderAmend
                 'qty_minor' => max(1, (int) ($item['qty_minor'] ?? $item['qty'] ?? 1)),
                 'unit_price_minor' => (int) ($item['unit_price_minor'] ?? 0),
                 'row_total_minor' => (int) ($item['row_total_minor'] ?? 0),
-                'weight_minor' => (int) ($item['weight_minor'] ?? 0),
+                'weight_minor' => max(0, (int) ($item['weight_minor'] ?? 0)) > 0
+                    ? (int) $item['weight_minor']
+                    : 500, // 0.5kg catalog fallback when offer weight is missing (weight_table fail-closed)
                 'volume_minor' => (int) ($item['volume_minor'] ?? 0),
                 'sku' => (string) ($item['sku'] ?? ''),
                 'name' => (string) ($item['name'] ?? ''),
@@ -239,10 +260,11 @@ final class ExpressUnpaidOrderAmend
      */
     private function quoteShippingMinor(array $address, array $items, string $currency, string $serviceCode): int
     {
+        $lines = $this->linesForQuote($items);
         try {
             $result = w_query('shippingInfo', 'listQuoteOptions', [
                 'address' => $address,
-                'lines' => $this->linesForQuote($items),
+                'lines' => $lines,
                 'currency' => $currency,
                 'currency_precision' => 2,
                 'scope' => [
@@ -258,22 +280,85 @@ final class ExpressUnpaidOrderAmend
             return 0;
         }
         $options = is_array($result['data']['options'] ?? null) ? $result['data']['options'] : [];
+        $methods = [];
         foreach ($options as $option) {
             if (!is_array($option)) {
                 continue;
             }
             $code = trim((string) ($option['service_code'] ?? $option['code'] ?? ''));
+            if ($code === '') {
+                continue;
+            }
+            $methods[] = [
+                'code' => $code,
+                'amount_minor' => (int) ($option['amount_minor'] ?? 0),
+            ];
+        }
+        $methods = $this->enrichShippingMethods(
+            $methods,
+            $lines,
+            $address,
+            [
+                'website_id' => (int) RequestContext::getWelineWebsiteId(),
+                'store_id' => (int) RequestContext::getWelineStoreId(),
+                'channel_id' => (int) RequestContext::getWelineChannelId(),
+            ],
+            $currency,
+        );
+        if ($methods === []) {
+            return 0;
+        }
+        foreach ($methods as $method) {
+            if (!is_array($method)) {
+                continue;
+            }
+            $code = trim((string) ($method['code'] ?? ''));
             if ($serviceCode !== '' && $code !== $serviceCode) {
                 continue;
             }
 
-            return (int) ($option['amount_minor'] ?? 0);
-        }
-        if ($options !== [] && is_array($options[0])) {
-            return (int) ($options[0]['amount_minor'] ?? 0);
+            return (int) ($method['amount_minor'] ?? 0);
         }
 
-        return 0;
+        return (int) ($methods[0]['amount_minor'] ?? 0);
+    }
+
+    /**
+     * @param list<array<string, mixed>> $methods
+     * @param list<array<string, mixed>> $lines
+     * @param array<string, mixed> $address
+     * @param array<string, mixed> $scope
+     * @return list<array<string, mixed>>
+     */
+    private function enrichShippingMethods(
+        array $methods,
+        array $lines,
+        array $address,
+        array $scope,
+        string $currency,
+    ): array {
+        try {
+            $events = ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class);
+            if (!$events instanceof \Weline\Framework\Event\EventsManager) {
+                return $methods;
+            }
+            $payload = [
+                'methods' => $methods,
+                'lines' => $lines,
+                'address' => $address,
+                'scope' => $scope,
+                'currency' => $currency,
+                'error' => null,
+            ];
+            $events->dispatch('Weline_Checkout::checkout::shipping_methods::enrich', $payload);
+            if (!empty($payload['error'])) {
+                return [];
+            }
+
+            return is_array($payload['methods'] ?? null) ? $payload['methods'] : $methods;
+        } catch (\Throwable) {
+            return $methods;
+        }
     }
 
     /**

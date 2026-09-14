@@ -137,6 +137,103 @@ final class PaymentCheckoutSessionPersistenceService
     }
 
     /**
+     * Update express/browser landing after payment intent exists (must include transaction_no).
+     *
+     * @param array<string, mixed> $landingParams
+     */
+    public function updateBrowserLanding(
+        string $transactionNo,
+        string $landingUrl,
+        array $landingParams = [],
+    ): ?PaymentCheckoutSession {
+        $transactionNo = trim($transactionNo);
+        $landingUrl = trim($landingUrl);
+        if ($transactionNo === '' || $landingUrl === '') {
+            return null;
+        }
+
+        $session = $this->loadByTransactionNo($transactionNo);
+        if ($session === null) {
+            /** @var PaymentTransaction $txn */
+            $txn = $this->objectManager->getInstance(PaymentTransaction::class);
+            $txn->load(PaymentTransaction::schema_fields_TRANSACTION_NO, $transactionNo);
+            if (!$txn->getId()) {
+                return null;
+            }
+            $request = $txn->getRequestData();
+            if (!is_array($request)) {
+                $request = [];
+            }
+            $scope = [
+                'scope' => (string) ($txn->getData('scope') ?? PaymentScopeConfigService::DEFAULT_SCOPE),
+                'environment' => (string) ($request['environment'] ?? 'sandbox'),
+            ];
+            $session = $this->persistFromPaymentContext(
+                array_replace($request, [
+                    'browser_landing_url' => $landingUrl,
+                    'browser_landing_params' => $landingParams,
+                    'order_id' => (string) $txn->getData(PaymentTransaction::schema_fields_ORDER_ID),
+                ]),
+                $transactionNo,
+                (string) $txn->getData(PaymentTransaction::schema_fields_METHOD_CODE),
+                $scope,
+            );
+            if ($session === null) {
+                return null;
+            }
+        }
+
+        $params = $landingParams;
+        $params[self::CONTEXT_TRANSACTION_NO] = $transactionNo;
+        $snapshot = array_replace($session->getContextSnapshot(), [
+            self::CONTEXT_BROWSER_LANDING_URL => $landingUrl,
+            self::CONTEXT_BROWSER_LANDING_PARAMS => $params,
+            self::CONTEXT_TRANSACTION_NO => $transactionNo,
+        ]);
+        $session
+            ->setData(PaymentCheckoutSession::schema_fields_ACTIVE_INTENT_CODE, $transactionNo)
+            ->setContextSnapshot($snapshot)
+            ->save();
+
+        // Keep unpaid express request_data landing in sync for callback consumers.
+        try {
+            /** @var PaymentTransaction $txn */
+            $txn = $this->objectManager->getInstance(PaymentTransaction::class);
+            $txn->load(PaymentTransaction::schema_fields_TRANSACTION_NO, $transactionNo);
+            if ($txn->getId()) {
+                $request = $txn->getRequestData();
+                if (!is_array($request)) {
+                    $request = [];
+                }
+                $request['browser_landing_url'] = $landingUrl;
+                $request['browser_landing_params'] = $params;
+                $txn->setRequestData($request)->save();
+            }
+        } catch (\Throwable) {
+        }
+
+        return $session;
+    }
+
+    public function loadByTransactionNo(string $transactionNo): ?PaymentCheckoutSession
+    {
+        $transactionNo = trim($transactionNo);
+        if ($transactionNo === '') {
+            return null;
+        }
+
+        /** @var PaymentCheckoutSession $session */
+        $session = $this->objectManager->getInstance(PaymentCheckoutSession::class);
+        $session->clear()
+            ->where(PaymentCheckoutSession::schema_fields_ACTIVE_INTENT_CODE, $transactionNo)
+            ->order(PaymentCheckoutSession::schema_fields_ID, 'DESC')
+            ->find()
+            ->fetch();
+
+        return $session->getId() ? $session : null;
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function landingSnapshot(PaymentCheckoutSession $session): array

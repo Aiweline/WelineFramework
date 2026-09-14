@@ -22,7 +22,16 @@ $tiersHidden = $mode !== 'tob';
 
 $offer = StorefrontOfferResolver::resolve($this);
 $sku = trim((string)($offer['sku'] ?? ''));
-$currency = strtoupper(trim((string)($offer['currency'] ?? 'CNY'))) ?: 'CNY';
+$currencyCode = strtoupper(trim((string)($offer['currency'] ?? 'CNY'))) ?: 'CNY';
+// Align with product-info main price: show symbol (¥) not ISO code (CNY).
+$currency = match ($currencyCode) {
+    'CNY', 'RMB' => '¥',
+    'USD' => '$',
+    'EUR' => '€',
+    'GBP' => '£',
+    'JPY' => '¥',
+    default => $currencyCode,
+};
 $catalogMinor = max(0, (int)($offer['catalog_price_minor'] ?? $offer['unit_price_minor'] ?? 0));
 if ($sku === '') {
     return;
@@ -33,6 +42,7 @@ $storeId = max(0, (int)RequestContext::getWelineStoreId());
 $moq = SellingModePolicy::DEFAULT_MOQ;
 $step = SellingModePolicy::DEFAULT_QTY_STEP;
 $allowsWholesaleDisplay = false;
+$productFlags = [];
 try {
     /** @var SellingModePolicy $policy */
     $policy = ObjectManager::getInstance(SellingModePolicy::class);
@@ -52,6 +62,15 @@ try {
 
 if (!$allowsWholesaleDisplay) {
     return;
+}
+
+try {
+    /** @var \Weline\B2B\Service\DefaultWholesalePolicy $defaultPolicy */
+    $defaultPolicy = ObjectManager::getInstance(\Weline\B2B\Service\DefaultWholesalePolicy::class);
+    if ($defaultPolicy instanceof \Weline\B2B\Service\DefaultWholesalePolicy) {
+        $moq = max(1, $defaultPolicy->lowestMinQty($defaultPolicy->allTiers($websiteId)));
+    }
+} catch (\Throwable) {
 }
 
 $customerId = '';
@@ -83,6 +102,8 @@ if ($customerId !== '' && $customerId !== '0') {
                 'sku' => $sku,
                 'qty' => $qty,
                 'retail_amount_minor' => $catalogMinor,
+                'product_flags' => $productFlags,
+                'selling_mode_tob' => true,
             ]);
             if (($result['ok'] ?? false) !== true) {
                 continue;
@@ -108,17 +129,53 @@ if ($customerId !== '' && $customerId !== '0') {
      aria-label="<?= $escape(__('批发起订与阶梯价')) ?>"
      <?= $tiersHidden ? 'hidden' : '' ?>>
     <p class="b2b-qty-tiers__moq" data-testid="b2b-qty-tiers-moq">
-        <?= $escape(__('批发起订量为 %{1} 件，步进 %{2} 件', [$moq, $step])) ?>
+        <?= $escape(__('起订 %{1} · 步进 %{2}', [$moq, $step])) ?>
     </p>
     <?php if ($tiers !== []): ?>
-        <ul class="b2b-qty-tiers__list" data-testid="b2b-qty-tiers-list">
+        <?php
+        $hasLadder = false;
+        $amounts = array_map(static fn(array $t): int => (int)$t['amount_minor'], $tiers);
+        if (count(array_unique($amounts)) > 1) {
+            $hasLadder = true;
+        }
+        ?>
+        <ul class="b2b-qty-tiers__list<?= $hasLadder ? ' is-ladder' : ' is-flat' ?>"
+            data-testid="b2b-qty-tiers-list"
+            data-b2b-qty-ladder="<?= $hasLadder ? '1' : '0' ?>">
             <?php foreach ($tiers as $tier): ?>
-                <li>
-                    <?= $escape(__('%{1} 件起：%{2} %{3}/件', [
-                        (int)$tier['qty'],
-                        $currency,
-                        number_format(((int)$tier['amount_minor']) / 100, 2, '.', ''),
-                    ])) ?>
+                <?php
+                $qty = (int)$tier['qty'];
+                $amount = (int)$tier['amount_minor'];
+                $unit = number_format($amount / 100, 2, '.', '');
+                $saveVsRetail = $catalogMinor > $amount ? ($catalogMinor - $amount) : 0;
+                $totalSaveMinor = $saveVsRetail > 0 ? ($saveVsRetail * $qty) : 0;
+                $liClass = 'b2b-qty-tiers__item';
+                if ($saveVsRetail > 0) {
+                    $liClass .= ' is-drop is-save';
+                }
+                ?>
+                <li class="<?= $escape($liClass) ?>"
+                    data-qty="<?= $qty ?>"
+                    data-amount-minor="<?= $amount ?>"
+                    data-unit-save-minor="<?= $saveVsRetail ?>"
+                    data-total-save-minor="<?= $totalSaveMinor ?>">
+                    <span class="b2b-qty-tiers__price">
+                        <?= $escape(__('%{1} 件 %{2} %{3}/件', [$qty, $currency, $unit])) ?>
+                    </span>
+                    <?php if ($saveVsRetail > 0): ?>
+                        <span class="b2b-qty-tiers__delta" data-testid="b2b-qty-tiers-drop">
+                            <?= $escape(__('每件低 %{1} %{2}', [
+                                $currency,
+                                number_format($saveVsRetail / 100, 2, '.', ''),
+                            ])) ?>
+                        </span>
+                        <span class="b2b-qty-tiers__save" data-testid="b2b-qty-tiers-save">
+                            <?= $escape(__('省 %{1} %{2}', [
+                                $currency,
+                                number_format($totalSaveMinor / 100, 2, '.', ''),
+                            ])) ?>
+                        </span>
+                    <?php endif; ?>
                 </li>
             <?php endforeach; ?>
         </ul>

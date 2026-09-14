@@ -10,12 +10,13 @@
 "域名解析结果偏离本站（如 DNS 指向变更）时触发，用于发送通知提醒管理员。","Triggered when the domain resolution result deviates from this site (e.g., DNS pointing changes), used to send notifications to alert the administrator."
 "一站式配置 - 绑定 DNS","One-stop configuration - Bind DNS"
 "一站式配置执行 DNS 绑定步骤时触发，观察者可在此创建 Zone/记录。","Triggered when the one-stop configuration performs the DNS binding step, where observers can create zones/records."
+标题,标题
+正文,正文
+类型,Type
 域名到期提醒邮件,域名到期提醒邮件
-"通知主题 domain_expiring 的邮件渠道","通知主题 domain_expiring 的邮件渠道"
 域名转移通知邮件,域名转移通知邮件
-"通知主题 domain_transfer 的邮件渠道","通知主题 domain_transfer 的邮件渠道"
 域名池解析偏离邮件,域名池解析偏离邮件
-"通知主题 domain_pool_resolve_off_local 的邮件渠道","通知主题 domain_pool_resolve_off_local 的邮件渠道"
+通知主题邮件渠道,通知主题邮件渠道
 站点,Site
 本地域名就绪查询器不支持的操作：%{1},"Operation not supported by local domain ready query: %{1}"
 "AI 建站本地域名就绪检查","AI website building local domain name readiness check"
@@ -1551,7 +1552,6 @@ DNS服务商,"DNS service provider"
 本服务器IP,"This Server IP"
 同步记录,"Sync records"
 添加记录,"Add Record"
-类型,Type
 主机记录,"host record"
 记录值,"Record Value"
 请选择域名查看DNS记录,"Select a domain to view DNS records"
@@ -1716,7 +1716,7 @@ DNS管理,"DNS management"
 创建成功,"Created successfully"
 "请先选择要切换 DNS 的根域名","Please select the root domain to switch DNS for first"
 个根域名,"root domain name"
-加载账户列表失败,"Failed to Load Account List"
+加载账户列表失败,"Failed to load account list"
 "-- 请选择账户 --","-- Please select the account --"
 请先选择要切换的根域名,"Please select the root domain to switch first"
 切换异常,"Switch Exception"
@@ -1734,7 +1734,7 @@ DNS管理,"DNS management"
 清理完成,"Cleanup Complete"
 已清理的账户,"Cleaned accounts"
 清理失败,"Cleanup Failed"
-鍔犺浇璐︽埛鍒楄〃澶辫触,"Exchanges between the two companies"
+鍔犺浇璐︽埛鍒楄〃澶辫触,鍔犺浇璐︽埛鍒楄〃澶辫触
 清除（使用注册商账户）,"Clear (using registrar account)"
 其他,Other
 批量购买域名,"Bulk Domain Purchase"
@@ -3215,6 +3215,9 @@ download,download
 "发现 %{1} 条非法域名记录：","Found %{1} illegal domain name records:"
 "已删除 %{1} 条非法记录","Deleted %{1} illegal record(s)"
 "处理完成：%d 条非法记录","Processing completed: %d illegal records"
+"通知主题 domain_expiring 的邮件渠道","通知主题 domain_expiring 的邮件渠道"
+"通知主题 domain_transfer 的邮件渠道","通知主题 domain_transfer 的邮件渠道"
+"通知主题 domain_pool_resolve_off_local 的邮件渠道","通知主题 domain_pool_resolve_off_local 的邮件渠道"
 点击选择货币（可多选）,点击选择货币（可多选）
 点击选择货币,点击选择货币
 搜索货币代码、名称或符号,搜索货币代码、名称或符号

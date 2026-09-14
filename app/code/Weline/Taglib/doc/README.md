@@ -12,7 +12,7 @@ Taglib 是模板语义扩展层，不是“所有前端能力都往里塞”的�
 - 可视化编辑器部件：用 widget
 - 只有当模板语法本身需要扩展时，才创建 Taglib
 
-如果任务与主题开发相关，先完成 `prepare_project`，再调用一次 `resolve_task_context`，同时将 `Weline_Taglib` 与 `Weline_Theme` 作为任务范围。随后按命中结果阅读：
+如果任务与主题开发相关，可选调用 `prepare_project` / `resolve_task_context`，并将 `Weline_Taglib` 与 `Weline_Theme` 作为检索范围。随后按命中结果阅读（编码用宿主原生编辑）：
 
 1. [`../../Theme/doc/theme-inheritance-and-file-conventions.md`](../../Theme/doc/theme-inheritance-and-file-conventions.md)
 2. [`../../Theme/doc/开发/Theme开发总指南.md`](../../Theme/doc/开发/Theme开发总指南.md)

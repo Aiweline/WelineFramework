@@ -11,15 +11,24 @@ declare(strict_types=1);
 
 namespace Weline\Marketing\Model\Rule\Action\Discount;
 
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Marketing\Model\Rule\Action\AbstractAction;
+use Weline\Marketing\Service\MarketingBaseCurrencyAmount;
 
 /**
  * 固定金额折扣动作
- * 
+ *
+ * discount_value 一律按站点基准货币录入；结账时换算到 quote 币种。
+ *
  * @package Weline_Marketing
  */
 class FixedAmount extends AbstractAction
 {
+    public function __construct(
+        private readonly ?MarketingBaseCurrencyAmount $baseCurrencyAmount = null,
+    ) {
+    }
+
     public function getCode(): string
     {
         return 'discount_fixed_amount';
@@ -32,7 +41,7 @@ class FixedAmount extends AbstractAction
 
     public function getDescription(): string
     {
-        return __('按固定金额折扣');
+        return __('按固定金额折扣（金额为站点基准货币，结账币种自动换算）');
     }
 
     public function execute(array $action, array $context): array
@@ -46,7 +55,17 @@ class FixedAmount extends AbstractAction
             ];
         }
 
-        $discountValue = (float)($action['discount_value'] ?? 0);
+        $discountValueBase = (float)($action['discount_value'] ?? 0);
+        $fx = $this->baseCurrencyAmount();
+        $checkoutCurrency = $fx->checkoutCurrencyFromContext($context);
+        $discountValue = $fx->convertBaseMajorToCheckout($discountValueBase, $checkoutCurrency);
+        if ($discountValue === null) {
+            return [
+                'discount_amount' => 0,
+                'messages' => [__('固定优惠换算失败：缺少基准货币到结账货币的汇率')],
+            ];
+        }
+
         $applyTo = \strtolower(\trim((string)($action['apply_to'] ?? 'subtotal')));
         if ($applyTo === 'cart' || $applyTo === '') {
             $applyTo = 'subtotal';
@@ -67,7 +86,11 @@ class FixedAmount extends AbstractAction
 
         return [
             'discount_amount' => $discountAmount,
-            'messages' => [sprintf(__('优惠 %.2f 元'), $discountAmount)],
+            'messages' => [sprintf(
+                __('优惠 %s %.2f'),
+                $checkoutCurrency,
+                $discountAmount
+            )],
         ];
     }
 
@@ -113,14 +136,17 @@ class FixedAmount extends AbstractAction
 
     public function getFormFields(): array
     {
+        $base = $this->baseCurrencyAmount()->baseCurrency();
+
         return [
             [
                 'name' => 'discount_value',
-                'label' => __('折扣金额'),
+                'label' => __('折扣金额（%{1}）', $base),
                 'type' => 'number',
                 'step' => '0.01',
                 'min' => 0,
                 'required' => true,
+                'hint' => __('固定金额按站点基准货币录入；结账时按汇率换算到当前货币，禁止按数字 1:1 跨币种扣减。'),
             ],
             [
                 'name' => 'apply_to',
@@ -135,5 +161,13 @@ class FixedAmount extends AbstractAction
             ],
         ];
     }
-}
 
+    private function baseCurrencyAmount(): MarketingBaseCurrencyAmount
+    {
+        if ($this->baseCurrencyAmount instanceof MarketingBaseCurrencyAmount) {
+            return $this->baseCurrencyAmount;
+        }
+
+        return ObjectManager::getInstance(MarketingBaseCurrencyAmount::class);
+    }
+}

@@ -1,0 +1,528 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+$selectedScope = (string)($this->getData('selected_scope') ?? 'default.default.default');
+$items = $this->getData('items') ?? [];
+$openChannel = trim((string)($this->getData('open_channel') ?? ''));
+$filterQ = trim((string)($this->getData('filter_q') ?? ''));
+$filterLocales = trim((string)($this->getData('filter_locales') ?? ''));
+$focusLocale = trim((string)($this->getData('focus_locale') ?? ''));
+$h = static fn($v) => htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$itemCount = is_array($items) ? count($items) : 0;
+?>
+<style>
+.w-smtp-channel-list { display: grid; gap: var(--weline-space-2); }
+.w-smtp-channel {
+    border: 1px solid var(--color-border, var(--weline-theme-border));
+    border-radius: var(--weline-radius-md);
+    background: var(--color-surface, var(--weline-theme-surface));
+}
+.w-smtp-channel > summary {
+    list-style: none;
+    cursor: pointer;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: var(--weline-space-3);
+    align-items: center;
+    padding: var(--weline-space-3) var(--weline-space-4);
+}
+.w-smtp-channel > summary::-webkit-details-marker { display: none; }
+.w-smtp-channel__chevron {
+    width: 1.25rem;
+    height: 1.25rem;
+    display: inline-grid;
+    place-items: center;
+    color: var(--color-text-muted, var(--weline-theme-text-muted));
+    transition: transform 0.15s ease;
+}
+.w-smtp-channel[open] > summary .w-smtp-channel__chevron { transform: rotate(90deg); }
+.w-smtp-channel__meta { display: grid; gap: var(--weline-space-1); min-inline-size: 0; }
+.w-smtp-channel__body {
+    border-top: 1px solid var(--color-border, var(--weline-theme-border));
+    padding: var(--weline-space-3) var(--weline-space-4) var(--weline-space-4);
+    display: grid;
+    gap: var(--weline-space-3);
+}
+.w-smtp-channel__locale-table { width: 100%; }
+.w-smtp-channel__subject--inherit {
+    color: var(--color-text-muted, var(--weline-theme-text-muted));
+}
+.w-smtp-channel__empty,
+.w-smtp-channel-list__empty {
+    display: none;
+    margin: 0;
+}
+.w-smtp-channel__body[data-filter-empty="1"] .w-smtp-channel__empty { display: block; }
+.w-smtp-channel__body[data-filter-empty="1"] .w-smtp-channel__locale-table { display: none; }
+.w-smtp-channel-list[data-channel-empty="1"] .w-smtp-channel-list__empty { display: block; }
+.w-smtp-filter-bar {
+    display: grid;
+    gap: var(--weline-space-3);
+}
+.w-smtp-filter-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--weline-space-3);
+    align-items: end;
+}
+.w-smtp-locale-filter-field {
+    --w-min-inline-size: min(100%, 28rem);
+    --w-mb: 0;
+    flex: 1 1 18rem;
+}
+@media (prefers-reduced-motion: reduce) {
+    .w-smtp-channel__chevron { transition: none; }
+}
+</style>
+<div class="w-stack"
+     style="--w-gap:var(--weline-space-4);"
+     data-testid="smtp-channel-listing"
+     data-smtp-channel-listing="1"
+     data-initial-q="<?= $h($filterQ) ?>"
+     data-initial-locales="<?= $h($filterLocales) ?>"
+     data-focus-locale="<?= $h($focusLocale) ?>"
+     data-open-channel="<?= $h($openChannel) ?>">
+    <div class="w-stack" style="--w-gap:var(--weline-space-1);" data-testid="smtp-channel-listing-header">
+        <h1 class="w-heading" data-level="2"><?= __('渠道管理') ?></h1>
+        <p class="w-text" data-tone="muted" data-size="sm">
+            <?= __('搜索渠道；用作用范围筛选渠道内模板；用语言标签多选快速过滤。未配置语言发送时使用网站默认语模板。共 %{1} 个渠道。', [$itemCount]) ?>
+        </p>
+    </div>
+
+    <div class="w-smtp-filter-bar" data-testid="smtp-channel-filter-bar">
+        <div class="w-smtp-filter-row" data-testid="smtp-channel-scope-bar">
+            <div class="w-field" style="--w-min-inline-size:16rem; --w-mb:0; flex:1 1 14rem;" data-testid="smtp-channel-search-field">
+                <label class="w-field__label" for="smtp-channel-search"><?= __('搜索渠道') ?></label>
+                <input class="w-input"
+                       type="search"
+                       id="smtp-channel-search"
+                       data-smtp-channel-search="1"
+                       data-testid="smtp-channel-search"
+                       placeholder="<?= $h(__('渠道名 / code / 模块 / 说明')) ?>"
+                       value="<?= $h($filterQ) ?>"
+                       autocomplete="off"/>
+            </div>
+            <div class="w-field" style="--w-min-inline-size:16rem; --w-mb:0; flex:1 1 14rem;" data-testid="smtp-channel-scope">
+                <label class="w-field__label" for="smtp-channel-scope"><?= __('按范围筛选模板') ?></label>
+                <w:scope
+                    id="smtp-channel-scope"
+                    name="target_scope"
+                    value="selected_scope"
+                    placeholder="@lang(选择网站范围)"
+                    search-placeholder="@lang(搜索作用范围)"
+                />
+            </div>
+        </div>
+        <div class="w-stack" style="--w-gap:var(--weline-space-2);" data-testid="smtp-locale-tag-filter">
+            <div class="w-cluster" data-align="end" data-justify="between" style="--w-gap:var(--weline-space-2);">
+                <div class="w-field w-smtp-locale-filter-field" data-testid="smtp-locale-language-select-field">
+                    <label class="w-field__label" for="smtp-locale-filter-field"><?= __('语言标签过滤') ?></label>
+                    <w:i18n:language:select
+                        id="smtp-locale-filter"
+                        name="locale_filter[]"
+                        input-id="smtp-locale-filter-field"
+                        value=""
+                        multiple="true"
+                        catalog="installed"
+                        empty-text="@lang(点击选择语言（可多选过滤）)"
+                        search-placeholder="@lang(搜索国家、语言或代码以过滤模板)"
+                        data-w-width="full"
+                    />
+                </div>
+                <button type="button"
+                        class="w-button"
+                        data-variant="outline"
+                        data-size="sm"
+                        data-smtp-locale-clear="1"
+                        data-testid="smtp-locale-tag-clear">
+                    <?= __('清除语言筛选') ?>
+                </button>
+            </div>
+            <p class="w-text" data-tone="muted" data-size="sm">
+                <?= __('使用官方语言选择标签多选过滤；未选时显示全部语言。当前范围：%{1}', [$selectedScope]) ?>
+            </p>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            var root = document.querySelector('[data-smtp-channel-listing="1"]');
+            if (!root) { return; }
+            var restoreDone = false;
+
+            function scopeField() {
+                var el = document.getElementById('smtp-channel-scope');
+                if (!el) { return null; }
+                if (el.matches && el.matches('input[name="target_scope"]')) {
+                    return el;
+                }
+                return el.querySelector('input[type="hidden"][name="target_scope"]')
+                    || el.querySelector('input[name="target_scope"]');
+            }
+            function writeListingParams(url) {
+                var input = root.querySelector('[data-smtp-channel-search="1"]');
+                var q = input ? String(input.value || '').trim() : '';
+                if (q) { url.searchParams.set('q', q); } else { url.searchParams.delete('q'); }
+                var locales = selectedLocaleList().join(',');
+                if (locales) { url.searchParams.set('locales', locales); } else { url.searchParams.delete('locales'); }
+                var openCh = root.querySelector('details.w-smtp-channel[open]:not([hidden])')
+                    || root.querySelector('details.w-smtp-channel[open]');
+                var channel = openCh ? String(openCh.getAttribute('data-channel') || '').trim() : '';
+                if (channel) { url.searchParams.set('channel', channel); } else { url.searchParams.delete('channel'); }
+                var focus = String(root.getAttribute('data-focus-locale') || '').trim();
+                if (focus) { url.searchParams.set('focus_locale', focus); } else { url.searchParams.delete('focus_locale'); }
+                return url;
+            }
+            function syncListingUrl() {
+                try {
+                    var url = writeListingParams(new URL(window.location.href));
+                    history.replaceState(null, '', url.toString());
+                } catch (_e) {}
+            }
+            function goScope() {
+                var field = scopeField();
+                var url = writeListingParams(new URL(window.location.href));
+                if (field && field.value) {
+                    var next = String(field.value || '').trim();
+                    url.searchParams.set('target_scope', next);
+                    url.searchParams.delete('website_code');
+                    url.searchParams.delete('store_code');
+                    url.searchParams.delete('channel_code');
+                    url.searchParams.delete('scope_kind');
+                    url.searchParams.delete('locale');
+                }
+                window.location.assign(url.toString());
+            }
+            var scopeInput = scopeField();
+            if (scopeInput) { scopeInput.addEventListener('change', goScope); }
+
+            function languageSelectRoot() {
+                return document.getElementById('smtp-locale-filter_wrapper')
+                    || root.querySelector('[data-w-component-id="smtp-locale-filter"]')
+                    || root.querySelector('[data-testid="smtp-locale-tag-filter"] [data-w-component="language-select"]');
+            }
+
+            function languageSelectApi() {
+                var el = languageSelectRoot();
+                if (!el || !window.Weline || !Weline.UI || typeof Weline.UI.get !== 'function') {
+                    return null;
+                }
+                try {
+                    return Weline.UI.get(el, 'language-select');
+                } catch (_e) {
+                    return null;
+                }
+            }
+
+            function selectedLocaleList() {
+                var api = languageSelectApi();
+                if (api && typeof api.getValues === 'function') {
+                    return (api.getValues() || []).map(String).filter(Boolean);
+                }
+                var field = document.getElementById('smtp-locale-filter-field')
+                    || (languageSelectRoot() && languageSelectRoot().querySelector('[data-w-language-field]'));
+                if (!field || !field.selectedOptions) {
+                    return [];
+                }
+                return Array.prototype.map.call(field.selectedOptions, function (opt) {
+                    return String(opt.value || '').trim();
+                }).filter(Boolean);
+            }
+
+            function applyLocaleRowFilter(body) {
+                var selected = selectedLocaleList();
+                var selectedMap = {};
+                selected.forEach(function (code) { selectedMap[code] = true; });
+                var rows = body.querySelectorAll('[data-smtp-locale-row="1"]');
+                var visible = 0;
+                rows.forEach(function (row) {
+                    var loc = String(row.getAttribute('data-locale') || '');
+                    var show = selected.length === 0 || !!selectedMap[loc];
+                    row.hidden = !show;
+                    if (show) { visible += 1; }
+                });
+                body.setAttribute('data-filter-empty', visible === 0 ? '1' : '0');
+            }
+
+            function applyAllLocaleFilters() {
+                root.querySelectorAll('.w-smtp-channel__body').forEach(applyLocaleRowFilter);
+            }
+
+            function applyChannelSearch() {
+                var input = root.querySelector('[data-smtp-channel-search="1"]');
+                var q = input ? String(input.value || '').trim().toLowerCase() : '';
+                var list = root.querySelector('[data-testid="smtp-channel-list"]');
+                var channels = root.querySelectorAll('details.w-smtp-channel');
+                var visible = 0;
+                channels.forEach(function (ch) {
+                    var hay = String(ch.getAttribute('data-search') || '').toLowerCase();
+                    var show = q === '' || hay.indexOf(q) !== -1;
+                    ch.hidden = !show;
+                    if (show) { visible += 1; }
+                });
+                if (list) {
+                    list.setAttribute('data-channel-empty', visible === 0 ? '1' : '0');
+                }
+            }
+
+            function clearLocaleFilter() {
+                var api = languageSelectApi();
+                if (api && typeof api.setValues === 'function') {
+                    api.setValues([]);
+                    applyAllLocaleFilters();
+                    syncListingUrl();
+                    return;
+                }
+                var field = document.getElementById('smtp-locale-filter-field')
+                    || (languageSelectRoot() && languageSelectRoot().querySelector('[data-w-language-field]'));
+                if (field && field.options) {
+                    Array.prototype.forEach.call(field.options, function (opt) { opt.selected = false; });
+                    field.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+                applyAllLocaleFilters();
+                syncListingUrl();
+            }
+
+            function scrollToReturnPosition() {
+                var openChannel = String(root.getAttribute('data-open-channel') || '').trim();
+                var focus = String(root.getAttribute('data-focus-locale') || '').trim();
+                var target = null;
+                if (openChannel) {
+                    var ch = root.querySelector('details.w-smtp-channel[data-channel="' + openChannel.replace(/"/g, '') + '"]');
+                    if (ch) {
+                        ch.open = true;
+                        if (focus) {
+                            target = ch.querySelector('[data-smtp-locale-row="1"][data-locale="' + focus.replace(/"/g, '') + '"]');
+                        }
+                        if (!target) { target = ch; }
+                    }
+                }
+                if (target && typeof target.scrollIntoView === 'function') {
+                    target.scrollIntoView({ block: 'center', inline: 'nearest' });
+                }
+            }
+
+            function restoreFromUrl(attempt) {
+                var initialLocales = String(root.getAttribute('data-initial-locales') || '')
+                    .split(',')
+                    .map(function (s) { return String(s || '').trim(); })
+                    .filter(Boolean);
+                applyChannelSearch();
+                if (initialLocales.length) {
+                    var api = languageSelectApi();
+                    if (api && typeof api.setValues === 'function') {
+                        api.setValues(initialLocales);
+                        applyAllLocaleFilters();
+                        if (!restoreDone) {
+                            restoreDone = true;
+                            scrollToReturnPosition();
+                            syncListingUrl();
+                        }
+                        return;
+                    }
+                    if ((attempt || 0) < 40) {
+                        setTimeout(function () { restoreFromUrl((attempt || 0) + 1); }, 50);
+                        return;
+                    }
+                }
+                applyAllLocaleFilters();
+                if (!restoreDone) {
+                    restoreDone = true;
+                    scrollToReturnPosition();
+                    syncListingUrl();
+                }
+            }
+
+            root.addEventListener('input', function (event) {
+                var t = event.target;
+                if (t && t.getAttribute && t.getAttribute('data-smtp-channel-search') === '1') {
+                    applyChannelSearch();
+                    syncListingUrl();
+                }
+            });
+            root.addEventListener('change', function (event) {
+                var t = event.target;
+                if (!t) { return; }
+                if (t.id === 'smtp-locale-filter-field' || (t.getAttribute && t.getAttribute('data-w-language-field') !== null
+                    && languageSelectRoot() && languageSelectRoot().contains(t))) {
+                    applyAllLocaleFilters();
+                    syncListingUrl();
+                }
+            });
+            root.addEventListener('toggle', function (event) {
+                var t = event.target;
+                if (t && t.matches && t.matches('details.w-smtp-channel')) {
+                    syncListingUrl();
+                }
+            }, true);
+            root.addEventListener('click', function (event) {
+                var t = event.target;
+                if (t && t.closest && t.closest('[data-smtp-locale-clear="1"]')) {
+                    clearLocaleFilter();
+                    return;
+                }
+                var editLink = t && t.closest ? t.closest('a[data-testid^="smtp-channel-edit-"]') : null;
+                if (!editLink || !editLink.href) { return; }
+                try {
+                    var url = writeListingParams(new URL(editLink.href, window.location.origin));
+                    var row = editLink.closest('[data-smtp-locale-row="1"]');
+                    var loc = row ? String(row.getAttribute('data-locale') || '').trim() : '';
+                    if (loc) {
+                        url.searchParams.set('focus_locale', loc);
+                        url.searchParams.set('locale', loc);
+                    }
+                    var ch = editLink.closest('details.w-smtp-channel');
+                    if (ch) {
+                        url.searchParams.set('channel', String(ch.getAttribute('data-channel') || '').trim());
+                    }
+                    editLink.href = url.toString();
+                } catch (_e) {}
+            });
+
+            restoreFromUrl(0);
+        })();
+    </script>
+
+    <div class="w-smtp-channel-list" data-testid="smtp-channel-list" data-channel-empty="0">
+        <p class="w-text w-smtp-channel-list__empty" data-tone="muted" data-size="sm" data-testid="smtp-channel-list-empty">
+            <?= __('没有匹配的渠道') ?>
+        </p>
+        <?php foreach ($items as $item):
+            $ch = $item['channel'] ?? [];
+            $locales = is_array($item['locales'] ?? null) ? $item['locales'] : [];
+            $code = (string)($ch['code'] ?? '');
+            $name = (string)($ch['name'] ?? $code);
+            $module = (string)($ch['module'] ?? '');
+            $desc = (string)($ch['description'] ?? '');
+            $localeCount = (int)($item['locale_count'] ?? count($locales));
+            $presentCount = (int)($item['present_count'] ?? 0);
+            $isOpen = $openChannel !== '' && $openChannel === $code;
+            $channelSearch = implode(' ', array_filter([$name, $code, $module, $desc]));
+            ?>
+            <details class="w-smtp-channel"
+                     data-testid="smtp-channel-row-<?= $h($code) ?>"
+                     data-channel="<?= $h($code) ?>"
+                     data-search="<?= $h($channelSearch) ?>"
+                     <?= $isOpen ? 'open' : '' ?>>
+                <summary data-testid="smtp-channel-toggle-<?= $h($code) ?>">
+                    <span class="w-smtp-channel__chevron" aria-hidden="true">▸</span>
+                    <div class="w-smtp-channel__meta">
+                        <div class="w-cluster" data-align="baseline" style="--w-gap:var(--weline-space-2);">
+                            <strong><?= $h($name) ?></strong>
+                            <code class="w-text" data-size="sm"><?= $h($code) ?></code>
+                        </div>
+                        <?php if ($desc !== ''): ?>
+                            <p class="w-text" data-tone="muted" data-size="sm"><?= $h($desc) ?></p>
+                        <?php endif; ?>
+                    </div>
+                    <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);">
+                        <?php if ($module !== ''): ?>
+                            <span class="w-badge" data-tone="neutral"><?= $h($module) ?></span>
+                        <?php endif; ?>
+                        <span class="w-badge" data-testid="smtp-channel-locale-count-<?= $h($code) ?>">
+                            <?= __('已有 %{1} / %{2} 语言', [$presentCount, $localeCount]) ?>
+                        </span>
+                    </div>
+                </summary>
+                <div class="w-smtp-channel__body" data-testid="smtp-channel-locales-<?= $h($code) ?>" data-filter-empty="0">
+                    <p class="w-text" data-tone="muted" data-size="sm">
+                        <?= __('本列表已按上方「作用范围」加载；未配置语言时，发送将使用网站默认语模板（可就近向上）。') ?>
+                    </p>
+                    <p class="w-text w-smtp-channel__empty" data-tone="muted" data-size="sm" data-testid="smtp-channel-locale-empty-<?= $h($code) ?>">
+                        <?= __('没有匹配的语言模板') ?>
+                    </p>
+                    <table class="w-table w-smtp-channel__locale-table" data-testid="smtp-channel-locale-table-<?= $h($code) ?>">
+                        <thead>
+                        <tr>
+                            <th><?= __('语言') ?></th>
+                            <th><?= __('主题') ?></th>
+                            <th><?= __('来源') ?></th>
+                            <th><?= __('继承') ?></th>
+                            <th><?= __('操作') ?></th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <?php foreach ($locales as $localeItem):
+                            $loc = (string)($localeItem['locale'] ?? '');
+                            $tpl = $localeItem['template'] ?? null;
+                            $inherit = is_array($localeItem['inherit'] ?? null) ? $localeItem['inherit'] : null;
+                            $inheritTpl = $inherit['template'] ?? null;
+                            $inheritScope = (string)($inherit['storage_scope'] ?? '');
+                            $inheritLocale = (string)($inherit['locale'] ?? '');
+                            $inheritChannel = (string)($inherit['resolved_channel'] ?? '');
+                            $localSubject = $tpl ? (string)$tpl->getData('subject') : '';
+                            $inheritSubject = ($inheritTpl && is_object($inheritTpl))
+                                ? (string)$inheritTpl->getData('subject')
+                                : '';
+                            $displaySubject = $localSubject !== '' ? $localSubject : $inheritSubject;
+                            $isLocaleFallback = $tpl === null
+                                && $inherit !== null
+                                && $inheritScope === $selectedScope
+                                && $inheritChannel === $code
+                                && $inheritLocale !== ''
+                                && $inheritLocale !== $loc;
+                            $inheritLabel = '';
+                            if ($isLocaleFallback) {
+                                $inheritLabel = __('网站默认语') . ' ' . $inheritLocale;
+                            } elseif ($inherit !== null) {
+                                $inheritLabel = __('发送将继承自') . ' ' . $inheritScope . ' / ' . $inheritLocale;
+                                if ($inheritChannel !== '' && $inheritChannel !== $code) {
+                                    $inheritLabel .= ' · ' . $inheritChannel;
+                                }
+                            }
+                            $editUrlParams = [
+                                'target_scope' => $selectedScope,
+                                'channel' => $code,
+                                'locale' => $loc,
+                                'focus_locale' => $loc,
+                                'template_id' => $tpl ? (int)$tpl->getId() : 0,
+                            ];
+                            if ($filterQ !== '') {
+                                $editUrlParams['q'] = $filterQ;
+                            }
+                            if ($filterLocales !== '') {
+                                $editUrlParams['locales'] = $filterLocales;
+                            }
+                            $editUrl = $this->getBackendUrl('smtp/backend/template/edit', $editUrlParams);
+                            ?>
+                            <tr data-testid="smtp-channel-locale-row-<?= $h($code) ?>-<?= $h($loc) ?>"
+                                data-smtp-locale-row="1"
+                                data-locale="<?= $h($loc) ?>">
+                                <td><code class="w-text" data-size="sm"><?= $h($loc) ?></code></td>
+                                <td>
+                                    <?php if ($localSubject !== ''): ?>
+                                        <?= $h($localSubject) ?>
+                                    <?php elseif ($inheritSubject !== ''): ?>
+                                        <span class="w-smtp-channel__subject--inherit" title="<?= $h(__('未配置本语言；发送时使用此默认语主题')) ?>">
+                                            <?= $h($inheritSubject) ?>
+                                        </span>
+                                    <?php else: ?>
+                                        —
+                                    <?php endif; ?>
+                                </td>
+                                <td><?= $tpl ? $h((string)$tpl->getData('source')) : '—' ?></td>
+                                <td data-testid="smtp-channel-inherit-<?= $h($code) ?>-<?= $h($loc) ?>">
+                                    <?php if ($inheritLabel !== ''): ?>
+                                        <span class="w-badge" data-testid="smtp-channel-inherit-badge-<?= $h($code) ?>-<?= $h($loc) ?>"><?= $h($inheritLabel) ?></span>
+                                    <?php else: ?>
+                                        —
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <a class="w-button"
+                                       data-tone="primary"
+                                       data-variant="outline"
+                                       data-size="sm"
+                                       href="<?= $h($editUrl) ?>"
+                                       data-testid="smtp-channel-edit-<?= $h($code) ?>-<?= $h($loc) ?>">
+                                        <?= __('编辑') ?>
+                                    </a>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+        <?php endforeach; ?>
+    </div>
+</div>

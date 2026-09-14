@@ -11,7 +11,9 @@ declare(strict_types=1);
 
 namespace Weline\Marketing\Model\Rule\Action\Discount;
 
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Marketing\Model\Rule\Action\AbstractAction;
+use Weline\Marketing\Service\MarketingBaseCurrencyAmount;
 
 /**
  * 买X送Y动作
@@ -70,15 +72,48 @@ class BuyXGetY extends AbstractAction
                 $avgPrice = $totalPrice / $itemCount;
             }
             $discountAmount = $avgPrice * $freeItems;
-            $messages[] = sprintf(__('买 %d 送 %d，共赠送 %d 件商品，优惠 %.2f 元'), $buyX, $getY, $freeItems, $discountAmount);
+            $checkoutCurrency = $this->baseCurrencyAmount()->checkoutCurrencyFromContext($context);
+            $messages[] = sprintf(
+                __('买 %d 送 %d，共赠送 %d 件商品，优惠 %s %.2f'),
+                $buyX,
+                $getY,
+                $freeItems,
+                $checkoutCurrency,
+                $discountAmount
+            );
         } elseif ($discountType === 'percentage' && $discountValue !== null) {
             $order = $context['order'] ?? [];
             $subtotal = (float)($order['subtotal'] ?? $order['total'] ?? $context['subtotal'] ?? 0);
             $discountAmount = $this->calculateDiscount($subtotal, 'percentage', $discountValue);
-            $messages[] = sprintf(__('买 %d 送 %d，享受 %.2f%% 折扣，优惠 %.2f 元'), $buyX, $getY, $discountValue, $discountAmount);
+            $checkoutCurrency = $this->baseCurrencyAmount()->checkoutCurrencyFromContext($context);
+            $messages[] = sprintf(
+                __('买 %d 送 %d，享受 %.2f%% 折扣，优惠 %s %.2f'),
+                $buyX,
+                $getY,
+                $discountValue,
+                $checkoutCurrency,
+                $discountAmount
+            );
         } elseif ($discountType === 'fixed_amount' && $discountValue !== null) {
-            $discountAmount = $discountValue * $times;
-            $messages[] = sprintf(__('买 %d 送 %d，每次优惠 %.2f 元，共优惠 %.2f 元'), $buyX, $getY, $discountValue, $discountAmount);
+            $fx = $this->baseCurrencyAmount();
+            $checkoutCurrency = $fx->checkoutCurrencyFromContext($context);
+            $perTimes = $fx->convertBaseMajorToCheckout($discountValue, $checkoutCurrency);
+            if ($perTimes === null) {
+                return [
+                    'discount_amount' => 0,
+                    'messages' => [__('买X送Y固定额换算失败：缺少基准货币到结账货币的汇率')],
+                ];
+            }
+            $discountAmount = $perTimes * $times;
+            $messages[] = sprintf(
+                __('买 %d 送 %d，每次优惠 %s %.2f，共优惠 %s %.2f'),
+                $buyX,
+                $getY,
+                $checkoutCurrency,
+                $perTimes,
+                $checkoutCurrency,
+                $discountAmount
+            );
         }
 
         return [
@@ -117,12 +152,18 @@ class BuyXGetY extends AbstractAction
             ],
             [
                 'name' => 'discount_value',
-                'label' => __('折扣值（百分比或金额）'),
+                'label' => __('折扣值（百分比或金额；固定额为 %{1}）', $this->baseCurrencyAmount()->baseCurrency()),
                 'type' => 'number',
                 'step' => '0.01',
                 'required' => false,
+                'hint' => __('选择固定金额时按站点基准货币录入，结账按汇率换算。'),
             ],
         ];
+    }
+
+    private function baseCurrencyAmount(): MarketingBaseCurrencyAmount
+    {
+        return ObjectManager::getInstance(MarketingBaseCurrencyAmount::class);
     }
 }
 

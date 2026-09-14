@@ -20,5 +20,10 @@ final class CartHelpPaySlotContractTest extends TestCase
         self::assertStringContainsString('id="cart-summary-help-pay"', $tpl);
         self::assertStringNotContainsString('Weline_HelpPay::', $tpl);
         self::assertStringNotContainsString('<w:widget', $tpl);
+        $checkoutPos = strpos($tpl, 'data-cart-checkout');
+        $helpPos = strpos($tpl, 'id="cart-summary-help-pay"');
+        self::assertNotFalse($checkoutPos);
+        self::assertNotFalse($helpPos);
+        self::assertGreaterThan($checkoutPos, $helpPos, 'help-pay slot must follow 去结算');
     }
 }

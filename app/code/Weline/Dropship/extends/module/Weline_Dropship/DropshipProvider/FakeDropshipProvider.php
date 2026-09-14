@@ -39,6 +39,13 @@ class FakeDropshipProvider implements
             'fulfillment' => true,
             'freight' => true,
             'webhook' => true,
+            'webhook_order' => true,
+            'webhook_product' => true,
+            'webhook_stock' => true,
+            'webhook_logistics' => true,
+            'webhook_makeup' => true,
+            'webhook_private_order' => true,
+            'webhook_dispute' => true,
             'warehouse' => true,
         ];
     }
@@ -247,6 +254,11 @@ class FakeDropshipProvider implements
         ]];
     }
 
+    public function freightOnFailure(): string
+    {
+        return \Weline\Dropship\Service\DropshipFreightPolicy::ON_FAILURE_FALLBACK_LOCAL;
+    }
+
     public function verifyWebhook(array $headers, string $body): array
     {
         return ['ok' => true];
@@ -259,13 +271,51 @@ class FakeDropshipProvider implements
             $payload = [];
         }
 
+        $topic = strtolower(trim((string)($payload['topic'] ?? '')));
         $event = (string)($payload['type'] ?? $payload['event'] ?? 'order.updated');
-        $externalOrderId = (string)($payload['external_order_id'] ?? $payload['orderId'] ?? $payload['id'] ?? '');
-        $externalId = (string)($payload['id'] ?? $payload['external_event_id'] ?? $externalOrderId);
+        $typeUp = strtoupper(trim((string)($payload['type'] ?? '')));
+        if ($topic === '') {
+            $topic = match ($typeUp) {
+                'PRODUCT', 'VARIANT' => 'product',
+                'STOCK' => 'stock',
+                'LOGISTIC', 'LOGISTICS' => 'logistics',
+                'MAKEUP' => 'makeup',
+                'PRIVATE_ORDER' => 'private_order',
+                'DISPUTES', 'DISPUTE' => 'dispute',
+                'ORDER', 'ORDERSPLIT' => 'order',
+                default => 'order',
+            };
+        }
+        $externalId = (string)($payload['id'] ?? $payload['external_event_id'] ?? $payload['messageId'] ?? '');
         if ($externalId === '') {
             $externalId = $body !== '' ? md5($body) : ('fake-event-' . substr(uniqid('', true), -8));
         }
 
+        $catalog = \is_array($payload['catalog'] ?? null) ? $payload['catalog'] : [];
+        if ($catalog === [] && \in_array($topic, ['product', 'stock'], true)) {
+            $catalog = [
+                'external_spu' => (string)($payload['external_spu'] ?? $payload['pid'] ?? ''),
+                'external_sku' => (string)($payload['external_sku'] ?? $payload['sku'] ?? ''),
+                'qty' => array_key_exists('qty', $payload) ? (int)$payload['qty'] : null,
+                'shelf_status' => (string)($payload['shelf_status'] ?? 'active'),
+                'origin_price_minor' => isset($payload['origin_price_minor']) ? (int)$payload['origin_price_minor'] : null,
+                'origin_currency' => (string)($payload['origin_currency'] ?? 'USD'),
+                'title' => (string)($payload['title'] ?? ''),
+            ];
+        }
+
+        $makeup = \is_array($payload['makeup'] ?? null) ? $payload['makeup'] : [];
+        if ($makeup === [] && $topic === 'makeup') {
+            $makeup = [
+                'external_id' => (string)($payload['makeup_id'] ?? $payload['id'] ?? ''),
+                'related_external_order_id' => (string)($payload['related_external_order_id'] ?? $payload['external_order_id'] ?? ''),
+                'status' => (string)($payload['status'] ?? 'PAID'),
+                'amount_minor' => isset($payload['amount_minor']) ? (int)$payload['amount_minor'] : null,
+                'currency' => (string)($payload['currency'] ?? 'USD'),
+            ];
+        }
+
+        $externalOrderId = (string)($payload['external_order_id'] ?? $payload['orderId'] ?? $payload['id'] ?? '');
         $tracking = $payload['tracking'] ?? $payload['tracking_number'] ?? $payload['trackNumber'] ?? '';
         if (\is_array($tracking)) {
             $trackingNumber = (string)($tracking['number'] ?? '');
@@ -275,17 +325,31 @@ class FakeDropshipProvider implements
             $carrier = (string)($payload['carrier'] ?? $payload['logisticName'] ?? '');
         }
 
+        $fulfillment = [
+            'external_order_id' => $externalOrderId,
+            'order_uuid' => (string)($payload['order_uuid'] ?? $payload['orderNumber'] ?? ''),
+            'tracking_number' => $trackingNumber,
+            'carrier' => $carrier,
+            'status' => (string)($payload['status'] ?? $payload['orderStatus'] ?? 'updated'),
+        ];
+        if (\in_array($topic, ['product', 'stock'], true)) {
+            $fulfillment = [
+                'external_order_id' => '',
+                'order_uuid' => '',
+                'tracking_number' => '',
+                'carrier' => '',
+                'status' => '',
+            ];
+        }
+
         return [
             'ok' => true,
             'event' => $event,
+            'topic' => $topic,
             'external_id' => $externalId,
-            'fulfillment' => [
-                'external_order_id' => $externalOrderId,
-                'order_uuid' => (string)($payload['order_uuid'] ?? $payload['orderNumber'] ?? ''),
-                'tracking_number' => $trackingNumber,
-                'carrier' => $carrier,
-                'status' => (string)($payload['status'] ?? $payload['orderStatus'] ?? 'updated'),
-            ],
+            'fulfillment' => $fulfillment,
+            'catalog' => $catalog,
+            'makeup' => $makeup,
             'payload' => $payload,
         ];
     }

@@ -221,6 +221,7 @@ class AffiliateServiceTest extends TestCase
         $method = new \ReflectionMethod(AffiliateService::class, 'resolveShareTargetUrl');
         $method->setAccessible(true);
 
+        // Without product query, slug upgrade fails and click keeps a public product path.
         $this->assertSame('/product/652', $method->invoke($service, $share));
     }
 
@@ -235,6 +236,29 @@ class AffiliateServiceTest extends TestCase
         $method->setAccessible(true);
 
         $this->assertSame('/product/559', $method->invoke($service, $share));
+    }
+
+    public function testShareTargetTreatsNumericProductPathAsStale(): void
+    {
+        $service = new AffiliateService();
+        $method = new \ReflectionMethod(AffiliateService::class, 'isStaleProductTargetPath');
+        $method->setAccessible(true);
+
+        $this->assertTrue($method->invoke($service, 'product/558'));
+        $this->assertTrue($method->invoke($service, '/product/558/'));
+        $this->assertTrue($method->invoke($service, 'product/view'));
+        $this->assertFalse($method->invoke($service, 'product/airpods-pro-magsafe'));
+        $this->assertFalse($method->invoke($service, '/'));
+    }
+
+    public function testProductShareTargetPathNeverFallsBackToNumericId(): void
+    {
+        $source = (string) file_get_contents(__DIR__ . '/../../../Service/AffiliateService.php');
+
+        $this->assertStringContainsString('商品缺少 URL slug', $source);
+        $this->assertStringContainsString('isNumericProductTargetPath', $source);
+        $this->assertStringContainsString('publicSlugFromSku', $source);
+        $this->assertStringNotContainsString("return 'product/' . \$productId;", $source);
     }
 
     public function testShareTargetUsesPublicProductHandleWithoutExtraIdParam(): void

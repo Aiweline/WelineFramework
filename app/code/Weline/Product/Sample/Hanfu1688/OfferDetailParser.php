@@ -115,7 +115,14 @@ final class OfferDetailParser
         ));
 
         $weight = $packFields['unitWeight'] ?? null;
-        $weight = is_numeric($weight) && (float)$weight >= 0 ? (float)$weight : null;
+        $weight = is_numeric($weight) ? (float)$weight : null;
+        // Reject tiny placeholders (e.g. 0.001kg / 1g) the same way as pieceWeightScale.
+        if ($weight === null || $weight < 0.05) {
+            $weight = $this->pieceWeightScaleKg($packFields);
+        }
+        if ($weight !== null && $weight < 0.05) {
+            $weight = null;
+        }
         $detailDescriptionUrl = $this->canonicalHttps((string)($descriptionFields['detailUrl'] ?? ''));
         $companyName = trim((string)($titleFields['shopInfo']['companyName']
             ?? $titleFields['shopInfo']['authCompanyName']
@@ -667,6 +674,7 @@ final class OfferDetailParser
         ));
         $detailModel = is_array($data['detailModel'] ?? null) ? $data['detailModel'] : [];
         $descriptionUrl = $this->mtopDescriptionUrl((string)($detailModel['detailUrl'] ?? ''));
+        $weightKg = $this->mtopUnitWeightKg($data, $components, $temp);
 
         $result = [
             'offer_id' => $offerId,
@@ -687,6 +695,7 @@ final class OfferDetailParser
                 ? 'mtop_property'
                 : 'mtop_property_checked_empty',
             'price_ranges' => $priceRanges,
+            'weight_kg' => $weightKg,
         ];
         if ($basePrice !== null) {
             $result['price'] = $basePrice;
@@ -699,6 +708,122 @@ final class OfferDetailParser
         }
 
         return $result;
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     * @param array<string, list<array<string, mixed>>> $components
+     * @param array<string, mixed> $temp
+     */
+    private function mtopUnitWeightKg(array $data, array $components, array $temp): ?float
+    {
+        $candidates = [
+            $temp['unitWeight'] ?? null,
+            $temp['weight'] ?? null,
+            $data['productPackInfo']['fields']['unitWeight'] ?? null,
+            $data['productPackInfo']['unitWeight'] ?? null,
+            $data['packInfo']['unitWeight'] ?? null,
+        ];
+        foreach (['detail_od_pack', 'detail_pack_info', 'productPackInfo'] as $componentType) {
+            foreach ($components[$componentType] ?? [] as $component) {
+                if (!is_array($component)) {
+                    continue;
+                }
+                $payload = is_array($component['data'] ?? null) ? $component['data'] : $component;
+                $candidates[] = $payload['unitWeight'] ?? null;
+                $candidates[] = $payload['fields']['unitWeight'] ?? null;
+                $candidates[] = $payload['weight'] ?? null;
+            }
+        }
+        foreach ($candidates as $candidate) {
+            if (is_numeric($candidate)) {
+                $value = (float)$candidate;
+                if ($value >= 0.05 && $value < 500) {
+                    return $value;
+                }
+            }
+        }
+        $directPack = is_array($data['productPackInfo']['fields'] ?? null)
+            ? $data['productPackInfo']['fields']
+            : (is_array($data['productPackInfo'] ?? null) ? $data['productPackInfo'] : []);
+        $fromDirect = $this->pieceWeightScaleKg($directPack);
+        if ($fromDirect !== null) {
+            return $fromDirect;
+        }
+        foreach (['detail_od_pack', 'detail_pack_info', 'productPackInfo'] as $componentType) {
+            foreach ($components[$componentType] ?? [] as $component) {
+                if (!is_array($component)) {
+                    continue;
+                }
+                $payload = is_array($component['data'] ?? null) ? $component['data'] : $component;
+                $fromScale = $this->pieceWeightScaleKg($payload);
+                if ($fromScale !== null) {
+                    return $fromScale;
+                }
+                $fields = is_array($payload['fields'] ?? null) ? $payload['fields'] : null;
+                if (is_array($fields)) {
+                    $fromScale = $this->pieceWeightScaleKg($fields);
+                    if ($fromScale !== null) {
+                        return $fromScale;
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Prefer seller unitWeight (kg). Fallback: pieceWeightScale 重量(g) → kg.
+     * Reject obvious placeholders (all 1g / resulting kg < 0.05).
+     *
+     * @param array<string, mixed> $packFields
+     */
+    private function pieceWeightScaleKg(array $packFields): ?float
+    {
+        $scale = $packFields['pieceWeightScale'] ?? null;
+        if (!is_array($scale)) {
+            return null;
+        }
+        $rows = $scale['pieceWeightScaleInfo'] ?? null;
+        if (!is_array($rows) || $rows === []) {
+            return null;
+        }
+        $isGrams = false;
+        foreach (is_array($scale['columnList'] ?? null) ? $scale['columnList'] : [] as $column) {
+            if (!is_array($column) || (string)($column['name'] ?? '') !== 'weight') {
+                continue;
+            }
+            $label = strtolower((string)($column['label'] ?? ''));
+            $isGrams = str_contains($label, '(g)') || str_contains($label, '（g）') || str_contains($label, '克');
+            break;
+        }
+        $values = [];
+        foreach ($rows as $row) {
+            if (!is_array($row) || !is_numeric($row['weight'] ?? null)) {
+                continue;
+            }
+            $raw = (float)$row['weight'];
+            if ($raw <= 0) {
+                continue;
+            }
+            $values[] = $raw;
+        }
+        if ($values === []) {
+            return null;
+        }
+        // Sellers often leave every SKU at placeholder "1".
+        $unique = array_values(array_unique(array_map(static fn(float $v): string => (string)$v, $values)));
+        if (count($unique) === 1 && abs((float)$unique[0] - 1.0) < 0.0001) {
+            return null;
+        }
+        $max = max($values);
+        $kg = $isGrams ? ($max / 1000.0) : $max;
+        if ($kg < 0.05 || $kg >= 500) {
+            return null;
+        }
+
+        return round($kg, 3);
     }
 
     /**

@@ -10,7 +10,7 @@
  * @meta.description {default="页面头部区域（导航栏、Logo、搜索等）",name="页面头部区域（导航栏、Logo、搜索等）",description="页面头部区域（导航栏、Logo、搜索等），用于描述片段的用途"}
  * @param.logo {default="",name="Logo URL",description="Logo图片URL，用于设置头部Logo图片地址"}
  * @param.logoText {default="云裳 Hanfu Atelier",name="Logo文字",description="Logo文字，用于设置当Logo图片不存在时显示的文字"}
- * @param.logoHeight {default=50,name="Logo高度",description="Logo高度（像素），用于设置Logo图片的高度，宽度自适应"}
+ * @param.logoHeight {default=64,name="Logo高度",description="Logo高度（像素），用于设置Logo图片的高度，宽度自适应"}
  * @param.navItems {default=[],name="导航项数组",description="导航项数组，用于设置头部导航菜单，格式：[{\"text\":\"菜单文字\",\"url\":\"菜单链接\"}]"}
  * @param.showSearch {default=true,name="是否显示搜索框",description="是否显示搜索框，用于控制搜索框的显示"}
  * @param.showUserMenu {default=true,name="是否显示用户菜单",description="是否显示用户菜单，用于控制用户菜单的显示"}
@@ -41,7 +41,7 @@ try {
 $logoWordmarkParts = preg_split('/\s+/u', trim($logoText), 2) ?: [];
 $logoWordmarkPrimary = (string)($logoWordmarkParts[0] ?? $logoText);
 $logoWordmarkSecondary = (string)($logoWordmarkParts[1] ?? '');
-$logoHeight = $meta['logoHeight'] ?? 50; // Logo高度，默认50px
+$logoHeight = $meta['logoHeight'] ?? 64; // Logo高度，默认64px（深色顶栏可读性）
 // navItems 可能在 hook 中被设置，先尝试从模板数据中获取，如果没有则从 meta 中获取
 $navItems = $this->getData('navItems') ?? $meta['navItems'] ?? [];
 $showSearch = $meta['showSearch'] ?? true;
@@ -428,7 +428,9 @@ $defaultNavItemsFactory = static function (): array {
                             class="header-logo">
                         <a href="@url{'/'}"
                            title="<lang>首页</lang>"
-                           aria-label="<?= htmlspecialchars($logoText, ENT_QUOTES, 'UTF-8') ?>">
+                           aria-label="<?= htmlspecialchars($logoText, ENT_QUOTES, 'UTF-8') ?>"
+                           class="header-logo__link w-surface"
+                           data-surface="default">
                             <?php if ($hasLogo): ?>
                                 <img class="logo-image"
                                      src="<?= htmlspecialchars((string)$logo, ENT_QUOTES, 'UTF-8') ?>"
@@ -1286,17 +1288,55 @@ textarea::-webkit-scrollbar-thumb:hover,
     align-items: center;
 }
 
-.header-logo a {
+.header-logo a,
+.header-logo__link {
     display: flex;
     align-items: center;
     color: var(--weline-theme-text-on-dark);
     text-decoration: none;
 }
 
+/*
+ * inverse 顶栏内嵌浅色 logo 板：背景走 surface，字色走正文 Token，
+ * 避免品牌图/字标在黑底上发灰或对比不足（theme-surface-text-roles）。
+ */
+.header-belt.w-surface-inverse .header-logo__link,
+.header-belt[data-surface="inverse"] .header-logo__link {
+    background: var(--weline-theme-surface);
+    color: var(--weline-theme-text);
+    padding: var(--weline-space-1) var(--weline-space-2);
+    border-radius: var(--weline-radius-sm, var(--border-radius-sm));
+    border: var(--border-width-thin, 1px) solid var(--weline-theme-border, transparent);
+}
+
+.header-belt.w-surface-inverse a.header-logo__link.w-surface[data-surface="default"],
+.header-belt[data-surface="inverse"] a.header-logo__link.w-surface[data-surface="default"] {
+    /* 覆盖 inverse 顶栏 a 继承的 on-dark 字色，浅底必须用正文色 */
+    color: var(--weline-theme-text);
+    --w-surface-fg: var(--weline-theme-text);
+    --w-surface-fg-muted: var(--weline-theme-text-muted, var(--weline-theme-text));
+}
+
+.header-belt.w-surface-inverse .header-logo__link .logo-wordmark,
+.header-belt[data-surface="inverse"] .header-logo__link .logo-wordmark {
+    color: var(--weline-theme-text);
+}
+
+.header-belt.w-surface-inverse .header-logo__link .logo-wordmark__cn,
+.header-belt[data-surface="inverse"] .header-logo__link .logo-wordmark__cn {
+    color: var(--weline-theme-primary, var(--weline-theme-text));
+}
+
+.header-belt.w-surface-inverse .header-logo__link .logo-wordmark__en,
+.header-belt[data-surface="inverse"] .header-logo__link .logo-wordmark__en {
+    color: var(--weline-theme-text-muted, var(--weline-theme-text));
+}
+
 .header-logo img {
-    height: <?= (int)$logoHeight ?>px; /* 使用配置的高度，默认50px */
+    height: <?= (int)$logoHeight ?>px; /* 使用配置的高度 */
     width: auto; /* 宽度自适应 */
     object-fit: contain; /* 保持比例 */
+    display: block;
 }
 
 .logo-text {

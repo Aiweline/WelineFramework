@@ -7,7 +7,7 @@ SEO Head 使用当前 Store 的名称和独立入口覆盖 Website 默认值，�
 
 ## 开发前先读
 
-先完成 `prepare_project` 并调用 `resolve_task_context`，再按返回来源阅读：
+可选：可完成 `prepare_project` 并调用 `resolve_task_context` 检索后再按返回来源阅读（编码不强制）：
 
 1. `app/code/Weline/Websites/doc/default-website-and-request-detection.md`
 2. `app/code/Weline/Websites/doc/store-saleschannel-scope.md`（Store/渠道/三段 Scope，商城内核 P1a）

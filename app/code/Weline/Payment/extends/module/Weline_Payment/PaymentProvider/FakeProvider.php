@@ -46,6 +46,14 @@ final class FakeProvider implements ProviderInterface
     }
 
     /**
+     * @return array<string, list<string>>
+     */
+    public function cspDirectives(): array
+    {
+        return [];
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function getCapabilities(): array

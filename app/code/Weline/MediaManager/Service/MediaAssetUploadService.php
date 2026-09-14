@@ -95,6 +95,8 @@ final class MediaAssetUploadService
             if (!$this->isExtensionAllowed($file['name'], $file['detected_mime'], $allowedExtensions)) {
                 throw new \InvalidArgumentException((string)__('上传文件的扩展名与内容类型不匹配：%{1}', [$file['name']]));
             }
+            // Prefer extension-canonical audio MIME for playback (e.g. .m4a sniffed as video/mp4).
+            $file['detected_mime'] = $this->canonicalizeStoredMime($file['name'], $file['detected_mime']);
             [$file['width'], $file['height']] = $this->imageDimensions(
                 $file['tmp_name'],
                 $file['detected_mime'],
@@ -359,6 +361,29 @@ final class MediaAssetUploadService
             return true;
         }
         return false;
+    }
+
+    /**
+     * Prefer a playback-friendly MIME for audio containers that finfo often
+     * mislabels (e.g. AAC-in-MP4 .m4a → video/mp4).
+     */
+    private function canonicalizeStoredMime(string $name, string $detectedMime): string
+    {
+        $extension = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+        if ($extension === '') {
+            return $detectedMime;
+        }
+        $audioExts = ['mp3', 'wav', 'ogg', 'oga', 'm4a', 'aac', 'flac', 'opus', 'wma', 'weba'];
+        if (!in_array($extension, $audioExts, true)) {
+            return $detectedMime;
+        }
+        $expected = MimeTypes::getMimeTypes($extension);
+        foreach ($expected as $candidate) {
+            if (str_starts_with($candidate, 'audio/')) {
+                return $candidate;
+            }
+        }
+        return $detectedMime;
     }
 
     /** @return array{0:?int,1:?int} */

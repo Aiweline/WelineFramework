@@ -148,6 +148,42 @@ return [
             ],
         ],
     ],
+    'product-help-pay' => [
+        'name' => '商品找朋友代付',
+        'description' => 'PDP 帮我付弱入口：主购买下方 quiet 文字链；rules→address-pick→/h/ 出链。',
+        'type' => 'product',
+        'code' => 'product-help-pay',
+        'area' => 'frontend',
+        'template' => 'Weline_HelpPay::templates/frontend/widgets/product-help-pay.phtml',
+        'page_layouts' => ['product'],
+        'position' => ['content'],
+        'slot' => 'product-purchase-actions',
+        'supports' => [
+            'product-purchase-actions',
+            'help-pay',
+            'helppay',
+        ],
+        'default_injections' => [[
+            'layout_type' => 'product',
+            'layout_option' => 'default',
+            'slot' => 'product-purchase-actions',
+            'area' => 'content',
+            'sort_order' => 50,
+            'required' => true,
+            'reason' => '商品页默认提供找朋友代付弱入口（可关）',
+            'config' => [
+                'enabled' => true,
+                'placement' => 'product',
+            ],
+        ]],
+        'params' => [
+            'enabled' => [
+                'default' => true,
+                'type' => 'bool',
+                'label' => '展示找朋友代付',
+            ],
+        ],
+    ],
     'help-pay-share-result' => [
         'name' => '出链结果（链接+二维码）',
         'description' => '统一出链双形态：复制链接、复制二维码图、页内预览。',

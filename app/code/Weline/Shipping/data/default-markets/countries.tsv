@@ -1,59 +1,60 @@
 # ISO country_code — default sellable markets for carrier coverage + lane seeds
 # Excludes system-embargo territories (AQ/BV/GS/HM/TF/UM/KP).
 # lane: domestic | greater_china | asia_pacific | americas | europe | middle_east_africa | latam | oceania | other
-country_code	lane
-CN	domestic
-HK	greater_china
-MO	greater_china
-TW	greater_china
-JP	asia_pacific
-KR	asia_pacific
-SG	asia_pacific
-MY	asia_pacific
-TH	asia_pacific
-VN	asia_pacific
-ID	asia_pacific
-PH	asia_pacific
-IN	asia_pacific
-US	americas
-CA	americas
-MX	americas
-BR	latam
-AR	latam
-CL	latam
-CO	latam
-PE	latam
-GB	europe
-IE	europe
-DE	europe
-FR	europe
-IT	europe
-ES	europe
-NL	europe
-BE	europe
-AT	europe
-CH	europe
-SE	europe
-NO	europe
-DK	europe
-FI	europe
-PT	europe
-PL	europe
-CZ	europe
-HU	europe
-RO	europe
-GR	europe
-AU	oceania
-NZ	oceania
-AE	middle_east_africa
-SA	middle_east_africa
-IL	middle_east_africa
-TR	middle_east_africa
-EG	middle_east_africa
-ZA	middle_east_africa
-NG	middle_east_africa
-KE	middle_east_africa
-RU	other
-KZ	other
-UA	other
-BY	other
+# sort_order: hot position for Region.sort_order seed + checkout postal multi-country (lower = earlier). Admin can override.
+country_code	lane	sort_order
+CN	domestic	10
+HK	greater_china	20
+MO	greater_china	30
+TW	greater_china	40
+US	americas	50
+CA	americas	60
+GB	europe	70
+DE	europe	80
+JP	asia_pacific	90
+AU	oceania	100
+FR	europe	110
+KR	asia_pacific	120
+SG	asia_pacific	130
+MY	asia_pacific	140
+TH	asia_pacific	150
+VN	asia_pacific	160
+ID	asia_pacific	170
+PH	asia_pacific	180
+IN	asia_pacific	190
+MX	americas	200
+BR	latam	210
+AR	latam	220
+CL	latam	230
+CO	latam	240
+PE	latam	250
+IE	europe	260
+IT	europe	270
+ES	europe	280
+NL	europe	290
+BE	europe	300
+AT	europe	310
+CH	europe	320
+SE	europe	330
+NO	europe	340
+DK	europe	350
+FI	europe	360
+PT	europe	370
+PL	europe	380
+CZ	europe	390
+HU	europe	400
+RO	europe	410
+GR	europe	420
+NZ	oceania	430
+AE	middle_east_africa	440
+SA	middle_east_africa	450
+IL	middle_east_africa	460
+TR	middle_east_africa	470
+EG	middle_east_africa	480
+ZA	middle_east_africa	490
+NG	middle_east_africa	500
+KE	middle_east_africa	510
+RU	other	520
+KZ	other	530
+UA	other	540
+BY	other	550

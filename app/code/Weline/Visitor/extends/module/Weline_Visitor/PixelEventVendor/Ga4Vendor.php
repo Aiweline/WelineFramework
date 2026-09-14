@@ -63,4 +63,33 @@ final class Ga4Vendor implements PixelEventVendorInterface
             'google_recommended' => true,
         ];
     }
+
+    /**
+     * @return array<string, list<string>>
+     */
+    public function cspDirectives(): array
+    {
+        // GA4 gtag.js Measurement ID path (www.googletagmanager.com/gtag/js).
+        return [
+            'script-src' => [
+                'https://www.googletagmanager.com',
+                'https://www.google-analytics.com',
+                'https://www.google.com',
+                'https://www.gstatic.com',
+            ],
+            'connect-src' => [
+                'https://www.googletagmanager.com',
+                'https://www.google-analytics.com',
+                'https://region1.google-analytics.com',
+                'https://www.google.com',
+                'https://www.gstatic.com',
+            ],
+            'img-src' => [
+                'https://www.googletagmanager.com',
+                'https://www.google-analytics.com',
+                'https://www.google.com',
+                'https://www.gstatic.com',
+            ],
+        ];
+    }
 }

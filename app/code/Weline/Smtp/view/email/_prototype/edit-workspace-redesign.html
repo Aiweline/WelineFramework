@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"/>
+  <title>SMTP 邮件模板编辑页 · 工作区原型</title>
+  <style>
+    :root {
+      --bg: #fffefa;
+      --muted: #ede9e1;
+      --border: #d4cfc5;
+      --ink: #1c1917;
+      --accent: #9f1239;
+      --space: 0.75rem;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 14px/1.45 "Source Han Sans SC", "Noto Sans SC", sans-serif; color: var(--ink); background: var(--muted); }
+    .page { max-width: 1200px; margin: 1.5rem auto; padding: 1rem; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; }
+    .toolbar { display: flex; justify-content: space-between; gap: var(--space); padding-bottom: var(--space); border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
+    .actions { display: flex; gap: 0.5rem; align-items: center; }
+    button { font: inherit; padding: 0.4rem 0.85rem; border-radius: 6px; border: 1px solid var(--border); background: #fff; cursor: pointer; }
+    button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .meta { display: flex; gap: 1rem; margin-bottom: 1rem; }
+    .chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.5rem 0 1rem; }
+    .chip { border: 1px solid var(--border); border-radius: 999px; padding: 0.2rem 0.65rem; background: #fff; font-size: 12px; }
+    details { border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem 0.75rem; margin-bottom: 0.5rem; background: #fff; }
+    .main { display: grid; grid-template-columns: 1fr 0.95fr; gap: 1rem; align-items: start; }
+    .panel { border: 1px solid var(--border); border-radius: 8px; background: #fff; min-height: 320px; padding: 0.75rem; }
+    .preview { position: sticky; top: 0.75rem; }
+    .preview .mail { background: var(--muted); border-radius: 6px; min-height: 280px; padding: 1rem; }
+    .mail-head { background: #1c1917; color: #fff; padding: 0.75rem 1rem; border-radius: 4px 4px 0 0; }
+    .mail-body { background: #fff; padding: 1rem; border: 1px solid var(--border); border-top: 0; }
+    .mail-foot { font-size: 12px; color: #57534e; padding: 0.75rem; border: 1px solid var(--border); border-top: 0; border-radius: 0 0 4px 4px; }
+    h1 { margin: 0 0 0.25rem; font-size: 1.25rem; }
+    .muted { color: #78716c; font-size: 12px; }
+    @media (max-width: 900px) { .main { grid-template-columns: 1fr; } .preview { position: static; } }
+  </style>
+</head>
+<body>
+  <div class="page" data-prototype="smtp-edit-workspace-v2">
+    <div class="toolbar">
+      <div>
+        <h1>编辑邮件模板 · 密码重置</h1>
+        <div class="muted"><code>Weline_Customer::password_reset</code></div>
+      </div>
+      <div class="actions">
+        <button class="primary">保存</button>
+        <button>刷新预览</button>
+        <button>重置为默认</button>
+      </div>
+    </div>
+    <div class="meta">
+      <label>语言 <select><option>zh_Hans_CN</option></select></label>
+      <span class="muted">作用范围 default.default.default</span>
+    </div>
+    <label>主题 <input style="width:100%;padding:0.45rem;margin-top:0.25rem;border:1px solid var(--border);border-radius:6px;" value="重置您的密码"/></label>
+    <p style="margin:1rem 0 0.35rem;font-weight:600;">插入变量</p>
+    <p class="muted">页头/页尾由系统固定注入；品牌色仅壳使用。</p>
+    <div class="chips">
+      <span class="chip">{{var.customer_name}}</span>
+      <span class="chip">{{var.reset_url}}</span>
+      <span class="chip">{{var.expire_minutes}}</span>
+    </div>
+    <details>
+      <summary>站店渠 / 联系信息 (8)</summary>
+      <div class="chips"><span class="chip">{{var.site_name}}</span><span class="chip">{{var.contact_email}}</span></div>
+    </details>
+    <details>
+      <summary>品牌色（壳用）(6)</summary>
+      <div class="chips"><span class="chip">{{var.brand_primary}}</span><span class="chip">{{var.brand_header_bg}}</span></div>
+    </details>
+    <div class="main">
+      <div class="panel">
+        <strong>正文</strong>
+        <p class="muted">CKEditor 区域</p>
+        <p>您好 {{var.customer_name}}，点击链接重置密码…</p>
+      </div>
+      <aside class="preview panel">
+        <strong>实时预览</strong>
+        <p class="muted">含固定页头/页尾；编辑后自动刷新。</p>
+        <div class="mail">
+          <div class="mail-head">墨港 · Logo</div>
+          <div class="mail-body">您好 张三，点击链接重置密码…</div>
+          <div class="mail-foot">客服 · contact@example.com · 服务时间</div>
+        </div>
+      </aside>
+    </div>
+    <details style="margin-top:1rem"><summary>高级：纯文本 / 复制到范围语言</summary><p class="muted">次要操作收纳于此。</p></details>
+  </div>
+</body>
+</html>

@@ -31,6 +31,27 @@ class InstagramProvider extends DocumentedSocialPlatformProvider
         'status' => 'live_publish_enabled',
     ];
 
+    /**
+     * @return array<string, list<string>>
+     */
+    public function cspDirectives(): array
+    {
+        return [
+            'frame-src' => [
+                'https://www.instagram.com',
+                'https://www.facebook.com',
+            ],
+            'connect-src' => [
+                'https://www.instagram.com',
+                'https://graph.instagram.com',
+                'https://graph.facebook.com',
+            ],
+            'script-src' => [
+                'https://www.instagram.com',
+            ],
+        ];
+    }
+
     public function buildAuthorizationUrl(array $accountContext, string $redirectUri, string $state): ?string
     {
         $app = $this->appConfig()->getPlatformApp('instagram');

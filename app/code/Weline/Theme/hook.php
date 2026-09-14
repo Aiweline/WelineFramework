@@ -787,10 +787,25 @@ return [
         'description' => __('在产品推荐区渲染热销产品内容。'),
         'doc' => 'frontend/layouts/product/bestsellers.md',
     ],
+    'Weline_Theme::frontend::layouts::product::personalization-before' => [
+        'name' => __('个性化推荐之前'),
+        'description' => __('在商品详情常显猜你喜欢/最近浏览区域之前触发。'),
+        'doc' => 'frontend/layouts/product/personalization-before.md',
+    ],
+    'Weline_Theme::frontend::layouts::product::you-may-like' => [
+        'name' => __('猜你喜欢'),
+        'description' => __('在商品详情常显区渲染猜你喜欢内容。默认由 Weline_Product you-may-like 经 default_injections 注入 product-you-may-like。'),
+        'doc' => 'frontend/layouts/product/you-may-like.md',
+    ],
     'Weline_Theme::frontend::layouts::product::recently-viewed' => [
         'name' => __('最近浏览'),
-        'description' => __('在产品推荐区渲染最近浏览内容。'),
+        'description' => __('在商品详情常显区渲染最近浏览内容。'),
         'doc' => 'frontend/layouts/product/recently-viewed.md',
+    ],
+    'Weline_Theme::frontend::layouts::product::personalization-after' => [
+        'name' => __('个性化推荐之后'),
+        'description' => __('在商品详情常显猜你喜欢/最近浏览区域之后触发。'),
+        'doc' => 'frontend/layouts/product/personalization-after.md',
     ],
     'Weline_Theme::frontend::layouts::product::cross-sell' => [
         'name' => __('交叉销售'),

@@ -158,13 +158,8 @@ class DefaultWebsiteService
      */
     private function rowNeedsDefaultUpdate(array $row): bool
     {
-        foreach ($this->defaultRow() as $field => $value) {
-            if ((string)($row[$field] ?? '') !== (string)$value) {
-                return true;
-            }
-        }
-
-        return false;
+        // 默认身份由安装流程维护；URL、名称和本地化配置属于管理员。
+        return (string)($row[Website::schema_fields_CODE] ?? '') !== Website::CODE_DEFAULT;
     }
 
     private function insertDefaultRow(): void
@@ -196,8 +191,7 @@ class DefaultWebsiteService
 
     private function updateDefaultRow(): void
     {
-        $data = $this->defaultRow();
-        unset($data[Website::schema_fields_ID]);
+        $data = [Website::schema_fields_CODE => Website::CODE_DEFAULT];
         $driver = $this->connection()->getDriverType();
         $table = $this->quoteIdentifier($this->website->getTable(), $driver);
         $sets = [];

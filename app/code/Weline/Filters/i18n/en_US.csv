@@ -12,6 +12,7 @@
 颜色,Color
 可选颜色,"Available colors"
 尺码,Size
+大小,Size
 可选尺码,"Available sizes"
 面料,Fabric
 织物,Fabric
@@ -34,6 +35,20 @@
 雪纺,Chiffon
 汉服,Hanfu
 其他,Other
+其它,Other
+男女同款,"Unisex style"
+男,Men
+女,Women
+男士,Men
+女士,Women
+中性,Unisex
+默认项,Default
+【云里春】上衣+裙子+披帛,"[Yunli Chun] Top + Skirt + Shawl"
+【亡国公主】战国袍+内搭+腰封,"[Fallen Princess] Warring States robe + inner layer + waistband"
+单件大袖衫,"Large-sleeve shirt only"
+曳撒（不包括腰带）,"Yesa (belt not included)"
+粉红色全套拽妃,"Pink full Zhuafei set"
+"【Koi Fireworks】Bik甲","[Koi Fireworks] Bikjia"
 浅灰色,"Light gray"
 浅蓝色,"Light blue"
 紫粉色,"Purple pink"
@@ -49,3 +64,19 @@ S码3米摆,"S · 3m hem"
 儿童120,"Kids 120"
 均码,"One size"
 普通舞台装,"Stage Costume"
+winter,Winter
+"【Shans寺桃花】Top + Skirt + Shawl","[Shansi Peach Blossom] Top + Skirt + Shawl"
+"【寄相思】Red wide-sleeved top + skirt","[Yearning Letter] Red wide-sleeved top + skirt"
+七月夕服饰,"Qiyuexi Apparel"
+华朝记,"Huachao Ji"
+咔布奇妮,Kabuqini
+尚玉,Shangyu
+悦雅霓裳,"Yueya Nishang"
+有香如故,"Youxiang Rugu"
+梦然,Mengran
+汉唐华韵,"Hantang Huayun"
+舒语慕雅,"Shuyu Muya"
+花朝记,"Huazhao Ji"
+茗月萱,Mingyuexuan
+茵卡蕾,Yinkalei
+鑫耀,Xinyao

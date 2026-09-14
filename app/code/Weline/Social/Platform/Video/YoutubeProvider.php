@@ -32,6 +32,27 @@ class YoutubeProvider extends DocumentedSocialPlatformProvider
         'status' => 'live_publish_enabled',
     ];
 
+    /**
+     * @return array<string, list<string>>
+     */
+    public function cspDirectives(): array
+    {
+        return [
+            'frame-src' => [
+                'https://www.youtube.com',
+                'https://www.youtube-nocookie.com',
+            ],
+            'connect-src' => [
+                'https://www.googleapis.com',
+                'https://www.youtube.com',
+            ],
+            'img-src' => [
+                'https://i.ytimg.com',
+                'https://img.youtube.com',
+            ],
+        ];
+    }
+
     public function buildAuthorizationUrl(array $accountContext, string $redirectUri, string $state): ?string
     {
         $clientId = $this->appConfig()->get('youtube', 'client_id');

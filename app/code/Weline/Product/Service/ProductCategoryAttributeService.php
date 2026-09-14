@@ -248,14 +248,23 @@ final class ProductCategoryAttributeService
      * remains identical to the individual attribute readers.
      *
      * @param list<int> $categoryIds
-     * @return array{name: array<int, string>, image: array<int, string>, banner: array<int, string>, summary: array<int, string>, description: array<int, string>}
+     * @param list<string> $additionalAttributeCodes Extra maps collected by the same attribute read.
+     * @return array<string, array<int, string>> The five presentation maps plus any requested extra fields.
      */
-    public function readPresentationMaps(int $websiteId, array $categoryIds, string $locale = ''): array
+    public function readPresentationMaps(
+        int $websiteId,
+        array $categoryIds,
+        string $locale = '',
+        array $additionalAttributeCodes = [],
+    ): array
     {
         return $this->readAttributeMaps(
             $websiteId,
             $categoryIds,
-            ['name', 'image', 'banner', 'summary', 'description'],
+            array_values(array_unique(array_merge(
+                ['name', 'image', 'banner', 'summary', 'description'],
+                $additionalAttributeCodes,
+            ))),
             $locale,
         );
     }

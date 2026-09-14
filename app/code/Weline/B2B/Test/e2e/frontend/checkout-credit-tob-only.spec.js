@@ -57,6 +57,8 @@ moduleDescribe(test, MODULE, '结账批发信用仅 tob 展示', () => {
       expect(tocState.creditHidden || tocState.slotHidden).toBe(true);
       expect(tocState.creditTabHidden).toBe(true);
       expect(tocState.tabLabels.some((l) => /批发信用/.test(l))).toBe(false);
+      // 空帮我付槽不得生成无文案幽灵页签。
+      expect(tocState.tabLabels.every((l) => String(l || '').trim() !== '')).toBe(true);
 
       await page.evaluate(() => {
         const root = document.querySelector('[data-weline-checkout], [data-checkout], .weline-checkout');
@@ -81,6 +83,8 @@ moduleDescribe(test, MODULE, '结账批发信用仅 tob 展示', () => {
         tobState.creditTabVisible
           || tobState.visibleTabLabels.some((l) => /批发信用/.test(l)),
       ).toBe(true);
+      expect(tobState.visibleTabLabels.every((l) => String(l || '').trim() !== '')).toBe(true);
+      expect(tobState.visibleTabLabels.some((l) => /批发信用/.test(l))).toBe(true);
     },
   );
 

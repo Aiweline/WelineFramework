@@ -263,11 +263,40 @@ class DropshipPushTerminalCompensationService
             return;
         }
 
+        $websiteId = $order && $order->getId()
+            ? (int)$order->getData(Order::schema_fields_WEBSITE_ID)
+            : 0;
+        $storeId = $order && $order->getId()
+            ? (int)$order->getData(Order::schema_fields_STORE_ID)
+            : 0;
+        $storageScope = $this->resolveStorageScope($websiteId, $storeId);
+        $websiteCode = 'default';
+        $locale = 'zh_Hans_CN';
+        try {
+            /** @var Website $website */
+            $website = ObjectManager::getInstance(Website::class);
+            if ($websiteId > 0) {
+                $website->load($websiteId);
+                $code = trim((string)$website->getCode());
+                if ($code !== '') {
+                    $websiteCode = $code;
+                }
+                $lang = trim((string)($website->getDefaultLanguage() ?? ''));
+                if ($lang !== '') {
+                    $locale = $lang;
+                }
+            }
+        } catch (\Throwable) {
+        }
+
         try {
             $result = w_query('smtp', 'send', [
                 'module' => 'Weline_Dropship',
                 'channel' => self::MAIL_CHANNEL,
                 'to' => $email,
+                'website_code' => $websiteCode,
+                'scope' => $storageScope,
+                'locale' => $locale,
                 'vars' => [
                     'order_uuid' => $orderUuid,
                     'message' => (string)__('很抱歉，您的订单中部分货源商品目前无法履约。我们已启动退款，款项将按原支付方式退回（到账时间视渠道而定）。如有疑问请联系客服。'),

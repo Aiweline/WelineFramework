@@ -745,6 +745,10 @@ class Core
             return $this->routeFrontendStreamApi();
         }
 
+        if (!$is_api_admin && $this->isFrontendCspPolicyApiUrl($url)) {
+            return $this->routeFrontendCspPolicyApi();
+        }
+
         if ($is_api_admin && $this->isBackendFrameworkQueryApiUrl($url)) {
             return $this->routeBackendFrameworkQueryApi();
         }
@@ -799,6 +803,21 @@ class Core
         return $normalized === 'framework/stream'
             || $normalized === 'api/framework/stream'
             || ($prefixedStream !== '' && $normalized === $prefixedStream);
+    }
+
+    private function isFrontendCspPolicyApiUrl(string $url): bool
+    {
+        $normalized = \strtolower(\trim($url, '/'));
+        $restFrontendPrefix = \strtolower(\trim((string)(Env::getAreaRoutePrefix('rest_frontend') ?: 'api'), '/'));
+        $prefixed = $restFrontendPrefix !== '' ? $restFrontendPrefix . '/framework/csp-policy' : '';
+        $prefixedCompact = $restFrontendPrefix !== '' ? $restFrontendPrefix . '/framework/csppolicy' : '';
+
+        return $normalized === 'framework/csp-policy'
+            || $normalized === 'framework/csppolicy'
+            || $normalized === 'api/framework/csp-policy'
+            || $normalized === 'api/framework/csppolicy'
+            || ($prefixed !== '' && $normalized === $prefixed)
+            || ($prefixedCompact !== '' && $normalized === $prefixedCompact);
     }
 
     private function isExternalBinQueryApiUrl(string $url): bool
@@ -892,6 +911,25 @@ class Core
                 'area' => \Weline\Framework\Controller\Data\DataInterface::type_api_REST_FRONTEND,
                 'name' => \Weline\Framework\Controller\Api\Stream::class,
                 'controller_name' => 'Stream',
+                'method' => 'getIndex',
+                'request_method' => 'GET',
+            ],
+            'type' => 'api',
+        ];
+
+        return $this->route();
+    }
+
+    private function routeFrontendCspPolicyApi()
+    {
+        $this->router = [
+            'module' => Env::MODULE_FRAMEWORK,
+            'module_path' => Env::framework_code_path,
+            'router' => 'framework',
+            'class' => [
+                'area' => \Weline\Framework\Controller\Data\DataInterface::type_api_REST_FRONTEND,
+                'name' => \Weline\Framework\Controller\Api\CspPolicy::class,
+                'controller_name' => 'CspPolicy',
                 'method' => 'getIndex',
                 'request_method' => 'GET',
             ],
@@ -1341,6 +1379,11 @@ class Core
                 $mime_type = 'text/css';
             } elseif ($file_ext === 'js') {
                 $mime_type = 'text/javascript';
+            } elseif (\strtolower((string)$file_ext) === 'm4a') {
+                // finfo 常把 m4a 报成 video/mp4；音频直出统一 audio/mp4 便于 <audio> 播放
+                $mime_type = 'audio/mp4';
+            } elseif (\strtolower((string)$file_ext) === 'aac') {
+                $mime_type = 'audio/aac';
             } else {
                 $fi = new \finfo(FILEINFO_MIME_TYPE);
                 $mime_type = $fi->file($filename);
@@ -1927,7 +1970,19 @@ class Core
 
         $policyService = new \Weline\Framework\Http\Security\SecurityHeaderPolicyService();
         $collector = HeaderCollector::getInstance();
-        foreach ($policyService->resolveCurrentResponseHeaders() as $name => $value) {
+        $includeDocumentCsp = true;
+        // isset：未初始化的 typed 属性不抛错，单测直接 new Core() 时安全。
+        if (isset($this->request_area)) {
+            $includeDocumentCsp = !\in_array(
+                (string)$this->request_area,
+                [
+                    \Weline\Framework\Controller\Data\DataInterface::type_api_REST_FRONTEND,
+                    \Weline\Framework\Controller\Data\DataInterface::type_api_BACKEND,
+                ],
+                true
+            );
+        }
+        foreach ($policyService->resolveCurrentResponseHeaders(null, null, $includeDocumentCsp) as $name => $value) {
             $collector->setHeader($name, $value);
         }
     }

@@ -32,21 +32,36 @@ final class ThemeScopedPreviewResolver
     ) {
     }
 
-    /** @return array<string,array<string,mixed>> */
-    public function resolveLayout(ThemeEditorContext $context, string $status): array
+    /** 公开渲染只读取已发布载荷；草稿预览继续使用完整工作区状态。 */
+    private function readPayload(ThemeEditorContext $context, bool $includeDraft): mixed
     {
-        $context = $context->withResource(ThemeEditorContext::RESOURCE_LAYOUT);
+        if (!$includeDraft && $this->workspace instanceof \Weline\Theme\Api\Scoped\ThemePublishedSnapshotReaderInterface) {
+            return $this->workspace->readPublishedSnapshot($context)['payload'] ?? null;
+        }
+
+        $state = $this->workspace->load($context, $includeDraft);
+        return $state[$includeDraft ? 'draft_payload' : 'published_payload'] ?? null;
+    }
+
+    /**
+     * Structure-only layout projection (no I18N bake). Safe to share across languages.
+     *
+     * @return array<string,array<string,mixed>>
+     */
+    public function resolveStructureLayout(ThemeEditorContext $context, string $status): array
+    {
+        $structureContext = $context
+            ->withResource(ThemeEditorContext::RESOURCE_LAYOUT)
+            ->withLocale('default');
         $includeDraft = $status !== ThemeLayout::STATUS_PUBLISHED;
         $status = $includeDraft ? ThemeLayout::STATUS_DRAFT : ThemeLayout::STATUS_PUBLISHED;
-        $state = $this->workspace->load($context, $includeDraft);
-        $payload = $state[$includeDraft ? 'draft_payload' : 'published_payload'] ?? null;
+        $payload = $this->readPayload($structureContext, $includeDraft);
         if (!\is_array($payload)) {
             throw new \RuntimeException('theme_scoped_preview_layout_payload_missing');
         }
 
-        $layout = $this->normalizer->denormalize($context, $payload);
-        $identity = $this->legacyIdentity($context);
-        $translations = $this->resolveTranslations($context, $includeDraft);
+        $layout = $this->normalizer->denormalize($structureContext, $payload);
+        $identity = $this->legacyStructureIdentity($structureContext);
 
         foreach ($layout as &$areaData) {
             if (!\is_array($areaData['widgets'] ?? null)) {
@@ -62,15 +77,61 @@ final class ThemeScopedPreviewResolver
                 }
                 $widget['status'] = $status;
                 $widget['scope'] = $identity['scope'];
-                $widget['locale_code'] = $identity['locale_code'];
-                $widget['target_type'] = $context->targetType;
-                $widget['target_id'] = $context->targetId;
+                // Structure nodes do not carry request/layout locale.
+                $widget['locale_code'] = '';
+                $widget['target_type'] = $structureContext->targetType;
+                $widget['target_id'] = $structureContext->targetId;
+                $config = \is_array($widget['config'] ?? null) ? $widget['config'] : [];
+                unset($config['_skip_translation_merge']);
+                $widget['config'] = $config;
+            }
+            unset($widget);
+        }
+        unset($areaData);
+
+        return $this->layouts->decorateLayoutForRender($layout, $structureContext->layoutType);
+    }
+
+    /**
+     * Overlay RESOURCE_I18N onto a structure layout for one locale.
+     * Result must not be written back into the structure cache.
+     *
+     * @param array<string,array<string,mixed>> $layout
+     * @return array<string,array<string,mixed>>
+     */
+    public function applyLayoutLocaleOverlay(
+        array $layout,
+        ThemeEditorContext $context,
+        string $status,
+    ): array {
+        $includeDraft = $status !== ThemeLayout::STATUS_PUBLISHED;
+        $overlayLocale = \trim((string)$context->locale);
+        if ($overlayLocale === '' || \strcasecmp($overlayLocale, 'default') === 0) {
+            return $layout;
+        }
+
+        $i18nContext = $context
+            ->withResource(ThemeEditorContext::RESOURCE_I18N)
+            ->withLocale($overlayLocale);
+        $translations = $this->resolveTranslations($i18nContext, $includeDraft);
+        if ($translations === []) {
+            return $layout;
+        }
+
+        foreach ($layout as &$areaData) {
+            if (!\is_array($areaData['widgets'] ?? null)) {
+                continue;
+            }
+            foreach ($areaData['widgets'] as &$widget) {
+                if (!\is_array($widget)) {
+                    continue;
+                }
+                $uid = \strtolower(\trim((string)($widget['node_uid'] ?? '')));
                 $config = \is_array($widget['config'] ?? null) ? $widget['config'] : [];
                 foreach (\is_array($translations[$uid] ?? null) ? $translations[$uid] : [] as $path => $value) {
                     $this->setConfigPath($config, (string)$path, $value);
                 }
-                // Canonical i18n has already been overlaid. Do not let legacy
-                // dictionary state or a browser locale override this preview.
+                // Scoped i18n owns these paths; skip legacy dictionary re-merge for this render.
                 $config['_skip_translation_merge'] = true;
                 $widget['config'] = $config;
             }
@@ -78,7 +139,14 @@ final class ThemeScopedPreviewResolver
         }
         unset($areaData);
 
-        return $this->layouts->decorateLayoutForRender($layout, $context->layoutType);
+        return $layout;
+    }
+
+    /** @return array<string,array<string,mixed>> */
+    public function resolveLayout(ThemeEditorContext $context, string $status): array
+    {
+        $layout = $this->resolveStructureLayout($context, $status);
+        return $this->applyLayoutLocaleOverlay($layout, $context, $status);
     }
 
     /** @return array<string,mixed> */
@@ -110,8 +178,7 @@ final class ThemeScopedPreviewResolver
             ThemeEditorContext::RESOURCE_APPEARANCE,
             'default',
         );
-        $state = $this->workspace->load($appearance, $includeDraft);
-        $payload = $state[$includeDraft ? 'draft_payload' : 'published_payload'] ?? [];
+        $payload = $this->readPayload($appearance, $includeDraft);
 
         return \is_array($payload) ? $payload : [];
     }
@@ -180,18 +247,20 @@ final class ThemeScopedPreviewResolver
     /** @return array<string,mixed> */
     private function resolveTranslations(ThemeEditorContext $context, bool $includeDraft): array
     {
-        if ($context->locale === 'default') {
+        $locale = \trim((string)$context->locale);
+        if ($locale === '' || \strcasecmp($locale, 'default') === 0) {
             return [];
         }
-        $i18n = $context->withResource(ThemeEditorContext::RESOURCE_I18N);
-        $state = $this->workspace->load($i18n, $includeDraft);
-        $payload = $state[$includeDraft ? 'draft_payload' : 'published_payload'] ?? [];
+        $i18n = $context->resourceType === ThemeEditorContext::RESOURCE_I18N
+            ? $context
+            : $context->withResource(ThemeEditorContext::RESOURCE_I18N)->withLocale($locale);
+        $payload = $this->readPayload($i18n, $includeDraft);
 
         return \is_array($payload['translations'] ?? null) ? $payload['translations'] : [];
     }
 
     /** @return array{layout_option:string,scope:string,target_type:string,target_id:int,locale_code:string} */
-    private function legacyIdentity(ThemeEditorContext $context): array
+    private function legacyStructureIdentity(ThemeEditorContext $context): array
     {
         return [
             'layout_option' => $context->layoutOption,
@@ -201,7 +270,7 @@ final class ThemeScopedPreviewResolver
             ),
             'target_type' => $context->targetType,
             'target_id' => $context->targetId,
-            'locale_code' => $context->locale === 'default' ? '' : $context->locale,
+            'locale_code' => '',
         ];
     }
 

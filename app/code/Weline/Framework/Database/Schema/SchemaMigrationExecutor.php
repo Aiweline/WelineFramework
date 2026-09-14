@@ -36,6 +36,18 @@ final class SchemaMigrationExecutor implements SchemaMigrationExecutorInterface
     ) {
     }
 
+    /**
+     * Read validated ownership without rebinding an immutable checkpoint.
+     * A valid current checkpoint with an empty table map remains authoritative.
+     *
+     * @return array{migration_id: int, module_name: string, version: string, format: int, checksum: string, tables: array<string, string>}|null
+     */
+    public function getSchemaCheckpointForOwnership(string $moduleName, string $moduleVersion): ?array
+    {
+        return $this->migrationModel->getSchemaCheckpoint($moduleName, $moduleVersion)
+            ?? $this->migrationModel->getLatestSchemaCheckpointBefore($moduleName, $moduleVersion);
+    }
+
     /** 先加列，再 DROP 旧外键/索引，再 ADD 新索引/外键，最后 DROP 列；同名索引可先删后建。回滚按 sequence 倒序。 */
     private const KIND_PRIORITY = [
         SchemaDiffOp::KIND_CREATE_TABLE => 0,

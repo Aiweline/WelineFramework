@@ -105,7 +105,7 @@ final class ThemeLayoutSnapshotNormalizer
                 'slot_id' => \array_key_exists('slot_id', $node) ? $node['slot_id'] : null,
                 'layout_option' => $context->layoutOption,
                 'scope' => $context->scope->storageScope,
-                'locale_code' => $context->locale === 'default' ? '' : $context->locale,
+                'locale_code' => '',
                 'target_type' => $context->targetType,
                 'target_id' => $context->targetId,
                 'config' => \is_array($node['config'] ?? null) ? $node['config'] : [],

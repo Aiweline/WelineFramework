@@ -61,9 +61,13 @@
     var SAFE_UPLOAD_EXTENSIONS = [
         'jpg', 'jpeg', 'png', 'gif', 'webp', 'ico', 'bmp', 'tiff', 'tif', 'avif',
         'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv', 'json',
-        'zip', 'rar', 'gz', 'tar', '7z', 'mp3', 'wav', 'ogg', 'mp4', 'webm', 'avi',
+        'zip', 'rar', 'gz', 'tar', '7z', 'mp3', 'wav', 'ogg', 'oga', 'm4a', 'aac',
+        'flac', 'opus', 'wma', 'weba', 'mp4', 'webm', 'avi',
         'mov', 'mkv', 'flv', 'wmv', 'ttf', 'otf', 'woff', 'woff2', 'eot'
     ];
+    // Active browser content must never be uploaded via the media picker, even when
+    // a caller passes an explicit ext= contract.
+    var BLOCKED_UPLOAD_EXTENSIONS = ['svg', 'html', 'htm', 'css', 'js', 'xml'];
 
     /* ─── helpers ────────────────────────────────────────────────────── */
 
@@ -2969,11 +2973,19 @@
 
     function configuredUploadExtensions() {
         var raw = String(CONFIG.ext || '*').trim().toLowerCase();
-        if (!raw || raw === '*') return SAFE_UPLOAD_EXTENSIONS.slice();
+        if (!raw || raw === '*') {
+            return SAFE_UPLOAD_EXTENSIONS.slice();
+        }
+        // upload-ext-contract:v2 — Explicit picker/block ext= is the contract
+        // (e.g. StoreMusic audio with m4a). Do NOT re-intersect with SAFE_UPLOAD_EXTENSIONS
+        // or newly added formats get silently dropped while the UI still displays
+        // the full contract list.
         return raw.split(',').map(function(extension) {
             return extension.trim().replace(/^\./, '');
         }).filter(function(extension) {
-            return extension && SAFE_UPLOAD_EXTENSIONS.indexOf(extension) >= 0;
+            return extension
+                && extension !== '*'
+                && BLOCKED_UPLOAD_EXTENSIONS.indexOf(extension) < 0;
         });
     }
 
@@ -2986,7 +2998,9 @@
         }
         return raw.split(',').map(function(extension) {
             return extension.trim().replace(/^\./, '');
-        }).filter(Boolean);
+        }).filter(function(extension) {
+            return extension && BLOCKED_UPLOAD_EXTENSIONS.indexOf(extension) < 0;
+        });
     }
 
     function selectionMimeAllowed(mime) {

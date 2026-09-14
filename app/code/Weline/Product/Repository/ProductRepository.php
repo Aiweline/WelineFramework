@@ -343,7 +343,7 @@ final class ProductRepository extends AbstractWebsiteShardRepository
             'draft' => ['published', 'archived'],
             'published' => ['disabled'],
             'disabled' => ['published', 'archived'],
-            'archived' => [],
+            'archived' => ['draft'],
         ];
         if (!in_array($targetStatus, $allowed[$currentStatus] ?? [], true)) {
             throw new CatalogConflictException(

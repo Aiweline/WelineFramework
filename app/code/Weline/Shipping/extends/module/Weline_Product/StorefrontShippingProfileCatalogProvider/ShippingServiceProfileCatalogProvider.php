@@ -6,7 +6,7 @@ namespace Weline\Shipping\Extends\Module\Weline_Product\StorefrontShippingProfil
 
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Product\Api\Storefront\StorefrontShippingProfileCatalogProviderInterface;
-use Weline\Shipping\Model\ShippingService;
+use Weline\Shipping\Model\ShippingProfile;
 
 final class ShippingServiceProfileCatalogProvider implements StorefrontShippingProfileCatalogProviderInterface
 {
@@ -17,35 +17,34 @@ final class ShippingServiceProfileCatalogProvider implements StorefrontShippingP
 
     public function getCode(): string
     {
-        return 'shipping_service';
+        return 'shipping_profile';
     }
 
     public function listActiveProfiles(): array
     {
-        /** @var ShippingService $model */
-        $model = $this->objectManager->getInstance(ShippingService::class);
+        /** @var ShippingProfile $model */
+        $model = $this->objectManager->getInstance(ShippingProfile::class);
         $items = $model->reset()
-            ->where(ShippingService::schema_fields_IS_ACTIVE, 1)
-            ->order(ShippingService::schema_fields_SORT_ORDER, 'ASC')
-            ->order(ShippingService::schema_fields_ID, 'ASC')
+            ->where(ShippingProfile::schema_fields_IS_ACTIVE, 1)
+            ->order(ShippingProfile::schema_fields_IS_GENERAL, 'DESC')
+            ->order(ShippingProfile::schema_fields_ID, 'ASC')
             ->select()
             ->fetch()
             ->getItems();
         $out = [];
         foreach ($items as $item) {
-            if (!$item instanceof ShippingService) {
+            if (!$item instanceof ShippingProfile) {
                 continue;
             }
-            $code = trim((string)$item->getData(ShippingService::schema_fields_SERVICE_CODE));
+            $code = trim((string)$item->getData(ShippingProfile::schema_fields_PROFILE_CODE));
             if ($code === '') {
                 continue;
             }
             $out[] = [
                 'code' => $code,
-                'label' => (string)$item->getData(ShippingService::schema_fields_SERVICE_NAME),
-                'is_free_shipping' => (bool)$item->getData(ShippingService::schema_fields_IS_FREE_SHIPPING),
-                'estimated_days_min' => $item->getData(ShippingService::schema_fields_ESTIMATED_DAYS_MIN),
-                'estimated_days_max' => $item->getData(ShippingService::schema_fields_ESTIMATED_DAYS_MAX),
+                'label' => (string)$item->getData(ShippingProfile::schema_fields_PROFILE_NAME),
+                'is_free_shipping' => false,
+                'is_general' => (bool)$item->getData(ShippingProfile::schema_fields_IS_GENERAL),
             ];
         }
 
@@ -58,31 +57,16 @@ final class ShippingServiceProfileCatalogProvider implements StorefrontShippingP
             return null;
         }
         $code = trim($profileCode);
-        $profiles = $this->listActiveProfiles();
-        $hit = null;
-        foreach ($profiles as $profile) {
-            if ($code !== '' && $profile['code'] === $code) {
-                $hit = $profile;
-                break;
-            }
-        }
-        if ($hit === null && $code === '' && $profiles !== []) {
-            // Unbound: neutral checkout note only.
+        if ($code === '' || $code === ShippingProfile::SEED_GENERAL) {
             return [
                 'badge' => null,
                 'note' => (string)__('运费以结算页为准'),
             ];
         }
-        if ($hit === null) {
+        if ($code === ShippingProfile::SEED_HEAVY) {
             return [
-                'badge' => null,
-                'note' => (string)__('运费以结算页为准'),
-            ];
-        }
-        if (!empty($hit['is_free_shipping'])) {
-            return [
-                'badge' => (string)__('包邮'),
-                'note' => (string)__('本配送方案为服务级免邮，具体以结算页为准'),
+                'badge' => (string)__('重货'),
+                'note' => (string)__('本商品使用重货配送方案，运费以结算页为准'),
             ];
         }
 

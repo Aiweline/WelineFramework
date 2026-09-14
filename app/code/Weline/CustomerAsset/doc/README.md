@@ -7,7 +7,7 @@ commands and fresh WLS workers share one fail-closed decision. Existing
 settlement/refund obligations continue to converge.
 
 - Current contract: [customer-asset.md](customer-asset.md)
-- AI 上下文：`prepare_project` 就绪后由 `resolve_task_context` 动态返回。
+- AI 上下文（可选）：可 `prepare_project` 后由 `resolve_task_context` 动态返回；编码用宿主原生编辑。
 
 P4D-002 adds Payment reserve-before-cash integration and the official
 `Weline_Customer` account-layout read projection. Order snapshots and refund

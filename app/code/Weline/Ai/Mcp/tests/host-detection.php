@@ -78,8 +78,20 @@ try {
         $temporary . '/marketplace/plugins/weline-project-intelligence/.mcp.json',
     ), true, 512, JSON_THROW_ON_ERROR);
     $enabled = $configuration['mcpServers']['weline-project-intelligence']['enabled_tools'] ?? [];
-    $expected = ['submit_task_plan', 'get_task_plan', 'update_task_plan_progress', 'review_task_plan', 'project_index_status'];
-    $check(array_diff($expected, $enabled) === [], 'plugin exposes every plan tool and project index status');
+    $expected = [
+        'get_indexed_document',
+        'get_skill',
+        'health',
+        'prepare_project',
+        'project_index_status',
+        'repair_project_docs',
+        'resolve_skill',
+        'resolve_task_context',
+        'search_project_knowledge',
+    ];
+    $sortedEnabled = is_array($enabled) ? $enabled : [];
+    sort($sortedEnabled);
+    $check($sortedEnabled === $expected, 'plugin enabled_tools equals the nine index/knowledge tools');
 } finally {
     if (is_dir($temporary)) {
         $files = new RecursiveIteratorIterator(

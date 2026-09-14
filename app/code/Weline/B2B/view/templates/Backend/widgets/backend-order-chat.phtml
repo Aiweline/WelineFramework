@@ -1,0 +1,111 @@
+<?php
+/**
+ * 后台订单详情：批发订单沟通（商家侧，与店面同一线程）。
+ *
+ * @var \Weline\Framework\View\Template $this
+ *
+ * @widget.code {b2b-backend-order-chat}
+ * @widget.name {批发订单沟通}
+ * @widget.description {订单后台详情：B2B 定金/尾款协商消息；默认注入 backend-order-b2b-chat。}
+ * @widget.type {content}
+ * @widget.area {backend}
+ * @widget.position {["content"]}
+ * @widget.page_layouts {["backend-order-view"]}
+ * @widget.slot {backend-order-b2b-chat}
+ * @widget.supports {["backend-order-b2b-chat","b2b-order-chat","b2b"]}
+ * @widget.default_injections {[{"layout_type":"backend-order-view","layout_option":"default","slot":"backend-order-b2b-chat","area":"content","sort_order":20,"required":true,"reason":"批发/挂单订单详情默认展示商家侧订单沟通","config":{"title":"订单沟通"}}]}
+ *
+ * @param title {default="订单沟通",type="string",label="标题"}
+ */
+
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Order\Model\Order;
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forWidget('b2b-backend-order-chat');
+$wc = $scope->cssClass;
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$title = '订单沟通';
+$configuredTitle = trim((string)($this->getData('title') ?? ''));
+if ($configuredTitle !== '' && !str_starts_with($configuredTitle, 'Weline_')) {
+    $title = $configuredTitle;
+}
+
+$order = $this->getData('order') ?? null;
+$orderData = is_object($order) ? $order->getData() : (is_array($order) ? $order : []);
+$orderRef = trim((string)($orderData[Order::schema_fields_ORDER_UUID] ?? ''));
+if ($orderRef === '') {
+    $orderId = (int)($this->getData('order_id') ?? 0);
+    if ($orderId <= 0) {
+        $orderId = (int)($this->request->getParam('id') ?? 0);
+    }
+    if ($orderId > 0) {
+        try {
+            $orderModel = ObjectManager::getInstance(Order::class);
+            if ($orderModel instanceof Order) {
+                $orderModel->load($orderId);
+                $orderData = $orderModel->getData();
+                $orderRef = trim((string)($orderData[Order::schema_fields_ORDER_UUID] ?? ''));
+            }
+        } catch (\Throwable) {
+            $orderRef = '';
+        }
+    }
+}
+if ($orderRef === '') {
+    return;
+}
+
+$orderType = strtolower(trim((string)($this->getData('order_type') ?? $orderData[Order::schema_fields_ORDER_TYPE] ?? 'toc')));
+$customerIdHint = trim((string)($orderData[Order::schema_fields_CUSTOMER_ID] ?? ''));
+$hasHang = false;
+$hasThread = false;
+$chatUnread = 0;
+try {
+    $hang = ObjectManager::getInstance(\Weline\B2B\Service\B2BHangOrderService::class);
+    if ($hang instanceof \Weline\B2B\Service\B2BHangOrderService) {
+        $hasHang = $hang->getByOrderRef($orderRef) !== null;
+    }
+} catch (\Throwable) {
+}
+try {
+    $chat = ObjectManager::getInstance(\Weline\B2B\Service\B2BOrderThreadService::class);
+    if ($chat instanceof \Weline\B2B\Service\B2BOrderThreadService) {
+        $thread = $chat->getByOrderRef($orderRef);
+        if (is_array($thread)) {
+            $hasThread = true;
+            $chatUnread = max(0, (int)($thread['merchant_unread'] ?? 0));
+        }
+    }
+} catch (\Throwable) {
+}
+
+if ($orderType !== 'tob' && !$hasHang && !$hasThread) {
+    return;
+}
+
+$chatRole = 'merchant';
+?>
+<link rel="stylesheet" href="@static(Weline_B2B::css/b2b-storefront.css)&v=20260912-hang-admin-chat1">
+<div data-weline-load="b2bOrderChat"></div>
+<div class="w-card <?= $escape($wc) ?>"
+     style="--w-mb:var(--weline-space-4);"
+     weline-code="<?= $escape($scope->code) ?>"
+     data-uid="<?= $escape($scope->uid) ?>"
+     data-js-ns="<?= $escape($scope->jsNs) ?>"
+     data-testid="b2b-backend-order-chat-card">
+    <div class="w-card__header">
+        <h5 class="w-card__title" style="--w-mb:0;"><?= $escape(__($title)) ?></h5>
+    </div>
+    <div class="w-card__body">
+        <p class="w-text" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-3);">
+            <?= __('与客户就本批发订单的定金/尾款协商消息，前后台同一线程。') ?>
+        </p>
+        <?php
+        $chatPartial = BP . 'app/code/Weline/B2B/view/templates/frontend/partials/order-chat-accordion.phtml';
+        if (is_file($chatPartial)) {
+            include $chatPartial;
+        }
+        ?>
+    </div>
+</div>

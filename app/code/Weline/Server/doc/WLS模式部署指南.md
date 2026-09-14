@@ -6,7 +6,13 @@ WLS（Weline Server）是框架内置的常驻内存 HTTP 服务器。WLS 2.0 �
 默认 `--edge=auto` 优先加入已安装且受信的宿主 Weline Gateway；若网关不存在且
 80/443、签名包、平台权限和守护安装条件全部安全，首项目自动将包安装到宿主 A/B 槽、
 建立独立网关并注册自身。未知 owner、缺包、坏签名、无权限、不兼容或建立未 ready 时，
-以稳定高端口降级为纯 WLS TLS。普通启动不会自动升级、修复、重引导或接管未知 Nginx。
+以稳定高端口降级为纯 WLS TLS。普通启动默认不会自动升级、修复、重引导、接管未知 Nginx，
+也**默认不从网络下载**签名包。
+
+可选：配置 `wls.edge.gateway.package_base_url`（HTTPS）与 allowlisted
+`package_fetch_hosts`，并显式 `package_fetch=true` 后，缺包或本地半包损坏时可在
+bootstrap 锁外从 CDN 拉取到项目分发目录（须已注入 enabled 信任公钥）。主路径仍推荐
+显式 `php bin/w server:gateway:package:fetch`。信任钥永不从网络下载。
 
 纯 WLS 可显式使用 `--edge=wls`，`--no-nginx` 是兼容别名。此时 WLS 直接作为入口，
 默认启用 HTTPS/TLS 1.3、优先 HTTP/2，并自动回退 HTTP/1.1；纯 WLS 不提供 HTTP/3，
@@ -41,6 +47,13 @@ Master/Worker 或平台副作用前统一拒绝不满足该合同的 PHP，`serv
     'edge' => [
         'mode' => 'auto',               // auto / gateway / wls
         'adapter' => 'nginx',           // 兼容投影；由最终 decision 固化
+        'gateway' => [
+            // 可选 CDN：默认关闭。开启前须注入 enabled 信任公钥。
+            'package_base_url' => '', // e.g. https://www.aiweline.com/wls/gateway
+            'package_fetch' => false,
+            'package_fetch_timeout_sec' => 120,
+            'package_fetch_hosts' => ['www.aiweline.com'],
+        ],
         'nginx' => [
             // 以下项目托管 Nginx 键只服务 legacy 实例；
             // 共享网关由宿主 Gateway Controller 管理。

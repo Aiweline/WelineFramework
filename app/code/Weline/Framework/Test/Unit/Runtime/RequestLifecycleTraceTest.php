@@ -16,6 +16,7 @@ class RequestLifecycleTraceTest extends TestCase
     protected function tearDown(): void
     {
         unset($_SERVER['HTTP_X_WELINE_REQUEST_ID'], $_SERVER['HTTP_X_REQUEST_ID']);
+        RequestLifecycleTrace::clearPanelTrace();
         Context::leave();
         Runtime::resetModeCache();
         RequestLifecycleTrace::reset();
@@ -77,11 +78,73 @@ class RequestLifecycleTraceTest extends TestCase
             'runtime' => ['request_context' => ['initialized' => true]],
         ]));
 
+        RequestLifecycleTrace::installPanelTraceOn();
         RequestLifecycleTrace::recordSpan('router_start', 1.0, 'framework');
 
         self::assertSame([
             ['name' => 'router_start', 'duration_ms' => 1.0, 'category' => 'framework'],
         ], RequestLifecycleTrace::getSpans());
+    }
+
+    public function testDevModeWithoutPanelOpenDoesNotEnableTrace(): void
+    {
+        Context::enter(new Context([
+            'runtime' => ['request_context' => ['initialized' => true]],
+        ]));
+        RequestLifecycleTrace::clearPanelTrace();
+
+        self::assertFalse(RequestLifecycleTrace::isEnabled());
+        RequestLifecycleTrace::recordSpan('should_not_record', 1.0, 'framework');
+        self::assertSame([], RequestLifecycleTrace::getSpans());
+    }
+
+    public function testPanelOpenEnablesTraceAndCloseDisables(): void
+    {
+        Context::enter(new Context([
+            'runtime' => ['request_context' => ['initialized' => true]],
+        ]));
+
+        RequestLifecycleTrace::installPanelTraceOn();
+        self::assertTrue(RequestLifecycleTrace::isPanelTraceArmed());
+        self::assertTrue(RequestLifecycleTrace::isEnabled());
+
+        RequestLifecycleTrace::recordSpan('armed_span', 2.5, 'framework');
+        self::assertSame([
+            ['name' => 'armed_span', 'duration_ms' => 2.5, 'category' => 'framework'],
+        ], RequestLifecycleTrace::getSpans());
+
+        RequestLifecycleTrace::clearPanelTrace();
+        RequestLifecycleTrace::reset();
+        Context::leave();
+        Context::enter(new Context([
+            'runtime' => ['request_context' => ['initialized' => true]],
+        ]));
+        self::assertFalse(RequestLifecycleTrace::isPanelTraceArmed());
+        self::assertFalse(RequestLifecycleTrace::isEnabled());
+    }
+
+    public function testEnvRequestTraceConfigDoesNotEnableWithoutPanel(): void
+    {
+        Context::enter(new Context([
+            'runtime' => ['request_context' => ['initialized' => true]],
+        ]));
+        RequestLifecycleTrace::clearPanelTrace();
+        if (\class_exists(\Weline\Framework\App\Env::class, false)) {
+            \Weline\Framework\App\Env::getInstance()->applyRuntimeConfig([
+                'wls' => ['debug' => ['request_trace' => true]],
+            ]);
+        }
+        self::assertFalse(RequestLifecycleTrace::isEnabled());
+    }
+
+    public function testForgedPanelTraceCookieIsRejected(): void
+    {
+        Context::enter(new Context([
+            'runtime' => ['request_context' => ['initialized' => true]],
+        ]));
+        $_COOKIE[RequestLifecycleTrace::panelTraceCookieName()] = 'not-a-valid-panel-cookie';
+        self::assertFalse(RequestLifecycleTrace::isPanelTraceArmed());
+        self::assertFalse(RequestLifecycleTrace::isEnabled());
     }
 
     public function testWlsControlPlaneWithoutRequestContextStaysDisabledEvenWhenDebugIsOn(): void
@@ -92,6 +155,7 @@ class RequestLifecycleTraceTest extends TestCase
             \define('DEBUG', true);
         }
         Context::enter(new Context([]));
+        RequestLifecycleTrace::installPanelTraceOn();
 
         self::assertFalse(RequestLifecycleTrace::isEnabled());
 
@@ -152,8 +216,9 @@ class RequestLifecycleTraceTest extends TestCase
         Context::enter(new Context([
             'runtime' => ['request_context' => ['initialized' => true]],
         ]));
-        $this->setStaticProperty('maxSpansCapCache', 1);
-        $this->setStaticProperty('maxSpansLogged', true);
+        RequestLifecycleTrace::installPanelTraceOn();
+        $this->setStateProperty('maxSpansCapCache', 1);
+        $this->setStateProperty('maxSpansLogged', true);
 
         RequestLifecycleTrace::recordSpan('first', 1.0);
         self::assertCount(1, RequestLifecycleTrace::getSpans());
@@ -174,7 +239,8 @@ class RequestLifecycleTraceTest extends TestCase
         self::assertSame(1, $payload['summary']['max_spans']);
 
         RequestLifecycleTrace::reset();
-        $this->setStaticProperty('maxSpansCapCache', 1);
+        RequestLifecycleTrace::installPanelTraceOn();
+        $this->setStateProperty('maxSpansCapCache', 1);
         RequestLifecycleTrace::recordSpan('after_reset', 1.0);
         self::assertCount(1, RequestLifecycleTrace::getSpans());
     }
@@ -184,6 +250,7 @@ class RequestLifecycleTraceTest extends TestCase
         Context::enter(new Context([
             'runtime' => ['request_context' => ['initialized' => true]],
         ]));
+        RequestLifecycleTrace::installPanelTraceOn();
         $digest = \str_repeat('a', 64);
 
         RequestLifecycleTrace::recordSpan(
@@ -209,13 +276,12 @@ class RequestLifecycleTraceTest extends TestCase
      */
     private function setSpans(array $spans): void
     {
-        $this->setStaticProperty('spans', $spans);
+        $this->setStateProperty('spans', $spans);
     }
 
-    private function setStaticProperty(string $name, mixed $value): void
+    private function setStateProperty(string $name, mixed $value): void
     {
-        $property = new \ReflectionProperty(RequestLifecycleTrace::class, $name);
-        $property->setAccessible(true);
-        $property->setValue(null, $value);
+        $state = (new \ReflectionMethod(RequestLifecycleTrace::class, 'state'))->invoke(null);
+        $state->{$name} = $value;
     }
 }

@@ -344,12 +344,19 @@ DOC;
         if (!\in_array($catalog, ['installed', 'global'], true)) {
             $catalog = 'installed';
         }
-        $cacheKey = DictionaryCacheNamespace::cacheKey($catalog . '|' . $displayLocale);
-        if (isset(DictionaryCacheNamespace::localCache(self::$itemsCache, 128)[$cacheKey])) {
-            return DictionaryCacheNamespace::localCache(self::$itemsCache, 128)[$cacheKey];
+        $translationLocales = array_values(array_unique([
+            $displayLocale,
+            ...\Weline\Framework\Cache\StorefrontCacheKeyContext::currentOrRequestFence()->translationLocales,
+        ]));
+        $cacheKey = DictionaryCacheNamespace::cacheKey(
+            $catalog . '|' . $displayLocale . '|' . implode(',', $translationLocales),
+            $translationLocales,
+        );
+        if (isset(DictionaryCacheNamespace::localCache(self::$itemsCache, 128, $translationLocales)[$cacheKey])) {
+            return DictionaryCacheNamespace::localCache(self::$itemsCache, 128, $translationLocales)[$cacheKey];
         }
         if ($catalog === 'global') {
-            return DictionaryCacheNamespace::localCache(self::$itemsCache, 128)[$cacheKey] = self::buildGlobalLanguageItems($displayLocale);
+            return DictionaryCacheNamespace::localCache(self::$itemsCache, 128, $translationLocales)[$cacheKey] = self::buildGlobalLanguageItems($displayLocale);
         }
 
         /** @var I18n $i18n */
@@ -470,7 +477,7 @@ DOC;
             return $name !== 0 ? $name : \strnatcasecmp((string)($a['code'] ?? ''), (string)($b['code'] ?? ''));
         });
 
-        return DictionaryCacheNamespace::localCache(self::$itemsCache, 128)[$cacheKey] = $items;
+        return DictionaryCacheNamespace::localCache(self::$itemsCache, 128, $translationLocales)[$cacheKey] = $items;
     }
 
     public static function getLanguageItemsJson(

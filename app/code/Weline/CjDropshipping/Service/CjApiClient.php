@@ -18,6 +18,7 @@ class CjApiClient
     public const KEY_API_KEY = 'dropship/channel/cj/api_key';
     public const KEY_TOKEN = 'dropship/channel/cj/access_token';
     public const KEY_ORDER_SANDBOX = 'dropship/channel/cj/order_sandbox';
+    public const KEY_FREIGHT_ON_FAILURE = 'dropship/channel/cj/freight_on_failure';
     public const BASE = 'https://developers.cjdropshipping.com/api2.0/v1';
 
     /**
@@ -28,6 +29,16 @@ class CjApiClient
         $raw = strtolower($this->cfg(self::KEY_ORDER_SANDBOX));
 
         return in_array($raw, ['1', 'true', 'yes', 'on'], true);
+    }
+
+    /**
+     * Checkout freight failure mode (Provider-owned).
+     */
+    public function freightOnFailure(): string
+    {
+        return \Weline\Dropship\Service\DropshipFreightPolicy::normalize(
+            $this->cfg(self::KEY_FREIGHT_ON_FAILURE)
+        );
     }
 
     public function probe(): array

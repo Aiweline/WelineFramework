@@ -41,7 +41,10 @@ final class TranslationConcurrencyGateContractTest extends TestCase
         self::assertStringContainsString('timeout_seconds', $service);
         self::assertStringContainsString('low_speed_time', $service);
         self::assertStringContainsString('connect_timeout', $service);
-        self::assertStringContainsString('isBusyMarker', $service);
+        self::assertStringContainsString('isBusyMarker', $gate);
+        self::assertStringContainsString('function isBusy', $gate);
+        self::assertStringContainsString('TranslationBusyException', $gate);
+        self::assertStringContainsString('isBusy(', $service);
         self::assertStringContainsString('REQUEST_TIMEOUT_SECONDS = 900', $service);
         self::assertStringContainsString('REQUEST_LOW_SPEED_SECONDS = 900', $service);
         self::assertStringContainsString('REQUEST_CONNECT_TIMEOUT_SECONDS = 5', $service);

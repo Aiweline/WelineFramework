@@ -21,16 +21,18 @@ final class StorefrontScopeHotCacheTraceMetadataTest extends TestCase
     {
         Context::enter(new Context([
             'meta' => ['type' => 'request', 'mode' => 'fpm'],
-            'input' => ['uri' => '/products', 'server' => ['HTTP_X_WELINE_TRACE' => '1']],
+            'input' => ['uri' => '/products'],
             'runtime' => ['request_context' => ['initialized' => true]],
         ]));
         RequestLifecycleTrace::reset();
+        RequestLifecycleTrace::installPanelTraceOn();
         StorefrontScopeHotCache::resetProcessCache();
     }
 
     protected function tearDown(): void
     {
         StorefrontScopeHotCache::resetProcessCache();
+        RequestLifecycleTrace::clearPanelTrace();
         RequestLifecycleTrace::reset();
         Context::leave();
     }

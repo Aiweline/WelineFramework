@@ -1031,6 +1031,11 @@ final class ConnectorService
         ) !== 1) {
             return $this->detectStorageMime($path);
         }
+        $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+        // Serve AAC-in-MP4 (.m4a) as audio/mp4 even when DB/finfo stored video/mp4.
+        if ($ext === 'm4a' && ($mime === 'video/mp4' || $mime === 'application/mp4')) {
+            return 'audio/mp4';
+        }
         return $mime;
     }
 

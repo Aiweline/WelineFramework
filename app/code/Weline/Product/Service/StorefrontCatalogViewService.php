@@ -73,6 +73,60 @@ final class StorefrontCatalogViewService
     }
 
     /**
+     * Whole-listing facts for price/attribute filters, sorting and counts.
+     * Media is filled only after pagination; complete card APIs keep their contract.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function publishedListingCandidates(int $limit = 1000, bool $includeListingDetails = false): array
+    {
+        $limit = max(1, min(self::MAX_CATALOG_PRODUCTS, $limit));
+
+        return array_slice($this->rememberPublishedOffers($includeListingDetails, false), 0, $limit);
+    }
+
+    /**
+     * Add only the current page's card images, preserving its order and price facts.
+     *
+     * @param list<array<string, mixed>> $offers
+     * @return list<array<string, mixed>>
+     */
+    public function hydrateListingMedia(array $offers): array
+    {
+        $productIds = array_values(array_unique(array_filter(array_map(
+            static fn(array $offer): int => (int)($offer['product_id'] ?? 0),
+            $offers,
+        ), static fn(int $id): bool => $id > 0)));
+        if ($productIds === []) {
+            return $offers;
+        }
+
+        $scope = $this->currentScope();
+        $websiteId = max(0, (int)$scope->websiteId);
+        $logicalKey = $this->catalogCache->catalogTargetedOffersLogicalKey($websiteId, $productIds, false)
+            . '.media.v1';
+        $images = RequestLifecycleTrace::measurePhase(
+            'product.catalog.listing_media',
+            fn(): array => $this->hotCache->rememberPolicy(
+                StorefrontCatalogCacheCoordinator::catalogTargetedOffersPolicy(),
+                $logicalKey,
+                fn(): array => $this->snapshots->resolveCatalogImages($productIds, $scope),
+            ),
+            ['products' => count($productIds)],
+        );
+        $locale = trim((string)RequestContext::getWelineUserLang());
+        foreach ($offers as &$offer) {
+            $image = (string)($images[(int)($offer['product_id'] ?? 0)] ?? '');
+            $offer['image'] = $image;
+            $offer['images'] = $image !== '' ? [$image] : [];
+            $offer = $this->mediaUrls->resolveListingOffer($offer, $scope, $locale);
+        }
+        unset($offer);
+
+        return $offers;
+    }
+
+    /**
      * Return a bounded channel/locale summary projection for card surfaces.
      *
      * Read candidates in bounded SQL pages and continue past unavailable rows
@@ -87,7 +141,7 @@ final class StorefrontCatalogViewService
         if (Context::hasCurrent() && RequestContext::has(self::REQUEST_FULL_ROWS_KEY)) {
             $rows = RequestContext::get(self::REQUEST_FULL_ROWS_KEY);
             if (is_array($rows)) {
-                return array_slice($rows, 0, $limit);
+                return $this->materializeCampaignUrls(array_slice($rows, 0, $limit));
             }
         }
         $scope = $this->currentScope();
@@ -128,7 +182,7 @@ final class StorefrontCatalogViewService
             ),
         );
 
-        return array_slice($rows, 0, $limit);
+        return $this->materializeCampaignUrls(array_slice($rows, 0, $limit));
     }
 
     /**
@@ -192,7 +246,7 @@ final class StorefrontCatalogViewService
                 ),
             );
 
-            return \array_slice($rows, 0, $limit);
+            return $this->materializeCampaignUrls(\array_slice($rows, 0, $limit));
         }
 
         $rows = $this->rememberPublishedOffers($includeListingDetails);
@@ -342,12 +396,12 @@ final class StorefrontCatalogViewService
     }
 
     /** @return list<array<string, mixed>> */
-    private function rememberPublishedOffers(bool $includeListingDetails = true): array
+    private function rememberPublishedOffers(bool $includeListingDetails = true, bool $includeMedia = true): array
     {
         // A listing renders the full catalog before its recommendation slot.
         // Reuse that immutable request result for summary cards instead of
         // rebuilding the same 220-product snapshot under the summary policy.
-        if (!$includeListingDetails && Context::hasCurrent() && RequestContext::has(self::REQUEST_FULL_ROWS_KEY)) {
+        if ($includeMedia && !$includeListingDetails && Context::hasCurrent() && RequestContext::has(self::REQUEST_FULL_ROWS_KEY)) {
             $requestRows = RequestContext::get(self::REQUEST_FULL_ROWS_KEY);
             if (is_array($requestRows)) {
                 RequestLifecycleTrace::recordPhase(
@@ -356,29 +410,32 @@ final class StorefrontCatalogViewService
                     ['rows' => count($requestRows)],
                 );
                 /** @var list<array<string, mixed>> $requestRows */
-                return $requestRows;
+                return $this->materializeCampaignUrls($requestRows);
             }
         }
 
         $scope = $this->currentScope();
         $websiteId = max(0, (int)$scope->websiteId);
+        // summary-slug2: empty EAV slug falls back to SKU-derived public handle
+        // so cards/affiliate never emit /product/{id} when SKU can form a slug.
         $logicalKey = $this->catalogCache->catalogOffersLogicalKey(
             $websiteId,
-            $includeListingDetails ? 'full' : 'summary',
+            ($includeMedia ? '' : 'candidates-') . ($includeListingDetails ? 'full' : 'summary-slug2'),
         );
 
         /** @var list<array<string, mixed>> $rows */
-        $rows = RequestLifecycleTrace::measurePhase('product.catalog.resolve',
+        $rows = RequestLifecycleTrace::measurePhase($includeMedia ? 'product.catalog.resolve' : 'product.catalog.resolve_candidates',
             fn(): array => $this->hotCache->rememberPolicy(
                 StorefrontCatalogCacheCoordinator::catalogOffersPolicy(),
                 $logicalKey,
-                fn(): array => RequestLifecycleTrace::measurePhase('product.catalog.build',
+                fn(): array => RequestLifecycleTrace::measurePhase($includeMedia ? 'product.catalog.build' : 'product.catalog.build_candidates',
                     fn(): array => $this->buildPublishedOffers(
                         $websiteId,
                         $scope,
                         [],
                         true,
                         $includeListingDetails,
+                        includeMedia: $includeMedia,
                     ),
                     ['website_id' => $websiteId],
                 ),
@@ -386,11 +443,11 @@ final class StorefrontCatalogViewService
             ['website_id' => $websiteId],
         );
 
-        if ($includeListingDetails && Context::hasCurrent()) {
+        if ($includeMedia && $includeListingDetails && Context::hasCurrent()) {
             RequestContext::set(self::REQUEST_FULL_ROWS_KEY, $rows);
         }
 
-        return $rows;
+        return $this->materializeCampaignUrls($rows);
     }
 
     /**
@@ -451,7 +508,7 @@ final class StorefrontCatalogViewService
             $hydrated[] = $projected;
         }
 
-        return $hydrated;
+        return $this->materializeCampaignUrls($hydrated);
     }
 
     /**
@@ -587,6 +644,18 @@ final class StorefrontCatalogViewService
                     if (preg_match('#^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$#D', $slug) !== 1) {
                         $slug = '';
                     }
+                    if ($slug === '') {
+                        $sku = '';
+                        foreach ($snapshots as $snapshot) {
+                            if ($snapshot !== null && $snapshot->found) {
+                                $sku = trim((string)($snapshot->sku ?? ''));
+                                if ($sku !== '') {
+                                    break;
+                                }
+                            }
+                        }
+                        $slug = $this->publicSlugFromSku($sku);
+                    }
 
                     $selection = new StorefrontVariantSelectionService();
                     $availabilityRows = [];
@@ -633,6 +702,7 @@ final class StorefrontCatalogViewService
         bool $includeListingDetails = true,
         ?int $maxRows = null,
         ?array $preparedOffers = null,
+        bool $includeMedia = true,
     ): array
     {
         $maxRows = $maxRows === null
@@ -658,7 +728,7 @@ final class StorefrontCatalogViewService
                     static fn(array $row): int => (int)$row[Offer::schema_fields_PRODUCT_ID], $page,
                 )));
                 $rows = array_merge($rows, $this->buildPublishedOffers(
-                    $websiteId, $scope, $ids, true, $includeListingDetails, null, $page,
+                    $websiteId, $scope, $ids, true, $includeListingDetails, null, $page, $includeMedia,
                 ));
             } while (count($rows) < $maxRows && count($page) === $pageSize);
 
@@ -741,9 +811,8 @@ final class StorefrontCatalogViewService
         $attributeRows = null;
         if ($includeListingDetails) {
             $attributeStartedAt = hrtime(true);
-            $attributeRows = $this->attributeValues->listExplicitRows(
+            $attributeRows = $this->requestAttributeRows(
                 $websiteId,
-                'product',
                 \array_keys($publishedProductIds),
                 $storeIds,
             );
@@ -756,15 +825,9 @@ final class StorefrontCatalogViewService
                     'listing_details' => $includeListingDetails,
                 ],
             );
-            $this->rememberAttributeRowsForRequest(
-                $websiteId,
-                array_keys($publishedProductIds),
-                $storeIds,
-                $attributeRows,
-            );
         }
         $mediaRows = null;
-        if ($includeListingDetails) {
+        if ($includeMedia && $includeListingDetails) {
             $mediaStartedAt = hrtime(true);
             $mediaRows = $this->media->listByProductIds(
                 $websiteId,
@@ -785,6 +848,7 @@ final class StorefrontCatalogViewService
             $products,
             $attributeRows,
             $mediaRows,
+            includeMedia: $includeMedia,
         );
         RequestLifecycleTrace::recordPhase('product.catalog.snapshots', (hrtime(true) - $phaseStartedAt) / 1e6, ['offers' => count($candidateOffers)]);
         foreach ($candidateOffers as $index => $offer) {
@@ -803,6 +867,10 @@ final class StorefrontCatalogViewService
                 'global_offer_uuid' => $snapshot->offer->globalOfferUuid,
                 'name' => $snapshot->name,
                 'sku' => $snapshot->sku,
+                'slug' => $this->resolvePublicCatalogSlug(
+                    trim((string)($snapshot->slug ?? '')),
+                    trim((string)($snapshot->sku ?? '')),
+                ),
                 'combination_key' => \trim((string)($offer[Offer::schema_fields_COMBINATION_KEY] ?? '')),
                 'is_default' => (bool)($offer[Offer::schema_fields_IS_DEFAULT] ?? false),
                 'requires_shipping' => (bool)($offer[Offer::schema_fields_REQUIRES_SHIPPING] ?? true),
@@ -901,9 +969,11 @@ final class StorefrontCatalogViewService
             }
             $fieldProjectionMs += (hrtime(true) - $itemStartedAt) / 1e6;
             $itemStartedAt = hrtime(true);
-            $rows[$index] = $representativeOnly
-                ? $this->mediaUrls->resolveListingOffer($projected, $scope, $locale)
-                : $this->mediaUrls->resolveOffer($projected, $scope, $locale);
+            $rows[$index] = !$includeMedia
+                ? $projected
+                : ($representativeOnly
+                    ? $this->mediaUrls->resolveListingOffer($projected, $scope, $locale)
+                    : $this->mediaUrls->resolveOffer($projected, $scope, $locale));
             $mediaProjectionMs += (hrtime(true) - $itemStartedAt) / 1e6;
         }
         RequestLifecycleTrace::recordPhase('product.catalog.projection', (hrtime(true) - $phaseStartedAt) / 1e6, [
@@ -942,6 +1012,7 @@ final class StorefrontCatalogViewService
         $row['has_deal'] = false;
         $row['campaign_label'] = '';
         $row['campaign_url'] = '';
+        unset($row['_campaign_frontend_route']);
         $row['eligible_campaigns'] = [];
         $row['deal_discount_type'] = '';
         $row['deal_discount_value'] = 0.0;
@@ -968,8 +1039,18 @@ final class StorefrontCatalogViewService
             $row['compare_at_minor'] = max(0, $view->compareAtMinor);
             $row['has_deal'] = $view->hasDeal;
             $row['campaign_label'] = $view->campaignLabel();
-            $row['campaign_url'] = $view->campaignUrl();
+            $route = $view->campaignRoute();
+            $row['campaign_url'] = $route === '' ? $view->campaignUrl() : '';
+            if ($route !== '') {
+                $row['_campaign_frontend_route'] = $route;
+            }
             $row['eligible_campaigns'] = $view->eligibleCampaigns;
+            foreach ($row['eligible_campaigns'] as &$campaign) {
+                if (trim((string)($campaign['frontend_route'] ?? '')) !== '') {
+                    $campaign['url'] = '';
+                }
+            }
+            unset($campaign);
             $primary = $view->appliedAdjustments[0] ?? null;
             if ($primary instanceof StorefrontPriceAdjustment) {
                 $row['deal_discount_type'] = $primary->type;
@@ -980,6 +1061,42 @@ final class StorefrontCatalogViewService
         }
 
         return $row;
+    }
+
+    /**
+     * Shared catalog rows carry internal routes, never the producer's origin.
+     * Only this request's returned copy gets absolute links; custom URLs remain intact.
+     *
+     * @param list<array<string, mixed>> $rows
+     * @return list<array<string, mixed>>
+     */
+    private function materializeCampaignUrls(array $rows): array
+    {
+        $environment = null;
+        $resolve = function (string $route) use (&$environment): string {
+            $environment ??= \Weline\Framework\Cache\KeyBuilder::environmentHash();
+            return $this->hotCache->rememberForRequest(
+                'product.campaign.frontend_url',
+                serialize([$environment, $route]),
+                static fn(): string => ObjectManager::getInstance(\Weline\Framework\Http\Url::class)->getFrontendUrl($route),
+            );
+        };
+        foreach ($rows as $index => $row) {
+            $route = trim((string)($row['_campaign_frontend_route'] ?? ''));
+            if ($route !== '') {
+                $rows[$index]['campaign_url'] = $resolve($route);
+            }
+            unset($rows[$index]['_campaign_frontend_route']);
+            foreach ($row['eligible_campaigns'] ?? [] as $choiceIndex => $campaign) {
+                $route = trim((string)($campaign['frontend_route'] ?? ''));
+                if ($route !== '') {
+                    $rows[$index]['eligible_campaigns'][$choiceIndex]['url'] = $resolve($route);
+                }
+                unset($rows[$index]['eligible_campaigns'][$choiceIndex]['frontend_route']);
+            }
+        }
+
+        return $rows;
     }
 
     private function resolvePriceAssembler(): ?StorefrontOfferPriceAssemblerInterface
@@ -1034,26 +1151,6 @@ final class StorefrontCatalogViewService
         }
 
         return $rows;
-    }
-
-    /**
-     * @param list<int> $productIds
-     * @param list<int> $storeIds
-     * @param list<array<string, mixed>> $rows
-     */
-    private function rememberAttributeRowsForRequest(
-        int $websiteId,
-        array $productIds,
-        array $storeIds,
-        array $rows,
-    ): void {
-        if (!Context::hasCurrent()) {
-            return;
-        }
-        RequestContext::set(
-            $this->attributeRowsRequestKey($websiteId, $productIds, $storeIds),
-            $rows,
-        );
     }
 
     /** @param list<int> $productIds @param list<int> $storeIds */
@@ -1170,6 +1267,15 @@ final class StorefrontCatalogViewService
                     }
                 }
 
+                // ASCII SKU fallback: products without EAV slug still publish as /product/{sku-slug}.
+                $skuProductId = $this->findPublishedProductIdByPublicSkuSlug($websiteId, $slug);
+                if ($skuProductId > 0) {
+                    $offers = $this->livePublishedOffersForProduct($skuProductId);
+                    if ($offers !== [] && \strtolower(\trim((string)($offers[0]['slug'] ?? ''))) === $slug) {
+                        return $offers;
+                    }
+                }
+
                 // Compatibility fallback for legacy projections that predate product slug EAV rows.
                 foreach ($this->publishedOffers(200) as $offer) {
                     if (\strtolower(\trim((string)($offer['slug'] ?? ''))) !== $slug) {
@@ -1181,6 +1287,54 @@ final class StorefrontCatalogViewService
                 return [];
             }
         );
+    }
+
+    private function findPublishedProductIdByPublicSkuSlug(int $websiteId, string $slug): int
+    {
+        $skuGuess = strtoupper($slug);
+        if ($skuGuess === '') {
+            return 0;
+        }
+
+        try {
+            $product = $this->products->findBySku($websiteId, $skuGuess);
+        } catch (\Throwable) {
+            return 0;
+        }
+        if ($product === null || !(int) ($product->getId() ?? 0)) {
+            return 0;
+        }
+        if ((string) ($product->getData(Product::schema_fields_STATUS) ?? '') !== Product::STATUS_PUBLISHED) {
+            return 0;
+        }
+        $sku = (string) ($product->getData(Product::schema_fields_SKU) ?? '');
+        if ($this->publicSlugFromSku($sku) !== $slug) {
+            return 0;
+        }
+
+        return (int) $product->getId();
+    }
+
+    private function resolvePublicCatalogSlug(string $slug, string $sku): string
+    {
+        $slug = strtolower(trim($slug));
+        if ($slug !== '' && preg_match('#^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$#D', $slug) === 1) {
+            return $slug;
+        }
+
+        return $this->publicSlugFromSku($sku);
+    }
+
+    private function publicSlugFromSku(string $sku): string
+    {
+        $slug = strtolower(trim($sku));
+        $slug = preg_replace('/[^a-z0-9]+/', '-', $slug) ?? '';
+        $slug = trim($slug, '-');
+        if ($slug === '' || preg_match('#^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$#D', $slug) !== 1) {
+            return '';
+        }
+
+        return $slug;
     }
 
     /**

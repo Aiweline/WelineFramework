@@ -47,6 +47,28 @@ final class StorefrontScopeHotCacheTest extends TestCase
         self::assertSame(2, $calls);
     }
 
+    public function testPolicyWaitBudgetAcquiresBeforeSharedRead(): void
+    {
+        $adapter = new InMemoryAdapter();
+        $pool = new CachePool('unit_scope_hot_policy', $adapter, jitterRatio: 0.0);
+        $cacheManager = $this->createMock(CacheManager::class);
+        $cacheManager->method('pool')->willReturn($pool);
+        $cacheManager->method('registerPolicy')->willReturnArgument(0);
+        $flight = new ImmediateSingleFlight();
+        $service = new StorefrontScopeHotCache($cacheManager, null, $flight);
+        $policy = new \Weline\Framework\Cache\CachePolicy(
+            resource: 'unit.heavy',
+            pool: 'unit_scope_hot_policy',
+            scope: 'global',
+            singleFlightWaitMs: 250,
+        );
+
+        self::assertSame('payload', $service->rememberPolicy($policy, 'demo.key', static fn(): string => 'payload'));
+        self::assertSame(250, $flight->lastTimeoutMs);
+        self::assertSame(['acquire', 'release'], $flight->events);
+        self::assertSame(['read'], $adapter->events);
+    }
+
     public function testColdMissDoesNotWaitForAContendedSingleFlightLock(): void
     {
         $adapter = new InMemoryAdapter();
@@ -66,8 +88,12 @@ final class InMemoryAdapter implements CacheAdapterInterface
     /** @var array<string, mixed> */
     private array $data = [];
 
+    /** @var list<string> */
+    public array $events = [];
+
     public function get(string $key): mixed
     {
+        $this->events[] = 'read';
         return $this->data[$key] ?? null;
     }
 
@@ -102,9 +128,13 @@ final class ImmediateSingleFlight implements SingleFlightInterface
 {
     public int $lastTimeoutMs = -1;
 
+    /** @var list<string> */
+    public array $events = [];
+
     public function acquire(string $key, int $timeoutMs = 1500, int $ttlSeconds = 30): ?string
     {
         unset($key, $ttlSeconds);
+        $this->events[] = 'acquire';
         $this->lastTimeoutMs = $timeoutMs;
 
         return 'immediate-token';
@@ -112,6 +142,7 @@ final class ImmediateSingleFlight implements SingleFlightInterface
 
     public function release(string $key, string $token): void
     {
+        $this->events[] = 'release';
         unset($key, $token);
     }
 }

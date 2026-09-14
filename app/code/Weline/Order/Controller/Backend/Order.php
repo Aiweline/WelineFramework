@@ -152,6 +152,8 @@ class Order extends BackendController
         try {
             $order = $record['order'];
             $items = $this->orderService->getOrderItems($orderId);
+            $displayItems = ObjectManager::getInstance(\Weline\Order\Service\BackendOrderLinePresenter::class)
+                ->present($order, $items);
 
             // 支付记录由 Order 空槽 + Weline_Payment 部件/Hook 填充，禁止本控制器直灌。
             
@@ -190,7 +192,7 @@ class Order extends BackendController
             }
             $orderTypeTone = $orderTypeRegistry->resolveBadgeTone($orderTypeCode);
             if ($orderTypeTone === 'muted') {
-                $orderTypeTone = 'secondary';
+                $orderTypeTone = 'info';
             }
             $typePayloadRaw = (string)$order->getData(OrderModel::schema_fields_TYPE_PAYLOAD_JSON);
             $typePayload = [];
@@ -202,7 +204,7 @@ class Order extends BackendController
             }
             
             $this->assign('order', $order);
-            $this->assign('items', $items);
+            $this->assign('items', $displayItems);
             $this->assign('customer_present', $customerPresent);
             $this->assign('order_type', $orderTypeCode);
             $this->assign('order_type_label', $orderTypeRegistry->resolveLabel($orderTypeCode));
@@ -247,9 +249,90 @@ class Order extends BackendController
         try {
             $order = $record['order'];
             $items = $this->orderService->getOrderItems($orderId);
-            
+            $displayItems = ObjectManager::getInstance(\Weline\Order\Service\BackendOrderLinePresenter::class)
+                ->present($order, $items);
+
+            $fulfillmentService = ObjectManager::getInstance(\Weline\Order\Service\FulfillmentService::class);
+            $shipments = $fulfillmentService->getShipments($orderId);
+
+            $historyModel = ObjectManager::getInstance(\Weline\Order\Model\OrderHistory::class);
+            $history = $historyModel->reset()
+                ->where(\Weline\Order\Model\OrderHistory::schema_fields_ORDER_ID, $orderId)
+                ->order(\Weline\Order\Model\OrderHistory::schema_fields_CREATED_AT, 'DESC')
+                ->select()
+                ->fetch()
+                ->getItems();
+
+            $customerPresent = ObjectManager::getInstance(\Weline\Order\Service\BackendOrderListPresenter::class)
+                ->present($order);
+
+            $adjustService = ObjectManager::getInstance(\Weline\Order\Service\BackendOrderCustomerAdjustService::class);
+            $shippingRaw = $order->getData(OrderModel::schema_fields_SHIPPING_ADDRESS);
+            $billingRaw = $order->getData(OrderModel::schema_fields_BILLING_ADDRESS);
+            $shippingMap = \is_array($shippingRaw) ? $shippingRaw : (json_decode((string)$shippingRaw, true) ?: []);
+            $billingMap = \is_array($billingRaw) ? $billingRaw : (json_decode((string)$billingRaw, true) ?: []);
+            if (!\is_array($shippingMap)) {
+                $shippingMap = [];
+            }
+            if (!\is_array($billingMap)) {
+                $billingMap = [];
+            }
+
+            $totals = ObjectManager::getInstance(\Weline\Order\Service\BackendOrderTotalsPresenter::class)
+                ->present($order, $displayItems);
+
+            $currentStatus = (string)$order->getData(OrderModel::schema_fields_STATUS);
+            $availableTransitions = $this->stateMachine->getAvailableTransitions($currentStatus);
+
+            $orderTypeRegistry = ObjectManager::getInstance(\Weline\Order\Service\CommerceOrderTypeRegistry::class);
+            $orderTypeCode = strtolower(trim((string)$order->getData(OrderModel::schema_fields_ORDER_TYPE)));
+            if ($orderTypeCode === '') {
+                $orderTypeCode = \Weline\Order\Service\CommerceOrderTypeRegistry::CODE_TOC;
+            }
+            $orderTypeTone = $orderTypeRegistry->resolveBadgeTone($orderTypeCode);
+            if ($orderTypeTone === 'muted') {
+                $orderTypeTone = 'info';
+            }
+            $typePayloadRaw = (string)$order->getData(OrderModel::schema_fields_TYPE_PAYLOAD_JSON);
+            $typePayload = [];
+            if ($typePayloadRaw !== '') {
+                $decoded = json_decode($typePayloadRaw, true);
+                if (is_array($decoded)) {
+                    $typePayload = $decoded;
+                }
+            }
+
+            $customerId = (int)($order->getData(OrderModel::schema_fields_CUSTOMER_ID) ?? 0);
+            $orderCustomerSelectValue = $customerId > 0 ? (string)$customerId : '';
+            $orderCustomerSelectDisplay = trim(
+                (string)($customerPresent['customer_name'] ?? '')
+                . (
+                    ($customerPresent['customer_email'] ?? '') !== ''
+                        ? (' <' . (string)$customerPresent['customer_email'] . '>')
+                        : ''
+                )
+            );
+
+            $paymentChrome = ObjectManager::getInstance(\Weline\Order\Service\BackendOrderPaymentChromePresenter::class)
+                ->present($order);
+
             $this->assign('order', $order);
-            $this->assign('items', $items);
+            $this->assign('items', $displayItems);
+            $this->assign('customer_present', $customerPresent);
+            $this->assign('order_totals', $totals);
+            $this->assign('shipping_form', $adjustService->addressFormValues($shippingMap));
+            $this->assign('billing_form', $adjustService->addressFormValues($billingMap));
+            $this->assign('payment_chrome', $paymentChrome);
+            $this->assign('orderCustomerSelectValue', $orderCustomerSelectValue);
+            $this->assign('orderCustomerSelectDisplay', $orderCustomerSelectDisplay);
+            $this->assign('order_type', $orderTypeCode);
+            $this->assign('order_type_label', $orderTypeRegistry->resolveLabel($orderTypeCode));
+            $this->assign('order_type_tone', $orderTypeTone);
+            $this->assign('type_payload', $typePayload);
+            $this->assign('shipments', $shipments);
+            $this->assign('history', $history);
+            $this->assign('current_status', $currentStatus);
+            $this->assign('available_transitions', $availableTransitions);
             $updateGrant = $this->objectAuthorizationGuard()->check(ObjectAction::UPDATE, $record['scope']);
             $this->assign(
                 'expected_grant_version',
@@ -262,6 +345,63 @@ class Order extends BackendController
             $this->getMessageManager()->addError($e->getMessage());
             $this->redirect('*/index');
         }
+    }
+
+    /**
+     * 管理订单异步办理面板（发货 / 退款 / 支付沟通片段）。
+     */
+    #[Acl('Weline_Order::order_edit', '编辑订单', 'edit', '编辑订单')]
+    public function panel(): string
+    {
+        $orderId = (int)$this->request->getParam('id');
+        $tab = strtolower(trim((string)$this->request->getParam('tab', 'shipment')));
+        try {
+            $record = $this->requireOrder($orderId, ObjectAction::VIEW);
+        } catch (FrontendQueryException $exception) {
+            $this->request->getResponse()->setCode(403);
+
+            return $exception->getMessage();
+        }
+
+        $returnUrl = 'order/backend/order/edit?id=' . $orderId . '&tab=' . rawurlencode($tab);
+        $presenter = new \Weline\Order\Service\BackendOrderOpsPanelPresenter(
+            ObjectManager::getInstance(\Weline\Order\Service\OrderTradeAdminCommandService::class)
+        );
+        $scope = $record['scope'];
+
+        if ($tab === 'refund') {
+            $payload = $presenter->refundPanel($orderId);
+            $grant = $this->objectAuthorizationGuard()->check(ObjectAction::REFUND, $scope);
+            $grantVersion = $grant->allowed ? $grant->matchedGrantVersion : 0;
+            foreach ($payload['candidates'] as &$row) {
+                $row['expected_grant_version'] = $grantVersion;
+            }
+            unset($row);
+            $this->assign('candidates', $payload['candidates']);
+            $this->assign('cases', $payload['cases']);
+            $this->assign('returnUrl', $returnUrl);
+
+            return $this->template('Weline_Order::templates/Backend/Order/panel/refund.phtml');
+        }
+
+        if ($tab === 'comms' || $tab === 'payment') {
+            $this->assign('orderId', $orderId);
+
+            return $this->template('Weline_Order::templates/Backend/Order/panel/comms.phtml');
+        }
+
+        $payload = $presenter->shipmentPanel($orderId);
+        $grant = $this->objectAuthorizationGuard()->check(ObjectAction::FULFILL, $scope);
+        $grantVersion = $grant->allowed ? $grant->matchedGrantVersion : 0;
+        foreach ($payload['candidates'] as &$row) {
+            $row['expected_grant_version'] = $grantVersion;
+        }
+        unset($row);
+        $this->assign('candidates', $payload['candidates']);
+        $this->assign('progress', $payload['progress']);
+        $this->assign('returnUrl', $returnUrl);
+
+        return $this->template('Weline_Order::templates/Backend/Order/panel/shipment.phtml');
     }
     
     /**
@@ -281,8 +421,19 @@ class Order extends BackendController
                     $record['scope'],
                     $this->expectedGrantVersion(),
                 );
-                $this->orderService->updateOrder($orderId, $data);
-                $message = \__('订单更新成功');
+                $order = $record['order'];
+                $adjustService = ObjectManager::getInstance(\Weline\Order\Service\BackendOrderCustomerAdjustService::class);
+                $shippingRaw = $order->getData(OrderModel::schema_fields_SHIPPING_ADDRESS);
+                $billingRaw = $order->getData(OrderModel::schema_fields_BILLING_ADDRESS);
+                $shippingMap = \is_array($shippingRaw) ? $shippingRaw : (json_decode((string)$shippingRaw, true) ?: []);
+                $billingMap = \is_array($billingRaw) ? $billingRaw : (json_decode((string)$billingRaw, true) ?: []);
+                $payload = $adjustService->normalizeUpdatePayload(
+                    $data,
+                    \is_array($shippingMap) ? $shippingMap : [],
+                    \is_array($billingMap) ? $billingMap : [],
+                );
+                $this->orderService->updateOrder($orderId, $payload);
+                $message = \__('客户调整已保存');
             } else {
                 $scope = ObjectManager::getInstance(OrderObjectScopeService::class)
                     ->fromExplicitCreate($data);
@@ -297,7 +448,7 @@ class Order extends BackendController
             }
             
             $this->getMessageManager()->addSuccess($message);
-            $this->redirect('*/view?id=' . $orderId);
+            $this->redirect('*/edit?id=' . $orderId);
             
         } catch (FrontendQueryException $exception) {
             $this->request->getResponse()->setCode(403);
@@ -307,6 +458,35 @@ class Order extends BackendController
             $this->getMessageManager()->addError($e->getMessage());
             $this->redirect('*/edit' . ($orderId ? '?id=' . $orderId : ''));
         }
+    }
+
+    /**
+     * 仅追加订单备注（不改状态）
+     */
+    #[Acl('Weline_Order::order_update_status', '更新订单状态', 'refresh', '更新订单状态')]
+    public function addComment()
+    {
+        $orderId = (int)$this->request->getPost('order_id');
+        $comment = trim((string)$this->request->getPost('comment', ''));
+        $notifyCustomer = (bool)$this->request->getPost('notify_customer', false);
+
+        try {
+            $record = $this->requireOrder($orderId, ObjectAction::UPDATE);
+            $this->objectAuthorizationGuard()->requireSubmitForQuery(
+                ObjectAction::UPDATE,
+                $record['scope'],
+                $this->expectedGrantVersion(),
+            );
+            $this->orderService->addOrderComment($orderId, $comment, $notifyCustomer);
+            $this->getMessageManager()->addSuccess(\__('备注已添加'));
+        } catch (FrontendQueryException $exception) {
+            $this->request->getResponse()->setCode(403);
+            $this->getMessageManager()->addError($exception->getMessage());
+        } catch (\Exception $e) {
+            $this->getMessageManager()->addError($e->getMessage());
+        }
+
+        $this->redirect('*/edit?id=' . $orderId);
     }
     
     /**
@@ -334,7 +514,7 @@ class Order extends BackendController
             $this->getMessageManager()->addError($e->getMessage());
         }
         
-        $this->redirect('*/view?id=' . $orderId);
+        $this->redirect('*/edit?id=' . $orderId);
     }
     
     /**
@@ -370,7 +550,7 @@ class Order extends BackendController
             $this->getMessageManager()->addError($e->getMessage());
         }
         
-        $this->redirect('*/view?id=' . $orderId);
+        $this->redirect('*/edit?id=' . $orderId);
     }
 
     /**

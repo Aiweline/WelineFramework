@@ -150,6 +150,11 @@ final class SharedSidecarInspector
             return $baseResult;
         }
 
+        $commandLine = $this->resolveIndexedCommandLine($pid, $commandLine);
+        if ($commandLine === '') {
+            return $baseResult;
+        }
+
         return $this->buildReusableResultFromCommandLine(
             $baseResult,
             $pid,
@@ -208,6 +213,14 @@ final class SharedSidecarInspector
         $result['instance_name'] = $this->resolveInstanceName($commandLine);
 
         return $result;
+    }
+
+    private function resolveIndexedCommandLine(int $pid, string $commandLine): string
+    {
+        // 索引可能只保存短进程名；缺实例身份时读取同一 PID 的真实命令，不推断名称。
+        return $this->resolveInstanceName($commandLine) !== ''
+            ? $commandLine
+            : Processer::getProcessCommandLine($pid);
     }
 
     private function buildCommandLineFromIndexedProcessName(string $processName): string

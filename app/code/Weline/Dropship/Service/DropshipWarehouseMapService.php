@@ -392,10 +392,36 @@ class DropshipWarehouseMapService
             $row['remote_label'] = (string)($remoteLabels[$provider . "\0" . $remoteId] ?? ($remoteId !== '' ? $remoteId : '—'));
             $row['local_label'] = (string)($localLabels[$localId] ?? ('#' . $localId));
             $row['country_label'] = $country !== '' ? $country : '—';
+            $row[DropshipScopeWarehouseMap::schema_fields_SHIPPING_ADDRESS_ID]
+                = $this->resolveShippingAddressId($websiteId, $localId);
             $out[] = $row;
         }
 
         return $out;
+    }
+
+    /**
+     * 权威读口：仓→发货地址走 Shipping WarehouseShippingOrigin（禁止长期双写 map 列）。
+     */
+    public function resolveShippingAddressId(int $websiteId, int $localWarehouseId): int
+    {
+        $websiteId = max(0, $websiteId);
+        $localWarehouseId = max(0, $localWarehouseId);
+        if ($localWarehouseId <= 0) {
+            return 0;
+        }
+        if (!interface_exists(\Weline\Shipping\Api\WarehouseShippingOriginInterface::class)) {
+            return 0;
+        }
+        try {
+            /** @var \Weline\Shipping\Api\WarehouseShippingOriginInterface $origins */
+            $origins = ObjectManager::getInstance(\Weline\Shipping\Api\WarehouseShippingOriginInterface::class);
+            $id = $origins->findShippingAddressId($websiteId, $localWarehouseId);
+
+            return $id !== null ? max(0, $id) : 0;
+        } catch (\Throwable) {
+            return 0;
+        }
     }
 
     /**

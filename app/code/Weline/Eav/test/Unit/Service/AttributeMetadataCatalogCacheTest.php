@@ -172,6 +172,29 @@ final class AttributeMetadataCatalogCacheTest extends TestCase
         self::assertSame(1, $this->db->readCount('attribute'), 'Known placement metadata must reuse the attributes already loaded in this context.');
     }
 
+
+    public function testDisplayCatalogReusesLoadedAttributesForEveryPlacement(): void
+    {
+        $this->db->pdo->exec("INSERT INTO attribute_set VALUES (12,4,'second','Second'), (13,4,'third','Third')");
+        $this->db->pdo->exec("INSERT INTO attribute_group VALUES (23,4,12,0,'second','Second'), (24,4,13,0,'third','Third')");
+        $this->db->pdo->exec('INSERT INTO placement VALUES (4,12,23,30), (4,12,23,30), (4,13,24,30)');
+
+        $sets = $this->catalog->catalog($this->entity);
+        self::assertSame([10, 12, 13], array_map(static fn($set): int => $set->id, $sets));
+        foreach ($sets as $set) {
+            self::assertCount(1, $set->groups);
+            self::assertCount(1, $set->groups[0]->attributes, 'Duplicate placement must not duplicate the DTO.');
+            $attribute = $set->groups[0]->attributes[0];
+            self::assertSame(30, $attribute->id);
+            self::assertSame($set->id, $attribute->setId);
+            self::assertSame($set->groups[0]->id, $attribute->groupId);
+            self::assertSame('English color', $attribute->name);
+            self::assertSame(['common'], array_map(static fn($option): string => $option->code, $attribute->options));
+            self::assertSame('English common', $attribute->options[0]->label);
+        }
+        self::assertSame(1, $this->db->readCount('attribute'), 'Display placements must reuse the current entity batch instead of querying each attribute again.');
+    }
+
     public function testOptionScopeFilteringHappensInSqlBeforeRowsAreMaterialized(): void
     {
         $first = $this->catalog->catalogForProduct($this->entity, 101);
@@ -384,6 +407,89 @@ final class AttributeMetadataCatalogCacheTest extends TestCase
         self::assertSame('Updated common', $fresh[0]->groups[0]->attributes[0]->options[0]->label);
         self::assertSame('Updated private A', $fresh[1]->groups[0]->attributes[0]->name);
         self::assertSame(['common', 'only_a'], $this->optionCodes($fresh));
+    }
+
+
+    public function testPrefetchedProductOptionMissesNeverQueryPerProduct(): void
+    {
+        $ids = array_merge([101, 202, 303], range(1000, 1212));
+        $this->catalog->prefetchForProducts($this->entity, $ids);
+        self::assertSame(3, $this->db->readCount('attribute_option'));
+        // The old Product compatibility query must use the same observable SQLite fixture.
+        ObjectManager::setInstance(Option::class, new class($this->db) {
+            private array $filters = [];
+            private int $id = 0;
+            public function __construct(private readonly EavSqliteFixture $db) {}
+            public function clearData(): self { $this->id = 0; return $this; }
+            public function clearQuery(): self { $this->filters = []; return $this; }
+            public function where(string $field, mixed $value): self { $this->filters[] = [$field, $value, '=']; return $this; }
+            public function find(): self { $this->id = (int)($this->db->select('attribute_option', $this->filters, true)[0]['option_id'] ?? 0); return $this; }
+            public function fetch(): self { return $this; }
+            public function getOptionId(): int { return $this->id; }
+        });
+        $entity = (new ReflectionClass(\Weline\Product\Model\ProductCatalogAttributeEntity::class))->newInstanceWithoutConstructor();
+        $resolver = new \Weline\Product\Service\StorefrontEavLabelResolver($this->catalog, $entity);
+        foreach ($ids as $id) {
+            $labels = $resolver->forProduct($id);
+            self::assertSame('绣花, 印染', $labels->resolve('plain_text', '绣花, 印染'));
+            self::assertSame('unknown-code', $labels->canonicalOptionId('plain_text', 'unknown-code'));
+        }
+        self::assertSame(3, $this->db->readCount('attribute_option'), 'Known empty private rows and shared misses must not produce per-product code queries.');
+    }
+
+    public function testProductOptionIdentityIncludesUnplacedRowsAndKeepsScopeAndLocale(): void
+    {
+        $this->db->pdo->exec("INSERT INTO attribute_option VALUES (250,4,999,101,'legacy','Legacy source'), (251,5,999,101,'foreign','Other entity'), (252,4,999,202,'legacy','Other private'), (253,4,999,101,'common','Private duplicate')");
+        $this->db->pdo->exec("INSERT INTO option_local VALUES (250,'en_US','Legacy translated')");
+        $this->catalog->prefetchForProducts($this->entity, [101, 202, 303]);
+        $reads = $this->db->readCount('attribute_option');
+        $find = fn(int $id, string $token) => $this->catalog->productOptionIdentity($this->entity, $id, $token);
+        self::assertSame(250, $find(101, 'legacy')->id);
+        self::assertSame('Legacy translated', $find(101, '250')->label);
+        self::assertSame(250, $find(101, ' LEGACY ')->id);
+        self::assertSame(252, $find(202, 'legacy')->id);
+        self::assertSame(100, $find(101, 'common')->id, 'Shared code takes precedence over private compatibility rows.');
+        self::assertNull($find(303, 'legacy'));
+        self::assertNull($find(101, '252'));
+        self::assertNull($find(101, 'foreign'));
+        self::assertSame($reads, $this->db->readCount('attribute_option'));
+
+        State::setRequestLanguageOverride('fr_FR');
+        self::assertSame('Legacy source', $find(101, '250')->label);
+        self::assertSame($reads, $this->db->readCount('attribute_option'), 'Locale changes reuse raw scope rows.');
+        $this->db->pdo->exec("UPDATE attribute_option SET code='new-legacy',value='Updated source' WHERE option_id=250");
+        $this->newRequest('fr_FR');
+        self::assertNull($find(101, 'legacy'));
+        self::assertSame('Updated source', $find(101, 'new-legacy')->label, 'The same catalog instance must see changed data in the next request.');
+    }
+
+    public function testProductOptionIdentityLoadsOnlyRequestedRowsAndRetriesFailedRead(): void
+    {
+        self::assertSame(101, $this->catalog->productOptionIdentity($this->entity, 101, 'only_a')->id);
+        self::assertSame(2, $this->db->readCount('attribute_option'));
+        self::assertNull($this->catalog->productOptionIdentity($this->entity, 101, 'missing'));
+        self::assertSame(4, $this->db->readCount('attribute_option'));
+
+        $optionReads = array_values(array_filter(
+            $this->db->reads,
+            static fn(array $read): bool => $read['table'] === 'attribute_option',
+        ));
+        self::assertStringContainsString('"code" = ?', $optionReads[0]['sql']);
+        self::assertStringContainsString('"code" = ?', $optionReads[1]['sql']);
+        self::assertSame([], $optionReads[0]['rows']);
+        self::assertSame([101], array_column($optionReads[1]['rows'], 'option_id'));
+
+        $this->newRequest('en_US');
+        $this->db->pdo->exec('ALTER TABLE attribute_option RENAME TO unavailable_options');
+        try {
+            $this->catalog->productOptionIdentity($this->entity, 101, 'only_a');
+            self::fail('An unavailable source must not be memoized as an authoritative miss.');
+        } catch (\PDOException) {
+            self::assertTrue(true);
+        } finally {
+            $this->db->pdo->exec('ALTER TABLE unavailable_options RENAME TO attribute_option');
+        }
+        self::assertSame(101, $this->catalog->productOptionIdentity($this->entity, 101, 'only_a')->id);
     }
 
     private function optionCodes(array $sets): array

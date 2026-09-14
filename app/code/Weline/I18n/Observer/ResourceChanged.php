@@ -46,17 +46,37 @@ final class ResourceChanged implements AsyncObserverInterface
 
         $connection = $this->dictionary->getConnection();
         $this->namespaces->assertConnectionAffinity($connection);
-        $this->transactions->run($connection, function () use ($connection): void {
-            // This observer is critical and synchronous: the root version is
-            // committed (or rolled back) with the source mutation. bumpMany
-            // deduplicates repeated dictionary writes in the owner transaction.
-            $version = $this->namespaces->bumpMany([DictionaryCacheNamespace::NAMESPACE]);
-            $this->transactions->afterCommit(
-                $connection,
-                'i18n.namespace.publish',
-                fn() => $this->broadcaster->broadcastCommitted($version['authority_clock'], $version['changes']),
-            );
+        $this->transactions->run($connection, function () use ($change): void {
+            // The critical observer commits generations with the source write.
+            // Repository publication receives every change in the owner transaction.
+            $this->namespaces->bumpMany($this->affectedNamespaces($change), [
+                'i18n.namespace.publish' => fn(int $clock, array $changes) =>
+                    $this->broadcaster->broadcastCommitted($clock, $changes),
+            ]);
         });
+    }
+
+    /** @return list<string> */
+    private function affectedNamespaces(ResourceChange $change): array
+    {
+        $root = DictionaryCacheNamespace::NAMESPACE;
+        if (!in_array($change->resourceType(), ['i18n_dictionary', 'i18n_pack'], true)) {
+            return [$root];
+        }
+        $impact = $change->toArray()['impact']['namespaces'] ?? [];
+        $paths = array_values(array_filter(
+            is_array($impact) ? $impact : [],
+            static fn(mixed $path): bool => is_string($path)
+                && ($path === $root || str_starts_with($path, $root . '/')),
+        ));
+        // Only the explicit content + locale contract narrows invalidation.
+        // Legacy events, empty scope and global clear retain parent invalidation.
+        if (in_array($root, $paths, true)
+            || !in_array(DictionaryCacheNamespace::CONTENT_NAMESPACE, $paths, true)
+            || count($paths) < 2) {
+            return [$root];
+        }
+        return $paths;
     }
 
     private function affectsI18n(ResourceChange $change): bool

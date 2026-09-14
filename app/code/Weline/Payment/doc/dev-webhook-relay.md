@@ -1,17 +1,43 @@
 # Payment Dev Webhook Relay
 
-Provider 无关的开发环境 Webhook 转发：任意本框架线上站（开启中继门禁）固定接收 Provider Webhook；**本机后台静默 SSE 客户端**拉取事件并按官方 inbound 重放。无需打开浏览器终端。
+Provider 无关的开发环境 Webhook 转发：任意本框架线上站（开启中继门禁）固定接收 Provider / 货源 Webhook；**本机后台静默 SSE 客户端**拉取事件并重放。无需打开浏览器终端。
+
+## 何时开启
+
+| 场景 | 是否开启 |
+|------|----------|
+| 本机要收 PayPal 等支付 Provider Webhook，对方只能打公网生产站 | **开**（支付） |
+| 本机要收万能货源 / CJ 回调，对方只能打公网生产站 | **开**（与支付同一开关） |
+| 纯 Mock、或 Provider/CJ 已能直达本机公网入口 | **不必开** |
+
+万能货源 **不另建** 中继：开关与本机 worker 都在 `payment/backend/dev-relay`；货源说明页 `dropship/backend/dev-relay`。
 
 ## 启用（后台统一配置）
 
 **不要**在 `app/etc/env.php` 写 `payment.dev_relay`。到后台控制台开关即可：
 
-1. 打开 `payment/backend/dev-relay`（支付钩子 / 开发 Webhook 转发）
+1. 打开 `payment/backend/dev-relay`（支付 → 开发 Webhook 转发）
 2. 勾选 **启用开发 Webhook 中继**
 3. 生产站若作中转主机，勾选 **允许本生产站作为线上中转主机**（开启时会自动带上）
 4. 点击 **保存配置**
 
 配置写入站点 `var/payment-dev-relay-settings.json`（控制台「保存配置」）。若历史上曾用 env 启用，首次读配置会自动迁入该文件。
+
+## 支付怎么用
+
+1. **生产站**：启用 + 允许生产中转 → 保存；复制「站点地址」与「用户 API Token」
+2. **本机**：启用并保存（可预填线上地址）→「本机静默中继」填线上完整 URL + Token → **开启中继**（徽章「运行中」）
+3. Provider 登记 **生产** 官方回调，例如：  
+   `https://www.aiweline.com/payment/frontend/callback/notify?endpoint_code={method}.sandbox.default`  
+   **勿**填本机 `*.test.weline.com`，**勿**填 `/payment/dev-relay/*`
+4. 触发沙盒/正式支付事件：线上 inbox 先落库 → 本机 worker 拉取后按官方 inbound 重放
+
+## 万能货源怎么用
+
+1. 先按「支付怎么用」把生产中转 + 本机静默中继跑起来（同一 worker）
+2. 打开 `dropship/backend/dev-relay`，复制 CJ 沙盒/正式生产回调 URL，登记到 CJ  
+   形态：`https://www.aiweline.com/dropship/frontend/callback/notify?endpoint_code=cj.sandbox.default`
+3. CJ 推送后：生产 `callback/notify` 落 inbox；若本站是支付中转主机，则以 `dropship:{id}` 注入同一 EventStore；本机 worker **直接 POST** 本机 `.../dropship/frontend/callback/notify?endpoint_code=...`（不是支付 inbound JSON 包装）
 
 ## 操作流程（推荐：本机面板观察）
 
@@ -22,7 +48,7 @@ Provider 无关的开发环境 Webhook 转发：任意本框架线上站（开�
 - 本机 + 线上均打开 `payment/backend/dev-relay` → 勾选启用 → **保存配置**
 - 线上需勾选「允许本生产站作为线上中转主机」
 
-### 2. 本机面板一键探测（推荐）
+### 2. 本机面板一键探测（推荐，支付）
 
 1. 任意本机页输入 `weline` → 最右侧 Tab **高级维护** → 二级 Tab **DevRelay 中继**
 2. 面板顶部 **Provider Webhook** 区块：复制线上官方回调 URL，粘贴到 PayPal（或其它 Provider）Developer Webhooks  
@@ -32,7 +58,7 @@ Provider 无关的开发环境 Webhook 转发：任意本框架线上站（开�
 3. 点 **发送探测**（无需填 Token、无需打开线上 demo）
 4. 面板自动：补全已存凭证 → 保活中继 → 发线上探针 → 展示本机 SSE 重放结果
 
-本机「静默中继」启停始终可点：点 **开启中继** 会自动打开中继开关，并读取 JSON 请求体中的线上地址与 Token（也可回落已记住凭证）。首次需填写线上用户 API Token（会记到本机 `var/payment-dev-relay-local.secret.json`，关闭中继后仍保留）；之后可留空再开。
+本机「静默中继」启停始终可点：点 **开启中继** 会自动打开中继开关，并读取 JSON 请求体中的线上地址与 Token（也可回落已记住凭证）。首次需填写线上用户 API Token（会记到本机 `var/payment-dev-relay-local.secret.json`，关闭中继后仍保留）；之后可留空再开。空 Token 首次开启会在按钮上方显示红色告警。
 
 ### 3. CLI（可选）
 
@@ -72,24 +98,22 @@ php bin/w payment:devrelay:stop
 
 站点地址必须是完整 URL（`https://host` 或 `https://host/subpath`），不要只填裸域名。
 
-## 货源（Dropship / CJ）复用
-
-万能货源 **不另建** SSE/会话：生产收 `dropship/frontend/callback/notify` 后，若本站已是支付 DevRelay 线上中转主机，则把 inbox 以 `dropship:{id}` 注入同一 EventStore；本机静默 worker 拉取后 **直接 POST** 本机 `.../dropship/frontend/callback/notify?endpoint_code=...`（不是支付 inbound JSON 包装）。
-
-登记到 CJ 的回调必须是生产 URL，例如：
-
-`https://www.aiweline.com/dropship/frontend/callback/notify?endpoint_code=cj.sandbox.default`
-
-说明页：`dropship/backend/dev-relay`（开关仍在 `payment/backend/dev-relay`）。
-
 ## 约束
 
 - 线上 **不会** 直接 POST 到 `*.test.weline.com`；由本机 worker 拉 SSE 后重放
 - PayPal 2xx 不等待本机；本机离线时线上 inbox 仍写入
 - 出站 API 默认本机直连 Provider；`online_proxy` 时经线上代发
 
-## PayPal 验收
+## 验收
+
+### 支付
 
 1. 线上登记 Webhook → inbox 有记录
 2. 本机 worker running → 本机 inbox 出现相同 `provider_event_id`
 3. `payment:devrelay:stop` 后不再重放
+
+### 万能货源
+
+1. CJ 登记生产 notify URL → 生产 inbox 有记录
+2. 本机 worker running → 本机 `dropship/frontend/callback/notify` 被重放
+3. 说明页 `dropship/backend/dev-relay` 状态与支付开关一致

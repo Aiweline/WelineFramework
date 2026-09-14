@@ -86,6 +86,31 @@ stage → definition → activate → start → trusted status；只允许同一
 不能写成“所有现有项目已携带包”。未完成该发布集成，或发行工程没有注入启用公钥时，
 项目目录会保持缺包/空信任库，生产 `auto` 必须 fail closed 到纯 WLS，`gateway` 必须失败。
 
+### 2.1a 项目发行包 CDN 拉取（opt-in）
+
+默认不联网。管理员可显式拉取：
+
+```bash
+php bin/w server:gateway:package:fetch [--target=darwin-arm64] [--force]
+```
+
+合同：
+
+- CDN 布局与 CI staging 同构：`{base}/{target}/manifest.json`、`manifest.sig` 与
+  `manifest.components` 中的相对路径文件。
+- 拉取前必须存在至少一把 `trusted-release-keys.json` 中 `enabled=true` 的 Ed25519
+  公钥；空库报 `TRUST_UNAVAILABLE`，不下载。
+- 写入 `var/tmp` 暂存树 → `HostGatewayPackageManager::verifyPackage` 且
+  `release_ready=true` → 原子发布到 `extend/server/wls-gateway/{target}/`。
+- 半包/坏签删除暂存；`--force` 可替换已损坏的最终树。
+- 本命令**不**安装宿主网关；宿主安装仍用 `server:gateway:install --package=... --confirm`。
+- 仅当 `wls.edge.gateway.package_fetch=true` 时，`server:start --edge=auto|gateway`
+  才可在宿主 `package-bootstrap.lock` **之外**自动执行同等拉取；锁内仍只读本地包。
+
+CDN 上传清单：将 `wls-gateway-project-distribution-*` artifact 中
+`extend/server/wls-gateway/<target>/` 原样同步到 `{package_base_url}/<target>/`，
+并确保发行物已注入与 `signing_key_id` 匹配的启用公钥。
+
 ### 2.2 稳定 Launcher 整代重引导
 
 普通 A/B 升级只能在已冻结的宿主 Launcher 摘要下切换运行时槽位；

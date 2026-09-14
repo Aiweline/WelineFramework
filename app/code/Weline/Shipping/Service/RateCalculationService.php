@@ -12,7 +12,10 @@ declare(strict_types=1);
 namespace Weline\Shipping\Service;
 
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Shipping\Exception\ShippingRateUnavailableException;
 use Weline\Shipping\Model\RateTemplate;
+use Weline\Shipping\Service\ChargeableWeightService;
+use Weline\Shipping\Service\RateBracketValidator;
 
 /**
  * 费用计算服务
@@ -110,6 +113,7 @@ class RateCalculationService
         RateTemplate $template,
         array $lines,
         int $currencyPrecision = 2,
+        ?int $subtotalMinorInTemplateCurrency = null,
     ): int {
         if ($currencyPrecision < 0 || $currencyPrecision > 6) {
             throw new \InvalidArgumentException(__('币种精度非法'));
@@ -122,16 +126,29 @@ class RateCalculationService
         $weightMinor = 0;
         $volumeMinor = 0;
         foreach ($lines as $line) {
+            if (!(bool)($line['requires_shipping'] ?? true)) {
+                continue;
+            }
             $quantity = $this->checkedAdd($quantity, max(0, (int)($line['qty_minor'] ?? 0)));
             $weightMinor = $this->checkedAdd($weightMinor, max(0, (int)($line['weight_minor'] ?? 0)));
             $volumeMinor = $this->checkedAdd($volumeMinor, max(0, (int)($line['volume_minor'] ?? 0)));
+        }
+
+        $type = (string)$template->getData(RateTemplate::schema_fields_CALCULATION_TYPE);
+        if ($type === RateTemplate::CALC_TYPE_WEIGHT_TABLE || $type === RateTemplate::CALC_TYPE_PRICE_TABLE) {
+            return $this->calculateTableMinor(
+                $template,
+                $lines,
+                $type,
+                $currencyPrecision,
+                $subtotalMinorInTemplateCurrency,
+            );
         }
 
         $fee = $this->decimalToMinor(
             (string)$template->getData(RateTemplate::schema_fields_BASE_FEE),
             $currencyPrecision,
         );
-        $type = (string)$template->getData(RateTemplate::schema_fields_CALCULATION_TYPE);
         $fee = match ($type) {
             RateTemplate::CALC_TYPE_FIXED => $fee,
             RateTemplate::CALC_TYPE_QUANTITY => $this->checkedAdd(
@@ -174,6 +191,67 @@ class RateCalculationService
         };
 
         return max(0, $fee);
+    }
+
+    /**
+     * @param list<array<string,mixed>> $lines
+     */
+    private function calculateTableMinor(
+        RateTemplate $template,
+        array $lines,
+        string $type,
+        int $currencyPrecision,
+        ?int $subtotalMinorInTemplateCurrency,
+    ): int {
+        $maxWeight = $template->getData(RateTemplate::schema_fields_MAX_WEIGHT_KG);
+        $maxWeightKg = $maxWeight === null || $maxWeight === '' ? null : (float)$maxWeight;
+        $validator = new RateBracketValidator();
+        $brackets = $validator->normalizeAndValidate($template->getRateBrackets(), $maxWeightKg);
+
+        if ($type === RateTemplate::CALC_TYPE_WEIGHT_TABLE) {
+            $summary = (new ChargeableWeightService())->summarize($lines);
+            if ($summary['missing_weight'] || $summary['weight_kg'] <= 0) {
+                throw new ShippingRateUnavailableException('missing_weight');
+            }
+            if ($maxWeightKg !== null && $summary['weight_kg'] > $maxWeightKg + 0.0001) {
+                throw new ShippingRateUnavailableException('over_max_weight');
+            }
+            $matchKey = $summary['weight_kg'];
+        } else {
+            $subtotal = $subtotalMinorInTemplateCurrency;
+            if ($subtotal === null) {
+                $subtotal = 0;
+                foreach ($lines as $line) {
+                    if (!(bool)($line['requires_shipping'] ?? true)) {
+                        continue;
+                    }
+                    $row = array_key_exists('row_total_minor', $line)
+                        ? (int)$line['row_total_minor']
+                        : (int)($line['qty_minor'] ?? 0) * (int)($line['unit_price_minor'] ?? 0);
+                    $subtotal = $this->checkedAdd($subtotal, max(0, $row));
+                }
+            }
+            // price_table key in major units of template currency
+            $matchKey = $subtotal / (10 ** $currencyPrecision);
+        }
+
+        foreach ($brackets as $i => $bracket) {
+            $min = (float)$bracket['min'];
+            $max = $bracket['max'];
+            $isLast = $i === array_key_last($brackets);
+            if ($max === null) {
+                $inRange = $matchKey >= $min;
+            } elseif ($isLast) {
+                $inRange = $matchKey >= $min && $matchKey <= (float)$max + 0.0000001;
+            } else {
+                $inRange = $matchKey >= $min && $matchKey < (float)$max;
+            }
+            if ($inRange) {
+                return $this->decimalToMinor((string)$bracket['price'], $currencyPrecision);
+            }
+        }
+
+        throw new ShippingRateUnavailableException('no_bracket_match');
     }
 
     /**

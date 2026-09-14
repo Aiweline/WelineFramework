@@ -1,0 +1,195 @@
+<?php
+/**
+ * StoreMusic: simple floating portrait player — entrance music (进店音乐).
+ *
+ * Hook: Weline_Theme::frontend::layouts::base::body-end
+ *
+ * @hook-priority 190
+ * @hook-sort-order 8
+ * @hook-solo false
+ */
+
+use Weline\Framework\Manager\ObjectManager;
+use Weline\StoreMusic\Service\StoreMusicSettings;
+
+$requestPathRaw = (string)($this->request->getPathInfo() ?: \w_env_request_uri());
+$requestPathParsed = parse_url($requestPathRaw, PHP_URL_PATH);
+$requestPath = strtolower((string)(is_string($requestPathParsed) && $requestPathParsed !== '' ? $requestPathParsed : $requestPathRaw));
+$isAccountRoute = $requestPath === '/customer/account'
+    || $requestPath === 'customer/account'
+    || str_contains($requestPath, '/customer/account/');
+$isWorkspacePreview = (string)$this->request->getGet('visual_editor', '') === '1'
+    || (string)$this->request->getGet('preview', '') === '1'
+    || str_contains($requestPath, 'workspace-preview');
+$isBackend = str_contains($requestPath, '/admin');
+if ($isAccountRoute || $isWorkspacePreview || $isBackend) {
+    return;
+}
+
+/** @var StoreMusicSettings $settings */
+$settings = ObjectManager::getInstance(StoreMusicSettings::class);
+if (!$settings->isWidgetActive()) {
+    return;
+}
+
+$payload = $settings->frontendPayload();
+$websiteId = '0';
+$storeId = '0';
+try {
+    if (class_exists(\Weline\Framework\Runtime\RequestContext::class)) {
+        $websiteId = (string)\Weline\Framework\Runtime\RequestContext::getWelineWebsiteId();
+        $storeId = (string)\Weline\Framework\Runtime\RequestContext::getWelineStoreId();
+    }
+} catch (\Throwable) {
+    // Soft: ids only affect localStorage key names.
+}
+
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$configJson = $esc((string)json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+$defaultVol = (int)$payload['default_volume'];
+?>
+<link rel="stylesheet"
+      href="@static(Weline_StoreMusic::css/store-music.css)&v=20260914-storemusic5"
+      data-no-extract="true"
+      data-weline-store-music="1">
+<canvas id="weline-store-music-wave"
+        class="w-store-music-wave"
+        data-store-music-wave
+        hidden
+        aria-hidden="true"></canvas>
+<aside id="weline-store-music"
+       class="w-store-music w-store-music--simple"
+       data-store-music
+       data-weline-load="storeMusic"
+       data-store-music-config="<?= $configJson ?>"
+       data-website-id="<?= $esc($websiteId) ?>"
+       data-store-id="<?= $esc($storeId) ?>"
+       data-testid="store-music-widget">
+    <span class="w-store-music__sr" data-store-music-i18n-need-consent hidden><lang>请先同意营销 Cookie 后再播放</lang></span>
+    <span class="w-store-music__sr" data-store-music-i18n-wave-unavailable hidden><lang>波形不可用</lang></span>
+    <span class="w-store-music__sr" data-store-music-i18n-wave-on hidden><lang>开启波形</lang></span>
+    <span class="w-store-music__sr" data-store-music-i18n-wave-off hidden><lang>关闭波形</lang></span>
+    <span class="w-store-music__sr" data-store-music-i18n-playing hidden><lang>播放中</lang></span>
+    <span class="w-store-music__sr" data-store-music-i18n-idle hidden><lang>进店音乐</lang></span>
+    <span class="w-store-music__sr" data-store-music-i18n-format-unsupported hidden><lang>当前浏览器暂不支持此音频格式</lang></span>
+    <span class="w-store-music__sr" data-store-music-i18n-play-error hidden><lang>音频加载失败，请换一首曲目或格式</lang></span>
+    <span class="w-store-music__sr" data-store-music-i18n-dismissed hidden><lang>已关闭自动播放，点击播放可重新开启</lang></span>
+    <span class="w-store-music__sr" data-store-music-i18n-other-tab hidden><lang>已在其他页面播放</lang></span>
+    <span class="w-store-music__sr" data-store-music-i18n-playlist hidden><lang>播放列表</lang></span>
+
+    <div class="w-store-music__shell" data-store-music-shell>
+        <div class="w-store-music__entry">
+            <button type="button"
+                    class="w-store-music__avatar"
+                    data-store-music-toggle
+                    data-testid="store-music-mascot"
+                    aria-expanded="false"
+                    aria-controls="weline-store-music-panel"
+                    title="@lang(进店氛围音乐)">
+                <img class="w-store-music__face"
+                     src="@static(Weline_StoreMusic::images/guofeng-cameo.png)&v=20260914-simple2"
+                     alt="@lang(进店音乐)"
+                     width="96"
+                     height="120"
+                     decoding="async"
+                     loading="lazy"/>
+            </button>
+            <button type="button"
+                    class="w-store-music__hint"
+                    data-store-music-toggle
+                    data-store-music-hint
+                    data-testid="store-music-hint"
+                    hidden
+                    aria-controls="weline-store-music-panel">
+                <lang>点开选曲</lang>
+            </button>
+        </div>
+
+        <div id="weline-store-music-panel"
+             class="w-store-music__panel"
+             data-store-music-panel
+             hidden
+             data-testid="store-music-panel">
+            <div class="w-store-music__head">
+                <div class="w-store-music__meta">
+                    <span class="w-store-music__title"
+                          data-store-music-title
+                          data-testid="store-music-track-title"><lang>进店音乐</lang></span>
+                    <span class="w-store-music__intro"
+                          data-store-music-intro
+                          data-testid="store-music-track-intro"><lang>选择曲目聆听</lang></span>
+                </div>
+                <button type="button"
+                        class="w-store-music__dismiss"
+                        data-store-music-close
+                        data-testid="store-music-close"
+                        aria-label="@lang(关闭选曲)"
+                        title="@lang(关闭选曲)">×</button>
+            </div>
+
+            <div class="w-store-music__transport" role="group" aria-label="@lang(播放控制)">
+                <button type="button"
+                        class="w-store-music__btn w-store-music__btn--prev"
+                        data-store-music-prev
+                        data-testid="store-music-prev"
+                        aria-label="@lang(上一首)"
+                        hidden>‹</button>
+                <button type="button"
+                        class="w-store-music__btn w-store-music__btn--play"
+                        data-store-music-play
+                        data-testid="store-music-play"
+                        aria-label="@lang(播放)">▶</button>
+                <button type="button"
+                        class="w-store-music__btn w-store-music__btn--pause"
+                        data-store-music-pause
+                        data-testid="store-music-pause"
+                        aria-label="@lang(停止)"
+                        title="@lang(停止播放)"
+                        hidden>❚❚</button>
+                <button type="button"
+                        class="w-store-music__btn w-store-music__btn--next"
+                        data-store-music-next
+                        data-testid="store-music-next"
+                        aria-label="@lang(下一首)"
+                        hidden>›</button>
+            </div>
+
+            <label class="w-store-music__vol">
+                <span class="w-store-music__sr"><lang>音量</lang></span>
+                <input type="range"
+                       min="0"
+                       max="100"
+                       step="1"
+                       value="<?= $defaultVol ?>"
+                       data-store-music-volume
+                       data-testid="store-music-volume">
+                <span class="w-store-music__vol-pct" data-store-music-volume-pct><?= $defaultVol ?>%</span>
+            </label>
+
+            <div class="w-store-music__compartment" data-store-music-compartment hidden>
+                <div class="w-store-music__compartment-head">
+                    <span class="w-store-music__compartment-label"><lang>播放列表</lang></span>
+                    <span class="w-store-music__compartment-count" data-store-music-playlist-count></span>
+                    <label class="w-store-music__wave" title="@lang(开启波形)">
+                        <input type="checkbox"
+                               data-store-music-wave-toggle
+                               data-testid="store-music-wave-toggle"
+                               <?= !empty($payload['waveform_default']) ? 'checked' : '' ?>>
+                        <span class="w-store-music__wave-face" aria-hidden="true">〰</span>
+                        <span class="w-store-music__sr" data-store-music-wave-label><lang>开启波形</lang></span>
+                    </label>
+                </div>
+                <ul class="w-store-music__playlist"
+                    data-store-music-playlist
+                    data-testid="store-music-playlist"
+                    role="listbox"
+                    aria-label="@lang(播放列表)"></ul>
+            </div>
+
+            <p class="w-store-music__status"
+               data-store-music-status
+               data-testid="store-music-status"
+               hidden></p>
+        </div>
+    </div>
+</aside>

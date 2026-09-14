@@ -28,9 +28,37 @@ final class AttributeValueRepository extends AbstractWebsiteShardRepository
         ProductShardProvisioner $provisioner,
         private readonly CatalogOverlayResolver $resolver = new CatalogOverlayResolver(),
         ?callable $modelFactory = null,
+        private readonly ?\Weline\Product\Api\ProductSearchProjectionMutationCoordinatorInterface $projectionMutations = null,
     ) {
         parent::__construct($provisioner);
         $this->modelFactory = $modelFactory;
+    }
+
+    /** Run one product attribute batch through the existing committed catalog change. */
+    public function mutateProductAttributes(
+        int $websiteId,
+        int $productId,
+        int $storeId,
+        callable $mutation,
+    ): mixed {
+        $this->assertWebsite($websiteId);
+        $this->assertStoreId($storeId);
+        $model = $this->newModel($websiteId);
+        $projectionMutations = $this->projectionMutations ?? ObjectManager::getInstance(
+            \Weline\Product\Api\ProductSearchProjectionMutationCoordinatorInterface::class,
+        );
+        $targetStoreId = $storeId === AttributeValue::WEBSITE_STORE_ID ? null : $storeId;
+
+        return $projectionMutations->execute(
+            $model->getConnection(),
+            $websiteId,
+            $targetStoreId === null
+                ? \Weline\Product\Api\ProductSearchProjectionMutationCoordinatorInterface::TARGET_PRODUCT
+                : \Weline\Product\Api\ProductSearchProjectionMutationCoordinatorInterface::TARGET_STORE_PRODUCT,
+            $productId,
+            $targetStoreId,
+            $mutation,
+        );
     }
 
     /**

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Filters\Service;
 
 use Weline\Framework\App\State;
+use Weline\Framework\Runtime\RequestContext;
 
 /**
  * Translate storefront facet chrome/values using Weline_Filters i18n CSV.
@@ -16,6 +17,15 @@ final class StorefrontFacetTranslator
 {
     /** @var array<string, array<string, string>> */
     private static array $dictionaries = [];
+
+    /** @var array<string, int> */
+    private static array $dictionaryMtimes = [];
+
+    public static function clearDictionaries(): void
+    {
+        self::$dictionaries = [];
+        self::$dictionaryMtimes = [];
+    }
 
     public function translate(string $text, ?string $locale = null): string
     {
@@ -41,6 +51,13 @@ final class StorefrontFacetTranslator
     private function localeCandidates(?string $locale = null): array
     {
         $primary = trim(str_replace('-', '_', (string)($locale ?? '')));
+        if ($primary === '') {
+            try {
+                $primary = trim(str_replace('-', '_', (string)RequestContext::getWelineUserLang()));
+            } catch (\Throwable) {
+                $primary = '';
+            }
+        }
         if ($primary === '') {
             try {
                 $primary = trim(str_replace('-', '_', (string)State::getLang()));
@@ -73,18 +90,26 @@ final class StorefrontFacetTranslator
      */
     private function dictionary(string $locale): array
     {
-        if (isset(self::$dictionaries[$locale])) {
+        $path = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'i18n' . DIRECTORY_SEPARATOR . $locale . '.csv';
+        $mtime = is_file($path) ? (int)@filemtime($path) : 0;
+        if (
+            isset(self::$dictionaries[$locale])
+            && (self::$dictionaryMtimes[$locale] ?? -1) === $mtime
+        ) {
             return self::$dictionaries[$locale];
         }
 
-        $path = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'i18n' . DIRECTORY_SEPARATOR . $locale . '.csv';
         $dict = [];
         if (!is_file($path)) {
+            self::$dictionaryMtimes[$locale] = $mtime;
+
             return self::$dictionaries[$locale] = $dict;
         }
 
         $handle = @fopen($path, 'rb');
         if (!is_resource($handle)) {
+            self::$dictionaryMtimes[$locale] = $mtime;
+
             return self::$dictionaries[$locale] = $dict;
         }
 
@@ -104,6 +129,8 @@ final class StorefrontFacetTranslator
         } finally {
             fclose($handle);
         }
+
+        self::$dictionaryMtimes[$locale] = $mtime;
 
         return self::$dictionaries[$locale] = $dict;
     }

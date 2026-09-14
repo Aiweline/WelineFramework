@@ -135,6 +135,7 @@ class SchemaDiffStage extends AbstractStage
         // ── Pass 1: 收集所有需要 diff 的表及其声明 schema ──
         /** @var array<string, \Weline\Framework\Database\Schema\TableSchema> $declaredSchemas */
         $declaredSchemas = [];
+        $modelDeclarations = [];
 
         foreach ($modules as $moduleData) {
             $module = new Module($moduleData);
@@ -183,36 +184,14 @@ class SchemaDiffStage extends AbstractStage
                     continue;
                 }
                 $processedTableKey = $this->normalizeProcessedTableKey($declared->tableName);
-                if (isset($processedTables[$processedTableKey])) {
-                    continue;
-                }
-                $processedTables[$processedTableKey] = true;
-                $declaredSchemas[$declared->tableName] = $declared;
-                $checkpointTableName = SchemaCheckpointIdentity::tableName(
-                    $declared->tableName,
-                    $this->checkpointRuntimeQualifiers,
-                );
-                $checkpointSource = SchemaCheckpointIdentity::qualifiedTableName($declared->tableName);
-                $this->registerModuleCheckpointSource(
-                    $module->getName(),
-                    $checkpointTableName,
-                    $checkpointSource,
-                );
-                $this->moduleSchemaFingerprints[$module->getName()][$checkpointTableName]
-                    = $this->schemaFingerprint($declared, true);
-                $historicalTableName = SchemaCheckpointIdentity::legacyTableName(
-                    $declared->tableName,
-                    $this->checkpointRuntimeQualifiers,
-                );
-                $this->moduleSchemaHistoricalFingerprints[$module->getName()][$historicalTableName]
-                    = $this->schemaFingerprint(
-                        SchemaCheckpointIdentity::legacySchema($declared, $this->checkpointRuntimeQualifiers),
-                        false,
-                    );
-                $this->moduleSchemaLegacyFingerprints[$module->getName()][$declared->tableName]
-                    = $this->schemaFingerprint($declared, false);
+                $modelDeclarations[$processedTableKey][] = [
+                    'module' => $module->getName(),
+                    'schema' => $declared,
+                ];
             }
         }
+
+        $this->collectModelTableSchemas($modelDeclarations, $declaredSchemas, $processedTables);
 
         // Pass 1b: extends SchemaProvider（含 Shard family 全量展开）合入同一 declaredSchemas
         $this->mergeSchemaProviders($declaredSchemas, $processedTables);
@@ -422,6 +401,111 @@ class SchemaDiffStage extends AbstractStage
             $normalize($schema),
             JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION
         ));
+    }
+
+    /**
+     * Physical-table deduplication must not transfer checkpoint ownership when
+     * the module discovery order changes. Existing equivalent owners retain
+     * their maps; the physical table is still diffed only once.
+     *
+     * @param array<string, list<array{module: string, schema: TableSchema}>> $declarations
+     * @param array<string, TableSchema> $declaredSchemas
+     * @param array<string, bool> $processedTables
+     */
+    private function collectModelTableSchemas(
+        array $declarations,
+        array &$declaredSchemas,
+        array &$processedTables,
+    ): void {
+        $checkpointTables = [];
+        foreach ($declarations as $tableKey => $candidates) {
+            // 同模块的同表投影保留原扫描首项；跨模块归属比较只使用各模块的代表声明。
+            $moduleCandidates = [];
+            foreach ($candidates as $candidate) {
+                $moduleCandidates[$candidate['module']] ??= $candidate;
+            }
+            $candidates = array_values($moduleCandidates);
+            usort($candidates, static fn(array $left, array $right): int =>
+                strcmp($left['module'], $right['module'])
+                ?: strcmp($left['schema']->modelClass ?? '', $right['schema']->modelClass ?? '')
+            );
+            $first = $candidates[0];
+            $owners = [];
+            if (count($candidates) > 1) {
+                $fingerprint = $this->schemaFingerprint($first['schema'], true);
+                foreach ($candidates as $candidate) {
+                    if ($this->schemaFingerprint($candidate['schema'], true) !== $fingerprint) {
+                        throw new Exception(__(
+                            '表 %{1} 存在不一致的 Model Schema 声明：%{2} 与 %{3}',
+                            [
+                                $first['schema']->tableName,
+                                $first['module'] . ':' . $first['schema']->modelClass,
+                                $candidate['module'] . ':' . $candidate['schema']->modelClass,
+                            ],
+                        ));
+                    }
+                }
+                foreach ($candidates as $candidate) {
+                    $moduleName = $candidate['module'];
+                    if (!array_key_exists($moduleName, $checkpointTables)) {
+                        $checkpoint = $this->executor->getSchemaCheckpointForOwnership(
+                            $moduleName,
+                            $this->moduleVersions[$moduleName],
+                        );
+                        $checkpointTables[$moduleName] = [];
+                        foreach ($checkpoint['tables'] ?? [] as $storedTable => $storedFingerprint) {
+                            $identity = SchemaCheckpointIdentity::tableName(
+                                $storedTable,
+                                $this->checkpointRuntimeQualifiers,
+                            );
+                            $checkpointTables[$moduleName][$identity] = true;
+                        }
+                    }
+                    $identity = SchemaCheckpointIdentity::tableName(
+                        $candidate['schema']->tableName,
+                        $this->checkpointRuntimeQualifiers,
+                    );
+                    if (isset($checkpointTables[$moduleName][$identity])) {
+                        $owners[$moduleName] ??= $candidate;
+                    }
+                }
+            }
+            // A first installation has no historical owner. Use the same
+            // deterministic representative regardless of discovery order.
+            $owners = $owners ?: [$first['module'] => $first];
+            $representative = reset($owners)['schema'];
+            $processedTables[$tableKey] = true;
+            $declaredSchemas[$representative->tableName] = $representative;
+            foreach ($owners as $owner) {
+                $this->registerModelCheckpointSchema($owner['module'], $owner['schema']);
+            }
+        }
+    }
+
+    private function registerModelCheckpointSchema(string $moduleName, TableSchema $declared): void
+    {
+        $checkpointTableName = SchemaCheckpointIdentity::tableName(
+            $declared->tableName,
+            $this->checkpointRuntimeQualifiers,
+        );
+        $this->registerModuleCheckpointSource(
+            $moduleName,
+            $checkpointTableName,
+            SchemaCheckpointIdentity::qualifiedTableName($declared->tableName),
+        );
+        $this->moduleSchemaFingerprints[$moduleName][$checkpointTableName]
+            = $this->schemaFingerprint($declared, true);
+        $historicalTableName = SchemaCheckpointIdentity::legacyTableName(
+            $declared->tableName,
+            $this->checkpointRuntimeQualifiers,
+        );
+        $this->moduleSchemaHistoricalFingerprints[$moduleName][$historicalTableName]
+            = $this->schemaFingerprint(
+                SchemaCheckpointIdentity::legacySchema($declared, $this->checkpointRuntimeQualifiers),
+                false,
+            );
+        $this->moduleSchemaLegacyFingerprints[$moduleName][$declared->tableName]
+            = $this->schemaFingerprint($declared, false);
     }
 
     /**

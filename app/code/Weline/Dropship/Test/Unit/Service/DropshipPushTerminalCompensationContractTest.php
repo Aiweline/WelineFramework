@@ -42,7 +42,14 @@ final class DropshipPushTerminalCompensationContractTest extends TestCase
         self::assertStringContainsString('DropshipPushTerminalRefundObserver', $eventXml);
 
         self::assertStringContainsString('Weline_Dropship::fulfillment_consolation', $mail);
+        self::assertStringContainsString("'default_templates'", $mail);
+        self::assertStringContainsString("'variables'", $mail);
         self::assertStringContainsString('MailChannelProviderInterface', $extends);
+        self::assertFileExists($root . '/view/email/fulfillment_consolation/zh_Hans_CN.html');
+        self::assertStringContainsString("'vars'", $svc);
+        self::assertStringContainsString('order_uuid', $svc);
+        self::assertStringNotContainsString("'subject' =>", $svc);
+        self::assertStringNotContainsString("'content' => \$content", $svc);
     }
 
     public function testSettingsSwitchDefaultOn(): void

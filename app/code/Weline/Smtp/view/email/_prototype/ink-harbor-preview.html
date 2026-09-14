@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<!-- PROTOTYPE throwaway: Ink Harbor email shell preview (not a production route) -->
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Email template prototype · Ink Harbor</title>
+<style>
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #dfe8ec; color: #1c2a32; }
+  .bar { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 20; display: flex; gap: 8px; padding: 10px 12px; background: #16333f; border-radius: 999px; box-shadow: 0 10px 30px rgba(22,51,63,.35); }
+  .bar a { color: #f4f7f8; text-decoration: none; font-size: 13px; padding: 8px 14px; border-radius: 999px; }
+  .bar a[aria-current="true"] { background: #e8a14a; color: #16333f; font-weight: 700; }
+  .stage { max-width: 720px; margin: 0 auto; padding: 40px 16px 96px; }
+  .note { margin-bottom: 18px; font-size: 13px; color: #5c6b74; }
+  iframe { width: 100%; min-height: 720px; border: 0; background: transparent; }
+</style>
+</head>
+<body>
+  <div class="stage">
+    <p class="note">PROTOTYPE · 选定方案 <strong>Ink Harbor</strong>（深青墨品牌条 + 琥珀 CTA）。下方为密码重置默认模板预览（样例变量已填入）。</p>
+    <iframe id="frame" title="email preview"></iframe>
+  </div>
+  <nav class="bar" aria-label="variants">
+    <a href="?variant=A" data-v="A">A Ink Harbor</a>
+    <a href="?variant=B" data-v="B">B Paper Ledger</a>
+    <a href="?variant=C" data-v="C">C Night Signal</a>
+  </nav>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const variant = params.get('variant') || 'A';
+    document.querySelectorAll('.bar a').forEach((a) => {
+      a.setAttribute('aria-current', a.dataset.v === variant ? 'true' : 'false');
+    });
+    const samples = {
+      A: `FILE:password_reset`,
+      B: `LEDGER`,
+      C: `NIGHT`
+    };
+    // Inline chosen production-like A; B/C are contrast sketches for review only.
+    const htmlA = String.raw`<!DOCTYPE html><html><body style="margin:0;background:#e7eef2;"><table width="100%" style="background:#e7eef2;"><tr><td align="center" style="padding:36px 16px;"><table width="560" style="background:#fff;border-radius:18px;overflow:hidden;border:1px solid #d5e0e6;"><tr><td style="background:#16333f;padding:22px 28px;"><div style="font-family:Georgia,serif;font-size:20px;color:#f4f7f8;">Weline</div><div style="margin-top:6px;font-size:12px;color:#9bb0b8;letter-spacing:.12em;text-transform:uppercase;">安全中心 · Security</div></td></tr><tr><td style="height:4px;background:#e8a14a;"></td></tr><tr><td style="padding:32px 28px;font-family:-apple-system,sans-serif;"><h1 style="margin:0 0 16px;font-family:Georgia,serif;font-size:26px;color:#16333f;">重置您的账户密码</h1><p style="line-height:1.7;color:#33434c;">我们收到了针对 <strong>user@example.com</strong> 的密码重置请求。</p><p style="line-height:1.7;color:#33434c;">请点击下方按钮设置新密码。</p><a href="#" style="display:inline-block;margin-top:20px;padding:14px 28px;border-radius:999px;background:#e8a14a;color:#16333f;text-decoration:none;font-weight:700;">立即重置密码</a></td></tr><tr><td style="padding:18px 28px 28px;font-size:12px;color:#7a8a93;border-top:1px solid #e6eef1;">若非本人操作，请忽略本邮件。</td></tr></table></td></tr></table></body></html>`;
+    const htmlB = String.raw`<!DOCTYPE html><html><body style="margin:0;background:#f7f3ea;"><table width="100%"><tr><td align="center" style="padding:36px 16px;"><table width="560" style="background:#fffdf8;border:1px solid #d9d0bf;"><tr><td style="padding:20px 24px;border-bottom:2px solid #1f1a14;font-family:Georgia,serif;font-size:22px;">Weline Ledger</td></tr><tr><td style="padding:28px 24px;font-family:Georgia,serif;"><h1 style="margin:0 0 12px;font-size:28px;">重置密码</h1><p>账户 user@example.com 请求重置。</p><p style="border-top:1px dashed #cbbfa8;padding-top:16px;"><a href="#">继续 →</a></p></td></tr></table></td></tr></table></body></html>`;
+    const htmlC = String.raw`<!DOCTYPE html><html><body style="margin:0;background:#0b1020;"><table width="100%"><tr><td align="center" style="padding:36px 16px;"><table width="560" style="background:#12182b;border:1px solid #2a3558;border-radius:8px;"><tr><td style="padding:18px 24px;color:#7dd3fc;font-family:ui-monospace,monospace;font-size:12px;">SIGNAL // SECURITY</td></tr><tr><td style="padding:8px 24px 28px;color:#e2e8f0;font-family:-apple-system,sans-serif;"><h1 style="margin:0 0 12px;font-size:24px;color:#fff;">Reset password</h1><p>user@example.com</p><a href="#" style="display:inline-block;margin-top:18px;padding:12px 20px;background:#22d3ee;color:#041016;text-decoration:none;font-weight:700;">RESET</a></td></tr></table></td></tr></table></body></html>`;
+    const map = { A: htmlA, B: htmlB, C: htmlC };
+    const doc = map[variant] || htmlA;
+    document.getElementById('frame').srcdoc = doc;
+  </script>
+</body>
+</html>

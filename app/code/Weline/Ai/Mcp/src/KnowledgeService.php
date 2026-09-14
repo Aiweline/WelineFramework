@@ -115,7 +115,6 @@ final class KnowledgeService
             'module' => $module,
             'drift' => $state,
             'operations' => [],
-            'edit_plan' => null,
             'conflicts' => [],
             'warnings' => [
                 'Static module indexes and Skill projections are retired.',

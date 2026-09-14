@@ -522,6 +522,20 @@ class PcController extends Core
     protected function fetchTemplateWithEvents(string $fileName): mixed
     {
         $fetchProfileStart = \microtime(true);
+        $memoryProbe = static function (string $phase, mixed $content = null): void {
+            if ((string)\getenv('WELINE_DIAG_MEMORY') !== '1') {
+                return;
+            }
+            \error_log('[MemoryProbe] ' . \json_encode([
+                'component' => 'PcController::fetchTemplateWithEvents',
+                'phase' => $phase,
+                'file' => $fileName ?? '',
+                'content_bytes' => \is_string($content) ? \strlen($content) : null,
+                'usage' => \memory_get_usage(true),
+                'peak' => \memory_get_peak_usage(true),
+            ], \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE));
+        };
+        $memoryProbe('start');
         $fetchProfileBeforeStart = $fetchProfileStart;
         // 触发Weline_Framework_Controller::fetch_file_before事件
         $eventData = new DataObject([
@@ -545,13 +559,16 @@ class PcController extends Core
         $fileName = $eventData->getData('fileName');
         $fetchProfileTemplateStart = \microtime(true);
         $content = $this->getTemplate()->fetch($fileName);
+        $memoryProbe('after_template_fetch', $content);
         $fetchProfileTemplateMs = \round((\microtime(true) - $fetchProfileTemplateStart) * 1000, 2);
         // 触发Weline_Framework_Controller::fetch_file_after事件
         $eventData->setData('content', $content);
         $fetchProfileAfterStart = \microtime(true);
         $this->getEventManager()->dispatch('Weline_Framework_Controller::fetch_file_after', $eventData);
+        $memoryProbe('after_fetch_file_after', $eventData->getData('content'));
         $fetchProfileAfterMs = \round((\microtime(true) - $fetchProfileAfterStart) * 1000, 2);
         $finalContent = $eventData->getData('content');
+        $memoryProbe('before_return', $finalContent);
         $fetchProfileTotalMs = \round((\microtime(true) - $fetchProfileStart) * 1000, 2);
         $uri = (string)(\w_env('full_request_uri', \w_env('request.uri', '')) ?? '');
         if ($fetchProfileTotalMs >= 20.0) {

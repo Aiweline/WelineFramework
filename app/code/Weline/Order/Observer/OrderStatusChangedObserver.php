@@ -2,91 +2,61 @@
 
 declare(strict_types=1);
 
-/*
- * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
- * 邮箱：aiweline@qq.com
- * 网址：aiweline.com
- * 论坛：https://bbs.aiweline.com
- */
-
 namespace Weline\Order\Observer;
 
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Order\Model\Order;
 use Weline\Order\Model\OrderHistory;
+use Weline\Order\Service\OrderMailNotifier;
 
 /**
- * 订单状态变更观察者
- * 
- * 处理订单状态变更后的逻辑：
- * - 记录订单历史
- * - 发送客户通知（如果需要）
+ * 订单状态变更：记历史；notify_customer 时发信；发货/退款映射专用渠道。
  */
 class OrderStatusChangedObserver implements ObserverInterface
 {
-    /**
-     * 执行观察者逻辑
-     */
     public function execute(Event &$event): void
     {
         $data = $event->getData();
         $order = $data['order'] ?? null;
         $orderId = $data['order_id'] ?? null;
-        $oldStatus = $data['old_status'] ?? null;
-        $newStatus = $data['new_status'] ?? null;
+        $oldStatus = (string)($data['old_status'] ?? '');
+        $newStatus = (string)($data['new_status'] ?? '');
         $comment = $data['comment'] ?? null;
-        $notifyCustomer = $data['notify_customer'] ?? false;
-        
-        if (!$orderId || !$newStatus) {
+        $notifyCustomer = (bool)($data['notify_customer'] ?? false);
+
+        if (!$orderId || $newStatus === '') {
             return;
         }
-        
-        // 1. 记录订单历史
-        $this->addHistory($orderId, $newStatus, $comment, $notifyCustomer);
-        
-        // 2. 发送客户通知（如果需要）
-        if ($notifyCustomer && $order) {
-            $this->notifyCustomer($order, $oldStatus, $newStatus, $comment);
+
+        $this->addHistory((int)$orderId, $newStatus, is_string($comment) ? $comment : null, $notifyCustomer);
+
+        if ($notifyCustomer && $order instanceof Order) {
+            try {
+                /** @var OrderMailNotifier $notifier */
+                $notifier = ObjectManager::getInstance(OrderMailNotifier::class);
+                $notifier->notifyStatusChanged(
+                    $order,
+                    $oldStatus,
+                    $newStatus,
+                    true,
+                    ['comment' => (string)($comment ?? '')],
+                );
+            } catch (\Throwable $e) {
+                w_log_error('OrderStatusChangedObserver mail: ' . $e->getMessage(), [], 'order_mail');
+            }
         }
     }
-    
-    /**
-     * 添加订单历史记录
-     * 
-     * @param int $orderId 订单ID
-     * @param string $status 状态
-     * @param string|null $comment 备注
-     * @param bool $notifyCustomer 是否通知客户
-     * @return void
-     */
-    private function addHistory(int $orderId, string $status, ?string $comment = null, bool $notifyCustomer = false): void
+
+    private function addHistory(int $orderId, string $status, ?string $comment, bool $notifyCustomer): void
     {
         /** @var OrderHistory $history */
         $history = ObjectManager::getInstance(OrderHistory::class);
         $history->setData(OrderHistory::schema_fields_ORDER_ID, $orderId)
-                ->setData(OrderHistory::schema_fields_STATUS, $status)
-                ->setData(OrderHistory::schema_fields_COMMENT, $comment)
-                ->setData(OrderHistory::schema_fields_IS_CUSTOMER_NOTIFIED, $notifyCustomer ? 1 : 0)
-                ->save();
-    }
-    
-    /**
-     * 通知客户订单状态变更
-     * 
-     * @param mixed $order 订单对象
-     * @param string|null $oldStatus 旧状态
-     * @param string $newStatus 新状态
-     * @param string|null $comment 备注
-     * @return void
-     */
-    private function notifyCustomer($order, ?string $oldStatus, string $newStatus, ?string $comment = null): void
-    {
-        // 这里可以触发客户通知事件，让其他模块（如邮件、短信模块）处理通知
-        // 例如：触发 'Weline_Order::order_status_notify_customer' 事件
-        
-        // 暂时留空，等待其他模块实现通知逻辑
-        // 可以通过事件系统让其他模块监听并处理通知
+            ->setData(OrderHistory::schema_fields_STATUS, $status)
+            ->setData(OrderHistory::schema_fields_COMMENT, $comment)
+            ->setData(OrderHistory::schema_fields_IS_CUSTOMER_NOTIFIED, $notifyCustomer ? 1 : 0)
+            ->save();
     }
 }
-

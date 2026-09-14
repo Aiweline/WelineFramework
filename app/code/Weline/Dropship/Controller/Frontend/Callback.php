@@ -23,21 +23,16 @@ class Callback extends FrontendController
         $endpoint = (string)$this->request->getGet('endpoint_code', '');
         $parts = explode('.', $endpoint);
         $providerCode = $parts[0] ?? '';
-        // WLS 下 php://input 常为空；统一走 Request raw body（FPM/WLS 兼容）。
-        $body = (string)$this->request->getBodyParams(false);
-        if ($body === '' || $body === '[]' || $body === '{}') {
-            $raw = '';
-            try {
-                $raw = (string)$this->request->getParameterBag()->getRawBody();
-            } catch (\Throwable) {
-                $raw = '';
-            }
-            if ($raw !== '') {
-                $body = $raw;
-            }
+        // WLS/FPM 统一 raw body（禁止直接读 php://input，WLS 下常为空）。
+        $body = '';
+        try {
+            $body = (string)$this->request->getParameterBag()->getRawBody();
+        } catch (\Throwable) {
+            $body = '';
         }
-        if (($body === '' || $body === '[]' || $body === '{}') && \is_string($GLOBALS['HTTP_RAW_POST_DATA'] ?? null)) {
-            $body = (string)$GLOBALS['HTTP_RAW_POST_DATA'];
+        if ($body === '') {
+            $fallback = $this->request->getBodyParams(false);
+            $body = \is_string($fallback) ? $fallback : '';
         }
         $headers = function_exists('getallheaders') ? (array)getallheaders() : [];
         if ($headers === []) {
@@ -77,8 +72,11 @@ class Callback extends FrontendController
         // Persist shell-standard envelope; keep original raw_body for DevRelay replay.
         $storedBody = json_encode([
             'event' => (string)($parsed['event'] ?? ''),
+            'topic' => (string)($parsed['topic'] ?? ''),
             'external_id' => $externalId,
             'fulfillment' => \is_array($parsed['fulfillment'] ?? null) ? $parsed['fulfillment'] : [],
+            'catalog' => \is_array($parsed['catalog'] ?? null) ? $parsed['catalog'] : [],
+            'makeup' => \is_array($parsed['makeup'] ?? null) ? $parsed['makeup'] : [],
             'raw' => \is_array($parsed['payload'] ?? null) ? $parsed['payload'] : [],
             'raw_body' => $body,
             'headers' => $headers,

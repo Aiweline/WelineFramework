@@ -5,7 +5,7 @@
   "type": "object",
   "required": [
     "schema_version", "guidance_id", "project_id", "repository", "readiness_id",
-    "client_session_id", "project_revision", "task", "session_directives",
+    "client_session_id", "project_revision", "task",
     "fragments", "token_usage", "query", "routing_contract"
   ],
   "properties": {
@@ -17,7 +17,7 @@
     "client_session_id": {"type": "string", "minLength": 1},
     "project_revision": {"type": "integer", "minimum": 0},
     "task": {"type": "string", "minLength": 1},
-    "session_directives": {"type": "array", "maxItems": 50, "items": {"type": "string"}},
+    "session_directives": {"type": "array", "maxItems": 50, "items": {"type": "string"}, "description": "Optional legacy session directives; index-only MCP omits this field."},
     "rules": {"type": "array", "description": "Optional validated-learning guidance; legacy responses may also include duplicated rule summaries.", "items": {"type": "object"}},
     "fragments": {
       "type": "array",

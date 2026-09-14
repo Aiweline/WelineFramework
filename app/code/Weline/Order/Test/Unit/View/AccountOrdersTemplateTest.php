@@ -57,6 +57,16 @@ final class AccountOrdersTemplateTest extends TestCase
         self::assertStringContainsString('查看详情', $html);
     }
 
+    public function testOrdersTemplateDeclaresOrderTypeBadgeMarkup(): void
+    {
+        $template = dirname(__DIR__, 3) . '/view/hooks/Weline_Order/frontend/account/index/orders.phtml';
+        $source = (string) file_get_contents($template);
+        self::assertStringContainsString('data-testid="account-order-type-badge"', $source);
+        self::assertStringContainsString('data-testid="account-order-detail-type-badge"', $source);
+        self::assertStringContainsString('account-orders__badge--type', $source);
+        self::assertStringContainsString("\$view['order_type_label']", $source);
+    }
+
     public function testOwnedV2OrderDetailRendersInsideTheAccountOrdersSection(): void
     {
         $template = dirname(__DIR__, 3) . '/view/hooks/Weline_Order/frontend/account/index/orders.phtml';

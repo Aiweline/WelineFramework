@@ -20,7 +20,7 @@ app/code/Weline/YourModule/i18n/
 | 文件 | 第一列（source / word） | 第二列（translate） |
 |------|-------------------------|---------------------|
 | `zh_Hans_CN.csv` | 源串（中文） | 简体中文展示（通常与 source 相同） |
-| `en_US.csv` | **与 zh 文件相同的 source** | **英文译文**（不得留空或仍写中文） |
+| `en_US.csv` | **与 zh 文件相同的 source** | **英文译文**（不得留空、不得把中文 source 原样当作英文） |
 
 ## 前后台对齐
 

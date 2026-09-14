@@ -88,12 +88,12 @@ class MarketingCheckoutCouponSession
             ];
         }
 
-        $hasLines = is_array($params['lines'] ?? null) && $params['lines'] !== [];
+        // Prefer client lines; when empty, resolve storefront cart lines so we never
+        // persist a ghost coupon that paints a tag with 0 discount on checkout.
+        $params['lines'] = $this->resolveCartLines($params);
         $request = $this->buildPreviewRequest($params, $normalized);
         $quote = $quotes->quote($request);
-        // When the client only sends the code (no cart lines), persist first and let
-        // the follow-up quoteDiscount / cart discount_preview render the amount.
-        if ($hasLines && $quote->amountMinor <= 0) {
+        if ($quote->amountMinor <= 0) {
             return [
                 'success' => false,
                 'message' => (string)__('优惠券无效、不可用或已达使用上限'),
@@ -110,7 +110,7 @@ class MarketingCheckoutCouponSession
             'success' => true,
             'coupon_code' => $normalized,
             'cart_type' => $cartType,
-            'discount' => $quote->amountMinor > 0 ? $quote->toArray() : null,
+            'discount' => $quote->toArray(),
             'message' => (string)__('优惠券已保存，将在结账报价时生效'),
         ];
     }
@@ -312,7 +312,7 @@ class MarketingCheckoutCouponSession
      */
     private function buildPreviewRequest(array $params, ?string $couponCode): DiscountQuoteRequest
     {
-        $lines = is_array($params['lines'] ?? null) ? $params['lines'] : [];
+        $lines = $this->resolveCartLines($params);
         $scope = is_array($params['scope'] ?? null) ? $params['scope'] : [];
         $address = is_array($params['address'] ?? null) ? $params['address'] : [];
 
@@ -334,8 +334,103 @@ class MarketingCheckoutCouponSession
         );
     }
 
+    /**
+     * Prefer client quote lines; when empty, load the trusted storefront cart so
+     * marketing apply/quote matches cart discount_preview (same items).
+     *
+     * @param array<string, mixed> $params
+     * @return list<array<string, mixed>>
+     */
+    private function resolveCartLines(array $params): array
+    {
+        $raw = is_array($params['lines'] ?? null) ? $params['lines'] : [];
+        $normalized = $this->normalizeQuoteLines($raw);
+        if ($normalized !== []) {
+            return $normalized;
+        }
+
+        try {
+            if (!class_exists(\Weline\Cart\Service\CartService::class)
+                || !class_exists(\Weline\Cart\Service\CartScopeResolver::class)
+                || !class_exists(\Weline\Cart\Service\CartCurrentCustomerResolver::class)
+            ) {
+                return [];
+            }
+            $cartService = ObjectManager::getInstance(\Weline\Cart\Service\CartService::class);
+            $scopeResolver = ObjectManager::getInstance(\Weline\Cart\Service\CartScopeResolver::class);
+            $customerResolver = ObjectManager::getInstance(\Weline\Cart\Service\CartCurrentCustomerResolver::class);
+            if (!$cartService instanceof \Weline\Cart\Service\CartService
+                || !$scopeResolver instanceof \Weline\Cart\Service\CartScopeResolver
+                || !$customerResolver instanceof \Weline\Cart\Service\CartCurrentCustomerResolver
+            ) {
+                return [];
+            }
+
+            $guestToken = trim((string)($params['guest_token'] ?? ''));
+            if ($guestToken === '') {
+                $guestToken = trim((string)\Weline\Framework\Http\Cookie::get(
+                    \Weline\Cart\Service\CartService::GUEST_TOKEN_COOKIE
+                ));
+            }
+            $cartType = $this->cartTypeFromParams($params);
+            $summary = $cartService->getCart(
+                $scopeResolver->fromParams($params),
+                $guestToken !== '' ? $guestToken : null,
+                $customerResolver->currentCustomerId(),
+                $cartType,
+            );
+
+            return $this->normalizeQuoteLines(is_array($summary['items'] ?? null) ? $summary['items'] : []);
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * @param array<int|string, mixed> $raw
+     * @return list<array<string, mixed>>
+     */
+    private function normalizeQuoteLines(array $raw): array
+    {
+        $lines = [];
+        foreach ($raw as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $qty = (int)($item['qty_minor'] ?? $item['qty'] ?? $item['quantity'] ?? 1);
+            $unitMinor = (int)($item['unit_price_minor'] ?? 0);
+            if ($unitMinor <= 0) {
+                $unitMinor = (int)round(((float)($item['price'] ?? $item['unit_price'] ?? 0)) * 100);
+            }
+            if ($qty <= 0 && $unitMinor <= 0) {
+                continue;
+            }
+            $lines[] = [
+                'qty_minor' => max(1, $qty),
+                'unit_price_minor' => max(0, $unitMinor),
+                'sku' => trim((string)($item['sku'] ?? '')),
+                'product_id' => (int)($item['product_id'] ?? 0),
+            ];
+        }
+
+        return $lines;
+    }
+
     private function currentCustomerId(): ?int
     {
+        // Prefer Cart's storefront resolver so quoteDiscount and cart discount_preview
+        // share the same customer_id (session + optional Customer facade).
+        try {
+            if (class_exists(\Weline\Cart\Service\CartCurrentCustomerResolver::class)) {
+                $resolver = ObjectManager::getInstance(\Weline\Cart\Service\CartCurrentCustomerResolver::class);
+                if ($resolver instanceof \Weline\Cart\Service\CartCurrentCustomerResolver) {
+                    return $resolver->currentCustomerId();
+                }
+            }
+        } catch (\Throwable) {
+            // Fall through to session-only resolution.
+        }
+
         try {
             $session = $this->frontendSession();
             if (!$session->isLoggedIn()) {

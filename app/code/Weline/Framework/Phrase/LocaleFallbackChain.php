@@ -54,6 +54,26 @@ final class LocaleFallbackChain
         return implode('_', $parts);
     }
 
+    /** 网站默认语言的统一读取入口；仅读取已加载环境，不写配置。 */
+    public static function websiteDefaultLocale(): string
+    {
+        foreach (['website.language', 'locale', 'lang'] as $configKey) {
+            try {
+                $candidate = \Weline\Framework\App\Env::get($configKey, '');
+                if (!\is_scalar($candidate)) {
+                    continue;
+                }
+                $candidate = self::normalize((string)$candidate);
+                if ($candidate !== '') {
+                    return $candidate;
+                }
+            } catch (\Throwable) {
+            }
+        }
+
+        return self::normalize(\Weline\Framework\App\Env::default_LANGUAGE_CODE);
+    }
+
     private static function isChinese(string $locale): bool
     {
         return strtolower((string)strtok($locale, '_')) === 'zh';

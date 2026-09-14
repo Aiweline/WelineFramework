@@ -11,6 +11,9 @@
 支付失败邮件,支付失败邮件
 登录鉴权失败邮件,登录鉴权失败邮件
 其他业务拒绝邮件,其他业务拒绝邮件
+标题,标题
+正文,正文
+类型,type
 "站点错误监控主题 %{1} 的邮件渠道","站点错误监控主题 %{1} 的邮件渠道"
 "Visitor Query","Visitor Query"
 "Provides frontend visitor tracking operations through the worker channel.","Provides frontend visitor tracking operations through the worker channel."
@@ -188,7 +191,6 @@ download,download
 "渠道表尚未就绪或查询失败；完成 setup:upgrade 后刷新本页。","Channel table not ready or query failed; refresh after setup:upgrade."
 名称,name
 渠道码,"Channel code"
-类型,type
 流量类型,"Traffic Type"
 站点,site
 启用,enable

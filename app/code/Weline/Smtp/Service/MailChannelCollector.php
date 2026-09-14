@@ -14,7 +14,14 @@ use Weline\Smtp\Api\MailChannelProviderInterface;
 class MailChannelCollector
 {
     /**
-     * @return list<array{code: string, name: string, description: string, module: string}>
+     * @return list<array{
+     *   code: string,
+     *   name: string,
+     *   description: string,
+     *   module: string,
+     *   variables: list<array{code: string, label: string, sample: string}>,
+     *   default_templates: list<array<string, mixed>>
+     * }>
      */
     public function collect(): array
     {
@@ -34,11 +41,71 @@ class MailChannelCollector
                     'name' => (string)($row['name'] ?? $code),
                     'description' => (string)($row['description'] ?? ''),
                     'module' => (string)($row['module'] ?? $moduleName),
+                    'variables' => $this->normalizeVariables($row['variables'] ?? []),
+                    'default_templates' => $this->normalizeDefaultTemplates($row['default_templates'] ?? []),
                 ];
             }
         }
         ksort($channels);
         return array_values($channels);
+    }
+
+    /**
+     * @return array{code: string, name: string, description: string, module: string, variables: list, default_templates: list}|null
+     */
+    public function getByCode(string $code): ?array
+    {
+        $code = trim($code);
+        foreach ($this->collect() as $row) {
+            if (($row['code'] ?? '') === $code) {
+                return $row;
+            }
+        }
+        return null;
+    }
+
+    /** @return list<array{code: string, label: string, sample: string}> */
+    private function normalizeVariables(mixed $raw): array
+    {
+        if (!is_array($raw)) {
+            return [];
+        }
+        $out = [];
+        foreach ($raw as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $varCode = trim((string)($item['code'] ?? ''));
+            if ($varCode === '' || !preg_match('/^[A-Za-z][A-Za-z0-9_.]*$/', $varCode)) {
+                continue;
+            }
+            $out[] = [
+                'code' => $varCode,
+                'label' => (string)($item['label'] ?? $varCode),
+                'sample' => (string)($item['sample'] ?? ''),
+            ];
+        }
+        return $out;
+    }
+
+    /** @return list<array<string, mixed>> */
+    private function normalizeDefaultTemplates(mixed $raw): array
+    {
+        if (!is_array($raw)) {
+            return [];
+        }
+        $out = [];
+        foreach ($raw as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $locale = trim((string)($item['locale'] ?? ''));
+            if ($locale === '' || $locale === 'default') {
+                continue;
+            }
+            $out[] = $item;
+        }
+        return $out;
     }
 
     /** @return MailChannelProviderInterface[] */

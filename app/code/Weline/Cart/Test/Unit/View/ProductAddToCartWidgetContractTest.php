@@ -77,9 +77,12 @@ final class ProductAddToCartWidgetContractTest extends TestCase
         );
 
         self::assertStringContainsString('function resolveAddCartType(button)', $script);
+        self::assertStringContainsString('function productAllowsWholesaleAdd(button)', $script);
         self::assertStringContainsString('WelineB2BSellingMode.preferredMode', $script);
+        self::assertStringNotContainsString('confirmCartTypeForAdd', $script);
         self::assertStringContainsString('weline_cart_type_explicit', $script);
         self::assertStringContainsString('cart_type: sellingMode', $script);
+        self::assertStringContainsString('syncChromeAfterRetailOnlyAdd', $script);
         self::assertStringContainsString('var mode = preferred || fromButton || fromHtml || \'toc\'', $script);
         // Old FPC-first chain must stay gone.
         self::assertStringNotContainsString(
