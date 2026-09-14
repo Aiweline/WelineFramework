@@ -24,7 +24,7 @@ final class ProductBrandAdminContractTest extends TestCase
         $model = $this->read('Model/Shard/Brand.php');
 
         self::assertStringContainsString("'brand'", $key);
-        self::assertStringContainsString("SCHEMA_VERSION = '4.7.0'", $schema);
+        self::assertStringContainsString("SCHEMA_VERSION = '4.9.0'", $schema);
         self::assertStringContainsString("'brand' => new TableSchema", $schema);
         self::assertStringContainsString("return 'brand';", $model);
         self::assertStringContainsString('schema_fields_CODE', $model);

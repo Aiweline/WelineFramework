@@ -28,6 +28,17 @@ final class ChannelIndexTemplateContractTest extends TestCase
         self::assertStringContainsString('履约', $tpl);
         self::assertStringContainsString('运费', $tpl);
         self::assertStringContainsString('回调', $tpl);
+        self::assertStringContainsString('选品浏览', $tpl);
+        self::assertStringContainsString('选品国家筛选', $tpl);
+        self::assertStringContainsString('订单回调', $tpl);
+        self::assertStringContainsString('商品回调', $tpl);
+        self::assertStringContainsString('库存回调', $tpl);
+        self::assertStringContainsString('物流回调', $tpl);
+        self::assertStringContainsString('补单回调', $tpl);
+        self::assertStringContainsString('私有订单回调', $tpl);
+        self::assertStringContainsString('纠纷回调', $tpl);
+        self::assertStringContainsString('仓映射', $tpl);
+        self::assertStringContainsString('title=', $tpl);
         self::assertStringContainsString('配置凭证', $tpl);
         self::assertStringContainsString("__('配置')", $tpl);
         self::assertStringNotContainsString('!$ok && $credentialsEmbed', $tpl);

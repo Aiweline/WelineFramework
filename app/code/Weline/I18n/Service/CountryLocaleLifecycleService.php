@@ -47,18 +47,26 @@ class CountryLocaleLifecycleService
 
     public function activateCountry(string $countryCode): array
     {
-        return $this->runLifecycleMutation(fn(): array => $this->activateCountryRecord($countryCode));
+        return $this->runLifecycleMutation(function () use ($countryCode): array {
+            $changed = false;
+            $result = $this->activateCountryRecord($countryCode, $changed);
+            if ($changed) {
+                $this->invalidateLocaleCatalogCaches();
+            }
+            return $result;
+        });
     }
 
-    private function activateCountryRecord(string $countryCode): array
+    private function activateCountryRecord(string $countryCode, bool &$changed): array
     {
         $countryCode = $this->normalizeCountryCode($countryCode);
-        $this->ensureCountryExists($countryCode);
-        $localeCodes = $this->ensureLocaleRecordsForCountry($countryCode);
+        $this->ensureCountryExists($countryCode, $changed);
+        $localeCodes = $this->ensureLocaleRecordsForCountry($countryCode, $changed);
 
         $country = $this->getCountryRecord($countryCode);
         if ((int)$country->getData(Countries::schema_fields_IS_INSTALL) !== 1) {
             $country->setData(Countries::schema_fields_IS_INSTALL, 1)->save();
+            $changed = true;
         }
 
         $preferredLocale = $this->findActiveInstalledLocaleCode($countryCode);
@@ -73,20 +81,16 @@ class CountryLocaleLifecycleService
                 throw new \RuntimeException((string)__('国家 %{1} 没有可启用的地区', [$countryCode]));
             }
 
-            $this->activateLocale($preferredLocale);
+            $this->activateLocaleRecord($preferredLocale, $changed);
         } else {
-            $country = $this->ensureCountryExists($countryCode);
-            $country->setData(Countries::schema_fields_IS_INSTALL, 1)
-                ->setData(Countries::schema_fields_IS_ACTIVE, 1)
-                ->save();
+            $country = $this->ensureCountryExists($countryCode, $changed);
+            $this->saveInstallationState($country, 1, 1, $changed);
             // preferred 已安装激活时仍同步 Locals，避免读侧仍看不到。
-            $this->syncLocalsFromLocaleRecord($preferredLocale);
+            $this->syncLocalsFromLocaleRecord($preferredLocale, $changed);
         }
 
-        $summary = $this->syncCountryState($countryCode);
+        $summary = $this->syncCountryStateRecord($countryCode, $changed);
         $summary['preferred_locale'] = $preferredLocale;
-        // 国家安装/激活后立即失效读侧缓存（即使 preferred 已存在、未再走 activateLocale）。
-        $this->invalidateLocaleCatalogCaches();
 
         return $summary;
     }
@@ -169,27 +173,29 @@ class CountryLocaleLifecycleService
 
     public function activateLocale(string $localeCode): array
     {
-        return $this->runLifecycleMutation(fn(): array => $this->activateLocaleRecord($localeCode));
+        return $this->runLifecycleMutation(function () use ($localeCode): array {
+            $changed = false;
+            $result = $this->activateLocaleRecord($localeCode, $changed);
+            if ($changed) {
+                $this->invalidateLocaleCatalogCaches();
+            }
+            return $result;
+        });
     }
 
-    private function activateLocaleRecord(string $localeCode): array
+    private function activateLocaleRecord(string $localeCode, bool &$changed): array
     {
         $localeCode = $this->normalizeLocaleCode($localeCode);
-        $locale = $this->ensureLocaleRecordExists($localeCode);
+        $locale = $this->ensureLocaleRecordExists($localeCode, null, $changed);
         $countryCode = (string)$locale->getData(Locale::schema_fields_COUNTRY_CODE);
 
-        $locale->setData(Locale::schema_fields_IS_INSTALL, 1)
-            ->setData(Locale::schema_fields_IS_ACTIVE, 1)
-            ->save();
+        $this->saveInstallationState($locale, 1, 1, $changed);
 
-        $country = $this->ensureCountryExists($countryCode);
-        $country->setData(Countries::schema_fields_IS_INSTALL, 1)
-            ->setData(Countries::schema_fields_IS_ACTIVE, 1)
-            ->save();
+        $country = $this->ensureCountryExists($countryCode, $changed);
+        $this->saveInstallationState($country, 1, 1, $changed);
 
-        $this->syncLocalsStateForLocale($localeCode, true, true);
-        $countrySummary = $this->syncCountryState($countryCode);
-        $this->invalidateLocaleCatalogCaches();
+        $this->syncLocalsStateForLocale($localeCode, true, true, $changed);
+        $countrySummary = $this->syncCountryStateRecord($countryCode, $changed);
 
         return $this->buildLocalePayload($localeCode, $countrySummary);
     }
@@ -252,24 +258,18 @@ class CountryLocaleLifecycleService
 
     public function syncCountryState(string $countryCode): array
     {
+        return $this->syncCountryStateRecord($countryCode);
+    }
+
+    private function syncCountryStateRecord(string $countryCode, bool &$changed = false): array
+    {
         $countryCode = $this->normalizeCountryCode($countryCode);
-        $country = $this->ensureCountryExists($countryCode);
+        $country = $this->ensureCountryExists($countryCode, $changed);
 
         if ($this->isProtectedCountry($countryCode)) {
-            $defaultLocale = $this->ensureLocaleRecordExists(self::DEFAULT_LOCALE_CODE, self::DEFAULT_COUNTRY_CODE);
-            if ((int)$defaultLocale->getData(Locale::schema_fields_IS_INSTALL) !== 1
-                || (int)$defaultLocale->getData(Locale::schema_fields_IS_ACTIVE) !== 1) {
-                $defaultLocale->setData(Locale::schema_fields_IS_INSTALL, 1)
-                    ->setData(Locale::schema_fields_IS_ACTIVE, 1)
-                    ->save();
-            }
-
-            if ((int)$country->getData(Countries::schema_fields_IS_INSTALL) !== 1
-                || (int)$country->getData(Countries::schema_fields_IS_ACTIVE) !== 1) {
-                $country->setData(Countries::schema_fields_IS_INSTALL, 1)
-                    ->setData(Countries::schema_fields_IS_ACTIVE, 1)
-                    ->save();
-            }
+            $defaultLocale = $this->ensureLocaleRecordExists(self::DEFAULT_LOCALE_CODE, self::DEFAULT_COUNTRY_CODE, $changed);
+            $this->saveInstallationState($defaultLocale, 1, 1, $changed);
+            $this->saveInstallationState($country, 1, 1, $changed);
 
             return $this->buildCountryPayload($countryCode);
         }
@@ -278,11 +278,22 @@ class CountryLocaleLifecycleService
         $activeCount = $this->countLocalesByCountry($countryCode, true, true);
         $countryInstalled = (int)$country->getData(Countries::schema_fields_IS_INSTALL) === 1;
 
-        $country->setData(Countries::schema_fields_IS_INSTALL, ($countryInstalled || $installedCount > 0) ? 1 : 0)
-            ->setData(Countries::schema_fields_IS_ACTIVE, $activeCount > 0 ? 1 : 0)
-            ->save();
+        $this->saveInstallationState($country, ($countryInstalled || $installedCount > 0) ? 1 : 0, $activeCount > 0 ? 1 : 0, $changed);
 
         return $this->buildCountryPayload($countryCode);
+    }
+
+    /** Compare persisted flags numerically so PDO string values do not cause no-op saves. */
+    private function saveInstallationState(Countries|Locale $record, int $installed, int $active, bool &$changed): void
+    {
+        if ((int)$record->getData(Locale::schema_fields_IS_INSTALL) === $installed
+            && (int)$record->getData(Locale::schema_fields_IS_ACTIVE) === $active) {
+            return;
+        }
+        $record->setData(Locale::schema_fields_IS_INSTALL, $installed)
+            ->setData(Locale::schema_fields_IS_ACTIVE, $active)
+            ->save();
+        $changed = true;
     }
 
     public function getCountrySummary(string $countryCode): array
@@ -372,7 +383,7 @@ class CountryLocaleLifecycleService
         ];
     }
 
-    private function ensureCountryExists(string $countryCode): Countries
+    private function ensureCountryExists(string $countryCode, bool &$changed = false): Countries
     {
         $countryCode = $this->normalizeCountryCode($countryCode);
         $country = $this->getCountryRecord($countryCode);
@@ -388,16 +399,18 @@ class CountryLocaleLifecycleService
                 ->setData(Countries::schema_fields_IS_INSTALL, 0)
                 ->setData(Countries::schema_fields_IS_ACTIVE, 0)
                 ->save();
+            $changed = true;
         } elseif (!$country->getData(Countries::schema_fields_FLAG) && $flag !== '') {
             $country->setData(Countries::schema_fields_FLAG, $flag)->save();
+            $changed = true;
         }
 
-        $this->ensureCountryDisplayNames($countryCode);
+        $this->ensureCountryDisplayNames($countryCode, $changed);
 
         return $this->getCountryRecord($countryCode);
     }
 
-    private function ensureCountryDisplayNames(string $countryCode): void
+    private function ensureCountryDisplayNames(string $countryCode, bool &$changed = false): void
     {
         foreach ($this->getFallbackDisplayLocaleCodes() as $displayLocaleCode) {
             $nameModel = $this->makeCountryLocaleNameModel();
@@ -407,7 +420,7 @@ class CountryLocaleLifecycleService
                 ->find()
                 ->fetch();
 
-            if ($existing->getId()) {
+            if ($existing->getId() && trim((string)$existing->getData(CountryLocaleName::schema_fields_DISPLAY_NAME)) !== '') {
                 continue;
             }
 
@@ -420,10 +433,11 @@ class CountryLocaleLifecycleService
                 CountryLocaleName::schema_fields_COUNTRY_CODE,
                 CountryLocaleName::schema_fields_DISPLAY_LOCALE_CODE,
             ])->fetch();
+            $changed = true;
         }
     }
 
-    private function ensureLocaleRecordExists(string $localeCode, ?string $countryCode = null): Locale
+    private function ensureLocaleRecordExists(string $localeCode, ?string $countryCode = null, bool &$changed = false): Locale
     {
         $localeCode = $this->normalizeLocaleCode($localeCode);
         $countryCode = $countryCode ? $this->normalizeCountryCode($countryCode) : $this->getCountryCodeFromLocale($localeCode);
@@ -431,7 +445,7 @@ class CountryLocaleLifecycleService
             throw new \RuntimeException((string)__('无法处理区域代码 %{1}', [$localeCode]));
         }
 
-        $this->ensureCountryExists($countryCode);
+        $this->ensureCountryExists($countryCode, $changed);
         $locale = $this->getLocaleRecord($localeCode);
         $localeCodes = Locale::extractLocaleCodes($localeCode);
         $flagData = $this->i18n->getCountryFlagWithLocal($localeCode, 42, 30);
@@ -447,11 +461,12 @@ class CountryLocaleLifecycleService
                 ->setData(Locale::schema_fields_IS_INSTALL, 0)
                 ->setData(Locale::schema_fields_IS_ACTIVE, 0)
                 ->save();
+            $changed = true;
         } else {
-            $changed = false;
+            $localeChanged = false;
             if ((string)$locale->getData(Locale::schema_fields_COUNTRY_CODE) !== $countryCode) {
                 $locale->setData(Locale::schema_fields_COUNTRY_CODE, $countryCode);
-                $changed = true;
+                $localeChanged = true;
             }
             foreach ([
                 Locale::schema_fields_SHORT_CODE => $localeCodes['short_code'],
@@ -461,20 +476,21 @@ class CountryLocaleLifecycleService
             ] as $field => $value) {
                 if (!$locale->getData($field) && $value !== '') {
                     $locale->setData($field, $value);
-                    $changed = true;
+                    $localeChanged = true;
                 }
             }
-            if ($changed) {
+            if ($localeChanged) {
                 $locale->save();
+                $changed = true;
             }
         }
 
-        $this->ensureLocaleDisplayNames([$localeCode]);
+        $this->ensureLocaleDisplayNames([$localeCode], $changed);
 
         return $this->getLocaleRecord($localeCode);
     }
 
-    private function ensureLocaleRecordsForCountry(string $countryCode): array
+    private function ensureLocaleRecordsForCountry(string $countryCode, bool &$changed = false): array
     {
         $countryCode = $this->normalizeCountryCode($countryCode);
         $country = $this->i18n->getCountry($countryCode);
@@ -484,13 +500,13 @@ class CountryLocaleLifecycleService
         }
 
         foreach ($localeCodes as $localeCode) {
-            $this->ensureLocaleRecordExists($localeCode, $countryCode);
+            $this->ensureLocaleRecordExists($localeCode, $countryCode, $changed);
         }
 
         return $localeCodes;
     }
 
-    private function ensureLocaleDisplayNames(array $localeCodes): void
+    private function ensureLocaleDisplayNames(array $localeCodes, bool &$changed = false): void
     {
         foreach ($localeCodes as $localeCode) {
             foreach ($this->getFallbackDisplayLocaleCodes() as $displayLocaleCode) {
@@ -501,7 +517,7 @@ class CountryLocaleLifecycleService
                     ->find()
                     ->fetch();
 
-                if ($existing->getId()) {
+                if ($existing->getId() && trim((string)$existing->getData(LocaleName::schema_fields_DISPLAY_NAME)) !== '') {
                     continue;
                 }
 
@@ -513,6 +529,7 @@ class CountryLocaleLifecycleService
                     LocaleName::schema_fields_LOCALE_CODE,
                     LocaleName::schema_fields_DISPLAY_LOCALE_CODE,
                 ])->fetch();
+                $changed = true;
             }
         }
     }
@@ -617,7 +634,7 @@ class CountryLocaleLifecycleService
     /**
      * Mirror Locale install/active flags into Locals (language switcher / DetectLanguage / LocalizationProvider).
      */
-    private function syncLocalsStateForLocale(string $localeCode, bool $installed, bool $active): void
+    private function syncLocalsStateForLocale(string $localeCode, bool $installed, bool $active, bool &$changed = false): void
     {
         $localeCode = $this->normalizeLocaleCode($localeCode);
         if ($localeCode === '') {
@@ -631,10 +648,21 @@ class CountryLocaleLifecycleService
         $locals = ObjectManager::getInstance(Locals::class);
         $existing = $locals->clearQuery()
             ->where(Locals::schema_fields_CODE, $localeCode)
-            ->select(Locals::schema_fields_CODE)
+            ->select(implode(',', [Locals::schema_fields_CODE, Locals::schema_fields_IS_INSTALL, Locals::schema_fields_IS_ACTIVE]))
             ->fetchArray();
 
         if (!empty($existing)) {
+            $stateChanged = false;
+            foreach ($existing as $row) {
+                if ((int)($row[Locals::schema_fields_IS_INSTALL] ?? 0) !== $isInstall
+                    || (int)($row[Locals::schema_fields_IS_ACTIVE] ?? 0) !== $isActive) {
+                    $stateChanged = true;
+                    break;
+                }
+            }
+            if (!$stateChanged) {
+                return;
+            }
             $locals->clearQuery()
                 ->where(Locals::schema_fields_CODE, $localeCode)
                 ->update([
@@ -642,6 +670,7 @@ class CountryLocaleLifecycleService
                     Locals::schema_fields_IS_ACTIVE => $isActive,
                 ])
                 ->fetch();
+            $changed = true;
             return;
         }
 
@@ -675,19 +704,20 @@ class CountryLocaleLifecycleService
                 Locals::schema_fields_FLAG => $flag,
             ],
         ], [Locals::schema_fields_CODE, Locals::schema_fields_TARGET_CODE])->fetch();
+        $changed = true;
     }
 
-    private function syncLocalsFromLocaleRecord(string $localeCode): void
+    private function syncLocalsFromLocaleRecord(string $localeCode, bool &$changed = false): void
     {
         $locale = $this->getLocaleRecord($localeCode);
         if (!$locale->getId()) {
-            $this->syncLocalsStateForLocale($localeCode, false, false);
+            $this->syncLocalsStateForLocale($localeCode, false, false, $changed);
             return;
         }
 
         $installed = (int)$locale->getData(Locale::schema_fields_IS_INSTALL) === 1;
         $active = (int)$locale->getData(Locale::schema_fields_IS_ACTIVE) === 1;
-        $this->syncLocalsStateForLocale($localeCode, $installed, $active);
+        $this->syncLocalsStateForLocale($localeCode, $installed, $active, $changed);
     }
 
     private function syncLocalsForCountry(string $countryCode): void

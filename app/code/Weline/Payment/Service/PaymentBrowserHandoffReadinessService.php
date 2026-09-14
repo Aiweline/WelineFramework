@@ -58,7 +58,25 @@ final class PaymentBrowserHandoffReadinessService
         $transactionReady = $this->isTransactionReady($session);
         $degraded = $elapsedMs >= self::HANDOFF_MAX_WAIT_MS;
         $ready = $transactionReady || $degraded;
-        $landingUrl = $ready ? $this->mergeLandingUrl($baseUrl, $landing['browser_landing_params'], $degraded) : null;
+        $params = is_array($landing['browser_landing_params'] ?? null) ? $landing['browser_landing_params'] : [];
+        $snapshot = $session->getContextSnapshot();
+        $transactionNo = trim((string) ($snapshot[PaymentCheckoutSessionPersistenceService::CONTEXT_TRANSACTION_NO] ?? ''));
+        if ($transactionNo === '') {
+            $transactionNo = trim((string) $session->getData(PaymentCheckoutSession::schema_fields_ACTIVE_INTENT_CODE));
+        }
+        if ($transactionNo !== '') {
+            $params[PaymentCheckoutSessionPersistenceService::CONTEXT_TRANSACTION_NO] = $transactionNo;
+        }
+
+        // Express review is only for awaiting_confirm; after paid success, prefer checkout success.
+        $baseUrl = $landing['browser_landing_url'];
+        if ($transactionReady && $this->isExpressReviewLanding($baseUrl)) {
+            $successParams = $params;
+            unset($successParams['source']);
+            $baseUrl = $this->buildCheckoutSuccessUrl($successParams, $transactionNo);
+        }
+
+        $landingUrl = $ready ? $this->mergeLandingUrl($baseUrl, $params, $degraded) : null;
 
         return [
             'ready' => $ready,
@@ -71,6 +89,43 @@ final class PaymentBrowserHandoffReadinessService
             'poll_after_ms' => $this->nextPollIntervalMs($elapsedMs),
             'degraded' => $degraded && !$transactionReady,
         ];
+    }
+
+    private function isExpressReviewLanding(string $url): bool
+    {
+        return str_contains($url, 'checkout/express-review');
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     */
+    private function buildCheckoutSuccessUrl(array $params, string $transactionNo): string
+    {
+        $query = [];
+        foreach (['checkout_group_uuid', 'checkout_token', 'order_uuid'] as $key) {
+            $value = trim((string) ($params[$key] ?? ''));
+            if ($value !== '') {
+                $query[$key] = $value;
+            }
+        }
+        if ($transactionNo !== '' && empty($query['order_uuid'])) {
+            try {
+                /** @var PaymentTransaction $txn */
+                $txn = \Weline\Framework\Manager\ObjectManager::getInstance(PaymentTransaction::class);
+                $txn->load(PaymentTransaction::schema_fields_TRANSACTION_NO, $transactionNo);
+                $orderUuid = trim((string) $txn->getData(PaymentTransaction::schema_fields_ORDER_ID));
+                if ($orderUuid !== '') {
+                    $query['order_uuid'] = $orderUuid;
+                }
+            } catch (\Throwable) {
+            }
+        }
+        $path = '/checkout/success';
+        if ($query !== []) {
+            $path .= '?' . http_build_query($query, '', '&', PHP_QUERY_RFC3986);
+        }
+
+        return $path;
     }
 
     private function isTransactionReady(PaymentCheckoutSession $session): bool
@@ -101,10 +156,11 @@ final class PaymentBrowserHandoffReadinessService
     private function mergeLandingUrl(string $baseUrl, array $params, bool $degraded): string
     {
         $parts = parse_url($baseUrl);
-        if (!\is_array($parts) || empty($parts['scheme']) || empty($parts['host'])) {
+        if (!\is_array($parts)) {
             return $baseUrl;
         }
 
+        $isAbsolute = !empty($parts['scheme']) && !empty($parts['host']);
         $query = [];
         if (isset($parts['query']) && \is_string($parts['query']) && $parts['query'] !== '') {
             parse_str($parts['query'], $query);
@@ -121,11 +177,24 @@ final class PaymentBrowserHandoffReadinessService
             $query['degraded'] = '1';
         }
 
-        $rebuilt = $parts['scheme'] . '://' . $parts['host'];
-        if (isset($parts['port'])) {
-            $rebuilt .= ':' . $parts['port'];
+        if ($isAbsolute) {
+            $rebuilt = $parts['scheme'] . '://' . $parts['host'];
+            if (isset($parts['port'])) {
+                $rebuilt .= ':' . $parts['port'];
+            }
+            $rebuilt .= $parts['path'] ?? '';
+        } else {
+            $rebuilt = $parts['path'] ?? $baseUrl;
+            if ($rebuilt === $baseUrl && str_contains($baseUrl, '?')) {
+                $rebuilt = explode('?', $baseUrl, 2)[0];
+            }
+            if ($rebuilt === '' || ($rebuilt[0] ?? '') !== '/') {
+                // Relative path without leading slash / opaque — keep original if unparseable.
+                if (($parts['path'] ?? '') === '' && empty($parts['query'])) {
+                    return $baseUrl;
+                }
+            }
         }
-        $rebuilt .= $parts['path'] ?? '';
         if ($query !== []) {
             $rebuilt .= '?' . http_build_query($query, '', '&', PHP_QUERY_RFC3986);
         }

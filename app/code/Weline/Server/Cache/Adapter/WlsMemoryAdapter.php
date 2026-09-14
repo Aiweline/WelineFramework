@@ -91,13 +91,17 @@ class WlsMemoryAdapter implements AtomicCacheAdapterInterface, BatchCacheAdapter
 
     public function get(string $key): mixed
     {
-        $this->syncLocalEpoch();
         $this->relieveLocalMemoryPressure(false);
 
-        // 先查本地缓存
+        // An epoch probe is only needed before returning a local value. A
+        // shared-cache miss for a key absent from L1 cannot expose stale data,
+        // so avoid an extra WLS round trip on that path.
         if (\array_key_exists($key, $this->localCache)) {
-            $this->recordHit();
-            return $this->localCache[$key];
+            $this->syncLocalEpoch();
+            if (\array_key_exists($key, $this->localCache)) {
+                $this->recordHit();
+                return $this->localCache[$key];
+            }
         }
 
         // 本地缓存未命中，查共享内存；服务不可用时快速降级为 miss，避免 WLS 请求反复等待超时。

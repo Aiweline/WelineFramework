@@ -17,19 +17,19 @@ class MailChannelProvider implements MailChannelProviderInterface
                 'description' => __('推单无法履约且已启动自动退款后的顾客安慰邮件'),
                 'module' => 'Weline_Dropship',
                 'variables' => [
-                    ['code' => 'order_uuid', 'label' => __('订单号'), 'sample' => 'ORD-DEMO'],
-                    ['code' => 'message', 'label' => __('说明'), 'sample' => 'Refund started'],
+                    ['code' => 'order_uuid', 'label' => __('订单 UUID'), 'sample' => 'ord-uuid-example'],
+                    ['code' => 'message', 'label' => __('安慰文案'), 'sample' => '已启动退款'],
                 ],
                 'default_templates' => [
                     [
                         'locale' => 'zh_Hans_CN',
-                        'subject_file' => 'fulfillment_consolation/zh_Hans_CN.subject.txt',
-                        'body_file' => 'fulfillment_consolation/zh_Hans_CN.html',
+                        'subject_file' => 'view/email/fulfillment_consolation/zh_Hans_CN.subject.txt',
+                        'body_file' => 'view/email/fulfillment_consolation/zh_Hans_CN.html',
                     ],
                     [
                         'locale' => 'en_US',
-                        'subject_file' => 'fulfillment_consolation/en_US.subject.txt',
-                        'body_file' => 'fulfillment_consolation/en_US.html',
+                        'subject_file' => 'view/email/fulfillment_consolation/en_US.subject.txt',
+                        'body_file' => 'view/email/fulfillment_consolation/en_US.html',
                     ],
                 ],
             ],

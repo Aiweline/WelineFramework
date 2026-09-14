@@ -208,7 +208,11 @@ final class WaitGiftService
         }
 
         $issued = $provider->issueRandomCoupon($ruleId, [
-            'source' => 'maintenance_wait_gift',
+            'source' => WaitGiftCampaignSyncService::SOURCE_TYPE,
+            'source_module' => WaitGiftCampaignSyncService::SOURCE_MODULE,
+            'source_type' => WaitGiftCampaignSyncService::SOURCE_TYPE,
+            'source_id' => WaitGiftCampaignSyncService::SOURCE_ID,
+            'source_key' => 'wait_gift',
             'wave_id' => (string)($wave['wave_id'] ?? ''),
             'token_hash' => $hash,
             'discount_type' => (string)($wave['discount_type'] ?? 'fixed_amount'),

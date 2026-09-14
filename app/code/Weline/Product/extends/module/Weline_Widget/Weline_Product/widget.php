@@ -19,7 +19,7 @@ return [
                 'name' => '购买操作',
                 'accepts' => ['product', 'cart', 'checkout'],
                 'slot_type' => 'layout-product-purchase-actions',
-                'max' => 5,
+                'max' => 6,
             ],
             'product-express-payment' => [
                 'name' => '快捷支付',
@@ -79,7 +79,6 @@ return [
         'supports' => [
             'layout-product-related-products',
             'related-products',
-            'you-may-like',
             'product-carousel',
         ],
         'default_injections' => [[
@@ -127,6 +126,85 @@ return [
                     'grid' => '网格',
                     'carousel' => '轮播',
                 ],
+            ],
+        ],
+    ],
+    'you-may-like' => [
+        'name' => '猜你喜欢',
+        'description' => '商品详情猜你喜欢：同分类亲合优先，真实目录报价补齐。',
+        'type' => 'product',
+        'code' => 'you-may-like',
+        'area' => 'frontend',
+        'template' => 'Weline_Product::templates/frontend/widgets/you-may-like.phtml',
+        'page_layouts' => ['product'],
+        'position' => ['content'],
+        'slot' => 'product-you-may-like',
+        'supports' => [
+            'layout-product-you-may-like',
+            'layout-product-related-products',
+            'you-may-like',
+            'product-carousel',
+        ],
+        'default_injections' => [[
+            'layout_type' => 'product',
+            'layout_option' => 'default',
+            'slot' => 'product-you-may-like',
+            'area' => 'content',
+            'sort_order' => 0,
+            'required' => true,
+            'reason' => '商品详情默认猜你喜欢槽',
+            'config' => [
+                'title' => '猜你喜欢',
+                'limit' => 8,
+                'columns' => '4',
+                'layout' => 'grid',
+            ],
+        ]],
+        'params' => [
+            'title' => [
+                'default' => '猜你喜欢',
+                'type' => 'string',
+                'label' => '标题',
+            ],
+            'limit' => [
+                'default' => 8,
+                'type' => 'number',
+                'label' => '显示数量',
+            ],
+            'columns' => [
+                'default' => '4',
+                'type' => 'select',
+                'label' => '每行列数',
+                'options' => [
+                    '2' => '2列',
+                    '3' => '3列',
+                    '4' => '4列',
+                    '5' => '5列',
+                ],
+            ],
+            'layout' => [
+                'default' => 'grid',
+                'type' => 'select',
+                'label' => '布局方式',
+                'options' => [
+                    'grid' => '网格',
+                    'carousel' => '轮播',
+                ],
+            ],
+            'show_wishlist' => [
+                'default' => true,
+                'type' => 'bool',
+                'label' => '显示收藏',
+            ],
+            'show_compare' => [
+                'default' => true,
+                'type' => 'bool',
+                'label' => '显示对比',
+            ],
+            'show_quickview' => [
+                'default' => true,
+                'type' => 'bool',
+                'label' => '显示快速查看',
             ],
         ],
     ],

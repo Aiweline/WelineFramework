@@ -263,6 +263,167 @@
         if (express) {
             express.hidden = true;
         }
+        var back = document.querySelector('.weline-checkout__back');
+        if (back) {
+            back.setAttribute('href', '/customer/account/index#b2b-identity');
+            back.textContent = '返回批发身份';
+        }
+    }
+
+    function renderHangOrderSummary(panel, summary, currency) {
+        var host = panel.querySelector('[data-b2b-hang-order]');
+        if (!host) {
+            return;
+        }
+        summary = summary && typeof summary === 'object' ? summary : {};
+        var lines = Array.isArray(summary.lines) ? summary.lines : [];
+        var display = summary.display_number ? String(summary.display_number) : '';
+        var uuid = summary.order_uuid ? String(summary.order_uuid) : '';
+        var statusLabel = summary.hang_status_label
+            ? String(summary.hang_status_label)
+            : String(summary.hang_status || '');
+
+        var meta = document.createElement('div');
+        meta.className = 'b2b-hang-payment__meta';
+        meta.setAttribute('data-testid', 'b2b-hang-order-meta');
+        var metaLeft = document.createElement('div');
+        metaLeft.className = 'b2b-hang-payment__meta-main';
+        var orderLabel = document.createElement('span');
+        orderLabel.className = 'b2b-hang-payment__meta-label';
+        orderLabel.textContent = '订单';
+        var orderValue = document.createElement('strong');
+        orderValue.className = 'b2b-hang-payment__meta-value';
+        orderValue.setAttribute('data-testid', 'b2b-hang-order-number');
+        orderValue.textContent = display !== '' ? display : (uuid !== '' ? uuid.slice(0, 8) + '…' : '—');
+        metaLeft.appendChild(orderLabel);
+        metaLeft.appendChild(orderValue);
+        if (uuid !== '' && display !== '') {
+            var uuidHint = document.createElement('code');
+            uuidHint.className = 'b2b-hang-payment__meta-uuid';
+            uuidHint.textContent = uuid.length > 12 ? uuid.slice(0, 8) + '…' : uuid;
+            metaLeft.appendChild(uuidHint);
+        }
+        meta.appendChild(metaLeft);
+        if (statusLabel) {
+            var badge = document.createElement('span');
+            badge.className = 'w-badge';
+            var hangStatus = String(summary.hang_status || '');
+            var tone = 'warning';
+            if (hangStatus === 'completed') {
+                tone = 'success';
+            } else if (hangStatus === 'awaiting_balance' || hangStatus === 'awaiting_deposit') {
+                tone = 'warning';
+            }
+            badge.setAttribute('data-tone', tone);
+            badge.setAttribute('data-testid', 'b2b-hang-order-status');
+            badge.textContent = statusLabel;
+            meta.appendChild(badge);
+        }
+
+        var list = document.createElement('ul');
+        list.className = 'b2b-hang-payment__lines';
+        list.setAttribute('data-testid', 'b2b-hang-order-lines');
+        if (lines.length === 0) {
+            var emptyLi = document.createElement('li');
+            emptyLi.className = 'b2b-hang-payment__line b2b-hang-payment__line--empty';
+            emptyLi.setAttribute('data-testid', 'b2b-hang-order-lines-empty');
+            emptyLi.textContent = summary.loading
+                ? '正在加载订单明细…'
+                : '暂无商品行，请从「批发身份」重新进入挂单';
+            list.appendChild(emptyLi);
+        } else {
+            lines.forEach(function (line) {
+                if (!line || typeof line !== 'object') {
+                    return;
+                }
+                var li = document.createElement('li');
+                li.className = 'b2b-hang-payment__line';
+                li.setAttribute('data-testid', 'b2b-hang-order-line');
+
+                var thumb = document.createElement('div');
+                thumb.className = 'b2b-hang-payment__line-thumb';
+                thumb.setAttribute('data-testid', 'b2b-hang-order-thumb');
+                var imageUrl = String(line.image_url || line.image || line.thumbnail || '').trim();
+                if (imageUrl && !/^asset:\/\//i.test(imageUrl)) {
+                    var img = document.createElement('img');
+                    img.src = imageUrl;
+                    img.alt = String(line.name || line.sku || '商品');
+                    img.loading = 'lazy';
+                    img.width = 56;
+                    img.height = 56;
+                    img.setAttribute('data-testid', 'b2b-hang-order-thumb-img');
+                    img.addEventListener('error', function () {
+                        thumb.classList.add('is-empty');
+                        if (img.parentNode) {
+                            img.parentNode.removeChild(img);
+                        }
+                    });
+                    thumb.appendChild(img);
+                } else {
+                    thumb.classList.add('is-empty');
+                }
+
+                var main = document.createElement('div');
+                main.className = 'b2b-hang-payment__line-main';
+                var nameEl = document.createElement('span');
+                nameEl.className = 'b2b-hang-payment__line-name';
+                nameEl.textContent = String(line.name || line.sku || '商品');
+                main.appendChild(nameEl);
+                if (line.sku) {
+                    var skuEl = document.createElement('span');
+                    skuEl.className = 'b2b-hang-payment__line-sku';
+                    skuEl.textContent = String(line.sku);
+                    main.appendChild(skuEl);
+                }
+                var side = document.createElement('div');
+                side.className = 'b2b-hang-payment__line-side';
+                var qtyEl = document.createElement('span');
+                qtyEl.className = 'b2b-hang-payment__line-qty';
+                qtyEl.textContent = '×' + String(Number(line.qty_minor) || 0);
+                var rowEl = document.createElement('span');
+                rowEl.className = 'b2b-hang-payment__line-total';
+                rowEl.textContent = formatMinor(line.row_total_minor, currency);
+                side.appendChild(qtyEl);
+                side.appendChild(rowEl);
+                li.appendChild(thumb);
+                li.appendChild(main);
+                li.appendChild(side);
+                list.appendChild(li);
+            });
+        }
+
+        var totals = document.createElement('dl');
+        totals.className = 'b2b-hang-payment__totals';
+        totals.setAttribute('data-testid', 'b2b-hang-order-totals');
+        function addTotalRow(label, amount, opts) {
+            opts = opts || {};
+            var dt = document.createElement('dt');
+            dt.textContent = label;
+            var dd = document.createElement('dd');
+            if (opts.testid) {
+                dd.setAttribute('data-testid', opts.testid);
+            }
+            if (opts.emphasis) {
+                dd.className = 'b2b-hang-payment__totals-payable';
+            }
+            dd.textContent = (opts.prefix || '') + formatMinor(amount, currency);
+            totals.appendChild(dt);
+            totals.appendChild(dd);
+        }
+        addTotalRow('商品合计', summary.goods_subtotal_minor, { testid: 'b2b-hang-goods-subtotal' });
+        addTotalRow('已付定金', summary.deposit_amount_minor, { testid: 'b2b-hang-deposit-paid', prefix: '−' });
+        var balanceLabel = String(summary.hang_status || '') === 'completed' ? '已付尾款' : '应付尾款';
+        addTotalRow(
+            balanceLabel,
+            summary.payable_minor != null ? summary.payable_minor : summary.balance_amount_minor,
+            { testid: 'b2b-hang-payable', emphasis: true }
+        );
+
+        host.innerHTML = '';
+        host.appendChild(meta);
+        host.appendChild(list);
+        host.appendChild(totals);
+        host.hidden = false;
     }
 
     function selectedPaymentMethod(root) {
@@ -458,10 +619,54 @@
         return best;
     }
 
+    function isNodeEffectivelyHidden(node) {
+        if (!node || !node.closest) {
+            return false;
+        }
+        if (node.hidden || node.getAttribute('hidden') !== null) {
+            return true;
+        }
+        try {
+            var host = node.closest('[hidden], [aria-hidden="true"]');
+            if (!host) {
+                return false;
+            }
+            // Discount breakdown may be hidden while its goods node is still the live base —
+            // only treat it as stale when an ancestor other than the breakdown itself hides it
+            // AND a sibling payable amount exists. Prefer attribute reads instead.
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    function readGoodsMajorFromAttrHosts(hosts) {
+        var best = NaN;
+        for (var i = 0; i < hosts.length; i += 1) {
+            var host = hosts[i];
+            if (!host) {
+                continue;
+            }
+            var fromGoodsAttr = parseMoneyMajor(host.getAttribute('data-cart-goods-subtotal-major'));
+            if (isFinite(fromGoodsAttr) && fromGoodsAttr > 0) {
+                // Prefer goods attr over payable attr when both exist on the same host.
+                if (!isFinite(best) || fromGoodsAttr > best) {
+                    best = fromGoodsAttr;
+                }
+                continue;
+            }
+            var fromPayableAttr = parseMoneyMajor(host.getAttribute('data-cart-subtotal'));
+            if (isFinite(fromPayableAttr) && (!isFinite(best) || fromPayableAttr > best)) {
+                best = fromPayableAttr;
+            }
+        }
+        return best;
+    }
+
     /**
      * Goods subtotal (major) for tob deposit base.
-     * Prefer page cart/checkout summary; among matches take the largest to avoid
-     * header mini-cart badge / stale smaller totals winning first-match.
+     * Prefer live cart/checkout summary attrs; never keep a stale hidden goods row
+     * (e.g. previous toc cart total still sitting under a hidden discount breakdown).
      */
     function readGoodsSubtotalMajor(opts) {
         opts = opts || {};
@@ -470,42 +675,73 @@
             return fromOpts;
         }
         try {
-            var preferred = [
-                '[data-weline-cart] [data-cart-goods-subtotal]',
-                '[data-weline-checkout] [data-checkout-subtotal]',
-                '[data-checkout] [data-checkout-subtotal]',
-                '[data-testid="checkout-subtotal"]',
-                '.weline-checkout [data-checkout-subtotal]',
-                // Drawer body (open mini-cart), not the compact header badge alone.
-                '[data-w-mini-cart="1"] .mini-cart-drawer [data-cart-goods-subtotal]',
-                '[data-w-mini-cart="1"] [data-cart-goods-subtotal]',
-                '[data-cart-goods-subtotal]'
-            ];
-            var best = NaN;
-            for (var s = 0; s < preferred.length; s += 1) {
-                var nodes = document.querySelectorAll(preferred[s]);
-                var candidate = pickLargestMoneyMajor(nodes);
-                if (isFinite(candidate) && (!isFinite(best) || candidate > best)) {
-                    best = candidate;
+            // 1) Cart page: authoritative when present.
+            var cartHosts = document.querySelectorAll('[data-weline-cart]');
+            if (cartHosts.length) {
+                var fromCartAttr = readGoodsMajorFromAttrHosts(cartHosts);
+                if (isFinite(fromCartAttr) && fromCartAttr > 0) {
+                    return fromCartAttr;
                 }
-                // Cart page summary is authoritative once found.
-                if (s === 0 && isFinite(best) && best > 0) {
-                    return best;
+                var cartGoods = document.querySelectorAll('[data-weline-cart] [data-cart-goods-subtotal]');
+                var cartGoodsMajor = pickLargestMoneyMajor(cartGoods);
+                if (isFinite(cartGoodsMajor) && cartGoodsMajor > 0) {
+                    return cartGoodsMajor;
                 }
             }
-            if (isFinite(best) && best > 0) {
-                return best;
-            }
-            var attrHosts = document.querySelectorAll(
-                '[data-weline-cart][data-cart-subtotal], [data-w-mini-cart="1"][data-cart-subtotal], [data-cart-subtotal]'
+
+            // 2) Checkout summary.
+            var checkoutNodes = document.querySelectorAll(
+                '[data-weline-checkout] [data-checkout-subtotal], [data-checkout] [data-checkout-subtotal], [data-testid="checkout-subtotal"], .weline-checkout [data-checkout-subtotal]'
             );
-            for (var a = 0; a < attrHosts.length; a += 1) {
-                var fromAttr = parseMoneyMajor(attrHosts[a].getAttribute('data-cart-subtotal'));
-                if (isFinite(fromAttr) && (!isFinite(best) || fromAttr > best)) {
-                    best = fromAttr;
+            var checkoutMajor = pickLargestMoneyMajor(checkoutNodes);
+            if (isFinite(checkoutMajor) && checkoutMajor > 0) {
+                return checkoutMajor;
+            }
+
+            // 3) Mini-cart: prefer numeric goods attr on the open/active root (synced every applySummary).
+            var miniRoots = document.querySelectorAll('[data-w-mini-cart="1"]');
+            var preferredMini = [];
+            var fallbackMini = [];
+            for (var m = 0; m < miniRoots.length; m += 1) {
+                var mini = miniRoots[m];
+                var open = mini.classList.contains('is-drawer-open')
+                    || (mini.querySelector && mini.querySelector('.mini-cart-drawer.is-open'));
+                if (open) {
+                    preferredMini.push(mini);
+                } else {
+                    fallbackMini.push(mini);
                 }
             }
-            return best;
+            var miniAttr = readGoodsMajorFromAttrHosts(preferredMini.length ? preferredMini : fallbackMini);
+            if (isFinite(miniAttr) && miniAttr > 0) {
+                return miniAttr;
+            }
+
+            // 4) Visible payable in open drawer (tob has no marketing discount → equals goods).
+            var payableSelectors = preferredMini.length
+                ? '[data-w-mini-cart="1"].is-drawer-open [data-cart-total-amount], [data-w-mini-cart="1"] .mini-cart-drawer.is-open [data-cart-total-amount]'
+                : '[data-w-mini-cart="1"] [data-cart-total-amount]';
+            var payableMajor = pickLargestMoneyMajor(document.querySelectorAll(payableSelectors));
+            if (isFinite(payableMajor) && payableMajor > 0) {
+                return payableMajor;
+            }
+
+            // 5) Last resort: any goods node text that is not inside a hidden ancestor.
+            var goodsNodes = document.querySelectorAll('[data-cart-goods-subtotal]');
+            var visibleGoods = [];
+            for (var g = 0; g < goodsNodes.length; g += 1) {
+                if (!isNodeEffectivelyHidden(goodsNodes[g])) {
+                    visibleGoods.push(goodsNodes[g]);
+                }
+            }
+            var goodsMajor = pickLargestMoneyMajor(visibleGoods.length ? visibleGoods : goodsNodes);
+            if (isFinite(goodsMajor) && goodsMajor > 0) {
+                return goodsMajor;
+            }
+
+            return readGoodsMajorFromAttrHosts(document.querySelectorAll(
+                '[data-weline-cart], [data-w-mini-cart="1"], [data-cart-subtotal], [data-cart-goods-subtotal-major]'
+            ));
         } catch (e) {
             return NaN;
         }
@@ -999,7 +1235,15 @@
             help.setAttribute('title', String(quote.hint_detail || ''));
         }
         var maxApply = Math.max(0, Number(quote.max_apply_checkout_minor) || 0);
-        var deposit = Math.max(0, Number(quote.deposit_amount_minor) || 0);
+        var quotedDeposit = Math.max(0, Number(quote.deposit_amount_minor) || 0);
+        // Live goods/deposit for copy — must match footer subtotal; never keep a stale quoted base.
+        var liveGoodsMajor = readGoodsSubtotalMajor(creditState.pendingQuoteOpts || {});
+        var liveDeposit = estimateDepositMinor(creditState.pendingQuoteOpts || {});
+        var deposit = liveDeposit > 0 ? liveDeposit : quotedDeposit;
+        if (liveDeposit > 0 && quotedDeposit > 0 && liveDeposit !== quotedDeposit) {
+            // Quote was for a different cart total — clamp apply until ensureCreditQuote refetches.
+            maxApply = Math.min(maxApply, deposit);
+        }
         // Authoritative checkout currency from quote — never use available_base_minor as UI max.
         creditState.currency = String(quote.checkout_currency || creditState.currency || 'CNY').toUpperCase() || 'CNY';
         var currencyLabel = panel.querySelector('[data-b2b-credit-currency]');
@@ -1052,7 +1296,9 @@
         if (cashEl) {
             cashEl.hidden = false;
             cashEl.removeAttribute('hidden');
-            var goodsMajor = readGoodsSubtotalMajor(creditState.pendingQuoteOpts || {});
+            var goodsMajor = isFinite(liveGoodsMajor) && liveGoodsMajor > 0
+                ? liveGoodsMajor
+                : (deposit > 0 ? (deposit * 10000 / DEPOSIT_RATIO_BPS) / 100 : NaN);
             var depositLabel = formatMinor(deposit, creditState.currency);
             var cashLabel = formatMinor(creditState.cashMinor, creditState.currency);
             var goodsLabel = isFinite(goodsMajor) && goodsMajor > 0
@@ -1183,6 +1429,12 @@
 
     function ensureHangPanel(root) {
         var existing = root.querySelector('[data-b2b-hang-payment]');
+        if (existing && !existing.querySelector('[data-b2b-hang-columns]')) {
+            if (existing.parentNode) {
+                existing.parentNode.removeChild(existing);
+            }
+            existing = null;
+        }
         if (existing) {
             return existing;
         }
@@ -1191,12 +1443,20 @@
         panel.setAttribute('data-b2b-hang-payment', '1');
         panel.setAttribute('data-testid', 'b2b-hang-payment');
         panel.innerHTML = ''
+            + '<header class="b2b-hang-payment__header">'
             + '<h2 class="b2b-hang-payment__title" data-b2b-hang-title></h2>'
-            + '<p class="b2b-hang-payment__amount" data-b2b-hang-amount></p>'
+            + '<p class="b2b-hang-payment__amount" data-b2b-hang-amount data-testid="b2b-hang-amount"></p>'
+            + '</header>'
+            + '<div class="b2b-hang-payment__columns" data-b2b-hang-columns>'
+            + '<div class="b2b-hang-payment__order" data-b2b-hang-order data-testid="b2b-hang-order" hidden></div>'
+            + '<div class="b2b-hang-payment__pay-block">'
+            + '<h3 class="b2b-hang-payment__pay-title">支付方式</h3>'
             + '<div class="b2b-hang-payment__methods" data-b2b-hang-methods data-testid="b2b-hang-methods" hidden></div>'
             + '<p class="b2b-hang-payment__status" data-b2b-hang-status hidden></p>'
             + '<button type="button" class="w-button" data-variant="primary" data-b2b-hang-pay data-testid="b2b-hang-pay">'
-            + '</button>';
+            + '</button>'
+            + '</div>'
+            + '</div>';
         var form = root.querySelector('form') || root;
         form.parentNode.insertBefore(panel, form);
         return panel;
@@ -1218,6 +1478,65 @@
         global.location.assign(hangLoginUrl());
     }
 
+    function applyHangNonPayableUi(panel, ctx, hang) {
+        var titleEl = panel.querySelector('[data-b2b-hang-title]');
+        var amountEl = panel.querySelector('[data-b2b-hang-amount]');
+        var statusEl = panel.querySelector('[data-b2b-hang-status]');
+        var payBtn = panel.querySelector('[data-b2b-hang-pay]');
+        var payTitle = panel.querySelector('.b2b-hang-payment__pay-title');
+        var methods = panel.querySelector('[data-b2b-hang-methods]');
+        var viewState = String((ctx && ctx.view_state) || '');
+        var hangStatus = String((ctx && ctx.hang_status) || '');
+        if (!viewState && hangStatus === 'completed') {
+            viewState = 'completed';
+        }
+        panel.classList.toggle('is-hang-completed', viewState === 'completed');
+        panel.setAttribute('data-hang-view-state', viewState || 'blocked');
+        if (titleEl) {
+            titleEl.textContent = String((ctx && ctx.label) || (hang.purpose === 'deposit' ? '定金已结清' : '挂单已完成'));
+        }
+        if (amountEl) {
+            var amount = formatMinor(ctx && ctx.amount_minor, ctx && ctx.currency);
+            if (viewState === 'completed') {
+                amountEl.textContent = (hang.purpose === 'deposit' ? '已付定金 ' : '已付尾款 ') + amount;
+            } else {
+                amountEl.textContent = amount;
+            }
+        }
+        if (payTitle) {
+            payTitle.textContent = viewState === 'completed' ? '支付状态' : '支付方式';
+        }
+        if (methods) {
+            methods.hidden = true;
+            methods.innerHTML = '';
+        }
+        if (statusEl) {
+            statusEl.hidden = false;
+            statusEl.textContent = String(
+                (ctx && ctx.message)
+                || (viewState === 'completed'
+                    ? (hang.purpose === 'deposit' ? '本单定金已付清，无需再支付' : '本单尾款已结清，无需再支付')
+                    : '当前挂单状态无法继续支付')
+            );
+            statusEl.setAttribute('data-tone', viewState === 'completed' ? 'success' : 'warning');
+        }
+        if (payBtn) {
+            if (viewState === 'completed') {
+                payBtn.disabled = false;
+                payBtn.textContent = '返回批发身份';
+                payBtn.setAttribute('data-b2b-hang-done', '1');
+                payBtn.onclick = function () {
+                    global.location.assign('/customer/account/index#b2b-identity');
+                };
+            } else {
+                payBtn.disabled = true;
+                payBtn.textContent = hang.purpose === 'deposit' ? '支付定金' : '支付尾款';
+                payBtn.removeAttribute('data-b2b-hang-done');
+                payBtn.onclick = null;
+            }
+        }
+    }
+
     async function bindHangPayment(root) {
         var hang = hangPurposeFromLocation();
         if (!hang || !root) {
@@ -1236,6 +1555,18 @@
         if (payBtn) {
             payBtn.textContent = hang.purpose === 'deposit' ? '支付定金' : '支付尾款';
         }
+        renderHangOrderSummary(panel, {
+            display_number: '',
+            order_uuid: hang.orderUuid,
+            hang_status: '',
+            hang_status_label: hang.purpose === 'deposit' ? '待付定金' : '待付尾款',
+            lines: [],
+            goods_subtotal_minor: 0,
+            deposit_amount_minor: 0,
+            balance_amount_minor: 0,
+            payable_minor: 0,
+            loading: true
+        }, 'CNY');
         if (!global.Weline || !global.Weline.Api || typeof global.Weline.Api.resource !== 'function') {
             if (statusEl) {
                 statusEl.hidden = false;
@@ -1256,6 +1587,18 @@
                 sendToLogin(statusEl, payBtn);
                 return;
             }
+            renderHangOrderSummary(panel, {
+                display_number: '',
+                order_uuid: hang.orderUuid,
+                hang_status: '',
+                hang_status_label: '',
+                lines: [],
+                goods_subtotal_minor: 0,
+                deposit_amount_minor: 0,
+                balance_amount_minor: 0,
+                payable_minor: 0,
+                loading: false
+            }, 'CNY');
             if (statusEl) {
                 statusEl.hidden = false;
                 statusEl.textContent = (err && err.message) || '无法加载挂单支付信息';
@@ -1270,6 +1613,22 @@
             if (isHangAuthError(null, ctx)) {
                 sendToLogin(statusEl, payBtn);
                 return;
+            }
+            if (ctx && ctx.order_summary) {
+                renderHangOrderSummary(panel, ctx.order_summary, ctx.currency || 'CNY');
+            } else {
+                renderHangOrderSummary(panel, {
+                    display_number: '',
+                    order_uuid: hang.orderUuid,
+                    hang_status: '',
+                    hang_status_label: '',
+                    lines: [],
+                    goods_subtotal_minor: 0,
+                    deposit_amount_minor: 0,
+                    balance_amount_minor: 0,
+                    payable_minor: 0,
+                    loading: false
+                }, 'CNY');
             }
             if (statusEl) {
                 statusEl.hidden = false;
@@ -1286,6 +1645,14 @@
         if (amountEl) {
             amountEl.textContent = formatMinor(ctx.amount_minor, ctx.currency);
         }
+        renderHangOrderSummary(panel, ctx.order_summary, ctx.currency);
+        var canPay = ctx.can_pay !== false;
+        if (!canPay) {
+            applyHangNonPayableUi(panel, ctx, hang);
+            return;
+        }
+        panel.classList.remove('is-hang-completed');
+        panel.setAttribute('data-hang-view-state', 'payable');
         var methodCount = renderHangPaymentMethods(panel, ctx.payment_methods);
         if (methodCount <= 0) {
             if (statusEl) {
@@ -1401,9 +1768,21 @@
             // Sync chrome only — deposit-change refetch is handled inside ensureCreditQuote.
             applyCartTypeAll(type);
             if (String(type || '').toLowerCase() === 'tob') {
+                var quoteOpts = { cart_type: 'tob' };
+                if (summary) {
+                    var sub = Number(summary.subtotal != null ? summary.subtotal : summary.subtotal_minor != null
+                        ? Number(summary.subtotal_minor) / 100
+                        : NaN);
+                    if (isFinite(sub) && sub > 0) {
+                        quoteOpts.subtotal = sub;
+                    }
+                    if (summary.currency) {
+                        quoteOpts.currency = String(summary.currency).toUpperCase();
+                    }
+                }
                 creditSurfaceRoots().forEach(function (root) {
                     if (root.querySelector('[data-b2b-checkout-credit]')) {
-                        ensureCreditQuote(root, { cart_type: 'tob' });
+                        ensureCreditQuote(root, quoteOpts);
                     }
                 });
             }
@@ -1455,6 +1834,7 @@
             hangPurposeFromLocation: hangPurposeFromLocation,
             hangLoginUrl: hangLoginUrl,
             bindHangPayment: bindHangPayment,
+            renderHangOrderSummary: renderHangOrderSummary,
             syncFromFrozen: syncFromFrozen,
             refreshCreditQuote: refreshCreditQuote,
             ensureCreditQuote: ensureCreditQuote,

@@ -26,6 +26,7 @@ final class McpSkillCatalog
         'weline-theme-development' => GuidanceWorkflowCatalog::SURFACE_FRONTEND_DEVELOPMENT,
         'local-browser-urls' => GuidanceWorkflowCatalog::SURFACE_WEBUI_BROWSER_CLOSEOUT,
         'weline-taglib-first' => GuidanceWorkflowCatalog::SURFACE_TAGLIB_UI_CONTROL,
+        'weline-req-clarify' => GuidanceWorkflowCatalog::SURFACE_REQUIREMENT_CLARIFY_USE_CASE,
     ];
 
     /**
@@ -79,14 +80,18 @@ final class McpSkillCatalog
                 'Host shells (e.g. Cursor Agent Skills) may exist only as thin reminders to call MCP.',
                 'Full task docs still come from resolve_task_context; skills are procedural checklists.',
                 'Whenever the task mentions CSS or 主题/theme: load UI skill frontend-design, prototype skill prototype, and theme skill weline-theme-development (get_skill) before styling.',
-                'HARD: At requirement start analyze environment implicit requirements (requirement_implicit_analysis_skill_decision → implicit_requirements + ui_skill_decision=participate|skip). Classify work_kind=feature|non_feature (requirement_feature_kind_gate). Decide prototype/frontend-design participation FROM analysis—never blindly force on every feature. When participate: skill_participation MUST include prototype + frontend-design; acceptance MUST include type=shentu; verify MUST run 审图. Closeout MUST write huishen_notes 汇审 (closeout_requires_huishen).',
+                'HARD: At requirement start classify work_kind + fe_be_scope (requirement_fe_be_scope_analysis), then run Spec Kit/Kiro-style clarify + use-case when needed (requirement_clarify_use_case_spec). Enable host Plan Mode (host_plan_mode_for_planning) UNLESS simple plan_skip with rationale≥24. EVERY ask MUST have real acceptance (requirement_acceptance_always)—Web touches need local Browser WB-OP visual+logic even without Playwright e2e. Layout/humanization/吐槽/审图 force prototype+frontend-design adjustments (ui_skill_surface_signal_gate). Then analyze implicit requirements; decide ui_skill_decision. When participate: prototype+frontend-design+weline-theme-development + type=shentu. Closeout MUST write huishen_notes 汇审 (closeout_requires_huishen).',
                 'HARD: Any user message with an image/screenshot attachment (admin/CMS/error/storefront—not only retail/B2B) MUST run MCP command 审图 (dev/ai-command/theme/审图.md) immediately; do not wait for the word 审图. Classify error_shot vs ui_shot: non-error (ui_shot) defaults to UI modification required. Same-turn joint pipeline: extract wireframe/line sketch → prototype adjustments (prototype) → frontend-design humanization + aesthetic standards → weline-theme-development CSS/tokens; fix fails (do not critique-only). Shot-only/silent screenshot: UI+prototype audit—NOT confirming prior chat. If host skills frontend-design or prototype are missing: prompt visibly and self-install into Cursor Agent Store before E/F pass (image_attachment_shentu_bundle.missing_host_skills_gate).',
+                'HARD: Prototype/feature Web UI page groupings MUST default to TOP tabs (feature_ui_keep_simple_top_tabs): one job per pane; secondary blocks use click-to-expand cards (default collapsed); redesign non-compliant dense stacked pages to tabs in the same feature.',
                 'Module doc skills are extracted from doc/ai/INDEX.json + SKILL.md (+ AI-INDEX locators) into MCP memory only; never revive knowledge.auto_generate_skills.',
             ],
             'feature_skill_bundle' => [
                 'rule_id' => 'requirement_implicit_analysis_skill_decision',
                 'also_rule_id' => 'requirement_feature_kind_gate',
-                'triggers' => ['work_kind=feature', '功能', 'feature', 'ui_skill_decision=participate', '隐形需求'],
+                'clarify_rule_id' => 'requirement_clarify_use_case_spec',
+                'clarify_skill_id' => GuidanceWorkflowCatalog::SURFACE_REQUIREMENT_CLARIFY_USE_CASE,
+                'clarify_command_path' => 'dev/ai-command/ai/需求澄清与用例规格.md',
+                'triggers' => ['work_kind=feature', '功能', 'feature', 'ui_skill_decision=participate', '隐形需求', '需求澄清', '用例规格'],
                 'required_when' => 'ui_skill_decision=participate',
                 'required' => [
                     ['role' => 'prototype', 'host_skill' => 'prototype'],

@@ -172,6 +172,20 @@ final class FrontendWorkerScopeBootstrapResponseService
                     );
                 }
                 $decoratedBody = $encoded;
+            } elseif ($prepared['encoding'] === 'br') {
+                $encoded = \brotli_compress(
+                    $decoratedBody,
+                    \Weline\Framework\Http\ContentEncodingNegotiator::BROTLI_QUALITY,
+                );
+                if (!\is_string($encoded) || $encoded === '') {
+                    return $this->skipOrFail(
+                        $result,
+                        $bindingRequired,
+                        $decision->mode,
+                        'worker_scope_response_encoding_failed',
+                    );
+                }
+                $decoratedBody = $encoded;
             }
 
             // Return the Response for both controller Response and legacy
@@ -184,12 +198,13 @@ final class FrontendWorkerScopeBootstrapResponseService
                 $headers->removeHeader($header);
             }
             $transferEncoding = \strtolower($this->headerValue($response, 'Transfer-Encoding'));
-            if ($prepared['encoding'] === 'gzip' && $transferEncoding === '') {
+            $isCompressed = $prepared['encoding'] === 'gzip' || $prepared['encoding'] === 'br';
+            if ($isCompressed && $transferEncoding === '') {
                 $response->setHeader('Content-Length', (string)\strlen($decoratedBody));
             } else {
                 $headers->removeHeader('Content-Length');
             }
-            if ($prepared['encoding'] === 'gzip') {
+            if ($isCompressed) {
                 $this->ensureVaryAcceptEncoding($response);
             }
 
@@ -307,6 +322,23 @@ final class FrontendWorkerScopeBootstrapResponseService
                     $bindingRequired,
                     $mode,
                     'worker_scope_response_gzip_invalid',
+                );
+            }
+            $html = $decoded;
+        } elseif ($encoding === 'br') {
+            if (!\function_exists('brotli_uncompress') || !\function_exists('brotli_compress')) {
+                return $this->preparationFailure(
+                    $bindingRequired,
+                    $mode,
+                    'worker_scope_response_encoding_unsupported',
+                );
+            }
+            $decoded = \brotli_uncompress($wireBody);
+            if (!\is_string($decoded) || \strlen($decoded) > self::MAX_HTML_BODY_BYTES) {
+                return $this->preparationFailure(
+                    $bindingRequired,
+                    $mode,
+                    'worker_scope_response_br_invalid',
                 );
             }
             $html = $decoded;

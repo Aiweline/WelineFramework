@@ -116,14 +116,14 @@ final class CoroutineRuntimeTest extends TestCase
         $get = $_GET;
         [$reader, $writer] = self::guardTimingPair();
         try {
-            $_SERVER['REQUEST_URI'] = '/guard-timing-fixture?wls_trace=1';
+            $_SERVER['REQUEST_URI'] = '/guard-timing-fixture';
             $_SERVER['REQUEST_METHOD'] = 'GET';
-            $_GET['wls_trace'] = '1';
             $context::init();
             $context::set('server', $_SERVER);
             $context::set('get', $_GET);
             $context::isInitialized();
             $trace::reset();
+            $trace::installPanelTraceOn();
             self::assertTrue($trace::isEnabled());
             $scheduler = new FiberScheduler();
             $runtime = self::guardTimingLoop($scheduler);

@@ -69,8 +69,10 @@ final class TsvGzReader
 
     public static function normalizePostal(string $postal): string
     {
-        $postal = strtoupper(trim($postal));
-        $postal = preg_replace('/\s+/', '', $postal) ?? $postal;
+        $postal = trim($postal);
+        // Strip ZWSP/ZWNJ/BOM/soft-hyphen and other format chars pasted from chat/docs.
+        $postal = preg_replace('/[\x{200B}-\x{200D}\x{FEFF}\x{00AD}\p{Cf}\s]+/u', '', $postal) ?? $postal;
+        $postal = strtoupper($postal);
 
         return $postal;
     }

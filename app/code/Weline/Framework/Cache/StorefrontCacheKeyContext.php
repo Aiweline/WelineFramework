@@ -16,6 +16,10 @@ final readonly class StorefrontCacheKeyContext
     public const SCHEMA_VERSION = 'storefront-cache-v2';
     private const STORAGE_KEY = 'framework.cache.storefront_key_context.v2';
 
+    public string $defaultLocale;
+    /** @var list<string> Ordered lookup chain; namespace paths may sort separately. */
+    public array $translationLocales;
+
     public function __construct(
         public ?ScopeIdentity $scopeIdentity,
         public string $lang,
@@ -24,7 +28,14 @@ final readonly class StorefrontCacheKeyContext
         public string $cacheKeyFingerprint,
         public bool $cacheable,
         public string $failureCode = '',
+        string $defaultLocale = '',
+        ?array $translationLocales = null,
     ) {
+        $this->defaultLocale = \Weline\Framework\Phrase\LocaleFallbackChain::normalize(
+            $defaultLocale !== '' ? $defaultLocale : \Weline\Framework\Phrase\LocaleFallbackChain::websiteDefaultLocale(),
+        );
+        $this->translationLocales = $translationLocales
+            ?? \Weline\Framework\Phrase\LocaleFallbackChain::candidates($lang, $this->defaultLocale);
         if (preg_match('/^[a-f0-9]{64}$/D', $cacheKeyFingerprint) !== 1) {
             throw new \InvalidArgumentException(__('Storefront 缓存键指纹必须是小写 SHA-256'));
         }
@@ -165,6 +176,8 @@ final readonly class StorefrontCacheKeyContext
             'store_mode' => $identity?->storeMode ?? ScopeIdentity::MODE_NORMAL,
             'context_version' => $identity?->contextVersion ?? ScopeIdentity::CONTEXT_VERSION,
             'lang' => $this->lang,
+            'default_locale' => $this->defaultLocale,
+            'translation_locales' => implode(',', $this->translationLocales),
             'currency' => $this->currency,
             'namespace_fingerprint' => $this->namespaceFingerprint ?? '',
             'cache_key_fingerprint' => $this->cacheKeyFingerprint,

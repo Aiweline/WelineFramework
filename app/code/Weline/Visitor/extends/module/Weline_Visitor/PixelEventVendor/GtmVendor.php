@@ -64,4 +64,36 @@ final class GtmVendor implements PixelEventVendorInterface
             'google_recommended' => true,
         ];
     }
+
+    /**
+     * @return array<string, list<string>>
+     */
+    public function cspDirectives(): array
+    {
+        // GTM container bootstrap (gtm.js) + optional preview frames.
+        return [
+            'script-src' => [
+                'https://www.googletagmanager.com',
+                'https://www.google-analytics.com',
+                'https://www.google.com',
+                'https://www.gstatic.com',
+            ],
+            'connect-src' => [
+                'https://www.googletagmanager.com',
+                'https://www.google-analytics.com',
+                'https://region1.google-analytics.com',
+                'https://www.google.com',
+                'https://www.gstatic.com',
+            ],
+            'img-src' => [
+                'https://www.googletagmanager.com',
+                'https://www.google-analytics.com',
+                'https://www.google.com',
+                'https://www.gstatic.com',
+            ],
+            'frame-src' => [
+                'https://www.googletagmanager.com',
+            ],
+        ];
+    }
 }

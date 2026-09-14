@@ -90,6 +90,9 @@ final class ProductQueryProvider implements QueryProviderInterface
                 continue;
             }
             $slug = strtolower(trim((string)($offer['slug'] ?? '')));
+            if ($slug === '' || preg_match('#^\d+$#', $slug) === 1) {
+                $slug = $this->publicSlugFromSku((string)($offer['sku'] ?? ''));
+            }
             $byProduct[$productId] = [
                 'product_id' => $productId,
                 'name' => (string)($offer['name'] ?? ''),
@@ -110,5 +113,17 @@ final class ProductQueryProvider implements QueryProviderInterface
         }
 
         return $ordered;
+    }
+
+    private function publicSlugFromSku(string $sku): string
+    {
+        $slug = strtolower(trim($sku));
+        $slug = preg_replace('/[^a-z0-9]+/', '-', $slug) ?? '';
+        $slug = trim($slug, '-');
+        if ($slug === '' || preg_match('#^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$#D', $slug) !== 1) {
+            return '';
+        }
+
+        return $slug;
     }
 }

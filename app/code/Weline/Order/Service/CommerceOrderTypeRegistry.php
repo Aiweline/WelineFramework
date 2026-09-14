@@ -121,9 +121,9 @@ final class CommerceOrderTypeRegistry
         }
         $normalized = $this->normalize($code);
         if ($normalized === '' || $normalized === self::CODE_TOC) {
-            return (string)__('零售');
+            return (string)__('零售订单');
         }
-        return (string)__('历史批发');
+        return (string)__('历史批发订单');
     }
 
     public function resolveBadgeTone(string $code): string

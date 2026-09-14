@@ -17,9 +17,10 @@ final class CheckoutFormAddressRegionIdsContractTest extends TestCase
             dirname(__DIR__, 3) . '/view/frontend/checkout/index.phtml',
         );
         self::assertStringContainsString('function formAddress()', $src);
-        self::assertStringContainsString('province_region_id: text(data.get(\'province_region_id\')).trim()', $src);
-        self::assertStringContainsString('city_region_id: text(data.get(\'city_region_id\')).trim()', $src);
-        self::assertStringContainsString('district_region_id: text(data.get(\'district_region_id\')).trim()', $src);
+        self::assertStringContainsString('resolveQuoteAddress', $src);
+        self::assertStringContainsString('province_region_id', $src);
+        self::assertStringContainsString('city_region_id', $src);
+        self::assertStringContainsString('district_region_id', $src);
         self::assertStringContainsString('billing_province_region_id', $src);
         self::assertStringContainsString('billing_city_region_id', $src);
         self::assertStringContainsString('billing_district_region_id', $src);

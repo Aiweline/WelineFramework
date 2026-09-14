@@ -75,10 +75,9 @@ if (count($ids) !== count($reports)) {
 fwrite(STDOUT, json_encode([
     'schema_version' => 'weline-real-project-acceptance.v1',
     'scenario_coverage' => [
-        'normal_multi_file' => 'covered by tests/run.php execution-run fixture',
-        'large_symbol_edit' => 'covered by exact-region and run-bound edit-plan fixture',
-        'post_apply_impact_expansion' => 'covered by IMPACT_EXPANSION execution-run fixture',
-        'directory_identity' => 'verified against the real directories below',
+        'index_only_knowledge' => 'covered by tests/run.php project-index and readiness fixtures',
+        'isolated_directory_identity' => 'verified against the real directories below',
+        'lifecycle_retention' => 'covered by audit/session TTL cleanup in tests/run.php',
     ],
     'project_count' => count($reports),
     'isolated_project_id_count' => count($ids),

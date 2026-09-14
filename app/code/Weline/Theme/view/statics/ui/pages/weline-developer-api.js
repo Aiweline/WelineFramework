@@ -737,15 +737,10 @@ function refreshApiToc() {
     panel.append(header, list);
     host.append(toggle, panel);
 
-    if (apiIsMobileViewport()) {
-        panel.hidden = true;
-        panel.classList.remove('is-open');
-        toggle.hidden = false;
-    } else {
-        panel.hidden = false;
-        panel.classList.add('is-open');
-        toggle.hidden = true;
-    }
+    // Keep the floating directory out of the API tester until explicitly opened.
+    panel.hidden = true;
+    panel.classList.remove('is-open');
+    toggle.hidden = false;
 
     const scrollRoot = detailRoot instanceof HTMLElement ? detailRoot : null;
     apiTocState.scrollRoot = scrollRoot;

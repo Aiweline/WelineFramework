@@ -1746,7 +1746,7 @@ table.table tbody tr:hover {
     color: inherit;
 }
 
-[data-surface="inverse"] a:not([class*="w-button"]):not(.btn):not(.mini-cart-drawer__btn),
+[data-surface="inverse"] a:not([class*="w-button"]):not(.btn):not(.mini-cart-drawer__btn):not(.header-logo__link),
 [data-surface="inverse"] button:not(.w-button):not(.btn):not(.search-submit-btn):not(.search-category-facade):not(.search-type-facade):not(.search-type-trigger),
 [data-surface="inverse"] .w-icon,
 [data-surface="inverse"] svg {

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Weline\Customer\Service;
 
 use Weline\Customer\Model\PasswordResetToken;
+use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\ScopeIdentity;
 
 class PasswordResetService
 {
@@ -38,20 +40,62 @@ class PasswordResetService
             ->setData(PasswordResetToken::schema_fields_EXPIRES_AT, $expiresAt)
             ->save();
 
-        w_query('smtp', 'send', [
+        $tokenUrl = $resetUrl . (str_contains($resetUrl, '?') ? '&' : '?') . 'token=' . $token;
+        $params = [
             'module' => 'Weline_Customer',
             'channel' => 'Weline_Customer::password_reset',
             'to' => $email,
-            'subject' => (string) __('重置您的密码'),
-            'content' => sprintf(
-                '<p>%s</p><p><a href="%s">%s</a></p>',
-                __('请点击下方链接重置密码。'),
-                htmlspecialchars($resetUrl . (str_contains($resetUrl, '?') ? '&' : '?') . 'token=' . $token, ENT_QUOTES),
-                __('重置密码')
-            ),
-        ]);
+            'vars' => [
+                'reset_url' => $tokenUrl,
+                'customer_email' => $email,
+            ],
+        ];
+        $scope = $this->resolveSendScope($customer);
+        if ($scope['website_code'] !== '') {
+            $params['website_code'] = $scope['website_code'];
+        }
+        if ($scope['locale'] !== '') {
+            $params['locale'] = $scope['locale'];
+        }
+        w_query('smtp', 'send', $params);
 
         return true;
+    }
+
+    /**
+     * Prefer RequestContext website/locale; otherwise customer website when available.
+     *
+     * @return array{website_code:string,locale:string}
+     */
+    private function resolveSendScope(object $customer): array
+    {
+        $websiteCode = '';
+        $locale = '';
+        try {
+            $identity = RequestContext::scopeIdentity();
+            if ($identity instanceof ScopeIdentity && !$identity->isGlobal()) {
+                $websiteCode = trim((string)($identity->websiteCode ?? ''));
+            }
+            $lang = trim((string)RequestContext::getWelineUserLang());
+            if ($lang !== '' && $lang !== 'default') {
+                $locale = $lang;
+            }
+        } catch (\Throwable) {
+        }
+
+        if ($websiteCode === '') {
+            try {
+                if (method_exists($customer, 'getData')) {
+                    $code = trim((string)$customer->getData('website_code'));
+                    if ($code !== '') {
+                        $websiteCode = $code;
+                    }
+                }
+            } catch (\Throwable) {
+            }
+        }
+
+        return ['website_code' => $websiteCode, 'locale' => $locale];
     }
 
     public function validateToken(string $token): ?PasswordResetToken

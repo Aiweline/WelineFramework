@@ -1211,12 +1211,24 @@ class AffiliateService
             throw new \InvalidArgumentException((string) \__('暂时无法生成分销分享链接（商品分享目标不可用）。'));
         }
 
-        $handle = trim((string) ($product['handle'] ?? $product['slug'] ?? ''));
-        if ($handle !== '') {
+        // Prefer the storefront public URL from Product query (already slug-based).
+        $urlPath = trim((string) ($product['url'] ?? ''));
+        if ($urlPath !== '' && !$this->isNumericProductTargetPath($urlPath)) {
+            return ltrim($urlPath, '/');
+        }
+
+        $handle = strtolower(trim((string) ($product['handle'] ?? $product['slug'] ?? '')));
+        if ($handle !== '' && !$this->isNumericProductHandle($handle)) {
             return 'product/' . ltrim($handle, '/');
         }
 
-        return 'product/' . $productId;
+        // Catalog may omit EAV slug for ASCII SKUs; derive the same public handle.
+        $skuHandle = $this->publicSlugFromSku((string) ($product['sku'] ?? ''));
+        if ($skuHandle !== '') {
+            return 'product/' . $skuHandle;
+        }
+
+        throw new \InvalidArgumentException((string) \__('暂时无法生成分销分享链接（商品缺少 URL slug）。'));
     }
 
     /**
@@ -2605,22 +2617,30 @@ class AffiliateService
             return $targetPath;
         }
 
-        if ($this->isLegacyProductViewTargetPath($targetPath)) {
+        if ($this->isStaleProductTargetPath($targetPath)) {
             $resolved = '';
             if ($productId > 0) {
                 try {
                     $resolved = $this->resolveProductShareTargetPath($productId);
                 } catch (\Throwable) {
-                    $resolved = 'product/' . $productId;
+                    $resolved = '';
                 }
             }
+            // Click continuity only: prefer product/{id} over broken legacy controller routes
+            // when slug still cannot be resolved in this request.
             if ($resolved === '') {
-                $resolved = $productId > 0 ? ('product/' . $productId) : '/';
+                if ($productId > 0) {
+                    $resolved = 'product/' . $productId;
+                } elseif ($targetPath !== '' && $targetPath !== '/') {
+                    $resolved = ltrim($targetPath, '/');
+                } else {
+                    $resolved = '/';
+                }
             }
 
             if (
                 $resolved !== ''
-                && $resolved !== $targetPath
+                && $resolved !== ltrim($targetPath, '/')
                 && (int) ($share->getId() ?? 0) > 0
             ) {
                 try {
@@ -2635,18 +2655,33 @@ class AffiliateService
         }
 
         if ($targetPath === '') {
-            $targetPath = $productId > 0 ? ('product/' . $productId) : '/';
+            if ($productId > 0) {
+                try {
+                    $targetPath = $this->resolveProductShareTargetPath($productId);
+                } catch (\Throwable) {
+                    $targetPath = '/';
+                }
+            } else {
+                $targetPath = '/';
+            }
         }
 
         return $this->buildFrontendPath($targetPath);
     }
 
-    private function isLegacyProductViewTargetPath(string $targetPath): bool
+    /**
+     * Legacy controller routes and numeric /product/{id} paths must be upgraded to /product/{slug}.
+     */
+    private function isStaleProductTargetPath(string $targetPath): bool
     {
         $raw = trim($targetPath);
-        // Homepage `/` and empty paths are not the old product view controller route.
+        // Homepage `/` and empty paths are not product share targets.
         if ($raw === '' || $raw === '/') {
             return false;
+        }
+
+        if ($this->isNumericProductTargetPath($raw)) {
+            return true;
         }
 
         $path = strtolower(trim(explode('?', $raw, 2)[0]));
@@ -2655,6 +2690,31 @@ class AffiliateService
         return $path === 'product/view'
             || $path === self::PRODUCT_VIEW_ROUTE
             || $path === rtrim(self::PRODUCT_VIEW_ROUTE, '/');
+    }
+
+    private function isNumericProductTargetPath(string $targetPath): bool
+    {
+        $path = strtolower(trim(explode('?', trim($targetPath), 2)[0]));
+        $path = trim($path, '/');
+
+        return (bool) preg_match('#^product/(\d+)/?$#', $path);
+    }
+
+    private function isNumericProductHandle(string $handle): bool
+    {
+        return (bool) preg_match('#^\d+$#', trim($handle, '/'));
+    }
+
+    private function publicSlugFromSku(string $sku): string
+    {
+        $slug = strtolower(trim($sku));
+        $slug = preg_replace('/[^a-z0-9]+/', '-', $slug) ?? '';
+        $slug = trim($slug, '-');
+        if ($slug === '' || preg_match('#^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$#D', $slug) !== 1) {
+            return '';
+        }
+
+        return $slug;
     }
 
     /**

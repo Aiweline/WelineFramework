@@ -50,6 +50,24 @@ $status = (string)($item['status'] ?? 'enabled');
             <div class="w-help"><?= $escape(__('留空表示适用于全部语言。')) ?></div>
         </div>
 
+        <div class="w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-3);">
+            <div class="w-field" style="flex:1 1 10rem;">
+                <label class="w-label" for="faq-store-code"><?= $escape(__('店铺 code')) ?></label>
+                <input class="w-input" id="faq-store-code" name="store_code" value="<?= $escape($item['store_code'] ?? '') ?>"
+                       placeholder="<?= $escape(__('空=网站层')) ?>" autocomplete="off"
+                       data-testid="faq-store-code">
+            </div>
+            <div class="w-field" style="flex:1 1 10rem;">
+                <label class="w-label" for="faq-channel-code"><?= $escape(__('渠道 code')) ?></label>
+                <input class="w-input" id="faq-channel-code" name="channel_code" value="<?= $escape($item['channel_code'] ?? '') ?>"
+                       placeholder="<?= $escape(__('空=店铺/网站层')) ?>" autocomplete="off"
+                       data-testid="faq-channel-code">
+            </div>
+        </div>
+        <div class="w-help" style="--w-mb:var(--weline-space-3);">
+            <?= $escape(__('与 Websites 店铺/渠道 code 对齐；填渠道时必须同时填店铺。下级禁用同一 faq_key = 抑制上级该条。')) ?>
+        </div>
+
         <div class="w-field">
             <label class="w-label" for="faq-type-code"><?= $escape(__('类型')) ?></label>
             <select class="w-select" id="faq-type-code" name="type_code" required>
@@ -60,9 +78,17 @@ $status = (string)($item['status'] ?? 'enabled');
         </div>
 
         <div class="w-field">
-            <label class="w-label" for="faq-entity-uuid"><?= $escape(__('实体 UUID')) ?></label>
+            <label class="w-label" for="faq-entity-uuid"><?= $escape(__('实体 UUID / 模板 pack')) ?></label>
             <input class="w-input" id="faq-entity-uuid" name="entity_uuid" required value="<?= $escape($item['entity_uuid'] ?? '') ?>"
-                   placeholder="site / product offer or product uuid">
+                   placeholder="site / retail|cross_border|virtual|b2b / product uuid">
+            <div class="w-help"><?= $escape(__('type=template 时填写 pack 编码（retail 等）。')) ?></div>
+        </div>
+
+        <div class="w-field">
+            <label class="w-label" for="faq-faq-key"><?= $escape(__('FAQ Key')) ?></label>
+            <input class="w-input" id="faq-faq-key" name="faq_key" value="<?= $escape($item['faq_key'] ?? '') ?>"
+                   placeholder="shipping / returns / …">
+            <div class="w-help"><?= $escape(__('同类型+实体内跨范围继承的稳定键；留空则由问题自动生成。')) ?></div>
         </div>
 
         <div class="w-field">

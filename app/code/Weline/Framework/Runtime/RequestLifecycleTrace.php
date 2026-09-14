@@ -5,7 +5,8 @@ declare(strict_types=1);
 /**
  * Weline Framework - 请求生命周期链路追踪
  *
- * 仅在 DEV 模式下记录当前请求各阶段耗时，供开发面板「请求链路」Tab 展示。
+ * DEV/DEBUG 下默认关闭；仅当 Weline 开发面板打开（签名 Cookie）时记录，
+ * 关闭面板即停止。不认配置开关与租约 TTL。
  * WLS 下需在 StateManager 注册重置，避免跨请求残留。
  */
 
@@ -80,6 +81,8 @@ class RequestLifecycleTrace
 {
     private const REQUEST_CONTEXT_ID_KEY = 'request_lifecycle_trace.request_id';
     private const REDACTED_AUTH_SQL = '[REDACTED: authentication persistence statement]';
+    private const PANEL_TRACE_COOKIE = 'w_weline_trace_panel';
+    private const PANEL_TRACE_PAYLOAD = 'on';
 
     private static bool $stateManagerRegistered = false;
 
@@ -190,12 +193,13 @@ class RequestLifecycleTrace
     }
 
     /**
-     * 是否启用（DEV 或 DEBUG 时启用，便于开发环境与调试时查看请求链路）
+     * 是否启用。
+     *
+     * 只认 Weline 面板开/关签发的签名 Cookie；关闭面板即关闭记录。
+     * 不认 DEV/DEBUG 常开、不认 wls.debug.request_trace / wls_trace 配置与查询开关。
      *
      * WLS Master / Dispatcher / Session / Memory 等控制面没有请求级 reset。
-     * 无活跃 RequestContext 时必须保持关闭（且不写入 enabledCache），否则 DEBUG=true
-     * 时会在 Master 上无限累积 span 直至 OOM。Worker 进入请求并初始化 RequestContext
-     * 后再按 DEV/DEBUG / 显式开关决定。
+     * 无活跃 RequestContext 时必须保持关闭（且不写入 enabledCache）。
      */
     public static function isEnabled(): bool
     {
@@ -209,7 +213,6 @@ class RequestLifecycleTrace
 
         // Persistent control-plane / pre-request: never enable. Do not cache —
         // Workers still need to enable after RequestContext becomes ready.
-        // Treat "RequestContext class not loaded" as no active request (Master).
         if (\class_exists(Runtime::class, false)
             && Runtime::isPersistent()
             && !$hasActiveRequestContext
@@ -217,18 +220,7 @@ class RequestLifecycleTrace
             return false;
         }
 
-        $enabled = false;
-        if (self::isExplicitPersistentTraceRequested()) {
-            $enabled = true;
-        } elseif (\defined('DEV') && DEV) {
-            $enabled = true;
-        } elseif (\defined('DEBUG') && DEBUG) {
-            $enabled = true;
-        } elseif (\defined('WLS_DEV_MODE') && WLS_DEV_MODE) {
-            $enabled = true;
-        } elseif (self::isEnvRequestTraceEnabled()) {
-            $enabled = true;
-        }
+        $enabled = self::isPanelTraceArmed();
 
         if (!$enabled) {
             $state->enabledCache = false;
@@ -246,6 +238,167 @@ class RequestLifecycleTrace
 
         $state->enabledCache = true;
         return true;
+    }
+
+    public static function panelTraceCookieName(): string
+    {
+        return self::PANEL_TRACE_COOKIE;
+    }
+
+    public static function isPanelTraceArmed(): bool
+    {
+        return self::isValidPanelTraceCookie(self::readPanelTraceCookieValue());
+    }
+
+    /** Install panel-open cookie into the current process (tests / same-request). */
+    public static function installPanelTraceOn(): void
+    {
+        $_COOKIE[self::PANEL_TRACE_COOKIE] = self::buildPanelTraceCookieValue();
+    }
+
+    public static function clearPanelTrace(): void
+    {
+        unset($_COOKIE[self::PANEL_TRACE_COOKIE]);
+    }
+
+    /**
+     * @param object{setCookie?: callable} $response
+     */
+    public static function issuePanelTraceCookie(object $response, bool $enabled): void
+    {
+        if ($enabled) {
+            $value = self::buildPanelTraceCookieValue();
+            $_COOKIE[self::PANEL_TRACE_COOKIE] = $value;
+            if (\method_exists($response, 'setCookie')) {
+                $response->setCookie(
+                    self::PANEL_TRACE_COOKIE,
+                    $value,
+                    0,
+                    '/',
+                    '',
+                    self::isSecureRequest(),
+                    true,
+                    'Lax'
+                );
+            }
+
+            return;
+        }
+
+        self::clearPanelTrace();
+        if (\method_exists($response, 'setCookie')) {
+            $response->setCookie(
+                self::PANEL_TRACE_COOKIE,
+                '',
+                \time() - 3600,
+                '/',
+                '',
+                self::isSecureRequest(),
+                true,
+                'Lax'
+            );
+        }
+    }
+
+    public static function buildPanelTraceCookieValue(): string
+    {
+        $signature = \hash_hmac('sha256', self::PANEL_TRACE_PAYLOAD, self::panelTraceSigningKey());
+
+        return self::base64UrlEncode(self::PANEL_TRACE_PAYLOAD . '.' . $signature);
+    }
+
+    public static function isValidPanelTraceCookie(string $cookieValue): bool
+    {
+        if ($cookieValue === '') {
+            return false;
+        }
+
+        $decoded = self::base64UrlDecode($cookieValue);
+        if ($decoded === '') {
+            return false;
+        }
+
+        $parts = \explode('.', $decoded, 2);
+        if (\count($parts) !== 2) {
+            return false;
+        }
+
+        [$payload, $signature] = $parts;
+        if ($payload !== self::PANEL_TRACE_PAYLOAD || $signature === '') {
+            return false;
+        }
+
+        $expected = \hash_hmac('sha256', self::PANEL_TRACE_PAYLOAD, self::panelTraceSigningKey());
+
+        return \hash_equals($expected, $signature);
+    }
+
+    private static function readPanelTraceCookieValue(): string
+    {
+        if (\class_exists(\Weline\Framework\Http\Cookie::class, false)) {
+            $fromHelper = \Weline\Framework\Http\Cookie::get(self::PANEL_TRACE_COOKIE, '');
+            if (\is_scalar($fromHelper) && (string)$fromHelper !== '') {
+                return (string)$fromHelper;
+            }
+        }
+
+        $fromServer = '';
+        if (\class_exists(WelineEnv::class, false)) {
+            $fromServer = (string)WelineEnv::server('HTTP_COOKIE', '');
+        }
+        if ($fromServer === '' && isset($_SERVER['HTTP_COOKIE'])) {
+            $fromServer = (string)$_SERVER['HTTP_COOKIE'];
+        }
+        if ($fromServer !== '') {
+            foreach (\explode(';', $fromServer) as $pair) {
+                $pair = \trim($pair);
+                if ($pair === '' || !\str_contains($pair, '=')) {
+                    continue;
+                }
+                [$name, $value] = \explode('=', $pair, 2);
+                if (\trim($name) === self::PANEL_TRACE_COOKIE) {
+                    return \rawurldecode(\trim($value));
+                }
+            }
+        }
+
+        return isset($_COOKIE[self::PANEL_TRACE_COOKIE])
+            ? (string)$_COOKIE[self::PANEL_TRACE_COOKIE]
+            : '';
+    }
+
+    private static function panelTraceSigningKey(): string
+    {
+        $salt = \defined('BP') ? (string)BP : __DIR__;
+
+        return \hash('sha256', $salt . '|request_lifecycle_trace_panel');
+    }
+
+    private static function isSecureRequest(): bool
+    {
+        if (!\class_exists(WelineEnv::class, false)) {
+            return false;
+        }
+        $https = (string)WelineEnv::server('HTTPS', '');
+
+        return $https !== '' && \strtolower($https) !== 'off';
+    }
+
+    private static function base64UrlEncode(string $value): string
+    {
+        return \rtrim(\strtr(\base64_encode($value), '+/', '-_'), '=');
+    }
+
+    private static function base64UrlDecode(string $value): string
+    {
+        $value = \strtr($value, '-_', '+/');
+        $padding = \strlen($value) % 4;
+        if ($padding > 0) {
+            $value .= \str_repeat('=', 4 - $padding);
+        }
+        $decoded = \base64_decode($value, true);
+
+        return \is_string($decoded) ? $decoded : '';
     }
 
     /**
@@ -689,6 +842,9 @@ class RequestLifecycleTrace
             'slow_overflow_span_count' => \count($state->slowOverflowSpans),
             'slow_overflow_span_limit' => 40,
             'phases' => $state->phases,
+            'template_render_files' => RequestContext::isInitialized()
+                ? (RequestContext::get('view.template.aggregate') ?? [])
+                : [],
         ];
     }
 

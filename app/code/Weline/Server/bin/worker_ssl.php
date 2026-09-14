@@ -3889,7 +3889,7 @@ if ($controlPort > 0 || $supervisorEnabled) {
                                 'cache_pool_clear_failed:' . \implode(',', $failedCachePools)
                             );
                         }
-                        \Weline\Framework\Manager\ObjectManager::clearInstances();
+                        \Weline\Framework\Manager\ObjectManager::clearProcessInstances();
                         if (\class_exists(\Weline\Framework\Phrase\Parser::class)) {
                             \Weline\Framework\Phrase\Parser::clearWorkerCaches();
                         }
@@ -6569,128 +6569,134 @@ while (true) {
     }
 
     // 连接已经关闭时，先按 (connId, streamId) 清理全部 Fiber，避免失效流在 tick 中再次恢复。
-    $orphanFiberConnections = [];
-    foreach ($activeFibers as $orphanFiberKey => $orphanFiberState) {
-        $orphanConnId = \Weline\Server\Protocol\Http2\MultiplexScheduler::connectionId(
-            $orphanFiberKey,
-            $orphanFiberState
-        );
-        if ($orphanConnId > 0 && !isset($connections[$orphanConnId])) {
-            $orphanFiberConnections[$orphanConnId] = true;
-        }
-    }
-    foreach (\array_keys($orphanFiberConnections) as $orphanConnId) {
-        wlsCancelActiveFibersForConnection(
-            $activeFibers,
-            (int)$orphanConnId,
-            $fiberScheduler,
-            $activeRequests
-        );
-    }
-
-    // 先 tick，避免 sleep/usleep 挂起的 Fiber 饿死
-    $fiberScheduler->tick(
-        function (\Fiber $fiber) use (&$activeFibers): void {
-            \Weline\Server\Runtime\WorkerFiberContextTracker::restore($activeFibers, $fiber);
-        },
-        $fiberTickBudgetMs > 0.0 ? $fiberTickBudgetMs : null,
-        function (\Fiber $fiber) use (&$activeFibers): void {
-            $activeFibers = \Weline\Server\Runtime\WorkerFiberContextTracker::capture(
-                $activeFibers,
-                $fiber,
-                static fn (\Fiber $targetFiber) => \Weline\Framework\Runtime\WlsFiberContext::captureForFiber(
-                    $targetFiber
-                )
+    try {
+        $orphanFiberConnections = [];
+        foreach ($activeFibers as $orphanFiberKey => $orphanFiberState) {
+            $orphanConnId = \Weline\Server\Protocol\Http2\MultiplexScheduler::connectionId(
+                $orphanFiberKey,
+                $orphanFiberState
             );
-            wlsResetLongRunningExecutionLimit();
-        },
-        static function (\Fiber $fiber, \Throwable $failure): void {
-            \Weline\Server\Service\WorkerResponseMemoryGuard::requestDrainAfterResponse(
-                'request_fiber_resume_failure'
-            );
-            WlsLogger::error_(
-                'TLS Request Fiber resume/capture failed; Worker quarantine requested: '
-                . $failure->getMessage()
-                . ' fiber=' . \spl_object_id($fiber)
-            );
-        }
-    );
-    wlsDrainAfterResponseIfRequested($socket, $shouldExit, $ipcDraining, $drainStartTime, $maxDrainTime);
-    foreach ($activeFibers as $afKey => $afData) {
-        $af = $afData['fiber'] ?? null;
-        if (!($af instanceof \Fiber)) {
-            unset($activeFibers[$afKey]);
-            continue;
-        }
-        $afConnId = \Weline\Server\Protocol\Http2\MultiplexScheduler::connectionId($afKey, $afData);
-        $afStreamId = \Weline\Server\Protocol\Http2\MultiplexScheduler::streamId($afKey, $afData);
-        if ($af->isTerminated()) {
-            $afFinishedAt = wlsWorkerMonotonicNow();
-            $afStartedAt = \Weline\Server\Runtime\WorkerFiberContextTracker::normalizeMonotonicStartSeconds(
-                $afData['handleStartTime'] ?? null,
-                $afFinishedAt,
-            );
-            $afResponse = '';
-            try {
-                $afResponse = (string)($af->getReturn() ?? '');
-            } catch (\Throwable) {
-            } finally {
-                \Weline\Framework\Manager\ObjectManager::clearRequestScopeForFiber($af);
+            if ($orphanConnId > 0 && !isset($connections[$orphanConnId])) {
+                $orphanFiberConnections[$orphanConnId] = true;
             }
-            $fiberScheduler->unregisterFiber();
-            if (($afData['transport'] ?? '') === 'http3') {
-                wlsHttp3SubmitResponse(
-                    $http3Runtime,
-                    (int)($afData['http3_token'] ?? 0),
-                    (string)($afData['rawRequest'] ?? ''),
-                    $afResponse,
-                    $afStartedAt,
-                    $activeRequests,
+        }
+        foreach (\array_keys($orphanFiberConnections) as $orphanConnId) {
+            wlsCancelActiveFibersForConnection(
+                $activeFibers,
+                (int)$orphanConnId,
+                $fiberScheduler,
+                $activeRequests
+            );
+        }
+
+        // 先 tick，避免 sleep/usleep 挂起的 Fiber 饿死
+        $fiberScheduler->tick(
+            function (\Fiber $fiber) use (&$activeFibers): void {
+                \Weline\Server\Runtime\WorkerFiberContextTracker::restore($activeFibers, $fiber);
+            },
+            $fiberTickBudgetMs > 0.0 ? $fiberTickBudgetMs : null,
+            function (\Fiber $fiber) use (&$activeFibers): void {
+                $activeFibers = \Weline\Server\Runtime\WorkerFiberContextTracker::capture(
+                    $activeFibers,
+                    $fiber,
+                    static fn (\Fiber $targetFiber) => \Weline\Framework\Runtime\WlsFiberContext::captureForFiber(
+                        $targetFiber
+                    )
                 );
+                wlsResetLongRunningExecutionLimit();
+            },
+            static function (\Fiber $fiber, \Throwable $failure): void {
+                \Weline\Server\Service\WorkerResponseMemoryGuard::requestDrainAfterResponse(
+                    'request_fiber_resume_failure'
+                );
+                WlsLogger::error_(
+                    'TLS Request Fiber resume/capture failed; Worker quarantine requested: '
+                    . $failure->getMessage()
+                    . ' fiber=' . \spl_object_id($fiber)
+                );
+            }
+        );
+        wlsDrainAfterResponseIfRequested($socket, $shouldExit, $ipcDraining, $drainStartTime, $maxDrainTime);
+        foreach ($activeFibers as $afKey => $afData) {
+            $af = $afData['fiber'] ?? null;
+            if (!($af instanceof \Fiber)) {
                 unset($activeFibers[$afKey]);
                 continue;
             }
-            $afDurationMs = \max(0.0, $afFinishedAt - $afStartedAt) * 1000;
-            $afResponse = injectWlsProcessTimeHeader($afResponse, $afDurationMs);
-            if ($afConnId > 0 && isset($connections[$afConnId]) && \is_resource($afData['conn'] ?? null)) {
-                $afHttp2Adapter = $afData['http2_adapter'] ?? null;
-                sslFinalizeHttpResponseAfterHandle(
-                    $afData['conn'],
-                    $afConnId,
-                    (string)($afData['rawRequest'] ?? ''),
-                    $afResponse,
-                    $afStartedAt,
-                    (bool)($afData['is_sse_protocol'] ?? false),
-                    $ipcDraining,
-                    $connections,
-                    $requestBuffers,
-                    $connectionLastActivity,
-                    $requestLogged,
-                    $writeBuffers,
-                    $writableConnections,
-                    $pendingClose,
-                    $longLivedConnections,
-                    $ipcClient,
-                    $instanceName,
-                    $activeRequests,
-                    true,
-                    null,
-                    null,
-                    false,
-                    $afHttp2Adapter instanceof \Weline\Server\Protocol\Http2\ConnectionAdapter ? $afHttp2Adapter : null,
-                    $afStreamId,
+            $afConnId = \Weline\Server\Protocol\Http2\MultiplexScheduler::connectionId($afKey, $afData);
+            $afStreamId = \Weline\Server\Protocol\Http2\MultiplexScheduler::streamId($afKey, $afData);
+            if ($af->isTerminated()) {
+                $afFinishedAt = wlsWorkerMonotonicNow();
+                $afStartedAt = \Weline\Server\Runtime\WorkerFiberContextTracker::normalizeMonotonicStartSeconds(
+                    $afData['handleStartTime'] ?? null,
+                    $afFinishedAt,
                 );
-                wlsDrainAfterResponseIfRequested($socket, $shouldExit, $ipcDraining, $drainStartTime, $maxDrainTime);
-            } else {
-                $activeRequests = \max(0, $activeRequests - 1);
-                \Weline\Framework\Http\Sse\SseContext::reset();
+                $afResponse = '';
+                try {
+                    $afResponse = (string)($af->getReturn() ?? '');
+                } catch (\Throwable) {
+                } finally {
+                    \Weline\Framework\Manager\ObjectManager::clearRequestScopeForFiber($af);
+                }
+                $fiberScheduler->unregisterFiber();
+                if (($afData['transport'] ?? '') === 'http3') {
+                    wlsHttp3SubmitResponse(
+                        $http3Runtime,
+                        (int)($afData['http3_token'] ?? 0),
+                        (string)($afData['rawRequest'] ?? ''),
+                        $afResponse,
+                        $afStartedAt,
+                        $activeRequests,
+                    );
+                    unset($activeFibers[$afKey]);
+                    continue;
+                }
+                $afDurationMs = \max(0.0, $afFinishedAt - $afStartedAt) * 1000;
+                $afResponse = injectWlsProcessTimeHeader($afResponse, $afDurationMs);
+                if ($afConnId > 0 && isset($connections[$afConnId]) && \is_resource($afData['conn'] ?? null)) {
+                    $afHttp2Adapter = $afData['http2_adapter'] ?? null;
+                    sslFinalizeHttpResponseAfterHandle(
+                        $afData['conn'],
+                        $afConnId,
+                        (string)($afData['rawRequest'] ?? ''),
+                        $afResponse,
+                        $afStartedAt,
+                        (bool)($afData['is_sse_protocol'] ?? false),
+                        $ipcDraining,
+                        $connections,
+                        $requestBuffers,
+                        $connectionLastActivity,
+                        $requestLogged,
+                        $writeBuffers,
+                        $writableConnections,
+                        $pendingClose,
+                        $longLivedConnections,
+                        $ipcClient,
+                        $instanceName,
+                        $activeRequests,
+                        true,
+                        null,
+                        null,
+                        false,
+                        $afHttp2Adapter instanceof \Weline\Server\Protocol\Http2\ConnectionAdapter ? $afHttp2Adapter : null,
+                        $afStreamId,
+                    );
+                    wlsDrainAfterResponseIfRequested($socket, $shouldExit, $ipcDraining, $drainStartTime, $maxDrainTime);
+                } else {
+                    $activeRequests = \max(0, $activeRequests - 1);
+                    \Weline\Framework\Http\Sse\SseContext::reset();
+                }
+                unset($activeFibers[$afKey]);
+                continue;
             }
-            unset($activeFibers[$afKey]);
-            continue;
+            if ($af->isSuspended()) {
+                $activeFibers[$afKey] = $afData;
+            }
         }
-        if ($af->isSuspended()) {
-            $activeFibers[$afKey] = $afData;
-        }
+    } finally {
+        // The pool owns suspended snapshots. Loop-local copies must not keep
+        // completed request contexts or response bodies alive until the next request.
+        unset($fiberState, $orphanFiberState, $afData, $af, $afResponse, $afHttp2Adapter);
     }
 
     \Weline\Server\Runtime\WorkerFiberSnapshot::setSnapshot(\Weline\Server\Runtime\WorkerFiberHealthSnapshot::build($activeFibers));
@@ -8844,6 +8850,12 @@ while (true) {
         $http2ConnectionAdapters
     );
 
+    // 本轮前台读写与 Fiber 已先推进；空闲循环继续处理到期任务，无需另一条 HTTP 响应。
+    // 排水/退出不等待后台任务，活动 Fiber 的请求上下文仍由原池持有。
+    if (!$shouldExit && !$ipcDraining && $activeFibers === []) {
+        wlsDrainPostResponseTasks($activeRequests, $requestBuffers, $writeBuffers, null, $http2PendingRequests);
+    }
+
     // 重置连续错误计数（本轮循环成功完成）
     $deferredWorkerBootstrapLoopCompleted = true;
     $consecutiveErrors = 0;
@@ -10358,7 +10370,8 @@ function wlsDrainPostResponseTasks(
     int $activeRequests = 0,
     array $requestBuffers = [],
     array $writeBuffers = [],
-    ?int $currentConnId = null
+    ?int $currentConnId = null,
+    array $http2PendingRequests = []
 ): void
 {
     if (!\class_exists(\Weline\Framework\Runtime\PostResponseTaskQueue::class)) {
@@ -10366,7 +10379,7 @@ function wlsDrainPostResponseTasks(
     }
 
     $deferWhenBusy = (bool)(\Weline\Framework\App\Env::get('wls.post_response_task_defer_when_busy', true) ?? true);
-    if ($deferWhenBusy && wlsWorkerHasPendingRequestWork($activeRequests, $requestBuffers, $writeBuffers, $currentConnId)) {
+    if ($deferWhenBusy && wlsWorkerHasPendingRequestWork($activeRequests, $requestBuffers, $writeBuffers, $currentConnId, $http2PendingRequests)) {
         return;
     }
 
@@ -11550,6 +11563,7 @@ function wlsWorkerMemoryHealthDiagnostics(bool $includeStaticProperties = false,
         'gc_status' => \function_exists('gc_status') ? \gc_status() : [],
         'object_manager' => [],
         'state_manager' => [],
+        'post_response_tasks' => ['pending' => 0, 'ready' => 0, 'delayed' => 0, 'next_due_ms' => null, 'draining' => false],
     ];
 
     if (\class_exists(\Weline\Framework\Manager\ObjectManager::class, false)) {
@@ -11566,6 +11580,10 @@ function wlsWorkerMemoryHealthDiagnostics(bool $includeStaticProperties = false,
         } catch (\Throwable $throwable) {
             $diagnostics['state_manager_error'] = $throwable->getMessage();
         }
+    }
+
+    if (\class_exists(\Weline\Framework\Runtime\PostResponseTaskQueue::class, false)) {
+        $diagnostics['post_response_tasks'] = \Weline\Framework\Runtime\PostResponseTaskQueue::getRuntimeDiagnostics();
     }
 
     if ($includeStaticProperties) {
@@ -11763,7 +11781,7 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
         'css', 'js', 'map',
         'jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'svg', 'ico', 'bmp',
         'woff', 'woff2', 'eot', 'ttf', 'otf',
-        'mp4', 'mp3', 'webm', 'ogg', 'm3u8',
+        'mp4', 'mp3', 'm4a', 'aac', 'webm', 'ogg', 'm3u8',
         'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
         'txt', 'json', 'xml',
         'zip', 'rar', '7z', 'gz', 'tar',
@@ -11797,6 +11815,8 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
         'webm' => 'video/webm',
         'ogg' => 'audio/ogg',
         'mp3' => 'audio/mpeg',
+        'm4a' => 'audio/mp4',
+        'aac' => 'audio/aac',
         'm3u8' => 'application/vnd.apple.mpegurl',
         'pdf' => 'application/pdf',
         'zip' => 'application/zip',

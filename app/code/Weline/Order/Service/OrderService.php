@@ -407,10 +407,15 @@ class OrderService
         }
         
         if (isset($filters['keyword']) && $filters['keyword']) {
-            $keyword = "%{$filters['keyword']}%";
-            $model->where(Order::schema_fields_ORDER_NUMBER, $keyword, 'LIKE', 'OR')
-                  ->where(Order::schema_fields_CUSTOMER_NAME, $keyword, 'LIKE', 'OR')
-                  ->where(Order::schema_fields_CUSTOMER_EMAIL, $keyword, 'LIKE');
+            $tokens = OrderListKeywordNormalizer::tokens((string)$filters['keyword']);
+            foreach ($tokens as $token) {
+                $keyword = '%' . $token . '%';
+                $model->where(Order::schema_fields_ORDER_NUMBER, $keyword, 'LIKE', 'OR')
+                    ->where(Order::schema_fields_CHECKOUT_GROUP_UUID, $keyword, 'LIKE', 'OR')
+                    ->where(Order::schema_fields_ORDER_UUID, $keyword, 'LIKE', 'OR')
+                    ->where(Order::schema_fields_CUSTOMER_NAME, $keyword, 'LIKE', 'OR')
+                    ->where(Order::schema_fields_CUSTOMER_EMAIL, $keyword, 'LIKE', 'OR');
+            }
         }
         
         // 排序：框架时间戳权威列为 create_time（created_at 常为空）
@@ -521,6 +526,29 @@ class OrderService
     }
     
     /**
+     * Admin customer-facing comment without status change.
+     */
+    public function addOrderComment(int $orderId, string $comment, bool $notifyCustomer = false): void
+    {
+        $comment = trim($comment);
+        if ($comment === '') {
+            throw new \InvalidArgumentException((string)\__('备注不能为空'));
+        }
+        $order = $this->getOrder($orderId);
+        $this->addHistory(
+            $orderId,
+            (string)$order->getData(Order::schema_fields_STATUS),
+            $comment,
+            $notifyCustomer,
+        );
+        $this->eventsManager->dispatch('Weline_Order::order_updated', [
+            'order' => $order,
+            'order_id' => $orderId,
+            'comment_only' => true,
+        ]);
+    }
+
+    /**
      * 获取订单项列表
      * 
      * @param int $orderId 订单ID
@@ -533,7 +561,27 @@ class OrderService
             ->select()
             ->fetch();
         
-        return $collection->getItems();
+        $items = $collection->getItems();
+        if ($items !== []) {
+            return $items;
+        }
+
+        // Topology / facade rows may persist items with order_id=0 and only order_uuid.
+        try {
+            $order = $this->getOrder($orderId);
+        } catch (\Throwable) {
+            return [];
+        }
+        $orderUuid = trim((string)$order->getData(Order::schema_fields_ORDER_UUID));
+        if ($orderUuid === '') {
+            return [];
+        }
+
+        return $this->getOrderItemModel()->reset()
+            ->where(OrderItem::schema_fields_ORDER_UUID, $orderUuid)
+            ->select()
+            ->fetch()
+            ->getItems();
     }
     
     /**

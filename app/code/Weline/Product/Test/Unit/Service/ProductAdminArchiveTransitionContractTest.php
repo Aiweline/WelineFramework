@@ -20,8 +20,13 @@ final class ProductAdminArchiveTransitionContractTest extends TestCase
 
         self::assertStringContainsString('lifecycleStepsToward', $source);
         self::assertStringContainsString("STATUS_ARCHIVED", $source);
+        self::assertStringContainsString('ACTION_RESTORE', $source);
         self::assertMatchesRegularExpression(
             '/lifecycleStepsToward.*?published.*?disabled.*?archived/s',
+            $source,
+        );
+        self::assertMatchesRegularExpression(
+            "/'archived'\\s*=>\\s*\\['draft'\\]/",
             $source,
         );
         self::assertMatchesRegularExpression(

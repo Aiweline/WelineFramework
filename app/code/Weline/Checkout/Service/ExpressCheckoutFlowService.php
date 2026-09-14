@@ -89,7 +89,14 @@ final class ExpressCheckoutFlowService
         if ($address === [] && is_array($data['delivery']['checkout_address'] ?? null)) {
             $address = $data['delivery']['checkout_address'];
         }
+        /** @var CheckoutShippingAddressResolver $addressResolver */
+        $addressResolver = $this->om()->getInstance(CheckoutShippingAddressResolver::class);
+        $address = $addressResolver->resolve($address, $params + [
+            'shipping_address' => $address,
+            'address' => $address,
+        ]);
         if (trim((string) ($address['country_code'] ?? '')) === '') {
+            // Last resort only when resolver and delivery context have no ISO country.
             $address['country_code'] = 'CN';
         }
 
@@ -188,13 +195,16 @@ final class ExpressCheckoutFlowService
      */
     public function getReview(array $params): array
     {
-        $transactionNo = trim((string) ($params['transaction_no'] ?? ''));
-        if ($transactionNo === '') {
-            return [
-                'success' => false,
-                'message' => (string) __('缺少交易号'),
-                'error_code' => 'express_review_transaction_required',
-            ];
+        $resolved = $this->resolveTransactionNo($params);
+        if (empty($resolved['success'])) {
+            return $resolved;
+        }
+        $transactionNo = (string) $resolved['transaction_no'];
+        $params['transaction_no'] = $transactionNo;
+
+        $alreadyPaid = $this->buildAlreadyPaidResult($transactionNo, $params);
+        if ($alreadyPaid !== null) {
+            return $alreadyPaid;
         }
 
         $loaded = $this->loadContext($transactionNo, $params);
@@ -215,12 +225,22 @@ final class ExpressCheckoutFlowService
                 static fn ($v) => $v !== null && $v !== '',
             ));
         }
+        $selectedAddress = $this->extractAddressFromParams($params);
+        if ($selectedAddress !== []) {
+            $address = array_replace($address, $selectedAddress);
+        }
+        /** @var CheckoutShippingAddressResolver $addressResolver */
+        $addressResolver = $this->om()->getInstance(CheckoutShippingAddressResolver::class);
+        $address = $addressResolver->resolve($address, $params + [
+            'shipping_address' => $address,
+            'address' => $address,
+        ]);
 
         $items = is_array($order['items'] ?? null) ? $order['items'] : [];
         $currency = (string) ($order['currency'] ?? 'CNY');
         $requiresShipping = $this->itemsRequireShipping($items);
 
-        $evaluation = $this->evaluateProfile($profile !== [] ? $profile : $address, $requiresShipping);
+        $evaluation = $this->evaluateProfile($address !== [] ? $address : $profile, $requiresShipping);
         $serviceCode = trim((string) (
             $params['service_code']
             ?? ($order['shipping']['method'] ?? $order['shipping']['service_code'] ?? '')
@@ -247,6 +267,39 @@ final class ExpressCheckoutFlowService
         $shippingMethods = $requiresShipping
             ? $this->listShippingMethods($address, $items, $currency)
             : [];
+        if ($requiresShipping && $shippingMethods !== []) {
+            $codes = [];
+            foreach ($shippingMethods as $method) {
+                if (is_array($method)) {
+                    $code = trim((string) ($method['code'] ?? ''));
+                    if ($code !== '') {
+                        $codes[] = $code;
+                    }
+                }
+            }
+            // PayPal (and other express) may return a different country than freeze;
+            // keep the first reachable lane instead of a stale domestic service_code.
+            if ($serviceCode === '' || !\in_array($serviceCode, $codes, true)) {
+                $serviceCode = $codes[0];
+                $amended = $this->amendUnpaidOrder($orderUuid, $address, [
+                    'service_code' => $serviceCode,
+                    'currency' => $currency,
+                ]);
+                if (!empty($amended['ok'])) {
+                    try {
+                        $fresh = $this->om()->getInstance(OrderFacadeInterface::class)->get($orderUuid);
+                        $order = $fresh->toArray();
+                    } catch (\Throwable) {
+                    }
+                    $money = is_array($amended['totals'] ?? null)
+                        ? $amended['totals']
+                        : (is_array($order['money'] ?? null) ? $order['money'] : $money);
+                    if (is_array($amended['address'] ?? null) && $amended['address'] !== []) {
+                        $address = $amended['address'];
+                    }
+                }
+            }
+        }
         $embargo = $this->evaluateEmbargo($requiresShipping, $address);
         $missing = is_array($evaluation['missing_fields'] ?? null) ? $evaluation['missing_fields'] : [];
         $gapOnly = array_values(array_intersect($missing, ['contact_phone', 'phone', 'email']));
@@ -270,7 +323,8 @@ final class ExpressCheckoutFlowService
                 'order_uuid' => $orderUuid,
                 'checkout_group_uuid' => (string) ($order['checkout_group_uuid'] ?? ''),
                 'address' => $address,
-                'address_readonly' => true,
+                'address_readonly' => false,
+                'address_editable' => true,
                 'missing_fields' => $missing,
                 'gap_fields' => $gapOnly,
                 'complete' => $coreMissing === [],
@@ -288,6 +342,7 @@ final class ExpressCheckoutFlowService
                     'headline' => (string) __('确认并付款'),
                     'not_charged' => (string) __('尚未扣款，确认后向支付商收款'),
                     'cta' => (string) __('确认并付款'),
+                    'address_hint' => (string) __('请确认收货地址；不对可更换或新增'),
                 ],
             ],
         ] + [
@@ -306,13 +361,16 @@ final class ExpressCheckoutFlowService
      */
     public function confirm(array $params): array
     {
-        $transactionNo = trim((string) ($params['transaction_no'] ?? ''));
-        if ($transactionNo === '') {
-            return [
-                'success' => false,
-                'message' => (string) __('缺少交易号'),
-                'error_code' => 'express_confirm_transaction_required',
-            ];
+        $resolved = $this->resolveTransactionNo($params);
+        if (empty($resolved['success'])) {
+            return $resolved;
+        }
+        $transactionNo = (string) $resolved['transaction_no'];
+        $params['transaction_no'] = $transactionNo;
+
+        $alreadyPaid = $this->buildAlreadyPaidResult($transactionNo, $params);
+        if ($alreadyPaid !== null) {
+            return $alreadyPaid;
         }
 
         $loaded = $this->loadContext($transactionNo, $params);
@@ -325,17 +383,24 @@ final class ExpressCheckoutFlowService
         $order = is_array($ctx['order'] ?? null) ? $ctx['order'] : [];
         $status = strtolower(trim((string) ($order['status'] ?? '')));
         if (in_array($status, ['paid', 'fulfilled', 'completed'], true)) {
-            $redirect = $this->om()->getInstance(CheckoutSuccessUrlBuilder::class)
-                ->buildForOrders([$orderUuid], [
-                    'checkout_token' => (string) ($params['checkout_token'] ?? ''),
-                ]);
-
-            return [
-                'success' => true,
-                'message' => (string) __('订单已支付'),
-                'redirect_url' => $redirect,
-                'data' => ['redirect_url' => $redirect, 'already_paid' => true],
-            ];
+            return $this->buildAlreadyPaidResult($transactionNo, $params)
+                ?? [
+                    'success' => true,
+                    'message' => (string) __('订单已支付'),
+                    'redirect_url' => $this->om()->getInstance(CheckoutSuccessUrlBuilder::class)
+                        ->buildForOrders([$orderUuid], [
+                            'checkout_token' => (string) ($params['checkout_token'] ?? ''),
+                        ]),
+                    'data' => [
+                        'already_paid' => true,
+                        'transaction_no' => $transactionNo,
+                        'order_uuid' => $orderUuid,
+                        'redirect_url' => $this->om()->getInstance(CheckoutSuccessUrlBuilder::class)
+                            ->buildForOrders([$orderUuid], [
+                                'checkout_token' => (string) ($params['checkout_token'] ?? ''),
+                            ]),
+                    ],
+                ];
         }
 
         $items = is_array($order['items'] ?? null) ? $order['items'] : [];
@@ -358,11 +423,21 @@ final class ExpressCheckoutFlowService
         if ($profile !== [] && $address === []) {
             $address = $this->profileToAddress($profile);
         }
+        $selectedAddress = $this->extractAddressFromParams($params);
+        if ($selectedAddress !== []) {
+            $address = array_replace($address, $selectedAddress);
+        }
         $gaps = [
             'contact_phone' => trim((string) ($params['contact_phone'] ?? $params['phone'] ?? '')),
             'email' => trim((string) ($params['email'] ?? '')),
         ];
         $address = array_replace($address, array_filter($gaps, static fn ($v) => $v !== ''));
+        /** @var CheckoutShippingAddressResolver $addressResolver */
+        $addressResolver = $this->om()->getInstance(CheckoutShippingAddressResolver::class);
+        $address = $addressResolver->resolve($address, $params + [
+            'shipping_address' => $address,
+            'address' => $address,
+        ]);
         $serviceCode = trim((string) ($params['service_code'] ?? ''));
         $amended = $this->amendUnpaidOrder($orderUuid, $address, [
             'service_code' => $serviceCode,
@@ -417,7 +492,34 @@ final class ExpressCheckoutFlowService
 
         $redirectPath = trim((string) ($decision['redirect_path'] ?? $decision['redirect_url'] ?? ''));
         $redirectParams = is_array($decision['redirect_params'] ?? null) ? $decision['redirect_params'] : [];
-        if ($redirectPath !== '' && !str_starts_with($redirectPath, 'http')) {
+        $checkoutToken = trim((string) ($params['checkout_token'] ?? ''));
+        if ($checkoutToken === '') {
+            try {
+                /** @var PaymentTransaction $txn */
+                $txn = $this->om()->getInstance(PaymentTransaction::class);
+                $txn->load(PaymentTransaction::schema_fields_TRANSACTION_NO, $transactionNo);
+                $request = $txn->getRequestData();
+                if (is_array($request)) {
+                    $checkoutToken = trim((string) (
+                        $request['checkout_token']
+                        ?? $request['quote_token']
+                        ?? ''
+                    ));
+                }
+            } catch (\Throwable) {
+            }
+        }
+        if ($checkoutToken !== '' && empty($redirectParams['checkout_token'])) {
+            $redirectParams['checkout_token'] = $checkoutToken;
+        }
+        if ($orderUuid !== '' && empty($redirectParams['order_uuid'])) {
+            $redirectParams['order_uuid'] = $orderUuid;
+        }
+        // Prefer Checkout L3 success after capture — avoid handoff→stale express-review→cart.
+        if ($redirectPath === '' || str_contains($redirectPath, 'handoff') || str_contains($redirectPath, 'express-review')) {
+            $redirectUrl = $this->om()->getInstance(CheckoutSuccessUrlBuilder::class)
+                ->buildForOrders([$orderUuid], $redirectParams);
+        } elseif ($redirectPath !== '' && !str_starts_with($redirectPath, 'http')) {
             $redirectUrl = $this->om()->getInstance(\Weline\Framework\Http\Url::class)
                 ->getUrl($redirectPath, $redirectParams);
         } else {
@@ -446,14 +548,12 @@ final class ExpressCheckoutFlowService
      */
     public function cancel(array $params): array
     {
-        $transactionNo = trim((string) ($params['transaction_no'] ?? ''));
-        if ($transactionNo === '') {
-            return [
-                'success' => false,
-                'message' => (string) __('缺少交易号'),
-                'error_code' => 'express_cancel_transaction_required',
-            ];
+        $resolved = $this->resolveTransactionNo($params);
+        if (empty($resolved['success'])) {
+            return $resolved;
         }
+        $transactionNo = (string) $resolved['transaction_no'];
+        $params['transaction_no'] = $transactionNo;
 
         $abandoned = $this->abandon($transactionNo, 'buyer_cancelled');
 
@@ -528,6 +628,201 @@ final class ExpressCheckoutFlowService
         }
 
         return $out;
+    }
+
+    /**
+     * When payment already captured/succeeded, never surface missing-order / forbidden copy.
+     *
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>|null
+     */
+    public function buildAlreadyPaidResult(string $transactionNo, array $params = []): ?array
+    {
+        $transactionNo = trim($transactionNo);
+        if ($transactionNo === '') {
+            return null;
+        }
+
+        try {
+            /** @var PaymentTransaction $txn */
+            $txn = $this->om()->getInstance(PaymentTransaction::class);
+            $txn->clear()
+                ->where(PaymentTransaction::schema_fields_TRANSACTION_NO, $transactionNo)
+                ->find()
+                ->fetch();
+            if (!(int) $txn->getId()) {
+                return null;
+            }
+
+            $orderUuid = trim((string) $txn->getData(PaymentTransaction::schema_fields_ORDER_ID));
+            $methodCode = trim((string) $txn->getData(PaymentTransaction::schema_fields_METHOD_CODE));
+            $paidByTxn = $txn->isSuccess();
+            $paidByOrder = false;
+            $checkoutGroupUuid = '';
+            if ($orderUuid !== '') {
+                try {
+                    /** @var OrderFacadeInterface $orderFacade */
+                    $orderFacade = $this->om()->getInstance(OrderFacadeInterface::class);
+                    $order = $orderFacade->get($orderUuid)->toArray();
+                    $status = strtolower(trim((string) ($order['status'] ?? '')));
+                    $paymentStatus = strtolower(trim((string) ($order['payment_status'] ?? '')));
+                    $paidByOrder = in_array($status, ['paid', 'fulfilled', 'completed'], true)
+                        || in_array($paymentStatus, ['paid', 'captured', 'success'], true);
+                    $checkoutGroupUuid = trim((string) ($order['checkout_group_uuid'] ?? ''));
+                } catch (\Throwable) {
+                }
+            }
+
+            if (!$paidByTxn && !$paidByOrder) {
+                return null;
+            }
+
+            $landingExtras = [];
+            $checkoutToken = trim((string) ($params['checkout_token'] ?? ''));
+            if ($checkoutToken === '') {
+                try {
+                    $request = $txn->getRequestData();
+                    if (is_array($request)) {
+                        $checkoutToken = trim((string) (
+                            $request['checkout_token']
+                            ?? $request['checkout_session_code']
+                            ?? $request['quote_token']
+                            ?? ''
+                        ));
+                    }
+                } catch (\Throwable) {
+                }
+            }
+            if ($checkoutToken !== '') {
+                $landingExtras['checkout_token'] = $checkoutToken;
+            }
+            if ($checkoutGroupUuid !== '') {
+                $landingExtras['checkout_group_uuid'] = $checkoutGroupUuid;
+            } else {
+                $groupFromParam = trim((string) ($params['checkout_group_uuid'] ?? ''));
+                if ($groupFromParam !== '') {
+                    $landingExtras['checkout_group_uuid'] = $groupFromParam;
+                }
+            }
+            $redirect = $orderUuid !== ''
+                ? $this->om()->getInstance(CheckoutSuccessUrlBuilder::class)->buildForOrders([$orderUuid], $landingExtras)
+                : '/checkout/success';
+
+            $methodLabel = $methodCode !== ''
+                ? ((string) __('支付方式') . '：' . $methodCode)
+                : (string) __('快捷支付');
+
+            return [
+                'success' => true,
+                'message' => (string) __('该笔订单已支付'),
+                'redirect_url' => $redirect,
+                'already_paid' => true,
+                'transaction_no' => $transactionNo,
+                'order_uuid' => $orderUuid,
+                'data' => [
+                    'already_paid' => true,
+                    'transaction_no' => $transactionNo,
+                    'order_uuid' => $orderUuid,
+                    'checkout_group_uuid' => (string) ($landingExtras['checkout_group_uuid'] ?? ''),
+                    'checkout_token' => $checkoutToken,
+                    'method_code' => $methodCode,
+                    'method_label' => $methodLabel,
+                    'redirect_url' => $redirect,
+                    'copy' => [
+                        'headline' => (string) __('订单已支付'),
+                        'not_charged' => (string) __('该笔快捷支付已完成扣款'),
+                        'cta' => (string) __('查看订单'),
+                    ],
+                    'can_confirm' => false,
+                    'awaiting_confirm' => false,
+                ],
+            ];
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * Resolve payment transaction_no from explicit param or checkout_group_uuid (express landing resilience).
+     *
+     * @param array<string, mixed> $params
+     * @return array{success:bool,transaction_no?:string,message?:string,error_code?:string}
+     */
+    public function resolvePaymentTransactionNo(array $params): array
+    {
+        return $this->resolveTransactionNo($params);
+    }
+
+    /**
+     * Resolve payment transaction_no from explicit param or checkout_group_uuid (express landing resilience).
+     *
+     * @param array<string, mixed> $params
+     * @return array{success:bool,transaction_no?:string,message?:string,error_code?:string}
+     */
+    private function resolveTransactionNo(array $params): array
+    {
+        $transactionNo = trim((string) ($params['transaction_no'] ?? ''));
+        if ($transactionNo !== '') {
+            return ['success' => true, 'transaction_no' => $transactionNo];
+        }
+
+        $groupUuid = trim((string) ($params['checkout_group_uuid'] ?? ''));
+        if ($groupUuid === '') {
+            return [
+                'success' => false,
+                'message' => (string) __('缺少支付单号'),
+                'error_code' => 'express_review_transaction_required',
+            ];
+        }
+
+        try {
+            /** @var Order $order */
+            $order = $this->om()->getInstance(Order::class);
+            $order->clear()
+                ->where(Order::schema_fields_CHECKOUT_GROUP_UUID, $groupUuid)
+                ->order(Order::schema_fields_ID, 'DESC')
+                ->find()
+                ->fetch();
+            if (!(int) $order->getId()) {
+                return [
+                    'success' => false,
+                    'message' => (string) __('找不到快捷支付订单'),
+                    'error_code' => 'express_review_group_order_missing',
+                ];
+            }
+            $orderUuid = trim((string) $order->getData(Order::schema_fields_ORDER_UUID));
+            if ($orderUuid === '') {
+                return [
+                    'success' => false,
+                    'message' => (string) __('找不到快捷支付订单'),
+                    'error_code' => 'express_review_group_order_missing',
+                ];
+            }
+
+            /** @var PaymentTransaction $txn */
+            $txn = $this->om()->getInstance(PaymentTransaction::class);
+            $txn->clear()
+                ->where(PaymentTransaction::schema_fields_ORDER_ID, $orderUuid)
+                ->order(PaymentTransaction::schema_fields_ID, 'DESC')
+                ->find()
+                ->fetch();
+            $transactionNo = trim((string) $txn->getData(PaymentTransaction::schema_fields_TRANSACTION_NO));
+            if (!(int) $txn->getId() || $transactionNo === '') {
+                return [
+                    'success' => false,
+                    'message' => (string) __('快捷支付单尚未创建，请返回商品页重试'),
+                    'error_code' => 'express_review_group_txn_missing',
+                ];
+            }
+
+            return ['success' => true, 'transaction_no' => $transactionNo];
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'message' => (string) __('无法解析支付单号'),
+                'error_code' => 'express_review_resolve_failed',
+            ];
+        }
     }
 
     /**
@@ -718,10 +1013,14 @@ final class ExpressCheckoutFlowService
                 $lines[] = [
                     'requires_shipping' => (bool) ($item['requires_shipping'] ?? true),
                     'qty_minor' => max(1, (int) ($item['qty_minor'] ?? $item['qty'] ?? 1)),
+                    'qty' => max(1, (int) ($item['qty'] ?? $item['qty_minor'] ?? 1)),
                     'unit_price_minor' => (int) ($item['unit_price_minor'] ?? 0),
                     'row_total_minor' => (int) ($item['row_total_minor'] ?? 0),
-                    'weight_minor' => (int) ($item['weight_minor'] ?? 0),
+                    'weight_minor' => $this->chargeableWeightMinor($item),
                     'volume_minor' => (int) ($item['volume_minor'] ?? 0),
+                    'offer_id' => (int) ($item['offer_id'] ?? 0),
+                    'product_id' => (int) ($item['product_id'] ?? 0),
+                    'split_key' => (string) ($item['split_key'] ?? ''),
                 ];
             }
             $result = w_query('shippingInfo', 'listQuoteOptions', [
@@ -748,17 +1047,72 @@ final class ExpressCheckoutFlowService
                 if ($code === '') {
                     continue;
                 }
+                // Express-only display label; same field priority as checkout listQuoteOptions mapping.
+                // Keep code as selection value — do not change CheckoutQueryProvider / 万能结账.
+                $label = trim((string) ($option['label'] ?? $option['service_name'] ?? $option['title'] ?? $option['name'] ?? ''));
+                if ($label === '') {
+                    $label = $code;
+                }
                 $out[] = [
                     'code' => $code,
-                    'title' => (string) ($option['title'] ?? $option['name'] ?? $code),
+                    'label' => $label,
+                    'title' => $label,
                     'amount_minor' => (int) ($option['amount_minor'] ?? 0),
                     'amount' => ((int) ($option['amount_minor'] ?? 0)) / 100,
                 ];
             }
 
-            return $out;
+            return $this->enrichShippingMethods(
+                $out,
+                $lines,
+                $address,
+                [
+                    'website_id' => (int) RequestContext::getWelineWebsiteId(),
+                    'store_id' => (int) RequestContext::getWelineStoreId(),
+                    'channel_id' => (int) RequestContext::getWelineChannelId(),
+                ],
+                $currency !== '' ? $currency : 'CNY',
+            );
         } catch (\Throwable) {
             return [];
+        }
+    }
+
+    /**
+     * @param list<array<string, mixed>> $methods
+     * @param list<array<string, mixed>> $lines
+     * @param array<string, mixed> $address
+     * @param array<string, mixed> $scope
+     * @return list<array<string, mixed>>
+     */
+    private function enrichShippingMethods(
+        array $methods,
+        array $lines,
+        array $address,
+        array $scope,
+        string $currency,
+    ): array {
+        try {
+            $events = $this->om()->getInstance(\Weline\Framework\Event\EventsManager::class);
+            if (!$events instanceof \Weline\Framework\Event\EventsManager) {
+                return $methods;
+            }
+            $payload = [
+                'methods' => $methods,
+                'lines' => $lines,
+                'address' => $address,
+                'scope' => $scope,
+                'currency' => $currency,
+                'error' => null,
+            ];
+            $events->dispatch('Weline_Checkout::checkout::shipping_methods::enrich', $payload);
+            if (!empty($payload['error'])) {
+                return [];
+            }
+
+            return is_array($payload['methods'] ?? null) ? $payload['methods'] : $methods;
+        } catch (\Throwable) {
+            return $methods;
         }
     }
 
@@ -839,6 +1193,67 @@ final class ExpressCheckoutFlowService
         }
 
         return ['ok' => true];
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function extractAddressFromParams(array $params): array
+    {
+        $raw = $params['shipping_address']
+            ?? $params['address']
+            ?? $params['checkout_address']
+            ?? null;
+        if (is_string($raw) && $raw !== '') {
+            $decoded = json_decode($raw, true);
+            $raw = is_array($decoded) ? $decoded : null;
+        }
+        if (!is_array($raw)) {
+            $raw = [];
+            foreach ([
+                'contact_name', 'name', 'phone', 'contact_phone', 'email',
+                'country_code', 'country', 'province', 'city', 'district',
+                'street', 'address1', 'address2', 'postal_code',
+            ] as $key) {
+                if (array_key_exists($key, $params) && trim((string) $params[$key]) !== '') {
+                    $raw[$key] = trim((string) $params[$key]);
+                }
+            }
+        }
+        if ($raw === []) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($raw as $key => $value) {
+            if (!is_string($key)) {
+                continue;
+            }
+            if (is_scalar($value) || $value === null) {
+                $trimmed = trim((string) $value);
+                if ($trimmed !== '') {
+                    $out[$key] = $trimmed;
+                }
+            }
+        }
+        if (isset($out['phone']) && !isset($out['contact_phone'])) {
+            $out['contact_phone'] = $out['phone'];
+        }
+        if (isset($out['contact_phone']) && !isset($out['phone'])) {
+            $out['phone'] = $out['contact_phone'];
+        }
+        if (isset($out['name']) && !isset($out['contact_name'])) {
+            $out['contact_name'] = $out['name'];
+        }
+        if (isset($out['street']) && !isset($out['address1'])) {
+            $out['address1'] = $out['street'];
+        }
+        if (isset($out['address1']) && !isset($out['street'])) {
+            $out['street'] = $out['address1'];
+        }
+
+        return $out;
     }
 
     /**
@@ -1029,5 +1444,18 @@ final class ExpressCheckoutFlowService
         }
 
         return '';
+    }
+
+    /**
+     * weight_table lanes reject weight_minor=0 as missing_weight. Catalog offers often omit
+     * weight; use 0.5kg so express re-quote (esp. PayPal US return) can still list lanes.
+     *
+     * @param array<string, mixed> $item
+     */
+    private function chargeableWeightMinor(array $item): int
+    {
+        $weightMinor = max(0, (int) ($item['weight_minor'] ?? 0));
+
+        return $weightMinor > 0 ? $weightMinor : 500;
     }
 }

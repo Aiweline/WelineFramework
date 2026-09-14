@@ -19,10 +19,15 @@ https://dashboard.stripe.com/apikeys
 - 在 WeShop 后台选择运行环境并保存对应密钥。
 
 ## 后台字段说明
-required_fields: secret_key, success_url, cancel_url
-- sandbox_secret_key / live_secret_key：Stripe Secret Key。
-- webhook_secret：Stripe Webhook Signing secret。
-- success_url / cancel_url：客户支付后返回地址。
+required_fields: secret_key
+- sandbox_secret_key / live_secret_key：Stripe Secret Key（按环境解析为 `secret_key`）。
+- sandbox_webhook_secret / live_webhook_secret：Webhook Signing secret（解析为 `webhook_secret`）。
+- success_url / cancel_url：由支付壳在下单时注入（亦可配置 return_url/cancel_url）。
+
+## Provider / CSP
+- 实现：`extends/module/Weline_Payment/PaymentProvider/StripeProvider.php`
+- API：`Service/StripeApiClient.php`（Checkout Session + Refund + Stripe-Signature）
+- CSP：`StripeProvider::cspDirectives()` → `PaymentVendorsCsp`（勿写回 Framework Defaults）
 
 ## Webhook/回调 URL
 在 Stripe Dashboard > Developers > Webhooks 增加 WeShop 回调 URL，监听 checkout.session.completed、payment_intent.payment_failed。

@@ -6,6 +6,8 @@ namespace Weline\Product\Service;
 
 use Weline\Eav\Api\Attribute\Option\AttributeOptionRecord;
 use Weline\Eav\Api\Attribute\Option\AttributeOptionStoreInterface;
+use Weline\Eav\Api\Metadata\AttributeMetadata;
+use Weline\Eav\Api\Metadata\AttributeMetadataCodeIndexInterface;
 use Weline\Eav\Api\Metadata\AttributeMetadataCatalogInterface;
 use Weline\Eav\Api\Metadata\AttributeOptionIdentityCatalogInterface;
 use Weline\Eav\Api\Metadata\AttributeOptionMetadata;
@@ -29,11 +31,14 @@ class StorefrontEavLabelResolver
     /** @var array<string, string>|null */
     private ?array $attributeNamesByCode = null;
 
-    /** @var array<string, list<array{id:string,code:string,label:string,aliases:list<string>}>>|null */
+    /** @var array<string, list<AttributeOptionMetadata>>|null */
     private ?array $optionsByAttribute = null;
 
     /** @var list<AttributeSetMetadata>|null */
     private ?array $metadataCatalog = null;
+
+    /** @var array<string, list<AttributeMetadata>> */
+    private array $attributeMetadataByCode = [];
 
     private ?string $cacheLocale = null;
 
@@ -84,21 +89,63 @@ class StorefrontEavLabelResolver
             return $value;
         }
 
-        $labels = $this->optionLabelsByAttribute($code);
-        $attributeLabels = $labels[$code] ?? [];
+        $indexed = $this->metadata instanceof \Weline\Eav\Api\Metadata\AttributeMetadataOptionTokenIndexInterface;
+        $identityCatalog = $this->productId > 0
+            && $this->metadata instanceof \Weline\Eav\Api\Metadata\AttributeProductOptionIdentityCatalogInterface;
+        if ($indexed || $identityCatalog) {
+            $this->refreshCachesForLocale();
+        }
+        $attributeLabels = null;
         foreach (self::optionLookupTokens($value) as $token) {
-            if (array_key_exists($token, $attributeLabels)) {
-                $label = self::usableOptionLabel((string)$attributeLabels[$token], self::displayOptionToken($value));
-
-                return $label !== '' ? $label : self::displayOptionToken($value);
+            // Numeric IDs and canonical ASCII option codes can be resolved from
+            // the bounded product identity index without materializing the full
+            // product catalog. Value tokens still use the legacy catalog path.
+            $directToken = ctype_digit($token)
+                || preg_match('/^[A-Za-z][A-Za-z0-9_.-]*$/D', $token) === 1;
+            if ($identityCatalog && $directToken) {
+                try {
+                    $option = $this->metadata->productOptionIdentity($this->entity, $this->productId, $token);
+                    if ($option instanceof AttributeOptionMetadata) {
+                        $optionData = $this->indexOption($option);
+                        $label = self::usableOptionLabel(
+                            (string)($optionData['label'] ?? ''),
+                            self::displayOptionToken($value),
+                        );
+                        return $label !== '' ? $label : self::displayOptionToken($value);
+                    }
+                } catch (\Throwable) {
+                    // Preserve the indexed/catalog fallback when the optional
+                    // bounded identity provider is temporarily unavailable.
+                }
             }
-            foreach ($attributeLabels as $optionCode => $label) {
-                // PHP casts numeric string keys to int; normalize before strcasecmp.
-                $optionCode = (string)$optionCode;
-                if (strcasecmp($optionCode, $token) === 0) {
-                    $usable = self::usableOptionLabel((string)$label, self::displayOptionToken($value));
+            if ($indexed) {
+                try {
+                    $option = $this->metadata->findOptionByToken($this->metadataForCode($code), $token);
+                    if ($option instanceof AttributeOptionMetadata) {
+                        $optionData = $this->indexOption($option);
+                        $label = self::usableOptionLabel((string)($optionData['label'] ?? ''), self::displayOptionToken($value));
+                        return $label !== '' ? $label : self::displayOptionToken($value);
+                    }
+                } catch (\Throwable) {
+                    // Optional provider failure preserves the established lookup path.
+                    $indexed = false;
+                }
+            }
+            if (!$indexed) {
+                $attributeLabels ??= $this->optionLabelsByAttribute($code)[$code] ?? [];
+                if (array_key_exists($token, $attributeLabels)) {
+                    $label = self::usableOptionLabel((string)$attributeLabels[$token], self::displayOptionToken($value));
 
-                    return $usable !== '' ? $usable : self::displayOptionToken($value);
+                    return $label !== '' ? $label : self::displayOptionToken($value);
+                }
+                foreach ($attributeLabels as $optionCode => $label) {
+                    // PHP casts numeric string keys to int; normalize before strcasecmp.
+                    $optionCode = (string)$optionCode;
+                    if (strcasecmp($optionCode, $token) === 0) {
+                        $usable = self::usableOptionLabel((string)$label, self::displayOptionToken($value));
+
+                        return $usable !== '' ? $usable : self::displayOptionToken($value);
+                    }
                 }
             }
 
@@ -171,7 +218,7 @@ class StorefrontEavLabelResolver
             return '';
         }
 
-        return $this->attributeNamesByCode()[$code] ?? '';
+        return $this->attributeNamesByCode($code)[$code] ?? '';
     }
 
     /**
@@ -268,18 +315,16 @@ class StorefrontEavLabelResolver
 
         if ($this->productId === 0 && $this->metadata instanceof AttributeOptionIdentityCatalogInterface) {
             $identities ??= $this->identityOptions([$code]);
-            $options = [];
-            foreach ($identities[$code] ?? [] as $option) {
-                $indexed = $this->indexOption($option);
-                if ($indexed !== null) {
-                    $options[] = $indexed;
-                }
-            }
+            $options = $identities[$code] ?? [];
         } else {
             $options = $this->optionsByAttribute($code)[$code] ?? [];
         }
         foreach (self::optionLookupTokens($token) as $candidate) {
-            foreach ($options as $option) {
+            foreach ($options as $metadata) {
+                $option = $this->indexOption($metadata);
+                if ($option === null) {
+                    continue;
+                }
                 foreach ($option['aliases'] as $alias) {
                     if ($alias === $candidate || strcasecmp($alias, $candidate) === 0) {
                         return [
@@ -377,6 +422,25 @@ class StorefrontEavLabelResolver
         $token = trim($token);
         if ($this->productId <= 0 || $token === '') {
             return null;
+        }
+
+
+        if ($this->metadata instanceof \Weline\Eav\Api\Metadata\AttributeProductOptionIdentityCatalogInterface) {
+            try {
+                $option = $this->metadata->productOptionIdentity($this->entity, $this->productId, $token);
+                if ($option === null) {
+                    return null;
+                }
+                $identity = $this->indexOption($option);
+                return $identity === null ? null : [
+                    'id' => $identity['id'],
+                    'code' => $identity['code'],
+                    'label' => $identity['label'],
+                ];
+            } catch (\Throwable) {
+                // A failed metadata read is not an authoritative miss. Keep the
+                // legacy path and retry this capability on the next lookup.
+            }
         }
 
         $cacheKey = $this->productId . ':' . $token;
@@ -481,10 +545,14 @@ class StorefrontEavLabelResolver
     private function refreshCachesForLocale(): void
     {
         $locale = $this->currentLocale();
-        if ($this->cacheLocale === $locale) {
+        // Metadata and private option caches belong to the current request even
+        // when two requests use the same locale. WLS keeps resolver instances.
+        $requestKey = RequestContext::getRequestId() ?? '<no-request>';
+        $cacheKey = $requestKey . '|' . $locale;
+        if ($this->cacheLocale === $cacheKey) {
             return;
         }
-        $this->cacheLocale = $locale;
+        $this->cacheLocale = $cacheKey;
         $this->clearCaches();
     }
 
@@ -494,6 +562,7 @@ class StorefrontEavLabelResolver
         $this->attributeNamesByCode = null;
         $this->optionsByAttribute = null;
         $this->metadataCatalog = null;
+        $this->attributeMetadataByCode = [];
         $this->privateOptionCache = [];
     }
 
@@ -508,38 +577,58 @@ class StorefrontEavLabelResolver
     /**
      * @return array<string, string>
      */
-    private function attributeNamesByCode(): array
+    private function attributeNamesByCode(string $code): array
     {
         $this->refreshCachesForLocale();
-        if ($this->attributeNamesByCode !== null) {
+        if ($this->attributeNamesByCode !== null && array_key_exists($code, $this->attributeNamesByCode)) {
             return $this->attributeNamesByCode;
         }
 
-        $index = [];
+        $name = '';
         try {
-            foreach ($this->metadataCatalog() as $set) {
-                if (!$set instanceof AttributeSetMetadata) {
-                    continue;
-                }
-                foreach ($set->groups as $group) {
-                    foreach ($group->attributes as $attribute) {
-                        $attributeCode = strtolower(trim($attribute->code));
-                        if ($attributeCode === '') {
-                            continue;
-                        }
-                        $name = trim($attribute->name);
-                        if ($name === '' || strcasecmp($name, $attributeCode) === 0) {
-                            continue;
-                        }
-                        $index[$attributeCode] = $name;
-                    }
+            foreach ($this->metadataForCode($code) as $attribute) {
+                $candidate = trim($attribute->name);
+                // Keep real labels such as "Size"/"Material". Only ignore an exact
+                // code echo (`size` / `material`) used as a placeholder name.
+                if ($candidate !== '' && $candidate !== $code) {
+                    $name = $candidate;
                 }
             }
         } catch (\Throwable) {
-            $index = [];
+            $name = '';
         }
 
-        return $this->attributeNamesByCode = $index;
+        $this->attributeNamesByCode[$code] = $name;
+        return $this->attributeNamesByCode;
+    }
+
+    /** @return list<AttributeMetadata> */
+    private function metadataForCode(string $code): array
+    {
+        if (array_key_exists($code, $this->attributeMetadataByCode)) {
+            return $this->attributeMetadataByCode[$code];
+        }
+
+        $sets = $this->metadataCatalog();
+        if ($this->metadata instanceof AttributeMetadataCodeIndexInterface) {
+            return $this->attributeMetadataByCode[$code] = $this->metadata->attributesByCode($sets, $code);
+        }
+
+        // 未实现可选索引能力的旧提供者继续使用其原目录。
+        $matches = [];
+        foreach ($sets as $set) {
+            if (!$set instanceof AttributeSetMetadata) {
+                continue;
+            }
+            foreach ($set->groups as $group) {
+                foreach ($group->attributes as $attribute) {
+                    if (strtolower(trim($attribute->code)) === $code) {
+                        $matches[] = $attribute;
+                    }
+                }
+            }
+        }
+        return $this->attributeMetadataByCode[$code] = $matches;
     }
 
     /**
@@ -555,7 +644,11 @@ class StorefrontEavLabelResolver
         }
 
         $labels = [];
-        foreach ($this->optionsByAttribute($attributeCode)[$attributeCode] ?? [] as $option) {
+        foreach ($this->optionsByAttribute($attributeCode)[$attributeCode] ?? [] as $metadata) {
+            $option = $this->indexOption($metadata);
+            if ($option === null) {
+                continue;
+            }
             foreach ($option['aliases'] as $alias) {
                 $labels[$alias] = $option['label'];
             }
@@ -566,7 +659,7 @@ class StorefrontEavLabelResolver
     }
 
     /**
-     * @return array<string, list<array{id:string,code:string,label:string,aliases:list<string>}>>
+     * @return array<string, list<AttributeOptionMetadata>>
      */
     private function optionsByAttribute(string $requestedCode): array
     {
@@ -577,33 +670,25 @@ class StorefrontEavLabelResolver
             return $this->optionsByAttribute;
         }
 
-        $index = [];
+        $options = [];
+        $seenOptions = [];
         try {
-            foreach ($this->metadataCatalog() as $set) {
-                if (!$set instanceof AttributeSetMetadata) {
-                    continue;
-                }
-                foreach ($set->groups as $group) {
-                    foreach ($group->attributes as $attribute) {
-                        $attributeCode = strtolower(trim($attribute->code));
-                        if ($attributeCode === '' || $attributeCode !== $requestedCode) {
-                            continue;
-                        }
-                        foreach ($attribute->options as $option) {
-                            $indexed = $this->indexOption($option);
-                            if ($indexed !== null) {
-                                $index[$attributeCode][] = $indexed;
-                            }
-                        }
+            foreach ($this->metadataForCode($requestedCode) as $attribute) {
+                foreach ($attribute->options as $option) {
+                    // 复用只读 DTO；重复挂载只保留同一个选项引用。
+                    $identity = spl_object_id($option);
+                    if (isset($seenOptions[$identity])) {
+                        continue;
                     }
+                    $seenOptions[$identity] = true;
+                    $options[] = $option;
                 }
             }
         } catch (\Throwable) {
-            $index = [];
+            $options = [];
         }
 
-        $this->optionsByAttribute[$requestedCode] = $index[$requestedCode] ?? [];
-
+        $this->optionsByAttribute[$requestedCode] = $options;
         return $this->optionsByAttribute;
     }
 }

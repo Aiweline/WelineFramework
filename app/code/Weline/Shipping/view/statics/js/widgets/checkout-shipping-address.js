@@ -1,9 +1,14 @@
 (function () {
     'use strict';
-    var root = document.querySelector('[data-shipping-checkout-address]');
-    if (!root) {
-        return;
+
+    function mount(root) {
+    if (!root || !root.querySelector) {
+        return null;
     }
+    if (root.getAttribute('data-shipping-mounted') === '1') {
+        return window.WelineShippingCheckoutAddress || null;
+    }
+    root.setAttribute('data-shipping-mounted', '1');
 
     var ADDRESS_CODE = 'checkout-shipping-address';
     var form = root.closest('form');
@@ -188,8 +193,89 @@
             street_id: text(data.get('street_id')).trim(),
             street_code: text(data.get('street_code')).trim(),
             address1: text(data.get('address1')).trim(),
-            postal_code: text(data.get('postal_code')).trim()
+            postal_code: text(data.get('postal_code')).trim(),
+            address_id: text(data.get('shipping_address_id') || data.get('address_id')).trim(),
+            shipping_address_id: text(data.get('shipping_address_id') || data.get('address_id')).trim()
         };
+    }
+
+    function selectedCardPayload() {
+        var card = root.querySelector('[data-address-card].is-selected');
+        if (!card) {
+            var radio = root.querySelector('[data-address-radio]:checked');
+            card = radio && radio.closest ? radio.closest('[data-address-card]') : null;
+        }
+        if (!card) {
+            return null;
+        }
+        try {
+            var payload = JSON.parse(card.getAttribute('data-address-json') || '{}') || {};
+            return payload && typeof payload === 'object' ? payload : null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    /**
+     * Quote/reload must use the selected saved card — not cascade defaults (often CN)
+     * left in the hidden editor after currency full-page navigation.
+     */
+    function resolveQuoteAddress() {
+        var currentMode = mode();
+        var formSnap = readShippingSnapshot();
+        if (currentMode === 'new' || currentMode === 'edit') {
+            return formSnap;
+        }
+        var payload = selectedCardPayload();
+        if (!payload || text(payload.country_code).trim() === '') {
+            return formSnap;
+        }
+        var address1 = text(payload.address1 || payload.street || '').trim();
+        var id = text(payload.id || payload.delivery_address_id || payload.address_id || '').trim();
+        return {
+            name: text(payload.name || payload.contact_name || formSnap.name || '').trim(),
+            phone: text(payload.phone || payload.contact_phone || formSnap.phone || '').trim(),
+            email: text(payload.email || formSnap.email || '').trim(),
+            country_code: text(payload.country_code).trim().toUpperCase(),
+            country: text(payload.country || payload.country_name || payload.country_code || '').trim(),
+            province: text(payload.province || '').trim(),
+            province_code: text(payload.province_code || '').trim(),
+            province_region_id: text(payload.province_region_id || payload.province_id || '0').trim(),
+            city: text(payload.city || '').trim(),
+            city_code: text(payload.city_code || '').trim(),
+            city_region_id: text(payload.city_region_id || payload.city_id || '0').trim(),
+            district: text(payload.district || '').trim(),
+            district_code: text(payload.district_code || '').trim(),
+            district_region_id: text(payload.district_region_id || payload.district_id || '0').trim(),
+            street: address1,
+            street_id: text(payload.street_id || '0').trim(),
+            street_code: text(payload.street_code || '').trim(),
+            address1: address1,
+            postal_code: text(payload.postal_code || '').trim(),
+            address_id: id,
+            shipping_address_id: id
+        };
+    }
+
+    function syncFormFromSelectedCard() {
+        var payload = selectedCardPayload();
+        if (!payload || text(payload.country_code).trim() === '') {
+            return false;
+        }
+        fillShipping({
+            name: payload.name || payload.contact_name || '',
+            phone: payload.phone || payload.contact_phone || '',
+            email: payload.email || '',
+            country_code: payload.country_code,
+            country: payload.country || payload.country_name || payload.country_code || '',
+            province: payload.province || '',
+            city: payload.city || '',
+            district: payload.district || '',
+            street: payload.address1 || payload.street || '',
+            address1: payload.address1 || payload.street || '',
+            postal_code: payload.postal_code || ''
+        }, {clearEmpty: true});
+        return true;
     }
 
     function applyCascade(address) {
@@ -236,6 +322,13 @@
         });
     }
 
+    function isSessionIsolated() {
+        if (text(root.getAttribute('data-session-isolation')) === '1') {
+            return true;
+        }
+        return !!(root.closest && root.closest('[data-session-isolation="1"]'));
+    }
+
     async function selectSaved(card) {
         var id = text(card.getAttribute('data-address-id'));
         var payload = {};
@@ -247,6 +340,10 @@
         markSelected(id);
         fillShipping(payload);
         setMode('collapsed');
+        // Quick-buy / HelpPay modal: local selection only — do not rewrite universal checkout delivery.
+        if (isSessionIsolated()) {
+            return;
+        }
         if (!id || !window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
             return;
         }
@@ -925,6 +1022,9 @@
         if (ctx.selected && ctx.selected.id) {
             markSelected(ctx.selected.id);
         }
+        if (isSessionIsolated()) {
+            return;
+        }
         window.dispatchEvent(new CustomEvent('weline:checkout:address-updated', {
             detail: ctx,
         }));
@@ -966,6 +1066,44 @@
         }
         setMessage('', false);
         clearFieldErrors();
+        // Isolated modal: apply local card state only — never saveDeliveryAddress into checkout session.
+        if (isSessionIsolated()) {
+            var localId = selectedId || ('local_' + Date.now().toString(36));
+            var localPayload = {
+                id: localId,
+                name: snap.name,
+                phone: snap.phone,
+                email: snap.email || '',
+                country_code: snap.country_code || '',
+                country: snap.country || '',
+                province: snap.province || '',
+                city: snap.city || '',
+                district: snap.district || '',
+                street: snap.address1 || snap.street || '',
+                address1: snap.address1 || snap.street || '',
+                postal_code: snap.postal_code || '',
+            };
+            markSelected(localId);
+            fillShipping(localPayload);
+            var cardsHost = savedBox && savedBox.querySelector('.w-shipping-checkout-address__cards');
+            if (cardsHost) {
+                renderSavedAddresses({
+                    addresses: [Object.assign({}, localPayload, {is_selected: true})],
+                    selected: localPayload,
+                    checkout_address: localPayload,
+                });
+            }
+            if (savedBox) {
+                savedBox.hidden = false;
+            }
+            setMode('collapsed');
+            setShippingRequired(false);
+            setMessage(t('address_updated_local', '地址已用于本单（不影响结账页）。'), false);
+            if (useBtn) {
+                useBtn.disabled = false;
+            }
+            return;
+        }
         try {
             if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
                 throw new Error('Weline.Api 尚未就绪，请刷新页面后重试。');
@@ -1055,7 +1193,15 @@
         if (window.WelineThemeAddress && typeof window.WelineThemeAddress.boot === 'function') {
             window.WelineThemeAddress.boot();
         }
-        return applyCascade(initial);
+        var seed = selectedCardPayload() || initial;
+        return Promise.resolve(applyCascade(seed)).then(function () {
+            // Collapsed saved-card mode: keep editor fields aligned with the visible card
+            // so currency reload / getData never quotes the cascade default (CN).
+            if (mode() === 'collapsed' || mode() === 'picking') {
+                syncFormFromSelectedCard();
+            }
+            return true;
+        });
     }
 
     // 事件委托到 root：访客首存后动态显示的 saved shell 也能选中/编辑/新增/更换
@@ -1157,10 +1303,11 @@
         bootAddress();
     }
 
-    root.setAttribute('data-shipping-js-rev', '20260905-msg-captcha2');
-    window.WelineShippingCheckoutAddress = {
-        rev: '20260905-msg-captcha2',
+    root.setAttribute('data-shipping-js-rev', '20260914-quote-selected-mount');
+    var api = {
+        rev: '20260914-quote-selected-mount',
         root: root,
+        mount: mount,
         applyFieldErrors: applyFieldErrors,
         focusFirstFieldError: focusFirstFieldError,
         sanitizeErrorMessage: sanitizeErrorMessage,
@@ -1168,5 +1315,30 @@
         buildRequiredFieldErrors: buildRequiredFieldErrors,
         openAddressPicker: openAddressPicker,
         collapseAddressList: collapseAddressList,
+        resolveQuoteAddress: resolveQuoteAddress,
+        syncFormFromSelectedCard: syncFormFromSelectedCard,
     };
+    window.WelineShippingCheckoutAddress = api;
+    return api;
+    }
+
+    window.WelineShippingCheckoutAddress = {
+        rev: '20260914-quote-selected-mount',
+        root: null,
+        mount: mount,
+        applyFieldErrors: function () {},
+        focusFirstFieldError: function () {},
+        sanitizeErrorMessage: function (m) { return m == null ? '' : String(m); },
+        validateShippingFields: function () { return true; },
+        buildRequiredFieldErrors: function () { return {}; },
+        openAddressPicker: function () {},
+        collapseAddressList: function () {},
+        resolveQuoteAddress: function () { return null; },
+        syncFormFromSelectedCard: function () { return false; },
+    };
+
+    var existing = document.querySelector('[data-shipping-checkout-address]');
+    if (existing) {
+        mount(existing);
+    }
 })();

@@ -31,7 +31,8 @@ final class ThemeLayoutScopeNormalizer implements LayoutScopeNormalizerInterface
     {
         $layoutOption = trim((string)($identity['layout_option'] ?? 'default'));
         $targetType = trim((string)($identity['target_type'] ?? 'global'));
-        $localeCode = $this->normalizeLocaleCode((string)($identity['locale_code'] ?? $identity['locale'] ?? ''));
+        // Layout structure identity is language-neutral; ignore any passed locale.
+        $localeCode = '';
         $storeMode = $this->normalizeStoreMode((string)($identity['store_mode'] ?? ScopeIdentity::MODE_NORMAL));
 
         $rawScope = trim((string)($identity['scope'] ?? ''));

@@ -27,6 +27,9 @@ final class AffiliateProductShareHookContractTest extends TestCase
         self::assertStringContainsString('data-apply-url', $src);
         self::assertStringContainsString('data-free-share-url', $src);
         self::assertStringContainsString('data-affiliate-share-guest', $src);
+        self::assertStringContainsString("getUrl('product/'", $src);
+        self::assertStringNotContainsString("\$_SERVER['REQUEST_URI']", $src);
+        self::assertStringNotContainsString('$_SERVER["REQUEST_URI"]', $src);
         self::assertStringContainsString('登录前往申请分销', $src);
         self::assertStringContainsString('data-affiliate-default-platform', $src);
         self::assertStringContainsString('affiliate-share-platform__logo', $src);
@@ -50,7 +53,8 @@ final class AffiliateProductShareHookContractTest extends TestCase
         self::assertStringContainsString('syncDefaultPlatformHrefs', $src);
         self::assertStringContainsString('Never wipe SSR default icons', $src);
         self::assertStringContainsString('data-affiliate-default-platform', $src);
-        self::assertStringContainsString('20260909-default-icons2', file_get_contents(dirname(__DIR__, 3) . '/view/statics/frontend/weline.modules.js'));
+        self::assertStringContainsString('20260914-panel-share-url', file_get_contents(dirname(__DIR__, 3) . '/view/statics/frontend/weline.modules.js'));
+        self::assertStringContainsString('/\\/product\\//i.test(path)', $src);
         self::assertStringContainsString('getProductShareLinks', $src);
         self::assertStringContainsString('showGuestPromo', $src);
         self::assertStringNotContainsString('freeShareHint', $src);

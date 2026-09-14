@@ -234,7 +234,7 @@ final class CheckoutHtmlRenderer
         bool $showPrice = false,
     ): string {
         if ($methods === []) {
-            return '<p class="weline-checkout__empty">' . $this->e($emptyMessage) . '</p>';
+            return $this->renderMethodEmptyAlert($inputName, $emptyMessage);
         }
         $html = '';
         foreach ($methods as $index => $method) {
@@ -266,7 +266,7 @@ final class CheckoutHtmlRenderer
         string $emptyMessage = '',
     ): string {
         if ($methods === []) {
-            return '<p class="weline-checkout__empty">' . $this->e($emptyMessage) . '</p>';
+            return $this->renderMethodEmptyAlert($inputName, $emptyMessage);
         }
 
         $expandLabel = (string)__('展开简介');
@@ -327,6 +327,34 @@ final class CheckoutHtmlRenderer
         }
 
         return $html;
+    }
+
+    /**
+     * Empty shipping/payment options must be an obvious blocking alert — plain grey
+     * body text is easy to miss and users cannot tell why checkout is stuck.
+     */
+    private function renderMethodEmptyAlert(string $inputName, string $emptyMessage): string
+    {
+        $msg = trim($emptyMessage);
+        if ($msg === '') {
+            $msg = $inputName === 'payment_method'
+                ? (string)__('暂无可用支付方式。')
+                : (string)__('暂无可用配送方式。');
+        }
+        $title = $inputName === 'payment_method'
+            ? (string)__('暂无可用支付方式')
+            : (string)__('暂无可用配送方式');
+
+        return '<div class="w-alert weline-checkout__method-alert"'
+            . ' data-tone="warning"'
+            . ' role="alert"'
+            . ' data-checkout-method-empty="' . $this->e($inputName) . '"'
+            . ' data-testid="checkout-method-empty-' . $this->e($inputName) . '">'
+            . '<div class="w-alert__content">'
+            . '<div class="w-alert__title">' . $this->e($title) . '</div>'
+            . '<p class="weline-checkout__method-alert-body">' . $this->e($msg) . '</p>'
+            . '</div>'
+            . '</div>';
     }
 
     private function money(string $currency, float $amount): string

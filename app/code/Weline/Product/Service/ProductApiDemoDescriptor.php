@@ -348,6 +348,9 @@ final class ProductApiDemoDescriptor
                                 'global_product_uuid' => [
                                     '$field' => 'global_product_uuid',
                                 ],
+                                'locale' => [
+                                    '$field' => 'locale',
+                                ],
                                 'payload' => [
                                     'local_version' => [
                                         '$field' => 'local_version',

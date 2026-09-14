@@ -21,11 +21,10 @@ final class SharedConnectionTimingTest extends TestCase
     protected function setUp(): void
     {
         $this->previousDebugConfig = [
-            'request_trace' => Env::get('wls.debug.request_trace', false),
             'request_trace_max_spans' => Env::get('wls.debug.request_trace_max_spans', 4096),
         ];
         Env::getInstance()->applyRuntimeConfig([
-            'wls' => ['debug' => ['request_trace' => true, 'request_trace_max_spans' => 32]],
+            'wls' => ['debug' => ['request_trace_max_spans' => 32]],
         ]);
         Runtime::setMode(RuntimeInterface::MODE_WLS);
         Context::enter(new Context([
@@ -34,11 +33,13 @@ final class SharedConnectionTimingTest extends TestCase
         ]));
         self::assertTrue(RequestContext::isInitialized());
         RequestLifecycleTrace::reset();
+        RequestLifecycleTrace::installPanelTraceOn();
         self::assertTrue(RequestLifecycleTrace::isEnabled());
     }
 
     protected function tearDown(): void
     {
+        RequestLifecycleTrace::clearPanelTrace();
         RequestLifecycleTrace::reset();
         Context::leave();
         Runtime::resetModeCache();

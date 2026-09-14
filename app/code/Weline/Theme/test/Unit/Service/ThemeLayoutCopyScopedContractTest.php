@@ -478,25 +478,19 @@ final class ThemeLayoutCopyScopedContractTest extends TestCase
         self::assertStringNotContainsString("if (\$layoutId === '' && \$healthPayload === null)", $methodBody);
     }
 
-    public function testPublishedLayoutInheritsDefaultLocaleBeforeScopeParents(): void
+    public function testPublishedLayoutDoesNotInheritAcrossLocales(): void
     {
-        $contextSource = (string)\file_get_contents(
-            BP . 'app/code/Weline/Theme/Api/Scoped/ThemeEditorContext.php',
-        );
-        self::assertStringContainsString('public function withLocale(string $locale): self', $contextSource);
-
         $workspaceSource = (string)\file_get_contents(
             BP . 'app/code/Weline/Theme/Service/Scoped/ThemeScopedWorkspace.php',
         );
-        $methodStart = \strpos($workspaceSource, 'function publishedState(');
+        $methodStart = \strpos($workspaceSource, 'function shouldInheritDefaultLocalePublished(');
         self::assertNotFalse($methodStart);
         $nextFn = \strpos($workspaceSource, "\n    private function parentPublishedState(", $methodStart + 10);
         self::assertNotFalse($nextFn);
         $methodBody = \substr($workspaceSource, $methodStart, $nextFn - $methodStart);
-        self::assertStringContainsString('shouldInheritDefaultLocalePublished', $methodBody);
-        self::assertStringContainsString("withLocale('default')", $methodBody);
-        self::assertStringContainsString('RESOURCE_LAYOUT', $methodBody);
-        self::assertStringContainsString('RESOURCE_META', $methodBody);
+        // LAYOUT/META identity is always default; inherit helper is a permanent no-op.
+        self::assertStringContainsString('return false;', $methodBody);
+        self::assertStringNotContainsString('RESOURCE_LAYOUT', $methodBody);
     }
 
     public function testScopedLayoutSnapshotAllowsInheritedEffectivePayload(): void

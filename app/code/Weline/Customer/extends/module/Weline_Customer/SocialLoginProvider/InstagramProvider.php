@@ -34,6 +34,24 @@ final class InstagramProvider extends AbstractSocialLoginProvider
         return 30;
     }
 
+    /**
+     * @return array<string, list<string>>
+     */
+    public function cspDirectives(): array
+    {
+        // Instagram Business Login authorize + token + Graph.
+        return [
+            'frame-src' => [
+                'https://www.instagram.com',
+            ],
+            'connect-src' => [
+                'https://www.instagram.com',
+                'https://api.instagram.com',
+                'https://graph.instagram.com',
+            ],
+        ];
+    }
+
     public function getIconSvgMarkup(): string
     {
         return '<svg class="account-social-login__mark" viewBox="0 0 24 24" width="22" height="22" focusable="false" aria-hidden="true">'

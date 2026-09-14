@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 return [
     'name' => 'Weline_B2B',
-    'version' => '2.6.72',
+    'version' => '2.6.77',
     'requires' => [
         'Weline_Backend' => '*',
         'Weline_Framework' => '*',
@@ -34,6 +34,8 @@ return [
             => \Weline\B2B\Service\CommerceTypeMembershipChecker::class,
         \Weline\Cart\Api\CommerceCartQtyPolicyInterface::class
             => \Weline\B2B\Service\B2BCartQtyPolicy::class,
+        \Weline\Cart\Api\CommerceCartOfferRoutingInterface::class
+            => \Weline\B2B\Service\B2BCartOfferRouting::class,
         'payment.asset_policy.Weline_B2B'
             => \Weline\B2B\Service\B2BPaymentAssetPolicyProvider::class,
     ],

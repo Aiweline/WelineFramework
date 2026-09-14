@@ -1484,18 +1484,11 @@ final class Store
             'DELETE FROM audit_log WHERE created_at <= ?',
             [self::timeAfter(-$this->config->duration('privacy.query_log_ttl'))],
         )->rowCount();
-        $executionRuns = $this->execute(
-            'DELETE FROM execution_runs
-             WHERE status IN (\'completed\', \'planned\', \'failed\', \'rolled_back\', \'superseded\')
-               AND updated_at <= ?',
-            [self::timeAfter(-$this->config->duration('privacy.execution_run_ttl'))],
-        )->rowCount();
 
         return [
             'terminal_jobs_deleted' => $jobs,
             'tombstones_deleted' => $tombstones,
             'audit_rows_deleted' => $auditRows,
-            'execution_runs_deleted' => $executionRuns,
         ];
     }
 

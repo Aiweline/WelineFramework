@@ -20,6 +20,10 @@ final class LanguageSelectSearchFocusContractTest extends TestCase
         self::assertStringContainsString('focusSearch();', $runtime);
         self::assertStringContainsString('focusSearch', $theme);
         self::assertStringContainsString('window.setTimeout', $theme);
+        self::assertStringContainsString("classList.toggle('has-value'", $runtime);
+        self::assertStringContainsString('dataset.hasValue', $runtime);
+        self::assertStringContainsString("classList.toggle('has-value'", $theme);
+        self::assertStringContainsString('dataset.hasValue', $theme);
     }
 
     private function read(string $path): string

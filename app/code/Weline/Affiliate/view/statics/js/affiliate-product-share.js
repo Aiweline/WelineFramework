@@ -162,14 +162,22 @@
     }
 
     function resolveFreeShareUrl(root) {
+        var fromAttr = String(root.getAttribute('data-free-share-url') || '').trim();
         try {
-            var live = window.location.origin + window.location.pathname + window.location.search;
-            if (live) {
-                return live;
+            var path = String(window.location.pathname || '');
+            // Listing / purchase-panel hosts: prefer SSR product URL, not the current page.
+            if (/\/product\//i.test(path)) {
+                return window.location.origin + path + (window.location.search || '');
             }
         } catch (_e) {}
-        var fromAttr = String(root.getAttribute('data-free-share-url') || '').trim();
-        return fromAttr;
+        if (fromAttr) {
+            return fromAttr;
+        }
+        try {
+            return window.location.origin + window.location.pathname + window.location.search;
+        } catch (_e2) {
+            return '';
+        }
     }
 
     function buildFreePlatformUrls(targetUrl) {

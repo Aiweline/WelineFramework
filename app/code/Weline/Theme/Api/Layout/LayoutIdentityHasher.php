@@ -7,8 +7,8 @@ namespace Weline\Theme\Api\Layout;
 /**
  * Produces compact database identities without replacing the readable columns.
  *
- * All callers must first construct LayoutIdentity so locale and identity fields
- * have one canonical representation before hashing.
+ * Structure hashes intentionally omit locale: slot mounts are language-neutral.
+ * Callers still construct LayoutIdentity for canonical scope/target fields.
  */
 final class LayoutIdentityHasher
 {
@@ -19,7 +19,6 @@ final class LayoutIdentityHasher
             $pageType,
             $identity->layoutOption,
             $identity->scope,
-            $identity->localeCode,
             $identity->targetType,
             (string)$identity->targetId,
         ]);
@@ -51,7 +50,6 @@ final class LayoutIdentityHasher
             $layoutType,
             $identity->layoutOption,
             $identity->scope,
-            $identity->localeCode,
             $identity->targetType,
             (string)$identity->targetId,
         ]);
@@ -70,7 +68,6 @@ final class LayoutIdentityHasher
             $pageType,
             $identity->layoutOption,
             $identity->scope,
-            $identity->localeCode,
             $identity->targetType,
             (string)$identity->targetId,
             $injectionKey,

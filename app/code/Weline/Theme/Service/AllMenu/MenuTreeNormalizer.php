@@ -77,6 +77,10 @@ final class MenuTreeNormalizer
                 'text' => $this->resolveDisplayName($node),
                 'url' => $this->localizeUrl((string)($node['url'] ?? '#')),
             ];
+            $nodeId = trim((string)($node['id'] ?? $node['category_id'] ?? $node['code'] ?? ''));
+            if ($nodeId !== '') {
+                $item['id'] = $nodeId;
+            }
             $image = trim((string)($node['image'] ?? $node['img'] ?? $node['icon_url'] ?? ''));
             if ($image !== '') {
                 $item['image'] = $image;

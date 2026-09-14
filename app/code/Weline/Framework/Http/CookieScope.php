@@ -6,6 +6,7 @@ namespace Weline\Framework\Http;
 
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
 
 /**
  * Framework-owned Cookie name/Path resolution.
@@ -18,6 +19,10 @@ use Weline\Framework\Manager\ObjectManager;
  * Protocol and authentication-realm cookies (`__Host-` / `__Secure-` /
  * Worker bootstrap / backend remember-device) stay exact: browser prefix
  * rules and realm bridges require Path=/ and the wire name unchanged.
+ *
+ * Resolve is memoized per request and guarded against re-entrancy: observers
+ * or {@see \Weline\Framework\Env\WelineEnv::getCookie()} must not recurse into
+ * another EVENT_RESOLVE dispatch (that path OOMs workers / reflection:compile).
  */
 final class CookieScope
 {
@@ -25,6 +30,22 @@ final class CookieScope
 
     /** @var (callable(): array<string, mixed>)|null */
     private static $policyResolverOverride = null;
+
+    /** True while EVENT_RESOLVE (or override) is running. */
+    private static bool $resolving = false;
+
+    /** @var array{
+     *     active: bool,
+     *     name_suffix: string,
+     *     name_suffix_pattern: string,
+     *     mount_path: string,
+     *     expire_unscoped_aliases: bool,
+     *     revision: string
+     * }|null */
+    private static ?array $cachedPolicy = null;
+
+    /** Request / CLI scope key that owns {@see $cachedPolicy}. */
+    private static string $cachedScopeKey = '';
 
     /**
      * Test-only override for policy resolution (cleared in tearDown).
@@ -34,6 +55,17 @@ final class CookieScope
     public static function setPolicyResolverOverride(?callable $resolver): void
     {
         self::$policyResolverOverride = $resolver;
+        self::resetRequestState();
+    }
+
+    /**
+     * Drop request-scoped policy memo (WLS request boundary / tests).
+     */
+    public static function resetRequestState(): void
+    {
+        self::$cachedPolicy = null;
+        self::$cachedScopeKey = '';
+        self::$resolving = false;
     }
 
     /**
@@ -140,6 +172,7 @@ final class CookieScope
      * @return array{
      *     active: bool,
      *     name_suffix: string,
+     *     name_suffix_pattern: string,
      *     mount_path: string,
      *     expire_unscoped_aliases: bool,
      *     revision: string
@@ -148,6 +181,64 @@ final class CookieScope
     private static function resolvePolicy(): array
     {
         if (self::$policyResolverOverride !== null) {
+            return self::resolveViaOverride();
+        }
+
+        $scopeKey = self::currentScopeKey();
+        if (self::$cachedPolicy !== null && self::$cachedScopeKey === $scopeKey) {
+            return self::$cachedPolicy;
+        }
+
+        // Break CookieScope ↔ getCookie / observer re-entry before EventsManager work.
+        if (self::$resolving) {
+            return self::identityPolicy();
+        }
+
+        self::$resolving = true;
+        $data = self::identityPolicy();
+
+        try {
+            /** @var EventsManager $eventsManager */
+            $eventsManager = ObjectManager::getInstance(EventsManager::class);
+            $eventsManager->dispatch(self::EVENT_RESOLVE, $data);
+        } catch (\Throwable) {
+            // Event failure must not break cookie emission.
+        } finally {
+            self::$resolving = false;
+        }
+
+        unset($data['observers']);
+
+        $policy = self::normalizePolicy($data);
+        self::$cachedPolicy = $policy;
+        self::$cachedScopeKey = $scopeKey;
+
+        return $policy;
+    }
+
+    /**
+     * @return array{
+     *     active: bool,
+     *     name_suffix: string,
+     *     name_suffix_pattern: string,
+     *     mount_path: string,
+     *     expire_unscoped_aliases: bool,
+     *     revision: string
+     * }
+     */
+    private static function resolveViaOverride(): array
+    {
+        $scopeKey = self::currentScopeKey();
+        if (self::$cachedPolicy !== null && self::$cachedScopeKey === $scopeKey) {
+            return self::$cachedPolicy;
+        }
+
+        if (self::$resolving) {
+            return self::identityPolicy();
+        }
+
+        self::$resolving = true;
+        try {
             try {
                 $data = (self::$policyResolverOverride)();
             } catch (\Throwable) {
@@ -157,17 +248,29 @@ final class CookieScope
                 $data = [];
             }
 
-            return self::normalizePolicy($data + [
-                'active' => false,
-                'name_suffix' => '',
-                'name_suffix_pattern' => '',
-                'mount_path' => '/',
-                'expire_unscoped_aliases' => false,
-                'revision' => '',
-            ]);
-        }
+            $policy = self::normalizePolicy($data + self::identityPolicy());
+            self::$cachedPolicy = $policy;
+            self::$cachedScopeKey = $scopeKey;
 
-        $data = [
+            return $policy;
+        } finally {
+            self::$resolving = false;
+        }
+    }
+
+    /**
+     * @return array{
+     *     active: bool,
+     *     name_suffix: string,
+     *     name_suffix_pattern: string,
+     *     mount_path: string,
+     *     expire_unscoped_aliases: bool,
+     *     revision: string
+     * }
+     */
+    private static function identityPolicy(): array
+    {
+        return [
             'active' => false,
             'name_suffix' => '',
             'name_suffix_pattern' => '',
@@ -175,18 +278,27 @@ final class CookieScope
             'expire_unscoped_aliases' => false,
             'revision' => '',
         ];
+    }
 
+    private static function currentScopeKey(): string
+    {
         try {
-            /** @var EventsManager $eventsManager */
-            $eventsManager = ObjectManager::getInstance(EventsManager::class);
-            $eventsManager->dispatch(self::EVENT_RESOLVE, $data);
+            if (\class_exists(RequestContext::class, false)) {
+                $requestId = RequestContext::getId();
+                if ($requestId !== null && $requestId !== '') {
+                    return 'req:' . (string)$requestId;
+                }
+            }
         } catch (\Throwable) {
-            // Event failure must not break cookie emission.
         }
 
-        unset($data['observers']);
+        $fiber = \Fiber::getCurrent();
+        if ($fiber !== null) {
+            return 'fiber:' . \spl_object_id($fiber);
+        }
 
-        return self::normalizePolicy($data);
+        // CLI / single-shot: one memo per process is fine (reflection:compile).
+        return 'cli';
     }
 
     /**

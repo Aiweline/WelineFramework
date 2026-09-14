@@ -643,11 +643,33 @@ function injectWlsProcessTimeHeader(string $response, float $durationMs): string
     return \substr_replace($response, $headers, $pos + 2, 0);
 }
 
+function wlsEnsureContentEncodingNegotiator(): string
+{
+    $class = \Weline\Framework\Http\ContentEncodingNegotiator::class;
+    if (!\class_exists($class, false)) {
+        $file = \dirname(__DIR__, 2) . '/Framework/Http/ContentEncodingNegotiator.php';
+        if (\is_file($file)) {
+            require_once $file;
+        }
+    }
+
+    return $class;
+}
+
 function wlsCompressFormattedHttpResponse(string $response, string $acceptEncoding): string
 {
-    if ($response === ''
-        || \stripos($acceptEncoding, 'gzip') === false
-        || !\function_exists('gzencode')) {
+    if ($response === '') {
+        return $response;
+    }
+
+    $negotiator = wlsEnsureContentEncodingNegotiator();
+    if (!\class_exists($negotiator, false)) {
+        return $response;
+    }
+
+    /** @var class-string<\Weline\Framework\Http\ContentEncodingNegotiator> $negotiator */
+    $encoding = $negotiator::negotiate($acceptEncoding);
+    if ($encoding === null) {
         return $response;
     }
 
@@ -671,24 +693,18 @@ function wlsCompressFormattedHttpResponse(string $response, string $acceptEncodi
 
     $contentType = '';
     if (\preg_match('/^Content-Type:\s*([^\r\n]+)/mi', $headersPart, $typeMatch)) {
-        $contentType = \strtolower(\trim((string)$typeMatch[1]));
+        $contentType = \trim((string)$typeMatch[1]);
     }
-    if ($contentType !== ''
-        && !\str_starts_with($contentType, 'text/')
-        && !\str_contains($contentType, 'application/json')
-        && !\str_contains($contentType, 'application/javascript')
-        && !\str_contains($contentType, 'application/xml')
-        && !\str_contains($contentType, 'application/xhtml+xml')
-        && !\str_contains($contentType, 'image/svg+xml')) {
+    if (!$negotiator::isCompressibleContentType($contentType)) {
         return $response;
     }
 
-    $compressed = \gzencode($bodyPart, 6);
-    if ($compressed === false) {
+    $compressed = $negotiator::encode($bodyPart, $encoding);
+    if ($compressed === null) {
         return $response;
     }
 
-    $headersPart .= "\r\nContent-Encoding: gzip";
+    $headersPart .= "\r\nContent-Encoding: {$encoding}";
     $headersPart = wlsSetFormattedHeader($headersPart, 'Content-Length', (string)\strlen($compressed));
     $headersPart = wlsAddFormattedVaryAcceptEncoding($headersPart);
 

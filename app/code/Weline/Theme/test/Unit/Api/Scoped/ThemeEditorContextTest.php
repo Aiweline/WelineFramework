@@ -44,10 +44,47 @@ final class ThemeEditorContextTest extends TestCase
         self::assertSame(19, $serialized['theme_id']);
         self::assertSame('cms_page', $serialized['layout_type']);
         self::assertSame('landing', $serialized['layout_option']);
-        self::assertSame('zh_Hans_CN', $serialized['locale']);
+        self::assertSame('default', $serialized['locale']);
         self::assertSame('cms_page', $serialized['target_type']);
         self::assertSame(42, $serialized['target_id']);
         self::assertSame($context->identityHash(), $serialized['identity_hash']);
+        self::assertSame(
+            $context->withLocale('en_US')->identityHash(),
+            $context->identityHash(),
+            'LAYOUT identity hash must ignore request/editor locale',
+        );
+    }
+
+    public function testI18nIdentityKeepsLocale(): void
+    {
+        $scope = new ScopeContext(
+            identity: ScopeIdentity::channel(7, 'shop', 'cn', 'app', ScopeIdentity::MODE_TEST),
+            storageScope: 'shop.cn.app',
+            storeMode: ScopeIdentity::MODE_TEST,
+            fallbackStorageScopes: [
+                'shop.cn.app',
+                'shop.cn.default',
+                'shop.default.default',
+                'default.default.default',
+            ],
+        );
+        $i18n = new ThemeEditorContext(
+            scope: $scope,
+            area: 'frontend',
+            resourceType: ThemeEditorContext::RESOURCE_I18N,
+            themeId: 19,
+            layoutType: 'cms_page',
+            layoutOption: 'landing',
+            locale: 'en_US',
+            targetType: 'cms_page',
+            targetId: 42,
+        );
+
+        self::assertSame('en_US', $i18n->identityLocale());
+        self::assertNotSame(
+            $i18n->withLocale('zh_Hans_CN')->identityHash(),
+            $i18n->identityHash(),
+        );
     }
 
     public function testThemeBindingDropsEveryDownstreamSelector(): void

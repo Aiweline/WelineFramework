@@ -41,6 +41,8 @@ final class CartItemSnapshot
         public readonly int $compareAtMinor = 0,
         public readonly string $campaignLabel = '',
         public readonly string $campaignUrl = '',
+        /** Canonical storefront handle for /product/{slug} card URLs. */
+        public readonly string $slug = '',
     ) {
     }
 
@@ -80,6 +82,7 @@ final class CartItemSnapshot
             'has_deal' => $hasDeal,
             'campaign_label' => trim($this->campaignLabel),
             'campaign_url' => trim($this->campaignUrl),
+            'slug' => trim($this->slug),
             'legacy_product_id' => $this->offer->legacyProductId ?? 0,
         ];
         if ($this->fulfillmentMetadata !== []) {

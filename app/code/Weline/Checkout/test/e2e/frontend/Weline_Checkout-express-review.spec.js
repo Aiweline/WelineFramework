@@ -47,11 +47,38 @@ moduleDescribe(test, MODULE, 'Express review light confirm', () => {
       expect(body).toContain('data-testid="checkout-express-review"');
       expect(body).toContain('确认并付款');
       expect(body).toContain('尚未扣款，确认后向支付商收款');
+      expect(body).toContain('请确认收货地址；不对可更换或新增');
+      expect(body).toContain('id="checkout-shipping-address"');
+      expect(body).not.toContain('支付商带回，只读');
       expect(body).toContain('window.opener');
       expect(body).not.toMatch(/WLS Runtime Error|ParseError|Fatal error/i);
       await expect(page.getByTestId('checkout-express-review')).toBeVisible({ timeout: 45000 });
       await expect(page.getByTestId('express-confirm-pay')).toBeVisible();
       await expect(page.getByTestId('express-cancel')).toBeVisible();
+      // Address widget slot from Shipping (same as full checkout).
+      const addressSlot = page.locator('#checkout-shipping-address, [data-shipping-checkout-address]');
+      await expect(addressSlot.first()).toBeVisible({ timeout: 45000 });
+    },
+  );
+
+  moduleCase(
+    test,
+    { module: MODULE, id: 'CK-CHECKOUT-EXPRESS-REVIEW-003' },
+    'express-review 前后端通路：JS 含地址切换监听与 shipping_address 回传',
+    async () => {
+      const js = fs.readFileSync(
+        path.join(ROOT_DIR, 'app/code/Weline/Checkout/view/statics/js/express-review.js'),
+        'utf8',
+      );
+      expect(js).toContain('weline:checkout:address-updated');
+      expect(js).toContain('shipping_address');
+      expect(js).toContain('collectShippingAddress');
+      const flow = fs.readFileSync(
+        path.join(ROOT_DIR, 'app/code/Weline/Checkout/Service/ExpressCheckoutFlowService.php'),
+        'utf8',
+      );
+      expect(flow).toContain('extractAddressFromParams');
+      expect(flow).toContain("'address_readonly' => false");
     },
   );
 

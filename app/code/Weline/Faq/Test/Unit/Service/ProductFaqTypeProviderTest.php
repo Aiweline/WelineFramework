@@ -59,6 +59,7 @@ final class ProductFaqTypeProviderTest extends TestCase
         $registry = (string)file_get_contents(dirname(__DIR__, 3) . '/Service/FaqTypeRegistry.php');
         self::assertStringContainsString('ProductFaqTypeProvider', $registry);
         self::assertStringContainsString('SiteFaqTypeProvider', $registry);
+        self::assertStringContainsString('TemplateFaqTypeProvider', $registry);
         self::assertStringContainsString('FaqTypeProvider', $registry);
 
         $extends = include dirname(__DIR__, 3) . '/extends.php';

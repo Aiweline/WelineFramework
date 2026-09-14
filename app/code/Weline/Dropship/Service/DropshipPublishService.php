@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Dropship\Service;
 
 use Weline\Dropship\Api\Data\DropshipCatalogSnapshot;
+use Weline\Dropship\Interface\DropshipCategoryPathLocalizerInterface;
 use Weline\Dropship\Model\DropshipListing;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Product\Api\Data\ProductAdminCommand;
@@ -705,8 +706,22 @@ class DropshipPublishService
         if ($path === '') {
             $path = trim($snapshot->categoryId);
         }
+        $locale = 'zh_Hans_CN';
+        try {
+            /** @var DropshipChannelManager $channels */
+            $channels = ObjectManager::getInstance(DropshipChannelManager::class);
+            $provider = $channels->getProvider($snapshot->providerCode);
+            if ($provider instanceof DropshipCategoryPathLocalizerInterface) {
+                $localized = trim($provider->localizeCategoryPath($path, $locale));
+                if ($localized !== '') {
+                    $path = $localized;
+                }
+            }
+        } catch (\Throwable $e) {
+            w_log_warning('dropship localize category path failed: ' . $e->getMessage());
+        }
 
-        return $ensure->ensureFromRemotePath($websiteId, $snapshot->providerCode, $path);
+        return $ensure->ensureFromRemotePath($websiteId, $snapshot->providerCode, $path, $locale);
     }
 
     private function resolveWebsiteCurrency(int $websiteId): string

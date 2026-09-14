@@ -32,7 +32,7 @@ use Weline\Framework\Runtime\RequestContext;
 /**
  * Eav-owned read model. Consumers receive DTOs and never Eav ORM objects.
  */
-final class AttributeMetadataCatalog implements AttributeMetadataCatalogInterface, AttributeMetadataPrefetchInterface, AttributeOptionIdentityCatalogInterface
+final class AttributeMetadataCatalog implements AttributeMetadataCatalogInterface, AttributeMetadataPrefetchInterface, AttributeOptionIdentityCatalogInterface, \Weline\Eav\Api\Metadata\AttributeProductOptionIdentityCatalogInterface, \Weline\Eav\Api\Metadata\AttributeMetadataCodeIndexInterface, \Weline\Eav\Api\Metadata\AttributeMetadataOptionTokenIndexInterface
 {
     public function __construct(
         private readonly EavEntity $entityModel,
@@ -51,6 +51,251 @@ final class AttributeMetadataCatalog implements AttributeMetadataCatalogInterfac
     /** @var array<string, array<int, true>> */
     private array $localFieldLoadedIds = [];
     private ?string $localFieldRequestId = null;
+
+    /** @var \WeakMap<AttributeSetMetadata, array<string, list<AttributeMetadata>>>|null */
+    private ?\WeakMap $attributeMetadataCodeIndexes = null;
+
+    /** @var \WeakMap<AttributeMetadata, \stdClass>|null */
+    private ?\WeakMap $attributeOptionTokenIndexes = null;
+
+    public function findOptionByToken(array $attributes, string $token): ?AttributeOptionMetadata
+    {
+        if ($attributes === [] || $token === '') {
+            return null;
+        }
+        $children = $this->attributeOptionTokenIndexes ??= new \WeakMap();
+        $node = null;
+        foreach ($attributes as $attribute) {
+            if (!$attribute instanceof AttributeMetadata) {
+                continue;
+            }
+            $node = $children[$attribute] ??= (object)['children' => new \WeakMap(), 'index' => null];
+            $children = $node->children;
+        }
+        if ($node === null) {
+            return null;
+        }
+        if ($node->index === null) {
+            $exact = [];
+            $seen = [];
+            foreach ($attributes as $attribute) {
+                if (!$attribute instanceof AttributeMetadata) {
+                    continue;
+                }
+                foreach ($attribute->options as $option) {
+                    $identity = spl_object_id($option);
+                    if (isset($seen[$identity])) {
+                        continue;
+                    }
+                    $seen[$identity] = true;
+                    foreach ([(string)$option->id, $option->code, $option->value] as $alias) {
+                        $alias = trim($alias);
+                        if ($alias !== '') {
+                            $exact[$alias] = $option;
+                        }
+                    }
+                }
+            }
+            $folded = [];
+            foreach ($exact as $alias => $option) {
+                // Overwriting an exact alias preserves its original insertion
+                // position, matching the previous strcasecmp traversal.
+                $folded[strtolower((string)$alias)] ??= $option;
+            }
+            // Values contain option DTOs, never the attribute keys or their set.
+            $node->index = [$exact, $folded];
+        }
+
+        return $node->index[0][$token] ?? $node->index[1][strtolower($token)] ?? null;
+    }
+
+    /** @inheritdoc */
+    public function attributesByCode(array $sets, string $attributeCode): array
+    {
+        $code = strtolower(trim($attributeCode));
+        if ($code === '') {
+            return [];
+        }
+
+        $this->attributeMetadataCodeIndexes ??= new \WeakMap();
+        $matches = [];
+        foreach ($sets as $set) {
+            if (!$set instanceof AttributeSetMetadata) {
+                continue;
+            }
+            $index = $this->attributeMetadataCodeIndexes[$set] ?? null;
+            if ($index === null) {
+                $index = [];
+                foreach ($set->groups as $group) {
+                    foreach ($group->attributes as $attribute) {
+                        $indexedCode = strtolower(trim($attribute->code));
+                        if ($indexedCode !== '') {
+                            $index[$indexedCode][] = $attribute;
+                        }
+                    }
+                }
+                // 公共目录复用同一 DTO；私有目录和失效后的新 DTO 各有自己的索引。
+                // 值只持有属性引用，不反向持有 set，不延长目录的生命周期。
+                $this->attributeMetadataCodeIndexes[$set] = $index;
+            }
+            foreach ($index[$code] ?? [] as $attribute) {
+                $matches[] = $attribute;
+            }
+        }
+        return $matches;
+    }
+
+
+    public function productOptionIdentity(
+        EntityDefinitionInterface $entity,
+        int $productId,
+        string $token,
+    ): ?AttributeOptionMetadata {
+        $token = trim($token);
+        if ($token === '' || $productId < 0) {
+            return null;
+        }
+        $entityId = $this->entityId(strtolower(trim($entity->getEntityCode())));
+        $locale = $this->resolveStorefrontLocale();
+        $numeric = ctype_digit($token);
+        $lookupKey = $numeric ? (int)$token : strtolower($token);
+
+        // Cache one compatibility lookup, not a complete option index. The old
+        // implementation materialized every option in each scope before it
+        // could answer one token, which multiplied request memory on listings.
+        return $this->rememberRequest(
+            'product-option-identity|' . json_encode(
+                [$entityId, $productId, $locale, $numeric, $lookupKey],
+                JSON_THROW_ON_ERROR,
+            ),
+            function () use ($entityId, $productId, $locale, $numeric, $lookupKey): ?AttributeOptionMetadata {
+                foreach (array_unique([Option::SCOPE_SHARED, $productId]) as $scopeId) {
+                    $scopeId = (int)$scopeId;
+
+                    // A complete projection may already have been built by
+                    // catalog()/catalogForProduct(). Scan it first so callers
+                    // receive the exact immutable DTO instance they already use.
+                    $projectionLogicalKey = 'option-projection|' . json_encode(
+                        [$entityId, [$scopeId], $locale, null],
+                        JSON_THROW_ON_ERROR,
+                    );
+                    $projectionKey = 'framework.cache.request_memo.v1:' . hash(
+                        'sha256',
+                        serialize(['eav.metadata', $projectionLogicalKey]),
+                    );
+                    if (RequestContext::has($projectionKey)) {
+                        $projection = (array)RequestContext::get($projectionKey, []);
+                        foreach ($projection as $options) {
+                            if (!is_array($options)) {
+                                continue;
+                            }
+                            foreach ($options as $option) {
+                                if (!$option instanceof AttributeOptionMetadata) {
+                                    continue;
+                                }
+                                if (($numeric && $option->id === $lookupKey)
+                                    || (!$numeric && strtolower($option->code) === $lookupKey)
+                                ) {
+                                    return $option;
+                                }
+                            }
+                        }
+                        // A complete projection is authoritative, including a
+                        // known miss; do not issue a second broad query.
+                        continue;
+                    }
+
+                    // prefetchForProducts() seeds this exact scalar-row key.
+                    // Reuse those rows without hydrating every option into DTOs.
+                    $rowsLogicalKey = $this->rowsCacheKey($this->optionModel, [
+                        Option::schema_fields_eav_entity_id => $entityId,
+                        Option::schema_fields_scope_instance_id => [$scopeId],
+                    ]);
+                    $rowsMemoKey = 'framework.cache.request_memo.v1:' . hash(
+                        'sha256',
+                        serialize(['eav.metadata', $rowsLogicalKey]),
+                    );
+                    $rowsLoaded = RequestContext::has($rowsMemoKey);
+                    $rows = $rowsLoaded ? (array)RequestContext::get($rowsMemoKey, []) : [];
+                    if (!$rowsLoaded) {
+                        $filters = [Option::schema_fields_scope_instance_id => [$scopeId]];
+                        if ($numeric) {
+                            $filters[Option::schema_fields_option_id] = [$lookupKey];
+                        } else {
+                            $filters[Option::schema_fields_code] = $lookupKey;
+                        }
+                        $rows = $this->rows(
+                            $this->optionModel,
+                            Option::schema_fields_eav_entity_id,
+                            $entityId,
+                            $filters,
+                        );
+                    }
+
+                    $match = null;
+                    foreach ($rows as $row) {
+                        if (!is_array($row)) {
+                            continue;
+                        }
+                        $rowMatches = $numeric
+                            ? (int)($row[Option::schema_fields_option_id] ?? 0) === $lookupKey
+                            : strtolower(trim((string)($row[Option::schema_fields_code] ?? ''))) === $lookupKey;
+                        if (!$rowMatches) {
+                            continue;
+                        }
+                        if ($match === null || [
+                            (int)($row[Option::schema_fields_attribute_id] ?? 0),
+                            (int)($row[Option::schema_fields_option_id] ?? 0),
+                        ] < [
+                            (int)($match[Option::schema_fields_attribute_id] ?? 0),
+                            (int)($match[Option::schema_fields_option_id] ?? 0),
+                        ]) {
+                            $match = $row;
+                        }
+                    }
+                    if ($match === null) {
+                        // A prefetched scope is complete, so an empty match is
+                        // authoritative. An unprefetched targeted query is
+                        // already memoized by rows() for this token.
+                        continue;
+                    }
+
+                    $optionId = (int)($match[Option::schema_fields_option_id] ?? 0);
+                    if ($optionId <= 0) {
+                        continue;
+                    }
+                    $sourceLabel = trim((string)($match[Option::schema_fields_value] ?? ''));
+                    $code = trim((string)($match[Option::schema_fields_code] ?? ''));
+                    $localized = trim((string)(
+                        $this->localFieldById(
+                            OptionLocalDescription::class,
+                            OptionLocalDescription::schema_fields_value,
+                            $locale,
+                            [$optionId],
+                        )[$optionId] ?? ''
+                    ));
+                    if ($localized !== '' && preg_match('/%[0-9A-Fa-f]{2}/', $localized) === 1) {
+                        $localized = '';
+                    }
+
+                    return new AttributeOptionMetadata(
+                        id: $optionId,
+                        value: $sourceLabel !== '' ? $sourceLabel : (string)$optionId,
+                        code: $code !== '' ? $code : (string)$optionId,
+                        label: $localized !== ''
+                            ? $localized
+                            : ($sourceLabel !== '' ? $sourceLabel : ($code !== '' ? $code : (string)$optionId)),
+                        sortOrder: $optionId,
+                        swatchImage: (string)($match[Option::schema_fields_swatch_image] ?? ''),
+                        swatchColor: (string)($match[Option::schema_fields_swatch_color] ?? ''),
+                        swatchText: (string)($match[Option::schema_fields_swatch_text] ?? ''),
+                    );
+                }
+
+                return null;
+            },
+        );
+    }
 
     public function catalog(EntityDefinitionInterface $entity): array
     {
@@ -399,7 +644,9 @@ final class AttributeMetadataCatalog implements AttributeMetadataCatalogInterfac
                 continue;
             }
 
-            $attribute = $identityOnly ? ($sharedAttributesById[$attributeId] ?? null) : null;
+            // The entity batch already contains this shared attribute in both
+            // display and identity modes; another placement only changes its DTO location.
+            $attribute = $sharedAttributesById[$attributeId] ?? null;
             if (!$attribute instanceof EavAttribute) {
                 $attribute = clone $this->attributeModel;
                 $attribute->clearData();
@@ -490,15 +737,30 @@ final class AttributeMetadataCatalog implements AttributeMetadataCatalogInterfac
             $allowed[Option::SCOPE_SHARED] = true;
         }
 
-        // Shared options are read once per request. Each Product adds only its
-        // own rows; unrelated private options never cross the SQL boundary.
+        // This is an immutable projection, not a mutable ORM cache. Both the
+        // display catalog and compatibility identity lookup consume this key.
+        return $this->rememberRequest(
+            'option-projection|' . json_encode([$entityId, array_keys($allowed), $locale, $attributeIds], JSON_THROW_ON_ERROR),
+            fn(): array => $this->buildOptionsByAttribute($entityId, $allowed, $locale, $attributeIds),
+        );
+    }
+
+    /** @return array<int, list<AttributeOptionMetadata>> */
+    private function buildOptionsByAttribute(
+        int $entityId,
+        array $allowed,
+        string $locale,
+        ?array $attributeIds,
+    ): array {
+        // 直接将已预取的标量行投影为只读 DTO，避免中间逐行构造 ORM。
+        // 每个商品只叠加自己的选项，其他商品的私有行不会跨过查询边界。
         $scopedOptions = [];
         foreach (array_keys($allowed) as $scopeId) {
             $filters = [Option::schema_fields_scope_instance_id => [(int)$scopeId]];
             if ($attributeIds !== null) {
                 $filters[Option::schema_fields_attribute_id] = $attributeIds;
             }
-            $scopedOptions = array_merge($scopedOptions, $this->items(
+            $scopedOptions = array_merge($scopedOptions, $this->rows(
                 $this->optionModel,
                 Option::schema_fields_eav_entity_id,
                 $entityId,
@@ -508,8 +770,9 @@ final class AttributeMetadataCatalog implements AttributeMetadataCatalogInterfac
 
         $optionIds = [];
         foreach ($scopedOptions as $option) {
-            if ($option instanceof Option && $option->getOptionId() > 0) {
-                $optionIds[] = $option->getOptionId();
+            $optionId = (int)($option[Option::schema_fields_option_id] ?? 0);
+            if ($optionId > 0) {
+                $optionIds[] = $optionId;
             }
         }
         $optionLocals = $optionIds === []
@@ -523,17 +786,14 @@ final class AttributeMetadataCatalog implements AttributeMetadataCatalogInterfac
 
         $optionsByAttribute = [];
         foreach ($scopedOptions as $option) {
-            if (!$option instanceof Option) {
-                continue;
-            }
-            $scopeInstanceId = $option->getScopeInstanceId();
+            $scopeInstanceId = (int)($option[Option::schema_fields_scope_instance_id] ?? 0);
             if (!isset($allowed[$scopeInstanceId])) {
                 continue;
             }
-            $attributeId = $option->getAttributeId();
-            $optionId = $option->getOptionId();
-            $code = trim($option->getCode());
-            $sourceLabel = trim($option->getValue());
+            $attributeId = (int)($option[Option::schema_fields_attribute_id] ?? 0);
+            $optionId = (int)($option[Option::schema_fields_option_id] ?? 0);
+            $code = trim($option[Option::schema_fields_code]);
+            $sourceLabel = trim($option[Option::schema_fields_value]);
             $localized = trim((string)($optionLocals[$optionId] ?? ''));
             // Percent-encoded locals are corrupt AI/import payloads — never surface as EN labels.
             if ($localized !== '' && preg_match('/%[0-9A-Fa-f]{2}/', $localized) === 1) {
@@ -548,9 +808,9 @@ final class AttributeMetadataCatalog implements AttributeMetadataCatalogInterfac
                 code: $code !== '' ? $code : (string)$optionId,
                 label: $label !== '' ? $label : ($code !== '' ? $code : (string)$optionId),
                 sortOrder: $optionId,
-                swatchImage: $option->getSwatchImage(),
-                swatchColor: $option->getSwatchColor(),
-                swatchText: $option->getSwatchText(),
+                swatchImage: (string)($option[Option::schema_fields_swatch_image] ?? ''),
+                swatchColor: (string)($option[Option::schema_fields_swatch_color] ?? ''),
+                swatchText: (string)($option[Option::schema_fields_swatch_text] ?? ''),
             );
         }
         foreach ($optionsByAttribute as &$options) {
@@ -624,7 +884,17 @@ final class AttributeMetadataCatalog implements AttributeMetadataCatalogInterfac
 
     private function resolveStorefrontLocale(): string
     {
-        $locale = trim(str_replace('-', '_', (string)State::getLangLocal()));
+        // Prefer the request-scoped storefront locale (path /en_US/...) so LocalDescription
+        // matches the page language even when State falls back briefly during boot.
+        $locale = '';
+        try {
+            $locale = trim(str_replace('-', '_', (string)RequestContext::getWelineUserLang()));
+        } catch (\Throwable) {
+            $locale = '';
+        }
+        if ($locale === '') {
+            $locale = trim(str_replace('-', '_', (string)State::getLangLocal()));
+        }
 
         return $locale !== '' ? $locale : 'zh_Hans_CN';
     }
@@ -750,14 +1020,15 @@ final class AttributeMetadataCatalog implements AttributeMetadataCatalogInterfac
                     },
                 );
                 $optionLocalIds = [];
-                foreach ($this->items(
+                foreach ($this->rows(
                     $this->optionModel,
                     Option::schema_fields_eav_entity_id,
                     $entityId,
                     [Option::schema_fields_scope_instance_id => [Option::SCOPE_SHARED]],
-                ) as $option) {
-                    if ($option instanceof Option && $option->getOptionId() > 0) {
-                        $optionLocalIds[] = $option->getOptionId();
+                ) as $optionRow) {
+                    $optionId = (int)($optionRow[Option::schema_fields_ID] ?? 0);
+                    if ($optionId > 0) {
+                        $optionLocalIds[] = $optionId;
                     }
                 }
                 foreach (array_chunk($productIds, 200) as $batch) {
@@ -860,10 +1131,31 @@ final class AttributeMetadataCatalog implements AttributeMetadataCatalogInterfac
         mixed $value = null,
         array $additionalFilters = [],
     ): array {
+        $rows = $this->rows($prototype, $field, $value, $additionalFilters);
+        // Context stores scalar rows, never mutable ORM instances. A consumer
+        // receives its own model objects and cannot corrupt a later catalog.
+        $items = [];
+        foreach ($rows as $row) {
+            $item = clone $prototype;
+            $item->reset()->clearData()->setData($row);
+            $items[] = $item;
+        }
+        return $items;
+    }
+    /**
+     * Scalar query rows share the existing request key, including prefetched rows.
+     * Callers needing ORM instances must use items() for independent mutable models.
+     */
+    private function rows(
+        object $prototype,
+        ?string $field = null,
+        mixed $value = null,
+        array $additionalFilters = [],
+    ): array {
         $filters = $field === null ? [] : [$field => $value];
         $filters = array_merge($filters, $additionalFilters);
         $cacheKey = $this->rowsCacheKey($prototype, $filters);
-        $rows = $this->rememberRequest($cacheKey, static function () use ($prototype, $filters): array {
+        return $this->rememberRequest($cacheKey, static function () use ($prototype, $filters): array {
             $query = clone $prototype;
             $query->reset()->clearData();
             foreach ($filters as $filterField => $filterValue) {
@@ -877,16 +1169,6 @@ final class AttributeMetadataCatalog implements AttributeMetadataCatalogInterfac
             }
             return $rows;
         });
-
-        // Context stores scalar rows, never mutable ORM instances. A consumer
-        // receives its own model objects and cannot corrupt a later catalog.
-        $items = [];
-        foreach ($rows as $row) {
-            $item = clone $prototype;
-            $item->reset()->clearData()->setData($row);
-            $items[] = $item;
-        }
-        return $items;
     }
 
     private function entityId(string $entityCode): int

@@ -75,13 +75,13 @@ final class PooledConnectionTokenRotationTest extends TestCase
         (new \ReflectionProperty($connection, 'socket'))->setValue($connection, $client);
         $originalServer = $_SERVER;
         $originalGet = $_GET;
-        $_SERVER['REQUEST_URI'] = '/isolated-auth-timing?wls_trace=1';
+        $_SERVER['REQUEST_URI'] = '/isolated-auth-timing';
         $_SERVER['REQUEST_METHOD'] = 'GET';
-        $_GET['wls_trace'] = '1';
         \Weline\Framework\Runtime\RequestContext::init();
         \Weline\Framework\Runtime\RequestContext::set('server', $_SERVER);
         \Weline\Framework\Runtime\RequestContext::set('get', $_GET);
         \Weline\Framework\Runtime\RequestLifecycleTrace::reset();
+        \Weline\Framework\Runtime\RequestLifecycleTrace::installPanelTraceOn();
         self::assertTrue(\Weline\Framework\Runtime\RequestLifecycleTrace::isEnabled());
 
         try {

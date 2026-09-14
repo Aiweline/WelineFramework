@@ -41,6 +41,22 @@ final class ProductWholesaleEligibilityTest extends TestCase
         ));
     }
 
+    public function testDefaultTemplateAloneDoesNotUnlockDisplay(): void
+    {
+        $lists = PriceListStore::forTesting();
+        $policy = SellingModePolicy::forTesting(['website:1' => ['toc' => true, 'tob' => true]]);
+        // Even if a DefaultWholesalePolicy exists in DI historically, display must
+        // require an active SKU price-list tier — construct without tiers.
+        $gate = new ProductWholesaleEligibility($policy, $lists);
+
+        self::assertFalse($gate->allowsWholesaleDisplay(
+            1,
+            0,
+            [SellingModePolicy::PRODUCT_FLAG_TOB => true],
+            'SKU-TEMPLATE-ONLY',
+        ));
+    }
+
     public function testRequiresTobQtyGateMatchesDisplay(): void
     {
         $lists = PriceListStore::forTesting();

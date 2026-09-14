@@ -35,10 +35,31 @@ moduleDescribe(test, MODULE, 'Hang 尾款支付面板', () => {
               order_uuid: 'e2e-hang-balance-ord',
               purpose: 'balance',
               hang_status: 'awaiting_balance',
+              can_pay: true,
               amount_minor: 8500,
               balance_amount_minor: 8500,
               currency: 'CNY',
               label: '支付尾款',
+              order_summary: {
+                display_number: 'HANG-E2E-8500',
+                order_uuid: 'e2e-hang-balance-ord',
+                hang_status: 'awaiting_balance',
+                hang_status_label: '待付尾款',
+                lines: [
+                  {
+                    name: '批发样例商品',
+                    sku: 'SKU-E2E-BAL',
+                    qty_minor: 2,
+                    unit_price_minor: 4250,
+                    row_total_minor: 8500,
+                    image_url: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==',
+                  },
+                ],
+                goods_subtotal_minor: 12000,
+                deposit_amount_minor: 3500,
+                balance_amount_minor: 8500,
+                payable_minor: 8500,
+              },
               payment_methods: [
                 { code: 'paypal', title: 'PayPal' },
                 { code: 'fake_card', title: '测试卡' },
@@ -134,6 +155,15 @@ moduleDescribe(test, MODULE, 'Hang 尾款支付面板', () => {
       });
 
       await page.waitForSelector('[data-testid="b2b-hang-payment"]', { timeout: 30000 });
+      await page.waitForSelector('[data-testid="b2b-hang-order"]', { timeout: 15000 });
+      await expect(page.locator('[data-testid="b2b-hang-order-lines"]')).toBeVisible();
+      await expect(page.locator('[data-testid="b2b-hang-payment"]')).toBeVisible();
+      await expect(page.locator('[data-b2b-hang-columns]')).toBeVisible();
+      await expect(page.locator('[data-testid="b2b-hang-layout-switcher"]')).toHaveCount(0);
+      await expect(page.locator('[data-testid="b2b-hang-order-line"]')).toHaveCount(1);
+      await expect(page.locator('[data-testid="b2b-hang-order-thumb-img"]')).toHaveCount(1);
+      await expect(page.locator('[data-testid="b2b-hang-order-number"]')).toContainText('HANG-E2E-8500');
+      await expect(page.locator('[data-testid="b2b-hang-payable"]')).toBeVisible();
       await page.waitForSelector('[data-testid="b2b-hang-payment-method"]', { timeout: 15000 });
       await expect(page.locator('[data-testid="b2b-hang-payment-method"]')).toHaveCount(2);
 
@@ -171,6 +201,140 @@ moduleDescribe(test, MODULE, 'Hang 尾款支付面板', () => {
         (nodes) => nodes.map((n) => n.value),
       );
       expect(methodValues).toEqual(['paypal', 'fake_card']);
+    },
+  );
+
+  moduleCase(
+    test,
+    { module: MODULE, id: 'B2B-HANG-BALANCE-COMPLETED' },
+    'paymentContext can_pay=false completed 时展示结清态而非不可支付矛盾',
+    async ({ page }) => {
+      await page.addInitScript(() => {
+        function b2bApi() {
+          return {
+            'hang.paymentContext': async () => ({
+              success: true,
+              ok: true,
+              order_uuid: 'e2e-hang-completed-ord',
+              purpose: 'balance',
+              hang_status: 'completed',
+              can_pay: false,
+              view_state: 'completed',
+              message: '本单尾款已结清，无需再支付',
+              amount_minor: 37800,
+              balance_amount_minor: 37800,
+              currency: 'CNY',
+              payment_methods: [],
+              label: '挂单已完成',
+              order_summary: {
+                display_number: '4090577524',
+                order_uuid: 'e2e-hang-completed-ord',
+                hang_status: 'completed',
+                hang_status_label: '挂单已完成',
+                lines: [
+                  {
+                    name: '结清样例商品',
+                    sku: 'SKU-DONE',
+                    qty_minor: 5,
+                    unit_price_minor: 10800,
+                    row_total_minor: 54000,
+                    image_url: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==',
+                  },
+                ],
+                goods_subtotal_minor: 54000,
+                deposit_amount_minor: 16200,
+                balance_amount_minor: 37800,
+                payable_minor: 37800,
+              },
+            }),
+            'hang.startPayment': async () => ({
+              success: false,
+              ok: false,
+              error: 'b2b_hang_payment_state_invalid',
+              message: '当前挂单状态不可支付',
+            }),
+          };
+        }
+
+        function ensureApi() {
+          window.Weline = window.Weline || {};
+          window.Weline.Api = window.Weline.Api || {};
+          const api = window.Weline.Api;
+          if (api.__b2bHangCompletedMockInstalled) {
+            return;
+          }
+          let underlying = typeof api.resource === 'function' ? api.resource.bind(api) : null;
+          Object.defineProperty(api, 'resource', {
+            configurable: true,
+            enumerable: true,
+            get() {
+              return function resource(name) {
+                if (String(name) === 'b2b') {
+                  return b2bApi();
+                }
+                return underlying ? underlying(name) : {};
+              };
+            },
+            set(fn) {
+              underlying = typeof fn === 'function' ? fn.bind(api) : null;
+            },
+          });
+          api.__b2bHangCompletedMockInstalled = true;
+        }
+
+        ensureApi();
+        const timer = setInterval(ensureApi, 30);
+        window.addEventListener('load', () => {
+          ensureApi();
+          setTimeout(() => clearInterval(timer), 2000);
+        });
+        setTimeout(() => clearInterval(timer), 20000);
+      });
+
+      const path = '/checkout?purpose=balance&order_uuid=e2e-hang-completed-ord';
+      let navigated = false;
+      try {
+        await page.goto(
+          `https://p05113ef3.test.weline.com:9555${path}`,
+          { waitUntil: 'domcontentloaded', timeout: 60000 },
+        );
+        navigated = true;
+      } catch (error) {
+        navigated = false;
+      }
+      if (!navigated) {
+        await gotoFrontend(page, path);
+      }
+
+      await expect(page.locator('body')).not.toHaveText(FATAL_PATTERN);
+      await page.waitForFunction(
+        () => !!(window.WelineB2BCheckoutTob || document.querySelector('[data-weline-checkout], .weline-checkout')),
+        undefined,
+        { timeout: 60000 },
+      );
+      await page.evaluate(async () => {
+        const root = document.querySelector('[data-weline-checkout], .weline-checkout, [data-checkout]')
+          || document.body;
+        if (window.WelineB2BCheckoutTob && typeof window.WelineB2BCheckoutTob.bindHangPayment === 'function') {
+          const old = root.querySelector('[data-b2b-hang-payment]');
+          if (old && old.parentNode) {
+            old.parentNode.removeChild(old);
+          }
+          await window.WelineB2BCheckoutTob.bindHangPayment(root);
+        }
+      });
+
+      await page.waitForSelector('[data-testid="b2b-hang-payment"]', { timeout: 30000 });
+      await expect(page.locator('[data-hang-view-state]')).toHaveAttribute('data-hang-view-state', 'completed');
+      await expect(page.locator('[data-b2b-hang-title]')).toContainText('挂单已完成');
+      await expect(page.locator('[data-b2b-hang-status]')).toContainText('本单尾款已结清，无需再支付');
+      await expect(page.locator('[data-b2b-hang-status]')).not.toContainText('不可支付');
+      await expect(page.locator('[data-testid="b2b-hang-order-status"]')).toContainText('挂单已完成');
+      await expect(page.locator('[data-testid="b2b-hang-order-totals"]')).toContainText('已付尾款');
+      await expect(page.locator('[data-testid="b2b-hang-payable"]')).toBeVisible();
+      await expect(page.locator('[data-testid="b2b-hang-pay"]')).toContainText('返回批发身份');
+      await expect(page.locator('[data-testid="b2b-hang-pay"]')).toBeEnabled();
+      await expect(page.locator('[data-testid="b2b-hang-payment-method"]')).toHaveCount(0);
     },
   );
 });

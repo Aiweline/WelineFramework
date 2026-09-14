@@ -2572,6 +2572,9 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                     throw new Exception(__('模块 %{1} 路由注册失败：%{2}', [$module_name, $exception->getMessage()]));
                 }
             }
+            $this->printing->success(__(
+                '✓ 路由扫描收集完成（内存缓冲）；ACL 与路由文件将在提交 route_update 时一次写入'
+            ));
             // 路由收集完成后做 ACL diff（清理已卸载模块的 type=pc 等）
             try {
                 $eventsManager = ObjectManager::getInstance(EventsManager::class);

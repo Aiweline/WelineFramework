@@ -22,10 +22,11 @@
 
 | 职责 | 说明 |
 |---|---|
-| `ProviderInterface` | 支付生命周期 + verify/parse + 测连 |
+| `ProviderInterface` | 支付生命周期 + verify/parse + 测连 + **`cspDirectives()` 自报 SDK/iframe 域名** |
 | 专属配置 | schema + config phtml |
 | 可选 `ProviderConnectInterface` | OAuth / 一键授权，经壳调度 |
 | 结账呈现 | `checkout_mode` + 模板或仅 `next_action`；iframe/SDK 自担 |
+| CSP | 经 Extends `Weline_Framework/Security/Csp/PaymentVendorsCsp` 聚合为应用默认；**禁止**在壳或 Framework Defaults 硬编码本网关域名 |
 
 ### 禁止
 
@@ -124,6 +125,7 @@ HMAC 签名 token（`PaymentBrowserCallbackTokenService`），解码得 `method_
 |---|---|---|
 | `fake_card` | `fake` | 本地测试样板，无 OAuth |
 | `paypal` | `paypal` | 内置网关；Connect/OAuth 在 Provider 包内，经壳调度；**快捷智能支付**声明 `express_checkout`（GET_FROM_FILE 取址） |
+| `stripe` | `stripe` | Stripe Checkout Session 跳转；Webhook `Stripe-Signature`；CSP 经 `cspDirectives()` → `PaymentVendorsCsp` |
 
 ## 6.1 快捷智能支付（Express）
 
@@ -132,8 +134,9 @@ HMAC 签名 token（`PaymentBrowserCallbackTokenService`），解码得 `method_
 - 地址回写 SPI：`payment.express_address_sink.*`（Checkout 提供配送上下文实现）
 - 结账槽 `checkout-express-payment` 与 PDP 槽 `product-express-payment` 都只渲染壳 `listExpressMethods`
 - PDP：`startExpressCheckout` → 打开支付商窗体；回跳 `express_prepare_only`（不 capture）→ `/checkout/express-review` 轻量确认 → `express_confirm_capture`
+- **落地契约**：`browser_landing_url` / 回跳 `decideExpressReview` **必须**带 `transaction_no`（创建支付后 `updateBrowserLanding`）；允许附带 `checkout_group_uuid` 作容错。确认页可用组号反查支付单；capture 成功后 Handoff 不得再落到无单号的 express-review（改 L3 success）。**已支付再开确认页**：提示「订单已支付」+ 支付方式，不提示缺单/无权；有登录或 `checkout_token` 时跳成功页。
 - PayPal express：`user_action=CONTINUE`；确认前可 `patchOrder`；元数据 `express_awaiting_confirm`
-- 支付商核心地址只读（卖家保护）；缺口字段（phone/email）在确认页补全
+- 支付商带回地址可确认/更换/新增（与结账地址槽一致）；缺口字段（phone/email）在确认页补全
 - **后台开关（万能支付 SystemConfig，默认开启）**：
   - 壳级：`payment/general/express_checkout_enabled`（支付核心配置 → 启用快捷智能支付）
   - 方式级：`payment/method/paypal/express_enabled`（PayPal 支付方式 → 启用 PayPal 快捷支付）；`express_enabled=false` 时收窄掉 `express_checkout` 能力

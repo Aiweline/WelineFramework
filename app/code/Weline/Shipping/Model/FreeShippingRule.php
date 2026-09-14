@@ -26,6 +26,9 @@ class FreeShippingRule extends AbstractModel
     public const SCOPE_STORE = 'store';
     public const SCOPE_CHANNEL = 'channel';
 
+    public const ORIGIN_SEED = 'seed';
+    public const ORIGIN_MANUAL = 'manual';
+
     #[Col('int', null, nullable: false, primaryKey: true, autoIncrement: true, comment: '规则ID')]
     public const schema_fields_ID = 'rule_id';
     #[Col('varchar', 16, nullable: false, default: 'website', comment: '作用范围类型 website|store|channel')]
@@ -48,6 +51,8 @@ class FreeShippingRule extends AbstractModel
     public const schema_fields_COUPON_CODES = 'coupon_codes';
     #[Col('text', comment: '混合条件配置JSON')]
     public const schema_fields_MIXED_CONFIG = 'mixed_config';
+    #[Col('varchar', 16, nullable: false, default: 'manual', comment: '来源 seed|manual')]
+    public const schema_fields_ORIGIN = 'origin';
     #[Col('int', 1, nullable: false, default: 1, comment: '是否启用')]
     public const schema_fields_IS_ACTIVE = 'is_active';
     #[Col('int', null, nullable: false, default: 0, comment: '优先级')]
@@ -65,17 +70,23 @@ class FreeShippingRule extends AbstractModel
     /**
      * 索引排序键
      */
-    public array $_index_sort_keys = ['rule_id', 'scope_type', 'scope_id', 'rule_code', 'priority'];    /**
+    public array $_index_sort_keys = ['rule_id', 'scope_type', 'scope_id', 'rule_code', 'priority'];
+
+    /**
      * 初始化模型
      */
     public function _init(): void
     {
     }
 
+    public function isSeed(): bool
+    {
+        return strtolower(trim((string)$this->getData(self::schema_fields_ORIGIN))) === self::ORIGIN_SEED;
+    }
+
     /**
-/**
      * 获取会员等级ID列表
-     * 
+     *
      * @return array
      */
     public function getMemberLevelIds(): array

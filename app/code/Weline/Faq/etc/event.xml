@@ -16,4 +16,11 @@
                   shared="true"
                   sort="10"/>
     </event>
+    <event name="Weline_Framework_Setup::before_schema_diff_commit">
+        <observer name="Weline_Faq::before_schema_diff_commit_heal_faq_key"
+                  instance="Weline\Faq\Observer\BeforeSchemaDiffCommitObserver"
+                  disabled="false"
+                  shared="true"
+                  sort="20"/>
+    </event>
 </config>

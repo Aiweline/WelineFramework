@@ -26,7 +26,8 @@
         if (!payload || Number(payload.amount_minor || 0) <= 0) {
             return '';
         }
-        return '-' + currencySymbol(payload.currency) + formatAmount(
+        var code = String(payload.currency || 'CNY').toUpperCase();
+        return '-' + code + ' ' + formatAmount(
             Number(payload.amount_minor || 0),
             payload.currency_precision || 2,
         );
@@ -79,8 +80,14 @@
         if (Array.isArray(cartResponse.items)) {
             return cartResponse.items;
         }
+        if (cartResponse.data && Array.isArray(cartResponse.data.items)) {
+            return cartResponse.data.items;
+        }
         if (cartResponse.summary && Array.isArray(cartResponse.summary.items)) {
             return cartResponse.summary.items;
+        }
+        if (cartResponse.data && cartResponse.data.summary && Array.isArray(cartResponse.data.summary.items)) {
+            return cartResponse.data.summary.items;
         }
         return [];
     }
@@ -123,6 +130,7 @@
             var token = guestToken();
             if (token) {
                 params.guest_token = token;
+                payload.guest_token = token;
             }
             var cartResponse = await cartClient.getCart(params);
             payload.lines = cartItemsFromResponse(cartResponse).map(function (item) {
@@ -133,12 +141,16 @@
                 return {
                     qty_minor: Math.max(1, Math.round(qty)),
                     unit_price_minor: Math.max(0, unitMinor),
+                    sku: String(item.sku || '').trim(),
+                    product_id: Number(item.product_id || 0) || 0,
                 };
             });
             if (cartResponse && cartResponse.currency) {
                 payload.currency = String(cartResponse.currency);
             } else if (cartResponse && cartResponse.summary && cartResponse.summary.currency) {
                 payload.currency = String(cartResponse.summary.currency);
+            } else if (cartResponse && cartResponse.data && cartResponse.data.currency) {
+                payload.currency = String(cartResponse.data.currency);
             }
             if (forcedType === 'tob' || forcedType === 'toc') {
                 payload.cart_type = forcedType;
@@ -146,9 +158,12 @@
             } else if (cartResponse && cartResponse.cart_type) {
                 payload.cart_type = String(cartResponse.cart_type).toLowerCase() === 'tob' ? 'tob' : 'toc';
                 payload.selling_mode = payload.cart_type;
+            } else if (cartResponse && cartResponse.data && cartResponse.data.cart_type) {
+                payload.cart_type = String(cartResponse.data.cart_type).toLowerCase() === 'tob' ? 'tob' : 'toc';
+                payload.selling_mode = payload.cart_type;
             }
         } catch (e) {
-            // Session apply can still succeed without quote lines.
+            // Session apply can still succeed without quote lines (server resolves cart).
         }
         return payload;
     }
@@ -216,9 +231,59 @@
             }
         }
 
-        function notifyCartDiscountChanged() {
+        function discountPreviewFromQuote(code, discount) {
+            if (!discount || Number(discount.amount_minor || 0) <= 0) {
+                return null;
+            }
+            var couponCode = String(code || discount.coupon_code || '').trim().toUpperCase();
+            var precision = Number(discount.currency_precision == null ? 2 : discount.currency_precision);
+            var amountMinor = Number(discount.amount_minor || 0);
+            var items = [];
+            if (Array.isArray(discount.lines)) {
+                discount.lines.forEach(function (line) {
+                    if (!line || typeof line !== 'object') {
+                        return;
+                    }
+                    var major = Number(line.discount_amount || 0);
+                    if (major <= 0) {
+                        return;
+                    }
+                    var lineCode = String(line.coupon_code || couponCode || '').trim().toUpperCase();
+                    items.push({
+                        label: lineCode || String(line.rule_name || discount.label || '').trim(),
+                        source: String(line.source || 'coupon'),
+                        coupon_code: lineCode,
+                        amount_minor: Math.round(major * Math.pow(10, precision)),
+                        stackable: false,
+                        kind: String(line.source || '') === 'coupon' ? 'coupon' : 'automatic',
+                    });
+                });
+            }
+            if (!items.length && amountMinor > 0) {
+                items.push({
+                    label: couponCode || String(discount.label || '').trim(),
+                    source: 'coupon',
+                    coupon_code: couponCode,
+                    amount_minor: amountMinor,
+                    stackable: false,
+                    kind: 'coupon',
+                });
+            }
+            return {
+                label: String(discount.label || '预计优惠'),
+                amount_minor: amountMinor,
+                currency: String(discount.currency || 'CNY').toUpperCase(),
+                currency_precision: precision,
+                coupon_code: couponCode,
+                items: items,
+                read_only: true,
+            };
+        }
+
+        function notifyCartDiscountChanged(extra) {
+            var detail = Object.assign({ refresh: true, forceNetwork: true }, extra && typeof extra === 'object' ? extra : {});
             window.dispatchEvent(new CustomEvent('weline:cart-updated', {
-                detail: { refresh: true },
+                detail: detail,
             }));
         }
 
@@ -288,7 +353,6 @@
 
         function quoteSavedCoupon(code, forcedType, opts) {
             opts = opts && typeof opts === 'object' ? opts : {};
-            var restoreOnly = opts.restoreOnly === true;
             if (!code) {
                 return Promise.resolve(null);
             }
@@ -303,17 +367,25 @@
                 var discount = quoteResponse && quoteResponse.success ? quoteResponse.discount : null;
                 if (discount && Number(discount.amount_minor || 0) > 0) {
                     syncAppliedState(code, discount);
+                    // Soft notify: update checkout totals without re-entering hydrate storms.
+                    notifyCartDiscountChanged({
+                        refresh: false,
+                        coupon_code: String(code || '').trim().toUpperCase(),
+                        discount: discount,
+                        discount_preview: discountPreviewFromQuote(code, discount),
+                    });
                     return quoteResponse;
                 }
-                // restoreOnly: keep the server session coupon visible even when quote is 0,
-                // otherwise freezeQuote still applies discount_fixed_amount while the field looks empty.
-                if (restoreOnly) {
-                    syncAppliedState(code, null);
-                    return quoteResponse;
-                }
+                // Zero-amount ghost coupons confuse checkout (tag without 优惠行). Clear them.
                 clearAppliedState();
                 if (resolveCartType(root, type) === 'toc') {
                     return client.removeCoupon(withCartType(root, {}, type), { silent: true }).then(function () {
+                        notifyCartDiscountChanged({
+                            refresh: false,
+                            coupon_code: '',
+                            clear_discount: true,
+                            discount_preview: null,
+                        });
                         return quoteResponse;
                     }).catch(function () {
                         return quoteResponse;
@@ -345,8 +417,10 @@
             applyBtn.disabled = true;
             setApplyLoading(true);
             miniCartBusyDelta(1);
-            // applyCoupon descriptor only accepts coupon_code; quote with cart lines afterwards.
-            return client.applyCoupon(withCartType(root, { coupon_code: normalized }), { silent: true }).then(function (response) {
+            // Persist with cart lines so invalid/zero-amount codes are rejected before session write.
+            return buildQuotePayload(root, normalized, 'toc').then(function (payload) {
+                return client.applyCoupon(payload, { silent: true });
+            }).then(function (response) {
                 if (!response || !response.success) {
                     setMessage((response && response.message) || i18n('data-i18n-unavailable', '优惠券不可用'), true);
                     return null;
@@ -358,12 +432,35 @@
                     var discount = quoteResponse && quoteResponse.success ? quoteResponse.discount : null;
                     if (!discount || Number(discount.amount_minor || 0) <= 0) {
                         setMessage(i18n('data-i18n-invalid-limit', '优惠券无效、不可用或已达使用上限'), true);
+                        notifyCartDiscountChanged({
+                            coupon_code: '',
+                            clear_discount: true,
+                            discount_preview: null,
+                        });
+                        return quoteResponse;
                     }
-                    notifyCartDiscountChanged();
+                    notifyCartDiscountChanged({
+                        coupon_code: appliedCode,
+                        discount: discount,
+                        discount_preview: discountPreviewFromQuote(appliedCode, discount),
+                    });
                     return quoteResponse;
                 });
-            }).catch(function () {
-                setMessage(i18n('data-i18n-service-unavailable', '营销服务暂时不可用'), true);
+            }).catch(function (error) {
+                var apiMessage = '';
+                try {
+                    apiMessage = String(
+                        (error && error.response && error.response.data && error.response.data.data && error.response.data.data.message)
+                        || (error && error.response && error.response.data && error.response.data.message)
+                        || (error && error.message)
+                        || ''
+                    ).trim();
+                } catch (e) {}
+                if (apiMessage && apiMessage.indexOf('WelineApi') === -1 && apiMessage.indexOf('handleWorkerMessage') === -1) {
+                    setMessage(apiMessage, true);
+                } else {
+                    setMessage(i18n('data-i18n-service-unavailable', '营销服务暂时不可用'), true);
+                }
                 return null;
             }).finally(function () {
                 miniCartBusyDelta(-1);
@@ -377,7 +474,11 @@
             return client.removeCoupon(withCartType(root, {}), { silent: true }).then(function (response) {
                 clearAppliedState();
                 setMessage((response && response.message) || i18n('data-i18n-removed', '已移除优惠券'), false);
-                notifyCartDiscountChanged();
+                notifyCartDiscountChanged({
+                    coupon_code: '',
+                    clear_discount: true,
+                    discount_preview: null,
+                });
             }).catch(function () {
                 setMessage(i18n('data-i18n-service-unavailable', '营销服务暂时不可用'), true);
             }).finally(function () {

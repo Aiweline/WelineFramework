@@ -1227,7 +1227,7 @@ AI翻译繁忙：本地模型正被其他任务占用，请稍后重试。,AI翻
 "模型列表响应解析失败: %{1}","Failed to parse model list response: %{1}"
 "AI请求超时（已设置超时时间为 %d 秒）。这可能是因为：1) 网络连接较慢；2) AI服务响应较慢；3) 请求内容较复杂。建议：1) 检查网络连接；2) 尝试增加超时时间设置；3) 简化请求内容；4) 稍后重试。","The AI ​​request timed out (the timeout has been set to %d seconds). This may be because: 1) the network connection is slow; 2) the AI ​​service responds slowly; 3) the request content is complex. Suggestions: 1) Check the network connection; 2) Try to increase the timeout setting; 3) Simplify the request content; 4) Try again later."
 "AI请求超时。这可能是因为：1) 网络连接较慢；2) AI服务响应较慢；3) 请求内容较复杂。建议：1) 检查网络连接；2) 尝试设置合理的超时时间；3) 简化请求内容；4) 稍后重试。","AI request timed out. This may be because: 1) the network connection is slow; 2) the AI ​​service responds slowly; 3) the request content is complex. Suggestions: 1) Check the network connection; 2) Try to set a reasonable timeout; 3) Simplify the request content; 4) Try again later."
-"VectorEngine 鍥炬枃妯″瀷娴嬭瘯鍝嶅簲涓虹┖",VectorEngine
+"VectorEngine 鍥炬枃妯″瀷娴嬭瘯鍝嶅簲涓虹┖","VectorEngine 鍥炬枃妯″瀷娴嬭瘯鍝嶅簲涓虹┖"
 该供应商尚未实现向量模型连接测试,"This supplier has not yet implemented vector model connection testing."
 文生视频模型测试响应为空,"Text-to-video model test response is empty"
 文生音频/音乐模型测试响应为空,"Text-to-audio/music model test response is empty"
@@ -1321,6 +1321,7 @@ AI用量审计恢复,"AI usage audit recovery"
 "%{1} 同步失败：%{2}","%{1} Synchronization failed: %{2}"
 "模型收集完成，共 %{1} 个模型","Model collection completed, total %{1} models"
 已跳过模型收集,"Model collection skipped"
+"VectorEngine 图文模型测试响应为空","VectorEngine graphic model test response is empty"
 AI翻译繁忙：已断开僵死占用进程，请稍后重试。,AI翻译繁忙：已断开僵死占用进程，请稍后重试。
 "支持 .ico, .png","支持 .ico, .png"
 """a, b""","""a, b"""
@@ -1333,7 +1334,6 @@ ID,ID
 供应商连通性,"Supplier connectivity"
 模型详情,"Model Details"
 "未配置独立 API Key，未执行自配置测试","No independent API Key is configured and no self-configuration test is performed."
-"VectorEngine 图文模型测试响应为空","VectorEngine graphic model test response is empty"
 "用于登记本机或内网 OpenAI 兼容服务（Ollama / LM Studio / vLLM 等）。登记后可在「供应商账户」建账户，再在「模型」中手工填写模型代码。","Used to register local or intranet OpenAI compatible services (Ollama / LM Studio / vLLM, etc.). After registration, you can create an account in ""Supplier Account"" and then manually fill in the model code in ""Model""."
 引用,Quote
 连通性测试使用；请填写本机已拉取的模型名,"Used for connectivity testing; please fill in the model name that has been pulled by this machine"

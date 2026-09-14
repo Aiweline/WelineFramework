@@ -35,7 +35,9 @@ final class GatewayInitialBootstrapCoordinator implements GatewayStartupBootstra
             // closed if the host remains unavailable.
         }
         try {
-            $package = $this->operations->resolveProjectReleasePackage();
+            // Optional CDN fetch happens only here, outside the host bootstrap
+            // lock. Lock-held resolveProjectReleasePackage() stays offline.
+            $package = $this->operations->ensureProjectReleasePackage($deadlineMonotonic);
         } catch (\Throwable $throwable) {
             return self::failure(
                 'PACKAGE_INVALID',

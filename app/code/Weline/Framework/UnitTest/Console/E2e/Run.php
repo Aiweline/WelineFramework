@@ -58,12 +58,9 @@ class Run extends CommandAbstract
         }
 
         $playwrightArgs = $this->buildPlaywrightArgs($args, $control);
-        if ($control['headless']) {
-            $extraEnv['PLAYWRIGHT_HEADLESS'] = '1';
-        }
-
-        if (!$this->hasAnyHeadMode($playwrightArgs, $control['headless'])) {
-            $playwrightArgs[] = '--headed';
+        $display = $this->resolveDisplayMode($playwrightArgs, $control);
+        foreach ($display['env'] as $envKey => $envValue) {
+            $extraEnv[$envKey] = $envValue;
         }
 
         if (!$this->ensurePlaywrightRuntime($e2eDir)) {
@@ -106,8 +103,8 @@ class Run extends CommandAbstract
                 '--case-id=ID' => __('按 `[case:ID]` 标签筛选，推荐新用例使用该风格'),
                 '--list-modules' => __('列出可运行模块及文件数量'),
                 '--refresh-collection' => __('强制刷新测试收集映射'),
-                '--headed' => __('有界面模式（默认会自动追加）'),
-                '--headless' => __('无界面模式（设置 PLAYWRIGHT_HEADLESS=1）'),
+                '--headed' => __('有界面模式（调试用；默认无头，需显式传入）'),
+                '--headless' => __('无界面模式（默认；设置 PLAYWRIGHT_HEADLESS=1）'),
                 '--ui' => __('Playwright UI 模式'),
                 '--grep=PATTERN' => __('按测试名过滤'),
                 '--workers=N' => __('并发 worker 数'),
@@ -214,11 +211,30 @@ class Run extends CommandAbstract
         return array_values(array_unique($result));
     }
 
-    private function hasAnyHeadMode(array $args, bool $headless): bool
+    /**
+     * 解析 E2E 显示模式：默认无头；仅显式 --headed/--ui 时有界面。
+     *
+     * @param list<string> $playwrightArgs
+     * @param array{headless?:bool} $control
+     * @return array{headless:bool,append_headed:bool,env:array<string,string>}
+     */
+    private function resolveDisplayMode(array $playwrightArgs, array $control): array
     {
-        if ($headless) {
-            return true;
-        }
+        $explicitHeaded = $this->hasExplicitHeadedOrUi($playwrightArgs);
+        $headless = !empty($control['headless']) || !$explicitHeaded;
+
+        return [
+            'headless' => $headless,
+            'append_headed' => false,
+            'env' => $headless ? ['PLAYWRIGHT_HEADLESS' => '1'] : [],
+        ];
+    }
+
+    /**
+     * @param list<string> $args
+     */
+    private function hasExplicitHeadedOrUi(array $args): bool
+    {
         foreach ($args as $arg) {
             if ($arg === '--headed' || $arg === '--ui') {
                 return true;

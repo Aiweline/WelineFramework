@@ -1,7 +1,7 @@
 <?php
 /**
  * @meta.title {default="CJ Dropshipping",description="CJ 货源供应商凭证"}
- * @meta.description {default="全局一套 CJ 凭证与订单沙盒开关；探活与拉品/推单共用。"}
+ * @meta.description {default="全局一套 CJ 凭证、订单沙盒与运费试算失败策略；探活与拉品/推单共用。"}
  * @config.area {backend}
  * @config.sort {76}
  * @config.acl {Weline_Dropship::config}
@@ -19,4 +19,8 @@
   <w:config:field key="dropship/channel/cj/order_sandbox" label="订单沙盒" type="switch"
                   value-type="bool" default="0" scope="global"
                   description="开启后推单 createOrderV3 传 isSandbox=1：假支付、不扣余额、不真实履约，仅用于联调测试。"/>
+  <w:config:field key="dropship/channel/cj/freight_on_failure" label="运费试算失败时" type="select"
+                  value-type="string" default="fallback_local" scope="global"
+                  options="fallback_local:回退本站运费（允许结账）,block_checkout:阻断结账"
+                  description="结账命中 CJ 货源行后实时试算失败时的处理：回退用本站航线价继续下单，或阻断直至试算成功。"/>
 </w:config:group>

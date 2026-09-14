@@ -54,6 +54,10 @@ class RateTemplate extends AbstractModel
     public const schema_fields_QUANTITY_RATE = 'quantity_rate';
     #[Col('text', comment: '混合模式配置JSON')]
     public const schema_fields_MIXED_CONFIG = 'mixed_config';
+    #[Col('text', comment: 'Shopify式阶梯 JSON [{min,max,price}]')]
+    public const schema_fields_RATE_BRACKETS = 'rate_brackets';
+    #[Col('decimal', '10,3', comment: '最大可寄计费重(kg)，空=不限')]
+    public const schema_fields_MAX_WEIGHT_KG = 'max_weight_kg';
     #[Col('varchar', 3, nullable: false, default: 'USD', comment: '货币代码')]
     public const schema_fields_CURRENCY_CODE = 'currency_code';
     #[Col('int', 1, nullable: false, default: 1, comment: '是否启用')]
@@ -69,11 +73,26 @@ class RateTemplate extends AbstractModel
     public const CALC_TYPE_QUANTITY = 'quantity';
     public const CALC_TYPE_FIXED = 'fixed';
     public const CALC_TYPE_MIXED = 'mixed';
+    public const CALC_TYPE_WEIGHT_TABLE = 'weight_table';
+    public const CALC_TYPE_PRICE_TABLE = 'price_table';
+
+    /** 系统航线种子模板代码前缀（不可物理删除）。 */
+    public const SEED_CODE_PREFIX = 'SEED_TPL_';
 
     /**
      * 主键字段
      */
     public array $_unit_primary_keys = ['template_id'];
+
+    public function isSeed(): bool
+    {
+        return self::isSeedTemplateCode((string)$this->getData(self::schema_fields_TEMPLATE_CODE));
+    }
+
+    public static function isSeedTemplateCode(string $code): bool
+    {
+        return str_starts_with(strtoupper(trim($code)), self::SEED_CODE_PREFIX);
+    }
 
     /**
      * 索引排序键
@@ -111,6 +130,36 @@ class RateTemplate extends AbstractModel
     public function setMixedConfig(array $config): self
     {
         $this->setData(self::schema_fields_MIXED_CONFIG, json_encode($config, JSON_UNESCAPED_UNICODE));
+        return $this;
+    }
+
+    /**
+     * @return list<array{min:float|int|string|null,max:float|int|string|null,price:string|float|int}>
+     */
+    public function getRateBrackets(): array
+    {
+        $raw = $this->getData(self::schema_fields_RATE_BRACKETS);
+        if ($raw === null || $raw === '') {
+            return [];
+        }
+        if (is_array($raw)) {
+            return array_values($raw);
+        }
+        $decoded = json_decode((string)$raw, true);
+
+        return is_array($decoded) ? array_values($decoded) : [];
+    }
+
+    /**
+     * @param list<array<string,mixed>> $brackets
+     */
+    public function setRateBrackets(array $brackets): self
+    {
+        $this->setData(
+            self::schema_fields_RATE_BRACKETS,
+            json_encode(array_values($brackets), JSON_UNESCAPED_UNICODE),
+        );
+
         return $this;
     }
 }

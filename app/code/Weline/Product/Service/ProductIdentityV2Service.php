@@ -450,7 +450,9 @@ final class ProductIdentityV2Service implements ProductIdentityV2ResolverInterfa
                 ProductIdentityRegistry::STATUS_PUBLISHED,
                 ProductIdentityRegistry::STATUS_ARCHIVED,
             ],
-            ProductIdentityRegistry::STATUS_ARCHIVED => [],
+            ProductIdentityRegistry::STATUS_ARCHIVED => [
+                ProductIdentityRegistry::STATUS_DRAFT,
+            ],
         ];
 
         return $this->mutateProduct(

@@ -5,7 +5,7 @@
 
 ## 当前入口
 
-开发前先调用项目 MCP `prepare_project`；返回 `ready` 后，使用 `resolve_task_context` 按任务从本 README、`需求.md`、`开发日志.md` 和专题文档取得必要上下文。
+可选：需要检索时，可调用项目 MCP `prepare_project` / `resolve_task_context`，按任务从本 README、`需求.md`、`开发日志.md` 和专题文档取上下文；**编码用宿主原生编辑**。
 
 ## 模块定位
 
@@ -40,13 +40,20 @@
 
 ## 公共邮件发送边界
 
-跨模块邮件只能依赖 `Weline\Smtp\Api\MailSenderInterface`。其 `sender()` 参数、默认值和异常行为
-与现有 `SmtpSender` 完全一致；实现仍在 Smtp 内部完成 SMTP 配置解析、PHPMailer 发送和发送日志。
-调用模块不得引用 `Smtp\Helper\SmtpSender`、`Helper\Data`、`SmtpSendLog` 或 PHPMailer 对象。
+跨模块邮件只能依赖 `Weline\Smtp\Api\MailSenderInterface` 或 Query `smtp.send`。
+有 `channel` 时以 `SmtpMailTemplate` 为模板权威（`vars` 渲染）；账户绑定仍走既有范围配置就近向上。
+调用模块通过 Extends `MailChannelProviderInterface` 注册 `variables` / `default_templates`，不得硬拼 HTML 绕过模板。
 
-接口同时通过 `MailSenderInterfaceFactory` 和 `etc/module.php.provides` 注册，兼容当前 ObjectManager
-迁移桥与编译 Provider。单元/契约验证必须注入 fake `MailSenderInterface`，禁止为验证公共边界而
-真实发信或写发送日志。
+## 邮件模板 / 渠道管理（1.4.x）
+
+- 后台菜单「渠道管理」：`smtp/backend/template/listing`（仅 `target_scope`；展开渠道看各语言模板）
+- 编辑往返：`q` / `locales` / `channel` / `focus_locale` 保持搜索、语言筛选、展开渠道与焦点行
+- 一语言一套；listing 按渠道聚合当前 scope 下全部语言；发送 Resolver 就近向上
+- 通知域：`Module::notify_*` 回退 `Weline_Backend::notification_email`
+- **硬规则：邮件正文禁止 JavaScript**（无 `<script>` / 事件处理器 / `javascript:`）；仅 table + 内联样式
+- **固定页头/页尾**：`Smtp/view/email/shell/{locale}.html`（Theme `brand_*` 色调）；业务 `view/email/**` 只写正文；发信时组装
+- **编辑工作区**：顶栏 CTA；变量分组；左编辑右 sticky 实时预览；**预览站址取 WebsiteDomain；Logo 上溯 Website appearance brand（`/pub/media/websites/...`，非 Theme 默认标）**
+- 发信自动注入站店渠信任变量：`site_name` / `store_name` / `channel_name` / `site_logo_img` / `contact_*` / `brand_primary` 等（`MailBrandContextService`）
 
 ## 本模块文档资产
 

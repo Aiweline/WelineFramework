@@ -9,5 +9,7 @@
              icon="circle" order="1"/>
         <menu source="Weline_Smtp::system_smtp_log" name="system_smtp_log" title="发件记录" action="smtp/backend/log/listing"
              icon="circle" order="2"/>
+        <menu source="Weline_Smtp::system_smtp_template" name="system_smtp_template" title="渠道管理" action="smtp/backend/template/listing"
+             icon="circle" order="3"/>
     </menu>
 </menus>

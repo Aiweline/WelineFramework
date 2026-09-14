@@ -1215,7 +1215,7 @@ class SharedStateServiceManager
             return false;
         }
 
-        $protocolHealthy = $this->probeRunningSharedService(['host' => $host, 'port' => $port], $tokenFileName);
+        $protocolHealthy = $this->probeRunningSharedService(['role' => $role, 'host' => $host, 'port' => $port], $tokenFileName);
         $inspection = $this->inspectRunningSharedService([
             'role' => $role,
             'host' => $host,

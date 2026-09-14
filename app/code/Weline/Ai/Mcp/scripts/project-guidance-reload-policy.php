@@ -11,8 +11,8 @@ declare(strict_types=1);
  *
  * Cursor IDE Agent snapshots tools/list at chat start. When the Cursor Helper
  * mcp-process is older than MCP source, has no learning-mcp child (orphan
- * Transport), or the STDIO probe is missing required tools (especially
- * submit_task_plan), agents must bounce the helper and open a new Agent turn —
+ * Transport), or the STDIO probe is missing required index/skill tools,
+ * agents must bounce the helper and open a new Agent turn —
  * continuing on a stale catalog yields HOST_MCP_NOT_ATTACHED.
  *
  * @param array<string,mixed> $hostRuntime

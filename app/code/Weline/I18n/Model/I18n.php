@@ -107,7 +107,11 @@ class I18n
         if (!$this->i18nCache instanceof NamespaceScopedCachePoolInterface
             || !in_array(DictionaryCacheNamespace::NAMESPACE, $this->i18nCache->getNamespaces(), true)
         ) {
-            $this->i18nCache = DictionaryCacheNamespace::scopedPool($this->i18nCache);
+            // Locale names, installation state and flags are global catalog facts.
+            // Dictionary content commits do not change this root-owned directory.
+            $this->i18nCache = \Weline\Framework\Cache\Pool\NamespaceScopedCachePool::create(
+                $this->i18nCache, [DictionaryCacheNamespace::NAMESPACE],
+            );
         }
         return $this->i18nCache;
     }
@@ -1011,6 +1015,8 @@ class I18n
             ini_set('memory_limit', '512M');
         }
 
+        // This snapshot contains every locale: the no-locale namespace is
+        // CONTENT_NAMESPACE, while namespaceCache() above owns only the directory.
         $wordsCacheKey = DictionaryCacheNamespace::cacheKey($moduleName ?? '*');
         if ($cache && isset(DictionaryCacheNamespace::localCache(self::$local_words, 64)[$wordsCacheKey])) {
             return DictionaryCacheNamespace::localCache(self::$local_words, 64)[$wordsCacheKey];

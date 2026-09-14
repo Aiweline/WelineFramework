@@ -20,6 +20,8 @@ use Weline\Ai\Api\AgentResult;
 use Weline\Ai\Service\Agent\AgentExecutionContext;
 use Weline\Ai\Api\AiModel as AgentModel;
 use Weline\Ai\Exception\AiBillingException;
+use Weline\Ai\Exception\AiTransportException;
+use Weline\Ai\Exception\TranslationBusyException;
 use Weline\Ai\Model\AiModel;
 use Weline\Ai\Model\AiUsageLog;
 use Weline\Ai\Model\Provider\Account;
@@ -1865,8 +1867,28 @@ class AiService
                 ]);
             }
             
-            // 记录错误
-            w_log_error("AI API调用失败: " . $e->getMessage());
+            // 记录错误（运输层失败走指纹限流，避免 Ollama 宕机时刷屏）
+            if ($e instanceof AiTransportException
+                || $e instanceof TranslationBusyException
+                || $this->isOperationalAiTransportMessage($e->getMessage())
+            ) {
+                if (class_exists(\Weline\Framework\Exception\ExceptionLogThrottle::class)) {
+                    $decision = \Weline\Framework\Exception\ExceptionLogThrottle::decide($e);
+                    if (!empty($decision['allow'])) {
+                        if (!empty($decision['summary'])) {
+                            w_log('warning', (string)$decision['summary'], [
+                                '_flood_key' => (string)($decision['short_key'] ?? ''),
+                            ], 'exception');
+                        } elseif (function_exists('w_log_error')) {
+                            w_log_error('AI API调用失败: ' . $e->getMessage());
+                        }
+                    }
+                } elseif (function_exists('w_log_error')) {
+                    w_log_error('AI API调用失败: ' . $e->getMessage());
+                }
+            } elseif (function_exists('w_log_error')) {
+                w_log_error('AI API调用失败: ' . $e->getMessage());
+            }
             throw $this->wrapAiBillingExceptionIfNeeded($e, "AI生成失败: " . $e->getMessage());
         }
     }
@@ -2598,11 +2620,52 @@ class AiService
         if ($throwable instanceof AiBillingException) {
             return $throwable;
         }
+        if ($throwable instanceof TranslationBusyException) {
+            return $throwable;
+        }
         $billingCode = AiBillingException::classifyMessageToCode($message);
         if ($billingCode === '') {
+            // Keep transport/BUSY as RuntimeException — Framework App Exception
+            // auto-logs on construct and flooded exception.log when Ollama was down.
+            if ($throwable instanceof AiTransportException
+                || $this->isOperationalAiTransportMessage($message)
+                || $this->isOperationalAiTransportMessage($throwable->getMessage())
+            ) {
+                return new AiTransportException($message, 0, $throwable);
+            }
+
             return new Exception($message, (int)$throwable->getCode(), $throwable);
         }
 
         return new AiBillingException($message, $billingCode, 402, $throwable);
+    }
+
+    private function isOperationalAiTransportMessage(string $message): bool
+    {
+        if ($message === '') {
+            return false;
+        }
+        if (str_contains($message, TranslationBusyException::class)
+            || str_contains($message, 'AI_TRANSLATION_BUSY')) {
+            return true;
+        }
+        $needles = [
+            'Failed to connect',
+            'Could not connect',
+            "Couldn't connect",
+            'Connection refused',
+            'Connection reset',
+            "Couldn't resolve host",
+            'Could not resolve host',
+            'Name or service not known',
+            'Network is unreachable',
+        ];
+        foreach ($needles as $needle) {
+            if (stripos($message, $needle) !== false) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

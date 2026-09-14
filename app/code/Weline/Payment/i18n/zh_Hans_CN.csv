@@ -1,13 +1,28 @@
 ﻿"Payment Webhook Inbox 已接收","Payment Webhook Inbox 已接收"
 "PaymentCallbackReceiver 成功写入 immutable inbox 后触发，供 Dev Relay 等扩展消费。","PaymentCallbackReceiver 成功写入 immutable inbox 后触发，供 Dev Relay 等扩展消费。"
 …,…
+Stripe,Stripe
+"使用 Stripe Checkout 完成卡与本地支付方式。","使用 Stripe Checkout 完成卡与本地支付方式。"
+"Payment amount must be greater than zero.","Payment amount must be greater than zero."
+"Stripe secret key is not configured for the current environment.","Stripe secret key is not configured for the current environment."
+"Currency is not supported by Stripe.","Currency is not supported by Stripe."
+"Country is not supported by Stripe.","Country is not supported by Stripe."
+"Redirecting to Stripe Checkout.","Redirecting to Stripe Checkout."
+"Stripe Checkout Session id is missing.","Stripe Checkout Session id is missing."
+"Stripe payment completed.","Stripe payment completed."
+"Stripe Checkout Session expired.","Stripe Checkout Session expired."
+"Stripe payment is still processing.","Stripe payment is still processing."
+"Stripe payment cancelled.","Stripe payment cancelled."
+"Stripe authorize is not supported in this Checkout integration.","Stripe authorize is not supported in this Checkout integration."
+"Stripe capture is handled by Checkout payment mode.","Stripe capture is handled by Checkout payment mode."
+"Stripe void is not supported in this Checkout integration.","Stripe void is not supported in this Checkout integration."
+"Stripe refund submitted.","Stripe refund submitted."
 本地测试支付,本地测试支付
 仅用于本地开发验证，不会产生真实扣款。,仅用于本地开发验证，不会产生真实扣款。
 "Fake payment cancelled.","Fake payment cancelled."
 PayPal,PayPal
 "使用 PayPal 账户或卡完成支付。","使用 PayPal 账户或卡完成支付。"
 "首次使用需完成 PayPal 沙箱平台应用一次性初始化（维护者操作，商户无需手填 Client ID/Secret）。","首次使用需完成 PayPal 沙箱平台应用一次性初始化（维护者操作，商户无需手填 Client ID/Secret）。"
-"Payment amount must be greater than zero.","Payment amount must be greater than zero."
 "PayPal credentials are not configured for the current environment.","当前环境尚未配置 PayPal 凭据。"
 "Currency is not supported by PayPal.","PayPal 不支持当前货币。"
 "Country is not supported by PayPal.","PayPal 不支持当前国家。"
@@ -239,6 +254,8 @@ settings,settings
 继续购物,继续购物
 返回结账,返回结账
 您的支付已完成。,您的支付已完成。
+"Continue to Stripe","Continue to Stripe"
+"Stripe Checkout will open after you confirm payment.","Stripe Checkout will open after you confirm payment."
 确认进度,确认进度
 正在确认订单…,正在确认订单…
 支付已成功，我们正在同步订单信息。,支付已成功，我们正在同步订单信息。
@@ -344,6 +361,21 @@ More,更多的
 重新连接,重新连接
 关闭窗口,关闭窗口
 "在此统一开启中继；无需改 app/etc/env.php。本机填写线上站点完整地址与用户 Token 后后台挂接 SSE。","在此统一开启中继；无需改 app/etc/env.php。本机填写线上站点完整地址与用户 Token 后后台挂接 SSE。"
+"何时开启 · 怎么用","何时开启 · 怎么用"
+何时开启,何时开启
+"本机开发要收支付 Provider（如 PayPal）Webhook，但对方只能打到公网生产站时。","本机开发要收支付 Provider（如 PayPal）Webhook，但对方只能打到公网生产站时。"
+"本机开发要收万能货源 / CJ 回调时：开关仍在本页（货源不另建中继）。","本机开发要收万能货源 / CJ 回调时：开关仍在本页（货源不另建中继）。"
+"不需要开：纯 Mock、或 Provider/CJ 已能直达本机公网入口时。","不需要开：纯 Mock、或 Provider/CJ 已能直达本机公网入口时。"
+支付怎么用,支付怎么用
+"生产站：勾选「启用」+「允许本生产站作为线上中转主机」→ 保存；复制站点地址与用户 API Token。","生产站：勾选「启用」+「允许本生产站作为线上中转主机」→ 保存；复制站点地址与用户 API Token。"
+"本机：勾选启用并保存（可预填线上地址）→ 下方填线上地址与 Token → 点「开启中继」，徽章变为运行中。","本机：勾选启用并保存（可预填线上地址）→ 下方填线上地址与 Token → 点「开启中继」，徽章变为运行中。"
+"把 Provider Webhook 登记为生产官方回调（如 /payment/frontend/callback/notify?endpoint_code=…）。勿填本机 *.test.weline.com，勿填 /payment/dev-relay/*。","把 Provider Webhook 登记为生产官方回调（如 /payment/frontend/callback/notify?endpoint_code=…）。勿填本机 *.test.weline.com，勿填 /payment/dev-relay/*。"
+"在沙盒/正式触发支付事件：线上 inbox 先落库，本机 worker 拉取后重放到本机官方 inbound。","在沙盒/正式触发支付事件：线上 inbox 先落库，本机 worker 拉取后重放到本机官方 inbound。"
+万能货源怎么用,万能货源怎么用
+"与支付共用同一套开关与本机静默 worker；先按上面步骤在生产+本机把中继跑起来。","与支付共用同一套开关与本机静默 worker；先按上面步骤在生产+本机把中继跑起来。"
+"到「货源 Webhook 中继」页复制 CJ 生产回调 URL（/dropship/frontend/callback/notify?endpoint_code=…），登记到 CJ，勿填本机域名。","到「货源 Webhook 中继」页复制 CJ 生产回调 URL（/dropship/frontend/callback/notify?endpoint_code=…），登记到 CJ，勿填本机域名。"
+"CJ 推送后：生产 inbox 入队并以 dropship:{id} 进入同一中继；本机 worker 直接 POST 到本机 notify。","CJ 推送后：生产 inbox 入队并以 dropship:{id} 进入同一中继；本机 worker 直接 POST 到本机 notify。"
+详细说明见模块文档,详细说明见模块文档
 中继开关（统一配置）,中继开关（统一配置）
 "启用开发 Webhook 中继","启用开发 Webhook 中继"
 允许本生产站作为线上中转主机,允许本生产站作为线上中转主机
@@ -533,6 +565,7 @@ More,更多的
 "PayPal 沙箱一键授权","PayPal 沙箱一键授权"
 "可在 Global 或 Website（含默认站点）下点击「沙箱一键授权」跳转 PayPal Sandbox 登录。","可在 Global 或 Website（含默认站点）下点击「沙箱一键授权」跳转 PayPal Sandbox 登录。"
 "Webhook inbox 不存在。","Webhook inbox 不存在。"
+"货源 Webhook inbox 不存在。","货源 Webhook inbox 不存在。"
 当前会话未启用线上代发模式。,当前会话未启用线上代发模式。
 "不支持的 Relay 命令：%{1}","不支持的 Relay 命令：%{1}"
 "支付 Provider 不可用。","支付 Provider 不可用。"

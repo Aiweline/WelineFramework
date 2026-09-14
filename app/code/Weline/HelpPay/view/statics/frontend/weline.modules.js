@@ -7,10 +7,10 @@ window.WelineModulesConfig.modules = window.WelineModulesConfig.modules || {};
 Object.assign(window.WelineModulesConfig.modules, {
     helpPayShare: {
         paths: [
-            "Weline_HelpPay::js/helppay-share.js?v=20260911-layout-token2"
+            "Weline_HelpPay::js/helppay-share.js?v=20260914-share-spec1"
         ],
         globalVar: "WelineModules.helpPayShare",
         load: "defer",
-        description: "帮我付 / 纯分享 / 快捷购买：规则确认、出链双形态复制（样式由脚本注入主题 Token CSS）"
+        description: "帮我付 / 纯分享 / 快捷购买 / 商品找朋友代付：规则确认、出链双形态复制（样式由脚本注入主题 Token CSS）"
     }
 });

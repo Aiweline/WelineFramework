@@ -18,6 +18,7 @@ use Weline\Framework\Acl\Acl;
 use Weline\Marketing\Model\Coupon\Coupon as CouponModel;
 use Weline\Marketing\Model\Rule\Rule as RuleModel;
 use Weline\Marketing\Service\CouponService;
+use Weline\Marketing\Service\MarketingBaseCurrencyAmount;
 
 /**
  * 优惠券管理控制器
@@ -32,21 +33,86 @@ class Coupon extends BackendController
     public function index(): string
     {
         try {
+            /** @var \Weline\Marketing\Service\CouponSourceAttribution $attribution */
+            $attribution = ObjectManager::getInstance(\Weline\Marketing\Service\CouponSourceAttribution::class);
+            $attribution->backfillMissing(500);
+            $sourceOptions = $attribution->listFilterOptions();
+
+            $search = trim((string)$this->request->getGet('search', ''));
+            $sourceType = trim((string)$this->request->getGet('source_type', ''));
+            $status = trim((string)$this->request->getGet('status', ''));
+            $type = trim((string)$this->request->getGet('type', ''));
+            $page = max(1, (int)$this->request->getGet('page', 1));
+            $pageSize = max(1, min(100, (int)$this->request->getGet('pageSize', 20)));
+
             /** @var CouponModel $coupon */
-            $coupon = ObjectManager::getInstance(CouponModel::class);
-            
-            if ($search = $this->request->getGet('search')) {
-                $coupon->where('code', "%{$search}%", 'like');
+            $coupon = ObjectManager::getInstance(CouponModel::class, [], false);
+            $coupon->clear();
+
+            if ($search !== '') {
+                $coupon->where(CouponModel::schema_fields_CODE, '%' . $search . '%', 'like');
             }
-            
-            $coupon->pagination()->select()->fetch();
-            $this->assign('coupons', $coupon->getItems());
+            if ($sourceType !== '') {
+                $coupon->where(CouponModel::schema_fields_SOURCE_TYPE, $sourceType);
+            }
+            if ($status !== '') {
+                $coupon->where(CouponModel::schema_fields_STATUS, $status);
+            }
+            if ($type !== '') {
+                $coupon->where(CouponModel::schema_fields_TYPE, $type);
+            }
+
+            $filterParams = array_filter([
+                'search' => $search,
+                'source_type' => $sourceType,
+                'status' => $status,
+                'type' => $type,
+                'pageSize' => (string)$pageSize,
+            ], static fn($v) => $v !== null && $v !== '');
+
+            $coupon
+                ->order(CouponModel::schema_fields_ID, 'DESC')
+                ->pagination($page, $pageSize, $filterParams)
+                ->select()
+                ->fetch();
+
+            $items = $coupon->getItems() ?: [];
+            $enriched = [];
+            foreach ($items as $row) {
+                if ($row instanceof CouponModel) {
+                    $row = $row->getData();
+                } elseif (!is_array($row)) {
+                    $row = (array)$row;
+                }
+                $meta = $attribution->describe($row);
+                $row['source_label'] = $meta['label'];
+                $row['source_tone'] = $meta['tone'];
+                $enriched[] = $row;
+            }
+
+            $this->assign('coupons', $enriched);
             $this->assign('pagination', $coupon->getPagination());
-            
+            $this->assign('filter_search', $search);
+            $this->assign('filter_source_type', $sourceType);
+            $this->assign('filter_status', $status);
+            $this->assign('filter_type', $type);
+            $this->assign('source_options', $sourceOptions);
+            $this->assign(
+                'base_currency',
+                ObjectManager::getInstance(MarketingBaseCurrencyAmount::class)->baseCurrency()
+            );
+
             return $this->fetch();
         } catch (\Exception $e) {
             Message::error(__('加载优惠券列表失败：%{1}', $e->getMessage()));
             $this->assign('coupons', []);
+            $this->assign('pagination', '');
+            $this->assign('filter_search', '');
+            $this->assign('filter_source_type', '');
+            $this->assign('filter_status', '');
+            $this->assign('filter_type', '');
+            $this->assign('source_options', []);
+            $this->assign('base_currency', 'CNY');
             return $this->fetch();
         }
     }
@@ -85,6 +151,20 @@ class Coupon extends BackendController
         }
 
         $this->assign('coupon', $coupon);
+        $this->assign(
+            'base_currency',
+            ObjectManager::getInstance(MarketingBaseCurrencyAmount::class)->baseCurrency()
+        );
+        /** @var \Weline\Marketing\Service\CouponSourceAttribution $attribution */
+        $attribution = ObjectManager::getInstance(\Weline\Marketing\Service\CouponSourceAttribution::class);
+        $this->assign(
+            'coupon_source',
+            $coupon !== null ? $attribution->describe($coupon) : [
+                'label' => (string)__('后台手工'),
+                'tone' => 'neutral',
+                'source_type' => CouponModel::SOURCE_TYPE_MANUAL,
+            ]
+        );
 
         return $this->fetch('form');
     }

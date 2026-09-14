@@ -245,7 +245,7 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
         self::assertStringContainsString('amz-order-confirm__banner', $template);
         self::assertStringContainsString('amz-order-confirm__btn--primary', $template);
         self::assertStringContainsString('--amz-btn-primary-bg: var(--color-primary, #b84a3c)', $template);
-        self::assertStringContainsString('--amz-success: #067d62', $template);
+        self::assertStringContainsString('--amz-success: var(--color-success, #067d62)', $template);
         self::assertStringContainsString('data-order-uuid="<?= $escape($requestOrderUuid) ?>"', $template);
         self::assertStringContainsString(
             'data-checkout-group-uuid="<?= $escape($requestCheckoutGroupUuid) ?>"',
@@ -277,9 +277,12 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
             $template,
         );
         self::assertStringContainsString(
-            'padding: 24px var(--weline-layout-content-padding-inline) 48px;',
+            'padding: var(--weline-space-5, 24px) var(--weline-layout-content-padding-inline) var(--weline-space-8, 48px);',
             $template,
         );
+        self::assertStringContainsString('--amz-btn-primary-fg: var(--color-on-primary, #fff)', $template);
+        self::assertStringContainsString('weline-pixel::continue_shopping', $template);
+        self::assertStringContainsString("aria-label=\"<?= \$escape(__('订单操作')) ?>\"", $template);
         self::assertStringNotContainsString('max-width: 980px', $template);
         self::assertStringNotContainsString(
             'var(--weline-layout-content-max-width, 1040px)',
@@ -373,7 +376,27 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
         self::assertStringContainsString('emptyCartInvalidateDone', $template);
         self::assertStringContainsString("reason: 'checkout-empty'", $template);
         self::assertStringContainsString('window.location.reload()', $template);
+        self::assertStringContainsString('pendingDiscountPreview', $template);
+        self::assertStringContainsString('rememberPendingDiscount', $template);
+        self::assertStringContainsString('applyPendingDiscountToCart', $template);
+        self::assertStringContainsString("detail.refresh === false", $template);
+        self::assertStringContainsString('getDataParams.coupon_code', $template);
         self::assertStringNotContainsString("loadCheckout().catch(function () {\n            /* keep current totals if refresh fails */", $template);
+    }
+
+    public function testCheckoutSurfacesShippingPaymentUnavailableAsBlockingAlert(): void
+    {
+        $template = $this->read('app/code/Weline/Checkout/view/frontend/checkout/index.phtml');
+        $renderer = $this->read('app/code/Weline/Checkout/Service/CheckoutHtmlRenderer.php');
+
+        self::assertStringContainsString('renderMethodEmptyAlert', $renderer);
+        self::assertStringContainsString('data-checkout-method-empty', $renderer);
+        self::assertStringContainsString('data-tone="warning"', $renderer);
+        self::assertStringContainsString('暂无可用配送方式', $renderer);
+        self::assertStringContainsString('syncMethodBlockPanels', $template);
+        self::assertStringContainsString('readMethodBlockMessage', $template);
+        self::assertStringContainsString('is-method-blocked', $template);
+        self::assertStringContainsString('weline-checkout__method-alert', $template);
     }
 
     public function testCheckoutAwaitsShippingValidationIncludingEmbargo(): void

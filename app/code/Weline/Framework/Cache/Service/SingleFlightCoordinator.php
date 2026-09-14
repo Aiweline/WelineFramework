@@ -32,7 +32,7 @@ class SingleFlightCoordinator implements SingleFlightInterface
     private const WAIT_SLICE_US = 20_000;
 
     /**
-     * CLI 模式进程内锁存储（key => token）。
+     * 进程内持有标记（key => token），用于CLI锁以及WLS同Worker重复请求的快速短路。
      *
      * @var array<string, string>
      */
@@ -46,9 +46,14 @@ class SingleFlightCoordinator implements SingleFlightInterface
     private array $fileHandles = [];
 
     private ?AtomicCacheAdapterInterface $atomicAdapter = null;
+    private bool $preferFileLock = false;
 
-    public function __construct(?AtomicCacheAdapterInterface $atomicAdapter = null)
+    public function __construct(?AtomicCacheAdapterInterface $atomicAdapter = null, bool $preferFileLock = false)
     {
+        $this->preferFileLock = $preferFileLock;
+        if ($preferFileLock) {
+            return;
+        }
         if (Runtime::isPersistent()) {
             $adapter = $atomicAdapter ?? (new AdapterFactory())->create('wls_memory', self::POOL_IDENTITY);
             if (!$adapter instanceof AtomicCacheAdapterInterface) {
@@ -92,7 +97,13 @@ class SingleFlightCoordinator implements SingleFlightInterface
     public function release(string $key, string $token): void
     {
         if ($this->atomicAdapter !== null) {
-            $this->atomicAdapter->compareAndSet($key, $token, null, 1);
+            try {
+                $this->atomicAdapter->compareAndSet($key, $token, null, 1);
+            } finally {
+                if (\array_key_exists($key, self::$localLocks) && self::$localLocks[$key] === $token) {
+                    unset(self::$localLocks[$key]);
+                }
+            }
             return;
         }
 
@@ -117,10 +128,29 @@ class SingleFlightCoordinator implements SingleFlightInterface
     private function tryAcquire(string $key, string $token, int $ttlSeconds): bool
     {
         if ($this->atomicAdapter !== null) {
-            return $this->atomicAdapter->compareAndSet($key, null, $token, $ttlSeconds);
+            // A persistent worker can have several Fibers contend for the same
+            // key while the first CAS is waiting on WLS. Keep a process-local
+            // holder marker so duplicates fail immediately; the atomic CAS
+            // remains authoritative across workers.
+            if (\array_key_exists($key, self::$localLocks)) {
+                return false;
+            }
+            self::$localLocks[$key] = $token;
+            try {
+                $acquired = $this->atomicAdapter->compareAndSet($key, null, $token, $ttlSeconds);
+            } catch (\Throwable $throwable) {
+                if ((self::$localLocks[$key] ?? null) === $token) {
+                    unset(self::$localLocks[$key]);
+                }
+                throw $throwable;
+            }
+            if (!$acquired && (self::$localLocks[$key] ?? null) === $token) {
+                unset(self::$localLocks[$key]);
+            }
+            return $acquired;
         }
 
-        if (Runtime::isFpm()) {
+        if ($this->preferFileLock || Runtime::isFpm()) {
             return $this->acquireFileLock($key, $token);
         }
 

@@ -22,7 +22,13 @@ final class BackendOrderListPresenter
      *     customer_email: string,
      *     customer_phone: string,
      *     is_anonymous: bool,
-     *     created_at: string
+     *     created_at: string,
+     *     checkout_group_display: string,
+     *     shipping_address_lines: list<string>,
+     *     billing_address_lines: list<string>,
+     *     notes: string,
+     *     payment_method: string,
+     *     shipping_method: string
      * }
      */
     public function present(Order|array $order): array
@@ -59,7 +65,110 @@ final class BackendOrderListPresenter
                     (string)($data[Order::schema_fields_CREATED_AT] ?? '')
                 )
             ),
+            'checkout_group_display' => OrderListKeywordNormalizer::groupDisplayNumber(
+                (string)($data[Order::schema_fields_CHECKOUT_GROUP_UUID] ?? '')
+            ),
+            'shipping_address_lines' => $this->formatAddressLines($shipping),
+            'billing_address_lines' => $this->formatAddressLines(
+                $this->decodeMap($data[Order::schema_fields_BILLING_ADDRESS] ?? null)
+            ),
+            'notes' => trim((string)($data[Order::schema_fields_NOTES] ?? '')),
+            'payment_method' => trim((string)($data[Order::schema_fields_PAYMENT_METHOD] ?? '')),
+            'shipping_method' => trim((string)($data[Order::schema_fields_SHIPPING_METHOD] ?? '')),
         ];
+    }
+
+    /**
+     * Flatten checkout shipping/billing JSON into display lines (Magento/Shopify-style cards).
+     *
+     * @param array<string, mixed> $address
+     * @return list<string>
+     */
+    public function formatAddressLines(array $address): array
+    {
+        if ($address === []) {
+            return [];
+        }
+
+        $lines = [];
+        $name = $this->firstNonEmpty(
+            (string)($address['name'] ?? ''),
+            (string)($address['fullname_name'] ?? ''),
+            trim($this->firstNonEmpty(
+                (string)($address['firstname'] ?? $address['first_name'] ?? ''),
+                ''
+            ) . ' ' . $this->firstNonEmpty(
+                (string)($address['lastname'] ?? $address['last_name'] ?? ''),
+                ''
+            ))
+        );
+        if ($name !== '') {
+            $lines[] = $name;
+        }
+
+        $company = trim((string)($address['company'] ?? ''));
+        if ($company !== '') {
+            $lines[] = $company;
+        }
+
+        $street = '';
+        if (isset($address['street']) && \is_array($address['street'])) {
+            $street = trim(implode(' ', array_map('strval', $address['street'])));
+        }
+        if ($street === '') {
+            $street = $this->firstNonEmpty(
+                (string)($address['street'] ?? ''),
+                (string)($address['street1'] ?? ''),
+                (string)($address['address'] ?? ''),
+                (string)($address['address1'] ?? ''),
+                (string)($address['detail'] ?? ''),
+                (string)($address['detailed_address'] ?? '')
+            );
+        }
+        if ($street !== '') {
+            $lines[] = $street;
+        }
+
+        $regionLine = trim(implode(' ', array_filter([
+            $this->firstNonEmpty(
+                (string)($address['region'] ?? ''),
+                (string)($address['province'] ?? ''),
+                (string)($address['state'] ?? '')
+            ),
+            $this->firstNonEmpty(
+                (string)($address['city'] ?? ''),
+                (string)($address['city_name'] ?? '')
+            ),
+            $this->firstNonEmpty(
+                (string)($address['district'] ?? ''),
+                (string)($address['area'] ?? ''),
+                (string)($address['county'] ?? '')
+            ),
+        ], static fn(string $part): bool => $part !== '')));
+        if ($regionLine !== '') {
+            $lines[] = $regionLine;
+        }
+
+        $postcode = trim((string)($address['postcode'] ?? $address['zip'] ?? $address['postal_code'] ?? ''));
+        if ($postcode !== '') {
+            $lines[] = $postcode;
+        }
+
+        $country = trim((string)($address['country'] ?? $address['country_id'] ?? $address['country_code'] ?? ''));
+        if ($country !== '') {
+            $lines[] = $country;
+        }
+
+        $phone = $this->firstNonEmpty(
+            (string)($address['telephone'] ?? ''),
+            (string)($address['phone'] ?? ''),
+            (string)($address['mobile'] ?? '')
+        );
+        if ($phone !== '') {
+            $lines[] = $phone;
+        }
+
+        return $lines;
     }
 
     /** @param array<string, mixed> $data */

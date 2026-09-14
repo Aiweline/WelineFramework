@@ -532,13 +532,12 @@ final class ProductCategoryAdminService
             static fn(array $row): int => (int)($row[Category::schema_fields_ID] ?? 0),
             $rows,
         )));
-        $names = $this->categoryAttributes->readNameMap($websiteId, $ids, $locale);
-        $googleIds = $this->categoryAttributes->readGoogleTaxonomyIdMap($websiteId, $ids, $locale);
-        $images = $this->categoryAttributes->readImageMap($websiteId, $ids, $locale);
-        $banners = $this->categoryAttributes->readBannerMap($websiteId, $ids, $locale);
-        $summaries = $this->categoryAttributes->readSummaryMap($websiteId, $ids, $locale);
-        $descriptions = $this->categoryAttributes->readDescriptionMap($websiteId, $ids, $locale);
-        $sourcePlatforms = $this->categoryAttributes->readSourcePlatformMap($websiteId, $ids, $locale);
+        $presentation = $this->categoryAttributes->readPresentationMaps(
+            $websiteId,
+            $ids,
+            $locale,
+            ['google_taxonomy_id', 'source_platform'],
+        );
 
         $presented = [];
         foreach ($rows as $row) {
@@ -558,13 +557,13 @@ final class ProductCategoryAdminService
                 'position' => (int)($row[Category::schema_fields_POSITION] ?? 0),
                 'status' => (string)($row[Category::schema_fields_STATUS] ?? 'active'),
                 'is_active' => strtolower((string)($row[Category::schema_fields_STATUS] ?? 'active')) !== 'inactive' ? 1 : 0,
-                'name' => $names[$categoryId] ?? $this->displayNameFromPath($path),
-                'google_taxonomy_id' => (string)($googleIds[$categoryId] ?? ''),
-                'image' => (string)($images[$categoryId] ?? ''),
-                'banner' => (string)($banners[$categoryId] ?? ''),
-                'summary' => (string)($summaries[$categoryId] ?? ''),
-                'description' => (string)($descriptions[$categoryId] ?? ''),
-                'source_platform' => (string)($sourcePlatforms[$categoryId] ?? ''),
+                'name' => $presentation['name'][$categoryId] ?? $this->displayNameFromPath($path),
+                'google_taxonomy_id' => (string)($presentation['google_taxonomy_id'][$categoryId] ?? ''),
+                'image' => (string)($presentation['image'][$categoryId] ?? ''),
+                'banner' => (string)($presentation['banner'][$categoryId] ?? ''),
+                'summary' => (string)($presentation['summary'][$categoryId] ?? ''),
+                'description' => (string)($presentation['description'][$categoryId] ?? ''),
+                'source_platform' => (string)($presentation['source_platform'][$categoryId] ?? ''),
                 'level' => $this->depthFor($rows, $categoryId),
             ];
         }

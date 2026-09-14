@@ -21,6 +21,8 @@ final class CheckoutShippingMethodsHomologyContractTest extends TestCase
         );
         self::assertStringContainsString('fulfillment_metadata', $src);
         self::assertStringContainsString('shipping_profile_code', $src);
+        self::assertStringContainsString('shipping_hazard_class', $src);
+        self::assertStringContainsString('delivery_point_type', $src);
         self::assertStringContainsString("'scope' =>", $src);
         self::assertStringContainsString('website_id', $src);
         self::assertStringContainsString('store_id', $src);

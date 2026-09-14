@@ -130,6 +130,34 @@ final class CheckoutHtmlRendererTest extends TestCase
         self::assertStringContainsString('checked', $html);
     }
 
+    public function testEmptyShippingMethodsRenderBlockingAlert(): void
+    {
+        $r = new CheckoutHtmlRenderer();
+        $html = $r->renderMethodOptions(
+            [],
+            'shipping_method',
+            'CNY',
+            '当前地址下所选配送方案不可用，请调整收货地址或商品后再试。',
+            true,
+        );
+        self::assertStringContainsString('w-alert', $html);
+        self::assertStringContainsString('data-tone="warning"', $html);
+        self::assertStringContainsString('role="alert"', $html);
+        self::assertStringContainsString('data-checkout-method-empty="shipping_method"', $html);
+        self::assertStringContainsString('暂无可用配送方式', $html);
+        self::assertStringContainsString('当前地址下所选配送方案不可用', $html);
+        self::assertStringNotContainsString('weline-checkout__empty', $html);
+    }
+
+    public function testEmptyPaymentMethodsRenderBlockingAlert(): void
+    {
+        $r = new CheckoutHtmlRenderer();
+        $html = $r->renderPaymentMethodOptions([], 'payment_method', '暂无可用支付方式。');
+        self::assertStringContainsString('data-checkout-method-empty="payment_method"', $html);
+        self::assertStringContainsString('暂无可用支付方式', $html);
+        self::assertStringContainsString('data-tone="warning"', $html);
+    }
+
     public function testPaymentMethodOptionsIncludeLogoIntroAndGuideLink(): void
     {
         $r = new CheckoutHtmlRenderer();

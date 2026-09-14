@@ -146,7 +146,7 @@ $visibleOptionLimit = 6;
                             aria-current="<?= !empty($opt['selected']) ? 'true' : 'false' ?>"
                         >
                             <span class="w-filters__radio" aria-hidden="true"></span>
-                            <span class="w-filters__label"><?= $escape(__($opt['label'])) ?></span>
+                            <span class="w-filters__label"><?= $escape((string)($opt['label'] ?? '')) ?></span>
                             <span class="w-filters__count"><?= (int)$opt['count'] ?></span>
                         </a>
                     </li>
@@ -178,7 +178,7 @@ $visibleOptionLimit = 6;
             data-filter-code="<?= $escape($group['code']) ?>"
             <?= $groupOpen ? 'open' : '' ?>
         >
-            <summary class="w-filters__summary"><?= $escape(__($group['name'])) ?></summary>
+            <summary class="w-filters__summary"><?= $escape((string)($group['name'] ?? '')) ?></summary>
             <ul class="w-filters__list" data-testid="storefront-filters-attribute">
                 <?php foreach ($visibleOptions as $opt): ?>
                     <li>
@@ -188,7 +188,7 @@ $visibleOptionLimit = 6;
                             aria-current="<?= !empty($opt['selected']) ? 'true' : 'false' ?>"
                         >
                             <span class="w-filters__check" aria-hidden="true"></span>
-                            <span class="w-filters__label"><?= $escape(__($opt['label'])) ?></span>
+                            <span class="w-filters__label"><?= $escape((string)($opt['label'] ?? '')) ?></span>
                             <span class="w-filters__count"><?= (int)$opt['count'] ?></span>
                         </a>
                     </li>
@@ -209,7 +209,7 @@ $visibleOptionLimit = 6;
                                     aria-current="<?= !empty($opt['selected']) ? 'true' : 'false' ?>"
                                 >
                                     <span class="w-filters__check" aria-hidden="true"></span>
-                                    <span class="w-filters__label"><?= $escape(__($opt['label'])) ?></span>
+                                    <span class="w-filters__label"><?= $escape((string)($opt['label'] ?? '')) ?></span>
                                     <span class="w-filters__count"><?= (int)$opt['count'] ?></span>
                                 </a>
                             </li>

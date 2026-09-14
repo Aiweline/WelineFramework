@@ -1,5 +1,7 @@
 # Weline 统一知识库与 MCP 协议
 
+> **2026-09-14 约定更新**：工程任务在 MCP 已挂载/可挂载时必须 `prepare_project` 并遵守 `hard_constraints`；编码仍用宿主原生编辑。MCP 未挂载时以仓库文档为准。下文历史工具清单仅作实现参考。
+
 本文定义 Weline 项目对 Codex、Cursor 及其他本地 AI 客户端公开的唯一知识入口。实现位于 `app/code/Weline/Ai/Mcp`，协议版本随内置 MCP `0.13.x` 维护。
 
 ## 知识来源
@@ -39,7 +41,7 @@ prepare_project(repository, client_session_id)
 
 `token_usage.estimated` 以整个序列化 `tools/call` 结果的 Unicode 字符数除以 4 向上取整，包含 JSON、工作流、会话与回执，不是模型计费 tokenizer 结果。默认优先保留有用片段并在总预算内裁减指导内容；若预算低于必要协议开销，返回真实估算及 `budget_exceeded=true`，该字段不阻断执行。完整编辑符号不走指导片段裁剪。
 
-MCP 默认以 `structuredContent` 承载完整正文，`content` 只提供简短回执/摘要。旧客户端确实需要正文镜像时，可显式配置 `WELINE_MCP_RESPONSE_FORMAT=legacy_mirror`。默认 `get_edit_bundle` 只发送 `exact_regions`，省去与它完全相同的 `regions` 别名。
+MCP 默认以 `structuredContent` 承载完整正文，`content` 只提供简短回执/摘要。旧客户端确实需要正文镜像时，可显式配置 `WELINE_MCP_RESPONSE_FORMAT=legacy_mirror`。默认 （历史编辑包工具） 只发送 `exact_regions`，省去与它完全相同的 `regions` 别名。
 
 指定符号的编辑上下文从索引中的完整文件内容提取；预算允许时返回完整符号，`content_complete=true`。不足时明确 `truncated`、完整符号范围及所需预算，并返回上下文不足状态；不能根据截断片段重建整个函数。`expected_digest` 保护整个符号版本，不能替代完整内容或行为验收。
 
@@ -53,13 +55,7 @@ Agent 用时先 `resolve_skill(task)` 发现，再 `get_skill(skill_id)` 取正�
 
 ## 临时决定
 
-`set_session_directives` 保存用户对当前任务的临时决定：
-
-- 只存在当前 MCP 进程内；
-- 按项目与客户端会话隔离；
-- 不写仓库、SQLite 长期知识、日志或文档；
-- 拒绝凭据、Token、Cookie、私钥和密码形态的内容；
-- 不会自动晋升为长期规则。
+任务临时决定记在会话笔记或宿主对话上下文。
 
 需要长期保留的决定必须由维护者明确写入归属模块文档并接受正常审查。
 
@@ -68,20 +64,19 @@ Agent 用时先 `resolve_skill(task)` 发现，再 `get_skill(skill_id)` 取正�
 - 每次受保护工具调用仍检查分支、模块和必备文档；已准备会话在 `index.refresh_interval` 内复用全量发现结果，默认 60 秒。明确文件/目录仅定向刷新；必要文档的内容变更即时重索引。没有指定目标的新增源码由周期发现更新。
 - 精确目标按内容 Hash 检查，同大小、同修改时间的外部改动也会进入索引；指定目录的发现不得扩大到整个项目。
 - 外部删除必要文档会立即使 readiness 失效并返回 `PROJECT_NEEDS_REPAIR`。
-- MCP 的 `apply_compact_edit` 在文件锁内校验 Hash、应用替换、运行固定验证并重索引；验证失败自动回滚。
+- 编码默认宿主原生编辑；MCP 只刷新索引与检索。
 - 同一 readiness 句柄可在内容仍完整时刷新绑定的 revision/Hash；项目或会话身份不能变更。
-- 默认索引与编辑容量均为 1 MiB；启用编辑时，旧配置的有效索引容量至少覆盖允许编辑的容量。写后和回滚后核对实际索引内容 Hash；缺失或旧记录保持索引待完成状态，不能将 oversized/未覆盖误报为 completed。
+- 默认索引容量 1 MiB。
 
-## Deploy 只读桥接
+## Deploy（非 MCP）
 
-`resolve_deploy_plan` 要求有效 readiness，并且只会以 argv 方式调用项目公开 CLI：
+部署计划请直接调用项目公开 CLI：
 
 ```text
 php bin/w deploy:plan --json ...
 ```
 
-MCP 不加载 `Weline\Deploy\Service` 类、不连接发布数据库、不接受执行授权参数。`local` 返回 `not_applicable`；预发/生产在配置缺失时返回顺序问题，只有明确的 `commit` 或 `tag` 才能生成 release 计划。计划中 `release_executed=false` 和 `orchestrator_called=false` 是 MCP 的强制验证条件。
-
+MCP 不加载 `Weline\Deploy\Service` 类、不连接发布数据库、不接受执行授权参数。
 ## 退役 AiKnowledge 数据检查
 
 升级会移除重复模块的代码和后台入口，但不会自动删除应用数据库中可能存在的 `ai_knowledge_call_history`。运维人员只能在确认数据保留策略、数据库前缀和可恢复备份后单独处理：
@@ -98,9 +93,9 @@ DROP TABLE ai_knowledge_call_history;
 
 ## 客户端支持边界
 
-- Codex：由本地个人插件注册 STDIO MCP，生成的 `enabled_tools` 必须包含全部 22 个紧凑工具（含计划四工具及索引状态）。`ensure` 按当前运行宿主探测，不以机器上安装了 Cursor 代替 Codex 已连接。本地 `status=ready` 仅表示 STDIO 引导可用；脚本无法观测当前会话目录时，`correct` / `host_attached` 为 `null`，由本回合工具齐全及实际 `prepare_project` 成功补足。源码更新不自动重启整个宿主或重新安装健康插件。
-- 若完成 `ensure-project-guidance.php` 修复并至少重试一次后，当前会话仍缺工具或持续 `Transport closed`，记录 `HOST_MCP_NOT_ATTACHED`；已安装允许列表与当前已载入目录应分别检查。若工具已附加但容量门槛后仍不能物化精确目标（含 worker OOM / 修复后仍 `MCP_RUNTIME_STALE`），记录 `MCP_TARGET_UNAVAILABLE`。两种情况允许受限原生回退（仅精确已知路径），无需为重新附加而中断其他任务。
-- Cursor：**编码/工程任务**第一步运行 `php app/code/Weline/Ai/Mcp/scripts/ensure-project-guidance.php`；`host_mcp_install` 下发本会话安装步骤，bootstrap 不直接改写宿主 MCP 配置；通过后调用 `prepare_project`。**非编码任务禁止** ensure / `prepare_project`（见 `mcp_call_scope`）。
-- 其他 AI：仅当支持本地 STDIO MCP、能稳定传递会话 ID 并遵守 readiness 状态机时受支持。
+- Codex：由本地个人插件注册 STDIO MCP，生成的 `enabled_tools` 须覆盖**索引/技能面**（`prepare_project`、`resolve_task_context`、`search_project_knowledge`、`get_indexed_document`、`resolve_skill`、`get_skill`、`project_index_status`、`health` 等）。`ensure` 按当前运行宿主探测，不以机器上安装了 Cursor 代替 Codex 已连接。本地 `status=ready` 仅表示 STDIO 引导可用；脚本无法观测当前会话目录时，`correct` / `host_attached` 为 `null`，由本回合工具齐全及实际 `prepare_project` 成功补足。源码更新不自动重启整个宿主或重新安装健康插件。
+- 若完成 `ensure-project-guidance.php` 修复并至少重试一次后，当前会话仍缺工具或持续 `Transport closed`，可继续用宿主原生读文档与编辑开发；MCP 恢复后再按需检索。无需为重新附加而中断其他任务。
+- Cursor：工程任务运行 `php app/code/Weline/Ai/Mcp/scripts/ensure-project-guidance.php`（写出冷启动 `.mdc`）；`host_mcp_install` 下发本会话安装步骤，bootstrap 不直接改写宿主 MCP 配置；通过后**必须**调用 `prepare_project` 并遵守 `hard_constraints`。**编码仍用原生编辑**；非编码任务通常跳过 ensure / `prepare_project`（见 `mcp_call_scope`）。
+- 其他 AI：仅当支持本地 STDIO MCP、能稳定传递会话 ID 时，可作为知识面受支持。
 
-客户端启动 MCP 不等于项目已经 ready；标准路径只有 `prepare_project.status=ready` 才允许进入开发。框架硬约束由 MCP 编译为 `hard-constraints.v1`（`agent_guidance.hard_constraints` + server `instructions`），权威文档为 `AI硬规则索引.md`；宿主引导与 `session_startup_notices` 只指路。受限原生回退不是 readiness 替代品：条件与范围见 `hard_constraints.mcp_operational`；`blocked` 状态不可回退，MCP 恢复后必须重新进入标准路径。
+`prepare_project.status=ready` 表示索引/规则检索就绪。工程任务在 MCP 可挂载时**必须** `prepare_project`；MCP 挂不上时以仓库文档为准继续原生开发。框架硬约束由 MCP 编译为 `hard-constraints.v1`（`agent_guidance.hard_constraints` + server `instructions`），权威文档为 `AI硬规则索引.md`；宿主引导与 `session_startup_notices` 只指路。

@@ -157,7 +157,10 @@ final class ShippingConfigScopeService
     }
 
     /**
-     * 最近一层「有启用配送航线」的配置；都没有则回退 website（可空）。
+     * 最近一层「有启用配送航线」的配置；请求链都没有时回退 website:0 种子层。
+     *
+     * 系统种子航线默认落在 website:0；店面 website_id>0 且未复制航线时必须能吃到该层，
+     * 否则结账/Express 会得到空配送并误报 shipping_profile_conflict。
      *
      * @param array{website_id?:int,store_id?:int,channel_id?:int}|null $context
      * @return array{scope_type:string,scope_id:int}
@@ -165,16 +168,22 @@ final class ShippingConfigScopeService
     public function resolveNearestServiceLayer(?array $context = null): array
     {
         $chain = $this->quoteLayerChain($context);
+        $seed = ['scope_type' => self::SCOPE_WEBSITE, 'scope_id' => 0];
+        $last = $chain[array_key_last($chain)] ?? null;
+        if (
+            $last === null
+            || (string)($last['scope_type'] ?? '') !== self::SCOPE_WEBSITE
+            || (int)($last['scope_id'] ?? -1) !== 0
+        ) {
+            $chain[] = $seed;
+        }
         foreach ($chain as $layer) {
             if ($this->countActiveServices($layer['scope_type'], $layer['scope_id']) > 0) {
                 return $layer;
             }
         }
 
-        return $chain[array_key_last($chain)] ?? [
-            'scope_type' => self::SCOPE_WEBSITE,
-            'scope_id' => 0,
-        ];
+        return $seed;
     }
 
     public function countActiveServices(string $scopeType, int $scopeId): int

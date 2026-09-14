@@ -1,0 +1,168 @@
+<?php
+/**
+ * Product-owned "you may like" for the PDP personalization slot.
+ *
+ * @var \Weline\Framework\View\Template $this
+ *
+ * @widget.code {you-may-like}
+ * @widget.name {猜你喜欢}
+ * @widget.description {基于当前商品分类亲合与目录报价的真实推荐}
+ * @widget.type {product}
+ * @widget.area {frontend}
+ * @widget.position {["content"]}
+ * @widget.page_layouts {["product"]}
+ * @widget.slot {product-you-may-like}
+ * @widget.supports {["layout-product-you-may-like","layout-product-related-products","you-may-like"]}
+ * @widget.default_injections {[{ "layout_type":"product", "layout_option":"default", "slot":"product-you-may-like", "area":"content", "sort_order":0, "required":true, "reason":"商品详情默认猜你喜欢槽", "config":{"title":"猜你喜欢","limit":8,"columns":"4","layout":"grid"} }]}
+ *
+ * @param title {default="猜你喜欢",type="string",label="标题"}
+ * @param limit {default=8,type="number",label="显示数量"}
+ * @param columns {default="4",type="select",label="每行列数",options={2:"2列",3:"3列",4:"4列",5:"5列"}}
+ * @param layout {default="grid",type="select",label="布局方式",options={grid:"网格",carousel:"轮播"}}
+ * @param show_wishlist {default=true,type="bool",label="显示收藏"}
+ * @param show_compare {default=true,type="bool",label="显示对比"}
+ * @param show_quickview {default=true,type="bool",label="显示快速查看"}
+ */
+
+use Weline\Framework\Http\Url;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Product\Service\StorefrontProductWidgetCatalog;
+use Weline\Theme\Helper\ProductCardShopperActionParams;
+use Weline\Theme\Helper\WidgetI18n;
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forWidget('you-may-like');
+$shopperActions = ProductCardShopperActionParams::fromTemplate($this);
+$wc = $scope->cssClass;
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+$isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
+$titleSource = trim((string)($this->getData('title') ?? '')) ?: '猜你喜欢';
+if (preg_match('/^Weline_[A-Za-z0-9_]+$/', $titleSource)) {
+    $titleSource = '猜你喜欢';
+}
+// 标题+副标题均跟店面 locale：英文站不再残留中文副标（此前 en_US CSV 恒等映射导致「英文下有中文」）。
+$widgetTitle = WidgetI18n::label($titleSource, '猜你喜欢');
+$widgetSubtitle = WidgetI18n::label('根据当前商品为你推荐', '根据当前商品为你推荐');
+$limit = max(1, min(24, (int)($this->getData('limit') ?? 8)));
+$columns = (string)($this->getData('columns') ?? '4');
+$layout = (string)($this->getData('layout') ?? 'grid');
+if (!in_array($columns, ['2', '3', '4', '5'], true)) {
+    $columns = '4';
+}
+if (!in_array($layout, ['grid', 'carousel'], true)) {
+    $layout = 'grid';
+}
+
+$excludeProductId = (int)($this->getData('product_id') ?? 0);
+$offer = $this->getData('storefront_offer');
+if ($excludeProductId <= 0 && is_array($offer)) {
+    $excludeProductId = (int)($offer['product_id'] ?? 0);
+}
+$currentProduct = $this->getData('product');
+if ($excludeProductId <= 0 && is_array($currentProduct)) {
+    $excludeProductId = (int)($currentProduct['product_id'] ?? $currentProduct['entity_id'] ?? 0);
+} elseif ($excludeProductId <= 0 && is_object($currentProduct) && method_exists($currentProduct, 'getId')) {
+    $excludeProductId = (int)$currentProduct->getId();
+}
+if ($excludeProductId <= 0) {
+    try {
+        $resolvedOffer = \Weline\Product\Helper\StorefrontOfferResolver::resolve($this);
+        $excludeProductId = max(0, (int)($resolvedOffer['product_id'] ?? 0));
+    } catch (\Throwable) {
+        $excludeProductId = 0;
+    }
+}
+
+$products = [];
+try {
+    $editorPreview = $isPreviewMode || (bool)($this->getData('editor_mode') ?? false);
+    if ($editorPreview && $excludeProductId <= 0) {
+        $products = \Weline\Theme\Helper\ThemeDemoCatalog::products($limit, 33);
+    } else {
+        $products = ObjectManager::getInstance(StorefrontProductWidgetCatalog::class)
+            ->youMayLikeCards($excludeProductId, $limit);
+    }
+} catch (\Throwable) {
+    $products = [];
+}
+
+if ($products === [] && ($isPreviewMode || (bool)($this->getData('editor_mode') ?? false))) {
+    $products = \Weline\Theme\Helper\ThemeDemoCatalog::products($limit, 33);
+}
+
+foreach ($products as &$product) {
+    $productId = (int)($product['product_id'] ?? $product['id'] ?? 0);
+    $product['id'] = $productId;
+    $route = trim((string)($product['url'] ?? ''));
+    if (str_starts_with($route, 'http://') || str_starts_with($route, 'https://') || str_starts_with($route, '//')) {
+        $product['url'] = $route;
+    } else {
+        $path = '/' . ltrim($route, '/');
+        $prefix = rtrim(Url::getPrefix(), '/');
+        $hasCurrentPrefix = $prefix !== ''
+            && ($path === $prefix || str_starts_with($path, $prefix . '/'));
+        $product['url'] = $hasCurrentPrefix
+            ? $path
+            : ($prefix !== '' ? $prefix : '') . $path;
+    }
+}
+unset($product);
+
+$cardShowWishlist = !empty($shopperActions['show_wishlist']);
+$cardShowCompare = !empty($shopperActions['show_compare']);
+$cardShowQuickview = !empty($shopperActions['show_quickview']);
+
+if ($products === []) {
+    ?>
+<section class="<?= $esc($wc) ?> weline-product-you-may-like<?= $isPreviewMode ? ' is-preview' : '' ?> is-empty"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>"
+         data-testid="you-may-like-empty"
+         hidden
+         aria-hidden="true"></section>
+    <?php
+    return;
+}
+?>
+<link rel="stylesheet"
+      href="@static(Weline_Product::css/widgets/you-may-like.css)?v=20260914-subtitle-i18n2"
+      data-no-extract="true">
+
+<section class="<?= $esc($wc) ?> weline-product-you-may-like<?= $isPreviewMode ? ' is-preview' : '' ?>"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-testid="storefront-you-may-like"
+         data-weline-load="youMayLike"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>"
+         data-layout="<?= $esc($layout) ?>"
+         data-columns="<?= $esc($columns) ?>">
+    <header class="wym-header">
+        <h2 class="wym-title"><?= $esc($widgetTitle) ?></h2>
+        <p class="wym-subtitle"><?= $esc($widgetSubtitle) ?></p>
+    </header>
+
+    <div class="wym-stage" data-wym-stage>
+        <?php if ($layout === 'carousel'): ?>
+            <button class="wym-nav wym-nav--prev" type="button" data-wym-prev aria-label="<?= $esc((string)__('上一组')) ?>">
+                <span aria-hidden="true">‹</span>
+            </button>
+        <?php endif; ?>
+
+        <div class="wym-viewport" data-wym-viewport>
+            <div class="wym-track columns-<?= $esc($columns) ?> layout-<?= $esc($layout) ?>" data-wym-track>
+                <?php foreach ($products as $product): ?>
+                    <w:product:card product="product" show-price="true" show-rating="false" show-add-to-cart="true" show-wishlist="cardShowWishlist" show-compare="cardShowCompare" show-quickview="cardShowQuickview" show-labels="true" show-sku="true" density="standard" class="wpc-listing-card wym-card" wishlist-pixel="true" />
+                <?php endforeach; ?>
+            </div>
+        </div>
+
+        <?php if ($layout === 'carousel'): ?>
+            <button class="wym-nav wym-nav--next" type="button" data-wym-next aria-label="<?= $esc((string)__('下一组')) ?>">
+                <span aria-hidden="true">›</span>
+            </button>
+        <?php endif; ?>
+    </div>
+</section>
+
+<?php // youMayLike：由部件根 data-weline-load 声明，禁止 @static 直引 ?>

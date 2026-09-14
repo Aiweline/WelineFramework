@@ -327,22 +327,30 @@ final class SharedStateClientTest extends TestCase
 
     private function withRequestTrace(bool $enabled, callable $callback): void
     {
-        $previousTrace = Env::get('wls.debug.request_trace', false);
         $previousCap = Env::get('wls.debug.request_trace_max_spans', 4096);
-        Env::getInstance()->applyRuntimeConfig(['wls' => ['debug' => ['request_trace' => $enabled, 'request_trace_max_spans' => 64]]]);
+        $wasArmed = RequestLifecycleTrace::isPanelTraceArmed();
+        Env::getInstance()->applyRuntimeConfig(['wls' => ['debug' => ['request_trace_max_spans' => 64]]]);
         Runtime::setMode(RuntimeInterface::MODE_WLS);
         Context::enter(new Context($enabled ? ['runtime' => ['request_context' => ['initialized' => true, 'request_id' => 'rpc-unit-request']]] : []));
         if ($enabled) {
             RequestContext::setId('rpc-unit-request');
+            RequestLifecycleTrace::installPanelTraceOn();
+        } else {
+            RequestLifecycleTrace::clearPanelTrace();
         }
         RequestLifecycleTrace::reset();
         try {
             $callback();
         } finally {
             RequestLifecycleTrace::reset();
+            if ($wasArmed) {
+                RequestLifecycleTrace::installPanelTraceOn();
+            } else {
+                RequestLifecycleTrace::clearPanelTrace();
+            }
             Context::leave();
             Runtime::resetModeCache();
-            Env::getInstance()->applyRuntimeConfig(['wls' => ['debug' => ['request_trace' => $previousTrace, 'request_trace_max_spans' => $previousCap]]]);
+            Env::getInstance()->applyRuntimeConfig(['wls' => ['debug' => ['request_trace_max_spans' => $previousCap]]]);
         }
     }
 }

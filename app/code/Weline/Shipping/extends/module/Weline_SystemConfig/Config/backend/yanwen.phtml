@@ -1,0 +1,71 @@
+<?php
+/**
+ * @meta.title {default="燕文物流",description="燕文配送 Provider 配置"}
+ * @meta.description {default="Yanwen Open Platform：询价、打单、轨迹。"}
+ * @config.area {backend}
+ * @config.sort {80}
+ * @config.acl {Weline_Shipping::shipping_management}
+ */
+?>
+
+<w:config:group code="yanwen" label="燕文物流" description="内置燕文配送 Provider。未启用或缺密钥时不影响本地费用模板承运商。" sort="20">
+    <w:config:field
+        key="shipping/carrier/yanwen/enabled"
+        label="启用燕文"
+        description="开启后结账可对燕文承运商实时询价（需密钥）。"
+        type="switch"
+        value-type="bool"
+        default="0"
+        scope="global,website,store" />
+
+    <w:config:field
+        key="shipping/carrier/yanwen/user_id"
+        label="客户号 user_id"
+        description="燕文客户中心发货账号客户号。"
+        type="text"
+        value-type="string"
+        default=""
+        scope="global,website,store"
+        validation="max:64" />
+
+    <w:config:field
+        key="shipping/carrier/yanwen/api_token"
+        label="API Token"
+        description="燕文客户中心发货账号密钥。"
+        type="password"
+        value-type="string"
+        default=""
+        scope="global,website,store"
+        validation="max:256" />
+
+    <w:config:field
+        key="shipping/carrier/yanwen/environment"
+        label="环境"
+        description="sandbox=测试（open-fat），live=生产。"
+        type="select"
+        value-type="string"
+        default="sandbox"
+        scope="global,website,store"
+        options="sandbox:Sandbox,live:Live"
+        validation="required|in_options" />
+
+    <w:config:field
+        key="shipping/carrier/yanwen/default_city_id"
+        label="默认出发仓 cityId"
+        description="运价试算必填的出发仓 ID（小包专线交货仓 / 海外派交货地）。"
+        type="text"
+        value-type="string"
+        default=""
+        scope="global,website,store"
+        validation="max:32" />
+
+    <w:config:field
+        key="shipping/carrier/yanwen/sort_order"
+        label="排序"
+        description="Provider 展示排序，数字越小越靠前。"
+        type="number"
+        value-type="int"
+        default="50"
+        scope="global,website,store"
+        validation="min:0|max:9999" />
+</w:config:group>

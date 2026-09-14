@@ -32,6 +32,12 @@ final class ManagedNginxConfigWriter
         ?NginxConfigPublication $publication = null,
     ) {
         $this->paths = $paths ?? new ManagedNginxPaths();
+        // Publication requires a real, non-linked conf directory. Create runtime
+        // layout before constructing the default publication (status/doctor/fromEnv
+        // all hit this path before write() can call ensureRuntimeDirectories).
+        if ($publication === null) {
+            $this->paths->ensureRuntimeDirectories();
+        }
         $this->publication = $publication ?? new NginxConfigPublication(
             $this->paths->confFile(),
             'managed nginx',

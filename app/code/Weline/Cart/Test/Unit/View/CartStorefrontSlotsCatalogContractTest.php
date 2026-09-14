@@ -48,6 +48,7 @@ final class CartStorefrontSlotsCatalogContractTest extends TestCase
         self::assertStringContainsString('b2b-checkout-credit', $template);
         self::assertStringContainsString('data-cart-discount-breakdown', $template);
         self::assertStringContainsString('data-cart-goods-subtotal', $template);
+        self::assertStringContainsString('data-cart-goods-subtotal-major', $template);
         self::assertStringContainsString('data-cart-discount-lines', $template);
         self::assertStringContainsString('weline-cart-shell__summary-row--payable', $template);
         self::assertStringContainsString('discount_preview', $template);

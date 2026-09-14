@@ -1,9 +1,14 @@
-﻿后台通知邮件（默认）,后台通知邮件（默认）
+﻿标题,标题
+正文,正文
+类型标签,类型标签
+主题代码,主题代码
+后台通知邮件（默认）,后台通知邮件（默认）
 通知中心邮件渠道默认回退；无主题专用绑定时使用,通知中心邮件渠道默认回退；无主题专用绑定时使用
 系统告警邮件,系统告警邮件
 "通知主题 system_alert 的邮件渠道","通知主题 system_alert 的邮件渠道"
 安全告警邮件,安全告警邮件
 "通知主题 security_alert 的邮件渠道","通知主题 security_alert 的邮件渠道"
+"通知主题 %{1} 的邮件渠道","通知主题 %{1} 的邮件渠道"
 系统信息,"System Information"
 系统,System
 一般系统信息通知,"General system information notifications"
@@ -66,11 +71,10 @@ Telegram,Telegram
 签名密钥,"Signing Key"
 "加签密钥（SEC 开头）","Signing key (starts with SEC)"
 邮件,Mail
-邮件渠道测试,"Email channel test"
-这是一条测试消息，如果您收到此邮件，说明邮件渠道配置正确。,"This is a test message. If you receive this email, the email channel configuration is correct."
 收件邮箱,"Recipient Email"
 发件人（可选）,"Sender (optional)"
 使用默认,"Use default"
+邮件渠道覆盖（可选）,邮件渠道覆盖（可选）
 飞书,Feishu
 飞书渠道测试,"Feishu Channel Test"
 这是一条测试消息，如果您收到此消息，说明飞书渠道配置正确。,"This is a test message. If you receive this message, the Feishu channel configuration is correct."
@@ -568,6 +572,9 @@ DI编译失败：%{1},"DI compilation failed: %{1}"
 模板缓存清理完成！,"Template cache cleanup complete!"
 模板缓存清理失败：%{1},"Template cache cleanup failed: %{1}"
 菜单收集和系统更新完成！菜单已生效。,"Menu collection and system update complete! Menu is now active."
+"发件人 code（可选）","发件人 code（可选）"
+邮件渠道测试,"Email channel test"
+这是一条测试消息，如果您收到此邮件，说明邮件渠道配置正确。,"This is a test message. If you receive this email, the email channel configuration is correct."
 后台通知邮件,后台通知邮件
 通知中心邮件渠道发信,通知中心邮件渠道发信
 消息主题,"Message Subject"

@@ -31,31 +31,60 @@ final class HelpPayQueryProvider implements QueryProviderInterface
             'operations' => [
                 [
                     'name' => 'createHelpPay',
+                    'frontend' => true,
+                    'external' => true,
+                    'mode' => 'write',
                     'description' => '创建帮我付短链（需地址确认与规则勾选）',
                     'params' => [
                         ['name' => 'amount_minor', 'type' => 'int', 'required' => true, 'description' => '金额 minor'],
                         ['name' => 'shipping_address', 'type' => 'array', 'required' => true, 'description' => '收货快照'],
                         ['name' => 'address_confirmed', 'type' => 'bool', 'required' => true, 'description' => '地址已确认'],
                         ['name' => 'rules_accepted', 'type' => 'bool', 'required' => true, 'description' => '已阅读规则'],
+                        ['name' => 'currency_code', 'type' => 'string', 'required' => false, 'description' => '币种'],
+                        ['name' => 'cart_type', 'type' => 'string', 'required' => false, 'description' => 'toc|tob；一期仅 toc'],
+                        ['name' => 'line_summary', 'type' => 'array', 'required' => false, 'description' => '行摘要'],
+                        ['name' => 'public_origin', 'type' => 'string', 'required' => false, 'description' => '公网 origin'],
+                        ['name' => 'ttl_seconds', 'type' => 'int', 'required' => false, 'description' => 'TTL 秒'],
                     ],
                 ],
                 [
                     'name' => 'createSelectionShare',
+                    'frontend' => true,
+                    'external' => true,
+                    'mode' => 'write',
                     'description' => '创建纯分享短链',
                     'params' => [
                         ['name' => 'selection_snapshot', 'type' => 'array', 'required' => true, 'description' => '规格快照'],
+                        ['name' => 'cart_type', 'type' => 'string', 'required' => false, 'description' => 'toc|tob；一期仅 toc'],
+                        ['name' => 'public_origin', 'type' => 'string', 'required' => false, 'description' => '公网 origin'],
+                        ['name' => 'ttl_seconds', 'type' => 'int', 'required' => false, 'description' => 'TTL 秒'],
                     ],
                 ],
                 [
                     'name' => 'createQuickPay',
+                    'frontend' => true,
+                    'external' => true,
+                    'mode' => 'write',
                     'description' => '创建本人快捷购买短链',
                     'params' => [
-                        ['name' => 'amount_minor', 'type' => 'int', 'required' => true, 'description' => '金额 minor'],
+                        ['name' => 'amount_minor', 'type' => 'int', 'required' => true, 'description' => '应付总额 minor（可含运费）'],
                         ['name' => 'shipping_address', 'type' => 'array', 'required' => true, 'description' => '收货地址'],
+                        ['name' => 'currency_code', 'type' => 'string', 'required' => false, 'description' => '币种'],
+                        ['name' => 'cart_type', 'type' => 'string', 'required' => false, 'description' => 'toc|tob；一期仅 toc'],
+                        ['name' => 'service_code', 'type' => 'string', 'required' => false, 'description' => '所选配送 service_code'],
+                        ['name' => 'service_label', 'type' => 'string', 'required' => false, 'description' => '配送可读名'],
+                        ['name' => 'goods_amount_minor', 'type' => 'int', 'required' => false, 'description' => '商品 minor'],
+                        ['name' => 'shipping_amount_minor', 'type' => 'int', 'required' => false, 'description' => '运费 minor'],
+                        ['name' => 'line_summary', 'type' => 'array', 'required' => false, 'description' => '行摘要'],
+                        ['name' => 'public_origin', 'type' => 'string', 'required' => false, 'description' => '公网 origin'],
+                        ['name' => 'ttl_seconds', 'type' => 'int', 'required' => false, 'description' => 'TTL 秒'],
                     ],
                 ],
                 [
                     'name' => 'qrPng',
+                    'frontend' => true,
+                    'external' => true,
+                    'mode' => 'read',
                     'description' => '按 URL 生成二维码 data URI',
                     'params' => [
                         ['name' => 'url', 'type' => 'string', 'required' => true, 'description' => '绝对 http(s) URL'],
@@ -63,6 +92,9 @@ final class HelpPayQueryProvider implements QueryProviderInterface
                 ],
                 [
                     'name' => 'revoke',
+                    'frontend' => true,
+                    'external' => true,
+                    'mode' => 'write',
                     'description' => '撤销短链',
                     'params' => [
                         ['name' => 'token', 'type' => 'string', 'required' => true, 'description' => 'token'],
@@ -71,6 +103,9 @@ final class HelpPayQueryProvider implements QueryProviderInterface
                 ],
                 [
                     'name' => 'resolveHelpPay',
+                    'frontend' => true,
+                    'external' => true,
+                    'mode' => 'read',
                     'description' => '代付人解析（无 shipping）',
                     'params' => [
                         ['name' => 'token', 'type' => 'string', 'required' => true, 'description' => 'token'],

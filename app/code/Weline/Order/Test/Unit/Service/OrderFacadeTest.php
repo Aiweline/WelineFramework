@@ -123,6 +123,23 @@ final class OrderFacadeTest extends TestCase
         self::assertSame(0, $facade->get($result->orderUuids[0])->websiteId);
     }
 
+    public function testCreatePersistsPaymentMethodFromCommandOptions(): void
+    {
+        $facade = OrderFacade::forTesting();
+        $command = new CreateCheckoutGroupCommand(
+            idempotencyKey: 'pay-method-persist',
+            requestHash: hash('sha256', 'pay-method-persist'),
+            websiteId: 0,
+            storeId: 1,
+            currency: 'CNY',
+            lines: [['name' => 'Pay Item', 'qty_minor' => 1, 'unit_price_minor' => 100]],
+            options: ['payment_method' => 'PayPal'],
+        );
+        $result = $facade->create($command);
+        $group = $facade->getGroup($result->checkoutGroupUuid);
+        self::assertSame('paypal', (string)($group['orders'][0]['payment_method'] ?? ''));
+    }
+
     public function testWebsiteZeroIsValidScope(): void
     {
         $facade = OrderFacade::forTesting();

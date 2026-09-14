@@ -44,12 +44,20 @@ final class DevRelayTemplatePathContractTest extends TestCase
         $indexHtml = (string) file_get_contents($index);
         self::assertStringContainsString('payment-dev-relay', $indexHtml);
         self::assertStringContainsString('payment-dev-relay-management', $indexHtml);
+        self::assertStringContainsString('payment-dev-relay-guide', $indexHtml);
+        self::assertStringContainsString('何时开启', $indexHtml);
+        self::assertStringContainsString('支付怎么用', $indexHtml);
+        self::assertStringContainsString('万能货源怎么用', $indexHtml);
         self::assertStringContainsString('dev-relay-save-settings', $indexHtml);
         self::assertStringContainsString('class="w-card"', $indexHtml);
         self::assertStringContainsString('class="w-button"', $indexHtml);
         self::assertStringContainsString('class="w-switch"', $indexHtml);
         self::assertStringNotContainsString('class="card payment-dev-relay"', $indexHtml);
         self::assertStringNotContainsString('btn btn-success', $indexHtml);
-        self::assertStringContainsString('Weline_Payment::js/backend/dev-relay.js', $indexHtml);
+        self::assertStringContainsString('dev-relay.js', $indexHtml);
+        self::assertMatchesRegularExpression(
+            '#/Weline/Payment/view/statics/js/backend/dev-relay\.js\?v=#',
+            $indexHtml
+        );
     }
 }

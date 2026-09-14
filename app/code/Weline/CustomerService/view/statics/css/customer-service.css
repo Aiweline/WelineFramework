@@ -35,12 +35,17 @@
 
     .customer-service-widget {
         position: fixed;
-        bottom: calc(var(--weline-space-5) + var(--weline-safe-area-bottom));
+        /* Lift above PDP sticky purchase when Product sets --weline-product-sticky-purchase-clearance. */
+        bottom: calc(
+            var(--weline-space-5)
+            + var(--weline-safe-area-bottom)
+            + var(--weline-product-sticky-purchase-clearance, 0px)
+        );
         right: calc(var(--weline-space-5) + var(--weline-safe-area-right));
         z-index: var(--weline-z-overlay);
         font-family: var(--weline-font-sans);
         color: var(--cs-text);
-        transition: opacity var(--weline-motion-normal) ease, visibility var(--weline-motion-normal) ease, transform var(--weline-motion-normal) ease;
+        transition: opacity var(--weline-motion-normal) ease, visibility var(--weline-motion-normal) ease, transform var(--weline-motion-normal) ease, bottom var(--weline-motion-normal) ease;
     }
 
     .customer-service-widget.customer-service-widget--mini-cart-open {
@@ -1168,7 +1173,11 @@
 
     @media (max-width: 720px) {
         .customer-service-widget {
-            bottom: calc(var(--weline-space-3, 0.75rem) + var(--weline-safe-area-bottom, env(safe-area-inset-bottom, 0px)));
+            bottom: calc(
+                var(--weline-space-3, 0.75rem)
+                + var(--weline-safe-area-bottom, env(safe-area-inset-bottom, 0px))
+                + var(--weline-product-sticky-purchase-clearance, 0px)
+            );
             right: calc(var(--weline-space-3, 0.75rem) + var(--weline-safe-area-right, env(safe-area-inset-right, 0px)));
         }
 

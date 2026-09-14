@@ -91,6 +91,19 @@ class LayoutSlotRenderer implements ObserverInterface
         // 鑾峰彇浜嬩欢鏁版嵁锛坒etch_file_after 浜嬩欢浣跨敤 content 鍜?fileName锛?
         $html = (string)$event->getData('content');
         $template = (string)$event->getData('fileName');
+        $memoryProbe = static function (string $phase, mixed $content = null): void {
+            if ((string)\getenv('WELINE_DIAG_MEMORY') !== '1') {
+                return;
+            }
+            \error_log('[MemoryProbe] ' . \json_encode([
+                'component' => 'LayoutSlotRenderer',
+                'phase' => $phase,
+                'content_bytes' => \is_string($content) ? \strlen($content) : null,
+                'usage' => \memory_get_usage(true),
+                'peak' => \memory_get_peak_usage(true),
+            ], \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE));
+        };
+        $memoryProbe('start', $html);
         
         // 濡傛灉 HTML 涓虹┖锛岀洿鎺ヨ繑鍥?
         if (empty($html)) {
@@ -202,6 +215,7 @@ class LayoutSlotRenderer implements ObserverInterface
         // 澶勭悊鎻掓Ы鏇挎崲
         $accountSidebarBefore = $this->htmlHasAccountSidebar($html);
         $processedHtml = $this->slotRenderer->processSlots($html, $themeId, $pageType, $status, $area);
+        $memoryProbe('after_process_slots', $processedHtml);
         $accountSidebarAfter = $this->htmlHasAccountSidebar($processedHtml);
         if ($this->isAccountHtml($html) || $this->isAccountHtml($processedHtml)) {
             RequestLifecycleTrace::recordSpan('theme::layoutSlotRenderer::accountHtml', 0.0, 'theme', null, [
@@ -277,6 +291,7 @@ class LayoutSlotRenderer implements ObserverInterface
         // 鏇存柊浜嬩欢鏁版嵁锛坒etch_file_after 浜嬩欢浣跨敤 content锛?
         $processedHtml = $this->slotRenderer->finalizePreviewWidgetHealth($processedHtml);
         $event->setData('content', $this->finalizeFrontendHtml($processedHtml, $area));
+        $memoryProbe('before_return', $event->getData('content'));
     }
 
     private function finalizeFrontendHtml(string $html, string $area): string

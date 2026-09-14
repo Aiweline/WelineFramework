@@ -88,6 +88,70 @@ class KeyBuilderStorefrontTest extends TestCase
         self::assertArrayHasKey('area', $dims);
     }
 
+    public function testEnvironmentOriginUsesCurrentContextInsteadOfStaleGlobals(): void
+    {
+        require_once BP . 'app/code/Weline/Framework/Common/functions.php';
+        $context = Context::current();
+        $context->set('input.host', 'shop.test:9555');
+        $context->set('input.scheme', 'https');
+        $context->set('route.website_url', 'https://shop.test:9555/');
+        $_SERVER['HTTP_HOST'] = 'shop.test:19655';
+        $_SERVER['REQUEST_SCHEME'] = 'http';
+        $_SERVER['WELINE_WEBSITE_URL'] = 'http://shop.test:19655/';
+
+        $request = (new \ReflectionClass(\Weline\Framework\Http\WlsRequest::class))->newInstanceWithoutConstructor();
+        foreach (['parsedHost' => 'shop.test:9555', 'parsedHttps' => true] as $name => $value) {
+            (new \ReflectionProperty($request, $name))->setValue($request, $value);
+        }
+        $environment = KeyBuilder::environmentContext();
+        self::assertSame($request->getBaseHost(), $environment['base_url']);
+        self::assertSame('https://shop.test:9555/', $environment['website_url']);
+        self::assertSame('shop.test:9555', $environment['host']);
+
+        \w_env_set('base_url', 'https://shop.test:9555/mounted/');
+        self::assertSame('https://shop.test:9555/mounted/', KeyBuilder::environmentContext()['base_url']);
+    }
+
+    public function testOnlyRenderedEnvironmentVariesWithRequestTransport(): void
+    {
+        require_once BP . 'app/code/Weline/Framework/Common/functions.php';
+        $_SERVER['HTTP_HOST'] = 'stale.test:19655';
+        $_SERVER['REQUEST_SCHEME'] = 'http';
+        $_SERVER['WELINE_WEBSITE_URL'] = 'http://stale.test:19655/';
+        $scopeKeys = [];
+        $environmentKeys = [];
+        foreach ([9555, 19655] as $port) {
+            Context::current()->set('input.host', 'shop.test:' . $port);
+            Context::current()->set('input.scheme', 'https');
+            Context::current()->set('route.website_url', 'https://shop.test:' . $port . '/');
+            $scopeKeys[] = KeyBuilder::applyDimensionFlags('category-data', true, true, true, true);
+            $environmentKeys[] = KeyBuilder::environmentHash(['surface' => 'header']);
+        }
+        self::assertSame($scopeKeys[0], $scopeKeys[1], 'Fixed scope metadata remains shareable across request origins.');
+        self::assertNotSame($environmentKeys[0], $environmentKeys[1], 'Rendered absolute links must follow the current request origin.');
+        RequestContext::setId('different-request-id');
+        Context::current()->set('input.uri', '/another-page?irrelevant=1');
+        self::assertSame($environmentKeys[1], KeyBuilder::environmentHash(['surface' => 'header']));
+    }
+
+    public function testEnvironmentOriginRetainsCliGlobalsFallbackWithoutContext(): void
+    {
+        require_once BP . 'app/code/Weline/Framework/Common/functions.php';
+        RequestContext::cleanup();
+        Context::leave();
+        $_SERVER['HTTP_HOST'] = 'cli.test:9555';
+        $_SERVER['REQUEST_SCHEME'] = 'https';
+        $_SERVER['WELINE_WEBSITE_URL'] = 'https://cli.test:9555/mounted/';
+        $environment = KeyBuilder::environmentContext([], [
+            'area' => false, 'area_route' => false, 'website' => false,
+            'lang' => false, 'lang_local' => false, 'currency' => false,
+        ]);
+        self::assertSame('cli.test:9555', $environment['host']);
+        self::assertSame('https://cli.test:9555', $environment['base_url']);
+        self::assertSame('https://cli.test:9555/mounted/', $environment['website_url']);
+        self::assertNull(Context::getCurrent(), 'Resolving CLI cache dimensions must not create a request context.');
+    }
+
     private function enterScope(
         string $website,
         string $store,

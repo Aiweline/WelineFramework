@@ -1,0 +1,1 @@
+Order status updated · {{var.order_number}}

@@ -146,14 +146,14 @@ final class ParserNamespaceGenerationTest extends TestCase
         self::assertSame(['Title' => 'Old title'], $load->invoke(null, 'en_US', ['Weline_NamespaceFixture']));
     }
 
-    public function testEvictingFullDictionaryAlsoDropsItsCompletenessMarker(): void
+    public function testEvictingModuleDictionaryAlsoDropsItsCompletenessMarker(): void
     {
         $load = new ReflectionMethod(Parser::class, 'loadGlobalDictionaryScopeWords');
-        $load->invoke(null, 'en_US', []);
+        $load->invoke(null, 'en_US', ['Weline_A']);
         (new ReflectionProperty(Parser::class, 'workerGlobalDictionaryLocaleWords'))->setValue(null, []);
         $load->invoke(null, 'en_US', ['Weline_A']);
         $load->invoke(null, 'en_US', ['Weline_A', 'Weline_B']);
-        self::assertSame([[], ['Weline_A'], ['Weline_B']], $this->provider->batchCalls);
+        self::assertSame([['Weline_A'], ['Weline_A'], ['Weline_B']], $this->provider->batchCalls);
     }
 
     private function nextRequest(): void
@@ -184,7 +184,10 @@ final class DictionaryNamespaceAuthorityFixture implements NamespaceGenerationIn
     public bool $unavailable = false;
     public function fingerprint(array $namespaces): string
     {
-        TestCase::assertSame(['global/i18n'], $namespaces);
+        TestCase::assertNotEmpty($namespaces);
+        foreach ($namespaces as $namespace) {
+            TestCase::assertContains($namespace, ['global/i18n/content', 'global/i18n/en_US', 'global/i18n/zh_Hans_CN']);
+        }
         ++$this->reads;
         if ($this->unavailable) { throw new \RuntimeException('Authority unavailable'); }
         return 'generation-' . $this->version;

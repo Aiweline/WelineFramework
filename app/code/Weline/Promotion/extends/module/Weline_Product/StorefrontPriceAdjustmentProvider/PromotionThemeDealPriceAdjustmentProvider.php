@@ -79,6 +79,7 @@ final class PromotionThemeDealPriceAdjustmentProvider implements StorefrontPrice
                 exclusiveGroup: StorefrontPriceAdjustment::GROUP_UNIT,
                 url: $url,
                 badge: $label,
+                frontendRoute: \Weline\Promotion\Service\PromotionActivityThemeService::storefrontPath($pageSlug),
             ),
         ];
     }
@@ -116,6 +117,7 @@ final class PromotionThemeDealPriceAdjustmentProvider implements StorefrontPrice
                 'theme_id' => $themeId,
                 'label' => $label,
                 'url' => trim((string)($deal['campaign_url'] ?? '')),
+                'frontend_route' => \Weline\Promotion\Service\PromotionActivityThemeService::storefrontPath((string)($deal['page_slug'] ?? '')),
                 'deal_discount_type' => (string)($deal['deal_discount_type'] ?? ''),
                 'deal_discount_value' => (float)($deal['deal_discount_value'] ?? 0),
                 'page_slug' => (string)($deal['page_slug'] ?? ''),

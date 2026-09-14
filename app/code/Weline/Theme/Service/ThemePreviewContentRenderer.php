@@ -38,7 +38,7 @@ class ThemePreviewContentRenderer
     private const CONTENT_SLOT_PRIORITY = [
         ThemeLayout::PAGE_TYPE_HOME => ['content', 'main-content', 'homepage-promo', 'homepage-brands', 'homepage-benefits'],
         ThemeLayout::PAGE_TYPE_PRODUCT_LIST => ['list-recommendations', 'content'],
-        ThemeLayout::PAGE_TYPE_PRODUCT => ['product-main', 'product-reviews', 'product-related', 'product-related-products', 'product-sidebar', 'content'],
+        ThemeLayout::PAGE_TYPE_PRODUCT => ['product-main', 'product-reviews', 'product-related', 'product-related-products', 'product-you-may-like', 'product-recently-viewed', 'product-sidebar', 'content'],
         ThemeLayout::PAGE_TYPE_CATEGORY => ['category-related', 'content'],
         ThemeLayout::PAGE_TYPE_CART => ['cart-recommendations', 'content'],
         ThemeLayout::PAGE_TYPE_SEARCH => ['search-main', 'search-recommendations', 'content'],

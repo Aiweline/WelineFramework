@@ -233,9 +233,41 @@ if (!function_exists('w_log_exception')) {
      */
     function w_log_exception(\Throwable $exception, ?string $message = null, ?string $channel = null): void
     {
-        $logMessage = $message ?? 'Exception occurred: {exception_class} in {exception_file}:{exception_line}';
+        $channel = $channel ?? 'exception';
+        $decision = ['allow' => true, 'summary' => null, 'suppressed_before' => 0, 'short_key' => ''];
+        if (class_exists(\Weline\Framework\Exception\ExceptionLogThrottle::class)) {
+            try {
+                $decision = \Weline\Framework\Exception\ExceptionLogThrottle::decide($exception);
+            } catch (\Throwable) {
+                $decision = ['allow' => true, 'summary' => null, 'suppressed_before' => 0, 'short_key' => ''];
+            }
+        }
 
-        w_log('error', $logMessage, w_log_exception_build_context($exception), $channel ?? 'exception');
+        // Same logical failure within the throttle window: skip full stack spam.
+        if (empty($decision['allow'])) {
+            return;
+        }
+
+        if (!empty($decision['summary']) && function_exists('w_log')) {
+            w_log('warning', (string)$decision['summary'], [
+                '_flood_key' => (string)($decision['short_key'] ?? ''),
+                '_suppressed' => (int)($decision['suppressed_before'] ?? 0),
+            ], $channel);
+            // Heartbeat / post-window summary only — do not also dump another full stack
+            // when this write was opened solely for the summary.
+            if ((int)($decision['suppressed_before'] ?? 0) > 0
+                && str_contains((string)$decision['summary'], 'still repeating')) {
+                return;
+            }
+        }
+
+        $logMessage = $message ?? 'Exception occurred: {exception_class} in {exception_file}:{exception_line}';
+        $context = w_log_exception_build_context($exception);
+        if (!empty($decision['short_key'])) {
+            $context['_flood_key'] = (string)$decision['short_key'];
+        }
+
+        w_log('error', $logMessage, $context, $channel);
     }
 }
 

@@ -122,6 +122,8 @@ $listId = (string)($editorState['list_id'] ?? '');
 $listVersion = (int)($editorState['version'] ?? 0);
 $skuTiers = is_array($editorState['sku_tiers'] ?? null) ? $editorState['sku_tiers'] : [];
 $productSkus = is_array($editorState['product_skus'] ?? null) ? $editorState['product_skus'] : $persistedSkuList;
+$inheritsDefault = (bool)($editorState['inherits_default_policy'] ?? false);
+$defaultPreview = is_array($editorState['default_policy_preview'] ?? null) ? $editorState['default_policy_preview'] : [];
 
 $hasAnyTier = false;
 foreach ($productSkus as $sku) {
@@ -133,12 +135,15 @@ foreach ($productSkus as $sku) {
 
 $statusKey = 'off';
 $statusText = (string)__('未启用批发');
-if ($enabled && !$hasAnyTier) {
+if ($enabled && !$hasAnyTier && $defaultPreview !== []) {
+    $statusKey = 'enabled-inherit';
+    $statusText = (string)__('已启用批发，继承站点默认模板（改模板立即作用于新报价，不回刷已有价目）');
+} elseif ($enabled && !$hasAnyTier) {
     $statusKey = 'enabled-no-tiers';
     $statusText = (string)__('已启用批发，但尚未配置阶梯价：前台仍按零售展示');
 } elseif ($enabled && $hasAnyTier) {
     $statusKey = 'ready';
-    $statusText = (string)__('已启用批发且已有生效阶梯价');
+    $statusText = (string)__('已启用批发且已有覆盖阶梯价');
 }
 
 $saveUrl = '';
@@ -179,14 +184,29 @@ $readonlyAttr = $canEditBusiness ? '' : 'disabled';
     <div class="w-card__header w-cluster" data-align="center" data-justify="between" data-wrap="true">
         <div>
             <h2><lang>批发经营与阶梯价</lang></h2>
-            <p><lang>启用批发后需配置数量阶梯价，前台才会展示批发能力。本页只维护网站级价目（不含渠道覆盖）。</lang></p>
+            <p><lang>启用批发后默认继承站点 VIP 模板；在此填写阶梯即覆盖该组。清空并保存可恢复继承。本页只维护网站级价目（不含渠道覆盖）。</lang></p>
         </div>
-        <span class="w-status" data-status="<?= $escape($statusKey === 'ready' ? 'published' : ($statusKey === 'enabled-no-tiers' ? 'draft' : 'disabled')) ?>"
+        <span class="w-status" data-status="<?= $escape($statusKey === 'ready' ? 'published' : ($statusKey === 'enabled-inherit' || $statusKey === 'enabled-no-tiers' ? 'draft' : 'disabled')) ?>"
               data-testid="b2b-product-wholesale-status">
             <?= $escape($statusText) ?>
         </span>
     </div>
     <div class="w-card__body w-stack" data-gap="md">
+        <?php if ($enabled && !$hasAnyTier && $defaultPreview !== []): ?>
+            <div class="w-stack" data-gap="xs" data-testid="b2b-product-default-policy-preview">
+                <p class="w-field__help" style="--w-m:0;"><lang>当前客户组继承模板预览（只读）</lang></p>
+                <ul>
+                    <?php foreach ($defaultPreview as $row): ?>
+                        <li>
+                            <?= $escape(__('%{1} 件起：折扣 %{2}%', [
+                                (int)($row['min_qty'] ?? 0),
+                                (string)($row['discount_percent'] ?? 0),
+                            ])) ?>
+                        </li>
+                    <?php endforeach; ?>
+                </ul>
+            </div>
+        <?php endif; ?>
         <label class="w-product-create__basics-check" for="product-edit-selling-mode-tob-canonical">
             <input type="checkbox"
                    id="product-edit-selling-mode-tob-canonical"

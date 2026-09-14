@@ -29,10 +29,30 @@ final class ProductRestTranslations
             }
         }
         $normalized = implode('_', $parts);
-        if (!State::isAllowedLanguageCode($normalized)) {
-            throw new \InvalidArgumentException('product_api_locale_unsupported');
+        if (State::isAllowedLanguageCode($normalized)) {
+            return $normalized;
         }
-        return $normalized;
+
+        // 浏览器常省略脚本；只匹配已安装目录中的同语言、同地区，避免默认语言回退。
+        if (count($parts) === 2 && strlen($parts[1]) !== 4) {
+            $repository = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\I18n\Api\Localization\LocaleRepositoryInterface::class,
+            );
+            $matches = [];
+            foreach ($repository->installedActive((string)State::getLangLocal()) as $record) {
+                $candidate = explode('_', $record->code);
+                if (count($candidate) === 3 && strlen($candidate[1]) === 4
+                    && $candidate[0] === $parts[0] && $candidate[2] === $parts[1]
+                    && State::isAllowedLanguageCode($record->code)
+                ) {
+                    $matches[$record->code] = true;
+                }
+            }
+            if (count($matches) === 1) {
+                return (string)array_key_first($matches);
+            }
+        }
+        throw new \InvalidArgumentException('product_api_locale_unsupported');
     }
 
     /** 按请求头的偏好权重选择已登记语言；明确的不支持语言不会静默写入默认值。 */

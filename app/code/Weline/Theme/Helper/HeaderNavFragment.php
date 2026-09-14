@@ -124,6 +124,46 @@ final class HeaderNavFragment
         }
     }
 
+    /**
+     * Allocate a document-unique mega-menu panel id.
+     * Same display slug (e.g. two "yun-dong-hu-wai" roots) must not collide.
+     *
+     * @param array<string, true> $usedIds
+     */
+    public static function allocateMegaPanelId(
+        string $text,
+        string $url,
+        array &$usedIds,
+        string $identity = '',
+    ): string {
+        $slug = \preg_replace('/[^a-z0-9_-]+/i', '-', \strtolower(\trim($text))) ?? '';
+        $slug = \trim($slug, '-');
+        $base = $slug !== '' ? ('mega-menu-' . $slug) : '';
+        if ($base === '' || $base === 'mega-menu') {
+            $base = 'mega-menu-' . \substr(\md5($text . '|' . $url), 0, 10);
+        }
+
+        $candidate = $base;
+        if (isset($usedIds[$candidate])) {
+            $suffix = \preg_replace('/[^a-z0-9_-]+/i', '-', \strtolower(\trim($identity))) ?? '';
+            $suffix = \trim($suffix, '-');
+            if ($suffix === '') {
+                $suffix = \substr(\md5($url . '|' . $text), 0, 8);
+            }
+            $candidate = $base . '-' . $suffix;
+        }
+
+        $unique = $candidate;
+        $n = 2;
+        while (isset($usedIds[$unique])) {
+            $unique = $candidate . '-' . $n;
+            $n++;
+        }
+        $usedIds[$unique] = true;
+
+        return $unique;
+    }
+
     private static function shouldBypass(Template $template): bool
     {
         try {

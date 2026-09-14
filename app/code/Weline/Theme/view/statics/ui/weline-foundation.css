@@ -730,7 +730,7 @@
        default (empty input/textarea): label rests as in-field placeholder;
        :focus-within / :not(:placeholder-shown) / select: float to top-border notch.
        Opt out: data-floating-label="0" (always notch). */
-    .w-field:has(> .w-field__label):has(:is(.w-input, .w-select, .w-textarea, .w-field__control)):not(
+    .w-field:has(> .w-field__label):has(:is(.w-input, .w-select, .w-textarea, .w-field__control, .w-language-select)):not(
         :has(> .w-check),
         :has(> .w-switch),
         .w-theme-disk-field--inline,
@@ -741,7 +741,7 @@
     ) {
         position: relative;
     }
-    .w-field:has(> .w-field__label):has(:is(.w-input, .w-select, .w-textarea, .w-field__control)):not(
+    .w-field:has(> .w-field__label):has(:is(.w-input, .w-select, .w-textarea, .w-field__control, .w-language-select)):not(
         :has(> .w-check),
         :has(> .w-switch),
         .w-theme-disk-field--inline,
@@ -779,7 +779,7 @@
             background-color var(--weline-motion-fast),
             padding-inline var(--weline-motion-fast);
     }
-    .w-field:has(> .w-field__label):has(:is(.w-input, .w-select, .w-textarea, .w-field__control)):not(
+    .w-field:has(> .w-field__label):has(:is(.w-input, .w-select, .w-textarea, .w-field__control, .w-language-select)):not(
         :has(> .w-check),
         :has(> .w-switch),
         .w-theme-disk-field--inline,
@@ -794,7 +794,8 @@
         min-height: 1em;
         flex: 0 0 1em;
     }
-    /* Resting: empty text controls act as in-field placeholder (select stays notched). */
+    /* Resting: empty text controls act as in-field placeholder (select stays notched).
+       language-select 弹层内空 search 不算字段值；有胶囊时靠 .has-value / [data-has-value=true] 上浮. */
     .w-field:has(> .w-field__label):has(:is(.w-input, .w-textarea)):not(
         :has(> .w-check),
         :has(> .w-switch),
@@ -803,7 +804,8 @@
         [data-label-layout="inline"],
         [data-floating-label="0"],
         .w-search-inline,
-        .w-search-bar
+        .w-search-bar,
+        :has(.w-language-select)
     ):has(:is(.w-input, .w-textarea):placeholder-shown):not(:focus-within) > .w-field__label {
         /* Relative to control height — not 50% of .w-field (hint/error would sink the label). */
         inset-block-start: calc(var(--weline-control-height) / 2);
@@ -814,7 +816,39 @@
         font-size: var(--weline-font-size-sm);
         font-weight: 500;
     }
-    .w-field:has(> .w-field__label):has(:is(.w-input, .w-select, .w-textarea, .w-field__control)):not(
+    .w-field:has(> .w-field__label):has(.w-language-select):not(
+        :has(> .w-check),
+        :has(> .w-switch),
+        .w-theme-disk-field--inline,
+        [data-label-layout="stacked"],
+        [data-label-layout="inline"],
+        [data-floating-label="0"],
+        .w-search-inline,
+        .w-search-bar
+    ):has(.w-language-select:not([data-has-value="true"])):not(:focus-within) > .w-field__label {
+        inset-block-start: calc(var(--weline-control-height) / 2);
+        translate: 0 -50%;
+        padding-inline: 0;
+        color: var(--weline-theme-text-subtle);
+        background: transparent;
+        font-size: var(--weline-font-size-sm);
+        font-weight: 500;
+    }
+    .w-field:has(> .w-field__label):has(.w-language-select):not(
+        :has(> .w-check),
+        :has(> .w-switch),
+        .w-theme-disk-field--inline,
+        [data-label-layout="stacked"],
+        [data-label-layout="inline"],
+        [data-floating-label="0"],
+        .w-search-inline,
+        .w-search-bar
+    ):has(.w-language-select:not([data-has-value="true"])):not(:focus-within) .w-language-select__placeholder {
+        color: transparent;
+        -webkit-text-fill-color: transparent;
+        opacity: 0;
+    }
+    .w-field:has(> .w-field__label):has(:is(.w-input, .w-select, .w-textarea, .w-field__control, .w-language-select)):not(
         :has(> .w-check),
         :has(> .w-switch),
         .w-theme-disk-field--inline,
@@ -837,7 +871,7 @@
         color: var(--weline-theme-danger);
     }
     @media (prefers-reduced-motion: reduce) {
-        .w-field:has(> .w-field__label):has(:is(.w-input, .w-select, .w-textarea, .w-field__control)):not(
+        .w-field:has(> .w-field__label):has(:is(.w-input, .w-select, .w-textarea, .w-field__control, .w-language-select)):not(
             :has(> .w-check),
             :has(> .w-switch),
             .w-theme-disk-field--inline,
@@ -886,7 +920,8 @@
         [data-label-layout="inline"],
         [data-floating-label="0"],
         .w-search-inline,
-        .w-search-bar
+        .w-search-bar,
+        :has(.w-language-select)
     ):has(:is(.w-input, .w-textarea):placeholder-shown):not(:focus-within) :is(.w-input, .w-textarea)::placeholder {
         color: transparent;
         -webkit-text-fill-color: transparent;

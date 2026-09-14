@@ -22,4 +22,14 @@
                   instance="Weline\Dropship\Observer\DropshipPushTerminalRefundObserver"
                   disabled="false" shared="true" sort="100"/>
     </event>
+    <event name="Weline_Checkout::checkout::shipping_quote::overlay">
+        <observer name="weline_dropship_checkout_shipping_quote_overlay"
+                  instance="Weline\Dropship\Observer\CheckoutShippingQuoteOverlayObserver"
+                  disabled="false" shared="false" sort="100"/>
+    </event>
+    <event name="Weline_Checkout::checkout::shipping_methods::enrich">
+        <observer name="weline_dropship_checkout_shipping_methods_enrich"
+                  instance="Weline\Dropship\Observer\CheckoutShippingMethodsEnrichObserver"
+                  disabled="false" shared="false" sort="100"/>
+    </event>
 </config>

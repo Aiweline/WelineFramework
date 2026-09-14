@@ -76,6 +76,18 @@
     padding: 0 var(--weline-space-6) var(--weline-space-6);
 }
 
+.marketing-coupon-page .marketing-coupon-filter {
+    padding: var(--weline-space-4) 0 var(--weline-space-2);
+    border-bottom: 1px solid var(--backend-theme-border, var(--weline-theme-border));
+    margin-bottom: var(--weline-space-2);
+}
+
+.marketing-coupon-page .marketing-coupon-pagination {
+    display: flex;
+    justify-content: flex-end;
+    padding-top: var(--weline-space-3);
+}
+
 /* 表格 */
 .marketing-coupon-page .marketing-coupon-table-wrap {
     overflow-x: auto;

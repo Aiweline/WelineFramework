@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Shipping\Service;
 
+use Weline\Currency\Service\CurrencyRateService;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Shipping\Model\Carrier;
 use Weline\Shipping\Model\FreeShippingRule;
@@ -67,6 +68,44 @@ final class ShippingConfigurationAdminService
             Region::schema_fields_SORT_ORDER => max(0, (int)($data['sort_order'] ?? 0)),
         ])->save();
         return $model;
+    }
+
+    /**
+     * Update TYPE_COUNTRY sort_order (hot position for checkout postal ambiguity + country lists).
+     * Lower numbers appear first.
+     *
+     * @param array<string, int|string> $sortByCountry ISO2 => sort_order
+     * @return int number of rows updated
+     */
+    public function updateCountrySortOrders(array $sortByCountry): int
+    {
+        $updated = 0;
+        foreach ($sortByCountry as $code => $sortRaw) {
+            $cc = strtoupper(trim((string)$code));
+            if (preg_match('/^[A-Z]{2}$/D', $cc) !== 1) {
+                continue;
+            }
+            $sort = max(0, (int)$sortRaw);
+            $id = $this->findRegionIdByCode($cc, $cc);
+            if ($id === null) {
+                continue;
+            }
+            /** @var Region $item */
+            $item = $this->fresh(Region::class)->load($id);
+            if ((int)$item->getId() <= 0) {
+                continue;
+            }
+            if ((string)$item->getData(Region::schema_fields_REGION_TYPE) !== Region::TYPE_COUNTRY) {
+                continue;
+            }
+            if ((int)$item->getData(Region::schema_fields_SORT_ORDER) === $sort) {
+                continue;
+            }
+            $item->setData(Region::schema_fields_SORT_ORDER, $sort)->save();
+            $updated++;
+        }
+
+        return $updated;
     }
 
     /**
@@ -405,7 +444,17 @@ final class ShippingConfigurationAdminService
         $code = strtoupper(trim((string)($data['template_code'] ?? '')));
         $type = strtolower(trim((string)($data['calculation_type'] ?? RateTemplate::CALC_TYPE_FIXED)));
         $this->assertNameAndCode($name, $code, '费用模板');
-        if (!in_array($type, [RateTemplate::CALC_TYPE_WEIGHT, RateTemplate::CALC_TYPE_VOLUME, RateTemplate::CALC_TYPE_QUANTITY, RateTemplate::CALC_TYPE_FIXED, RateTemplate::CALC_TYPE_MIXED], true)) throw new \InvalidArgumentException((string)__('费用计算类型无效。'));
+        if (!in_array($type, [
+            RateTemplate::CALC_TYPE_WEIGHT,
+            RateTemplate::CALC_TYPE_VOLUME,
+            RateTemplate::CALC_TYPE_QUANTITY,
+            RateTemplate::CALC_TYPE_FIXED,
+            RateTemplate::CALC_TYPE_MIXED,
+            RateTemplate::CALC_TYPE_WEIGHT_TABLE,
+            RateTemplate::CALC_TYPE_PRICE_TABLE,
+        ], true)) {
+            throw new \InvalidArgumentException((string)__('费用计算类型无效。'));
+        }
         $scope = $this->normalizeScopePayload($data);
         $this->assertUnique(RateTemplate::class, RateTemplate::schema_fields_TEMPLATE_CODE, $code, [
             RateTemplate::schema_fields_SCOPE_TYPE => $scope['scope_type'],
@@ -413,20 +462,118 @@ final class ShippingConfigurationAdminService
         ]);
         /** @var RateTemplate $model */
         $model = $this->fresh(RateTemplate::class);
-        $model->setData([
+        $model->setData($this->rateTemplatePayload($data, $scope, $name, $code, $type))->save();
+        return $model;
+    }
+
+    /** @param array<string,mixed> $data */
+    public function updateRateTemplate(array $data): RateTemplate
+    {
+        $templateId = (int)($data['template_id'] ?? 0);
+        if ($templateId <= 0) {
+            throw new \InvalidArgumentException((string)__('费用模板不存在。'));
+        }
+        $scope = $this->normalizeScopePayload($data);
+        $this->assertSameScope(RateTemplate::class, $templateId, $scope, '费用模板');
+        /** @var RateTemplate $model */
+        $model = $this->fresh(RateTemplate::class)->load($templateId);
+        $name = trim((string)($data['template_name'] ?? ''));
+        $code = strtoupper(trim((string)($data['template_code'] ?? $model->getData(RateTemplate::schema_fields_TEMPLATE_CODE))));
+        $type = strtolower(trim((string)($data['calculation_type'] ?? $model->getData(RateTemplate::schema_fields_CALCULATION_TYPE))));
+        $this->assertNameAndCode($name, $code, '费用模板');
+        if (!in_array($type, [
+            RateTemplate::CALC_TYPE_WEIGHT,
+            RateTemplate::CALC_TYPE_VOLUME,
+            RateTemplate::CALC_TYPE_QUANTITY,
+            RateTemplate::CALC_TYPE_FIXED,
+            RateTemplate::CALC_TYPE_MIXED,
+            RateTemplate::CALC_TYPE_WEIGHT_TABLE,
+            RateTemplate::CALC_TYPE_PRICE_TABLE,
+        ], true)) {
+            throw new \InvalidArgumentException((string)__('费用计算类型无效。'));
+        }
+        if ($code !== strtoupper((string)$model->getData(RateTemplate::schema_fields_TEMPLATE_CODE))) {
+            $this->assertUnique(RateTemplate::class, RateTemplate::schema_fields_TEMPLATE_CODE, $code, [
+                RateTemplate::schema_fields_SCOPE_TYPE => $scope['scope_type'],
+                RateTemplate::schema_fields_SCOPE_ID => $scope['scope_id'],
+            ]);
+        }
+        $model->setData($this->rateTemplatePayload($data, $scope, $name, $code, $type))->save();
+        return $model;
+    }
+
+    public function deleteRateTemplate(int $templateId): void
+    {
+        /** @var RateTemplate $model */
+        $model = $this->fresh(RateTemplate::class)->load($templateId);
+        if ((int)$model->getId() <= 0) {
+            throw new \InvalidArgumentException((string)__('费用模板不存在。'));
+        }
+        if ($model->isSeed()) {
+            throw new \RuntimeException((string)__('系统种子不可删除'));
+        }
+        /** @var ShippingService $serviceProbe */
+        $serviceProbe = $this->fresh(ShippingService::class);
+        $refs = $serviceProbe->reset()
+            ->where(ShippingService::schema_fields_RATE_TEMPLATE_ID, $templateId)
+            ->select()
+            ->fetch()
+            ->getItems();
+        if (is_array($refs) && $refs !== []) {
+            throw new \RuntimeException((string)__('仍有配送服务引用该费用模板，请先解除绑定后再删除。'));
+        }
+        $model->delete();
+    }
+
+    /**
+     * 费用一律按站点基础货币落库；忽略表单自由 currency_code。
+     *
+     * @param array<string,mixed> $data
+     * @param array{scope_type:string,scope_id:int} $scope
+     * @return array<string,mixed>
+     */
+    private function rateTemplatePayload(array $data, array $scope, string $name, string $code, string $type): array
+    {
+        /** @var CurrencyRateService $rates */
+        $rates = $this->objectManager->getInstance(CurrencyRateService::class);
+        $baseCurrency = strtoupper(trim($rates->getBaseCurrency())) ?: 'CNY';
+        $maxWeight = isset($data['max_weight_kg']) && $data['max_weight_kg'] !== ''
+            ? max(0, (float)$data['max_weight_kg'])
+            : null;
+        $bracketsJson = null;
+        if ($type === RateTemplate::CALC_TYPE_WEIGHT_TABLE || $type === RateTemplate::CALC_TYPE_PRICE_TABLE) {
+            $raw = $data['rate_brackets'] ?? [];
+            if (is_string($raw)) {
+                $decoded = json_decode($raw, true);
+                $raw = is_array($decoded) ? $decoded : [];
+            }
+            if (!is_array($raw)) {
+                $raw = [];
+            }
+            /** @var RateBracketValidator $validator */
+            $validator = $this->objectManager->getInstance(RateBracketValidator::class);
+            $normalized = $validator->normalizeAndValidate($raw, $maxWeight);
+            $bracketsJson = json_encode($normalized, JSON_UNESCAPED_UNICODE);
+        }
+
+        return [
             RateTemplate::schema_fields_SCOPE_TYPE => $scope['scope_type'],
             RateTemplate::schema_fields_SCOPE_ID => $scope['scope_id'],
             RateTemplate::schema_fields_TEMPLATE_NAME => $name,
             RateTemplate::schema_fields_TEMPLATE_CODE => $code,
             RateTemplate::schema_fields_CALCULATION_TYPE => $type,
-            RateTemplate::schema_fields_BASE_FEE => max(0, (float)($data['base_fee'] ?? 0)),
+            RateTemplate::schema_fields_BASE_FEE => ($type === RateTemplate::CALC_TYPE_WEIGHT_TABLE
+                || $type === RateTemplate::CALC_TYPE_PRICE_TABLE)
+                ? 0
+                : max(0, (float)($data['base_fee'] ?? 0)),
             RateTemplate::schema_fields_WEIGHT_RATE => isset($data['weight_rate']) ? max(0, (float)$data['weight_rate']) : null,
             RateTemplate::schema_fields_VOLUME_RATE => isset($data['volume_rate']) ? max(0, (float)$data['volume_rate']) : null,
             RateTemplate::schema_fields_QUANTITY_RATE => isset($data['quantity_rate']) ? max(0, (float)$data['quantity_rate']) : null,
-            RateTemplate::schema_fields_CURRENCY_CODE => strtoupper(trim((string)($data['currency_code'] ?? 'CNY'))),
+            RateTemplate::schema_fields_RATE_BRACKETS => $bracketsJson,
+            RateTemplate::schema_fields_MAX_WEIGHT_KG => $maxWeight,
+            RateTemplate::schema_fields_CURRENCY_CODE => $baseCurrency,
             RateTemplate::schema_fields_IS_ACTIVE => !empty($data['is_active']) ? 1 : 0,
-        ])->save();
-        return $model;
+        ];
     }
 
     /** @param array<string,mixed> $data */
@@ -452,12 +599,41 @@ final class ShippingConfigurationAdminService
             FreeShippingRule::schema_fields_RULE_CODE => $code,
             FreeShippingRule::schema_fields_CONDITION_TYPE => $type,
             FreeShippingRule::schema_fields_MIN_ORDER_AMOUNT => max(0, (float)($data['min_order_amount'] ?? 0)),
+            FreeShippingRule::schema_fields_ORIGIN => FreeShippingRule::ORIGIN_MANUAL,
             FreeShippingRule::schema_fields_IS_ACTIVE => !empty($data['is_active']) ? 1 : 0,
             FreeShippingRule::schema_fields_PRIORITY => max(0, (int)($data['priority'] ?? 0)),
         ]);
         $model->setRegionIds($regionIds);
         $model->save();
         return $model;
+    }
+
+    public function setFreeShippingRuleActive(int $ruleId, bool $active): FreeShippingRule
+    {
+        /** @var FreeShippingRule $model */
+        $model = $this->fresh(FreeShippingRule::class)->load($ruleId);
+        if ((int)$model->getId() <= 0) {
+            throw new \InvalidArgumentException((string)__('免邮规则不存在。'));
+        }
+        $model->setData(FreeShippingRule::schema_fields_IS_ACTIVE, $active ? 1 : 0);
+        $model->setData(FreeShippingRule::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'));
+        $model->save();
+
+        return $model;
+    }
+
+    public function deleteFreeShippingRule(int $ruleId): void
+    {
+        /** @var FreeShippingRule $model */
+        $model = $this->fresh(FreeShippingRule::class)->load($ruleId);
+        if ((int)$model->getId() <= 0) {
+            throw new \InvalidArgumentException((string)__('免邮规则不存在。'));
+        }
+        $origin = strtolower(trim((string)$model->getData(FreeShippingRule::schema_fields_ORIGIN)));
+        if ($origin === FreeShippingRule::ORIGIN_SEED || $origin !== FreeShippingRule::ORIGIN_MANUAL) {
+            throw new \RuntimeException((string)__('系统种子不可删除'));
+        }
+        $model->delete();
     }
 
     /** @param array<string,mixed> $data */
@@ -502,6 +678,9 @@ final class ShippingConfigurationAdminService
             ShippingService::schema_fields_ORIGIN_SHIPPING_ADDRESS_ID => $originId > 0 ? $originId : null,
             ShippingService::schema_fields_ESTIMATED_DAYS_MIN => $minDays,
             ShippingService::schema_fields_ESTIMATED_DAYS_MAX => $maxDays,
+            ShippingService::schema_fields_INCOTERM => $this->normalizeIncoterm(
+                (string)($data['incoterm'] ?? \Weline\Shipping\Service\ShippingIncotermService::DDU),
+            ),
             ShippingService::schema_fields_IS_FREE_SHIPPING => !empty($data['is_free_shipping']) ? 1 : 0,
             ShippingService::schema_fields_IS_ACTIVE => !empty($data['is_active']) ? 1 : 0,
             ShippingService::schema_fields_SORT_ORDER => max(0, (int)($data['sort_order'] ?? 0)),
@@ -524,6 +703,42 @@ final class ShippingConfigurationAdminService
         }
 
         return $model;
+    }
+
+    /**
+     * Update lane Incoterm only (duty_notice metadata; does not change Local amount).
+     *
+     * @param array<string,mixed> $data
+     */
+    public function updateShippingServiceIncoterm(array $data): ShippingService
+    {
+        $id = (int)($data['service_id'] ?? $data['id'] ?? 0);
+        if ($id <= 0) {
+            throw new \InvalidArgumentException((string)__('配送服务不存在。'));
+        }
+        /** @var ShippingService $model */
+        $model = $this->fresh(ShippingService::class)->load($id);
+        if (!$model->getId()) {
+            throw new \InvalidArgumentException((string)__('配送服务不存在。'));
+        }
+        $scope = $this->normalizeScopePayload($data);
+        if (
+            (string)$model->getData(ShippingService::schema_fields_SCOPE_TYPE) !== $scope['scope_type']
+            || (int)$model->getData(ShippingService::schema_fields_SCOPE_ID) !== $scope['scope_id']
+        ) {
+            throw new \InvalidArgumentException((string)__('配送服务必须与当前作用范围一致。'));
+        }
+        $model->setData(
+            ShippingService::schema_fields_INCOTERM,
+            $this->normalizeIncoterm((string)($data['incoterm'] ?? '')),
+        )->save();
+
+        return $model;
+    }
+
+    private function normalizeIncoterm(string $raw): string
+    {
+        return (new \Weline\Shipping\Service\ShippingIncotermService())->normalize($raw);
     }
 
     /**

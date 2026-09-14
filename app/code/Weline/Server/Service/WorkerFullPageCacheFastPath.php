@@ -117,14 +117,23 @@ final class WorkerFullPageCacheFastPath
             // Prefer READY's exact identity, then the receipt captured by a
             // natural anonymous homepage hit when startup skipped priming.
             // Both paths stay in Process L1; a miss returns to Framework.
+            // (Anonymous `/` cannot rebuild variants in the probe Context while
+            // legacy pre-router FPC is disabled — receipt identity is required.)
             if ($requestUri === '/') {
+                $cookieHeader = (string)($headers['cookie'] ?? '');
                 $receipt = $this->runtime?->resolveHomepageFastPathReceipt(
                     $fullUri,
-                    (string)($headers['cookie'] ?? ''),
+                    $cookieHeader,
                 ) ?? $this->coordinator->resolveRootHomepageProcessReceipt(
                     $fullUri,
-                    (string)($headers['cookie'] ?? ''),
+                    $cookieHeader,
                 );
+                if ($receipt === null && $cookieHeader === '') {
+                    $receipt = $this->coordinator->resolveRootHomepageProcessReceipt(
+                        $this->alternateRootFullUri($fullUri, $scheme),
+                        '',
+                    );
+                }
                 if (\is_array($receipt)) {
                     $cached = $this->coordinator->getFormattedProcessCachedResponseForInternalReceipt(
                         $receipt,
@@ -304,5 +313,36 @@ final class WorkerFullPageCacheFastPath
         $headerPort = (int)($hostParts['port'] ?? $defaultPort);
 
         return $targetPort === $headerPort;
+    }
+
+    /**
+     * READY/natural receipts may be stored with an explicit :443/:80 while the
+     * live Host header omits the default port (or the reverse). Try the peer
+     * form so fail-open Workers still bind the anonymous root identity.
+     */
+    private function alternateRootFullUri(string $fullUri, string $scheme): string
+    {
+        try {
+            $parts = \parse_url($fullUri);
+        } catch (\ValueError) {
+            return $fullUri;
+        }
+        if (!\is_array($parts)) {
+            return $fullUri;
+        }
+
+        $host = \strtolower(\rtrim((string)($parts['host'] ?? ''), '.'));
+        if ($host === '') {
+            return $fullUri;
+        }
+        $defaultPort = $scheme === 'https' ? 443 : 80;
+        $port = (int)($parts['port'] ?? 0);
+        $authority = $port > 0 && $port !== $defaultPort
+            ? $host
+            : $host . ':' . $defaultPort;
+        $path = (string)($parts['path'] ?? '/');
+        $path = $path !== '' ? $path : '/';
+
+        return $scheme . '://' . $authority . $path;
     }
 }

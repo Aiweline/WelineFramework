@@ -39,5 +39,13 @@ interface SocialPlatformProviderInterface
      * @return array<string, mixed>
      */
     public function queryPublishStatus(string $remoteId, array $account, array $context = []): array;
+
+    /**
+     * Browser CSP sources this platform needs (OAuth popup / JS SDK / embed).
+     * Collected by Social Extends into Framework app defaults.
+     *
+     * @return array<string, list<string>> directive => absolute https hosts / keywords
+     */
+    public function cspDirectives(): array;
 }
 

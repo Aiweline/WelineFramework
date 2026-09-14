@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<!--
+  PROTOTYPE throwaway — 定金挂单瀑布审核台（勿当生产）
+  Question: Can merchant approve with customer/address/lines/chat at a glance?
+  Open with ?variant=waterfall
+-->
+<html lang="zh-Hans">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PROTOTYPE · 定金挂单瀑布审核台</title>
+  <style>
+    :root {
+      --bg: #0f1419; --surface: #171d25; --border: #2a3340; --text: #e7ecf1; --muted: #8b98a8;
+      --danger: #f87171; --warn: #fbbf24; --info: #60a5fa; --primary: #3b82f6;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 14px/1.45 system-ui, sans-serif; background: var(--bg); color: var(--text); padding: 24px; }
+    .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+    .tab { padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; color: var(--muted); text-decoration: none; }
+    .tab.on { background: var(--primary); color: #fff; border-color: var(--primary); }
+    .list { display: grid; gap: 12px; max-width: 52rem; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; display: grid; gap: 10px; }
+    .card.danger { box-shadow: inset 4px 0 0 var(--danger); border-color: var(--danger); }
+    .card.warn { box-shadow: inset 4px 0 0 var(--warn); border-color: var(--warn); }
+    .risk span { display: inline-block; margin-right: 6px; padding: 2px 8px; border-radius: 999px; background: #2a3340; font-size: 12px; }
+    .risk .d { color: var(--danger); } .risk .w { color: var(--warn); }
+    .top { display: flex; justify-content: space-between; gap: 12px; }
+    .muted { color: var(--muted); font-size: 12px; }
+    .amounts { display: flex; flex-wrap: wrap; gap: 16px; }
+    .amounts b { display: block; font-size: 1.05rem; }
+    details { border-top: 1px solid var(--border); padding-top: 8px; }
+    .ops { display: flex; gap: 8px; flex-wrap: wrap; }
+    button { border: 0; border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+    .primary { background: var(--primary); color: #fff; }
+    .danger { background: #7f1d1d; color: #fecaca; }
+  </style>
+</head>
+<body>
+  <p class="muted">PROTOTYPE · variant=waterfall · 落地对照 ControlCenter hang-orders</p>
+  <nav class="tabs" data-testid="proto-hang-tabs">
+    <a class="tab on" href="?variant=waterfall">等待审批 2</a>
+    <a class="tab" href="?variant=waterfall&tab=all">全部 5</a>
+    <a class="tab" href="?variant=waterfall&tab=completed">已完成 1</a>
+  </nav>
+  <div class="list">
+    <article class="card warn">
+      <div class="risk"><span class="w">偏远提示（启发式）：新疆</span><span class="w">有未读沟通</span></div>
+      <div class="top">
+        <div>
+          <strong>阿克苏贸易</strong>
+          <div class="muted">hang_0e3c… · 订单 80219477…</div>
+          <div class="muted">新疆阿克苏市 · 解放路 12 号</div>
+        </div>
+        <span class="muted">待商家审批</span>
+      </div>
+      <div class="amounts">
+        <div><span class="muted">定金</span><b>CNY 162.00</b></div>
+        <div><span class="muted">尾款</span><b>CNY 378.00</b></div>
+        <div><span class="muted">货款</span><b>CNY 500.00</b></div>
+      </div>
+      <details open>
+        <summary>商品详情</summary>
+        <ul>
+          <li>工业轴承 SKU-A ×2 · CNY 400.00</li>
+          <li>密封件 SKU-B ×1 · CNY 100.00</li>
+        </ul>
+      </details>
+      <div class="chat">
+        <p class="muted">最近沟通：货期能否确认？</p>
+        <button type="button" id="proto-chat-toggle">订单沟通 1</button>
+        <div id="proto-chat-panel" hidden style="margin-top:8px;padding:8px;border:1px solid #444;border-radius:8px;">
+          <div class="muted">客户：货期能否确认？</div>
+          <textarea rows="2" style="width:100%;margin-top:6px;" placeholder="输入留言"></textarea>
+          <button type="button" style="margin-top:6px;">发送</button>
+        </div>
+      </div>
+      <div class="ops">
+        <button class="primary" type="button">批准</button>
+        <button class="danger" type="button">驳回</button>
+      </div>
+    </article>
+    <script>
+      (function () {
+        var t = document.getElementById('proto-chat-toggle');
+        var p = document.getElementById('proto-chat-panel');
+        if (t && p) {
+          t.addEventListener('click', function () { p.hidden = !p.hidden; });
+        }
+      })();
+    </script>
+    <article class="card danger">
+      <div class="risk"><span class="d">禁运地址</span></div>
+      <div class="top">
+        <div>
+          <strong>海外客户</strong>
+          <div class="muted">hang_embargo… · 订单 e7cf…</div>
+          <div class="muted">受制裁地区地址摘要</div>
+        </div>
+        <span class="muted">待商家审批</span>
+      </div>
+      <div class="amounts">
+        <div><span class="muted">定金</span><b>CNY 90.00</b></div>
+        <div><span class="muted">尾款</span><b>CNY 210.00</b></div>
+      </div>
+      <details open>
+        <summary>商品与沟通详情</summary>
+        <ul><li>配件包 ×1 · CNY 300.00</li></ul>
+      </details>
+      <div class="ops">
+        <button class="primary" type="button">批准</button>
+        <button class="danger" type="button">驳回</button>
+      </div>
+    </article>
+  </div>
+</body>
+</html>

@@ -41,6 +41,43 @@ class Data extends AbstractHelper
     /** @var array 收集的路由注册参数，用于批量注册 */
     private array $collected_route_registrations = [];
 
+    /** setup:upgrade 路由收集期：跨模块暂存 ACL 事件，提交阶段一次派发 */
+    private bool $deferControllerAttributes = false;
+
+    /** @var list<\Weline\Framework\DataObject\DataObject> */
+    private array $deferredControllerAttributesEvents = [];
+
+    public function enableDeferControllerAttributes(): void
+    {
+        $this->deferControllerAttributes = true;
+        $this->deferredControllerAttributesEvents = [];
+    }
+
+    public function isDeferControllerAttributes(): bool
+    {
+        return $this->deferControllerAttributes;
+    }
+
+    /**
+     * 将暂存的控制器 ACL 事件一次派发（可含多模块；观察者按 module 分组落库）。
+     */
+    public function flushDeferredControllerAttributes(): void
+    {
+        $events = $this->deferredControllerAttributesEvents;
+        $this->deferredControllerAttributesEvents = [];
+        $this->deferControllerAttributes = false;
+        if ($events === []) {
+            return;
+        }
+
+        $this->getEvenManager()->dispatch('Weline_Framework_Module::controller_attributes', $events);
+    }
+
+    public function clearDeferredControllerAttributes(): void
+    {
+        $this->deferredControllerAttributesEvents = [];
+        $this->deferControllerAttributes = false;
+    }
     public function __construct(
         File $file,
         Scan $scan,
@@ -629,6 +666,14 @@ class Data extends AbstractHelper
     private function batchDispatchControllerAttributesEvents(): void
     {
         if (empty($this->collected_controller_attributes_events)) {
+            return;
+        }
+
+        if ($this->deferControllerAttributes) {
+            foreach ($this->collected_controller_attributes_events as $eventData) {
+                $this->deferredControllerAttributesEvents[] = $eventData;
+            }
+            $this->collected_controller_attributes_events = [];
             return;
         }
         

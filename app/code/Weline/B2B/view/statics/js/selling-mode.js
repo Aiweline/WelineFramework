@@ -1446,9 +1446,11 @@
             syncCartPageChrome(mode);
             syncCheckoutChrome(mode);
         });
-        global.addEventListener('weline:cart-updated', function () {
-            syncMiniCartChrome(preferredMode(null));
-            syncCheckoutChrome(preferredMode(null));
+        global.addEventListener('weline:cart-updated', function (event) {
+            var detail = event && event.detail && typeof event.detail === 'object' ? event.detail : {};
+            var mode = String(detail.cart_type || detail.selling_mode || preferredMode(null)).toLowerCase();
+            syncMiniCartChrome(mode === 'tob' ? 'tob' : 'toc');
+            syncCheckoutChrome(mode === 'tob' ? 'tob' : 'toc');
         });
         global.addEventListener('weline:account-sidebar-content-loaded', function () {
             bindAllAccountIdentities();

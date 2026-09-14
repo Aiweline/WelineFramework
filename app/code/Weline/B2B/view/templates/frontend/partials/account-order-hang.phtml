@@ -31,7 +31,6 @@ $depositHref = $checkoutUrl . (str_contains($checkoutUrl, '?') ? '&' : '?')
     . 'purpose=deposit&order_uuid=' . rawurlencode($orderUuid);
 $balanceHref = $checkoutUrl . (str_contains($checkoutUrl, '?') ? '&' : '?')
     . 'purpose=balance&order_uuid=' . rawurlencode($orderUuid);
-$chatHref = '/customer/account/index#b2b-order-chat';
 $progressSteps = [
     'awaiting_deposit',
     'awaiting_merchant_approval',
@@ -39,59 +38,65 @@ $progressSteps = [
     'completed',
 ];
 ?>
-<link rel="stylesheet" href="@static(Weline_B2B::css/b2b-storefront.css)&v=20260912-hang-balance1" data-no-extract="true">
+<link rel="stylesheet" href="@static(Weline_B2B::css/b2b-storefront.css)&v=20260912-order-chat-ui2" data-no-extract="true">
+<div data-weline-load="b2bOrderChat"></div>
 <div class="b2b-account-hang"
      data-b2b-account-hang="1"
      data-hang-status="<?= $escape($hangStatus) ?>"
      data-order-uuid="<?= $escape($orderUuid) ?>"
      data-testid="b2b-account-hang">
-    <div class="b2b-account-hang__progress" role="list">
-        <?php foreach ($progressSteps as $code): ?>
-            <span class="w-badge"
-                  role="listitem"
-                  data-tone="<?= $hangStatus === $code ? $tone : 'secondary' ?>"
-                  data-hang-step="<?= $escape($code) ?>"
-                  data-state="<?= $hangStatus === $code ? 'current' : 'idle' ?>">
-                <?php if ($code === 'awaiting_deposit'): ?><lang>待付定金</lang>
-                <?php elseif ($code === 'awaiting_merchant_approval'): ?><lang>待商家审批</lang>
-                <?php elseif ($code === 'awaiting_balance'): ?><lang>待付尾款</lang>
-                <?php else: ?><lang>已完成</lang><?php endif; ?>
-            </span>
-        <?php endforeach; ?>
+    <div class="b2b-account-hang__meta">
+        <div class="b2b-account-hang__progress" role="list">
+            <?php foreach ($progressSteps as $code): ?>
+                <span class="w-badge"
+                      role="listitem"
+                      data-tone="<?= $hangStatus === $code ? $tone : 'secondary' ?>"
+                      data-hang-step="<?= $escape($code) ?>"
+                      data-state="<?= $hangStatus === $code ? 'current' : 'idle' ?>">
+                    <?php if ($code === 'awaiting_deposit'): ?><lang>待付定金</lang>
+                    <?php elseif ($code === 'awaiting_merchant_approval'): ?><lang>待商家审批</lang>
+                    <?php elseif ($code === 'awaiting_balance'): ?><lang>待付尾款</lang>
+                    <?php else: ?><lang>已完成</lang><?php endif; ?>
+                </span>
+            <?php endforeach; ?>
+        </div>
+        <span class="w-badge" data-tone="<?= $escape($tone) ?>" data-testid="b2b-hang-status-badge">
+            <?php if ($hangStatus === 'awaiting_deposit'): ?><lang>待付定金</lang>
+            <?php elseif ($hangStatus === 'awaiting_merchant_approval'): ?><lang>待商家审批</lang>
+            <?php elseif ($hangStatus === 'awaiting_balance'): ?><lang>待付尾款</lang>
+            <?php elseif ($hangStatus === 'completed'): ?><lang>已完成</lang>
+            <?php elseif ($hangStatus === 'rejected'): ?><lang>已驳回</lang>
+            <?php elseif ($hangStatus === 'expired'): ?><lang>已过期</lang>
+            <?php else: ?><?= $escape($hangStatus) ?><?php endif; ?>
+        </span>
+        <div class="b2b-account-hang__actions">
+            <?php if ($showDeposit && $orderUuid !== ''): ?>
+                <a class="w-button"
+                   data-variant="primary"
+                   data-testid="b2b-pay-deposit"
+                   href="<?= $escape($depositHref) ?>">
+                    <lang>支付定金</lang>
+                </a>
+            <?php endif; ?>
+            <?php if ($showBalance && $orderUuid !== ''): ?>
+                <a class="w-button"
+                   data-variant="primary"
+                   data-testid="b2b-pay-balance"
+                   href="<?= $escape($balanceHref) ?>">
+                    <lang>支付尾款</lang>
+                </a>
+            <?php endif; ?>
+        </div>
     </div>
-    <span class="w-badge" data-tone="<?= $escape($tone) ?>" data-testid="b2b-hang-status-badge">
-        <?php if ($hangStatus === 'awaiting_deposit'): ?><lang>待付定金</lang>
-        <?php elseif ($hangStatus === 'awaiting_merchant_approval'): ?><lang>待商家审批</lang>
-        <?php elseif ($hangStatus === 'awaiting_balance'): ?><lang>待付尾款</lang>
-        <?php elseif ($hangStatus === 'completed'): ?><lang>已完成</lang>
-        <?php elseif ($hangStatus === 'rejected'): ?><lang>已驳回</lang>
-        <?php elseif ($hangStatus === 'expired'): ?><lang>已过期</lang>
-        <?php else: ?><?= $escape($hangStatus) ?><?php endif; ?>
-    </span>
-    <div class="b2b-account-hang__actions">
-        <?php if ($showDeposit && $orderUuid !== ''): ?>
-            <a class="w-button"
-               data-variant="primary"
-               data-testid="b2b-pay-deposit"
-               href="<?= $escape($depositHref) ?>">
-                <lang>支付定金</lang>
-            </a>
-        <?php endif; ?>
-        <?php if ($showBalance && $orderUuid !== ''): ?>
-            <a class="w-button"
-               data-variant="primary"
-               data-testid="b2b-pay-balance"
-               href="<?= $escape($balanceHref) ?>">
-                <lang>支付尾款</lang>
-            </a>
-        <?php endif; ?>
-        <?php if ($orderUuid !== '' && !in_array($hangStatus, ['rejected', 'expired'], true)): ?>
-            <a class="w-button"
-               data-variant="secondary"
-               data-testid="b2b-order-chat"
-               href="<?= $escape($chatHref) ?>">
-                <lang>订单沟通</lang>
-            </a>
-        <?php endif; ?>
-    </div>
+    <?php if ($orderUuid !== '' && !in_array($hangStatus, ['rejected', 'expired'], true)): ?>
+        <?php
+        $orderRef = $orderUuid;
+        $chatRole = 'customer';
+        $customerIdHint = '';
+        $chatPartial = BP . 'app/code/Weline/B2B/view/templates/frontend/partials/order-chat-accordion.phtml';
+        if (is_file($chatPartial)) {
+            include $chatPartial;
+        }
+        ?>
+    <?php endif; ?>
 </div>

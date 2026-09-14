@@ -29,12 +29,16 @@ final class I18nResourceChangePublisher
         return $this->dictionary->getConnection();
     }
 
-    /** @param array<string,mixed> $payload */
-    public function publishAction(string $action, array $payload): ResourceChange
+    /**
+     * @param array<string,mixed> $payload
+     * @param ?string $persistedLocale Actual target from the persistence owner;
+     *        leave null for legacy actions whose request payload is not authority.
+     */
+    public function publishAction(string $action, array $payload, ?string $persistedLocale = null): ResourceChange
     {
         return ObjectManager::getInstance(TransactionCoordinatorInterface::class)->run(
             $this->connection(),
-            fn(): ResourceChange => $this->publishInTransaction($action, $payload),
+            fn(): ResourceChange => $this->publishInTransaction($action, $payload, null, $persistedLocale),
         );
     }
 
@@ -57,7 +61,7 @@ final class I18nResourceChangePublisher
             try {
                 $payload = $publishFile();
                 $payload['locale_code'] = $localeCode;
-                $this->publishInTransaction('dictionary-file-publish', $payload, $revision);
+                $this->publishInTransaction('dictionary-file-publish', $payload, $revision, $localeCode);
                 return true;
             } catch (\Throwable $failure) {
                 // 先恢复文件再让事务协调器回滚，避免释放行锁后覆盖后继发布者。
@@ -76,8 +80,11 @@ final class I18nResourceChangePublisher
     }
 
     /** @param array<string,mixed> $payload */
-    private function publishInTransaction(string $action, array $payload, ?int $revision = null): ResourceChange
+    private function publishInTransaction(string $action, array $payload, ?int $revision = null, ?string $persistedLocale = null): ResourceChange
     {
+        if ($persistedLocale !== null) {
+            $payload['locale_code'] = $persistedLocale;
+        }
         [$resourceType, $resourceId] = $this->identity($action, $payload);
         $locale = $this->locale($payload);
         $summary = [
@@ -104,12 +111,27 @@ final class I18nResourceChangePublisher
             after: $summary,
             changedFields: $summary['payload_keys'],
             impact: [
-                'namespaces' => [DictionaryCacheNamespace::NAMESPACE, $this->namespacePath->global('i18n', [$locale])],
+                'namespaces' => $this->translationNamespaces($resourceType, $persistedLocale),
             ],
             origin: ['entry' => 'i18n.admin.' . $action],
         );
         w_changed($change);
         return $change;
+    }
+
+    /** @return list<string> */
+    private function translationNamespaces(string $resourceType, ?string $persistedLocale): array
+    {
+        $root = DictionaryCacheNamespace::NAMESPACE;
+        if ($persistedLocale === null || !in_array($resourceType, ['i18n_dictionary', 'i18n_pack'], true)) {
+            return [$root];
+        }
+        $paths = DictionaryCacheNamespace::namespacePaths([$persistedLocale]);
+        if (in_array($root, $paths, true)
+            || in_array(DictionaryCacheNamespace::CONTENT_NAMESPACE, $paths, true)) {
+            return [$root];
+        }
+        return [DictionaryCacheNamespace::CONTENT_NAMESPACE, ...$paths];
     }
 
     /** @param array<string,mixed> $payload @return array{0:string,1:string} */

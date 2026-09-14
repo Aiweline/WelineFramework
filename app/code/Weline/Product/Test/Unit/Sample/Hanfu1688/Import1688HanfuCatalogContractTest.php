@@ -66,7 +66,8 @@ final class Import1688HanfuCatalogContractTest extends TestCase
         self::assertStringContainsString("['accepted'] ?? false", $script);
         self::assertStringContainsString('hanfu1688CanonicalVariantCatalog', $script);
         self::assertStringContainsString('$attributeMetadata->canonicalizeVariantAxes', $script);
-        self::assertStringContainsString('$attributeMetadata->canonicalizeVariantCombination', $script);
+        self::assertStringContainsString('$sourceValueMap', $script);
+        self::assertStringContainsString('$canonicalizeCombination', $script);
         self::assertStringContainsString("'matrix_rows'", $script);
         $canonicalizePosition = strpos($script, '$catalog = hanfu1688CanonicalVariantCatalog(');
         $existingLookupPosition = strpos($script, '$existingByKey = []');
@@ -132,10 +133,15 @@ final class Import1688HanfuCatalogContractTest extends TestCase
         self::assertStringContainsString("explode('|', \$key)", $validation);
         self::assertStringContainsString("'xxl', 'label' => 'XXL'", $bootstrap);
         self::assertStringContainsString("'xxxl', 'label' => 'XXXL'", $bootstrap);
-        self::assertStringNotContainsString("'code' => 'available_colors'", $bootstrap);
-        self::assertStringNotContainsString("'code' => 'available_sizes'", $bootstrap);
-        self::assertStringNotContainsString("'code' => 'source_public_specs'", $bootstrap);
-        self::assertStringNotContainsString("'code' => 'source_variant_combinations'", $bootstrap);
+        $hanfuStart = strpos($bootstrap, 'public function ensureHanfuSchema');
+        $dropshipStart = strpos($bootstrap, 'public function ensureDropshipSchema');
+        self::assertNotFalse($hanfuStart);
+        self::assertNotFalse($dropshipStart);
+        $hanfuBootstrap = substr($bootstrap, $hanfuStart, $dropshipStart - $hanfuStart);
+        self::assertStringNotContainsString("'code' => 'available_colors'", $hanfuBootstrap);
+        self::assertStringNotContainsString("'code' => 'available_sizes'", $hanfuBootstrap);
+        self::assertStringNotContainsString("'code' => 'source_public_specs'", $hanfuBootstrap);
+        self::assertStringNotContainsString("'code' => 'source_variant_combinations'", $hanfuBootstrap);
     }
 
     public function testMediaImporterCapacityCoversCompleteSellerDetailSet(): void
@@ -242,10 +248,11 @@ final class Import1688HanfuCatalogContractTest extends TestCase
         ];
 
         $catalog = $mapper->catalog($offer, 'ZHIZAOSI-HANFU');
-        self::assertSame(['color', 'size'], array_column($catalog['axes'], 'code'));
-        $sizeAxis = $catalog['axes'][1];
+        self::assertSame(['size', 'style_type'], array_column($catalog['axes'], 'code'));
+        $axesByCode = array_column($catalog['axes'], null, 'code');
+        $sizeAxis = $axesByCode['size'];
         self::assertSame(
-            ['s', 'xxl', 'xxxl'],
+            ['s', 'xxxl'],
             array_column($sizeAxis['options'], 'value'),
         );
         self::assertNotEmpty($catalog['sku_overrides']);
@@ -262,7 +269,7 @@ final class Import1688HanfuCatalogContractTest extends TestCase
             $catalog['variant_media'][0]['image_url'],
         );
         self::assertSame(
-            ['color' => 'bai-se-shang', 'size' => 's'],
+            ['size' => 's', 'style_type' => 'bai-se-shang-yi'],
             $catalog['variant_media'][0]['combination'],
         );
 
@@ -272,15 +279,15 @@ final class Import1688HanfuCatalogContractTest extends TestCase
             'company_name' => '汉服供应商',
         ], 'snapshot-digest', $catalog);
         $codes = array_column($rows, 'attribute_code');
-        self::assertContains('color', $codes);
+        self::assertContains('style_type', $codes);
         self::assertContains('size', $codes);
         self::assertNotContains('available_colors', $codes);
         self::assertNotContains('available_sizes', $codes);
         self::assertNotContains('source_public_specs', $codes);
         self::assertNotContains('source_variant_combinations', $codes);
-        $colorRow = $rows[array_search('color', $codes, true)];
-        self::assertSame('multiselect', $colorRow['value_type']);
-        self::assertIsArray($colorRow['value']);
+        $styleRow = $rows[array_search('style_type', $codes, true)];
+        self::assertSame('multiselect', $styleRow['value_type']);
+        self::assertIsArray($styleRow['value']);
     }
 
     public function testMapperKeepsNumericEavOptionLabelsAsStrings(): void

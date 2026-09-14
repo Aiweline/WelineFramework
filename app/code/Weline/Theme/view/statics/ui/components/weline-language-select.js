@@ -245,6 +245,9 @@ export function register(UI) {
             const changed = !sameValues(selectedValues, next);
             selectedValues = next;
             for (const option of field.options) option.selected = selectedValues.includes(option.value);
+            // Outlined floating label：胶囊/选中值视为有内容（勿被弹层内空 search 误判为空）
+            element.classList.toggle('has-value', selectedValues.length > 0);
+            element.dataset.hasValue = selectedValues.length > 0 ? 'true' : 'false';
             renderTags();
             renderList(search?.value || '');
             updateValidity();

@@ -35,8 +35,35 @@ class ShippingInfoQueryProvider implements QueryProviderInterface
         return match ($operation) {
             'getByLocation' => $this->getByLocation($params),
             'listQuoteOptions', 'quote' => $this->quoteOps($operation, $params),
+            'quoteReturnShipping' => $this->quoteReturnShipping($params),
             default => throw new \InvalidArgumentException('Shipping info query provider does not support operation: ' . $operation),
         };
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function quoteReturnShipping(array $params): array
+    {
+        try {
+            /** @var \Weline\Shipping\Service\ShippingFacade $facade */
+            $facade = ObjectManager::getInstance(\Weline\Shipping\Service\ShippingFacade::class);
+            $lines = \is_array($params['lines'] ?? null) ? $params['lines'] : [];
+            $address = \is_array($params['address'] ?? null) ? $params['address'] : [];
+            $context = \is_array($params['context'] ?? null) ? $params['context'] : null;
+            $quote = $facade->quoteReturnShipping(
+                $lines,
+                $address,
+                (string)($params['currency'] ?? 'CNY'),
+                (int)($params['currency_precision'] ?? 2),
+                $context,
+            );
+
+            return ['success' => true, 'data' => $quote];
+        } catch (\Throwable $e) {
+            return ['success' => false, 'message' => $e->getMessage()];
+        }
     }
 
     /**
@@ -86,6 +113,7 @@ class ShippingInfoQueryProvider implements QueryProviderInterface
                     'data' => [
                         'options' => $options,
                         'config_version' => $pinned,
+                        'quote_diagnostics' => $this->serviceManager->getLastQuoteDiagnostics(),
                     ],
                 ];
             }

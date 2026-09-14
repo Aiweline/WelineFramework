@@ -226,6 +226,39 @@ final class B2BOrderThreadService
         }
     }
 
+    /**
+     * @return array<string,mixed>|null
+     */
+    public function getByOrderRef(string $orderRef): ?array
+    {
+        $orderRef = trim($orderRef);
+        if ($orderRef === '') {
+            return null;
+        }
+
+        return $this->findByOrderRef($orderRef);
+    }
+
+    /**
+     * Merchant/admin open: reuse thread or create for the order's customer.
+     *
+     * @return array<string,mixed>
+     */
+    public function openOrCreateForMerchant(string $orderRef, string $customerId, int $websiteId, ?string $hangId = null): array
+    {
+        $orderRef = trim($orderRef);
+        $customerId = trim($customerId);
+        if ($orderRef === '' || $customerId === '' || $websiteId < 0) {
+            throw new B2BConflictException(self::ERROR_INVALID, __('订单沟通参数无效'));
+        }
+        $existing = $this->findByOrderRef($orderRef);
+        if ($existing !== null) {
+            return $existing;
+        }
+
+        return $this->openOrCreate($orderRef, $customerId, $websiteId, $hangId);
+    }
+
     /** @return array<string,mixed>|null */
     private function findByOrderRef(string $orderRef): ?array
     {

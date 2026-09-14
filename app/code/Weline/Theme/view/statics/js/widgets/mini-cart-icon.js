@@ -101,6 +101,9 @@
     }
 
     var summaryCacheKeyPrefix = 'weline.cart.summary_cache';
+    /** Pending coupon code from Marketing cart-updated — passed into getCart for discount_preview. */
+    var pendingCouponCode = '';
+    var pendingDiscountPreview = null;
 
     /**
      * Opaque cart_type SPI code (Cart core default CODE_TOC = 'toc').
@@ -340,7 +343,39 @@
         var mode = preferredCartType();
         params.cart_type = mode;
         params.selling_mode = mode;
+        if (pendingCouponCode) {
+            params.coupon_code = pendingCouponCode;
+        }
         return params;
+    }
+
+    function mergeDiscountPreviewIntoSummary(summary, preview, clearDiscount) {
+        if (!summary || typeof summary !== 'object') {
+            return summary;
+        }
+        var next = Object.assign({}, summary);
+        if (clearDiscount) {
+            delete next.discount_preview;
+            return next;
+        }
+        if (preview && typeof preview === 'object' && Number(preview.amount_minor || 0) > 0) {
+            next.discount_preview = preview;
+        }
+        return next;
+    }
+
+    function resolveEventDiscountPreview(detail) {
+        if (!detail || typeof detail !== 'object') {
+            return null;
+        }
+        if (detail.clear_discount === true) {
+            return null;
+        }
+        if (detail.discount_preview && typeof detail.discount_preview === 'object'
+            && Number(detail.discount_preview.amount_minor || 0) > 0) {
+            return detail.discount_preview;
+        }
+        return null;
     }
 
     /** Set opaque data-cart-type only; Theme does not rewrite titles/badges. */
@@ -574,7 +609,7 @@
         return selectedParts.join(' / ');
     }
 
-    function appendMiniCartOptions(details, item) {
+    function appendMiniCartOptions(root, details, item) {
         var options = item && Array.isArray(item.options) ? item.options : [];
         if (options.length) {
             var list = document.createElement('ul');
@@ -593,11 +628,18 @@
                 var swatchImage = String(option.swatch_image || '').trim();
                 var swatchColor = String(option.swatch_color || '').trim();
                 if (isDisplayableImageUrl(swatchImage)) {
+                    var btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'mini-cart-drawer__line-option-swatch-btn';
+                    btn.setAttribute('data-mini-cart-swatch-trigger', '1');
+                    btn.setAttribute('data-mini-cart-swatch-src', swatchImage);
+                    btn.setAttribute('aria-label', attr(root, 'data-i18n-swatch-preview', '查看规格图'));
                     var img = document.createElement('img');
                     img.className = 'mini-cart-drawer__line-option-swatch';
                     img.src = swatchImage;
                     img.alt = '';
-                    li.appendChild(img);
+                    btn.appendChild(img);
+                    li.appendChild(btn);
                 } else if (swatchColor) {
                     var swatch = document.createElement('span');
                     swatch.className = 'mini-cart-drawer__line-option-swatch mini-cart-drawer__line-option-swatch--color';
@@ -690,7 +732,7 @@
         title.textContent = name;
         details.appendChild(title);
 
-        appendMiniCartOptions(details, item);
+        appendMiniCartOptions(root, details, item);
 
         var meta = document.createElement('div');
         meta.className = 'mini-cart-drawer__line-meta';
@@ -936,6 +978,10 @@
         }
         if (!items.length) {
             breakdown.hidden = true;
+            // Keep goods text current for credit/deposit readers even while the row is hidden.
+            if (goodsEl) {
+                text(goodsEl, formatMoney(subtotal, currency));
+            }
             return;
         }
 
@@ -984,12 +1030,16 @@
         var discountMajor = discountAmountMajor(summary);
         var payable = Math.max(0, subtotal - discountMajor);
         var formatted = formatMoney(payable, currency);
+        var goodsFormatted = formatMoney(subtotal, currency);
         var items = Array.isArray(summary.items) ? summary.items : [];
         var cartType = normalizeCartType(summary.cart_type || summary.selling_mode || preferredCartType());
         var gate = String(summary.gate_reason || '').toLowerCase();
 
         root.setAttribute('data-cart-count', String(count));
         root.setAttribute('data-cart-subtotal', formatted);
+        // Authoritative goods base (major) for B2B deposit/credit — must stay in sync even when
+        // the discount breakdown row is hidden (otherwise credit keeps a stale larger total).
+        root.setAttribute('data-cart-goods-subtotal-major', String(isFinite(subtotal) && subtotal > 0 ? subtotal : 0));
         root.setAttribute('data-cart-type', cartType);
         if (gate === 'login' || gate === 'membership') {
             root.setAttribute('data-cart-gate', gate);
@@ -1008,6 +1058,8 @@
         text(root.querySelector('[data-cart-subtotal-text]'), formatted);
         text(root.querySelector('[data-cart-item-count]'), String(count));
         text(root.querySelector('[data-cart-total-amount]'), formatted);
+        // Always refresh goods node text — do not wait for discount lines to appear.
+        text(root.querySelector('[data-cart-goods-subtotal]'), goodsFormatted);
         renderDiscountBreakdown(root, summary, currency);
         renderItems(root, items.slice(0, 20), currency);
     }
@@ -1153,12 +1205,28 @@
             var api = await withTimeout(waitForCartApi(), 8000, 'cart api wait timeout');
             var token = guestToken();
             var result;
+            var baseParams = cartQueryParams(token ? { guest_token: token } : {});
             if (typeof api.getCart === 'function') {
-                result = await withTimeout(
-                    api.getCart(cartQueryParams(token ? { guest_token: token } : {}), { silent: true }),
-                    8000,
-                    'getCart timeout'
-                );
+                try {
+                    result = await withTimeout(
+                        api.getCart(baseParams, { silent: true }),
+                        8000,
+                        'getCart timeout'
+                    );
+                } catch (getCartErr) {
+                    var msg = String((getCartErr && getCartErr.message) || '');
+                    if (baseParams.coupon_code && /coupon_code|Unknown frontend worker param/i.test(msg)) {
+                        var retryParams = Object.assign({}, baseParams);
+                        delete retryParams.coupon_code;
+                        result = await withTimeout(
+                            api.getCart(retryParams, { silent: true }),
+                            8000,
+                            'getCart retry timeout'
+                        );
+                    } else {
+                        throw getCartErr;
+                    }
+                }
             } else if (typeof api.summary === 'function') {
                 result = await withTimeout(api.summary(cartQueryParams({}), { silent: true }), 8000, 'summary timeout');
             } else if (typeof api.count === 'function') {
@@ -1184,6 +1252,15 @@
             var normalized = normalizeSummary(payload) || payload;
             normalized.cart_type = normalizeCartType(normalized.cart_type || normalized.selling_mode || mode);
             normalized.selling_mode = normalized.cart_type;
+            if ((!normalized.discount_preview || Number(normalized.discount_preview.amount_minor || 0) <= 0)
+                && pendingDiscountPreview) {
+                normalized = mergeDiscountPreviewIntoSummary(normalized, pendingDiscountPreview, false);
+            } else if (normalized.discount_preview && Number(normalized.discount_preview.amount_minor || 0) > 0) {
+                pendingDiscountPreview = normalized.discount_preview;
+                if (normalized.discount_preview.coupon_code) {
+                    pendingCouponCode = String(normalized.discount_preview.coupon_code).trim().toUpperCase();
+                }
+            }
             applySummary(root, normalized);
             rememberSummaryCache(normalized);
             if (options.forceNetwork && window.WelineCart
@@ -1400,14 +1477,72 @@
         });
     }
 
+    function ensureMiniCartSwatchPreview(root) {
+        var dialog = root.querySelector('[data-mini-cart-swatch-preview]');
+        if (dialog) {
+            return dialog;
+        }
+        dialog = document.createElement('dialog');
+        dialog.className = 'mini-cart-drawer__swatch-preview';
+        dialog.setAttribute('data-mini-cart-swatch-preview', '1');
+        var panel = document.createElement('div');
+        panel.className = 'mini-cart-drawer__swatch-preview-panel';
+        var img = document.createElement('img');
+        img.className = 'mini-cart-drawer__swatch-preview-img';
+        img.setAttribute('data-mini-cart-swatch-preview-img', '1');
+        img.alt = '';
+        var form = document.createElement('form');
+        form.method = 'dialog';
+        var closeBtn = document.createElement('button');
+        closeBtn.type = 'submit';
+        closeBtn.className = 'mini-cart-drawer__swatch-preview-close';
+        closeBtn.textContent = attr(root, 'data-i18n-swatch-preview-close', '关闭');
+        form.appendChild(closeBtn);
+        panel.appendChild(img);
+        panel.appendChild(form);
+        dialog.appendChild(panel);
+        dialog.addEventListener('click', function (event) {
+            if (event.target === dialog && typeof dialog.close === 'function') {
+                dialog.close();
+            }
+        });
+        root.appendChild(dialog);
+        return dialog;
+    }
+
+    function openMiniCartSwatchPreview(root, trigger) {
+        var src = String(trigger.getAttribute('data-mini-cart-swatch-src') || '').trim();
+        if (!src) {
+            return;
+        }
+        var dialog = ensureMiniCartSwatchPreview(root);
+        var img = dialog.querySelector('[data-mini-cart-swatch-preview-img]');
+        if (!img) {
+            return;
+        }
+        img.setAttribute('src', src);
+        img.setAttribute('alt', attr(root, 'data-i18n-swatch-preview', '查看规格图'));
+        if (typeof dialog.showModal === 'function') {
+            dialog.showModal();
+        } else {
+            dialog.setAttribute('open', '');
+        }
+    }
+
     function bindLineActions(root) {
         root.addEventListener('click', function (event) {
-            if (isDrawerBusy(root)) {
-                event.preventDefault();
-                return;
-            }
             var target = event.target;
             if (!(target instanceof Element)) {
+                return;
+            }
+            var swatchTrigger = target.closest('[data-mini-cart-swatch-trigger]');
+            if (swatchTrigger && root.contains(swatchTrigger)) {
+                event.preventDefault();
+                openMiniCartSwatchPreview(root, swatchTrigger);
+                return;
+            }
+            if (isDrawerBusy(root)) {
+                event.preventDefault();
                 return;
             }
             var line = target.closest('[data-mini-cart-line]');
@@ -1483,12 +1618,28 @@
                 var api = await withTimeout(waitForCartApi(), 8000, 'cart api wait timeout');
                 var token = guestToken();
                 var result;
+                var baseParams = cartQueryParams(token ? { guest_token: token } : {});
                 if (typeof api.getCart === 'function') {
-                    result = await withTimeout(
-                        api.getCart(cartQueryParams(token ? { guest_token: token } : {}), { silent: true }),
-                        8000,
-                        'getCart timeout'
-                    );
+                    try {
+                        result = await withTimeout(
+                            api.getCart(baseParams, { silent: true }),
+                            8000,
+                            'getCart timeout'
+                        );
+                    } catch (getCartErr) {
+                        var msg = String((getCartErr && getCartErr.message) || '');
+                        if (baseParams.coupon_code && /coupon_code|Unknown frontend worker param/i.test(msg)) {
+                            var retryParams = Object.assign({}, baseParams);
+                            delete retryParams.coupon_code;
+                            result = await withTimeout(
+                                api.getCart(retryParams, { silent: true }),
+                                8000,
+                                'getCart retry timeout'
+                            );
+                        } else {
+                            throw getCartErr;
+                        }
+                    }
                 } else if (typeof api.miniItems === 'function') {
                     result = await withTimeout(api.miniItems({ limit: 20 }, { silent: true }), 8000, 'miniItems timeout');
                 } else if (typeof api.summary === 'function') {
@@ -1512,6 +1663,15 @@
                 var normalized = normalizeSummary(payload) || payload;
                 normalized.cart_type = normalizeCartType(normalized.cart_type || normalized.selling_mode || mode);
                 normalized.selling_mode = normalized.cart_type;
+                if ((!normalized.discount_preview || Number(normalized.discount_preview.amount_minor || 0) <= 0)
+                    && pendingDiscountPreview) {
+                    normalized = mergeDiscountPreviewIntoSummary(normalized, pendingDiscountPreview, false);
+                } else if (normalized.discount_preview && Number(normalized.discount_preview.amount_minor || 0) > 0) {
+                    pendingDiscountPreview = normalized.discount_preview;
+                    if (normalized.discount_preview.coupon_code) {
+                        pendingCouponCode = String(normalized.discount_preview.coupon_code).trim().toUpperCase();
+                    }
+                }
                 applySummary(root, normalized);
                 rememberSummaryCache(normalized);
                 if (options.forceNetwork && window.WelineCart
@@ -1547,11 +1707,42 @@
             // Never short-circuit on stale summary_cache — that hides discount_preview lines.
             var forceRefresh = !!(summary && typeof summary === 'object'
                 && (summary.refresh === true || summary.forceNetwork === true));
+            if (summary && typeof summary === 'object') {
+                if (summary.clear_discount === true) {
+                    pendingCouponCode = '';
+                    pendingDiscountPreview = null;
+                } else {
+                    var code = String(summary.coupon_code || '').trim().toUpperCase();
+                    if (code) {
+                        pendingCouponCode = code;
+                    }
+                    var preview = resolveEventDiscountPreview(summary);
+                    if (preview) {
+                        pendingDiscountPreview = preview;
+                    }
+                }
+            }
             var normalized = normalizeSummary(summary);
             var hasCartPayload = !!(normalized
                 && normalized.success !== false
                 && (normalized.cart_count != null || Array.isArray(normalized.items)));
             var roots = document.querySelectorAll('[data-w-mini-cart="1"]');
+            // Optimistic: paint chip quote onto current summary before network returns.
+            if (forceRefresh && (pendingDiscountPreview || summary && summary.clear_discount === true)) {
+                roots.forEach(function (root) {
+                    var base = root.__welineLastSummary
+                        || normalizeSummary(readSummaryCache(preferredCartType()))
+                        || null;
+                    if (!base) {
+                        return;
+                    }
+                    applySummary(root, mergeDiscountPreviewIntoSummary(
+                        base,
+                        pendingDiscountPreview,
+                        !!(summary && summary.clear_discount === true)
+                    ));
+                });
+            }
             roots.forEach(function (root) {
                 if (!forceRefresh && hasCartPayload) {
                     applySummary(root, normalized);

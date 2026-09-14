@@ -20,11 +20,25 @@ Object.assign(window.WelineModulesConfig.modules, {
         globalVar: null,
         description: "推荐商品轮播/网格"
     },
+    youMayLike: {
+        paths: [
+            "Weline_Product::js/widgets/you-may-like.js"
+        ],
+        globalVar: null,
+        description: "猜你喜欢轮播/网格"
+    },
     crossSell: {
         paths: [
             "Weline_Product::js/widgets/cross-sell.js"
         ],
         globalVar: null,
         description: "经常一起购买（FBT）"
+    },
+    productStickyPurchase: {
+        paths: [
+            "Weline_Product::js/widgets/product-sticky-purchase.js?v=20260913-sticky-atc4"
+        ],
+        globalVar: null,
+        description: "PDP 主加购滚出视野后的悬浮代理加购条"
     }
 });

@@ -3,13 +3,40 @@
  * 优惠券管理 - 内容模板
  * @var \Weline\Framework\View\Template $this
  * @var array $coupons
- * @var \Weline\Framework\Pagination\Pagination $pagination
+ * @var string $pagination
  */
 $escapeHtml = static fn(mixed $value): string => htmlspecialchars(
     (string)$value,
     ENT_QUOTES | ENT_SUBSTITUTE,
     'UTF-8'
 );
+$baseCurrency = strtoupper(trim((string)($base_currency ?? $this->getData('base_currency') ?? 'CNY'))) ?: 'CNY';
+$filterSearch = trim((string)($filter_search ?? $this->getData('filter_search') ?? ''));
+$filterSourceType = trim((string)($filter_source_type ?? $this->getData('filter_source_type') ?? ''));
+$filterStatus = trim((string)($filter_status ?? $this->getData('filter_status') ?? ''));
+$filterType = trim((string)($filter_type ?? $this->getData('filter_type') ?? ''));
+$sourceOptions = $source_options ?? $this->getData('source_options');
+if (!is_array($sourceOptions) || $sourceOptions === []) {
+    $sourceOptions = [
+        ['value' => 'manual', 'label' => (string)__('后台手工')],
+        ['value' => 'maintenance_wait_gift', 'label' => (string)__('维护等待礼金')],
+        ['value' => 'promotion_activity_theme', 'label' => (string)__('促销活动主题')],
+    ];
+}
+$coupons = is_array($coupons ?? null) ? $coupons : [];
+$hasFilter = $filterSearch !== '' || $filterSourceType !== '' || $filterStatus !== '' || $filterType !== '';
+$statusOptions = [
+    'active' => __('启用'),
+    'inactive' => __('禁用'),
+    'expired' => __('已过期'),
+    'exhausted' => __('已用尽'),
+];
+$typeOptions = [
+    'percentage' => __('百分比折扣'),
+    'fixed_amount' => __('固定金额'),
+    'free_shipping' => __('免运费'),
+    'gift' => __('赠品'),
+];
 ?>
 <link rel="stylesheet" href="@static(Weline_Marketing::css/coupon-index.css)">
 
@@ -22,15 +49,96 @@ $escapeHtml = static fn(mixed $value): string => htmlspecialchars(
                     <w:icon name="plus" size="sm"></w:icon><lang>添加优惠券</lang>
                 </a>
             </div>
-            <div class="marketing-coupon-card-body">
+            <div class="marketing-coupon-card-body w-stack" style="--w-gap:var(--weline-space-4);">
+                <w:form
+                    method="get"
+                    action="@backend-url{'marketing/backend/coupon/index'}"
+                    class="w-grid marketing-coupon-filter"
+                    data-align="end"
+                    data-testid="marketing-coupon-filter"
+                >
+                    <div class="w-field" data-label-layout="stacked" style="--w-span-md:3;">
+                        <label class="w-field__label" for="marketing-coupon-filter-search"><?= __('搜索代码') ?></label>
+                        <input
+                            id="marketing-coupon-filter-search"
+                            class="w-input"
+                            type="search"
+                            name="search"
+                            value="<?= $escapeHtml($filterSearch) ?>"
+                            placeholder="<?= $escapeHtml(__('优惠券代码，如 MW / SAVE')) ?>"
+                            maxlength="100"
+                            autocomplete="off"
+                            data-testid="marketing-coupon-filter-search"
+                        >
+                    </div>
+                    <div class="w-field" data-label-layout="stacked" style="--w-span-md:3;">
+                        <label class="w-field__label" for="marketing-coupon-filter-source"><?= __('来源活动') ?></label>
+                        <select
+                            id="marketing-coupon-filter-source"
+                            class="w-select"
+                            name="source_type"
+                            data-testid="marketing-coupon-filter-source"
+                        >
+                            <option value=""><?= __('全部来源') ?></option>
+                            <?php foreach ($sourceOptions as $option): ?>
+                                <?php
+                                $optValue = (string)($option['value'] ?? '');
+                                $optLabel = (string)($option['label'] ?? $optValue);
+                                ?>
+                                <option value="<?= $escapeHtml($optValue) ?>"<?= $filterSourceType === $optValue ? ' selected' : '' ?>>
+                                    <?= $escapeHtml($optLabel) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="w-field" data-label-layout="stacked" style="--w-span-md:2;">
+                        <label class="w-field__label" for="marketing-coupon-filter-type"><?= __('类型') ?></label>
+                        <select id="marketing-coupon-filter-type" class="w-select" name="type" data-testid="marketing-coupon-filter-type">
+                            <option value=""><?= __('全部类型') ?></option>
+                            <?php foreach ($typeOptions as $optValue => $optLabel): ?>
+                                <option value="<?= $escapeHtml((string)$optValue) ?>"<?= $filterType === (string)$optValue ? ' selected' : '' ?>>
+                                    <?= $escapeHtml((string)$optLabel) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="w-field" data-label-layout="stacked" style="--w-span-md:2;">
+                        <label class="w-field__label" for="marketing-coupon-filter-status"><?= __('状态') ?></label>
+                        <select id="marketing-coupon-filter-status" class="w-select" name="status" data-testid="marketing-coupon-filter-status">
+                            <option value=""><?= __('全部状态') ?></option>
+                            <?php foreach ($statusOptions as $optValue => $optLabel): ?>
+                                <option value="<?= $escapeHtml((string)$optValue) ?>"<?= $filterStatus === (string)$optValue ? ' selected' : '' ?>>
+                                    <?= $escapeHtml((string)$optLabel) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="w-cluster" style="--w-span-md:2;" data-align="end">
+                        <button type="submit" class="w-button" data-tone="primary" data-testid="marketing-coupon-filter-submit">
+                            <w:icon name="search" size="sm"></w:icon><?= __('筛选') ?>
+                        </button>
+                        <?php if ($hasFilter): ?>
+                            <a
+                                href="@backend-url{'marketing/backend/coupon/index'}"
+                                class="w-button"
+                                data-tone="neutral"
+                                data-testid="marketing-coupon-filter-reset"
+                            >
+                                <w:icon name="refresh" size="sm"></w:icon><?= __('重置') ?>
+                            </a>
+                        <?php endif; ?>
+                    </div>
+                </w:form>
+
                 <div class="marketing-coupon-table-wrap">
-                    <table class="marketing-coupon-table">
+                    <table class="marketing-coupon-table" data-testid="marketing-coupon-table">
                         <thead>
                             <tr>
                                 <th><?= __('ID') ?></th>
                                 <th><?= __('优惠券代码') ?></th>
+                                <th><?= __('来源') ?></th>
                                 <th><?= __('类型') ?></th>
-                                <th><?= __('折扣值') ?></th>
+                                <th><?= __('折扣值（基准货币 %{1}）', $baseCurrency) ?></th>
                                 <th><?= __('状态') ?></th>
                                 <th><?= __('使用次数') ?></th>
                                 <th><?= __('操作') ?></th>
@@ -39,10 +147,16 @@ $escapeHtml = static fn(mixed $value): string => htmlspecialchars(
                         <tbody>
                             <?php if (empty($coupons)): ?>
                             <tr>
-                                <td colspan="7">
+                                <td colspan="8">
                                     <div class="marketing-coupon-empty">
                                         <w:icon name="circle" size="sm"></w:icon>
-                                        <span class="marketing-coupon-empty-text"><lang>暂无数据</lang></span>
+                                        <span class="marketing-coupon-empty-text">
+                                            <?php if ($hasFilter): ?>
+                                                <lang>无匹配结果，请调整筛选条件</lang>
+                                            <?php else: ?>
+                                                <lang>暂无数据</lang>
+                                            <?php endif; ?>
+                                        </span>
                                     </div>
                                 </td>
                             </tr>
@@ -56,12 +170,30 @@ $escapeHtml = static fn(mixed $value): string => htmlspecialchars(
                             } elseif (in_array(strtolower((string)$status), ['expired', '已过期', '失效'], true)) {
                                 $statusClass = 'expired';
                             }
+                            $sourceLabel = (string)($coupon['source_label'] ?? __('后台手工'));
+                            $sourceTone = (string)($coupon['source_tone'] ?? 'neutral');
+                            $sourceType = (string)($coupon['source_type'] ?? 'manual');
                             ?>
-                            <tr>
-                                <td><?= $coupon['id'] ?></td>
-                                <td><code class="marketing-coupon-code"><?= $escapeHtml($coupon['code']) ?></code></td>
+                            <tr data-testid="marketing-coupon-row" data-source-type="<?= $escapeHtml($sourceType) ?>">
+                                <td><?= (int)($coupon['id'] ?? 0) ?></td>
+                                <td><code class="marketing-coupon-code"><?= $escapeHtml($coupon['code'] ?? '') ?></code></td>
+                                <td>
+                                    <span
+                                        class="w-badge"
+                                        data-tone="<?= $escapeHtml($sourceTone === 'info' ? 'info' : 'secondary') ?>"
+                                        data-testid="marketing-coupon-source"
+                                        title="<?= $escapeHtml(($coupon['source_module'] ?? '') . ' / ' . $sourceType) ?>"
+                                    ><?= $escapeHtml($sourceLabel) ?></span>
+                                </td>
                                 <td><?= $escapeHtml($coupon['type'] ?? '') ?></td>
-                                <td><?= $escapeHtml((string)($coupon['discount_value'] ?? '')) ?></td>
+                                <td>
+                                    <?= $escapeHtml((string)($coupon['discount_value'] ?? '')) ?>
+                                    <?php if (($coupon['type'] ?? '') === 'fixed_amount'): ?>
+                                        <span class="w-text" data-tone="muted" data-size="sm"><?= $escapeHtml($baseCurrency) ?></span>
+                                    <?php elseif (($coupon['type'] ?? '') === 'percentage'): ?>
+                                        <span class="w-text" data-tone="muted" data-size="sm">%</span>
+                                    <?php endif; ?>
+                                </td>
                                 <td>
                                     <span class="marketing-coupon-badge marketing-coupon-badge--<?= $statusClass ?>">
                                         <?= $escapeHtml((string)$status) ?>
@@ -80,7 +212,9 @@ $escapeHtml = static fn(mixed $value): string => htmlspecialchars(
                         </tbody>
                     </table>
                 </div>
-                <?= $this->getChildHtml('pagination') ?>
+                <div class="marketing-coupon-pagination" data-testid="marketing-coupon-pagination">
+                    {{pagination}}
+                </div>
             </div>
         </div>
     </div>

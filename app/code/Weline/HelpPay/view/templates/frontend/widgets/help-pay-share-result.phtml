@@ -6,22 +6,52 @@ $hint = trim((string) ($this->getData('share_hint') ?? ''));
 if ($title === '') {
     $title = (string) __('分享给付款人');
 }
+if ($hint === '') {
+    $hint = (string) __('复制链接或扫码分享当前规格');
+}
 $escape = static fn ($v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
 $uid = 'helppay-share-url-' . substr(sha1($url !== '' ? $url : uniqid('hp', true)), 0, 8);
+$urlTipDefault = trim((string) ($this->getData('url_tip') ?? ''));
+$urlTipCopied = trim((string) ($this->getData('url_tip_copied') ?? ''));
+$qrTipDefault = trim((string) ($this->getData('qr_tip') ?? ''));
+$qrTipCopied = trim((string) ($this->getData('qr_tip_copied') ?? ''));
+$linkSection = trim((string) ($this->getData('link_section') ?? ''));
+$qrSection = trim((string) ($this->getData('qr_section') ?? ''));
+$qrAria = trim((string) ($this->getData('qr_aria') ?? ''));
+if ($urlTipDefault === '') {
+    $urlTipDefault = (string) __('复制后，粘贴发给朋友即可打开这份规格');
+}
+if ($urlTipCopied === '') {
+    $urlTipCopied = (string) __('已复制，可以分发给朋友');
+}
+if ($qrTipDefault === '') {
+    $qrTipDefault = (string) __('复制后，可直接把图片粘贴到聊天里发送');
+}
+if ($qrTipCopied === '') {
+    $qrTipCopied = (string) __('已复制，可直接粘贴图片到聊天里发送');
+}
+if ($linkSection === '') {
+    $linkSection = (string) __('链接分享');
+}
+if ($qrSection === '') {
+    $qrSection = (string) __('扫码分享');
+}
+if ($qrAria === '') {
+    $qrAria = (string) __('分享二维码');
+}
 ?>
 <div class="w-helppay-share-result w-helppay-panel"
      data-testid="help-pay-share-result"
      data-helppay-share-result="1"
      data-share-url="<?= $escape($url) ?>"
      data-weline-load="helpPayShare">
-    <div class="w-stack" style="--w-gap:var(--weline-space-1, var(--space-1)); --w-mb:var(--weline-space-3, var(--space-3));">
-        <p class="w-helppay-share-result__title w-text" data-weight="strong" style="--w-m:0;"><?= $escape($title) ?></p>
-        <?php if ($hint !== ''): ?>
-            <p class="w-text" data-size="sm" data-tone="muted" style="--w-m:0;"><?= $escape($hint) ?></p>
-        <?php endif; ?>
+    <div class="w-helppay-share-result__header">
+        <p class="w-helppay-share-result__title w-text" data-weight="strong"><?= $escape($title) ?></p>
+        <p class="w-helppay-share-result__hint"><?= $escape($hint) ?></p>
     </div>
     <div class="w-helppay-share-result__grid">
         <div class="w-helppay-share-result__url-block">
+            <p class="w-helppay-share-result__section-label"><?= $escape($linkSection) ?></p>
             <label class="w-field" for="<?= $escape($uid) ?>">
                 <span class="w-field__label"><?= $escape(__('链接地址')) ?></span>
                 <input id="<?= $escape($uid) ?>"
@@ -31,33 +61,61 @@ $uid = 'helppay-share-url-' . substr(sha1($url !== '' ? $url : uniqid('hp', true
                        data-testid="help-pay-share-url"
                        value="<?= $escape($url) ?>">
             </label>
-            <button type="button"
-                    class="w-button w-button--primary"
-                    data-testid="help-pay-copy-url"
-                    data-helppay-copy-url="1">
-                <?= $escape(__('复制链接')) ?>
-            </button>
+            <div class="w-helppay-share-result__actions">
+                <button type="button"
+                        class="w-button"
+                        data-tone="primary"
+                        data-testid="help-pay-copy-url"
+                        data-helppay-copy-url="1"
+                        data-helppay-copied-label="<?= $escape(__('已复制')) ?>"
+                        data-helppay-fail-label="<?= $escape(__('复制失败')) ?>">
+                    <?= $escape(__('复制链接')) ?>
+                </button>
+            </div>
+            <p class="w-helppay-share-result__tip w-text"
+               data-size="sm"
+               data-tone="muted"
+               data-testid="help-pay-copy-tip-url"
+               data-helppay-copy-tip="url"
+               data-helppay-tip-copied="<?= $escape($urlTipCopied) ?>"
+               data-helppay-tip-fail="<?= $escape(__('复制没成功，请再点一次试试')) ?>"
+               aria-live="polite"><?= $escape($urlTipDefault) ?></p>
         </div>
         <div class="w-helppay-share-result__qr-block">
+            <p class="w-helppay-share-result__section-label"><?= $escape($qrSection) ?></p>
             <div class="w-helppay-share-result__qr-frame">
                 <canvas data-testid="help-pay-share-qr"
                         data-helppay-qr-canvas="1"
                         width="160"
                         height="160"
-                        aria-label="<?= $escape(__('分享二维码')) ?>"></canvas>
+                        aria-label="<?= $escape($qrAria) ?>"></canvas>
             </div>
-            <button type="button"
-                    class="w-button w-button--secondary"
-                    data-testid="help-pay-copy-qr"
-                    data-helppay-copy-qr="1">
-                <?= $escape(__('复制二维码图片')) ?>
-            </button>
-            <a class="w-helppay-share-result__dl w-text"
+            <div class="w-helppay-share-result__actions">
+                <button type="button"
+                        class="w-button"
+                        data-variant="outline"
+                        data-tone="primary"
+                        data-testid="help-pay-copy-qr"
+                        data-helppay-copy-qr="1"
+                        data-helppay-copied-label="<?= $escape(__('已复制')) ?>"
+                        data-helppay-fail-label="<?= $escape(__('复制失败')) ?>">
+                    <?= $escape(__('复制二维码图片')) ?>
+                </button>
+                <a class="w-helppay-share-result__dl w-text"
+                   data-size="sm"
+                   data-testid="help-pay-download-qr"
+                   data-helppay-download-qr="1"
+                   hidden
+                   download="helppay-qr.png"><?= $escape(__('下载二维码')) ?></a>
+            </div>
+            <p class="w-helppay-share-result__tip w-text"
                data-size="sm"
-               data-testid="help-pay-download-qr"
-               data-helppay-download-qr="1"
-               hidden
-               download="helppay-qr.png"><?= $escape(__('下载二维码')) ?></a>
+               data-tone="muted"
+               data-testid="help-pay-copy-tip-qr"
+               data-helppay-copy-tip="qr"
+               data-helppay-tip-copied="<?= $escape($qrTipCopied) ?>"
+               data-helppay-tip-fail="<?= $escape(__('复制没成功，请再点一次或改用下载')) ?>"
+               aria-live="polite"><?= $escape($qrTipDefault) ?></p>
         </div>
     </div>
 </div>

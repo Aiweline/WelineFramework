@@ -21,6 +21,7 @@ use Weline\Framework\Database\TransactionContext;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Event\EventsManager;
+use Weline\Framework\Http\ContentEncodingNegotiator;
 use Weline\Framework\Http\Response;
 use Weline\Framework\Http\Security\SecurityHeaderPolicyService;
 use Weline\Framework\Manager\ObjectManager;
@@ -42,11 +43,22 @@ final class FullPageCacheCoordinator
     private const PERSISTENT_LOCK_WAIT_TIMEOUT_MS = 0;
     private const LOCK_WAIT_STEP_MS = 20;
     private const UNIFIED_CACHE_FPC_GZIP_B64_KEY = 'fpc_gzip_b64';
+    private const UNIFIED_CACHE_FPC_BROTLI_B64_KEY = 'fpc_br_b64';
     private const UNIFIED_CACHE_FPC_BODY_FILE_KEY = 'fpc_body_file';
     private const UNIFIED_CACHE_HTML_URLS_VALIDATED_KEY = 'fpc_html_urls_validated';
     private const UNIFIED_CACHE_EXPIRES_AT_KEY = 'fpc_expires_at';
+    private const FPC_BODY_FILE_ENCODING_BROTLI = 'br';
+    private const FPC_BODY_FILE_ENCODING_IDENTITY = 'identity';
     private const GZIP_CACHE_MIN_BODY_BYTES = 1024;
+    /** Sliding window for gzip-only / gzip-preferred demand before materializing a stored gzip body. */
+    private const DEFAULT_GZIP_DEMAND_WINDOW_SECONDS = 60;
+    /** Gzip serves inside the window that trigger persisting fpc_gzip_b64 (br remains authoritative). */
+    private const DEFAULT_GZIP_DEMAND_MATERIALIZE_THRESHOLD = 8;
+    /** After this many seconds without gzip demand, drop the materialized gzip body. */
+    private const DEFAULT_GZIP_DEMAND_EVICT_IDLE_SECONDS = 120;
     private const FAST_HTTP_GZIP_KEEPALIVE_SUFFIX = ':http:gzip:keepalive:v1';
+    private const FAST_HTTP_BROTLI_KEEPALIVE_SUFFIX = ':http:br:keepalive:v1';
+    private const FAST_HTTP_ENCODING_KEEPALIVE_PREFIX = ':http:';
     private const STALE_CACHE_SUFFIX = ':stale:v1';
     private const SCHEMA_NEUTRAL_STALE_CACHE_PREFIX =
         'unified-fpc-schema-neutral-stale:20260907-category-summary-facets-v8:';
@@ -166,6 +178,15 @@ final class FullPageCacheCoordinator
 
     /** @var array<string, float> */
     private static array $frontendLoginSessionCacheExpiresAt = [];
+
+    /**
+     * Process-local gzip demand meter per FPC payload key.
+     * Counts gzip serves; when the windowed count is high we materialize gzip,
+     * and when demand goes idle we drop it again (br stays the compressed authority).
+     *
+     * @var array<string, array{count:int,window_start:float,last_at:float}>
+     */
+    private static array $gzipDemandByCacheKey = [];
 
     public function __construct(
         ?CacheManager $cacheManager = null,
@@ -410,6 +431,18 @@ final class FullPageCacheCoordinator
 
         $fullUri = $this->getCacheKeyFullUri();
         $body = $response->getBody();
+        try {
+            $policyService = new SecurityHeaderPolicyService();
+            if ($policyService->isMetaDelivery()) {
+                $withCsp = $policyService->ensureDocumentCspMeta($body);
+                if ($withCsp !== $body) {
+                    $body = $withCsp;
+                    $response->setBody($body);
+                }
+            }
+        } catch (\Throwable) {
+            // Publishing must not fail because CSP decoration threw.
+        }
         if ($body === '' || !KeyBuilder::isValidFullPageCacheKey($fullUri)) {
             return;
         }
@@ -445,9 +478,12 @@ final class FullPageCacheCoordinator
         ];
 
         self::cooperativeBuildYield();
-        $gzipBody = $this->buildCachedGzipBody($body);
-        if ($gzipBody !== null) {
-            $payload[self::UNIFIED_CACHE_FPC_GZIP_B64_KEY] = \base64_encode($gzipBody);
+        // When brotli is available, br is the authoritative body. Gzip is
+        // demand-materialized only after enough gzip clients hit the transcoder.
+        // Without brotli, plaintext remains authoritative (fail-open compatibility).
+        $brotliBody = $this->buildCachedBrotliBody($body);
+        if ($brotliBody !== null) {
+            $payload[self::UNIFIED_CACHE_FPC_BROTLI_B64_KEY] = \base64_encode($brotliBody);
         }
 
         $ttl = $this->privateSessionTokenFromVariant($variant) !== ''
@@ -456,7 +492,11 @@ final class FullPageCacheCoordinator
         $payload[self::UNIFIED_CACHE_EXPIRES_AT_KEY] = \microtime(true) + $ttl;
         $unifiedCacheKey = $this->getUnifiedCacheKey($method);
         self::cooperativeBuildYield();
-        $sharedPayload = $this->externalizeSharedPayload($unifiedCacheKey, $payload);
+        // Externalize while plaintext length is still known, then drop plaintext
+        // from Shared/L1 whenever br authority exists.
+        $sharedPayload = $this->stripPlaintextWhenBrotliAuthority(
+            $this->externalizeSharedPayload($unifiedCacheKey, $payload)
+        );
         $sharedPublished = $this->cache()->set(
             $unifiedCacheKey,
             $sharedPayload,
@@ -468,13 +508,17 @@ final class FullPageCacheCoordinator
         if ($this->privateSessionTokenFromVariant($variant) === '') {
             $staleCacheKey = $this->buildStaleCacheKey($unifiedCacheKey);
             $staleTtl = $this->staleTtlSeconds();
-            $stalePayload = $this->externalizeSharedPayload($staleCacheKey, $payload);
+            $stalePayload = $this->stripPlaintextWhenBrotliAuthority(
+                $this->externalizeSharedPayload($staleCacheKey, $payload)
+            );
             if ($this->shouldPublishSharedStalePayload($stalePayload)) {
                 self::cooperativeBuildYield();
                 $this->cache()->set($staleCacheKey, $stalePayload, $staleTtl);
                 self::cooperativeBuildYield();
                 $schemaNeutralStaleKey = $this->buildSchemaNeutralStaleCacheKey($fullUri, $method, $variant);
-                $schemaNeutralStalePayload = $this->externalizeSharedPayload($schemaNeutralStaleKey, $payload);
+                $schemaNeutralStalePayload = $this->stripPlaintextWhenBrotliAuthority(
+                    $this->externalizeSharedPayload($schemaNeutralStaleKey, $payload)
+                );
                 if ($this->shouldPublishSharedStalePayload($schemaNeutralStalePayload)) {
                     $this->cache()->set(
                         $schemaNeutralStaleKey,
@@ -484,7 +528,10 @@ final class FullPageCacheCoordinator
                 }
             }
         }
-        $this->setProcessCachedPayload($unifiedCacheKey, $payload);
+        $this->setProcessCachedPayload(
+            $unifiedCacheKey,
+            $this->stripPlaintextWhenBrotliAuthority($payload)
+        );
         $this->registerLocalizedHomepageProcessReceipt($fullUri, $variant, $unifiedCacheKey);
         $this->registerRootHomepageProcessReceipt($fullUri, $variant, $unifiedCacheKey);
         if (InternalHomepagePrime::isCurrentRequest()) {
@@ -494,13 +541,20 @@ final class FullPageCacheCoordinator
             );
         }
         self::cooperativeBuildYield();
-        $formattedGzip = $this->buildFormattedGzipKeepAliveResponse($payload, 'shared');
-        if ($formattedGzip !== null) {
-            $formattedKey = $this->buildFormattedFastHttpCacheKey($unifiedCacheKey);
-            $this->setProcessCachedFormattedResponse($formattedKey, $formattedGzip, $ttl);
-            if ($this->shouldPublishSharedFormattedResponse($formattedGzip)) {
+        $formatted = $this->buildFormattedEncodedKeepAliveResponse(
+            $payload,
+            'shared-formatted',
+            ContentEncodingNegotiator::ENCODING_BROTLI,
+        );
+        if ($formatted !== null) {
+            $formattedKey = $this->buildFormattedFastHttpCacheKey(
+                $unifiedCacheKey,
+                ContentEncodingNegotiator::ENCODING_BROTLI,
+            );
+            $this->setProcessCachedFormattedResponse($formattedKey, $formatted, $ttl);
+            if ($this->shouldPublishSharedFormattedResponse($formatted)) {
                 self::cooperativeBuildYield();
-                $this->cache()->set($formattedKey, $formattedGzip, $ttl);
+                $this->cache()->set($formattedKey, $formatted, $ttl);
             }
         }
     }
@@ -750,6 +804,7 @@ final class FullPageCacheCoordinator
         self::$processFormattedFpcTotalBytes = 0;
         self::$frontendLoginSessionCache = [];
         self::$frontendLoginSessionCacheExpiresAt = [];
+        self::$gzipDemandByCacheKey = [];
     }
 
     private function getStaleCachedResponse(string $method): ?Response
@@ -801,7 +856,11 @@ final class FullPageCacheCoordinator
             return null;
         }
 
-        $body = (string)($cached[KeyBuilder::UNIFIED_CACHE_FPC_KEY] ?? '');
+        if (!$this->payloadHasAuthoritativeBody($cached)) {
+            return null;
+        }
+
+        $body = $this->resolvePlaintextBody($cached) ?? '';
         if ($body === '') {
             return null;
         }
@@ -820,14 +879,16 @@ final class FullPageCacheCoordinator
         }
 
         $statusCode = (int)($cached[KeyBuilder::UNIFIED_CACHE_STATUS_KEY] ?? 200);
-        $gzipBody = $this->resolveCachedGzipBody($cached);
-        $useGzipBody = $gzipBody !== null && $this->clientAcceptsGzip();
-
-        $response = Response::fromContent($useGzipBody ? $gzipBody : $body, $statusCode, 'text/html; charset=utf-8');
+        [$responseBody, $encoding] = $this->resolveEncodedHitBody(
+            $cached,
+            $this->clientAcceptEncodingHeader(),
+            $staleCacheKey,
+        );
+        $response = Response::fromContent($responseBody, $statusCode, 'text/html; charset=utf-8');
         $this->applyCachedHeaders($response, $cached[KeyBuilder::UNIFIED_CACHE_HEADERS_KEY] ?? []);
-        if ($useGzipBody) {
-            $response->setHeader('Content-Encoding', 'gzip');
-            $response->setHeader('Content-Length', (string)\strlen($gzipBody));
+        if ($encoding !== null) {
+            $response->setHeader('Content-Encoding', $encoding);
+            $response->setHeader('Content-Length', (string)\strlen($responseBody));
             $this->ensureVaryAcceptEncoding($response);
         }
         $response->setHeader('X-Weline-FPC', 'STALE');
@@ -882,15 +943,14 @@ final class FullPageCacheCoordinator
         if (\is_array($cached)) {
             $cached = $this->hydrateSharedPayload($cached);
         }
-        $body = \is_array($cached) ? ($cached[KeyBuilder::UNIFIED_CACHE_FPC_KEY] ?? null) : null;
-        if (!\is_string($body) || $body === '') {
+        if (!$this->payloadHasAuthoritativeBody($cached)) {
             // SharedState 短断或单次读失败时保留仍在自身 TTL 内的 process FPC；
             // 显式 cache-clear IPC 仍会立即清理进程缓存，不用一次瞬时故障制造下一个冷请求。
             return false;
         }
 
         $this->setProcessCachedPayload($cacheKey, $cached);
-        $this->deleteProcessCachedFormattedResponse($this->buildFormattedFastHttpCacheKey($cacheKey));
+        $this->deleteProcessCachedFormattedResponsesForPayload($cacheKey);
         return $this->getProcessCachedPayload($cacheKey) !== null;
     }
 
@@ -918,8 +978,12 @@ final class FullPageCacheCoordinator
         if (\is_array($cached)) {
             $cached = $this->hydrateSharedPayload($cached);
         }
-        $body = \is_array($cached) ? ($cached[KeyBuilder::UNIFIED_CACHE_FPC_KEY] ?? null) : null;
-        if (!\is_string($body) || $body === '') {
+        if (!$this->payloadHasAuthoritativeBody($cached)) {
+            return false;
+        }
+
+        $body = $this->resolvePlaintextBody($cached) ?? '';
+        if ($body === '') {
             return false;
         }
 
@@ -929,7 +993,7 @@ final class FullPageCacheCoordinator
         }
 
         $this->setProcessCachedPayload($cacheKey, $cached);
-        $this->deleteProcessCachedFormattedResponse($this->buildFormattedFastHttpCacheKey($cacheKey));
+        $this->deleteProcessCachedFormattedResponsesForPayload($cacheKey);
         return $this->getProcessCachedPayload($cacheKey) !== null;
     }
 
@@ -955,8 +1019,6 @@ final class FullPageCacheCoordinator
         ) {
             return null;
         }
-        $acceptsGzip = $this->acceptEncodingAllowsGzip($acceptEncoding);
-
         $cacheKey = $this->internalHomepageReceiptCacheKey($receipt);
         if ($cacheKey === null) {
             return null;
@@ -966,7 +1028,10 @@ final class FullPageCacheCoordinator
         if (!\is_array($cached)) {
             return null;
         }
-        $body = (string)($cached[KeyBuilder::UNIFIED_CACHE_FPC_KEY] ?? '');
+        if (!$this->payloadHasAuthoritativeBody($cached)) {
+            return null;
+        }
+        $body = $this->resolvePlaintextBody($cached) ?? '';
         if ($body === '') {
             return null;
         }
@@ -980,11 +1045,16 @@ final class FullPageCacheCoordinator
             return null;
         }
 
-        if ($requestMethod === 'GET' && $acceptsGzip) {
-            $formattedKey = $this->buildFormattedFastHttpCacheKey($cacheKey);
+        $encoding = $this->resolveHitContentEncoding($acceptEncoding, $cached);
+        if ($requestMethod === 'GET' && $encoding !== null) {
+            $formattedKey = $this->buildFormattedFastHttpCacheKey($cacheKey, $encoding);
             $formatted = $this->getProcessCachedFormattedResponse($formattedKey);
             if ($formatted === null) {
-                $formatted = $this->buildFormattedGzipKeepAliveResponse($cached, 'process');
+                $formatted = $this->buildFormattedEncodedKeepAliveResponse(
+                    $cached,
+                    'process-formatted',
+                    $encoding,
+                );
                 if ($formatted !== null) {
                     $this->setProcessCachedFormattedResponse(
                         $formattedKey,
@@ -1003,14 +1073,12 @@ final class FullPageCacheCoordinator
         }
 
         $statusCode = (int)($cached[KeyBuilder::UNIFIED_CACHE_STATUS_KEY] ?? 200);
-        $gzipBody = $this->resolveCachedGzipBody($cached);
-        $useGzipBody = $gzipBody !== null && $acceptsGzip;
-        $responseBody = $useGzipBody ? $gzipBody : $body;
+        [$responseBody, $encoding] = $this->resolveEncodedHitBody($cached, $acceptEncoding, $cacheKey);
         $response = Response::fromContent($responseBody, $statusCode, 'text/html; charset=utf-8');
         $this->applyCachedHeaders($response, $cached[KeyBuilder::UNIFIED_CACHE_HEADERS_KEY] ?? []);
-        if ($useGzipBody) {
-            $response->setHeader('Content-Encoding', 'gzip');
-            $response->setHeader('Content-Length', (string)\strlen($gzipBody));
+        if ($encoding !== null) {
+            $response->setHeader('Content-Encoding', $encoding);
+            $response->setHeader('Content-Length', (string)\strlen($responseBody));
             $this->ensureVaryAcceptEncoding($response);
         }
         $response->setHeader('X-Weline-FPC', 'HIT');
@@ -1245,6 +1313,9 @@ final class FullPageCacheCoordinator
             'cache_key' => $unifiedCacheKey,
             'scope_identity' => $context->scopeIdentity->toArray(),
             'namespace_fingerprint' => $context->namespaceFingerprint,
+            'lang' => $context->lang,
+            'default_locale' => $context->defaultLocale,
+            'translation_locales' => $context->translationLocales,
         ];
     }
 
@@ -1348,14 +1419,19 @@ final class FullPageCacheCoordinator
         // 首次读取 @clock，同请求重复核验只读已冻结向量，不依赖广播是否送达。
         $scope = $receipt['scope_identity'] ?? null;
         $fingerprint = $receipt['namespace_fingerprint'] ?? null;
+        $lang = $receipt['lang'] ?? null;
+        $defaultLocale = $receipt['default_locale'] ?? null;
+        $translationLocales = $receipt['translation_locales'] ?? null;
         if (!is_array($scope) || !is_string($fingerprint)
+            || !is_string($lang) || !is_string($defaultLocale) || !is_array($translationLocales)
+            || $translationLocales !== \Weline\Framework\Phrase\LocaleFallbackChain::candidates($lang, $defaultLocale)
             || preg_match('/^[a-f0-9]{64}$/D', $fingerprint) !== 1
         ) {
             return null;
         }
         try {
             $identity = ScopeIdentity::fromArray($scope);
-            $currentFingerprint = $this->storefrontCacheKeyContextResolver()->fingerprintForIdentity($identity);
+            $currentFingerprint = $this->storefrontCacheKeyContextResolver()->fingerprintForIdentity($identity, $translationLocales);
             if (!hash_equals($fingerprint, $currentFingerprint)) {
                 return null;
             }
@@ -1400,7 +1476,7 @@ final class FullPageCacheCoordinator
         if (\stripos($acceptHeader, 'text/event-stream') !== false) {
             return null;
         }
-        $acceptsGzip = $this->acceptEncodingAllowsGzip($acceptEncoding);
+        $hitEncoding = $this->resolveHitContentEncoding($acceptEncoding, null);
         $loggedInFrontendSession = $this->cookieHeaderHasLoggedInFrontendSession($cookieHeader, $fullUri);
         $privateSessionToken = '';
         // Signed-in shoppers may HIT the public guest FPC; Account soft-reconciles.
@@ -1425,8 +1501,8 @@ final class FullPageCacheCoordinator
                 return null;
             }
 
-            if ($method === 'GET' && $acceptsGzip) {
-                $formattedKey = $this->buildFormattedFastHttpCacheKey($cacheKey);
+            if ($method === 'GET' && $hitEncoding !== null) {
+                $formattedKey = $this->buildFormattedFastHttpCacheKey($cacheKey, $hitEncoding);
                 $formatted = $this->getProcessCachedFormattedResponse($formattedKey);
                 if ($formatted !== null) {
                     return [
@@ -1483,7 +1559,11 @@ final class FullPageCacheCoordinator
             return null;
         }
 
-        $body = (string)($cached[KeyBuilder::UNIFIED_CACHE_FPC_KEY] ?? '');
+        if (!$this->payloadHasAuthoritativeBody($cached)) {
+            return null;
+        }
+
+        $body = $this->resolvePlaintextBody($cached) ?? '';
         if ($body === '') {
             return null;
         }
@@ -1497,12 +1577,17 @@ final class FullPageCacheCoordinator
         if ($cached === null) {
             return null;
         }
+        $encoding = $this->resolveHitContentEncoding($acceptEncoding, $cached);
         if ($source === 'shared') {
             $this->setProcessCachedPayload($cacheKey, $cached);
-            if ($method === 'GET' && $acceptsGzip) {
-                $formatted = $this->buildFormattedGzipKeepAliveResponse($cached, 'shared');
+            if ($method === 'GET' && $encoding !== null) {
+                $formatted = $this->buildFormattedEncodedKeepAliveResponse(
+                    $cached,
+                    'shared-formatted',
+                    $encoding,
+                );
                 if ($formatted !== null) {
-                    $formattedKey = $this->buildFormattedFastHttpCacheKey($cacheKey);
+                    $formattedKey = $this->buildFormattedFastHttpCacheKey($cacheKey, $encoding);
                     $this->setProcessCachedFormattedResponse($formattedKey, $formatted);
                     if ($this->shouldPublishSharedFormattedResponse($formatted)) {
                         $this->cache()->set($formattedKey, $formatted, 3600);
@@ -1511,10 +1596,14 @@ final class FullPageCacheCoordinator
             }
         } elseif ($source === 'stale-shared') {
             $this->setProcessCachedPayload($payloadCacheKey, $cached);
-            if ($method === 'GET' && $acceptsGzip) {
-                $formatted = $this->buildFormattedGzipKeepAliveResponse($cached, 'stale-shared');
+            if ($method === 'GET' && $encoding !== null) {
+                $formatted = $this->buildFormattedEncodedKeepAliveResponse(
+                    $cached,
+                    'stale-shared-formatted',
+                    $encoding,
+                );
                 if ($formatted !== null) {
-                    $formattedKey = $this->buildFormattedFastHttpCacheKey($payloadCacheKey);
+                    $formattedKey = $this->buildFormattedFastHttpCacheKey($payloadCacheKey, $encoding);
                     $this->setProcessCachedFormattedResponse($formattedKey, $formatted, $this->staleTtlSeconds());
                     if ($this->shouldPublishSharedFormattedResponse($formatted)) {
                         $this->cache()->set($formattedKey, $formatted, $this->staleTtlSeconds());
@@ -1523,11 +1612,18 @@ final class FullPageCacheCoordinator
             }
         }
 
-        if ($method === 'GET' && $acceptsGzip) {
-            $formattedKey = $this->buildFormattedFastHttpCacheKey($payloadCacheKey);
+        if ($method === 'GET' && $encoding !== null) {
+            $formattedKey = $this->buildFormattedFastHttpCacheKey($payloadCacheKey, $encoding);
             $formatted = $this->getProcessCachedFormattedResponse($formattedKey);
             if ($formatted === null) {
-                $formatted = $this->buildFormattedGzipKeepAliveResponse($cached, $source);
+                $formattedSource = \str_starts_with($source, 'stale-')
+                    ? $source . '-formatted'
+                    : ($source === 'process' ? 'process-formatted' : $source . '-formatted');
+                $formatted = $this->buildFormattedEncodedKeepAliveResponse(
+                    $cached,
+                    $formattedSource,
+                    $encoding,
+                );
                 if ($formatted !== null) {
                     $ttl = \str_starts_with($source, 'stale-') ? $this->staleTtlSeconds() : null;
                     $this->setProcessCachedFormattedResponse($formattedKey, $formatted, $ttl);
@@ -1543,15 +1639,13 @@ final class FullPageCacheCoordinator
         }
 
         $statusCode = (int)($cached[KeyBuilder::UNIFIED_CACHE_STATUS_KEY] ?? 200);
-        $gzipBody = $this->resolveCachedGzipBody($cached);
-        $useGzipBody = $gzipBody !== null && $acceptsGzip;
-        $responseBody = $useGzipBody ? $gzipBody : $body;
+        [$responseBody, $encoding] = $this->resolveEncodedHitBody($cached, $acceptEncoding, $payloadCacheKey);
 
         $response = Response::fromContent($responseBody, $statusCode, 'text/html; charset=utf-8');
         $this->applyCachedHeaders($response, $cached[KeyBuilder::UNIFIED_CACHE_HEADERS_KEY] ?? []);
-        if ($useGzipBody) {
-            $response->setHeader('Content-Encoding', 'gzip');
-            $response->setHeader('Content-Length', (string)\strlen($gzipBody));
+        if ($encoding !== null) {
+            $response->setHeader('Content-Encoding', $encoding);
+            $response->setHeader('Content-Length', (string)\strlen($responseBody));
             $this->ensureVaryAcceptEncoding($response);
         }
         $isStale = \str_starts_with($source, 'stale-');
@@ -1614,9 +1708,7 @@ final class FullPageCacheCoordinator
             $cached = $this->hydrateSharedPayload($cached);
         }
 
-        return \is_array($cached)
-            && \is_string($cached[KeyBuilder::UNIFIED_CACHE_FPC_KEY] ?? null)
-            && (string)$cached[KeyBuilder::UNIFIED_CACHE_FPC_KEY] !== '';
+        return $this->payloadHasAuthoritativeBody($cached);
     }
 
     private function isFrontendResponseCacheAllowed(string $method): bool
@@ -2123,7 +2215,11 @@ final class FullPageCacheCoordinator
             return null;
         }
 
-        $body = (string)($cached[KeyBuilder::UNIFIED_CACHE_FPC_KEY] ?? '');
+        if (!$this->payloadHasAuthoritativeBody($cached)) {
+            RequestContext::set('wls.fpc.hit_source', 'invalid');
+            return null;
+        }
+        $body = $this->resolvePlaintextBody($cached) ?? '';
         if ($body === '') {
             RequestContext::set('wls.fpc.hit_source', 'invalid');
             return null;
@@ -2155,14 +2251,17 @@ final class FullPageCacheCoordinator
         }
 
         $statusCode = (int)($cached[KeyBuilder::UNIFIED_CACHE_STATUS_KEY] ?? 200);
-        $gzipBody = $this->resolveCachedGzipBody($cached);
-        $useGzipBody = $gzipBody !== null && $this->clientAcceptsGzip();
+        [$responseBody, $encoding] = $this->resolveEncodedHitBody(
+            $cached,
+            $this->clientAcceptEncodingHeader(),
+            $cacheKey,
+        );
 
-        $response = Response::fromContent($useGzipBody ? $gzipBody : $body, $statusCode, 'text/html; charset=utf-8');
+        $response = Response::fromContent($responseBody, $statusCode, 'text/html; charset=utf-8');
         $this->applyCachedHeaders($response, $cached[KeyBuilder::UNIFIED_CACHE_HEADERS_KEY] ?? []);
-        if ($useGzipBody) {
-            $response->setHeader('Content-Encoding', 'gzip');
-            $response->setHeader('Content-Length', (string)\strlen($gzipBody));
+        if ($encoding !== null) {
+            $response->setHeader('Content-Encoding', $encoding);
+            $response->setHeader('Content-Length', (string)\strlen($responseBody));
             $this->ensureVaryAcceptEncoding($response);
         }
         $response->setHeader('X-Weline-FPC', 'HIT');
@@ -2232,9 +2331,10 @@ final class FullPageCacheCoordinator
     }
 
     /**
-     * Legacy FPC payloads may predate URL validation or cached gzip bodies.
+     * Legacy FPC payloads may predate URL validation or cached brotli bodies.
      * Normalize them once at the cache boundary so worker fastpath does not
      * fall back into full App/Router rendering for already-cacheable pages.
+     * Gzip is never eagerly rebuilt here — only demand-materialized.
      *
      * @param array<string, mixed> $cached
      * @return array<string, mixed>|null
@@ -2257,7 +2357,7 @@ final class FullPageCacheCoordinator
             if (!$validateUrls) {
                 $cached[self::UNIFIED_CACHE_HTML_URLS_VALIDATED_KEY] = true;
                 $updated = true;
-            } elseif ($this->bodyContainsIgnorableHtmlUrlQuery($body)) {
+            } elseif ($body !== '' && $this->bodyContainsIgnorableHtmlUrlQuery($body)) {
                 $this->deleteCachedPayloadByKey($cacheKey);
                 $this->logFpcWarning('drop cached polluted seo url', [
                     'cache_key' => $cacheKey,
@@ -2270,12 +2370,26 @@ final class FullPageCacheCoordinator
             }
         }
 
-        if (($cached[self::UNIFIED_CACHE_FPC_GZIP_B64_KEY] ?? '') === '') {
-            $gzipBody = $this->buildCachedGzipBody($body);
-            if ($gzipBody !== null) {
-                $cached[self::UNIFIED_CACHE_FPC_GZIP_B64_KEY] = \base64_encode($gzipBody);
+        // Ensure br authority when plaintext is available; never write plaintext back.
+        if (($cached[self::UNIFIED_CACHE_FPC_BROTLI_B64_KEY] ?? '') === '' && $body !== '') {
+            $brotliBody = $this->buildCachedBrotliBody($body);
+            if ($brotliBody !== null) {
+                $cached[self::UNIFIED_CACHE_FPC_BROTLI_B64_KEY] = \base64_encode($brotliBody);
                 $updated = true;
             }
+        }
+        $hadPlaintext = \is_string($cached[KeyBuilder::UNIFIED_CACHE_FPC_KEY] ?? null)
+            && (string)$cached[KeyBuilder::UNIFIED_CACHE_FPC_KEY] !== '';
+        $cached = $this->stripPlaintextWhenBrotliAuthority($cached);
+        if ($hadPlaintext
+            && (!\is_string($cached[KeyBuilder::UNIFIED_CACHE_FPC_KEY] ?? null)
+                || (string)$cached[KeyBuilder::UNIFIED_CACHE_FPC_KEY] === '')
+        ) {
+            $updated = true;
+        }
+
+        if ($this->maybeEvictIdleGzipBody($cacheKey, $cached)) {
+            $updated = true;
         }
 
         if ($updated) {
@@ -2283,7 +2397,9 @@ final class FullPageCacheCoordinator
             if ($writeShared) {
                 $this->cache()->set(
                     $cacheKey,
-                    $this->externalizeSharedPayload($cacheKey, $cached),
+                    $this->stripPlaintextWhenBrotliAuthority(
+                        $this->externalizeSharedPayload($cacheKey, $cached)
+                    ),
                     $remainingTtl ?? 3600
                 );
             }
@@ -2294,13 +2410,20 @@ final class FullPageCacheCoordinator
 
     private function buildCachedGzipBody(string $body): ?string
     {
-        if (\strlen($body) < self::GZIP_CACHE_MIN_BODY_BYTES || !\function_exists('gzencode')) {
+        if (\strlen($body) < self::GZIP_CACHE_MIN_BODY_BYTES) {
             return null;
         }
 
-        $gzipBody = \gzencode($body, 6);
+        return ContentEncodingNegotiator::encode($body, ContentEncodingNegotiator::ENCODING_GZIP);
+    }
 
-        return \is_string($gzipBody) && $gzipBody !== '' ? $gzipBody : null;
+    private function buildCachedBrotliBody(string $body): ?string
+    {
+        if (\strlen($body) < self::GZIP_CACHE_MIN_BODY_BYTES) {
+            return null;
+        }
+
+        return ContentEncodingNegotiator::encode($body, ContentEncodingNegotiator::ENCODING_BROTLI);
     }
 
     /**
@@ -2321,18 +2444,361 @@ final class FullPageCacheCoordinator
     /**
      * @param array<string, mixed> $cached
      */
-    private function buildFormattedGzipKeepAliveResponse(array $cached, string $source): ?string
+    private function resolveCachedBrotliBody(array $cached): ?string
     {
-        $gzipBody = $this->resolveCachedGzipBody($cached);
-        if ($gzipBody === null) {
+        $encoded = $cached[self::UNIFIED_CACHE_FPC_BROTLI_B64_KEY] ?? null;
+        if (!\is_string($encoded) || $encoded === '') {
+            return null;
+        }
+
+        $decoded = \base64_decode($encoded, true);
+
+        return \is_string($decoded) && $decoded !== '' ? $decoded : null;
+    }
+
+    /**
+     * When br is authoritative, drop plaintext so Shared/L1 do not double-store HTML.
+     * Without br, plaintext remains (fail-open compatibility).
+     *
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
+    private function stripPlaintextWhenBrotliAuthority(array $payload): array
+    {
+        if ($this->resolveCachedBrotliBody($payload) === null) {
+            return $payload;
+        }
+
+        unset($payload[KeyBuilder::UNIFIED_CACHE_FPC_KEY]);
+
+        return $payload;
+    }
+
+    /**
+     * Recover plaintext from the payload key or by decoding br authority.
+     *
+     * @param array<string, mixed> $cached
+     */
+    private function resolvePlaintextBody(array $cached): ?string
+    {
+        $body = $cached[KeyBuilder::UNIFIED_CACHE_FPC_KEY] ?? null;
+        if (\is_string($body) && $body !== '') {
+            return $body;
+        }
+
+        $brotli = $this->resolveCachedBrotliBody($cached);
+        if ($brotli === null) {
+            return null;
+        }
+
+        $decoded = ContentEncodingNegotiator::decode(
+            $brotli,
+            ContentEncodingNegotiator::ENCODING_BROTLI,
+        );
+
+        return \is_string($decoded) && $decoded !== '' ? $decoded : null;
+    }
+
+    /**
+     * @param array<string, mixed>|null $cached
+     */
+    private function payloadHasAuthoritativeBody(?array $cached): bool
+    {
+        if (!\is_array($cached)) {
+            return false;
+        }
+
+        $plain = $cached[KeyBuilder::UNIFIED_CACHE_FPC_KEY] ?? null;
+        if (\is_string($plain) && $plain !== '') {
+            return true;
+        }
+        if ($this->resolveCachedBrotliBody($cached) !== null) {
+            return true;
+        }
+        $meta = $cached[self::UNIFIED_CACHE_FPC_BODY_FILE_KEY] ?? null;
+
+        return \is_array($meta) && \trim((string)($meta['path'] ?? '')) !== '';
+    }
+
+    /**
+     * Prefer br when the client accepts it and the payload has a br body; else gzip
+     * (stored or derivable from br/plain).
+     *
+     * @param array<string, mixed>|null $cached
+     */
+    private function resolveHitContentEncoding(string $acceptEncoding, ?array $cached): ?string
+    {
+        $preferred = ContentEncodingNegotiator::negotiate($acceptEncoding);
+        if ($preferred === null) {
+            return null;
+        }
+        if ($cached === null) {
+            return $preferred;
+        }
+        if ($preferred === ContentEncodingNegotiator::ENCODING_BROTLI) {
+            if ($this->resolveCachedBrotliBody($cached) !== null) {
+                return ContentEncodingNegotiator::ENCODING_BROTLI;
+            }
+            if (ContentEncodingNegotiator::accepts($acceptEncoding, ContentEncodingNegotiator::ENCODING_GZIP)
+                && $this->canDeriveGzipBody($cached)) {
+                return ContentEncodingNegotiator::ENCODING_GZIP;
+            }
+
+            return null;
+        }
+        if ($preferred === ContentEncodingNegotiator::ENCODING_GZIP
+            && $this->canDeriveGzipBody($cached)) {
+            return ContentEncodingNegotiator::ENCODING_GZIP;
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<string, mixed> $cached
+     */
+    private function canDeriveGzipBody(array $cached): bool
+    {
+        if ($this->resolveCachedGzipBody($cached) !== null) {
+            return true;
+        }
+        if ($this->resolveCachedBrotliBody($cached) !== null) {
+            return true;
+        }
+        $plain = $this->resolvePlaintextBody($cached) ?? '';
+
+        return \strlen($plain) >= self::GZIP_CACHE_MIN_BODY_BYTES
+            && ContentEncodingNegotiator::gzipAvailable();
+    }
+
+    /**
+     * @param array<string, mixed> $cached
+     * @return array{0: string, 1: ?string}
+     */
+    private function resolveEncodedHitBody(
+        array $cached,
+        string $acceptEncoding,
+        ?string $cacheKey = null,
+    ): array {
+        $plain = $this->resolvePlaintextBody($cached) ?? '';
+        $encoding = $this->resolveHitContentEncoding($acceptEncoding, $cached);
+        if ($encoding === ContentEncodingNegotiator::ENCODING_BROTLI) {
+            $body = $this->resolveCachedBrotliBody($cached);
+            if ($body !== null) {
+                return [$body, ContentEncodingNegotiator::ENCODING_BROTLI];
+            }
+        }
+        if ($encoding === ContentEncodingNegotiator::ENCODING_GZIP
+            || ($encoding === null && ContentEncodingNegotiator::accepts($acceptEncoding, ContentEncodingNegotiator::ENCODING_GZIP))) {
+            if (!ContentEncodingNegotiator::accepts($acceptEncoding, ContentEncodingNegotiator::ENCODING_GZIP)) {
+                return [$plain, null];
+            }
+            $stored = $this->resolveCachedGzipBody($cached);
+            if ($stored !== null) {
+                if ($cacheKey !== null) {
+                    $this->recordGzipDemand($cacheKey);
+                }
+
+                return [$stored, ContentEncodingNegotiator::ENCODING_GZIP];
+            }
+
+            $gzipBody = $this->transcodeToGzipBody($cached, $plain);
+            if ($gzipBody !== null) {
+                if ($cacheKey !== null) {
+                    $count = $this->recordGzipDemand($cacheKey);
+                    if ($count >= $this->gzipDemandMaterializeThreshold()) {
+                        $this->materializeGzipBody($cacheKey, $cached, $gzipBody);
+                    }
+                }
+
+                return [$gzipBody, ContentEncodingNegotiator::ENCODING_GZIP];
+            }
+        }
+
+        return [$plain, null];
+    }
+
+    /**
+     * @param array<string, mixed> $cached
+     */
+    private function transcodeToGzipBody(array $cached, string $plain): ?string
+    {
+        $brotli = $this->resolveCachedBrotliBody($cached);
+        if ($brotli !== null) {
+            $fromBrotli = ContentEncodingNegotiator::decode($brotli, ContentEncodingNegotiator::ENCODING_BROTLI);
+            if (\is_string($fromBrotli) && $fromBrotli !== '') {
+                return $this->buildCachedGzipBody($fromBrotli);
+            }
+        }
+
+        if ($plain !== '') {
+            return $this->buildCachedGzipBody($plain);
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<string, mixed> $cached
+     */
+    private function materializeGzipBody(string $cacheKey, array $cached, string $gzipBody): void
+    {
+        if ($gzipBody === '' || ($cached[self::UNIFIED_CACHE_FPC_GZIP_B64_KEY] ?? '') !== '') {
+            return;
+        }
+
+        $cached[self::UNIFIED_CACHE_FPC_GZIP_B64_KEY] = \base64_encode($gzipBody);
+        $this->setProcessCachedPayload($cacheKey, $cached);
+
+        $remainingTtl = $this->payloadRemainingTtlSeconds($cached) ?? 3600;
+        $shared = $this->cache()->get($cacheKey);
+        if (\is_array($shared) && !isset($shared[self::UNIFIED_CACHE_FPC_BODY_FILE_KEY])) {
+            $shared[self::UNIFIED_CACHE_FPC_GZIP_B64_KEY] = $cached[self::UNIFIED_CACHE_FPC_GZIP_B64_KEY];
+            $this->cache()->set($cacheKey, $shared, $remainingTtl);
+        }
+
+        $formatted = $this->buildFormattedEncodedKeepAliveResponse(
+            $cached,
+            'process',
+            ContentEncodingNegotiator::ENCODING_GZIP,
+        );
+        if ($formatted === null) {
+            return;
+        }
+        $formattedKey = $this->buildFormattedFastHttpCacheKey(
+            $cacheKey,
+            ContentEncodingNegotiator::ENCODING_GZIP,
+        );
+        $this->setProcessCachedFormattedResponse($formattedKey, $formatted, $remainingTtl);
+        if ($this->shouldPublishSharedFormattedResponse($formatted)) {
+            $this->cache()->set($formattedKey, $formatted, $remainingTtl);
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $cached
+     */
+    private function maybeEvictIdleGzipBody(string $cacheKey, array &$cached): bool
+    {
+        if (($cached[self::UNIFIED_CACHE_FPC_GZIP_B64_KEY] ?? '') === '') {
+            return false;
+        }
+        if (!$this->shouldEvictMaterializedGzip($cacheKey)) {
+            return false;
+        }
+
+        unset($cached[self::UNIFIED_CACHE_FPC_GZIP_B64_KEY]);
+        $formattedKey = $this->buildFormattedFastHttpCacheKey(
+            $cacheKey,
+            ContentEncodingNegotiator::ENCODING_GZIP,
+        );
+        $this->deleteProcessCachedFormattedResponse($formattedKey);
+        $this->cache()->delete($formattedKey);
+
+        $shared = $this->cache()->get($cacheKey);
+        if (\is_array($shared) && isset($shared[self::UNIFIED_CACHE_FPC_GZIP_B64_KEY])) {
+            unset($shared[self::UNIFIED_CACHE_FPC_GZIP_B64_KEY]);
+            $remainingTtl = $this->payloadRemainingTtlSeconds($cached) ?? 3600;
+            $this->cache()->set($cacheKey, $shared, $remainingTtl);
+        }
+
+        return true;
+    }
+
+    private function recordGzipDemand(string $cacheKey): int
+    {
+        $now = \microtime(true);
+        $window = $this->gzipDemandWindowSeconds();
+        $entry = self::$gzipDemandByCacheKey[$cacheKey] ?? [
+            'count' => 0,
+            'window_start' => $now,
+            'last_at' => 0.0,
+        ];
+        if (($now - (float)$entry['window_start']) >= $window) {
+            $entry = [
+                'count' => 0,
+                'window_start' => $now,
+                'last_at' => (float)$entry['last_at'],
+            ];
+        }
+        $entry['count'] = (int)$entry['count'] + 1;
+        $entry['last_at'] = $now;
+        self::$gzipDemandByCacheKey[$cacheKey] = $entry;
+
+        return (int)$entry['count'];
+    }
+
+    private function shouldEvictMaterializedGzip(string $cacheKey): bool
+    {
+        $entry = self::$gzipDemandByCacheKey[$cacheKey] ?? null;
+        if ($entry === null) {
+            return false;
+        }
+        $lastAt = (float)($entry['last_at'] ?? 0.0);
+        if ($lastAt <= 0.0) {
+            return false;
+        }
+
+        return (\microtime(true) - $lastAt) >= $this->gzipDemandEvictIdleSeconds();
+    }
+
+    private function gzipDemandWindowSeconds(): int
+    {
+        $configured = (int)Env::get(
+            'wls.performance.fpc_gzip_demand_window_seconds',
+            self::DEFAULT_GZIP_DEMAND_WINDOW_SECONDS,
+        );
+
+        return $configured > 0 ? $configured : self::DEFAULT_GZIP_DEMAND_WINDOW_SECONDS;
+    }
+
+    private function gzipDemandMaterializeThreshold(): int
+    {
+        $configured = (int)Env::get(
+            'wls.performance.fpc_gzip_demand_materialize_threshold',
+            self::DEFAULT_GZIP_DEMAND_MATERIALIZE_THRESHOLD,
+        );
+
+        return $configured > 0 ? $configured : self::DEFAULT_GZIP_DEMAND_MATERIALIZE_THRESHOLD;
+    }
+
+    private function gzipDemandEvictIdleSeconds(): int
+    {
+        $configured = (int)Env::get(
+            'wls.performance.fpc_gzip_demand_evict_idle_seconds',
+            self::DEFAULT_GZIP_DEMAND_EVICT_IDLE_SECONDS,
+        );
+
+        return $configured > 0 ? $configured : self::DEFAULT_GZIP_DEMAND_EVICT_IDLE_SECONDS;
+    }
+
+    /**
+     * @param array<string, mixed> $cached
+     */
+    private function buildFormattedEncodedKeepAliveResponse(array $cached, string $source, string $encoding): ?string
+    {
+        $encodedBody = $encoding === ContentEncodingNegotiator::ENCODING_BROTLI
+            ? $this->resolveCachedBrotliBody($cached)
+            : $this->resolveCachedGzipBody($cached);
+        if ($encodedBody === null && $encoding === ContentEncodingNegotiator::ENCODING_GZIP) {
+            $plain = $this->resolvePlaintextBody($cached) ?? '';
+            $plain = $this->withDocumentCspMeta($plain);
+            $encodedBody = $this->transcodeToGzipBody($cached, $plain);
+        }
+        if ($encodedBody === null && $encoding === ContentEncodingNegotiator::ENCODING_BROTLI) {
+            $plain = $this->resolvePlaintextBody($cached) ?? '';
+            $plain = $this->withDocumentCspMeta($plain);
+            $encodedBody = $this->buildCachedBrotliBody($plain);
+        }
+        if ($encodedBody === null) {
             return null;
         }
 
         $statusCode = (int)($cached[KeyBuilder::UNIFIED_CACHE_STATUS_KEY] ?? 200);
-        $response = Response::fromContent($gzipBody, $statusCode, 'text/html; charset=utf-8');
+        $response = Response::fromContent($encodedBody, $statusCode, 'text/html; charset=utf-8');
         $this->applyCachedHeaders($response, $cached[KeyBuilder::UNIFIED_CACHE_HEADERS_KEY] ?? []);
-        $response->setHeader('Content-Encoding', 'gzip');
-        $response->setHeader('Content-Length', (string)\strlen($gzipBody));
+        $response->setHeader('Content-Encoding', $encoding);
+        $response->setHeader('Content-Length', (string)\strlen($encodedBody));
         $this->ensureVaryAcceptEncoding($response);
         $response->setHeader('X-Weline-FPC', 'HIT');
         $response->setHeader('X-Wls-Performance-Fpc-Hit', '1');
@@ -2349,13 +2815,30 @@ final class FullPageCacheCoordinator
         return $response->toHttpString(true);
     }
 
-    private function buildFormattedFastHttpCacheKey(string $cacheKey): string
+    /** @deprecated Use buildFormattedEncodedKeepAliveResponse() */
+    private function buildFormattedGzipKeepAliveResponse(array $cached, string $source): ?string
     {
-        $headers = (new SecurityHeaderPolicyService())->resolveCurrentResponseHeaders();
-        \ksort($headers, \SORT_STRING);
-        $securityVariant = \substr(\hash('sha256', \serialize($headers)), 0, 16);
+        return $this->buildFormattedEncodedKeepAliveResponse(
+            $cached,
+            $source,
+            ContentEncodingNegotiator::ENCODING_GZIP,
+        );
+    }
 
-        return $cacheKey . self::FAST_HTTP_GZIP_KEEPALIVE_SUFFIX . ':' . $securityVariant;
+    private function buildFormattedFastHttpCacheKey(
+        string $cacheKey,
+        string $encoding = ContentEncodingNegotiator::ENCODING_GZIP,
+    ): string {
+        $suffix = $encoding === ContentEncodingNegotiator::ENCODING_BROTLI
+            ? self::FAST_HTTP_BROTLI_KEEPALIVE_SUFFIX
+            : self::FAST_HTTP_GZIP_KEEPALIVE_SUFFIX;
+        $securityVariant = \substr(
+            \hash('sha256', (new SecurityHeaderPolicyService())->securityVariantMaterial()),
+            0,
+            16
+        );
+
+        return $cacheKey . $suffix . ':' . $securityVariant;
     }
 
     private function withFormattedResponseConnection(string $http, bool $keepAlive): string
@@ -2379,54 +2862,25 @@ final class FullPageCacheCoordinator
         return \substr($http, 0, $headerEnd + 2) . $replacement . \substr($http, $headerEnd + 2);
     }
 
-    private function clientAcceptsGzip(): bool
+    private function clientAcceptEncodingHeader(): string
     {
-        $acceptEncoding = (string)(
+        return (string)(
             WelineEnv::server('HTTP_ACCEPT_ENCODING', '')
             ?: WelineEnv::get('server.http_accept_encoding', '')
         );
+    }
 
-        return $this->acceptEncodingAllowsGzip($acceptEncoding);
+    private function clientAcceptsGzip(): bool
+    {
+        return ContentEncodingNegotiator::accepts(
+            $this->clientAcceptEncodingHeader(),
+            ContentEncodingNegotiator::ENCODING_GZIP,
+        );
     }
 
     private function acceptEncodingAllowsGzip(string $acceptEncoding): bool
     {
-        $acceptEncoding = \strtolower(\trim($acceptEncoding));
-        if ($acceptEncoding === '') {
-            return false;
-        }
-
-        $specificity = -1;
-        $quality = 0.0;
-        foreach (\explode(',', $acceptEncoding) as $range) {
-            $parts = \array_map('trim', \explode(';', $range));
-            $coding = (string)\array_shift($parts);
-            $candidateSpecificity = $coding === 'gzip' ? 1 : ($coding === '*' ? 0 : -1);
-            if ($candidateSpecificity < 0 || $candidateSpecificity < $specificity) {
-                continue;
-            }
-
-            $candidateQuality = 1.0;
-            foreach ($parts as $parameter) {
-                if (\preg_match('/^q\s*=\s*(.*)$/D', $parameter, $matches) !== 1) {
-                    continue;
-                }
-                $qValue = (string)($matches[1] ?? '');
-                $candidateQuality = \preg_match('/^(?:0(?:\.\d{0,3})?|1(?:\.0{0,3})?|\.\d{1,3})$/D', $qValue) === 1
-                    ? (float)$qValue
-                    : 0.0;
-                break;
-            }
-
-            if ($candidateSpecificity > $specificity) {
-                $specificity = $candidateSpecificity;
-                $quality = $candidateQuality;
-                continue;
-            }
-            $quality = \max($quality, $candidateQuality);
-        }
-
-        return $quality > 0.0;
+        return ContentEncodingNegotiator::accepts($acceptEncoding, ContentEncodingNegotiator::ENCODING_GZIP);
     }
 
     private function ensureVaryAcceptEncoding(Response $response): void
@@ -2455,6 +2909,23 @@ final class FullPageCacheCoordinator
         }
 
         $response->setHeader('Vary', $varyValue . ', ' . $headerName);
+    }
+
+    private function withDocumentCspMeta(string $html): string
+    {
+        if ($html === '') {
+            return $html;
+        }
+        try {
+            $service = new SecurityHeaderPolicyService();
+            if (!$service->isMetaDelivery()) {
+                return $html;
+            }
+
+            return $service->ensureDocumentCspMeta($html);
+        } catch (\Throwable) {
+            return $html;
+        }
     }
 
     private function applyCachedHeaders(Response $response, mixed $headers): void
@@ -2578,8 +3049,8 @@ final class FullPageCacheCoordinator
      */
     private function setProcessCachedPayload(string $cacheKey, array $payload): void
     {
-        $body = $payload[KeyBuilder::UNIFIED_CACHE_FPC_KEY] ?? '';
-        if (!\is_string($body) || $body === '') {
+        $payload = $this->stripPlaintextWhenBrotliAuthority($payload);
+        if (!$this->payloadHasAuthoritativeBody($payload)) {
             return;
         }
         $remainingTtl = $this->payloadRemainingTtlSeconds($payload);
@@ -2612,7 +3083,7 @@ final class FullPageCacheCoordinator
 
     private function deleteProcessCachedFormattedResponsesForPayload(string $cacheKey): void
     {
-        $prefix = $cacheKey . self::FAST_HTTP_GZIP_KEEPALIVE_SUFFIX . ':';
+        $prefix = $cacheKey . self::FAST_HTTP_ENCODING_KEEPALIVE_PREFIX;
         foreach (\array_keys(self::$processFormattedFpcCache) as $formattedKey) {
             if (\str_starts_with((string)$formattedKey, $prefix)) {
                 $this->deleteProcessCachedFormattedResponse((string)$formattedKey);
@@ -2699,12 +3170,19 @@ final class FullPageCacheCoordinator
     }
 
     /**
+     * Budget Process L1 by authoritative body (br when present) + optional
+     * demand-materialized gzip. Do not double-count discarded plaintext.
+     *
      * @param array<string, mixed> $payload
      */
     private function estimatePayloadBytes(array $payload): int
     {
         $bytes = 0;
-        foreach ($payload as $value) {
+        $hasBrotliAuthority = $this->resolveCachedBrotliBody($payload) !== null;
+        foreach ($payload as $key => $value) {
+            if ($hasBrotliAuthority && $key === KeyBuilder::UNIFIED_CACHE_FPC_KEY) {
+                continue;
+            }
             if (\is_string($value)) {
                 $bytes += \strlen($value);
                 continue;
@@ -2830,9 +3308,14 @@ final class FullPageCacheCoordinator
 
         $body = $payload[KeyBuilder::UNIFIED_CACHE_FPC_KEY] ?? '';
         $gzip = $payload[self::UNIFIED_CACHE_FPC_GZIP_B64_KEY] ?? '';
-        $bytes = \is_string($body) ? \strlen($body) : 0;
+        $brotli = $payload[self::UNIFIED_CACHE_FPC_BROTLI_B64_KEY] ?? '';
+        $hasBrotli = \is_string($brotli) && $brotli !== '';
+        $bytes = (!$hasBrotli && \is_string($body)) ? \strlen($body) : 0;
         if (\is_string($gzip)) {
             $bytes += \strlen($gzip);
+        }
+        if ($hasBrotli) {
+            $bytes += \strlen($brotli);
         }
 
         return $bytes <= $maxBytes;
@@ -2845,40 +3328,79 @@ final class FullPageCacheCoordinator
     }
 
     /**
-     * Keep large rendered HTML out of MemoryService values. The shared cache
-     * stores a small pointer, while each worker hydrates the payload once into
-     * its process-local FPC cache.
+     * Keep large rendered bodies out of MemoryService values. Prefer externalizing
+     * the authoritative brotli body as a `.br` file; fall back to plaintext `.html`
+     * only when brotli is unavailable.
      *
      * @param array<string, mixed> $payload
      * @return array<string, mixed>
      */
     private function externalizeSharedPayload(string $cacheKey, array $payload): array
     {
-        $body = $payload[KeyBuilder::UNIFIED_CACHE_FPC_KEY] ?? null;
-        if (!\is_string($body) || $body === '') {
+        $bodyFile = $payload[self::UNIFIED_CACHE_FPC_BODY_FILE_KEY] ?? null;
+        if (\is_array($bodyFile) && \trim((string)($bodyFile['path'] ?? '')) !== '') {
+            // Already externalized: Shared must stay pointer-only (no inline br/plain).
+            unset(
+                $payload[KeyBuilder::UNIFIED_CACHE_FPC_KEY],
+                $payload[self::UNIFIED_CACHE_FPC_GZIP_B64_KEY],
+                $payload[self::UNIFIED_CACHE_FPC_BROTLI_B64_KEY],
+            );
+
             return $payload;
         }
 
         $minBytes = (int)(Env::get('wls.performance.fpc_shared_file_body_min_bytes', 262144) ?: 0);
-        if ($minBytes <= 0 || \strlen($body) < $minBytes) {
+        if ($minBytes <= 0) {
             return $payload;
         }
 
-        $file = $this->sharedPayloadFilePath($cacheKey);
-        if (!$this->writeSharedPayloadFile($file, $body)) {
+        $plain = $payload[KeyBuilder::UNIFIED_CACHE_FPC_KEY] ?? null;
+        $plain = \is_string($plain) ? $plain : '';
+        $brotli = $this->resolveCachedBrotliBody($payload);
+
+        if ($brotli !== null && ContentEncodingNegotiator::brotliAvailable()) {
+            $authorityBytes = $plain !== '' ? \strlen($plain) : \strlen($brotli);
+            if ($authorityBytes < $minBytes) {
+                return $payload;
+            }
+
+            $file = $this->sharedPayloadFilePath($cacheKey, self::FPC_BODY_FILE_ENCODING_BROTLI);
+            if (!$this->writeSharedPayloadFile($file, $brotli)) {
+                return $payload;
+            }
+
+            unset(
+                $payload[KeyBuilder::UNIFIED_CACHE_FPC_KEY],
+                $payload[self::UNIFIED_CACHE_FPC_GZIP_B64_KEY],
+                $payload[self::UNIFIED_CACHE_FPC_BROTLI_B64_KEY],
+            );
+            $payload[self::UNIFIED_CACHE_FPC_BODY_FILE_KEY] = [
+                'path' => $file,
+                'bytes' => \strlen($brotli),
+                'encoding' => self::FPC_BODY_FILE_ENCODING_BROTLI,
+            ];
+
+            return $payload;
+        }
+
+        if ($plain === '' || \strlen($plain) < $minBytes) {
+            return $payload;
+        }
+
+        $file = $this->sharedPayloadFilePath($cacheKey, self::FPC_BODY_FILE_ENCODING_IDENTITY);
+        if (!$this->writeSharedPayloadFile($file, $plain)) {
             return $payload;
         }
 
         unset($payload[KeyBuilder::UNIFIED_CACHE_FPC_KEY]);
-        // The gzip copy can still be close to the original HTML size (and is
-        // base64-expanded inside the NDJSON shared-state frame). Keeping it
-        // here defeats body externalization and can exceed the bounded Memory
-        // Service protocol frame. Each Worker rebuilds this optional variant
-        // once after hydrating the shared body and retains it in Process L1.
-        unset($payload[self::UNIFIED_CACHE_FPC_GZIP_B64_KEY]);
+        unset(
+            $payload[self::UNIFIED_CACHE_FPC_GZIP_B64_KEY],
+            $payload[self::UNIFIED_CACHE_FPC_BROTLI_B64_KEY],
+        );
         $payload[self::UNIFIED_CACHE_FPC_BODY_FILE_KEY] = [
             'path' => $file,
-            'bytes' => \strlen($body),
+            'bytes' => \strlen($plain),
+            'encoding' => self::FPC_BODY_FILE_ENCODING_IDENTITY,
         ];
 
         return $payload;
@@ -2890,14 +3412,16 @@ final class FullPageCacheCoordinator
      */
     private function hydrateSharedPayload(array $payload): ?array
     {
-        $body = $payload[KeyBuilder::UNIFIED_CACHE_FPC_KEY] ?? null;
-        if (\is_string($body) && $body !== '') {
-            return $payload;
+        if ($this->payloadHasAuthoritativeBody($payload)
+            && !isset($payload[self::UNIFIED_CACHE_FPC_BODY_FILE_KEY])) {
+            return $this->stripPlaintextWhenBrotliAuthority($payload);
         }
 
         $meta = $payload[self::UNIFIED_CACHE_FPC_BODY_FILE_KEY] ?? null;
         if (!\is_array($meta)) {
-            return null;
+            return $this->payloadHasAuthoritativeBody($payload)
+                ? $this->stripPlaintextWhenBrotliAuthority($payload)
+                : null;
         }
 
         $file = (string)($meta['path'] ?? '');
@@ -2905,17 +3429,40 @@ final class FullPageCacheCoordinator
             return null;
         }
 
-        $body = @\file_get_contents($file);
-        if (!\is_string($body) || $body === '') {
+        $raw = @\file_get_contents($file);
+        if (!\is_string($raw) || $raw === '') {
             return null;
         }
 
         $expectedBytes = (int)($meta['bytes'] ?? 0);
-        if ($expectedBytes > 0 && \strlen($body) !== $expectedBytes) {
+        if ($expectedBytes > 0 && \strlen($raw) !== $expectedBytes) {
             return null;
         }
 
-        $payload[KeyBuilder::UNIFIED_CACHE_FPC_KEY] = $body;
+        $encoding = \strtolower(\trim((string)($meta['encoding'] ?? '')));
+        if ($encoding === '') {
+            $encoding = \str_ends_with(\strtolower($file), '.br')
+                ? self::FPC_BODY_FILE_ENCODING_BROTLI
+                : self::FPC_BODY_FILE_ENCODING_IDENTITY;
+        }
+
+        if ($encoding === self::FPC_BODY_FILE_ENCODING_BROTLI) {
+            $payload[self::UNIFIED_CACHE_FPC_BROTLI_B64_KEY] = \base64_encode($raw);
+            unset($payload[KeyBuilder::UNIFIED_CACHE_FPC_KEY]);
+
+            return $payload;
+        }
+
+        // Legacy plaintext `.html` externalization: promote to br authority when possible.
+        $brotliBody = $this->buildCachedBrotliBody($raw);
+        if ($brotliBody !== null) {
+            $payload[self::UNIFIED_CACHE_FPC_BROTLI_B64_KEY] = \base64_encode($brotliBody);
+            unset($payload[KeyBuilder::UNIFIED_CACHE_FPC_KEY]);
+
+            return $payload;
+        }
+
+        $payload[KeyBuilder::UNIFIED_CACHE_FPC_KEY] = $raw;
 
         return $payload;
     }
@@ -2948,21 +3495,29 @@ final class FullPageCacheCoordinator
 
     private function deleteSharedPayloadFile(string $cacheKey): void
     {
-        $file = $this->sharedPayloadFilePath($cacheKey);
-        if (\is_file($file)) {
-            @\unlink($file);
+        foreach ([
+            $this->sharedPayloadFilePath($cacheKey, self::FPC_BODY_FILE_ENCODING_BROTLI),
+            $this->sharedPayloadFilePath($cacheKey, self::FPC_BODY_FILE_ENCODING_IDENTITY),
+        ] as $file) {
+            if (\is_file($file)) {
+                @\unlink($file);
+            }
         }
     }
 
-    private function sharedPayloadFilePath(string $cacheKey): string
-    {
+    private function sharedPayloadFilePath(
+        string $cacheKey,
+        string $encoding = self::FPC_BODY_FILE_ENCODING_BROTLI,
+    ): string {
         $hash = \hash('sha256', $cacheKey);
+        $extension = $encoding === self::FPC_BODY_FILE_ENCODING_BROTLI ? '.br' : '.html';
+
         return $this->sharedPayloadBaseDir()
             . \DIRECTORY_SEPARATOR
             . \substr($hash, 0, 2)
             . \DIRECTORY_SEPARATOR
             . $hash
-            . '.html';
+            . $extension;
     }
 
     private function sharedPayloadBaseDir(): string
@@ -3093,10 +3648,9 @@ final class FullPageCacheCoordinator
         if (!$context->cacheable) {
             throw new \LogicException(__('Storefront 缓存上下文尚未完成版本冻结'));
         }
-        return $this->mergePathVariant($this->variantFromStorefrontContext($context, [
-            'lang' => $this->normalizeVariantLang($context->lang),
-            'currency' => $this->normalizeVariantCurrency($context->currency),
-        ]), $this->getCacheKeyFullUri());
+        // App freezes the validated visitor-path locale before FPC. Do not
+        // re-read mutable State after freezing its namespace generation vector.
+        return $this->variantFromStorefrontContext($context, []);
     }
 
     /**
@@ -3115,10 +3669,7 @@ final class FullPageCacheCoordinator
         if (!$context->cacheable) {
             throw new \LogicException(__('Storefront 缓存上下文尚未完成版本冻结'));
         }
-        return $this->mergePathVariant(
-            $this->variantFromStorefrontContext($context, $variant),
-            $fullUri,
-        );
+        return $this->variantFromStorefrontContext($context, $variant);
     }
 
     /**
@@ -3194,6 +3745,8 @@ final class FullPageCacheCoordinator
             'channel',
             'store_mode',
             'context_version',
+            'default_locale',
+            'translation_locales',
             'cache_version',
         ] as $field) {
             if (isset($variant[$field]) && (string)$variant[$field] !== '') {
@@ -3211,6 +3764,10 @@ final class FullPageCacheCoordinator
     ): array
     {
         $dimensions = $context->keyDimensions();
+        $variant['lang'] = $this->normalizeVariantLang($context->lang);
+        $variant['currency'] = $this->normalizeResolvedVariantCurrency($context->currency);
+        $variant['default_locale'] = $context->defaultLocale;
+        $variant['translation_locales'] = implode(',', $context->translationLocales);
         $variant['scope_state'] = $dimensions['scope_state'];
         $variant['scope_kind'] = $dimensions['scope_kind'];
         $variant['website'] = $dimensions['website'];
@@ -3495,15 +4052,19 @@ final class FullPageCacheCoordinator
     {
         $staleCacheKey = $this->buildStaleCacheKey($cacheKey);
         $this->cache()->delete($cacheKey);
-        $this->cache()->delete($this->buildFormattedFastHttpCacheKey($cacheKey));
+        $this->cache()->delete($this->buildFormattedFastHttpCacheKey($cacheKey, ContentEncodingNegotiator::ENCODING_GZIP));
+        $this->cache()->delete($this->buildFormattedFastHttpCacheKey($cacheKey, ContentEncodingNegotiator::ENCODING_BROTLI));
         $this->cache()->delete($staleCacheKey);
-        $this->cache()->delete($this->buildFormattedFastHttpCacheKey($staleCacheKey));
+        $this->cache()->delete($this->buildFormattedFastHttpCacheKey($staleCacheKey, ContentEncodingNegotiator::ENCODING_GZIP));
+        $this->cache()->delete($this->buildFormattedFastHttpCacheKey($staleCacheKey, ContentEncodingNegotiator::ENCODING_BROTLI));
         $this->deleteSharedPayloadFile($cacheKey);
         $this->deleteSharedPayloadFile($staleCacheKey);
         $this->deleteProcessCachedPayload($cacheKey);
         $this->deleteProcessCachedPayload($staleCacheKey);
-        $this->deleteProcessCachedFormattedResponse($this->buildFormattedFastHttpCacheKey($cacheKey));
-        $this->deleteProcessCachedFormattedResponse($this->buildFormattedFastHttpCacheKey($staleCacheKey));
+        $this->deleteProcessCachedFormattedResponse($this->buildFormattedFastHttpCacheKey($cacheKey, ContentEncodingNegotiator::ENCODING_GZIP));
+        $this->deleteProcessCachedFormattedResponse($this->buildFormattedFastHttpCacheKey($cacheKey, ContentEncodingNegotiator::ENCODING_BROTLI));
+        $this->deleteProcessCachedFormattedResponse($this->buildFormattedFastHttpCacheKey($staleCacheKey, ContentEncodingNegotiator::ENCODING_GZIP));
+        $this->deleteProcessCachedFormattedResponse($this->buildFormattedFastHttpCacheKey($staleCacheKey, ContentEncodingNegotiator::ENCODING_BROTLI));
     }
 
     private function bodyContainsIgnorableHtmlUrlQuery(string $body): bool

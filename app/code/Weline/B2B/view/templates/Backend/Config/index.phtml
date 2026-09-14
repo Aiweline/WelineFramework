@@ -42,32 +42,225 @@ $centerUrl = $this->request->getUrlBuilder()->getBackendUrl('weline_systemconfig
     <w:config:embed
         module="Weline_B2B"
         area="frontend"
-        fields="selling_mode_toc_enabled,selling_mode_tob_enabled,b2b_credit_enabled,b2b_credit_min_cash_deposit_percent"
+        fields="selling_mode_toc_enabled,selling_mode_tob_enabled,b2b_credit_enabled,b2b_credit_min_cash_deposit_percent,b2b_max_discount_bps,b2b_min_margin_bps,b2b_default_tier_policy_json"
         locale="default"
     />
+
+    <div class="w-stack" style="--w-gap:var(--weline-space-3);" data-testid="b2b-default-wholesale-policy-panel">
+        <div class="w-stack" style="--w-gap:var(--weline-space-1);">
+            <h3 class="w-text" data-weight="semibold" style="--w-m:0;" data-testid="b2b-default-tier-policy-heading">
+                <lang>VIP0–VIP12 默认批发档</lang>
+            </h3>
+            <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0;" data-testid="b2b-default-policy-no-rebrush">
+                <lang>修改模板立即作用于继承商品的新报价/PDP；不会回刷已有价目表或历史订单。折扣按百分比填写，保存时自动换算为基点。</lang>
+            </p>
+        </div>
+        <div class="w-table-wrap">
+            <table class="w-table" data-testid="b2b-default-tier-policy-table">
+                <thead>
+                <tr>
+                    <th><lang>VIP 档</lang></th>
+                    <th><lang>起订量</lang></th>
+                    <th><lang>折扣（%）</lang></th>
+                </tr>
+                </thead>
+                <tbody id="b2b-default-tier-policy-tbody"></tbody>
+            </table>
+        </div>
+    </div>
 </div>
+<style>
+    /* Persist JSON via embed control but never show raw payload to operators. */
+    [data-testid="b2b-selling-mode-config"] [data-config-key="b2b_default_tier_policy_json"],
+    [data-testid="b2b-selling-mode-config"] [data-config-key="b2b_default_tier_policy_json"][data-b2b-json-hidden="1"] {
+        position: absolute !important;
+        width: 1px !important;
+        height: 1px !important;
+        padding: 0 !important;
+        margin: -1px !important;
+        overflow: hidden !important;
+        clip: rect(0, 0, 0, 0) !important;
+        clip-path: inset(50%) !important;
+        white-space: nowrap !important;
+        border: 0 !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+    }
+</style>
 <script>
 (function () {
     var root = document.getElementById('b2b-config-scope');
-    if (!root) {
-        return;
+    if (root) {
+        var field = root.querySelector('input[type="hidden"][name="target_scope"]') || root.querySelector('input[name="target_scope"]');
+        if (field) {
+            field.addEventListener('change', function () {
+                var next = String(field.value || '').trim();
+                if (!next) {
+                    return;
+                }
+                var url = new URL(window.location.href);
+                url.searchParams.set('target_scope', next);
+                var parts = next.split('.');
+                url.searchParams.set('website_code', parts[0] && parts[0] !== 'default' ? parts[0] : '');
+                url.searchParams.set('store_code', parts[1] && parts[1] !== 'default' ? parts[1] : '');
+                url.searchParams.set('channel_code', parts[2] && parts[2] !== 'default' ? parts[2] : '');
+                window.location.assign(url.toString());
+            });
+        }
     }
-    var field = root.querySelector('input[type="hidden"][name="target_scope"]') || root.querySelector('input[name="target_scope"]');
-    if (!field) {
-        return;
+
+    function findControl(key, testId, tagHint) {
+        var byTestId = document.querySelector('[data-testid="' + testId + '"]');
+        if (byTestId) {
+            if (byTestId.matches(tagHint)) {
+                return byTestId;
+            }
+            var nestedTid = byTestId.querySelector(tagHint);
+            if (nestedTid) {
+                return nestedTid;
+            }
+        }
+        var byKey = document.querySelector('[data-config-key="' + key + '"]');
+        if (byKey) {
+            var nestedKey = byKey.querySelector(tagHint + ', [data-w-config-embed-control]');
+            if (nestedKey) {
+                if (!nestedKey.getAttribute('data-testid')) {
+                    nestedKey.setAttribute('data-testid', testId);
+                }
+                return nestedKey;
+            }
+        }
+        return document.querySelector(tagHint + '[name*="' + key + '"], ' + tagHint + '[data-config-key="' + key + '"]');
     }
-    field.addEventListener('change', function () {
-        var next = String(field.value || '').trim();
-        if (!next) {
+
+    function findTierJsonControl() {
+        return findControl('b2b_default_tier_policy_json', 'b2b-default-tier-policy-json', 'textarea,input');
+    }
+
+    function findMaxDiscountControl() {
+        return findControl('b2b_max_discount_bps', 'b2b-max-discount-bps', 'input');
+    }
+
+    function hideJsonFieldRow() {
+        var row = document.querySelector('[data-testid="b2b-selling-mode-config"] [data-config-key="b2b_default_tier_policy_json"]');
+        if (!row) {
             return;
         }
-        var url = new URL(window.location.href);
-        url.searchParams.set('target_scope', next);
-        var parts = next.split('.');
-        url.searchParams.set('website_code', parts[0] && parts[0] !== 'default' ? parts[0] : '');
-        url.searchParams.set('store_code', parts[1] && parts[1] !== 'default' ? parts[1] : '');
-        url.searchParams.set('channel_code', parts[2] && parts[2] !== 'default' ? parts[2] : '');
-        window.location.assign(url.toString());
-    });
+        row.setAttribute('aria-hidden', 'true');
+        row.setAttribute('data-b2b-json-hidden', '1');
+        row.hidden = true;
+        var control = row.querySelector('textarea,input');
+        if (control) {
+            control.setAttribute('tabindex', '-1');
+            control.setAttribute('aria-hidden', 'true');
+        }
+    }
+
+    function seedRows(maxBps) {
+        var rows = [];
+        for (var tier = 0; tier <= 12; tier++) {
+            rows.push({
+                tier_rank: tier,
+                min_qty: 5 + tier * 5,
+                discount_bps: Math.min(500 + tier * 500, maxBps)
+            });
+        }
+        return rows;
+    }
+
+    function parseRows(raw, maxBps) {
+        var rows = [];
+        try {
+            var decoded = typeof raw === 'string' ? JSON.parse(raw || '[]') : raw;
+            if (Array.isArray(decoded) && decoded.length) {
+                rows = decoded;
+            }
+        } catch (e) {
+            rows = [];
+        }
+        if (!rows.length) {
+            return seedRows(maxBps);
+        }
+        var byTier = {};
+        rows.forEach(function (row) {
+            if (!row || typeof row !== 'object') {
+                return;
+            }
+            var tier = Number(row.tier_rank);
+            if (tier < 0 || tier > 12) {
+                return;
+            }
+            byTier[tier] = {
+                tier_rank: tier,
+                min_qty: Math.max(1, Number(row.min_qty) || 5),
+                discount_bps: Math.max(0, Math.min(maxBps, Number(row.discount_bps) || 0))
+            };
+        });
+        return seedRows(maxBps).map(function (seed) {
+            return byTier[seed.tier_rank] || seed;
+        });
+    }
+
+    function syncTableToJson(jsonControl, tbody, maxBps) {
+        var rows = [];
+        tbody.querySelectorAll('tr').forEach(function (tr) {
+            var tier = Number(tr.getAttribute('data-tier-rank'));
+            var minQty = Number(tr.querySelector('[data-field="min_qty"]').value || 1);
+            var percent = Number(tr.querySelector('[data-field="discount_percent"]').value || 0);
+            var bps = Math.round(percent * 100);
+            rows.push({
+                tier_rank: tier,
+                min_qty: Math.max(1, minQty),
+                discount_bps: Math.max(0, Math.min(maxBps, bps))
+            });
+        });
+        jsonControl.value = JSON.stringify(rows);
+        jsonControl.dispatchEvent(new Event('input', { bubbles: true }));
+        jsonControl.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    function renderTable() {
+        hideJsonFieldRow();
+        var jsonControl = findTierJsonControl();
+        var tbody = document.getElementById('b2b-default-tier-policy-tbody');
+        if (!jsonControl || !tbody) {
+            return;
+        }
+        var maxControl = findMaxDiscountControl();
+        var maxBps = Math.max(0, Math.min(10000, Number(maxControl && maxControl.value ? maxControl.value : 2000) || 2000));
+        var maxPercent = Math.round(maxBps) / 100;
+        var rows = parseRows(jsonControl.value, maxBps);
+        tbody.innerHTML = '';
+        rows.forEach(function (row) {
+            var percent = Math.round((Number(row.discount_bps) || 0) / 100 * 100) / 100;
+            var tr = document.createElement('tr');
+            tr.setAttribute('data-tier-rank', String(row.tier_rank));
+            tr.setAttribute('data-testid', 'b2b-default-tier-row-' + row.tier_rank);
+            tr.innerHTML = '<td>VIP' + row.tier_rank + '</td>'
+                + '<td><input class="w-input" type="number" min="1" step="1" data-field="min_qty" data-testid="b2b-default-tier-min-qty-' + row.tier_rank + '" value="' + row.min_qty + '"></td>'
+                + '<td><input class="w-input" type="number" min="0" max="' + maxPercent + '" step="0.01" data-field="discount_percent" data-testid="b2b-default-tier-discount-percent-' + row.tier_rank + '" value="' + percent + '"></td>';
+            tbody.appendChild(tr);
+        });
+        tbody.querySelectorAll('input').forEach(function (input) {
+            input.addEventListener('change', function () {
+                syncTableToJson(jsonControl, tbody, maxBps);
+            });
+            input.addEventListener('input', function () {
+                syncTableToJson(jsonControl, tbody, maxBps);
+            });
+        });
+        syncTableToJson(jsonControl, tbody, maxBps);
+        if (maxControl && !maxControl.dataset.b2bTierBound) {
+            maxControl.dataset.b2bTierBound = '1';
+            maxControl.addEventListener('change', renderTable);
+        }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', renderTable);
+    } else {
+        renderTable();
+    }
+    setTimeout(renderTable, 400);
 })();
 </script>

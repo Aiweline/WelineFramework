@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 return [
     'name' => 'Weline_Inventory',
-    'version' => '2.5.22',
+    'version' => '2.5.23',
     'requires' => [
         'Weline_Framework' => '*',
         'Weline_Websites' => '*',
@@ -27,5 +27,7 @@ return [
             => \Weline\Inventory\Service\DefaultLogicalWarehouseResolver::class,
         \Weline\Inventory\Api\WarehouseInventoryCapabilityInterface::class
             => \Weline\Inventory\Service\WarehouseInventoryService::class,
+        \Weline\Inventory\Api\FulfillmentSplitPlanInterface::class
+            => \Weline\Inventory\Service\FulfillmentSplitPlanService::class,
     ],
 ];
