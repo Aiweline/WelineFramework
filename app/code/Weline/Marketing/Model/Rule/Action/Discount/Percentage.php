@@ -11,11 +11,15 @@ declare(strict_types=1);
 
 namespace Weline\Marketing\Model\Rule\Action\Discount;
 
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Marketing\Model\Rule\Action\AbstractAction;
+use Weline\Marketing\Service\MarketingBaseCurrencyAmount;
 
 /**
  * 百分比折扣动作
- * 
+ *
+ * 百分比无货币单位；max_discount（最大折扣金额）按站点基准货币录入并换算。
+ *
  * @package Weline_Marketing
  */
 class Percentage extends AbstractAction
@@ -49,7 +53,18 @@ class Percentage extends AbstractAction
         }
 
         $discountValue = (float)($action['discount_value'] ?? 0);
-        $maxDiscount = isset($action['max_discount']) ? (float)$action['max_discount'] : null;
+        $fx = $this->baseCurrencyAmount();
+        $checkoutCurrency = $fx->checkoutCurrencyFromContext($context);
+        $maxDiscount = null;
+        if (isset($action['max_discount']) && $action['max_discount'] !== '' && $action['max_discount'] !== null) {
+            $maxDiscount = $fx->convertBaseMajorToCheckout((float)$action['max_discount'], $checkoutCurrency);
+            if ($maxDiscount === null) {
+                return [
+                    'discount_amount' => 0,
+                    'messages' => [__('百分比封顶额换算失败：缺少基准货币到结账货币的汇率')],
+                ];
+            }
+        }
         $applyTo = \strtolower(\trim((string)($action['apply_to'] ?? 'subtotal')));
         if ($applyTo === 'cart' || $applyTo === '') {
             $applyTo = 'subtotal';
@@ -70,7 +85,12 @@ class Percentage extends AbstractAction
 
         return [
             'discount_amount' => $discountAmount,
-            'messages' => [sprintf(__('享受 %.2f%% 折扣，优惠 %.2f 元'), $discountValue, $discountAmount)],
+            'messages' => [sprintf(
+                __('享受 %.2f%% 折扣，优惠 %s %.2f'),
+                $discountValue,
+                $checkoutCurrency,
+                $discountAmount
+            )],
         ];
     }
 
@@ -128,10 +148,11 @@ class Percentage extends AbstractAction
             ],
             [
                 'name' => 'max_discount',
-                'label' => __('最大折扣金额'),
+                'label' => __('最大折扣金额（%{1}）', $this->baseCurrencyAmount()->baseCurrency()),
                 'type' => 'number',
                 'step' => '0.01',
                 'required' => false,
+                'hint' => __('封顶金额按站点基准货币录入；结账时按汇率换算。'),
             ],
             [
                 'name' => 'apply_to',
@@ -145,6 +166,11 @@ class Percentage extends AbstractAction
                 'required' => true,
             ],
         ];
+    }
+
+    private function baseCurrencyAmount(): MarketingBaseCurrencyAmount
+    {
+        return ObjectManager::getInstance(MarketingBaseCurrencyAmount::class);
     }
 }
 

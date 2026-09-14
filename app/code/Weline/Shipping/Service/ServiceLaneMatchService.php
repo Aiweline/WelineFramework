@@ -30,11 +30,54 @@ final class ServiceLaneMatchService
     public function resolveDefaultOriginId(): int
     {
         $default = $this->shippingAddressService->getDefault();
-        if (!$default instanceof ShippingAddress || !$default->getId()) {
-            return 0;
+        if ($default instanceof ShippingAddress && (int)$default->getId() > 0) {
+            return (int)$default->getId();
         }
 
-        return (int)$default->getId();
+        // 无 is_default 时：优先仓权威绑定，否则首个启用发货地址（避免种子航线被 origin=0 滤光）。
+        try {
+            if (interface_exists(\Weline\Shipping\Api\WarehouseShippingOriginInterface::class)
+                && interface_exists(\Weline\Inventory\Api\DefaultWarehouseResolverInterface::class)
+            ) {
+                /** @var \Weline\Inventory\Api\DefaultWarehouseResolverInterface $resolver */
+                $resolver = $this->objectManager->getInstance(
+                    \Weline\Inventory\Api\DefaultWarehouseResolverInterface::class
+                );
+                $warehouseId = (int)$resolver->resolveDefault(0, 0)->warehouseId;
+                if ($warehouseId > 0) {
+                    /** @var \Weline\Shipping\Api\WarehouseShippingOriginInterface $origins */
+                    $origins = $this->objectManager->getInstance(
+                        \Weline\Shipping\Api\WarehouseShippingOriginInterface::class
+                    );
+                    $bound = (int)($origins->findShippingAddressId(0, $warehouseId) ?? 0);
+                    if ($bound > 0) {
+                        return $bound;
+                    }
+                }
+            }
+        } catch (\Throwable) {
+            // fall through
+        }
+
+        try {
+            /** @var ShippingAddress $model */
+            $model = $this->objectManager->getInstance(ShippingAddress::class, [], false);
+            $items = $model->reset()
+                ->where(ShippingAddress::schema_fields_IS_ENABLED, 1)
+                ->order(ShippingAddress::schema_fields_IS_DEFAULT, 'DESC')
+                ->order(ShippingAddress::schema_fields_ID, 'ASC')
+                ->select()
+                ->fetch()
+                ->getItems();
+            $row = is_array($items) ? ($items[0] ?? null) : null;
+            if ($row instanceof ShippingAddress && (int)$row->getId() > 0) {
+                return (int)$row->getId();
+            }
+        } catch (\Throwable) {
+            // no address
+        }
+
+        return 0;
     }
 
     /**

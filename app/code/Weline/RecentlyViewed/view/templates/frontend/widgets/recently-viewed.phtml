@@ -97,12 +97,22 @@ foreach ($products as &$product) {
     $productId = (int)($product['product_id'] ?? $product['id'] ?? 0);
     $product['id'] = $productId;
     $route = trim((string)($product['url'] ?? ''));
+    $slug = strtolower(trim((string)($product['slug'] ?? '')));
+    if ($route === '' && $slug !== '') {
+        $route = 'product/' . $slug;
+    } elseif ($route === '' && $productId > 0) {
+        $route = 'product/' . $productId;
+    }
     if (str_starts_with($route, 'http://') || str_starts_with($route, 'https://') || str_starts_with($route, '//')) {
         $product['url'] = $route;
     } else {
         $path = '/' . ltrim($route, '/');
         $prefix = rtrim(Url::getPrefix(), '/');
-        $product['url'] = ($prefix !== '' ? $prefix : '') . $path;
+        $hasCurrentPrefix = $prefix !== ''
+            && ($path === $prefix || str_starts_with($path, $prefix . '/'));
+        $product['url'] = $hasCurrentPrefix
+            ? $path
+            : ($prefix !== '' ? $prefix : '') . $path;
     }
 }
 unset($product);
@@ -130,7 +140,7 @@ if ($products === []) {
 }
 ?>
 <link rel="stylesheet"
-      href="@static(Weline_RecentlyViewed::css/widgets/recently-viewed.css)?v=20260906-product-card1"
+      href="@static(Weline_RecentlyViewed::css/widgets/recently-viewed.css)?v=20260912-bg-transparent"
       data-no-extract="true">
 
 <section class="<?= $esc($wc) ?> weline-recently-viewed<?= $isPreviewMode ? ' is-preview' : '' ?>"
@@ -155,7 +165,7 @@ if ($products === []) {
             <?php endif; ?>
             <div class="wrv-track columns-<?= $esc($columns) ?> layout-<?= $esc($layout) ?>" data-wrv-track>
                 <?php foreach ($products as $product): ?>
-                    <w:product:card product="product" show-price="showPrice" show-rating="false" show-add-to-cart="false" show-wishlist="cardShowWishlist" show-compare="cardShowCompare" show-quickview="cardShowQuickview" show-labels="false" density="shelf" class="wrv-card" />
+                    <w:product:card product="product" show-price="showPrice" show-rating="false" show-add-to-cart="true" show-wishlist="cardShowWishlist" show-compare="cardShowCompare" show-quickview="cardShowQuickview" show-labels="true" show-sku="true" density="standard" class="wpc-listing-card wrv-card" wishlist-pixel="true" />
                 <?php endforeach; ?>
             </div>
             <?php if ($layout === 'carousel'): ?>

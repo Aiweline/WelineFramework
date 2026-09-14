@@ -38,6 +38,14 @@
 获取发货状态标签，允许其他模块扩展发货状态标签。,"Shipping status label retrieved, allowing other modules to extend shipping status labels."
 解析完整状态信息,"Parse full status information"
 解析完整状态信息，允许其他模块扩展状态信息解析。,"Parse full status information, allowing other modules to extend status information parsing."
+"订单 ID","Order ID"
+"订单 UUID","订单 UUID"
+订单号,"Order Number"
+客户邮箱,"Customer Email"
+状态,Status
+原状态,原状态
+备注,Comment
+附加说明,附加说明
 订单创建通知,订单创建通知
 新订单创建后的客户/运营邮件通知,新订单创建后的客户/运营邮件通知
 订单支付通知,订单支付通知
@@ -97,8 +105,9 @@
 订单详情页之后,"After Order Details Page"
 在订单详情页内容之后注入内容，允许其他模块在订单详情页底部添加自定义内容。,"Inject content after the order details page content, allowing other modules to add custom content at the bottom of the order details page."
 订单详情支付记录槽,订单详情支付记录槽
-"订单详情支付记录空槽内的默认扩展点；由万能支付模块注入 Attempt 记录，禁止 Order 直读支付表拼表。","订单详情支付记录空槽内的默认扩展点；由万能支付模块注入 Attempt 记录，禁止 Order 直读支付表拼表。"
 "订单详情「支付记录」空槽内的默认扩展点；由万能支付模块注入 Attempt 记录，禁止 Order 直读 Payment 表。","订单详情「支付记录」空槽内的默认扩展点；由万能支付模块注入 Attempt 记录，禁止 Order 直读 Payment 表。"
+订单详情批发沟通槽,订单详情批发沟通槽
+"订单详情「批发订单沟通」空槽内的默认扩展点；由 B2B 部件注入商家侧协商消息，禁止 Order 直出聊天 UI。","订单详情「批发订单沟通」空槽内的默认扩展点；由 B2B 部件注入商家侧协商消息，禁止 Order 直出聊天 UI。"
 订单列表筛选器,"Order List Filters"
 在订单列表页面的筛选器区域注入内容，允许其他模块添加自定义筛选条件。,"Inject content in the filter area of the order list page, allowing other modules to add custom filter conditions."
 前端订单创建前,"Before Frontend Order Creation"
@@ -129,8 +138,9 @@ cash,cash
 查看可退款订单项和退款案例,"View refundable line items and refund cases"
 提交退款,"Submit a refund"
 "锁内占用可退金额和数量并生成退款 outbox","The refundable amount and quantity are occupied in the lock and a refund is generated outbox"
-订单更新成功,"Order updated successfully"
+客户调整已保存,客户调整已保存
 订单创建成功,"Order created successfully"
+备注已添加,备注已添加
 订单取消成功,"Order cancelled successfully"
 参数错误,"Invalid parameters"
 订单状态更新成功,"Order status updated successfully"
@@ -143,18 +153,16 @@ eye,eye
 edit,edit
 保存订单,"Save order"
 save,save
-取消订单,"Cancel order"
-close,close
 更新订单状态,"Update order status"
 refresh,refresh
+取消订单,"Cancel order"
+close,close
 订单收款记录,"Order collection record"
 "支付 ID","Payment ID"
-"订单 ID","Order ID"
 支付方式,"Payment Method"
 金额,Amount
 货币,currency
 交易号,"Transaction number"
-状态,Status
 创建时间,"Created At"
 订单异常与补偿,"Order exceptions and compensation"
 "记录 ID","Record ID"
@@ -206,6 +214,7 @@ switch,switch
 获取订单详情成功,"Order details retrieved successfully"
 订单数据不能为空,"Order data cannot be empty"
 更新数据不能为空,"Update data cannot be empty"
+订单更新成功,"Order updated successfully"
 发货记录创建成功,"Shipment record created successfully"
 退款申请创建成功,"Refund request created successfully"
 发票生成成功,"Invoice generated successfully"
@@ -221,6 +230,10 @@ switch,switch
 "Order asset snapshot 必填字段为空：%{1}","Order asset snapshot required fields are empty: %{1}"
 "Order asset snapshot 数值/hash 非法","Order asset snapshot value/hash is illegal"
 我的订单,"My Orders"
+退货,Return
+与我的订单,"And My Orders"
+订单留言,"Order note"
+如有特殊要求请留言,"Leave a message if you have special requirements"
 查看订单进度与支付状态,"View order progress and payment status"
 已关闭,Closed
 未知状态,"unknown status"
@@ -244,23 +257,42 @@ SKU,SKU
 暂无订单,"No orders yet"
 查看详情,"View Details"
 订单明细,"Order details"
-退货,Return
-与我的订单,"And My Orders"
 查询失败,"Query failed"
 物流单号,"Tracking Number"
 当前,Current
-订单留言,"Order note"
-如有特殊要求请留言,"Leave a message if you have special requirements"
+本单待发履约单元；提交后写入仓维进度账本。,本单待发履约单元；提交后写入仓维进度账本。
+履约单元,"fulfillment unit"
+仓库,storehouse
+已发/总量,"Issued/total amount"
+提交,提交
+本单暂无可发货履约单元,本单暂无可发货履约单元
+发货数量,"Shipment quantity"
+发货,发货
+进度,进度
+版本,Version
+时间,Time
+本单可退项；占额由服务端重算。,本单可退项；占额由服务端重算。
+可退数量,可退数量
+本单暂无可退款订单项,本单暂无可退款订单项
+退款数量,"Refund quantity"
+后台退款,"Backstage refund"
+退款原因,"Reason for refund"
+退款,Refund
+案例,案例
+顾客视图,"customer view"
+支付记录与批发沟通（插件槽位）。,支付记录与批发沟通（插件槽位）。
+订单支付记录,订单支付记录
+批发订单沟通,批发订单沟通
+打开完整详情,打开完整详情
 订单列表,"Order List"
 新建订单,"Create Order"
-搜索订单号、客户姓名、邮箱,"Search order number, customer name, email"
+"搜索订单号、分组号 G-xxx、UUID、客户","搜索订单号、分组号 G-xxx、UUID、客户"
 全部状态,"All Status"
 全部支付状态,"All Payment Status"
 全部发货状态,"All Fulfillment Status"
 全部类型,"All types"
 搜索,Search
 重置,Reset
-订单号,"Order Number"
 类型,Type
 客户,Customer
 订单状态,"Order Status"
@@ -274,20 +306,33 @@ SKU,SKU
 系统,System
 订单基本信息,"Order Information"
 客户姓名,"Customer Name"
-客户邮箱,"Customer Email"
 客户电话,"Customer Phone"
 折扣,Discount
 批发信用优惠,批发信用优惠
 汇率快照,汇率快照
 现金定金,现金定金
 状态操作,"Status Actions"
-备注,Comment
 更新状态,"Update Status"
+收货地址,收货地址
+暂无收货地址,暂无收货地址
+账单地址,账单地址
+暂无账单地址,暂无账单地址
+备注与履约方式,备注与履约方式
+配送方式,"Shipping Method"
+订单备注,"Order Notes"
+（无备注）,（无备注）
 订单项,"Order Items"
-商品名称,"Product Name"
+结账快照,结账快照
+价格快照,价格快照
+行优惠,行优惠
 行总计,"Row Total"
+活动,活动
 暂无订单项,"No Order Items"
-订单支付记录,订单支付记录
+成交,成交
+原价,原价
+原价未记录,原价未记录
+活动价,活动价
+无活动记录,无活动记录
 发货记录,"Shipment Records"
 承运商,Carrier
 发货时间,"Shipped At"
@@ -295,17 +340,68 @@ SKU,SKU
 暂无发货记录,"No Shipment Records"
 订单历史,"Order History"
 是否通知客户,"Customer Notified"
-时间,Time
 暂无历史记录,"No History Records"
 是,Yes
 否,No
-客户ID,"Customer ID"
-配送方式,"Shipping Method"
-订单备注,"Order Notes"
-删除,Delete
+未指定,未指定
+未指定配送方式,未指定配送方式
+管理订单,管理订单
+订单摘要,订单摘要
+结账组号,结账组号
+商品行数,商品行数
+商品数量累计,商品数量累计
+商品行累计,商品行累计
+运输方式,运输方式
+优惠项目,优惠项目
+无优惠项目,无优惠项目
+累计校验：行累计与商品小计不一致，请核对快照,累计校验：行累计与商品小计不一致，请核对快照
+状态调整,状态调整
+状态备注,状态备注
+通知客户,通知客户
+订单办理,订单办理
+加载中…,加载中…
+加载失败，请重试,加载失败，请重试
+支付与沟通,支付与沟通
+客户调整,客户调整
+切换到此页签时异步加载本单发货。,切换到此页签时异步加载本单发货。
+切换到此页签时异步加载本单退款。,切换到此页签时异步加载本单退款。
+切换到此页签时异步加载支付与沟通。,切换到此页签时异步加载支付与沟通。
+联系人、地址与备注在下方「客户调整」区编辑。,联系人、地址与备注在下方「客户调整」区编辑。
+前往客户调整,前往客户调整
+结账快照不可改行,结账快照不可改行
+点击展开编辑客户、地址与备注,点击展开编辑客户、地址与备注
+选择客户,选择客户
+当前为访客结账，可改为注册客户,当前为访客结账，可改为注册客户
+客户姓名（展示）,客户姓名（展示）
+收货人,收货人
+电话,电话
+邮箱,邮箱
+邮编,邮编
+详细地址,详细地址
+"门牌号 / 楼栋单元等","门牌号 / 楼栋单元等"
+账单姓名,账单姓名
+国家代码,国家代码
+省/州,省/州
+城市,城市
+区县,区县
+当前无账单地址快照；填写后可保存。避免与收货级联同页争用，空账单使用文本字段。,当前无账单地址快照；填写后可保存。避免与收货级联同页争用，空账单使用文本字段。
+选择支付方式,选择支付方式
+订单尚未记录支付方式时，摘要显示「未指定」并附带支付状态；可在此选择可用方式后保存。,订单尚未记录支付方式时，摘要显示「未指定」并附带支付状态；可在此选择可用方式后保存。
+系统代码,系统代码
+未加载到运输服务目录时，可直接填写代码；摘要优先展示可读名称。,未加载到运输服务目录时，可直接填写代码；摘要优先展示可读名称。
 添加订单项,"Add Order Item"
-取消,Cancel
-保存,Save
+返回列表,返回列表
+保存客户调整,保存客户调整
+更多,更多
+"沟通备注 · 取消 · 发货记录 · 历史","沟通备注 · 取消 · 发货记录 · 历史"
+追加沟通备注,追加沟通备注
+写入订单历史，可选通知客户,写入订单历史，可选通知客户
+添加备注,添加备注
+取消原因,取消原因
+确认取消,确认取消
+"支付记录与沟通也可在上方「订单办理 → 支付与沟通」页签异步加载。","支付记录与沟通也可在上方「订单办理 → 支付与沟通」页签异步加载。"
+商品名称,"Product Name"
+删除,Delete
 按状态筛选,"Filter by status"
 筛选,filter
 暂无记录,"No record yet"
@@ -329,6 +425,7 @@ SKU,SKU
 吗？,?
 确认删除,"Confirm deletion"
 确定删除,"Confirm deletion"
+取消,Cancel
 编辑状态,"Edit Status"
 "只能包含小写字母和下划线，如：pending, processing","Can only contain lowercase letters and underscores, e.g., pending, processing"
 默认语言（中文）的状态名称,"Status Name of Default Language (Chinese)"
@@ -342,6 +439,7 @@ SKU,SKU
 英文状态名称,"English Status Name"
 英文状态描述,"English Status Description"
 状态名称会通过翻译系统自动翻译。如果在此处填写了翻译，将优先使用数据库中的翻译；否则使用翻译文件中的翻译。,"Status names are automatically translated through the translation system. If a translation is provided here, the database translation will be used first; otherwise, the translation from the translation file will be used."
+保存,Save
 返回,Back
 保存成功,"Saved successfully"
 保存失败,"Save Failed"
@@ -350,27 +448,18 @@ SKU,SKU
 "发货动作写入仓维 FulfillmentUnit 与不可变进度账本；相同幂等键和载荷不会重复扣减可发数量。","The shipping action is written into the warehouse FulfillmentUnit and the immutable progress ledger; the same idempotent key and load will not repeatedly deduct the deliverable quantity."
 待发货履约单元,"Fulfillment unit to be shipped"
 订单,Order
-履约单元,"fulfillment unit"
-仓库,storehouse
-已发/总量,"Issued/total amount"
 "CAS 版本","CAS version"
 暂无可发货履约单元,"There is currently no delivery fulfillment unit"
-发货数量,"Shipment quantity"
 幂等键,"idempotent keys"
 仓维发货进度账本,"Warehouse delivery progress ledger"
-版本,Version
 暂无进度记录,"No progress record yet"
 订单退款管理,"Order refund management"
 "退款金额由服务端按冻结订单项重算；提交会在同一事务内占用可退数量与金额，并生成 PaymentRefund 和确定性 outbox。","The refund amount is recalculated by the server based on frozen order items; submission will occupy the refundable quantity and amount in the same transaction, and generate PaymentRefund and deterministic outbox."
 可退款订单项,"Refundable line items"
 可申请数量,"Available quantity"
 暂无可退款订单项,"There are currently no refundable line items"
-退款数量,"Refund quantity"
-后台退款,"Backstage refund"
-退款原因,"Reason for refund"
 退款案例与占额状态,"Refund cases and balance status"
 金额（minor）,"Amount (minor)"
-顾客视图,"customer view"
 暂无退款案例,"No refund cases yet"
 订单发票管理,"Order invoice management"
 "只处理 Payment 已生成的确定性 invoice effect；页面不能绕过支付事实手工创建发票。每张已支付订单最多生成一张最小发票。","Only handles the deterministic invoice effect for which Payment has been generated; the page cannot bypass the payment fact to manually create an invoice. A maximum of one minimum invoice will be generated for each paid order."
@@ -430,6 +519,7 @@ Outbox,Outbox
 订单已更新,"Order updated"
 订单当前状态不允许取消,"Order cannot be cancelled in current status"
 订单不存在,"Order does not exist"
+备注不能为空,备注不能为空
 %{1}不能为空,"%{1} cannot be empty"
 订单项不能为空,"Order items cannot be empty"
 商品名称不能为空,"Product name cannot be empty"
@@ -482,6 +572,9 @@ Outbox,Outbox
 "订单退款 Outbox %{1}","Order Refund Outbox %{1}"
 笔订单,orders
 部分状态不同，已展开,"Some statuses are different and have been expanded."
+混合类型,混合类型
+批发订单,"Wholesale order"
+零售订单,"Retail order"
 状态不一致,"Inconsistent status"
 状态待确认,"Status awaiting confirmation"
 退款处理中,"Refund in progress"
@@ -512,8 +605,7 @@ Outbox,Outbox
 "Order 售卖类型 code 不能为空","Order 售卖类型 code 不能为空"
 "重复的 Order 售卖类型 code：%{1}","重复的 Order 售卖类型 code：%{1}"
 未注册的订单售卖类型：%{1},未注册的订单售卖类型：%{1}
-零售,Retail
-历史批发,"Historical wholesale"
+历史批发订单,"Historical wholesale order"
 订单当前状态不允许退款,"Order cannot be refunded in current status"
 退款金额不能为空,"Refund amount cannot be empty"
 退款金额不能超过订单总额,"Refund amount cannot exceed order total"
@@ -535,6 +627,7 @@ Outbox,Outbox
 未找到匹配的订单,"No matching order found"
 联系方式与订单不匹配,"Contact does not match this order"
 订单标识不能为空,订单标识不能为空
+选项,选项
 "OrderPlan 影子比对只允许在 shadow mode 执行","OrderPlan shadow comparison is only allowed in shadow mode"
 "影子计划字段 %{1} 必须是数组","Shadow plan field %{1} must be an array"
 影子副作用快照必须返回数组,"Shadow side-effect snapshot must return an array"
@@ -555,6 +648,29 @@ Outbox,Outbox
 "旧 Checkout writer 已被 cutover gate 禁止（mode=%{1}）","The old Checkout writer has been disabled by the cutover gate (mode=%{1})"
 "新 Order writer 在当前 mode 不可写（mode=%{1}；shadow 仅允许 plan）","The new Order writer is not writable in the current mode (mode=%{1}; shadow only allows plan)"
 "MIG-P2-ORDER：Checkout→Order 单写切流（仅登记的隔离 clone）","MIG-P2-ORDER: Checkout→Order single write flow (only registered isolation clone)"
+"订单详情支付记录空槽内的默认扩展点；由万能支付模块注入 Attempt 记录，禁止 Order 直读支付表拼表。","订单详情支付记录空槽内的默认扩展点；由万能支付模块注入 Attempt 记录，禁止 Order 直读支付表拼表。"
+配送方式代码,配送方式代码
+"为客户调整（联系 / 地址 / 备注）","为客户调整（联系 / 地址 / 备注）"
+客户留言与运营备注；地址与客户选择保存后写入订单,客户留言与运营备注；地址与客户选择保存后写入订单
+为客户调整入口,为客户调整入口
+发货管理,"Shipping management"
+退款管理,"Refund management"
+支付与沟通（详情）,支付与沟通（详情）
+支付记录与订单沟通请在,支付记录与订单沟通请在
+中查看与操作,中查看与操作
+累计校验,累计校验
+行累计与商品小计不一致，请核对快照,行累计与商品小计不一致，请核对快照
+收货地址（当前）,收货地址（当前）
+账单地址（当前）,账单地址（当前）
+收货地址调整,收货地址调整
+账单地址调整,账单地址调整
+可编辑字段,可编辑字段
+客户ID,"Customer ID"
+访客结账（无注册客户）,访客结账（无注册客户）
+客户留言与运营备注，保存后写入订单记录,客户留言与运营备注，保存后写入订单记录
+搜索订单号、客户姓名、邮箱,"Search order number, customer name, email"
+零售,Retail
+历史批发,"Historical wholesale"
 支付记录,"Payment Records"
 支付金额,"Payment Amount"
 交易ID,"Transaction ID"
@@ -566,7 +682,6 @@ Outbox,Outbox
 物流单号更新成功,"Tracking number updated successfully"
 发货ID不能为空,"Shipment ID cannot be empty"
 标记成功,"Marked successfully"
-发货管理,"Shipping management"
 创建发货,"Create shipment"
 创建发货记录,"Create shipping record"
 更新物流单号,"Update logistics order number"
@@ -574,7 +689,6 @@ Outbox,Outbox
 标记为已送达,"Mark as delivered"
 退款ID不能为空,"Refund ID cannot be empty"
 退款处理成功,"Refund processed successfully"
-退款管理,"Refund management"
 创建退款,"Create a refund"
 创建退款记录,"Create a refund record"
 处理退款,"Process a refund"
@@ -584,7 +698,6 @@ Outbox,Outbox
 发票管理,"Invoice management"
 生成发票,"Generate invoice"
 打印发票,"Print invoice"
-退款,Refund
 发票,bill
 "MIG-P2-ORDER：Checkout→Order 单写切流（apply 必须 --database=mig_clone_*）","MIG-P2-ORDER: Checkout→Order single write flow (apply must --database=mig_clone_*)"
 "已创建以下数据表: weline_checkout_group, weline_order, weline_order_item, weline_fulfillment_unit, weline_order_payment, weline_order_shipment, weline_order_refund, weline_order_invoice, weline_order_history, weline_order_status, weline_order_status_translation","The following data tables have been created: weline_checkout_group, weline_order, weline_order_item, weline_fulfillment_unit, weline_order_payment, weline_order_shipment, weline_order_refund, weline_order_invoice, weline_order_history, weline_order_status, weline_order_status_translation"

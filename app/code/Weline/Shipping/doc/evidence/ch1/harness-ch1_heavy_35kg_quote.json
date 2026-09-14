@@ -1,0 +1,35 @@
+{
+    "ok": true,
+    "scenario": "ch1_heavy_35kg_quote",
+    "rates": {
+        "SEED_LANE_HEAVY_INTERNATIONAL": {
+            "amount_minor": 220000,
+            "label": "国际重货",
+            "package_count": 1,
+            "free_reason": null,
+            "surcharges": [],
+            "seasonal": [],
+            "addons": []
+        }
+    },
+    "diagnostics": {
+        "country_code": "US",
+        "currency": "CNY",
+        "lane_count": 1,
+        "fx_skipped": [],
+        "profile_groups": 1
+    },
+    "error": null,
+    "assertions": {
+        "conflict": false,
+        "has_service": true,
+        "amount_minor": 220000,
+        "package_count": 1,
+        "surcharges": [],
+        "addons": [],
+        "seasonal": [],
+        "free_reason": null,
+        "min_amount_ok": true,
+        "gt_americas_2kg": true
+    }
+}

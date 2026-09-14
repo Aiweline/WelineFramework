@@ -71,6 +71,11 @@ async function main() {
     await page.goto(FRONTEND + PDP, { waitUntil: 'domcontentloaded' });
     result.steps.push('pdp_loaded');
     await page.waitForFunction(() => !!(window.Weline && window.Weline.Api), null, { timeout: 60000 });
+    await page.waitForSelector(
+      '[data-testid="product-express-payment"][data-product-express] [data-product-express-pay], [data-testid="product-express-paypal"]',
+      { timeout: 60000 },
+    );
+    result.steps.push('express_button_ready');
 
     // Drive the same JS path as the button, but return the redirect URL instead of relying on window.open.
     const started = await page.evaluate(async () => {
@@ -173,7 +178,29 @@ async function main() {
     if (!body.includes('尚未扣款')) {
       throw new Error('missing_not_charged_copy');
     }
+    result.express_review_url = result.review_url;
+    if (!body.includes('data-shipping-checkout-address') && !body.includes('checkout-shipping-address')) {
+      throw new Error('missing_shipping_address_widget');
+    }
+    if (body.includes('支付商带回，只读')) {
+      throw new Error('address_still_readonly_copy');
+    }
 
+    // Prefer Shipping widget phone/name fields; fall back to gap inputs.
+    const shipPhone = paypal.locator('[data-shipping-checkout-address] input[name="phone"]').first();
+    if (await shipPhone.isVisible().catch(() => false)) {
+      const cur = await shipPhone.inputValue().catch(() => '');
+      if (!String(cur || '').trim()) {
+        await shipPhone.fill('13800138000');
+      }
+    }
+    const shipName = paypal.locator('[data-shipping-checkout-address] input[name="name"]').first();
+    if (await shipName.isVisible().catch(() => false)) {
+      const cur = await shipName.inputValue().catch(() => '');
+      if (!String(cur || '').trim()) {
+        await shipName.fill('John Doe');
+      }
+    }
     const phone = paypal.locator('#express-phone');
     if (await phone.isVisible().catch(() => false)) {
       await phone.fill('13800138000');
@@ -183,17 +210,64 @@ async function main() {
       await emailGap.fill(BUYER_EMAIL);
     }
 
+    if (process.env.EXPRESS_STOP_AT_REVIEW === '1') {
+      result.steps.push('stopped_at_review');
+      result.ok = !!result.transaction_no && /express-review/.test(result.review_url);
+      console.log(JSON.stringify(result, null, 2));
+      await browser.close();
+      process.exit(result.ok ? 0 : 1);
+      return;
+    }
+
+    // PayPal US address may need phone gap + shipping re-select; wait for can_confirm.
+    const shipPhone2 = paypal.locator('[data-shipping-checkout-address] input[name="phone"]').first();
+    if (await shipPhone2.isVisible().catch(() => false)) {
+      const cur = await shipPhone2.inputValue().catch(() => '');
+      if (!String(cur || '').trim()) {
+        await shipPhone2.fill('14085551234');
+        await shipPhone2.blur().catch(() => {});
+        await paypal.waitForTimeout(1500);
+      }
+    }
     const confirm = paypal.locator('[data-testid="express-confirm-pay"]');
     await confirm.waitFor({ state: 'visible', timeout: 30000 });
     await paypal.waitForFunction(() => {
       const btn = document.querySelector('[data-testid="express-confirm-pay"]');
-      return !!(btn && !btn.disabled);
-    }, null, { timeout: 60000 }).catch(() => {});
+      const status = (document.querySelector('[data-express-status]') || {}).innerText || '';
+      return !!(btn && !btn.disabled) || /已支付/.test(status);
+    }, null, { timeout: 90000 }).catch(() => {});
     if (await confirm.isEnabled()) {
-      await confirm.click();
-      await paypal.waitForURL(/handoff|success|payment/, { timeout: 120000 }).catch(() => {});
+      await Promise.all([
+        paypal.waitForURL((url) => {
+          const u = String(url);
+          if (/\/cart(?:\?|$)/.test(u)) return true;
+          if (/\/checkout\/success/.test(u)) return true;
+          if (/\/payment\/.*handoff|\/checkout\/handoff/.test(u)) return true;
+          return false;
+        }, { timeout: 120000 }).catch(() => {}),
+        confirm.click(),
+      ]);
+      for (let i = 0; i < 10; i += 1) {
+        const u = paypal.url();
+        if (/\/checkout\/success/.test(u) || /\/cart(?:\?|$)/.test(u)) {
+          break;
+        }
+        if (/handoff/.test(u)) {
+          await paypal.waitForTimeout(1200);
+          continue;
+        }
+        await paypal.waitForTimeout(800);
+      }
       result.steps.push('confirm_done:' + paypal.url());
+      result.handoff_url = paypal.url();
       result.review_url = paypal.url();
+      if (/\/cart(?:\?|$)/.test(paypal.url())) {
+        throw new Error('final_url_is_cart:' + paypal.url());
+      }
+      const finalHtml = await paypal.content();
+      if (!/\/checkout\/success/.test(paypal.url()) && !/订单已支付|感谢您的订购|已支付成功|结账成功/.test(finalHtml)) {
+        throw new Error('missing_paid_success_copy:' + paypal.url());
+      }
     } else {
       const status = await paypal.locator('[data-express-status]').innerText().catch(() => '');
       result.steps.push('confirm_disabled:' + status);
@@ -201,7 +275,9 @@ async function main() {
       result.error = status ? ('confirm_disabled:' + status) : 'confirm_disabled';
     }
 
-    result.ok = !!result.transaction_no && /express-review|handoff|success|payment/.test(result.review_url);
+    result.ok = !!result.transaction_no
+      && /success/.test(result.review_url)
+      && !/\/cart(?:\?|$)/.test(result.review_url);
   } catch (e) {
     result.error = String(e && e.message || e);
   }

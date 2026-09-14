@@ -70,6 +70,7 @@ final class ShippingScopeAndSeedContractTest extends TestCase
         self::assertStringContainsString("CN\tdomestic", $body);
         self::assertStringContainsString("US\tamericas", $body);
         self::assertStringContainsString("DE\teurope", $body);
+        self::assertStringContainsString('sort_order', $body);
         self::assertStringNotContainsString("\nKP\t", $body);
 
         $provider = (string)file_get_contents(dirname(__DIR__, 3) . '/Service/DefaultCarrierCoverageProvider.php');
@@ -99,5 +100,19 @@ final class ShippingScopeAndSeedContractTest extends TestCase
         self::assertNotFalse($websitePos);
         self::assertLessThan((int)$storePos, (int)$channelPos);
         self::assertLessThan((int)$websitePos, (int)$storePos);
+    }
+
+    public function testNearestServiceLayerFallsBackToWebsiteZeroSeed(): void
+    {
+        $src = (string)file_get_contents(dirname(__DIR__, 3) . '/Service/ShippingConfigScopeService.php');
+        self::assertStringContainsString('website:0 种子层', $src);
+        $fn = strstr($src, 'function resolveNearestServiceLayer');
+        self::assertNotFalse($fn);
+        self::assertStringContainsString("'scope_id' => 0", (string)$fn);
+        self::assertStringContainsString('$chain[] = $seed', (string)$fn);
+
+        $profile = (string)file_get_contents(dirname(__DIR__, 3) . '/Service/ShippingProfileResolver.php');
+        self::assertStringContainsString('profileScopeCandidates', $profile);
+        self::assertStringContainsString('SCOPE_WEBSITE, 0', $profile);
     }
 }

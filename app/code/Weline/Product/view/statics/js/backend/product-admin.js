@@ -511,6 +511,7 @@
                 width: '',
                 height: '',
                 shipping_profile_code: '',
+                shipping_hazard_class: '',
                 short_description: '',
                 description: '',
                 slug: '',
@@ -2070,6 +2071,10 @@
                     var shippingProfileEl = document.getElementById('product-create-shipping-profile');
                     if (shippingProfileEl) {
                         payload.shipping_profile_code = String(shippingProfileEl.value || '').trim();
+                    }
+                    var shippingHazardEl = document.getElementById('product-create-shipping-hazard');
+                    if (shippingHazardEl) {
+                        payload.shipping_hazard_class = String(shippingHazardEl.value || '').trim();
                     }
                     var categoryIds = [];
                     var categorySelect = window.WelineCatalogCategorySelect
@@ -4730,6 +4735,10 @@
         var shippingProfileEl = document.getElementById('product-edit-shipping-profile');
         if (shippingProfileEl) {
             payload.shipping_profile_code = String(shippingProfileEl.value || '').trim();
+        }
+        var shippingHazardEl = document.getElementById('product-edit-shipping-hazard');
+        if (shippingHazardEl) {
+            payload.shipping_hazard_class = String(shippingHazardEl.value || '').trim();
         }
         payload.attributes = mergeWholesaleSellingModeFlag(payload.attributes || []);
         var priceSelector = payload.offer_matrix

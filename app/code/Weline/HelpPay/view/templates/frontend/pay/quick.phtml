@@ -27,7 +27,7 @@ if ($shareUrl !== '' && !str_starts_with($shareUrl, 'http') && $host !== '') {
         <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0;"><lang>本人快捷购买</lang></p>
         <h1 class="w-text" data-weight="strong" style="--w-m:0;"><?= $escape(__('快捷购买')) ?></h1>
         <p class="w-text" data-tone="muted" style="--w-m:0;">
-            <lang>订单归属你本人。可在此页直接支付，或用下方链接 / 二维码在另一台设备完成付款。</lang>
+            <lang>订单归属你本人。请在此页完成支付。</lang>
         </p>
     </header>
 
@@ -45,13 +45,6 @@ if ($shareUrl !== '' && !str_starts_with($shareUrl, 'http') && $host !== '') {
         <?php endif; ?>
     </div>
 
-    <?php
-    $this->assign('url', $absoluteShare);
-    $this->assign('share_title', $shareTitle);
-    $this->assign('share_hint', $shareHint);
-    echo $this->fetch('Weline_HelpPay::templates/frontend/widgets/help-pay-share-result.phtml');
-    ?>
-
     <div class="w-helppay-quick__actions">
         <button type="button"
                 class="w-button w-button--primary"
@@ -60,4 +53,25 @@ if ($shareUrl !== '' && !str_starts_with($shareUrl, 'http') && $host !== '') {
             <?= $escape(__('立即支付')) ?>
         </button>
     </div>
+
+    <?php if ($absoluteShare !== ''): ?>
+        <details class="w-helppay-quick__cross-device" data-testid="quick-pay-cross-device">
+            <summary class="w-text" data-size="sm">
+                <lang>换设备支付（链接 / 二维码）</lang>
+            </summary>
+            <?php
+            $this->assign('url', $absoluteShare);
+            $this->assign('share_title', $shareTitle);
+            $this->assign('share_hint', $shareHint);
+            $this->assign('link_section', (string) __('付款链接'));
+            $this->assign('qr_section', (string) __('扫码付款'));
+            $this->assign('qr_aria', (string) __('快捷购买付款二维码'));
+            $this->assign('url_tip', (string) __('复制后在浏览器打开，用你自己的账号完成支付'));
+            $this->assign('url_tip_copied', (string) __('已复制，请自行打开链接付款'));
+            $this->assign('qr_tip', (string) __('扫码后在本机打开付款页，完成你自己的支付'));
+            $this->assign('qr_tip_copied', (string) __('已复制，可粘贴到本机浏览器打开付款'));
+            echo $this->fetch('Weline_HelpPay::templates/frontend/widgets/help-pay-share-result.phtml');
+            ?>
+        </details>
+    <?php endif; ?>
 </section>

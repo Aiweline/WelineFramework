@@ -68,128 +68,64 @@ class TrackingService
         if (!$carrier->getId()) {
             throw new \RuntimeException(__('快递公司不存在'));
         }
-        
-        // 检查是否已有跟踪记录
+
         $tracking = $this->getTrackingModel()->getByTrackingNumberAndCarrier($trackingNumber, $carrierId);
-        
-        // 如果不是强制刷新且记录存在且最近更新过（1小时内），直接返回缓存
+
         if (!$forceRefresh && $tracking && $tracking->getId()) {
             $lastTracked = $tracking->getData(Tracking::schema_fields_LAST_TRACKED_AT);
             if ($lastTracked && strtotime($lastTracked) > time() - 3600) {
                 return $this->formatTrackingResponse($tracking, $carrier);
             }
         }
-        
-        // 根据快递公司类型查询
-        $carrierType = $carrier->getData(Carrier::schema_fields_CARRIER_TYPE);
-        $trackingSupportStatus = $carrier->getData(Carrier::schema_fields_TRACKING_SUPPORT_STATUS);
-        
-        if ($carrierType === Carrier::TYPE_API && $trackingSupportStatus === Carrier::TRACKING_SUPPORTED) {
-            // API类型，调用第三方API
-            return $this->queryByApi($trackingNumber, $carrier, $tracking);
-        } else {
-            // 手动类型或不支持追踪，返回标准格式
-            return $this->queryManual($trackingNumber, $carrier, $tracking);
+
+        /** @var ShippingFacade $facade */
+        $facade = $this->objectManager->getInstance(ShippingFacade::class);
+        $result = $facade->queryTracking(new \Weline\Shipping\Api\Data\Shipping\ShippingTrackingRequest(
+            $trackingNumber,
+            $carrierId,
+            '',
+            $forceRefresh,
+        ));
+
+        if ($result->status !== \Weline\Shipping\Api\Data\Shipping\ShippingTrackingResult::STATUS_OK) {
+            return $this->formatErrorResponse(
+                $trackingNumber,
+                $carrier,
+                $result->message !== '' ? $result->message : $result->status,
+            );
         }
+
+        $apiResponse = [
+            'status' => $result->trackingStatus !== '' ? $result->trackingStatus : Tracking::STATUS_IN_TRANSIT,
+            'current_location' => $result->currentLocation,
+            'estimated_delivery_date' => null,
+            'nodes' => $result->nodes,
+            'tracking_url' => $result->trackingUrl,
+            'payload' => $result->payload,
+        ];
+        $saved = $this->saveTracking($trackingNumber, $carrier, $apiResponse, $tracking);
+        $formatted = $this->formatTrackingResponse($saved, $carrier);
+        if ($result->trackingUrl !== '') {
+            $formatted['tracking_url'] = $result->trackingUrl;
+        }
+
+        return $formatted;
     }
 
     /**
-     * 通过API查询（API类型快递公司）
-     * 
-     * @param string $trackingNumber
-     * @param Carrier $carrier
-     * @param Tracking|null $existingTracking
-     * @return array
+     * @deprecated Kept for binary compatibility; routing is via ShippingFacade.
      */
     private function queryByApi(string $trackingNumber, Carrier $carrier, ?Tracking $existingTracking): array
     {
-        try {
-            // TODO: 实现第三方API调用
-            // 这里应该调用适配器接口，根据carrier的配置调用相应的API
-            // 目前返回模拟数据
-            
-            $apiConfig = $carrier->getApiConfig();
-            $apiEndpoint = $carrier->getData(Carrier::schema_fields_TRACKING_API_ENDPOINT);
-            $apiMethod = $carrier->getData(Carrier::schema_fields_TRACKING_API_METHOD) ?: 'GET';
-            
-            // 模拟API响应
-            $apiResponse = [
-                'status' => Tracking::STATUS_IN_TRANSIT,
-                'current_location' => '北京分拨中心',
-                'estimated_delivery_date' => date('Y-m-d H:i:s', strtotime('+3 days')),
-                'nodes' => [
-                    [
-                        'time' => date('Y-m-d H:i:s', strtotime('-2 days')),
-                        'location' => '北京分拨中心',
-                        'status' => '已发货',
-                        'description' => '快件已从北京分拨中心发出',
-                        'type' => TrackingNode::TYPE_PICKUP,
-                    ],
-                    [
-                        'time' => date('Y-m-d H:i:s', strtotime('-1 day')),
-                        'location' => '上海分拨中心',
-                        'status' => '运输中',
-                        'description' => '快件已到达上海分拨中心',
-                        'type' => TrackingNode::TYPE_TRANSIT,
-                    ],
-                ],
-            ];
-            
-            // 保存或更新跟踪记录
-            $tracking = $this->saveTracking($trackingNumber, $carrier, $apiResponse, $existingTracking);
-            
-            return $this->formatTrackingResponse($tracking, $carrier);
-            
-        } catch (\Exception $e) {
-            // API调用失败，返回错误信息
-            return $this->formatErrorResponse($trackingNumber, $carrier, $e->getMessage());
-        }
+        return $this->query($trackingNumber, (int)$carrier->getId(), true);
     }
 
     /**
-     * 手动查询（手动类型快递公司或不支持追踪）
-     * 
-     * @param string $trackingNumber
-     * @param Carrier $carrier
-     * @param Tracking|null $existingTracking
-     * @return array
+     * @deprecated Kept for binary compatibility; routing is via ShippingFacade.
      */
     private function queryManual(string $trackingNumber, Carrier $carrier, ?Tracking $existingTracking): array
     {
-        $trackingUrl = $carrier->generateTrackingUrl($trackingNumber);
-        $trackingSupportStatus = $carrier->getData(Carrier::schema_fields_TRACKING_SUPPORT_STATUS);
-        
-        // 创建或更新跟踪记录
-        if (!$existingTracking || !$existingTracking->getId()) {
-            $tracking = $this->getTrackingModel();
-            $tracking->setData([
-                Tracking::schema_fields_TRACKING_NUMBER => $trackingNumber,
-                Tracking::schema_fields_CARRIER_ID => $carrier->getId(),
-                Tracking::schema_fields_STATUS => Tracking::STATUS_NOT_SUPPORTED,
-            ]);
-            $tracking->save();
-        } else {
-            $tracking = $existingTracking;
-        }
-        
-        // 返回标准格式（不支持追踪）
-        $status = Tracking::STATUS_NOT_SUPPORTED;
-        $trackingModel = $this->getTrackingModel();
-        $trackingModel->setData(Tracking::schema_fields_STATUS, $status);
-        
-        return [
-            'success' => false,
-            'tracking_number' => $trackingNumber,
-            'carrier' => [
-                'code' => $carrier->getData(Carrier::schema_fields_CARRIER_CODE),
-                'name' => $carrier->getData(Carrier::schema_fields_CARRIER_NAME),
-            ],
-            'status' => $status,
-            'status_label' => $trackingModel->getStatusLabel($status), // 添加翻译后的状态标签
-            'message' => __('该快递公司暂不支持在线追踪，请联系客服查询'),
-            'tracking_url' => $trackingUrl,
-            'support_contact' => __('客服电话：400-xxx-xxxx'),
-        ];
+        return $this->query($trackingNumber, (int)$carrier->getId(), true);
     }
 
     /**

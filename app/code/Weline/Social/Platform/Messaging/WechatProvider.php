@@ -33,6 +33,26 @@ class WechatProvider extends DocumentedSocialPlatformProvider
         'status' => 'live_publish_enabled',
     ];
 
+    /**
+     * @return array<string, list<string>>
+     */
+    public function cspDirectives(): array
+    {
+        return [
+            'script-src' => [
+                'https://open.weixin.qq.com',
+                'https://res.wx.qq.com',
+            ],
+            'frame-src' => [
+                'https://open.weixin.qq.com',
+            ],
+            'connect-src' => [
+                'https://open.weixin.qq.com',
+                'https://api.weixin.qq.com',
+            ],
+        ];
+    }
+
     public function testConfig(array $config, array $context = []): array
     {
         try {

@@ -1382,6 +1382,41 @@ final class SharedStateServiceManagerTest extends TestCase
         );
     }
 
+    public function testForceStopPassesRoleToTheProtocolProbe(): void
+    {
+        $manager = new class extends SharedStateServiceManager {
+            public array $probeDefinition = [];
+            public string $probeTokenFileName = '';
+
+            public function __construct() {}
+
+            public function forceStopForTest(array $record): bool
+            {
+                return $this->forceStopSharedService($record);
+            }
+
+            protected function probeRunningSharedService(array $definition, string $tokenFileName): bool
+            {
+                $this->probeDefinition = $definition;
+                $this->probeTokenFileName = $tokenFileName;
+                return false;
+            }
+
+            protected function inspectRunningSharedService(array $definition, string $tokenFileName): array
+            {
+                return ['in_use' => false];
+            }
+        };
+
+        foreach (['session_server', 'memory_server'] as $role) {
+            $definition = ['role' => $role, 'host' => '127.0.0.1', 'port' => 19970];
+            $tokenFileName = $role . '.token';
+            self::assertFalse($manager->forceStopForTest($definition + ['token_file_name' => $tokenFileName]));
+            self::assertSame($definition, $manager->probeDefinition);
+            self::assertSame($tokenFileName, $manager->probeTokenFileName);
+        }
+    }
+
     public function testForceRestartSelectsAnExactLifecycleBeforeGracefulShutdown(): void
     {
         $role = ControlMessage::ROLE_SESSION_SERVER;

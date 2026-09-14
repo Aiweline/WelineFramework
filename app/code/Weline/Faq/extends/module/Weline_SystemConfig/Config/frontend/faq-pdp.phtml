@@ -1,0 +1,18 @@
+<?php
+/**
+ * @meta.title {default="商品 FAQ（PDP）",description="商品详情常见问题：是否同时展示默认与商品 FAQ，以及启用的模板套装"}
+ * @meta.description {default="模板绑定与是否同时展示按网站/店铺/渠道继承；下级不改即用上级。字段 scope 即允许写入的范围层。"}
+ * @config.area {frontend}
+ * @config.sort {82}
+ * @config.acl {Weline_Faq::config}
+ */
+?>
+<w:config:group code="faq_pdp" label="商品详情 FAQ" sort="10">
+  <w:config:field key="faq/pdp/merge_enabled" label="同时展示默认与商品 FAQ" type="switch"
+                  value-type="bool" default="1" scope="website,store,channel"
+                  description="开启：解析后的默认 FAQ 与商品 FAQ 一起展示并标记来源。关闭：有商品 FAQ 只显示商品，否则回退默认集。"/>
+  <w:config:field key="faq/pdp/active_pack" label="启用的 FAQ 模板套装" type="select"
+                  value-type="string" default="retail" scope="website,store,channel"
+                  options="retail:标准零售,cross_border:跨境,virtual:虚拟商品,b2b:B2B"
+                  description="通用电商 FAQ 模板；网站配置后，店铺/渠道不改则继承上级。选项与 FaqTemplatePacks::CODES 保持一致。"/>
+</w:config:group>

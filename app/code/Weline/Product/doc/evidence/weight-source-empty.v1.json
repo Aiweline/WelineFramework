@@ -1,0 +1,120 @@
+{
+    "schema_version": "weight-source-empty.v1",
+    "updated_at": "2026-09-14T05:45:17+00:00",
+    "rows": [
+        {
+            "product_id": 117,
+            "offer": "730813804749",
+            "reason": "http_source_empty_or_placeholder",
+            "checked_at": "2026-09-14T05:31:38+00:00",
+            "method": "public_http"
+        },
+        {
+            "product_id": 173,
+            "offer": "824333824966",
+            "reason": "unitWeight_0_no_pieceWeightScale",
+            "checked_at": "2026-09-14T05:04:51+00:00",
+            "method": "browser_cdp"
+        },
+        {
+            "product_id": 203,
+            "offer": "862175507109",
+            "reason": "unitWeight_0_all_1g_placeholder",
+            "checked_at": "2026-09-14T05:28:35+00:00",
+            "method": "browser_cdp",
+            "shop": "曹县花朝记服饰有限公司"
+        },
+        {
+            "product_id": 413,
+            "offer": "1028220906653",
+            "reason": "unitWeight_0.001_and_all_1g_placeholder",
+            "checked_at": "2026-09-14T05:26:15+00:00",
+            "method": "browser_cdp"
+        },
+        {
+            "product_id": 414,
+            "offer": "1028223378473",
+            "reason": "unitWeight_0.001_and_all_1g_placeholder",
+            "checked_at": "2026-09-14T05:26:15+00:00",
+            "method": "browser_cdp"
+        },
+        {
+            "product_id": 415,
+            "offer": "1029094443489",
+            "reason": "unitWeight_0.001_and_all_1g_placeholder",
+            "checked_at": "2026-09-14T05:27:28+00:00",
+            "method": "browser_cdp",
+            "shop": "曹县蔡宝服装厂"
+        },
+        {
+            "product_id": 428,
+            "offer": "704976283158",
+            "reason": "offer_delisted",
+            "checked_at": "2026-09-14T05:38:01+00:00",
+            "method": "browser"
+        },
+        {
+            "product_id": 430,
+            "offer": "705532380012",
+            "reason": "offer_delisted",
+            "checked_at": "2026-09-14T05:40:19+00:00",
+            "method": "browser"
+        },
+        {
+            "product_id": 431,
+            "offer": "705533300032",
+            "reason": "offer_delisted",
+            "checked_at": "2026-09-14T05:40:25+00:00",
+            "method": "browser"
+        },
+        {
+            "product_id": 432,
+            "offer": "670310368253",
+            "reason": "offer_delisted",
+            "checked_at": "2026-09-14T05:40:39+00:00",
+            "method": "browser"
+        },
+        {
+            "product_id": 433,
+            "offer": "705193029653",
+            "reason": "offer_delisted",
+            "checked_at": "2026-09-14T05:40:48+00:00",
+            "method": "browser"
+        },
+        {
+            "product_id": 435,
+            "offer": "705813333122",
+            "reason": "offer_delisted",
+            "checked_at": "2026-09-14T05:42:43+00:00",
+            "method": "browser"
+        },
+        {
+            "product_id": 436,
+            "offer": "706013682914",
+            "reason": "offer_delisted",
+            "checked_at": "2026-09-14T05:42:55+00:00",
+            "method": "browser"
+        },
+        {
+            "product_id": 437,
+            "offer": "706146997638",
+            "reason": "offer_delisted",
+            "checked_at": "2026-09-14T05:43:11+00:00",
+            "method": "browser"
+        },
+        {
+            "product_id": 439,
+            "offer": "707628780493",
+            "reason": "offer_delisted",
+            "checked_at": "2026-09-14T05:44:59+00:00",
+            "method": "browser"
+        },
+        {
+            "product_id": 440,
+            "offer": "708035977500",
+            "reason": "offer_delisted",
+            "checked_at": "2026-09-14T05:45:17+00:00",
+            "method": "browser"
+        }
+    ]
+}

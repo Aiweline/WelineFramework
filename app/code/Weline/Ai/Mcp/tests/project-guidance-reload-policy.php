@@ -68,12 +68,12 @@ $cases = [
         'expected_deferred_refresh' => false,
         'expected_cursor_bounce' => true,
     ],
-    'missing submit_task_plan does not alone bounce Cursor' => [
+    'missing resolve_skill does not alone bounce Cursor' => [
         'runtime' => ['kind' => 'other', 'current' => true],
         'mcp_config_changed' => false,
         'plugin_changed' => false,
         'cursor' => ['kind' => 'cursor_mcp_process', 'pid' => 4242, 'current' => true],
-        'missing' => ['submit_task_plan'],
+        'missing' => ['resolve_skill'],
         'expected_reload' => false,
         'expected_deferred_refresh' => false,
         'expected_cursor_bounce' => false,
@@ -97,14 +97,24 @@ foreach ($cases as $label => $case) {
 }
 
 $required = welineGuidanceRequiredMcpTools();
+$expectedRequired = [
+    'prepare_project',
+    'repair_project_docs',
+    'resolve_task_context',
+    'search_project_knowledge',
+    'get_indexed_document',
+    'resolve_skill',
+    'get_skill',
+    'project_index_status',
+    'health',
+];
 $missingCheck = welineGuidanceMissingRequiredMcpTools(
-    ['prepare_project', 'health', 'get_edit_bundle'],
+    ['prepare_project', 'health', 'resolve_task_context'],
     $required,
 );
-$requiredOk = in_array('submit_task_plan', $required, true)
-    && in_array('get_task_plan', $required, true)
-    && in_array('submit_task_plan', $missingCheck, true);
-fwrite($requiredOk ? STDOUT : STDERR, sprintf("[%s] required tools include plan gate pair\n", $requiredOk ? 'PASS' : 'FAIL'));
+$requiredOk = $required === $expectedRequired
+    && in_array('resolve_skill', $missingCheck, true);
+fwrite($requiredOk ? STDOUT : STDERR, sprintf("[%s] required tools equal the nine index/knowledge tools\n", $requiredOk ? 'PASS' : 'FAIL'));
 $failed = $failed || !$requiredOk;
 
 $singleRegistration = ['name' => 'weline-project-intelligence', 'version' => '0.13.0'];

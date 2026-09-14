@@ -180,43 +180,6 @@ CREATE TABLE IF NOT EXISTS query_feedback (
 CREATE INDEX IF NOT EXISTS query_feedback_query_idx ON query_feedback(query_id, created_at);
 CREATE INDEX IF NOT EXISTS query_feedback_chunk_idx ON query_feedback(chunk_id, outcome);
 
-CREATE TABLE IF NOT EXISTS edit_transactions (
-    transaction_id TEXT PRIMARY KEY,
-    base_revision INTEGER NOT NULL,
-    status TEXT NOT NULL,
-    token_hash TEXT,
-    base_commit TEXT NOT NULL DEFAULT '',
-    plan_digest TEXT NOT NULL DEFAULT '',
-    request_json TEXT NOT NULL,
-    plan_json TEXT NOT NULL DEFAULT '{}',
-    snapshots_json TEXT NOT NULL DEFAULT '[]',
-    result_json TEXT NOT NULL DEFAULT '{}',
-    error_json TEXT,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL,
-    expires_at TEXT,
-    applied_at TEXT
-);
-
-CREATE INDEX IF NOT EXISTS edit_transactions_status_idx ON edit_transactions(status, created_at);
-CREATE UNIQUE INDEX IF NOT EXISTS edit_transactions_token_hash_unique
-    ON edit_transactions(token_hash) WHERE token_hash IS NOT NULL;
-
-CREATE TABLE IF NOT EXISTS validation_runs (
-    validation_id TEXT PRIMARY KEY,
-    transaction_id TEXT REFERENCES edit_transactions(transaction_id) ON DELETE SET NULL,
-    revision INTEGER NOT NULL,
-    profile TEXT NOT NULL,
-    status TEXT NOT NULL,
-    command_json TEXT NOT NULL DEFAULT '[]',
-    result_json TEXT NOT NULL DEFAULT '{}',
-    started_at TEXT NOT NULL,
-    completed_at TEXT
-);
-
-CREATE INDEX IF NOT EXISTS validation_runs_transaction_idx
-    ON validation_runs(transaction_id, started_at);
-
 CREATE TRIGGER IF NOT EXISTS chunks_after_insert
 AFTER INSERT ON chunks
 BEGIN

@@ -66,6 +66,10 @@ $activeTaglibIds = GuidanceWorkflowCatalog::resolveActiveSurfaceIds('taglib sele
 $activeModuleUpgradeIds = GuidanceWorkflowCatalog::resolveActiveSurfaceIds('改了 Model #[Col] 新建 Controller');
 $activeI18nCsvIds = GuidanceWorkflowCatalog::resolveActiveSurfaceIds('i18n csv en_US collect 翻译');
 $activeWebuiCloseoutIds = GuidanceWorkflowCatalog::resolveActiveSurfaceIds('后台页面验收交付 Browser 自测');
+$activeClarifyIds = GuidanceWorkflowCatalog::resolveActiveSurfaceIds('需求澄清 用例规格 EARS clarify');
+$clarifySurface = is_array($surfaces[GuidanceWorkflowCatalog::SURFACE_REQUIREMENT_CLARIFY_USE_CASE] ?? null)
+    ? $surfaces[GuidanceWorkflowCatalog::SURFACE_REQUIREMENT_CLARIFY_USE_CASE]
+    : [];
 
 $hasSectionIdentityNorm = false;
 foreach ($norms as $norm) {
@@ -269,7 +273,9 @@ $checks = [
         is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
             && ($rule['id'] ?? '') === 'ui_feature_requires_e2e'
-            && str_contains((string) ($rule['summary'] ?? ''), 'EVERY work_kind=feature')),
+            && str_contains((string) ($rule['summary'] ?? ''), 'work_kind=feature')
+            && str_contains((string) ($rule['summary'] ?? ''), 'SIMPLE EXEMPTION')
+            && str_contains((string) ($rule['summary'] ?? ''), 'WB-OP')),
         false,
     ),
     'hard_constraints include forbid_user_manual_test_handoff' => array_reduce(
@@ -277,6 +283,14 @@ $checks = [
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
             && ($rule['id'] ?? '') === 'forbid_user_manual_test_handoff'
             && str_contains((string) ($rule['summary'] ?? ''), 'MUST NOT ask the user to test')),
+        false,
+    ),
+    'hard_constraints include e2e_playwright_headless_default' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'e2e_playwright_headless_default'
+            && str_contains((string) ($rule['summary'] ?? ''), 'headless')
+            && str_contains((string) ($rule['summary'] ?? ''), '--headed')),
         false,
     ),
     'hard_constraints include browser_cache_disabled_on_open' => array_reduce(
@@ -321,16 +335,6 @@ $checks = [
             && str_contains((string) ($rule['summary'] ?? ''), 'browser_release_after_delivery')),
         false,
     ),
-    'hard_constraints include task_plan_before_edit' => array_reduce(
-        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
-        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule) && ($rule['id'] ?? '') === 'task_plan_before_edit'),
-        false,
-    ),
-    'hard_constraints include user_requirement_full_workflow' => array_reduce(
-        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
-        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule) && ($rule['id'] ?? '') === 'user_requirement_full_workflow'),
-        false,
-    ),
     'hard_constraints include architecture_first_for_requirements' => array_reduce(
         is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
@@ -362,8 +366,8 @@ $checks = [
             && str_contains((string) ($rule['summary'] ?? ''), 'MUST NOT reimplement')),
         false,
     ),
-    'mandatory_before_code includes requirement_analysis_in_task_plan' => in_array(
-        'requirement_analysis_in_task_plan',
+    'mandatory_before_code includes requirements_confirmed_or_scoped' => in_array(
+        'requirements_confirmed_or_scoped',
         is_array($contract['mandatory_before_code'] ?? null) ? $contract['mandatory_before_code'] : [],
         true,
     ),
@@ -411,17 +415,104 @@ $checks = [
             && str_contains((string) ($rule['summary'] ?? ''), 'evidence')),
         false,
     ),
-    'hard_constraints include plan_then_tdd_required' => array_reduce(
+    'mandatory_before_code includes prepare_project_hard_constraints_when_mcp_attached' => in_array(
+        'prepare_project_hard_constraints_when_mcp_attached',
+        is_array($contract['mandatory_before_code'] ?? null) ? $contract['mandatory_before_code'] : [],
+        true,
+    ),
+    'mandatory_before_code includes optional_resolve_task_context_or_get_skill' => in_array(
+        'optional_resolve_task_context_or_get_skill',
+        is_array($contract['mandatory_before_code'] ?? null) ? $contract['mandatory_before_code'] : [],
+        true,
+    ),
+    'mandatory_before_code is read-only MCP plus engineering gates' => ($contract['mandatory_before_code'] ?? null) === [
+        'requirements_confirmed_or_scoped',
+        'work_kind_feature_or_non_feature_classified',
+        'requirement_fe_be_scope_analyzed',
+        'requirement_clarify_use_case_spec',
+        'host_plan_mode_enabled_or_simple_skip',
+        'feature_prototype_and_ui_participation_when_feature',
+        'requirement_framework_scrutiny',
+        'requirement_cross_layer_impact_gate',
+        'architecture_mapped_to_requirements',
+        'architecture_design_structured',
+        'framework_decoupled_design',
+        'extension_point_selected',
+        'prepare_project_hard_constraints_when_mcp_attached',
+        'optional_resolve_task_context_or_get_skill',
+        'acceptance_items_planned',
+        'tdd_unit_acceptance_planned',
+        'shentu_acceptance_planned_when_feature',
+        'webui_acceptance_cases_agreed_for_web_surface',
+        'chapter_acceptance_defined_if_multi_chapter_plan',
+    ],
+    'hard_constraints include requirement_clarify_use_case_spec' => array_reduce(
         is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
-            && ($rule['id'] ?? '') === 'plan_then_tdd_required'
-            && str_contains((string) ($rule['summary'] ?? ''), 'TDD')
-            && str_contains((string) ($rule['summary'] ?? ''), 'unit')),
+            && ($rule['id'] ?? '') === 'requirement_clarify_use_case_spec'
+            && str_contains((string) ($rule['summary'] ?? ''), 'EARS')
+            && str_contains((string) ($rule['summary'] ?? ''), 'doc/开发/spec')),
         false,
     ),
-    'mandatory_before_code includes submit_task_plan_accepted' => in_array(
-        'submit_task_plan_accepted',
+    'hard_constraints include host_plan_mode_for_planning' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'host_plan_mode_for_planning'
+            && str_contains((string) ($rule['summary'] ?? ''), 'Plan Mode')
+            && str_contains((string) ($rule['summary'] ?? ''), 'SIMPLE SKIP')),
+        false,
+    ),
+    'hard_constraints include requirement_acceptance_always' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'requirement_acceptance_always'
+            && str_contains((string) ($rule['summary'] ?? ''), 'WB-OP')
+            && str_contains((string) ($rule['summary'] ?? ''), 'visual')),
+        false,
+    ),
+    'hard_constraints include requirement_fe_be_scope_analysis' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'requirement_fe_be_scope_analysis'
+            && str_contains((string) ($rule['summary'] ?? ''), 'frontend')
+            && str_contains((string) ($rule['summary'] ?? ''), 'backend')),
+        false,
+    ),
+    'hard_constraints ui_skill_surface includes humanization complaints' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'ui_skill_surface_signal_gate'
+            && str_contains((string) ($rule['summary'] ?? ''), '不够人性化')
+            && str_contains((string) ($rule['summary'] ?? ''), '被吐槽')),
+        false,
+    ),
+    'mandatory_before_code includes requirement_clarify_use_case_spec' => in_array(
+        'requirement_clarify_use_case_spec',
         is_array($contract['mandatory_before_code'] ?? null) ? $contract['mandatory_before_code'] : [],
+        true,
+    ),
+    'mandatory_before_code includes host_plan_mode_enabled_or_simple_skip' => in_array(
+        'host_plan_mode_enabled_or_simple_skip',
+        is_array($contract['mandatory_before_code'] ?? null) ? $contract['mandatory_before_code'] : [],
+        true,
+    ),
+    'mandatory_before_closeout includes requirement_acceptance_always_satisfied' => in_array(
+        'requirement_acceptance_always_satisfied',
+        is_array($contract['mandatory_before_closeout'] ?? null) ? $contract['mandatory_before_closeout'] : [],
+        true,
+    ),
+    'mcp instructions mention host Plan Mode' => str_contains(ToolService::instructions(), 'host_plan_mode_for_planning')
+        && str_contains(ToolService::instructions(), 'requirement_acceptance_always'),
+    'surfaces include requirement_clarify_use_case' => ($clarifySurface['id'] ?? '')
+        === GuidanceWorkflowCatalog::SURFACE_REQUIREMENT_CLARIFY_USE_CASE,
+    'pinned includes clarify use-case command doc' => in_array(
+        'dev/ai-command/ai/需求澄清与用例规格.md',
+        $pinned,
+        true,
+    ),
+    'resolveActiveSurfaceIds matches clarify use-case task' => in_array(
+        GuidanceWorkflowCatalog::SURFACE_REQUIREMENT_CLARIFY_USE_CASE,
+        $activeClarifyIds,
         true,
     ),
     'surfaces include webui_browser_closeout' => ($webuiBrowserCloseoutSurface['id'] ?? '')
@@ -465,8 +556,7 @@ $checks = [
         && (($closeoutReminder['browser_tooling'] ?? '') === 'host_available_real_browser')
         && ($closeoutReminder['agent_self_verify_required'] ?? false) === true
         && ($closeoutReminder['agent_self_verify_rule'] ?? '') === 'agent_self_verify_before_done'
-        && ($closeoutReminder['plan_then_tdd_required'] ?? false) === true
-        && ($closeoutReminder['plan_then_tdd_rule'] ?? '') === 'plan_then_tdd_required'
+        && ($closeoutReminder['prefer_tdd'] ?? false) === true
         && str_contains((string) ($closeoutReminder['summary_zh'] ?? ''), '真实 Browser'),
     'closeout reminder requires browser release after delivery' => ($closeoutReminder['browser_release_after_delivery_required'] ?? false) === true
         && is_array($closeoutReminder['browser_release_order'] ?? null)
@@ -602,16 +692,46 @@ $checks = [
         && ($closeoutReminder['required_in_every_feature_report'] ?? false) === true
         && is_string($closeoutReminder['summary_zh'] ?? null)
         && str_contains((string)$closeoutReminder['summary_zh'], '交付地址'),
+    'session_startup_notices mandate prepare for engineering' => array_reduce(
+        $contract['session_startup_notices'] ?? [],
+        static fn (bool $ok, mixed $notice): bool => $ok || (is_string($notice)
+            && str_contains($notice, 'prepare_project')
+            && (str_contains($notice, '必须') || str_contains($notice, 'MUST'))),
+        false,
+    ),
+    'bootstrap phase is mandatory engineering gate' => array_reduce(
+        is_array($contract['phases'] ?? null) ? $contract['phases'] : [],
+        static fn (bool $ok, mixed $phase): bool => $ok || (is_array($phase)
+            && ($phase['id'] ?? '') === 'bootstrap'
+            && str_contains((string) ($phase['label'] ?? ''), '工程必做')),
+        false,
+    ),
+    'mcp_call_scope mandates prepare_project for engineering' => array_reduce(
+        is_array($hardConstraintsPackage['mcp_operational'] ?? null) ? $hardConstraintsPackage['mcp_operational'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'mcp_call_scope'
+            && str_contains((string) ($rule['summary'] ?? ''), 'MANDATORY')
+            && str_contains((string) ($rule['summary'] ?? ''), 'prepare_project')
+            && str_contains((string) ($rule['summary'] ?? ''), 'hard_constraints')),
+        false,
+    ),
+    'host_editor_rules mention coldstart generator' => array_reduce(
+        is_array($hardConstraintsPackage['mcp_operational'] ?? null) ? $hardConstraintsPackage['mcp_operational'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'host_editor_rules_mcp_generated_only'
+            && str_contains((string) ($rule['summary'] ?? ''), 'weline-mcp-coldstart.mdc')
+            && str_contains((string) ($rule['summary'] ?? ''), 'HostEditorRulesGenerator')),
+        false,
+    ),
     'session_startup_notices require delivery section in reports' => array_reduce(
         $contract['session_startup_notices'] ?? [],
         static fn (bool $ok, mixed $notice): bool => $ok || (is_string($notice) && str_contains($notice, 'feature_delivery_urls')),
         false,
     ),
-    'session_startup_notices allow native fallback on MCP capacity' => array_reduce(
+    'hard_constraints omit retired mcp_capacity_native_fallback' => !array_reduce(
         is_array($hardConstraintsPackage['mcp_operational'] ?? null) ? $hardConstraintsPackage['mcp_operational'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
-            && ($rule['id'] ?? '') === 'mcp_capacity_native_fallback'
-            && str_contains((string) ($rule['summary'] ?? ''), 'MCP_TARGET_UNAVAILABLE')),
+            && ($rule['id'] ?? '') === 'mcp_capacity_native_fallback'),
         false,
     ),
     'MCP hard constraints preserve dirty workspace changes' => array_reduce(
@@ -621,8 +741,7 @@ $checks = [
             && str_contains((string) ($rule['summary'] ?? ''), 'staged')
             && str_contains((string) ($rule['summary'] ?? ''), 'untracked')
             && str_contains((string) ($rule['summary'] ?? ''), 'Agent Shell')
-            && str_contains((string) ($rule['summary'] ?? ''), 'git checkout')
-            && str_contains((string) ($rule['summary'] ?? ''), 'dirty-load')),
+            && str_contains((string) ($rule['summary'] ?? ''), 'git checkout')),
         false,
     ),
     'MCP hard constraints require runtime status query local-first' => array_reduce(
@@ -636,8 +755,8 @@ $checks = [
         false,
     ),
     'mcp instructions require local-first status queries' => str_contains(ToolService::instructions(), 'runtime_status_query_local_first')
-        && str_contains(ToolService::instructions(), 'LOCAL-FIRST status'),
-    'mcp instructions ban git checkout before sealed dirty-load' => str_contains(ToolService::instructions(), 'DIRTY-LOAD ONLY')
+        || str_contains(ToolService::instructions(), 'LOCAL-FIRST'),
+    'mcp instructions ban wiping dirty workspace with git' => str_contains(ToolService::instructions(), 'preserve_dirty_workspace')
         && str_contains(ToolService::instructions(), 'never git checkout'),
     'MCP hard constraints require host editor rules mcp-generated only' => array_reduce(
         is_array($hardConstraintsPackage['mcp_operational'] ?? null) ? $hardConstraintsPackage['mcp_operational'] : [],
@@ -728,16 +847,16 @@ $checks = [
         static fn (bool $ok, mixed $rule): bool => $ok || (is_string($rule) && str_contains($rule, 'etc/module.php')),
         false,
     ),
-    'module_upgrade_gate forbids sealed plan without bump' => in_array(
-        'Submitting sealed edit-plan.v1 with Model/Controller/event/hook/register changes but omitting etc/module.php bump',
+    'module_upgrade_gate forbids change set without bump' => in_array(
+        'Changing Model/Controller/event/hook/register without bumping etc/module.php version in the same change set',
         is_array($moduleUpgradeSurface['template_surface_rules']['forbidden'] ?? null)
             ? $moduleUpgradeSurface['template_surface_rules']['forbidden']
             : [],
         true,
     ),
-    'module_upgrade_gate sealed_edit norm present' => array_reduce(
+    'module_upgrade_gate module_version_bump_gate norm present' => array_reduce(
         is_array($moduleUpgradeSurface['norms'] ?? null) ? $moduleUpgradeSurface['norms'] : [],
-        static fn (bool $ok, mixed $norm): bool => $ok || (is_array($norm) && ($norm['id'] ?? '') === 'sealed_edit_module_version_gate'),
+        static fn (bool $ok, mixed $norm): bool => $ok || (is_array($norm) && ($norm['id'] ?? '') === 'module_version_bump_gate'),
         false,
     ),
     'taglib surface has authoritative_docs' => is_array($taglibSurface['authoritative_docs'] ?? null)

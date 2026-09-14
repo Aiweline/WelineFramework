@@ -1,0 +1,49 @@
+{
+    "ok": true,
+    "scenario": "ch1_seed_profiles",
+    "template_codes_found": [
+        "SEED_TPL_DOMESTIC",
+        "SEED_TPL_GREATER_CHINA",
+        "SEED_TPL_ASIA_PACIFIC",
+        "SEED_TPL_AMERICAS",
+        "SEED_TPL_EUROPE",
+        "SEED_TPL_OCEANIA",
+        "SEED_TPL_LATAM",
+        "SEED_TPL_MIDDLE_EAST_AFRICA",
+        "SEED_TPL_OTHER",
+        "SEED_TPL_HEAVY_DOMESTIC",
+        "SEED_TPL_HEAVY_INTERNATIONAL"
+    ],
+    "template_codes_expected": [
+        "SEED_TPL_DOMESTIC",
+        "SEED_TPL_GREATER_CHINA",
+        "SEED_TPL_ASIA_PACIFIC",
+        "SEED_TPL_AMERICAS",
+        "SEED_TPL_EUROPE",
+        "SEED_TPL_OCEANIA",
+        "SEED_TPL_LATAM",
+        "SEED_TPL_MIDDLE_EAST_AFRICA",
+        "SEED_TPL_OTHER",
+        "SEED_TPL_HEAVY_DOMESTIC",
+        "SEED_TPL_HEAVY_INTERNATIONAL"
+    ],
+    "profiles": [
+        "SEED_PROFILE_GENERAL",
+        "SEED_PROFILE_HEAVY"
+    ],
+    "seed": {
+        "carrier_id": 3,
+        "coverage": 55,
+        "destinations": 55,
+        "templates": 11,
+        "services": 11,
+        "regions": 110,
+        "origin_shipping_address_id": 1,
+        "surcharges": 6
+    },
+    "assertions": {
+        "template_count": 11,
+        "templates_ok": true,
+        "profiles_ok": true
+    }
+}

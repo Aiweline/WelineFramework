@@ -654,17 +654,18 @@ class Template extends DataObject
         }
 
         $dimension = static function (string $key, string $default, string $pattern): string {
-            $value = \function_exists('w_env_get') ? (string)\w_env_get($key, $default) : $default;
+            $value = \function_exists('w_env') ? (string)\w_env($key, $default) : $default;
             return \preg_match($pattern, $value) === 1 ? $value : $default;
         };
 
         $scope = [
+            'compile_scope_schema' => self::TEMPLATE_COMPILE_SCOPE_SCHEMA,
             'area' => $dimension('area', 'frontend', '/^[a-z][a-z0-9_-]{0,31}$/i'),
             'website_id' => $dimension('website_id', '0', '/^[0-9]{1,10}$/'),
             'website_code' => $dimension('website_code', 'default', '/^[a-z0-9][a-z0-9_.-]{0,63}$/i'),
             'lang' => $dimension('user.lang', 'default', '/^[a-z]{2,3}(?:_[A-Za-z]{2,12}){0,2}$/'),
             'currency' => $dimension('user.currency', 'CNY', '/^[A-Z]{3}$/'),
-            'website_url' => \function_exists('w_env_get') ? (string)\w_env_get('website.url', '') : '',
+            'website_url' => \function_exists('w_env') ? (string)\w_env('website_url', '') : '',
             'theme' => $this->resolveThemeCacheKeyForFetchFile($this->view_dir),
             // Nested w:widget compile bakes <w:hook> output (header-account-links).
             // New hooks.php → new ctx_ dir → miss → re-bake account dropdown menus.
@@ -1603,17 +1604,48 @@ class Template extends DataObject
         float $totalMs,
         int $bytes
     ): void {
-        if ($totalMs < 20.0 && $includeMs < 20.0) {
+        $traceEnabled = \Weline\Framework\Runtime\RequestLifecycleTrace::isEnabled();
+        if (!$traceEnabled && $totalMs < 20.0 && $includeMs < 20.0) {
             return;
         }
-
-        $profile = RequestContext::get('view.template.profile');
-        $profile = \is_array($profile) ? $profile : [];
         $path = \str_replace('\\', '/', $filename);
         $basePath = \defined('BP') ? \str_replace('\\', '/', BP) : '';
         if ($basePath !== '' && \str_starts_with($path, $basePath)) {
             $path = \ltrim(\substr($path, \strlen($basePath)), '/');
         }
+
+        if ($traceEnabled) {
+            // 小模板也会积少成多；仅在当前请求累计，避免逐次写入 trace 明细。
+            $aggregate = RequestContext::get('view.template.aggregate') ?? ['files' => [], 'overflow_calls' => 0];
+            if (isset($aggregate['files'][$path]) || \count($aggregate['files']) < 128) {
+                $entry = $aggregate['files'][$path] ?? [
+                    'calls' => 0,
+                    'init_ms' => 0.0,
+                    'include_ms' => 0.0,
+                    'capture_ms' => 0.0,
+                    'total_ms' => 0.0,
+                    'max_ms' => 0.0,
+                    'bytes' => 0,
+                ];
+                ++$entry['calls'];
+                $entry['init_ms'] += $initMs;
+                $entry['include_ms'] += $includeMs;
+                $entry['capture_ms'] += $captureMs;
+                $entry['total_ms'] += $totalMs;
+                $entry['max_ms'] = \max($entry['max_ms'], $totalMs);
+                $entry['bytes'] += $bytes;
+                $aggregate['files'][$path] = $entry;
+            } else {
+                ++$aggregate['overflow_calls'];
+            }
+            RequestContext::set('view.template.aggregate', $aggregate);
+        }
+
+        if ($totalMs < 20.0 && $includeMs < 20.0) {
+            return;
+        }
+        $profile = RequestContext::get('view.template.profile');
+        $profile = \is_array($profile) ? $profile : [];
 
         $profile[] = [
             'file' => $path,
@@ -2224,6 +2256,30 @@ class Template extends DataObject
         // 如果存在solo hook，只执行solo hook
         if ($soloHook !== null) {
             $hookFiles = [$soloHook => $hookFiles[$soloHook]];
+        }
+
+        if ($hookFiles !== [] && \method_exists(\Weline\Framework\Phrase\Parser::class, 'prefetchGlobalDictionaryModules')) {
+            $dictionaryModules = [];
+            foreach ($hookFiles as $hookFile) {
+                try {
+                    // 使用实际文件来源；注册模块可能引用另一个模块，不能直接取列表键。
+                    [, $sourceModule] = $this->processModuleSourceFilePath('hooks', (string)$hookFile);
+                    if ($sourceModule !== '') {
+                        $dictionaryModules[$sourceModule] = $sourceModule;
+                    }
+                } catch (\Throwable) {
+                    // 路径异常仍由原来的逐文件渲染处理，预取不改变模块激活。
+                }
+            }
+            if ($dictionaryModules !== []) {
+                $dictionaryModules = \array_values($dictionaryModules);
+                \sort($dictionaryModules);
+                RequestLifecycleTrace::measurePhase(
+                    'view.hook.dictionary_prefetch',
+                    static fn() => \Weline\Framework\Phrase\Parser::prefetchGlobalDictionaryModules($dictionaryModules),
+                    ['hook' => $name, 'modules' => \count($dictionaryModules), 'module_set_hash' => \sha1(\implode('|', $dictionaryModules))],
+                );
+            }
         }
 
         $hookOutputBytes = 0;

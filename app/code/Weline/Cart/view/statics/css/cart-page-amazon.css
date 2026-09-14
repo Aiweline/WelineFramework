@@ -333,6 +333,18 @@
     min-width: 0;
 }
 
+.weline-cart-shell--amazon .weline-cart-shell__line-option-swatch-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: zoom-in;
+    line-height: 0;
+}
+
 .weline-cart-shell--amazon .weline-cart-shell__line-option-swatch {
     flex: 0 0 auto;
     width: 28px;
@@ -340,11 +352,56 @@
     border: 1px solid var(--cart-border);
     border-radius: 4px;
     object-fit: cover;
-    background: #fff;
+    background: var(--cart-surface);
 }
 
 .weline-cart-shell--amazon .weline-cart-shell__line-option-swatch--color {
     display: inline-block;
+}
+
+.weline-cart-shell--amazon .weline-cart-shell__swatch-preview {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    max-width: min(92vw, 520px);
+}
+
+.weline-cart-shell--amazon .weline-cart-shell__swatch-preview::backdrop {
+    background: var(--color-overlay-50, rgba(15, 23, 42, 0.45));
+}
+
+.weline-cart-shell--amazon .weline-cart-shell__swatch-preview-panel {
+    display: grid;
+    gap: 12px;
+    padding: 16px;
+    border: 1px solid var(--cart-border);
+    border-radius: var(--weline-theme-radius-md, 12px);
+    background: var(--cart-surface);
+    box-shadow: var(--weline-theme-shadow-lg, 0 16px 40px rgba(15, 17, 17, 0.18));
+}
+
+.weline-cart-shell--amazon .weline-cart-shell__swatch-preview-img {
+    display: block;
+    width: min(100%, 480px);
+    max-height: min(70vh, 480px);
+    margin: 0 auto;
+    object-fit: contain;
+    border-radius: var(--weline-theme-radius-sm, 8px);
+    background: var(--cart-surface-muted);
+}
+
+.weline-cart-shell--amazon .weline-cart-shell__swatch-preview-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 36px;
+    width: 100%;
+    border: 1px solid var(--cart-border);
+    border-radius: var(--weline-theme-radius-sm, 8px);
+    background: var(--cart-surface);
+    color: var(--cart-text);
+    cursor: pointer;
+    font-size: 14px;
 }
 
 .weline-cart-shell--amazon .weline-cart-shell__line-option-text {

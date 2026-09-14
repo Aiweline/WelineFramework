@@ -282,7 +282,7 @@ return [
             'dynamic_ready_gate_enabled' => false,
             // 首个匿名店面请求在 READY 前完成有限 FPC 构建，避免访客与冷构建竞争。
             // 只取模块通过 FpcWarmupProviderInterface 发布的路径，失败默认放行 Worker。
-            'storefront_ready_gate_enabled' => true,
+            'storefront_ready_gate_enabled' => false,
             'storefront_ready_gate_paths' => [],
             'storefront_ready_gate_max_paths' => 4,
             'storefront_ready_gate_fail_open' => true,
@@ -291,7 +291,10 @@ return [
             'dynamic_ready_gate_max_paths' => 1,
             // 选定业务 Worker READY 后仅在本地 listener 预热一个公开店面路径，
             // 通过统一 FPC 构建与命中探针填充共享/进程缓存；不会占用 READY 握手。
-            'storefront_deferred_warmup_enabled' => true,
+            'storefront_deferred_warmup_enabled' => false,
+            // 后台与动态首渲染会构建完整页面，默认关闭；仅在有独立维护 Worker 和内存预算时显式开启。
+            'backend_deferred_warmup_enabled' => false,
+            'dynamic_deferred_warmup_enabled' => false,
             'storefront_deferred_warmup_max_paths' => 6,
             'storefront_deferred_warmup_peer_wait_ms' => 5000,
             // 只有指定 Worker 执行冷构建，其余 Worker 复用共享 FPC；设为 0 可恢复全 Worker 预热。
@@ -402,6 +405,15 @@ return [
             // /绝对路径/nginx -s reload。
             'reload_command' => '',
             'reload_timeout_sec' => 30,
+            // 可选：从固定 HTTPS CDN 拉取签名宿主网关包到 extend/server/wls-gateway/{target}/。
+            // 默认关闭；开启前须在 app/code/Weline/Server/env/gateway/trusted-release-keys.json
+            // 注入至少一把 enabled 公钥。信任钥永不从网络下载。
+            'gateway' => [
+                'package_base_url' => '', // e.g. https://www.aiweline.com/wls/gateway
+                'package_fetch' => false, // opt-in：server:start auto/gateway 缺包时才自动 fetch
+                'package_fetch_timeout_sec' => 120,
+                'package_fetch_hosts' => ['www.aiweline.com'],
+            ],
             // 以下是 WLS 1.x/显式项目级 managed-Nginx 兼容配置；WLS 2.0 共享 Gateway
             // 使用宿主 A/B 包和锁定 Nginx，不从这里继承项目级 install/runtime 目录。
             'nginx' => [
@@ -635,8 +647,11 @@ return [
         'headers' => [
             // 安全默认（与 SecurityHeaderDefaults 对齐）。CORS 留空=禁止跨域回显。
             // 后台须允许内联 style/script 以及主题内嵌 data:image 图标。
-            'csp_report_only' => "connect-src 'self' https://api.stripe.com https://api.tiktok.com https://api.twitter.com https://cdn.jsdelivr.net https://cdn.syndication.twimg.com https://cdnjs.cloudflare.com https://connect.facebook.net https://graph.facebook.com https://open.weixin.qq.com https://region1.google-analytics.com https://unpkg.com https://www.google-analytics.com https://www.google.com https://www.googletagmanager.com https://www.gstatic.com https://www.linkedin.com https://www.paypal.com; default-src 'self'; font-src 'self' data: https:; frame-src 'self' https://js.stripe.com https://open.weixin.qq.com https://platform.twitter.com https://player.bilibili.com https://twitter.com https://www.facebook.com https://www.google.com https://www.gstatic.com https://www.instagram.com https://www.linkedin.com https://www.paypal.com https://www.tiktok.com https://www.youtube-nocookie.com https://www.youtube.com https://x.com; img-src 'self' blob: data: https:; media-src 'self' blob: https:; script-src 'self' 'unsafe-inline' https://ajax.googleapis.com https://apis.google.com https://cdn.jsdelivr.net https://cdn.syndication.twimg.com https://cdnjs.cloudflare.com https://connect.facebook.net https://graph.facebook.com https://js.stripe.com https://open.weixin.qq.com https://platform.linkedin.com https://platform.twitter.com https://player.bilibili.com https://res.wx.qq.com https://unpkg.com https://www.google-analytics.com https://www.google.com https://www.googletagmanager.com https://www.gstatic.com https://www.instagram.com https://www.paypal.com https://www.paypalobjects.com https://www.tiktok.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; worker-src 'self' blob:",
-            'csp' => "connect-src 'self' https://api.stripe.com https://api.tiktok.com https://api.twitter.com https://cdn.jsdelivr.net https://cdn.syndication.twimg.com https://cdnjs.cloudflare.com https://connect.facebook.net https://graph.facebook.com https://open.weixin.qq.com https://region1.google-analytics.com https://unpkg.com https://www.google-analytics.com https://www.google.com https://www.googletagmanager.com https://www.gstatic.com https://www.linkedin.com https://www.paypal.com; default-src 'self'; font-src 'self' data: https:; frame-src 'self' https://js.stripe.com https://open.weixin.qq.com https://platform.twitter.com https://player.bilibili.com https://twitter.com https://www.facebook.com https://www.google.com https://www.gstatic.com https://www.instagram.com https://www.linkedin.com https://www.paypal.com https://www.tiktok.com https://www.youtube-nocookie.com https://www.youtube.com https://x.com; img-src 'self' blob: data: https:; media-src 'self' blob: https:; script-src 'self' 'unsafe-inline' https://ajax.googleapis.com https://apis.google.com https://cdn.jsdelivr.net https://cdn.syndication.twimg.com https://cdnjs.cloudflare.com https://connect.facebook.net https://graph.facebook.com https://js.stripe.com https://open.weixin.qq.com https://platform.linkedin.com https://platform.twitter.com https://player.bilibili.com https://res.wx.qq.com https://unpkg.com https://www.google-analytics.com https://www.google.com https://www.googletagmanager.com https://www.gstatic.com https://www.instagram.com https://www.paypal.com https://www.paypalobjects.com https://www.tiktok.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; worker-src 'self' blob:",
+            // Report-Only 默认空，避免与强制 CSP 重复占响应头；观察期再显式配置。
+            'csp_report_only' => '',
+            'csp' => "connect-src 'self'; default-src 'self'; font-src 'self' data: https:; frame-src 'self'; img-src 'self' blob: data: https:; media-src 'self' blob: https:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:",
+            // meta=写入 HTML（响应头不再带大 CSP）；header=传统响应头
+            'csp_delivery' => 'meta',
             'cors_origins' => '',
         ],
         // CDN/Storage 等 secret_ref 主密钥（生产必须为高强度随机串；仅 ENV_TEST/DEV 可空）

@@ -1012,6 +1012,17 @@ class ObjectManager implements ManagerInterface
         }
     }
 
+    /**
+     * 仅清理可重建的进程实例，保留正在挂起的请求实例。
+     * IPC 缓存失效在主事件循环处理，此时请求 Fiber 可能仍在等待 I/O。
+     */
+    public static function clearProcessInstances(): void
+    {
+        self::$instances = [];
+        self::$origin_instances = [];
+        self::$reflections = [];
+    }
+
     public static function clearCurrentRequestScope(): void
     {
         $fiber = self::currentRequestFiber();

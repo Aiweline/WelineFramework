@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>PROTOTYPE — 定金挂单沟通行内（勿当生产）</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #0f1419; color: #e7ecf1; padding: 24px; }
+    .note { opacity: .7; margin-bottom: 16px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border-bottom: 1px solid #2a3340; padding: 10px 8px; text-align: left; vertical-align: top; font-size: 13px; }
+    .ops { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; min-width: 10rem; }
+    .ops-btns { display: flex; gap: 8px; }
+    .btn { border: 0; border-radius: 6px; padding: 6px 10px; cursor: pointer; }
+    .primary { background: #3b82f6; color: #fff; }
+    .danger { background: #f87171; color: #111; }
+    .secondary { background: #1e293b; color: #e7ecf1; border: 1px solid #334155; }
+    .chat { width: 100%; max-width: 16rem; }
+    .panel { margin-top: 8px; padding: 8px; background: #151b23; border: 1px solid #2a3340; border-radius: 8px; display: none; }
+    .chat.open .panel { display: block; }
+  </style>
+</head>
+<body>
+  <p class="note">PROTOTYPE variant A：沟通在「操作」列内（批准/驳回下方），不再单独 colspan 行。</p>
+  <table>
+    <thead>
+      <tr><th>hang_id</th><th>order_ref</th><th>hang_status</th><th>定金(分)</th><th>尾款(分)</th><th>支付链接</th><th>操作</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>hang_0e3c…</td>
+        <td>80219477-…</td>
+        <td>awaiting_merchant_approval</td>
+        <td>16200</td>
+        <td>37800</td>
+        <td>—</td>
+        <td>
+          <div class="ops">
+            <div class="ops-btns">
+              <button class="btn primary" type="button">批准</button>
+              <button class="btn danger" type="button">驳回</button>
+            </div>
+            <div class="chat" data-chat>
+              <button class="btn secondary" type="button" data-toggle>订单沟通</button>
+              <div class="panel">留言面板（原型）</div>
+            </div>
+          </div>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+  <script>
+    document.querySelectorAll('[data-chat]').forEach((root) => {
+      root.querySelector('[data-toggle]').addEventListener('click', () => root.classList.toggle('open'));
+    });
+  </script>
+</body>
+</html>

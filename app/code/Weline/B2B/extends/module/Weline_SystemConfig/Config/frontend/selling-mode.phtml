@@ -52,3 +52,46 @@
         validation="min:0|max:100"
     />
 </w:config:group>
+
+<w:config:group
+    code="b2b_default_wholesale_policy"
+    label="默认批发模板与亏损护栏"
+    description="商品启用批发后默认按 VIP 档继承本站模板（改模板只影响新报价/PDP，不回刷已有价目表或历史订单）。显式价目覆盖优先。"
+    sort="20"
+>
+    <w:config:field
+        key="b2b_max_discount_bps"
+        label="相对零售最大折扣（基点）"
+        description="100=1%。默认 2000（20%）。任意 VIP 模板档与手填批发价不得超过该上限。"
+        type="number"
+        value-type="int"
+        default="2000"
+        scope="global,website"
+        validation="min:0|max:10000"
+        data-testid="b2b-max-discount-bps"
+        cache-namespaces="storefront/product"
+    />
+    <w:config:field
+        key="b2b_min_margin_bps"
+        label="相对成本最低毛利（基点）"
+        description="0=关闭。大于 0 且商品有成本时，批发价不得低于成本×(1+毛利)。"
+        type="number"
+        value-type="int"
+        default="0"
+        scope="global,website"
+        validation="min:0|max:10000"
+        data-testid="b2b-min-margin-bps"
+        cache-namespaces="storefront/product"
+    />
+    <w:config:field
+        key="b2b_default_tier_policy_json"
+        label="VIP0–VIP12 默认档"
+        description="由批发配置页的 VIP 表格维护（起订量与折扣%）。空则按 VIP0=起订5/折扣5% 每档+5起订/+5% 并受最大折扣封顶。修改模板立即作用于继承商品的新报价/PDP；不会回刷已有价目表或历史订单。"
+        type="textarea"
+        value-type="json"
+        default="[]"
+        scope="global,website"
+        data-testid="b2b-default-tier-policy-json"
+        cache-namespaces="storefront/product"
+    />
+</w:config:group>

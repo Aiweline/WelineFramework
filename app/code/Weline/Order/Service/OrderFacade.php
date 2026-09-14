@@ -172,19 +172,34 @@ final class OrderFacade implements OrderFacadeInterface
             $shipping = $this->checkedAdd($shipping, (int)$o['shipping_amount_minor']);
             $tax = $this->checkedAdd($tax, (int)$o['tax_amount_minor']);
         }
-        $grandTotal = $this->checkedAdd($this->checkedAdd($subtotal, $shipping), $tax);
+        $baseBeforeCod = $this->checkedAdd($this->checkedAdd($subtotal, $shipping), $tax);
+        $codFee = $this->resolveCodFeeMinor($command, $baseBeforeCod);
+        $orders = $planned['orders'];
+        if ($codFee > 0 && $orders !== []) {
+            $ownerIdx = $planned['owner_index'];
+            if ($ownerIdx === null || !isset($orders[$ownerIdx])) {
+                $ownerIdx = 0;
+            }
+            $orders[$ownerIdx]['cod_fee_amount_minor'] = $codFee;
+            $orders[$ownerIdx]['grand_total_minor'] = $this->checkedAdd(
+                (int)$orders[$ownerIdx]['grand_total_minor'],
+                $codFee,
+            );
+        }
+        $grandTotal = $this->checkedAdd($baseBeforeCod, $codFee);
 
         return new OrderPlan(
             currency: $command->currency,
             websiteId: $command->websiteId,
             storeId: $command->storeId,
-            orders: $planned['orders'],
+            orders: $orders,
             totals: [
                 'subtotal_minor' => $subtotal,
                 'shipping_amount_minor' => $shipping,
                 'tax_amount_minor' => $tax,
                 'grand_total_minor' => $grandTotal,
-                'order_count' => count($planned['orders']),
+                'cod_fee_amount_minor' => $codFee,
+                'order_count' => count($orders),
             ],
             shippingChargeOwnerIndex: $planned['owner_index'],
         );
@@ -247,6 +262,7 @@ final class OrderFacade implements OrderFacadeInterface
                     shippingAmountMinor: (int)$planned['shipping_amount_minor'],
                     taxAmountMinor: (int)$planned['tax_amount_minor'],
                     grandTotalMinor: (int)$planned['grand_total_minor'],
+                    codFeeAmountMinor: (int)($planned['cod_fee_amount_minor'] ?? 0),
                 ))->withComputedGrandTotal();
                 $catalog = new CatalogSnapshot($planned['items']);
                 $scope = new ScopeSnapshot($command->websiteId, $command->storeId, $command->currency);
@@ -261,6 +277,10 @@ final class OrderFacade implements OrderFacadeInterface
                     chargeOwnerOrderUuid: $isOwner ? $orderUuid : null,
                     address: $command->shippingAddress,
                 );
+                $shippingData = array_merge(
+                    $shipping->toArray(),
+                    $this->shippingCommerceExtras($command, (int)$planned['shipping_amount_minor'], $isOwner),
+                );
 
                 $row = [
                     'order_uuid' => $orderUuid,
@@ -272,6 +292,7 @@ final class OrderFacade implements OrderFacadeInterface
                     'store_id' => $command->storeId,
                     'customer_id' => $command->customerId,
                     'order_type' => $this->orderTypeFromCommand($command),
+                    'payment_method' => $this->paymentMethodFromCommand($command),
                     'type_payload' => $this->typePayloadForPlannedOrder($command, (string)$planned['split_key']),
                     'items' => $planned['items'],
                     'money' => $money->toArray(),
@@ -281,7 +302,7 @@ final class OrderFacade implements OrderFacadeInterface
                         'catalog' => $catalog->toArray(),
                         'scope' => $scope->toArray(),
                         'tax' => $tax->toArray(),
-                        'shipping' => $shipping->toArray(),
+                        'shipping' => $shippingData,
                     ],
                     'fulfillment_units' => $this->buildFulfillmentUnits(
                         $planned['items'],
@@ -311,12 +332,17 @@ final class OrderFacade implements OrderFacadeInterface
                 'shipping_amount_minor' => $plan->totals['shipping_amount_minor'],
                 'tax_amount_minor' => $plan->totals['tax_amount_minor'],
                 'grand_total_minor' => $plan->totals['grand_total_minor'],
+                'cod_fee_amount_minor' => (int)($plan->totals['cod_fee_amount_minor'] ?? 0),
             ]);
             $groupShipping = new ShippingSnapshot(
                 method: $command->shippingMethod,
                 amountMinor: (int)$plan->totals['shipping_amount_minor'],
                 chargeOwnerOrderUuid: $ownerUuid,
                 address: $command->shippingAddress,
+            );
+            $groupShippingData = array_merge(
+                $groupShipping->toArray(),
+                $this->shippingCommerceExtras($command, (int)$plan->totals['shipping_amount_minor'], true),
             );
 
             $this->invariant->assertMoneyConservation($orderRows, $plan->totals);
@@ -345,7 +371,7 @@ final class OrderFacade implements OrderFacadeInterface
                         $command,
                         (int) $plan->totals['tax_amount_minor'],
                     )->toArray(),
-                    'shipping' => $groupShipping->toArray(),
+                    'shipping' => $groupShippingData,
                 ],
             ];
             $this->memory['groups'][$groupUuid] = $group;
@@ -428,6 +454,8 @@ final class OrderFacade implements OrderFacadeInterface
                     subtotalMinor: (int)$planned['subtotal_minor'],
                     shippingAmountMinor: (int)$planned['shipping_amount_minor'],
                     taxAmountMinor: (int)$planned['tax_amount_minor'],
+                    grandTotalMinor: (int)$planned['grand_total_minor'],
+                    codFeeAmountMinor: (int)($planned['cod_fee_amount_minor'] ?? 0),
                 ))->withComputedGrandTotal();
                 $catalog = new CatalogSnapshot($planned['items']);
                 $scope = new ScopeSnapshot($command->websiteId, $command->storeId, $command->currency);
@@ -442,6 +470,10 @@ final class OrderFacade implements OrderFacadeInterface
                     chargeOwnerOrderUuid: $isOwner ? $orderUuid : null,
                     address: $command->shippingAddress,
                 );
+                $shippingData = array_merge(
+                    $shipping->toArray(),
+                    $this->shippingCommerceExtras($command, (int)$planned['shipping_amount_minor'], $isOwner),
+                );
 
                 $orderRows[] = [
                     'order_uuid' => $orderUuid,
@@ -453,6 +485,7 @@ final class OrderFacade implements OrderFacadeInterface
                     'store_id' => $command->storeId,
                     'customer_id' => $command->customerId,
                     'order_type' => $this->orderTypeFromCommand($command),
+                    'payment_method' => $this->paymentMethodFromCommand($command),
                     'type_payload' => $this->typePayloadForPlannedOrder($command, (string)$planned['split_key']),
                     'items' => $planned['items'],
                     'money' => $money->toArray(),
@@ -462,7 +495,7 @@ final class OrderFacade implements OrderFacadeInterface
                         'catalog' => $catalog->toArray(),
                         'scope' => $scope->toArray(),
                         'tax' => $tax->toArray(),
-                        'shipping' => $shipping->toArray(),
+                        'shipping' => $shippingData,
                     ],
                     'fulfillment_units' => $this->buildFulfillmentUnits(
                         $planned['items'],
@@ -486,12 +519,17 @@ final class OrderFacade implements OrderFacadeInterface
                 'shipping_amount_minor' => $plan->totals['shipping_amount_minor'],
                 'tax_amount_minor' => $plan->totals['tax_amount_minor'],
                 'grand_total_minor' => $plan->totals['grand_total_minor'],
+                'cod_fee_amount_minor' => (int)($plan->totals['cod_fee_amount_minor'] ?? 0),
             ]);
             $groupShipping = new ShippingSnapshot(
                 method: $command->shippingMethod,
                 amountMinor: (int)$plan->totals['shipping_amount_minor'],
                 chargeOwnerOrderUuid: $ownerUuid,
                 address: $command->shippingAddress,
+            );
+            $groupShippingData = array_merge(
+                $groupShipping->toArray(),
+                $this->shippingCommerceExtras($command, (int)$plan->totals['shipping_amount_minor'], true),
             );
 
             $this->invariant->assertMoneyConservation($orderRows, $plan->totals);
@@ -520,7 +558,7 @@ final class OrderFacade implements OrderFacadeInterface
                         $command,
                         (int) $plan->totals['tax_amount_minor'],
                     )->toArray(),
-                    'shipping' => $groupShipping->toArray(),
+                    'shipping' => $groupShippingData,
                 ],
             ];
 
@@ -1067,6 +1105,11 @@ final class OrderFacade implements OrderFacadeInterface
                     storeId: $groupTaxSnapshot->storeId,
                 );
             }
+            $unitMinor = (int)$line['unit_price_minor'];
+            $compareAtMinor = max(0, (int)($line['compare_at_minor'] ?? 0));
+            $campaignLabel = trim((string)($line['campaign_label'] ?? ''));
+            $campaignUrl = trim((string)($line['campaign_url'] ?? ''));
+            $hasDeal = !empty($line['has_deal']) || ($compareAtMinor > $unitMinor && $unitMinor > 0);
             $plannedItem = [
                 'line_uuid' => $lineUuid !== '' ? $lineUuid : null,
                 'offer_id' => $line['offer_id'] ?? null,
@@ -1074,7 +1117,7 @@ final class OrderFacade implements OrderFacadeInterface
                 'sku' => $line['sku'] ?? null,
                 'name' => (string)$line['name'],
                 'qty_minor' => (int)$line['qty_minor'],
-                'unit_price_minor' => (int)$line['unit_price_minor'],
+                'unit_price_minor' => $unitMinor,
                 'row_total_minor' => $lineTotal,
                 'requires_shipping' => (bool)($line['requires_shipping'] ?? true),
                 'reservation_uuid' => $line['reservation_uuid'] ?? null,
@@ -1082,6 +1125,26 @@ final class OrderFacade implements OrderFacadeInterface
                 'tax_amount_minor' => $lineTax,
                 'tax_snapshot' => $lineTaxSnapshot->toArray(),
             ];
+            if ($compareAtMinor > 0) {
+                $plannedItem['compare_at_minor'] = $compareAtMinor;
+            }
+            if ($hasDeal) {
+                $plannedItem['has_deal'] = true;
+                $plannedItem['line_discount_minor'] = max(
+                    0,
+                    ($compareAtMinor - $unitMinor) * (int)$line['qty_minor'],
+                );
+            }
+            if ($campaignLabel !== '') {
+                $plannedItem['campaign_label'] = $campaignLabel;
+            }
+            if ($campaignUrl !== '') {
+                $plannedItem['campaign_url'] = $campaignUrl;
+            }
+            $lineOptions = $line['options'] ?? null;
+            if (\is_array($lineOptions) && $lineOptions !== []) {
+                $plannedItem['options'] = $lineOptions;
+            }
             $providerCode = trim((string)($line['provider_code'] ?? ''));
             if ($providerCode !== '') {
                 $plannedItem['provider_code'] = $providerCode;
@@ -1093,6 +1156,10 @@ final class OrderFacade implements OrderFacadeInterface
             $fulfillmentMetadata = $line['fulfillment_metadata'] ?? [];
             if (is_array($fulfillmentMetadata) && $fulfillmentMetadata !== []) {
                 $plannedItem['fulfillment_metadata'] = $fulfillmentMetadata;
+            }
+            $image = trim((string)($line['image'] ?? $line['image_url'] ?? $line['image_src'] ?? ''));
+            if ($image !== '') {
+                $plannedItem['image'] = $image;
             }
             $buckets[$split]['items'][] = $plannedItem;
             $buckets[$split]['subtotal_minor'] = $this->checkedAdd(
@@ -1217,6 +1284,94 @@ final class OrderFacade implements OrderFacadeInterface
         )));
 
         return $code !== '' ? $code : 'toc';
+    }
+
+    private function paymentMethodFromCommand(CreateCheckoutGroupCommand $command): string
+    {
+        return strtolower(trim((string)($command->options['payment_method'] ?? '')));
+    }
+
+    /**
+     * COD fee into grand_total — options override or Payment CodFeeCalculator.
+     */
+    private function resolveCodFeeMinor(CreateCheckoutGroupCommand $command, int $baseMinor): int
+    {
+        if (\array_key_exists('cod_fee_amount_minor', $command->options)) {
+            return max(0, (int)$command->options['cod_fee_amount_minor']);
+        }
+        $method = $this->paymentMethodFromCommand($command);
+        if ($method === '' || !class_exists(\Weline\Payment\Service\CodFeeCalculator::class)) {
+            return 0;
+        }
+        try {
+            /** @var \Weline\Payment\Service\CodFeeCalculator $calc */
+            $calc = ObjectManager::getInstance(\Weline\Payment\Service\CodFeeCalculator::class);
+
+            return $calc->forMethodCode($method, max(0, $baseMinor), 2);
+        } catch (\Throwable) {
+            return 0;
+        }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function shippingCommerceExtras(
+        CreateCheckoutGroupCommand $command,
+        int $shippingAmountMinor,
+        bool $includeSplit,
+    ): array {
+        $fromOptions = \is_array($command->options['shipping_commerce'] ?? null)
+            ? $command->options['shipping_commerce']
+            : [];
+        $quote = \is_array($command->options['shipping_quote'] ?? null)
+            ? $command->options['shipping_quote']
+            : [];
+        $out = [];
+        if ($includeSplit) {
+            $split = strtolower(trim((string)($fromOptions['split_shipment_shipping'] ?? '')));
+            $outbound = (int)($fromOptions['outbound_shipping_minor'] ?? -1);
+            if ($split === '' || $outbound < 0) {
+                try {
+                    if (class_exists(\Weline\Shipping\Service\SplitShipmentShippingService::class)) {
+                        /** @var \Weline\Shipping\Service\SplitShipmentShippingService $svc */
+                        $svc = ObjectManager::getInstance(
+                            \Weline\Shipping\Service\SplitShipmentShippingService::class,
+                        );
+                        $snap = $svc->buildCheckoutSnapshot(
+                            max(0, $command->shippingAmountMinor),
+                            [
+                                'website_id' => $command->websiteId,
+                                'scope_type' => 'website',
+                                'scope_id' => $command->websiteId,
+                            ],
+                        );
+                        if ($split === '') {
+                            $split = (string)$snap['split_shipment_shipping'];
+                        }
+                        if ($outbound < 0) {
+                            $outbound = (int)$snap['outbound_shipping_minor'];
+                        }
+                    }
+                } catch (\Throwable) {
+                    // soft
+                }
+            }
+            if ($split !== '') {
+                $out['split_shipment_shipping'] = $split;
+                $out['outbound_shipping_minor'] = $outbound >= 0
+                    ? $outbound
+                    : max(0, $shippingAmountMinor > 0 ? $shippingAmountMinor : $command->shippingAmountMinor);
+            }
+        }
+        foreach (['incoterm', 'duty_notice'] as $key) {
+            $val = trim((string)($fromOptions[$key] ?? $quote[$key] ?? ''));
+            if ($val !== '') {
+                $out[$key] = $val;
+            }
+        }
+
+        return $out;
     }
 
     /** @return array<string,mixed> */

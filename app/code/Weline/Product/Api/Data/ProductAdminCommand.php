@@ -18,6 +18,8 @@ final readonly class ProductAdminCommand
     public const ACTION_PUBLISH = 'publish';
     public const ACTION_DISABLE = 'disable';
     public const ACTION_ARCHIVE = 'archive';
+    /** Restore archived catalog → draft so standard publish can run again. */
+    public const ACTION_RESTORE = 'restore';
     public const ACTION_CHANGE_TYPE = 'change_type';
     public const ACTION_SHARE = 'share';
     public const ACTION_TRANSFER_INITIATE = 'transfer_initiate';
@@ -32,6 +34,7 @@ final readonly class ProductAdminCommand
         self::ACTION_PUBLISH,
         self::ACTION_DISABLE,
         self::ACTION_ARCHIVE,
+        self::ACTION_RESTORE,
         self::ACTION_CHANGE_TYPE,
         self::ACTION_SHARE,
         self::ACTION_TRANSFER_INITIATE,

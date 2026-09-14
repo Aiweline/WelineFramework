@@ -42,7 +42,7 @@ $listPresenter = new BackendOrderListPresenter();
                 <w:form method="get" action="@backend-url{'order/backend/order/index'}" style="--w-mb:var(--weline-space-4);">
                     <div class="w-grid" style="--w-gap:var(--weline-space-4);">
                         <div style="--w-span-md:3;">
-                            <input type="text" name="keyword" class="w-input" placeholder="<?= __('搜索订单号、客户姓名、邮箱') ?>" value="<?= htmlspecialchars($filters['keyword'] ?? '') ?>">
+                            <input type="text" name="keyword" class="w-input" data-testid="order-list-keyword" placeholder="<?= __('搜索订单号、分组号 G-xxx、UUID、客户') ?>" value="<?= htmlspecialchars($filters['keyword'] ?? '') ?>">
                         </div>
                         <div style="--w-span-md:2;">
                             <select name="status" class="w-select">
@@ -137,17 +137,25 @@ $listPresenter = new BackendOrderListPresenter();
                                         ? $orderTypeRegistry->resolveBadgeTone($rowOrderType)
                                         : 'secondary';
                                     if ($rowTypeTone === 'muted') {
-                                        $rowTypeTone = 'secondary';
+                                        $rowTypeTone = 'info';
                                     }
                                     ?>
                                     <tr>
-                                        <td>
+                                        <td data-testid="order-list-order-number">
                                             <a href="@backend-url{'order/backend/order/view'|['id' => $orderData[Order::schema_fields_ID] ?? '']}">
                                                 <?= htmlspecialchars($orderData[Order::schema_fields_ORDER_NUMBER] ?? '') ?>
                                             </a>
+                                            <?php if (($presented['checkout_group_display'] ?? '') !== ''): ?>
+                                                <div>
+                                                    <small class="w-text" data-tone="muted" data-testid="order-list-group-display"><?= htmlspecialchars((string)$presented['checkout_group_display']) ?></small>
+                                                </div>
+                                            <?php endif; ?>
                                         </td>
                                         <td>
-                                            <span class="w-badge bg-<?= htmlspecialchars($rowTypeTone) ?>" data-testid="order-type-badge"><?= htmlspecialchars($rowTypeLabel) ?></span>
+                                            <span class="w-badge"
+                                                  data-tone="<?= htmlspecialchars($rowTypeTone) ?>"
+                                                  data-order-type-code="<?= htmlspecialchars($rowOrderType) ?>"
+                                                  data-testid="order-type-badge"><?= htmlspecialchars($rowTypeLabel) ?></span>
                                         </td>
                                         <td data-testid="order-list-customer">
                                             <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-1);">

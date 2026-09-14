@@ -16,18 +16,28 @@
         description="留空继承 Env 安全默认；非空必须是 Global 基线子集，且必须保留 Extends 应用默认 source。后台需含 script-src/style-src 的 unsafe-inline。"
         type="textarea"
         value-type="string"
-        default="connect-src 'self' https://api.stripe.com https://api.tiktok.com https://api.twitter.com https://cdn.jsdelivr.net https://cdn.syndication.twimg.com https://cdnjs.cloudflare.com https://connect.facebook.net https://graph.facebook.com https://open.weixin.qq.com https://region1.google-analytics.com https://unpkg.com https://www.google-analytics.com https://www.google.com https://www.googletagmanager.com https://www.gstatic.com https://www.linkedin.com https://www.paypal.com; default-src 'self'; font-src 'self' data: https:; frame-src 'self' https://js.stripe.com https://open.weixin.qq.com https://platform.twitter.com https://player.bilibili.com https://twitter.com https://www.facebook.com https://www.google.com https://www.gstatic.com https://www.instagram.com https://www.linkedin.com https://www.paypal.com https://www.tiktok.com https://www.youtube-nocookie.com https://www.youtube.com https://x.com; img-src 'self' blob: data: https:; media-src 'self' blob: https:; script-src 'self' 'unsafe-inline' https://ajax.googleapis.com https://apis.google.com https://cdn.jsdelivr.net https://cdn.syndication.twimg.com https://cdnjs.cloudflare.com https://connect.facebook.net https://graph.facebook.com https://js.stripe.com https://open.weixin.qq.com https://platform.linkedin.com https://platform.twitter.com https://player.bilibili.com https://res.wx.qq.com https://unpkg.com https://www.google-analytics.com https://www.google.com https://www.googletagmanager.com https://www.gstatic.com https://www.instagram.com https://www.paypal.com https://www.paypalobjects.com https://www.tiktok.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; worker-src 'self' blob:"
+        default="connect-src 'self'; default-src 'self'; font-src 'self' data: https:; frame-src 'self'; img-src 'self' blob: data: https:; media-src 'self' blob: https:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:"
         scope="global,website,store,channel"
         validation="max:8000" />
     <w:config:field
         key="security.headers.csp_report_only"
         label="CSP Report-Only"
-        description="观察策略默认与强制 CSP 一致；仍不得弱于基线，且不可删除应用默认 source。"
+        description="默认留空（推荐）。仅观察期填写且应与强制 CSP 不同；与强制 CSP 相同时运行时会省略，避免响应头体积翻倍。"
         type="textarea"
         value-type="string"
-        default="connect-src 'self' https://api.stripe.com https://api.tiktok.com https://api.twitter.com https://cdn.jsdelivr.net https://cdn.syndication.twimg.com https://cdnjs.cloudflare.com https://connect.facebook.net https://graph.facebook.com https://open.weixin.qq.com https://region1.google-analytics.com https://unpkg.com https://www.google-analytics.com https://www.google.com https://www.googletagmanager.com https://www.gstatic.com https://www.linkedin.com https://www.paypal.com; default-src 'self'; font-src 'self' data: https:; frame-src 'self' https://js.stripe.com https://open.weixin.qq.com https://platform.twitter.com https://player.bilibili.com https://twitter.com https://www.facebook.com https://www.google.com https://www.gstatic.com https://www.instagram.com https://www.linkedin.com https://www.paypal.com https://www.tiktok.com https://www.youtube-nocookie.com https://www.youtube.com https://x.com; img-src 'self' blob: data: https:; media-src 'self' blob: https:; script-src 'self' 'unsafe-inline' https://ajax.googleapis.com https://apis.google.com https://cdn.jsdelivr.net https://cdn.syndication.twimg.com https://cdnjs.cloudflare.com https://connect.facebook.net https://graph.facebook.com https://js.stripe.com https://open.weixin.qq.com https://platform.linkedin.com https://platform.twitter.com https://player.bilibili.com https://res.wx.qq.com https://unpkg.com https://www.google-analytics.com https://www.google.com https://www.googletagmanager.com https://www.gstatic.com https://www.instagram.com https://www.paypal.com https://www.paypalobjects.com https://www.tiktok.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; worker-src 'self' blob:"
+        default=""
         scope="global,website,store,channel"
         validation="max:8000" />
+    <w:config:field
+        key="security.headers.csp_delivery"
+        label="CSP 交付方式"
+        description="meta=写入 HTML meta（默认，响应头不再带大 CSP）；header=传统 Content-Security-Policy 响应头。浏览器不支持从 URL 自动拉取并应用 CSP。"
+        type="select"
+        value-type="string"
+        default="meta"
+        options="meta:HTML meta,header:HTTP Header"
+        scope="global"
+        validation="in:meta,header" />
     <w:config:field
         key="security.headers.cors_origins"
         label="CORS Origin 白名单"

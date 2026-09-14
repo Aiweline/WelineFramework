@@ -1,0 +1,349 @@
+{
+    "ok": true,
+    "scenario": "suite_critical",
+    "parts": [
+        {
+            "ok": true,
+            "scenario": "ch1_seed_profiles",
+            "template_codes_found": [
+                "SEED_TPL_DOMESTIC",
+                "SEED_TPL_GREATER_CHINA",
+                "SEED_TPL_ASIA_PACIFIC",
+                "SEED_TPL_AMERICAS",
+                "SEED_TPL_EUROPE",
+                "SEED_TPL_OCEANIA",
+                "SEED_TPL_LATAM",
+                "SEED_TPL_MIDDLE_EAST_AFRICA",
+                "SEED_TPL_OTHER",
+                "SEED_TPL_HEAVY_DOMESTIC",
+                "SEED_TPL_HEAVY_INTERNATIONAL"
+            ],
+            "template_codes_expected": [
+                "SEED_TPL_DOMESTIC",
+                "SEED_TPL_GREATER_CHINA",
+                "SEED_TPL_ASIA_PACIFIC",
+                "SEED_TPL_AMERICAS",
+                "SEED_TPL_EUROPE",
+                "SEED_TPL_OCEANIA",
+                "SEED_TPL_LATAM",
+                "SEED_TPL_MIDDLE_EAST_AFRICA",
+                "SEED_TPL_OTHER",
+                "SEED_TPL_HEAVY_DOMESTIC",
+                "SEED_TPL_HEAVY_INTERNATIONAL"
+            ],
+            "profiles": [
+                "SEED_PROFILE_GENERAL",
+                "SEED_PROFILE_HEAVY"
+            ],
+            "seed": {
+                "carrier_id": 3,
+                "coverage": 55,
+                "destinations": 55,
+                "templates": 11,
+                "services": 11,
+                "regions": 110,
+                "origin_shipping_address_id": 1,
+                "surcharges": 6
+            },
+            "assertions": {
+                "template_count": 11,
+                "templates_ok": true,
+                "profiles_ok": true
+            }
+        },
+        {
+            "ok": true,
+            "scenario": "ch1_americas_2kg",
+            "rates": {
+                "SEED_LANE_AMERICAS": {
+                    "amount_minor": 11500,
+                    "label": "美洲",
+                    "package_count": 1,
+                    "free_reason": null,
+                    "surcharges": [],
+                    "seasonal": [],
+                    "addons": []
+                }
+            },
+            "diagnostics": {
+                "country_code": "US",
+                "currency": "CNY",
+                "lane_count": 1,
+                "fx_skipped": [],
+                "profile_groups": 1
+            },
+            "error": null,
+            "assertions": {
+                "conflict": false,
+                "has_service": true,
+                "amount_minor": 11500,
+                "package_count": 1,
+                "surcharges": [],
+                "addons": [],
+                "seasonal": [],
+                "free_reason": null,
+                "amount_match": true
+            }
+        },
+        {
+            "ok": true,
+            "scenario": "ch2_cn_xj_surcharge",
+            "rates": {
+                "SEED_LANE_DOMESTIC": {
+                    "amount_minor": 4500,
+                    "label": "国内标快",
+                    "package_count": 1,
+                    "free_reason": null,
+                    "surcharges": [
+                        {
+                            "rule_code": "SEED_SURCHARGE_CN_XJ",
+                            "rule_name": "偏远加价·新疆",
+                            "amount_minor": 2500
+                        }
+                    ],
+                    "seasonal": [],
+                    "addons": []
+                }
+            },
+            "diagnostics": {
+                "country_code": "CN",
+                "currency": "CNY",
+                "lane_count": 1,
+                "fx_skipped": [],
+                "profile_groups": 1
+            },
+            "error": null,
+            "assertions": {
+                "conflict": false,
+                "has_service": true,
+                "amount_minor": 4500,
+                "package_count": 1,
+                "surcharges": [
+                    {
+                        "rule_code": "SEED_SURCHARGE_CN_XJ",
+                        "rule_name": "偏远加价·新疆",
+                        "amount_minor": 2500
+                    }
+                ],
+                "addons": [],
+                "seasonal": [],
+                "free_reason": null,
+                "surcharge_found": true,
+                "surcharge_sum": 2500,
+                "surcharge_min_ok": true
+            }
+        },
+        {
+            "ok": true,
+            "scenario": "ch3_split_boxes",
+            "single": {
+                "ok": true,
+                "scenario": "ch3_split_boxes_single",
+                "rates": {
+                    "SEED_LANE_AMERICAS": {
+                        "amount_minor": 46500,
+                        "label": "美洲",
+                        "package_count": 1,
+                        "free_reason": null,
+                        "surcharges": [],
+                        "seasonal": [],
+                        "addons": []
+                    }
+                },
+                "diagnostics": {
+                    "country_code": "US",
+                    "currency": "CNY",
+                    "lane_count": 1,
+                    "fx_skipped": [],
+                    "profile_groups": 1
+                },
+                "error": null,
+                "assertions": {
+                    "conflict": false,
+                    "has_service": true,
+                    "amount_minor": 46500,
+                    "package_count": 1,
+                    "surcharges": [],
+                    "addons": [],
+                    "seasonal": [],
+                    "free_reason": null
+                }
+            },
+            "split": {
+                "ok": true,
+                "scenario": "ch3_split_boxes",
+                "rates": {
+                    "SEED_LANE_AMERICAS": {
+                        "amount_minor": 93000,
+                        "label": "美洲",
+                        "package_count": 2,
+                        "free_reason": null,
+                        "surcharges": [],
+                        "seasonal": [],
+                        "addons": []
+                    }
+                },
+                "diagnostics": {
+                    "country_code": "US",
+                    "currency": "CNY",
+                    "lane_count": 1,
+                    "fx_skipped": [],
+                    "profile_groups": 1
+                },
+                "error": null,
+                "assertions": {
+                    "conflict": false,
+                    "has_service": true,
+                    "amount_minor": 93000,
+                    "package_count": 2,
+                    "surcharges": [],
+                    "addons": [],
+                    "seasonal": [],
+                    "free_reason": null
+                }
+            },
+            "assertions": {
+                "package_count": 2,
+                "split_ge_single": true,
+                "single_amount": 46500,
+                "split_amount": 93000
+            }
+        },
+        {
+            "ok": true,
+            "scenario": "ch3_signature_addon",
+            "base": {
+                "ok": true,
+                "scenario": "ch3_signature_addon_base",
+                "rates": {
+                    "SEED_LANE_AMERICAS": {
+                        "amount_minor": 11500,
+                        "label": "美洲",
+                        "package_count": 1,
+                        "free_reason": null,
+                        "surcharges": [],
+                        "seasonal": [],
+                        "addons": []
+                    }
+                },
+                "diagnostics": {
+                    "country_code": "US",
+                    "currency": "CNY",
+                    "lane_count": 1,
+                    "fx_skipped": [],
+                    "profile_groups": 1
+                },
+                "error": null,
+                "assertions": {
+                    "conflict": false,
+                    "has_service": true,
+                    "amount_minor": 11500,
+                    "package_count": 1,
+                    "surcharges": [],
+                    "addons": [],
+                    "seasonal": [],
+                    "free_reason": null
+                }
+            },
+            "with_signature": {
+                "ok": true,
+                "scenario": "ch3_signature_addon",
+                "rates": {
+                    "SEED_LANE_AMERICAS": {
+                        "amount_minor": 12000,
+                        "label": "美洲",
+                        "package_count": 1,
+                        "free_reason": null,
+                        "surcharges": [],
+                        "seasonal": [],
+                        "addons": [
+                            {
+                                "addon_code": "SEED_ADDON_SIGNATURE",
+                                "addon_name": "签收确认",
+                                "addon_type": "signature",
+                                "amount_minor": 500
+                            }
+                        ]
+                    }
+                },
+                "diagnostics": {
+                    "country_code": "US",
+                    "currency": "CNY",
+                    "lane_count": 1,
+                    "fx_skipped": [],
+                    "profile_groups": 1
+                },
+                "error": null,
+                "assertions": {
+                    "conflict": false,
+                    "has_service": true,
+                    "amount_minor": 12000,
+                    "package_count": 1,
+                    "surcharges": [],
+                    "addons": [
+                        {
+                            "addon_code": "SEED_ADDON_SIGNATURE",
+                            "addon_name": "签收确认",
+                            "addon_type": "signature",
+                            "amount_minor": 500
+                        }
+                    ],
+                    "seasonal": [],
+                    "free_reason": null
+                }
+            },
+            "assertions": {
+                "amount_increased": true,
+                "has_signature_addon": true,
+                "base_amount": 11500,
+                "with_amount": 12000
+            }
+        },
+        {
+            "ok": true,
+            "scenario": "ch4_ddp_notice",
+            "assertions": {
+                "amount_equal": true,
+                "ddu_amount": 11500,
+                "ddp_amount": 11500,
+                "incoterm": "ddp",
+                "duty_notice": "duty_included_by_seller_estimate_separate"
+            }
+        },
+        {
+            "ok": true,
+            "scenario": "ch4_return_buyer",
+            "quote": {
+                "amount_minor": 1600,
+                "currency": "CNY",
+                "return_policy": "buyer_pays",
+                "template_code": "SEED_TPL_RETURN_DOMESTIC"
+            },
+            "assertions": {
+                "amount_minor": 1600,
+                "return_policy": "buyer_pays",
+                "seller_zero": null,
+                "buyer_positive": true
+            }
+        },
+        {
+            "ok": true,
+            "scenario": "ch4_cod_in_grand_total",
+            "assertions": {
+                "cod_fee_amount_minor": 500,
+                "baseline": 11500,
+                "grand_total_minor": 12000,
+                "money_grand": 12000
+            }
+        },
+        {
+            "ok": true,
+            "scenario": "ch4_split_each_shipment",
+            "assertions": {
+                "strategy": "each_shipment",
+                "second_amount_minor": 11500,
+                "positive": true
+            }
+        }
+    ]
+}

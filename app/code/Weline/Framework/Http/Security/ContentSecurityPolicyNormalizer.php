@@ -74,6 +74,62 @@ final class ContentSecurityPolicyNormalizer
     }
 
     /**
+     * 线上响应头体积压缩：在保留语义的前提下剔除被更宽 source 覆盖的主机。
+     *
+     * - 指令含 `https:` 时去掉所有 `https://…` 主机
+     * - 指令含 `http:` 时去掉所有 `http://…` 主机
+     * - 指令含 `*` 时去掉网络主机与 http(s): scheme token
+     *
+     * 不改变 LKG / assert 用的 canonicalize；仅用于写入 HTTP 头或 document meta。
+     */
+    public function compactForWire(string $policy): string
+    {
+        $directives = $this->parse($policy);
+        if ($directives === []) {
+            return '';
+        }
+        foreach ($directives as $name => $sources) {
+            $directives[$name] = $this->pruneRedundantSources($sources);
+        }
+
+        return $this->stringify($directives);
+    }
+
+    /**
+     * @param list<string> $sources
+     * @return list<string>
+     */
+    private function pruneRedundantSources(array $sources): array
+    {
+        if ($sources === []) {
+            return [];
+        }
+        $hasStar = \in_array('*', $sources, true);
+        $hasHttps = \in_array('https:', $sources, true);
+        $hasHttp = \in_array('http:', $sources, true);
+        $kept = [];
+        foreach ($sources as $src) {
+            if ($hasHttps && \preg_match('#^https://#i', $src) === 1) {
+                continue;
+            }
+            if ($hasHttp && \preg_match('#^http://#i', $src) === 1) {
+                continue;
+            }
+            if ($hasStar) {
+                if ($src === 'https:' || $src === 'http:') {
+                    continue;
+                }
+                if (\preg_match('#^https?://#i', $src) === 1) {
+                    continue;
+                }
+            }
+            $kept[] = $src;
+        }
+
+        return \array_values(\array_unique($kept));
+    }
+
+    /**
      * candidate 是否弱于 baseline（允许了基线禁止的能力）。
      */
     public function isWeaker(string $candidate, string $baseline): bool

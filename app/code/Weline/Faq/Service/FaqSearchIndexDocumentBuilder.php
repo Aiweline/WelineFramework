@@ -85,11 +85,20 @@ final class FaqSearchIndexDocumentBuilder
             return null;
         }
         $typeCode = (string)($row[FaqItem::schema_fields_TYPE_CODE] ?? '');
+        if ($typeCode === 'template') {
+            return null;
+        }
         $entityUuid = (string)($row[FaqItem::schema_fields_ENTITY_UUID] ?? '');
         $answer = trim(strip_tags((string)($row[FaqItem::schema_fields_ANSWER] ?? '')));
         $url = $typeCode === 'site'
             ? '/' . FaqNamespace::PREFIX
-            : '/' . FaqNamespace::PREFIX . '?entity=' . rawurlencode($entityUuid);
+            : ($typeCode === 'product'
+                ? '/#product-faq'
+                : '/' . FaqNamespace::PREFIX . '?entity=' . rawurlencode($entityUuid));
+        if ($typeCode === 'product') {
+            // Prefer product detail hash; Search provider may rewrite with product URL.
+            $url = '/#product-faq';
+        }
         $payload = [
             'faq_id' => $faqId,
             'type_code' => $typeCode,

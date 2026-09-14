@@ -5,6 +5,25 @@ use Weline\Shipping\Model\RateTemplate;
 
 $templates = $this->getData('templates') ?? [];
 $embed = $this->getData('embed') ?? false;
+/** @var RateTemplate|null $editing */
+$editing = $this->getData('editing_template');
+$baseCurrency = strtoupper(trim((string)($this->getData('base_currency') ?? 'CNY'))) ?: 'CNY';
+$isEdit = $editing instanceof RateTemplate && (int)$editing->getId() > 0;
+$calcType = $isEdit
+    ? (string)$editing->getData(RateTemplate::schema_fields_CALCULATION_TYPE)
+    : RateTemplate::CALC_TYPE_FIXED;
+$jsonFlags = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP;
+$scopeQuery = http_build_query(array_filter([
+    'target_scope' => (string)($this->getData('target_scope') ?? ''),
+    'website_code' => (string)($this->getData('scope_website_code') ?? ''),
+    'store_code' => (string)($this->getData('scope_store_code') ?? ''),
+    'channel_code' => (string)($this->getData('scope_channel_code') ?? ''),
+    'scope_kind' => (string)($this->getData('scope_kind') ?? ''),
+    'embed' => !empty($embed) ? '1' : '',
+], static fn ($v) => $v !== '' && $v !== null));
+$scopeQs = $scopeQuery !== '' ? '?' . $scopeQuery : '';
+$h = static fn (string $s): string => htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
+$removeUrl = $h($this->getBackendUrl('shipping/backend/ratetemplate/remove') . $scopeQs);
 ?>
 <?php if (empty($embed)): ?>
 <div class="w-grid" data-testid="shipping-rate-template-management">
@@ -31,14 +50,25 @@ $embed = $this->getData('embed') ?? false;
     <div class="w-alert" role="status" data-tone="info" data-testid="shipping-rate-template-design-note" style="--w-mb:var(--weline-space-4);">
         <w:icon name="info" size="sm"></w:icon>
         <div class="w-alert__content">
-            <strong class="w-alert__title"><?= __('设计说明 · 计费 vs 可达性') ?></strong>
-            <span><?= __('费用模板（本页）只定义「怎么算钱」（固定 / 重量 / 体积 / 件数 / 混合），不是「配送方案」。区域相对当前位置差价请在「配送服务 / 航线」配置目的地覆盖与发货锚点，勿在模板里配地区矩阵。') ?></span>
+            <strong class="w-alert__title"><?= __('设计说明 · 计费 vs 可达性 · 基础货币') ?></strong>
+            <span><?= __('费用模板（本页）定义「怎么算钱」：固定 / 重量阶梯 / 金额阶梯（及兼容线性）。金额按站点基础货币；区域差价在「配送服务 / 航线」与 Profile。第1章：阶梯须从 0 连续并设 max_weight_kg。') ?></span>
         </div>
     </div>
 </div></div>
 
 <div class="w-grid" style="--w-mb:var(--weline-space-4);"><div style="--w-span:12;"><div class="w-card" data-testid="shipping-rate-template-create-form">
-    <div class="w-card__header"><h5 class="w-card__title" style="--w-mb:0;"><?= __('新增费用模板') ?></h5></div>
+    <div class="w-card__header w-cluster" data-align="center" data-justify="between">
+        <h5 class="w-card__title" style="--w-mb:0;"><?= $isEdit ? __('编辑费用模板') : __('新增费用模板') ?></h5>
+        <?php if ($isEdit): ?>
+            <a class="w-button" data-tone="ghost" data-size="sm"
+               data-testid="shipping-rate-template-cancel-edit"
+               href="@backend-url{'shipping/backend/ratetemplate/index'|[
+                    'target_scope' => (string)($this->getData('target_scope') ?? 'default.default.default'),
+                    'website_code' => (string)($this->getData('scope_website_code') ?? ''),
+                    'scope_kind' => 'website',
+               ]}"><?= __('取消编辑') ?></a>
+        <?php endif; ?>
+    </div>
     <div class="w-card__body"><w:form method="post" action="@backend-url('shipping/backend/ratetemplate/save')">
         <input type="hidden" name="target_scope" value="<?= htmlspecialchars((string)($this->getData('target_scope') ?? 'default.default.default'), ENT_QUOTES, 'UTF-8') ?>">
         <input type="hidden" name="scope_type" value="<?= htmlspecialchars((string)($this->getData('work_scope_type') ?? 'website'), ENT_QUOTES, 'UTF-8') ?>">
@@ -46,16 +76,43 @@ $embed = $this->getData('embed') ?? false;
         <input type="hidden" name="website_code" value="<?= htmlspecialchars((string)($this->getData('scope_website_code') ?? ''), ENT_QUOTES, 'UTF-8') ?>">
         <input type="hidden" name="store_code" value="<?= htmlspecialchars((string)($this->getData('scope_store_code') ?? ''), ENT_QUOTES, 'UTF-8') ?>">
         <input type="hidden" name="channel_code" value="<?= htmlspecialchars((string)($this->getData('scope_channel_code') ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+        <?php if ($isEdit): ?>
+            <input type="hidden" name="template_id" value="<?= (int)$editing->getId() ?>">
+        <?php endif; ?>
         <div class="w-grid" style="--w-gap:var(--weline-space-4);">
-        <div class="w-field" style="--w-span-md:3;"><label class="w-field__label"><?= __('模板名称') ?></label><input class="w-input" name="template_name" maxlength="255" required></div>
-        <div class="w-field" style="--w-span-md:2;"><label class="w-field__label"><?= __('模板代码') ?></label><input class="w-input" name="template_code" maxlength="50" required></div>
-        <div class="w-field" style="--w-span-md:2;"><label class="w-field__label"><?= __('计算类型') ?></label><select class="w-select" name="calculation_type"><option value="fixed"><?= __('固定费用') ?></option><option value="weight"><?= __('按重量') ?></option><option value="volume"><?= __('按体积') ?></option><option value="quantity"><?= __('按件数') ?></option></select></div>
-        <div class="w-field" style="--w-span-md:2;"><label class="w-field__label"><?= __('基础费用') ?></label><input class="w-input" type="number" min="0" step="0.01" name="base_fee" value="10.00" required></div>
-        <div class="w-field" style="--w-span-md:1;"><label class="w-field__label"><?= __('货币') ?></label><input class="w-input" name="currency_code" maxlength="3" value="CNY" required></div>
-        <div class="w-field" style="--w-span-md:2;"><label class="w-field__label"><?= __('重量单价') ?></label><input class="w-input" type="number" min="0" step="0.0001" name="weight_rate" value="0" placeholder="kg"></div>
-        <div class="w-field" style="--w-span-md:2;"><label class="w-field__label"><?= __('体积单价') ?></label><input class="w-input" type="number" min="0" step="0.0001" name="volume_rate" value="0" placeholder="m³"></div>
-        <div class="w-field" style="--w-span-md:2;"><label class="w-field__label"><?= __('件数单价') ?></label><input class="w-input" type="number" min="0" step="0.01" name="quantity_rate" value="0"></div>
-        <div class="w-cluster" data-align="end" style="--w-span-md:2;"><input type="hidden" name="is_active" value="1"><button class="w-button" type="submit" data-testid="shipping-rate-template-submit" data-w-width="full" data-tone="primary"><?= __('创建') ?></button></div>
+        <div class="w-field" style="--w-span-md:3;"><label class="w-field__label"><?= __('模板名称') ?></label><input class="w-input" name="template_name" maxlength="255" required value="<?= $isEdit ? htmlspecialchars((string)$editing->getData(RateTemplate::schema_fields_TEMPLATE_NAME), ENT_QUOTES, 'UTF-8') : '' ?>"></div>
+        <div class="w-field" style="--w-span-md:2;"><label class="w-field__label"><?= __('模板代码') ?></label><input class="w-input" name="template_code" maxlength="50" required <?= $isEdit ? 'readonly' : '' ?> value="<?= $isEdit ? htmlspecialchars((string)$editing->getData(RateTemplate::schema_fields_TEMPLATE_CODE), ENT_QUOTES, 'UTF-8') : '' ?>"></div>
+        <div class="w-field" style="--w-span-md:2;"><label class="w-field__label"><?= __('计算类型') ?></label><select class="w-select" name="calculation_type">
+            <option value="fixed" <?= $calcType === 'fixed' ? 'selected' : '' ?>><?= __('固定费用') ?></option>
+            <option value="weight_table" <?= $calcType === 'weight_table' ? 'selected' : '' ?>><?= __('按重量阶梯') ?></option>
+            <option value="price_table" <?= $calcType === 'price_table' ? 'selected' : '' ?>><?= __('按订单金额阶梯') ?></option>
+            <option value="weight" <?= $calcType === 'weight' ? 'selected' : '' ?>><?= __('按重量（兼容）') ?></option>
+            <option value="volume" <?= $calcType === 'volume' ? 'selected' : '' ?>><?= __('按体积（兼容）') ?></option>
+            <option value="quantity" <?= $calcType === 'quantity' ? 'selected' : '' ?>><?= __('按件数（兼容）') ?></option>
+            <option value="mixed" <?= $calcType === 'mixed' ? 'selected' : '' ?>><?= __('混合（兼容）') ?></option>
+        </select></div>
+        <div class="w-field" style="--w-span-md:2;"><label class="w-field__label"><?= __('最大可寄重量(kg)') ?></label><input class="w-input" type="number" min="0" step="0.001" name="max_weight_kg" value="<?= $isEdit ? htmlspecialchars((string)($editing->getData(RateTemplate::schema_fields_MAX_WEIGHT_KG) ?? ''), ENT_QUOTES, 'UTF-8') : '30' ?>"></div>
+        <div class="w-field" style="--w-span-md:6;"><label class="w-field__label"><?= __('阶梯 JSON') ?></label><textarea class="w-textarea" name="rate_brackets" rows="4" placeholder='[{"min":0,"max":0.5,"price":"52.00"},…]'><?php
+            if ($isEdit) {
+                $br = $editing->getData(RateTemplate::schema_fields_RATE_BRACKETS);
+                echo htmlspecialchars(is_string($br) ? $br : (string)json_encode($br ?: [], JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
+            }
+        ?></textarea></div>
+        <div class="w-field" style="--w-span-md:2;"><label class="w-field__label"><?= __('基础费用') ?></label><input class="w-input" type="number" min="0" step="0.01" name="base_fee" value="<?= $isEdit ? htmlspecialchars((string)$editing->getData(RateTemplate::schema_fields_BASE_FEE), ENT_QUOTES, 'UTF-8') : '10.00' ?>" required></div>
+        <div class="w-field" style="--w-span-md:1;"><label class="w-field__label"><?= __('基础货币') ?></label>
+            <input class="w-input" type="text" value="<?= htmlspecialchars($baseCurrency, ENT_QUOTES, 'UTF-8') ?>" readonly data-testid="shipping-rate-template-base-currency" aria-readonly="true">
+            <input type="hidden" name="base_currency" value="<?= htmlspecialchars($baseCurrency, ENT_QUOTES, 'UTF-8') ?>">
+        </div>
+        <div class="w-field" style="--w-span-md:2;"><label class="w-field__label"><?= __('重量单价') ?></label><input class="w-input" type="number" min="0" step="0.0001" name="weight_rate" value="<?= $isEdit ? htmlspecialchars((string)($editing->getData(RateTemplate::schema_fields_WEIGHT_RATE) ?? '0'), ENT_QUOTES, 'UTF-8') : '0' ?>" placeholder="kg"></div>
+        <div class="w-field" style="--w-span-md:2;"><label class="w-field__label"><?= __('体积单价') ?></label><input class="w-input" type="number" min="0" step="0.0001" name="volume_rate" value="<?= $isEdit ? htmlspecialchars((string)($editing->getData(RateTemplate::schema_fields_VOLUME_RATE) ?? '0'), ENT_QUOTES, 'UTF-8') : '0' ?>" placeholder="m³"></div>
+        <div class="w-field" style="--w-span-md:2;"><label class="w-field__label"><?= __('件数单价') ?></label><input class="w-input" type="number" min="0" step="0.01" name="quantity_rate" value="<?= $isEdit ? htmlspecialchars((string)($editing->getData(RateTemplate::schema_fields_QUANTITY_RATE) ?? '0'), ENT_QUOTES, 'UTF-8') : '0' ?>"></div>
+        <div class="w-field" style="--w-span-md:2;"><label class="w-field__label"><?= __('状态') ?></label>
+            <label class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);">
+                <input type="checkbox" name="is_active" value="1" <?= (!$isEdit || (int)$editing->getData(RateTemplate::schema_fields_IS_ACTIVE) === 1) ? 'checked' : '' ?>>
+                <span><?= __('启用') ?></span>
+            </label>
+        </div>
+        <div class="w-cluster" data-align="end" style="--w-span-md:2;"><button class="w-button" type="submit" data-testid="shipping-rate-template-submit" data-w-width="full" data-tone="primary"><?= $isEdit ? __('保存') : __('创建') ?></button></div>
     </div></w:form></div>
 </div></div></div>
 
@@ -68,28 +125,100 @@ $embed = $this->getData('embed') ?? false;
                     <div class="w-alert" data-tone="info" style="--w-mb:0;"><?= __('当前暂无费用模板配置。') ?></div>
                 <?php else: ?>
                     <div class="w-table-wrap">
-                        <table class="w-table" data-w-vertical="middle">
+                        <table class="w-table" data-w-vertical="middle" data-testid="shipping-rate-template-list">
                             <thead>
                             <tr>
                                 <th><?= __('模板名称') ?></th>
                                 <th><?= __('模板代码') ?></th>
                                 <th><?= __('计算类型') ?></th>
+                                <th><?= __('基础费用') ?></th>
+                                <th><?= __('重量单价') ?></th>
+                                <th><?= __('体积单价') ?></th>
+                                <th><?= __('件数单价') ?></th>
+                                <th><?= __('货币') ?></th>
                                 <th><?= __('状态') ?></th>
+                                <th><?= __('操作') ?></th>
                             </tr>
                             </thead>
                             <tbody>
+                            <?php
+                            $calcLabels = [
+                                RateTemplate::CALC_TYPE_FIXED => (string)__('固定费用'),
+                                RateTemplate::CALC_TYPE_WEIGHT => (string)__('按重量'),
+                                RateTemplate::CALC_TYPE_VOLUME => (string)__('按体积'),
+                                RateTemplate::CALC_TYPE_QUANTITY => (string)__('按件数'),
+                                RateTemplate::CALC_TYPE_MIXED => (string)__('混合计费'),
+                            ];
+                            ?>
                             <?php foreach ($templates as $template): ?>
                                 <?php /** @var RateTemplate $template */ ?>
-                                <tr>
-                                    <td><?= htmlspecialchars((string)$template->getData(RateTemplate::schema_fields_TEMPLATE_NAME)) ?></td>
-                                    <td><?= htmlspecialchars((string)$template->getData(RateTemplate::schema_fields_TEMPLATE_CODE)) ?></td>
-                                    <td><?= htmlspecialchars((string)$template->getData(RateTemplate::schema_fields_CALCULATION_TYPE)) ?></td>
+                                <?php
+                                $rowId = (int)$template->getData(RateTemplate::schema_fields_ID);
+                                $rowCode = (string)$template->getData(RateTemplate::schema_fields_TEMPLATE_CODE);
+                                $rowCurrency = strtoupper(trim((string)$template->getData(RateTemplate::schema_fields_CURRENCY_CODE))) ?: $baseCurrency;
+                                $calcKey = (string)$template->getData(RateTemplate::schema_fields_CALCULATION_TYPE);
+                                $calcLabel = $calcLabels[$calcKey] ?? $calcKey;
+                                $isSeed = str_starts_with(strtoupper($rowCode), 'SEED_TPL_');
+                                $fmtRate = static function ($value): string {
+                                    if ($value === null || $value === '') {
+                                        return '0.00';
+                                    }
+
+                                    return is_numeric($value) ? number_format((float)$value, 4, '.', '') : (string)$value;
+                                };
+                                $fmtMoney = static function ($value): string {
+                                    if ($value === null || $value === '') {
+                                        return '0.00';
+                                    }
+
+                                    return is_numeric($value) ? number_format((float)$value, 2, '.', '') : (string)$value;
+                                };
+                                ?>
+                                <tr data-template-code="<?= htmlspecialchars($rowCode, ENT_QUOTES, 'UTF-8') ?>"<?= $isSeed ? ' data-seed="1"' : '' ?>>
+                                    <td>
+                                        <span class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);">
+                                            <span><?= htmlspecialchars((string)$template->getData(RateTemplate::schema_fields_TEMPLATE_NAME)) ?></span>
+                                            <?php if ($isSeed): ?>
+                                                <span class="w-badge" data-w-background="muted" data-testid="shipping-rate-template-origin-seed"><?= __('系统') ?></span>
+                                            <?php endif; ?>
+                                        </span>
+                                    </td>
+                                    <td><?= htmlspecialchars($rowCode) ?></td>
+                                    <td data-field="calculation_type" data-calc="<?= htmlspecialchars($calcKey, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($calcLabel) ?></td>
+                                    <td data-field="base_fee"><?= htmlspecialchars($fmtMoney($template->getData(RateTemplate::schema_fields_BASE_FEE))) ?></td>
+                                    <td data-field="weight_rate"><?= htmlspecialchars($fmtRate($template->getData(RateTemplate::schema_fields_WEIGHT_RATE))) ?></td>
+                                    <td data-field="volume_rate"><?= htmlspecialchars($fmtRate($template->getData(RateTemplate::schema_fields_VOLUME_RATE))) ?></td>
+                                    <td data-field="quantity_rate"><?= htmlspecialchars($fmtMoney($template->getData(RateTemplate::schema_fields_QUANTITY_RATE))) ?></td>
+                                    <td data-field="currency_code"><?= htmlspecialchars($rowCurrency) ?></td>
                                     <td>
                                         <?php if ($template->getData(RateTemplate::schema_fields_IS_ACTIVE)): ?>
                                             <span class="w-badge" data-w-background="success"><?= __('启用') ?></span>
                                         <?php else: ?>
                                             <span class="w-badge" data-w-background="muted"><?= __('禁用') ?></span>
                                         <?php endif; ?>
+                                    </td>
+                                    <td>
+                                        <div class="w-cluster" data-align="center" data-testid="shipping-rate-template-row-actions">
+                                            <a class="w-button" data-tone="ghost" data-size="sm"
+                                               data-testid="shipping-rate-template-edit"
+                                               href="@backend-url{'shipping/backend/ratetemplate/index'|[
+                                                    'edit_id' => $rowId,
+                                                    'target_scope' => (string)($this->getData('target_scope') ?? 'default.default.default'),
+                                                    'website_code' => (string)($this->getData('scope_website_code') ?? ''),
+                                                    'store_code' => (string)($this->getData('scope_store_code') ?? ''),
+                                                    'channel_code' => (string)($this->getData('scope_channel_code') ?? ''),
+                                                    'scope_kind' => 'website',
+                                               ]}"><?= __('编辑') ?></a>
+                                            <?php if (!$isSeed): ?>
+                                                <form method="post" action="<?= $removeUrl ?>" style="display:inline"
+                                                      onsubmit="return confirm(<?= json_encode((string)__('确认删除该自建费用模板？删除后不可恢复。'), $jsonFlags) ?>);">
+                                                    <input type="hidden" name="template_id" value="<?= $rowId ?>">
+                                                    <button type="submit" class="w-button" data-tone="danger" data-variant="outline" data-size="sm" data-testid="shipping-rate-template-delete"><?= __('删除') ?></button>
+                                                </form>
+                                            <?php else: ?>
+                                                <span class="w-field__help" data-testid="shipping-rate-template-delete-forbidden"><?= __('系统种子不可删除') ?></span>
+                                            <?php endif; ?>
+                                        </div>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>

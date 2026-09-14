@@ -14,6 +14,7 @@ final class MoneySnapshot
         public readonly int $taxAmountMinor,
         public readonly int $discountAmountMinor = 0,
         public readonly int $grandTotalMinor = 0,
+        public readonly int $codFeeAmountMinor = 0,
     ) {
     }
 
@@ -25,14 +26,19 @@ final class MoneySnapshot
             $this->shippingAmountMinor,
             $this->taxAmountMinor,
             $this->discountAmountMinor,
-            $this->subtotalMinor + $this->shippingAmountMinor + $this->taxAmountMinor - $this->discountAmountMinor,
+            $this->subtotalMinor
+                + $this->shippingAmountMinor
+                + $this->taxAmountMinor
+                - $this->discountAmountMinor
+                + $this->codFeeAmountMinor,
+            $this->codFeeAmountMinor,
         );
     }
 
     /** @return array<string, mixed> */
     public function toArray(): array
     {
-        return [
+        $out = [
             'currency' => $this->currency,
             'subtotal_minor' => $this->subtotalMinor,
             'shipping_amount_minor' => $this->shippingAmountMinor,
@@ -40,6 +46,11 @@ final class MoneySnapshot
             'discount_amount_minor' => $this->discountAmountMinor,
             'grand_total_minor' => $this->grandTotalMinor,
         ];
+        if ($this->codFeeAmountMinor > 0) {
+            $out['cod_fee_amount_minor'] = $this->codFeeAmountMinor;
+        }
+
+        return $out;
     }
 
     /** @param array<string, mixed> $data */
@@ -52,6 +63,7 @@ final class MoneySnapshot
             taxAmountMinor: (int)($data['tax_amount_minor'] ?? 0),
             discountAmountMinor: (int)($data['discount_amount_minor'] ?? 0),
             grandTotalMinor: (int)($data['grand_total_minor'] ?? 0),
+            codFeeAmountMinor: (int)($data['cod_fee_amount_minor'] ?? 0),
         );
     }
 }

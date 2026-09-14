@@ -689,7 +689,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
 
         $rawFlag = \getenv('WLS_WORKER_STOREFRONT_READY_GATE_ENABLED');
         if ($rawFlag === false || \trim((string)$rawFlag) === '') {
-            $rawFlag = Env::get('wls.worker.storefront_ready_gate_enabled', '1');
+            $rawFlag = Env::get('wls.worker.storefront_ready_gate_enabled', '0');
         }
 
         return \in_array(
@@ -1257,7 +1257,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
 
         $rawFlag = \getenv('WLS_WORKER_STOREFRONT_DEFERRED_WARMUP_ENABLED');
         if ($rawFlag === false || \trim((string)$rawFlag) === '') {
-            $rawFlag = Env::get('wls.worker.storefront_deferred_warmup_enabled', '1');
+            $rawFlag = Env::get('wls.worker.storefront_deferred_warmup_enabled', '0');
         }
 
         if (!\in_array(
@@ -1343,6 +1343,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                     'errors' => \array_slice(\is_array($result['errors'] ?? null) ? $result['errors'] : [], 0, 4),
                 ], \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE));
             }
+            $this->adoptDeferredHomepageWarmupProof($hosts, $result);
             return;
         }
 
@@ -1354,11 +1355,75 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             'elapsed_ms' => (float)($result['elapsed_ms'] ?? 0.0),
             'samples' => \array_slice(\is_array($result['samples'] ?? null) ? $result['samples'] : [], 0, 4),
         ]);
+        $this->adoptDeferredHomepageWarmupProof($hosts, $result);
 
         if (\function_exists('w_log_info')) {
             \w_log_info('[WlsRuntime] deferred storefront critical warmup done warmed='
                 . (int)($result['warmed'] ?? 0)
                 . ' elapsed_ms=' . (float)($result['elapsed_ms'] ?? 0.0));
+        }
+    }
+
+    /**
+     * Fail-open READY leaves homepage proof empty. After deferred `/` warmup
+     * publishes Process L1 + root receipt, adopt that identity so Worker
+     * fastpath and status no longer stay stuck on deferred-after-ready.
+     *
+     * @param list<string> $hosts
+     * @param array{warmed?:int,failed?:int,samples?:list<array<string,mixed>>} $result
+     */
+    private function adoptDeferredHomepageWarmupProof(array $hosts, array $result): void
+    {
+        if ((bool)($this->readyGateHomepageFpcProof['hit'] ?? false)) {
+            return;
+        }
+
+        $homepageReady = false;
+        foreach (\is_array($result['samples'] ?? null) ? $result['samples'] : [] as $sample) {
+            if (!\is_array($sample)) {
+                continue;
+            }
+            if ((string)($sample['path'] ?? '') !== '/') {
+                continue;
+            }
+            if ((bool)($sample['ready'] ?? false) !== true) {
+                continue;
+            }
+            $homepageReady = true;
+            break;
+        }
+        if (!$homepageReady) {
+            return;
+        }
+
+        $coordinator = new FullPageCacheCoordinator();
+        foreach ($hosts as $host) {
+            $host = \trim((string)$host);
+            if ($host === '') {
+                continue;
+            }
+            foreach (['https', 'http'] as $scheme) {
+                $fullUri = $scheme . '://' . $host . '/';
+                $receipt = $coordinator->resolveRootHomepageProcessReceipt($fullUri, '');
+                if (!\is_array($receipt) || !isset($receipt['cache_key'])) {
+                    continue;
+                }
+                $normalized = $this->normalizeHomepageWarmupReceipt($receipt);
+                if ($normalized === [] || !isset($normalized['cache_key'])) {
+                    continue;
+                }
+                $this->homepageCacheWarmupReceipt = $normalized;
+                $this->homepageCacheFullUri = (string)$normalized['full_uri'];
+                $this->readyGateHomepageFpcProof = [
+                    'hit' => true,
+                    'fpc_status' => 'HIT',
+                    'source' => 'process',
+                    'full_uri' => (string)$normalized['full_uri'],
+                    'reason' => 'homepage-fpc:deferred-warmup:adopted',
+                    'http_status' => 200,
+                ];
+                return;
+            }
         }
     }
 
@@ -2112,7 +2177,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             $rawFlag = \getenv('WLS_WORKER_BACKEND_DEFERRED_WARMUP');
         }
         if ($rawFlag === false || \trim((string)$rawFlag) === '') {
-            $rawFlag = Env::get('wls.worker.backend_deferred_warmup_enabled', '1');
+            $rawFlag = Env::get('wls.worker.backend_deferred_warmup_enabled', '0');
         }
         if (!\in_array(\strtolower(\trim((string)$rawFlag)), ['1', 'true', 'yes', 'on', 'async', 'deferred'], true)) {
             return false;
@@ -3491,6 +3556,13 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             }
             $normalized['scope_identity'] = $scope;
             $normalized['namespace_fingerprint'] = $fingerprint;
+            // Keep the publication's translation snapshot through READY/IPC.
+            // FPC remains the owner of validating required locale evidence.
+            foreach (['lang', 'default_locale', 'translation_locales'] as $field) {
+                if (array_key_exists($field, $receipt)) {
+                    $normalized[$field] = $receipt[$field];
+                }
+            }
         }
         return $normalized;
     }
@@ -4116,7 +4188,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
 
         $rawFlag = \getenv('WLS_WORKER_DYNAMIC_DEFERRED_WARMUP_ENABLED');
         if ($rawFlag === false || \trim((string)$rawFlag) === '') {
-            $rawFlag = Env::get('wls.worker.dynamic_deferred_warmup_enabled', '1');
+            $rawFlag = Env::get('wls.worker.dynamic_deferred_warmup_enabled', '0');
         }
 
         if (!\in_array(\strtolower(\trim((string)$rawFlag)), ['1', 'true', 'yes', 'on', 'async', 'deferred'], true)) {
@@ -6916,8 +6988,18 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                 : (string)($contentEncodingHeader ?? '')
             ));
             $isGzip = $contentEncoding === 'gzip';
+            $isBrotli = $contentEncoding === 'br';
             if ($isGzip) {
                 $decoded = \gzdecode($body);
+                if (!\is_string($decoded)) {
+                    return;
+                }
+                $body = $decoded;
+            } elseif ($isBrotli) {
+                if (!\function_exists('brotli_uncompress') || !\function_exists('brotli_compress')) {
+                    return;
+                }
+                $decoded = \brotli_uncompress($body);
                 if (!\is_string($decoded)) {
                     return;
                 }
@@ -6933,6 +7015,15 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             if ($isGzip) {
                 $encoded = \gzencode($preparedBody, 6);
                 if (!\is_string($encoded)) {
+                    return;
+                }
+                $preparedBody = $encoded;
+            } elseif ($isBrotli) {
+                $encoded = \brotli_compress(
+                    $preparedBody,
+                    \Weline\Framework\Http\ContentEncodingNegotiator::BROTLI_QUALITY,
+                );
+                if (!\is_string($encoded) || $encoded === '') {
                     return;
                 }
                 $preparedBody = $encoded;

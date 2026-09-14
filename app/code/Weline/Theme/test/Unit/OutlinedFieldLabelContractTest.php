@@ -39,6 +39,9 @@ final class OutlinedFieldLabelContractTest extends TestCase
         self::assertStringContainsString('font-size: var(--weline-font-size-xs)', $css);
         self::assertStringContainsString(':placeholder-shown', $css);
         self::assertStringContainsString('[data-floating-label="0"]', $css);
+        self::assertStringContainsString(':has(.w-language-select)', $css);
+        self::assertStringContainsString('.w-language-select:not([data-has-value="true"])', $css);
+        self::assertStringContainsString('.w-language-select__placeholder', $css);
         self::assertStringContainsString(
             'inset-block-start: calc(var(--weline-control-height) / 2)',
             $css

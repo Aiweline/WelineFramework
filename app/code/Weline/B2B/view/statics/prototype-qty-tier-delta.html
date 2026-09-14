@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<!-- PROTOTYPE throwaway: unit-save vs retail (not vs prev tier). Do not ship as product. -->
+<html lang="zh-Hans">
+<head>
+  <meta charset="utf-8" />
+  <title>PROTOTYPE · 批发阶梯 · 每件低（对零售）</title>
+  <style>
+    :root {
+      --bg: #f7f4ef;
+      --surface: #fff;
+      --border: #e8e2d8;
+      --text: #1a1814;
+      --primary: #b84a3c;
+      --success: #2f6b4f;
+      --muted: #6b655c;
+      --radius: 8px;
+    }
+    body { font: 14px/1.45 system-ui, sans-serif; background: #eee; color: var(--text); padding: 1.5rem; }
+    h1 { font-size: 1rem; margin: 0 0 0.5rem; }
+    .bar { position: fixed; left: 0; right: 0; bottom: 0; display: flex; gap: 0.5rem; justify-content: center;
+      padding: 0.75rem; background: #111; }
+    .bar a { color: #fff; text-decoration: none; padding: 0.4rem 0.75rem; border-radius: 999px; background: #333; font-size: 12px; }
+    .bar a.on { background: var(--primary); }
+    .wrap { max-width: 440px; margin: 0 auto 4rem; padding: 0.75rem; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); }
+    .moq { margin: 0 0 0.35rem; color: var(--primary); font-weight: 600; font-size: 0.875rem; }
+    ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.25rem; }
+    li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.35rem 0.5rem;
+      padding: 0.35rem 0.5rem; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; }
+    .price { font-weight: 600; }
+    .unit-save { color: var(--success); font-weight: 600; font-size: 0.8rem; }
+    .save { color: var(--primary); font-weight: 700; font-size: 0.8rem; margin-left: auto; }
+    .note { margin-top: 0.75rem; font-size: 12px; color: var(--muted); }
+    .ref { font-size: 12px; color: var(--muted); margin: 0 0 0.5rem; }
+  </style>
+</head>
+<body>
+<h1>原型：相对零售「每件低」——首档也有（勿提交）</h1>
+<div class="wrap">
+  <p class="moq">起订 5 · 步进 5</p>
+  <p class="ref">零售参考价 ¥ 21.94/件</p>
+  <ul id="list"></ul>
+  <p class="note" id="caption"></p>
+</div>
+<nav class="bar">
+  <a href="?variant=a" id="a">A 每件低</a>
+  <a href="?variant=b" id="b">B 低x/件</a>
+  <a href="?variant=c" id="c">C 仅省</a>
+</nav>
+<script>
+  const retail = 21.94;
+  const tiers = [
+    { q: 5, u: 19.74, save: '11.00' },
+    { q: 10, u: 18.94, save: '30.00' },
+    { q: 15, u: 18.14, save: '57.00' },
+    { q: 30, u: 17.55, save: '131.70' },
+  ];
+  const variant = new URLSearchParams(location.search).get('variant') || 'a';
+  document.getElementById(variant)?.classList.add('on');
+  const captions = {
+    a: '推荐：每档都写「每件低 x.xx」（相对零售），首档也有；右侧「省」= 该档起订量合计省多少。括号裸数字已废弃。',
+    b: '备选：更短「低 2.20/件」，含义仍对零售。',
+    c: '备选：只留「省」总额，单价旁不写差价——最干净，但看不出每件便宜多少。',
+  };
+  document.getElementById('caption').textContent = captions[variant];
+  const list = document.getElementById('list');
+  for (const t of tiers) {
+    const unitLow = (retail - t.u).toFixed(2);
+    const li = document.createElement('li');
+    let mid = '';
+    if (variant === 'a') mid = `<span class="unit-save">每件低 ¥ ${unitLow}</span>`;
+    else if (variant === 'b') mid = `<span class="unit-save">低 ¥ ${unitLow}/件</span>`;
+    li.innerHTML = `<span class="price">${t.q} 件 ¥ ${t.u.toFixed(2)}/件</span>${mid}`
+      + (variant !== 'c' || true ? `<span class="save">省 ¥ ${t.save}</span>` : '');
+    list.appendChild(li);
+  }
+</script>
+</body>
+</html>

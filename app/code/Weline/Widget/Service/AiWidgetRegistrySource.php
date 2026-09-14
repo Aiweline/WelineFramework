@@ -10,22 +10,41 @@ class AiWidgetRegistrySource
 {
     public function __construct(
         private readonly AiWidget $aiWidget,
+        private readonly ?\Weline\Framework\Cache\Service\StorefrontScopeHotCache $hotCache = null,
     ) {
     }
 
     public function getRegistryEntries(): array
     {
         try {
-            $rows = (clone $this->aiWidget)
-                ->clearData()
-                ->clearQuery()
-                ->where(AiWidget::schema_fields_IS_ACTIVE, 1)
-                ->select()
-                ->fetchArray();
+            $cache = $this->hotCache ?? \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Cache\Service\StorefrontScopeHotCache::class);
+            return $cache->rememberPolicy(
+                new \Weline\Framework\Cache\CachePolicy(
+                    resource: 'widget.ai_registry',
+                    pool: 'weline_widget_ai_registry',
+                    scope: 'global',
+                    dependencies: [AiWidgetRegistryMutation::NAMESPACE],
+                    freshTtlSeconds: 300,
+                    staleTtlSeconds: 1800,
+                ),
+                'active-definitions.v1',
+                fn(): array => $this->loadRegistryEntries(),
+            );
         } catch (\Throwable $e) {
+            // 失败保持原来的空回退，但不能将数据库失败发布成权威空注册表。
             w_log_error('读取 AI Widget 注册数据失败: ' . $e->getMessage(), [], 'AiWidgetRegistrySource');
             return [];
         }
+    }
+
+    private function loadRegistryEntries(): array
+    {
+        $rows = (clone $this->aiWidget)
+            ->clearData()
+            ->clearQuery()
+            ->where(AiWidget::schema_fields_IS_ACTIVE, 1)
+            ->select()
+            ->fetchArray();
 
         $registry = [];
         foreach (is_array($rows) ? $rows : [] as $row) {

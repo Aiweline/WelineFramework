@@ -23,10 +23,25 @@ use Weline\Shipping\Model\Street\LocalDescription as StreetLocalDescription;
 use Weline\Shipping\Service\CarrierCoverageAdminService;
 use Weline\Shipping\Service\DefaultShippingLaneSeedService;
 use Weline\Shipping\Service\EmbargoReasonAdminService;
+use Weline\Shipping\Service\FreeShippingConditionTypeAdminService;
+use Weline\Shipping\Service\FreeShippingRuleSeedService;
 use Weline\Shipping\Service\RegionLocalSeedService;
+use Weline\Shipping\Service\ShippingProviderManager;
 use Weline\Shipping\Service\SystemEmbargoAdminService;
 
 /**
+ * 2.9.0：第4章履约周边（incoterm + 退货模板/策略 + 同单分批发策略）。
+ * 2.8.0：第3章同仓分箱 + 签名保价 + 旺季燃油（PackingPolicy/CheckoutAddon/SeasonalRule）。
+ * 2.7.0：第2章偏远加价 + 地址点类型/危品门禁（ShippingSurchargeRule）。
+ * 2.6.0：第1章运费阶梯表 + ShippingProfile（General/Heavy 种子）+ max_weight/rate_brackets。
+ * 2.5.0：Carrier.provider_code + 万能配送壳 Provider 扫描；默认 API 承运商种子委托 Extends。
+ * 2.4.95：国家 Region.sort_order 热门位次种子（default-markets）+ 邮编多国待选按位次排序。
+ * 2.4.90：种子九档航线锚定当前仓发货地址（origin_shipping_address_id + WarehouseShippingOrigin）。
+ * 2.4.89：多仓拆单运费 — WarehouseShippingOrigin 权威仓↔发货地址绑定。
+ * 2.4.86：费用模板自建可删、系统种子 SEED_TPL_* 不可删（对齐免邮 remove）。
+ * 2.4.85：免邮条件类型字典 FreeShippingConditionType + LocalDescription（列表 <local>）。
+ * 2.4.84：费用模板九档航线种子补齐（始终 upsert SEED_TPL_* + 重量/体积/件数字段）。
+ * 2.4.82：FreeShippingRule 国际满额种子模板（origin=seed 不可删）。
  * 2.4.72：禁运原因字典 EmbargoReason + LocalDescription。
  * 2.4.68：ShippingService/RateTemplate/FreeShippingRule 作用范围 + 默认可达市场航线种子。
  * 2.4.66：ShippingService.origin_shipping_address_id + ServiceRegion 航线目的地覆盖。
@@ -41,11 +56,14 @@ final class Upgrade implements UpgradeInterface
     public function setup(Setup $setup, Context $context): void
     {
         foreach ([
+            Carrier::class,
             CarrierRegion::class,
             DestinationRegion::class,
             EmbargoRegion::class,
             EmbargoReason::class,
             EmbargoReasonLocalDescription::class,
+            \Weline\Shipping\Model\FreeShippingConditionType::class,
+            \Weline\Shipping\Model\FreeShippingConditionType\LocalDescription::class,
             RegionLocalDescription::class,
             StreetLocalDescription::class,
             PostalPlaceLocalDescription::class,
@@ -53,6 +71,14 @@ final class Upgrade implements UpgradeInterface
             ServiceRegion::class,
             \Weline\Shipping\Model\RateTemplate::class,
             \Weline\Shipping\Model\FreeShippingRule::class,
+            \Weline\Shipping\Model\WarehouseShippingOrigin::class,
+            \Weline\Shipping\Model\ShippingProfile::class,
+            \Weline\Shipping\Model\ShippingProfileService::class,
+            \Weline\Shipping\Model\ShippingSurchargeRule::class,
+            \Weline\Shipping\Model\ShippingPackingPolicy::class,
+            \Weline\Shipping\Model\ShippingCheckoutAddon::class,
+            \Weline\Shipping\Model\ShippingSeasonalRule::class,
+            \Weline\Shipping\Model\ShippingCommercePolicy::class,
         ] as $modelClass) {
             $model = ObjectManager::getInstance($modelClass);
             $runner = ObjectManager::make(ModelSetup::class);
@@ -67,6 +93,78 @@ final class Upgrade implements UpgradeInterface
         $this->seedSystemEmbargo();
         $this->seedEmbargoReasons();
         $this->seedDefaultLanes();
+        $this->seedFreeShippingRules();
+        $this->seedFreeShippingConditionTypes();
+        $this->seedCountrySortOrders();
+        $this->seedProviderCodesAndDefaultApiCarriers();
+    }
+
+    /**
+     * 2.5.0：Carrier.provider_code 回填；默认 API 承运商种子委托 Extends。
+     */
+    private function seedProviderCodesAndDefaultApiCarriers(): void
+    {
+        try {
+            /** @var Carrier $carrierModel */
+            $carrierModel = ObjectManager::getInstance(Carrier::class, [], false);
+            $items = $carrierModel->reset()->select()->fetch()->getItems();
+            foreach ($items as $carrier) {
+                if (!$carrier instanceof Carrier) {
+                    continue;
+                }
+                $code = trim((string)$carrier->getData(Carrier::schema_fields_PROVIDER_CODE));
+                if ($code === '') {
+                    $carrier->setData(
+                        Carrier::schema_fields_PROVIDER_CODE,
+                        ShippingProviderManager::DEFAULT_PROVIDER_CODE,
+                    );
+                    $carrier->save();
+                }
+            }
+
+            $seedClass = 'Weline\\Shipping\\Extends\\Module\\Weline_Shipping\\Setup\\DefaultApiCarrierSeed';
+            if (class_exists($seedClass)) {
+                $seeder = ObjectManager::getInstance($seedClass);
+                if (\is_object($seeder) && method_exists($seeder, 'seed')) {
+                    $seeder->seed();
+                }
+            }
+        } catch (\Throwable) {
+            // Seed must not block module upgrade.
+        }
+    }
+
+    private function seedCountrySortOrders(): void
+    {
+        try {
+            /** @var \Weline\Shipping\Service\RegionService $regions */
+            $regions = ObjectManager::getInstance(\Weline\Shipping\Service\RegionService::class);
+            $regions->seedCountrySortFromDefaultMarkets(true);
+        } catch (\Throwable) {
+            // Seed must not block module upgrade.
+        }
+    }
+
+    private function seedFreeShippingConditionTypes(): void
+    {
+        try {
+            /** @var FreeShippingConditionTypeAdminService $admin */
+            $admin = ObjectManager::getInstance(FreeShippingConditionTypeAdminService::class);
+            $admin->seedDefaults();
+        } catch (\Throwable) {
+            // Seed must not block module upgrade.
+        }
+    }
+
+    private function seedFreeShippingRules(): void
+    {
+        try {
+            /** @var FreeShippingRuleSeedService $seeder */
+            $seeder = ObjectManager::getInstance(FreeShippingRuleSeedService::class);
+            $seeder->seedDefaults(\Weline\Shipping\Model\FreeShippingRule::SCOPE_WEBSITE, 0);
+        } catch (\Throwable) {
+            // Seed must not block module upgrade.
+        }
     }
 
     private function seedEmbargoReasons(): void
@@ -171,7 +269,8 @@ final class Upgrade implements UpgradeInterface
                 if ($id <= 0 || $admin->countForCarrier($id) > 0) {
                     continue;
                 }
-                $admin->applyProviderDefaults($id);
+                $providerCode = (string)$carrier->getData(Carrier::schema_fields_PROVIDER_CODE);
+                $admin->applyProviderDefaults($id, $providerCode);
             }
         } catch (\Throwable) {
             // Schema may not be ready yet; next deploy can retry.

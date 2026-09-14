@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace LearningMcp;
 
 /**
- * Pinned workflow guidance merged into resolve_task_context and get_edit_bundle.
+ * Pinned workflow guidance merged into resolve_task_context (read-only guidance).
  */
 final class GuidanceWorkflowCatalog
 {
@@ -28,6 +28,8 @@ final class GuidanceWorkflowCatalog
 
     public const SURFACE_WEBUI_BROWSER_CLOSEOUT = 'webui_browser_closeout';
 
+    public const SURFACE_REQUIREMENT_CLARIFY_USE_CASE = 'requirement_clarify_use_case';
+
     /** @return list<string> Repository-relative pinned doc paths. */
     public static function pinnedDocumentPaths(): array
     {
@@ -47,6 +49,7 @@ final class GuidanceWorkflowCatalog
             'app/code/Weline/Frontend/doc/Weline.Api使用指南.md',
             'app/code/Weline/Theme/doc/开发/Theme开发总指南.md',
             'app/code/Weline/Theme/doc/部件开发指南.md',
+            'dev/ai-command/ai/需求澄清与用例规格.md',
         ];
     }
 
@@ -59,16 +62,14 @@ final class GuidanceWorkflowCatalog
     public static function sessionStartupNotices(): array
     {
         return [
-            '【引导·只指路】框架硬约束不在本列表展开。请立即阅读 prepare_project.agent_guidance.hard_constraints（hard-constraints.v1）；权威正文 app/code/Weline/Ai/doc/AI硬规则索引.md；任务细则由 resolve_task_context → workflow_contract.v1 surfaces 下发；工程技能由 agent_guidance.mcp_skills + resolve_skill/get_skill 按需取。',
-            '[Bootstrap · pointers only] Framework hard rules are not expanded here. Read agent_guidance.hard_constraints (hard-constraints.v1); authority app/code/Weline/Ai/doc/AI硬规则索引.md; task detail via resolve_task_context → workflow_contract.v1 surfaces; engineering skills via agent_guidance.mcp_skills + resolve_skill/get_skill.',
-            '交付地址机器契约见 agent_guidance.feature_delivery_urls 与 closeout_delivery_reminder；本机默认 Host 为 `{project_hash}.test.weline.com`，禁止主验收使用 `*.weline.test`。任何 feature 必须 Agent 自跑 Playwright e2e PASS（禁止请用户测试）；Browser 自测、每次打开禁用缓存、交付地址、汇报后关闭标签见 hard_constraints（ui_feature_requires_e2e / forbid_user_manual_test_handoff / browser_operator_self_test / browser_cache_disabled_on_open / feature_delivery_urls / browser_release_after_delivery）与 WebUI浏览器验收与交付地址门禁.md。',
-            'Delivery URL machine contract: agent_guidance.feature_delivery_urls and closeout_delivery_reminder; default local Host is {project_hash}.test.weline.com (never primary *.weline.test). Every feature MUST Agent-run Playwright e2e to PASS (never ask the user to test). Browser self-test, cache-disabled-on-open, delivery URLs, and close-after-report live in hard_constraints (ui_feature_requires_e2e / forbid_user_manual_test_handoff / browser_operator_self_test / browser_cache_disabled_on_open / feature_delivery_urls / browser_release_after_delivery) and WebUI browser closeout gate doc.',
-            '【宿主工具目录】密封编辑前确认本会话可见 submit_task_plan / get_task_plan。ensure 的 mcp_stdio 已含而本会话 GetDynamicTools 缺失时，记 HOST_MCP_SESSION_CATALOG_STALE 并新开 Agent 回合；禁止调用 mcp_auth。',
-            '[Host tool catalog] Before sealed edits, confirm this chat exposes submit_task_plan / get_task_plan. If ensure mcp_stdio lists them but GetDynamicTools does not, record HOST_MCP_SESSION_CATALOG_STALE and start a new Agent turn; never call mcp_auth.',
-            '【调用范围】非编码（闲聊/概念问答）禁止 MCP；仅编码/工程走 ensure → prepare_project。例外：打招呼 hi/你好 或指令「提取技能」可 list MCP 技能+指令（禁止密封编辑）。运行/翻译状态查询默认本机（runtime_status_query_local_first）；仅明示线上/生产才 SSH。细则见 mcp_call_scope / greeting_lists_mcp_skills_and_commands。',
-            '[Call scope] Skip MCP for non-coding; coding/engineering only uses ensure → prepare_project. Exception: greeting hi/你好 or command 提取技能 may list MCP skills+commands (no sealed edits). Status/translation queries default LOCAL (runtime_status_query_local_first); production SSH only when user explicitly asks. See mcp_call_scope / greeting_lists_mcp_skills_and_commands.',
-            '【每条编码需求】可执行编码/工程需求提出后，立即分析当前环境隐形需求并写入 implicit_requirements；判定 work_kind；据分析设 ui_skill_decision=participate|skip（禁止凡 feature 一律强制原型+UI）；participate 时原型+UI 参与并规划 type=shentu；按框架信息审视合理性，再做解耦方案并 submit_task_plan；计划须经合规审核（架构/解耦/电商合规/原型/e2e/体量/闭环；章节=e2e闭环；标进度后再下一章）；验收阶段按决策审图；结束须汇审；禁止耦合写法与字面照做不合理需求；有纠偏汇报「需求纠偏」；发现耦合须「耦合提示」；再 TDD 红→绿并实际跑测。非编码勿 submit_task_plan。',
-            '[Every coding requirement] Immediately analyze environment implicit requirements, classify work_kind, set ui_skill_decision=participate|skip from analysis (never blindly force prototype+UI), scrutinize against the framework, design a decoupled solution, and submit_task_plan; review plan compliance (architecture/decoupling/ecommerce/prototype/e2e/size/closed-loop; chapters=e2e loops); during verify run 审图 when participate; before done write 汇审; then TDD red→green. Non-coding must not submit_task_plan.',
+            '【引导·只指路】工程任务在 MCP 已挂载/可挂载时必须先 prepare_project，并遵守 agent_guidance.hard_constraints（hard-constraints.v1）。框架硬约束不在本列表展开。权威正文 app/code/Weline/Ai/doc/AI硬规则索引.md；任务细则可由 resolve_task_context → workflow_contract.v1 surfaces 下发；工程技能由 agent_guidance.mcp_skills + resolve_skill/get_skill 按需取。编码用宿主原生编辑。冷启动门禁由 MCP 生成 `.cursor/rules/weline-mcp-coldstart.mdc`（ensure 写出）。',
+            '[Bootstrap · pointers only] For engineering when MCP is attached/attachable, MUST prepare_project first and obey agent_guidance.hard_constraints (hard-constraints.v1). Framework hard rules are not expanded here. Authority app/code/Weline/Ai/doc/AI硬规则索引.md; task detail via resolve_task_context → workflow_contract.v1 surfaces; engineering skills via agent_guidance.mcp_skills + resolve_skill/get_skill. Coding uses host-native editors. Cold-start gate is MCP-generated `.cursor/rules/weline-mcp-coldstart.mdc` (via ensure).',
+            '交付地址机器契约见 agent_guidance.feature_delivery_urls 与 closeout_delivery_reminder；本机默认 Host 为 `{project_hash}.test.weline.com`，禁止主验收使用 `*.weline.test`。任何 feature 必须 Agent 自跑 Playwright e2e PASS（禁止请用户测试；默认无头 e2e_playwright_headless_default，勿加 --headed 除非用户要求观看）；Browser 自测、每次打开禁用缓存、交付地址、汇报后关闭标签见 hard_constraints（ui_feature_requires_e2e / forbid_user_manual_test_handoff / e2e_playwright_headless_default / browser_operator_self_test / browser_cache_disabled_on_open / feature_delivery_urls / browser_release_after_delivery）与 WebUI浏览器验收与交付地址门禁.md。',
+            'Delivery URL machine contract: agent_guidance.feature_delivery_urls and closeout_delivery_reminder; default local Host is {project_hash}.test.weline.com (never primary *.weline.test). Every feature MUST Agent-run Playwright e2e to PASS (never ask the user to test; default headless via e2e_playwright_headless_default—do not pass --headed unless the user asks to watch). Browser self-test, cache-disabled-on-open, delivery URLs, and close-after-report live in hard_constraints (ui_feature_requires_e2e / forbid_user_manual_test_handoff / e2e_playwright_headless_default / browser_operator_self_test / browser_cache_disabled_on_open / feature_delivery_urls / browser_release_after_delivery) and WebUI browser closeout gate doc.',
+            '【调用范围】闲聊可跳过 MCP。工程/编码任务：MCP 已挂载或可挂载时必须 ensure→prepare_project→遵守 hard_constraints，再原生编辑；检索工具按需。挂不上则宿主 Read AI硬规则索引.md。例外：打招呼 hi/你好 或「提取技能」可 list MCP 技能+指令。运行/翻译状态查询默认本机（runtime_status_query_local_first）；仅明示线上/生产才 SSH。细则见 mcp_call_scope / greeting_lists_mcp_skills_and_commands。',
+            '[Call scope] Skip MCP for pure chat. For engineering/coding when MCP is attached/attachable: MUST ensure→prepare_project→obey hard_constraints before host-native edits; retrieval tools as needed. If MCP cannot attach, host-Read AI硬规则索引.md. Exception: greeting hi/你好 or command 提取技能 may list MCP skills+commands. Status/translation queries default LOCAL (runtime_status_query_local_first); production SSH only when user explicitly asks. See mcp_call_scope / greeting_lists_mcp_skills_and_commands.',
+            '【每条编码需求】提出后须：① 分析前后端是否要做（fe_be_scope）；② 澄清/用例（简单可轻量）；③ 非简单则宿主 Plan Mode（简单可 plan_skip+理由）；④ **一定要验收**—即使不做 Playwright e2e，凡触及 Web 须本机 Browser 真机验视觉+逻辑（WB-OP）；⑤ 布局调整/不够人性化/被吐槽/审图时 **原型+UI 必须参与并调整**；⑥ 隐形需求、work_kind、ui_skill_decision；再 TDD→跑测→汇审→交付地址。',
+            '[Every coding requirement] Analyze FE/BE scope; clarify/use-case (light when simple); host Plan Mode unless simple skip; ALWAYS acceptance—Web touches need local Browser WB-OP visual+logic even without Playwright e2e; layout/humanization/complaint/审图 force prototype+UI adjustments; then TDD→verify→汇审→delivery URLs.',
         ];
     }
 
@@ -106,8 +107,8 @@ final class GuidanceWorkflowCatalog
             'huishen_hard_constraint' => 'closeout_requires_huishen',
             'requirement_feature_kind_gate' => true,
             'requirement_implicit_analysis_skill_decision' => true,
-            'plan_then_tdd_required' => true,
-            'plan_then_tdd_rule' => 'plan_then_tdd_required',
+            'requirement_cross_layer_impact_gate' => true,
+            'prefer_tdd' => true,
             'requirement_framework_scrutiny' => true,
             'requirement_scrutiny_report_required' => true,
             'requirement_scrutiny_section_title' => '需求纠偏',
@@ -214,10 +215,10 @@ final class GuidanceWorkflowCatalog
         return [
             'schema' => 'chapter-delivery.v1',
             'session_startup_notices_addon' => [
-                '分章计划：上一章 doc/开发日志.md 四段门禁全 pass 后才允许下一章编码；每章=可完整验收的 e2e 闭环，须 update_task_plan_progress 标进度后再开下一章。',
+                '分章计划：上一章 doc/开发日志.md 四段门禁全 pass 后才允许下一章编码；每章=可完整验收的 e2e 闭环，须在开发日志与汇报标进度后再开下一章。',
                 '含 Web 的分章 Done：WB 须 WB-OP；有视觉面且宿主可截图时再加 WB-VIS（存归属模块 doc/evidence/ch{N}/，有 doc/原型设计.md 则对照）。',
                 '每章收口须在交付汇报与 doc/开发日志.md 列出本章涉及的前台、后台与 API 地址清单。',
-                '计划合规审核（task_plan_compliance_review）：架构/解耦/电商合规/原型设计/e2e完整性/体量/逻辑闭环。',
+                '工程计划自检：架构/解耦/电商合规/原型设计/e2e完整性/体量/逻辑闭环。',
             ],
             'mandatory_before_code' => [
                 'webui_acceptance_cases_agreed_for_web_surface',
@@ -269,25 +270,29 @@ final class GuidanceWorkflowCatalog
             'schema_version' => self::SCHEMA,
             'session_startup_notices' => self::sessionStartupNotices(),
             'mandatory_before_code' => [
-                'prepare_project_ready',
                 'requirements_confirmed_or_scoped',
-                'requirement_analysis_in_task_plan',
                 'work_kind_feature_or_non_feature_classified',
+                'requirement_fe_be_scope_analyzed',
+                'requirement_clarify_use_case_spec',
+                'host_plan_mode_enabled_or_simple_skip',
                 'feature_prototype_and_ui_participation_when_feature',
                 'requirement_framework_scrutiny',
+                'requirement_cross_layer_impact_gate',
                 'architecture_mapped_to_requirements',
+                'architecture_design_structured',
                 'framework_decoupled_design',
                 'extension_point_selected',
-                'task_contract_or_plan',
-                'submit_task_plan_accepted',
+                'prepare_project_hard_constraints_when_mcp_attached',
+                'optional_resolve_task_context_or_get_skill',
+                'acceptance_items_planned',
                 'tdd_unit_acceptance_planned',
                 'shentu_acceptance_planned_when_feature',
                 'webui_acceptance_cases_agreed_for_web_surface',
                 'chapter_acceptance_defined_if_multi_chapter_plan',
-                'plan_compliance_dimensions_reviewed',
             ],
             'mandatory_before_closeout' => [
                 'agent_self_verify_with_acceptance_evidence',
+                'requirement_acceptance_always_satisfied',
                 'tdd_unit_tests_executed_and_passed',
                 'acceptance_shentu_passed_or_na',
                 'huishen_notes_recorded',
@@ -309,38 +314,46 @@ final class GuidanceWorkflowCatalog
                 'detail_via' => HardConstraintsCatalog::AUTHORITATIVE_DOC,
             ],
             'phases' => [
-                ['id' => 'bootstrap', 'label' => '引导与 ready', 'tools' => ['ensure-project-guidance', 'prepare_project'], 'read' => ['agent_guidance.hard_constraints', 'session_startup_notices']],
-                ['id' => 'locate', 'label' => '定位与需求确认', 'tools' => ['resolve_task_context', 'search_project_knowledge', 'submit_task_plan'], 'notes' => [
-                    'Coding/engineering executable requirements must be understood here, classify work_kind=feature|non_feature, and immediately become submit_task_plan.requirements + acceptance — do not defer planning until implement. If feature: prototype + frontend-design must participate. Non-coding asks skip this phase and all MCP tools.',
+                ['id' => 'bootstrap', 'label' => '会话引导（工程必做）', 'tools' => ['ensure-project-guidance', 'prepare_project'], 'read' => ['agent_guidance.hard_constraints', 'session_startup_notices'], 'notes' => [
+                    'For engineering when MCP is attached/attachable: MUST ensure → prepare_project and obey hard_constraints before edits. Coding still uses host-native editors; MCP has no write tools. Cold-start alwaysApply gate is MCP-generated weline-mcp-coldstart.mdc.',
+                ]],
+                ['id' => 'locate', 'label' => '定位与需求确认', 'tools' => ['resolve_task_context', 'search_project_knowledge', 'resolve_skill', 'get_skill'], 'notes' => [
+                    'After prepare_project, retrieve docs/skills/code-map via read-only MCP tools as needed. Classify work_kind=feature|non_feature. Coding uses host-native editors.',
+                ]],
+                ['id' => 'clarify_spec', 'label' => '需求澄清与用例规格', 'tools' => ['get_skill', 'resolve_skill'], 'docs' => [
+                    'dev/ai-command/ai/需求澄清与用例规格.md',
+                ], 'notes' => [
+                    'MANDATORY (requirement_clarify_use_case_spec): Spec Kit/Kiro-style clarify + EARS + use cases into module doc/开发/spec/{slug}.md before architecture/code.',
+                    'feature → status ready-for-plan; non_feature may skip with rationale≥24. get_skill(requirement_clarify_use_case|weline-req-clarify).',
+                ]],
+                ['id' => 'host_plan_mode', 'label' => '宿主计划模式', 'tools' => [], 'notes' => [
+                    'DEFAULT (host_plan_mode_for_planning): enable host Plan Mode before architecture/plan—Cursor SwitchMode target_mode_id=plan.',
+                    'SIMPLE SKIP: plan_complexity=simple + rationale≥24 (single module, ≤~2h, no new extension invention)—still MUST accept (requirement_acceptance_always); Web touch → Browser WB-OP visual+logic even without e2e.',
+                    'Stay in Plan Mode through architecture_design + chapter plan until user approves implement; then SwitchMode to agent.',
+                    'If host has no Plan Mode: plan read-only in chat; record host_plan_mode=unavailable + rationale≥24; do not edit business code yet (unless simple skip).',
                 ]],
                 ['id' => 'extension_point', 'label' => '扩展点选型', 'docs' => [
                     'app/code/Weline/Framework/doc/3-开发/扩展点选型.md',
                     'app/code/Weline/Framework/doc/event/README.md',
                 ]],
-                ['id' => 'plan', 'label' => '计划拆解', 'tools' => ['submit_task_plan', 'get_task_plan', 'update_task_plan_progress', 'review_task_plan'], 'docs' => ['doc/开发/plan.md', 'doc/开发/task.md', 'task_contract'], 'notes' => [
-                    'On every coding/engineering user requirement: compose requirements + work_kind + skill_participation (feature→prototype+frontend-design) + requirement_scrutiny + architecture + coupling_findings + dev_tasks + acceptance (feature→type=shentu) and call submit_task_plan immediately. Non-coding skips MCP.',
-                    'PLAN_REQUIRED is not a dead-end: follow plan_workflow steps and submit_task_plan now.',
-                    'Track dev_tasks and acceptance status via update_task_plan_progress during implement/verify; update requirement_scrutiny / coupling_findings when corrections or coupling are discovered.',
-                    'Call review_task_plan before closeout; compliance_dimensions must cover architecture/decoupling/ecommerce/prototype/e2e/size/closed-loop (task_plan_compliance_review); chapters=e2e loops with progress before next; closeout_allowed=true required to claim done; user report MUST include 「需求纠偏」 (无调整/合理 or listed corrections), 「耦合提示」 (无耦合 or listed findings), and 「汇审」.',
-                    'Web/UI tasks must list tablet and PC responsive acceptance in the plan.',
+                ['id' => 'design', 'label' => '架构与解耦设计', 'tools' => ['resolve_task_context'], 'notes' => [
+                    'Record fe_be_scope (requirement_fe_be_scope_analysis). Scrutinize requirements; record architecture_design + coupling_findings; decide ui_skill_decision. Remain in host Plan Mode unless simple skip. Coding is not gated on MCP write tools.',
                 ]],
-                ['id' => 'implement', 'label' => '实现（TDD 绿）', 'tools' => ['get_edit_bundle', 'apply_compact_edit', 'update_task_plan_progress'], 'notes' => [
-                    'Only after accepted plan. TDD: failing test first (red), then minimal production change to green (plan_then_tdd_required). Do not claim done here.',
+                ['id' => 'implement', 'label' => '实现（宿主原生编辑 + TDD）', 'tools' => [], 'notes' => [
+                    'Edit with host-native tools. Prefer TDD: failing test first (red), then minimal production change to green. Do not claim done here.',
                 ]],
-                ['id' => 'review', 'label' => '架构/缺陷/安全复审与汇审', 'tools' => ['review_task_plan', 'update_task_plan_progress'], 'notes' => [
-                    'Review plan omissions; append review_notes; write huishen_notes 汇审 covering requirements/acceptance/(feature) prototype/UI/审图 before closeout.',
+                ['id' => 'verify', 'label' => '实际跑测、分层验收与审图', 'tools' => [], 'notes' => [
+                    'MANDATORY (requirement_acceptance_always + agent_self_verify_before_done): run real tests; unit evidence must look like phpunit/PASS output.',
+                    'Any Web/UI touch → local Browser WB-OP visual + operator logic (even if Playwright e2e skipped as simple).',
+                    'Non-simple feature → Playwright e2e chapter + suite PASS; participate → 审图 with prototype+UI adjustments.',
+                    'Unfinished self-verify/审图 → report only “代码已改，验收未完成”; never claim done.',
                 ]],
-                ['id' => 'verify', 'label' => '实际跑测、分层验收与审图', 'tools' => ['update_task_plan_progress', 'review_task_plan'], 'notes' => [
-                    'MANDATORY (plan_then_tdd_required + agent_self_verify_before_done): run the real test command; unit passed evidence must look like phpunit/PASS output.',
-                    'Pure logic → focused unit/contract tests actually PASS; command/API/runtime → real command/API result; page/UI/feature → host-available real Browser WB-OP + 审图 (type=shentu).',
-                    'Unfinished TDD/self-verify/审图 → report only “代码已改，TDD/测试未跑通”; never claim done.',
-                ]],
-                ['id' => 'closeout', 'label' => '文档对齐与开发日志收口', 'tools' => ['review_task_plan'], 'docs' => ['doc/README.md', 'doc/需求.md', 'doc/开发日志.md'], 'notes' => [
-                    'review_task_plan.closeout_allowed must be true before claiming feature done (requires huishen_notes 汇审).',
+                ['id' => 'closeout', 'label' => '文档对齐与开发日志收口', 'docs' => ['doc/README.md', 'doc/需求.md', 'doc/开发日志.md'], 'notes' => [
+                    'Write huishen_notes 汇审 before claiming feature done.',
                     'Reconcile module docs with shipped behavior before claiming done.',
-                    'Plan honesty (plan_todo_evidence_closeout): never mark a multi-todo plan complete without per-todo evidence; partial work must report an unfinished checklist and write it into doc/开发日志.md.',
-                    'End every user-facing feature report with 「交付地址」: frontend pages, backend admin pages, API/Query routes (probe-verified); each primary URL as direct http(s) Markdown link `[label](url)` per feature_delivery_urls.link_format.',
-                    'After the Delivery URLs section: immediately release acceptance Browsers (browser_release_after_delivery)—unlock then close tabs; do not leave idle Glass/Simple Browser/ide-browser webviews.',
+                    'Plan honesty (plan_todo_evidence_closeout): never mark multi-todo work complete without per-todo evidence.',
+                    'End every user-facing feature report with 「交付地址」 per feature_delivery_urls.link_format.',
+                    'After Delivery URLs: immediately release acceptance Browsers (browser_release_after_delivery).',
                 ]],
             ],
             'extension_point_matrix' => [
@@ -413,19 +426,23 @@ final class GuidanceWorkflowCatalog
                 'source' => 'prepare_project.agent_guidance.hard_constraints',
             ],
             'mandatory_before_code' => [
-                'prepare_project_ready',
+                'requirement_fe_be_scope_analyzed',
+                'requirement_clarify_use_case_spec',
+                'host_plan_mode_enabled_or_simple_skip',
                 'extension_point_selected',
                 'requirement_framework_scrutiny',
+                'requirement_cross_layer_impact_gate',
                 'architecture_mapped_to_requirements',
+                'architecture_design_structured',
                 'framework_decoupled_design',
-                'submit_task_plan_accepted',
+                'optional_resolve_task_context_or_get_skill',
             ],
             'mandatory_before_closeout' => [
                 'module_docs_reconciled_with_behavior',
                 'real_runtime_acceptance_evidence',
                 'requirement_scrutiny_reported',
                 'coupling_findings_reported',
-                'review_task_plan',
+                'huishen_notes_recorded',
             ],
             'active_surface_ids' => array_keys($surfaces),
             'surfaces' => $surfaces,
@@ -657,6 +674,7 @@ final class GuidanceWorkflowCatalog
             self::SURFACE_MODULE_I18N_CSV => self::moduleI18nCsvSurface(),
             self::SURFACE_MODULE_UPGRADE => self::moduleUpgradeGateSurface(),
             self::SURFACE_WEBUI_BROWSER_CLOSEOUT => self::webuiBrowserCloseoutSurface(),
+            self::SURFACE_REQUIREMENT_CLARIFY_USE_CASE => self::requirementClarifyUseCaseSurface(),
         ];
     }
 
@@ -847,8 +865,9 @@ final class GuidanceWorkflowCatalog
             'norms' => [
                 ['id' => 'lang_tag_not_php', 'summary' => 'HTML 正文/属性用 <lang>/@lang，不用 <?= __() ?>'],
                 ['id' => 'at_lang_no_unquoted_comma', 'summary' => '@lang()/{} 源文含逗号必须加引号或改用 <lang>，禁止 @lang{a, b} 导致编译 ParseError'],
-                ['id' => 'csv_bilingual_aligned', 'summary' => 'zh_Hans_CN.csv 与 en_US.csv source 键对齐，en 列为英文译文'],
+                ['id' => 'csv_bilingual_aligned', 'summary' => 'zh_Hans_CN.csv 与 en_US.csv source 键对齐；en_US 第二列必须是英文译文，禁止留空或把中文 source 原样当作英文'],
                 ['id' => 'collect_after_csv', 'summary' => '改 CSV 或新增源串后必须 php bin/w i18n:collect，否则运行时词典不更新'],
+                ['id' => 'en_us_no_chinese_placeholder', 'summary' => '交付前抽检 en_US：用户可见词条第二列不得仍为纯中文（与 source 相同）'],
             ],
             'verification_commands' => [
                 'php bin/w i18n:collect Weline_Module',
@@ -879,7 +898,7 @@ final class GuidanceWorkflowCatalog
         return [
             'id' => self::SURFACE_MODULE_I18N_CSV,
             'label' => '模块翻译 CSV 门禁',
-            'description' => '模块须维护齐全 zh_Hans_CN/en_US CSV；改词或改 CSV 后必须 i18n:collect 才生效。',
+            'description' => '模块须维护齐全 zh_Hans_CN/en_US CSV；en_US 第二列须为英文（禁止中文占位）；改词或改 CSV 后必须 i18n:collect 才生效。',
             'triggers' => [
                 'csv', 'i18n:collect', 'en_us', 'zh_hans_cn', '翻译文件', '词典', 'collect',
                 '国际化', 'locale', '语言包',
@@ -891,6 +910,7 @@ final class GuidanceWorkflowCatalog
             ],
             'norms' => [
                 ['id' => 'bilingual_csv_required', 'summary' => '每模块至少 zh_Hans_CN.csv + en_US.csv，source 键一致'],
+                ['id' => 'en_us_real_english', 'summary' => 'en_US 第二列必须是英文译文，禁止留空或把中文 source 原样当作英文'],
                 ['id' => 'frontend_backend_csv_sync', 'summary' => '前台加词须同步补后台 CSV 与 en 译文'],
                 ['id' => 'collect_mandatory', 'summary' => 'CSV 处理后必须 i18n:collect，禁止只改文件不收集'],
             ],
@@ -901,10 +921,12 @@ final class GuidanceWorkflowCatalog
                 'forbidden' => [
                     'Claiming i18n done after CSV edit without i18n:collect',
                     'Adding frontend <lang> strings without en_US.csv translation rows',
+                    'Leaving en_US translate column as Chinese source (untranslated placeholder) for user-visible strings',
                     'Replacing i18n:collect with cache:clear only',
                 ],
                 'required' => [
                     'Align zh_Hans_CN.csv and en_US.csv source keys for every new phrase',
+                    'Fill en_US second column with real English before claiming translation done',
                     'Run php bin/w i18n:collect after any CSV or translatable string change',
                     'Record collect command in module doc/开发日志.md',
                 ],
@@ -932,23 +954,22 @@ final class GuidanceWorkflowCatalog
             'norms' => [
                 ['id' => 'bump_version_on_schema', 'summary' => 'Model #[Col]/#[Index]/新 Model → patch+ version + setup:upgrade'],
                 ['id' => 'bump_version_on_controller', 'summary' => '新 Controller 方法 → version + setup:upgrade --route'],
-                ['id' => 'sealed_edit_module_version_gate', 'summary' => 'MCP EditService prepare rejects plans that touch Model/Controller/event.xml/hook.php/register.php without same-plan etc/module.php version increase (EDIT_MODULE_VERSION_REQUIRED)'],
+                ['id' => 'module_version_bump_gate', 'summary' => 'Changes that touch Model/Controller/event.xml/hook.php/register.php MUST include etc/module.php version increase in the same change set, then run setup:upgrade'],
             ],
             'verification_commands' => [
                 'php bin/w setup:upgrade -m Weline_Module',
                 'php bin/w setup:upgrade --route --module=Weline_Module',
                 'php bin/w setup:schema:check',
-                'php app/code/Weline/Ai/Mcp/tests/module-version-bump-gate.php',
             ],
             'template_surface_rules' => [
                 'forbidden' => [
                     'Changing Model schema attributes without bumping etc/module.php version',
                     'Adding Controller actions without route refresh (setup:upgrade --route)',
                     'Expecting upgrade() to run when module version unchanged',
-                    'Submitting sealed edit-plan.v1 with Model/Controller/event/hook/register changes but omitting etc/module.php bump',
+                    'Changing Model/Controller/event/hook/register without bumping etc/module.php version in the same change set',
                 ],
                 'required' => [
-                    'Bump etc/module.php version (at least patch) in the same edit-plan as registration-affecting files',
+                    'Bump etc/module.php version (at least patch) in the same change set as registration-affecting files',
                     'Run setup:upgrade or scoped -m / --route after registration-affecting changes',
                     'Record bumped version and command in module doc/开发日志.md',
                 ],
@@ -1006,6 +1027,57 @@ final class GuidanceWorkflowCatalog
                     'End every feature/stage report with probe-verified http(s) Markdown Delivery URLs on {project_hash}.test.weline.com by default',
                     'Immediately after the Delivery URLs section, close every acceptance Browser tab opened this turn (Cursor: unlock then browser_tabs close)',
                     'If Browser not run or host has no Browser: report only “代码已改，WebUI 验收未完成”',
+                ],
+            ],
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    public static function requirementClarifyUseCaseSurface(): array
+    {
+        return [
+            'id' => self::SURFACE_REQUIREMENT_CLARIFY_USE_CASE,
+            'label' => '需求澄清与用例规格',
+            'description' => '编码前强制 Spec Kit/Kiro 式澄清：定向追问、落盘 doc/开发/spec/{slug}.md、用户故事+EARS 验收标准、用例（主成功/异常）映射 type=e2e 与 Browser 操作员路径；feature 须 status=ready-for-plan 再架构/写码。',
+            'triggers' => [
+                '需求澄清', '澄清需求', '用例规格', '用例设计', '写用例', 'EARS',
+                'clarify', 'use case', 'use-case', 'speckit', 'kiro', '规格澄清',
+                '用户故事', '验收标准', '非目标', '主成功路径',
+            ],
+            'authoritative_skill' => 'weline-req-clarify',
+            'authoritative_doc' => 'dev/ai-command/ai/需求澄清与用例规格.md',
+            'authoritative_docs' => [
+                'dev/ai-command/ai/需求澄清与用例规格.md',
+                'app/code/Weline/Ai/doc/AI工程交付流程.md',
+                'app/code/Weline/Ai/doc/AI硬规则索引.md',
+            ],
+            'norms' => [
+                ['id' => 'clarify_before_code', 'summary' => '写码/架构落笔前完成澄清；一次最多 5 题；答案写入规格「澄清记录」'],
+                ['id' => 'persist_spec_md', 'summary' => 'feature 必须落盘 owning-module doc/开发/spec/{feature-slug}.md'],
+                ['id' => 'ears_acceptance', 'summary' => '每用户故事 ≥2 条 EARS（WHEN/IF…SHALL）可观察验收句'],
+                ['id' => 'use_cases_feed_e2e', 'summary' => '≥1 用例含主成功步骤，可直接改写为 Playwright/Browser WB-OP 与 type=e2e'],
+                ['id' => 'ready_for_plan_gate', 'summary' => 'status 升到 ready-for-plan 后才允许 architecture_design / 业务码'],
+                ['id' => 'host_plan_mode_next', 'summary' => 'ready-for-plan 后立即启用宿主 Plan Mode（Cursor SwitchMode→plan）做架构与计划，批准实现后再切 agent'],
+                ['id' => 'non_feature_skip_rationale', 'summary' => 'non_feature 可 clarify_status=skipped 且理由≥24 字'],
+            ],
+            'verification_commands' => [
+                'test -f app/code/<Vendor>/<Module>/doc/开发/spec/<slug>.md',
+                'rg -n "WHEN |IF |SHALL|UC-" app/code/<Vendor>/<Module>/doc/开发/spec/<slug>.md',
+            ],
+            'template_surface_rules' => [
+                'forbidden' => [
+                    'Jumping from a one-line user ask straight to PHP/phtml patches',
+                    'Claiming requirements clear without a persisted doc/开发/spec/{slug}.md for feature work',
+                    'Prose-only acceptance without EARS WHEN/IF…SHALL lines',
+                    'Use cases that cannot become Playwright or Browser operator steps',
+                    'Skipping clarify on feature without ready-for-plan status',
+                ],
+                'required' => [
+                    'Read and follow dev/ai-command/ai/需求澄清与用例规格.md (or get_skill requirement_clarify_use_case)',
+                    'For feature: write clarified/ready-for-plan spec with user stories, EARS, and UC mapped to e2e intent',
+                    'Ask ≤5 targeted clarification questions per round; encode answers into the spec',
+                    'After ready-for-plan: enable host Plan Mode (Cursor SwitchMode plan) before architecture_design / chapter plan',
+                    'Only then proceed to requirement_framework_scrutiny and architecture_design (still in Plan Mode)',
                 ],
             ],
         ];
@@ -1113,6 +1185,9 @@ final class GuidanceWorkflowCatalog
 
     private static function surfaceIdForPinnedPath(string $path): string
     {
+        if (str_contains($path, '需求澄清与用例规格')) {
+            return self::SURFACE_REQUIREMENT_CLARIFY_USE_CASE;
+        }
         if (str_contains($path, 'WebUI浏览器验收与交付地址门禁')) {
             return self::SURFACE_WEBUI_BROWSER_CLOSEOUT;
         }

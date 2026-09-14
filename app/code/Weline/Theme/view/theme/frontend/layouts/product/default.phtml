@@ -15,7 +15,7 @@
  * @param showFooter {default=true,name="是否显示footer",description="是否显示footer，用于控制footer的显示"}
  * @param showBreadcrumb {default=true,name="是否显示面包屑",description="是否显示面包屑导航"}
  * @param showSidebar {default=false,name="是否显示侧边栏",description="是否显示右侧边栏（相关产品推荐等）"}
- * @param showRelatedProducts {default=false,name="是否显示相关产品",description="是否显示相关产品推荐区域（相关/热销/最近浏览/搭配）；默认关闭"}
+ * @param showRelatedProducts {default=false,name="是否显示相关产品",description="是否显示相关产品推荐区域（相关/热销/搭配）；猜你喜欢与最近浏览为常显槽，不受此开关控制；默认关闭"}
  * @param showReviews {default=true,name="是否显示评论容器",description="是否显示商品评论容器槽（由评论模块 default_injections 注入，布局不直接加载部件）"}
  * @param showFaq {default=true,name="是否显示 FAQ 容器",description="是否显示商品 FAQ 容器槽（由 Faq 模块 default_injections 注入，布局不直接加载部件）"}
  * @param showTabs {default=false,name="是否显示详情标签",description="是否显示产品详情标签区域"}
@@ -113,7 +113,7 @@ $this->assign('meta', $meta);
             <!-- ========== 商品详情页主体区域 ========== -->
             <w:slot id="content"
                     name="内容区"
-                    accept="layout-product-content,layout-default-content,content,product-detail,product-main,product-sidebar,product-tabs,product-reviews,product-faq,related-products,bestsellers,recently-viewed,cross-sell"
+                    accept="layout-product-content,layout-default-content,content,product-detail,product-main,product-sidebar,product-tabs,product-reviews,product-faq,related-products,you-may-like,bestsellers,recently-viewed,cross-sell"
                     reject="header,footer"
                     multiple="true"
                     position="content"
@@ -243,7 +243,7 @@ $this->assign('meta', $meta);
                 </section>
             </if>
 
-            <!-- ========== 相关产品推荐区域 ========== -->
+            <!-- ========== 相关产品推荐区域（相关/热销/搭配；默认关闭，不含猜你喜欢/最近浏览） ========== -->
             <if condition="meta.showRelatedProducts">
                 <section class="product-detail-layout__related" weline-code="theme.product.section_2">
                     <div class="product-detail-layout__related-container">
@@ -268,15 +268,6 @@ $this->assign('meta', $meta);
                                         class="product-detail-layout__related-slot product-detail-layout__related-slot--bestsellers">
                                     <w:hook>Weline_Theme::frontend::layouts::product::bestsellers</w:hook>
                                 </w:slot>
-                                <w:slot id="product-recently-viewed"
-                                        name="最近浏览"
-                                        accept="recently-viewed,product-carousel"
-                                        multiple="true"
-                                        position="content"
-                                        wrapper="div"
-                                        class="product-detail-layout__related-slot product-detail-layout__related-slot--recently-viewed">
-                                    <w:hook>Weline_Theme::frontend::layouts::product::recently-viewed</w:hook>
-                                </w:slot>
                                 <w:slot id="product-cross-sell"
                                         name="搭配推荐"
                                         accept="cross-sell,up-sell,product-carousel"
@@ -292,6 +283,34 @@ $this->assign('meta', $meta);
                     </div>
                 </section>
             </if>
+
+            <!-- ========== 猜你喜欢 / 最近浏览（常显；部件经 default_injections 注入，禁止布局内嵌 w:widget） ========== -->
+            <section class="product-detail-layout__personalization" weline-code="theme.product.section_personalization">
+                <div class="product-detail-layout__personalization-container">
+                    <w:hook>Weline_Theme::frontend::layouts::product::personalization-before</w:hook>
+                    <div class="product-detail-layout__personalization-stack">
+                        <w:slot id="product-you-may-like"
+                                name="猜你喜欢"
+                                accept="you-may-like,product-carousel"
+                                multiple="true"
+                                position="content"
+                                wrapper="div"
+                                class="product-detail-layout__related-slot product-detail-layout__related-slot--you-may-like">
+                            <w:hook>Weline_Theme::frontend::layouts::product::you-may-like</w:hook>
+                        </w:slot>
+                        <w:slot id="product-recently-viewed"
+                                name="最近浏览"
+                                accept="recently-viewed,product-carousel"
+                                multiple="true"
+                                position="content"
+                                wrapper="div"
+                                class="product-detail-layout__related-slot product-detail-layout__related-slot--recently-viewed">
+                            <w:hook>Weline_Theme::frontend::layouts::product::recently-viewed</w:hook>
+                        </w:slot>
+                    </div>
+                    <w:hook>Weline_Theme::frontend::layouts::product::personalization-after</w:hook>
+                </div>
+            </section>
 
             </w:slot>
 
@@ -437,6 +456,36 @@ $this->assign('meta', $meta);
 
     .product-detail-layout__recommendations-stack {
         width: 100%;
+    }
+
+    /* ---- 猜你喜欢 / 最近浏览常显区（与主内容同宽） ---- */
+    .product-detail-layout__personalization {
+        padding: var(--spacing-6) 0;
+    }
+
+    .product-detail-layout__personalization-container {
+        width: min(100%, var(--weline-layout-content-max-width));
+        max-width: 100%;
+        margin: 0 auto;
+        padding: 0 var(--weline-layout-content-padding-inline);
+        box-sizing: border-box;
+    }
+
+    .product-detail-layout__personalization-stack {
+        width: 100%;
+    }
+
+    .product-detail-layout__personalization-stack > .product-detail-layout__related-slot,
+    .product-detail-layout__personalization .product-detail-layout__related-slot {
+        width: 100%;
+        min-width: 0;
+        margin-block: var(--spacing-4, 1rem) 0;
+    }
+
+    .product-detail-layout__personalization .product-detail-layout__related-slot > .widget-wrapper {
+        width: 100%;
+        min-width: 0;
+        display: block;
     }
 
     .product-detail-layout__related-slot {
@@ -632,12 +681,14 @@ $this->assign('meta', $meta);
         .product-detail-layout__tabs,
         .product-detail-layout__reviews,
         .product-detail-layout__faq,
-        .product-detail-layout__related {
+        .product-detail-layout__related,
+        .product-detail-layout__personalization {
             padding: var(--spacing-5) 0;
         }
 
         .product-detail-layout__tabs-container,
-        .product-detail-layout__related-container {
+        .product-detail-layout__related-container,
+        .product-detail-layout__personalization-container {
             padding: 0 var(--weline-layout-content-padding-inline);
         }
     }

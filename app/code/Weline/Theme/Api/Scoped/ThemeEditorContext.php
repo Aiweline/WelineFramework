@@ -68,7 +68,9 @@ final readonly class ThemeEditorContext
             layoutOption: \in_array($resourceType, [self::RESOURCE_THEME_BINDING, self::RESOURCE_APPEARANCE], true)
                 ? 'default'
                 : $this->layoutOption,
-            locale: \in_array($resourceType, [self::RESOURCE_LAYOUT, self::RESOURCE_I18N], true)
+            // LAYOUT/META/APPEARANCE are structure docs: identity locale is always default.
+            // Only RESOURCE_I18N keeps a real locale in the resource identity.
+            locale: $resourceType === self::RESOURCE_I18N
                 ? $this->locale
                 : 'default',
             targetType: \in_array($resourceType, [self::RESOURCE_THEME_BINDING, self::RESOURCE_APPEARANCE], true)
@@ -182,7 +184,8 @@ final readonly class ThemeEditorContext
 
     public function identityLocale(): string
     {
-        return \in_array($this->resourceType, [self::RESOURCE_LAYOUT, self::RESOURCE_I18N], true)
+        // Structure resources share one workspace/release identity across languages.
+        return $this->resourceType === self::RESOURCE_I18N
             ? $this->locale
             : 'default';
     }

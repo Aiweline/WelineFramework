@@ -2,7 +2,7 @@
 
 ## 开发前先读
 
-先完成 `prepare_project` 并调用 `resolve_task_context`，再按返回来源阅读：
+可选：可完成 `prepare_project` 并调用 `resolve_task_context` 检索后再按返回来源阅读（编码不强制）：
 
 1. `app/code/Weline/Eav/doc/eav-entity-and-attribute-conventions.md`
 2. 本模块实际命中的 `Model/`、`Schema/`、`Service/`、`Controller/` 源码
@@ -95,3 +95,9 @@
 - `app/code/Weline/Eav/Schema/SchemaRegistry.php`
 - `app/code/Weline/Eav/Service/AttributeFilterService.php`
 - `app/code/Weline/Eav/Observer/UpgradeDefaultAttribute.php`
+
+## 按属性码复用只读元数据
+
+`AttributeMetadataCatalog` 可选实现 `AttributeMetadataCodeIndexInterface::attributesByCode()`。消费者传入已经按范围、商品和语言解析的 `AttributeSetMetadata` 目录；该方法只返回现有 `AttributeMetadata` 引用，保留挂载顺序和重复属性，不再解析上下文、查询数据库或访问 WLS。
+
+索引使用以不可变属性集 DTO 对象为键的 `WeakMap`。公共目录对象在多个商品间复用时只建一次索引；含商品私有选项/自由属性的不同 DTO 不会混入公共索引。现有 changed/语言流程产生新目录 DTO 后自然使用新索引，不新建代次或缓存存储；索引值不引用属性集本身，原目录释放后条目随之释放。不得按数值 set_id 复用，因为不同商品、语言及代次可以拥有相同 id。

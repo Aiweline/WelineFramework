@@ -17,18 +17,31 @@ final class SecurityHeaderDefaults
      * worker-src 须显式放行 'self' + blob:：QueryBin 可用同源 Worker，
      * 也可在同源挂起时回退到 Blob Worker（CSP 缺 worker-src 时会回落到 script-src，禁止 blob:）。
      *
-     * script/frame/connect 放行社媒、支付、
-     * 主流 CDN 等大厂域名；img/font/media 对 https: 开放以便外链资源。
-     * 业务专属 SDK 域名请经 Extends `Security/Csp`（CspSourceContributionProviderInterface）贡献。
+     * Framework 基线只保留自有面（'self' / data / blob / unsafe-inline 等）。
+     * 业务第三方 / CDN（支付含 Stripe、人机、社媒登录、融媒体、分析、商品视频、DataTable CDN 等）
+     * 必须由所属模块经 Extends `Security/Csp`（CspSourceContributionProviderInterface）贡献，
+     * **不要**再写回本 Defaults。
      *
      * 字面量保持 ContentSecurityPolicyNormalizer::canonicalize 稳定形态（指令名排序）。
      */
-    public const CSP = "connect-src 'self' https://api.stripe.com https://api.tiktok.com https://api.twitter.com https://cdn.jsdelivr.net https://cdn.syndication.twimg.com https://cdnjs.cloudflare.com https://connect.facebook.net https://graph.facebook.com https://open.weixin.qq.com https://region1.google-analytics.com https://unpkg.com https://www.google-analytics.com https://www.google.com https://www.googletagmanager.com https://www.gstatic.com https://www.linkedin.com https://www.paypal.com; default-src 'self'; font-src 'self' data: https:; frame-src 'self' https://js.stripe.com https://open.weixin.qq.com https://platform.twitter.com https://player.bilibili.com https://twitter.com https://www.facebook.com https://www.google.com https://www.gstatic.com https://www.instagram.com https://www.linkedin.com https://www.paypal.com https://www.tiktok.com https://www.youtube-nocookie.com https://www.youtube.com https://x.com; img-src 'self' blob: data: https:; media-src 'self' blob: https:; script-src 'self' 'unsafe-inline' https://ajax.googleapis.com https://apis.google.com https://cdn.jsdelivr.net https://cdn.syndication.twimg.com https://cdnjs.cloudflare.com https://connect.facebook.net https://graph.facebook.com https://js.stripe.com https://open.weixin.qq.com https://platform.linkedin.com https://platform.twitter.com https://player.bilibili.com https://res.wx.qq.com https://unpkg.com https://www.google-analytics.com https://www.google.com https://www.googletagmanager.com https://www.gstatic.com https://www.instagram.com https://www.paypal.com https://www.paypalobjects.com https://www.tiktok.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; worker-src 'self' blob:";
+    public const CSP = "connect-src 'self'; default-src 'self'; font-src 'self' data: https:; frame-src 'self'; img-src 'self' blob: data: https:; media-src 'self' blob: https:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:";
 
     /**
-     * 观察策略默认与强制 CSP 一致，避免配置页/基线留空。
+     * Report-Only 默认关闭：与强制 CSP 相同时再输出会把响应头体积翻倍（约 +3KB），
+     * 且不增加强制执行能力。需要观察期时再在 Env/Scope 显式配置不同策略。
      */
-    public const CSP_REPORT_ONLY = self::CSP;
+    public const CSP_REPORT_ONLY = '';
+
+    /**
+     * CSP 交付方式：
+     * - header：写入 Content-Security-Policy 响应头（传统）
+     * - meta：写入 HTML `<meta http-equiv>`，HTTP 头不再携带大 CSP（文档加载一次即可）
+     */
+    public const CSP_DELIVERY_HEADER = 'header';
+
+    public const CSP_DELIVERY_META = 'meta';
+
+    public const CSP_DELIVERY = self::CSP_DELIVERY_META;
 
     /**
      * 空 = 不输出 Access-Control-Allow-Origin（最严安全默认）。

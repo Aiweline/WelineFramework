@@ -61,14 +61,18 @@ final class Item extends BackendController
         $this->assign('item', $item ?? [
             'faq_id' => 0,
             'website_id' => 0,
+            'store_code' => '',
+            'channel_code' => '',
             'locale_code' => '',
             'type_code' => 'site',
             'entity_uuid' => 'site',
+            'faq_key' => '',
             'question' => '',
             'answer' => '',
             'sort_order' => 0,
             'status' => FaqItem::STATUS_ENABLED,
         ]);
+        $this->assign('template_packs', \Weline\Faq\Service\FaqTemplatePacks::codes());
         $this->assign('type_codes', $this->types->codes());
         $this->assign('websites', $this->loadWebsiteOptions());
         $this->assign('listing_url', $this->getUrl('faq/backend/item/listing'));
@@ -84,9 +88,12 @@ final class Item extends BackendController
             $saved = $this->faqs->save([
                 'faq_id' => (int)$this->request->getPost('faq_id', 0),
                 'website_id' => (int)$this->request->getPost('website_id', 0),
+                'store_code' => (string)$this->request->getPost('store_code', ''),
+                'channel_code' => (string)$this->request->getPost('channel_code', ''),
                 'locale_code' => (string)$this->request->getPost('locale_code', ''),
                 'type_code' => (string)$this->request->getPost('type_code', ''),
                 'entity_uuid' => (string)$this->request->getPost('entity_uuid', ''),
+                'faq_key' => (string)$this->request->getPost('faq_key', ''),
                 'question' => (string)$this->request->getPost('question', ''),
                 'answer' => (string)$this->request->getPost('answer', ''),
                 'sort_order' => (int)$this->request->getPost('sort_order', 0),

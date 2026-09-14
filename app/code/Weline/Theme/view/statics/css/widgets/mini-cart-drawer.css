@@ -289,6 +289,18 @@
     color: var(--amz-drawer-muted, var(--weline-theme-text-muted, #6b7280));
 }
 
+.header-cart .mini-cart-drawer__line-option-swatch-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: zoom-in;
+    line-height: 0;
+}
+
 .header-cart .mini-cart-drawer__line-option-swatch {
     flex: 0 0 auto;
     width: 22px;
@@ -296,11 +308,57 @@
     border: 1px solid var(--weline-theme-border, #d1d5db);
     border-radius: var(--weline-theme-radius-sm);
     object-fit: cover;
-    background: #fff;
+    background: var(--amz-drawer-surface, var(--color-bg-primary, #fff));
 }
 
 .header-cart .mini-cart-drawer__line-option-swatch--color {
     display: inline-block;
+}
+
+.header-cart .mini-cart-drawer__swatch-preview {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    max-width: min(92vw, 520px);
+    z-index: calc(var(--weline-z-overlay, 1200) + 20);
+}
+
+.header-cart .mini-cart-drawer__swatch-preview::backdrop {
+    background: var(--color-overlay-50, rgba(15, 23, 42, 0.45));
+}
+
+.header-cart .mini-cart-drawer__swatch-preview-panel {
+    display: grid;
+    gap: var(--weline-space-3, 0.75rem);
+    padding: var(--weline-space-4, 1rem);
+    border: 1px solid var(--amz-drawer-border, var(--weline-theme-border, #d1d5db));
+    border-radius: var(--weline-theme-radius-md, 12px);
+    background: var(--amz-drawer-surface, var(--color-bg-primary, #fff));
+    box-shadow: var(--weline-theme-shadow-lg, 0 16px 40px rgba(15, 17, 17, 0.18));
+}
+
+.header-cart .mini-cart-drawer__swatch-preview-img {
+    display: block;
+    width: min(100%, 480px);
+    max-height: min(70vh, 480px);
+    margin: 0 auto;
+    object-fit: contain;
+    border-radius: var(--weline-theme-radius-sm);
+    background: var(--amz-drawer-surface-muted, var(--color-bg-secondary, #f7fafa));
+}
+
+.header-cart .mini-cart-drawer__swatch-preview-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 36px;
+    width: 100%;
+    border: 1px solid var(--amz-drawer-border, var(--weline-theme-border, #d1d5db));
+    border-radius: var(--weline-theme-radius-sm);
+    background: var(--amz-drawer-surface, var(--color-bg-primary, #fff));
+    color: var(--amz-drawer-text, var(--weline-theme-text, #0f1111));
+    cursor: pointer;
+    font-size: var(--weline-font-size-sm, 0.875rem);
 }
 
 .header-cart .mini-cart-drawer__line-option-text {

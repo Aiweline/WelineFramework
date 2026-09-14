@@ -9,7 +9,7 @@ Object.assign(window.WelineModulesConfig.modules, {
     cart: {
         paths: [
             "Weline_Cart::js/cart.js?v=20260910-payment-lifecycle-listen3",
-            "Weline_Cart::js/widgets/product-purchase-actions.js?v=20260910-cart-type-pref"
+            "Weline_Cart::js/widgets/product-purchase-actions.js?v=20260914-affiliate-panel-show"
         ],
         globalVar: "WelineCartPurchaseActions",
         load: "defer",

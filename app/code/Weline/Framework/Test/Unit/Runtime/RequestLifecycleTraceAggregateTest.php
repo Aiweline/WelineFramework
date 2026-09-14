@@ -19,18 +19,19 @@ final class RequestLifecycleTraceAggregateTest extends TestCase
     protected function setUp(): void
     {
         $this->previousDebugConfig = [
-            'request_trace' => Env::get('wls.debug.request_trace', false),
             'request_trace_max_spans' => Env::get('wls.debug.request_trace_max_spans', 4096),
         ];
         Env::getInstance()->applyRuntimeConfig([
-            'wls' => ['debug' => ['request_trace' => true, 'request_trace_max_spans' => 2]],
+            'wls' => ['debug' => ['request_trace_max_spans' => 2]],
         ]);
         Runtime::setMode(RuntimeInterface::MODE_WLS);
         $this->enterRequest('aggregate-main');
+        RequestLifecycleTrace::installPanelTraceOn();
     }
 
     protected function tearDown(): void
     {
+        RequestLifecycleTrace::clearPanelTrace();
         RequestLifecycleTrace::reset();
         Context::leave();
         Runtime::resetModeCache();

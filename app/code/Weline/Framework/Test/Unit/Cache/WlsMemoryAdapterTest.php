@@ -11,6 +11,12 @@ use Weline\Framework\Cache\Adapter\WlsMemoryAdapter;
 
 class WlsMemoryAdapterTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+        WlsMemoryAdapter::clearAllMemory();
+    }
+
     public function testLocalMemoryStoreEvictsOldestEntries(): void
     {
         $adapter = new WlsMemoryAdapter('unit_wls_memory_evict', [
@@ -85,6 +91,72 @@ class WlsMemoryAdapterTest extends TestCase
                 @\ini_set('memory_limit', $previousLimit);
             }
         }
+    }
+
+    public function testCacheMissDoesNotProbeEpochWhenRequestedKeyIsNotLocal(): void
+    {
+        $facade = $this->createMock(\Weline\Server\Service\MemoryStateFacade::class);
+        $epochCalls = 0;
+        $facade->method('get')->willReturnCallback(static function () use (&$epochCalls): int {
+            $epochCalls++;
+            return 0;
+        });
+        $facade->expects($this->once())
+            ->method('getCache')
+            ->with('unit_wls_memory_epoch_miss', 'missing')
+            ->willReturn(null);
+        $adapter = new WlsMemoryAdapter('unit_wls_memory_epoch_miss');
+        $this->injectMemoryFacade($adapter, $facade);
+
+        $this->invokeSetLocalCache($adapter, 'other', 'value');
+
+        $this->assertNull($adapter->get('missing'));
+        $this->assertSame(0, $epochCalls);
+    }
+
+    public function testLocalHitStillProbesEpochBeforeReturningValue(): void
+    {
+        $facade = $this->createMock(\Weline\Server\Service\MemoryStateFacade::class);
+        $facade->expects($this->once())
+            ->method('get')
+            ->with('wls_adapter_local_epoch', 'unit_wls_memory_epoch_hit')
+            ->willReturn(0);
+        $facade->expects($this->never())->method('getCache');
+        $adapter = new WlsMemoryAdapter('unit_wls_memory_epoch_hit');
+        $this->injectMemoryFacade($adapter, $facade);
+
+        $this->invokeSetLocalCache($adapter, 'cached', 'value');
+
+        $this->assertSame('value', $adapter->get('cached'));
+    }
+
+    public function testChangedEpochDropsStaleLocalHitBeforeRemoteRead(): void
+    {
+        $facade = $this->createMock(\Weline\Server\Service\MemoryStateFacade::class);
+        $facade->expects($this->once())
+            ->method('get')
+            ->with('wls_adapter_local_epoch', 'unit_wls_memory_epoch_changed')
+            ->willReturn(2);
+        $facade->expects($this->once())
+            ->method('getCache')
+            ->with('unit_wls_memory_epoch_changed', 'cached')
+            ->willReturn('fresh');
+        $adapter = new WlsMemoryAdapter('unit_wls_memory_epoch_changed');
+        $this->injectMemoryFacade($adapter, $facade);
+
+        $this->invokeSetLocalCache($adapter, 'cached', 'stale');
+
+        $this->assertSame('fresh', $adapter->get('cached'));
+    }
+
+    private function injectMemoryFacade(
+        WlsMemoryAdapter $adapter,
+        \Weline\Server\Service\MemoryStateFacade $facade,
+    ): void {
+        $reflection = new ReflectionClass($adapter);
+        $property = $reflection->getProperty('memoryFacade');
+        $property->setAccessible(true);
+        $property->setValue($adapter, $facade);
     }
 
     /**

@@ -1,0 +1,49 @@
+{
+    "ok": true,
+    "scenario": "ch2_free_keeps_remote",
+    "rates": {
+        "SEED_LANE_DOMESTIC": {
+            "amount_minor": 2500,
+            "label": "国内标快",
+            "package_count": 1,
+            "free_reason": "free_shipping_rule",
+            "surcharges": [
+                {
+                    "rule_code": "SEED_SURCHARGE_CN_XJ",
+                    "rule_name": "偏远加价·新疆",
+                    "amount_minor": 2500
+                }
+            ],
+            "seasonal": [],
+            "addons": []
+        }
+    },
+    "diagnostics": {
+        "country_code": "CN",
+        "currency": "CNY",
+        "lane_count": 1,
+        "fx_skipped": [],
+        "profile_groups": 1
+    },
+    "error": null,
+    "assertions": {
+        "conflict": false,
+        "has_service": true,
+        "amount_minor": 2500,
+        "package_count": 1,
+        "surcharges": [
+            {
+                "rule_code": "SEED_SURCHARGE_CN_XJ",
+                "rule_name": "偏远加价·新疆",
+                "amount_minor": 2500
+            }
+        ],
+        "addons": [],
+        "seasonal": [],
+        "free_reason": "free_shipping_rule",
+        "min_amount_ok": true,
+        "surcharge_found": true,
+        "surcharge_sum": 2500,
+        "has_free_reason": true
+    }
+}

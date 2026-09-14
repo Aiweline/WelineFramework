@@ -1,0 +1,16 @@
+{
+    "ok": true,
+    "scenario": "ch4_return_buyer",
+    "quote": {
+        "amount_minor": 1600,
+        "currency": "CNY",
+        "return_policy": "buyer_pays",
+        "template_code": "SEED_TPL_RETURN_DOMESTIC"
+    },
+    "assertions": {
+        "amount_minor": 1600,
+        "return_policy": "buyer_pays",
+        "seller_zero": null,
+        "buyer_positive": true
+    }
+}

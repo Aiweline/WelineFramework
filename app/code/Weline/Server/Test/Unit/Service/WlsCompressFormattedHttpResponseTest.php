@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Server\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\Http\ContentEncodingNegotiator;
 
 final class WlsCompressFormattedHttpResponseTest extends TestCase
 {
@@ -14,7 +15,7 @@ final class WlsCompressFormattedHttpResponseTest extends TestCase
         require_once dirname(__DIR__, 3) . '/bin/worker_http_message.php';
     }
 
-    public function testGzipCompressesJavascriptStaticBody(): void
+    public function testPrefersBrotliWhenClientAcceptsIt(): void
     {
         $body = \str_repeat('function welineApiWorker(){return 1;}' . "\n", 80);
         $response = "HTTP/1.1 200 OK\r\n"
@@ -25,14 +26,37 @@ final class WlsCompressFormattedHttpResponseTest extends TestCase
             . $body;
 
         $compressed = wlsCompressFormattedHttpResponse($response, 'gzip, deflate, br');
-
-        self::assertStringContainsString("Content-Encoding: gzip\r\n", $compressed);
-        self::assertStringContainsString('Vary:', $compressed);
         $headerEnd = \strpos($compressed, "\r\n\r\n");
         self::assertNotFalse($headerEnd);
         $wire = \substr($compressed, $headerEnd + 4);
         self::assertLessThan(\strlen($body), \strlen($wire));
+        self::assertStringContainsString('Vary:', $compressed);
+
+        if (ContentEncodingNegotiator::brotliAvailable()) {
+            self::assertStringContainsString("Content-Encoding: br\r\n", $compressed);
+            self::assertSame($body, \brotli_uncompress($wire));
+            return;
+        }
+
+        self::assertStringContainsString("Content-Encoding: gzip\r\n", $compressed);
         self::assertSame($body, \gzdecode($wire));
+    }
+
+    public function testGzipWhenBrotliNotAccepted(): void
+    {
+        $body = \str_repeat('function welineApiWorker(){return 1;}' . "\n", 80);
+        $response = "HTTP/1.1 200 OK\r\n"
+            . "Content-Type: text/javascript; charset=utf-8\r\n"
+            . 'Content-Length: ' . \strlen($body) . "\r\n"
+            . "Connection: close\r\n"
+            . "\r\n"
+            . $body;
+
+        $compressed = wlsCompressFormattedHttpResponse($response, 'gzip');
+        self::assertStringContainsString("Content-Encoding: gzip\r\n", $compressed);
+        $headerEnd = \strpos($compressed, "\r\n\r\n");
+        self::assertNotFalse($headerEnd);
+        self::assertSame($body, \gzdecode(\substr($compressed, $headerEnd + 4)));
     }
 
     public function testGzipSkipsPartialContentRange(): void

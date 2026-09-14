@@ -251,6 +251,17 @@ class SlotRendererService
         string $area = 'frontend'
     ): string
     {
+        if ((string)\getenv('WELINE_DIAG_MEMORY') === '1') {
+            \error_log('[MemoryProbe] ' . \json_encode([
+                'component' => 'SlotRendererService::doProcessSlots',
+                'phase' => 'start',
+                'content_bytes' => \strlen($html),
+                'theme_id' => $themeId,
+                'page_type' => $pageType,
+                'usage' => \memory_get_usage(true),
+                'peak' => \memory_get_peak_usage(true),
+            ], \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE));
+        }
         // 检查是否包含插槽标记（支持新旧两种方式）
         if (strpos($html, 'data-wslot') === false && strpos($html, 'widget-slot-area') === false) {
             return $html;
@@ -316,6 +327,8 @@ class SlotRendererService
             );
         }
 
+        $this->prefetchSlotDictionaryModules($slotWidgets);
+
         // Boundaries-only slot fill (legacy DOM engine removed).
         $this->filledSlotIdsThisRun = [];
         $this->unavailableWidgets = [];
@@ -334,6 +347,15 @@ class SlotRendererService
                     )
                 )
             );
+            if ((string)\getenv('WELINE_DIAG_MEMORY') === '1') {
+                \error_log('[MemoryProbe] ' . \json_encode([
+                    'component' => 'SlotRendererService::doProcessSlots',
+                    'phase' => 'after_boundaries',
+                    'content_bytes' => \strlen($html),
+                    'usage' => \memory_get_usage(true),
+                    'peak' => \memory_get_peak_usage(true),
+                ], \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE));
+            }
 
             $html = $this->stripEmptyTemplateWidgetShells($html);
             if ($this->shouldInspectWidgetHtml()) {
@@ -347,6 +369,41 @@ class SlotRendererService
             $this->pageRenderContext = [];
         }
     }
+    /** Prefetch data only; each template still activates its own translation module. */
+    private function prefetchSlotDictionaryModules(array $slotWidgets): void
+    {
+        // Rolling workers may still have the previous Parser class loaded.
+        if (!\method_exists(\Weline\Framework\Phrase\Parser::class, 'prefetchGlobalDictionaryModules')) {
+            return;
+        }
+
+        $modules = [];
+        foreach ($slotWidgets as $widgets) {
+            foreach ($widgets as $widget) {
+                $module = $widget['widget_module'] ?? null;
+                if (\is_string($module) && ($module = \trim($module)) !== '') {
+                    $modules[$module] = true;
+                }
+            }
+        }
+        if ($modules === []) {
+            return;
+        }
+
+        $modules = \array_keys($modules);
+        \sort($modules, \SORT_STRING);
+        RequestLifecycleTrace::measurePhase(
+            'theme.slots.dictionary_prefetch',
+            static function () use ($modules): void {
+                \Weline\Framework\Phrase\Parser::prefetchGlobalDictionaryModules($modules);
+            },
+            [
+                'modules' => \count($modules),
+                'module_set_hash' => \hash('sha256', \implode('|', $modules)),
+            ],
+        );
+    }
+
 
     /**
      * Theme-preview content path may skip processSlots (wrappers already present).
@@ -769,7 +826,8 @@ class SlotRendererService
     }
 
     /**
-     * Shared chrome carrier identity: same store/website scope + locale, global target only.
+     * Shared chrome carrier identity: same store/website scope, global target only.
+     * Locale is omitted — chrome mounts are structural; translated HTML is presentation-layer.
      *
      * @param array{layout_option?:string,scope?:string,target_type?:string,target_id?:int,locale_code?:string} $identity
      * @return array{layout_option:string,scope:string,target_type:string,target_id:int,locale_code:string}
@@ -783,7 +841,7 @@ class SlotRendererService
             'scope' => (string)($identity['scope'] ?? 'default'),
             'target_type' => ThemeVirtualLayout::TARGET_GLOBAL,
             'target_id' => 0,
-            'locale_code' => (string)($identity['locale_code'] ?? ''),
+            'locale_code' => '',
         ];
     }
 
@@ -3911,7 +3969,10 @@ HTML;
     {
         $installed = RequestContext::get(LayoutIdentity::REQUEST_CONTEXT_KEY);
         if ($installed instanceof LayoutIdentity) {
-            return $installed->toArray();
+            $array = $installed->toArray();
+            // Structure identity never carries request locale.
+            $array['locale_code'] = '';
+            return $array;
         }
 
         $area = $area === 'backend' || $this->renderArea === 'backend' ? 'backend' : 'frontend';
@@ -3925,12 +3986,12 @@ HTML;
             }
             $normalized = $normalizer->normalize([
                 'scope' => ThemeContextService::DEFAULT_SCOPE,
-                'locale_code' => (string)(RequestContext::locale() ?? ''),
+                'locale_code' => '',
             ]);
         } else {
             $normalized = $normalizer->normalize([
                 'scope_identity' => $scope,
-                'locale_code' => (string)(RequestContext::locale() ?? ''),
+                'locale_code' => '',
             ]);
         }
 
@@ -3939,7 +4000,7 @@ HTML;
             $normalized['scope'],
             'global',
             0,
-            $normalized['locale_code'],
+            '',
         ))->toArray();
     }
 
@@ -3952,21 +4013,22 @@ HTML;
     ): array
     {
         $identity = $identityOverride ?? $this->currentLayoutIdentity($area);
+        $identity['locale_code'] = '';
         $hasTargetIdentity = $this->hasTargetIdentity($identity);
+        // Structure cache key: no locale (mount graph is language-neutral).
         $cacheKey = "{$themeId}:{$pageType}:{$status}:"
             . $identity['layout_option'] . ':'
             . $identity['scope'] . ':'
-            . $identity['locale_code'] . ':'
             . $identity['target_type'] . ':'
             . $identity['target_id'];
         $isDraft = ($status === ThemeLayout::STATUS_DRAFT);
         $cacheablePublished = !$isDraft && !$hasTargetIdentity;
 
+        $layout = null;
         // 草稿和页面级 target 不读缓存，保证编辑器/预览/页面级渲染每次按当前 identify 取数。
         if ($cacheablePublished && isset($this->layoutCache[$cacheKey])) {
-            return $this->layoutCache[$cacheKey];
-        }
-        if ($cacheablePublished) {
+            $layout = $this->layoutCache[$cacheKey];
+        } elseif ($cacheablePublished) {
             $cached = self::$publishedLayoutDataCache[$cacheKey] ?? null;
             if (\is_array($cached)
                 && isset($cached['expires_at'], $cached['data'])
@@ -3975,67 +4037,116 @@ HTML;
                 unset(self::$publishedLayoutDataCache[$cacheKey]);
                 self::$publishedLayoutDataCache[$cacheKey] = $cached;
                 $this->layoutCache[$cacheKey] = $cached['data'];
-                return $cached['data'];
-            }
-            unset(self::$publishedLayoutDataCache[$cacheKey]);
-            $runtimeCachedLayout = $this->runtimeCacheGet('layout.data.' . $cacheKey);
-            if (\is_array($runtimeCachedLayout)) {
-                $this->layoutCache[$cacheKey] = $runtimeCachedLayout;
-                $this->rememberPublishedLayoutData($cacheKey, $runtimeCachedLayout);
-                return $runtimeCachedLayout;
+                $layout = $cached['data'];
+            } else {
+                unset(self::$publishedLayoutDataCache[$cacheKey]);
+                $runtimeCachedLayout = $this->runtimeCacheGet('layout.data.' . $cacheKey);
+                if (\is_array($runtimeCachedLayout)) {
+                    $this->layoutCache[$cacheKey] = $runtimeCachedLayout;
+                    $this->rememberPublishedLayoutData($cacheKey, $runtimeCachedLayout);
+                    $layout = $runtimeCachedLayout;
+                }
             }
         }
 
         /** @var ThemeRuntimeLayoutResolver $runtimeLayoutResolver */
         $runtimeLayoutResolver = ObjectManager::getInstance(ThemeRuntimeLayoutResolver::class);
 
-        // 1. 按指定状态从 scoped release 获取数据（published 不读 legacy theme_layout）。
-        $layout = $runtimeLayoutResolver->resolveLayout($themeId, $pageType, $status, $area, $identity);
+        if (!\is_array($layout)) {
+            // 1. Structure-only resolve (published 不读 legacy theme_layout).
+            $layout = $runtimeLayoutResolver->resolveLayout($themeId, $pageType, $status, $area, $identity);
 
-        // 2. 检查是否有部件配置。空 slot 必须保持为空：default_injections 不得在渲染路径回填
-        // （仅主题初始化、「应用」tab / 显式初始化、草稿重置、部件首次入库、Dashboard view ready）。
-        $hasWidgets = $this->hasWidgetsInLayout($layout);
-        $hasNoWidgetPlacements = $runtimeLayoutResolver->hasNoWidgetPlacements(
-            $themeId,
-            $pageType,
-            $status,
-            $identity,
-            $area,
-        );
-
-        // Published runtime must never read or auto-publish a draft. Empty
-        // published layouts remain empty until an immutable Release is created.
-
-        // 4. 如果当前页面类型没有数据，尝试获取默认页面类型的数据。
-        // 已明确保存为“没有部件配置”的布局必须保持这个状态，只渲染 slot 默认内容。
-        if (!$hasWidgets && !$hasNoWidgetPlacements && !$hasTargetIdentity && $pageType !== ThemeLayout::PAGE_TYPE_DEFAULT) {
-            $defaultLayout = $runtimeLayoutResolver->resolveLayout(
+            // 2. 检查是否有部件配置。空 slot 必须保持为空：default_injections 不得在渲染路径回填
+            // （仅主题初始化、「应用」tab / 显式初始化、草稿重置、部件首次入库、Dashboard view ready）。
+            $hasWidgets = $this->hasWidgetsInLayout($layout);
+            $hasNoWidgetPlacements = $runtimeLayoutResolver->hasNoWidgetPlacements(
                 $themeId,
-                ThemeLayout::PAGE_TYPE_DEFAULT,
+                $pageType,
                 $status,
-                $area,
                 $identity,
+                $area,
             );
-            if ($this->hasWidgetsInLayout($defaultLayout)) {
-                $layout = $defaultLayout;
+
+            // Published runtime must never read or auto-publish a draft. Empty
+            // published layouts remain empty until an immutable Release is created.
+
+            // 4. 如果当前页面类型没有数据，尝试获取默认页面类型的数据。
+            // 已明确保存为“没有部件配置”的布局必须保持这个状态，只渲染 slot 默认内容。
+            if (!$hasWidgets && !$hasNoWidgetPlacements && !$hasTargetIdentity && $pageType !== ThemeLayout::PAGE_TYPE_DEFAULT) {
+                $defaultLayout = $runtimeLayoutResolver->resolveLayout(
+                    $themeId,
+                    ThemeLayout::PAGE_TYPE_DEFAULT,
+                    $status,
+                    $area,
+                    $identity,
+                );
+                if ($this->hasWidgetsInLayout($defaultLayout)) {
+                    $layout = $defaultLayout;
+                }
+            }
+
+            $layout = ObjectManager::getInstance(ProductPageLayoutNormalizer::class)
+                ->normalizeLayoutForRender($pageType, $layout);
+
+            // 扩展槽部件已配置但缺 footer-container 时补齐父容器，避免孤儿告警与空槽。
+            // 非 default_injections 空槽回填；仅修复已放置子部件与父容器不一致的布局。
+            $layout = FooterDefaultLinksHelper::ensureFooterContainerInLayout($layout);
+
+            // 仅普通已发布布局写入结构缓存；草稿和页面级 target 不缓存。
+            if ($cacheablePublished) {
+                $this->layoutCache[$cacheKey] = $layout;
+                $this->rememberPublishedLayoutData($cacheKey, $layout);
+                $this->runtimeCacheSet('layout.data.' . $cacheKey, $layout, $this->publishedLayoutCacheTtl());
             }
         }
 
-        $layout = ObjectManager::getInstance(ProductPageLayoutNormalizer::class)
-            ->normalizeLayoutForRender($pageType, $layout);
-
-        // 扩展槽部件已配置但缺 footer-container 时补齐父容器，避免孤儿告警与空槽。
-        // 非 default_injections 空槽回填；仅修复已放置子部件与父容器不一致的布局。
-        $layout = FooterDefaultLinksHelper::ensureFooterContainerInLayout($layout);
-
-        // 仅普通已发布布局写入缓存；草稿和页面级 target 不缓存，避免页面级 Meta/Layout 串页或发布后读旧值。
-        if ($cacheablePublished) {
-            $this->layoutCache[$cacheKey] = $layout;
-            $this->rememberPublishedLayoutData($cacheKey, $layout);
-            $this->runtimeCacheSet('layout.data.' . $cacheKey, $layout, $this->publishedLayoutCacheTtl());
+        // Language overlay after structure cache hit/miss — must not write back into structure cache.
+        // Deep-copy so in-place overlay cannot mutate the shared structure entry.
+        $structure = \json_decode(\json_encode($layout, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '[]', true);
+        if (!\is_array($structure)) {
+            $structure = $layout;
         }
 
-        return $layout;
+        return $this->overlayLayoutLocale(
+            $runtimeLayoutResolver,
+            $structure,
+            $themeId,
+            $pageType,
+            $status,
+            $area,
+            $identity,
+        );
+    }
+
+    /**
+     * @param array<string,mixed> $layout
+     * @param array{layout_option:string,scope:string,target_type:string,target_id:int,locale_code?:string} $identity
+     * @return array<string,mixed>
+     */
+    private function overlayLayoutLocale(
+        ThemeRuntimeLayoutResolver $runtimeLayoutResolver,
+        array $layout,
+        int $themeId,
+        string $pageType,
+        string $status,
+        string $area,
+        array $identity,
+    ): array {
+        $locale = $this->resolveRenderLocale();
+        if ($locale === null || $locale === '' || \strcasecmp($locale, 'default') === 0) {
+            return $layout;
+        }
+
+        try {
+            $context = $runtimeLayoutResolver->buildContext($themeId, $pageType, $area, $identity)
+                ->withLocale($locale);
+            /** @var \Weline\Theme\Service\Scoped\ThemeScopedPreviewResolver $preview */
+            $preview = ObjectManager::getInstance(\Weline\Theme\Service\Scoped\ThemeScopedPreviewResolver::class);
+
+            return $preview->applyLayoutLocaleOverlay($layout, $context, $status);
+        } catch (\Throwable) {
+            return $layout;
+        }
     }
 
     /** @param array<string,mixed> $layout */

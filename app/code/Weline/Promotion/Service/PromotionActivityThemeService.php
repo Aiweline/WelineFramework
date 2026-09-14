@@ -28,12 +28,18 @@ final class PromotionActivityThemeService
 
     public function storefrontUrl(string $pageSlug = ''): string
     {
+        return $this->url->getFrontendUrl(self::storefrontPath($pageSlug));
+    }
+
+    /** Origin-free route for scope-shared product data. */
+    public static function storefrontPath(string $pageSlug = ''): string
+    {
         $pageSlug = strtolower(trim($pageSlug));
         if ($pageSlug === '' || $pageSlug === 'index') {
-            return $this->url->getFrontendUrl('promotion');
+            return 'promotion';
         }
 
-        return $this->url->getFrontendUrl('promotion/' . rawurlencode($pageSlug));
+        return 'promotion/' . rawurlencode($pageSlug);
     }
 
     public function hasActivePage(string $pageSlug): bool

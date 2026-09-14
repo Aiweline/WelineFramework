@@ -1,0 +1,11 @@
+{
+    "ok": true,
+    "scenario": "ch2_hazard_refuse",
+    "rates": [],
+    "diagnostics": [],
+    "error": "shipping_profile_conflict",
+    "assertions": {
+        "conflict": true,
+        "refused": true
+    }
+}

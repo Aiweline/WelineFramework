@@ -1,0 +1,18 @@
+<?php
+/**
+ * meta 交付时尽早写入 CSP，保证 </head> 前可见（非 Response 发射路径兜底）。
+ *
+ * @hook-priority 10
+ * @hook-sort-order 0
+ * @hook-solo false
+ */
+$service = new \Weline\Framework\Http\Security\SecurityHeaderPolicyService();
+if (!$service->isMetaDelivery()) {
+    return;
+}
+$csp = $service->resolveCurrentDocumentCsp();
+if ($csp === '') {
+    return;
+}
+$content = htmlspecialchars($csp, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+echo '<meta http-equiv="Content-Security-Policy" content="' . $content . '" data-weline-csp="1">' . "\n";

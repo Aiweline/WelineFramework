@@ -1,0 +1,34 @@
+{
+    "ok": true,
+    "scenario": "ch1_americas_2kg",
+    "rates": {
+        "SEED_LANE_AMERICAS": {
+            "amount_minor": 11500,
+            "label": "美洲",
+            "package_count": 1,
+            "free_reason": null,
+            "surcharges": [],
+            "seasonal": [],
+            "addons": []
+        }
+    },
+    "diagnostics": {
+        "country_code": "US",
+        "currency": "CNY",
+        "lane_count": 1,
+        "fx_skipped": [],
+        "profile_groups": 1
+    },
+    "error": null,
+    "assertions": {
+        "conflict": false,
+        "has_service": true,
+        "amount_minor": 11500,
+        "package_count": 1,
+        "surcharges": [],
+        "addons": [],
+        "seasonal": [],
+        "free_reason": null,
+        "amount_match": true
+    }
+}

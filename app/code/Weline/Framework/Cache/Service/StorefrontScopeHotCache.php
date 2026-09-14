@@ -73,7 +73,7 @@ final class StorefrontScopeHotCache
         if ($key === null) {
             return $builder();
         }
-        return $this->rememberKey($policy->pool, $key, $policy->freshTtlSeconds, $builder, $policy->staleTtlSeconds, true, $traceMeta);
+        return $this->rememberKey($policy->pool, $key, $policy->freshTtlSeconds, $builder, $policy->staleTtlSeconds, true, $traceMeta, $policy->singleFlightWaitMs);
     }
 
     public function forgetPolicy(CachePolicy|string $policy, string $logicalKey): void
@@ -106,7 +106,7 @@ final class StorefrontScopeHotCache
         if (($policy->scope === 'global' || $canResolveDependencies) && $policy->dependencies !== []) {
             try {
                 $this->generations ??= ObjectManager::getInstance(NamespaceGenerationRepository::class);
-                $namespacePaths = $policy->namespacePaths($context->scopeIdentity);
+                $namespacePaths = $policy->namespacePaths($context->scopeIdentity, $context->translationLocales ?? []);
                 $fingerprint = $this->generations->fingerprint($namespacePaths);
             } catch (\Throwable) {
                 // A generation read failure must not publish an unversioned shared entry.
@@ -138,7 +138,7 @@ final class StorefrontScopeHotCache
             $staleTtlSeconds ?? ($freshTtlSeconds * self::DEFAULT_STALE_MULTIPLIER),
         );
         $traceMeta = RequestLifecycleTrace::isEnabled() ? ['logical_key_hash' => hash('sha256', $logicalKey)] : null;
-        return $this->rememberKey($poolIdentity, $this->scopedKey($logicalKey, $dimensionFlags), $freshTtlSeconds, $builder, $staleTtlSeconds, false, $traceMeta);
+        return $this->rememberKey($poolIdentity, $this->scopedKey($logicalKey, $dimensionFlags), $freshTtlSeconds, $builder, $staleTtlSeconds, false, $traceMeta, 0);
     }
 
     private function rememberKey(
@@ -149,6 +149,7 @@ final class StorefrontScopeHotCache
         int $staleTtlSeconds,
         bool $explicitDimensions = false,
         ?array $traceMeta = null,
+        int $singleFlightWaitMs = 0,
     ): mixed {
         $processKey = $poolIdentity . '|' . $scopedKey;
 
@@ -187,10 +188,85 @@ final class StorefrontScopeHotCache
                 'stale_ttl_seconds' => $staleTtlSeconds,
                 'pool_class' => $pool::class,
             ] + $this->entryTraceMetadata($entry, $l1Status, 'l1');
-            if ($pool instanceof CachePool) {
-                $phaseMeta['adapter_class'] = $pool->getAdapter()::class;
+            if (method_exists($pool, 'getAdapter')) {
+                $adapter = $pool->getAdapter();
+                if (is_object($adapter)) {
+                    $phaseMeta['adapter_class'] = $adapter::class;
+                }
             }
         }
+
+        // Heavy public policies may wait for one cross-worker builder before
+        // reading WLS. The default zero budget keeps legacy callers non-blocking.
+        if ($singleFlightWaitMs > 0) {
+            $preflightLockKey = 'storefront-hot-cache:' . hash('sha256', $processKey);
+            // Explicit policy waits use a local file lock: WLS CAS may block well beyond the policy budget under load.
+            $preflightFlight = $this->singleFlight ??= new SingleFlightCoordinator(preferFileLock: true);
+            $preflightToken = RequestLifecycleTrace::measurePhase(
+                'storefront.cache.singleflight_acquire',
+                fn(): mixed => $preflightFlight->acquire($preflightLockKey, $singleFlightWaitMs, 30),
+                $phaseMeta,
+            );
+            if ($traceMeta !== null) {
+                $phaseMeta['singleflight_acquired'] = $preflightToken !== null;
+            }
+            if ($preflightToken !== null) {
+                try {
+                    $cached = RequestLifecycleTrace::measurePhase(
+                        'storefront.cache.shared_read',
+                        fn(): mixed => $this->readShared($pool, $scopedKey, $explicitDimensions),
+                        $phaseMeta,
+                    );
+                    if ($traceMeta !== null) {
+                        $phaseMeta += $this->entryTraceMetadata(null, $cached === null ? 'absent' : 'invalid', 'l2');
+                    }
+                    if (is_array($cached) && array_key_exists('payload', $cached)) {
+                        $entry = $this->normalizeEnvelope($cached, $freshTtlSeconds, $staleTtlSeconds);
+                        $status = $this->entryStatus($entry);
+                        if ($traceMeta !== null) {
+                            $phaseMeta = array_replace($phaseMeta, $this->entryTraceMetadata($entry, $status, 'l2'));
+                        }
+                        if ($status === 'fresh' || $status === 'stale') {
+                            $this->storeProcessEntry($processKey, $entry);
+                            if ($status === 'stale') {
+                                $this->queueRefresh(
+                                    $poolIdentity,
+                                    $scopedKey,
+                                    $processKey,
+                                    $freshTtlSeconds,
+                                    $staleTtlSeconds,
+                                    $builder,
+                                    $explicitDimensions,
+                                );
+                            }
+                            return $entry['payload'];
+                        }
+                    }
+                    $payload = RequestLifecycleTrace::measurePhase(
+                        'storefront.cache.builder',
+                        $builder,
+                        $phaseMeta,
+                    );
+                    $entry = $this->makeEnvelope($payload, $freshTtlSeconds, $staleTtlSeconds);
+                    if ($traceMeta !== null) {
+                        $phaseMeta['write_fresh_until'] = $entry['fresh_until'];
+                        $phaseMeta['write_stale_until'] = $entry['stale_until'];
+                    }
+                    RequestLifecycleTrace::measurePhase(
+                        'storefront.cache.shared_write',
+                        function () use ($pool, $scopedKey, $entry, $freshTtlSeconds, $staleTtlSeconds, $explicitDimensions): void {
+                            $this->writeShared($pool, $scopedKey, $entry, $freshTtlSeconds + $staleTtlSeconds, $explicitDimensions);
+                        },
+                        $phaseMeta,
+                    );
+                    $this->storeProcessEntry($processKey, $entry);
+                    return $payload;
+                } finally {
+                    $preflightFlight->release($preflightLockKey, $preflightToken);
+                }
+            }
+        }
+
         $cached = RequestLifecycleTrace::measurePhase(
             'storefront.cache.shared_read',
             fn(): mixed => $this->readShared($pool, $scopedKey, $explicitDimensions),
@@ -225,10 +301,9 @@ final class StorefrontScopeHotCache
 
         $lockKey = 'storefront-hot-cache:' . hash('sha256', $processKey);
         $flight = $this->singleFlight ??= new SingleFlightCoordinator();
-        // A storefront request must not queue behind a remote lock. The cache
-        // builder is idempotent and the shared recheck below still reuses a
-        // peer result when one is already available; waiting 1.5s per cold
-        // resource turns a burst into a serialized multi-second waterfall.
+        // Policies without a wait budget remain non-blocking. A timed-out
+        // policy preflight also falls through here and keeps the old
+        // shared-recheck-then-build availability path.
         $token = RequestLifecycleTrace::measurePhase(
             'storefront.cache.singleflight_acquire',
             fn(): mixed => $flight->acquire($lockKey, 0, 30),

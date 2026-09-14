@@ -242,6 +242,10 @@ class KeyBuilder
                 'area' => self::getAreaKey(),
             };
         }
+        if (in_array('lang', $policy->vary, true)) {
+            // The namespace vector is a set; retain fallback order in content identity.
+            $dimensions['translation_locales'] = $context->translationLocales ?? [];
+        }
         return $dimensions;
     }
 
@@ -393,7 +397,7 @@ class KeyBuilder
             }
         }
         if (!empty($dimensions['website_url'])) {
-            $environment['website_url'] = (string)self::requestScopeValue('website.url', 'WELINE_WEBSITE_URL', '');
+            $environment['website_url'] = (string)self::requestScopeValue('website_url', 'WELINE_WEBSITE_URL', '');
         }
         if (!empty($dimensions['host'])) {
             $environment['host'] = (string)self::requestScopeValue('server.http_host', 'HTTP_HOST', '');
@@ -580,15 +584,17 @@ class KeyBuilder
     private static function requestScopeValue(string $envKey, string $serverKey = '', mixed $default = ''): mixed
     {
         $value = null;
-        if ($serverKey !== '' && isset($_SERVER[$serverKey]) && $_SERVER[$serverKey] !== '') {
-            return $_SERVER[$serverKey];
-        }
-
         if ($envKey !== '' && \function_exists('w_env')) {
             $value = \w_env($envKey, null);
             if ($value !== null && $value !== '') {
                 return $value;
             }
+        }
+
+        // Renderers read the current Context through w_env(); globals can still
+        // contain an earlier request snapshot. Retain globals for empty/CLI input.
+        if ($serverKey !== '' && isset($_SERVER[$serverKey]) && $_SERVER[$serverKey] !== '') {
+            return $_SERVER[$serverKey];
         }
 
         if ($serverKey !== '') {

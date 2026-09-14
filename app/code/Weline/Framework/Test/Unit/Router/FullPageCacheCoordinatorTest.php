@@ -168,12 +168,13 @@ final class FullPageCacheCoordinatorTest extends TestCase
         ]));
     }
 
-    public function testCooperativeFpcYieldIsOptInForPersistentRequests(): void
+    public function testCooperativeFpcYieldDefaultsEnabledForPersistentRequests(): void
     {
         $method = new \ReflectionMethod(FullPageCacheCoordinator::class, 'cooperativeBuildYield');
         $file = $method->getFileName();
 
         self::assertIsString($file);
+        self::assertTrue((bool)\Weline\Framework\App\Env::get('wls.performance.fpc_cooperative_yield_enabled', false));
 
         $lines = \file($file);
         self::assertIsArray($lines);
@@ -185,7 +186,6 @@ final class FullPageCacheCoordinatorTest extends TestCase
         ));
 
         self::assertStringContainsString('wls.performance.fpc_cooperative_yield_enabled', $source);
-        self::assertStringContainsString('false', $source);
         self::assertStringContainsString('SchedulerSystem::yield()', $source);
     }
 
@@ -708,6 +708,210 @@ final class FullPageCacheCoordinatorTest extends TestCase
             'GET',
         );
         self::assertNull($coordinator->resolveRootHomepageProcessReceipt($queryFullUri));
+    }
+
+
+    public function testHomepageReceiptRetainsItsTranslationSnapshotAcrossOtherRequestLanguages(): void
+    {
+        $coordinator = $this->coordinator(new InMemoryCachePool());
+        $identity = RequestContext::scopeIdentity();
+        RequestContext::setWelineUserLang('de_DE');
+        RequestContext::setWelineUserCurrency('USD');
+        StorefrontCacheKeyContext::install(new StorefrontCacheKeyContext(
+            $identity, 'de_DE', 'USD', str_repeat('b', 64), str_repeat('b', 64), true, '',
+            'fr_FR', ['de_DE', 'en_US', 'fr_FR'],
+        ));
+        $fullUri = 'https://example.test/de_DE/';
+        $this->setCurrentFpcUri($fullUri, '/de_DE/');
+        $coordinator->publishResponse(
+            Response::html('<html><body>frozen translated homepage</body></html>')
+                ->setHeader('Cache-Control', 'public, max-age=60'),
+            '/de_DE/', ['id' => 'home'], ['module' => 'Test_Module'], [], 'GET',
+        );
+        $receipt = $coordinator->resolveLocalizedHomepageProcessReceipt($fullUri);
+        self::assertIsArray($receipt);
+        self::assertSame('de_DE', $receipt['lang']);
+        self::assertSame('fr_FR', $receipt['default_locale']);
+        self::assertSame(['de_DE', 'en_US', 'fr_FR'], $receipt['translation_locales']);
+
+        $runtime = (new \ReflectionClass(\Weline\Framework\Runtime\WlsRuntime::class))->newInstanceWithoutConstructor();
+        self::assertSame($receipt, (new \ReflectionMethod(
+            $runtime, 'normalizeHomepageWarmupReceipt',
+        ))->invoke($runtime, $receipt), 'READY/IPC normalization preserves the publication snapshot.');
+
+        RequestContext::setWelineUserLang('ja_JP');
+        self::assertSame($receipt['cache_key'], (new \ReflectionMethod(
+            $coordinator, 'internalHomepageReceiptCacheKey',
+        ))->invoke($coordinator, $receipt), 'Revalidation uses the receipt, not ambient language.');
+
+        $legacy = $receipt;
+        unset($legacy['translation_locales']);
+        self::assertNull((new \ReflectionMethod(
+            $coordinator, 'internalHomepageReceiptCacheKey',
+        ))->invoke($coordinator, $legacy));
+    }
+
+    public function testPublishStoresBrotliOnlyAndGzipMaterializesOnDemand(): void
+    {
+        if (!\Weline\Framework\Http\ContentEncodingNegotiator::brotliAvailable()) {
+            self::markTestSkipped('brotli extension is not loaded');
+        }
+
+        \Weline\Framework\App\Env::set('wls.performance.fpc_gzip_demand_materialize_threshold', 3);
+        \Weline\Framework\App\Env::set('wls.performance.fpc_gzip_demand_window_seconds', 60);
+        \Weline\Framework\App\Env::set('wls.performance.fpc_gzip_demand_evict_idle_seconds', 30);
+
+        $pool = new InMemoryCachePool();
+        $coordinator = $this->coordinator($pool);
+        $plain = \str_repeat('<section class="storefront-critical">layout</section>', 40);
+        self::assertGreaterThanOrEqual(1024, \strlen($plain));
+
+        $coordinator->publishResponse(
+            Response::html($plain, 200)->setHeader('Cache-Control', 'public, max-age=60'),
+            '/',
+            ['id' => 'home'],
+            ['module' => 'Test_Module'],
+            [],
+            'GET',
+        );
+
+        $cacheKey = $this->buildCurrentUnifiedFpcCacheKey($coordinator, 'GET');
+        $payload = $pool->get($cacheKey);
+        self::assertIsArray($payload);
+        // br is authoritative: plaintext is stripped from Shared/L1 payloads.
+        self::assertNull($payload[KeyBuilder::UNIFIED_CACHE_FPC_KEY] ?? null);
+        self::assertNotEmpty($payload['fpc_br_b64'] ?? '');
+        self::assertSame('', (string)($payload['fpc_gzip_b64'] ?? ''));
+
+        $resolve = new \ReflectionMethod($coordinator, 'resolveEncodedHitBody');
+        $resolve->setAccessible(true);
+        $processGet = new \ReflectionMethod($coordinator, 'getProcessCachedPayload');
+        $processGet->setAccessible(true);
+
+        for ($i = 0; $i < 2; $i++) {
+            $cached = $processGet->invoke($coordinator, $cacheKey);
+            self::assertIsArray($cached);
+            [$body, $encoding] = $resolve->invoke($coordinator, $cached, 'gzip', $cacheKey);
+            self::assertSame('gzip', $encoding);
+            self::assertSame($plain, \gzdecode($body));
+            $after = $processGet->invoke($coordinator, $cacheKey);
+            self::assertIsArray($after);
+            self::assertSame('', (string)($after['fpc_gzip_b64'] ?? ''), 'below threshold keeps gzip ephemeral');
+        }
+
+        $cached = $processGet->invoke($coordinator, $cacheKey);
+        self::assertIsArray($cached);
+        [$body, $encoding] = $resolve->invoke($coordinator, $cached, 'gzip', $cacheKey);
+        self::assertSame('gzip', $encoding);
+        self::assertSame($plain, \gzdecode($body));
+
+        $materialized = $processGet->invoke($coordinator, $cacheKey);
+        self::assertIsArray($materialized);
+        self::assertNotEmpty($materialized['fpc_gzip_b64'] ?? '', 'threshold materializes gzip');
+
+        $demand = new \ReflectionProperty(FullPageCacheCoordinator::class, 'gzipDemandByCacheKey');
+        $demand->setAccessible(true);
+        /** @var array<string, array{count:int,window_start:float,last_at:float}> $map */
+        $map = $demand->getValue();
+        $map[$cacheKey]['last_at'] = \microtime(true) - 120.0;
+        $demand->setValue(null, $map);
+
+        $prepare = new \ReflectionMethod($coordinator, 'prepareCachedPayloadForHit');
+        $prepare->setAccessible(true);
+        $prepared = $prepare->invoke(
+            $coordinator,
+            $cacheKey,
+            $materialized,
+            $plain,
+            false,
+            false,
+        );
+        self::assertIsArray($prepared);
+        self::assertSame('', (string)($prepared['fpc_gzip_b64'] ?? ''), 'idle peak drops materialized gzip');
+        self::assertNull($prepared[KeyBuilder::UNIFIED_CACHE_FPC_KEY] ?? null, 'prepare must not write plaintext back');
+
+        \Weline\Framework\App\Env::set('wls.performance.fpc_gzip_demand_materialize_threshold', 8);
+        \Weline\Framework\App\Env::set('wls.performance.fpc_gzip_demand_window_seconds', 60);
+        \Weline\Framework\App\Env::set('wls.performance.fpc_gzip_demand_evict_idle_seconds', 120);
+    }
+
+    public function testResolvePlaintextBodyFromBrotliOnlyPayload(): void
+    {
+        if (!\Weline\Framework\Http\ContentEncodingNegotiator::brotliAvailable()) {
+            self::markTestSkipped('brotli extension is not loaded');
+        }
+
+        $coordinator = $this->coordinator(new InMemoryCachePool());
+        $plain = \str_repeat('<p>br-authority</p>', 80);
+        self::assertGreaterThanOrEqual(1024, \strlen($plain));
+        $br = \brotli_compress($plain, \Weline\Framework\Http\ContentEncodingNegotiator::BROTLI_QUALITY);
+        self::assertIsString($br);
+
+        $resolve = new \ReflectionMethod($coordinator, 'resolvePlaintextBody');
+        $resolve->setAccessible(true);
+        self::assertSame($plain, $resolve->invoke($coordinator, [
+            'fpc_br_b64' => \base64_encode($br),
+        ]));
+
+        $set = new \ReflectionMethod($coordinator, 'setProcessCachedPayload');
+        $set->setAccessible(true);
+        $get = new \ReflectionMethod($coordinator, 'getProcessCachedPayload');
+        $get->setAccessible(true);
+        $cacheKey = 'br-only-l1-key';
+        $set->invoke($coordinator, $cacheKey, [
+            KeyBuilder::UNIFIED_CACHE_STATUS_KEY => 200,
+            'fpc_br_b64' => \base64_encode($br),
+            KeyBuilder::UNIFIED_CACHE_HEADERS_KEY => ['Content-Type: text/html; charset=utf-8'],
+            'fpc_variant' => ['lang' => 'zh_Hans_CN', 'currency' => 'CNY'],
+            'fpc_html_urls_validated' => true,
+            'fpc_expires_at' => \microtime(true) + 60.0,
+        ]);
+        $stored = $get->invoke($coordinator, $cacheKey);
+        self::assertIsArray($stored);
+        self::assertNull($stored[KeyBuilder::UNIFIED_CACHE_FPC_KEY] ?? null);
+        self::assertSame($plain, $resolve->invoke($coordinator, $stored));
+    }
+
+    public function testExternalizeWritesBrotliFileAndHydrateRestoresAuthority(): void
+    {
+        if (!\Weline\Framework\Http\ContentEncodingNegotiator::brotliAvailable()) {
+            self::markTestSkipped('brotli extension is not loaded');
+        }
+
+        \Weline\Framework\App\Env::set('wls.performance.fpc_shared_file_body_min_bytes', 1024);
+        $coordinator = $this->coordinator(new InMemoryCachePool());
+        $plain = \str_repeat('<section>external-br</section>', 80);
+        self::assertGreaterThanOrEqual(1024, \strlen($plain));
+        $br = \brotli_compress($plain, \Weline\Framework\Http\ContentEncodingNegotiator::BROTLI_QUALITY);
+        self::assertIsString($br);
+
+        $externalize = new \ReflectionMethod($coordinator, 'externalizeSharedPayload');
+        $externalize->setAccessible(true);
+        $hydrate = new \ReflectionMethod($coordinator, 'hydrateSharedPayload');
+        $hydrate->setAccessible(true);
+
+        $shared = $externalize->invoke($coordinator, 'externalize-br-key', [
+            KeyBuilder::UNIFIED_CACHE_FPC_KEY => $plain,
+            'fpc_br_b64' => \base64_encode($br),
+            KeyBuilder::UNIFIED_CACHE_STATUS_KEY => 200,
+        ]);
+        self::assertIsArray($shared['fpc_body_file'] ?? null);
+        self::assertSame('br', $shared['fpc_body_file']['encoding'] ?? null);
+        self::assertStringEndsWith('.br', (string)($shared['fpc_body_file']['path'] ?? ''));
+        self::assertNull($shared[KeyBuilder::UNIFIED_CACHE_FPC_KEY] ?? null);
+        self::assertNull($shared['fpc_br_b64'] ?? null);
+        self::assertFileExists((string)$shared['fpc_body_file']['path']);
+
+        $hydrated = $hydrate->invoke($coordinator, $shared);
+        self::assertIsArray($hydrated);
+        self::assertNull($hydrated[KeyBuilder::UNIFIED_CACHE_FPC_KEY] ?? null);
+        self::assertNotEmpty($hydrated['fpc_br_b64'] ?? '');
+        $resolve = new \ReflectionMethod($coordinator, 'resolvePlaintextBody');
+        $resolve->setAccessible(true);
+        self::assertSame($plain, $resolve->invoke($coordinator, $hydrated));
+
+        @\unlink((string)$shared['fpc_body_file']['path']);
+        \Weline\Framework\App\Env::set('wls.performance.fpc_shared_file_body_min_bytes', 262144);
     }
 
     private function coordinator(CachePoolInterface $pool): FullPageCacheCoordinator

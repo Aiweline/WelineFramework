@@ -15,14 +15,14 @@ Object.assign(window.WelineModulesConfig.modules, {
     },
     miniCartExtras: {
         paths: [
-            "Weline_Theme::js/widgets/mini-cart-extras-tabs.js?v=20260911-credit-tob-only1"
+            "Weline_Theme::js/widgets/mini-cart-extras-tabs.js?v=20260914-skip-empty-tabs1"
         ],
         globalVar: "WelineMiniCartExtras",
         description: "迷你购物车 extras 页签交互"
     },
     miniCartIcon: {
         paths: [
-            "Weline_Theme::js/widgets/mini-cart-icon.js?v=20260910-checkout-invalidate1"
+            "Weline_Theme::js/widgets/mini-cart-icon.js?v=20260914-swatch-zoom"
         ],
         globalVar: "WelineMiniCartIcon",
         description: "迷你购物车图标与抽屉"

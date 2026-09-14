@@ -35,5 +35,7 @@ final class RandomCouponCampaignProviderContractTest extends TestCase
         self::assertStringContainsString('RULE_TYPE_COUPON', $svc);
         self::assertStringContainsString("'apply_to' => 'subtotal'", $svc);
         self::assertStringNotContainsString("'apply_to' => 'cart'", $svc);
+        self::assertStringContainsString('CouponSourceAttribution', $svc);
+        self::assertStringContainsString('schema_fields_SOURCE_TYPE', $svc);
     }
 }

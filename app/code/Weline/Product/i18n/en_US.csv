@@ -94,6 +94,7 @@
 "product_id 与 supplier_id 必须为正整数","product_id and supplier_id must be positive integers"
 商品供应商关联创建后无法回读：%{1},"Product-supplier link could not be reloaded after create: %{1}"
 商品供应商关联更新后无法回读,"Product-supplier link could not be reloaded after update"
+说明,说明
 产品更新通知,产品更新通知
 产品信息/库存等更新相关邮件,产品信息/库存等更新相关邮件
 询价回复通知,询价回复通知
@@ -403,9 +404,9 @@ SKU,SKU
 "Buy these items together","Buy these items together"
 当前商品,当前商品
 总价,总价
-精选好物，为你推荐,精选好物，为你推荐
 上一组,上一组
 下一组,下一组
+精选好物，为你推荐,精选好物，为你推荐
 商品信息暂不可用,"Product information is unavailable"
 商品类型,"Product type"
 属性集,"Attribute set"
@@ -486,10 +487,10 @@ DPI,DPI
 加入购物车,"Add to Cart"
 立即结账,"Proceed to checkout"
 暂不可售,"Currently unavailable"
-前往购物车,前往购物车
-正在前往结账...,正在前往结账...
-结账准备失败,结账准备失败
-快捷支付,快捷支付
+前往购物车,"Go to cart"
+正在前往结账...,"Going to checkout..."
+结账准备失败,"Could not prepare checkout"
+快捷支付,"Express checkout"
 安全交易保障,"Secure transaction"
 技术细节,"Technical details"
 展示更多,"Show more"
@@ -503,6 +504,7 @@ DPI,DPI
 备注,Notes
 请至少填写邮箱或手机号。提交后我们会尽快联系您。,"Provide at least an email or phone number. We will contact you after submission."
 取消,Cancel
+选规格,选规格
 查看商品视频,查看商品视频
 查看商品图片,查看商品图片
 请填写邮箱或手机号,"Please provide an email or phone number"
@@ -611,6 +613,12 @@ SPU,SPU
 配送方案,配送方案
 不限制（全部地址可达服务）,不限制（全部地址可达服务）
 绑定配送服务编码（非费用模板）。空=不限制。同车混绑不同方案时，结算可能无可选运力。,绑定配送服务编码（非费用模板）。空=不限制。同车混绑不同方案时，结算可能无可选运力。
+危品类别,危品类别
+普货（无危品）,普货（无危品）
+含锂电池,含锂电池
+液体,液体
+磁性,磁性
+粉末,粉末
 内容文案,内容文案
 短描述,短描述
 详情描述,详情描述
@@ -673,7 +681,7 @@ ID,ID
 编辑,edit
 未配置,未配置
 未命名草稿,未命名草稿
-包邮,包邮
+包邮,"Free shipping"
 未选择属性集,未选择属性集
 创建并立即发布,"Create and publish now"
 "维护 Website 级品牌目录（名称、编码、Logo、状态）。创建商品时从启用品牌中选择。","Maintain the website brand catalog (name, code, logo, status). Pick an active brand when creating products."
@@ -819,6 +827,7 @@ ID,ID
 需要配送,需要配送
 数字交付,数字交付
 "绑定配送服务编码（非费用模板）。空=不限制。保存后写入全部 Offer。","绑定配送服务编码（非费用模板）。空=不限制。保存后写入全部 Offer。"
+普货航线默认不接受危品；有危品时仅匹配已声明接受类别的航线。,普货航线默认不接受危品；有危品时仅匹配已声明接受类别的航线。
 库存能力暂不可用,库存能力暂不可用
 可以继续编辑商品其他信息；库存不会被改写。,可以继续编辑商品其他信息；库存不会被改写。
 暂无可维护库存,暂无可维护库存
@@ -1463,3 +1472,7 @@ AI翻译,"AI Translation"
 视频链接,"Video URL"
 视频排序,"Video position"
 视频媒体库,"Video media library"
+运费以结算页为准,"Shipping calculated at checkout"
+本配送方案为服务级免邮，具体以结算页为准,"This shipping profile includes free shipping; final cost shown at checkout"
+猜你喜欢,"Recommended for You"
+根据当前商品为你推荐,"Recommended for you based on this product"

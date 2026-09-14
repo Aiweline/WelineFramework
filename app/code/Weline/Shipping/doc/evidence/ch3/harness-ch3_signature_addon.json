@@ -1,0 +1,90 @@
+{
+    "ok": true,
+    "scenario": "ch3_signature_addon",
+    "base": {
+        "ok": true,
+        "scenario": "ch3_signature_addon_base",
+        "rates": {
+            "SEED_LANE_AMERICAS": {
+                "amount_minor": 11500,
+                "label": "美洲",
+                "package_count": 1,
+                "free_reason": null,
+                "surcharges": [],
+                "seasonal": [],
+                "addons": []
+            }
+        },
+        "diagnostics": {
+            "country_code": "US",
+            "currency": "CNY",
+            "lane_count": 1,
+            "fx_skipped": [],
+            "profile_groups": 1
+        },
+        "error": null,
+        "assertions": {
+            "conflict": false,
+            "has_service": true,
+            "amount_minor": 11500,
+            "package_count": 1,
+            "surcharges": [],
+            "addons": [],
+            "seasonal": [],
+            "free_reason": null
+        }
+    },
+    "with_signature": {
+        "ok": true,
+        "scenario": "ch3_signature_addon",
+        "rates": {
+            "SEED_LANE_AMERICAS": {
+                "amount_minor": 12000,
+                "label": "美洲",
+                "package_count": 1,
+                "free_reason": null,
+                "surcharges": [],
+                "seasonal": [],
+                "addons": [
+                    {
+                        "addon_code": "SEED_ADDON_SIGNATURE",
+                        "addon_name": "签收确认",
+                        "addon_type": "signature",
+                        "amount_minor": 500
+                    }
+                ]
+            }
+        },
+        "diagnostics": {
+            "country_code": "US",
+            "currency": "CNY",
+            "lane_count": 1,
+            "fx_skipped": [],
+            "profile_groups": 1
+        },
+        "error": null,
+        "assertions": {
+            "conflict": false,
+            "has_service": true,
+            "amount_minor": 12000,
+            "package_count": 1,
+            "surcharges": [],
+            "addons": [
+                {
+                    "addon_code": "SEED_ADDON_SIGNATURE",
+                    "addon_name": "签收确认",
+                    "addon_type": "signature",
+                    "amount_minor": 500
+                }
+            ],
+            "seasonal": [],
+            "free_reason": null
+        }
+    },
+    "assertions": {
+        "amount_increased": true,
+        "has_signature_addon": true,
+        "base_amount": 11500,
+        "with_amount": 12000
+    }
+}

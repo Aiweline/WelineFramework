@@ -125,14 +125,7 @@ final class ProjectIndexer
             $removed = [];
             $warnings = [];
             $skipped = ['policy' => 0, 'missing' => 0, 'oversized' => 0, 'binary' => 0, 'unreadable' => 0, 'parser_capacity' => 0];
-            // Existing configs may retain the former 512 KiB default. Every
-            // accepted edit must fit the same index on later refreshes too.
-            $maxFileBytes = max(
-                (int) $this->config->get('index.max_file_bytes', 1_048_576),
-                (bool) $this->config->get('editing.enabled', true)
-                    ? (int) $this->config->get('editing.max_file_bytes', 1_048_576)
-                    : 0,
-            );
+            $maxFileBytes = (int) $this->config->get('index.max_file_bytes', 1_048_576);
 
             foreach ($discovered as $path) {
                 if (!$this->pathAllowed($path, $requestedPaths !== null)) {

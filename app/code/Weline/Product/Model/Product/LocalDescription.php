@@ -147,6 +147,7 @@ class LocalDescription extends LocalModel
         $attributes = ObjectManager::getInstance(AttributeValueRepository::class);
         self::$syncing = true;
         try {
+            $writesByProduct = [];
             foreach ($rows as $row) {
                 $productId = max(0, (int)($row[self::schema_fields_ID] ?? 0));
                 $locale = ProductCategoryAttributeService::normalizeLocaleKey(
@@ -163,31 +164,49 @@ class LocalDescription extends LocalModel
                     if ($value === '') {
                         continue;
                     }
-                    $required = $field === self::schema_fields_NAME;
-                    $attributes->writeTyped(
-                        $websiteId,
-                        0,
-                        'product',
-                        $productId,
+                    $writesByProduct[$productId][] = [
                         $field,
                         $locale,
-                        'string',
                         $value,
-                        $required,
-                    );
-                    // Website default / empty-locale fallback used by publish diagnostics.
-                    $attributes->writeTyped(
-                        $websiteId,
-                        0,
-                        'product',
-                        $productId,
-                        $field,
-                        '',
-                        'string',
-                        $value,
-                        $required,
-                    );
+                        $field === self::schema_fields_NAME,
+                    ];
                 }
+            }
+
+            // One committed change per product; repeated locales retain their input order.
+            foreach ($writesByProduct as $productId => $writes) {
+                $attributes->mutateProductAttributes(
+                    $websiteId,
+                    $productId,
+                    0,
+                    function () use ($attributes, $websiteId, $productId, $writes): void {
+                        foreach ($writes as [$field, $locale, $value, $required]) {
+                            $attributes->writeTyped(
+                                $websiteId,
+                                0,
+                                'product',
+                                $productId,
+                                $field,
+                                $locale,
+                                'string',
+                                $value,
+                                $required,
+                            );
+                            // Preserve the empty-locale fallback immediately after its local value.
+                            $attributes->writeTyped(
+                                $websiteId,
+                                0,
+                                'product',
+                                $productId,
+                                $field,
+                                '',
+                                'string',
+                                $value,
+                                $required,
+                            );
+                        }
+                    },
+                );
             }
         } finally {
             self::$syncing = false;

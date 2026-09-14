@@ -118,6 +118,20 @@ class RouterRunBefore implements ObserverInterface
                 $core->StaticFile($decodedPath, true);
             }
         }
+        // /media/{relative} → pub/media/{relative}（音频/附件等非 /media/image|/media/file 直链）
+        if (str_starts_with($path, '/media/')
+            && !str_starts_with($path, '/media/image/')
+            && !str_starts_with($path, '/media/file/')
+            && !str_starts_with($path, '/media/backend/')
+        ) {
+            $relative = \substr($decodedPath, \strlen('/media/'));
+            $file_path = $this->resolveExistingFileInRoot(BP . '/pub/media', $relative);
+            if ($file_path !== null && is_file($file_path)) {
+                /**@var Core $core */
+                $core = ObjectManager::getInstance(Core::class);
+                $core->StaticFile('/pub/media/' . \ltrim($relative, '/'), true);
+            }
+        }
         // 跳过解析 
         // 图片
         if (str_starts_with($path, '/media/image/')) {

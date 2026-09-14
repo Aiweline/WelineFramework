@@ -1,0 +1,147 @@
+<?php
+/**
+ * @meta.title {default="Stripe 支付方式",description="Stripe Checkout Provider 配置模板标题"}
+ * @meta.description {default="配置 Stripe 沙箱与正式环境 Secret Key、Webhook 与结账展示。"}
+ * @config.area {backend}
+ * @config.sort {56}
+ * @config.acl {Weline_Payment::payment_method}
+ */
+?>
+
+<w:config:group code="stripe_runtime" label="Stripe 运行配置" description="Stripe Checkout 支付方式启用状态与排序。" sort="10">
+    <w:config:field
+        key="payment/method/stripe/enabled"
+        label="启用 Stripe"
+        description="启用后 Stripe 可在通过配置测试后参与结账。"
+        type="switch"
+        value-type="bool"
+        default="0"
+        scope="global,website,store" />
+
+    <w:config:field
+        key="payment/method/stripe/is_default"
+        label="设为默认支付方式"
+        description="当前 scope 下多个支付方式可用时优先选择 Stripe。"
+        type="switch"
+        value-type="bool"
+        default="0"
+        scope="global,website,store" />
+
+    <w:config:field
+        key="payment/method/stripe/sort_order"
+        label="排序"
+        description="结账页支付方式排序，数字越小越靠前。"
+        type="number"
+        value-type="int"
+        default="25"
+        scope="global,website,store"
+        validation="min:0|max:9999" />
+
+    <w:config:field
+        key="payment/method/stripe/icon"
+        label="支付图标"
+        description="覆盖 Provider 默认图标。从图库选择图片，或留空使用 Provider 自带图标。"
+        type="image"
+        value-type="string"
+        default=""
+        scope="global,website,store"
+        validation="max:1024" />
+
+    <w:config:field
+        key="payment/method/stripe/environment"
+        label="运行环境"
+        description="sandbox 使用测试密钥；live 使用正式密钥。"
+        type="select"
+        value-type="string"
+        default="sandbox"
+        scope="global,website,store"
+        options="sandbox:Sandbox,live:Live"
+        validation="in_options" />
+
+    <w:config:field
+        key="payment/method/stripe/supported_currencies"
+        label="支持货币"
+        description="Stripe 可在这些货币下展示；以商户后台开通为准。"
+        type="multiselect"
+        value-type="json"
+        default="USD,EUR,GBP,CAD,AUD,JPY,HKD,SGD,CNY"
+        scope="global,website,store"
+        options="USD:USD,EUR:EUR,GBP:GBP,CAD:CAD,AUD:AUD,JPY:JPY,HKD:HKD,SGD:SGD,CNY:CNY"
+        validation="required|in_options" />
+
+    <w:config:field
+        key="payment/method/stripe/supported_countries"
+        label="支持国家"
+        description="Stripe 可在这些国家下选择。"
+        type="multiselect"
+        value-type="json"
+        default="US,CA,GB,AU,SG,HK,FR,DE,NL,JP,BR,MX,CN"
+        scope="global,website,store"
+        options="US:US,CA:CA,GB:GB,AU:AU,SG:SG,HK:HK,FR:FR,DE:DE,NL:NL,JP:JP,BR:BR,MX:MX,CN:CN"
+        validation="in_options" />
+</w:config:group>
+
+<w:config:group code="stripe_sandbox" label="Stripe 沙箱凭据" description="从 Stripe Dashboard → Developers → API keys（Test mode）复制 Secret Key。" sort="20">
+    <w:config:field
+        key="payment/method/stripe/sandbox_secret_key"
+        label="沙箱 Secret Key"
+        description="以 sk_test_ 开头。仅服务端使用，勿暴露到前端。"
+        type="password"
+        value-type="string"
+        default=""
+        scope="global,website,store"
+        validation="max:256" />
+
+    <w:config:field
+        key="payment/method/stripe/sandbox_webhook_secret"
+        label="沙箱 Webhook Signing Secret"
+        description="Test endpoint 的 whsec_…，用于校验 Stripe-Signature。"
+        type="password"
+        value-type="string"
+        default=""
+        scope="global,website,store"
+        validation="max:256" />
+
+    <w:config:adapter
+        code="stripe.sandbox.test"
+        label="沙箱连接测试"
+        description="使用当前 Scope 沙箱 Secret Key 调用 Stripe Balance API。"
+        backend-url="payment/backend/connect/test?method_code=stripe&environment=sandbox"
+        action-label="测试沙箱连接" />
+</w:config:group>
+
+<w:config:group code="stripe_live" label="Stripe 正式凭据" description="Live mode Secret Key 与正式 Webhook Signing Secret。" sort="30">
+    <w:config:field
+        key="payment/method/stripe/live_secret_key"
+        label="正式 Secret Key"
+        description="以 sk_live_ 开头。"
+        type="password"
+        value-type="string"
+        default=""
+        scope="global,website,store"
+        validation="max:256" />
+
+    <w:config:field
+        key="payment/method/stripe/live_webhook_secret"
+        label="正式 Webhook Signing Secret"
+        description="Live endpoint 的 whsec_…。"
+        type="password"
+        value-type="string"
+        default=""
+        scope="global,website,store"
+        validation="max:256" />
+
+    <w:config:adapter
+        code="stripe.live.test"
+        label="正式连接测试"
+        description="使用当前 Scope 正式 Secret Key 调用 Stripe Balance API。"
+        backend-url="payment/backend/connect/test?method_code=stripe&environment=live"
+        action-label="测试正式连接" />
+</w:config:group>
+
+<w:config:hint type="info">
+【Stripe Checkout】
+- 在 Dashboard → Developers → Webhooks 登记壳回调 URL，监听 checkout.session.completed、payment_intent.payment_failed。
+- success/cancel URL 由支付壳在下单时注入；无需手填。
+- CSP 由 StripeProvider::cspDirectives() 贡献，无需在全局 Defaults 硬编码 Stripe 域名。
+</w:config:hint>

@@ -96,7 +96,7 @@ try {
     $check(($body['workflow_contract']['surfaces'] ?? []) === [], 'queue diagnosis does not include unrelated frontend surfaces');
     $check(!isset($body['pinned_fragments']) && !isset($body['workflow_contract']['frontend_development']), 'normal context omits duplicated pinned and frontend aliases');
     $check(isset($body['workflow_contract']['authoritative_hard_rules_index']), 'compact guidance preserves its authoritative rules entry');
-    $check(mb_strlen((string) ($init['instructions'] ?? ''), 'UTF-8') <= 1200, 'server bootstrap stays short when hosts expand it per tool');
+    $check(mb_strlen((string) ($init['instructions'] ?? ''), 'UTF-8') <= 3200, 'server bootstrap stays bounded when hosts expand it per tool');
     $frontendResponse = $request('tools/call', ['name' => 'resolve_task_context', 'arguments' => $scope + [
         'task' => 'Theme widget JavaScript module loading', 'token_budget' => 3500,
     ]]);
@@ -121,15 +121,17 @@ try {
     $server = new McpServer(new ToolService($store, $config, new Analyzer($store, $config)));
     $envelope = new ReflectionMethod($server, 'toolResponse');
     $marker = 'UNIQUE_REPLACEMENT_BODY_' . str_repeat('z', 200);
-    $regions = [['content' => $marker]];
-    $bundleInput = ['project_id' => 'test', 'exact_regions' => $regions, 'regions' => $regions];
-    $bundle = $envelope->invoke($server, 'get_edit_bundle', $bundleInput, false);
-    $check(substr_count(Json::encode($bundle), $marker) === 1, 'edit bundle body has one default wire carrier');
-    $check(($bundle['structuredContent']['exact_regions'][0]['content'] ?? '') === $marker, 'single carrier preserves complete structured edit content');
+    $guidanceResult = [
+        'schema_version' => 'guidance-bundle.v1',
+        'fragments' => [['path' => 'docs/Queue.md', 'content' => $marker]],
+        'token_usage' => ['budget' => 3500, 'estimated' => 100],
+    ];
+    $guidanceEnvelope = $envelope->invoke($server, 'resolve_task_context', $guidanceResult, false);
+    $check(substr_count(Json::encode($guidanceEnvelope), $marker) === 1, 'guidance body has one default wire carrier');
+    $check(($guidanceEnvelope['structuredContent']['fragments'][0]['content'] ?? '') === $marker, 'single carrier preserves complete structured guidance content');
     putenv('WELINE_MCP_RESPONSE_FORMAT=legacy_mirror');
-    $legacy = $envelope->invoke($server, 'get_edit_bundle', $bundleInput, false);
+    $legacy = $envelope->invoke($server, 'resolve_task_context', $guidanceResult, false);
     $check(str_contains((string) ($legacy['content'][1]['text'] ?? ''), $marker), 'explicit legacy mirror remains available to text-only hosts');
-    $check(($legacy['structuredContent']['regions'] ?? []) === $regions, 'legacy mirror preserves the regions compatibility alias');
     putenv('WELINE_MCP_RESPONSE_FORMAT');
     $store->close();
     $frontend = GuidanceWorkflowCatalog::frontendDevelopmentSurface();

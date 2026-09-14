@@ -55,4 +55,20 @@ class SingleFlightCoordinatorTest extends TestCase
 
         $coordinator->release('sf_wrong_token_key', $token);
     }
+
+    public function testPreferFileLockCoordinatesAcrossCoordinatorInstances(): void
+    {
+        $first = new SingleFlightCoordinator(preferFileLock: true);
+        $second = new SingleFlightCoordinator(preferFileLock: true);
+
+        $token = $first->acquire('sf_file_lock_mode', timeoutMs: 0, ttlSeconds: 5);
+        $this->assertNotNull($token);
+        $this->assertNull($second->acquire('sf_file_lock_mode', timeoutMs: 0, ttlSeconds: 5));
+
+        $first->release('sf_file_lock_mode', $token);
+        $next = $second->acquire('sf_file_lock_mode', timeoutMs: 0, ttlSeconds: 5);
+        $this->assertNotNull($next);
+        $second->release('sf_file_lock_mode', $next);
+    }
 }
+

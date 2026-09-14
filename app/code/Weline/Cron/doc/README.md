@@ -4,7 +4,7 @@
 
 ## 当前入口
 
-开发前先调用项目 MCP `prepare_project`；返回 `ready` 后，使用 `resolve_task_context` 按任务从本 README、`需求.md`、`开发日志.md` 和专题文档取得必要上下文。
+可选：需要检索时，可调用项目 MCP `prepare_project` / `resolve_task_context`，按任务从本 README、`需求.md`、`开发日志.md` 和专题文档取上下文；**编码用宿主原生编辑**。
 
 ## 模块定位
 

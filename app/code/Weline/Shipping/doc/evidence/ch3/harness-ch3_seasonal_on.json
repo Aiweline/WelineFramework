@@ -1,0 +1,88 @@
+{
+    "ok": true,
+    "scenario": "ch3_seasonal_on",
+    "off": {
+        "ok": true,
+        "scenario": "ch3_seasonal_off",
+        "rates": {
+            "SEED_LANE_AMERICAS": {
+                "amount_minor": 11500,
+                "label": "美洲",
+                "package_count": 1,
+                "free_reason": null,
+                "surcharges": [],
+                "seasonal": [],
+                "addons": []
+            }
+        },
+        "diagnostics": {
+            "country_code": "US",
+            "currency": "CNY",
+            "lane_count": 1,
+            "fx_skipped": [],
+            "profile_groups": 1
+        },
+        "error": null,
+        "assertions": {
+            "conflict": false,
+            "has_service": true,
+            "amount_minor": 11500,
+            "package_count": 1,
+            "surcharges": [],
+            "addons": [],
+            "seasonal": [],
+            "free_reason": null
+        }
+    },
+    "on": {
+        "ok": true,
+        "scenario": "ch3_seasonal_on",
+        "rates": {
+            "SEED_LANE_AMERICAS": {
+                "amount_minor": 12075,
+                "label": "美洲",
+                "package_count": 1,
+                "free_reason": null,
+                "surcharges": [],
+                "seasonal": [
+                    {
+                        "rule_code": "SEED_SEASONAL_FUEL",
+                        "rule_name": "燃油附加（默认关）",
+                        "amount_minor": 575
+                    }
+                ],
+                "addons": []
+            }
+        },
+        "diagnostics": {
+            "country_code": "US",
+            "currency": "CNY",
+            "lane_count": 1,
+            "fx_skipped": [],
+            "profile_groups": 1
+        },
+        "error": null,
+        "assertions": {
+            "conflict": false,
+            "has_service": true,
+            "amount_minor": 12075,
+            "package_count": 1,
+            "surcharges": [],
+            "addons": [],
+            "seasonal": [
+                {
+                    "rule_code": "SEED_SEASONAL_FUEL",
+                    "rule_name": "燃油附加（默认关）",
+                    "amount_minor": 575
+                }
+            ],
+            "free_reason": null
+        }
+    },
+    "assertions": {
+        "amount_increased": true,
+        "has_seasonal": true,
+        "off_amount": 11500,
+        "on_amount": 12075
+    }
+}

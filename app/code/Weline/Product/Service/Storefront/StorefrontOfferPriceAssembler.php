@@ -55,6 +55,7 @@ final class StorefrontOfferPriceAssembler implements StorefrontOfferPriceAssembl
                                 'theme_id' => $themeId,
                                 'label' => $label,
                                 'url' => trim((string)($choice['url'] ?? '')),
+                                'frontend_route' => trim((string)($choice['frontend_route'] ?? '')),
                                 'deal_discount_type' => (string)($choice['deal_discount_type'] ?? ''),
                                 'deal_discount_value' => (float)($choice['deal_discount_value'] ?? 0),
                                 'page_slug' => (string)($choice['page_slug'] ?? ''),
@@ -158,6 +159,7 @@ final class StorefrontOfferPriceAssembler implements StorefrontOfferPriceAssembl
             $primary = [
                 'label' => trim($first->label),
                 'url' => trim($first->url),
+                'frontend_route' => trim($first->frontendRoute),
                 'badge' => trim($first->badge) !== '' ? trim($first->badge) : trim($first->label),
                 'code' => $first->code,
                 'source_module' => $first->sourceModule,

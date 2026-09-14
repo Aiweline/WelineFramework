@@ -5,7 +5,7 @@
 
 ## 当前入口
 
-开发前必须先完成 `prepare_project`；进入 `ready` 后调用 `resolve_task_context`，由 MCP 按当前任务返回本模块的最小文档集合。全局门禁见 `app/code/Weline/Ai/doc/AI开发治理.md`。
+可选：需要规则/技能/代码地图时，可调用项目 MCP `prepare_project` / `resolve_task_context` 检索本模块文档；**编码用宿主原生编辑**。全局约定见 `app/code/Weline/Ai/doc/AI开发治理.md`。
 
 ## 模块定位
 

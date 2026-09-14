@@ -282,6 +282,8 @@ final class CartService
             );
         }
 
+        $cartType = $this->remapCartTypeForOffer($cartType, $snapshot, $scope, $customerId);
+
         $cartKey = $this->cartKey($scope, $guestToken, $customerId, $cartType);
         $cart = $this->loadCart($scope, $guestToken, $customerId, $cartType)
             ?? $this->newCart($scope, $guestToken, $customerId, $currency ?? $snapshot->currency, $cartType);
@@ -1092,6 +1094,47 @@ final class CartService
                 ['cart_type' => $actual, 'expected' => $expected],
             );
         }
+    }
+
+    /**
+     * Optional SPI: remap cart_type for this offer (e.g. tob→toc when not wholesale-eligible).
+     */
+    private function remapCartTypeForOffer(
+        string $cartType,
+        CartItemSnapshot $snapshot,
+        ScopeIdentity $scope,
+        ?int $customerId,
+    ): string {
+        $cartType = strtolower(trim($cartType)) ?: CommerceCartTypeRegistry::CODE_TOC;
+        try {
+            $resolver = ObjectManager::getInstance(\Weline\Framework\Runtime\RuntimeProviderResolver::class);
+            $resolution = $resolver->resolveDetailed(\Weline\Cart\Api\CommerceCartOfferRoutingInterface::class);
+        } catch (\Throwable) {
+            return $cartType;
+        }
+        if ($resolution->status === \Weline\Framework\Runtime\RuntimeProviderResolution::NOT_CONFIGURED) {
+            return $cartType;
+        }
+        if (!$resolution->isAvailable()
+            || !$resolution->provider instanceof \Weline\Cart\Api\CommerceCartOfferRoutingInterface
+        ) {
+            return $cartType;
+        }
+
+        $result = $resolution->provider->resolveAddCartType([
+            'cart_type' => $cartType,
+            'sku' => (string)$snapshot->sku,
+            'product_id' => (int)($snapshot->productId ?? 0),
+            'website_id' => (int)($scope->websiteId ?? 0),
+            'store_id' => (int)($scope->storeId ?? 0),
+            'customer_id' => $customerId,
+        ]);
+        $next = strtolower(trim((string)($result['cart_type'] ?? $cartType)));
+        if ($next === '' || !$this->typeRegistry->has($next)) {
+            return $cartType;
+        }
+
+        return $next;
     }
 
     private function assertQtyPolicy(

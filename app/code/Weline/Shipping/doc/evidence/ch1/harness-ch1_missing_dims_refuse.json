@@ -1,0 +1,35 @@
+{
+    "ok": true,
+    "scenario": "ch1_missing_dims_refuse",
+    "chargeable": {
+        "missing_weight": {
+            "weight_kg": 0.2,
+            "has_shipping": true,
+            "missing_weight": true,
+            "missing_dims": false
+        },
+        "missing_dims": {
+            "weight_kg": 2,
+            "has_shipping": true,
+            "missing_weight": false,
+            "missing_dims": true
+        }
+    },
+    "quote": {
+        "ok": true,
+        "scenario": "ch1_missing_dims_refuse",
+        "rates": [],
+        "diagnostics": [],
+        "error": "shipping_profile_conflict",
+        "assertions": {
+            "conflict": true,
+            "missing_service": true,
+            "refused": true
+        }
+    },
+    "assertions": {
+        "missing_weight": true,
+        "missing_dims": true,
+        "quote_refused": true
+    }
+}

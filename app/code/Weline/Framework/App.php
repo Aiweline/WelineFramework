@@ -231,6 +231,47 @@ class App
         return \is_scalar($uri) ? (string)$uri : '';
     }
 
+    /** Read current URL sources without building URLs or retaining request state. */
+    private static function parsedUrlOriginProfile(array $parsedServer): array
+    {
+        $originOnly = static function (mixed $value): string {
+            if (!\is_string($value) || $value === '') {
+                return '';
+            }
+            $parts = \parse_url($value);
+            if (!\is_array($parts)
+                || !\in_array($parts['scheme'] ?? '', ['http', 'https'], true)
+                || empty($parts['host'])
+            ) {
+                return '';
+            }
+
+            return $parts['scheme'] . '://' . $parts['host']
+                . (isset($parts['port']) ? ':' . $parts['port'] : '');
+        };
+        $serverOrigins = static function (array $server) use ($originOnly): array {
+            $scheme = $server['REQUEST_SCHEME'] ?? '';
+            $host = $server['HTTP_HOST'] ?? '';
+
+            return [
+                'http_origin' => \is_string($scheme) && \is_string($host)
+                    ? $originOnly($scheme . '://' . $host) : '',
+                'server_port' => (int)($server['SERVER_PORT'] ?? 0),
+                'website_origin' => $originOnly($server['WELINE_WEBSITE_URL'] ?? ''),
+            ];
+        };
+        $context = Context::getCurrent();
+
+        return [
+            'parsed' => $serverOrigins($parsedServer),
+            'context' => $serverOrigins((array)($context?->server() ?? [])),
+            'global' => $serverOrigins(\is_array($_SERVER ?? null) ? $_SERVER : []),
+            'route_website_origin' => $originOnly($context?->get('route.website_url', '')),
+            'env_website_origin' => $originOnly(WelineEnv::get('website_url', '')),
+            'env_base_origin' => $originOnly(WelineEnv::get('base_url', '')),
+        ];
+    }
+
     public function applyParsedUrl(array $parse): void
     {
         $applyUrlProfile = [];
@@ -265,6 +306,7 @@ class App
         $markApplyUrlStep('load_context_server', [
             'parse_server_keys' => \count($parse['server']),
             'context_server_keys' => \count($server),
+            'origin' => RequestLifecycleTrace::isEnabled() ? self::parsedUrlOriginProfile($parse['server']) : [],
         ]);
         $rawRequestUri = Url::decode_url($this->normalizeParsedUri(
             $server['WELINE_ORIGIN_REQUEST_URI'] ?? $server['REQUEST_URI'] ?? $this->getCurrentRequestUri()
@@ -304,6 +346,7 @@ class App
         }
         $markApplyUrlStep('server_context_set', [
             'keys' => \count($parse['server']),
+            'origin' => RequestLifecycleTrace::isEnabled() ? self::parsedUrlOriginProfile($parse['server']) : [],
         ]);
 
         if ($area !== '') {
@@ -405,6 +448,7 @@ class App
         $markApplyUrlStep('storefront_scope_install', [
             'installed' => RequestContext::scopeIdentity() instanceof ScopeIdentity,
             'route_path' => $navigationScope?->routePath,
+            'origin' => RequestLifecycleTrace::isEnabled() ? self::parsedUrlOriginProfile($parse['server']) : [],
         ]);
 
         $scopeGateEventManager = $this->resolveEventManager();

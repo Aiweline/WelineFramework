@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Ai\Service;
 
+use Weline\Ai\Exception\TranslationBusyException;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Runtime\SchedulerSystem;
 
@@ -62,7 +63,8 @@ final class TranslationConcurrencyGate
     private static array $handleByLane = [];
 
     /**
-     * @throws Exception when another worker still holds the lane lock after waiting
+     * @throws TranslationBusyException when another worker still holds the lane lock after waiting
+     * @throws Exception when the lock directory/file cannot be created or opened
      */
     public function acquire(
         int $maxWaitSeconds = self::DEFAULT_WAIT_SECONDS,
@@ -113,7 +115,8 @@ final class TranslationConcurrencyGate
 
             if (microtime(true) >= $deadline) {
                 fclose($handle);
-                throw new Exception(
+                // RuntimeException: do not auto-write exception.log on construct.
+                throw new TranslationBusyException(
                     self::BUSY_MARKER . ': ' . (string)__('AI翻译繁忙：本地模型正被其他任务占用，请稍后重试。')
                 );
             }
@@ -147,6 +150,12 @@ final class TranslationConcurrencyGate
     public function isBusyMarker(string $message): bool
     {
         return str_contains($message, self::BUSY_MARKER);
+    }
+
+    public function isBusy(\Throwable $throwable): bool
+    {
+        return $throwable instanceof TranslationBusyException
+            || $this->isBusyMarker($throwable->getMessage());
     }
 
     private function disconnectStaleHolder(string $lane): bool

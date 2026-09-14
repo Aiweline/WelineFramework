@@ -1,0 +1,12 @@
+{
+    "ok": true,
+    "scenario": "ch1_general_35kg_refuse",
+    "rates": [],
+    "diagnostics": [],
+    "error": "shipping_profile_conflict",
+    "assertions": {
+        "conflict": true,
+        "missing_service": true,
+        "refused": true
+    }
+}

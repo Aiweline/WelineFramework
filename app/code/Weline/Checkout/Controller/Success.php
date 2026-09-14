@@ -119,6 +119,13 @@ class Success extends FrontendController
             $currentCustomerId,
             $capabilityAllowed,
         )) {
+            $status = strtolower(trim((string) ($order->status ?? '')));
+            $isPaid = in_array($status, ['paid', 'fulfilled', 'completed'], true);
+            // Paid express/success landings without a restored capability must NOT dump to /cart.
+            if ($isPaid && !$isCancel) {
+                return $this->renderPaidAcknowledgement($order);
+            }
+
             // Guests without a live success capability must not be pushed into the
             // account login funnel (/customer/account → /login).
             return $this->redirect($this->isLoggedIn() ? self::ORDER_LIST_PATH : self::CART_PATH);
@@ -149,6 +156,46 @@ class Success extends FrontendController
                 number_format(((int)($order->money['grand_total_minor'] ?? 0)) / 100, 2, '.', ','),
             ),
         );
+        $this->layoutType = 'checkout';
+
+        return $this->fetch('Weline_Checkout::frontend/checkout/success.phtml');
+    }
+
+    /**
+     * Soft success for paid orders when quote-token capability is missing (express/popup boundary).
+     * Shows paid confirmation without dumping the shopper to /cart.
+     */
+    private function renderPaidAcknowledgement(object $order): string
+    {
+        $arr = method_exists($order, 'toArray') ? $order->toArray() : [];
+        if (!is_array($arr)) {
+            $arr = [];
+        }
+        $display = trim((string) ($order->displayNumber ?? $arr['display_number'] ?? $order->orderUuid ?? $arr['order_uuid'] ?? ''));
+        $currency = trim((string) ($order->currency ?? $arr['currency'] ?? 'CNY'));
+        $money = is_array($order->money ?? null) ? $order->money : (is_array($arr['money'] ?? null) ? $arr['money'] : []);
+        $totalLabel = $currency . ' ' . number_format(((int) ($money['grand_total_minor'] ?? 0)) / 100, 2, '.', ',');
+
+        $title = (string) __('订单已支付');
+        $this->request->setGet('theme_page_title', $title);
+        $this->assign('page_title', $title);
+        $this->assign('title', $title);
+        $this->assign('checkout_payment_cancelled', false);
+        $this->assign('checkout_cancel_already', false);
+        $this->assign('checkout_paid_ack', true);
+        $this->assign('order', null);
+        $this->assign('order_v2', [
+            'order_uuid' => (string) ($order->orderUuid ?? $arr['order_uuid'] ?? ''),
+            'display_number' => $display,
+            'status' => 'paid',
+            'currency' => $currency,
+            'money' => $money,
+            'items' => [],
+            'shipping' => [],
+        ]);
+        $this->assign('order_v2_display_number', $display !== '' ? $display : (string) ($order->orderUuid ?? ''));
+        $this->assign('order_v2_status', 'paid');
+        $this->assign('order_v2_total_label', $totalLabel);
         $this->layoutType = 'checkout';
 
         return $this->fetch('Weline_Checkout::frontend/checkout/success.phtml');

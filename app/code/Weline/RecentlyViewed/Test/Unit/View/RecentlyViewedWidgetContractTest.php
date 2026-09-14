@@ -42,15 +42,36 @@ final class RecentlyViewedWidgetContractTest extends TestCase
         self::assertStringContainsString('@param limit {default=24', $source);
         self::assertStringContainsString('data-wrv-track', $source);
         self::assertStringContainsString('wrv-stage', $source);
-        self::assertStringContainsString('<w:product:card', $source);
-        self::assertStringContainsString('density="shelf"', $source);
-        self::assertStringContainsString('class="wrv-card"', $source);
+        self::assertStringContainsString('density="standard"', $source);
+        self::assertStringContainsString('class="wpc-listing-card wrv-card"', $source);
+        self::assertStringContainsString('show-sku="true"', $source);
+        self::assertStringNotContainsString('density="shelf"', $source);
         self::assertStringNotContainsString('ProductCardRenderer::render', $source);
+        self::assertStringContainsString("\$product['slug']", $source);
+        self::assertStringContainsString('$hasCurrentPrefix', $source);
+        self::assertStringContainsString("product/' . \$slug", $source);
         self::assertStringContainsString('wrv-nav--prev', $source);
         self::assertDoesNotMatchRegularExpression(
             '/if\s*\(\s*(?:empty\(\s*\$products\s*\)|\$products\s*===\s*\[\])\s*\)\s*\{\s*return\s*;\s*\}/s',
             $source,
             'Empty product list must render a shell, not bare return.',
+        );
+    }
+
+    public function testSectionBackgroundIsTransparent(): void
+    {
+        $path = dirname(__DIR__, 3) . '/view/statics/css/widgets/recently-viewed.css';
+        self::assertFileExists($path);
+        $css = (string)file_get_contents($path);
+        self::assertMatchesRegularExpression(
+            '/\.weline-recently-viewed\s*\{[\s\S]*?background:\s*transparent;/',
+            $css,
+            'Recently-viewed block must use transparent section background.',
+        );
+        self::assertStringNotContainsString(
+            'background: var(--wrv-surface);',
+            $css,
+            'Section must not paint raised surface as block fill.',
         );
     }
 }

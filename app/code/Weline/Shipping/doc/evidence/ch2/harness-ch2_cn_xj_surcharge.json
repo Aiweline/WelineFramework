@@ -1,0 +1,48 @@
+{
+    "ok": true,
+    "scenario": "ch2_cn_xj_surcharge",
+    "rates": {
+        "SEED_LANE_DOMESTIC": {
+            "amount_minor": 4500,
+            "label": "国内标快",
+            "package_count": 1,
+            "free_reason": null,
+            "surcharges": [
+                {
+                    "rule_code": "SEED_SURCHARGE_CN_XJ",
+                    "rule_name": "偏远加价·新疆",
+                    "amount_minor": 2500
+                }
+            ],
+            "seasonal": [],
+            "addons": []
+        }
+    },
+    "diagnostics": {
+        "country_code": "CN",
+        "currency": "CNY",
+        "lane_count": 1,
+        "fx_skipped": [],
+        "profile_groups": 1
+    },
+    "error": null,
+    "assertions": {
+        "conflict": false,
+        "has_service": true,
+        "amount_minor": 4500,
+        "package_count": 1,
+        "surcharges": [
+            {
+                "rule_code": "SEED_SURCHARGE_CN_XJ",
+                "rule_name": "偏远加价·新疆",
+                "amount_minor": 2500
+            }
+        ],
+        "addons": [],
+        "seasonal": [],
+        "free_reason": null,
+        "surcharge_found": true,
+        "surcharge_sum": 2500,
+        "surcharge_min_ok": true
+    }
+}

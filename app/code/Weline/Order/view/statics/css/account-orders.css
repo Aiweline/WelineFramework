@@ -117,6 +117,27 @@
     white-space: nowrap;
 }
 
+[data-account-orders="true"] .account-orders__badge--type[data-tone="info"],
+[data-account-orders="true"] .account-orders__badge--type[data-order-type-code="toc"] {
+    background: color-mix(in srgb, var(--color-info, #007185) 14%, transparent);
+    border-color: color-mix(in srgb, var(--color-info, #007185) 35%, transparent);
+    color: var(--color-info, #007185);
+}
+
+[data-account-orders="true"] .account-orders__badge--type[data-tone="warning"],
+[data-account-orders="true"] .account-orders__badge--type[data-order-type-code="tob"] {
+    background: color-mix(in srgb, var(--color-warning, #c45500) 14%, transparent);
+    border-color: color-mix(in srgb, var(--color-warning, #c45500) 35%, transparent);
+    color: var(--color-warning, #c45500);
+}
+
+[data-account-orders="true"] .account-orders__badge--type[data-tone="secondary"],
+[data-account-orders="true"] .account-orders__badge--type[data-order-type-code="mixed"] {
+    background: color-mix(in srgb, var(--color-text-muted, #565959) 12%, transparent);
+    border-color: var(--color-border-subtle, rgba(15, 17, 17, 0.12));
+    color: var(--color-text-secondary, #565959);
+}
+
 [data-account-orders="true"] .account-orders__badge[data-status="paid"],
 [data-account-orders="true"] .account-orders__badge[data-status="completed"] {
     background: rgba(16, 185, 129, 0.12);

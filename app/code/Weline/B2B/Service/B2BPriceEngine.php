@@ -18,6 +18,7 @@ final class B2BPriceEngine implements B2BPriceCandidateInterface
     public const SOURCE_RETAIL = 'retail';
     public const SOURCE_B2B_WEBSITE = 'b2b_website';
     public const SOURCE_B2B_CHANNEL = 'b2b_channel';
+    public const SOURCE_B2B_DEFAULT_POLICY = 'b2b_default_policy';
     public const SOURCE_CLOSED = 'b2b_closed';
 
     public const ERROR_MODE_OFF = 'b2b_mode_off_closes_candidate';
@@ -32,11 +33,16 @@ final class B2BPriceEngine implements B2BPriceCandidateInterface
         private readonly CustomerGroupStore $groups,
         private readonly PriceListStore $lists,
         private readonly B2BRolloutGate $rollout,
+        private readonly ?DefaultWholesalePolicy $defaultPolicy = null,
+        private readonly ?WholesalePricingGuard $pricingGuard = null,
     ) {
     }
 
-    public static function forTesting(?B2BRolloutGate $rollout = null): self
-    {
+    public static function forTesting(
+        ?B2BRolloutGate $rollout = null,
+        ?DefaultWholesalePolicy $defaultPolicy = null,
+        ?WholesalePricingGuard $pricingGuard = null,
+    ): self {
         $gate = $rollout ?? B2BRolloutGate::forTestingConfiguration();
         $gate->setMode(self::CAPABILITY, CommerceRolloutGateInterface::MODE_OFF);
 
@@ -44,6 +50,8 @@ final class B2BPriceEngine implements B2BPriceCandidateInterface
             CustomerGroupStore::forTesting(),
             PriceListStore::forTesting(),
             $gate,
+            $defaultPolicy,
+            $pricingGuard ?? new WholesalePricingGuard(),
         );
     }
 
@@ -160,7 +168,16 @@ final class B2BPriceEngine implements B2BPriceCandidateInterface
 
         $selected = $this->selectList($group->groupId, $websiteId, $channelId, $sku);
         if ($selected === null) {
-            return $this->retailResult($retail, ['no_b2b_list', 'retail'], self::SOURCE_RETAIL, true);
+            return $this->resolveDefaultPolicy(
+                $request,
+                $group->groupId,
+                $websiteId,
+                $sku,
+                $qty,
+                $retail,
+                $claimedListId,
+                $claimedVersion,
+            );
         }
 
         if ($claimedListId !== null && $claimedListId !== $selected->listId) {
@@ -221,6 +238,169 @@ final class B2BPriceEngine implements B2BPriceCandidateInterface
             'group_id' => $group->groupId,
             'rule_stack' => $stack,
         ];
+    }
+
+    /**
+     * @param array<string,mixed> $request
+     * @param list<string> $extraStack
+     * @return array{ok:bool,source:string,amount_minor:int,price_list_id:?string,version:?int,group_id:?string,rule_stack:list<string>,error?:string}
+     */
+    private function resolveDefaultPolicy(
+        array $request,
+        string $groupId,
+        int $websiteId,
+        string $sku,
+        int $qty,
+        int $retail,
+        ?string $claimedListId,
+        ?int $claimedVersion,
+        array $extraStack = [],
+    ): array {
+        if (!$this->productTobAllowsTemplate($request)) {
+            return $this->retailResult($retail, array_merge($extraStack, ['no_b2b_list', 'retail']), self::SOURCE_RETAIL, true);
+        }
+
+        $policy = $this->defaultPolicy();
+        if ($policy === null || !$policy->groupCanInheritTemplate($groupId)) {
+            return $this->retailResult($retail, array_merge($extraStack, ['no_b2b_list', 'retail']), self::SOURCE_RETAIL, true);
+        }
+
+        $tiers = $policy->tiersForGroup($groupId, $websiteId);
+        if ($tiers === []) {
+            return $this->retailResult($retail, array_merge($extraStack, ['no_default_policy', 'retail']), self::SOURCE_RETAIL, true);
+        }
+
+        $syntheticId = DefaultWholesalePolicy::syntheticListId($websiteId, $groupId);
+        if ($claimedListId !== null
+            && $claimedListId !== $syntheticId
+            && !DefaultWholesalePolicy::isSyntheticListId($claimedListId)
+        ) {
+            return [
+                'ok' => false,
+                'source' => self::SOURCE_RETAIL,
+                'amount_minor' => $retail,
+                'price_list_id' => $syntheticId,
+                'version' => 0,
+                'group_id' => $groupId,
+                'rule_stack' => [self::ERROR_FORGED_PRICE_LIST],
+                'error' => self::ERROR_FORGED_PRICE_LIST,
+            ];
+        }
+        if ($claimedVersion !== null && $claimedVersion !== 0) {
+            return [
+                'ok' => false,
+                'source' => self::SOURCE_B2B_DEFAULT_POLICY,
+                'amount_minor' => $retail,
+                'price_list_id' => $syntheticId,
+                'version' => 0,
+                'group_id' => $groupId,
+                'rule_stack' => [self::ERROR_VERSION_MISMATCH],
+                'error' => self::ERROR_VERSION_MISMATCH,
+            ];
+        }
+
+        $resolveQty = $qty;
+        $lowest = $policy->lowestMinQty($tiers);
+        if ($resolveQty < $lowest) {
+            // Unit display / Provider may pass qty=1; use lowest MOQ for amount pick.
+            $resolveQty = $lowest;
+        }
+        $amount = $policy->amountForQty($retail, $tiers, $resolveQty);
+        if ($amount === null) {
+            return $this->retailResult($retail, array_merge($extraStack, ['default_policy_qty_miss', 'retail']), self::SOURCE_RETAIL, true);
+        }
+
+        $bps = 0;
+        foreach ($tiers as $tier) {
+            if ($resolveQty >= (int) $tier['min_qty']) {
+                $bps = (int) $tier['discount_bps'];
+            }
+        }
+        try {
+            $this->pricingGuard()->assertAmountAllowed(
+                $retail,
+                $amount,
+                $policy->maxDiscountBps($websiteId),
+                $policy->minMarginBps($websiteId),
+                null,
+            );
+        } catch (\InvalidArgumentException) {
+            return $this->retailResult($retail, array_merge($extraStack, ['default_policy_guard', 'retail']), self::SOURCE_RETAIL, true);
+        }
+
+        $tierRank = \Weline\B2B\Model\SystemVipLadder::tierFromGroupId($groupId) ?? 0;
+        $stack = array_merge($extraStack, [
+            'default_policy:vip' . $tierRank . '@d' . $bps,
+            'group:' . $groupId,
+        ]);
+
+        return [
+            'ok' => true,
+            'source' => self::SOURCE_B2B_DEFAULT_POLICY,
+            'amount_minor' => $amount,
+            'price_list_id' => $syntheticId,
+            'version' => 0,
+            'group_id' => $groupId,
+            'rule_stack' => $stack,
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $request
+     */
+    private function productTobAllowsTemplate(array $request): bool
+    {
+        if (array_key_exists('selling_mode_tob', $request)) {
+            return $this->toBoolFlag($request['selling_mode_tob'], false);
+        }
+        $flags = $request['product_flags'] ?? null;
+        if (!is_array($flags) || !array_key_exists(SellingModePolicy::PRODUCT_FLAG_TOB, $flags)) {
+            // Callers must opt in; missing flags = no template (explicit lists only).
+            return false;
+        }
+
+        return $this->toBoolFlag($flags[SellingModePolicy::PRODUCT_FLAG_TOB], false);
+    }
+
+    private function toBoolFlag(mixed $value, bool $default): bool
+    {
+        if (is_bool($value)) {
+            return $value;
+        }
+        if (is_int($value) || is_float($value)) {
+            return (int) $value !== 0;
+        }
+        if (is_string($value)) {
+            $normalized = strtolower(trim($value));
+            if ($normalized === '') {
+                return $default;
+            }
+            if (in_array($normalized, ['1', 'true', 'yes', 'on', 'enabled'], true)) {
+                return true;
+            }
+            if (in_array($normalized, ['0', 'false', 'no', 'off', 'disabled'], true)) {
+                return false;
+            }
+        }
+
+        return $default;
+    }
+
+    private function defaultPolicy(): ?DefaultWholesalePolicy
+    {
+        if ($this->defaultPolicy instanceof DefaultWholesalePolicy) {
+            return $this->defaultPolicy;
+        }
+        try {
+            return \Weline\Framework\Manager\ObjectManager::getInstance(DefaultWholesalePolicy::class);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function pricingGuard(): WholesalePricingGuard
+    {
+        return $this->pricingGuard ?? new WholesalePricingGuard();
     }
 
     private function selectList(string $groupId, int $websiteId, ?string $channelId, string $sku): ?PriceList

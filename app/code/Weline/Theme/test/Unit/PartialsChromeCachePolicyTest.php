@@ -43,6 +43,79 @@ final class PartialsChromeCachePolicyTest extends TestCase
         parent::tearDown();
     }
 
+    public function testRenderedChromeSeparatesOriginsButReusesTheSameOriginAcrossRequests(): void
+    {
+        require_once BP . 'app/code/Weline/Framework/Common/functions.php';
+        $server = $_SERVER;
+        $query = $_GET;
+        $previousContext = \Weline\Framework\Context::hasCurrent() ? \Weline\Framework\Context::current() : null;
+        if ($previousContext !== null) {
+            \Weline\Framework\Context::leave();
+        }
+        \Weline\Framework\Context::enter(new \Weline\Framework\Context());
+        $env = ['base_url' => \w_env('base_url', ''), 'request.uri' => \w_env('request.uri', '')];
+        try {
+            $_GET = [];
+            $_SERVER['REQUEST_METHOD'] = 'GET';
+            $_SERVER['REQUEST_SCHEME'] = 'https';
+            $_SERVER['HTTP_HOST'] = 'shop.test:9555';
+            $_SERVER['WELINE_WEBSITE_URL'] = 'https://shop.test:9555/';
+            \w_env_set('base_url', 'https://shop.test:9555');
+            \Weline\Framework\Runtime\RequestContext::setId('chrome-origin-first');
+            \Weline\Framework\App\State::resetRequestPathLocalizationCache();
+            \Weline\Framework\App\State::setRequestLanguageOverride('zh_Hans_CN');
+            \Weline\Framework\Cache\StorefrontCacheKeyContext::install(new \Weline\Framework\Cache\StorefrontCacheKeyContext(
+                \Weline\Framework\Runtime\ScopeIdentity::channel(0, 'default', 'default', 'default', \Weline\Framework\Runtime\ScopeIdentity::MODE_NORMAL),
+                'zh_Hans_CN', 'CNY', str_repeat('a', 64), str_repeat('b', 64), true, '', 'zh_Hans_CN', ['zh_Hans_CN'],
+            ));
+            $partials = (new ReflectionClass(Partials::class))->newInstanceWithoutConstructor();
+            $requestProperty = new ReflectionProperty(Partials::class, 'request');
+            $request = $this->getMockBuilder($requestProperty->getType()->getName())
+                ->disableOriginalConstructor()
+                ->onlyMethods(['getGet', 'getQuery', 'getParam'])
+                ->addMethods(['getPathInfo'])
+                ->getMock();
+            $request->method('getPathInfo')->willReturn('/');
+            foreach (['getGet', 'getQuery', 'getParam'] as $methodName) {
+                $request->method($methodName)->willReturnCallback(static fn($name, $default = '') => $default);
+            }
+            $requestProperty->setValue($partials, $request);
+            $resolve = new ReflectionMethod(Partials::class, 'resolvePartialOutputCacheContext');
+            $key = static fn(string $type) => $resolve->invoke($partials, 'frontend', $type, 'default', [], ['mode' => 'chrome', 'auth' => 'guest', 'ttl' => 300]);
+            foreach (['header', 'footer'] as $type) {
+                $original = $key($type);
+                self::assertIsString($original, 'The real chrome key path must be active.');
+                \w_env_set('base_url', 'https://shop.test:19655');
+                self::assertNotSame($original, $key($type), 'Absolute rendered links require the actual base URL in the key.');
+                \w_env_set('base_url', 'https://shop.test:9555');
+
+                $_SERVER['WELINE_WEBSITE_URL'] = 'https://shop.test:19655/';
+                self::assertNotSame($original, $key($type), 'Configured website URLs are part of the rendered origin.');
+                $_SERVER['WELINE_WEBSITE_URL'] = 'https://shop.test:9555/';
+
+                $_SERVER['HTTP_HOST'] = 'shop.test:19655';
+                self::assertNotSame($original, $key($type), 'Host-derived URLs cannot share another origin chrome.');
+                $_SERVER['HTTP_HOST'] = 'shop.test:9555';
+
+                \Weline\Framework\Runtime\RequestContext::setId('chrome-origin-next');
+                \w_env_set('request.uri', '/another-page?irrelevant=1');
+                $_GET['irrelevant'] = '1';
+                self::assertSame($original, $key($type), 'Same-origin shared chrome must remain independent of request IDs and unrelated routes/query.');
+            }
+        } finally {
+            foreach ($env as $key => $value) {
+                \w_env_set($key, $value);
+            }
+            $_SERVER = $server;
+            $_GET = $query;
+            \Weline\Framework\App\State::resetRequestPathLocalizationCache();
+            \Weline\Framework\Context::leave();
+            if ($previousContext !== null) {
+                \Weline\Framework\Context::enter($previousContext);
+            }
+        }
+    }
+
     public function testComponentMetaParserReadsNestedCacheMeta(): void
     {
         $file = BP . 'app/code/Weline/Theme/view/theme/backend/partials/sidebar/left.phtml';
@@ -181,7 +254,7 @@ final class PartialsChromeCachePolicyTest extends TestCase
     public function testChromePartialCacheSchemaPinsStateLangOverStorefrontCookie(): void
     {
         $source = (string)\file_get_contents(BP . 'app/code/Weline/Theme/Block/Partials.php');
-        self::assertStringContainsString("'schema' => 'chrome-partial-v11-guest-header'", $source);
+        self::assertStringContainsString("'schema' => 'chrome-partial-v12-guest-chrome'", $source);
         self::assertStringContainsString("return 'frontend-auth:0';", $source);
         self::assertStringContainsString('always guest-SSR', $source);
         self::assertStringContainsString("'i18n_switcher_markup'", $source);
@@ -200,6 +273,7 @@ final class PartialsChromeCachePolicyTest extends TestCase
         self::assertStringContainsString('categories-horizontal-nav.phtml', $source);
         self::assertStringContainsString('categories-sidebar-nav.phtml', $source);
         self::assertStringContainsString('mega-menu-panel.phtml', $source);
+        self::assertStringContainsString('/widgets/header/mini-cart-icon/default.phtml', $source);
     }
 
     public function testRememberPartialOutputEvictsOldestWhenFull(): void

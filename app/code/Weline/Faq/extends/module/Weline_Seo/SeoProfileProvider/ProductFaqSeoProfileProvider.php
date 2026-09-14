@@ -38,7 +38,6 @@ final class ProductFaqSeoProfileProvider implements SeoProfileProviderInterface
             return [];
         }
 
-        // Do not duplicate hub FAQ payload when already present from hub profile.
         if (!empty($context['faqs']) && in_array($pageType, ['faq', 'faq_hub'], true)) {
             return [];
         }
@@ -58,8 +57,16 @@ final class ProductFaqSeoProfileProvider implements SeoProfileProviderInterface
 
         $websiteId = max(0, (int)($context['website_id'] ?? 0));
         $locale = trim((string)($context['locale'] ?? $context['locale_code'] ?? ''));
+        $storeCode = strtolower(trim((string)($context['store_code'] ?? '')));
+        $channelCode = strtolower(trim((string)($context['channel_code'] ?? '')));
         try {
-            $faqs = $this->faqs->seoFaqsForEntity('product', $entityUuid, $websiteId, $locale);
+            $faqs = $this->faqs->seoFaqsForPdp([
+                'website_id' => $websiteId,
+                'store_code' => $storeCode,
+                'channel_code' => $channelCode,
+                'locale_code' => $locale,
+                'product_uuid' => $entityUuid,
+            ]);
         } catch (\Throwable) {
             return [];
         }

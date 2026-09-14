@@ -282,10 +282,49 @@
     }
 
     /**
+     * True when the current product surface allows wholesale add (tob cart).
+     * PDP without B2B selling-mode switcher = retail-only → false.
+     * Listing cards without an explicit stamp defer to the server (true).
+     */
+    function productAllowsWholesaleAdd(button) {
+        if (button && button.dataset && button.dataset.wholesaleEligible != null
+            && String(button.dataset.wholesaleEligible) !== '') {
+            return String(button.dataset.wholesaleEligible) === '1';
+        }
+        var detail = detailRoot(button);
+        if (detail) {
+            var host = detail.closest('[data-testid="storefront-product-detail"]') || detail;
+            var switcher = host.querySelector('[data-b2b-selling-mode="1"]');
+            if (!switcher) {
+                return false;
+            }
+            return String(switcher.getAttribute('data-tob-enabled') || '1') !== '0';
+        }
+        var card = widgetRoot(button);
+        if (card) {
+            var flag = card.getAttribute('data-wholesale-eligible');
+            if (flag !== null && flag !== '') {
+                return String(flag) === '1';
+            }
+            var btnFlag = button && button.getAttribute
+                ? button.getAttribute('data-wholesale-eligible')
+                : null;
+            if (btnFlag !== null && btnFlag !== '') {
+                return String(btnFlag) === '1';
+            }
+        }
+        return true;
+    }
+
+    /**
      * Resolve add/buy cart_type. Cookie/session preferredMode and button stamps
      * beat FPC SSR html[data-selling-mode] (cached HTML often still says toc).
+     * Retail-only products always resolve to toc even when preferredMode is tob.
      */
     function resolveAddCartType(button) {
+        if (!productAllowsWholesaleAdd(button)) {
+            return 'toc';
+        }
         var preferred = '';
         if (window.WelineB2BSellingMode && typeof window.WelineB2BSellingMode.preferredMode === 'function') {
             preferred = String(window.WelineB2BSellingMode.preferredMode() || '').toLowerCase();
@@ -303,6 +342,52 @@
         var fromHtml = String(document.documentElement.getAttribute('data-selling-mode') || '').toLowerCase();
         var mode = preferred || fromButton || fromHtml || 'toc';
         return mode === 'tob' ? 'tob' : 'toc';
+    }
+
+    function preferredSellingModeHint() {
+        var preferred = '';
+        if (window.WelineB2BSellingMode && typeof window.WelineB2BSellingMode.preferredMode === 'function') {
+            preferred = String(window.WelineB2BSellingMode.preferredMode() || '').toLowerCase();
+        }
+        if (preferred === 'toc' || preferred === 'tob') {
+            return preferred;
+        }
+        try {
+            preferred = String(window.sessionStorage.getItem('weline_cart_type_explicit') || '').toLowerCase();
+        } catch (eExplicit) {
+            preferred = '';
+        }
+        if (preferred === 'toc' || preferred === 'tob') {
+            return preferred;
+        }
+        return String(document.documentElement.getAttribute('data-selling-mode') || 'toc').toLowerCase() === 'tob'
+            ? 'tob'
+            : 'toc';
+    }
+
+    function syncChromeAfterRetailOnlyAdd(button, cartType, requestedType) {
+        var actual = String(cartType || '').toLowerCase() === 'tob' ? 'tob' : 'toc';
+        if (actual !== 'toc') {
+            return;
+        }
+        if (preferredSellingModeHint() !== 'tob') {
+            return;
+        }
+        var requested = String(requestedType || '').toLowerCase() === 'tob' ? 'tob' : 'toc';
+        // Retail-only PDP (FE forced toc) or server remapped tob→toc on listing.
+        if (productAllowsWholesaleAdd(button) && requested !== 'tob') {
+            return;
+        }
+        try {
+            if (global.WelineCart && typeof global.WelineCart.requestCartType === 'function') {
+                global.WelineCart.requestCartType('toc', {
+                    source: 'retail-only-product-add',
+                    forceNetwork: true,
+                });
+            }
+        } catch (eSync) {
+            // Chrome can still hydrate on next open from toc summary cache.
+        }
     }
 
     async function addOfferFromButton(button) {
@@ -643,6 +728,57 @@
         return options;
     }
 
+    /**
+     * Purchase-panel HTML is injected after DOMContentLoaded, so Weline's one-shot
+     * data-weline-load scan never sees HelpPay CTAs. Load those modules and
+     * re-boot helpPayShare so quiet-link CSS + delegated clicks apply.
+     */
+    function loadInjectedAttributeModules(root) {
+        if (!root || !global.Weline || typeof global.Weline.load !== 'function') {
+            return Promise.resolve();
+        }
+        const names = [];
+        const seen = Object.create(null);
+        root.querySelectorAll('[data-weline-load]').forEach(function (el) {
+            String(el.getAttribute('data-weline-load') || '')
+                .split(',')
+                .map(function (n) { return n.trim(); })
+                .filter(Boolean)
+                .forEach(function (name) {
+                    if (seen[name]) {
+                        return;
+                    }
+                    seen[name] = true;
+                    names.push(name);
+                });
+        });
+        if (!names.length) {
+            return Promise.resolve();
+        }
+        return Promise.all(names.map(function (name) {
+            return Promise.resolve(global.Weline.load(name)).catch(function () {
+                return null;
+            });
+        })).then(function () {
+            try {
+                const hp = global.WelineModules && global.WelineModules.helpPayShare;
+                if (hp && typeof hp.ensureShareCss === 'function') {
+                    hp.ensureShareCss();
+                }
+                if (hp && typeof hp.boot === 'function') {
+                    hp.boot();
+                }
+            } catch (e) {}
+            try {
+                // Affiliate boot is one-shot; re-scan panels injected into the dialog.
+                const af = global.WelineAffiliateProductShare;
+                if (af && typeof af.scan === 'function') {
+                    af.scan(root);
+                }
+            } catch (e) {}
+        });
+    }
+
     async function openPurchasePanel(button) {
         const productId = Number(button.dataset.productId || 0);
         if (productId <= 0) {
@@ -748,6 +884,7 @@
                 }
             });
             bindPurchaseButtons(body);
+            await loadInjectedAttributeModules(body);
             try {
                 if (global.WelineB2BSellingMode && typeof global.WelineB2BSellingMode.applyIdentity === 'function'
                     && payload.identity && typeof payload.identity === 'object') {
@@ -802,6 +939,8 @@
         const resolvedOptions = options || readOptions(button);
 
         button.addEventListener('click', async function (event) {
+            const isAddToCart = button.dataset.action === 'add';
+
             if (button.disabled) {
                 return;
             }
@@ -845,10 +984,11 @@
 
             const feedback = purchaseFeedback(button);
             const message = feedback.message;
-            const isAddToCart = button.dataset.action === 'add';
+
             showPurchaseLoading(button, message, resolvedOptions.loadingText || '');
 
             try {
+                const requestedMode = resolveAddCartType(button);
                 const result = await addOfferFromButton(button);
                 button.classList.remove('is-loading');
                 button.disabled = false;
@@ -856,6 +996,11 @@
                     notifyCartUpdated(result);
                     const payload = unwrapCartPayload(result);
                     const cartSummary = normalizeCartSummary(payload);
+                    syncChromeAfterRetailOnlyAdd(
+                        button,
+                        cartSummary && (cartSummary.cart_type || cartSummary.selling_mode),
+                        requestedMode,
+                    );
                     const successText = String(
                         resolvedOptions.successText || (payload && payload.message) || '',
                     ).trim();

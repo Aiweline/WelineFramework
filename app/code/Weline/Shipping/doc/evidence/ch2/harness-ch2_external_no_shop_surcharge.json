@@ -1,0 +1,8 @@
+{
+    "ok": true,
+    "scenario": "ch2_external_no_shop_surcharge",
+    "assertions": {
+        "local_has_surcharge": true,
+        "manager_no_direct_surcharge": true
+    }
+}

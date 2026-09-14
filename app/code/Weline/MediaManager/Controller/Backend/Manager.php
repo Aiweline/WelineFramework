@@ -83,7 +83,13 @@ class Manager extends BackendController
         $this->assign('is_iframe', '1');
         $this->assign('target', $params['target'] ?? '');
         $this->assign('multi', $params['multi'] ?? '0');
-        $this->assign('ext', $params['ext'] ?? '*');
+        // Normalize picker ext through MimeTypes so UI/JS/upload share one allow-list
+        // (e.g. StoreMusic audio: m4a must survive into CONFIG.ext, not get silently dropped).
+        $rawExt = trim((string)($params['ext'] ?? '*'));
+        $normalizedExt = $rawExt === '' || $rawExt === '*'
+            ? '*'
+            : implode(',', \Weline\MediaManager\Helper\MimeTypes::collectExtensions($rawExt));
+        $this->assign('ext', $normalizedExt !== '' ? $normalizedExt : '*');
         $this->assign('size', $params['size'] ?? (string)MediaAssetUploadService::MAX_ASSET_UPLOAD_BYTES);
         $this->assign('lock_path', $params['lockPath'] ?? '0');
         $lockRoot = trim(str_replace('\\', '/', (string)($params['lockRoot'] ?? $params['lock_root'] ?? '')), '/');

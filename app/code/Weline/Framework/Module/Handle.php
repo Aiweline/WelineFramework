@@ -569,6 +569,16 @@ class Handle implements HandleInterface, RegisterInterface
      * @DateTime: 2023/1/8 0:08
      * 参数区：
      */
+    /**
+     * 批量收集路由时已处理的模块数（仅用于进度日志）。
+     */
+    private static int $batchRouteProgress = 0;
+
+    public static function resetBatchRouteProgress(): void
+    {
+        self::$batchRouteProgress = 0;
+    }
+
     public function registerRoute(Module $module): Module
     {
         // 已经存在模块则更新
@@ -576,15 +586,29 @@ class Handle implements HandleInterface, RegisterInterface
             $module->setStatus(false);
             $this->printer->warning(str_pad($module->getName(), 45) . __('已禁用！'));
         } else {
-            // 更新路由
-            if (DEV) {
+            /** @var \Weline\Framework\Router\Helper\Data $routerHelper */
+            $routerHelper = ObjectManager::getInstance(\Weline\Framework\Router\Helper\Data::class);
+            $batchCollect = $routerHelper->isBatchMode() || $this->helper->isDeferControllerAttributes();
+
+            if (!$batchCollect && DEV) {
                 $this->printer->setup($module->getName() . '：更新路由...', '开发');
             }
             $this->helper->registerModuleRouter($this->modules, $module);
-            if (DEV) {
-                $this->printer->setup($module->getName() . '：更新路由完成...', '开发');
+            if ($batchCollect) {
+                self::$batchRouteProgress++;
+                // 全量收集期降噪：每 20 个模块打一行进度，避免「跑一个刷三行」假象
+                if (DEV && (self::$batchRouteProgress === 1 || (self::$batchRouteProgress % 20) === 0)) {
+                    $this->printer->note(__(
+                        '   - 路由扫描进度：已收集 %{1} 个模块（内存缓冲，提交时一次写文件/ACL）...',
+                        [self::$batchRouteProgress]
+                    ));
+                }
+            } else {
+                if (DEV) {
+                    $this->printer->setup($module->getName() . '：更新路由完成...', '开发');
+                }
+                $this->printer->success(str_pad($module->getName(), 45) . __('已更新！'), __('路由更新：'));
             }
-            $this->printer->success(str_pad($module->getName(), 45) . __('已更新！'), __('路由更新：'));
         }
         return $module;
     }

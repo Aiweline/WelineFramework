@@ -31,6 +31,29 @@ class XProvider extends DocumentedSocialPlatformProvider
         'status' => 'live_publish_enabled',
     ];
 
+    /**
+     * @return array<string, list<string>>
+     */
+    public function cspDirectives(): array
+    {
+        return [
+            'script-src' => [
+                'https://platform.twitter.com',
+                'https://cdn.syndication.twimg.com',
+            ],
+            'frame-src' => [
+                'https://platform.twitter.com',
+                'https://twitter.com',
+                'https://x.com',
+            ],
+            'connect-src' => [
+                'https://api.twitter.com',
+                'https://api.x.com',
+                'https://cdn.syndication.twimg.com',
+            ],
+        ];
+    }
+
     public function buildAuthorizationUrl(array $accountContext, string $redirectUri, string $state): ?string
     {
         $clientId = $this->appConfig()->get('x', 'client_id');

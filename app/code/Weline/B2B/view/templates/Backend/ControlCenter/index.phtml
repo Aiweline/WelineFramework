@@ -569,7 +569,7 @@ try {
     </div></div>
     <?php endif; ?>
     <?php foreach ($datasets as $dataset): ?><div class="w-card" style="--w-mb:var(--weline-space-4);"><div class="w-card__header"><h5 style="--w-mb:0;"><?= $escape($dataset['label'] ?? '') ?></h5></div><div class="w-card__body">
-        <?php if (!empty($dataset['error'])): ?><div class="w-alert" data-tone="warning" style="--w-mb:0;"><?= $escape($dataset['error']) ?></div><?php elseif (empty($dataset['rows'])): ?>
+        <?php if (!empty($dataset['error'])): ?><div class="w-alert" data-tone="warning" style="--w-mb:0;"><?= $escape($dataset['error']) ?></div><?php elseif (empty($dataset['rows']) && $code !== 'hang-orders'): ?>
             <div class="w-empty" data-testid="b2b-<?= $escape($code) ?>-empty">
                 <div class="w-text" data-tone="muted"><?php
                     if ($kind === 'group') {
@@ -583,17 +583,145 @@ try {
             </div>
         <?php else: ?>
         <?php if ($code === 'hang-orders'): ?>
-        <div class="w-table-wrap"><table class="w-table" data-w-vertical="middle" data-testid="b2b-hang-orders-table" style="--w-mb:0;">
-            <thead><tr>
-                <th><?= __('hang_id') ?></th>
-                <th><?= __('order_ref') ?></th>
-                <th><?= __('hang_status') ?></th>
-                <th><?= __('定金(分)') ?></th>
-                <th><?= __('尾款(分)') ?></th>
-                <th><?= __('支付链接') ?></th>
-                <th><?= __('操作') ?></th>
-            </tr></thead>
-            <tbody>
+        <link rel="stylesheet" href="@static(Weline_B2B::css/b2b-storefront.css)&v=20260912-hang-compact1">
+        <style id="b2b-hang-waterfall-inline">
+            .commerce-control-center .b2b-hang-waterfall {
+                display: grid !important;
+                grid-template-columns: 1fr !important;
+                gap: var(--weline-theme-space-2, 8px) !important;
+                width: 100% !important;
+                max-width: 48rem !important;
+            }
+            .commerce-control-center .b2b-hang-waterfall .b2b-hang-card {
+                gap: var(--weline-theme-space-2, 8px) !important;
+                padding: var(--weline-theme-space-2, 8px) var(--weline-theme-space-3, 12px) !important;
+            }
+            .commerce-control-center .b2b-hang-waterfall .b2b-hang-card[data-severity="danger"] {
+                border-color: var(--weline-theme-danger, var(--color-danger, #c0392b)) !important;
+                box-shadow: inset 3px 0 0 var(--weline-theme-danger, var(--color-danger, #c0392b));
+            }
+            .commerce-control-center .b2b-hang-waterfall .b2b-hang-card[data-severity="warning"] {
+                border-color: var(--weline-theme-warning, var(--color-warning, #d68910)) !important;
+                box-shadow: inset 3px 0 0 var(--weline-theme-warning, var(--color-warning, #d68910));
+            }
+            .commerce-control-center .b2b-hang-waterfall .b2b-hang-card[data-severity="info"] {
+                border-color: var(--weline-theme-info, var(--color-info, #2980b9)) !important;
+                box-shadow: inset 3px 0 0 var(--weline-theme-info, var(--color-info, #2980b9));
+            }
+            .commerce-control-center .b2b-hang-waterfall .b2b-hang-admin-chat .b2b-order-chat {
+                display: grid !important;
+                gap: var(--weline-theme-space-2, 8px) !important;
+                width: 100% !important;
+            }
+            .commerce-control-center .b2b-hang-waterfall .b2b-hang-admin-chat .b2b-order-chat__toolbar {
+                display: flex !important;
+                flex-wrap: wrap !important;
+                align-items: center !important;
+                gap: var(--weline-theme-space-2, 8px) !important;
+            }
+            .commerce-control-center .b2b-hang-waterfall .b2b-hang-admin-chat .b2b-order-chat__panel:not([hidden]) {
+                display: grid !important;
+                gap: var(--weline-theme-space-2, 8px) !important;
+                width: 100% !important;
+                padding: var(--weline-theme-space-2, 8px) !important;
+                border: 1px solid var(--weline-theme-border, var(--color-border, #e7e7e7)) !important;
+                border-radius: var(--weline-theme-radius-md, 8px) !important;
+                background: var(--weline-theme-surface-muted, var(--color-surface-muted, rgba(127,127,127,.08))) !important;
+            }
+        </style>
+        <div data-weline-load="b2bOrderChat"></div>
+        <?php
+        $hangTab = strtolower(trim((string)($this->getData('hang_tab') ?? 'awaiting')));
+        if ($hangTab === '') {
+            $hangTab = 'awaiting';
+        }
+        $hangTabCounts = (array)($this->getData('hang_tab_counts') ?? []);
+        $hangTabQueryBase = (array)($this->getData('hang_tab_query_base') ?? []);
+        $hangTabHref = static function (string $tab) use ($hangTabQueryBase): string {
+            $q = $hangTabQueryBase;
+            $q['hang_tab'] = $tab;
+            $parts = [];
+            foreach ($q as $k => $v) {
+                if ($v === null || $v === '') {
+                    continue;
+                }
+                $parts[] = rawurlencode((string)$k) . '=' . rawurlencode((string)$v);
+            }
+
+            return '?' . implode('&', $parts);
+        };
+        $hangTabs = [
+            'awaiting' => __('等待审批'),
+            'deposit' => __('待付定金'),
+            'balance' => __('待付尾款'),
+            'completed' => __('已完成'),
+            'rejected' => __('已驳回'),
+            'expired' => __('已过期'),
+            'all' => __('全部'),
+        ];
+        $hangStatusLabel = static function (string $status): string {
+            return match ($status) {
+                'awaiting_deposit' => (string)__('待付定金'),
+                'awaiting_merchant_approval' => (string)__('待商家审批'),
+                'awaiting_balance' => (string)__('待付尾款'),
+                'completed' => (string)__('已完成'),
+                'rejected' => (string)__('已驳回'),
+                'expired' => (string)__('已过期'),
+                default => $status,
+            };
+        };
+        $hangStatusTone = static function (string $status): string {
+            return match ($status) {
+                'completed' => 'success',
+                'rejected', 'expired' => 'danger',
+                'awaiting_merchant_approval', 'awaiting_deposit', 'awaiting_balance' => 'warning',
+                default => 'muted',
+            };
+        };
+        $formatHangMinor = static function (mixed $minor) use ($baseCurrencyCode, $escape): string {
+            $amount = number_format(((int)$minor) / 100, 2, '.', '');
+
+            return $escape($baseCurrencyCode . ' ' . $amount);
+        };
+        $shortRef = static function (string $value, int $keep = 12) use ($escape): string {
+            $value = trim($value);
+            if ($value === '') {
+                return '—';
+            }
+            if (strlen($value) <= $keep + 1) {
+                return $escape($value);
+            }
+
+            return $escape(substr($value, 0, $keep) . '…');
+        };
+        $expandByDefault = false;
+        ?>
+        <nav class="b2b-hang-tabs w-cluster" data-testid="b2b-hang-tabs" style="--w-gap:var(--weline-space-2);flex-wrap:wrap;margin-bottom:var(--weline-theme-space-2,8px);">
+            <?php foreach ($hangTabs as $tabKey => $tabLabel):
+                $count = (int)($hangTabCounts[$tabKey] ?? 0);
+                $active = $hangTab === $tabKey;
+                ?>
+                <a class="w-button"
+                   data-size="sm"
+                   data-tone="<?= $active ? 'primary' : 'neutral' ?>"
+                   data-variant="<?= $active ? 'solid' : 'outline' ?>"
+                   href="<?= $escape($hangTabHref($tabKey)) ?>"
+                   data-hang-tab="<?= $escape($tabKey) ?>"
+                   <?= $active ? 'aria-current="page"' : '' ?>>
+                    <?= $escape((string)$tabLabel) ?>
+                    <span class="w-badge" data-tone="<?= $active ? 'primary' : 'muted' ?>"><?= $count ?></span>
+                </a>
+            <?php endforeach; ?>
+        </nav>
+        <?php if (empty($dataset['rows'])): ?>
+            <div class="w-empty" data-testid="b2b-hang-orders-empty">
+                <div class="w-text" data-tone="muted"><?= __('当前 Tab 暂无挂单。') ?></div>
+                <?php if ($hangTab !== 'all'): ?>
+                    <a class="w-button" data-tone="secondary" data-size="sm" href="<?= $escape($hangTabHref('all')) ?>"><?= __('查看全部') ?></a>
+                <?php endif; ?>
+            </div>
+        <?php else: ?>
+        <div class="b2b-hang-waterfall b2b-hang-workbench" data-testid="b2b-hang-orders-table" data-layout="waterfall">
             <?php foreach ($dataset['rows'] as $row):
                 $orderRef = trim((string)($row['order_ref'] ?? ''));
                 $hangId = trim((string)($row['hang_id'] ?? ''));
@@ -601,54 +729,186 @@ try {
                 $depositUrl = $hangPayUrl('deposit', $orderRef);
                 $balanceUrl = $hangPayUrl('balance', $orderRef);
                 $hangKey = $hangId !== '' ? $hangId : $orderRef;
+                $chatMeta = is_array($row['chat'] ?? null) ? $row['chat'] : [];
+                $chatUnread = max(0, (int)($chatMeta['merchant_unread'] ?? 0));
+                $chatPreview = trim((string)($chatMeta['preview'] ?? ''));
+                if ($chatPreview === '?' || $chatPreview === '？') {
+                    $chatPreview = '';
+                }
+                $depositMinor = (int)($row['deposit_amount_minor'] ?? 0);
+                $balanceMinor = (int)($row['balance_amount_minor'] ?? 0);
+                $goodsMinor = (int)($row['goods_subtotal_taxed_minor'] ?? 0);
+                $shipMinor = (int)($row['shipping_amount_minor'] ?? 0);
+                $customerName = trim((string)($row['customer_display_name'] ?? ''));
+                $shippingSummary = trim((string)($row['shipping_summary'] ?? ''));
+                $shippingLines = is_array($row['shipping_lines'] ?? null) ? $row['shipping_lines'] : [];
+                $severity = trim((string)($row['severity'] ?? 'none'));
+                $severityReasons = is_array($row['severity_reasons'] ?? null) ? $row['severity_reasons'] : [];
+                $lines = is_array($row['lines'] ?? null) ? $row['lines'] : [];
+                $linesTotal = (int)($row['lines_total'] ?? count($lines));
+                $displayNumber = trim((string)($row['display_number'] ?? $orderRef));
+                $remoteHint = $row['remote_hint'] ?? null;
+                $embargo = is_array($row['embargo'] ?? null) ? $row['embargo'] : [];
+                $addressCompact = $shippingSummary;
+                if ($addressCompact === '' && $shippingLines !== []) {
+                    $addressCompact = implode(' · ', array_values(array_filter(array_map(
+                        static fn($line): string => trim((string)$line),
+                        $shippingLines
+                    ), static fn(string $line): bool => $line !== '')));
+                }
+                $addressTitle = $shippingLines !== []
+                    ? implode("\n", array_map(static fn($line): string => (string)$line, $shippingLines))
+                    : $addressCompact;
+                $linesCountLabel = max(0, $linesTotal > 0 ? $linesTotal : count($lines));
                 ?>
-                <tr data-hang-status="<?= $escape($hangStatus) ?>" data-order-ref="<?= $escape($orderRef) ?>">
-                    <td><?= $display($row['hang_id'] ?? '') ?></td>
-                    <td><?= $display($orderRef) ?></td>
-                    <td><?= $display($hangStatus) ?></td>
-                    <td><?= $display($row['deposit_amount_minor'] ?? '') ?></td>
-                    <td><?= $display($row['balance_amount_minor'] ?? '') ?></td>
-                    <td>
-                        <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);">
+                <article class="b2b-hang-card"
+                         data-hang-status="<?= $escape($hangStatus) ?>"
+                         data-order-ref="<?= $escape($orderRef) ?>"
+                         data-severity="<?= $escape($severity !== '' ? $severity : 'none') ?>"
+                         data-density="compact"
+                         data-testid="b2b-hang-order-row">
+                    <?php if ($severityReasons !== []): ?>
+                        <div class="b2b-hang-card__risk" data-testid="b2b-hang-severity" data-severity="<?= $escape($severity) ?>">
+                            <?php foreach ($severityReasons as $reason): ?>
+                                <span class="w-badge" data-tone="<?= $escape($severity === 'danger' ? 'danger' : ($severity === 'info' ? 'info' : 'warning')) ?>" data-size="sm">
+                                    <?= $escape((string)$reason) ?>
+                                </span>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+                    <div class="b2b-hang-card__top">
+                        <div class="b2b-hang-card__ids" data-testid="b2b-hang-customer">
+                            <strong class="b2b-hang-card__customer"><?= $escape($customerName !== '' ? $customerName : '—') ?></strong>
+                            <span class="b2b-hang-card__meta" title="<?= $escape($hangId) ?>"><?= $shortRef($hangId, 12) ?></span>
+                            <span class="b2b-hang-card__meta" title="<?= $escape($orderRef) ?>">
+                                <?= __('订单') ?> <?= $escape($displayNumber !== '' ? $displayNumber : $shortRef($orderRef, 14)) ?>
+                            </span>
+                        </div>
+                        <span class="w-badge"
+                              data-tone="<?= $escape($hangStatusTone($hangStatus)) ?>"
+                              data-size="sm"
+                              data-testid="b2b-hang-status-badge">
+                            <?= $escape($hangStatusLabel($hangStatus)) ?>
+                        </span>
+                    </div>
+                    <?php if ($addressCompact !== ''): ?>
+                        <div class="b2b-hang-card__address" data-testid="b2b-hang-address" title="<?= $escape($addressTitle) ?>">
+                            <span class="b2b-hang-card__amount-label"><?= __('地址') ?></span>
+                            <span class="b2b-hang-card__address-text w-text" data-size="sm"><?= $escape($addressCompact) ?></span>
+                            <?php if (is_string($remoteHint) && $remoteHint !== ''): ?>
+                                <span class="w-badge" data-tone="warning" data-size="sm"><?= $escape($remoteHint) ?></span>
+                            <?php endif; ?>
+                            <?php if (!empty($embargo['blocked'])): ?>
+                                <span class="w-badge" data-tone="danger" data-size="sm"><?= __('禁运') ?></span>
+                            <?php endif; ?>
+                        </div>
+                    <?php endif; ?>
+                    <div class="b2b-hang-card__amounts" data-layout="inline">
+                        <div class="b2b-hang-card__amount">
+                            <span class="b2b-hang-card__amount-label"><?= __('定金') ?></span>
+                            <strong data-testid="b2b-hang-deposit-major"><?= $formatHangMinor($depositMinor) ?></strong>
+                        </div>
+                        <div class="b2b-hang-card__amount">
+                            <span class="b2b-hang-card__amount-label"><?= __('尾款') ?></span>
+                            <strong data-testid="b2b-hang-balance-major"><?= $formatHangMinor($balanceMinor) ?></strong>
+                        </div>
+                        <div class="b2b-hang-card__amount">
+                            <span class="b2b-hang-card__amount-label"><?= __('货款') ?></span>
+                            <strong><?= $formatHangMinor($goodsMinor) ?></strong>
+                        </div>
+                        <div class="b2b-hang-card__amount">
+                            <span class="b2b-hang-card__amount-label"><?= __('运费') ?></span>
+                            <strong><?= $formatHangMinor($shipMinor) ?></strong>
+                        </div>
+                    </div>
+                    <?php
+                    $detailOpen = '';
+                    ?>
+                    <details class="b2b-hang-card__details"<?= $detailOpen ?>>
+                        <summary class="w-text" data-size="sm"><?= __('商品详情') ?><?php if ($linesCountLabel > 0): ?> (<?= (int)$linesCountLabel ?>)<?php endif; ?></summary>
+                        <div class="b2b-hang-card__lines" data-testid="b2b-hang-lines">
+                            <?php if ($lines === []): ?>
+                                <span class="w-text" data-tone="muted" data-size="sm"><?= __('暂无商品行') ?></span>
+                            <?php else: ?>
+                                <ul class="b2b-hang-card__line-list">
+                                    <?php foreach ($lines as $line): ?>
+                                        <li>
+                                            <span><?= $escape((string)($line['name'] ?? '')) ?></span>
+                                            <?php if (trim((string)($line['sku'] ?? '')) !== ''): ?>
+                                                <span class="w-text" data-tone="muted" data-size="sm"><?= $escape((string)$line['sku']) ?></span>
+                                            <?php endif; ?>
+                                            <span>×<?= max(0, (int)(($line['qty_minor'] ?? 0) / 1000) ?: (int)($line['qty_minor'] ?? 0)) ?></span>
+                                            <strong><?= $formatHangMinor($line['row_total_minor'] ?? 0) ?></strong>
+                                        </li>
+                                    <?php endforeach; ?>
+                                </ul>
+                                <?php if ($linesTotal > count($lines)): ?>
+                                    <span class="w-text" data-tone="muted" data-size="sm"><?= __('共 %{1} 件商品行', [$linesTotal]) ?></span>
+                                <?php endif; ?>
+                            <?php endif; ?>
+                        </div>
+                    </details>
+                    <?php if ($orderRef !== ''): ?>
+                        <div class="b2b-hang-card__chat" data-testid="b2b-hang-card-chat">
+                            <?php if ($chatPreview !== ''): ?>
+                                <div class="b2b-hang-card__chat-preview w-text" data-size="sm" data-tone="muted" title="<?= $escape($chatPreview) ?>">
+                                    <?= __('最近') ?>：<?= $escape(mb_strlen($chatPreview) > 36 ? (mb_substr($chatPreview, 0, 36) . '…') : $chatPreview) ?>
+                                </div>
+                            <?php endif; ?>
+                            <div class="b2b-hang-admin-chat" data-testid="b2b-hang-admin-chat">
+                                <?php
+                                $chatRole = 'merchant';
+                                $customerIdHint = trim((string)($row['customer_id'] ?? ''));
+                                $chatOpen = $chatUnread > 0;
+                                $chatPartial = BP . 'app/code/Weline/B2B/view/templates/frontend/partials/order-chat-accordion.phtml';
+                                if (is_file($chatPartial)) {
+                                    include $chatPartial;
+                                }
+                                ?>
+                            </div>
+                        </div>
+                    <?php endif; ?>
+                    <div class="b2b-hang-card__footer">
+                        <div class="b2b-hang-order-ops" data-testid="b2b-hang-order-ops">
+                            <div class="w-cluster" data-align="start" style="--w-gap:var(--weline-space-2);">
+                                <?php if ($hangStatus === 'awaiting_merchant_approval' && $formActionPath !== '' && $hangKey !== ''): ?>
+                                    <w:form method="post" action="@backend-url{$formActionPath}" style="display:contents;">
+                                        <input type="hidden" name="hang_id" value="<?= $escape($hangKey) ?>">
+                                        <button class="w-button" type="submit" data-tone="primary" data-size="sm" data-testid="b2b-hang-row-approve"><?= __('批准') ?></button>
+                                    </w:form>
+                                <?php endif; ?>
+                                <?php if (in_array($hangStatus, ['awaiting_merchant_approval', 'awaiting_deposit'], true) && $rejectActionPath !== '' && $hangKey !== ''): ?>
+                                    <w:form method="post" action="@backend-url{$rejectActionPath}" style="display:contents;">
+                                        <input type="hidden" name="hang_id" value="<?= $escape($hangKey) ?>">
+                                        <button class="w-button" type="submit" data-tone="danger" data-size="sm" data-testid="b2b-hang-row-reject"><?= __('驳回') ?></button>
+                                    </w:form>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                        <div class="b2b-hang-card__pay">
                             <?php if ($hangStatus === 'awaiting_deposit' && $depositUrl !== ''): ?>
                                 <button type="button"
                                         class="w-button"
                                         data-tone="secondary"
+                                        data-size="sm"
                                         data-testid="b2b-copy-deposit-pay-link"
                                         data-copy-url="<?= $escape($depositUrl) ?>"><?= __('复制定金链接') ?></button>
-                            <?php endif; ?>
-                            <?php if ($hangStatus === 'awaiting_balance' && $balanceUrl !== ''): ?>
+                            <?php elseif ($hangStatus === 'awaiting_balance' && $balanceUrl !== ''): ?>
                                 <button type="button"
                                         class="w-button"
                                         data-tone="primary"
+                                        data-size="sm"
                                         data-testid="b2b-copy-balance-pay-link"
                                         data-copy-url="<?= $escape($balanceUrl) ?>"><?= __('复制尾款链接') ?></button>
-                            <?php endif; ?>
-                            <?php if (!in_array($hangStatus, ['awaiting_deposit', 'awaiting_balance'], true)): ?>
-                                <span class="w-text" data-tone="muted" data-size="sm"><?= __('—') ?></span>
-                            <?php endif; ?>
-                        </div>
-                    </td>
-                    <td>
-                        <div class="w-cluster" data-align="end" style="--w-gap:var(--weline-space-2);">
-                            <?php if ($hangStatus === 'awaiting_merchant_approval' && $formActionPath !== '' && $hangKey !== ''): ?>
-                                <w:form method="post" action="@backend-url{$formActionPath}" style="display:contents;">
-                                    <input type="hidden" name="hang_id" value="<?= $escape($hangKey) ?>">
-                                    <button class="w-button" type="submit" data-tone="primary" data-testid="b2b-hang-row-approve"><?= __('批准') ?></button>
-                                </w:form>
-                            <?php endif; ?>
-                            <?php if (in_array($hangStatus, ['awaiting_merchant_approval', 'awaiting_deposit'], true) && $rejectActionPath !== '' && $hangKey !== ''): ?>
-                                <w:form method="post" action="@backend-url{$rejectActionPath}" style="display:contents;">
-                                    <input type="hidden" name="hang_id" value="<?= $escape($hangKey) ?>">
-                                    <button class="w-button" type="submit" data-tone="danger" data-testid="b2b-hang-row-reject"><?= __('驳回') ?></button>
-                                </w:form>
+                            <?php else: ?>
+                                <span class="w-text" data-tone="muted" data-size="sm"><?= __('后台不收款') ?></span>
                             <?php endif; ?>
                         </div>
-                    </td>
-                </tr>
+                    </div>
+                </article>
             <?php endforeach; ?>
-            </tbody>
-        </table></div>
+        </div>
+        <?php endif; ?>
         <script>
         (function () {
             var root = document.querySelector('[data-workspace="hang-orders"]');
@@ -670,6 +930,11 @@ try {
                     });
                 } else {
                     window.prompt(<?= json_encode((string)__('复制链接'), JSON_UNESCAPED_UNICODE) ?>, url);
+                }
+            });
+            document.addEventListener('DOMContentLoaded', function () {
+                if (window.WelineB2BOrderChat && typeof window.WelineB2BOrderChat.boot === 'function') {
+                    window.WelineB2BOrderChat.boot(root);
                 }
             });
         })();

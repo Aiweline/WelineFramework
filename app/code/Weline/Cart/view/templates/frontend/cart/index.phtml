@@ -103,14 +103,6 @@ $copy = [
                         class="weline-cart-shell__credit-slot"
                         weline-code="cart.cart.credit_slot">
                 </w:slot>
-                <w:slot id="cart-summary-help-pay"
-                        name="<?= __('购物车帮我付') ?>"
-                        accept="cart-summary-help-pay,help-pay,helppay"
-                        multiple="false"
-                        position="content"
-                        class="weline-cart-shell__help-pay-slot"
-                        weline-code="cart.cart.help_pay_slot">
-                </w:slot>
             </div>
             <div class="weline-cart-shell__totals" data-cart-discount-breakdown hidden>
                 <div class="weline-cart-shell__summary-row weline-cart-shell__summary-row--goods">
@@ -127,6 +119,14 @@ $copy = [
             </div>
             <p class="weline-cart-shell__summary-note"><?= $escape($copy['shippingNote']) ?></p>
             <a class="weline-cart-shell__checkout" data-cart-checkout href="@url{'checkout'}"><?= __('去结算') ?></a>
+            <w:slot id="cart-summary-help-pay"
+                    name="<?= __('购物车帮我付') ?>"
+                    accept="cart-summary-help-pay,help-pay,helppay"
+                    multiple="false"
+                    position="content"
+                    class="weline-cart-shell__help-pay-slot"
+                    weline-code="cart.cart.help_pay_slot">
+            </w:slot>
             <a class="weline-cart-shell__continue weline-cart-shell__summary-continue"
                href="@url{'products'}"><?= __('继续购物') ?></a>
         </aside>
@@ -201,15 +201,41 @@ $copy = [
         const precision = Number(preview && preview.currency_precision != null ? preview.currency_precision : 2);
 
         discountLinesNode.textContent = '';
-        if (!items.length) {
+        // Quote may return amount_minor without per-line items; still show one coupon row.
+        let lines = items;
+        if (!lines.length && preview && Number(preview.amount_minor || 0) > 0) {
+            lines = [{
+                label: String(preview.coupon_code || preview.label || '').trim(),
+                coupon_code: String(preview.coupon_code || '').trim(),
+                source: preview.coupon_code ? 'coupon' : 'automatic',
+                kind: preview.coupon_code ? 'coupon' : 'automatic',
+                amount_minor: Number(preview.amount_minor || 0),
+                stackable: false,
+            }];
+        }
+        if (!lines.length) {
             discountBreakdownNode.hidden = true;
+            // Keep goods subtotal current for B2B credit deposit base even when breakdown is hidden.
+            setText(goodsSubtotalNode, money(goodsSubtotal, currency));
+            if (root) {
+                root.setAttribute(
+                    'data-cart-goods-subtotal-major',
+                    String(isFinite(Number(goodsSubtotal)) && Number(goodsSubtotal) > 0 ? Number(goodsSubtotal) : 0)
+                );
+            }
             return;
         }
 
         discountBreakdownNode.hidden = false;
         setText(goodsSubtotalNode, money(goodsSubtotal, currency));
+        if (root) {
+            root.setAttribute(
+                'data-cart-goods-subtotal-major',
+                String(isFinite(Number(goodsSubtotal)) && Number(goodsSubtotal) > 0 ? Number(goodsSubtotal) : 0)
+            );
+        }
 
-        items.forEach(function (item) {
+        lines.forEach(function (item) {
             if (!item || typeof item !== 'object') {
                 return;
             }
@@ -996,6 +1022,7 @@ $copy = [
             }
         }
         rememberLocalCartSummary(summary);
+        root.__welineLastCartSummary = summary;
         showState('ready');
     }
 
@@ -1086,6 +1113,7 @@ $copy = [
             ? options.cartType
             : preferredCartType();
         const seq = ++cartLoadSeq;
+        const couponCode = String((options && options.couponCode) || '').trim().toUpperCase();
         // Empty typed cache cannot short-circuit: sibling CTA may claim the other cart
         // still has lines while a stale empty bucket would paint 「购物车是空的」.
         if (preferCache && !options.forceNetwork) {
@@ -1103,8 +1131,12 @@ $copy = [
             applyCartTypeChrome(requestedMode);
             const cart = await getCartApi();
             let result;
+            const identity = await cartIdentity(requestedMode);
+            if (couponCode) {
+                identity.coupon_code = couponCode;
+            }
             try {
-                result = await cart.getCart(await cartIdentity(requestedMode));
+                result = await cart.getCart(identity);
             } catch (requestError) {
                 if (requestedMode === 'tob' && isCommerceTypeGateFailure(null, requestError)) {
                     // Guest/wholesale gate: keep page usable with retail cart (SSR already fail-soft).
@@ -1215,8 +1247,29 @@ $copy = [
         retryButton.addEventListener('click', loadCart);
     }
 
-    window.addEventListener('weline:cart-updated', function () {
-        loadCart({ soft: true, cartType: preferredCartType() });
+    window.addEventListener('weline:cart-updated', function (event) {
+        const detail = event && event.detail && typeof event.detail === 'object' ? event.detail : {};
+        const forceNetwork = detail.refresh === true || detail.forceNetwork === true;
+        if (forceNetwork && detail.discount_preview && typeof detail.discount_preview === 'object'
+            && Number(detail.discount_preview.amount_minor || 0) > 0
+            && root.__welineLastCartSummary) {
+            const patched = Object.assign({}, root.__welineLastCartSummary, {
+                discount_preview: detail.discount_preview,
+            });
+            render(patched);
+        }
+        if (forceNetwork && detail.clear_discount === true && root.__welineLastCartSummary) {
+            const cleared = Object.assign({}, root.__welineLastCartSummary);
+            delete cleared.discount_preview;
+            render(cleared);
+        }
+        loadCart({
+            soft: true,
+            cartType: preferredCartType(),
+            forceNetwork: forceNetwork,
+            couponCode: String(detail.coupon_code || '').trim(),
+            clearDiscount: detail.clear_discount === true,
+        });
     });
 
     window.addEventListener('weline:cart-type-changed', function (event) {

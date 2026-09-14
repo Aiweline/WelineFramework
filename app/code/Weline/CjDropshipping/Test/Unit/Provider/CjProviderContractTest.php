@@ -238,6 +238,23 @@ final class CjProviderContractTest extends TestCase
         self::assertArrayNotHasKey('sku', $line);
     }
 
+    public function testMapFreightCalculateRequestFromShellStandard(): void
+    {
+        $body = CjProvider::mapFreightCalculateRequest([
+            'start_country_code' => 'CN',
+            'end_country_code' => 'US',
+            'zip' => '10001',
+            'products' => [
+                ['external_vid' => '2609110854341615800', 'qty' => 2],
+            ],
+        ]);
+        self::assertSame('CN', $body['startCountryCode']);
+        self::assertSame('US', $body['endCountryCode']);
+        self::assertSame('10001', $body['zip']);
+        self::assertSame('2609110854341615800', $body['products'][0]['vid']);
+        self::assertSame(2, $body['products'][0]['quantity']);
+    }
+
     public function testPickVariantIdFromProductDataPrefersMatchingSku(): void
     {
         $vid = CjProvider::pickVariantIdFromProductData([
@@ -282,8 +299,174 @@ final class CjProviderContractTest extends TestCase
     {
         $schema = (new CjProvider())->getConfigSchema();
         self::assertContains('order_sandbox', $schema['fields'] ?? []);
+        self::assertContains('freight_on_failure', $schema['fields'] ?? []);
         $phtml = (string)file_get_contents(dirname(__DIR__, 3) . '/extends/module/Weline_SystemConfig/Config/backend/cj.phtml');
         self::assertStringContainsString('dropship/channel/cj/order_sandbox', $phtml);
         self::assertStringContainsString('订单沙盒', $phtml);
+        self::assertStringContainsString('dropship/channel/cj/freight_on_failure', $phtml);
+        self::assertStringContainsString('fallback_local', $phtml);
+        self::assertStringContainsString('block_checkout', $phtml);
+    }
+
+    public function testParseWebhookMapsOrderStatusFulfillment(): void
+    {
+        $body = json_encode([
+            'type' => 'orderStatus',
+            'id' => 'evt-cj-status-1',
+            'orderId' => 'CJ-ORD-9001',
+            'orderNumber' => 'site-ord-9001',
+            'orderStatus' => 'SHIPPED',
+            'trackNumber' => 'CJTRACK9001',
+            'logisticName' => 'CJPacket Ordinary',
+        ], JSON_UNESCAPED_UNICODE);
+        self::assertIsString($body);
+        $parsed = (new CjProvider())->parseWebhook([], $body);
+        self::assertTrue($parsed['ok'] ?? false);
+        self::assertSame('orderStatus', $parsed['event'] ?? null);
+        self::assertSame('evt-cj-status-1', $parsed['external_id'] ?? null);
+        self::assertSame('CJ-ORD-9001', $parsed['fulfillment']['external_order_id'] ?? null);
+        self::assertSame('site-ord-9001', $parsed['fulfillment']['order_uuid'] ?? null);
+        self::assertSame('SHIPPED', $parsed['fulfillment']['status'] ?? null);
+        self::assertSame('CJTRACK9001', $parsed['fulfillment']['tracking_number'] ?? null);
+        self::assertSame('CJPacket Ordinary', $parsed['fulfillment']['carrier'] ?? null);
+    }
+
+    public function testParseWebhookMapsOfficialOrderParamsEnvelope(): void
+    {
+        $body = json_encode([
+            'messageId' => '7cceede817dc47ed9748328b64353c5c',
+            'type' => 'ORDER',
+            'messageType' => 'UPDATE',
+            'params' => [
+                'orderNumber' => 'sbx-ord-1',
+                'cjOrderId' => 'SD2609120704400663000',
+                'orderStatus' => 'DELIVERED',
+                'logisticName' => 'CJPacket Ordinary',
+                'trackNumber' => 'SBX4400663000',
+            ],
+        ], JSON_UNESCAPED_UNICODE);
+        self::assertIsString($body);
+        $parsed = (new CjProvider())->parseWebhook([], $body);
+        self::assertTrue($parsed['ok'] ?? false);
+        self::assertSame('ORDER', $parsed['event'] ?? null);
+        self::assertSame('7cceede817dc47ed9748328b64353c5c', $parsed['external_id'] ?? null);
+        self::assertSame('SD2609120704400663000', $parsed['fulfillment']['external_order_id'] ?? null);
+        self::assertSame('sbx-ord-1', $parsed['fulfillment']['order_uuid'] ?? null);
+        self::assertSame('DELIVERED', $parsed['fulfillment']['status'] ?? null);
+        self::assertSame('SBX4400663000', $parsed['fulfillment']['tracking_number'] ?? null);
+        self::assertSame('CJPacket Ordinary', $parsed['fulfillment']['carrier'] ?? null);
+        self::assertSame('order', $parsed['topic'] ?? null);
+    }
+
+    public function testParseWebhookMapsOfficialProductStockLogisticsMakeupPrivateDispute(): void
+    {
+        $p = new CjProvider();
+
+        $product = $p->parseWebhook([], (string)json_encode([
+            'messageId' => 'msg-product-1',
+            'type' => 'PRODUCT',
+            'messageType' => 'UPDATE',
+            'params' => [
+                'pid' => '1424608189734850560',
+                'productSku' => 'SKU-P1',
+                'productNameEn' => 'Demo Tee',
+                'productSellPrice' => 12.34,
+                'productStatus' => 3,
+            ],
+        ], JSON_UNESCAPED_UNICODE));
+        self::assertTrue($product['ok'] ?? false);
+        self::assertSame('product', $product['topic'] ?? null);
+        self::assertSame('1424608189734850560', $product['catalog']['external_spu'] ?? null);
+        self::assertSame(1234, $product['catalog']['origin_price_minor'] ?? null);
+        self::assertSame('active', $product['catalog']['shelf_status'] ?? null);
+
+        $stock = $p->parseWebhook([], (string)json_encode([
+            'messageId' => 'msg-stock-1',
+            'type' => 'STOCK',
+            'messageType' => 'UPDATE',
+            'params' => [
+                'vid-a' => [
+                    ['vid' => 'vid-a', 'pid' => '123890023', 'storageNum' => 12],
+                    ['vid' => 'vid-a', 'pid' => '123890023', 'storageNum' => 3],
+                ],
+            ],
+        ], JSON_UNESCAPED_UNICODE));
+        self::assertSame('stock', $stock['topic'] ?? null);
+        self::assertSame('123890023', $stock['catalog']['external_spu'] ?? null);
+        self::assertSame(15, $stock['catalog']['qty'] ?? null);
+
+        $log = $p->parseWebhook([], (string)json_encode([
+            'messageId' => 'msg-log-1',
+            'type' => 'LOGISTIC',
+            'messageType' => 'UPDATE',
+            'params' => [
+                'orderId' => 'SD-LOG-1',
+                'storeOrderNumbers' => ['site-log-1'],
+                'trackingNumber' => 'CJPKL1',
+                'logisticName' => 'CJPacket',
+                'trackingProvider' => 'USPS',
+                'trackingStatus' => 0,
+            ],
+        ], JSON_UNESCAPED_UNICODE));
+        self::assertSame('logistics', $log['topic'] ?? null);
+        self::assertSame('SD-LOG-1', $log['fulfillment']['external_order_id'] ?? null);
+        self::assertSame('CJPKL1', $log['fulfillment']['tracking_number'] ?? null);
+        self::assertSame('USPS', $log['fulfillment']['carrier'] ?? null);
+
+        $makeup = $p->parseWebhook([], (string)json_encode([
+            'messageId' => 'msg-mu-1',
+            'type' => 'MAKEUP',
+            'messageType' => 'PAID',
+            'params' => [
+                'orderId' => 'BT2606061320024499900',
+                'relationOrderId' => 'SD2606060858539645300',
+                'amount' => 12.35,
+                'status' => 'PAID',
+            ],
+        ], JSON_UNESCAPED_UNICODE));
+        self::assertSame('makeup', $makeup['topic'] ?? null);
+        self::assertSame('BT2606061320024499900', $makeup['makeup']['external_id'] ?? null);
+        self::assertSame('SD2606060858539645300', $makeup['makeup']['related_external_order_id'] ?? null);
+        self::assertSame(1235, $makeup['makeup']['amount_minor'] ?? null);
+
+        $priv = $p->parseWebhook([], (string)json_encode([
+            'messageId' => 'msg-sy-1',
+            'type' => 'PRIVATE_ORDER',
+            'messageType' => 'UPDATE',
+            'params' => [
+                'orderId' => 'SY2606061320024499900',
+                'orderNumber' => 'shop_sy_1',
+                'status' => 'SHIPPED',
+            ],
+        ], JSON_UNESCAPED_UNICODE));
+        self::assertSame('private_order', $priv['topic'] ?? null);
+        self::assertSame('SY2606061320024499900', $priv['fulfillment']['external_order_id'] ?? null);
+
+        $disp = $p->parseWebhook([], (string)json_encode([
+            'messageId' => 'msg-dp-1',
+            'type' => 'DISPUTES',
+            'messageType' => 'UPDATE',
+            'params' => ['orderId' => 'SD-DP-1', 'status' => '2'],
+        ], JSON_UNESCAPED_UNICODE));
+        self::assertSame('dispute', $disp['topic'] ?? null);
+        self::assertSame('dispute_2', $disp['fulfillment']['status'] ?? null);
+
+        $refund = $p->parseWebhook([], (string)json_encode([
+            'messageId' => 'msg-rf-1',
+            'type' => 'ORDER',
+            'messageType' => 'UPDATE',
+            'params' => [
+                'cjOrderId' => 'SD-RF-1',
+                'orderNumber' => 'site-rf-1',
+                'orderStatus' => 'REFUND_COMPLETE',
+            ],
+        ], JSON_UNESCAPED_UNICODE));
+        self::assertSame('order', $refund['topic'] ?? null);
+        self::assertSame('REFUND_COMPLETE', $refund['fulfillment']['status'] ?? null);
+
+        $caps = $p->getCapabilities();
+        foreach (['webhook_order', 'webhook_product', 'webhook_stock', 'webhook_logistics', 'webhook_makeup', 'webhook_private_order', 'webhook_dispute'] as $k) {
+            self::assertTrue(!empty($caps[$k]), $k);
+        }
     }
 }

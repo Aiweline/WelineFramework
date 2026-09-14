@@ -11,13 +11,17 @@ use Weline\Framework\Manager\ObjectManager;
  *
  * Wholesale UI and tob MOQ apply only when site+product tob is allowed
  * AND the SKU has at least one active website price-list tier.
- * Ineligible products still may enter a tob cart at retail price/qty rules.
+ * Site default wholesale templates alone MUST NOT unlock PDP wholesale UI
+ * (templates seed price lists when wholesale is configured; display follows tiers).
+ * Ineligible products MUST NOT enter a tob cart; Cart Offer Routing remaps tob→toc.
  */
 final class ProductWholesaleEligibility
 {
     public function __construct(
         private readonly ?SellingModePolicy $sellingModePolicy = null,
         private readonly ?PriceListStore $priceLists = null,
+        /** @phpstan-ignore-next-line property.onlyWritten — DI may still inject; display ignores template-only. */
+        private readonly ?DefaultWholesalePolicy $defaultPolicy = null,
     ) {
     }
 

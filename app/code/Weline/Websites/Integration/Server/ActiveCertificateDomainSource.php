@@ -67,7 +67,6 @@ final class ActiveCertificateDomainSource implements ActiveCertificateDomainSour
             return $domains;
         }
 
-        $this->defaultWebsiteService->ensureDefaultWebsite(false);
         $websites = (clone $this->websiteModel)->clearQuery()->select()->fetchArray();
         foreach ($websites as $website) {
             if (!\is_array($website)) {

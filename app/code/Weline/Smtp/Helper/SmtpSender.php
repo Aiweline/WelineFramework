@@ -308,8 +308,14 @@ class SmtpSender extends \Weline\Framework\App\Helper implements MailSenderInter
                 ->setData(
                     $sendLog::schema_fields_STORAGE_SCOPE,
                     trim((string)($config['__storage_scope'] ?? $config['storage_scope'] ?? $config['scope'] ?? $this->data->resolveScope(null)))
-                )
-                ->save();
+                );
+            if (defined(SmtpSendLog::class . '::schema_fields_TEMPLATE_ID')) {
+                $sendLog->setData($sendLog::schema_fields_TEMPLATE_ID, (int)($config['__template_id'] ?? 0));
+            }
+            if (defined(SmtpSendLog::class . '::schema_fields_LOCALE')) {
+                $sendLog->setData($sendLog::schema_fields_LOCALE, trim((string)($config['__locale'] ?? '')));
+            }
+            $sendLog->save();
         } catch (\ReflectionException|Exception|ModelException $e) {
             if (DEV) {
                 throw new Exception($e->getMessage());

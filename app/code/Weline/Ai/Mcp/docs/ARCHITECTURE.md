@@ -1,5 +1,7 @@
 # Architecture
 
+MCP is an optional knowledge plane: project index, code map, skills, and domain hard-rule delivery. Coding uses host-native editors.
+
 ```text
 Codex / Cursor / compatible AI host
                 |
@@ -7,13 +9,13 @@ Codex / Cursor / compatible AI host
                 v
            McpServer
                 |
-           ToolService  ---- session readiness gate
+           ToolService
                 |
      +----------+-----------+
      |                      |
 ProjectReadinessService  IntelligenceService
      |                      |
-module/doc contract      ProjectIndexer / Retriever / EditService
+module/doc contract      ProjectIndexer / Retriever
      |                      |
      +----------> project-isolated SQLite
 ```
@@ -30,16 +32,15 @@ The MCP is plain PHP 8.2-compatible code under the `LearningMcp` namespace. It u
 
 ## Knowledge retrieval
 
-`resolve_task_context` searches indexed documents and source evidence and returns `guidance-bundle.v1`: bounded task-matched fragments, source paths, Hashes, rules, and current session directives. It does not preload the framework corpus. Dynamic skill aliases call the same path.
+`resolve_task_context` searches indexed documents and source evidence and returns `guidance-bundle.v1`: bounded task-matched fragments, source paths, Hashes, rules, and temporary session notes. It does not preload the framework corpus. Dynamic skill aliases call the same path.
 
-## Freshness and editing
+## Freshness
 
-Before every guarded call, the service compares the readiness snapshot with current Git/module/document state and incrementally refreshes external changes. MCP-owned writes reindex inside the same operation. Compact edits are sealed, journaled, fixed-profile validated, targeted-reindexed, and rolled back safely when validation fails.
+Before every guarded call, the service compares the readiness snapshot with current Git/module/document state and incrementally refreshes external changes. Host-native edits are picked up on the next readiness/index refresh.
 
 ## State
 
 - Global learning/event database: local user data directory.
 - Project code/document index: `indexes/{canonical-project-hash}/project.sqlite`.
 - Both SQLite connections enable a 30-second native busy timeout before WAL work, so concurrent STDIO processes wait without replaying application transactions.
-- Readiness and session directives: process memory only.
-- Edit journal and locks: local user data directory; never committed to the repository.
+- Readiness and temporary session notes: process memory only.

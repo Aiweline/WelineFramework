@@ -9,8 +9,8 @@ use Weline\Framework\Manager\ObjectManager;
 
 /**
  * ToB cart qty gates: default moq=5 / step=5 from SellingModePolicy when available.
- * Ineligible wholesale SKUs (no product tob + active tiers) skip MOQ so they can
- * still enter a tob cart at normal retail qty rules.
+ * Ineligible wholesale SKUs (no product tob + active tiers) skip MOQ — legacy lines
+ * already in tob carts fail soft; new adds are remapped to toc by Offer Routing.
  */
 final class B2BCartQtyPolicy implements CommerceCartQtyPolicyInterface
 {
@@ -118,6 +118,21 @@ final class B2BCartQtyPolicy implements CommerceCartQtyPolicyInterface
     {
         if (isset($params['moq']) && (int)$params['moq'] > 0) {
             return (int)$params['moq'];
+        }
+        $websiteId = max(0, (int)($params['website_id'] ?? 0));
+        $groupId = trim((string)($params['group_id'] ?? ''));
+        try {
+            $default = ObjectManager::getInstance(DefaultWholesalePolicy::class);
+            if ($default instanceof DefaultWholesalePolicy) {
+                if ($groupId !== '' && $default->groupCanInheritTemplate($groupId)) {
+                    $tiers = $default->tiersForGroup($groupId, $websiteId);
+                    if ($tiers !== []) {
+                        return max(1, $default->lowestMinQty($tiers));
+                    }
+                }
+                return max(1, $default->lowestMinQty($default->allTiers($websiteId)));
+            }
+        } catch (\Throwable) {
         }
         $policy = $this->policy();
         if ($policy !== null) {

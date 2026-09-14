@@ -18,7 +18,7 @@ final class TobCommerceOrderType implements CommerceOrderTypeInterface
 
     public function getLabel(): string
     {
-        return (string)__('批发');
+        return (string)__('批发订单');
     }
 
     public function getBadgeTone(): string

@@ -7,11 +7,14 @@ $amount = ((int) ($bill['amount_minor'] ?? 0)) / 100;
 $currency = (string) ($bill['currency_code'] ?? 'USD');
 $rulesUrl = (string) ($this->getData('help_rules_url') ?? '/faq/help-pay-payer');
 $privacyUrl = (string) ($this->getData('privacy_url') ?? '/faq/help-pay-privacy');
+$token = (string) ($this->getData('token') ?? '');
+$billingHtml = (string) ($this->getData('billing_address_html') ?? '');
 ?>
 <section class="w-helppay-payer w-stack"
          style="--w-gap:var(--weline-space-5, var(--space-5));"
          data-testid="help-pay-payer"
          data-shipping-redacted="1"
+         data-helppay-token="<?= $escape($token) ?>"
          data-weline-load="helpPayShare"
          weline-code="helppay.payer.page">
     <header class="w-helppay-payer__head w-stack" style="--w-gap:var(--weline-space-2, var(--space-2));">
@@ -53,20 +56,24 @@ $privacyUrl = (string) ($this->getData('privacy_url') ?? '/faq/help-pay-privacy'
         <p class="w-text" data-size="sm" data-tone="muted">
             <?= $escape(__('优惠券与积分不可用于帮我付。')) ?>
         </p>
-        <div class="w-stack" style="--w-gap:var(--weline-space-3, var(--space-3));" data-testid="help-pay-billing">
+        <div class="w-stack w-helppay-payer__billing" style="--w-gap:var(--weline-space-3, var(--space-3));" data-testid="help-pay-billing">
             <h3 class="w-text" data-weight="strong" style="--w-m:0;"><?= $escape(__('付款账单地址')) ?></h3>
             <p class="w-text" data-size="sm" data-tone="muted" style="--w-m:0;">
                 <?= $escape(__('卡支付时填写付款人自己的账单地址，不会写回收货地址。')) ?>
             </p>
-            <label class="w-field">
-                <span class="w-field__label"><?= $escape(__('账单地址')) ?></span>
-                <input class="w-input" type="text" name="billing_line1"
-                       placeholder="<?= $escape(__('街道、门牌等')) ?>"
-                       data-helppay-billing-line1>
-            </label>
+            <div data-helppay-billing-mount data-testid="helppay-billing-mount">
+                <?php if ($billingHtml !== ''): ?>
+                    <?= $billingHtml ?>
+                <?php else: ?>
+                    <p class="w-text" data-tone="danger" data-size="sm" data-testid="helppay-billing-unavailable" role="alert">
+                        <?= $escape(__('账单地址组件暂不可用，请稍后重试。')) ?>
+                    </p>
+                <?php endif; ?>
+            </div>
+            <p class="w-text" data-tone="danger" data-size="sm" data-helppay-billing-msg hidden role="alert"></p>
         </div>
         <div class="w-helppay-payer__actions">
-            <button type="button" class="w-button w-button--primary" data-helppay-pay>
+            <button type="button" class="w-button w-button--primary" data-helppay-pay data-testid="help-pay-confirm">
                 <?= $escape(__('确认付款')) ?>
             </button>
         </div>

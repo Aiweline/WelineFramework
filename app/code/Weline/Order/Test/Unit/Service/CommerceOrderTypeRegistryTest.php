@@ -19,6 +19,11 @@ final class CommerceOrderTypeRegistryTest extends TestCase
         self::assertSame(['toc'], $reg->codes());
         self::assertInstanceOf(TocCommerceOrderType::class, $reg->require('toc'));
         self::assertSame('toc', $reg->require('toc')->getCode());
+        self::assertSame('info', $reg->require('toc')->getBadgeTone());
+        self::assertSame('info', $reg->resolveBadgeTone('toc'));
+        $tocSource = (string) file_get_contents(dirname(__DIR__, 3) . '/Service/TocCommerceOrderType.php');
+        self::assertStringContainsString("'零售订单'", $tocSource);
+        self::assertStringContainsString("return 'info'", $tocSource);
     }
 
     public function testForTestingWithMockTobHasBoth(): void
@@ -31,7 +36,7 @@ final class CommerceOrderTypeRegistryTest extends TestCase
 
             public function getLabel(): string
             {
-                return '批发';
+                return '批发订单';
             }
 
             public function getBadgeTone(): string

@@ -28,6 +28,14 @@ abstract class AbstractSocialLoginProvider implements SocialLoginProviderInterfa
         return 100;
     }
 
+    /**
+     * @return array<string, list<string>>
+     */
+    public function cspDirectives(): array
+    {
+        return [];
+    }
+
     public function getSummary(): string
     {
         $label = $this->getLabel();

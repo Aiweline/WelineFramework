@@ -105,6 +105,71 @@ $listApiUrl = (string)w_url('/shipping/frontend/region/list', [], 'frontend');
 <?= $this->fetch('Weline_Shipping::templates/Backend/partials/manager-tabs.phtml', ['activeTab' => 'region']) ?>
 <?php endif; ?>
 
+<?php
+$countrySortRows = $this->getData('country_sort_rows');
+if (!is_array($countrySortRows)) {
+    $countrySortRows = [];
+}
+$saveCountrySortUrl = (string)w_url('shipping/backend/region/saveCountrySort');
+?>
+                <div class="w-grid" style="--w-mb:var(--weline-space-4,1rem);">
+                    <div style="--w-span:12;">
+                        <div class="w-card" data-testid="shipping-country-sort-card">
+                            <div class="w-card__header">
+                                <h5 class="w-card__title" style="--w-mb:0;"><?= __('热门国家排序') ?></h5>
+                            </div>
+                            <div class="w-card__body">
+                                <p class="w-text" style="--w-mb:var(--weline-space-3,0.75rem);color:var(--weline-theme-text-muted,#667085);">
+                                    <?= __('数字越小越靠前。用于结账邮编多国待选与国家下拉，避免热门市场被冷门同码国家挤到后面。') ?>
+                                </p>
+                                <?php if ($countrySortRows === []): ?>
+                                    <p class="w-text"><?= __('暂无可编辑国家，请先导入地址目录或执行升级种子。') ?></p>
+                                <?php else: ?>
+                                <w:form action="<?= htmlspecialchars($saveCountrySortUrl) ?>" method="post" data-testid="shipping-country-sort-form">
+                                    <?php if (!empty($embed)): ?>
+                                        <input type="hidden" name="embed" value="1">
+                                    <?php endif; ?>
+                                    <div class="w-table-wrap" style="--w-mb:var(--weline-space-3,0.75rem);max-block-size:22rem;overflow:auto;">
+                                        <table class="w-table" data-testid="shipping-country-sort-table">
+                                            <thead>
+                                                <tr>
+                                                    <th><?= __('国家') ?></th>
+                                                    <th><?= __('代码') ?></th>
+                                                    <th><?= __('排序') ?></th>
+                                                    <th><?= __('默认可达') ?></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <?php foreach ($countrySortRows as $row): ?>
+                                                    <?php
+                                                    $cc = htmlspecialchars((string)($row['country_code'] ?? ''));
+                                                    $name = htmlspecialchars((string)($row['country_name'] ?? ''));
+                                                    $sort = (int)($row['sort_order'] ?? 0);
+                                                    $inMarket = !empty($row['in_default_markets']);
+                                                    ?>
+                                                    <tr>
+                                                        <td><?= $name ?></td>
+                                                        <td>
+                                                            <?= $cc ?>
+                                                            <input type="hidden" name="country_code[]" value="<?= $cc ?>">
+                                                        </td>
+                                                        <td style="--w-max-inline-size:7rem;">
+                                                            <input class="w-input" type="number" min="0" name="sort_order[]" value="<?= $sort ?>" data-testid="shipping-country-sort-<?= $cc ?>">
+                                                        </td>
+                                                        <td><?= $inMarket ? __('是') : __('否') ?></td>
+                                                    </tr>
+                                                <?php endforeach; ?>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <button class="w-button" type="submit" data-tone="primary" data-testid="shipping-country-sort-submit"><?= __('保存热门排序') ?></button>
+                                </w:form>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="w-grid">
                     <div style="--w-span:12;">
                         <div class="w-card" data-testid="shipping-region-list-card">
@@ -212,8 +277,8 @@ $listApiUrl = (string)w_url('/shipping/frontend/region/list', [], 'frontend');
                             </div>
                         </div>
                         <div class="w-field" style="--w-max-inline-size:8rem;">
-                                    <label class="w-field__label" for="shipping-region-sort-order"><?= __('排序') ?></label>
-                            <input class="w-input" type="number" min="0" name="sort_order" id="shipping-region-sort-order" value="0">
+                                    <label class="w-field__label" for="shipping-region-sort-order"><?= __('排序（数字越小越靠前）') ?></label>
+                            <input class="w-input" type="number" min="0" name="sort_order" id="shipping-region-sort-order" value="0" placeholder="<?= __('影响结账热门位次') ?>">
                         </div>
                     </div>
                 </div>

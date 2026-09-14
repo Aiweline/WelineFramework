@@ -14,6 +14,8 @@ $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JS
 
 $title = trim((string)($this->getData('title') ?? ''));
 $title = $title === '' ? (string)__('收货地址') : (string)__($title);
+$savedHeading = trim((string)($this->getData('saved_heading') ?? ''));
+$savedHeading = $savedHeading === '' ? (string)__('选择收货地址') : (string)__($savedHeading);
 
 $context = [
     'country_code' => 'CN',
@@ -101,8 +103,8 @@ $ui = [
     'save_use' => (string)__('保存此地址'),
     'billing_same' => (string)__('账单地址与收货地址相同'),
     'billing_title' => (string)__('账单地址'),
-    'shipping_title' => (string)__('收货地址'),
-    'saved_heading' => (string)__('选择收货地址'),
+    'shipping_title' => $title,
+    'saved_heading' => $savedHeading,
     'change_address' => (string)__('更换地址'),
     'done_change' => (string)__('收起地址列表'),
     'load_addresses_failed' => (string)__('地址列表加载失败，请稍后重试。'),

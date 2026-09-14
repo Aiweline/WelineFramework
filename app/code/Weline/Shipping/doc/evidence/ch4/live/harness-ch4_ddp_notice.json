@@ -1,0 +1,11 @@
+{
+    "ok": true,
+    "scenario": "ch4_ddp_notice",
+    "assertions": {
+        "amount_equal": true,
+        "ddu_amount": 11500,
+        "ddp_amount": 11500,
+        "incoterm": "ddp",
+        "duty_notice": "duty_included_by_seller_estimate_separate"
+    }
+}

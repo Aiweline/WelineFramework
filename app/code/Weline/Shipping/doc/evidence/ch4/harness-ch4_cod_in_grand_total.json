@@ -1,0 +1,10 @@
+{
+    "ok": true,
+    "scenario": "ch4_cod_in_grand_total",
+    "assertions": {
+        "cod_fee_amount_minor": 500,
+        "baseline": 11500,
+        "grand_total_minor": 12000,
+        "money_grand": 12000
+    }
+}

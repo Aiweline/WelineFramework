@@ -33,6 +33,27 @@ final class FacebookProvider extends AbstractSocialLoginProvider
         return 20;
     }
 
+    /**
+     * @return array<string, list<string>>
+     */
+    public function cspDirectives(): array
+    {
+        // Facebook Login dialog + Graph API (+ optional JS SDK host).
+        return [
+            'script-src' => [
+                'https://connect.facebook.net',
+            ],
+            'frame-src' => [
+                'https://www.facebook.com',
+            ],
+            'connect-src' => [
+                'https://www.facebook.com',
+                'https://graph.facebook.com',
+                'https://connect.facebook.net',
+            ],
+        ];
+    }
+
     public function getIconSvgMarkup(): string
     {
         return '<svg class="account-social-login__mark" viewBox="0 0 24 24" width="22" height="22" focusable="false" aria-hidden="true">'

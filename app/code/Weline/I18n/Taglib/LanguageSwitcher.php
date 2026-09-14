@@ -950,7 +950,12 @@ class LanguageSwitcher implements TaglibInterface
         array $languageCodes
     ): string {
         return \md5(\json_encode([
-            'dictionary_version' => DictionaryCacheNamespace::fingerprint(),
+            'dictionary_version' => DictionaryCacheNamespace::fingerprint(array_values(array_unique([
+                $currentCode,
+                $displayLocale,
+                ...\Weline\Framework\Cache\StorefrontCacheKeyContext::currentOrRequestFence()->translationLocales,
+            ]))),
+            'translation_locales' => \Weline\Framework\Cache\StorefrontCacheKeyContext::currentOrRequestFence()->translationLocales,
             'scope' => $isBackendArea ? 'backend' : 'frontend:' . $websiteId,
             'for' => $renderFor,
             'lang' => $currentCode,
@@ -996,19 +1001,19 @@ class LanguageSwitcher implements TaglibInterface
      */
     private static function loadChromeDictionary(string $locale): array
     {
-        $cacheKey = DictionaryCacheNamespace::cacheKey($locale);
-        if (isset(DictionaryCacheNamespace::localCache(self::$chromeDictionaryCache, 256)[$cacheKey])) {
-            return DictionaryCacheNamespace::localCache(self::$chromeDictionaryCache, 256)[$cacheKey];
+        $cacheKey = DictionaryCacheNamespace::cacheKey($locale, [$locale]);
+        if (isset(DictionaryCacheNamespace::localCache(self::$chromeDictionaryCache, 256, [$locale])[$cacheKey])) {
+            return DictionaryCacheNamespace::localCache(self::$chromeDictionaryCache, 256, [$locale])[$cacheKey];
         }
 
         $path = \dirname(__DIR__) . '/i18n/' . $locale . '.csv';
         if (!\is_file($path)) {
-            return DictionaryCacheNamespace::localCache(self::$chromeDictionaryCache, 256)[$cacheKey] = [];
+            return DictionaryCacheNamespace::localCache(self::$chromeDictionaryCache, 256, [$locale])[$cacheKey] = [];
         }
 
         $handle = @\fopen($path, 'rb');
         if ($handle === false) {
-            return DictionaryCacheNamespace::localCache(self::$chromeDictionaryCache, 256)[$cacheKey] = [];
+            return DictionaryCacheNamespace::localCache(self::$chromeDictionaryCache, 256, [$locale])[$cacheKey] = [];
         }
 
         $words = [];
@@ -1028,7 +1033,7 @@ class LanguageSwitcher implements TaglibInterface
             \fclose($handle);
         }
 
-        return DictionaryCacheNamespace::localCache(self::$chromeDictionaryCache, 256)[$cacheKey] = $words;
+        return DictionaryCacheNamespace::localCache(self::$chromeDictionaryCache, 256, [$locale])[$cacheKey] = $words;
     }
 
     /**

@@ -1,0 +1,9 @@
+{
+    "ok": true,
+    "scenario": "ch4_split_each_shipment",
+    "assertions": {
+        "strategy": "each_shipment",
+        "second_amount_minor": 11500,
+        "positive": true
+    }
+}

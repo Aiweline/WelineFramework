@@ -24,6 +24,9 @@ use Weline\Framework\View\Data\HtmlInterface;
 
 trait TraitTemplate
 {
+    // 路径映射和物理编译目录必须同时迁移格式，避免映射仍指向旧编译产物。
+    private const TEMPLATE_COMPILE_SCOPE_SCHEMA = 'context-env-v4';
+
     /**
      * @DESC          # 读取页头代码
      *
@@ -846,6 +849,8 @@ trait TraitTemplate
 
         return KeyBuilder::environmentHash([
             'scope' => $scope,
+            // 编译身份改读有效环境后，旧共享路径映射不得复用错误目录。
+            'compile_scope_schema' => self::TEMPLATE_COMPILE_SCOPE_SCHEMA,
             'runtime_os' => PHP_OS_FAMILY,
             'runtime_root' => str_replace('\\', '/', rtrim($runtimeRoot, '/\\')),
             // w:widget bakes nested <w:hook> HTML at parent compile time; when

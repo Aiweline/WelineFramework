@@ -8,6 +8,8 @@ namespace Weline\Server\Service\Edge\Gateway;
  * Locates the immutable, platform-specific gateway package distributed with
  * one project release. It never builds, downloads or trusts package bytes;
  * HostGatewayPackageManager remains the signature and component authority.
+ * Optional CDN fetch is implemented by GatewayProjectReleasePackageFetcher and
+ * must complete before this resolver sees a published local tree.
  */
 final class GatewayProjectReleasePackageResolver
 {

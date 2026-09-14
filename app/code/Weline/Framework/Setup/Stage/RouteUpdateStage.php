@@ -89,6 +89,14 @@ class RouteUpdateStage extends AbstractStage
 
         $isPartial = !empty($this->modulesToClear);
 
+        // 路由文件批量缓冲 + ACL 事件 defer：扫描阶段只做内存收集，commit 时一次落盘/落库
+        /** @var \Weline\Framework\Module\Helper\Data $moduleHelper */
+        $moduleHelper = \Weline\Framework\Manager\ObjectManager::getInstance(
+            \Weline\Framework\Module\Helper\Data::class
+        );
+        $moduleHelper->enableDeferControllerAttributes();
+        \Weline\Framework\Module\Handle::resetBatchRouteProgress();
+
         if ($isPartial) {
             // 增量模式：确保不处于批量模式，避免仅写入内存不落盘
             if ($this->routerHelper->isBatchMode()) {
@@ -247,6 +255,13 @@ class RouteUpdateStage extends AbstractStage
         try {
             $isPartial = !empty($this->modulesToClear);
 
+            /** @var \Weline\Framework\Module\Helper\Data $moduleHelper */
+            $moduleHelper = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Framework\Module\Helper\Data::class
+            );
+            // 先落 ACL（扫描期已 defer），再写路由文件
+            $moduleHelper->flushDeferredControllerAttributes();
+
             // 增量模式：路由在注册过程中已经按文件即时写入，这里不再做全量 flush
             if ($isPartial) {
                 \Weline\Framework\Router\Core::snapshotGeneratedRouterFiles();
@@ -317,6 +332,16 @@ class RouteUpdateStage extends AbstractStage
                 // 忽略反射错误
             }
         }
+
+        try {
+            /** @var \Weline\Framework\Module\Helper\Data $moduleHelper */
+            $moduleHelper = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Framework\Module\Helper\Data::class
+            );
+            $moduleHelper->clearDeferredControllerAttributes();
+        } catch (\Throwable) {
+        }
+        \Weline\Framework\Module\Handle::resetBatchRouteProgress();
         
         $this->prepared = false;
         $this->committed = false;

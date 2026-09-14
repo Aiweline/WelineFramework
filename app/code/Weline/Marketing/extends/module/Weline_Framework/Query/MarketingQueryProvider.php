@@ -125,6 +125,7 @@ final class MarketingQueryProvider implements QueryProviderInterface
             'cart_hash' => ['type' => 'string', 'max_length' => 128],
             'cart_type' => ['type' => 'string', 'max_length' => 16],
             'selling_mode' => ['type' => 'string', 'max_length' => 16],
+            'guest_token' => ['type' => 'string', 'max_length' => 64],
         ];
     }
 

@@ -50,6 +50,46 @@ final class ParserGlobalDictionaryModuleCacheTest extends TestCase
         ini_set('memory_limit', $this->memoryLimit);
     }
 
+    public function testEarlyRequestWithoutModulesUsesExactWordsAndLoadsModulesWhenDiscovered(): void
+    {
+        $provider = new class implements GlobalDictionaryProviderInterface, ModuleGlobalDictionaryProviderInterface {
+            public array $legacyCalls = [];
+            public array $batchCalls = [];
+            public function word(string $locale, string $word): ?string
+            {
+                return $locale === 'en_US' && $word === 'Early source' ? 'Early exact translation' : null;
+            }
+            public function words(string $locale, array $modules = []): array
+            {
+                $this->legacyCalls[] = [$locale, $modules];
+                return ['Unrelated source' => 'Unrelated full-locale translation'];
+            }
+            public function wordsByModule(string $locale, array $modules): array
+            {
+                $this->batchCalls[] = [$locale, $modules];
+                $maps = array_fill_keys($modules, []);
+                if ($locale === 'en_US' && isset($maps['Weline_LateFixture'])) {
+                    $maps['Weline_LateFixture'] = ['Late source' => 'Late module translation'];
+                }
+                return $maps;
+            }
+        };
+        $this->startWorker($provider);
+        RequestContext::setId('early-request-without-modules');
+        $translate = new ReflectionMethod(Parser::class, 'translateWordFromLayers');
+
+        $earlyLayers = $this->load([], 'en_US', 'getLayeredWords');
+        self::assertSame('Early exact translation', $translate->invoke(null, 'Early source', $earlyLayers));
+        self::assertSame([], $provider->legacyCalls, 'Routing has not found a module; HTTP must not load the entire locale.');
+        self::assertSame([], $provider->batchCalls);
+        self::assertSame('Late source', $translate->invoke(null, 'Late source', $earlyLayers));
+
+        $moduleLayers = $this->load(['Weline_LateFixture'], 'en_US', 'getLayeredWords');
+        self::assertSame('Late module translation', $translate->invoke(null, 'Late source', $moduleLayers));
+        self::assertSame([], $provider->legacyCalls);
+        self::assertNotEmpty($provider->batchCalls);
+    }
+
     public function testPeersReuseIndependentModuleMapsAcrossDifferentGrowthOrders(): void
     {
         $first = new ModuleDictionaryProviderFixture();

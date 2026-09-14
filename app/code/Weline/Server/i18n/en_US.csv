@@ -2775,6 +2775,14 @@ Previous：%{1},Previous：%{1}
 恢复,recover
 "进程或宿主异常后，由管理员使用同一 package、nonce 与 profile 重跑本命令；事务会从已认证 journal 幂等恢复。","After a process or host interruption, rerun with the same package, nonce, and profile; the transaction resumes idempotently from its authenticated journal."
 "停止承诺后任一步失败都会先撤销候选启动权限，再整代恢复旧运行时、平台定义与旧 gateway epoch；只有旧代通过身份校验并连续健康 15 秒才重新开放。回滚恢复本身失败时保持 ADMIN_STOPPED。","After the persistent stop is committed, any failure first revokes candidate start authorization and then restores the previous runtime generation, platform definition, and gateway epoch. The entry reopens only after the previous generation passes identity checks and remains healthy for 15 seconds. ADMIN_STOPPED remains when rollback recovery itself fails."
+"请先配置 wls.edge.gateway.package_base_url 与 package_fetch_hosts。","请先配置 wls.edge.gateway.package_base_url 与 package_fetch_hosts。"
+"未注入启用的 Gateway 信任公钥。","未注入启用的 Gateway 信任公钥。"
+"Gateway 包拉取失败。","Gateway 包拉取失败。"
+"已拉取并验签 Gateway 项目发行包。宿主安装请使用 server:gateway:install --package=... --confirm。","已拉取并验签 Gateway 项目发行包。宿主安装请使用 server:gateway:install --package=... --confirm。"
+"从配置的 HTTPS CDN 拉取并验签 WLS 2.0 Gateway 项目发行包","从配置的 HTTPS CDN 拉取并验签 WLS 2.0 Gateway 项目发行包"
+"不安装宿主网关；空信任库或未配置 CDN 时 fail closed。","不安装宿主网关；空信任库或未配置 CDN 时 fail closed。"
+"平台目标，默认当前主机 profile","平台目标，默认当前主机 profile"
+验签通过后替换已有本地包树,验签通过后替换已有本地包树
 "重新启用共享网关会清除签名 ADMIN_STOPPED 意图；请提供 --confirm。","Re-enabling the shared gateway clears the signed ADMIN_STOPPED intent; provide --confirm."
 "宿主级 WLS 2.0 Gateway 已由管理员显式重新启用。","The host-level WLS 2.0 Gateway has been explicitly re-enabled by the administrator."
 "清除已验证的 ADMIN_STOPPED 意图并重新启用共享网关","Clear the authenticated ADMIN_STOPPED intent and re-enable the shared gateway"

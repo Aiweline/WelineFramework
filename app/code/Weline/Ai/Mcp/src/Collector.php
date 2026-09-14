@@ -184,16 +184,27 @@ final class Collector
         if ($tool === '') {
             return ['required' => false, 'paths' => [], 'reason' => 'missing_tool_name'];
         }
-        if (str_contains($tool, 'apply_compact_edit')
-            || str_contains($tool, 'rollback_edit')
-            || str_contains($tool, 'index_project')) {
+        if (str_contains($tool, 'index_project')
+            || str_contains($tool, 'repair_project_docs')) {
             return ['required' => false, 'paths' => [], 'reason' => 'tool_reindexes_itself'];
         }
         if ($tool === 'mcp__node_repl__js' || $tool === 'functions.exec') {
             return self::nodeReplRefreshHint($input, $repository);
         }
         if (str_starts_with($tool, 'mcp__')) {
-            foreach (['get_edit_bundle', 'get_edit_status', 'health'] as $readOnlyTool) {
+            foreach ([
+                'prepare_project',
+                'project_index_status',
+                'resolve_task_context',
+                'search_project_knowledge',
+                'get_indexed_document',
+                'get_indexed_files',
+                'inspect_symbol',
+                'resolve_skill',
+                'get_skill',
+                'health',
+                'check_document_drift',
+            ] as $readOnlyTool) {
                 if (str_ends_with($tool, '__' . $readOnlyTool)) {
                     return ['required' => false, 'paths' => [], 'reason' => 'known_read_only_mcp_tool'];
                 }
@@ -278,12 +289,19 @@ final class Collector
                 continue;
             }
             if (in_array($call, $readOnlyCalls, true)
-                || str_ends_with($call, '__get_edit_bundle')
-                || str_ends_with($call, '__get_edit_status')
+                || str_ends_with($call, '__prepare_project')
+                || str_ends_with($call, '__project_index_status')
+                || str_ends_with($call, '__resolve_task_context')
+                || str_ends_with($call, '__search_project_knowledge')
+                || str_ends_with($call, '__get_indexed_document')
+                || str_ends_with($call, '__get_indexed_files')
+                || str_ends_with($call, '__inspect_symbol')
+                || str_ends_with($call, '__resolve_skill')
+                || str_ends_with($call, '__get_skill')
                 || str_ends_with($call, '__health')
-                || str_ends_with($call, '__apply_compact_edit')
-                || str_ends_with($call, '__rollback_edit')
-                || str_ends_with($call, '__index_project')) {
+                || str_ends_with($call, '__check_document_drift')
+                || str_ends_with($call, '__index_project')
+                || str_ends_with($call, '__repair_project_docs')) {
                 continue;
             }
 

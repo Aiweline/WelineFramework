@@ -357,6 +357,8 @@ class Response implements ResponseInterface
 
     public function compress(string $acceptEncoding = ''): self
     {
+        $this->ensureDocumentCspMetaApplied();
+
         if ($this->body === '' || \strlen($this->body) < 1024) {
             return $this;
         }
@@ -365,26 +367,26 @@ class Response implements ResponseInterface
             return $this;
         }
 
-        $contentType = \strtolower((string)($this->getHeader('Content-Type') ?? ''));
-        if ($contentType !== ''
-            && !\str_starts_with($contentType, 'text/')
-            && !\str_contains($contentType, 'application/json')
-            && !\str_contains($contentType, 'application/javascript')
-            && !\str_contains($contentType, 'application/xml')
-            && !\str_contains($contentType, 'application/xhtml+xml')
-            && !\str_contains($contentType, 'image/svg+xml')) {
+        $contentType = (string)($this->getHeader('Content-Type') ?? '');
+        if (!ContentEncodingNegotiator::isCompressibleContentType($contentType)) {
             return $this;
         }
 
-        if (\stripos($acceptEncoding, 'gzip') !== false && \function_exists('gzencode')) {
-            $compressed = \gzencode($this->body, 6);
-            if ($compressed !== false) {
-                $this->body = $compressed;
-                $this->setHeader('Content-Encoding', 'gzip');
-                $this->setHeader('Content-Length', (string)\strlen($this->body));
-                $this->ensureVaryAcceptEncoding();
-            }
+        // Prefer Brotli when the client accepts it; otherwise gzip.
+        $encoding = ContentEncodingNegotiator::negotiate($acceptEncoding);
+        if ($encoding === null) {
+            return $this;
         }
+
+        $compressed = ContentEncodingNegotiator::encode($this->body, $encoding);
+        if ($compressed === null) {
+            return $this;
+        }
+
+        $this->body = $compressed;
+        $this->setHeader('Content-Encoding', $encoding);
+        $this->setHeader('Content-Length', (string)\strlen($this->body));
+        $this->ensureVaryAcceptEncoding();
 
         return $this;
     }
@@ -491,6 +493,7 @@ class Response implements ResponseInterface
         }
 
         try {
+            $this->ensureDocumentCspMetaApplied();
             if ($this->shouldBroadcastTelemetryBeforeEmission()) {
                 $preparedBody = TelemetryBroadcaster::broadcast(
                     $this->body,
@@ -506,6 +509,44 @@ class Response implements ResponseInterface
             // Response decoration must never block the actual response emission.
         } finally {
             $this->telemetryPrepared = true;
+        }
+    }
+
+    /**
+     * meta 交付：在发送前把当前 Scope CSP 写入 HTML head（FPC 明文路径同样受益）。
+     * 已压缩正文跳过（依赖 FPC securityVariant 含 CSP digest 失效旧包）。
+     */
+    private function ensureDocumentCspMetaApplied(): void
+    {
+        if ($this->body === '' || $this->getHeader('Content-Encoding') !== null) {
+            return;
+        }
+
+        $contentType = \strtolower((string)($this->getHeader('Content-Type') ?? ''));
+        $looksHtml = $contentType === ''
+            || \str_contains($contentType, 'text/html')
+            || \str_contains($contentType, 'application/xhtml');
+        if (!$looksHtml) {
+            return;
+        }
+        if ($contentType === ''
+            && \preg_match('/<html\b/i', \substr($this->body, 0, 4096)) !== 1
+        ) {
+            return;
+        }
+
+        try {
+            $service = new Security\SecurityHeaderPolicyService();
+            if (!$service->isMetaDelivery()) {
+                return;
+            }
+            $updated = $service->ensureDocumentCspMeta($this->body);
+            if ($updated !== $this->body) {
+                $this->body = $updated;
+                $this->synchronizeContentLengthHeader();
+            }
+        } catch (\Throwable) {
+            // CSP decoration must never block emission.
         }
     }
 

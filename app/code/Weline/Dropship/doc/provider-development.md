@@ -39,7 +39,7 @@ app/code/Vendor/YourSource/
 | `getCode()` | 稳定 code，且等于商品 `dropship_source` |
 | `getCapabilities()` | catalog/**browse**/**browse_country_filter**/fulfillment/freight/webhook/**warehouse** |
 | `getDisplayMetadata()` | title/module/sort_order |
-| `getConfigSchema()` | 字段提示 |
+| `quoteFreight()` / `freightOnFailure()` | 运费试算；失败策略由供应商自有 SystemConfig 选择（`fallback_local` / `block_checkout`） |
 | `probeConnection()` | 探活 |
 
 按能力再实现 Catalog / Fulfillment / Freight / Webhook / Warehouse 子接口。Catalog 只返回 `DropshipCatalogSnapshot`，**禁止**写 listing/Product/Inventory。
@@ -82,19 +82,40 @@ return [
 ## 4. Webhook
 
 统一：`dropship/frontend/callback/notify?endpoint_code={code}.{env}.default`  
-壳流程：`verifyWebhook`（纯校验）→ `parseWebhook`（纯解析）→ Inbox → 履约投影。
+壳流程：`verifyWebhook`（纯校验）→ `parseWebhook`（纯解析）→ Inbox → Queue → `processOne`（按 topic 投影）。
 
-`parseWebhook` **必须**返回壳标准 `fulfillment`：
+`parseWebhook` 返回壳标准块（禁止把供应商私有键交给壳消费逻辑）：
 
 | 键 | 说明 |
 |----|------|
-| `external_order_id` | 远端订单号 |
-| `order_uuid` | 本站订单 UUID（若有） |
-| `tracking_number` | 运单号 |
-| `carrier` | 承运商 |
-| `status` | 履约状态 |
+| `topic` | `order` / `product` / `stock` / `logistics` / `makeup` / `private_order` / `dispute` / `unknown` |
+| `fulfillment` | 订单/物流/私有单/纠纷：`external_order_id` `order_uuid` `tracking_number` `carrier` `status` |
+| `catalog` | 商品/库存：`external_spu` `external_sku` `qty` `shelf_status` `origin_price_minor` `origin_currency` `title` |
+| `makeup` | 补款：`external_id` `related_external_order_id` `status` `amount_minor` `currency` |
 
-供应商私有键（如 CJ 的 `orderId`/`trackNumber`）只在 Provider 内映射，**禁止**写回壳 Inbox 消费逻辑。
+壳处理：
+
+- 有 `fulfillment.external_order_id`（或 makeup 关联单号）→ upsert `DropshipFulfillment`
+- 有 `catalog.external_spu/sku` → 按已刊 listing 入队 `DropshipListingSyncConsumer`（跟随）
+- 空运单不覆盖已有运单
+
+### 4.0 capability（可做就 true，做不了 false）
+
+`getCapabilities()`：
+
+| 键 | 含义 |
+|----|------|
+| `webhook` | 总开关 |
+| `webhook_order` | 订单（壳已接；CJ 沙盒真推已实测） |
+| `webhook_product` | 商品/变体（壳已接；沙盒真推未强制） |
+| `webhook_stock` | 库存（壳已接） |
+| `webhook_logistics` | 物流轨迹（壳已接） |
+| `webhook_makeup` | 补款单（壳已接） |
+| `webhook_private_order` | 私有订单 SY（壳已接） |
+| `webhook_dispute` | 纠纷（壳已接；CJ **沙盒不可用** `disputes/create`，勿因此设 false） |
+
+缺细项且 `webhook=true` 时默认允许；显式 `false` 则壳 ack Inbox 但不做该 topic 投影。  
+三态标记约定：**壳已接 / 沙盒真推 / 沙盒不可用**（见 [功能现状.md](功能现状.md)）。
 
 - Fake / CJ 均实现 `DropshipWebhookProviderInterface`；货源平台「回调地址」可复制 Hook URL。
 

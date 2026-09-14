@@ -74,7 +74,7 @@ return [
     'Weline_Theme::theme/frontend/widgets/product/new-arrivals/default.phtml',
     'Weline_Theme::theme/frontend/widgets/product/bestsellers/default.phtml',
     'Weline_Theme::theme/frontend/widgets/product/deals-of-day/default.phtml',
-    'Weline_Theme::theme/frontend/widgets/product/you-may-like/default.phtml',
+    // you-may-like：店面默认由 Weline_Product 经 default_injections 注入；Theme 演示模板保留供编辑器拖拽参考但不再注册重复 code
     'Weline_Theme::theme/frontend/widgets/product/up-sell/default.phtml',
 
     // --- 轮播 (carousel) ---

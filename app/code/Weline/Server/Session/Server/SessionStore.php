@@ -1030,16 +1030,40 @@ final class SessionStore
      * 优化策略：优先淘汰即将过期（expire - now < 10分钟）的 Session，
      * 其次淘汰最久未访问的 Session
      */
-    private function evictIfNeeded(bool $memoryOnly = false): void
+    private function evictIfNeeded(bool $memoryOnly = false, int $reserveBytes = 0): void
     {
         $sessionCount = \count($this->store);
         $countPressure = !$memoryOnly && $sessionCount >= $this->maxSessions;
+        $reserveBytes = \max(0, $reserveBytes);
         $memoryUsage = \memory_get_usage(false);
-        $memoryPressure = $this->memoryHighWatermarkBytes > 0
-            && $memoryUsage >= $this->memoryHighWatermarkBytes;
+        $highTarget = \max(0, $this->memoryHighWatermarkBytes - $reserveBytes);
+        $livePressure = $this->memoryHighWatermarkBytes > 0 && $memoryUsage >= $highTarget;
+        $allocatedPressure = $this->memoryHighWatermarkBytes > 0
+            && \memory_get_usage(true) >= $highTarget;
+        if (!$countPressure && !$livePressure && !$allocatedPressure) {
+            return;
+        }
+
+        // Reclaim unused allocator pages before evicting useful cache values.
+        // Live bytes alone can remain below the watermark while PHP is close to
+        // memory_limit. Never run allocator reclamation on the low-pressure path.
+        if ($allocatedPressure && !$livePressure && \function_exists('gc_mem_caches')) {
+            \gc_mem_caches();
+            $memoryUsage = \memory_get_usage(false);
+            $livePressure = $memoryUsage >= $highTarget;
+            $allocatedPressure = \memory_get_usage(true) >= $highTarget;
+        }
+        $memoryPressure = $livePressure || $allocatedPressure;
         if (!$countPressure && !$memoryPressure) {
             return;
         }
+        $lowTarget = \max(0, $this->memoryLowWatermarkBytes - $reserveBytes);
+        // Fragmented/pinned pages may never lower allocated bytes when an entry
+        // is removed. Budget allocator-only relief once, using the existing 10%
+        // LRU batch policy, rather than waiting for allocated bytes to fall.
+        $allocatorOnlyBudget = $allocatedPressure && !$livePressure
+            ? \max(1, (int)\ceil($sessionCount * 0.1))
+            : $sessionCount;
 
         $startTime = self::monotonicSeconds();
         $toEvict = $countPressure ? \max(1, (int)\ceil($this->maxSessions * 0.1)) : 0;
@@ -1051,13 +1075,16 @@ final class SessionStore
 
             $countSatisfied = !$countPressure || $evicted >= $toEvict;
             $memorySatisfied = !$memoryPressure
-                || \memory_get_usage(false) <= $this->memoryLowWatermarkBytes;
-            if ($countSatisfied && $memorySatisfied) {
+                || \memory_get_usage(false) <= $lowTarget;
+            if ($countSatisfied && ($memorySatisfied || $evicted >= $allocatorOnlyBudget)) {
                 break;
             }
         }
 
         if ($evicted > 0) {
+            if ($memoryPressure && \function_exists('gc_mem_caches')) {
+                \gc_mem_caches();
+            }
             $this->evictionCount += $evicted;
             if ($memoryPressure) {
                 $this->memoryPressureEvictionCount += $evicted;
@@ -1081,10 +1108,10 @@ final class SessionStore
     /**
      * 在读取协议帧或维护阶段释放内存，避免到达 PHP memory_limit 后才被动崩溃。
      */
-    public function relieveMemoryPressure(): int
+    public function relieveMemoryPressure(int $reserveBytes = 0): int
     {
         $before = $this->evictionCount;
-        $this->evictIfNeeded(true);
+        $this->evictIfNeeded(true, $reserveBytes);
 
         return $this->evictionCount - $before;
     }

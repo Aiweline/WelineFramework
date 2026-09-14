@@ -60,3 +60,15 @@
 2. `extends/module/Weline_SystemConfig/Config/backend/{code}.phtml`（有凭证时）
 
 `getCode()`、配置模板、商品 `dropship_source` 三者一致。细节见 [provider-development.md](provider-development.md)。
+
+## 4. Webhook 壳能力（壳已接 / 沙盒真推 / 沙盒不可用）
+
+壳 Inbox 对 Provider 声明的 `webhook_*` 做投影；**做不了的 topic 用 capability=false，不要删壳解析分支**。
+
+CJ 默认 Provider 实测边界（详见各模块「功能现状」）：
+
+| 标记 | 含义 |
+|------|------|
+| 壳已接 | `parseWebhook` + Inbox/`processOne` 已消费 |
+| 沙盒真推 | CJ 沙盒账号会主动推到回调（ORDER 已实测） |
+| 沙盒不可用 | CJ 沙盒拒相关 API（纠纷 `disputes/create`：`The Sandbox account is not supported for this feature.`）；**capability 仍应 true**，留给正式账号 |

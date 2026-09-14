@@ -135,6 +135,10 @@ final class RandomCouponCampaignProvider implements RandomCouponCampaignProvider
 
         /** @var CouponService $coupons */
         $coupons = ObjectManager::getInstance(CouponService::class);
+        /** @var CouponSourceAttribution $attribution */
+        $attribution = ObjectManager::getInstance(CouponSourceAttribution::class);
+        $source = $attribution->fromIssueContext($rule, $context);
+
         $prefix = 'MW';
         $code = $prefix . \strtoupper(\substr(\bin2hex(\random_bytes(4)), 0, 8));
         $coupon = $coupons->createCoupon([
@@ -147,6 +151,10 @@ final class RandomCouponCampaignProvider implements RandomCouponCampaignProvider
             Coupon::schema_fields_STATUS => Coupon::STATUS_ACTIVE,
             Coupon::schema_fields_START_DATE => \date('Y-m-d H:i:s'),
             Coupon::schema_fields_END_DATE => \date('Y-m-d H:i:s', \time() + 86400 * 30),
+            Coupon::schema_fields_SOURCE_MODULE => $source['source_module'],
+            Coupon::schema_fields_SOURCE_TYPE => $source['source_type'],
+            Coupon::schema_fields_SOURCE_ID => $source['source_id'],
+            Coupon::schema_fields_SOURCE_KEY => $source['source_key'],
         ]);
 
         return [

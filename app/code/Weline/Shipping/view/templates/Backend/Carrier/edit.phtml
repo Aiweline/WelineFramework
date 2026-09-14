@@ -123,51 +123,49 @@ $id = $carrier ? $carrier->getId() : null;
                                     if (!is_array($defaultsLabels)) {
                                         $defaultsLabels = [];
                                     }
+                                    $coverageCount = \count($coverageLabels);
+                                    $defaultsCount = \count($defaultsLabels);
                                     ?>
-                                    <div class="w-field" style="--w-mb:var(--weline-space-4)">
-                                        <label class="w-field__label"><?= __('支持范围') ?> <span class="w-text" data-tone="danger">*</span></label>
+                                    <section
+                                        class="shipping-carrier-coverage"
+                                        data-testid="shipping-carrier-coverage-panel"
+                                        aria-labelledby="shipping-carrier-coverage-title"
+                                        style="--w-mb:var(--weline-space-4);padding:var(--weline-space-4);border:1px solid var(--weline-theme-border-subtle, var(--color-border, #e3e6e6));border-radius:var(--weline-radius-md, 8px);background:var(--weline-theme-surface-subtle, var(--color-surface-subtle, #f7f8f8));"
+                                    >
+                                        <div class="w-cluster" data-align="center" data-justify="between" style="--w-mb:var(--weline-space-3);">
+                                            <h6 id="shipping-carrier-coverage-title" class="w-field__label" style="--w-mb:0;font-size:var(--weline-font-size-md, 1rem);">
+                                                <?= __('支持范围') ?> <span class="w-text" data-tone="danger">*</span>
+                                            </h6>
+                                            <span class="w-badge" data-tone="neutral" data-testid="shipping-carrier-coverage-count">
+                                                <?= __('已保存') ?> <?= (int)$coverageCount ?> · <?= __('Provider 默认') ?> <?= (int)$defaultsCount ?>
+                                            </span>
+                                        </div>
+
                                         <div class="w-alert" role="alert" data-tone="warning" data-testid="shipping-carrier-coverage-caution" style="--w-mb:var(--weline-space-3);">
-                                                <w:icon name="warning" size="sm"></w:icon>
-                                                <div class="w-alert__content">
-                                                    <strong class="w-alert__title"><?= __('谨慎操作') ?></strong>
-                                                    <span><?= __('支持范围决定该承运商结账时能否运到客户地址。缩减或删错地区后，对应目的地将不再出现该承运商配送方式，可能导致无法下单。请仅保留真实可运区域，保存前务必核对。') ?></span>
-                                    </div>
-                                            <div class="w-alert" role="status" data-tone="info" data-testid="shipping-carrier-system-embargo-note" style="--w-mb:var(--weline-space-3);">
-                                                <w:icon name="info" size="sm"></w:icon>
-                                                <div class="w-alert__content">
-                                                    <strong class="w-alert__title"><?= __('系统禁运 · 不可选') ?></strong>
-                                                    <span><?= __('地址选择器中标为「不支持」的系统禁运国家/地区优先级最高，即使写入承运商覆盖也不会在结账放行。请勿把系统禁运区当作可运范围保存。') ?></span>
-                                                </div>
+                                            <w:icon name="warning" size="sm"></w:icon>
+                                            <div class="w-alert__content">
+                                                <strong class="w-alert__title"><?= __('谨慎操作') ?></strong>
+                                                <span><?= __('缩减可运地区后，结账将不再提供该承运商。保存前请确认与真实可运范围一致。') ?></span>
                                             </div>
-                                            <p class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-3);">
-                                                <?= __('启用承运商前必须配置支持范围。可多选国家→州省→区县；默认保留当前选择，也可改用 Provider 默认区域。费用模板只算运费金额，不含到达地区。') ?>
-                                            </p>
-                                            <input type="hidden" name="coverage_json" id="carrier_coverage_json" value="<?= $coverageJson ?>" data-coverage-baseline="<?= $coverageJson ?>">
-                                            <div class="w-cluster" style="--w-mb:var(--weline-space-3);">
-                                                <label class="w-cluster" data-align="center">
-                                                    <input type="checkbox" name="coverage_keep_current" value="1" id="coverage_keep_current" checked>
-                                                    <span><?= __('保存时用当前选择覆盖 Provider 默认区域') ?></span>
-                                                </label>
-                                            </div>
-                                            <p class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-3);">
-                                                <?= __('默认勾选：保存页面上已选范围。取消勾选则改用下方 Provider 默认区域覆盖。') ?>
-                                            </p>
-                                            <?php if ($defaultsLabels !== []): ?>
-                                                <div class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-2);" data-testid="shipping-carrier-coverage-defaults">
-                                                    <?= __('Provider 默认区域：') ?>
-                                                    <?php foreach ($defaultsLabels as $label): ?>
-                                                        <span class="w-badge" data-tone="neutral"><?= htmlspecialchars((string)$label, ENT_QUOTES, 'UTF-8') ?></span>
-                                                    <?php endforeach; ?>
-                                                </div>
-                                            <?php endif; ?>
-                                            <?php if ($coverageLabels !== []): ?>
-                                                <div class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-3);" data-testid="shipping-carrier-coverage-current">
-                                                    <?= __('当前已保存：') ?>
-                                                    <?php foreach ($coverageLabels as $label): ?>
-                                                        <span class="w-badge" data-tone="primary"><?= htmlspecialchars((string)$label, ENT_QUOTES, 'UTF-8') ?></span>
-                                                    <?php endforeach; ?>
-                                                </div>
-                                            <?php endif; ?>
+                                        </div>
+
+                                        <div class="w-cluster" data-align="center" data-justify="between" style="--w-mb:var(--weline-space-3);flex-wrap:wrap;gap:var(--weline-space-2);">
+                                            <label class="w-cluster" data-align="center" style="gap:var(--weline-space-2);">
+                                                <input type="checkbox" name="coverage_keep_current" value="1" id="coverage_keep_current" checked>
+                                                <span><?= __('保存当前选择（推荐）') ?></span>
+                                            </label>
+                                            <span class="w-text" data-tone="muted" style="font-size:var(--weline-font-size-sm, 0.875rem);">
+                                                <?= __('取消勾选 = 保存时改用 Provider 默认区域') ?>
+                                            </span>
+                                        </div>
+
+                                        <p class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-3);font-size:var(--weline-font-size-sm, 0.875rem);">
+                                            <?= __('在下方选择可运国家或更细地区。费用模板只算运费金额，不含到达地区。') ?>
+                                        </p>
+
+                                        <input type="hidden" name="coverage_json" id="carrier_coverage_json" value="<?= $coverageJson ?>" data-coverage-baseline="<?= $coverageJson ?>">
+
+                                        <div class="shipping-carrier-coverage__picker" style="--w-mb:var(--weline-space-3);padding:var(--weline-space-3);border-radius:var(--weline-radius-sm, 6px);background:var(--weline-theme-surface, var(--color-surface, #fff));border:1px solid var(--weline-theme-border-subtle, var(--color-border, #e3e6e6));">
                                             <w:theme:address
                                                 selection="multi"
                                                 multi-levels="country|province|district"
@@ -177,71 +175,108 @@ $id = $carrier ? $carrier->getId() : null;
                                                 searchable="true"
                                                 name="carrier_coverage_picker"
                                             />
-                                            <script src="/Weline/Theme/view/statics/js/address.js?v=20260906-catalog-empty1" data-shipping-address-direct data-no-extract="true" onload="window.__welineShippingAddressReady&&window.__welineShippingAddressReady()"></script>
-                                            <script>
-                                            (function () {
-                                                var hidden = document.getElementById('carrier_coverage_json');
-                                                if (!hidden) return;
-                                                var root = hidden.parentElement
-                                                    ? hidden.parentElement.querySelector('[data-w-address]')
-                                                    : null;
-                                                if (!root) {
-                                                    root = document.querySelector('[data-address-code="carrier-coverage"]');
+                                        </div>
+
+                                        <details class="shipping-carrier-coverage__help" style="--w-mb:var(--weline-space-2);">
+                                            <summary class="w-text" data-tone="muted" style="cursor:pointer;font-size:var(--weline-font-size-sm, 0.875rem);">
+                                                <?= __('说明与参考列表') ?>
+                                            </summary>
+                                            <div style="--w-mt:var(--weline-space-2);display:grid;gap:var(--weline-space-3);">
+                                                <div class="w-alert" role="status" data-tone="info" data-testid="shipping-carrier-system-embargo-note" style="--w-mb:0;">
+                                                    <w:icon name="info" size="sm"></w:icon>
+                                                    <div class="w-alert__content">
+                                                        <strong class="w-alert__title"><?= __('系统禁运 · 不可选') ?></strong>
+                                                        <span><?= __('地址选择器中标为「不支持」的系统禁运区优先级最高，写入覆盖也不会在结账放行。') ?></span>
+                                                    </div>
+                                                </div>
+                                                <?php if ($defaultsLabels !== []): ?>
+                                                    <div data-testid="shipping-carrier-coverage-defaults">
+                                                        <div class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-2);font-size:var(--weline-font-size-sm, 0.875rem);"><?= __('Provider 默认区域') ?></div>
+                                                        <div class="w-cluster" style="flex-wrap:wrap;gap:var(--weline-space-1);">
+                                                            <?php foreach ($defaultsLabels as $label): ?>
+                                                                <span class="w-badge" data-tone="neutral"><?= htmlspecialchars((string)$label, ENT_QUOTES, 'UTF-8') ?></span>
+                                                            <?php endforeach; ?>
+                                                        </div>
+                                                    </div>
+                                                <?php endif; ?>
+                                                <?php if ($coverageLabels !== []): ?>
+                                                    <div data-testid="shipping-carrier-coverage-current">
+                                                        <div class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-2);font-size:var(--weline-font-size-sm, 0.875rem);"><?= __('当前已保存') ?></div>
+                                                        <div class="w-cluster" style="flex-wrap:wrap;gap:var(--weline-space-1);">
+                                                            <?php foreach ($coverageLabels as $label): ?>
+                                                                <span class="w-badge" data-tone="primary"><?= htmlspecialchars((string)$label, ENT_QUOTES, 'UTF-8') ?></span>
+                                                            <?php endforeach; ?>
+                                                        </div>
+                                                    </div>
+                                                <?php endif; ?>
+                                            </div>
+                                        </details>
+
+                                        <script src="/Weline/Theme/view/statics/js/address.js?v=20260906-catalog-empty1" data-shipping-address-direct data-no-extract="true" onload="window.__welineShippingAddressReady&&window.__welineShippingAddressReady()"></script>
+                                        <script>
+                                        (function () {
+                                            var hidden = document.getElementById('carrier_coverage_json');
+                                            if (!hidden) return;
+                                            var panel = hidden.closest('.shipping-carrier-coverage') || hidden.parentElement;
+                                            var root = panel
+                                                ? panel.querySelector('[data-w-address], [data-address-code="carrier-coverage"]')
+                                                : null;
+                                            if (!root) {
+                                                root = document.querySelector('[data-address-code="carrier-coverage"]');
+                                            }
+                                            if (!root) return;
+                                            function sync() {
+                                                var raw = root.getAttribute('data-multi-selection') || '[]';
+                                                try { JSON.parse(raw); hidden.value = raw; } catch (e) {}
+                                            }
+                                            root.addEventListener('weline:address:multi-change', sync);
+                                            try {
+                                                root.setAttribute('data-multi-seed', hidden.value || '[]');
+                                                root.setAttribute('data-multi-defaults', <?= json_encode($this->getData('coverage_defaults_json') ?: '[]') ?>);
+                                            } catch (e) {}
+                                            function boot() {
+                                                if (!window.WelineThemeAddress || typeof window.WelineThemeAddress.boot !== 'function') {
+                                                    return false;
                                                 }
-                                                if (!root) return;
-                                                function sync() {
-                                                    var raw = root.getAttribute('data-multi-selection') || '[]';
-                                                    try { JSON.parse(raw); hidden.value = raw; } catch (e) {}
+                                                root.dataset.wAddressReady = '';
+                                                window.WelineThemeAddress.boot();
+                                                sync();
+                                                return true;
+                                            }
+                                            window.__welineShippingAddressReady = function () {
+                                                if (!boot()) {
+                                                    setTimeout(boot, 50);
                                                 }
-                                                root.addEventListener('weline:address:multi-change', sync);
-                                                try {
-                                                    root.setAttribute('data-multi-seed', hidden.value || '[]');
-                                                    root.setAttribute('data-multi-defaults', <?= json_encode($this->getData('coverage_defaults_json') ?: '[]') ?>);
-                                                } catch (e) {}
-                                                function boot() {
-                                                    if (!window.WelineThemeAddress || typeof window.WelineThemeAddress.boot !== 'function') {
-                                                        return false;
-                                                    }
-                                                    root.dataset.wAddressReady = '';
-                                                    window.WelineThemeAddress.boot();
+                                            };
+                                            if (window.WelineThemeAddress) {
+                                                window.__welineShippingAddressReady();
+                                            }
+                                            var form = hidden.closest('form');
+                                            if (form && !form.dataset.coverageConfirmBound) {
+                                                form.dataset.coverageConfirmBound = '1';
+                                                form.addEventListener('submit', function (ev) {
                                                     sync();
-                                                    return true;
-                                                }
-                                                window.__welineShippingAddressReady = function () {
-                                                    if (!boot()) {
-                                                        setTimeout(boot, 50);
+                                                    var keep = document.getElementById('coverage_keep_current');
+                                                    var applyingDefaults = !(keep && keep.checked);
+                                                    var baseline = hidden.getAttribute('data-coverage-baseline') || '[]';
+                                                    var current = hidden.value || '[]';
+                                                    var changed = applyingDefaults || baseline !== current;
+                                                    if (!changed) {
+                                                        return;
                                                     }
-                                                };
-                                                if (window.WelineThemeAddress) {
-                                                    window.__welineShippingAddressReady();
-                                                }
-                                                var form = hidden.closest('form');
-                                                if (form && !form.dataset.coverageConfirmBound) {
-                                                    form.dataset.coverageConfirmBound = '1';
-                                                    form.addEventListener('submit', function (ev) {
-                                                        sync();
-                                                        var keep = document.getElementById('coverage_keep_current');
-                                                        var applyingDefaults = !(keep && keep.checked);
-                                                        var baseline = hidden.getAttribute('data-coverage-baseline') || '[]';
-                                                        var current = hidden.value || '[]';
-                                                        var changed = applyingDefaults || baseline !== current;
-                                                        if (!changed) {
-                                                            return;
-                                                        }
-                                                        var msg = <?= json_encode(
-                                                            (string)__('即将保存承运商支持范围。缩减地区会导致对应目的地无法使用该承运商配送，请确认仍与真实可运范围一致。是否继续保存？'),
-                                                            JSON_UNESCAPED_UNICODE
-                                                        ) ?>;
-                                                        if (!window.confirm(msg)) {
-                                                            ev.preventDefault();
-                                                            ev.stopPropagation();
-                                                        }
-                                                    });
-                                                }
-                                            })();
-                                            </script>
-</div>
-                                    </div>
+                                                    var msg = <?= json_encode(
+                                                        (string)__('即将保存承运商支持范围。缩减地区会导致对应目的地无法使用该承运商配送，请确认仍与真实可运范围一致。是否继续保存？'),
+                                                        JSON_UNESCAPED_UNICODE
+                                                    ) ?>;
+                                                    if (!window.confirm(msg)) {
+                                                        ev.preventDefault();
+                                                        ev.stopPropagation();
+                                                    }
+                                                });
+                                            }
+                                        })();
+                                        </script>
+                                    </section>
 
                                     <div class="w-grid">
                                         <div class="offset-md-2" style="--w-span-md:10;">

@@ -67,6 +67,125 @@ final class OfferDetailParserTest extends TestCase
         self::assertSame(0.4, $parsed['weight_kg']);
     }
 
+    public function testParsesPieceWeightScaleGramsWhenUnitWeightEmpty(): void
+    {
+        $data = ['result' => ['data' => [
+            'productTitle' => ['fields' => ['title' => '件重尺样例']],
+            'gallery' => ['fields' => [
+                'offerId' => '432',
+                'mainImage' => ['https://cbu01.alicdn.com/1.jpg'],
+            ]],
+            'mainPrice' => ['fields' => [
+                'finalPriceModel' => [
+                    'tradeWithoutPromotion' => [
+                        'offerMinPrice' => '10.00',
+                        'skuMapOriginal' => [],
+                    ],
+                ],
+            ]],
+            'description' => ['fields' => []],
+            'productPackInfo' => ['fields' => [
+                'unitWeight' => 0,
+                'pieceWeightScale' => [
+                    'columnList' => [
+                        ['name' => 'weight', 'label' => '重量(g)'],
+                    ],
+                    'pieceWeightScaleInfo' => [
+                        ['weight' => 480],
+                        ['weight' => 500],
+                    ],
+                ],
+            ]],
+        ]]];
+        $html = '<script>window.context=(function(b,d){return d})(window.contextPath,'
+            . json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+            . ');</script>';
+        $parsed = (new OfferDetailParser())->parse(
+            $html,
+            'https://detail.1688.com/offer/432.html',
+        );
+        self::assertSame(0.5, $parsed['weight_kg']);
+    }
+
+    public function testRejectsTinyUnitWeightPlaceholder(): void
+    {
+        $data = ['result' => ['data' => [
+            'productTitle' => ['fields' => ['title' => '占位单重']],
+            'gallery' => ['fields' => [
+                'offerId' => '434',
+                'mainImage' => ['https://cbu01.alicdn.com/1.jpg'],
+            ]],
+            'mainPrice' => ['fields' => [
+                'finalPriceModel' => [
+                    'tradeWithoutPromotion' => [
+                        'offerMinPrice' => '10.00',
+                        'skuMapOriginal' => [],
+                    ],
+                ],
+            ]],
+            'description' => ['fields' => []],
+            'productPackInfo' => ['fields' => [
+                'unitWeight' => 0.001,
+                'pieceWeightScale' => [
+                    'columnList' => [
+                        ['name' => 'weight', 'label' => '重量(g)'],
+                    ],
+                    'pieceWeightScaleInfo' => [
+                        ['weight' => 1],
+                    ],
+                ],
+            ]],
+        ]]];
+        $html = '<script>window.context=(function(b,d){return d})(window.contextPath,'
+            . json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+            . ');</script>';
+        $parsed = (new OfferDetailParser())->parse(
+            $html,
+            'https://detail.1688.com/offer/434.html',
+        );
+        self::assertNull($parsed['weight_kg']);
+    }
+
+    public function testRejectsPlaceholderOneGramPieceWeightScale(): void
+    {
+        $data = ['result' => ['data' => [
+            'productTitle' => ['fields' => ['title' => '占位件重']],
+            'gallery' => ['fields' => [
+                'offerId' => '433',
+                'mainImage' => ['https://cbu01.alicdn.com/1.jpg'],
+            ]],
+            'mainPrice' => ['fields' => [
+                'finalPriceModel' => [
+                    'tradeWithoutPromotion' => [
+                        'offerMinPrice' => '10.00',
+                        'skuMapOriginal' => [],
+                    ],
+                ],
+            ]],
+            'description' => ['fields' => []],
+            'productPackInfo' => ['fields' => [
+                'unitWeight' => 0,
+                'pieceWeightScale' => [
+                    'columnList' => [
+                        ['name' => 'weight', 'label' => '重量(g)'],
+                    ],
+                    'pieceWeightScaleInfo' => [
+                        ['weight' => 1],
+                        ['weight' => 1],
+                    ],
+                ],
+            ]],
+        ]]];
+        $html = '<script>window.context=(function(b,d){return d})(window.contextPath,'
+            . json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+            . ');</script>';
+        $parsed = (new OfferDetailParser())->parse(
+            $html,
+            'https://detail.1688.com/offer/433.html',
+        );
+        self::assertNull($parsed['weight_kg']);
+    }
+
     public function testParsesBrandFromMobilePropsPayload(): void
     {
         $html = '<script type="application/json">'

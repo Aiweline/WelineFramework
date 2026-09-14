@@ -10,28 +10,18 @@ use Throwable;
 /**
  * Session-bound readiness gate for Weline module knowledge.
  *
- * Readiness and temporary directives deliberately live only in this MCP process.
- * The durable project index remains SQLite-backed, but no session decision is written
- * to the repository or to the learning database.
+ * Readiness lives only in this MCP process. The durable project index remains
+ * SQLite-backed; no session decision is written to the repository or learning DB.
  */
 final class ProjectReadinessService
 {
     private const REQUIRED_DOCUMENTS = ['README.md', '需求.md', '开发日志.md'];
     private const MAX_SESSIONS = 128;
-    private const MAX_DIRECTIVES = 50;
-    private const MAX_DIRECTIVE_CHARACTERS = 8_000;
-
     /** @var array<string,array<string,mixed>> */
     private array $readiness = [];
 
     /** @var array<string,array<string,mixed>> */
     private array $repairBundles = [];
-
-    /** @var array<string,list<string>> */
-    private array $sessionDirectives = [];
-
-    /** @var array<string,array<string,mixed>> */
-    private array $sessionTaskPlans = [];
 
     public function __construct(
         private readonly Config $config,
@@ -225,7 +215,7 @@ final class ProjectReadinessService
         if ($readinessId === '' || !isset($this->readiness[$readinessId])) {
             throw new ToolException(
                 'PROJECT_NOT_PREPARED',
-                'A valid readiness_id is required. Call prepare_project before knowledge or edit tools.',
+                'A valid readiness_id is required. Call prepare_project before knowledge/index tools.',
                 false,
             );
         }
@@ -336,266 +326,6 @@ final class ProjectReadinessService
     /** @param array<string,mixed> $input
      *  @return array<string,mixed>
      */
-    public function setDirectives(ProjectIndex $index, array $input): array
-    {
-        $readiness = $this->assertReady($index, $input);
-        $directives = $input['directives'] ?? null;
-        if (!is_array($directives) || !array_is_list($directives) || count($directives) > self::MAX_DIRECTIVES) {
-            throw new ToolException(
-                'VALIDATION_FAILED',
-                'directives must be a list containing at most ' . self::MAX_DIRECTIVES . ' strings.',
-            );
-        }
-        $normalized = Text::uniqueStrings($directives, false);
-        $characters = 0;
-        foreach ($normalized as $directive) {
-            $characters += mb_strlen($directive, 'UTF-8');
-            [, $secretCount] = Redactor::string($directive);
-            if ($secretCount > 0) {
-                throw new ToolException(
-                    'SESSION_DIRECTIVE_SECRET_REJECTED',
-                    'Session directives cannot contain credentials or credential-shaped values.',
-                );
-            }
-        }
-        if ($characters > self::MAX_DIRECTIVE_CHARACTERS) {
-            throw new ToolException(
-                'VALIDATION_FAILED',
-                'Session directives exceed the ' . self::MAX_DIRECTIVE_CHARACTERS . ' character budget.',
-            );
-        }
-
-        $sessionId = (string) $readiness['client_session_id'];
-        $key = $this->sessionKey($index, $sessionId);
-        if ($normalized === []) {
-            unset($this->sessionDirectives[$key]);
-        } else {
-            $this->sessionDirectives[$key] = $normalized;
-            $this->boundSessions();
-        }
-
-        return [
-            'schema_version' => 'session-directives.v1',
-            'status' => 'accepted',
-            'project_id' => $index->projectId(),
-            'client_session_id' => $sessionId,
-            'readiness_id' => $readiness['readiness_id'],
-            'directive_count' => count($normalized),
-            'directives_hash' => Ids::hash(Json::canonical($normalized)),
-            'persisted' => false,
-            'repository_written' => false,
-            'credentials_stored' => false,
-        ];
-    }
-
-    /** @return list<string> */
-    public function directives(ProjectIndex $index, string $sessionId): array
-    {
-        return $this->sessionDirectives[$this->sessionKey($index, $sessionId)] ?? [];
-    }
-
-    /**
-     * @param array<string,mixed> $input
-     * @return array<string,mixed>
-     */
-    public function submitTaskPlan(ProjectIndex $index, array $input): array
-    {
-        $readiness = $this->assertReady($index, $input);
-        $planInput = $input['plan'] ?? null;
-        if (!is_array($planInput)) {
-            throw new ToolException(
-                TaskPlanGate::ERROR_PLAN_INVALID,
-                'plan object is required (task-plan.v1 fields).',
-            );
-        }
-
-        $normalized = TaskPlanGate::normalizeSubmission($planInput);
-        $sessionId = (string) $readiness['client_session_id'];
-        $planId = Ids::make('plan');
-        $normalized['plan_id'] = $planId;
-        $normalized['project_id'] = $index->projectId();
-        $normalized['client_session_id'] = $sessionId;
-        $normalized['readiness_id'] = $readiness['readiness_id'];
-        $normalized['submitted_at'] = gmdate('c');
-        $normalized['persisted'] = false;
-        $normalized['repository_written'] = false;
-
-        $this->sessionTaskPlans[$this->sessionKey($index, $sessionId)] = $normalized;
-        $this->trimSessionTaskPlans();
-
-        return [
-            'schema_version' => TaskPlanGate::SCHEMA,
-            'status' => 'accepted',
-            'plan_id' => $planId,
-            'project_id' => $index->projectId(),
-            'client_session_id' => $sessionId,
-            'readiness_id' => $readiness['readiness_id'],
-            'plan' => $normalized,
-            'edit_allowed' => true,
-            'review' => TaskPlanWorkflow::reviewCompleteness($normalized),
-            'plan_workflow' => TaskPlanWorkflow::blueprint(),
-            'next_tools' => ['get_edit_bundle', 'apply_compact_edit', 'update_task_plan_progress'],
-        ];
-    }
-
-    /**
-     * @param array<string,mixed> $input
-     * @return array<string,mixed>
-     */
-    public function updateTaskPlanProgress(ProjectIndex $index, array $input): array
-    {
-        $readiness = $this->assertReady($index, $input);
-        $sessionId = (string) $readiness['client_session_id'];
-        $plan = $this->taskPlan($index, $sessionId);
-        if ($plan === null) {
-            throw new ToolException(
-                TaskPlanGate::ERROR_PLAN_REQUIRED,
-                'No task plan to update; submit_task_plan first.',
-                false,
-                TaskPlanGate::planRequiredDetails('update_task_plan_progress'),
-            );
-        }
-
-        $patch = is_array($input['progress'] ?? null) ? $input['progress'] : $input;
-        unset($patch['repository'], $patch['client_session_id'], $patch['readiness_id'], $patch['project_id']);
-        $updated = TaskPlanWorkflow::applyProgressPatch($plan, $patch);
-        $this->sessionTaskPlans[$this->sessionKey($index, $sessionId)] = $updated;
-        $review = TaskPlanWorkflow::reviewCompleteness($updated);
-
-        return [
-            'schema_version' => TaskPlanGate::SCHEMA,
-            'status' => 'accepted',
-            'edit_allowed' => true,
-            'project_id' => $index->projectId(),
-            'client_session_id' => $sessionId,
-            'readiness_id' => $readiness['readiness_id'],
-            'plan' => $updated,
-            'summary' => TaskPlanGate::publicStatus($updated),
-            'review' => $review,
-            'next_tools' => (bool) ($review['closeout_allowed'] ?? false)
-                ? ['review_task_plan', 'module doc reconcile']
-                : ['update_task_plan_progress', 'review_task_plan'],
-        ];
-    }
-
-    /**
-     * @param array<string,mixed> $input
-     * @return array<string,mixed>
-     */
-    public function reviewTaskPlan(ProjectIndex $index, array $input): array
-    {
-        $readiness = $this->assertReady($index, $input);
-        $sessionId = (string) $readiness['client_session_id'];
-        $plan = $this->taskPlan($index, $sessionId);
-        if ($plan === null) {
-            throw new ToolException(
-                TaskPlanGate::ERROR_PLAN_REQUIRED,
-                'No task plan to review; submit_task_plan first.',
-                false,
-                TaskPlanGate::planRequiredDetails('review_task_plan'),
-            );
-        }
-
-        $review = TaskPlanWorkflow::reviewCompleteness($plan);
-        $gaps = is_array($review['gaps'] ?? null) ? $review['gaps'] : [];
-        $omissionNotes = trim((string) ($input['omission_notes'] ?? ''));
-        if ($omissionNotes !== '') {
-            if (mb_strlen($omissionNotes, 'UTF-8') > 2000) {
-                throw new ToolException(TaskPlanGate::ERROR_PLAN_INVALID, 'omission_notes cannot exceed 2000 characters.');
-            }
-            $existing = trim((string) ($plan['review_notes'] ?? ''));
-            $plan['review_notes'] = $existing === '' ? $omissionNotes : $existing . "\n" . $omissionNotes;
-            $plan['updated_at'] = gmdate('c');
-            $this->sessionTaskPlans[$this->sessionKey($index, $sessionId)] = $plan;
-            $review = TaskPlanWorkflow::reviewCompleteness($plan);
-            $gaps = is_array($review['gaps'] ?? null) ? $review['gaps'] : [];
-        }
-
-        return [
-            'schema_version' => 'task-plan-review.v1',
-            'project_id' => $index->projectId(),
-            'client_session_id' => $sessionId,
-            'readiness_id' => $readiness['readiness_id'],
-            'plan_id' => (string) ($plan['plan_id'] ?? ''),
-            'review' => $review,
-            'gaps' => $gaps,
-            'closeout_allowed' => (bool) ($review['closeout_allowed'] ?? false),
-            'completeness_ratio' => (float) ($review['completeness_ratio'] ?? 0),
-            'plan_workflow' => TaskPlanWorkflow::blueprint(),
-            'next_tools' => (bool) ($review['closeout_allowed'] ?? false)
-                ? ['module doc reconcile', 'feature_delivery_urls']
-                : ['update_task_plan_progress', 'submit_task_plan'],
-        ];
-    }
-
-    /**
-     * @param array<string,mixed> $input
-     * @return array<string,mixed>
-     */
-    public function getTaskPlan(ProjectIndex $index, array $input): array
-    {
-        $readiness = $this->assertReady($index, $input);
-        $sessionId = (string) $readiness['client_session_id'];
-        $plan = $this->taskPlan($index, $sessionId);
-        if ($plan === null) {
-            return array_merge(
-                [
-                    'project_id' => $index->projectId(),
-                    'client_session_id' => $sessionId,
-                    'readiness_id' => $readiness['readiness_id'],
-                ],
-                TaskPlanGate::missingPlanEnvelope(),
-            );
-        }
-
-        $review = TaskPlanWorkflow::reviewCompleteness($plan);
-
-        return [
-            'schema_version' => TaskPlanGate::SCHEMA,
-            'status' => 'accepted',
-            'edit_allowed' => true,
-            'project_id' => $index->projectId(),
-            'client_session_id' => $sessionId,
-            'readiness_id' => $readiness['readiness_id'],
-            'plan' => $plan,
-            'summary' => TaskPlanGate::publicStatus($plan),
-            'review' => $review,
-            'plan_workflow' => TaskPlanWorkflow::blueprint(),
-            'next_tools' => (bool) ($review['closeout_allowed'] ?? false)
-                ? ['review_task_plan']
-                : ['update_task_plan_progress', 'get_edit_bundle'],
-        ];
-    }
-
-    public function taskPlan(ProjectIndex $index, string $sessionId): ?array
-    {
-        $plan = $this->sessionTaskPlans[$this->sessionKey($index, $sessionId)] ?? null;
-
-        return is_array($plan) ? $plan : null;
-    }
-
-    /**
-     * @throws ToolException
-     */
-    public function assertTaskPlanForEdit(ProjectIndex $index, string $sessionId, string $tool): void
-    {
-        TaskPlanGate::assertAcceptedForEdit($this->taskPlan($index, $sessionId), $tool);
-    }
-
-    private function trimSessionTaskPlans(): void
-    {
-        if (count($this->sessionTaskPlans) <= self::MAX_SESSIONS) {
-            return;
-        }
-        $overflow = count($this->sessionTaskPlans) - self::MAX_SESSIONS;
-        foreach (array_keys($this->sessionTaskPlans) as $key) {
-            if ($overflow-- <= 0) {
-                break;
-            }
-            unset($this->sessionTaskPlans[$key]);
-        }
-    }
-
     /** @param array<string,mixed> $snapshot
      *  @param array<string,mixed> $indexResult
      *  @return array<string,mixed>
@@ -880,11 +610,6 @@ final class ProjectReadinessService
         return $sessionId;
     }
 
-    private function sessionKey(ProjectIndex $index, string $sessionId): string
-    {
-        return hash('sha256', $index->projectId() . "\0" . $sessionId);
-    }
-
     private function boundSessions(): void
     {
         while (count($this->readiness) > self::MAX_SESSIONS) {
@@ -900,13 +625,6 @@ final class ProjectReadinessService
                 break;
             }
             unset($this->repairBundles[$key]);
-        }
-        while (count($this->sessionDirectives) > self::MAX_SESSIONS) {
-            $key = array_key_first($this->sessionDirectives);
-            if (!is_string($key)) {
-                break;
-            }
-            unset($this->sessionDirectives[$key]);
         }
     }
 

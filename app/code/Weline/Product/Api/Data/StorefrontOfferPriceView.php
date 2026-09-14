@@ -51,6 +51,12 @@ final readonly class StorefrontOfferPriceView
         return trim((string)($this->primaryCampaign['url'] ?? ''));
     }
 
+    /** Internal route is kept separately from the public, request-resolved URL. */
+    public function campaignRoute(): string
+    {
+        return trim((string)($this->primaryCampaign['frontend_route'] ?? ''));
+    }
+
     /**
      * Flat array for templates / listing enrichment.
      *

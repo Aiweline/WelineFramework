@@ -82,6 +82,7 @@ final class ProductSkuQtyTierAdminService
             $this->decodeTiersInput($input),
             $allowedMap,
         );
+        $this->assertTiersPassGuard($websiteId, $productTiers, $input);
         $lists = $this->service->engine()->lists();
         $resolved = $this->resolveWebsiteList($groupId, $websiteId, $allowedSkus);
 
@@ -249,7 +250,75 @@ final class ProductSkuQtyTierAdminService
             'sku_tiers' => $skuTiers,
             'product_skus' => $productSkus,
             'group_options' => $options,
+            'inherits_default_policy' => $skuTiers === [],
+            'default_policy_preview' => $this->defaultPolicyPreview($resolvedGroupId, $websiteId),
         ];
+    }
+
+    /**
+     * @return list<array{min_qty:int,discount_bps:int,discount_percent:float}>
+     */
+    private function defaultPolicyPreview(string $groupId, int $websiteId): array
+    {
+        try {
+            $policy = ObjectManager::getInstance(DefaultWholesalePolicy::class);
+            if (!$policy instanceof DefaultWholesalePolicy) {
+                return [];
+            }
+            if (!$policy->groupCanInheritTemplate($groupId)) {
+                return [];
+            }
+            $out = [];
+            foreach ($policy->tiersForGroup($groupId, $websiteId) as $tier) {
+                $bps = (int) $tier['discount_bps'];
+                $out[] = [
+                    'min_qty' => (int) $tier['min_qty'],
+                    'discount_bps' => $bps,
+                    'discount_percent' => round($bps / 100, 2),
+                ];
+            }
+
+            return $out;
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * @param array<string, array<int,int>> $productTiers
+     * @param array<string,mixed> $input
+     */
+    private function assertTiersPassGuard(int $websiteId, array $productTiers, array $input): void
+    {
+        if ($productTiers === []) {
+            return;
+        }
+        $policy = null;
+        try {
+            $policy = ObjectManager::getInstance(DefaultWholesalePolicy::class);
+        } catch (\Throwable) {
+        }
+        if (!$policy instanceof DefaultWholesalePolicy) {
+            $policy = DefaultWholesalePolicy::forTesting();
+        }
+        $guard = new WholesalePricingGuard();
+        $maxBps = $policy->maxDiscountBps($websiteId);
+        $minMargin = $policy->minMarginBps($websiteId);
+        $retailBySku = is_array($input['retail_by_sku'] ?? null) ? $input['retail_by_sku'] : [];
+        $costBySku = is_array($input['cost_by_sku'] ?? null) ? $input['cost_by_sku'] : [];
+        foreach ($productTiers as $sku => $byMin) {
+            $retail = (int) ($retailBySku[$sku] ?? $input['retail_amount_minor'] ?? -1);
+            if ($retail < 0) {
+                continue;
+            }
+            $cost = null;
+            if (isset($costBySku[$sku]) && is_numeric($costBySku[$sku])) {
+                $cost = (float) $costBySku[$sku];
+            }
+            foreach ($byMin as $amount) {
+                $guard->assertAmountAllowed($retail, (int) $amount, $maxBps, $minMargin, $cost);
+            }
+        }
     }
 
     /**

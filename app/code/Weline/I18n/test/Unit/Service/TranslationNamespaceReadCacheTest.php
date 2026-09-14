@@ -34,15 +34,62 @@ final class TranslationNamespaceReadCacheTest extends TestCase
         $authority->method('fingerprint')->willReturnCallback(fn(): string => 'i18n-test-' . $this->version);
         ObjectManager::setInstance(NamespaceGenerationInterface::class, $authority);
         RequestContext::init();
+        $this->installNamespaceRepository();
+        \Weline\Framework\Phrase\Parser::clearWorkerCaches();
     }
 
     protected function tearDown(): void
     {
+        \Weline\Framework\Phrase\Parser::clearWorkerCaches();
         LanguageSelect::clearProcessCaches();
         LanguageSwitcher::clearProcessCaches();
         RequestContext::cleanup();
         (new ReflectionProperty(ObjectManager::class, 'instances'))->setValue(null, $this->instances);
         (new ReflectionProperty(ObjectManager::class, 'instance'))->setValue(null, $this->manager);
+    }
+
+
+    public function testChromeAndCatalogTranslationKeysFollowTheRelevantLanguageOnly(): void
+    {
+        $this->installNamespaceRepository();
+        $generations = ['global/i18n' => 1, 'global/i18n/content' => 1];
+        $authority = $this->createStub(NamespaceGenerationInterface::class);
+        $authority->method('fingerprint')->willReturnCallback(static function (array $namespaces) use (&$generations): string {
+            $vector = [];
+            foreach ($namespaces as $namespace) {
+                $parts = explode('/', $namespace);
+                while ($parts !== []) {
+                    $path = implode('/', $parts);
+                    $vector[$path] = $generations[$path] ?? 0;
+                    array_pop($parts);
+                }
+            }
+            ksort($vector);
+            return hash('sha256', json_encode($vector));
+        });
+        ObjectManager::setInstance(NamespaceGenerationInterface::class, $authority);
+        RequestContext::init();
+        $label = 'Old locale name';
+        $i18n = $this->createMock(I18n::class);
+        $i18n->method('getLocaleName')->willReturnCallback(static function () use (&$label): string { return $label; });
+        ObjectManager::setInstance(I18n::class, $i18n);
+        $key = new \ReflectionMethod(LanguageSwitcher::class, 'buildHtmlCacheKey');
+        $args = [false, 1, '', 'en_US', 'en_US', 'USD', '/products', '', '', ['en_US']];
+        $before = $key->invoke(null, ...$args);
+        self::assertSame('Old locale name', LanguageSelect::getLanguageItems('en_US', 'global')[0]['name']);
+
+        $label = 'New locale name';
+        $generations['global/i18n/ja_JP'] = 1;
+        ++$generations['global/i18n/content'];
+        RequestContext::init();
+        self::assertSame($before, $key->invoke(null, ...$args));
+        self::assertSame('Old locale name', LanguageSelect::getLanguageItems('en_US', 'global')[0]['name']);
+
+        $generations['global/i18n/en_US'] = 1;
+        ++$generations['global/i18n/content'];
+        RequestContext::init();
+        self::assertNotSame($before, $key->invoke(null, ...$args));
+        self::assertSame('New locale name', LanguageSelect::getLanguageItems('en_US', 'global')[0]['name']);
     }
 
     public function testInstalledLocaleMemoFollowsCommittedGeneration(): void

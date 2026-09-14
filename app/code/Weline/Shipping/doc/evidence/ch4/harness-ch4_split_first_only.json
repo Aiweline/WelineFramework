@@ -1,0 +1,8 @@
+{
+    "ok": true,
+    "scenario": "ch4_split_first_only",
+    "assertions": {
+        "strategy": "first_only",
+        "second_amount_minor": 0
+    }
+}

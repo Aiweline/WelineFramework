@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'project-guidance-reload-policy.php';
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'project-guidance-runtime-time.php';
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'project-guidance-required-tools.php';
+require_once __DIR__ . DIRECTORY_SEPARATOR . 'project-guidance-host-editor-rules.php';
 require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'GitSafetyPolicy.php';
 
 /**
@@ -41,6 +42,11 @@ if ($repoRoot === null) {
 $repairs = [];
 $branch = welineGuidanceGitBranch($repoRoot);
 $branchOk = $branch === 'dev';
+
+$hostEditorRules = welineGuidanceSyncHostEditorRules($repoRoot);
+if (($hostEditorRules['changed'] ?? false) === true) {
+    $repairs[] = 'synced_cursor_host_editor_rules';
+}
 
 $sourceState = welineGuidanceSourceState($mcpRoot);
 $hostRuntime = welineGuidanceHostRuntimeState((int) $sourceState['latest_mtime']);
@@ -143,9 +149,9 @@ if ($branchOk && $stdioOk && $hostReady !== false && $cursorBounceRequired) {
 
 $status = 'ready';
 $blocker = null;
-$nextAction = 'Local STDIO is ready. Verify the current session exposes all mcp_required_tools, then call prepare_project with repository and a stable client_session_id. If tools remain missing after a new Agent turn, refresh only this MCP connection/catalog through the host when supported; preserve runnable STDIO and use the documented bounded fallback. Do not restart the shared app-server.';
+$nextAction = 'Local STDIO is ready. Verify the current session exposes all mcp_required_tools. For any engineering/coding task, MUST call prepare_project with repository and a stable client_session_id, then obey agent_guidance.hard_constraints before edits. If tools remain missing after a new Agent turn, refresh only this MCP connection/catalog through the host when supported; preserve runnable STDIO and use the documented bounded fallback. Do not restart the shared app-server.';
 if ($reloadDecision['plugin_refresh_deferred']) {
-    $nextAction = 'Codex plugin files were refreshed non-blockingly; local STDIO remains ready. Verify all mcp_required_tools in the current session and refresh only its MCP connection/catalog when supported. No app-server restart is required.';
+    $nextAction = 'Codex plugin files were refreshed non-blockingly; local STDIO remains ready. Verify all mcp_required_tools in the current session; for engineering, prepare_project remains mandatory once tools are visible. No app-server restart is required.';
 }
 
 if (!$branchOk) {
@@ -172,22 +178,22 @@ if (!$branchOk) {
     $status = 'blocked';
     $blocker = [
         'code' => 'MCP_REQUIRED_TOOLS_MISSING',
-        'message' => 'STDIO tools/list is missing required plan/edit tools after host repair.',
+        'message' => 'STDIO tools/list is missing required index/skill tools after host repair.',
         'details' => [
             'missing_required_tools' => $missingRequiredTools,
             'tools' => $stdio['tools'] ?? [],
             'next_action' => 'Repair ToolService definitions, rerun ensure-project-guidance, then start a new Agent turn.',
         ],
     ];
-    $nextAction = 'Stop with MCP_REQUIRED_TOOLS_MISSING; do not call prepare_project through an incomplete tool catalog.';
+    $nextAction = 'Stop with MCP_REQUIRED_TOOLS_MISSING; do not call prepare_project through an incomplete tool catalog. Coding may continue with host-native tools.';
 } elseif ($hostReady === false) {
     $status = 'host_install_needed';
-    $nextAction = (string) ($hostMcpInstall['agent_next_action'] ?? 'Execute host_mcp_install steps in this session, rerun ensure-project-guidance, then prepare_project.');
+    $nextAction = (string) ($hostMcpInstall['agent_next_action'] ?? 'Execute host_mcp_install steps in this session, rerun ensure-project-guidance, then prepare_project (engineering mandatory when MCP attaches).');
 } elseif ($cursorBounceRequired) {
     $status = 'host_repair_needed';
     $nextAction = (($cursorBounce['bounced'] ?? false) === true)
-        ? 'Cursor Helper mcp-process was bounced so tools/list can refresh. Start a new Agent turn in this workspace (or Developer: Reload Window if CallDynamicTool still times out), rerun ensure-project-guidance, verify submit_task_plan is visible, then prepare_project.'
-        : 'Cursor MCP tool catalog is stale or incomplete. Start a new Agent turn after ensure-project-guidance; never continue sealed edits without submit_task_plan.';
+        ? 'Cursor Helper mcp-process was bounced so tools/list can refresh. Start a new Agent turn in this workspace (or Developer: Reload Window if CallDynamicTool still times out), rerun ensure-project-guidance, verify index/skill tools are visible, then prepare_project (mandatory for engineering).'
+        : 'Cursor MCP tool catalog is stale or incomplete. Start a new Agent turn after ensure-project-guidance; for engineering, prepare_project remains mandatory once tools reappear.';
 }
 
 welineGuidanceEmit([
@@ -197,6 +203,7 @@ welineGuidanceEmit([
     'repository' => $repoRoot,
     'git_branch' => $branch,
     'git_branch_ok' => $branchOk,
+    'host_editor_rules' => $hostEditorRules,
     'mcp_init_check' => [
         'schema_version' => 'mcp-init-check.v1',
         'server' => 'weline_project_intelligence',

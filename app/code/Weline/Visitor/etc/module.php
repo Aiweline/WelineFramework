@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Visitor',
-    "version" => '1.1.20',
+    "version" => '1.1.22',
     "requires" => [
         'Weline_Backend' => '*',
         'Weline_Framework' => '*',

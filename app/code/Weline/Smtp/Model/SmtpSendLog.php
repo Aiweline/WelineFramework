@@ -53,4 +53,8 @@ class SmtpSendLog extends Model
     public const schema_fields_SENDER_CODE = 'sender_code';
     #[Col(type: 'varchar', length: 191, nullable: true, default: '', comment: 'SystemConfig storage_scope')]
     public const schema_fields_STORAGE_SCOPE = 'storage_scope';
+    #[Col(type: 'int', nullable: true, default: 0, comment: '命中的邮件模板 ID')]
+    public const schema_fields_TEMPLATE_ID = 'template_id';
+    #[Col(type: 'varchar', length: 32, nullable: true, default: '', comment: '发送所用 locale')]
+    public const schema_fields_LOCALE = 'locale';
 }

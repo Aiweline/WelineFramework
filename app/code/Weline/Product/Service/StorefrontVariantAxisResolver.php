@@ -44,10 +44,9 @@ final class StorefrontVariantAxisResolver
         if ($this->productId === $productId) {
             return $this;
         }
-        if ($this->lastProductScopedResolver?->productId === $productId) {
-            return $this->lastProductScopedResolver;
-        }
 
+        // Do not retain a previous product resolver on the long-lived base
+        // instance. Product maps are owned by the request-scoped projector.
         $scoped = clone $this;
         $scoped->productId = $productId;
         $scoped->attributesByCode = null;
@@ -55,7 +54,7 @@ final class StorefrontVariantAxisResolver
         $scoped->scopedLabelResolver = null;
         $scoped->lastProductScopedResolver = null;
 
-        return $this->lastProductScopedResolver = $scoped;
+        return $scoped;
     }
 
     private function scopedLabels(): StorefrontEavLabelResolver
@@ -475,10 +474,14 @@ final class StorefrontVariantAxisResolver
         if ($locale === '') {
             $locale = 'zh_Hans_CN';
         }
-        if ($this->attributesByCode !== null && $this->attributesCacheLocale === $locale) {
+        // Variant metadata is request-local; locale alone is not enough for a
+        // long-lived WLS resolver instance.
+        $requestKey = \Weline\Framework\Runtime\RequestContext::getRequestId() ?? '<no-request>';
+        $cacheKey = $requestKey . '|' . $locale;
+        if ($this->attributesByCode !== null && $this->attributesCacheLocale === $cacheKey) {
             return $this->attributesByCode;
         }
-        $this->attributesCacheLocale = $locale;
+        $this->attributesCacheLocale = $cacheKey;
 
         $index = [];
         try {

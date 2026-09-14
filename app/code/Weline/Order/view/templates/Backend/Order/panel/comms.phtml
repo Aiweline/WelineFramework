@@ -1,0 +1,33 @@
+<?php
+/** @var int $orderId */
+$orderId = (int)($orderId ?? 0);
+?>
+<div class="w-stack" style="--w-gap:var(--weline-space-3);" data-testid="order-edit-panel-comms">
+  <p class="w-text" data-tone="muted" data-size="sm" style="--w-mb:0;"><?= __('支付记录与批发沟通（插件槽位）。') ?></p>
+
+  <w:slot id="backend-order-payment-records"
+          name="<?= __('订单支付记录') ?>"
+          accept="backend-order-payment-records,payment-records,payment"
+          exclusive="true"
+          multiple="false"
+          position="content"
+          class="backend-order-payment-records-slot"
+          weline-code="order.backend.order.payment_records_slot">
+      <w:hook name="Weline_Order::backend::order::view::payment-records"/>
+  </w:slot>
+
+  <w:slot id="backend-order-b2b-chat"
+          name="<?= __('批发订单沟通') ?>"
+          accept="backend-order-b2b-chat,b2b-order-chat,b2b"
+          exclusive="true"
+          multiple="false"
+          position="content"
+          class="backend-order-b2b-chat-slot"
+          weline-code="order.backend.order.b2b_chat_slot">
+      <w:hook name="Weline_Order::backend::order::view::wholesale-chat"/>
+  </w:slot>
+
+  <div class="w-cluster" style="--w-gap:var(--weline-space-2);">
+    <a class="w-button" data-tone="neutral" data-size="sm" href="@backend-url{'order/backend/order/view'}?id=<?= $orderId ?>"><?= __('打开完整详情') ?></a>
+  </div>
+</div>

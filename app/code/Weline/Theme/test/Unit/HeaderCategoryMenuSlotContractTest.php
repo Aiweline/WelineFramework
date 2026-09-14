@@ -44,6 +44,7 @@ final class HeaderCategoryMenuSlotContractTest extends TestCase
         self::assertStringContainsString('id="categories-list"', $partial);
         self::assertStringContainsString('categories-overflow-wrapper', $partial);
         self::assertStringContainsString('fetchMegaMenuPanel', $partial);
+        self::assertStringContainsString('allocateMegaPanelId', $partial);
         self::assertStringContainsString('data-testid="header-category-menu"', $partial);
     }
 

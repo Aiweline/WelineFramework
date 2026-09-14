@@ -56,9 +56,23 @@ class ControllerFetchFileAfter implements ObserverInterface
 
         $template = $this->getTemplateInstance();
         $fallbackContent = (string)$eventData->getData('content');
+        $memoryProbe = static function (string $phase, mixed $content = null): void {
+            if ((string)\getenv('WELINE_DIAG_MEMORY') !== '1') {
+                return;
+            }
+            \error_log('[MemoryProbe] ' . \json_encode([
+                'component' => 'ControllerFetchFileAfter',
+                'phase' => $phase,
+                'content_bytes' => \is_string($content) ? \strlen($content) : null,
+                'usage' => \memory_get_usage(true),
+                'peak' => \memory_get_peak_usage(true),
+            ], \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE));
+        };
+        $memoryProbe('start', $fallbackContent);
 
         try {
             $contentHtml = $this->renderContentTemplate($template, $contentTemplate, $fallbackContent);
+            $memoryProbe('after_content_template', $contentHtml);
             $fastAuthHtml = $this->renderFastAccountAuthLayout($template, $layoutTemplate, $contentHtml);
             if ($fastAuthHtml !== null) {
                 $eventData->setData('content', $fastAuthHtml);
@@ -73,6 +87,7 @@ class ControllerFetchFileAfter implements ObserverInterface
                 $contentTemplate,
                 $contentHtml
             );
+            $memoryProbe('after_layout_chain', $renderedHtml);
             if ($this->isAccountLayoutTemplate($finalLayoutTemplate, $contentTemplate)
                 && !$this->htmlHasAccountSidebar($renderedHtml)
                 && $this->snapshotHasAccountSidebar($eventData)
@@ -98,6 +113,7 @@ class ControllerFetchFileAfter implements ObserverInterface
             ]);
             $eventData->setData('content', $renderedHtml);
             $eventData->setData('fileName', $finalLayoutTemplate);
+            $memoryProbe('before_return', $renderedHtml);
         } catch (\Throwable $e) {
             $this->reportLayoutWrapFailure(
                 $layoutType,

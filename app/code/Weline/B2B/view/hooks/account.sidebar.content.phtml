@@ -231,17 +231,30 @@ $homeUrl = '/';
         <header class="account-card__header">
             <div>
                 <h2 class="account-card__title"><lang>批发身份</lang></h2>
-                <p class="account-card__description"><lang>查看当前站点的批发等级、优惠要点与下一档升级信息。</lang></p>
+                <p class="account-card__description"><lang>等级权益、挂单跟进、尾款与订单协商</lang></p>
             </div>
             <span class="w-badge" data-tone="<?= $escape($badgeTone) ?>" data-testid="b2b-account-identity-badge">
                 <?= $escape($statusLabel($snap)) ?>
             </span>
         </header>
         <div class="account-card__body">
+            <?php
+            // Hang follow-up + chat hub (primary B2B workspace).
+            echo $this->fetch('Weline_B2B::templates/frontend/partials/account-identity-hub.phtml', [
+                'customerId' => $customerId,
+                'websiteId' => $websiteId,
+                'escape' => $escape,
+                'formatMajor' => $formatMajor,
+                'currencyCode' => $currencyCode,
+            ]);
+            ?>
             <?php if (!$loggedIn): ?>
                 <p role="status"><lang>登录后可查看批发身份资料。</lang></p>
             <?php else: ?>
                 <div class="b2b-account-identity" data-testid="b2b-account-identity-profile">
+                    <h3 class="b2b-identity-hub__title" style="margin-block: var(--weline-theme-space-4, 16px) var(--weline-theme-space-2, 8px);">
+                        <lang>等级与权益</lang>
+                    </h3>
                     <div>
                         <span class="b2b-account-identity__label"><lang>批发等级</lang></span>
                         <span class="b2b-account-identity__value" data-testid="b2b-account-tier-name"><?php
@@ -455,4 +468,4 @@ $homeUrl = '/';
         </div>
     </div>
 </section>
-<link rel="stylesheet" href="@static(Weline_B2B::css/b2b-storefront.css)?v=20260910-apply-notch2" data-no-extract="true">
+<link rel="stylesheet" href="@static(Weline_B2B::css/b2b-storefront.css)?v=20260912-identity-hub-proto2" data-no-extract="true">

@@ -76,14 +76,29 @@ moduleDescribe(test, MODULE, '订单沟通角标与 Query', () => {
       await page.evaluate(() => {
         const a = document.createElement('a');
         a.setAttribute('data-account-menu-signal', 'b2b.order_chat');
-        a.setAttribute('href', '/customer/account/index#b2b-order-chat');
+        a.setAttribute('href', '/customer/account/index#orders');
         a.innerHTML = '<span class="account-menu-signal-badge" data-account-menu-signal-badge="1" hidden aria-hidden="true"></span>';
         document.body.appendChild(a);
+
+        const wrap = document.createElement('div');
+        wrap.innerHTML = [
+          '<div data-testid="b2b-order-chat-accordion" data-b2b-order-chat-accordion data-order-ref="ord-e2e" data-chat-role="customer">',
+          '  <button type="button" data-b2b-order-chat-toggle aria-expanded="false">订单沟通</button>',
+          '  <div data-testid="b2b-order-chat-panel" data-b2b-order-chat-panel hidden>',
+          '    <ul data-b2b-order-chat-messages></ul>',
+          '    <p data-b2b-order-chat-status hidden></p>',
+          '    <form data-b2b-order-chat-form><input data-b2b-order-chat-input /><button data-b2b-order-chat-send type="submit">发送</button></form>',
+          '  </div>',
+          '</div>',
+        ].join('');
+        document.body.appendChild(wrap.firstElementChild);
       });
       const shell = page.locator('[data-account-menu-signal="b2b.order_chat"]');
       await expect(shell).toHaveCount(1);
       const text = await shell.innerText();
       expect(/\d/.test(text.trim())).toBeFalsy();
+      await expect(page.locator('[data-testid="b2b-order-chat-accordion"]')).toHaveCount(1);
+      await expect(page.locator('[data-b2b-order-chat-toggle]')).toBeVisible();
 
       const poll = await page.evaluate(async () => {
         const api = window.Weline.Api.resource('b2b');

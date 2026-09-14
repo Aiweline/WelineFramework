@@ -1,0 +1,76 @@
+{
+    "ok": true,
+    "scenario": "ch3_split_after_warehouse",
+    "single": {
+        "ok": true,
+        "scenario": "ch3_split_after_warehouse_single",
+        "rates": {
+            "SEED_LANE_AMERICAS": {
+                "amount_minor": 46500,
+                "label": "美洲",
+                "package_count": 1,
+                "free_reason": null,
+                "surcharges": [],
+                "seasonal": [],
+                "addons": []
+            }
+        },
+        "diagnostics": {
+            "country_code": "US",
+            "currency": "CNY",
+            "lane_count": 1,
+            "fx_skipped": [],
+            "profile_groups": 1
+        },
+        "error": null,
+        "assertions": {
+            "conflict": false,
+            "has_service": true,
+            "amount_minor": 46500,
+            "package_count": 1,
+            "surcharges": [],
+            "addons": [],
+            "seasonal": [],
+            "free_reason": null
+        }
+    },
+    "split": {
+        "ok": true,
+        "scenario": "ch3_split_after_warehouse",
+        "rates": {
+            "SEED_LANE_AMERICAS": {
+                "amount_minor": 93000,
+                "label": "美洲",
+                "package_count": 2,
+                "free_reason": null,
+                "surcharges": [],
+                "seasonal": [],
+                "addons": []
+            }
+        },
+        "diagnostics": {
+            "country_code": "US",
+            "currency": "CNY",
+            "lane_count": 1,
+            "fx_skipped": [],
+            "profile_groups": 1
+        },
+        "error": null,
+        "assertions": {
+            "conflict": false,
+            "has_service": true,
+            "amount_minor": 93000,
+            "package_count": 2,
+            "surcharges": [],
+            "addons": [],
+            "seasonal": [],
+            "free_reason": null
+        }
+    },
+    "assertions": {
+        "package_count": 2,
+        "split_ge_single": true,
+        "single_amount": 46500,
+        "split_amount": 93000
+    }
+}
