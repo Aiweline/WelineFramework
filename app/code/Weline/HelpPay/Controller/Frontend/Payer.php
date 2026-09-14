@@ -62,6 +62,7 @@ final class Payer extends FrontendController
                 [
                     'title' => (string) __('付款账单地址'),
                     'saved_heading' => (string) __('选择账单地址'),
+                    'hide_billing_same' => true,
                 ]
             ));
         } catch (\Throwable) {
