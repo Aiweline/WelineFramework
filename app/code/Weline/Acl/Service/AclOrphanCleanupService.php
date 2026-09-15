@@ -91,6 +91,11 @@ class AclOrphanCleanupService
         array $activeSourceIds = [],
         ?array $touchedModules = null,
     ): int {
+        // 显式空 touched：无模块被本轮重扫，禁止按 live set 全量 orphan（P0）
+        if ($touchedModules !== null && $touchedModules === []) {
+            return 0;
+        }
+
         if (empty($activeModules)) {
             $activeModules = array_keys(Env::getInstance()->getActiveModules());
         }

@@ -13,6 +13,8 @@ namespace Weline\Backend\Config;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\Config\Reader\XmlReader;
+use Weline\Framework\Php\FiberTaskBatch;
+use Weline\Framework\Setup\Service\SetupSourceFingerprint;
 use Weline\Framework\System\File\Scanner;
 use Weline\Framework\Xml\Parser;
 
@@ -57,29 +59,88 @@ class MenuXmlReader extends XmlReader
 
     /**
      * 读取菜单配置：仅激活模块，base_path 直接定位，逐文件解析合并，降低内存占用。
+     * menu.xml 源指纹命中时跳过该模块解析（由 MenuCollector 以 modulesFilter 限定 diff）。
+     *
+     * @return array<string, array{file: string, data: array}>
      */
     public function read(): array
     {
-        $module_menus = [];
         $fileList = $this->getFileList();
-        foreach ($fileList as $module => $filePath) {
-            $this->assertMenuXmlWellFormed($filePath, (string)$module);
-            $config = $this->parser->parseFile($filePath);
-            $module_and_file = $module . '::' . $filePath;
-            $one = $this->processOneMenuConfig($config, $filePath, $module_and_file);
-            if ($one !== null) {
-                $module_menus[$module] = $one;
-            }
-            unset($config, $one);
+        if ($fileList === []) {
+            return [];
         }
+
+        $fpService = new SetupSourceFingerprint();
+        $activeFp = \hash('sha256', \implode(',', \array_keys($fileList)));
+        $forceFull = !$fpService->matches('menu:active_set', $activeFp);
+
+        $module_menus = [];
+        $fpPending = ['menu:active_set' => $activeFp];
+        $batch = new FiberTaskBatch(null, true, 'WELINE_MENU_FIBER_CONCURRENCY');
+        $batch->mapModules(
+            $fileList,
+            function (string $module, mixed $filePath) use ($fpService, $forceFull): ?array {
+                $path = (string)$filePath;
+                $fp = $fpService->fingerprintFile($path);
+                $key = 'menu:' . $module;
+                if (!$forceFull && $fpService->matches($key, $fp)) {
+                    return null;
+                }
+                $this->assertMenuXmlWellFormed($path, $module);
+                $config = $this->parser->parseFile($path);
+                $module_and_file = $module . '::' . $path;
+                $one = $this->processOneMenuConfig($config, $path, $module_and_file);
+                unset($config);
+                if ($one === null) {
+                    return null;
+                }
+                $one['_fp'] = $fp;
+                $one['_fp_key'] = $key;
+
+                return $one;
+            },
+            static function (string $phase, array $ctx) use (&$module_menus, &$fpPending): void {
+                if ($phase !== 'task' || !($ctx['ok'] ?? false)) {
+                    return;
+                }
+                $one = $ctx['result'] ?? null;
+                if ($one !== null && \is_array($one)) {
+                    $key = (string)($one['_fp_key'] ?? '');
+                    $fp = (string)($one['_fp'] ?? '');
+                    unset($one['_fp'], $one['_fp_key']);
+                    if ($key !== '' && $fp !== '') {
+                        $fpPending[$key] = $fp;
+                    }
+                    $module_menus[(string)($ctx['key'] ?? '')] = $one;
+                }
+            },
+            [
+                'env' => 'WELINE_MENU_FIBER_CONCURRENCY',
+                'fail_fast' => true,
+                'label' => 'menu-xml-collect',
+                'keep_results' => false,
+            ]
+        );
+        unset($batch, $fileList);
+
+        if ($fpPending !== []) {
+            $store = $fpService->loadStore();
+            foreach ($fpPending as $k => $v) {
+                $store[$k] = $v;
+            }
+            $fpService->saveStore($store);
+        }
+
         foreach ($module_menus as &$module_menu) {
-            $data = $module_menu['data'];
+            $data = $module_menu['data'] ?? null;
             if ($data) {
                 $orders = array_column($data, 'order');
                 array_multisort($orders, SORT_ASC, $data);
                 $module_menu['data'] = $data;
             }
         }
+        unset($module_menu);
+
         return $module_menus;
     }
 
