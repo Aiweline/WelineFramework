@@ -34,13 +34,30 @@ class AfterRouteCollectionAclDiff implements ObserverInterface
         )));
         $activeModules = \array_keys(Env::getInstance()->getActiveModules());
         $touched = $event->getData('touched_modules');
+        // 显式空数组：无 touched，跳过 orphan 删除（禁止跳扫后全量误删）
+        if (\is_array($touched) && $touched === []) {
+            CollectedAclSourceIdsRegistry::clear();
+            LiveSourceSet::clear();
+
+            return;
+        }
         if (!\is_array($touched) || $touched === []) {
             $touched = LiveSourceSet::touchedModules();
+        }
+        if (\is_array($touched) && $touched === []) {
+            CollectedAclSourceIdsRegistry::clear();
+            LiveSourceSet::clear();
+
+            return;
         }
         $this->aclOrphanCleanupService->cleanupByActiveModules(
             $activeModules,
             $validSourceIds,
             \is_array($touched) ? \array_values(\array_map('strval', $touched)) : null,
         );
+        // diff 用完即卸：registry / live set 不再需要挂到下一阶段。
+        unset($validSourceIds, $activeModules, $touched);
+        CollectedAclSourceIdsRegistry::clear();
+        LiveSourceSet::clear();
     }
 }

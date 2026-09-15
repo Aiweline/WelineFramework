@@ -28,6 +28,8 @@ use Weline\Framework\Module\Model\Module;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
+use Weline\Framework\Php\FiberTaskBatch;
+use Weline\Framework\Setup\Service\SetupSourceFingerprint;
 
 /**
  * Schema Diff 阶段（order=2）：解析 #[Col]、与库表 diff、执行 DDL，并派发 table_ddl_before/after。
@@ -35,6 +37,8 @@ use Weline\Framework\Output\Cli\Printing;
  */
 class SchemaDiffStage extends AbstractStage
 {
+    private bool $sourceFingerprintSkipped = false;
+
     /** 不参与 SchemaDiff 的表（由 bootstrap 创建，表名不含前缀） */
     private const EXCLUDE_TABLES = [
         'weline_database_migrations',
@@ -137,59 +141,178 @@ class SchemaDiffStage extends AbstractStage
         $declaredSchemas = [];
         $modelDeclarations = [];
 
+        $sourceFingerprint = new SetupSourceFingerprint();
+        $forceRebind = $this->forceSchemaRebind;
+        $moduleFingerprints = [];
+        $allFresh = !$forceRebind && $modules !== [];
         foreach ($modules as $moduleData) {
-            $module = new Module($moduleData);
-            $this->moduleVersions[$module->getName()] = $module->getVersion();
-            $this->moduleSchemaFingerprints[$module->getName()] ??= [];
-            $this->moduleSchemaLegacyFingerprints[$module->getName()] ??= [];
-            $this->moduleSchemaHistoricalFingerprints[$module->getName()] ??= [];
-            $this->moduleCheckpointSources[$module->getName()] ??= [];
-            try {
-                $modelClasses = $this->moduleReader->readClass($module, 'Model');
-            } catch (\Throwable $e) {
-                $this->addError(__('模块 %{1} 读取 Model 列表失败：%{2}', [$module->getName(), $e->getMessage()]));
-                throw new Exception($this->errors[0] ?? 'SchemaDiff prepare failed', 0, $e);
+            $module = new Module(\is_array($moduleData) ? $moduleData : []);
+            $name = $module->getName();
+            $basePath = \rtrim((string)$module->getBasePath(), DIRECTORY_SEPARATOR);
+            $modelDir = $basePath !== '' ? $basePath . DIRECTORY_SEPARATOR . 'Model' : '';
+            $schemaProviderDir = $basePath !== ''
+                ? $basePath . DIRECTORY_SEPARATOR . 'Database' . DIRECTORY_SEPARATOR . 'Schema'
+                : '';
+            $fpParts = [];
+            if ($modelDir !== '' && \is_dir($modelDir)) {
+                $fpParts[] = $sourceFingerprint->fingerprintTree($modelDir);
+            }
+            if ($schemaProviderDir !== '' && \is_dir($schemaProviderDir)) {
+                $fpParts[] = $sourceFingerprint->fingerprintTree($schemaProviderDir);
+            }
+            $fp = $fpParts === []
+                ? \hash('sha256', 'schema-empty:' . $name)
+                : \hash('sha256', \implode('|', $fpParts));
+            $moduleFingerprints['schema:' . $name] = $fp;
+            if (!$sourceFingerprint->matches('schema:' . $name, $fp)) {
+                $allFresh = false;
+            }
+            $this->moduleVersions[$name] = $module->getVersion();
+            $this->moduleSchemaFingerprints[$name] ??= [];
+            $this->moduleSchemaLegacyFingerprints[$name] ??= [];
+            $this->moduleSchemaHistoricalFingerprints[$name] ??= [];
+            $this->moduleCheckpointSources[$name] ??= [];
+        }
+
+        if ($allFresh) {
+            $this->diffOps = [];
+            $this->prepared = true;
+            $this->sourceFingerprintSkipped = true;
+            $this->clearErrors();
+            if (\PHP_SAPI === 'cli') {
+                try {
+                    $printing = ObjectManager::getInstance(Printing::class);
+                    $printing->note(__('   - SchemaDiff：全部模块 Model 源指纹未变，跳过 prepare 扫描'));
+                } catch (\Throwable) {
+                }
             }
 
-            foreach ($modelClasses as $modelClass) {
-                if (!is_string($modelClass) || $modelClass === '') {
-                    continue;
-                }
-                if (trait_exists($modelClass) || interface_exists($modelClass)) {
-                    continue;
-                }
-                if (!class_exists($modelClass)) {
-                    continue;
-                }
-                try {
-                    $ref = new \ReflectionClass($modelClass);
-                    if ($ref->isAbstract() || $ref->isTrait() || $ref->isInterface()) {
-                        continue;
-                    }
-                } catch (\Throwable) {
-                    continue;
-                }
+            return;
+        }
 
-                if (in_array($modelClass, self::EXCLUDE_MODEL_CLASSES, true)) {
-                    continue;
-                }
-                if (is_subclass_of($modelClass, SchemaDiffExcludedModelInterface::class)) {
-                    continue;
-                }
-                $declared = $this->schemaParser->parse($modelClass);
-                if ($declared === null) {
-                    continue;
-                }
-                if (in_array($declared->tableName, self::EXCLUDE_TABLES, true)) {
-                    continue;
-                }
-                $processedTableKey = $this->normalizeProcessedTableKey($declared->tableName);
-                $modelDeclarations[$processedTableKey][] = [
-                    'module' => $module->getName(),
-                    'schema' => $declared,
-                ];
+        /** @var array<string, true> $changedSchemaModules */
+        $changedSchemaModules = [];
+        foreach ($moduleFingerprints as $fpKey => $fp) {
+            $mod = \substr((string)$fpKey, \strlen('schema:'));
+            if ($forceRebind || !$sourceFingerprint->matches((string)$fpKey, (string)$fp)) {
+                $changedSchemaModules[$mod] = true;
             }
         }
+
+        $schemaFpPending = [];
+        $schemaCollectBatch = new FiberTaskBatch(null, true, 'WELINE_SETUP_FIBER_CONCURRENCY');
+        $schemaCollectBatch->mapModules(
+            $modules,
+            function (string $moduleName, mixed $moduleData) use ($sourceFingerprint, $moduleFingerprints, $forceRebind): array {
+                $module = new Module(\is_array($moduleData) ? $moduleData : []);
+                $name = $module->getName();
+                $fpKey = 'schema:' . $name;
+                $fp = (string)($moduleFingerprints[$fpKey] ?? '');
+                $bag = [
+                    'version' => $module->getVersion(),
+                    'declarations' => [],
+                    'source_fp' => $fp,
+                    'fp_key' => $fpKey,
+                    'skipped' => false,
+                ];
+                if (!$forceRebind && $fp !== '' && $sourceFingerprint->matches($fpKey, $fp)) {
+                    $bag['skipped'] = true;
+
+                    return $bag;
+                }
+
+                try {
+                    $modelClasses = $this->moduleReader->readClass($module, 'Model');
+                } catch (\Throwable $e) {
+                    throw new Exception(__('模块 %{1} 读取 Model 列表失败：%{2}', [$module->getName(), $e->getMessage()]), 0, $e);
+                }
+
+                foreach ($modelClasses as $modelClass) {
+                    if (!is_string($modelClass) || $modelClass === '') {
+                        continue;
+                    }
+                    if (trait_exists($modelClass) || interface_exists($modelClass)) {
+                        continue;
+                    }
+                    if (!class_exists($modelClass)) {
+                        continue;
+                    }
+                    try {
+                        $ref = new \ReflectionClass($modelClass);
+                        if ($ref->isAbstract() || $ref->isTrait() || $ref->isInterface()) {
+                            continue;
+                        }
+                    } catch (\Throwable) {
+                        continue;
+                    }
+
+                    if (in_array($modelClass, self::EXCLUDE_MODEL_CLASSES, true)) {
+                        continue;
+                    }
+                    if (is_subclass_of($modelClass, SchemaDiffExcludedModelInterface::class)) {
+                        continue;
+                    }
+                    $declared = $this->schemaParser->parse($modelClass);
+                    if ($declared === null) {
+                        continue;
+                    }
+                    if (in_array($declared->tableName, self::EXCLUDE_TABLES, true)) {
+                        continue;
+                    }
+                    $processedTableKey = $this->normalizeProcessedTableKey($declared->tableName);
+                    $bag['declarations'][] = [
+                        'table_key' => $processedTableKey,
+                        'module' => $module->getName(),
+                        'schema' => $declared,
+                    ];
+                }
+
+                return $bag;
+            },
+            function (string $phase, array $ctx) use (&$modelDeclarations, &$schemaFpPending): void {
+                if ($phase !== 'task' || !($ctx['ok'] ?? false)) {
+                    return;
+                }
+                $moduleName = (string)($ctx['key'] ?? '');
+                $bag = $ctx['result'] ?? null;
+                if ($moduleName === '' || !\is_array($bag)) {
+                    return;
+                }
+                $this->moduleVersions[$moduleName] = (string)($bag['version'] ?? '1.0.0');
+                $this->moduleSchemaFingerprints[$moduleName] ??= [];
+                $this->moduleSchemaLegacyFingerprints[$moduleName] ??= [];
+                $this->moduleSchemaHistoricalFingerprints[$moduleName] ??= [];
+                $this->moduleCheckpointSources[$moduleName] ??= [];
+                $fpKey = (string)($bag['fp_key'] ?? ('schema:' . $moduleName));
+                $fp = (string)($bag['source_fp'] ?? '');
+                if ($fp !== '' && empty($bag['skipped'])) {
+                    $schemaFpPending[$fpKey] = $fp;
+                }
+                if (!empty($bag['skipped'])) {
+                    return;
+                }
+                foreach (($bag['declarations'] ?? []) as $row) {
+                    if (!\is_array($row)) {
+                        continue;
+                    }
+                    $tableKey = (string)($row['table_key'] ?? '');
+                    if ($tableKey === '') {
+                        continue;
+                    }
+                    $modelDeclarations[$tableKey][] = [
+                        'module' => (string)($row['module'] ?? $moduleName),
+                        'schema' => $row['schema'],
+                    ];
+                }
+            },
+            [
+                'env' => 'WELINE_SETUP_FIBER_CONCURRENCY',
+                'fail_fast' => true,
+                'label' => 'schema-diff-collect',
+                'keep_results' => false,
+            ]
+        );
+        unset($schemaCollectBatch);
 
         $this->collectModelTableSchemas($modelDeclarations, $declaredSchemas, $processedTables);
 
@@ -247,8 +370,23 @@ class SchemaDiffStage extends AbstractStage
             }
         }
 
+        // 指纹仅在 prepare 成功末尾落盘，避免半成品跳过导致漏 DDL。
+        $store = $sourceFingerprint->loadStore();
+        foreach ($moduleFingerprints as $fpKey => $fpVal) {
+            $store[(string)$fpKey] = (string)$fpVal;
+        }
+        foreach ($schemaFpPending as $fpKey => $fpVal) {
+            $store[(string)$fpKey] = (string)$fpVal;
+        }
+        $sourceFingerprint->saveStore($store);
+
         $this->prepared = true;
         $this->clearErrors();
+    }
+
+    public function wasSourceFingerprintSkipped(): bool
+    {
+        return $this->sourceFingerprintSkipped;
     }
 
     public function validate(): bool

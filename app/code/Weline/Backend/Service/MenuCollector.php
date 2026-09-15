@@ -116,8 +116,18 @@ class MenuCollector
         $file_sources = array_keys($file_menus);
 
         // 保护：未指定模块且文件端为空时，不执行破坏性操作
+        // （含 menu.xml 指纹全命中跳过解析 → 空 file_menus）
         if (empty($modulesFilter) && empty($file_menus)) {
             return [$modules_xml_menus, [], $modules_info, count($file_menus), []];
+        }
+
+        // 指纹跳过导致仅部分模块进入 file_menus 时，diff 必须限定到这些模块，避免误删未扫模块菜单
+        $effectiveFilter = $modulesFilter;
+        if ($effectiveFilter === [] && $modules_xml_menus !== []) {
+            $allFiles = $this->menuReader->getFileList();
+            if (\count($modules_xml_menus) < \count($allFiles)) {
+                $effectiveFilter = \array_keys($modules_xml_menus);
+            }
         }
 
         // Role grants must be rewritten before the menu diff can remove retired
@@ -127,7 +137,7 @@ class MenuCollector
             ->migrate(SourceIdRenameMap::ROLE_ACCESS);
 
         // 流式遍历 DB，不构建完整 db_menus，直接产出 diff 与 seen_db_sources，避免大表内存溢出
-        [$diff, $seen_db_sources] = $this->streamDbAndComputeDiff($file_menus, $file_sources, $modulesFilter, $disabledModules);
+        [$diff, $seen_db_sources] = $this->streamDbAndComputeDiff($file_menus, $file_sources, $effectiveFilter, $disabledModules);
         $this->validateMenuParentChain($file_menus, $seen_db_sources);
 
         $this->executeBatch($diff, $file_menus);
@@ -193,30 +203,60 @@ class MenuCollector
         }
 
         $file_menus = [];
-        foreach ($modules_xml_menus as $module => $menus) {
-            $data = $menus['data'] ?? [];
-            foreach ($data as $menu) {
-                $menu['module'] = $module;
-                $menu['parent_source'] = $this->normalizeParentSource((string)($menu['parent'] ?? ''));
-                $menu['route'] = trim($menu['action'] ?? '', '/');
-                $menu['access_mode'] = $this->normalizeAccessMode(
-                    (string)($menu['access_mode'] ?? $menu['accessMode'] ?? ''),
-                    'GET'
-                );
-                $menu['scope_group'] = (string)($menu['scope_group'] ?? $menu['scopeGroup'] ?? '');
-                $menu['api_exposable'] = $this->normalizeMenuBoolean($menu['api_exposable'] ?? $menu['apiExposable'] ?? false);
-                unset($menu['parent'], $menu['action']);
+        $batch = new \Weline\Framework\Php\FiberTaskBatch(null, true, 'WELINE_MENU_FIBER_CONCURRENCY');
+        $batch->mapModules(
+            $modules_xml_menus,
+            function (string $module, mixed $menus) use ($disabledModules, &$modules_info): array {
+                $rows = [];
+                $data = \is_array($menus) ? ($menus['data'] ?? []) : [];
+                foreach ($data as $menu) {
+                    if (!\is_array($menu)) {
+                        continue;
+                    }
+                    $menu['module'] = $module;
+                    $menu['parent_source'] = $this->normalizeParentSource((string)($menu['parent'] ?? ''));
+                    $menu['route'] = trim($menu['action'] ?? '', '/');
+                    $menu['access_mode'] = $this->normalizeAccessMode(
+                        (string)($menu['access_mode'] ?? $menu['accessMode'] ?? ''),
+                        'GET'
+                    );
+                    $menu['scope_group'] = (string)($menu['scope_group'] ?? $menu['scopeGroup'] ?? '');
+                    $menu['api_exposable'] = $this->normalizeMenuBoolean($menu['api_exposable'] ?? $menu['apiExposable'] ?? false);
+                    unset($menu['parent'], $menu['action']);
 
-                $menu = $this->replaceModuleAction($menu, $modules_info);
-                $menu['route'] = strtolower(trim((string)($menu['route'] ?? ''), '/'));
-                $menu['is_enable'] = in_array($module, $disabledModules, true) ? 0 : 1;
+                    $menu = $this->replaceModuleAction($menu, $modules_info);
+                    $menu['route'] = strtolower(trim((string)($menu['route'] ?? ''), '/'));
+                    $menu['is_enable'] = in_array($module, $disabledModules, true) ? 0 : 1;
 
-                $source = $menu['source'] ?? '';
-                if ($source !== '') {
-                    $file_menus[$source] = $menu;
+                    $source = $menu['source'] ?? '';
+                    if ($source !== '') {
+                        $rows[(string)$source] = $menu;
+                    }
                 }
-            }
-        }
+
+                return $rows;
+            },
+            static function (string $phase, array $ctx) use (&$file_menus): void {
+                if ($phase !== 'task' || !($ctx['ok'] ?? false)) {
+                    return;
+                }
+                $rows = $ctx['result'] ?? null;
+                if (!\is_array($rows)) {
+                    return;
+                }
+                foreach ($rows as $source => $menu) {
+                    $file_menus[(string)$source] = $menu;
+                }
+            },
+            [
+                'env' => 'WELINE_MENU_FIBER_CONCURRENCY',
+                'fail_fast' => true,
+                'label' => 'menu-normalize-collect',
+                'keep_results' => false,
+            ]
+        );
+        unset($batch);
+
         return [$file_menus, $modules_xml_menus];
     }
 
