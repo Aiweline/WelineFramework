@@ -14,7 +14,6 @@ namespace Weline\Framework\Setup\Stage;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Router\Helper\Data as RouterHelper;
-use Weline\Framework\System\File\Io\File;
 
 /**
  * 路由更新阶段
@@ -41,14 +40,18 @@ class RouteUpdateStage extends AbstractStage
     private array $routeData = [];
     
     /**
-     * @var array 原始路由数据备份 [文件路径 => 路由数组]
+     * 原始路由文件备份路径（磁盘临时副本，避免把整表路由再拷进内存）。
+     * @var array<string, string> livePath => backupTempPath
      */
-    private array $originalRouteData = [];
+    private array $originalRouteBackupFiles = [];
     
     /**
      * @var array 需要清除的模块列表
      */
     private array $modulesToClear = [];
+
+    /** 指纹全员命中：不写路由文件、不 flush batch */
+    private bool $skipWrite = false;
     
     /**
      * @param RouterHelper $routerHelper
@@ -79,6 +82,7 @@ class RouteUpdateStage extends AbstractStage
         // 当 setup:upgrade --stage=xxx 指定了不含 route_update 的阶段时，不触碰路由，避免 enableBatchMode 清空缓冲后不 flush 导致路由丢失
         if (!empty($context['skip_route_stage'])) {
             $this->prepared = true;
+            $this->committed = true;
             $this->clearErrors();
             return;
         }
@@ -87,7 +91,8 @@ class RouteUpdateStage extends AbstractStage
             $this->modulesToClear = $context['modules_to_clear'];
         }
 
-        $isPartial = !empty($this->modulesToClear);
+        $seedPartial = !empty($context['seed_partial']) && !empty($this->modulesToClear);
+        $isPartial = !empty($this->modulesToClear) && !$seedPartial;
 
         // 路由文件批量缓冲 + ACL 事件 defer：扫描阶段只做内存收集，commit 时一次落盘/落库
         /** @var \Weline\Framework\Module\Helper\Data $moduleHelper */
@@ -97,7 +102,15 @@ class RouteUpdateStage extends AbstractStage
         $moduleHelper->enableDeferControllerAttributes();
         \Weline\Framework\Module\Handle::resetBatchRouteProgress();
 
-        if ($isPartial) {
+        if ($seedPartial) {
+            // 指纹部分命中：batch + 磁盘种子 + 内存清除变更模块，禁止空 batch 跳扫（P0）
+            $this->backupOriginalRoutes();
+            $this->routerHelper->enableBatchMode();
+            $this->routerHelper->seedBatchFromDisk();
+            $this->clearModuleRoutersInMemory();
+            // commit 走全量 flush；modulesToClear 清空以免误判增量
+            $this->modulesToClear = [];
+        } elseif ($isPartial) {
             // 增量模式：确保不处于批量模式，避免仅写入内存不落盘
             if ($this->routerHelper->isBatchMode()) {
                 // 将当前批量缓存（如果有）先落盘并退出批量模式
@@ -120,18 +133,10 @@ class RouteUpdateStage extends AbstractStage
                 }
             }
         } else {
-            // 备份原始路由数据（从文件读取）
+            // 全量模式：磁盘备份 + seed 现有路由，再由收集覆盖变更模块。
             $this->backupOriginalRoutes();
-
-            // 全量模式必须从空快照重建。即使同一进程已留有批量缓存，
-            // 也不能继承它，否则已删除、改名或 area 变更的路由会继续残留。
             $this->routerHelper->enableBatchMode();
-
-            // 预置所有路由文件为空快照，确保某个 area 已无路由时，
-            // commit() 仍会用空数组覆盖旧文件，而不是保留陈旧内容。
-            foreach ($this->routerFilePaths as $path) {
-                $this->routerHelper->getBatchRouters($path);
-            }
+            $this->routerHelper->seedBatchFromDisk();
         }
         
         $this->prepared = true;
@@ -139,22 +144,44 @@ class RouteUpdateStage extends AbstractStage
     }
     
     /**
-     * 备份原始路由数据
-     * 
-     * @return void
+     * 将现有路由文件拷到临时目录（不 require 进内存）。
      */
     private function backupOriginalRoutes(): void
     {
+        $this->discardOriginalRouteBackups();
+        $dir = \rtrim(\sys_get_temp_dir(), DIRECTORY_SEPARATOR)
+            . DIRECTORY_SEPARATOR
+            . 'weline_route_bak_'
+            . \getmypid();
+        if (!\is_dir($dir) && !@\mkdir($dir, 0700, true) && !\is_dir($dir)) {
+            throw new Exception(__('无法创建路由回滚临时目录：%{1}', [$dir]));
+        }
+
         foreach ($this->routerFilePaths as $path) {
-            if (is_file($path)) {
-                $routers = require $path;
-                if (is_array($routers)) {
-                    $this->originalRouteData[$path] = $routers;
-                } else {
-                    $this->originalRouteData[$path] = [];
-                }
-            } else {
-                $this->originalRouteData[$path] = [];
+            if (!\is_file($path)) {
+                continue;
+            }
+            $bak = $dir . DIRECTORY_SEPARATOR . \md5($path) . '.php';
+            if (!@\copy($path, $bak)) {
+                throw new Exception(__('备份路由文件失败：%{1}', [$path]));
+            }
+            $this->originalRouteBackupFiles[$path] = $bak;
+        }
+    }
+
+    private function discardOriginalRouteBackups(): void
+    {
+        $dirs = [];
+        foreach ($this->originalRouteBackupFiles as $bak) {
+            if (\is_string($bak) && $bak !== '' && \is_file($bak)) {
+                $dirs[\dirname($bak)] = true;
+                @\unlink($bak);
+            }
+        }
+        $this->originalRouteBackupFiles = [];
+        foreach (\array_keys($dirs) as $dir) {
+            if (\is_dir($dir)) {
+                @\rmdir($dir);
             }
         }
     }
@@ -251,6 +278,32 @@ class RouteUpdateStage extends AbstractStage
             // 已经提交过，跳过
             return;
         }
+
+        if ($this->skipWrite) {
+            $this->committed = true;
+            $this->clearErrors();
+            return;
+        }
+
+        $printing = null;
+        if (\PHP_SAPI === 'cli') {
+            try {
+                $printing = \Weline\Framework\Manager\ObjectManager::getInstance(
+                    \Weline\Framework\Output\Cli\Printing::class
+                );
+            } catch (\Throwable) {
+                $printing = null;
+            }
+        }
+        $note = static function (string $message) use ($printing): void {
+            if ($printing === null) {
+                return;
+            }
+            $printing->note($message);
+            if (\defined('STDOUT') && \is_resource(\STDOUT)) {
+                \fflush(\STDOUT);
+            }
+        };
         
         try {
             $isPartial = !empty($this->modulesToClear);
@@ -260,13 +313,30 @@ class RouteUpdateStage extends AbstractStage
                 \Weline\Framework\Module\Helper\Data::class
             );
             // 先落 ACL（扫描期已 defer），再写路由文件
+            $note(__('   - route_update：正在批量写入控制器 ACL（可能较慢）…'));
             $moduleHelper->flushDeferredControllerAttributes();
+            // ACL 事件与观察者工作集已卸；diff 若已跑过，registry 也可卸。
+            if (\class_exists(\Weline\Acl\Service\CollectedAclSourceIdsRegistry::class)) {
+                \Weline\Acl\Service\CollectedAclSourceIdsRegistry::clear();
+            }
+            if (\class_exists(\Weline\Acl\Service\Resource\LiveSourceSet::class)) {
+                \Weline\Acl\Service\Resource\LiveSourceSet::clear();
+            }
+            $note(__('   - route_update：ACL 写入完成'));
 
             // 增量模式：路由在注册过程中已经按文件即时写入，这里不再做全量 flush
             if ($isPartial) {
+                $note(__('   - route_update：增量模式，刷新路由快照…'));
                 \Weline\Framework\Router\Core::snapshotGeneratedRouterFiles();
                 $this->committed = true;
                 $this->clearErrors();
+                $this->discardOriginalRouteBackups();
+                $this->modulesToClear = [];
+                $this->routeData = [];
+                if (\function_exists('gc_collect_cycles')) {
+                    \gc_collect_cycles();
+                }
+                $note(__('   - route_update：提交完成（增量）'));
                 return;
             }
 
@@ -277,11 +347,21 @@ class RouteUpdateStage extends AbstractStage
             }
             
             // 一次性写入所有路由文件
+            $note(__('   - route_update：正在落盘路由文件…'));
             $this->routerHelper->flushBatchRouters();
+            $note(__('   - route_update：路由文件已写入，正在生成运行时快照…'));
             \Weline\Framework\Router\Core::snapshotGeneratedRouterFiles();
 
             $this->committed = true;
             $this->clearErrors();
+            // 提交成功后备份不再需要，立刻卸掉临时文件。
+            $this->discardOriginalRouteBackups();
+            $this->modulesToClear = [];
+            $this->routeData = [];
+            if (\function_exists('gc_collect_cycles')) {
+                \gc_collect_cycles();
+            }
+            $note(__('   - route_update：提交完成'));
         } catch (\Exception $e) {
             $this->addError(__('路由文件写入失败：%{1}', [$e->getMessage()]));
             throw new Exception(__('路由文件写入失败：%{1}', [$e->getMessage()]));
@@ -297,24 +377,29 @@ class RouteUpdateStage extends AbstractStage
             return;
         }
         // 若从未做过真实准备（如 skip_route_stage），无备份可恢复，直接重置状态避免误写空数据
-        if ($this->originalRouteData === []) {
+        if ($this->originalRouteBackupFiles === []) {
             $this->prepared = false;
             $this->committed = false;
             return;
         }
-        // 恢复原始路由数据
-        foreach ($this->originalRouteData as $path => $routers) {
+        // 从临时文件拷回，避免再把整表路由 load 进 PHP 数组。
+        foreach ($this->originalRouteBackupFiles as $path => $bak) {
             try {
-                $file = new File();
-                $file->open($path, $file::mode_w_add);
-                $text = '<?php return ' . var_export($routers, true) . ';';
-                $file->write($text);
-                $file->close();
+                if (!\is_string($bak) || $bak === '' || !\is_file($bak)) {
+                    continue;
+                }
+                $dir = \dirname($path);
+                if (!\is_dir($dir) && !@\mkdir($dir, 0755, true) && !\is_dir($dir)) {
+                    throw new \RuntimeException('mkdir failed: ' . $dir);
+                }
+                if (!@\copy($bak, $path)) {
+                    throw new \RuntimeException('copy failed');
+                }
             } catch (\Exception $e) {
-                // 回滚失败，记录错误但不抛出异常（避免回滚过程中的异常覆盖原始异常）
                 $this->addError(__('回滚路由文件 %{1} 失败：%{2}', [$path, $e->getMessage()]));
             }
         }
+        $this->discardOriginalRouteBackups();
         
         // 禁用批量模式
         if ($this->routerHelper->isBatchMode()) {

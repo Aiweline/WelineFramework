@@ -39,6 +39,7 @@ use Weline\Framework\Setup\Stage\FrameworkDbBootstrapStage;
 use Weline\Framework\Setup\Stage\ModuleSetupStage;
 use Weline\Framework\Setup\Stage\EavSchemaStage;
 use Weline\Framework\Setup\Stage\SchemaDiffStage;
+use Weline\Framework\Php\FiberTaskBatch;
 use Weline\Framework\Php\FiberTaskRunner;
 use Weline\Framework\Phrase\DatabaseFreeTranslator;
 use Weline\Framework\Database\ConnectionFactory;
@@ -46,6 +47,8 @@ use Weline\Framework\Setup\Data\Context as SetupContext;
 use Weline\Framework\Setup\Lock\SetupDatabaseAccessLock;
 use Weline\Framework\Setup\Operation\SetupOperationContext;
 use Weline\Framework\Setup\Service\SetupScriptContractValidator;
+use Weline\Framework\Setup\Service\SetupSourceFingerprint;
+use Weline\Framework\Setup\Service\SetupUpgradeMetrics;
 use Weline\Framework\System\Text;
 use Weline\Framework\Router\Service\RouteUpdateService;
 use Weline\Framework\Registry\Service\RegistryModulePresence;
@@ -112,6 +115,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         'sync',
         'dev-rerun-install',
         'force-schema-rebind',
+        'force-optimize',
         'skip-classmap',
         'skip-composer-dump',
         'y',
@@ -138,6 +142,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         '--skip-background-optimize, --sync',
         '--dev-rerun-install',
         '--force-schema-rebind',
+        '--force-optimize',
         '--skip-classmap',
         '--skip-composer-dump',
         '--yes, -y',
@@ -169,12 +174,46 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
     /** Current non-hot command ID; passed explicitly to persistence consumers. */
     private string $setupOperationId = '';
 
+    private ?SetupUpgradeMetrics $upgradeMetrics = null;
+
+    /** Controller/Api 源指纹全员命中时跳过 route collect/commit */
+    private bool $skipRouteCollect = false;
+
+    /**
+     * 本轮需重扫路由的模块；null=全量重扫；非空=seed+仅扫这些；[] 且 skipRouteCollect=全跳。
+     * @var list<string>|null
+     */
+    private ?array $routeChangedModules = null;
+
+    /** @var array<string, string> */
+    private array $routeFingerprintPending = [];
+
+    /** Model/Controller/menu 等源树本轮有变更时，禁止自动跳过 completeUpgrade */
+    private bool $sourceTreeChanged = false;
+
     function __construct(
         private Printing $printing
     )
     {
         // 勿在构造函数里收集 extends/注册表：无升级锁、无 defer 上下文，且实例可能被多次构造，会导致顺序错乱或退化为逐模块递归扫描。
         // extends（generated/extends.php）须在 prepareUpgrade() 内、紧接「延迟注册表 + recollect 标记」之后作为第一步聚合，见该处步骤 4。
+    }
+
+    private function metrics(): SetupUpgradeMetrics
+    {
+        if ($this->upgradeMetrics === null) {
+            $this->upgradeMetrics = new SetupUpgradeMetrics($this->printing);
+        }
+
+        return $this->upgradeMetrics;
+    }
+
+    /**
+     * CLI 打印当前/峰值内存（委托 SetupUpgradeMetrics）。
+     */
+    private function noteSetupMemory(string $label): void
+    {
+        $this->metrics()->noteMemory($label);
     }
 
     /**
@@ -594,25 +633,42 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
 
             try {
                 $this->setupOperationId = $operationContext->begin();
+                $this->metrics()->start($this->setupOperationId);
                 $lockFile = $this->getLockFile();
                 // ========== 准备阶段 ==========
-                $this->prepareUpgrade($lockFile, $lockHandle, $args);
+                $this->metrics()->begin('prepareUpgrade');
+                try {
+                    $this->prepareUpgrade($lockFile, $lockHandle, $args);
+                } finally {
+                    $this->metrics()->end('prepareUpgrade');
+                }
                 // 检查系统是否已安装
                 if (!$this->checkSystemInstalled() && !$this->isRouteOnlyUpgradeRequest($args)) {
                     $this->releaseLock($lockHandle, $lockFile);
                     $exitCode = $this->handleSystemNotInstalled($args);
                 } else {
                     // ========== 执行阶段 ==========
-                    $this->executeUpgradeProcess($args, $data, $maintenanceEnabled);
+                    $this->metrics()->begin('executeUpgradeProcess');
+                    try {
+                        $this->executeUpgradeProcess($args, $data, $maintenanceEnabled);
+                    } finally {
+                        $this->metrics()->end('executeUpgradeProcess');
+                    }
 
                     // ========== 完成阶段 ==========
-                    $this->completeUpgrade($args);
+                    $this->metrics()->begin('completeUpgrade');
+                    try {
+                        $this->completeUpgrade($args);
+                    } finally {
+                        $this->metrics()->end('completeUpgrade');
+                    }
 
                     // 通知 WLS 服务器热重载（如果正在运行）
                     $this->notifyWlsReload();
                 }
 
             } catch (\Exception $e) {
+                $this->metrics()->setInterrupted(true);
                 $this->printing->error(__('系统升级过程中发生错误：%{1}', [$e->getMessage()]));
                 throw $e;
             } finally {
@@ -620,6 +676,10 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                     // ========== 清理阶段 ==========
                     $this->cleanupUpgrade($lockHandle, $lockFile, $maintenanceEnabled);
                 } finally {
+                    try {
+                        $this->metrics()->printOverview();
+                    } catch (\Throwable) {
+                    }
                     $this->setupOperationId = '';
                     $operationContext->clear();
                 }
@@ -1043,8 +1103,13 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         RegistryProgress::run(function () use ($eventsManager, $eventData): void {
             RegistryProgress::section('setup:upgrade after observers');
             RegistryProgress::log('upgrade_after dispatch started');
+        $this->metrics()->begin('upgrade_after');
+        try {
             $eventsManager->dispatch('Weline_Framework_Setup::upgrade_after', $eventData);
-            RegistryProgress::log('upgrade_after dispatch finished');
+        } finally {
+            $this->metrics()->end('upgrade_after');
+        }
+        RegistryProgress::log('upgrade_after dispatch finished');
         });
         
         // 5. 检查是否需要再次收集（升级过程中可能有新模块安装）
@@ -1150,22 +1215,55 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
     {
         $this->printing->note(__('正在生成优化缓存...'));
 
+        $forceOptimize = isset($args['force-optimize']);
+        $fpService = new SetupSourceFingerprint();
+        $canAutoSkip = !$forceOptimize
+            && !$this->sourceTreeChanged
+            && !$this->hasModuleInstalledOrUpgraded;
+        if ($canAutoSkip) {
+            $stamp = $fpService->computeOptimizeStamp();
+            if ($fpService->matches(SetupSourceFingerprint::OPTIMIZE_STAMP_KEY, $stamp)) {
+                $this->printing->note(__(
+                    '  - optimize stamp 新鲜且本轮无模块源变更，跳过 classmap / framework:compile / reflection（可用 --force-optimize 强制）'
+                ));
+                // PSR-4 / extends 仍可能被显式 skip 参数控制；默认热跑也跳过重活
+                if (!isset($args['skip-classmap'])) {
+                    $this->printing->note(__('  - 已跳过类映射缓存（stamp）'));
+                }
+                if (!isset($args['skip-framework-compile'])) {
+                    $this->printing->note(__('  - 已跳过框架运行时编译（stamp）'));
+                }
+                if (!isset($args['skip-reflection-compile']) && !isset($args['skip-reflect'])) {
+                    $this->printing->note(__('  - 已跳过反射/工厂编译（stamp）'));
+                }
+                $this->printing->success(__('✓ 优化缓存生成完成（stamp 跳过）。'));
+
+                return;
+            }
+        }
+
         // 1. 生成类映射缓存（支持 --skip-classmap 跳过）
         if (isset($args['skip-classmap'])) {
             $this->printing->note(__('  - 已跳过类映射缓存（--skip-classmap）'));
         } else {
-            $this->generateClassmapCache();
+            $this->metrics()->measure('completeUpgrade.classmap', function () {
+                $this->generateClassmapCache();
+            });
         }
         
         // 2. 生成 PSR-4 映射缓存
-        $this->generatePsr4Cache();
+        $this->metrics()->measure('completeUpgrade.psr4', function () {
+            $this->generatePsr4Cache();
+        });
 
         // 3. 重建扩展注册表（generated/extends.php），再编译框架运行时索引
         $skipExtendsRebuild = isset($args['skip-extends-rebuild']);
         if ($skipExtendsRebuild) {
             $this->printing->note(__('已跳过扩展注册表重建，需要时可执行：php bin/w extends:rebuild'));
         } else {
-            $this->rebuildExtendsRegistry();
+            $this->metrics()->measure('completeUpgrade.extends', function () {
+                $this->rebuildExtendsRegistry();
+            });
         }
 
         // 4. 编译框架运行时索引（modules provides / container / query providers）
@@ -1173,7 +1271,9 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         if ($skipFrameworkCompile) {
             $this->printing->note(__('已跳过框架运行时编译，需要时可执行：php bin/w framework:compile'));
         } else {
-            $this->compileFrameworkRuntimeRegistries();
+            $this->metrics()->measure('completeUpgrade.framework_compile', function () {
+                $this->compileFrameworkRuntimeRegistries();
+            });
         }
         
         // 5. 编译反射元数据与编译型工厂（reflection_metadata.php + compiled_factories.php）
@@ -1181,10 +1281,99 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         if ($skipReflectionCompile) {
             $this->printing->note(__('已跳过反射/工厂编译，需要时可执行：php bin/w reflection:compile'));
         } else {
-            $this->compileReflectionAndFactories();
+            $this->metrics()->measure('completeUpgrade.reflection', function () {
+                $this->compileReflectionAndFactories();
+            });
+        }
+
+        try {
+            $fpService->set(
+                SetupSourceFingerprint::OPTIMIZE_STAMP_KEY,
+                $fpService->computeOptimizeStamp()
+            );
+        } catch (\Throwable) {
         }
         
         $this->printing->success(__('✓ 优化缓存生成完成。'));
+    }
+
+    /**
+     * Controller/Api 树源指纹计划（非裸目录 mtime）。
+     *
+     * @param array<string, mixed> $modules
+     * @param string[] $argsModule
+     * @return array{skip_all: bool, changed: list<string>, fingerprints: array<string, string>}
+     */
+    private function resolveRouteFingerprintPlan(array $modules, array $argsModule): array
+    {
+        $fpService = new SetupSourceFingerprint();
+        $fingerprints = [];
+        $changed = [];
+        $scope = $argsModule !== []
+            ? \array_values(\array_unique(\array_map('strval', $argsModule)))
+            : null;
+
+        foreach ($modules as $moduleName => $moduleData) {
+            $name = \is_string($moduleName) && $moduleName !== ''
+                ? $moduleName
+                : (string)(\is_array($moduleData) ? ($moduleData['name'] ?? '') : '');
+            if ($name === '') {
+                continue;
+            }
+            if ($scope !== null && !\in_array($name, $scope, true)) {
+                continue;
+            }
+
+            $module = new Module(\is_array($moduleData) ? $moduleData : ['name' => $name]);
+            $basePath = \rtrim((string)$module->getBasePath(), DIRECTORY_SEPARATOR);
+            $parts = [];
+            if ($basePath !== '') {
+                foreach (['Controller', 'Api'] as $dirName) {
+                    $dir = $basePath . DIRECTORY_SEPARATOR . $dirName;
+                    if (\is_dir($dir)) {
+                        $parts[] = $fpService->fingerprintTree($dir);
+                    }
+                }
+            }
+            $hash = $parts === []
+                ? \hash('sha256', 'route-empty:' . $name)
+                : \hash('sha256', \implode('|', $parts));
+            $key = 'route:' . $name;
+            $fingerprints[$key] = $hash;
+            // -m 作用域：始终重扫指定模块；全量：仅指纹未命中者
+            if ($scope !== null || !$fpService->matches($key, $hash)) {
+                $changed[] = $name;
+            }
+        }
+
+        $skipAll = $scope === null && $modules !== [] && $changed === [] && $fingerprints !== [];
+
+        return [
+            'skip_all' => $skipAll,
+            'changed' => $changed,
+            'fingerprints' => $fingerprints,
+        ];
+    }
+
+    /**
+     * @param array<string, string> $fingerprints
+     */
+    private function persistRouteFingerprints(array $fingerprints): void
+    {
+        if ($fingerprints === []) {
+            return;
+        }
+        $fpService = new SetupSourceFingerprint();
+        $store = $fpService->loadStore();
+        foreach ($fingerprints as $key => $value) {
+            $k = (string)$key;
+            $v = (string)$value;
+            if ($k === '' || $v === '') {
+                continue;
+            }
+            $store[$k] = $v;
+        }
+        $fpService->saveStore($store);
     }
 
     /**
@@ -2037,18 +2226,41 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         $i = 1;
         // 如果没有指定模块，执行全局清理操作
         if (!$argsModule) {
-            //        // 删除路由文件
+            // 路由指纹计划：全员/部分命中时禁止删路由文件（否则 seedBatchFromDisk 无源）
+            $earlyModules = ObjectManager::getInstance(Handle::class)->getModules();
+            $routePlanEarly = $this->resolveRouteFingerprintPlan(
+                \is_array($earlyModules) ? $earlyModules : [],
+                []
+            );
+            $this->skipRouteCollect = !empty($routePlanEarly['skip_all']);
+            $this->routeChangedModules = $this->skipRouteCollect
+                ? []
+                : (\is_array($routePlanEarly['changed'] ?? null) ? $routePlanEarly['changed'] : null);
+            $this->routeFingerprintPending = $routePlanEarly['fingerprints'] ?? [];
+            $preserveRouterFiles = $this->skipRouteCollect
+                || ($this->routeChangedModules !== null && $this->routeChangedModules !== []);
+
             $this->printing->warning($i . '、路由更新...', '系统');
-            $this->printing->warning('清除文件：');
-            RouterCore::snapshotGeneratedRouterFiles();
-            /**@var System $system */
-            $system = ObjectManager::getInstance(System::class);
-            foreach (Env::router_files_PATH as $path) {
-                $this->printing->warning($path);
-                if (is_file($path)) {
-                    $data = $system->exec('rm -f ' . $path);
-                    if ($data) {
-                        $this->printing->printList($data);
+            if ($preserveRouterFiles) {
+                $this->printing->note(__(
+                    '   - 路由源指纹命中（全跳=%{all}，变更模块 %{n}），保留磁盘路由文件供 seed/跳扫',
+                    [
+                        'all' => $this->skipRouteCollect ? '1' : '0',
+                        'n' => \is_array($this->routeChangedModules) ? \count($this->routeChangedModules) : 0,
+                    ]
+                ));
+            } else {
+                $this->printing->warning('清除文件：');
+                RouterCore::snapshotGeneratedRouterFiles();
+                /**@var System $system */
+                $system = ObjectManager::getInstance(System::class);
+                foreach (Env::router_files_PATH as $path) {
+                    $this->printing->warning($path);
+                    if (is_file($path)) {
+                        $data = $system->exec('rm -f ' . $path);
+                        if ($data) {
+                            $this->printing->printList($data);
+                        }
                     }
                 }
             }
@@ -2405,63 +2617,98 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         $stageNumber++;
         $this->printing->note($stageNumber . '、批量收集模块更新任务...', '系统');
         
-        // 收集模块安装/升级任务
+        // 收集模块安装/升级任务（按模块 Fiber 调度，主线程登记）
         /** @var \Weline\Framework\Module\Helper\Data $moduleHelper */
         $moduleHelper = ObjectManager::getInstance(\Weline\Framework\Module\Helper\Data::class);
-        foreach ($modules as $module_name => $module) {
-            if ($argsModule and !in_array($module_name, $argsModule)) {
-                continue;
-            }
-            
-            $moduleObj = new Module($module);
-            
-            $targetVersion = (string)($module['version'] ?? '1.0.0');
-            $setupVersion = (string)($module['setup_version'] ?? '');
-            if ($setupVersion === '') {
-                // 历史兼容：无 setup_version 时用 upgrading 旗标或视为已完成到 version
-                $needsUpgrade = !empty($module['upgrading']) || !empty($module['pending_setup_upgrade']);
-            } else {
-                $needsUpgrade = $moduleHelper->isUpgrade($setupVersion, $targetVersion)
-                    || !empty($module['upgrading'])
-                    || !empty($module['pending_setup_upgrade']);
-            }
-            if ($needsUpgrade) {
-                $moduleSetupStage->addUpgradeTask($moduleObj);
-                $this->printing->note(__('收集模块升级任务：%{1}（%{2} → %{3}）', [
-                    $module_name,
-                    $setupVersion !== '' ? $setupVersion : ($module['version'] ?? '?'),
-                    $targetVersion,
-                ]));
-            }
-            
-            if (isset($module['installing']) and $module['installing']) {
-                $moduleSetupStage->addInstallTask($moduleObj);
-                $this->printing->note(__('收集模块安装任务：%{1}', [$module_name]));
-            }
-            
-            // DEV 全量重跑 Install 仅当显式 --dev-rerun-install
-            if (defined('DEV') && DEV && isset($args['dev-rerun-install'])
-                && empty($module['installing']) && !$needsUpgrade
-                && !$moduleHelper->isDisabled($modules, $module_name)) {
-                $moduleObj->setData('dev_force_run_install', true);
-                $moduleSetupStage->addInstallTask($moduleObj);
-                $this->printing->note(__('收集模块开发环境重跑安装脚本：%{1}', [$module_name]));
-            }
-        }
+        $setupCollectBatch = new FiberTaskBatch(null, true, 'WELINE_SETUP_FIBER_CONCURRENCY');
+        $setupCollectBatch->mapModules(
+            $modules,
+            static function (string $module_name, array $module) use ($moduleHelper, $modules, $args): array {
+                $moduleObj = new Module($module);
+                $targetVersion = (string)($module['version'] ?? '1.0.0');
+                $setupVersion = (string)($module['setup_version'] ?? '');
+                if ($setupVersion === '') {
+                    $needsUpgrade = !empty($module['upgrading']) || !empty($module['pending_setup_upgrade']);
+                } else {
+                    $needsUpgrade = $moduleHelper->isUpgrade($setupVersion, $targetVersion)
+                        || !empty($module['upgrading'])
+                        || !empty($module['pending_setup_upgrade']);
+                }
+
+                $actions = [];
+                if ($needsUpgrade) {
+                    $actions[] = [
+                        'type' => 'upgrade',
+                        'module' => $moduleObj,
+                        'from' => $setupVersion !== '' ? $setupVersion : ($module['version'] ?? '?'),
+                        'to' => $targetVersion,
+                    ];
+                }
+                if (isset($module['installing']) and $module['installing']) {
+                    $actions[] = ['type' => 'install', 'module' => $moduleObj];
+                }
+                if (defined('DEV') && DEV && isset($args['dev-rerun-install'])
+                    && empty($module['installing']) && !$needsUpgrade
+                    && !$moduleHelper->isDisabled($modules, $module_name)) {
+                    $moduleObj->setData('dev_force_run_install', true);
+                    $actions[] = ['type' => 'dev_install', 'module' => $moduleObj];
+                }
+
+                return $actions;
+            },
+            function (string $phase, array $ctx) use ($moduleSetupStage): void {
+                if ($phase !== 'task' || !($ctx['ok'] ?? false)) {
+                    return;
+                }
+                $actions = $ctx['result'] ?? [];
+                if (!\is_array($actions)) {
+                    return;
+                }
+                foreach ($actions as $action) {
+                    if (!\is_array($action)) {
+                        continue;
+                    }
+                    $type = (string)($action['type'] ?? '');
+                    $mod = $action['module'] ?? null;
+                    if (!$mod instanceof Module) {
+                        continue;
+                    }
+                    if ($type === 'upgrade') {
+                        $moduleSetupStage->addUpgradeTask($mod);
+                        $this->printing->note(__('收集模块升级任务：%{1}（%{2} → %{3}）', [
+                            $mod->getName(),
+                            (string)($action['from'] ?? '?'),
+                            (string)($action['to'] ?? '?'),
+                        ]));
+                    } elseif ($type === 'install') {
+                        $moduleSetupStage->addInstallTask($mod);
+                        $this->printing->note(__('收集模块安装任务：%{1}', [$mod->getName()]));
+                    } elseif ($type === 'dev_install') {
+                        $moduleSetupStage->addInstallTask($mod);
+                        $this->printing->note(__('收集模块开发环境重跑安装脚本：%{1}', [$mod->getName()]));
+                    }
+                }
+            },
+            [
+                'env' => 'WELINE_SETUP_FIBER_CONCURRENCY',
+                'fail_fast' => true,
+                'label' => 'module-setup-collect',
+                'filter' => $argsModule ?: null,
+                'keep_results' => false,
+            ]
+        );
+        unset($setupCollectBatch);
         
         // 收集数据库更新任务（仅在非仅更新路由模式下执行）
         // 如果是仅更新路由模式，跳过数据库更新任务收集
         if ($databaseStage !== null) {
-            $this->printing->note(__('   - 批量收集数据库更新任务...'));
+            $this->printing->note(__('   - 批量收集数据库更新任务（Fiber 按模块）...'));
             $moduleHelper = ObjectManager::getInstance(\Weline\Framework\Module\Helper\Data::class);
             $oldModules = $module_handle->getModules();
-            $databaseTaskCollectors = [];
-            foreach ($modules as $module_name => $module) {
-                if ($argsModule and !in_array($module_name, $argsModule)) {
-                    continue;
-                }
-
-                $databaseTaskCollectors[$module_name] = static function (string|int $taskKey) use ($module, $moduleHelper, $oldModules): array {
+            $dbCollectBatch = new FiberTaskBatch(null, true, 'WELINE_SETUP_FIBER_CONCURRENCY');
+            $dbCollectBatch->mapModules(
+                $modules,
+                static function (string $module_name, array $module) use ($moduleHelper, $oldModules): array {
                     $moduleObj = new Module($module);
                     $setupContext = ObjectManager::make(SetupContext::class, [
                         'module_name' => $moduleObj->getName(),
@@ -2492,26 +2739,84 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                     }
 
                     return $tasks;
-                };
-            }
-
-            $fiberConcurrency = max(1, (int)(getenv('WELINE_SETUP_FIBER_CONCURRENCY') ?: 4));
-            $taskRunner = new FiberTaskRunner($fiberConcurrency);
-            foreach ($taskRunner->run($databaseTaskCollectors, $fiberConcurrency) as $moduleTasks) {
-                foreach ($moduleTasks as [$moduleObj, $setupContext, $type]) {
-                    $databaseStage->addUpdateTask($moduleObj, $setupContext, $type);
-                }
-            }
+                },
+                function (string $phase, array $ctx) use ($databaseStage): void {
+                    if ($phase === 'start') {
+                        $this->printing->note(__(
+                            '   - 数据库任务 Fiber 收集：%{total} 模块，并发 %{c}',
+                            [
+                                'total' => (int)($ctx['total'] ?? 0),
+                                'c' => (int)($ctx['concurrency'] ?? 1),
+                            ]
+                        ));
+                        return;
+                    }
+                    if ($phase !== 'task' || !($ctx['ok'] ?? false)) {
+                        return;
+                    }
+                    $moduleTasks = $ctx['result'] ?? [];
+                    if (!\is_array($moduleTasks)) {
+                        return;
+                    }
+                    foreach ($moduleTasks as $row) {
+                        if (!\is_array($row) || \count($row) < 3) {
+                            continue;
+                        }
+                        [$moduleObj, $setupContext, $type] = $row;
+                        $databaseStage->addUpdateTask($moduleObj, $setupContext, $type);
+                    }
+                },
+                [
+                    'env' => 'WELINE_SETUP_FIBER_CONCURRENCY',
+                    'fail_fast' => true,
+                    'label' => 'db-task-collect',
+                    'filter' => $argsModule ?: null,
+                    'keep_results' => false,
+                ]
+            );
+            unset($dbCollectBatch);
         } else {
             $this->printing->note(__('   - 仅更新路由模式，跳过数据库更新任务收集'));
         }
         gc_collect_cycles();
+        $this->noteSetupMemory('模块/DB 任务收集后');
         
         // 仅在将提交 route_update 时准备并收集路由；单独指定其他阶段（如 schema_diff）时跳过，避免 enableBatchMode 清空缓冲后不 flush 导致路由丢失
         $willCommitRoute = $shouldCommitStage(self::STAGE_ROUTE_UPDATE);
-        if ($willCommitRoute) {
+        if ($willCommitRoute && $this->routeFingerprintPending === []) {
+            $routePlan = $this->resolveRouteFingerprintPlan($modules, $argsModule ?: []);
+            $this->skipRouteCollect = !empty($routePlan['skip_all']);
+            $this->routeChangedModules = $this->skipRouteCollect
+                ? []
+                : ($routePlan['changed'] !== [] ? $routePlan['changed'] : null);
+            $this->routeFingerprintPending = $routePlan['fingerprints'];
+        }
+        $skipRouteEntirely = $willCommitRoute && $this->skipRouteCollect;
+        if ($skipRouteEntirely) {
+            $this->printing->note(__('   - 路由 Controller 源指纹全员命中，跳过 route prepare/collect/commit'));
+            $routeStage->prepare(['skip_route_stage' => true]);
+            // 仍收集菜单；禁止 after_route 全量 orphan（无 registry 时会误删 ACL）
+            $this->printing->note(__('   - 收集菜单（路由全跳仍需 menu.xml / 启停集合同步）...'));
+            try {
+                $eventsManager = ObjectManager::getInstance(EventsManager::class);
+                $menuEventData = [];
+                $eventsManager->dispatch('Weline_Framework_Setup::before_route_collection', $menuEventData);
+            } catch (\Throwable $e) {
+                $this->printing->warning(__('菜单预收集失败（可能影响 ACL 断言）：%{1}', [$e->getMessage()]));
+            }
+            gc_collect_cycles();
+            $willCommitRoute = false;
+        } elseif ($willCommitRoute) {
+            $modulesToClear = $argsModule ?: [];
+            $seedPartial = false;
+            if ($modulesToClear === [] && \is_array($this->routeChangedModules) && $this->routeChangedModules !== []) {
+                // 部分指纹命中：batch seed 后仅 clear+重扫变更模块（非 -m 磁盘增量路径）
+                $modulesToClear = $this->routeChangedModules;
+                $seedPartial = true;
+            }
             $routeStage->prepare([
-                'modules_to_clear' => $argsModule ?: []
+                'modules_to_clear' => $modulesToClear,
+                'seed_partial' => $seedPartial,
             ]);
         }
         
@@ -2536,12 +2841,19 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             }
             if ($schemaDiffStage && !$schemaDiffStage->isCommitted()) {
                 $schemaDiffStage->prepare($setupStageContext);
+                if ($schemaDiffStage instanceof SchemaDiffStage
+                    && !$schemaDiffStage->wasSourceFingerprintSkipped()) {
+                    $this->sourceTreeChanged = true;
+                }
                 if ($schemaDiffStage->isPrepared()) {
                     $this->printing->note(__('   - 提前提交 SchemaDiff（确保表在路由收集前已创建）...'));
                     $schemaDiffStage->commit();
                 }
             }
             gc_collect_cycles();
+        }
+        if ($willCommitRoute && !$this->skipRouteCollect) {
+            $this->sourceTreeChanged = true;
         }
         
         // 先收集菜单（MenuCollector diff 写入 weline_acl type=menus），确保 ControllerAttributes 断言时 parent_source 已存在
@@ -2559,27 +2871,99 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         
         // 收集路由注册任务（仅在将提交 route_update 时执行，避免污染路由缓冲）
         if ($willCommitRoute) {
-            $this->printing->note(__('   - 批量收集路由注册任务...'));
-            foreach ($modules as $module_name => $module) {
-                if ($argsModule and !in_array($module_name, $argsModule)) {
-                    continue;
-                }
-                try {
-                    $module_handle->registerRoute(new Module($module));
-                } catch (Exception $exception) {
-                    $this->printing->error(__('模块 %{1} 路由注册失败：%{2}', [$module_name, $exception->getMessage()]));
-                    $routeStage->rollback();
-                    throw new Exception(__('模块 %{1} 路由注册失败：%{2}', [$module_name, $exception->getMessage()]));
-                }
+            $this->printing->note(__('   - 批量收集路由注册任务（Fiber 协作）...'));
+            $routeBatch = new FiberTaskBatch(
+                null,
+                true,
+                'WELINE_ROUTE_FIBER_CONCURRENCY'
+            );
+            $routeFilter = $argsModule ?: null;
+            if ($routeFilter === null && \is_array($this->routeChangedModules) && $this->routeChangedModules !== []) {
+                $routeFilter = $this->routeChangedModules;
+            }
+            try {
+                $routeBatch->mapModules(
+                    $modules,
+                    static function (string $module_name, mixed $module) use ($module_handle): string {
+                        $module_handle->registerRoute(new Module(\is_array($module) ? $module : []));
+
+                        return $module_name;
+                    },
+                    function (string $phase, array $ctx): void {
+                        if ($phase !== 'start' && $phase !== 'task') {
+                            return;
+                        }
+                        if ($phase === 'start') {
+                            $this->printing->note(__(
+                                '   - 路由 Fiber 收集：%{total} 模块，并发 %{c}',
+                                [
+                                    'total' => (int)($ctx['total'] ?? 0),
+                                    'c' => (int)($ctx['concurrency'] ?? 1),
+                                ]
+                            ));
+                            return;
+                        }
+                        $done = (int)($ctx['done'] ?? 0);
+                        $total = (int)($ctx['total'] ?? 0);
+                        if ($done === 1 || ($done % 20) === 0 || $done === $total) {
+                            $this->printing->note(__(
+                                '   - 路由扫描进度：[%{i}/%{total}] %{module}',
+                                [
+                                    'i' => $done,
+                                    'total' => $total,
+                                    'module' => (string)($ctx['key'] ?? ''),
+                                ]
+                            ));
+                            if (\defined('STDOUT') && \is_resource(STDOUT)) {
+                                \fflush(STDOUT);
+                            }
+                        }
+                    },
+                    [
+                'env' => 'WELINE_ROUTE_FIBER_CONCURRENCY',
+                'fail_fast' => true,
+                'label' => 'route-collect',
+                'filter' => $routeFilter,
+                'keep_results' => false,
+            ]
+                );
+            } catch (Exception $exception) {
+                $this->printing->error(__('模块路由注册失败：%{1}', [$exception->getMessage()]));
+                $routeStage->rollback();
+                throw new Exception(__('模块路由注册失败：%{1}', [$exception->getMessage()]));
+            } catch (\Throwable $exception) {
+                $this->printing->error(__('模块路由注册失败：%{1}', [$exception->getMessage()]));
+                $routeStage->rollback();
+                throw new Exception(__('模块路由注册失败：%{1}', [$exception->getMessage()]));
+            } finally {
+                unset($routeBatch);
             }
             $this->printing->success(__(
                 '✓ 路由扫描收集完成（内存缓冲）；ACL 与路由文件将在提交 route_update 时一次写入'
             ));
+            $this->noteSetupMemory('路由扫描收集后');
+            if ($this->routeFingerprintPending !== []) {
+                $toPersist = $this->routeFingerprintPending;
+                if (\is_array($this->routeChangedModules) && $this->routeChangedModules !== []) {
+                    $toPersist = [];
+                    foreach ($this->routeChangedModules as $mod) {
+                        $k = 'route:' . $mod;
+                        if (isset($this->routeFingerprintPending[$k])) {
+                            $toPersist[$k] = $this->routeFingerprintPending[$k];
+                        }
+                    }
+                }
+                $this->persistRouteFingerprints($toPersist);
+            }
             // 路由收集完成后做 ACL diff（清理已卸载模块的 type=pc 等）
             try {
                 $eventsManager = ObjectManager::getInstance(EventsManager::class);
+                $touchedForAcl = $argsModule ?: null;
+                if ($touchedForAcl === null && \is_array($this->routeChangedModules) && $this->routeChangedModules !== []) {
+                    $touchedForAcl = $this->routeChangedModules;
+                }
                 $afterRouteCollectionEventData = [
-                    'touched_modules' => $argsModule ?: null,
+                    'touched_modules' => $touchedForAcl,
                 ];
                 $eventsManager->dispatch('Weline_Framework_Setup::after_route_collection', $afterRouteCollectionEventData);
             } catch (\Throwable $e) {
@@ -2668,10 +3052,23 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             // 第二步：文件迁移（SchemaDiff 后、ModuleSetup 前），供 Install/Upgrade 依赖
             $this->printing->note(__('   - 执行模块文件迁移（MigrationService，位于 ModuleSetup 之前）...'));
             $this->runDatabaseFileMigrations($args, $argsModule);
+            $this->printing->note(__('   - 模块文件迁移检查结束，进入 ModuleSetup…'));
+            if (\defined('STDOUT') && \is_resource(STDOUT)) {
+                \fflush(STDOUT);
+            }
 
             // 第三步：提交模块安装/升级阶段（此时表与文件迁移已就绪）
             if ($shouldCommitStage(self::STAGE_MODULE_SETUP)) {
-                $this->printing->note(__('   - 提交模块安装/升级阶段（%{1}）...', [self::STAGE_MODULE_SETUP]));
+                $setupTaskCount = method_exists($moduleSetupStage, 'getTaskCount')
+                    ? (int)$moduleSetupStage->getTaskCount()
+                    : 0;
+                $this->printing->note(__(
+                    '   - 提交模块安装/升级阶段（%{1}），待执行任务 %{2} 个...',
+                    [self::STAGE_MODULE_SETUP, $setupTaskCount]
+                ));
+                if (\defined('STDOUT') && \is_resource(STDOUT)) {
+                    \fflush(STDOUT);
+                }
                 $moduleSetupStage->commit();
             } else {
                 $this->printing->note(__('   - 跳过阶段 %{1}', [self::STAGE_MODULE_SETUP]));
@@ -2730,41 +3127,68 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 
                 // 重新收集路由注册任务（仅当将提交 route_update 时执行）
                 if ($willCommitRoute) {
-                    $this->printing->note(__('   - 重新收集路由注册任务...'));
+                    $this->printing->note(__('   - 重新收集路由注册任务（Fiber 协作）...'));
+                    $reRouteTasks = [];
                     foreach ($updatedModules as $module_name => $module) {
                         if ($argsModule and !in_array($module_name, $argsModule)) {
                             continue;
                         }
-                        try {
-                            // 检查路由是否已经注册（通过检查批量缓存）
-                            $needsRoute = true;
-                            foreach (Env::router_files_PATH as $path) {
-                                $routers = $routerHelper->getBatchRouters($path);
-                                foreach ($routers as $router) {
-                                    $routerModule = '';
-                                    if (is_array($router)) {
-                                        if (isset($router['module'])) {
-                                            $routerModule = $router['module'];
-                                        } elseif (isset($router['rule']) && is_array($router['rule']) && isset($router['rule']['module'])) {
-                                            $routerModule = $router['rule']['module'];
-                                        }
-                                    }
-                                    if ($routerModule === $module_name) {
-                                        $needsRoute = false;
-                                        break 2;
+                        // 检查路由是否已经注册（通过检查批量缓存）
+                        $needsRoute = true;
+                        foreach (Env::router_files_PATH as $path) {
+                            $routers = $routerHelper->getBatchRouters($path);
+                            foreach ($routers as $router) {
+                                $routerModule = '';
+                                if (is_array($router)) {
+                                    if (isset($router['module'])) {
+                                        $routerModule = $router['module'];
+                                    } elseif (isset($router['rule']) && is_array($router['rule']) && isset($router['rule']['module'])) {
+                                        $routerModule = $router['rule']['module'];
                                     }
                                 }
+                                if ($routerModule === $module_name) {
+                                    $needsRoute = false;
+                                    break 2;
+                                }
                             }
-                            if ($needsRoute) {
-                                $this->printing->note(__('   - 为模块 %{1} 注册路由...', [$module_name]));
-                                $module_handle->registerRoute(new Module($module));
-                            }
-                        } catch (Exception $exception) {
+                        }
+                        if (!$needsRoute) {
+                            continue;
+                        }
+                        $reRouteTasks[$module_name] = function () use ($module_handle, $module_name, $module): string {
+                            FiberTaskRunner::yield();
+                            $module_handle->registerRoute(new Module($module));
+                            FiberTaskRunner::yield();
+
+                            return $module_name;
+                        };
+                    }
+                    if ($reRouteTasks !== []) {
+                        $reRouteBatch = new FiberTaskBatch(null, true, 'WELINE_ROUTE_FIBER_CONCURRENCY');
+                        $reSettled = $reRouteBatch->settle(
+                            $reRouteTasks,
+                            function (string $phase, array $ctx): void {
+                                if ($phase !== 'task' || !($ctx['ok'] ?? false)) {
+                                    return;
+                                }
+                                $this->printing->note(__(
+                                    '   - 为模块 %{1} 注册路由...',
+                                    [(string)($ctx['key'] ?? '')]
+                                ));
+                            },
+                            [
+                                'env' => 'WELINE_ROUTE_FIBER_CONCURRENCY',
+                                'fail_fast' => false,
+                                'label' => 'route-recollect',
+                            ]
+                        );
+                        foreach ($reSettled['failed'] as $item) {
                             $this->printing->warning(__('模块 %{1} 路由重新注册失败：%{2}，继续执行...', [
-                                $module_name,
-                                $exception->getMessage()
+                                (string)($item['key'] ?? ''),
+                                (string)($item['error'] ?? ''),
                             ]));
                         }
+                        unset($reSettled, $reRouteBatch, $reRouteTasks);
                     }
                 }
                 
@@ -2800,12 +3224,19 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             gc_collect_cycles();
             
             // 第四步：提交路由更新阶段
-            if ($shouldCommitStage(self::STAGE_ROUTE_UPDATE)) {
-                $this->printing->note(__('   - 提交路由更新阶段（%{1}）...', [self::STAGE_ROUTE_UPDATE]));
-                $routeStage->commit();
-            } else {
-                $this->printing->note(__('   - 跳过阶段 %{1}', [self::STAGE_ROUTE_UPDATE]));
-            }
+                if ($shouldCommitStage(self::STAGE_ROUTE_UPDATE)) {
+                    $this->printing->note(__('   - 提交路由更新阶段（%{1}）...', [self::STAGE_ROUTE_UPDATE]));
+                    if (\defined('STDOUT') && \is_resource(\STDOUT)) {
+                        \fflush(\STDOUT);
+                    }
+                    $routeStage->commit();
+                    $this->printing->success(__('   - 路由更新阶段已提交'));
+                    if (\defined('STDOUT') && \is_resource(\STDOUT)) {
+                        \fflush(\STDOUT);
+                    }
+                } else {
+                    $this->printing->note(__('   - 跳过阶段 %{1}', [self::STAGE_ROUTE_UPDATE]));
+                }
             gc_collect_cycles();
             
             // 第五步：提交文件更新阶段
@@ -3424,7 +3855,12 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         $stageCodes = implode(', ', self::STAGE_CODES_ORDERED);
         return \Weline\Framework\Console\CommandHelper::formatHelp(
             'setup:upgrade',
-            '升级模块系统，包括数据库模型、路由等',
+            __(
+                '升级模块系统（数据库模型、路由等）。全量默认按源指纹跳过未变更工作：'
+                . 'Schema/路由/菜单/404·维护静态页/收尾编译；'
+                . '路由跳扫须 seedBatchFromDisk 或全员跳过（禁止空 batch）；'
+                . 'ACL orphan 须 touched_modules=重扫模块。冷跑无指纹接近全量；可用 --force-optimize 强制收尾。'
+            ),
             [
                 '--model' => '升级声明式数据库模型（执行 SchemaDiff；与全量相同的 schema 前置）',
                 '--route' => '仅升级路由（新增/变更 Controller 且不需要 Schema 时；部署与系统更新默认不要加此参数）',
@@ -3440,6 +3876,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 '--sync' => __('兼容选项：保持同步执行优化（现在已是默认行为）'),
                 '--dev-rerun-install' => __('DEV 下显式重跑全模块 Install.php（默认关闭）'),
                 '--force-schema-rebind' => __('DEV only：同版本 Schema checkpoint 冲突时 supersede 旧记录并重绑；与 -f/--force（跳过环境检测）无关'),
+                '--force-optimize' => __('强制重跑 classmap / reflection / framework:compile（忽略 optimize stamp）'),
                 '--skip-classmap' => __('跳过 composer dump-autoload 与类映射缓存生成。适用：未变更 Composer 依赖/自动加载配置的快速更新'),
                 '--skip-composer-dump' => __('仅跳过 composer dump-autoload。适用：Composer 子进程不可用但需要执行 setup 阶段'),
                 '-h, --help' => '显示帮助信息',
@@ -3460,11 +3897,12 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 __('跳过 composer dump-autoload') => 'php bin/w setup:upgrade --skip-composer-dump',
                 __('跳过反射编译（加快 s:up）') => 'php bin/w setup:upgrade --skip-reflection-compile',
                 __('跳过框架运行时编译') => 'php bin/w setup:upgrade --skip-framework-compile',
+                __('强制重跑收尾优化') => 'php bin/w setup:upgrade --force-optimize',
                 __('显式在后台执行优化') => 'php bin/w setup:upgrade --background-optimize',
                 __('兼容旧脚本的同步参数') => 'php bin/w setup:upgrade --sync',
                 __('DEV 同版本 Schema 重绑') => 'php bin/w setup:upgrade --force-schema-rebind',
             ],
-            'php bin/w setup:upgrade [--model|--route|--stage=<code>|--hot|--background-optimize|--sync|--force-schema-rebind] [-m|--module=<模块名>]'
+            'php bin/w setup:upgrade [--model|--route|--stage=<code>|--hot|--force-optimize|--background-optimize|--sync|--force-schema-rebind] [-m|--module=<模块名>]'
         );
     }
 
